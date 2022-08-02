@@ -1,0 +1,4 @@
+core.autocrlf=false
+core.eol=lf
+*.bat eol=crlf
+* text=auto

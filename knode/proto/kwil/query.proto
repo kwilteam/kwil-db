@@ -1,0 +1,146 @@
+syntax = "proto3";
+package kwil.kwil;
+
+import "gogoproto/gogo.proto";
+import "google/api/annotations.proto";
+import "cosmos/base/query/v1beta1/pagination.proto";
+import "kwil/params.proto";
+import "kwil/databases.proto";
+import "kwil/ddl.proto";
+import "kwil/ddlindex.proto";
+import "kwil/queryids.proto";
+// this line is used by starport scaffolding # 1
+
+option go_package = "kwil/x/kwil/types";
+
+// Query defines the gRPC querier service.
+service Query {
+  // Parameters queries the parameters of the module.
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/kwil/kwil/params";
+  }
+  // Queries a Databases by index.
+	rpc Databases(QueryGetDatabasesRequest) returns (QueryGetDatabasesResponse) {
+		option (google.api.http).get = "/kwil/kwil/databases/{index}";
+	}
+
+	// Queries a list of Databases items.
+	rpc DatabasesAll(QueryAllDatabasesRequest) returns (QueryAllDatabasesResponse) {
+		option (google.api.http).get = "/kwil/kwil/databases";
+	}
+
+// Queries a Ddl by index.
+	rpc Ddl(QueryGetDdlRequest) returns (QueryGetDdlResponse) {
+		option (google.api.http).get = "/kwil/kwil/ddl/{index}";
+	}
+
+	// Queries a list of Ddl items.
+	rpc DdlAll(QueryAllDdlRequest) returns (QueryAllDdlResponse) {
+		option (google.api.http).get = "/kwil/kwil/ddl";
+	}
+
+// Queries a Ddlindex by index.
+	rpc Ddlindex(QueryGetDdlindexRequest) returns (QueryGetDdlindexResponse) {
+		option (google.api.http).get = "/kwil/kwil/ddlindex/{index}";
+	}
+
+	// Queries a list of Ddlindex items.
+	rpc DdlindexAll(QueryAllDdlindexRequest) returns (QueryAllDdlindexResponse) {
+		option (google.api.http).get = "/kwil/kwil/ddlindex";
+	}
+
+// Queries a Queryids by index.
+	rpc Queryids(QueryGetQueryidsRequest) returns (QueryGetQueryidsResponse) {
+		option (google.api.http).get = "/kwil/kwil/queryids/{index}";
+	}
+
+	// Queries a list of Queryids items.
+	rpc QueryidsAll(QueryAllQueryidsRequest) returns (QueryAllQueryidsResponse) {
+		option (google.api.http).get = "/kwil/kwil/queryids";
+	}
+
+// this line is used by starport scaffolding # 2
+}
+
+// QueryParamsRequest is request type for the Query/Params RPC method.
+message QueryParamsRequest {}
+
+// QueryParamsResponse is response type for the Query/Params RPC method.
+message QueryParamsResponse {
+  // params holds all the parameters of this module.
+  Params params = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryGetDatabasesRequest {
+	  string index = 1;
+
+}
+
+message QueryGetDatabasesResponse {
+	Databases databases = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryAllDatabasesRequest {
+	cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryAllDatabasesResponse {
+	repeated Databases databases = 1 [(gogoproto.nullable) = false];
+	cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryGetDdlRequest {
+	  string index = 1;
+
+}
+
+message QueryGetDdlResponse {
+	Ddl ddl = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryAllDdlRequest {
+	cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryAllDdlResponse {
+	repeated Ddl ddl = 1 [(gogoproto.nullable) = false];
+	cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryGetDdlindexRequest {
+	  string index = 1;
+
+}
+
+message QueryGetDdlindexResponse {
+	Ddlindex ddlindex = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryAllDdlindexRequest {
+	cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryAllDdlindexResponse {
+	repeated Ddlindex ddlindex = 1 [(gogoproto.nullable) = false];
+	cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+message QueryGetQueryidsRequest {
+	  string index = 1;
+
+}
+
+message QueryGetQueryidsResponse {
+	Queryids queryids = 1 [(gogoproto.nullable) = false];
+}
+
+message QueryAllQueryidsRequest {
+	cosmos.base.query.v1beta1.PageRequest pagination = 1;
+}
+
+message QueryAllQueryidsResponse {
+	repeated Queryids queryids = 1 [(gogoproto.nullable) = false];
+	cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// this line is used by starport scaffolding # 3

@@ -1,0 +1,14 @@
+syntax = "proto3";
+package kwil.kwil;
+
+option go_package = "kwil/x/kwil/types";
+
+message Queryids {
+  string index = 1; 
+  string queryid = 2; 
+  string query = 3; 
+  string dbid = 4; 
+  string publicity = 5; 
+  
+}
+
