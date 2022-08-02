@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published, edited]
+
+jobs:
+  build-push-image:
+    name: Build & push image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: '3.x'
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Taskfile
+        uses: arduino/setup-task@v1
+        with:
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19.0'
+          cache: true
+
+      - name: Install dependencies
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
+        run: |
+          go version
+          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
+          task install:deps
+          go mod download
+
+      - name: Compile Protobuf
+        run: |
+          task pb:compile:v1
+
+      - name: Generate go vendor
+        #for faster builds and private repos, need to run this after pb:compile:v1
+        run: |
+          task vendor
+
+      - name: configure variables
+        id: config
+        run: |
+          version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'`
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers for KD
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache-kwild
+          #key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kwild
+          restore-keys: |
+            ${{ runner.os }}-buildx-kwild
+
+      - name: Build & push KD image
+        id: docker_build_kwild
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            git_commit=${{ github.sha }}
+            version=${{ steps.config.outputs.version }}
+            build_time=${{ github.event.release.created_at }}
+          file: ./build/package/docker/kwild.dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWILD_ECR }}:${{ steps.config.outputs.version }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWILD_ECR }}:latest
+          cache-from: type=local,src=/tmp/.buildx-cache-kwild
+          cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache-kwild
+          mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
+
+  deploy-to-eks:
+    name: Deploy to k8s cluster
+    runs-on: ubuntu-latest
+    needs: build-push-image
+
+    steps:
+      - name: configure variables
+        id: config
+        run: |
+          if [[ '${{ github.event.release.prerelease }}' == 'true' ]]; then
+            echo "cluster=staging" >> $GITHUB_OUTPUT
+          else
+            echo "cluster=prod" >> $GITHUB_OUTPUT
+          fi
+          version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'`
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: deploy by release type to different eks cluster
+        run: |
+          echo "will deploy ${{ steps.config.outputs.version }} to eks ${{ steps.config.outputs.cluster }} cluster"

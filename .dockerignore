@@ -1,0 +1,9 @@
+.git/
+.build/
+.github/
+.vscode/
+.wal/
+build/package/docker/
+.gitattributes
+.gitignore
+.DS_Store

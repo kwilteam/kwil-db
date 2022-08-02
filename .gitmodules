@@ -1,0 +1,6 @@
+[submodule "proto"]
+	path = proto
+	url = https://github.com/kwilteam/proto
+[submodule "sql-grammar"]
+	path = pkg/sql_parser/sql_grammar
+	url = https://github.com/kwilteam/sql-grammar
