@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kwilteam/kwil-db/cli"
+	"github.com/kwilteam/kwil-db/cmd/cli"
 )
 
 func main() {
