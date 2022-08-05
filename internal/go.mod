@@ -11,9 +11,9 @@ require (
 	github.com/tidwall/tinylru v1.1.0 // indirect
 )
 
-// This will mean an explicit 'require' is 
+replace github.com/kwilteam/kwil-db/internal => ../internal
+
+// This will mean an explicit 'require' is
 // needed for usage of local packages/modules.
 // Intended to reduce implicit coupling.
-replace (
-	github.com/kwilteam/kwil-db => ./FORBIDDEN_DEPENDENCY
-)
+replace github.com/kwilteam/kwil-db => ./FORBIDDEN_DEPENDENCY

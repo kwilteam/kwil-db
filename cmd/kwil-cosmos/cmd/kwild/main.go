@@ -8,6 +8,10 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/app"
 )
 
+func ExportedMain() {
+	main()
+}
+
 func main() {
 	rootCmd, _ := cosmoscmd.NewRootCmd(
 		app.Name,

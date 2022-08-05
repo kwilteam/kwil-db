@@ -20,12 +20,10 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/client/cli"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/keeper"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types"
-
-	"github.com/kwilteam/kwil-db/internal/wal"
 )
 
 var (
-	_ module.AppModule      = AppModule{}
+	_ module.AppModule      = AppModule{walRef: CreateWalRef()}
 	_ module.AppModuleBasic = AppModuleBasic{}
 )
 
@@ -104,6 +102,8 @@ type AppModule struct {
 	keeper        keeper.Keeper
 	accountKeeper types.AccountKeeper
 	bankKeeper    types.BankKeeper
+
+	walRef *WalRef
 }
 
 func NewAppModule(
@@ -117,6 +117,7 @@ func NewAppModule(
 		keeper:         keeper,
 		accountKeeper:  accountKeeper,
 		bankKeeper:     bankKeeper,
+		walRef:         CreateWalRef(),
 	}
 }
 
@@ -169,20 +170,12 @@ func (AppModule) ConsensusVersion() uint64 { return 2 }
 
 // BeginBlock executes all ABCI BeginBlock logic respective to the capability module.
 func (am AppModule) BeginBlock(ctx sdk.Context, _ abci.RequestBeginBlock) {
-	var err error
-	// Set the global variable to the current wal
-	wal.CurrentWal, err = wal.NewBlockWal(ctx)
-	if err != nil {
-		panic(err)
-	}
+	am.walRef.BeginBlock(ctx)
 }
 
 // EndBlock executes all ABCI EndBlock logic respective to the capability module. It
 // returns no validator updates.
 func (am AppModule) EndBlock(ctx sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
-	err := wal.CurrentWal.Seal()
-	if err != nil {
-		panic(err)
-	}
+	am.walRef.EndBlock()
 	return []abci.ValidatorUpdate{}
 }

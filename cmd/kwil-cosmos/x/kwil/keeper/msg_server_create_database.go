@@ -9,7 +9,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types"
-	"github.com/kwilteam/kwil-db/internal/wal"
 )
 
 func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDatabase) (*types.MsgCreateDatabaseResponse, error) {
@@ -65,7 +64,7 @@ func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDat
 	}
 	k.SetDdlindex(ctx, newDDLIndex)
 
-	wal.CurrentWal.AppendCreateDatabase(dbName, createStatement.String())
+	//wal.CurrentWal.AppendCreateDatabase(dbName, createStatement.String())
 
 	return &types.MsgCreateDatabaseResponse{Id: dbName}, nil
 }

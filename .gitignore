@@ -6,3 +6,5 @@
 **/.DS_Store
 **/tmp/
 **/finished_logs/
+**/.kwal/
+cmd/kwil-cosmos/cmd/kwild/kwild
