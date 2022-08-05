@@ -8,3 +8,4 @@
 **/finished_logs/
 **/.kwal/
 cmd/kwil-cosmos/cmd/kwild/kwild
+cmd/kwil-cosmos/cmd/kwild/kwild.exe
