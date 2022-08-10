@@ -1,4 +1,4 @@
-package deposits
+package events
 
 import (
 	"fmt"
