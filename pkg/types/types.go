@@ -1,0 +1,84 @@
+package types
+
+import (
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+)
+
+func NewClientChain(chainID int, endpoint string, depositContract *DepositContract) *ClientChain {
+	return &ClientChain{
+		ChainID:         chainID,
+		Endpoint:        endpoint,
+		DepositContract: *depositContract,
+	}
+}
+
+type ClientChain struct {
+	ChainID         int             `json:"chain_id" mapstructure:"id"`
+	Endpoint        string          `json:"endpoint" mapstructure:"endpoint"`
+	DepositContract DepositContract `json:"deposit_contract" mapstructure:"deposit_contract"`
+	BlockTimeout    int             `json:"block_timeout" mapstructure:"block_timeout"`
+	MinBlockHeight  int             `json:"min_block_height" mapstructure:"min_block_height"`
+	MaxBufferSize   int             `json:"max_block_buffer_size" mapstructure:"max_block_buffer_size"`
+}
+
+func (c *ClientChain) GetChainID() int {
+	return c.ChainID
+}
+
+func (c *ClientChain) GetEndpoint() string {
+	return c.Endpoint
+}
+
+func (c *ClientChain) GetContractAddress() string {
+	return c.DepositContract.Address
+}
+
+func (c *ClientChain) GetContractABI() *abi.ABI {
+	return &c.DepositContract.ABI
+}
+
+func (c *ClientChain) GetDepositContract() DepositContract {
+	return c.DepositContract
+}
+
+func (c *ClientChain) GetBlockTimeout() int {
+	return c.BlockTimeout
+}
+
+func (c *ClientChain) GetMinBlockHeight() int {
+	return c.MinBlockHeight
+}
+
+// Takes event names and gets topics based on the ABI
+func (c *ClientChain) GetTopics(events []string) map[common.Hash]abi.Event {
+	topics := make(map[common.Hash]abi.Event)
+	for _, v := range events {
+		event := c.GetContractABI().Events[v]
+		topics[event.ID] = event
+	}
+	return topics
+}
+
+type DepositContract struct {
+	Address string   `json:"address" mapstructure:"address"` // Default is currently the USDC address
+	ABI     abi.ABI  `json:"abi"`
+	ABIPath string   `json:"abi_path" mapstructure:"abi_path"`
+	Events  []string `json:"events" mapstructure:"events"`
+}
+
+func (c *DepositContract) GetAddress() string {
+	return c.Address
+}
+
+func (c *DepositContract) GetEvents() []string {
+	return c.Events
+}
+
+func (c *DepositContract) GetABI() *abi.ABI {
+	return &c.ABI
+}
+
+func (c *DepositContract) GetABIPath() string {
+	return c.ABIPath
+}

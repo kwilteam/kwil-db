@@ -1,0 +1,19 @@
+{
+    "client_chain":
+    {
+        "id": "1",
+        "endpoint": "wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41",
+        "min_block_height": "1",
+        "max_block_buffer_size": "50",
+        "block_timeout": "60",
+        "deposit_contract": 
+            {
+                "address": "0x8730944604F48f67F502A0aAb24B06DaC7BA07da",
+                "abi_path": "./abi/test.json",
+                "events": [
+                    "HelloWorld",
+                    "GoodbyeWorld"
+                ]
+            }
+    }
+}
