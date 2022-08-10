@@ -3,7 +3,7 @@ package kwil.kwil;
 
 import "gogoproto/gogo.proto";
 
-option go_package = "kwil/x/kwil/types";
+option go_package = "github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types";
 
 // Params defines the parameters for the module.
 message Params {

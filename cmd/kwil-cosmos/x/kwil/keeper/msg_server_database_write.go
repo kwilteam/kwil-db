@@ -45,16 +45,6 @@ func (k msgServer) DatabaseWrite(goCtx context.Context, msg *types.MsgDatabaseWr
 	}
 
 	// TODO: Write to the database here
-	meter := ctx.GasMeter()
-	meter.ConsumeGas(190000, "fuck you")
-	consumed := strconv.FormatUint(meter.GasConsumed(), 10)
 
-	newDB := types.Databases{
-		Index: "hi",
-		Dbid:  consumed,
-		Owner: msg.Creator,
-	}
-	k.SetDatabases(ctx, newDB)
-
-	return &types.MsgDatabaseWriteResponse{Ret: consumed}, nil
+	return &types.MsgDatabaseWriteResponse{}, nil
 }
