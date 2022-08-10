@@ -13,7 +13,8 @@ func (ep *EventProcessor) ProcessEvents(ctx context.Context, ch chan map[string]
 				// Here we can go through and define what we want to do with the event
 				switch ev["ktype"] {
 				case "NewStake":
-					fmt.Println("NewStake")
+					yuh := ev["from"]
+					fmt.Println(yuh)
 				}
 			}
 		}

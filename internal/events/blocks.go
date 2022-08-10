@@ -20,7 +20,7 @@ func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[s
 			height := <-ch
 			addr := common.HexToAddress(config.Conf.ClientChain.DepositContract.Address)
 
-			// TODO: We should have some retry logic here for transient unavailability
+			// TODO: We should have some retry logic here for transient unavailability.  I haven't seen it yet and have let it run for a while.
 			query := ethereum.FilterQuery{
 				FromBlock: height,
 				ToBlock:   height,
