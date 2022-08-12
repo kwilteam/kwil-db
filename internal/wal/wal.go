@@ -4,16 +4,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
-	"path"
+	"sync"
 
 	"github.com/tidwall/wal"
 )
 
 // Struct for write ahead log. Contains fields for the block that the log is for
 type Wal struct {
-	wal  *wal.Log
-	name string
+	mu  sync.RWMutex
+	wal *wal.Log
 }
 
 type QueryArg struct {
@@ -28,70 +27,34 @@ type BlockContext interface {
 }
 
 const (
-	wal_FOLDER    string = ".kwal"
-	wal_BEGIN     string = "BEGIN"
-	wal_END_BLOCK string = "END_BLOCK"
+	wal_BEGIN_BLOCK string = "BEGIN_BLOCK(%d)"
+	wal_END_BLOCK   string = "END_BLOCK(%d)"
 )
 
 //TODO: add recovery logic or a registerable recovery handler
 
-var wip_FOLDER string = "" //set during ensureInitialized()
-
-var ErrorFileNotClosed = errors.New("file must be closed in order to move it")
-
 // Will create a new WAL based on context.
-func NewBlockWal(ctx BlockContext) (Wal, error) {
-	return NewBlockWalWithOptions(ctx, nil)
-}
-
-func NewBlockWalWithOptions(ctx BlockContext, walOpts *wal.Options) (Wal, error) {
-	ensureInitialized()
-
-	height := ctx.BlockHeight()
-	if height < 0 {
-		panic("BlockContext::BlockHeight must be >= 0")
-	}
-
-	name := leftZeroPad(uint64(height))
-
-	return NewWal(name, walOpts)
-}
-
-func NewWal(name string, walOpts *wal.Options) (Wal, error) {
-	// Building the string for the path
-	path := path.Join(wip_FOLDER, name)
-
-	// Opening wal
-	innerWal, err := wal.Open(path, walOpts)
+func Open(path string) *Wal {
+	innerWal, err := wal.Open(path, nil) //need to use walOptions for reader optimization
 	if err != nil {
-		return Wal{}, err
+		panic(err)
 	}
 
 	// Creating new wal
-	newWal := Wal{wal: innerWal, name: name}
+	return &Wal{wal: innerWal}
+}
 
-	// Write begin block
-	newWal.appendWriteString(wal_BEGIN)
+func (w *Wal) BeginBlock(ctx BlockContext) error {
+	return w.appendWriteString(fmt.Sprintf(wal_BEGIN_BLOCK, ctx.BlockHeight()))
+}
 
-	return newWal, nil
+func (w *Wal) EndBlock(ctx BlockContext) error {
+	return w.appendWriteString(fmt.Sprintf(wal_END_BLOCK, ctx.BlockHeight()))
 }
 
 // Function to finish a wal and send it to the final directory.
-func (w *Wal) Seal() error {
-	// Write EndBlock
-	err := w.appendWriteString(wal_END_BLOCK)
-	if err != nil {
-		return err
-	}
-
-	// Close
-	err = w.wal.Close()
-	if err != nil {
-		return err
-	}
-
-	// Move the location
-	return w.moveSealedLog()
+func (w *Wal) Close() error {
+	return w.wal.Close()
 }
 
 // Function to append a CreateDatabase message to the WAL
@@ -208,6 +171,9 @@ func (w *Wal) appendWriteString(data string) error {
 
 // Will automatically add the data to the end of the log
 func (w *Wal) appendWrite(data []byte) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	// Find the last index
 	currentIndex, err := w.wal.LastIndex()
 	if err != nil {
@@ -220,24 +186,7 @@ func (w *Wal) appendWrite(data []byte) error {
 	return w.wal.Write(currentIndex, data)
 }
 
-// Function to move the location of the wal. Will automatically create the new directory.
-func (w *Wal) moveSealedLog() error {
-	// Get current WIP file path
-	source := path.Join(wip_FOLDER, w.name)
-
-	// Get WAL file path
-	target := path.Join(wal_FOLDER, w.name)
-
-	// Rename. This does not delete the old directory
-	err := os.Rename(source, target)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func newLogPrefix(mByte uint8, msgType uint16) []byte {
+func newLogPrefix(mByte uint8, msgType uint8) []byte {
 	var m []byte
 	m = append(m, mByte)
 	m = append(m, uint16ToBytes(msgType)...)
@@ -269,31 +218,6 @@ func appendArgAmt(b []byte, a QueryArgs) []byte {
 func appendByteArrLength(b []byte, a []byte) []byte {
 	b = append(b, uint16ToBytes(uint16(len(a)))...)
 	return b
-}
-
-func leftZeroPad(number uint64) string {
-	return fmt.Sprintf("%020d", number)
-}
-
-// This method is idempotent and does not need to have any concurrent checkign logic, etc
-func ensureInitialized() {
-	if wip_FOLDER != "" {
-		return
-	}
-
-	var wip = path.Join(wal_FOLDER, "_wip")
-
-	// Making the directory
-	err := os.MkdirAll(wal_FOLDER, 0755) // Is 0755 the correct FileMode for this? It is more secure, however if there is an issue with another process being unable to delete the logs, then change it to 0777
-	if err != nil {
-		err = os.MkdirAll(wip, 0755)
-	}
-
-	if err != nil {
-		panic("unable to initialize WAL data directories")
-	}
-
-	wip_FOLDER = wip
 }
 
 /*

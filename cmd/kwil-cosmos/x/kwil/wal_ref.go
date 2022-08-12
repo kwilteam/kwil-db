@@ -2,47 +2,68 @@ package kwil
 
 import (
 	"sync/atomic"
-	"unsafe"
 
-	"github.com/kwilteam/kwil-db/internal/wal"
+	wal "github.com/kwilteam/kwil-db/internal/wal"
 )
 
-var emptyWal = unsafe.Pointer(&wal.Wal{})
-
 type WalRef struct {
-	log *wal.Wal
-}
-
-func CreateWalRef() *WalRef {
-	return &WalRef{log: (*wal.Wal)(emptyWal)}
+	log          *wal.Wal
+	blockStarted *uint32
 }
 
 func (ref *WalRef) BeginBlock(ctx wal.BlockContext) {
-	nextWal, err := wal.NewBlockWal(ctx)
-	if err != nil {
-		panic("unable to create new WAL log. " + err.Error())
+	if uint32(86) == *ref.blockStarted {
+		panic("the WAL has been closed.")
 	}
 
-	p := (*unsafe.Pointer)(unsafe.Pointer(&ref.log))
-	if atomic.CompareAndSwapPointer(p, emptyWal, unsafe.Pointer(&nextWal)) {
+	if !atomic.CompareAndSwapUint32(ref.blockStarted, 0, 1) {
+		// essentially close it out since we need to error out
+		ref.Close()
+		panic("invalid operation. Wal already in begin block state.")
+	}
+
+	err := ref.log.BeginBlock(ctx)
+	if err != nil {
+		panic("unable to BeginBlock in WAL log. " + err.Error())
+	}
+}
+
+func (ref *WalRef) EndBlock(ctx wal.BlockContext) {
+	if uint32(86) == *ref.blockStarted {
+		panic("the WAL has been closed.")
+	}
+
+	if !atomic.CompareAndSwapUint32(ref.blockStarted, 1, 2) {
+		ref.Close()
+		panic("the current WAL is NOT in a begin block state.")
+	}
+
+	err := ref.log.EndBlock(ctx)
+	if err != nil {
+		panic("unable to EndBlock in WAL log. " + err.Error())
+	}
+
+	if !atomic.CompareAndSwapUint32(ref.blockStarted, 2, 0) {
+		ref.Close()
+		panic("the current WAL is in an invalid state.")
+	}
+}
+
+func (ref *WalRef) IsClosed() bool {
+	return uint32(86) == *ref.blockStarted
+}
+
+func (ref *WalRef) Close() {
+	if uint32(86) == *ref.blockStarted {
 		return
 	}
 
-	// essentially close it out since we need to error out
-	nextWal.Seal()
+	*ref.blockStarted = 86
 
-	panic("the current WAL has not been disposed.")
+	ref.log.Close()
 }
 
-func (ref *WalRef) EndBlock() {
-	log := ref.log
-	p := (*unsafe.Pointer)(unsafe.Pointer(&ref.log))
-	if !atomic.CompareAndSwapPointer(p, unsafe.Pointer(ref.log), emptyWal) {
-		panic("the current WAL has been modified or sealed out of sequence with the block begin/end events.")
-	}
-
-	err := log.Seal()
-	if err != nil {
-		panic("unable to seal WAL log. " + err.Error())
-	}
+func Open(walFile string) *WalRef {
+	v := uint32(0)
+	return &WalRef{wal.Open(walFile), &v}
 }

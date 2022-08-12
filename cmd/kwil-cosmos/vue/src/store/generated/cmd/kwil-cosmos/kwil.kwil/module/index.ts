@@ -4,17 +4,17 @@ import { StdFee } from "@cosmjs/launchpad";
 import { SigningStargateClient } from "@cosmjs/stargate";
 import { Registry, OfflineSigner, EncodeObject, DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
 import { Api } from "./rest";
-import { MsgDatabaseWrite } from "./types/kwil/tx";
 import { MsgCreateDatabase } from "./types/kwil/tx";
-import { MsgDefineQuery } from "./types/kwil/tx";
+import { MsgDatabaseWrite } from "./types/kwil/tx";
 import { MsgDDL } from "./types/kwil/tx";
+import { MsgDefineQuery } from "./types/kwil/tx";
 
 
 const types = [
-  ["/kwil.kwil.MsgDatabaseWrite", MsgDatabaseWrite],
   ["/kwil.kwil.MsgCreateDatabase", MsgCreateDatabase],
-  ["/kwil.kwil.MsgDefineQuery", MsgDefineQuery],
+  ["/kwil.kwil.MsgDatabaseWrite", MsgDatabaseWrite],
   ["/kwil.kwil.MsgDDL", MsgDDL],
+  ["/kwil.kwil.MsgDefineQuery", MsgDefineQuery],
   
 ];
 export const MissingWalletError = new Error("wallet is required");
@@ -47,10 +47,10 @@ const txClient = async (wallet: OfflineSigner, { addr: addr }: TxClientOptions =
 
   return {
     signAndBroadcast: (msgs: EncodeObject[], { fee, memo }: SignAndBroadcastOptions = {fee: defaultFee, memo: ""}) => client.signAndBroadcast(address, msgs, fee,memo),
-    msgDatabaseWrite: (data: MsgDatabaseWrite): EncodeObject => ({ typeUrl: "/kwil.kwil.MsgDatabaseWrite", value: MsgDatabaseWrite.fromPartial( data ) }),
     msgCreateDatabase: (data: MsgCreateDatabase): EncodeObject => ({ typeUrl: "/kwil.kwil.MsgCreateDatabase", value: MsgCreateDatabase.fromPartial( data ) }),
-    msgDefineQuery: (data: MsgDefineQuery): EncodeObject => ({ typeUrl: "/kwil.kwil.MsgDefineQuery", value: MsgDefineQuery.fromPartial( data ) }),
+    msgDatabaseWrite: (data: MsgDatabaseWrite): EncodeObject => ({ typeUrl: "/kwil.kwil.MsgDatabaseWrite", value: MsgDatabaseWrite.fromPartial( data ) }),
     msgDDL: (data: MsgDDL): EncodeObject => ({ typeUrl: "/kwil.kwil.MsgDDL", value: MsgDDL.fromPartial( data ) }),
+    msgDefineQuery: (data: MsgDefineQuery): EncodeObject => ({ typeUrl: "/kwil.kwil.MsgDefineQuery", value: MsgDefineQuery.fromPartial( data ) }),
     
   };
 };
