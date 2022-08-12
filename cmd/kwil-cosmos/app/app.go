@@ -107,7 +107,7 @@ import (
 
 const (
 	AccountAddressPrefix = "kaddr-"
-	Name                 = "kwil"
+	Name                 = "kwildb"
 )
 
 // this line is used by starport scaffolding # stargate/wasm/app/enabledProposals
@@ -253,6 +253,7 @@ func New(
 	appOpts servertypes.AppOptions,
 	baseAppOptions ...func(*baseapp.BaseApp),
 ) cosmoscmd.App {
+
 	appCodec := encodingConfig.Marshaler
 	cdc := encodingConfig.Amino
 	interfaceRegistry := encodingConfig.InterfaceRegistry
@@ -395,7 +396,7 @@ func New(
 
 		app.BankKeeper,
 	)
-	kwilModule := kwilmodule.NewAppModule(appCodec, app.KwilKeeper, app.AccountKeeper, app.BankKeeper)
+	kwilModule := kwilmodule.NewAppModule(appCodec, app.KwilKeeper, app.AccountKeeper, app.BankKeeper, homePath)
 
 	// this line is used by starport scaffolding # stargate/app/keeperDefinition
 

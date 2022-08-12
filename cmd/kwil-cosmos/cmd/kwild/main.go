@@ -8,10 +8,6 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/app"
 )
 
-func ExportedMain() {
-	main()
-}
-
 func main() {
 	rootCmd, _ := cosmoscmd.NewRootCmd(
 		app.Name,
@@ -22,6 +18,9 @@ func main() {
 		app.New,
 		// this line is used by starport scaffolding # root/arguments
 	)
+
+	rootCmd.Short = "kwil-db cli"
+
 	if err := svrcmd.Execute(rootCmd, app.DefaultNodeHome); err != nil {
 		os.Exit(1)
 	}

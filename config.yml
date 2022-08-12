@@ -16,3 +16,9 @@ faucet:
   coins: ["5token", "100000stake"]
 build:
   main: "./cmd/kwil-cosmos/cmd/kwild"
+genesis:
+  chain_id: "kwildb"
+init:
+  home: "$HOME/.kwildb/chain"
+  #client:
+  #  keyring-backend: "os"

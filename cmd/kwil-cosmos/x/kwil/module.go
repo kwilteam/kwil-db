@@ -2,8 +2,14 @@ package kwil
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"path"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
@@ -23,7 +29,7 @@ import (
 )
 
 var (
-	_ module.AppModule      = AppModule{walRef: CreateWalRef()}
+	_ module.AppModule      = AppModule{walRef: &WalRef{}}
 	_ module.AppModuleBasic = AppModuleBasic{}
 )
 
@@ -111,13 +117,17 @@ func NewAppModule(
 	keeper keeper.Keeper,
 	accountKeeper types.AccountKeeper,
 	bankKeeper types.BankKeeper,
+	homePath string,
 ) AppModule {
+
+	walPath := getWalPath(homePath)
+
 	return AppModule{
 		AppModuleBasic: NewAppModuleBasic(cdc),
 		keeper:         keeper,
 		accountKeeper:  accountKeeper,
 		bankKeeper:     bankKeeper,
-		walRef:         CreateWalRef(),
+		walRef:         Open(walPath),
 	}
 }
 
@@ -176,6 +186,34 @@ func (am AppModule) BeginBlock(ctx sdk.Context, _ abci.RequestBeginBlock) {
 // EndBlock executes all ABCI EndBlock logic respective to the capability module. It
 // returns no validator updates.
 func (am AppModule) EndBlock(ctx sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
-	am.walRef.EndBlock()
+	am.walRef.EndBlock(ctx)
 	return []abci.ValidatorUpdate{}
+}
+
+// Get current node key to store associated WAL
+// will ensure that the WAL is correlated to the
+// correct chain if reset.
+func getWalPath(homePath string) string {
+	homePath = strings.TrimSuffix(homePath, "/")
+	homePath = strings.TrimSuffix(homePath, "/kwal")
+
+	identity := getNodeKeyHash(homePath)
+
+	return path.Join(homePath, "kwal", identity)
+}
+
+func getNodeKeyHash(dir string) string {
+	f, err := os.Open(path.Join(dir, "config", "node_key.json"))
+	if err != nil {
+		panic(err)
+	}
+
+	defer f.Close()
+
+	h := md5.New()
+	if _, err := io.Copy(h, f); err != nil {
+		panic(err)
+	}
+
+	return hex.EncodeToString(h.Sum(nil))
 }
