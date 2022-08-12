@@ -115,7 +115,7 @@ func (e *EventFeed) processBlockHeader(ch chan *big.Int, nch chan bool) chan *bi
 				height := <-ch
 				retChan <- height
 				<-nch
-				log.Info().Str("block_height", height.String()).Msg("processing client block")
+				//log.Info().Str("block_height", height.String()).Msg("processing client block")
 			} else {
 				// Pull the notifier from the channel and restart the loop.
 				// This is here so that it will hang until the header queue is long enough

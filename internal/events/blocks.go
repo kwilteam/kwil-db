@@ -2,13 +2,18 @@ package events
 
 import (
 	"context"
-	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/kwilteam/kwil-db/internal/config"
+	kwal "github.com/kwilteam/kwil-db/internal/wal"
 	"github.com/rs/zerolog/log"
 	"math/big"
+	"path"
 )
+
+type WAL interface{}
+
+const walPref = "events"
 
 // This function takes a channel of block heights and returns a channel of events.
 func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[string]interface{} {
@@ -18,9 +23,22 @@ func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[s
 			// At this point, we have received a finalized ethereum block
 			// Now to query the event data
 			height := <-ch
+
+			// Create new WAL here
+			wal, err := kwal.NewWal(path.Join(walPref, height.String()), nil)
+			if err != nil {
+				log.Fatal().Err(err).Msg("error creating new wal")
+			}
+
+			// Append BeginBlock
+			err = wal.BeginEthBlock(height)
+			if err != nil {
+				log.Fatal().Err(err).Msg("error writing BeginEthBlock to wal")
+			}
+
 			addr := common.HexToAddress(config.Conf.ClientChain.DepositContract.Address)
 
-			// TODO: We should have some retry logic here for transient unavailability.  I haven't seen it yet and have let it run for a while.
+			// TODO: We should probably have some retry logic here for transient unavailability.  I haven't seen it yet and have let it run for a while.
 			query := ethereum.FilterQuery{
 				FromBlock: height,
 				ToBlock:   height,
@@ -33,12 +51,18 @@ func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[s
 			if err != nil {
 				log.Fatal().Err(err).Msg("error reading in block data")
 			}
-			fmt.Println(logs)
 
 			for _, vLog := range logs {
+
+				// Append tx hash to wal
+				hBytes := common.Hex2BytesFixed(vLog.TxHash.Hex(), 32)
+				err = wal.BeginTransaction(hBytes)
+				if err != nil {
+					log.Fatal().Err(err).Msg("error writing BeginTransaction to wal")
+				}
+
 				// First I will find the topic
 				topic := vLog.Topics[0]
-
 				// Next, I find the event name
 				event := e.Topics[topic]
 
@@ -63,6 +87,17 @@ func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[s
 				}
 				// Send the result through the channel
 				retChan <- em
+			}
+			// Append EndBlock
+			err = wal.EndEthBlock(height)
+			if err != nil {
+				log.Fatal().Err(err).Msg("error writing EndEthBlock to wal")
+			}
+
+			// Close the wal
+			//err = wal.Close()
+			if err != nil {
+				log.Warn().Err(err).Msg("error closing wal")
 			}
 		}
 	}()

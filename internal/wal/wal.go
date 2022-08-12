@@ -54,6 +54,10 @@ func NewBlockWalWithOptions(ctx BlockContext, walOpts *wal.Options) (Wal, error)
 
 	name := leftZeroPad(uint64(height))
 
+	return NewWal(name, walOpts)
+}
+
+func NewWal(name string, walOpts *wal.Options) (Wal, error) {
 	// Building the string for the path
 	path := path.Join(wip_FOLDER, name)
 
@@ -233,10 +237,10 @@ func (w *Wal) moveSealedLog() error {
 	return nil
 }
 
-func newLogPrefix(mByte uint8, msgType uint8) []byte {
+func newLogPrefix(mByte uint8, msgType uint16) []byte {
 	var m []byte
 	m = append(m, mByte)
-	m = append(m, msgType)
+	m = append(m, uint16ToBytes(msgType)...)
 	return m
 }
 
@@ -297,7 +301,7 @@ func ensureInitialized() {
 	Examples are not in bytes, but instead as uints, strings, and bools.  The different parts are delimited by a "|" (only in the examples)
 
 	PREFIX: [magic-byte][msg-type]
-	SIZE:   [1]         [1]
+	SIZE:   [1]         [2]
 
 	TYPES:
 		0: CreateDatabase
@@ -317,10 +321,10 @@ func ensureInitialized() {
 
 		BYTES:
 			0: Magic Byte
-			1: Message Type
-			2-65: DB ID
-			66-67: Message Size
-			68+: Message
+			1-2: Message Type
+			3-66: DB ID
+			67-68: Message Size
+			69+: Message
 
 	TYPE 1: DDL
 		HEADER: [db-id][msg-size]
@@ -334,10 +338,10 @@ func ensureInitialized() {
 
 		BYTES:
 			0: Magic Byte
-			1: Message Type
-			2-65: DB ID
-			66-67: Message Size
-			68+: Message
+			1-2: Message Type
+			3-66: DB ID
+			67-68: Message Size
+			69+: Message
 
 	TYPE 2: DefineQuery
 		HEADER: [db-id][publicity][msg-size]
@@ -351,11 +355,11 @@ func ensureInitialized() {
 
 		BYTES:
 			0: Magic Byte
-			1: Message Type
-			2-65: DB ID
-			66: Publicity
-			67-68: Message Size
-			69+: Message
+			1-2: Message Type
+			3-66: DB ID
+			67: Publicity
+			68-69: Message Size
+			70+: Message
 
 	TYPE 3:
 		HEADER: [dbid][statementid][#-of-inputs]
@@ -370,11 +374,11 @@ func ensureInitialized() {
 
 		BYTES:
 			0: Magic Byte
-			1: Message Type
-			2-65: DB ID
-			66-129: Statement ID
-			130: # of inputs
-			131+: Body
+			1-2: Message Type
+			3-66: DB ID
+			67-130: Statement ID
+			131: # of inputs
+			132+: Body
 
 
 	TYPE N:
@@ -389,6 +393,6 @@ func ensureInitialized() {
 
 		BYTES:
 			0: Magic Byte
-			1: Message Type
+			1-2: Message Type
 
 */

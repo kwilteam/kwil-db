@@ -22,6 +22,15 @@ type ClientChain struct {
 	MaxBufferSize   int             `json:"max_block_buffer_size" mapstructure:"max_block_buffer_size"`
 }
 
+type Wallets struct {
+	Ethereum EthereumWallet `json:"ethereum" mapstructure:"ethereum"`
+}
+
+type EthereumWallet struct {
+	Address     string `json:"address" mapstructure:"address"`
+	PrivKeyPath string `json:"private_key_path" mapstructure:"private_key_path"`
+}
+
 func (c *ClientChain) GetChainID() int {
 	return c.ChainID
 }

@@ -14,15 +14,6 @@ import (
 	This package is to separate the event intake from the event processing (i.e., handling deposits).
 */
 
-type HelloWorld struct {
-	msg1 string
-	msg2 string
-}
-
-type Events struct {
-	HelloWorld HelloWorld
-}
-
 type EventFeed struct {
 	log         zerolog.Logger
 	ClientChain types.ClientChain

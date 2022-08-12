@@ -8,12 +8,23 @@
         "block_timeout": "60",
         "deposit_contract": 
             {
-                "address": "0x8730944604F48f67F502A0aAb24B06DaC7BA07da",
+                "address": "0xE596928C26A11e9373FC4245d6Ee02aE0De32612",
                 "abi_path": "./abi/test.json",
                 "events": [
                     "HelloWorld",
                     "GoodbyeWorld"
                 ]
             }
+    },
+    "wallets": {
+        "ethereum": {
+            "address": "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",
+            "private_key_path": "./keys/ethereum.pem"
+        }
+    },
+    "storage": {
+        "badger": {
+            "path": "./.kwilbadger"
+        }
     }
 }

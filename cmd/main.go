@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/kwilteam/kwil-db/internal/config"
+	"github.com/kwilteam/kwil-db/internal/deposits"
 	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/logging"
 	"github.com/kwilteam/kwil-db/internal/processing"
+	"github.com/kwilteam/kwil-db/internal/store"
 	"github.com/rs/zerolog/log"
 	"os"
 	"os/signal"
@@ -41,31 +43,40 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Making a channel listening for interruptions or errors
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	signal.Notify(c, os.Kill)
-
 	// Print that the node is running
-
 	ef, err := events.New(&config.Conf, client)
-	fmt.Println(ef.Topics)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize event feed")
 		os.Exit(1)
 	}
 
+	// Get the event channcel from the eventfeed
 	evChan, err := ef.Start(ctx)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to start event feed")
 		os.Exit(1)
 	}
 
-	ep := processing.New(&config.Conf, evChan)
-	ep.ProcessEvents(ctx, evChan)
+	// Initialize KV store
+	kv, err := store.New(&config.Conf)
+	defer kv.Close()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize KV store")
+		os.Exit(1)
+	}
+	// Initialize the deposit store
+	ds := deposits.New(kv)
+
+	// Initialize the event processor
+	ep := processing.New(&config.Conf, evChan, ds)
+	ep.ProcessEvents(ctx, evChan) // Listening
+
+	// Making a channel listening for interruptions or errors
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Kill)
 	fmt.Println("Node is running properly!")
 	// Block until a signal is received.
 	sig := <-c
 	fmt.Println("\nGot signal:", sig)
-
 }
