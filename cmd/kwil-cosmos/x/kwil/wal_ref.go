@@ -2,12 +2,9 @@ package kwil
 
 import (
 	"sync/atomic"
-	"unsafe"
 
 	wal "github.com/kwilteam/kwil-db/internal/wal"
 )
-
-var emptyWal = unsafe.Pointer(&wal.Wal{})
 
 type WalRef struct {
 	log          *wal.Wal
