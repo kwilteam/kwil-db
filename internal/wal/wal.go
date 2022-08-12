@@ -186,7 +186,7 @@ func (w *Wal) appendWrite(data []byte) error {
 	return w.wal.Write(currentIndex, data)
 }
 
-func newLogPrefix(mByte uint8, msgType uint8) []byte {
+func newLogPrefix(mByte uint8, msgType uint16) []byte {
 	var m []byte
 	m = append(m, mByte)
 	m = append(m, uint16ToBytes(msgType)...)
