@@ -2,13 +2,14 @@ package events
 
 import (
 	"context"
+	"math/big"
+	"path"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/kwilteam/kwil-db/internal/config"
 	kwal "github.com/kwilteam/kwil-db/internal/wal"
 	"github.com/rs/zerolog/log"
-	"math/big"
-	"path"
 )
 
 type WAL interface{}
@@ -25,7 +26,7 @@ func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[s
 			height := <-ch
 
 			// Create new WAL here
-			wal, err := kwal.NewWal(path.Join(walPref, height.String()), nil)
+			wal, err := kwal.Open(path.Join(walPref, height.String()))
 			if err != nil {
 				log.Fatal().Err(err).Msg("error creating new wal")
 			}
