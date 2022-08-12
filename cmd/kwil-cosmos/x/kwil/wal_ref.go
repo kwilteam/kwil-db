@@ -65,5 +65,10 @@ func (ref *WalRef) Close() {
 
 func Open(walFile string) *WalRef {
 	v := uint32(0)
-	return &WalRef{wal.Open(walFile), &v}
+	w, err := wal.Open(walFile)
+	if err != nil {
+		panic("unable to open WAL file. " + err.Error())
+	}
+
+	return &WalRef{w, &v}
 }

@@ -2,13 +2,14 @@ package events
 
 import (
 	"context"
+	"math/big"
+	"path"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/kwilteam/kwil-db/internal/config"
-	//kwal "github.com/kwilteam/kwil-db/internal/wal"
+	kwal "github.com/kwilteam/kwil-db/internal/wal"
 	"github.com/rs/zerolog/log"
-	"math/big"
-	//"path"
 )
 
 type WAL interface{}
@@ -25,16 +26,16 @@ func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[s
 			height := <-ch
 
 			// Create new WAL here
-			/*wal, err := kwal.NewWal(path.Join(walPref, height.String()), nil)
+			wal, err := kwal.Open(path.Join(walPref, height.String()))
 			if err != nil {
 				log.Fatal().Err(err).Msg("error creating new wal")
-			}*/
+			}
 
 			// Append BeginBlock
-			/*err = kwal.BeginEthBlock(height)
+			err = wal.BeginEthBlock(height)
 			if err != nil {
 				log.Fatal().Err(err).Msg("error writing BeginEthBlock to wal")
-			}*/
+			}
 
 			addr := common.HexToAddress(config.Conf.ClientChain.DepositContract.Address)
 
@@ -55,8 +56,8 @@ func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[s
 			for _, vLog := range logs {
 
 				// Append tx hash to wal
-				//hBytes := common.Hex2BytesFixed(vLog.TxHash.Hex(), 32)
-				//err = wal.BeginTransaction(hBytes)
+				hBytes := common.Hex2BytesFixed(vLog.TxHash.Hex(), 32)
+				err = wal.BeginTransaction(hBytes)
 				if err != nil {
 					log.Fatal().Err(err).Msg("error writing BeginTransaction to wal")
 				}
@@ -87,6 +88,17 @@ func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[s
 				}
 				// Send the result through the channel
 				retChan <- em
+			}
+			// Append EndBlock
+			err = wal.EndEthBlock(height)
+			if err != nil {
+				log.Fatal().Err(err).Msg("error writing EndEthBlock to wal")
+			}
+
+			// Close the wal
+			//err = wal.Close()
+			if err != nil {
+				log.Warn().Err(err).Msg("error closing wal")
 			}
 		}
 	}()

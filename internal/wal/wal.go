@@ -34,14 +34,14 @@ const (
 //TODO: add recovery logic or a registerable recovery handler
 
 // Will create a new WAL based on context.
-func Open(path string) *Wal {
+func Open(path string) (*Wal, error) {
 	innerWal, err := wal.Open(path, nil) //need to use walOptions for reader optimization
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	// Creating new wal
-	return &Wal{wal: innerWal}
+	return &Wal{wal: innerWal}, nil
 }
 
 func (w *Wal) BeginBlock(ctx BlockContext) error {
