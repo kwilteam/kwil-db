@@ -9,7 +9,7 @@ type Config struct {
 	Storage     Storage     `json:"storage" mapstructure:"storage"`
 	Log         struct {
 		Human bool `default:"false"`
-		Debug bool `default:"false"`
+		Debug bool `default:"false" mapstructure:"debug"`
 	}
 }
 

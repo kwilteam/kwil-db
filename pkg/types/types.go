@@ -14,12 +14,13 @@ func NewClientChain(chainID int, endpoint string, depositContract *DepositContra
 }
 
 type ClientChain struct {
-	ChainID         int             `json:"chain_id" mapstructure:"id"`
-	Endpoint        string          `json:"endpoint" mapstructure:"endpoint"`
-	DepositContract DepositContract `json:"deposit_contract" mapstructure:"deposit_contract"`
-	BlockTimeout    int             `json:"block_timeout" mapstructure:"block_timeout"`
-	MinBlockHeight  int             `json:"min_block_height" mapstructure:"min_block_height"`
-	MaxBufferSize   int             `json:"max_block_buffer_size" mapstructure:"max_block_buffer_size"`
+	ChainID               int             `json:"chain_id" mapstructure:"id"`
+	Endpoint              string          `json:"endpoint" mapstructure:"endpoint"`
+	DepositContract       DepositContract `json:"deposit_contract" mapstructure:"deposit_contract"`
+	BlockTimeout          int             `json:"block_timeout" mapstructure:"block_timeout"`
+	RequiredConfirmations int             `json:"required_confirmations" mapstructure:"required_confirmations"`
+	MaxBufferSize         int             `json:"max_block_buffer_size" mapstructure:"max_block_buffer_size"`
+	LowestHeight          int             `json:"lowest_height" mapstructure:"lowest_height"`
 }
 
 type Wallets struct {
@@ -55,8 +56,8 @@ func (c *ClientChain) GetBlockTimeout() int {
 	return c.BlockTimeout
 }
 
-func (c *ClientChain) GetMinBlockHeight() int {
-	return c.MinBlockHeight
+func (c *ClientChain) GetRequiredConfirmations() int {
+	return c.RequiredConfirmations
 }
 
 // Takes event names and gets topics based on the ABI

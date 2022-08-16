@@ -1,15 +1,14 @@
-package events
+package config
 
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/kwilteam/kwil-db/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
 func DryConnectChain() error {
 	// Get the config
-	conf := &config.Conf
+	conf := &Conf
 
 	// Dial the gateway service
 	client, err := ethclient.Dial(conf.ClientChain.Endpoint)
@@ -25,7 +24,7 @@ func DryConnectChain() error {
 
 func ConnectChain() (*ethclient.Client, error) {
 	// Get the config
-	conf := &config.Conf
+	conf := &Conf
 
 	// Dial the gateway service
 	client, err := ethclient.Dial(conf.ClientChain.Endpoint)

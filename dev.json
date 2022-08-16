@@ -3,9 +3,10 @@
     {
         "id": "1",
         "endpoint": "wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41",
-        "min_block_height": "1",
+        "required_confirmations": "1",
         "max_block_buffer_size": "50",
         "block_timeout": "60",
+        "lowest_height": "7411530",
         "deposit_contract": 
             {
                 "address": "0xE596928C26A11e9373FC4245d6Ee02aE0De32612",
@@ -15,6 +16,10 @@
                     "GoodbyeWorld"
                 ]
             }
+    },
+    "log": {
+        "debug": true
+
     },
     "wallets": {
         "ethereum": {

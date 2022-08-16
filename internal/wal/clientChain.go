@@ -7,18 +7,21 @@ import (
 
 // This file contains some abstractions for writing WAL data for Ethereum event listeners
 
+// This function logs that we have begun a new ETH block
 func (w *Wal) BeginEthBlock(h *big.Int) error {
 	m := newLogPrefix(0, 500)
 	m = append(m, BigInt2Bytes(h)...)
 	return w.appendWrite(m)
 }
 
+// This function logs that we have ended an ETH block
 func (w *Wal) EndEthBlock(h *big.Int) error {
 	m := newLogPrefix(0, 501)
 	m = append(m, BigInt2Bytes(h)...)
 	return w.appendWrite(m)
 }
 
+// BeginTransaction calls when we receive a new TX eth
 func (w *Wal) BeginTransaction(tx []byte) error {
 	if len(tx) != 32 {
 		return errors.New("invalid tx hash: hash must be 32 bytes")
@@ -28,6 +31,7 @@ func (w *Wal) BeginTransaction(tx []byte) error {
 	return w.appendWrite(m)
 }
 
+// EndTransaction calls when we have processed an eth event
 func (w *Wal) EndTransaction(tx []byte) error {
 	if len(tx) != 32 {
 		return errors.New("invalid tx hash: hash must be 32 bytes")

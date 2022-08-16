@@ -8,46 +8,61 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/types"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"math/big"
+	"sync"
 )
 
 /*
 	This package is to separate the event intake from the event processing (i.e., handling deposits).
 */
 
-type EventFeed struct {
-	log         zerolog.Logger
-	ClientChain types.ClientChain
-	EthClient   *ethclient.Client
-	Topics      map[common.Hash]abi.Event
+type DepositStore interface {
+	Deposit(amount *big.Int, addr string, tx []byte, height *big.Int) error
+	GetBalance(addr string) (*big.Int, error)
+	CommitBlock(height *big.Int) error
+	GetLastHeight() (*big.Int, error)
+	SetLastHeight(height *big.Int) error
 }
 
+type EventFeed struct {
+	log       zerolog.Logger
+	Config    *types.Config
+	EthClient *ethclient.Client
+	Topics    map[common.Hash]abi.Event
+	Wal       types.Wal
+	ds        DepositStore
+	mu        sync.Mutex
+}
+
+const walPath = ".wal"
+
 // Creates a new EventFeed
-func New(conf *types.Config, ethClient *ethclient.Client) (*EventFeed, error) {
+func New(conf *types.Config, ethClient *ethclient.Client, wal types.Wal, ds DepositStore) (*EventFeed, error) {
 	logger := log.With().Str("module", "events").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
 	topics := GetTopics(conf)
+
 	return &EventFeed{
-		log:         logger,
-		ClientChain: conf.ClientChain,
-		EthClient:   ethClient,
-		Topics:      topics,
+		log:       logger,
+		Config:    conf,
+		EthClient: ethClient,
+		Topics:    topics,
+		Wal:       wal,
+		ds:        ds,
 	}, nil
 }
 
-func (e *EventFeed) Start(
+func (e *EventFeed) Listen(
 	ctx context.Context,
-) (chan map[string]interface{}, error) {
+) error {
 	e.log.Debug().Msg("starting event feed")
-	defer e.log.Debug().Msg("event feed stopped")
 
-	// This will return a channel that contains block height bigint values
 	headers, err := e.listenForBlockHeaders(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	e.ProcessBlocks(ctx, headers)
 
-	events := e.pullEvents(ctx, headers)
-
-	return events, nil
+	return nil
 }
 
 // This function gets the list of topics
