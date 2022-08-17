@@ -5,47 +5,55 @@ import (
 	"math/big"
 )
 
+type WalEthTx struct {
+	inner *walWriter
+}
+
 // This file contains some abstractions for writing WAL data for Ethereum event listeners
 
-// This function logs that we have begun a new ETH block
-func (w *Wal) BeginEthBlock(h *big.Int) error {
-	m := newLogPrefix(0, 500)
-	m = append(m, BigInt2Bytes(h)...)
-	return w.appendWrite(m)
+// Will create a new WAL based on context.
+func OpenEthTxWal(path string) (*WalEthTx, error) {
+	inner, err := openWalWriter(path, "wal-etx")
+	if err != nil {
+		return nil, err
+	}
+
+	// Creating new wal
+	return &WalEthTx{inner}, nil
 }
 
-// This function logs that we have ended an ETH block
-func (w *Wal) EndEthBlock(h *big.Int) error {
-	m := newLogPrefix(0, 501)
-	m = append(m, BigInt2Bytes(h)...)
-	return w.appendWrite(m)
+func (w *WalEthTx) BeginEthBlock(h *big.Int) error {
+	return w.appendEthBlock(500, h)
 }
 
-// BeginTransaction calls when we receive a new TX eth
-func (w *Wal) BeginTransaction(tx []byte) error {
+func (w *WalEthTx) EndEthBlock(h *big.Int) error {
+	return w.appendEthBlock(501, h)
+}
+
+func (w *WalEthTx) BeginTransaction(tx []byte) error {
+	return w.appendTransaction(502, tx)
+}
+
+func (w *WalEthTx) EndTransaction(tx []byte) error {
+	return w.appendTransaction(503, tx)
+}
+
+func (w *WalEthTx) Close() {
+	w.inner.closeWal()
+}
+
+func (w *WalEthTx) appendEthBlock(msgType uint16, h *big.Int) error {
+	m := newWalMessage(msgType).append(bigInt2Bytes(h)...)
+	return w.inner.appendMsgToWal(m)
+}
+
+func (w *WalEthTx) appendTransaction(msgType uint16, tx []byte) error {
 	if len(tx) != 32 {
 		return errors.New("invalid tx hash: hash must be 32 bytes")
 	}
-	m := newLogPrefix(0, 502)
-	m = append(m, tx[:]...)
-	return w.appendWrite(m)
-}
 
-// EndTransaction calls when we have processed an eth event
-func (w *Wal) EndTransaction(tx []byte) error {
-	if len(tx) != 32 {
-		return errors.New("invalid tx hash: hash must be 32 bytes")
-	}
-	m := newLogPrefix(0, 503)
-	m = append(m, tx[:]...)
-	return w.appendWrite(m)
-}
-
-// This function converts a big int to bytes.  The result will always be a byte slice of length 16.
-func BigInt2Bytes(h *big.Int) []byte {
-	b := make([]byte, 16)
-	k := h.FillBytes(b)
-	return k
+	m := newWalMessage(msgType).append(tx[:]...)
+	return w.inner.appendMsgToWal(m)
 }
 
 /*

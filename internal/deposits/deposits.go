@@ -3,6 +3,7 @@ package deposits
 import (
 	"context"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/store"
@@ -19,7 +20,7 @@ import (
 type Deposits struct {
 	Store *store.DepositStore
 	ef    *events.EventFeed
-	wal   *wal.Wal
+	wal   *types.Wal
 }
 
 /*
@@ -34,7 +35,7 @@ const walPath = ".wal"
 func Init(ctx context.Context, conf *types.Config, client *ethclient.Client) (*Deposits, error) {
 
 	// Make a WAL
-	wal, err := wal.Open(walPath)
+	wal, err := wal.OpenEthTxWal(walPath)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +56,9 @@ func Init(ctx context.Context, conf *types.Config, client *ethclient.Client) (*D
 
 	// Make sure that the height is properly set
 	err = ef.IndicateLastHeight()
+	if err != nil {
+		return nil, err
+	}
 
 	// Now, we sync with old events
 	err = Sync(ctx, ef)
@@ -71,7 +75,7 @@ func Init(ctx context.Context, conf *types.Config, client *ethclient.Client) (*D
 	return &Deposits{
 		Store: ds,
 		ef:    ef,
-		wal:   wal,
+		wal:   getWalPtr(wal),
 	}, nil
 }
 
@@ -100,6 +104,14 @@ func Sync(ctx context.Context, ef *events.EventFeed) error {
 
 	// Finally, update the last height
 	err = ef.UpdateLastHeight(high)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Sync complete at height %d!\n", high)
 	return nil
+}
+
+func getWalPtr(wal types.Wal) *types.Wal {
+	return &wal
 }

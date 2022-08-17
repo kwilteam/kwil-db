@@ -19,6 +19,7 @@ func main() {
 		// this line is used by starport scaffolding # root/arguments
 	)
 
+	rootCmd.Use = "kwild"
 	rootCmd.Short = "kwil-db cli"
 
 	if err := svrcmd.Execute(rootCmd, app.DefaultNodeHome); err != nil {
