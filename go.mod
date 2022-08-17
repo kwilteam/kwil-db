@@ -8,7 +8,6 @@ require (
 	github.com/cosmos/ibc-go/v3 v3.0.0
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/ethereum/go-ethereum v1.10.21
-	github.com/fatih/color v1.13.0
 	github.com/gogo/protobuf v1.3.3
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/mux v1.8.0
@@ -83,6 +82,7 @@ require (
 	github.com/dvsekhvalnov/jose2go v0.0.0-20200901110807-248326c1351b // indirect
 	github.com/emicklei/proto v1.9.0 // indirect
 	github.com/emirpasic/gods v1.12.0 // indirect
+	github.com/fatih/color v1.13.0 // indirect
 	github.com/felixge/httpsnoop v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
