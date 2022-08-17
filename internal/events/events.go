@@ -56,7 +56,7 @@ func (e *EventFeed) Listen(
 ) error {
 	e.log.Debug().Msg("starting event feed")
 
-	headers, err := e.listenForBlockHeaders(ctx)
+	headers, err := e.ListenForBlockHeaders(ctx)
 	if err != nil {
 		return err
 	}
