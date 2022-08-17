@@ -71,6 +71,16 @@ func (ds *DepositStore) Deposit(amt *big.Int, addr string, tx []byte, height *bi
 
 	val := amt.Bytes()
 
+	exists, err := ds.db.Exists(txKey)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		fmt.Println("tx already exists")
+		return nil
+	}
+
 	// Now we create a transaction to store both the balance and txKey
 	txn := ds.db.NewTransaction(true)
 	defer txn.Discard()
@@ -79,30 +89,9 @@ func (ds *DepositStore) Deposit(amt *big.Int, addr string, tx []byte, height *bi
 	return txn.Commit()
 }
 
-// GetBalance returns the balance of the address
-func (ds *DepositStore) GetBalance(addr string) (*big.Int, error) {
-	key := append(ds.prefix, []byte(addr)...)
-	val, err := ds.db.Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	bal := Byte2BigInt(val)
-	return bal, nil
-}
-
-func Byte2BigInt(b []byte) *big.Int {
-	bi := big.NewInt(0)
-	bi.SetBytes(b)
-	return bi
-}
-
-func (ds *DepositStore) Close() {
-	ds.db.Close()
-}
-
 // CommitBlock deletes all the transactions in the block
 func (ds *DepositStore) CommitBlock(height *big.Int) error {
+
 	pref := append(BlockKey, height.Bytes()...) // bht is the prefix for block height
 	err := ds.db.DeleteByPrefix(pref)
 	if err != nil {
@@ -128,6 +117,28 @@ func (ds *DepositStore) CommitBlock(height *big.Int) error {
 	}
 
 	return nil
+}
+
+// GetBalance returns the balance of the address
+func (ds *DepositStore) GetBalance(addr string) (*big.Int, error) {
+	key := append(ds.prefix, []byte(addr)...)
+	val, err := ds.db.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	bal := Byte2BigInt(val)
+	return bal, nil
+}
+
+func Byte2BigInt(b []byte) *big.Int {
+	bi := big.NewInt(0)
+	bi.SetBytes(b)
+	return bi
+}
+
+func (ds *DepositStore) Close() {
+	ds.db.Close()
 }
 
 // Prints all balances of all wallets

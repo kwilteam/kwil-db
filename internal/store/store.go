@@ -199,3 +199,21 @@ func (db *BadgerDB) PrintAll() {
 		return nil
 	})
 }
+
+func (db *BadgerDB) Exists(key []byte) (bool, error) {
+	var exists bool
+	err := db.db.View(func(txn *badger.Txn) error {
+		_, err := txn.Get(key)
+		if err == badger.ErrKeyNotFound {
+			exists = false
+		} else if err == badger.ErrEmptyKey {
+			exists = false
+		} else if err != nil {
+			return err
+		} else {
+			exists = true
+		}
+		return nil
+	})
+	return exists, err
+}

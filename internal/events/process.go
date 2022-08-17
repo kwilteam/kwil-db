@@ -1,6 +1,7 @@
 package events
 
 import (
+	"fmt"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -25,10 +26,11 @@ func (ef *EventFeed) ProcessEvent(ev Event) error {
 
 func (ef *EventFeed) ProcessDeposit(ev *DepositEvent) error {
 	err := ef.ds.Deposit(ev.Data.Amount, ev.Data.Caller.String(), ev.Tx, ev.Height)
+	fmt.Println("tx:", ev.Tx, "height:", ev.Height)
 	if err != nil {
 		return err
 	} else {
-		ef.log.Info().Msgf("deposited %s to %s", ev.Data.Amount, ev.Data.Target)
+		ef.log.Info().Msgf("deposited to %s", ev.Data.Target)
 	}
 	return nil
 }

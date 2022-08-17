@@ -75,7 +75,7 @@ func (ef *EventFeed) ListenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 				} else if header.Number.Cmp(expected) > 0 {
 
 					// received is greater than expected
-					ef.log.Debug().Msgf("received header is greater than expected.  expected: %s", header.Number.String(), "received: ", expected.String())
+					ef.log.Debug().Msgf("received header is greater than expected.  expected: %s | received: %s", header.Number.String(), expected.String())
 
 					// Increasing the loop exit point since we need the received value as well
 					endloop := header.Number.Add(header.Number, big.NewInt(1)) // looping through from expected to received
@@ -86,7 +86,7 @@ func (ef *EventFeed) ListenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 
 				} else {
 
-					ef.log.Debug().Msgf("received header is less than expected.  expected: %s", header.Number.String(), "received: ", expected.String())
+					ef.log.Debug().Msgf("received header is less than expected.  expected: %s | received: %s", header.Number.String(), expected.String())
 					// do nothing here
 
 				}
@@ -258,7 +258,7 @@ func copyBigInt(v *big.Int) *big.Int {
 // This receives block headers and waits for them to reach a sufficient block height before pulling the data
 /*func (ef *EventFeed) processBlockHeader(ch chan *big.Int, nch chan bool) chan *big.Int {
 
-	retChan := make(chan *big.Int, config.Conf.ClientChain.MaxBufferSize) // TODO: This can be an unbuffered channel, but I have made it buffered for testing purposes
+	retChan := make(chan *big.Int, config.Conf.ClientChain.MaxBufferSize)
 	// Fire goroutine to listen
 	go func() {
 		for {

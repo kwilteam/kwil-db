@@ -3,7 +3,7 @@
     {
         "id": "1",
         "endpoint": "wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41",
-        "required_confirmations": "3",
+        "required_confirmations": "6",
         "max_block_buffer_size": "50",
         "block_timeout": "60",
         "lowest_height": "7411530",
