@@ -25,11 +25,18 @@ type ClientChain struct {
 
 type Wallets struct {
 	Ethereum EthereumWallet `json:"ethereum" mapstructure:"ethereum"`
+	Cosmos   CosmosWallet   `json:"cosmos" mapstructure:"cosmos"`
 }
 
 type EthereumWallet struct {
 	Address     string `json:"address" mapstructure:"address"`
 	PrivKeyPath string `json:"private_key_path" mapstructure:"private_key_path"`
+}
+
+type CosmosWallet struct {
+	AddressPrefix string `json:"address_prefix" mapstructure:"address_prefix"`
+	MnemonicPath  string `json:"mnemonic_path" mapstructure:"mnemonic_path"`
+	KeyName       string `json:"name_on_keyring" mapstructure:"name_on_keyring"`
 }
 
 func (c *ClientChain) GetChainID() int {

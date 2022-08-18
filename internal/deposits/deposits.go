@@ -32,7 +32,7 @@ type Deposits struct {
 
 const walPath = ".wal"
 
-func Init(ctx context.Context, conf *types.Config, client *ethclient.Client) (*Deposits, error) {
+func Init(ctx context.Context, conf *types.Config, client *ethclient.Client, cosmClient events.CosmClient) (*Deposits, error) {
 
 	// Make a WAL
 	wal, err := wal.OpenEthTxWal(walPath)
@@ -49,7 +49,7 @@ func Init(ctx context.Context, conf *types.Config, client *ethclient.Client) (*D
 	}
 
 	// Next initialize an event feed
-	ef, err := events.New(conf, client, wal, ds)
+	ef, err := events.New(conf, client, cosmClient, wal, ds)
 	if err != nil {
 		return nil, err
 	}

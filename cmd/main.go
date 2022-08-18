@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/api/rest"
+	cosClient "github.com/kwilteam/kwil-db/internal/client"
 	"github.com/kwilteam/kwil-db/internal/config"
 	"github.com/kwilteam/kwil-db/internal/deposits"
 	"github.com/kwilteam/kwil-db/internal/logging"
 	"github.com/rs/zerolog/log"
 	"os"
-	"os/signal"
 )
 
 func main() {
@@ -40,8 +41,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	/*// Create cosmos client
+	cosmClient, err := cosClient.NewCosmosClient(ctx, &config.Conf)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create cosmos client")
+		os.Exit(1)
+	}
+
+	cosmClient.Transfer(2, "kaddr-1jz2z9jtpza7a499cj4dpfmvzclwa0a5hva9ymq")*/
+
 	// Initialize deposits
-	d, err := deposits.Init(ctx, &config.Conf, client)
+	d, err := deposits.Init(ctx, &config.Conf, client, cosClient.CosmosClient{})
 	defer d.Store.Close()
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize deposits")
@@ -49,11 +59,13 @@ func main() {
 	}
 
 	// Making a channel listening for interruptions or errors
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	signal.Notify(c, os.Kill)
 	fmt.Println("Node is running properly!")
-	// Block until a signal is received.
-	sig := <-c
-	fmt.Println("\nGot signal:", sig)
+
+	// HTTP server
+	service := rest.NewService()
+	httpHandler := rest.NewHandler(service)
+	if err := httpHandler.Serve(); err != nil {
+		log.Fatal().Err(err).Msg("failed to start http server")
+		os.Exit(1)
+	}
 }

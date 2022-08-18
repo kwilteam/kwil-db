@@ -18,18 +18,27 @@
             }
     },
     "log": {
-        "debug": false
-
+        "debug": false,
+        "human": true
     },
     "wallets": {
         "ethereum": {
             "address": "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",
             "private_key_path": "./keys/ethereum.pem"
+        },
+        "cosmos": {
+            "address_prefix": "kaddr-",
+            "mnemonic_path": "./keys/cosmos",
+            "name_on_keyring": "alice"
         }
     },
     "storage": {
         "badger": {
             "path": "./.kwilbadger"
         }
+    },
+    "api": {
+        "port": "8080",
+        "timeout_time": "10"
     }
 }

@@ -2,9 +2,9 @@ package events
 
 import (
 	"context"
-	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/rs/zerolog/log"
 	"math/big"
 )
 
@@ -48,6 +48,6 @@ func (ef *EventFeed) ProcessBlocks(ctx context.Context, ch chan *big.Int) {
 func (ed *EventFeed) LogHeight(h *big.Int) {
 	bi := big.NewInt(0)
 	if bi.Mod(h, big.NewInt(1)).Cmp(big.NewInt(0)) == 0 {
-		fmt.Println("height: ", h)
+		log.Debug().Msgf("Processing block %d", h)
 	}
 }

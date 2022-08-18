@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/config"
 	"github.com/rs/zerolog/log"
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -122,14 +123,17 @@ func (e *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *type
 type HeaderQueue struct {
 	queue []*big.Int
 	last  *big.Int
+	mu    sync.Mutex
 }
 
 func (h *HeaderQueue) Append(height *big.Int) {
+	h.mu.Lock()
 	if !h.isGreaterThanLast(height) {
 		panic("height is not greater than last")
 	}
 	h.queue = append(h.queue, height)
 	h.last = height
+	h.mu.Unlock()
 }
 
 func (h *HeaderQueue) isGreaterThanLast(v *big.Int) bool {
@@ -137,11 +141,13 @@ func (h *HeaderQueue) isGreaterThanLast(v *big.Int) bool {
 }
 
 func (h *HeaderQueue) Pop() *big.Int {
+	h.mu.Lock()
 	if len(h.queue) == 0 {
 		return nil
 	}
 	ret := h.queue[0]
 	h.queue = h.queue[1:]
+	h.mu.Unlock()
 	return ret
 }
 

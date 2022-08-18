@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"os"
+	"strconv"
 )
 
 var Conf types.Config
@@ -33,6 +34,11 @@ func LoadConfig(path string) error {
 		return err // Returning empty config if error occurs
 	}
 
+	err = initEnv(&Conf)
+	if err != nil {
+		return err
+	}
+
 	err = loadABI(Conf.ClientChain.DepositContract.ABIPath)
 
 	return err
@@ -51,5 +57,14 @@ func loadABI(path string) error {
 	}
 
 	Conf.ClientChain.DepositContract.ABI = abiJSON
+	return nil
+}
+
+func initEnv(c *types.Config) error {
+	err := os.Setenv("TIMEOUT_TIME", strconv.Itoa(Conf.Api.TimeoutTime))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

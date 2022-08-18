@@ -77,7 +77,6 @@ func (ds *DepositStore) Deposit(amt *big.Int, addr string, tx []byte, height *bi
 	}
 
 	if exists {
-		fmt.Println("tx already exists")
 		return nil
 	}
 
