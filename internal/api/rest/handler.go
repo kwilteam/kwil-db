@@ -20,6 +20,8 @@ type Handler struct {
 	Server  *http.Server
 }
 
+// TODO: Add JSON validation
+
 func NewHandler(service WriteService) *Handler {
 	h := &Handler{
 		Router:  mux.NewRouter(),
