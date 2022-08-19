@@ -102,6 +102,7 @@ import (
 	kwilmodule "github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil"
 	kwilmodulekeeper "github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/keeper"
 	kwilmoduletypes "github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types"
+	"github.com/kwilteam/kwil-db/internal/utils"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 )
 
@@ -182,11 +183,8 @@ var (
 
 func init() {
 	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		panic(err)
-	}
-
-	DefaultNodeHome = filepath.Join(userHomeDir, "."+Name)
+	utils.PanicIfError(err)
+	DefaultNodeHome = filepath.Join(userHomeDir, "."+Name+"/chain")
 }
 
 // App extends an ABCI application, but with most of its parameters exported.
@@ -568,10 +566,7 @@ func New(
 			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
-
+	utils.PanicIfError(err)
 	app.SetAnteHandler(anteHandler)
 	app.SetEndBlocker(app.EndBlocker)
 
@@ -597,13 +592,11 @@ func (app App) GetBaseApp() *baseapp.BaseApp { return app.BaseApp }
 
 // BeginBlocker application updates every begin block
 func (app *App) BeginBlocker(ctx sdk.Context, req abci.RequestBeginBlock) abci.ResponseBeginBlock {
-
 	return app.mm.BeginBlock(ctx, req)
 }
 
 // EndBlocker application updates every end block
 func (app *App) EndBlocker(ctx sdk.Context, req abci.RequestEndBlock) abci.ResponseEndBlock {
-
 	return app.mm.EndBlock(ctx, req)
 }
 
