@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+
+	"github.com/kwilteam/kwil-db/internal/utils"
 )
 
 var (
@@ -41,9 +43,7 @@ type WalDbCmd struct {
 
 func OpenDbCmdWal(path string) *WalDbCmd {
 	w, err := openWalWriter(path, "dbcmd.wal")
-	if err != nil {
-		panic("unable to open WAL file. " + err.Error())
-	}
+	utils.PanicIfErrorMsg(err, "unable to open WAL file.")
 
 	v := uint32(0)
 
@@ -52,9 +52,7 @@ func OpenDbCmdWal(path string) *WalDbCmd {
 
 func OpenDbCmdWalFromHomeDir(path string) *WalDbCmd {
 	w, err := openWalWriterFromHomeDir(path, "dbcmd.wal")
-	if err != nil {
-		panic("unable to open WAL file. " + err.Error())
-	}
+	utils.PanicIfErrorMsg(err, "unable to open WAL file.")
 
 	v := uint32(0)
 
@@ -150,7 +148,7 @@ func (w *WalDbCmd) AppendExecuteQuery(dbid, statementid string, args QueryArgs) 
 
 	// Looping through all args to add the size and type
 	for i := 0; i < len(args); i++ {
-		b = appendByteArrLength(b, args[i].arg)
+		b = utils.AppendByteArrLength(b, args[i].arg)
 		b = append(b, args[i].argType...)
 	}
 
@@ -215,7 +213,7 @@ func newWalDbMessage(msgType uint16, dbid string) (*walMessage, error) {
 // Will append the slice length as uint16 to the end of the byte slice
 // Use this function instead of doing it manually since this uses uint16 instead of int64
 func appendArgAmt(w *walMessage, a QueryArgs) *walMessage {
-	return w.append(uint16ToBytes(uint16(len(a)))...)
+	return w.append(utils.Uint16ToBytes(uint16(len(a)))...)
 }
 
 /*

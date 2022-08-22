@@ -3,6 +3,8 @@ package wal
 import (
 	"errors"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/internal/utils"
 )
 
 type WalEthTx struct {
@@ -43,7 +45,7 @@ func (w *WalEthTx) Close() {
 }
 
 func (w *WalEthTx) appendEthBlock(msgType uint16, h *big.Int) error {
-	m := newWalMessage(msgType).append(bigInt2Bytes(h)...)
+	m := newWalMessage(msgType).append(utils.BigInt2Bytes(h)...)
 	return w.inner.appendMsgToWal(m)
 }
 

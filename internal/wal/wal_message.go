@@ -1,5 +1,7 @@
 package wal
 
+import "github.com/kwilteam/kwil-db/internal/utils"
+
 type walMessage struct {
 	data *[]byte
 }
@@ -16,7 +18,7 @@ func (m *walMessage) appendString(s string) *walMessage {
 }
 
 func (m *walMessage) appendLenWithString(s string) *walMessage {
-	*(m.data) = append(*(m.data), uint16ToBytes(uint16(len(s)))...)
+	*(m.data) = append(*(m.data), utils.Uint16ToBytes(uint16(len(s)))...)
 	return m
 }
 
@@ -27,6 +29,6 @@ func newWalMessage(msgType uint16) *walMessage {
 func newLogMsgPrefix(mByte uint8, msgType uint16) *[]byte {
 	var m []byte
 	m = append(m, mByte)
-	m = append(m, uint16ToBytes(msgType)...)
+	m = append(m, utils.Uint16ToBytes(msgType)...)
 	return &m
 }
