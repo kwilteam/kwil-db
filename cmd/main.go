@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/kwilteam/kwil-db/internal/api/rest"
+	"github.com/kwilteam/kwil-db/internal/api/service"
 	cosClient "github.com/kwilteam/kwil-db/internal/client"
 	"github.com/kwilteam/kwil-db/internal/config"
 	"github.com/kwilteam/kwil-db/internal/deposits"
@@ -62,8 +63,8 @@ func main() {
 	fmt.Println("Node is running properly!")
 
 	// HTTP server
-	service := rest.NewService()
-	httpHandler := rest.NewHandler(service)
+	serv := service.NewService()
+	httpHandler := rest.NewHandler(*serv)
 	if err := httpHandler.Serve(); err != nil {
 		log.Fatal().Err(err).Msg("failed to start http server")
 		os.Exit(1)

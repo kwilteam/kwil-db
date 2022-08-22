@@ -1,0 +1,12 @@
+{
+    "name": "",
+    "owner": "",
+    "type": "",
+    "default_role": "",
+    "structure": {
+        "parameterized_queries": [],
+        "roles": [],
+        "tables": [],
+        "constraints": []
+    }
+}

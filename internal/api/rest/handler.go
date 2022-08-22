@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/kwilteam/kwil-db/internal/api/service"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
@@ -11,18 +12,15 @@ import (
 	"time"
 )
 
-type WriteService interface {
-}
-
 type Handler struct {
 	Router  *mux.Router
-	Service WriteService
+	Service service.Service
 	Server  *http.Server
 }
 
 // TODO: Add JSON validation
 
-func NewHandler(service WriteService) *Handler {
+func NewHandler(service service.Service) *Handler {
 	h := &Handler{
 		Router:  mux.NewRouter(),
 		Service: service,
@@ -47,6 +45,7 @@ func (h *Handler) Write(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) mapRoutes() {
 	h.Router.HandleFunc("/api/v0/write", JWTAuth(h.Write)).Methods("POST")
+	h.Router.HandleFunc("/api/v0/createDatabase", JWTAuth(h.CreateDatabase)).Methods("POST")
 }
 
 func (h *Handler) Serve() error {
