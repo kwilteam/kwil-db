@@ -3,13 +3,14 @@ package rest
 import (
 	"context"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/kwilteam/kwil-db/internal/api/service"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/kwilteam/kwil-db/internal/api/service"
+	"github.com/rs/zerolog/log"
 )
 
 type Handler struct {
@@ -51,12 +52,12 @@ func (h *Handler) mapRoutes() {
 func (h *Handler) Serve() error {
 	go func() {
 		err := h.Server.ListenAndServe()
-		if err != nil {
-			if err != http.ErrServerClosed {
-				log.Fatal().Err(err).Msg("failed to start http server")
-				os.Exit(1)
-			}
+		if err == nil || err == http.ErrServerClosed {
+			return
 		}
+
+		log.Fatal().Err(err).Msg("failed to start http server")
+		os.Exit(1)
 	}()
 
 	c := make(chan os.Signal, 1)

@@ -1,5 +1,12 @@
 {
     "gopls": {
-        "experimentalWorkspaceModule": true
+        "experimentalWorkspaceModule": true,
+        "ui.semanticTokens": true,
+        "ui.completion.usePlaceholders": true,
+        "ui.diagnostic.staticcheck": true,
+        "ui.diagnostic.showCodeActions": true,
+        "ui.diagnostic.showRelatedInformation": true,
+        "ui.diagnostic.showSuggestedFixes": true,
     }
+    
 }

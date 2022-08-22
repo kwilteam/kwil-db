@@ -2,9 +2,10 @@ package rest
 
 import (
 	"fmt"
-	"github.com/golang-jwt/jwt"
 	"net/http"
 	"strings"
+
+	"github.com/golang-jwt/jwt"
 )
 
 func JWTAuth(
@@ -12,7 +13,7 @@ func JWTAuth(
 ) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header["Authorization"]
-		if authHeader == nil {
+		if len(authHeader) == 0 {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -36,7 +37,7 @@ func validateToken(accessToken string) bool {
 
 	token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return mySigningKey, nil
 	})
