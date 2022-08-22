@@ -52,12 +52,14 @@ func main() {
 	cosmClient.Transfer(2, "kaddr-1jz2z9jtpza7a499cj4dpfmvzclwa0a5hva9ymq")*/
 
 	// Initialize deposits
-	d, err := deposits.Init(ctx, &config.Conf, client, cosClient.CosmosClient{})
-	defer d.Store.Close()
+	cosmClient := cosClient.CosmosClient{}
+	d, err := deposits.Init(ctx, &config.Conf, client, &cosmClient)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize deposits")
 		os.Exit(1)
 	}
+
+	defer d.Store.Close()
 
 	// Making a channel listening for interruptions or errors
 	fmt.Println("Node is running properly!")

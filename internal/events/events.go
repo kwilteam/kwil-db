@@ -8,45 +8,32 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/types"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"math/big"
-	"sync"
 )
 
 /*
 	This package is to separate the event intake from the event processing (i.e., handling deposits).
 */
 
-type DepositStore interface {
-	Deposit(amount *big.Int, addr string, tx []byte, height *big.Int) error
-	GetBalance(addr string) (*big.Int, error)
-	CommitBlock(height *big.Int) error
-	GetLastHeight() (*big.Int, error)
-	SetLastHeight(height *big.Int) error
-}
-
 type CosmClient interface {
 }
 
 type EventFeed struct {
-	log        zerolog.Logger
+	log        *zerolog.Logger
 	Config     *types.Config
 	EthClient  *ethclient.Client
 	CosmClient CosmClient
 	Topics     map[common.Hash]abi.Event
 	Wal        types.Wal
-	ds         DepositStore
-	mu         sync.Mutex
+	ds         types.DepositStore
 }
 
-const walPath = ".wal"
-
 // Creates a new EventFeed
-func New(conf *types.Config, ethClient *ethclient.Client, cosmClient CosmClient, wal types.Wal, ds DepositStore) (*EventFeed, error) {
+func New(conf *types.Config, ethClient *ethclient.Client, cosmClient CosmClient, wal types.Wal, ds types.DepositStore) (*EventFeed, error) {
 	logger := log.With().Str("module", "events").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
 	topics := GetTopics(conf)
 
 	return &EventFeed{
-		log:        logger,
+		log:        &logger,
 		Config:     conf,
 		EthClient:  ethClient,
 		CosmClient: cosmClient,

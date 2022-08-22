@@ -51,20 +51,20 @@ type SqlDatabaseConfig struct {
 	Structure   SQLStructure `json:"structure" yaml:"structure" toml:"structure" mapstructure:"structure"`
 }
 
-func (s *SqlDatabaseConfig) GetName() string {
-	return s.Name
+func (s *SqlDatabaseConfig) GetName() *string {
+	return &s.Name
 }
 
-func (s *SqlDatabaseConfig) GetOwner() string {
-	return s.Owner
+func (s *SqlDatabaseConfig) GetOwner() *string {
+	return &s.Owner
 }
 
-func (s *SqlDatabaseConfig) GetDBType() string {
-	return s.DBType
+func (s *SqlDatabaseConfig) GetDBType() *string {
+	return &s.DBType
 }
 
-func (s *SqlDatabaseConfig) GetDefaultRole() string {
-	return s.DefaultRole
+func (s *SqlDatabaseConfig) GetDefaultRole() *string {
+	return &s.DefaultRole
 }
 
 func (s *SqlDatabaseConfig) GetStructure() Structure {

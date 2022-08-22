@@ -74,23 +74,16 @@ func (db *BadgerDB) Set(key, val []byte) error {
 
 func (db *BadgerDB) RunGC() {
 	ticker := time.NewTicker(badgerGCInterval)
-	for {
-		select {
-		case <-ticker.C:
-			err := db.db.RunValueLogGC(badgerDiscardRatio)
-			if err != nil {
-				// don't report error when GC didn't result in any cleanup
-				if err == badger.ErrNoRewrite {
-					db.log.Debug().Err(err).Msg("no cleanup done")
-				} else {
-					db.log.Error().Err(err).Msg("failed to run GC")
-				}
+	for range ticker.C {
+		<-ticker.C
+		err := db.db.RunValueLogGC(badgerDiscardRatio)
+		if err != nil {
+			// don't report error when GC didn't result in any cleanup
+			if err == badger.ErrNoRewrite {
+				db.log.Debug().Err(err).Msg("no cleanup done")
+			} else {
+				db.log.Error().Err(err).Msg("failed to run GC")
 			}
-
-			// Commenting this out since this doesn't currently have context
-			/*case <-db.ctx.Done():
-			return
-			*/
 		}
 	}
 }

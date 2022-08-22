@@ -9,6 +9,9 @@ import (
 
 func (ef *EventFeed) GetUnsyncedRange(ctx context.Context) (*big.Int, *big.Int, error) {
 	lowH, err := ef.ds.GetLastHeight()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// Get the current height from Ethereum
 	curHead, err := ef.EthClient.HeaderByNumber(ctx, nil)
@@ -60,16 +63,15 @@ func (ef *EventFeed) IndicateLastHeight() error {
 		return err
 	}
 
-	lowH := big.NewInt(0) //This is the variable that we will use for the height
 	// This is 0 in case it somehow does not get updated
 	if lastHeight.Cmp(big.NewInt(int64(ef.Config.ClientChain.LowestHeight))) >= 0 { // Comparing the lowest tracked height to the stored height
 		// This means that the deposit store height is greater than lowest possible.
 		// We should use the stored height to sync from.
-		lowH = lastHeight
+		ef.log.Warn().Msg("synced height higher than confirmed blocks")
 	} else {
 		// This means that the deposit store height is less than lowest possible.
 		// We should use the lowest possible height to sync from.
-		lowH = big.NewInt(int64(ef.Config.ClientChain.LowestHeight))
+		lowH := big.NewInt(int64(ef.Config.ClientChain.LowestHeight))
 		err = ef.ds.SetLastHeight(lowH)
 		if err != nil {
 			return err
