@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog/log"
 )
@@ -12,7 +13,6 @@ func DryConnectChain() error {
 
 	// Dial the gateway service
 	client, err := ethclient.Dial(conf.ClientChain.Endpoint)
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to client chain")
 		return err
