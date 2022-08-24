@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+
 	"github.com/kwilteam/kwil-db/internal/api/rest"
 	"github.com/kwilteam/kwil-db/internal/api/service"
 	cosClient "github.com/kwilteam/kwil-db/internal/client"
@@ -10,7 +12,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/deposits"
 	"github.com/kwilteam/kwil-db/internal/logging"
 	"github.com/rs/zerolog/log"
-	"os"
 )
 
 func main() {
@@ -65,7 +66,7 @@ func main() {
 	fmt.Println("Node is running properly!")
 
 	// HTTP server
-	serv := service.NewService()
+	serv := service.NewService(&config.Conf, d.Store)
 	httpHandler := rest.NewHandler(*serv)
 	if err := httpHandler.Serve(); err != nil {
 		log.Fatal().Err(err).Msg("failed to start http server")
