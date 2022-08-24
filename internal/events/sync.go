@@ -67,7 +67,7 @@ func (ef *EventFeed) IndicateLastHeight() error {
 	if lastHeight.Cmp(big.NewInt(int64(ef.Config.ClientChain.LowestHeight))) >= 0 { // Comparing the lowest tracked height to the stored height
 		// This means that the deposit store height is greater than lowest possible.
 		// We should use the stored height to sync from.
-		ef.log.Debug().Msg("using stored height to sync from")
+		ef.log.Debug().Msgf("using stored height to sync from: %s", lastHeight.String())
 		lowH := big.NewInt(lastHeight.Int64())
 		err = ef.ds.SetLastHeight(lowH)
 		if err != nil {
@@ -76,7 +76,7 @@ func (ef *EventFeed) IndicateLastHeight() error {
 	} else {
 		// This means that the deposit store height is less than lowest possible.
 		// We should use the lowest possible height to sync from.
-		ef.log.Debug().Msg("using lowest possible height to sync from")
+		ef.log.Debug().Msgf("using lowest possible height to sync from: %d", ef.Config.ClientChain.LowestHeight)
 		lowH := big.NewInt(int64(ef.Config.ClientChain.LowestHeight))
 		err = ef.ds.SetLastHeight(lowH)
 		if err != nil {

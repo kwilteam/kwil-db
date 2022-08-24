@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/kwilteam/kwil-db/internal/collection"
 	"github.com/kwilteam/kwil-db/internal/config"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -26,7 +28,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 		return nil, err
 	}
 
-	headerStore := newHeaderQueue(lh)
+	headerStore := ef.newHeaderQueue(lh)
 
 	retChan := make(chan *big.Int, config.Conf.ClientChain.MaxBufferSize)
 
@@ -74,7 +76,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 				} else if header.Number.Cmp(expected) > 0 {
 
 					// received is greater than expected
-					ef.log.Debug().Msgf("received header is greater than expected.  expected: %s | received: %s", header.Number.String(), expected.String())
+					ef.log.Debug().Msgf("received header is greater than expected.  received: %s | expected: %s", header.Number.String(), expected.String())
 
 					// Increasing the loop exit point since we need the received value as well
 					endloop := header.Number.Add(header.Number, big.NewInt(1)) // looping through from expected to received
@@ -116,12 +118,14 @@ func (e *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *type
 type HeaderQueue struct {
 	queue collection.Queue[*big.Int]
 	last  *big.Int
+	log   *zerolog.Logger
 }
 
-func newHeaderQueue(height *big.Int) HeaderQueue {
+func (ef *EventFeed) newHeaderQueue(height *big.Int) HeaderQueue {
 	return HeaderQueue{
 		queue: collection.NewQueue[*big.Int](),
 		last:  height,
+		log:   ef.log,
 	}
 }
 
@@ -129,6 +133,7 @@ func (h *HeaderQueue) append(height *big.Int) {
 	if !h.queue.AddIf(height, h.isGreaterThanLast) {
 		panic("height is not greater than last")
 	}
+	h.log.Debug().Msgf("appended header to queue %s", height.String())
 }
 
 func (h *HeaderQueue) size() int {
@@ -141,8 +146,10 @@ func (h *HeaderQueue) isGreaterThanLast(v *big.Int) bool {
 
 func (h *HeaderQueue) pollTo(c chan *big.Int) {
 	v, ok := h.queue.Poll()
+	x := new(big.Int).Set(v) //copy
 	if ok {
-		c <- v
+		fmt.Println(x)
+		c <- x
 	}
 }
 

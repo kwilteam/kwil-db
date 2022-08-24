@@ -49,6 +49,6 @@ func (ef *EventFeed) processBlocks(ctx context.Context, ch chan *big.Int) {
 func (ef *EventFeed) logHeight(h *big.Int) {
 	bi := big.NewInt(0)
 	if bi.Mod(h, big.NewInt(1)).Cmp(big.NewInt(0)) == 0 {
-		log.Debug().Msgf("Processing block %d", h)
+		log.Debug().Msgf("processing block %d", h)
 	}
 }

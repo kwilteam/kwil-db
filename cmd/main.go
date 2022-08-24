@@ -65,7 +65,7 @@ func main() {
 	fmt.Println("Node is running properly!")
 
 	// HTTP server
-	serv := service.NewService()
+	serv := service.NewService(&config.Conf, d.Store)
 	httpHandler := rest.NewHandler(*serv)
 	if err := httpHandler.Serve(); err != nil {
 		log.Fatal().Err(err).Msg("failed to start http server")
