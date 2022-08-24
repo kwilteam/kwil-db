@@ -3,17 +3,16 @@ package events
 import (
 	"context"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/kwilteam/kwil-db/internal/collection"
 	"github.com/kwilteam/kwil-db/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
 func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, error) {
-	// This method is essentially public since it is one of two methods used in ef.Listen
 	headers := make(chan *types.Header)
 
 	sub, err := ef.EthClient.SubscribeNewHead(ctx, headers)
@@ -26,7 +25,10 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 		return nil, err
 	}
 
-	headerStore := newHeaderQueue(lh)
+	headerStore := HeaderQueue{
+		queue: []*big.Int{},
+		last:  lh,
+	}
 
 	retChan := make(chan *big.Int, config.Conf.ClientChain.MaxBufferSize)
 
@@ -44,6 +46,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 				sub.Unsubscribe()
 				sub = ef.resubscribeEthClient(ctx, headers)
 			case header := <-headers:
+				// IF SHIT IS BREAKING IT IS PROBABLY HERE
 
 				/*
 					In this section, we will receive headers and store them in an array
@@ -92,10 +95,15 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 
 				// 2.
 
-				for headerStore.size() > config.Conf.ClientChain.RequiredConfirmations {
+				for {
 					// if queue is longer than required confirmations, we will pop and send
-					headerStore.pollTo(retChan)
+					if len(headerStore.queue) > config.Conf.ClientChain.RequiredConfirmations {
+						retChan <- headerStore.pop()
+					} else {
+						break
+					}
 				}
+
 			}
 		}
 	}()
@@ -114,36 +122,34 @@ func (e *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *type
 }
 
 type HeaderQueue struct {
-	queue collection.Queue[*big.Int]
+	queue []*big.Int
 	last  *big.Int
-}
-
-func newHeaderQueue(height *big.Int) HeaderQueue {
-	return HeaderQueue{
-		queue: collection.NewQueue[*big.Int](),
-		last:  height,
-	}
+	mu    sync.Mutex
 }
 
 func (h *HeaderQueue) append(height *big.Int) {
-	if !h.queue.AddIf(height, h.isGreaterThanLast) {
+	h.mu.Lock()
+	if !h.isGreaterThanLast(height) {
 		panic("height is not greater than last")
 	}
-}
-
-func (h *HeaderQueue) size() int {
-	return h.queue.Size()
+	h.queue = append(h.queue, height)
+	h.last = height
+	h.mu.Unlock()
 }
 
 func (h *HeaderQueue) isGreaterThanLast(v *big.Int) bool {
 	return v.Cmp(h.last) > 0
 }
 
-func (h *HeaderQueue) pollTo(c chan *big.Int) {
-	v, ok := h.queue.Poll()
-	if ok {
-		c <- v
+func (h *HeaderQueue) pop() *big.Int {
+	h.mu.Lock()
+	if len(h.queue) == 0 {
+		return nil
 	}
+	ret := h.queue[0]
+	h.queue = h.queue[1:]
+	h.mu.Unlock()
+	return ret
 }
 
 func copyBigInt(v *big.Int) *big.Int {
