@@ -21,7 +21,7 @@ func (h *Handler) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create database
-	err = h.Service.KDB.CreateDatabase(context.Background(), &db)
+	err = h.Service.CreateDatabase(context.Background(), &db)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create database")
 		w.WriteHeader(http.StatusInternalServerError)

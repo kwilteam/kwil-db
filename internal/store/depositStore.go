@@ -96,6 +96,11 @@ func (ds *DepositStore) Deposit(amt *big.Int, addr string, tx []byte, height *bi
 	return txn.Commit()
 }
 
+func (ds *DepositStore) SetBalance(addr string, bal *big.Int) error {
+	key := append(ds.prefix, []byte(addr)...)
+	return ds.db.Set(key, bal.Bytes())
+}
+
 // CommitBlock deletes all the transactions in the block
 func (ds *DepositStore) CommitBlock(height *big.Int) error {
 
