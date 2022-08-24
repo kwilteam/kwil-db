@@ -11,4 +11,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error while running kwild: %v", err)
 	}
+
+	log.Default().Println("kwild shutting down")
 }

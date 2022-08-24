@@ -12,4 +12,4 @@ cmd/kwil-cosmos/cmd/kwild/kwild.exe
 keys/*
 .kwilbadger/
 .wal/
-.testkwilbadger/
+/cmd/kwil-cosmos/cmd/kwild/__debug_bin

@@ -11,12 +11,12 @@ import (
 
 var Conf types.Config
 
-// Returns the current config
+// GetConfig Returns the current config
 func GetConfig() *types.Config {
 	return &Conf
 }
 
-// Function to load a file as the config
+// LoadConfig Function to load a file as the config
 func LoadConfig(path string) error {
 	viper.AddConfigPath(path)
 	viper.SetConfigName("dev")

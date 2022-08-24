@@ -7,7 +7,7 @@ import (
 	"math/big"
 )
 
-// Service Function for CreateDatabase
+// CreateDatabase Service Function for CreateDatabase
 func (s *Service) CreateDatabase(ctx context.Context, db *types.CreateDatabase) error {
 
 	/*

@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
@@ -16,11 +17,11 @@ func ImportWallet(r *cosmosaccount.Registry, name, mnemonic string) (cosmosaccou
 	// Check if account exists
 	acc, err := r.GetByName(name)
 	if err == nil { // if so, delete it
-		r.DeleteByName(name)
-		r.Keyring.Delete(name)
+		_ = r.DeleteByName(name)
+		_ = r.Keyring.Delete(name)
 	}
 
-	r.Keyring.Delete(name)
+	_ = r.Keyring.Delete(name)
 	algo, err := getSignAlgo(*r)
 	if err != nil {
 		return acc, err

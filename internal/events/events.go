@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -27,7 +28,7 @@ type EventFeed struct {
 	ds         types.DepositStore
 }
 
-// Creates a new EventFeed
+// New Creates a new EventFeed
 func New(conf *types.Config, ethClient *ethclient.Client, cosmClient CosmClient, wal types.Wal, ds types.DepositStore) (*EventFeed, error) {
 	logger := log.With().Str("module", "events").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
 	topics := getTopics(conf)
@@ -43,24 +44,24 @@ func New(conf *types.Config, ethClient *ethclient.Client, cosmClient CosmClient,
 	}, nil
 }
 
-func (e *EventFeed) Listen(
+func (ef *EventFeed) Listen(
 	ctx context.Context,
 ) error {
-	e.log.Debug().Msg("starting event feed")
+	ef.log.Debug().Msg("starting event feed")
 
-	headers, err := e.listenForBlockHeaders(ctx)
+	headers, err := ef.listenForBlockHeaders(ctx)
 	if err != nil {
 		return err
 	}
-	e.processBlocks(ctx, headers)
+	ef.processBlocks(ctx, headers)
 
 	return nil
 }
 
 // This function gets the list of topics
-func (e *EventFeed) getTopicsForEvents() []common.Hash {
-	topics := make([]common.Hash, len(e.Topics))
-	for _, v := range e.Topics {
+func (ef *EventFeed) getTopicsForEvents() []common.Hash {
+	topics := make([]common.Hash, len(ef.Topics))
+	for _, v := range ef.Topics {
 		topics = append(topics, v.ID)
 	}
 	return topics

@@ -1,12 +1,13 @@
 package dba
 
 import (
+	"strings"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/kwilteam/kwil-db/pkg/types"
 	"github.com/kwilteam/kwil-db/pkg/types/dba"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"strings"
 )
 
 type KVStore interface {

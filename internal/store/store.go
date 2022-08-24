@@ -114,7 +114,7 @@ func (db *BadgerDB) DeleteByPrefix(prefix []byte) error {
 	}
 
 	collectSize := 100000
-	db.db.View(func(txn *badger.Txn) error {
+	_ = db.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.AllVersions = false
 		opts.PrefetchValues = false
