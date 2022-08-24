@@ -33,7 +33,6 @@ func init() {
 	os.Args, hasReset = hasFlagAndRemove(os.Args, "--dbg-reset")
 	os.Args, hasRun = hasFlagAndRemove(os.Args, "--dbg-run")
 
-	loggingEnabled = true
 	if !hasReset && !hasRun {
 		return
 	}
@@ -188,6 +187,7 @@ func doRun() error {
 	return nil
 }
 
+//goland:noinspection GoUnhandledErrorResult
 func doReset() error {
 	homeDir, err := getHomeDir()
 	if err != nil {
@@ -220,9 +220,6 @@ func doReset() error {
 	if err != nil {
 		return err
 	}
-
-	//os.Args = []string{"kwil-dbd","gentx","alice","100000000stake","--chain-id","kwildb","--keyring-backend","test","--home","/home/randal/.kwildb/chain"}
-	//os.Args = []string{"kwil-dbd","collect-gentxs","--home","/home/randal/.kwildb/chain"}
 
 	_, err = execute([]string{"gentx", "alice", "100000000stake", "--chain-id", "kwildb", "--keyring-backend", "test", "--home", homeDir})
 	if err != nil {
@@ -275,6 +272,15 @@ func execute(args []string) (string, error) {
 
 	if strings.HasSuffix(app, "/__debug_bin") {
 		app = app[:len(app)-len("/__debug_bin")] + "/kwild"
+	} else if strings.HasPrefix(app, "/tmp/GoLand") {
+		dir, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		app = dir + "/cmd/kwil-cosmos/cmd/kwild/kwild"
+		if !utils.FileExists(app) {
+			return "", fmt.Errorf("file %s does not exists. Build kwild in order for the shell usage of command delegation", app)
+		}
 	} else {
 		app, err = filepath.EvalSymlinks(app)
 		if err != nil {
@@ -287,7 +293,7 @@ func execute(args []string) (string, error) {
 	b, err := cmd.Output()
 	if err != nil {
 		logMessage(err, func(e error) string {
-			return fmt.Sprintf("runBlockingDefaultCommand() error: %s\n", e)
+			return fmt.Sprintf("execute() error: %s\n", e)
 		})
 
 		return "", err

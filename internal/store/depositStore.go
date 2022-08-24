@@ -6,9 +6,10 @@ package store
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/kwilteam/kwil-db/pkg/types"
 	"github.com/rs/zerolog/log"
-	"math/big"
 )
 
 var DepositKey = []byte("deposit")
@@ -40,7 +41,7 @@ func NewDepositStore(conf *types.Config, wal types.Wal) (*DepositStore, error) {
 		return nil, err
 	}
 	if lh.Cmp(big.NewInt(0)) == 0 {
-		ds.SetLastHeight(lh)
+		_ = ds.SetLastHeight(lh)
 	}
 
 	return ds, nil
@@ -118,7 +119,7 @@ func (ds *DepositStore) CommitBlock(height *big.Int) error {
 	}
 	curH := prevH.Add(prevH, big.NewInt(1))
 	if curH.Cmp(height) == 0 {
-		ds.SetLastHeight(curH)
+		_ = ds.SetLastHeight(curH)
 	} else {
 		log.Fatal().Str("received from blockchain:", height.String()).Str("incremented", curH.String()).Msgf("expected height not received")
 	}
@@ -145,7 +146,7 @@ func Byte2BigInt(b []byte) *big.Int {
 }
 
 func (ds *DepositStore) Close() {
-	ds.db.Close()
+	_ = ds.db.Close()
 }
 
 // Prints all balances of all wallets

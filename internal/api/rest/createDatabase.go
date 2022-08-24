@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-// Handler for CreateDatabase
+// CreateDatabase Handler for CreateDatabase
 func (h *Handler) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	var db types.CreateDatabase
 

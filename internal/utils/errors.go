@@ -42,6 +42,18 @@ func (e Error) Unwrap() error {
 	return UnwrapR(e)
 }
 
+func PanicIf(condition bool, msg string) {
+	if condition {
+		panic(msg)
+	}
+}
+
+func PanicIfNot(condition bool, msg string) {
+	if !condition {
+		panic(msg)
+	}
+}
+
 func PanicIfError(err error) {
 	if err != nil {
 		panic(err)

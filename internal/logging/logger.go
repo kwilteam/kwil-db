@@ -55,7 +55,7 @@ func levelToSeverity(level zerolog.Level) logging.Severity {
 	}
 }
 
-// This should get deleted later, this is just a quick hack for me to get logs from a goroutine
+// FileOutput This should get deleted later, this is just a quick hack for me to get logs from a goroutine
 func FileOutput(msg string) {
 	// create a temp file
 	tempFile, err := ioutil.TempFile(os.TempDir(), "deleteme")

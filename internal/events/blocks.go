@@ -2,15 +2,15 @@ package events
 
 import (
 	"context"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog/log"
-	"math/big"
 )
 
 // This function takes a channel of block heights and returns a channel of events.
 func (ef *EventFeed) processBlocks(ctx context.Context, ch chan *big.Int) {
-	// This method is essentially public since it is one of two methods used in ef.Listen
 	addr := common.HexToAddress(ef.Config.ClientChain.DepositContract.Address)
 	go func() {
 		for {
@@ -41,12 +41,12 @@ func (ef *EventFeed) processBlocks(ctx context.Context, ch chan *big.Int) {
 			}
 
 			// At this point, we have confirmed stored all changes for the block, and can now delete any of the txs stored in the deposit store
-			ef.ds.CommitBlock(height)
+			_ = ef.ds.CommitBlock(height)
 		}
 	}()
 }
 
-func (ed *EventFeed) logHeight(h *big.Int) {
+func (ef *EventFeed) logHeight(h *big.Int) {
 	bi := big.NewInt(0)
 	if bi.Mod(h, big.NewInt(1)).Cmp(big.NewInt(0)) == 0 {
 		log.Debug().Msgf("Processing block %d", h)

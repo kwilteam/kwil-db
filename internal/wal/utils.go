@@ -22,7 +22,9 @@ func getNodeKeyHash(dir string) string {
 	f, err := os.Open(path.Join(dir, "config", "node_key.json"))
 	utils.PanicIfError(err)
 
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 
 	h := md5.New()
 

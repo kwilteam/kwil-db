@@ -9,7 +9,7 @@ type KDB interface {
 	CreateDatabase(ctx context.Context, db *types.CreateDatabase) error
 }
 
-// Struct for service logic
+// Service Struct for service logic
 type Service struct {
 	KDB KDB
 }

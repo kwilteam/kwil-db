@@ -140,7 +140,7 @@ func (d *DB) DeleteEntireDB() error {
 
 // Set function is a wrapper that adds the DB prefix
 func (d *DB) Set(k, v []byte) error {
-	d.loader.kv.Set(append(d.prefix, k...), v)
+	_ = d.loader.kv.Set(append(d.prefix, k...), v)
 	return nil
 }
 

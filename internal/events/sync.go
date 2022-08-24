@@ -39,7 +39,7 @@ func (ef *EventFeed) GetUnsyncedEvents(ctx context.Context, low *big.Int, high *
 		Topics:    [][]common.Hash{ef.getTopicsForEvents()},
 	}
 
-	// FIler the logs
+	// Filter the logs
 	logs, err := ef.EthClient.FilterLogs(ctx, filter)
 	if err != nil {
 		return nil, err

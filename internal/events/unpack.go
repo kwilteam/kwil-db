@@ -2,9 +2,10 @@ package events
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	"math/big"
 )
 
 // This function takes a log from ethereum and unpacks it into a deposit struct

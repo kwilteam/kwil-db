@@ -5,7 +5,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/types"
 )
 
-// Service Function for CreateDatabase
+// CreateDatabase Service Function for CreateDatabase
 func (s *Service) CreateDatabase(ctx context.Context, db *types.CreateDatabase) error {
 
 	/*
