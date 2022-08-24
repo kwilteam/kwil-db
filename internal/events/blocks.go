@@ -9,14 +9,15 @@ import (
 )
 
 // This function takes a channel of block heights and returns a channel of events.
-func (ef *EventFeed) ProcessBlocks(ctx context.Context, ch chan *big.Int) {
+func (ef *EventFeed) processBlocks(ctx context.Context, ch chan *big.Int) {
+	// This method is essentially public since it is one of two methods used in ef.Listen
 	addr := common.HexToAddress(ef.Config.ClientChain.DepositContract.Address)
 	go func() {
 		for {
 			// At this point, we have received a finalized ethereum block
 			// Now to query the event data
 			height := <-ch
-			ef.LogHeight(height)
+			ef.logHeight(height)
 
 			// TODO: We should probably have some retry logic here for transient unavailability.
 			query := ethereum.FilterQuery{
@@ -45,7 +46,7 @@ func (ef *EventFeed) ProcessBlocks(ctx context.Context, ch chan *big.Int) {
 	}()
 }
 
-func (ed *EventFeed) LogHeight(h *big.Int) {
+func (ed *EventFeed) logHeight(h *big.Int) {
 	bi := big.NewInt(0)
 	if bi.Mod(h, big.NewInt(1)).Cmp(big.NewInt(0)) == 0 {
 		log.Debug().Msgf("Processing block %d", h)

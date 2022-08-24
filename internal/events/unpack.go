@@ -8,7 +8,7 @@ import (
 )
 
 // This function takes a log from ethereum and unpacks it into a deposit struct
-func (ef *EventFeed) UnpackDeposit(vLog ethTypes.Log) (*DepositEvent, error) {
+func (ef *EventFeed) unpackDeposit(vLog ethTypes.Log) (*DepositEvent, error) {
 	abi := ef.Config.ClientChain.GetContractABI()
 	y, _ := abi.Unpack("Deposit", vLog.Data)
 	dep := Deposit{
@@ -35,13 +35,13 @@ type Deposit struct {
 	Amount *big.Int       //`abi:"amount"`
 }
 
-func (ef *EventFeed) ParseEvent(vLog ethTypes.Log) (Event, error) {
+func (ef *EventFeed) parseEvent(vLog ethTypes.Log) (Event, error) {
 	topic := vLog.Topics[0]
 	event := ef.Topics[topic]
 	switch event.Name {
 	default:
 		return nil, fmt.Errorf("unknown event type: %s", event.Name)
 	case "Deposit":
-		return ef.UnpackDeposit(vLog)
+		return ef.unpackDeposit(vLog)
 	}
 }

@@ -9,4 +9,6 @@ type DatabaseConfig interface {
 }
 
 type Structure interface {
+	GetRoles() *[]Role
+	GetQueries() *[]ParameterizedQuery
 }

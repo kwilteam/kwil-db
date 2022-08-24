@@ -47,7 +47,7 @@ func (ef *EventFeed) GetUnsyncedEvents(ctx context.Context, low *big.Int, high *
 
 	// Loops through the logs
 	for _, vLog := range logs {
-		ev, err := ef.ParseEvent(vLog)
+		ev, err := ef.parseEvent(vLog)
 		if err != nil {
 			ef.log.Fatal().Err(err).Msg("error parsing event")
 		}
@@ -67,10 +67,16 @@ func (ef *EventFeed) IndicateLastHeight() error {
 	if lastHeight.Cmp(big.NewInt(int64(ef.Config.ClientChain.LowestHeight))) >= 0 { // Comparing the lowest tracked height to the stored height
 		// This means that the deposit store height is greater than lowest possible.
 		// We should use the stored height to sync from.
-		ef.log.Warn().Msg("synced height higher than confirmed blocks")
+		ef.log.Debug().Msg("using stored height to sync from")
+		lowH := big.NewInt(lastHeight.Int64())
+		err = ef.ds.SetLastHeight(lowH)
+		if err != nil {
+			return err
+		}
 	} else {
 		// This means that the deposit store height is less than lowest possible.
 		// We should use the lowest possible height to sync from.
+		ef.log.Debug().Msg("using lowest possible height to sync from")
 		lowH := big.NewInt(int64(ef.Config.ClientChain.LowestHeight))
 		err = ef.ds.SetLastHeight(lowH)
 		if err != nil {

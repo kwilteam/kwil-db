@@ -1,6 +1,7 @@
 package dba
 
 import (
+	"github.com/dgraph-io/badger/v3"
 	"github.com/kwilteam/kwil-db/pkg/types"
 	"github.com/kwilteam/kwil-db/pkg/types/dba"
 	"github.com/rs/zerolog"
@@ -8,22 +9,14 @@ import (
 	"strings"
 )
 
-type Txn interface {
-	Delete([]byte) error
-	Get([]byte) ([]byte, error)
-	Set([]byte, []byte) error
-	Discard()
-	Commit() error
-}
-
 type KVStore interface {
-	Get([]byte) (string, error)
+	Get([]byte) ([]byte, error)
 	Set([]byte, []byte) error
 	Delete([]byte) error
 	Exists([]byte) (bool, error)
 	RunGC()
 	DeleteByPrefix([]byte) error
-	NewTransaction(bool) (Txn, error)
+	NewTransaction(bool) *badger.Txn
 	GetAllByPrefix([]byte) ([][]byte, [][]byte, error)
 	Close() error
 }
@@ -34,7 +27,7 @@ type DBLoader struct {
 	kv     KVStore
 }
 
-func New(conf *types.Config, kv KVStore) (*DBLoader, error) { // potentially returning an error in case we need more complex constructor later
+func NewLoader(conf *types.Config, kv KVStore) (*DBLoader, error) { // potentially returning an error in case we need more complex constructor later
 	logger := log.With().Str("module", "dba").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
 
 	go kv.RunGC()
@@ -44,13 +37,6 @@ func New(conf *types.Config, kv KVStore) (*DBLoader, error) { // potentially ret
 		Config: conf,
 		kv:     kv,
 	}, nil
-}
-
-// Make sure you pass this function a pointer to the DBConfig
-func (d *DBLoader) LoadDatabase(dbConf dba.DatabaseConfig) error {
-	d.log.Info().Msg("loading database")
-
-	return nil
 }
 
 func getDBPrefix(dbConf dba.DatabaseConfig) []byte {

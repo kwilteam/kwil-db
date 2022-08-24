@@ -30,7 +30,7 @@ type EventFeed struct {
 // Creates a new EventFeed
 func New(conf *types.Config, ethClient *ethclient.Client, cosmClient CosmClient, wal types.Wal, ds types.DepositStore) (*EventFeed, error) {
 	logger := log.With().Str("module", "events").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
-	topics := GetTopics(conf)
+	topics := getTopics(conf)
 
 	return &EventFeed{
 		log:        &logger,
@@ -48,11 +48,11 @@ func (e *EventFeed) Listen(
 ) error {
 	e.log.Debug().Msg("starting event feed")
 
-	headers, err := e.ListenForBlockHeaders(ctx)
+	headers, err := e.listenForBlockHeaders(ctx)
 	if err != nil {
 		return err
 	}
-	e.ProcessBlocks(ctx, headers)
+	e.processBlocks(ctx, headers)
 
 	return nil
 }
@@ -66,7 +66,7 @@ func (e *EventFeed) getTopicsForEvents() []common.Hash {
 	return topics
 }
 
-func GetTopics(conf *types.Config) map[common.Hash]abi.Event {
+func getTopics(conf *types.Config) map[common.Hash]abi.Event {
 	// First, get the ABI for the contract
 	events := conf.ClientChain.GetContractABI().Events // Named this cAbi to avoid confusion with the abi.ABI type
 	topics := make(map[common.Hash]abi.Event)

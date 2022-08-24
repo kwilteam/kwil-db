@@ -1,6 +1,6 @@
 {
-    "name": "dbname",
-    "owner": "dbowner",
+    "name": "kwildb",
+    "owner": "kwilliam_shakespeare",
     "type": "postgres",
     "default_role": "role1",
     "structure": {

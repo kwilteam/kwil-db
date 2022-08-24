@@ -2,7 +2,6 @@ package client
 
 import (
 	"errors"
-	"fmt"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
@@ -15,7 +14,6 @@ var ErrAccountExists = errors.New("account already exists")
 func ImportWallet(r *cosmosaccount.Registry, name, mnemonic string) (cosmosaccount.Account, error) {
 
 	// Check if account exists
-	fmt.Println(1)
 	acc, err := r.GetByName(name)
 	if err == nil { // if so, delete it
 		r.DeleteByName(name)
@@ -23,25 +21,20 @@ func ImportWallet(r *cosmosaccount.Registry, name, mnemonic string) (cosmosaccou
 	}
 
 	r.Keyring.Delete(name)
-	fmt.Println(2)
 	algo, err := getSignAlgo(*r)
 	if err != nil {
 		return acc, err
 	}
 
-	fmt.Println(3)
 	info, err := r.Keyring.NewAccount(name, mnemonic, "", hdPath(), algo)
 	if err != nil {
 		return acc, err
 	}
 
-	fmt.Println(4)
 	acc = cosmosaccount.Account{
 		Name: name,
 		Info: info,
 	}
-
-	fmt.Println(5)
 
 	return acc, nil
 }

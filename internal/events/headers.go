@@ -11,7 +11,8 @@ import (
 	"time"
 )
 
-func (ef *EventFeed) ListenForBlockHeaders(ctx context.Context) (chan *big.Int, error) {
+func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, error) {
+	// This method is essentially public since it is one of two methods used in ef.Listen
 	headers := make(chan *types.Header)
 
 	sub, err := ef.EthClient.SubscribeNewHead(ctx, headers)
@@ -45,7 +46,6 @@ func (ef *EventFeed) ListenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 				sub.Unsubscribe()
 				sub = ef.resubscribeEthClient(ctx, headers)
 			case header := <-headers:
-				// IF SHIT IS BREAKING IT IS PROBABLY HERE
 
 				/*
 					In this section, we will receive headers and store them in an array
@@ -71,7 +71,7 @@ func (ef *EventFeed) ListenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 				if header.Number.Cmp(expected) == 0 {
 
 					// This is the expected header
-					headerStore.Append(header.Number)
+					headerStore.append(header.Number)
 
 				} else if header.Number.Cmp(expected) > 0 {
 
@@ -82,7 +82,7 @@ func (ef *EventFeed) ListenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 					endloop := header.Number.Add(header.Number, big.NewInt(1)) // looping through from expected to received
 					for i := new(big.Int).Set(expected); i.Cmp(endloop) < 0; i.Add(i, big.NewInt(1)) {
 						x := copyBigInt(i) //copy
-						headerStore.Append(x)
+						headerStore.append(x)
 					}
 
 				} else {
@@ -97,7 +97,7 @@ func (ef *EventFeed) ListenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 				for {
 					// if queue is longer than required confirmations, we will pop and send
 					if len(headerStore.queue) > config.Conf.ClientChain.RequiredConfirmations {
-						retChan <- headerStore.Pop()
+						retChan <- headerStore.pop()
 					} else {
 						break
 					}
@@ -126,7 +126,7 @@ type HeaderQueue struct {
 	mu    sync.Mutex
 }
 
-func (h *HeaderQueue) Append(height *big.Int) {
+func (h *HeaderQueue) append(height *big.Int) {
 	h.mu.Lock()
 	if !h.isGreaterThanLast(height) {
 		panic("height is not greater than last")
@@ -140,7 +140,7 @@ func (h *HeaderQueue) isGreaterThanLast(v *big.Int) bool {
 	return v.Cmp(h.last) > 0
 }
 
-func (h *HeaderQueue) Pop() *big.Int {
+func (h *HeaderQueue) pop() *big.Int {
 	h.mu.Lock()
 	if len(h.queue) == 0 {
 		return nil

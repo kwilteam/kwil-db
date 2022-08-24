@@ -1,15 +1,14 @@
 {
     "name": "query1",
     "query": "SELECT ...",
-    "read_only": false,
-    "parameters": {
-        "param1": {
+    "parameters": [
+        {
             "name": "param1",
             "type": "string"
         },
-        "param2": {
+        {
             "name": "param2",
             "type": "string"
         }
-    }
+    ]
 }

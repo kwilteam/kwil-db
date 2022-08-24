@@ -83,8 +83,16 @@ func (ds *DepositStore) Deposit(amt *big.Int, addr string, tx []byte, height *bi
 	// Now we create a transaction to store both the balance and txKey
 	txn := ds.db.NewTransaction(true)
 	defer txn.Discard()
-	txn.Set(key, val)
-	txn.Set(txKey, []byte{})
+	err = txn.Set(key, val)
+	if err != nil {
+		return err
+	}
+
+	err = txn.Set(txKey, []byte{})
+	if err != nil {
+		return err
+	}
+
 	return txn.Commit()
 }
 

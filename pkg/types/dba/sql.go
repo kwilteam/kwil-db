@@ -8,11 +8,18 @@ type SQLStructure struct {
 	Constraints          []Constraint             `json:"-" yaml:"-" toml:"-" mapstructure:"-"`
 }
 
+func (s *SQLStructure) GetRoles() *[]Role {
+	return &s.Roles
+}
+
+func (s *SQLStructure) GetQueries() *[]ParameterizedQuery {
+	return &s.ParameterizedQueries
+}
+
 type ParameterizedQuery struct {
-	Name       string `json:"name" yaml:"name" toml:"name" mapstructure:"name"`
-	Query      string `json:"query" yaml:"query" toml:"query" mapstructure:"query"`
-	ReadOnly   bool   `json:"read_only" yaml:"read_only" toml:"read_only" mapstructure:"read_only"`
-	Parameters interface{}
+	Name       string      `json:"name" yaml:"name" toml:"name" mapstructure:"name"`
+	Query      string      `json:"query" yaml:"query" toml:"query" mapstructure:"query"`
+	Parameters []Paramater `json:"parameters" yaml:"parameters" toml:"parameters" mapstructure:"parameters"`
 }
 
 type Paramater struct {

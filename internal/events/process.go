@@ -7,7 +7,7 @@ import (
 
 func (ef *EventFeed) ProcessLog(vLog ethTypes.Log) error {
 	// Parse the event
-	ev, err := ef.ParseEvent(vLog)
+	ev, err := ef.parseEvent(vLog)
 	if err != nil {
 		ef.log.Error().Err(err).Msg("error parsing event")
 	}
