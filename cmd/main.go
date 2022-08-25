@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+
 	"github.com/kwilteam/kwil-db/internal/api/rest"
 	"github.com/kwilteam/kwil-db/internal/api/service"
 	cosClient "github.com/kwilteam/kwil-db/internal/client"
@@ -10,7 +12,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/deposits"
 	"github.com/kwilteam/kwil-db/internal/logging"
 	"github.com/rs/zerolog/log"
-	"os"
 )
 
 func main() {

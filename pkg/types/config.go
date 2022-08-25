@@ -34,4 +34,5 @@ type Api struct {
 
 type DatabaseCosts struct {
 	Create string `json:"create" mapstructure:"create"`
+	Delete string `json:"delete" mapstructure:"delete"`
 }

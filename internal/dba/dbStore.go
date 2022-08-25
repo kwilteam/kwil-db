@@ -123,6 +123,8 @@ func (d *DB) StoreAll(isTx bool) error {
 	return nil
 }
 
+// Not yet used
+/*
 func (d *DB) StoreAllIfNotExists(isTx bool) error {
 	exists, err := d.loader.kv.Exists(d.prefix)
 	if err != nil {
@@ -132,7 +134,7 @@ func (d *DB) StoreAllIfNotExists(isTx bool) error {
 		return nil
 	}
 	return d.StoreAll(isTx)
-}
+}*/
 
 func (d *DB) DeleteEntireDB() error {
 	return d.loader.kv.DeleteByPrefix(d.prefix)

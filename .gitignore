@@ -10,7 +10,9 @@
 cmd/kwil-cosmos/cmd/kwild/kwild
 cmd/kwil-cosmos/cmd/kwild/kwild.exe
 keys/*
+!keys/test_ethereum.pem
 .kwilbadger/
 .testkwilbadger/
 .wal/
+.testkwilbadger/
 /cmd/kwil-cosmos/cmd/kwild/__debug_bin

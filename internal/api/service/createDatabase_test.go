@@ -53,12 +53,12 @@ func TestService_CreateDatabase(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				db: &types.CreateDatabase{
-					Id:        "0x123",
+					Id:        "kwil",
 					DBType:    "test",
 					Name:      "testdb",
 					Fee:       "5",
-					Signature: "0x123",
-					From:      "0x123",
+					Signature: "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
+					From:      "0x995d95245698212D4Af52c8031F614C3D3127994",
 				},
 			},
 			wantErr: false,
@@ -73,12 +73,52 @@ func TestService_CreateDatabase(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				db: &types.CreateDatabase{
-					Id:        "0x123",
+					Id:        "kwil",
 					DBType:    "test",
 					Name:      "testdb",
 					Fee:       "1",
-					Signature: "0x123",
-					From:      "0x123",
+					Signature: "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
+					From:      "0x995d95245698212D4Af52c8031F614C3D3127994",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid signature length",
+			fields: fields{
+				conf: kconf.GetTestConfig(t),
+				Ds:   &MockDepositStore{},
+				log:  zerolog.Logger{},
+			},
+			args: args{
+				ctx: context.Background(),
+				db: &types.CreateDatabase{
+					Id:        "kwil",
+					DBType:    "test",
+					Name:      "testdb",
+					Fee:       "5",
+					Signature: "0x39fd0a55rr51cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
+					From:      "0x995d95245698212D4Af52c8031F614C3D3127994",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid signature",
+			fields: fields{
+				conf: kconf.GetTestConfig(t),
+				Ds:   &MockDepositStore{},
+				log:  zerolog.Logger{},
+			},
+			args: args{
+				ctx: context.Background(),
+				db: &types.CreateDatabase{
+					Id:        "kwilll",
+					DBType:    "test",
+					Name:      "testdb",
+					Fee:       "5",
+					Signature: "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
+					From:      "0x995d95245698212D4Af52c8031F614C3D3127994",
 				},
 			},
 			wantErr: true,
@@ -88,7 +128,7 @@ func TestService_CreateDatabase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := Service{
 				conf: tt.fields.conf,
-				Ds:   tt.fields.Ds,
+				ds:   tt.fields.Ds,
 				log:  tt.fields.log,
 			}
 			if err := s.CreateDatabase(tt.args.ctx, tt.args.db); (err != nil) != tt.wantErr {

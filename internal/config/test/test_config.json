@@ -43,7 +43,8 @@
     },
     "cost": {
         "database": {
-            "create": "5"
+            "create": "5",
+            "delete": "3"
         }
     }
 }

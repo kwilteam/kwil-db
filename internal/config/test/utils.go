@@ -3,17 +3,9 @@ package config
 import (
 	"github.com/kwilteam/kwil-db/pkg/types"
 	"github.com/spf13/viper"
-	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
-
-func getCurrentPath() string {
-	_, filename, _, _ := runtime.Caller(1)
-
-	return path.Dir(filename)
-}
 
 func loadConfig(path string) (*types.Config, error) {
 	var dbConfig types.Config
