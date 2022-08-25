@@ -13,7 +13,7 @@ type WalEthTx struct {
 
 // This file contains some abstractions for writing WAL data for Ethereum event listeners
 
-// Will create a new WAL based on context.
+// OpenEthTxWal Will create a new WAL based on context.
 func OpenEthTxWal(path string) (*WalEthTx, error) {
 	inner, err := openWalWriter(path, "wal-etx")
 	if err != nil {
@@ -41,7 +41,7 @@ func (w *WalEthTx) EndTransaction(tx []byte) error {
 }
 
 func (w *WalEthTx) Close() {
-	w.inner.closeWal()
+	_ = w.inner.closeWal()
 }
 
 func (w *WalEthTx) appendEthBlock(msgType uint16, h *big.Int) error {

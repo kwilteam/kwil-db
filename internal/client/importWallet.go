@@ -1,15 +1,13 @@
 package client
 
 import (
-	"errors"
-
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
 )
 
-var ErrAccountExists = errors.New("account already exists")
+//var ErrAccountExists = errors.New("account already exists")
 
 // ImportWallet takes a mnemonic and adds a new account to the keyring.  It also returns the account.
 func ImportWallet(r *cosmosaccount.Registry, name, mnemonic string) (cosmosaccount.Account, error) {

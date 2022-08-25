@@ -23,6 +23,7 @@ type CosmosClient struct {
 type EthClient struct {
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func NewCosmosClient(ctx context.Context, conf *types.Config) (CosmosClient, error) {
 	account := CosmosClient{
 		Config: conf,

@@ -8,7 +8,7 @@ import (
 	"math/big"
 )
 
-// Struct for service logic
+// Service Struct for service logic
 type Service struct {
 	conf *types.Config
 	ds   DepositStore

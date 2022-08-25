@@ -17,6 +17,7 @@ func NewQueue[T any]() Queue[T] {
 	return newQueueSync[T]()
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func MakeSafeQueue[T any](queue *Queue[T]) *Queue[T] {
 	q := *queue
 	if q.isSynchronized() {

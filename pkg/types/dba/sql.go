@@ -19,10 +19,10 @@ func (s *SQLStructure) GetQueries() *[]ParameterizedQuery {
 type ParameterizedQuery struct {
 	Name       string      `json:"name" yaml:"name" toml:"name" mapstructure:"name"`
 	Query      string      `json:"query" yaml:"query" toml:"query" mapstructure:"query"`
-	Parameters []Paramater `json:"parameters" yaml:"parameters" toml:"parameters" mapstructure:"parameters"`
+	Parameters []Parameter `json:"parameters" yaml:"parameters" toml:"parameters" mapstructure:"parameters"`
 }
 
-type Paramater struct {
+type Parameter struct {
 	Name string `json:"name" yaml:"name" toml:"name" mapstructure:"name"`
 	Type string `json:"type" yaml:"type" toml:"type" mapstructure:"type"`
 }

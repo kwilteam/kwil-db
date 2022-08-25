@@ -7,7 +7,7 @@ import (
 
 type StoredPQ struct {
 	Query  *string          `json:"query"`
-	Params *[]dba.Paramater `json:"params"`
+	Params *[]dba.Parameter `json:"params"`
 }
 
 func StoreParQuer(pq *dba.ParameterizedQuery, d KVBasic) error {

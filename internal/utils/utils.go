@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math/big"
 	"os"
+	"strings"
 )
 
 func Coalesce[T comparable](check T, alt T) T {
@@ -97,6 +98,25 @@ func FileExists(path string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+func ExpandHomeDir(path string) string {
+	return Ignore(path, TryExpandHomeDir)
+}
+
+func TryExpandHomeDir(path string) (expandedPath string, expanded bool) {
+	if !strings.HasPrefix(path, "~") {
+		return path, false
+	}
+
+	home := PanicIfErrorFn(os.UserHomeDir)
+
+	return home + path[1:], true
+}
+
+func Ignore[T any, R1 any, R2 any](arg T, fn func(arg T) (R1, R2)) R1 {
+	r, _ := fn(arg)
+	return r
 }
 
 func DirExists(path string) bool {

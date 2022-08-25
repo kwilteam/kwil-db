@@ -154,7 +154,7 @@ func (ds *DepositStore) Close() {
 	_ = ds.db.Close()
 }
 
-// Prints all balances of all wallets
+// PrintAllBalances Prints all balances of all wallets
 func (ds *DepositStore) PrintAllBalances() {
 	keys, vals, err := ds.db.GetAllByPrefix(DepositKey)
 	if err != nil {
