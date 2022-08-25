@@ -28,7 +28,7 @@
             "debugAdapter": "dlv-dap",
             "showLog": true,
             "dlvFlags" : ["--only-same-user=false"],
-            "args": ["start", "--home", "${userHome}/.kwildb/chain", "--dbg-run"],
+            "args": ["start", "--home", "${userHome}/.kwildb/chain", "--dbg-run"]
         },
         {
             "name": "Create-Db-Once",
@@ -39,7 +39,7 @@
             "debugAdapter": "dlv-dap",
             "showLog": true,
             "dlvFlags" : ["--only-same-user=false"],
-            "args": ["tx", "kwil", "create-database", "postResetDb", "--from", "alice", "-y", "--home", "${userHome}/.kwildb/chain", ],
+            "args": ["tx", "kwil", "create-database", "postResetDb", "--from", "alice", "-y", "--home", "${userHome}/.kwildb/chain" ]
         },
         {
             "name": "ETH CLI CMD",
@@ -50,7 +50,7 @@
             "debugAdapter": "dlv-dap",
             "showLog": true,
             "dlvFlags" : ["--only-same-user=false"],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

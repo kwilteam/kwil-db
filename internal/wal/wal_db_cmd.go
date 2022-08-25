@@ -13,9 +13,9 @@ var (
 
 	ErrorEndBlock = errors.New("out of order operation, unable to set EndBlock operation")
 
-	ErrorWrite = errors.New("BeginBlock must be called before an Append operation")
+	//ErrorWrite = errors.New("BeginBlock must be called before an Append operation")
 
-	ErrorWriteGeneral = errors.New("an error occurred while writing to the WAL")
+	//ErrorWriteGeneral = errors.New("an error occurred while writing to the WAL")
 
 	ErrorWalClosed = errors.New("wal has already been closed")
 
@@ -41,6 +41,7 @@ type WalDbCmd struct {
 	blockStarted *uint32
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func OpenDbCmdWal(path string) *WalDbCmd {
 	w, err := openWalWriter(path, "dbcmd.wal")
 	utils.PanicIfErrorMsg(err, "unable to open WAL file.")
@@ -95,21 +96,21 @@ func (w *WalDbCmd) Close() {
 
 	*w.blockStarted = 86
 
-	w.inner.closeWal()
+	_ = w.inner.closeWal()
 }
 
-// Function to append a CreateDatabase message to the WAL
+// AppendCreateDatabase Function to append a CreateDatabase message to the WAL
 func (w *WalDbCmd) AppendCreateDatabase(dbid, msg string) error {
 	return w.appendMsgString(0, dbid, msg)
 }
 
-// Appending DDL to the WAL
+// AppendDDL Appending DDL to the WAL
 // This is currently the same as CreateDatabase (besides the message ID).  I kept them separate so we can change them later if we need to.
 func (w *WalDbCmd) AppendDDL(dbid, msg string) error {
 	return w.appendMsgString(1, dbid, msg)
 }
 
-// Appends a parameterized query definition to the WAL
+// AppendDefineQuery Appends a parameterized query definition to the WAL
 // I made publicity an int8 so that it can be future compatible with the addition of more parameters.
 func (w *WalDbCmd) AppendDefineQuery(dbid, msg string, publicity uint8) error {
 	m, err := newWalDbMessage(2, dbid)

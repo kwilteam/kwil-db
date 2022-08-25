@@ -10,8 +10,8 @@ type Permissions struct {
 	ParamaterizedQueries []string `json:"parameterized_queries" yaml:"parameterized_queries" toml:"parameterized_queries" mapstructure:"parameterized_queries"`
 }
 
-func (s *Role) GetName() string {
-	return s.Name
+func (r *Role) GetName() string {
+	return r.Name
 }
 
 func (r *Role) GetPermissions() Permissions {

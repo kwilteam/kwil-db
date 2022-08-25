@@ -1,14 +1,15 @@
 package util
 
+//goland:noinspection SpellCheckingInspection
 import (
 	"errors"
 	"fmt"
 	"log"
 	"os"
-	exec "os/exec"
+	"os/exec"
 	"os/signal"
 	"path"
-	filepath "path/filepath"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -38,6 +39,11 @@ func init() {
 	}
 
 	home := getArg(os.Args, "--home")
+	home, exp := utils.TryExpandHomeDir(home)
+	if exp {
+		replaceArg(os.Args, "--home", home)
+	}
+
 	if !strings.HasSuffix(home, "/.kwildb/chain") {
 		panic("--home must end with /.kwildb/chain (invalid home directory for dbg mode)")
 	}
@@ -48,7 +54,7 @@ func init() {
 	utils.PanicIfError(err)
 }
 
-// When in DEBUG mode, Need to run export periodically since the
+// BuildAndRunRootCommand When in DEBUG mode, Need to run export periodically since the
 // debugger does not allopw capture SIGTERM or SIGINT
 // --> os.Args = []string{"kwil-dbd","export","--home", homeDir}
 func BuildAndRunRootCommand() error {
@@ -61,7 +67,7 @@ func BuildAndRunRootCommand() error {
 		return doRun()
 	}
 
-	logMessage(os.Args, func(args []string) string {
+	_ = logMessage(os.Args, func(args []string) string {
 		return fmt.Sprintf("os.Args = []string{%s}\n", "\""+strings.Join(args, "\",\"")+"\"")
 	})
 
@@ -78,7 +84,7 @@ func getHomeDir() (string, error) {
 		return "", errors.New("--home must end with /.kwildb/chain (invalid home directory for dbg mode)")
 	}
 
-	os.MkdirAll(home, 0755)
+	_ = os.MkdirAll(home, 0755)
 
 	homeDir = home
 
@@ -133,6 +139,17 @@ func getArg(s []string, r string) string {
 		}
 	}
 	return ""
+}
+
+func replaceArg(s []string, f, r string) {
+	for i, e := range s {
+		if e == f {
+			if i < len(s)-1 {
+				s[i+1] = r
+				break
+			}
+		}
+	}
 }
 
 func hasFlag(s []string, r string) bool {
@@ -252,7 +269,7 @@ func addGenesisAccount(homeDir string, keyring string) error {
 	key := strings.Split(keyring[idx:], "\n")[0]
 	key = strings.TrimSpace(key)
 
-	logMessage(key, func(o string) string {
+	_ = logMessage(key, func(o string) string {
 		return o + "\n"
 	})
 
@@ -265,34 +282,34 @@ func addGenesisAccount(homeDir string, keyring string) error {
 }
 
 func execute(args []string) (string, error) {
-	app, err := os.Executable()
+	appName, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
 
-	if strings.HasSuffix(app, "/__debug_bin") {
-		app = app[:len(app)-len("/__debug_bin")] + "/kwild"
-	} else if strings.HasPrefix(app, "/tmp/GoLand") {
+	if strings.HasSuffix(appName, "/__debug_bin") {
+		appName = appName[:len(appName)-len("/__debug_bin")] + "/kwild"
+	} else if strings.HasPrefix(appName, "/tmp/GoLand") {
 		dir, err := os.Getwd()
 		if err != nil {
 			return "", err
 		}
-		app = dir + "/cmd/kwil-cosmos/cmd/kwild/kwild"
-		if !utils.FileExists(app) {
-			return "", fmt.Errorf("file %s does not exists. Build kwild in order for the shell usage of command delegation", app)
+		appName = dir + "/cmd/kwil-cosmos/cmd/kwild/kwild"
+		if !utils.FileExists(appName) {
+			return "", fmt.Errorf("file %s does not exists. Build kwild in order for the shell usage of command delegation", appName)
 		}
 	} else {
-		app, err = filepath.EvalSymlinks(app)
+		appName, err = filepath.EvalSymlinks(appName)
 		if err != nil {
 			return "", err
 		}
 	}
 
-	cmd := exec.Command(app, args...)
+	cmd := exec.Command(appName, args...)
 
 	b, err := cmd.Output()
 	if err != nil {
-		logMessage(err, func(e error) string {
+		_ = logMessage(err, func(e error) string {
 			return fmt.Sprintf("execute() error: %s\n", e)
 		})
 
@@ -313,7 +330,7 @@ func logMessage[T any](arg T, fn func(a T) string) error {
 	}
 
 	dir = path.Join(dir, "tmp")
-	os.MkdirAll(dir, 0755)
+	_ = os.MkdirAll(dir, 0755)
 
 	file := path.Join(dir, "kwild.dbg")
 
@@ -322,7 +339,9 @@ func logMessage[T any](arg T, fn func(a T) string) error {
 		log.Fatalf("Unable to create/append 'tmp/kwild.log': %v", err)
 	}
 
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 
 	_, err = f.WriteString(fn(arg))
 	if err != nil {

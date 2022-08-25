@@ -59,7 +59,7 @@ var serveCmd = &cobra.Command{
 	},
 }
 
-var Source string
+//var Source string
 
 func init() {
 	RootCmd.AddCommand(serveCmd)

@@ -26,8 +26,8 @@ func (e Error) Fatal() {
 	Fatal(e)
 }
 
-func (e Error) Fatalln() {
-	Fatalln(e)
+func (e Error) FatalLn() {
+	FatalLn(e)
 }
 
 func (e Error) Panic() {
@@ -42,7 +42,15 @@ func (e Error) Unwrap() error {
 	return UnwrapR(e)
 }
 
-func PanicIf(condition bool, msg string) {
+func NewError(inner error, outer string) *Error {
+	return &Error{inner, outer}
+}
+
+/*func NewErrorf(inner error, format string, args ...interface{}) *Error {
+	return NewError(inner, fmt.Sprintf(format, args...))
+}*/
+
+/*func PanicIf(condition bool, msg string) {
 	if condition {
 		panic(msg)
 	}
@@ -52,7 +60,7 @@ func PanicIfNot(condition bool, msg string) {
 	if !condition {
 		panic(msg)
 	}
-}
+}*/
 
 func PanicIfError(err error) {
 	if err != nil {
@@ -62,15 +70,15 @@ func PanicIfError(err error) {
 
 func PanicIfErrorMsg(err error, msg string) {
 	if err != nil {
-		panic(err)
+		panic(NewError(err, msg))
 	}
 }
 
-func PanicIfErrorMsgF(err error, format string, args ...interface{}) {
+/*func PanicIfErrorMsgF(err error, format string, args ...interface{}) {
 	if err != nil {
 		panic(fmt.Sprintf(format, args...))
 	}
-}
+}*/
 
 func PanicIfErrorT[T any](v T, err error) T {
 	PanicIfError(err)
@@ -81,6 +89,7 @@ func PanicIfErrorFn[T any](fn func() (T, error)) T {
 	return PanicIfErrorT(fn())
 }
 
+/*
 func PanicIfErrorFn1[T any, U any](u U, fn func(u U) (T, error)) T {
 	return PanicIfErrorT(fn(u))
 }
@@ -99,7 +108,7 @@ func PanicIfErrorAc1[T any](t T, action func(t T) error) {
 
 func PanicIfErrorAc2[T any, U any](t T, u U, action func(t T, u U) error) {
 	PanicIfError(action(t, u))
-}
+}*/
 
 func Print(err error) {
 	e := errors.Unwrap(err)
@@ -118,7 +127,7 @@ func Println(err error) {
 	fmt.Println(err.Error())
 }
 
-func PrintIfError(err error) {
+/*func PrintIfError(err error) {
 	if err != nil {
 		Print(err)
 	}
@@ -128,19 +137,19 @@ func PrintIfErrorLn(err error) {
 	if err != nil {
 		Println(err)
 	}
-}
+}*/
 
 func Fatal(err error) {
 	Print(err)
 	os.Exit(1)
 }
 
-func Fatalln(err error) {
+func FatalLn(err error) {
 	Println(err)
 	os.Exit(1)
 }
 
-func FatalIfError(err error) {
+/*func FatalIfError(err error) {
 	if err != nil {
 		Fatal(err)
 	}
@@ -150,24 +159,7 @@ func FatalIfErrorLn(err error) {
 	if err != nil {
 		Fatalln(err)
 	}
-}
-
-func NewError(inner error, outer string) *Error {
-	return &Error{inner, outer}
-}
-
-func NewErrorf(inner error, format string, args ...interface{}) *Error {
-	return NewError(inner, fmt.Sprintf(format, args...))
-}
-
-func TryUnwrapR(err error) error {
-	tmp := UnwrapR(err)
-	if tmp == nil {
-		return err
-	}
-
-	return tmp
-}
+*/
 
 func UnwrapR(err error) error {
 	if err == nil {
@@ -187,3 +179,13 @@ func UnwrapR(err error) error {
 		err = tmp
 	}
 }
+
+/*func TryUnwrapR(err error) error {
+	tmp := UnwrapR(err)
+	if tmp == nil {
+		return err
+	}
+
+	return tmp
+}
+*/

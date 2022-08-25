@@ -32,7 +32,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 
 	retChan := make(chan *big.Int, config.Conf.ClientChain.MaxBufferSize)
 
-	// goroutine listents to new headers
+	// goroutine listens to new headers
 	go func() {
 		// Duration needs time in nanoseconds
 		timeoutTime := time.Duration(1000000000 * config.Conf.ClientChain.BlockTimeout)
@@ -112,8 +112,8 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 }
 
 // Make a function that will resubscribe to the block headers
-func (e *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *types.Header) ethereum.Subscription {
-	sub, err := e.EthClient.SubscribeNewHead(ctx, headers)
+func (ef *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *types.Header) ethereum.Subscription {
+	sub, err := ef.EthClient.SubscribeNewHead(ctx, headers)
 	log.Debug().Msg("resubscribing to eth client")
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to subscribe to new block headers")

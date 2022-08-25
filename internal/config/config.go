@@ -60,7 +60,7 @@ func loadABI(path string) error {
 	return nil
 }
 
-func initEnv(c *types.Config) error {
+func initEnv(_ *types.Config) error {
 	err := os.Setenv("TIMEOUT_TIME", strconv.Itoa(Conf.Api.TimeoutTime))
 	if err != nil {
 		return err

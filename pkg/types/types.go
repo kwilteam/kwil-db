@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+//goland:noinspection GoUnusedExportedFunction
 func NewClientChain(chainID int, endpoint string, depositContract *DepositContract) *ClientChain {
 	return &ClientChain{
 		ChainID:         chainID,

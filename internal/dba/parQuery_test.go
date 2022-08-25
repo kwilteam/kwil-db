@@ -13,7 +13,7 @@ func TestDB_StoreParQuer(t *testing.T) {
 	pq := types.ParameterizedQuery{
 		Name:  "query_1",
 		Query: "SELECT * FROM table_1",
-		Parameters: []types.Paramater{
+		Parameters: []types.Parameter{
 			{
 				Name: "param_1",
 				Type: "string",
