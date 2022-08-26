@@ -2,7 +2,6 @@ package wal
 
 import (
 	"errors"
-	"fmt"
 	"sync/atomic"
 
 	"github.com/kwilteam/kwil-db/internal/utils"
@@ -13,9 +12,7 @@ var (
 
 	ErrorEndBlock = errors.New("out of order operation, unable to set EndBlock operation")
 
-	//ErrorWrite = errors.New("BeginBlock must be called before an Append operation")
-
-	//ErrorWriteGeneral = errors.New("an error occurred while writing to the WAL")
+	ErrorAppendInProgress = errors.New("an append operation is already in progress")
 
 	ErrorWalClosed = errors.New("wal has already been closed")
 
@@ -32,8 +29,8 @@ type QueryArg struct {
 type QueryArgs []QueryArg
 
 const (
-	xBEGIN_BLOCK string = "BEGIN_BLOCK(%d)"
-	xEND_BLOCK   string = "(%d)END_BLOCK"
+	xBEGIN_BLOCK_TYPE uint16 = 1
+	xEND_BLOCK_TYPE   uint16 = 2
 )
 
 type WalDbCmd struct {
@@ -62,7 +59,16 @@ func OpenDbCmdWalFromHomeDir(path string) *WalDbCmd {
 
 func (w *WalDbCmd) BeginBlock(h int64) error {
 	if atomic.CompareAndSwapUint32(w.blockStarted, 0, 1) {
-		return w.inner.appendRawToWal([]byte(fmt.Sprintf(xBEGIN_BLOCK, h)))
+		b := newWalMessage(xBEGIN_BLOCK_TYPE).appendUint64(uint64(h))
+		return w.append(b)
+	}
+
+	if w.IsWriting() {
+		return ErrorAppendInProgress
+	}
+
+	if w.IsClosed() {
+		return ErrorWalClosed
 	}
 
 	// essentially close it out since we need to error out
@@ -71,7 +77,8 @@ func (w *WalDbCmd) BeginBlock(h int64) error {
 }
 
 func (w *WalDbCmd) EndBlock(h int64) error {
-	err := w.inner.appendRawToWal([]byte(fmt.Sprintf(xEND_BLOCK, h)))
+	b := newWalMessage(xEND_BLOCK_TYPE).appendUint64(uint64(h))
+	err := w.append(b)
 	if err != nil {
 		return err
 	}
@@ -80,40 +87,56 @@ func (w *WalDbCmd) EndBlock(h int64) error {
 		return nil
 	}
 
-	w.Close()
+	if w.IsWriting() {
+		return ErrorAppendInProgress
+	}
 
+	if w.IsClosed() {
+		return ErrorWalClosed
+	}
+
+	w.Close()
 	return ErrorEndBlock
 }
 
 func (w *WalDbCmd) IsClosed() bool {
-	return uint32(86) == *w.blockStarted
+	return uint32(86) == atomic.LoadUint32(w.blockStarted)
+}
+
+func (w *WalDbCmd) IsWriting() bool {
+	return uint32(2) == atomic.LoadUint32(w.blockStarted)
 }
 
 func (w *WalDbCmd) Close() {
-	if uint32(86) == *w.blockStarted {
-		return
-	}
+	//in case of an invalid state, only loop for up to 2 seconds
+	deadline := utils.NewDeadline(2000)
 
-	*w.blockStarted = 86
+	current := atomic.LoadUint32(w.blockStarted)
+	for current != uint32(86) && !deadline.HasExpired() {
+		if current != 2 && atomic.CompareAndSwapUint32(w.blockStarted, current, 86) {
+			break
+		}
+		current = atomic.LoadUint32(w.blockStarted)
+	}
 
 	_ = w.inner.closeWal()
 }
 
 // AppendCreateDatabase Function to append a CreateDatabase message to the WAL
 func (w *WalDbCmd) AppendCreateDatabase(dbid, msg string) error {
-	return w.appendMsgString(0, dbid, msg)
+	return w.appendMsgString(50, dbid, msg)
 }
 
 // AppendDDL Appending DDL to the WAL
 // This is currently the same as CreateDatabase (besides the message ID).  I kept them separate so we can change them later if we need to.
 func (w *WalDbCmd) AppendDDL(dbid, msg string) error {
-	return w.appendMsgString(1, dbid, msg)
+	return w.appendMsgString(51, dbid, msg)
 }
 
 // AppendDefineQuery Appends a parameterized query definition to the WAL
 // I made publicity an int8 so that it can be future compatible with the addition of more parameters.
 func (w *WalDbCmd) AppendDefineQuery(dbid, msg string, publicity uint8) error {
-	m, err := newWalDbMessage(2, dbid)
+	m, err := newWalDbMessage(52, dbid)
 	if err != nil {
 		return err
 	}
@@ -129,7 +152,7 @@ func (w *WalDbCmd) AppendDefineQuery(dbid, msg string, publicity uint8) error {
 }
 
 func (w *WalDbCmd) AppendExecuteQuery(dbid, statementid string, args QueryArgs) error {
-	m, err := newWalDbMessage(3, dbid)
+	m, err := newWalDbMessage(53, dbid)
 	if err != nil {
 		return err
 	}
@@ -180,7 +203,11 @@ func (w *WalDbCmd) appendMsgString(msgType uint16, dbid, msg string) error {
 
 func (w *WalDbCmd) append(m *walMessage) error {
 	if !atomic.CompareAndSwapUint32(w.blockStarted, 1, 2) {
-		if uint32(86) == *w.blockStarted {
+		if w.IsWriting() {
+			return ErrorAppendInProgress
+		}
+
+		if w.IsClosed() {
 			return ErrorWalClosed
 		}
 
@@ -195,7 +222,12 @@ func (w *WalDbCmd) append(m *walMessage) error {
 	}
 
 	if !atomic.CompareAndSwapUint32(w.blockStarted, 2, 1) {
+		if w.IsClosed() {
+			return ErrorWalClosed
+		}
+
 		w.Close()
+
 		return ErrorInvalidState
 	}
 
@@ -230,7 +262,7 @@ func appendArgAmt(w *walMessage, a QueryArgs) *walMessage {
 		2: DefineQuery
 		3: DatabaseWrite
 
-	TYPE 0: CreateDatabase
+	TYPE 50: CreateDatabase
 		HEADER: [db-id][msg-size]
 		SIZE:   [64]   [2]
 
@@ -247,7 +279,7 @@ func appendArgAmt(w *walMessage, a QueryArgs) *walMessage {
 			67-68: Message Size
 			69+: Message
 
-	TYPE 1: DDL
+	TYPE 51: DDL
 		HEADER: [db-id][msg-size]
 		SIZE:   [64]   [2]
 
@@ -264,7 +296,7 @@ func appendArgAmt(w *walMessage, a QueryArgs) *walMessage {
 			67-68: Message Size
 			69+: Message
 
-	TYPE 2: DefineQuery
+	TYPE 52: DefineQuery
 		HEADER: [db-id][publicity][msg-size]
 		SIZE:	[64]   [1]        [2]
 
@@ -282,7 +314,7 @@ func appendArgAmt(w *walMessage, a QueryArgs) *walMessage {
 			68-69: Message Size
 			70+: Message
 
-	TYPE 3:
+	TYPE 53:
 		HEADER: [dbid][statementid][#-of-inputs]
 		SIZE:   [64]  [64]         [1]
 

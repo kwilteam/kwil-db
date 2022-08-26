@@ -39,10 +39,10 @@
             "debugAdapter": "dlv-dap",
             "showLog": true,
             "dlvFlags" : ["--only-same-user=false"],
-            "args": ["tx", "kwil", "create-database", "postResetDb", "--from", "alice", "-y", "--home", "${userHome}/.kwildb/chain" ]
+            "args": ["tx", "kwil", "create-database", "postResetDbTest", "--from", "alice", "-y", "--home", "${userHome}/.kwildb/chain" ]
         },
         {
-            "name": "ETH CLI CMD",
+            "name": "Kwil CLI",
             "type": "go",
             "request": "launch",
             "mode": "debug",

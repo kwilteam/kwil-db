@@ -22,6 +22,11 @@ func (m *walMessage) appendLenWithString(s string) *walMessage {
 	return m
 }
 
+func (m *walMessage) appendUint64(n uint64) *walMessage {
+	*(m.data) = append(*(m.data), utils.Uint64ToBytes(n)...)
+	return m
+}
+
 func newWalMessage(msgType uint16) *walMessage {
 	return &walMessage{newLogMsgPrefix(0, msgType)}
 }
