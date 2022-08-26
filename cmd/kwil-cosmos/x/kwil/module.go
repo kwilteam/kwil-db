@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/kwilteam/kwil-db/internal/ctx"
+	"sync/atomic"
 
 	"github.com/kwilteam/kwil-db/internal/utils"
 
@@ -179,16 +180,24 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion implements ConsensusVersion.
 func (AppModule) ConsensusVersion() uint64 { return 2 }
 
+var blockState int32
+
 // BeginBlock executes all ABCI BeginBlock logic respective to the capability module.
 func (am AppModule) BeginBlock(ctx sdk.Context, _ abci.RequestBeginBlock) {
-	err := am.walRef.BeginBlock(ctx.BlockHeight())
+	var s = atomic.AddInt32(&blockState, 1)
+	h := ctx.BlockHeight()
+	fmt.Printf("############### BeginBlock (state: %d, height: %d) ###############\n", s, h)
+	err := am.walRef.BeginBlock(h)
 	utils.PanicIfError(err)
 }
 
 // EndBlock executes all ABCI EndBlock logic respective to the capability module. It
 // returns no validator updates.
 func (am AppModule) EndBlock(ctx sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
-	err := am.walRef.EndBlock(ctx.BlockHeight())
+	var s = atomic.AddInt32(&blockState, -1)
+	h := ctx.BlockHeight()
+	fmt.Printf("############### EndBlock (state: %d, height: %d) ###############\n", s, h)
+	err := am.walRef.EndBlock(h)
 	utils.PanicIfError(err)
 	return []abci.ValidatorUpdate{}
 }
