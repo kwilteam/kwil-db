@@ -29,7 +29,7 @@
         "cosmos": {
             "address_prefix": "kaddr-",
             "mnemonic_path": "./keys/cosmos",
-            "name_on_keyring": "alice"
+            "name_on_keyring": "kwilnode"
         }
     },
     "storage": {
@@ -43,7 +43,23 @@
     },
     "cost": {
         "database": {
-            "create": "1"
+            "create": "5"
+        },
+        "ddl": {
+            "table": {
+                "create": "3",
+                "delete": "2",
+                "modify": "2"
+            },
+            "role": {
+                "create": "2",
+                "delete": "1",
+                "modify": "1"
+            },
+            "query": {
+                "create": "2",
+                "delete": "1"
+            }
         }
     }
 }

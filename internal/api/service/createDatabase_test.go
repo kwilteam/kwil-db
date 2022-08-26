@@ -2,11 +2,12 @@ package service
 
 import (
 	"context"
+	"math/big"
+	"testing"
+
 	kconf "github.com/kwilteam/kwil-db/internal/config/test"
 	"github.com/kwilteam/kwil-db/pkg/types"
 	"github.com/rs/zerolog"
-	"math/big"
-	"testing"
 )
 
 type MockDepositStore struct {
@@ -27,11 +28,19 @@ func (m *MockDepositStore) SetBalance(address string, balance *big.Int) error {
 	return nil
 }
 
+type MockCosmosClient struct {
+}
+
+func (m *MockCosmosClient) CreateDB(db *types.CreateDatabase) error {
+	return nil
+}
+
 func TestService_CreateDatabase(t *testing.T) {
 	type fields struct {
-		conf *types.Config
-		Ds   DepositStore
-		log  zerolog.Logger
+		conf    *types.Config
+		ds      DepositStore
+		log     zerolog.Logger
+		cClient CosmosClient
 	}
 	type args struct {
 		ctx context.Context
@@ -46,9 +55,10 @@ func TestService_CreateDatabase(t *testing.T) {
 		{
 			name: "valid request",
 			fields: fields{
-				conf: kconf.GetTestConfig(t),
-				Ds:   &MockDepositStore{},
-				log:  zerolog.Logger{},
+				conf:    kconf.GetTestConfig(t),
+				ds:      &MockDepositStore{},
+				log:     zerolog.Logger{},
+				cClient: &MockCosmosClient{},
 			},
 			args: args{
 				ctx: context.Background(),
@@ -66,9 +76,10 @@ func TestService_CreateDatabase(t *testing.T) {
 		{
 			name: "fee too low",
 			fields: fields{
-				conf: kconf.GetTestConfig(t),
-				Ds:   &MockDepositStore{},
-				log:  zerolog.Logger{},
+				conf:    kconf.GetTestConfig(t),
+				ds:      &MockDepositStore{},
+				log:     zerolog.Logger{},
+				cClient: &MockCosmosClient{},
 			},
 			args: args{
 				ctx: context.Background(),
@@ -86,9 +97,10 @@ func TestService_CreateDatabase(t *testing.T) {
 		{
 			name: "invalid signature length",
 			fields: fields{
-				conf: kconf.GetTestConfig(t),
-				Ds:   &MockDepositStore{},
-				log:  zerolog.Logger{},
+				conf:    kconf.GetTestConfig(t),
+				ds:      &MockDepositStore{},
+				log:     zerolog.Logger{},
+				cClient: &MockCosmosClient{},
 			},
 			args: args{
 				ctx: context.Background(),
@@ -106,9 +118,10 @@ func TestService_CreateDatabase(t *testing.T) {
 		{
 			name: "invalid signature",
 			fields: fields{
-				conf: kconf.GetTestConfig(t),
-				Ds:   &MockDepositStore{},
-				log:  zerolog.Logger{},
+				conf:    kconf.GetTestConfig(t),
+				ds:      &MockDepositStore{},
+				log:     zerolog.Logger{},
+				cClient: &MockCosmosClient{},
 			},
 			args: args{
 				ctx: context.Background(),
@@ -126,10 +139,11 @@ func TestService_CreateDatabase(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := Service{
-				conf: tt.fields.conf,
-				ds:   tt.fields.Ds,
-				log:  tt.fields.log,
+			s := &Service{
+				conf:    tt.fields.conf,
+				ds:      tt.fields.ds,
+				log:     tt.fields.log,
+				cClient: tt.fields.cClient,
 			}
 			if err := s.CreateDatabase(tt.args.ctx, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("Service.CreateDatabase() error = %v, wantErr %v", err, tt.wantErr)

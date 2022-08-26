@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"github.com/kwilteam/kwil-db/internal/crypto"
 	"github.com/kwilteam/kwil-db/pkg/types"
+	"math/big"
 )
 
 // CreateDatabase Service Function for CreateDatabase
@@ -12,14 +14,10 @@ func (s *Service) CreateDatabase(ctx context.Context, db *types.CreateDatabase) 
 	/*
 		Service Function for CreateDatabase
 
-		First, we need to check the cost associated with creating a database.
-		Right now, this will be a static cost set in the config file. config.cost.database.create.
+		First, we check the incoming signature.
+		If valid, we then validate the balances (validates the sent fee, cost, and sender balance)
 
-		If the user has enough funds, we will subtract the fund and propagate to Cosmos to reach consensus.
-		(this is where a WAL should be used and rollback the funds if a crash occurs)
-
-		The request can have an optional flag to wait to send a response until the database is created,
-		or to respond once it has been written to the Wal and sent to cosmos.
+		If valid, we set the new balance and forward the message to cosmos
 
 	*/
 
@@ -33,18 +31,26 @@ func (s *Service) CreateDatabase(ctx context.Context, db *types.CreateDatabase) 
 	}
 
 	// Next, check the balances
-	amt, err := s.validateBalances(&db.From, &s.conf.Cost.Database.Create, &db.Fee)
+	/*amt, err := s.validateBalances(&db.From, &s.conf.Cost.Database.Create, &db.Fee)
 	if err != nil {
 		return err
-	}
+	}*/
 
+	amt := big.NewInt(10)
+	fmt.Println(1)
 	err = s.ds.SetBalance(db.From, amt)
 	if err != nil {
 		s.log.Debug().Err(err).Msgf("failed to set balance for %s", db.From)
 		return err
 	}
 
-	// TODO: Send to Cosmos
+	// Finally, forward the message to cosmos
+	fmt.Println(2)
+	err = s.cClient.CreateDB(db)
+	if err != nil {
+		s.log.Debug().Err(err).Msgf("failed to create database when broadcasting message %s", db.Name)
+		return err
+	}
 
 	return nil
 }

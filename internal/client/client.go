@@ -2,10 +2,10 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
 	"github.com/kwilteam/kwil-db/pkg/types"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"strconv"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -16,8 +16,9 @@ import (
 
 type CosmosClient struct {
 	Client  cosmosclient.Client
-	Account *cosmosaccount.Account
-	Config  *types.Config
+	conf    *types.Config
+	log     zerolog.Logger
+	address string
 }
 
 type EthClient struct {
@@ -25,59 +26,26 @@ type EthClient struct {
 
 //goland:noinspection GoUnusedExportedFunction
 func NewCosmosClient(ctx context.Context, conf *types.Config) (CosmosClient, error) {
+	logger := log.With().Str("location", "CosmosClient").Logger()
 	account := CosmosClient{
-		Config: conf,
+		conf: conf,
+		log:  logger,
 	}
-	cosmos, err := cosmosclient.New(
-		ctx,
-		cosmosclient.WithAddressPrefix(conf.Wallets.Cosmos.AddressPrefix),
-	)
+
+	cosmos, err := importWallet(ctx, conf)
 	if err != nil {
 		return account, err
 	}
 
-	accs, _ := cosmos.AccountRegistry.List()
-	fmt.Println(accs)
-
-	accName := "alice"
-	acc, err := cosmos.Account(accName)
-
+	an, err := cosmos.Account(conf.Wallets.Cosmos.KeyName)
 	if err != nil {
 		return account, err
 	}
-	account.Account = &acc
+
+	account.address = an.Address(conf.Wallets.Cosmos.AddressPrefix)
+
 	account.Client = cosmos
 	return account, nil
-
-	// Commenting out below until this keyring shit can get figured out
-	/*
-		// We need to read in the mnemonic from conf.Wallets.Cosmos.MnemonicPath
-		cosmMnemonic, err := os.ReadFile(conf.Wallets.Cosmos.MnemonicPath)
-		if err != nil {
-			return nil, err
-		}
-
-		cosmos, err := cosmosclient.New(
-			ctx,
-			cosmosclient.WithAddressPrefix(conf.Wallets.Cosmos.AddressPrefix),
-		)
-		if err != nil {
-			return nil, err
-		}
-		_, err = ImportWallet(&cosmos.AccountRegistry, accName, string(cosmMnemonic))
-		if err != nil {
-			return nil, err
-		}
-
-		acc, err := cosmos.Account(accName)
-		if err != nil {
-			return nil, err
-		}
-
-		return &CosmosClient{
-			Account: &acc,
-		}, nil
-	*/
 }
 
 func (c *CosmosClient) Transfer(amt int, toAddr string) error {
@@ -88,19 +56,17 @@ func (c *CosmosClient) Transfer(amt int, toAddr string) error {
 	}
 
 	msg := &banktypes.MsgSend{
-		FromAddress: c.Account.Address(c.Config.Wallets.Cosmos.AddressPrefix),
+		FromAddress: c.address,
 		ToAddress:   toAddr,
 		Amount:      sdk.Coins{coins},
 	}
-
-	txResp, err := c.Client.BroadcastTx(c.Account.Name, msg)
+	txResp, err := c.Client.BroadcastTx(c.conf.Wallets.Cosmos.KeyName, msg)
 	if err != nil {
+		c.log.Debug().Err(err).Msg("error broadcasting tx")
 		return err
 	}
 
-	// Print response from broadcasting a transaction
-	fmt.Print("MsgCreatePost:\n\n")
-	fmt.Println(txResp)
+	c.log.Debug().Interface("tx", txResp).Msg("tx broadcast")
 
 	return nil
 }

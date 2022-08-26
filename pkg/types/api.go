@@ -14,7 +14,7 @@ type DDL struct {
 	Name      string `json:"name"`
 	Owner     string `json:"owner"`
 	DBType    string `json:"type"`
-	DDLType   string `json:"ddl_type"`
+	Type      string `json:"ddl_type"`
 	DDL       string `json:"ddl"`
 	Fee       string `json:"fee"`
 	Signature string `json:"signature"`

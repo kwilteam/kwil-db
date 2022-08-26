@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"github.com/kwilteam/kwil-db/internal/ctx"
 	"strings"
 
@@ -66,6 +67,7 @@ func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDat
 	}
 	k.SetDdlindex(c, newDDLIndex)
 
+	fmt.Println("appending database")
 	err := kctx.Wal().AppendCreateDatabase(dbName, createStatement.String())
 	if err != nil {
 		return nil, err

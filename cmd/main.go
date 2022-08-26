@@ -43,17 +43,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	/*// Create cosmos client
+	// Create cosmos client
 	cosmClient, err := cosClient.NewCosmosClient(ctx, &config.Conf)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create cosmos client")
 		os.Exit(1)
 	}
 
-	cosmClient.Transfer(2, "kaddr-1jz2z9jtpza7a499cj4dpfmvzclwa0a5hva9ymq")*/
-
 	// Initialize deposits
-	cosmClient := cosClient.CosmosClient{}
+	//cosmClient := cosClient.CosmosClient{}
 	d, err := deposits.Init(ctx, &config.Conf, client, &cosmClient)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize deposits")
@@ -66,7 +64,7 @@ func main() {
 	fmt.Println("Node is running properly!")
 
 	// HTTP server
-	serv := service.NewService(&config.Conf, d.Store)
+	serv := service.NewService(&config.Conf, d.Store, &cosmClient)
 	httpHandler := rest.NewHandler(*serv)
 	if err := httpHandler.Serve(); err != nil {
 		log.Fatal().Err(err).Msg("failed to start http server")

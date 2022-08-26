@@ -1,44 +1,37 @@
 package client
 
 import (
-	"github.com/cosmos/cosmos-sdk/crypto/hd"
-	"github.com/cosmos/cosmos-sdk/crypto/keyring"
-	sdktypes "github.com/cosmos/cosmos-sdk/types"
-	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
+	"context"
+	"github.com/ignite/cli/ignite/pkg/cosmosclient"
+	"github.com/kwilteam/kwil-db/pkg/types"
+	"os"
 )
 
 //var ErrAccountExists = errors.New("account already exists")
 
 // ImportWallet takes a mnemonic and adds a new account to the keyring.  It also returns the account.
-func ImportWallet(r *cosmosaccount.Registry, name, mnemonic string) (cosmosaccount.Account, error) {
+func importWallet(ctx context.Context, conf *types.Config) (cosmosclient.Client, error) {
 
-	// Check if account exists
-	acc, err := r.GetByName(name)
-	if err == nil { // if so, delete it
-		_ = r.DeleteByName(name)
-		_ = r.Keyring.Delete(name)
-	}
-
-	_ = r.Keyring.Delete(name)
-	algo, err := getSignAlgo(*r)
+	cosmos, err := cosmosclient.New(
+		ctx,
+		cosmosclient.WithAddressPrefix(conf.Wallets.Cosmos.AddressPrefix),
+	)
 	if err != nil {
-		return acc, err
+		return cosmos, err
 	}
 
-	info, err := r.Keyring.NewAccount(name, mnemonic, "", hdPath(), algo)
+	mn, err := os.ReadFile(conf.Wallets.Cosmos.MnemonicPath)
 	if err != nil {
-		return acc, err
+		return cosmos, err
 	}
 
-	acc = cosmosaccount.Account{
-		Name: name,
-		Info: info,
-	}
+	cosmos.AccountRegistry.Import(conf.Wallets.Cosmos.KeyName, string(mn), "")
+	cosmos.Factory.Prepare(cosmos.Context()) // This is fucking stupid.
 
-	return acc, nil
+	return cosmos, nil
 }
 
-func getSignAlgo(r cosmosaccount.Registry) (keyring.SignatureAlgo, error) {
+/*func getSignAlgo(r cosmosaccount.Registry) (keyring.SignatureAlgo, error) {
 	algos, _ := r.Keyring.SupportedAlgorithms()
 	return keyring.NewSigningAlgoFromString(string(hd.Secp256k1Type), algos)
 }
@@ -46,3 +39,4 @@ func getSignAlgo(r cosmosaccount.Registry) (keyring.SignatureAlgo, error) {
 func hdPath() string {
 	return hd.CreateHDPath(sdktypes.GetConfig().GetCoinType(), 0, 0).String()
 }
+*/

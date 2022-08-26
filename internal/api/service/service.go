@@ -10,13 +10,14 @@ import (
 
 // Service Struct for service logic
 type Service struct {
-	conf *types.Config
-	ds   DepositStore
-	log  zerolog.Logger
+	conf    *types.Config
+	ds      DepositStore
+	log     zerolog.Logger
+	cClient CosmosClient
 }
 
-type Crypto interface {
-	VerifySignature(address string, signature string, message string) (bool, error)
+type CosmosClient interface {
+	CreateDB(db *types.CreateDatabase) error
 }
 
 type DepositStore interface {
@@ -25,12 +26,13 @@ type DepositStore interface {
 }
 
 // NewService returns a pointer Service.
-func NewService(conf *types.Config, ds DepositStore) *Service {
+func NewService(conf *types.Config, ds DepositStore, c CosmosClient) *Service {
 	logger := log.With().Str("module", "service").Logger()
 	return &Service{
-		log:  logger,
-		conf: conf,
-		ds:   ds,
+		log:     logger,
+		conf:    conf,
+		ds:      ds,
+		cClient: c,
 	}
 }
 

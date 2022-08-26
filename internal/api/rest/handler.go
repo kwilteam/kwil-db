@@ -46,7 +46,7 @@ func (h *Handler) Write(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) mapRoutes() {
 	h.Router.HandleFunc("/api/v0/write", JWTAuth(h.Write)).Methods("POST")
-	h.Router.HandleFunc("/api/v0/createDatabase", JWTAuth(h.CreateDatabase)).Methods("POST")
+	h.Router.HandleFunc("/api/v0/create-database", JWTAuth(h.CreateDatabase)).Methods("POST")
 }
 
 func (h *Handler) Serve() error {

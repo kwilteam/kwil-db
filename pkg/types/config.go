@@ -17,6 +17,7 @@ type Config struct {
 
 type Cost struct {
 	Database DatabaseCosts `json:"database" mapstructure:"database"`
+	Ddl      DDLCosts      `json:"ddl" mapstructure:"ddl"`
 }
 
 type Storage struct {
@@ -33,6 +34,29 @@ type Api struct {
 }
 
 type DatabaseCosts struct {
+	Create string `json:"create" mapstructure:"create"`
+	Delete string `json:"delete" mapstructure:"delete"`
+}
+
+type DDLCosts struct {
+	Table TableDDLCosts `json:"table" mapstructure:"table"`
+	Role  RoleDDLCosts  `json:"role" mapstructure:"role"`
+	Query QueryDDLCosts `json:"query" mapstructure:"query"`
+}
+
+type TableDDLCosts struct {
+	Create string `json:"create" mapstructure:"create"`
+	Delete string `json:"delete" mapstructure:"delete"`
+	Modify string `json:"modify" mapstructure:"modify"`
+}
+
+type RoleDDLCosts struct {
+	Create string `json:"create" mapstructure:"create"`
+	Delete string `json:"delete" mapstructure:"delete"`
+	Modify string `json:"modify" mapstructure:"modify"`
+}
+
+type QueryDDLCosts struct {
 	Create string `json:"create" mapstructure:"create"`
 	Delete string `json:"delete" mapstructure:"delete"`
 }
