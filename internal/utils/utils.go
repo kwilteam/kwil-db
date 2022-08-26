@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"os"
 	"strings"
+	"time"
 )
 
 func Coalesce[T comparable](check T, alt T) T {
@@ -144,4 +145,28 @@ func Uint16ToBytes(i uint16) []byte {
 	b := make([]byte, 2)
 	binary.BigEndian.PutUint16(b, i)
 	return b
+}
+
+func Uint64ToBytes(i uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, i)
+	return b
+}
+
+// Deadline implements the deadline/timeout resiliency pattern.
+type Deadline struct {
+	deadline time.Time
+}
+
+func (d *Deadline) Expiry() time.Time {
+	return d.deadline
+}
+
+func (d *Deadline) HasExpired() bool {
+	return !d.deadline.Before(time.Now())
+}
+
+// NewDeadline constructs a new Deadline with the given timeout.
+func NewDeadline(timeoutMillis time.Duration) *Deadline {
+	return &Deadline{time.Now().Add(time.Millisecond * timeoutMillis)}
 }
