@@ -8,6 +8,7 @@ require (
 	github.com/cosmos/ibc-go/v3 v3.0.0
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/ethereum/go-ethereum v1.10.21
+	github.com/gofrs/flock v0.8.1
 	github.com/gogo/protobuf v1.3.3
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang/protobuf v1.5.2
@@ -31,8 +32,11 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
+require google.golang.org/protobuf v1.28.1 // indirect
+
 replace (
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+	//github.com/golag/protobuf => google.golang.org/protobuf v1.28.1
 	github.com/keybase/go-keychain => github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4
 	github.com/kwilteam/kwil-db/cmd => ./cmd
 	github.com/kwilteam/kwil-db/internal => ./internal
@@ -209,7 +213,6 @@ require (
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
 	google.golang.org/api v0.84.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect

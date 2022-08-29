@@ -3,7 +3,7 @@ package types
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/kwilteam/kwil-db/internal/utils"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
 )
 
 const TypeMsgDatabaseWrite = "database_write"
@@ -29,7 +29,7 @@ func (msg *MsgDatabaseWrite) Type() string {
 
 func (msg *MsgDatabaseWrite) GetSigners() []sdk.AccAddress {
 	creator, err := sdk.AccAddressFromBech32(msg.Creator)
-	utils.PanicIfError(err)
+	errs.PanicIfError(err)
 	return []sdk.AccAddress{creator}
 }
 

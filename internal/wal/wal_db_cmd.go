@@ -2,9 +2,11 @@ package wal
 
 import (
 	"errors"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
 	"sync/atomic"
 
 	"github.com/kwilteam/kwil-db/internal/utils"
+	dt "github.com/kwilteam/kwil-db/internal/utils/dt"
 )
 
 var (
@@ -41,7 +43,7 @@ type WalDbCmd struct {
 //goland:noinspection GoUnusedExportedFunction
 func OpenDbCmdWal(path string) *WalDbCmd {
 	w, err := openWalWriter(path, "dbcmd.wal")
-	utils.PanicIfErrorMsg(err, "unable to open WAL file.")
+	errs.PanicIfErrorMsg(err, "unable to open WAL file.")
 
 	v := uint32(0)
 
@@ -50,7 +52,7 @@ func OpenDbCmdWal(path string) *WalDbCmd {
 
 func OpenDbCmdWalFromHomeDir(path string) *WalDbCmd {
 	w, err := openWalWriterFromHomeDir(path, "dbcmd.wal")
-	utils.PanicIfErrorMsg(err, "unable to open WAL file.")
+	errs.PanicIfErrorMsg(err, "unable to open WAL file.")
 
 	v := uint32(0)
 
@@ -109,7 +111,7 @@ func (w *WalDbCmd) IsWriting() bool {
 
 func (w *WalDbCmd) Close() {
 	//in case of an invalid state, only loop for up to 2 seconds
-	deadline := utils.NewDeadline(2000)
+	deadline := dt.NewDeadline(500)
 
 	current := atomic.LoadUint32(w.blockStarted)
 	for current != uint32(86) && !deadline.HasExpired() {

@@ -1,16 +1,22 @@
 package wal
 
 import (
+	"errors"
+	"os"
 	"path"
 	"sync"
 
+	"github.com/gofrs/flock"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
 	"github.com/tidwall/wal"
 )
 
 // Struct for write ahead log. Contains fields for the block that the log is for
 type walWriter struct {
-	mu  sync.RWMutex
-	wal *wal.Log
+	mu        sync.RWMutex
+	wal       *wal.Log
+	lck       *flock.Flock
+	lastIndex uint64
 }
 
 //TODO: add recovery logic or a registerable recovery handler
@@ -20,26 +26,39 @@ func openWalWriter(dir, name string) (*walWriter, error) {
 	if name != "" {
 		dir = path.Join(dir, name)
 	}
-	innerWal, err := wal.Open(dir, nil) //need to use walOptions for reader optimization
+
+	_ = os.MkdirAll(dir, 0755)
+
+	lck := flock.New(dir + ".lck")
+	locked, err := lck.TryLock()
 	if err != nil {
+		return nil, errs.NewError(err, "unable to obtain wal lock")
+	}
+
+	if !locked {
+		return nil, errors.New("unable to obtain wal lock")
+	}
+
+	innerWal, err := wal.Open(dir, nil)
+	if err != nil {
+		_ = lck.Unlock()
 		return nil, err
 	}
 
-	// Creating new wal
-	return &walWriter{wal: innerWal}, nil
+	lastIndex, err := innerWal.LastIndex()
+	if err != nil {
+		_ = lck.Unlock()
+		return nil, err
+	}
+
+	w := &walWriter{wal: innerWal, lck: lck, lastIndex: lastIndex}
+
+	return w, nil
 }
 
 func openWalWriterFromHomeDir(homeDir string, name string) (*walWriter, error) {
 	walDir := concatWithRootChainPath(homeDir, name)
-
-	innerWal, err := wal.Open(walDir, nil) //need to use walOptions for reader optimization
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Creating new wal
-	return &walWriter{wal: innerWal}, nil
+	return openWalWriter(walDir, "")
 }
 
 // Will automatically add the data to the end of the log
@@ -56,19 +75,19 @@ func (w *walWriter) appendRawToWal(data []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Find the last index
-	currentIndex, err := w.wal.LastIndex()
-	if err != nil {
-		return err
-	}
+	w.lastIndex++
 
-	// Increment by one
-	currentIndex++
-	// Write
-	return w.wal.Write(currentIndex, data)
+	return w.wal.Write(w.lastIndex, data)
 }
 
-// Function to finish a wal and send it to the final directory.
 func (w *walWriter) closeWal() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	_ = w.lck.Unlock()
 	return w.wal.Close()
+}
+
+func (w *walWriter) shutdown() {
+	_ = w.closeWal()
 }

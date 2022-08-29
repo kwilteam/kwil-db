@@ -2,9 +2,9 @@ package app
 
 import (
 	"encoding/json"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
 	"log"
 
-	"github.com/kwilteam/kwil-db/internal/utils"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
@@ -79,7 +79,7 @@ func (app *App) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAddrs []str
 	// withdraw all validator commission
 	app.StakingKeeper.IterateValidators(ctx, func(_ int64, val stakingtypes.ValidatorI) (stop bool) {
 		_, err := app.DistrKeeper.WithdrawValidatorCommission(ctx, val.GetOperator())
-		utils.PanicIfError(err)
+		errs.PanicIfError(err)
 		return false
 	})
 
@@ -87,7 +87,7 @@ func (app *App) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAddrs []str
 	dels := app.StakingKeeper.GetAllDelegations(ctx)
 	for _, delegation := range dels {
 		_, err := app.DistrKeeper.WithdrawDelegationRewards(ctx, delegation.GetDelegatorAddr(), delegation.GetValidatorAddr())
-		utils.PanicIfError(err)
+		errs.PanicIfError(err)
 	}
 
 	// clear validator slash events
@@ -165,7 +165,7 @@ func (app *App) prepForZeroHeightGenesis(ctx sdk.Context, jailAllowedAddrs []str
 
 	_ = iter.Close()
 
-	utils.PanicIfErrorT(
+	errs.PanicIfErrorT(
 		app.StakingKeeper.ApplyAndReturnValidatorSetUpdates(ctx),
 	)
 

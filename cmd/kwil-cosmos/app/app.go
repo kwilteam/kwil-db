@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
 	"io"
 	"net/http"
 	"os"
@@ -102,7 +103,6 @@ import (
 	kwilmodule "github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil"
 	kwilmodulekeeper "github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/keeper"
 	kwilmoduletypes "github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types"
-	"github.com/kwilteam/kwil-db/internal/utils"
 	// this line is used by starport scaffolding # stargate/app/moduleImport
 )
 
@@ -183,7 +183,7 @@ var (
 
 func init() {
 	userHomeDir, err := os.UserHomeDir()
-	utils.PanicIfError(err)
+	errs.PanicIfError(err)
 	DefaultNodeHome = filepath.Join(userHomeDir, "."+Name+"/chain")
 }
 
@@ -566,7 +566,7 @@ func New(
 			SigGasConsumer:  ante.DefaultSigVerificationGasConsumer,
 		},
 	)
-	utils.PanicIfError(err)
+	errs.PanicIfError(err)
 	app.SetAnteHandler(anteHandler)
 	app.SetEndBlocker(app.EndBlocker)
 

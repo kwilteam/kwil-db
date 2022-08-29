@@ -2,9 +2,12 @@ package client
 
 import (
 	"context"
+	"os"
+	"strings"
+
+	"github.com/ignite/cli/ignite/pkg/cosmosaccount"
 	"github.com/ignite/cli/ignite/pkg/cosmosclient"
 	"github.com/kwilteam/kwil-db/pkg/types"
-	"os"
 )
 
 //var ErrAccountExists = errors.New("account already exists")
@@ -26,8 +29,19 @@ func importWallet(ctx context.Context, conf *types.Config) (cosmosclient.Client,
 		return cosmos, err
 	}
 
-	cosmos.AccountRegistry.Import(conf.Wallets.Cosmos.KeyName, string(mn), "")
-	cosmos.Factory.Prepare(cosmos.Context()) // This is fucking stupid.
+	mns := strings.TrimSpace(string(mn))
+	_, err = cosmos.AccountRegistry.Import(conf.Wallets.Cosmos.KeyName, mns, "")
+	if err != nil {
+		if err != cosmosaccount.ErrAccountExists {
+			return cosmos, err
+		}
+		err = cosmos.AccountRegistry.DeleteByName(conf.Wallets.Cosmos.KeyName)
+		if err != nil {
+			return cosmos, err
+		}
+	}
+
+	_, _ = cosmos.Factory.Prepare(cosmos.Context()) // This is fucking stupid.
 
 	return cosmos, nil
 }

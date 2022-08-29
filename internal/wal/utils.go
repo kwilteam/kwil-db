@@ -3,11 +3,10 @@ package wal
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
 	"io"
 	"os"
 	"path"
-
-	"github.com/kwilteam/kwil-db/internal/utils"
 )
 
 // Get current node key to store associated WAL
@@ -20,7 +19,7 @@ func concatWithRootChainPath(homeDir, name string) string {
 
 func getNodeKeyHash(dir string) string {
 	f, err := os.Open(path.Join(dir, "config", "node_key.json"))
-	utils.PanicIfError(err)
+	errs.PanicIfError(err)
 
 	defer func(f *os.File) {
 		_ = f.Close()
@@ -29,7 +28,7 @@ func getNodeKeyHash(dir string) string {
 	h := md5.New()
 
 	_, err = io.Copy(h, f)
-	utils.PanicIfError(err)
+	errs.PanicIfError(err)
 
 	return hex.EncodeToString(h.Sum(nil))
 }

@@ -2,6 +2,7 @@ package kwil
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/ctx"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"

@@ -4,6 +4,8 @@ package util
 import (
 	"errors"
 	"fmt"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
+	"github.com/kwilteam/kwil-db/internal/utils/files"
 	"log"
 	"os"
 	"os/exec"
@@ -34,6 +36,8 @@ func init() {
 	os.Args, hasReset = hasFlagAndRemove(os.Args, "--dbg-reset")
 	os.Args, hasRun = hasFlagAndRemove(os.Args, "--dbg-run")
 
+	loggingEnabled = true
+
 	if !hasReset && !hasRun {
 		return
 	}
@@ -51,7 +55,7 @@ func init() {
 	homeDirRoot = strings.TrimSuffix(home, "/chain")
 
 	err := os.MkdirAll(home, 0755)
-	utils.PanicIfError(err)
+	errs.PanicIfError(err)
 }
 
 // BuildAndRunRootCommand When in DEBUG mode, Need to run export periodically since the
@@ -295,7 +299,7 @@ func execute(args []string) (string, error) {
 			return "", err
 		}
 		appName = dir + "/cmd/kwil-cosmos/cmd/kwild/kwild"
-		if !utils.FileExists(appName) {
+		if !files.FileExists(appName) {
 			return "", fmt.Errorf("file %s does not exists. Build kwild in order for the shell usage of command delegation", appName)
 		}
 	} else {

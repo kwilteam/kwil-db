@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/ctx"
-	"sync/atomic"
 
-	"github.com/kwilteam/kwil-db/internal/utils"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
+
+	"github.com/kwilteam/kwil-db/internal/ctx"
 
 	"github.com/gorilla/mux"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
@@ -84,7 +84,7 @@ func (AppModuleBasic) RegisterRESTRoutes(_ client.Context, _ *mux.Router) {
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
 	err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx))
-	utils.PanicIfError(err)
+	errs.PanicIfError(err)
 }
 
 // GetTxCmd returns the capability module's root tx command.
@@ -184,20 +184,14 @@ var blockState int32
 
 // BeginBlock executes all ABCI BeginBlock logic respective to the capability module.
 func (am AppModule) BeginBlock(ctx sdk.Context, _ abci.RequestBeginBlock) {
-	var s = atomic.AddInt32(&blockState, 1)
-	h := ctx.BlockHeight()
-	fmt.Printf("############### BeginBlock (state: %d, height: %d) ###############\n", s, h)
-	err := am.walRef.BeginBlock(h)
-	utils.PanicIfError(err)
+	err := am.walRef.BeginBlock(ctx.BlockHeight())
+	errs.PanicIfError(err)
 }
 
 // EndBlock executes all ABCI EndBlock logic respective to the capability module. It
 // returns no validator updates.
 func (am AppModule) EndBlock(ctx sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
-	var s = atomic.AddInt32(&blockState, -1)
-	h := ctx.BlockHeight()
-	fmt.Printf("############### EndBlock (state: %d, height: %d) ###############\n", s, h)
-	err := am.walRef.EndBlock(h)
-	utils.PanicIfError(err)
+	err := am.walRef.EndBlock(ctx.BlockHeight())
+	errs.PanicIfError(err)
 	return []abci.ValidatorUpdate{}
 }

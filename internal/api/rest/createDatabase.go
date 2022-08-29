@@ -3,9 +3,10 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+
 	"github.com/kwilteam/kwil-db/pkg/types"
 	"github.com/rs/zerolog/log"
-	"net/http"
 )
 
 // CreateDatabase Handler for CreateDatabase

@@ -7,16 +7,17 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types"
+	"github.com/kwilteam/kwil-db/internal/ctx"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 )
 
 func (k msgServer) DDL(goCtx context.Context, msg *types.MsgDDL) (*types.MsgDDLResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	c := sdk.UnwrapSDKContext(goCtx)
 
 	// First check if the specified DB exists
-	db, isFound := k.GetDatabases(ctx, msg.Dbid)
+	db, isFound := k.GetDatabases(c, msg.Dbid)
 	if !isFound {
 		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Specified DBid does not exist")
 	}
@@ -29,7 +30,7 @@ func (k msgServer) DDL(goCtx context.Context, msg *types.MsgDDL) (*types.MsgDDLR
 	// Store the DDL
 	// First get the correct position for this to be stored in
 
-	ddlIndex, isFound := k.GetDdlindex(ctx, msg.Dbid)
+	ddlIndex, isFound := k.GetDdlindex(c, msg.Dbid)
 	if !isFound {
 		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Could not find index for specified DB")
 	}
@@ -43,10 +44,19 @@ func (k msgServer) DDL(goCtx context.Context, msg *types.MsgDDL) (*types.MsgDDLR
 	// Create index
 	newDDLLocation.WriteString(msg.Dbid)
 	newDDLLocation.WriteString(strconv.Itoa(int(newPosition)))
-	_, isFound = k.GetDdl(ctx, newDDLLocation.String())
+	_, isFound = k.GetDdl(c, newDDLLocation.String())
 	if isFound {
 		fmt.Println("There was an error when adding new DDL")
 		return nil, sdkerrors.Wrap(sdkerrors.ErrUnknownRequest, "Internal error: DDL already exists at this map location")
+	}
+
+	if c.IsCheckTx() {
+		return &types.MsgDDLResponse{}, nil
+	}
+
+	kctx := ctx.Unwrap(goCtx)
+	if kctx == nil {
+		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Could not unwrap kwil context")
 	}
 
 	// If we have reached this point, we can update the new DDL and DDL index
@@ -59,7 +69,7 @@ func (k msgServer) DDL(goCtx context.Context, msg *types.MsgDDL) (*types.MsgDDLR
 	}
 
 	//Set DDL in the database
-	k.SetDdl(ctx, newDDL)
+	k.SetDdl(c, newDDL)
 
 	// Create new ddl index
 
@@ -68,7 +78,7 @@ func (k msgServer) DDL(goCtx context.Context, msg *types.MsgDDL) (*types.MsgDDLR
 		Name:     msg.Dbid,
 		Position: newPosition,
 	}
-	k.SetDdlindex(ctx, newDDLIndex)
+	k.SetDdlindex(c, newDDLIndex)
 
 	return &types.MsgDDLResponse{}, nil
 }

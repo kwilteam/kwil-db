@@ -2,10 +2,10 @@ package utils
 
 import (
 	"encoding/binary"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
 	"math/big"
 	"os"
 	"strings"
-	"time"
 )
 
 func Coalesce[T comparable](check T, alt T) T {
@@ -93,14 +93,6 @@ func DEFAULT[T any]() T {
 	return t
 }
 
-func FileExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
-
 func ExpandHomeDir(path string) string {
 	return Ignore(path, TryExpandHomeDir)
 }
@@ -110,7 +102,7 @@ func TryExpandHomeDir(path string) (expandedPath string, expanded bool) {
 		return path, false
 	}
 
-	home := PanicIfErrorFn(os.UserHomeDir)
+	home := errs.PanicIfErrorFn(os.UserHomeDir)
 
 	return home + path[1:], true
 }
@@ -118,14 +110,6 @@ func TryExpandHomeDir(path string) (expandedPath string, expanded bool) {
 func Ignore[T any, R1 any, R2 any](arg T, fn func(arg T) (R1, R2)) R1 {
 	r, _ := fn(arg)
 	return r
-}
-
-func DirExists(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return info.IsDir()
 }
 
 // AppendByteArrLength Will append the slice length as uint16 to the end of the byte slice
@@ -151,22 +135,4 @@ func Uint64ToBytes(i uint64) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, i)
 	return b
-}
-
-// Deadline implements the deadline/timeout resiliency pattern.
-type Deadline struct {
-	deadline time.Time
-}
-
-func (d *Deadline) Expiry() time.Time {
-	return d.deadline
-}
-
-func (d *Deadline) HasExpired() bool {
-	return !d.deadline.Before(time.Now())
-}
-
-// NewDeadline constructs a new Deadline with the given timeout.
-func NewDeadline(timeoutMillis time.Duration) *Deadline {
-	return &Deadline{time.Now().Add(time.Millisecond * timeoutMillis)}
 }

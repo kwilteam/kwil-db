@@ -5,20 +5,20 @@
     "version": "0.2.0",
     "configurations": [
 
-        {
-            // An issue with the gentx command not working but not giving an 
-            // error needs to be resolved.
-            // Use "ignite chain serve" for now
-            "name": "DO NOT USE -- Serve w/ Reset",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "${workspaceFolder}/cmd/kwil-cosmos/cmd/kwild",
-            "debugAdapter": "dlv-dap",
-            "showLog": true,
-            "dlvFlags" : ["--only-same-user=false"],
-            "args": ["start", "--home", "${userHome}/.kwildb/chain", "--dbg-reset"]
-        },
+        // {
+        //     // An issue with the gentx command not working but not giving an 
+        //     // error needs to be resolved.
+        //     // Use "ignite chain serve" for now
+        //     "name": "DO NOT USE -- Serve w/ Reset",
+        //     "type": "go",
+        //     "request": "launch",
+        //     "mode": "debug",
+        //     "program": "${workspaceFolder}/cmd/kwil-cosmos/cmd/kwild",
+        //     "debugAdapter": "dlv-dap",
+        //     "showLog": true,
+        //     "dlvFlags" : ["--only-same-user=false"],
+        //     "args": ["start", "--home", "${userHome}/.kwildb/chain", "--dbg-reset"]
+        // },
         {
             "name": "Chain Serve",
             "type": "go",
@@ -39,7 +39,7 @@
             "debugAdapter": "dlv-dap",
             "showLog": true,
             "dlvFlags" : ["--only-same-user=false"],
-            "args": ["tx", "kwil", "create-database", "postResetDbTest", "--from", "alice", "-y", "--home", "${userHome}/.kwildb/chain" ]
+            "args": ["tx", "kwil", "create-database", "postResetDbTest33444", "--from", "alice", "-y", "--home", "${userHome}/.kwildb/chain" ]
         },
         {
             "name": "Kwil CLI",

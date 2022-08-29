@@ -8,17 +8,18 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types"
+	"github.com/kwilteam/kwil-db/internal/ctx"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 )
 
 func (k msgServer) DefineQuery(goCtx context.Context, msg *types.MsgDefineQuery) (*types.MsgDefineQueryResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	c := sdk.UnwrapSDKContext(goCtx)
 
 	// First, I will check to ensure the dbid exists
 
-	db, isFound := k.GetDatabases(ctx, msg.DbId)
+	db, isFound := k.GetDatabases(c, msg.DbId)
 	if !isFound {
 		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Specified DBid does not exist")
 	}
@@ -41,9 +42,18 @@ func (k msgServer) DefineQuery(goCtx context.Context, msg *types.MsgDefineQuery)
 	sb.WriteString(queryID)
 
 	// Now check the KV to ensure this db id does not exist
-	_, isFound = k.GetQueryids(ctx, sb.String())
+	_, isFound = k.GetQueryids(c, sb.String())
 	if isFound {
 		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "This query already exists for this database")
+	}
+
+	if c.IsCheckTx() {
+		return &types.MsgDefineQueryResponse{Id: queryID}, nil
+	}
+
+	kctx := ctx.Unwrap(goCtx)
+	if kctx == nil {
+		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Could not unwrap kwil context")
 	}
 
 	// Set the new paramaterized query
@@ -55,7 +65,7 @@ func (k msgServer) DefineQuery(goCtx context.Context, msg *types.MsgDefineQuery)
 		Publicity: strconv.FormatBool(msg.Publicity),
 	}
 	// Store it
-	k.SetQueryids(ctx, newParQuer)
+	k.SetQueryids(c, newParQuer)
 
 	return &types.MsgDefineQueryResponse{Id: queryID}, nil
 }

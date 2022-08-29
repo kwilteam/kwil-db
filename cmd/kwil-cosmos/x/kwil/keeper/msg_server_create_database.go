@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
-	"github.com/kwilteam/kwil-db/internal/ctx"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/internal/ctx"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -14,7 +14,6 @@ import (
 )
 
 func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDatabase) (*types.MsgCreateDatabaseResponse, error) {
-	kctx := ctx.Unwrap(goCtx)
 	c := sdk.UnwrapSDKContext(goCtx)
 
 	// First, must combine the sender and block height.
@@ -31,6 +30,15 @@ func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDat
 	// Return an error if it exists
 	if isFound {
 		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Database for that user with that seed already exists, please use a different seed")
+	}
+
+	if c.IsCheckTx() {
+		return &types.MsgCreateDatabaseResponse{}, nil
+	}
+
+	kctx := ctx.Unwrap(goCtx)
+	if kctx == nil {
+		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Could not unwrap kwil context")
 	}
 
 	// Create the new DB
@@ -67,12 +75,9 @@ func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDat
 	}
 	k.SetDdlindex(c, newDDLIndex)
 
-	if !c.IsCheckTx() {
-		fmt.Println("appending database")
-		err := kctx.Wal().AppendCreateDatabase(dbName, createStatement.String())
-		if err != nil {
-			return nil, err
-		}
+	err := kctx.Wal().AppendCreateDatabase(dbName, createStatement.String())
+	if err != nil {
+		return nil, err
 	}
 
 	return &types.MsgCreateDatabaseResponse{Id: dbName}, nil
