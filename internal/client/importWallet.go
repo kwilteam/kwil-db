@@ -14,8 +14,9 @@ func importWallet(ctx context.Context, conf *types.Config) (cosmosclient.Client,
 
 	cosmos, err := cosmosclient.New(
 		ctx,
-		cosmosclient.WithAddressPrefix(conf.Wallets.Cosmos.AddressPrefix),
+		cosmosclient.WithAddressPrefix(conf.Wallets.Cosmos.AddressPrefix), // TODO: should make an in-memory backend and then add address later
 	)
+
 	if err != nil {
 		return cosmos, err
 	}
