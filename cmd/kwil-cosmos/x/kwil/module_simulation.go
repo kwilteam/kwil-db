@@ -1,6 +1,7 @@
 package kwil
 
 import (
+	"fmt"
 	"math/rand"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
@@ -91,10 +92,13 @@ func (am AppModule) WeightedOperations(simState module.SimulationState) []simtyp
 			weightMsgCreateDatabase = defaultWeightMsgCreateDatabase
 		},
 	)
+
+	fmt.Println("YOYOYO")
 	operations = append(operations, simulation.NewWeightedOperation(
 		weightMsgCreateDatabase,
 		kwilsimulation.SimulateMsgCreateDatabase(am.accountKeeper, am.bankKeeper, am.keeper),
 	))
+	fmt.Println("hhhhhh")
 
 	var weightMsgDDL int
 	simState.AppParams.GetOrGenerate(simState.Cdc, opWeightMsgDDL, &weightMsgDDL, nil,
