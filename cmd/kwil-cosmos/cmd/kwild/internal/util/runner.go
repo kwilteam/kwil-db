@@ -4,8 +4,6 @@ package util
 import (
 	"errors"
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/utils/errs"
-	"github.com/kwilteam/kwil-db/internal/utils/files"
 	"log"
 	"os"
 	"os/exec"
@@ -14,6 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
+	"github.com/kwilteam/kwil-db/internal/utils/files"
 
 	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
 	"github.com/ignite/cli/ignite/pkg/cosmoscmd"
@@ -58,8 +59,6 @@ func init() {
 	errs.PanicIfError(err)
 }
 
-// BuildAndRunRootCommand When in DEBUG mode, Need to run export periodically since the
-// debugger does not allopw capture SIGTERM or SIGINT
 // --> os.Args = []string{"kwil-dbd","export","--home", homeDir}
 func BuildAndRunRootCommand() error {
 	if hasReset {
@@ -168,17 +167,16 @@ func hasFlagAndRemove(s []string, r string) ([]string, bool) {
 	return removeArg(s, r), true
 }
 
-func runBlockingDefaultCommand(preBlockC func()) error {
+func runBlockingDefaultCommand() error {
 	cmd := getDefaultRootCommand()
 	if err := svrcmd.Execute(cmd, app.DefaultNodeHome); err != nil {
 		return err
 	}
 
-	preBlockC()
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
+	<-sigs
 
 	return nil
 }
@@ -189,19 +187,9 @@ func doRun() error {
 		return err
 	}
 
-	fn := func() {
-		//no-op
-	}
-
-	_, err = execute([]string{"export", "--home", homeDir})
-	if err != nil {
-		fn = func() {
-			execute([]string{"export", "--home", homeDir})
-		}
-	}
-
+	_, _ = execute([]string{"export", "--home", homeDir})
 	os.Args = []string{"kwild", "start", "--pruning", "nothing", "--grpc.address", "0.0.0.0:9090", "--home", homeDir}
-	if err := runBlockingDefaultCommand(fn); err != nil {
+	if err := runBlockingDefaultCommand(); err != nil {
 		return err
 	}
 
@@ -257,7 +245,7 @@ func doReset() error {
 	execute([]string{"export", "--home", homeDir})
 
 	os.Args = []string{"kwild", "start", "--pruning", "nothing", "--grpc.address", "0.0.0.0:9090", "--home", homeDir}
-	if err := runBlockingDefaultCommand(func() {}); err != nil {
+	if err := runBlockingDefaultCommand(); err != nil {
 		return err
 	}
 
