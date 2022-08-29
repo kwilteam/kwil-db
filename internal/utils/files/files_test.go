@@ -1,4 +1,4 @@
-package utils
+package files
 
 import (
 	"reflect"
