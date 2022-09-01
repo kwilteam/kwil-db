@@ -25,13 +25,15 @@ type ClientChain struct {
 }
 
 type Wallets struct {
-	Ethereum EthereumWallet `json:"ethereum" mapstructure:"ethereum"`
-	Cosmos   CosmosWallet   `json:"cosmos" mapstructure:"cosmos"`
+	KeyringFile string         `json:"keyring_file" mapstructure:"keyring_file"`
+	Ethereum    EthereumWallet `json:"ethereum" mapstructure:"ethereum"`
+	Cosmos      CosmosWallet   `json:"cosmos" mapstructure:"cosmos"`
 }
 
 type EthereumWallet struct {
 	Address     string `json:"address" mapstructure:"address"`
 	PrivKeyPath string `json:"private_key_path" mapstructure:"private_key_path"`
+	KeyName     string `json:"name_on_keyring" mapstructure:"name_on_keyring"`
 }
 
 type CosmosWallet struct {

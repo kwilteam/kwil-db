@@ -12,7 +12,7 @@ func LoadFileFromRoot(path string) ([]byte, error) {
 	// MAKE SURE THIS FILE DOES NOT MOVE OR IT WILL BREAK
 	_, b, _, _ := runtime.Caller(0)
 	basepath := filepath.Dir(b)
-	return os.ReadFile(filepath.Join(basepath, "../../", path))
+	return os.ReadFile(filepath.Join(basepath, "../../../", path))
 }
 
 func GetCurrentPath() string {

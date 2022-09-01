@@ -7,8 +7,9 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/api/rest"
 	"github.com/kwilteam/kwil-db/internal/api/service"
-	cosClient "github.com/kwilteam/kwil-db/internal/client"
+	"github.com/kwilteam/kwil-db/internal/auth"
 	"github.com/kwilteam/kwil-db/internal/config"
+	"github.com/kwilteam/kwil-db/internal/crypto"
 	"github.com/kwilteam/kwil-db/internal/deposits"
 	"github.com/kwilteam/kwil-db/internal/logging"
 	"github.com/rs/zerolog/log"
@@ -43,16 +44,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create cosmos client
-	cosmClient, err := cosClient.NewCosmosClient(ctx, &config.Conf)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to create cosmos client")
-		os.Exit(1)
-	}
-
 	// Initialize deposits
-	//cosmClient := cosClient.CosmosClient{}
-	d, err := deposits.Init(ctx, &config.Conf, client, &cosmClient)
+	d, err := deposits.Init(ctx, &config.Conf, client)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize deposits")
 		os.Exit(1)
@@ -60,12 +53,29 @@ func main() {
 
 	defer d.Store.Close()
 
+	// Creating Account
+	kr, err := crypto.NewKeyring(&config.Conf)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create keyring")
+		os.Exit(1)
+	}
+	acc, err := kr.GetDefaultAccount()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to get default account")
+		os.Exit(1)
+	}
+	// Creating Authenticator
+	a := auth.NewAuth(&config.Conf, acc)
+
+	// Authenticate with peers
+	a.Client.AuthAll()
+
 	// Making a channel listening for interruptions or errors
 	fmt.Println("Node is running properly!")
 
 	// HTTP server
-	serv := service.NewService(&config.Conf, d.Store, &cosmClient)
-	httpHandler := rest.NewHandler(*serv)
+	serv := service.NewService(&config.Conf, d.Store)
+	httpHandler := rest.NewHandler(*serv, a.Authenticator)
 	if err := httpHandler.Serve(); err != nil {
 		log.Fatal().Err(err).Msg("failed to start http server")
 		os.Exit(1)

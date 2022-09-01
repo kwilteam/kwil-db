@@ -22,9 +22,11 @@
         "human": true
     },
     "wallets": {
+        "keyring_file": "~/.kwilkeyring",
         "ethereum": {
             "address": "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",
-            "private_key_path": "./keys/ethereum.pem"
+            "private_key_path": "./keys/ethereum.pem",
+            "name_on_keyring": "kwilnode"
         },
         "cosmos": {
             "address_prefix": "kaddr-",
@@ -61,5 +63,10 @@
                 "delete": "1"
             }
         }
-    }
+    },
+    "auth": {
+        "token_expiration_time": "60"
+    },
+    "friends": ["0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D", "0x995d95245698212D4Af52c8031F614C3D3127994"],
+    "peers": []
 }

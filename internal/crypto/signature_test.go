@@ -43,7 +43,7 @@ func TestPrivateKey_Sign(t *testing.T) {
 			p := &PrivateKey{
 				key: tt.fields.key,
 			}
-			got, err := p.Sign(tt.args.data)
+			got, err := p.sign(tt.args.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("PrivateKey.Sign() error = %v, wantErr %v", err, tt.wantErr)
 				return

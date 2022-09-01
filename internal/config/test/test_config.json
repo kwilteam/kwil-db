@@ -3,7 +3,7 @@
     {
         "id": "1",
         "endpoint": "wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41",
-        "required_confirmations": "6",
+        "required_confirmations": "2",
         "max_block_buffer_size": "50",
         "block_timeout": "60",
         "lowest_height": "7411530",
@@ -22,19 +22,21 @@
         "human": true
     },
     "wallets": {
+        "keyring_file": "~/.kwilkeyring",
         "ethereum": {
             "address": "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",
-            "private_key_path": "./keys/ethereum.pem"
+            "private_key_path": "./keys/ethereum.pem",
+            "name_on_keyring": "kwilnode"
         },
         "cosmos": {
             "address_prefix": "kaddr-",
             "mnemonic_path": "./keys/cosmos",
-            "name_on_keyring": "alice"
+            "name_on_keyring": "mynode"
         }
     },
     "storage": {
         "badger": {
-            "path": "../../.testkwilbadger"
+            "path": "./.kwilbadger"
         }
     },
     "api": {
@@ -43,8 +45,7 @@
     },
     "cost": {
         "database": {
-            "create": "5",
-            "delete": "3"
+            "create": "5"
         },
         "ddl": {
             "table": {
@@ -62,5 +63,9 @@
                 "delete": "1"
             }
         }
-    }
+    },
+    "auth": {
+        "token_expiration_time": "60"
+    },
+    "friends": ["0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D", "0x995d95245698212D4Af52c8031F614C3D3127994"]
 }

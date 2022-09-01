@@ -11,8 +11,16 @@ type Config struct {
 		Human bool `default:"false" json:"human" mapstructure:"human"`
 		Debug bool `default:"false" mapstructure:"debug"`
 	}
-	Api  Api  `json:"api" mapstructure:"api"`
-	Cost Cost `json:"cost" mapstructure:"cost"`
+	Api        Api             `json:"api" mapstructure:"api"`
+	Cost       Cost            `json:"cost" mapstructure:"cost"`
+	Auth       Auth            `json:"auth" mapstructure:"auth"`
+	Friendlist []string        `json:"friends" mapstructure:"friends"`
+	Friends    map[string]bool `json:"-" mapstructure:"-"`
+	Peers      []string        `json:"peers" mapstructure:"peers"`
+}
+
+type Auth struct {
+	ExpirationTime int `json:"token_expiration_time" mapstructure:"token_expiration_time"`
 }
 
 type Cost struct {

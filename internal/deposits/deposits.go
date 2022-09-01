@@ -23,16 +23,9 @@ type Deposits struct {
 	wal   *types.Wal
 }
 
-/*
-	Constructor needs:
-		- ctx
-		- config
-		- eth client
-*/
-
 const walPath = ".wal"
 
-func Init(ctx context.Context, conf *types.Config, client *ethclient.Client, cosmClient events.CosmClient) (*Deposits, error) {
+func Init(ctx context.Context, conf *types.Config, client *ethclient.Client) (*Deposits, error) {
 
 	// Make a WAL
 	wal, err := wal.OpenEthTxWal(walPath)
@@ -49,7 +42,7 @@ func Init(ctx context.Context, conf *types.Config, client *ethclient.Client, cos
 	}
 
 	// Next initialize an event feed
-	ef, err := events.New(conf, client, cosmClient, wal, ds)
+	ef, err := events.New(conf, client, wal, ds)
 	if err != nil {
 		return nil, err
 	}

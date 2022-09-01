@@ -15,14 +15,19 @@ import (
 // ImportWallet takes a mnemonic and adds a new account to the keyring.  It also returns the account.
 func importWallet(ctx context.Context, conf *types.Config) (cosmosclient.Client, error) {
 
+	opt := cosmosclient.WithAddressPrefix(conf.Wallets.Cosmos.AddressPrefix)
+
 	cosmos, err := cosmosclient.New(
 		ctx,
-		cosmosclient.WithAddressPrefix(conf.Wallets.Cosmos.AddressPrefix), // TODO: should make an in-memory backend and then add address later
+		cosmosclient.WithKeyringBackend("memory"),
+		//cosmosclient.WithAddressPrefix(conf.Wallets.Cosmos.AddressPrefix), // TODO: should make an in-memory backend and then add address later
 	)
 
 	if err != nil {
 		return cosmos, err
 	}
+
+	opt(&cosmos)
 
 	mn, err := os.ReadFile(conf.Wallets.Cosmos.MnemonicPath)
 	if err != nil {

@@ -2,13 +2,13 @@ package rest
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"github.com/kwilteam/kwil-db/internal/api/service"
 	"github.com/rs/zerolog/log"
 )
@@ -17,14 +17,18 @@ type Handler struct {
 	Router  *mux.Router
 	Service service.Service
 	Server  *http.Server
+	Auth    Authenticator
 }
 
-// TODO: Add JSON validation
+type Authenticator interface {
+	Authenticate(*websocket.Conn) error
+}
 
-func NewHandler(service service.Service) *Handler {
+func NewHandler(service service.Service, a Authenticator) *Handler {
 	h := &Handler{
 		Router:  mux.NewRouter(),
 		Service: service,
+		Auth:    a,
 	}
 
 	h.mapRoutes()
@@ -40,12 +44,8 @@ func NewHandler(service service.Service) *Handler {
 	return h
 }
 
-func (h *Handler) Write(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Write")
-}
-
 func (h *Handler) mapRoutes() {
-	h.Router.HandleFunc("/api/v0/write", JWTAuth(h.Write)).Methods("POST")
+	h.Router.HandleFunc("/api/v0/peer-auth", h.PeerAuth)
 	h.Router.HandleFunc("/api/v0/create-database", JWTAuth(h.CreateDatabase)).Methods("POST")
 }
 

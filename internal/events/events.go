@@ -19,28 +19,26 @@ type CosmClient interface {
 }
 
 type EventFeed struct {
-	log        *zerolog.Logger
-	Config     *types.Config
-	EthClient  *ethclient.Client
-	CosmClient CosmClient
-	Topics     map[common.Hash]abi.Event
-	Wal        types.Wal
-	ds         types.DepositStore
+	log       *zerolog.Logger
+	Config    *types.Config
+	EthClient *ethclient.Client
+	Topics    map[common.Hash]abi.Event
+	Wal       types.Wal
+	ds        types.DepositStore
 }
 
 // New Creates a new EventFeed
-func New(conf *types.Config, ethClient *ethclient.Client, cosmClient CosmClient, wal types.Wal, ds types.DepositStore) (*EventFeed, error) {
+func New(conf *types.Config, ethClient *ethclient.Client, wal types.Wal, ds types.DepositStore) (*EventFeed, error) {
 	logger := log.With().Str("module", "events").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
 	topics := getTopics(conf)
 
 	return &EventFeed{
-		log:        &logger,
-		Config:     conf,
-		EthClient:  ethClient,
-		CosmClient: cosmClient,
-		Topics:     topics,
-		Wal:        wal,
-		ds:         ds,
+		log:       &logger,
+		Config:    conf,
+		EthClient: ethClient,
+		Topics:    topics,
+		Wal:       wal,
+		ds:        ds,
 	}, nil
 }
 
