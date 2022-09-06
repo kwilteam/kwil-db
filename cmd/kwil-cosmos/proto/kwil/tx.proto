@@ -3,7 +3,7 @@ package kwil.kwil;
 
 // this line is used by starport scaffolding # proto/tx/import
 
-option go_package = "kwil/x/kwil/types";
+option go_package = "github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types";
 
 // Msg defines the Msg service.
 service Msg {
@@ -22,7 +22,7 @@ message MsgDatabaseWrite {
 }
 
 message MsgDatabaseWriteResponse {
-  string ret = 1;
+  int64 code = 1;
 }
 
 message MsgCreateDatabase {

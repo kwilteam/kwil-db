@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
+
+	"github.com/kwilteam/kwil-db/internal/ctx"
+
 	"github.com/gorilla/mux"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
@@ -20,10 +24,11 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/client/cli"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/keeper"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types"
+	"github.com/kwilteam/kwil-db/internal/wal"
 )
 
 var (
-	_ module.AppModule      = AppModule{walRef: CreateWalRef()}
+	_ module.AppModule      = AppModule{walRef: &wal.WalDbCmd{}}
 	_ module.AppModuleBasic = AppModuleBasic{}
 )
 
@@ -64,7 +69,7 @@ func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
 }
 
 // ValidateGenesis performs genesis state validation for the capability module.
-func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncodingConfig, bz json.RawMessage) error {
+func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingConfig, bz json.RawMessage) error {
 	var genState types.GenesisState
 	if err := cdc.UnmarshalJSON(bz, &genState); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
@@ -73,12 +78,13 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncod
 }
 
 // RegisterRESTRoutes registers the capability module's REST service handlers.
-func (AppModuleBasic) RegisterRESTRoutes(clientCtx client.Context, rtr *mux.Router) {
+func (AppModuleBasic) RegisterRESTRoutes(_ client.Context, _ *mux.Router) {
 }
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx))
+	err := types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx))
+	errs.PanicIfError(err)
 }
 
 // GetTxCmd returns the capability module's root tx command.
@@ -103,7 +109,7 @@ type AppModule struct {
 	accountKeeper types.AccountKeeper
 	bankKeeper    types.BankKeeper
 
-	walRef *WalRef
+	walRef *wal.WalDbCmd
 }
 
 func NewAppModule(
@@ -111,14 +117,20 @@ func NewAppModule(
 	keeper keeper.Keeper,
 	accountKeeper types.AccountKeeper,
 	bankKeeper types.BankKeeper,
+	homePath string,
 ) AppModule {
+
 	return AppModule{
 		AppModuleBasic: NewAppModuleBasic(cdc),
 		keeper:         keeper,
 		accountKeeper:  accountKeeper,
 		bankKeeper:     bankKeeper,
-		walRef:         CreateWalRef(),
+		walRef:         wal.OpenDbCmdWalFromHomeDir(homePath),
 	}
+}
+
+func (am AppModule) CreateCtxFactory(parent context.Context) ctx.KwilContext {
+	return ctx.NewKwilContext(parent, am.walRef)
 }
 
 // Name returns the capability module's name.
@@ -128,14 +140,14 @@ func (am AppModule) Name() string {
 
 // Route returns the capability module's message routing key.
 func (am AppModule) Route() sdk.Route {
-	return sdk.NewRoute(types.RouterKey, NewHandler(am.keeper))
+	return sdk.NewRoute(types.RouterKey, NewHandler(am, am.keeper))
 }
 
 // QuerierRoute returns the capability module's query routing key.
 func (AppModule) QuerierRoute() string { return types.QuerierRoute }
 
 // LegacyQuerierHandler returns the capability module's Querier.
-func (am AppModule) LegacyQuerierHandler(legacyQuerierCdc *codec.LegacyAmino) sdk.Querier {
+func (am AppModule) LegacyQuerierHandler(_ *codec.LegacyAmino) sdk.Querier {
 	return nil
 }
 
@@ -168,14 +180,18 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 // ConsensusVersion implements ConsensusVersion.
 func (AppModule) ConsensusVersion() uint64 { return 2 }
 
+var blockState int32
+
 // BeginBlock executes all ABCI BeginBlock logic respective to the capability module.
 func (am AppModule) BeginBlock(ctx sdk.Context, _ abci.RequestBeginBlock) {
-	am.walRef.BeginBlock(ctx)
+	err := am.walRef.BeginBlock(ctx.BlockHeight())
+	errs.PanicIfError(err)
 }
 
 // EndBlock executes all ABCI EndBlock logic respective to the capability module. It
 // returns no validator updates.
 func (am AppModule) EndBlock(ctx sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
-	am.walRef.EndBlock()
+	err := am.walRef.EndBlock(ctx.BlockHeight())
+	errs.PanicIfError(err)
 	return []abci.ValidatorUpdate{}
 }

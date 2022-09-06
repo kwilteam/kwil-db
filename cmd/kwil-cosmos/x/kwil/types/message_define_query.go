@@ -3,6 +3,7 @@ package types
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/kwilteam/kwil-db/internal/utils/errs"
 )
 
 const TypeMsgDefineQuery = "define_query"
@@ -28,9 +29,7 @@ func (msg *MsgDefineQuery) Type() string {
 
 func (msg *MsgDefineQuery) GetSigners() []sdk.AccAddress {
 	creator, err := sdk.AccAddressFromBech32(msg.Creator)
-	if err != nil {
-		panic(err)
-	}
+	errs.PanicIfError(err)
 	return []sdk.AccAddress{creator}
 }
 

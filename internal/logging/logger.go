@@ -2,7 +2,6 @@ package logging
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 
@@ -33,6 +32,7 @@ func InitLogger(version string, debug, human bool) {
 
 type googleSeverityHook struct{}
 
+// Run --> ToDo: confirm if msg is supposed to be ignored here
 func (h googleSeverityHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 	e.Str("severity", levelToSeverity(level).String())
 }
@@ -55,10 +55,10 @@ func levelToSeverity(level zerolog.Level) logging.Severity {
 	}
 }
 
-// This should get deleted later, this is just a quick hack for me to get logs from a goroutine
+// FileOutput This should get deleted later, this is just a quick hack for me to get logs from a goroutine
 func FileOutput(msg string) {
 	// create a temp file
-	tempFile, err := ioutil.TempFile(os.TempDir(), "deleteme")
+	tempFile, err := os.CreateTemp(os.TempDir(), "deleteme")
 	if err != nil {
 		// Can we log an error before we have our logger? :)
 		log.Error().Err(err).Msg("there was an error creating a temporary file four our log")

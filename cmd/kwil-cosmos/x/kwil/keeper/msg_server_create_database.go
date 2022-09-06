@@ -6,13 +6,15 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/internal/ctx"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cosmos/x/kwil/types"
 )
 
 func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDatabase) (*types.MsgCreateDatabaseResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	c := sdk.UnwrapSDKContext(goCtx)
 
 	// First, must combine the sender and block height.
 	// TODO: Right now the uniqueness is determined by a seed that is provided by the user.
@@ -23,11 +25,20 @@ func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDat
 	dbName := hex.EncodeToString(dbIDBytes[:])
 
 	// Check if db ID already exists
-	_, isFound := k.GetDatabases(ctx, dbName)
+	_, isFound := k.GetDatabases(c, dbName)
 
 	// Return an error if it exists
 	if isFound {
 		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Database for that user with that seed already exists, please use a different seed")
+	}
+
+	if c.IsCheckTx() {
+		return &types.MsgCreateDatabaseResponse{}, nil
+	}
+
+	kctx := ctx.Unwrap(goCtx)
+	if kctx == nil {
+		return nil, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "Could not unwrap kwil context")
 	}
 
 	// Create the new DB
@@ -38,7 +49,7 @@ func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDat
 	}
 
 	// Store the DB
-	k.SetDatabases(ctx, newDB)
+	k.SetDatabases(c, newDB)
 
 	// TODO: We probably want to allow people to define any CREATE DATABASE esq statement, so that this natively supports non-SQL dbs
 	// This change would require changing the protobufs and messages, so I'm not going to worry about it for now
@@ -55,16 +66,19 @@ func (k msgServer) CreateDatabase(goCtx context.Context, msg *types.MsgCreateDat
 	}
 
 	//Set DDL in the database
-	k.SetDdl(ctx, newDDL)
+	k.SetDdl(c, newDDL)
 
 	newDDLIndex := types.Ddlindex{
 		Index:    dbName,
 		Name:     dbName,
 		Position: 0,
 	}
-	k.SetDdlindex(ctx, newDDLIndex)
+	k.SetDdlindex(c, newDDLIndex)
 
-	//wal.CurrentWal.AppendCreateDatabase(dbName, createStatement.String())
+	err := kctx.Wal().AppendCreateDatabase(dbName, createStatement.String())
+	if err != nil {
+		return nil, err
+	}
 
 	return &types.MsgCreateDatabaseResponse{Id: dbName}, nil
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+//goland:noinspection GoUnusedExportedFunction
 func NewClientChain(chainID int, endpoint string, depositContract *DepositContract) *ClientChain {
 	return &ClientChain{
 		ChainID:         chainID,
@@ -14,12 +15,31 @@ func NewClientChain(chainID int, endpoint string, depositContract *DepositContra
 }
 
 type ClientChain struct {
-	ChainID         int             `json:"chain_id" mapstructure:"id"`
-	Endpoint        string          `json:"endpoint" mapstructure:"endpoint"`
-	DepositContract DepositContract `json:"deposit_contract" mapstructure:"deposit_contract"`
-	BlockTimeout    int             `json:"block_timeout" mapstructure:"block_timeout"`
-	MinBlockHeight  int             `json:"min_block_height" mapstructure:"min_block_height"`
-	MaxBufferSize   int             `json:"max_block_buffer_size" mapstructure:"max_block_buffer_size"`
+	ChainID               int             `json:"chain_id" mapstructure:"id"`
+	Endpoint              string          `json:"endpoint" mapstructure:"endpoint"`
+	DepositContract       DepositContract `json:"deposit_contract" mapstructure:"deposit_contract"`
+	BlockTimeout          int             `json:"block_timeout" mapstructure:"block_timeout"`
+	RequiredConfirmations int             `json:"required_confirmations" mapstructure:"required_confirmations"`
+	MaxBufferSize         int             `json:"max_block_buffer_size" mapstructure:"max_block_buffer_size"`
+	LowestHeight          int             `json:"lowest_height" mapstructure:"lowest_height"`
+}
+
+type Wallets struct {
+	KeyringFile string         `json:"keyring_file" mapstructure:"keyring_file"`
+	Ethereum    EthereumWallet `json:"ethereum" mapstructure:"ethereum"`
+	Cosmos      CosmosWallet   `json:"cosmos" mapstructure:"cosmos"`
+}
+
+type EthereumWallet struct {
+	Address     string `json:"address" mapstructure:"address"`
+	PrivKeyPath string `json:"private_key_path" mapstructure:"private_key_path"`
+	KeyName     string `json:"name_on_keyring" mapstructure:"name_on_keyring"`
+}
+
+type CosmosWallet struct {
+	AddressPrefix string `json:"address_prefix" mapstructure:"address_prefix"`
+	MnemonicPath  string `json:"mnemonic_path" mapstructure:"mnemonic_path"`
+	KeyName       string `json:"name_on_keyring" mapstructure:"name_on_keyring"`
 }
 
 func (c *ClientChain) GetChainID() int {
@@ -46,8 +66,8 @@ func (c *ClientChain) GetBlockTimeout() int {
 	return c.BlockTimeout
 }
 
-func (c *ClientChain) GetMinBlockHeight() int {
-	return c.MinBlockHeight
+func (c *ClientChain) GetRequiredConfirmations() int {
+	return c.RequiredConfirmations
 }
 
 // Takes event names and gets topics based on the ABI

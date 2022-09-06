@@ -6,16 +6,12 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"os"
+	"strconv"
 )
 
 var Conf types.Config
 
-// Returns the current config
-func GetConfig() *types.Config {
-	return &Conf
-}
-
-// Function to load a file as the config
+// LoadConfig Function to load a file as the config
 func LoadConfig(path string) error {
 	viper.AddConfigPath(path)
 	viper.SetConfigName("dev")
@@ -33,9 +29,22 @@ func LoadConfig(path string) error {
 		return err // Returning empty config if error occurs
 	}
 
-	err = loadABI(Conf.ClientChain.DepositContract.ABIPath)
+	err = Init(&Conf)
+
+	loadABI(Conf.ClientChain.DepositContract.ABIPath)
 
 	return err
+}
+
+func Init(c *types.Config) error {
+	err := initEnv(c)
+	if err != nil {
+		return err
+	}
+
+	initFriends(c)
+
+	return nil
 }
 
 // Will load an ABI from a file
@@ -52,4 +61,21 @@ func loadABI(path string) error {
 
 	Conf.ClientChain.DepositContract.ABI = abiJSON
 	return nil
+}
+
+func initEnv(c *types.Config) error {
+	err := os.Setenv("TIMEOUT_TIME", strconv.Itoa(c.Api.TimeoutTime))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func initFriends(c *types.Config) {
+	// loop through the Friendlist and add each friend to the Friends map
+	c.Friends = make(map[string]bool)
+	for _, friend := range c.Friendlist {
+		c.Friends[friend] = true
+	}
 }

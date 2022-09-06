@@ -1,18 +1,34 @@
 package events
 
 import (
-	"context"
-	"fmt"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 )
 
-func (e *EventFeed) processEvents(ctx context.Context, ch chan map[string]interface{}) {
-	for {
-		select {
-		case ev := <-ch:
-			// Here we can go through and define what we want to do with the event
-			if ev["ktype"] == "HelloWorld" {
-				fmt.Println("Received HelloWorld event")
-			}
-		}
+func (ef *EventFeed) ProcessLog(vLog ethTypes.Log) error {
+	// Parse the event
+	ev, err := ef.parseEvent(vLog)
+	if err != nil {
+		ef.log.Error().Err(err).Msg("error parsing event")
 	}
+
+	return ef.ProcessEvent(ev)
+}
+
+func (ef *EventFeed) ProcessEvent(ev Event) error {
+	switch ev.GetName() {
+	case "Deposit":
+		return ef.ProcessDeposit(ev.(*DepositEvent))
+	}
+
+	return nil
+}
+
+func (ef *EventFeed) ProcessDeposit(ev *DepositEvent) error {
+	err := ef.ds.Deposit(ev.Data.Amount, ev.Data.Caller.String(), ev.Tx, ev.Height)
+	if err != nil {
+		return err
+	} else {
+		ef.log.Info().Msgf("deposited to %s", ev.Data.Target)
+	}
+	return nil
 }

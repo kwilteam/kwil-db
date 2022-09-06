@@ -4,7 +4,7 @@ import (
 	"os"
 )
 
-// Function deletes all logs in /kwil-cosmos-logger/tmp and /kwil-cosmos-logger/finished_logs
+// DeleteLogs Function deletes all logs in /kwil-cosmos-logger/tmp and /kwil-cosmos-logger/finished_logs
 func DeleteLogs() error {
 	err := os.RemoveAll("./kwil-cosmos-logger/tmp")
 	if err != nil {

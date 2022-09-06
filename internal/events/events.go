@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -14,61 +15,57 @@ import (
 	This package is to separate the event intake from the event processing (i.e., handling deposits).
 */
 
-type HelloWorld struct {
-	msg1 string
-	msg2 string
-}
-
-type Events struct {
-	HelloWorld HelloWorld
+type CosmClient interface {
 }
 
 type EventFeed struct {
-	log         zerolog.Logger
-	ClientChain types.ClientChain
-	EthClient   *ethclient.Client
-	Topics      map[common.Hash]abi.Event
+	log       *zerolog.Logger
+	Config    *types.Config
+	EthClient *ethclient.Client
+	Topics    map[common.Hash]abi.Event
+	Wal       types.Wal
+	ds        types.DepositStore
 }
 
-// Creates a new EventFeed
-func New(conf *types.Config, ethClient *ethclient.Client) (*EventFeed, error) {
+// New Creates a new EventFeed
+func New(conf *types.Config, ethClient *ethclient.Client, wal types.Wal, ds types.DepositStore) (*EventFeed, error) {
 	logger := log.With().Str("module", "events").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
-	topics := GetTopics(conf)
+	topics := getTopics(conf)
+
 	return &EventFeed{
-		log:         logger,
-		ClientChain: conf.ClientChain,
-		EthClient:   ethClient,
-		Topics:      topics,
+		log:       &logger,
+		Config:    conf,
+		EthClient: ethClient,
+		Topics:    topics,
+		Wal:       wal,
+		ds:        ds,
 	}, nil
 }
 
-func (e *EventFeed) Start(
+func (ef *EventFeed) Listen(
 	ctx context.Context,
-) (chan map[string]interface{}, error) {
-	e.log.Debug().Msg("starting event feed")
-	defer e.log.Debug().Msg("event feed stopped")
+) error {
+	ef.log.Debug().Msg("starting event feed")
 
-	// This will return a channel that contains block height bigint values
-	headers, err := e.listenForBlockHeaders(ctx)
+	headers, err := ef.listenForBlockHeaders(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	ef.processBlocks(ctx, headers)
 
-	events := e.pullEvents(ctx, headers)
-
-	return events, nil
+	return nil
 }
 
 // This function gets the list of topics
-func (e *EventFeed) getTopicsForEvents() []common.Hash {
-	topics := make([]common.Hash, len(e.Topics))
-	for _, v := range e.Topics {
+func (ef *EventFeed) getTopicsForEvents() []common.Hash {
+	topics := make([]common.Hash, len(ef.Topics))
+	for _, v := range ef.Topics {
 		topics = append(topics, v.ID)
 	}
 	return topics
 }
 
-func GetTopics(conf *types.Config) map[common.Hash]abi.Event {
+func getTopics(conf *types.Config) map[common.Hash]abi.Event {
 	// First, get the ABI for the contract
 	events := conf.ClientChain.GetContractABI().Events // Named this cAbi to avoid confusion with the abi.ABI type
 	topics := make(map[common.Hash]abi.Event)

@@ -2,69 +2,53 @@ package events
 
 import (
 	"context"
-	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/kwilteam/kwil-db/internal/config"
 	"github.com/rs/zerolog/log"
-	"math/big"
 )
 
 // This function takes a channel of block heights and returns a channel of events.
-func (e *EventFeed) pullEvents(ctx context.Context, ch chan *big.Int) chan map[string]interface{} {
-	retChan := make(chan map[string]interface{})
+func (ef *EventFeed) processBlocks(ctx context.Context, ch chan *big.Int) {
+	addr := common.HexToAddress(ef.Config.ClientChain.DepositContract.Address)
 	go func() {
 		for {
 			// At this point, we have received a finalized ethereum block
 			// Now to query the event data
 			height := <-ch
-			addr := common.HexToAddress(config.Conf.ClientChain.DepositContract.Address)
+			ef.logHeight(height)
 
-			// TODO: We should have some retry logic here for transient unavailability
+			// TODO: We should probably have some retry logic here for transient unavailability.
 			query := ethereum.FilterQuery{
 				FromBlock: height,
 				ToBlock:   height,
 				Addresses: []common.Address{addr},
-				Topics:    [][]common.Hash{e.getTopicsForEvents()},
+				Topics:    [][]common.Hash{ef.getTopicsForEvents()},
 			}
 
 			// Get a channel that will return the events
-			logs, err := e.EthClient.FilterLogs(ctx, query)
+			logs, err := ef.EthClient.FilterLogs(ctx, query)
 			if err != nil {
-				log.Fatal().Err(err).Msg("error reading in block data")
+				ef.log.Fatal().Err(err).Msg("error reading in block data")
 			}
-			fmt.Println(logs)
 
-			for _, vLog := range logs {
-				// First I will find the topic
-				topic := vLog.Topics[0]
-
-				// Next, I find the event name
-				event := e.Topics[topic]
-
-				// Next, I will unpack based on the event
-				ev, err := e.ClientChain.GetContractABI().Unpack(event.Name, vLog.Data)
+			for i := 0; i < len(logs); i++ {
+				err = ef.ProcessLog(logs[i])
 				if err != nil {
-					log.Fatal().Err(err).Msg("error unpacking event data")
+					ef.log.Error().Err(err).Msg("error processing log")
 				}
-				if len(ev) != len(event.Inputs) {
-					log.Fatal().Err(err).Msg("received smart contract event with different number of inputs than expected")
-				}
-
-				// Create a map to store the event data with dynamic keys
-				em := map[string]interface{}{}
-				em["ktype"] = event.Name // I name this ktype to ensure there aren't collisions with other fields
-				// Loop over the inputs and add them to the map
-				// This allows us to dyanmically name fields based on the ABI
-				for i := 0; i < len(ev); i++ {
-					// Get the name for the first arg
-					name := event.Inputs[i].Name
-					em[name] = ev[i]
-				}
-				// Send the result through the channel
-				retChan <- em
 			}
+
+			// At this point, we have confirmed stored all changes for the block, and can now delete any of the txs stored in the deposit store
+			_ = ef.ds.CommitBlock(height)
 		}
 	}()
-	return retChan
+}
+
+func (ef *EventFeed) logHeight(h *big.Int) {
+	bi := big.NewInt(0)
+	if bi.Mod(h, big.NewInt(1)).Cmp(big.NewInt(0)) == 0 {
+		log.Debug().Msgf("processing block %d", h)
+	}
 }
