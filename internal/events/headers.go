@@ -29,20 +29,12 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 		last:  lh,
 	}
 
-<<<<<<< HEAD
 	retChan := make(chan *big.Int, ef.conf.GetBufferSize())
-=======
-	retChan := make(chan *big.Int, config.Conf.ClientChain.MaxBufferSize)
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 
 	// goroutine listens to new headers
 	go func() {
 		// Duration needs time in nanoseconds
-<<<<<<< HEAD
 		timeoutTime := time.Duration(1000000000 * ef.conf.GetBlockTimeout())
-=======
-		timeoutTime := time.Duration(1000000000 * config.Conf.ClientChain.BlockTimeout)
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 		for {
 			select {
 			case err := <-sub.Err():
@@ -104,11 +96,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 
 				for {
 					// if queue is longer than required confirmations, we will pop and send
-<<<<<<< HEAD
 					if len(headerStore.queue) > ef.conf.GetReqConfirmations() {
-=======
-					if len(headerStore.queue) > config.Conf.ClientChain.RequiredConfirmations {
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 						retChan <- headerStore.pop()
 					} else {
 						break

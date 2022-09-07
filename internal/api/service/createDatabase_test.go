@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-<<<<<<< HEAD
 	"encoding/json"
 	"github.com/kwilteam/kwil-db/pkg/pricing"
 	"math/big"
@@ -98,51 +97,6 @@ func TestService_CreateDatabase(t *testing.T) {
 	type args struct {
 		ctx context.Context
 		db  *apitypes.CreateDatabaseMsg
-=======
-	"math/big"
-	"testing"
-
-	kconf "github.com/kwilteam/kwil-db/internal/config/test"
-	"github.com/kwilteam/kwil-db/pkg/types"
-	"github.com/rs/zerolog"
-)
-
-type MockDepositStore struct {
-	bal *big.Int
-}
-
-func (m *MockDepositStore) GetBalance(address string) (*big.Int, error) {
-	// if the big.Int is nil, set to 5
-	if m.bal == nil {
-		m.bal = big.NewInt(5)
-	}
-
-	return m.bal, nil
-}
-
-func (m *MockDepositStore) SetBalance(address string, balance *big.Int) error {
-	m.bal = balance
-	return nil
-}
-
-type MockCosmosClient struct {
-}
-
-func (m *MockCosmosClient) CreateDB(db *types.CreateDatabase) error {
-	return nil
-}
-
-func TestService_CreateDatabase(t *testing.T) {
-	type fields struct {
-		conf    *types.Config
-		ds      DepositStore
-		log     zerolog.Logger
-		cClient CosmosClient
-	}
-	type args struct {
-		ctx context.Context
-		db  *types.CreateDatabase
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	}
 	tests := []struct {
 		name    string
@@ -153,7 +107,6 @@ func TestService_CreateDatabase(t *testing.T) {
 		{
 			name: "valid request",
 			fields: fields{
-<<<<<<< HEAD
 				ds:      &MockDepositStore{},
 				log:     zerolog.Logger{},
 				pricing: pb,
@@ -161,30 +114,14 @@ func TestService_CreateDatabase(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				db: &apitypes.CreateDatabaseMsg{
-					ID:        string(createDBID(from, name, fee, dbt)),
+					ID:        string(createDBID(from, name, fee)),
 					DBType:    dbt,
 					Name:      name,
 					Operation: oper,
 					Crud:      crd,
 					Fee:       fee,
-					Signature: tsign(string(createDBID(from, name, fee, dbt))),
+					Signature: tsign(string(createDBID(from, name, fee))),
 					From:      from,
-=======
-				conf:    kconf.GetTestConfig(t),
-				ds:      &MockDepositStore{},
-				log:     zerolog.Logger{},
-				cClient: &MockCosmosClient{},
-			},
-			args: args{
-				ctx: context.Background(),
-				db: &types.CreateDatabase{
-					Id:        "kwil",
-					DBType:    "test",
-					Name:      "testdb",
-					Fee:       "5",
-					Signature: "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
-					From:      "0x995d95245698212D4Af52c8031F614C3D3127994",
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 				},
 			},
 			wantErr: false,
@@ -192,7 +129,6 @@ func TestService_CreateDatabase(t *testing.T) {
 		{
 			name: "fee too low",
 			fields: fields{
-<<<<<<< HEAD
 				ds:      &MockDepositStore{},
 				log:     zerolog.Logger{},
 				pricing: pb,
@@ -200,30 +136,14 @@ func TestService_CreateDatabase(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				db: &apitypes.CreateDatabaseMsg{
-					ID:        string(createDBID(from, name, "1", dbt)),
+					ID:        string(createDBID(from, name, "1")),
 					DBType:    dbt,
 					Name:      name,
 					Operation: oper,
 					Crud:      crd,
 					Fee:       "1",
-					Signature: tsign(string(createDBID(from, name, "1", dbt))),
+					Signature: tsign(string(createDBID(from, name, "1"))),
 					From:      from,
-=======
-				conf:    kconf.GetTestConfig(t),
-				ds:      &MockDepositStore{},
-				log:     zerolog.Logger{},
-				cClient: &MockCosmosClient{},
-			},
-			args: args{
-				ctx: context.Background(),
-				db: &types.CreateDatabase{
-					Id:        "kwil",
-					DBType:    "test",
-					Name:      "testdb",
-					Fee:       "1",
-					Signature: "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
-					From:      "0x995d95245698212D4Af52c8031F614C3D3127994",
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 				},
 			},
 			wantErr: true,
@@ -231,7 +151,6 @@ func TestService_CreateDatabase(t *testing.T) {
 		{
 			name: "invalid signature length",
 			fields: fields{
-<<<<<<< HEAD
 				ds:      &MockDepositStore{},
 				log:     zerolog.Logger{},
 				pricing: pb,
@@ -239,7 +158,7 @@ func TestService_CreateDatabase(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				db: &apitypes.CreateDatabaseMsg{
-					ID:        string(createDBID(from, name, fee, dbt)),
+					ID:        string(createDBID(from, name, fee)),
 					DBType:    dbt,
 					Name:      name,
 					Operation: oper,
@@ -247,22 +166,6 @@ func TestService_CreateDatabase(t *testing.T) {
 					Fee:       fee,
 					Signature: "ABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCAABCABCABCABCA",
 					From:      from,
-=======
-				conf:    kconf.GetTestConfig(t),
-				ds:      &MockDepositStore{},
-				log:     zerolog.Logger{},
-				cClient: &MockCosmosClient{},
-			},
-			args: args{
-				ctx: context.Background(),
-				db: &types.CreateDatabase{
-					Id:        "kwil",
-					DBType:    "test",
-					Name:      "testdb",
-					Fee:       "5",
-					Signature: "0x39fd0a55rr51cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
-					From:      "0x995d95245698212D4Af52c8031F614C3D3127994",
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 				},
 			},
 			wantErr: true,
@@ -270,7 +173,6 @@ func TestService_CreateDatabase(t *testing.T) {
 		{
 			name: "invalid signature",
 			fields: fields{
-<<<<<<< HEAD
 				ds:      &MockDepositStore{},
 				log:     zerolog.Logger{},
 				pricing: pb,
@@ -278,7 +180,7 @@ func TestService_CreateDatabase(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				db: &apitypes.CreateDatabaseMsg{
-					ID:        string(createDBID(from, name, fee, dbt)),
+					ID:        string(createDBID(from, name, fee)),
 					DBType:    dbt,
 					Name:      name,
 					Operation: oper,
@@ -286,22 +188,6 @@ func TestService_CreateDatabase(t *testing.T) {
 					Fee:       fee,
 					Signature: "ABC",
 					From:      from,
-=======
-				conf:    kconf.GetTestConfig(t),
-				ds:      &MockDepositStore{},
-				log:     zerolog.Logger{},
-				cClient: &MockCosmosClient{},
-			},
-			args: args{
-				ctx: context.Background(),
-				db: &types.CreateDatabase{
-					Id:        "kwilll",
-					DBType:    "test",
-					Name:      "testdb",
-					Fee:       "5",
-					Signature: "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
-					From:      "0x995d95245698212D4Af52c8031F614C3D3127994",
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 				},
 			},
 			wantErr: true,
@@ -310,16 +196,9 @@ func TestService_CreateDatabase(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Service{
-<<<<<<< HEAD
 				ds:      tt.fields.ds,
 				log:     tt.fields.log,
 				pricing: tt.fields.pricing,
-=======
-				conf:    tt.fields.conf,
-				ds:      tt.fields.ds,
-				log:     tt.fields.log,
-				cClient: tt.fields.cClient,
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 			}
 			if err := s.CreateDatabase(tt.args.ctx, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("Service.CreateDatabase() error = %v, wantErr %v", err, tt.wantErr)
@@ -327,7 +206,6 @@ func TestService_CreateDatabase(t *testing.T) {
 		})
 	}
 }
-<<<<<<< HEAD
 
 type MockDepositStore struct {
 	bal *big.Int
@@ -346,5 +224,3 @@ func (m *MockDepositStore) SetBalance(address string, balance *big.Int) error {
 	m.bal = balance
 	return nil
 }
-=======
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5

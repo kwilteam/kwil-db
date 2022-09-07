@@ -10,11 +10,7 @@ import (
 
 // This function takes a log from ethereum and unpacks it into a deposit struct
 func (ef *EventFeed) unpackDeposit(vLog ethTypes.Log) (*DepositEvent, error) {
-<<<<<<< HEAD
 	abi := ef.conf.GetContractABI()
-=======
-	abi := ef.Config.ClientChain.GetContractABI()
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	y, _ := abi.Unpack("Deposit", vLog.Data)
 	dep := Deposit{
 		Caller: y[0].(common.Address),

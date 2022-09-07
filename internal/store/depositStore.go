@@ -22,16 +22,12 @@ type DepositStore struct {
 	wal    types.Wal
 }
 
-<<<<<<< HEAD
 type Config interface {
 	GetKVPath() string
 	GetChainID() int
 }
 
 func NewDepositStore(conf Config, wal types.Wal) (*DepositStore, error) {
-=======
-func NewDepositStore(conf *types.Config, wal types.Wal) (*DepositStore, error) {
->>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	kvStore, err := New(conf)
 	//kvStore.PrintAll()
 	if err != nil {
