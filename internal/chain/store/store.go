@@ -2,10 +2,11 @@ package store
 
 import (
 	"fmt"
+
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
-	etypes "github.com/kwilteam/kwil-db/pkg/types/errs"
+	"github.com/kwilteam/kwil-db/pkg/types/errs"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -56,7 +57,7 @@ func (db *BadgerDB) Get(key []byte) ([]byte, error) {
 		item, err := txn.Get(key)
 		if err != nil {
 			if err == badger.ErrKeyNotFound {
-				return etypes.ErrNotFound
+				return errs.ErrNotFound
 			} else {
 				return err
 			}

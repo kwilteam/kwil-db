@@ -5,21 +5,16 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/chain/db"
 	"github.com/kwilteam/kwil-db/internal/chain/store"
-	"github.com/kwilteam/kwil-db/internal/common/utils"
-	dbp "github.com/kwilteam/kwil-db/pkg/types/db"
+	u "github.com/kwilteam/kwil-db/internal/common/utils"
+	tdba "github.com/kwilteam/kwil-db/pkg/types/db"
 )
 
 const configPath = "/configs/test_config.json"
 const sqlConfigPath = "/configs/test_sql_config.json"
 const emptyDBPath = "/configs/test_empty_db_config.json"
 
-type config interface {
-	GetChainID() int
-	GetKVPath() string
-}
-
-func GetTestingConfig(t *testing.T) config {
-	dir := utils.GetCallerPath() + configPath
+func GetTestConfig(t *testing.T) config {
+	dir := u.GetCallerPath() + configPath
 	con, err := loadConfig(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -27,8 +22,13 @@ func GetTestingConfig(t *testing.T) config {
 	return con
 }
 
+type config interface {
+	GetChainID() int
+	GetKVPath() string
+}
+
 func GetTestStore(t *testing.T) *store.BadgerDB {
-	conf := GetTestingConfig(t)
+	conf := GetTestConfig(t)
 	st, err := store.New(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func GetTestStore(t *testing.T) *store.BadgerDB {
 }
 
 func GetTestLoader(t *testing.T) *db.DBLoader {
-	conf := GetTestingConfig(t)
+	conf := GetTestConfig(t)
 
 	kv := GetTestStore(t)
 
@@ -48,8 +48,8 @@ func GetTestLoader(t *testing.T) *db.DBLoader {
 	return l
 }
 
-func GetTestSQLConfig(t *testing.T) *dbp.SqlDatabaseConfig {
-	curDir := utils.GetCallerPath()
+func GetTestSQLConfig(t *testing.T) *tdba.SqlDatabaseConfig {
+	curDir := u.GetCallerPath()
 	conf, err := db.LoadSQLConfig(curDir + sqlConfigPath)
 	if err != nil {
 		t.Fatal(err)
@@ -58,8 +58,8 @@ func GetTestSQLConfig(t *testing.T) *dbp.SqlDatabaseConfig {
 	return conf
 }
 
-func GetEmptySQLConfig(t *testing.T) *dbp.SqlDatabaseConfig {
-	curDir := utils.GetCallerPath()
+func GetEmptySQLConfig(t *testing.T) *tdba.SqlDatabaseConfig {
+	curDir := u.GetCallerPath()
 	conf, err := db.LoadSQLConfig(curDir + emptyDBPath)
 	if err != nil {
 		t.Fatal(err)

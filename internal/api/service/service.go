@@ -5,7 +5,7 @@ import (
 	"math/big"
 
 	apitypes "github.com/kwilteam/kwil-db/internal/api/types"
-	"github.com/kwilteam/kwil-db/pkg/pricing"
+	"github.com/kwilteam/kwil-db/pkg/types/chain/pricing"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )

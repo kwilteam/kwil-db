@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/pricing"
+	"github.com/kwilteam/kwil-db/pkg/types/chain/pricing"
 
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	apitypes "github.com/kwilteam/kwil-db/internal/api/types"

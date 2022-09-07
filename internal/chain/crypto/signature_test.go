@@ -4,11 +4,11 @@ import (
 	"crypto/ecdsa"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestPrivateKey_Sign(t *testing.T) {
-	pk, err := crypto.HexToECDSA("4bb214b1f3a0737d758bc3828cdff371e3769fe84a2678da34700cb18d50770e")
+	pk, err := ec.HexToECDSA("4bb214b1f3a0737d758bc3828cdff371e3769fe84a2678da34700cb18d50770e")
 	if err != nil {
 		t.Fatal(err)
 	}

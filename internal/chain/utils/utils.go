@@ -6,18 +6,16 @@ import (
 	"io"
 	"os"
 	"path"
-
 	"path/filepath"
-	"runtime"
 
 	"github.com/kwilteam/kwil-db/internal/common/errs"
+	u "github.com/kwilteam/kwil-db/internal/common/utils"
 )
 
 // Loads file from the root directory of Kwil
 func LoadFileFromRoot(path string) ([]byte, error) {
 	// MAKE SURE THIS FILE DOES NOT MOVE OR IT WILL BREAK
-	_, b, _, _ := runtime.Caller(0)
-	basepath := filepath.Dir(b)
+	basepath := u.GetCallerPath()
 	return os.ReadFile(filepath.Join(basepath, "../../../", path))
 }
 

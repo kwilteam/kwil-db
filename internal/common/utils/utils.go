@@ -141,7 +141,7 @@ func Uint64ToBytes(i uint64) []byte {
 }
 
 func GetCallerPath() string {
-	_, filename, _, _ := runtime.Caller(1)
+	_, filename, _, _ := runtime.Caller(2)
 
 	return path.Dir(filename)
 }

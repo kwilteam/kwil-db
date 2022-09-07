@@ -6,10 +6,9 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/kwilteam/kwil-db/internal/chain/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-
-	"github.com/kwilteam/kwil-db/internal/chain/utils"
 )
 
 func Init(c *Config) error {

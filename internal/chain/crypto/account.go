@@ -3,7 +3,8 @@ package crypto
 import (
 	"crypto/ecdsa"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/crypto"
+
+	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
 type Account struct {
@@ -25,13 +26,13 @@ func (k *Keyring) GetAccount(n string) (*Account, error) {
 	}
 
 	// convert to private key
-	pk, err := crypto.HexToECDSA(string(key))
+	pk, err := ec.HexToECDSA(string(key))
 	if err != nil {
 		return nil, err
 	}
 
 	// Now we need to get the address from the private key
-	addr := crypto.PubkeyToAddress(pk.PublicKey)
+	addr := ec.PubkeyToAddress(pk.PublicKey)
 	return &Account{
 		Name:    n,
 		Address: addr.Hex(),

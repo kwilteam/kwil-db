@@ -1,10 +1,10 @@
 package crypto
 
 import (
-	"crypto"
+	c "crypto"
 	"crypto/ecdsa"
 
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	ec "github.com/ethereum/go-ethereum/crypto"
 	"github.com/kwilteam/kwil-db/internal/chain/utils"
 )
 
@@ -19,7 +19,7 @@ func LoadPrivateKey(path string) (*PrivateKey, error) {
 		return nil, err
 	}
 
-	key, err := ethcrypto.HexToECDSA(string(hKey))
+	key, err := ec.HexToECDSA(string(hKey))
 	if err != nil {
 		return nil, err
 	}
@@ -29,5 +29,5 @@ func LoadPrivateKey(path string) (*PrivateKey, error) {
 
 // Sha384 returns the sha384 hash of the data.
 func Sha384(data []byte) []byte { // I wrapped this in a function so that we know it is standard
-	return crypto.SHA384.New().Sum(data)
+	return c.SHA384.New().Sum(data)
 }
