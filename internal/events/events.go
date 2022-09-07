@@ -15,12 +15,19 @@ import (
 	This package is to separate the event intake from the event processing (i.e., handling deposits).
 */
 
-type CosmClient interface {
+type Config interface {
+	GetContractABI() abi.ABI
+	GetChainID() int
+	GetDepositAddress() string
+	GetReqConfirmations() int
+	GetBufferSize() int
+	GetBlockTimeout() int
+	GetLowestHeight() int64
 }
 
 type EventFeed struct {
 	log       *zerolog.Logger
-	Config    *types.Config
+	conf      Config
 	EthClient *ethclient.Client
 	Topics    map[common.Hash]abi.Event
 	Wal       types.Wal
@@ -28,13 +35,13 @@ type EventFeed struct {
 }
 
 // New Creates a new EventFeed
-func New(conf *types.Config, ethClient *ethclient.Client, wal types.Wal, ds types.DepositStore) (*EventFeed, error) {
-	logger := log.With().Str("module", "events").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
+func New(conf Config, ethClient *ethclient.Client, wal types.Wal, ds types.DepositStore) (*EventFeed, error) {
+	logger := log.With().Str("module", "events").Int64("chainID", int64(conf.GetChainID())).Logger()
 	topics := getTopics(conf)
 
 	return &EventFeed{
 		log:       &logger,
-		Config:    conf,
+		conf:      conf,
 		EthClient: ethClient,
 		Topics:    topics,
 		Wal:       wal,
@@ -65,9 +72,9 @@ func (ef *EventFeed) getTopicsForEvents() []common.Hash {
 	return topics
 }
 
-func getTopics(conf *types.Config) map[common.Hash]abi.Event {
+func getTopics(conf Config) map[common.Hash]abi.Event {
 	// First, get the ABI for the contract
-	events := conf.ClientChain.GetContractABI().Events // Named this cAbi to avoid confusion with the abi.ABI type
+	events := conf.GetContractABI().Events // Named this cAbi to avoid confusion with the abi.ABI type
 	topics := make(map[common.Hash]abi.Event)
 
 	for _, ev := range events {

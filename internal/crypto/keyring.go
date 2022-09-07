@@ -3,17 +3,20 @@ package crypto
 import (
 	"github.com/99designs/keyring"
 	"github.com/kwilteam/kwil-db/internal/utils/files"
-	"github.com/kwilteam/kwil-db/pkg/types"
 )
 
 type Keyring struct {
 	kr   keyring.Keyring
-	conf *types.Config
+	conf config
 }
 
-func NewKeyring(c *types.Config) (*Keyring, error) {
+type config interface {
+	GetPrivKeyPath() string
+	GetKeyName() string
+}
 
-	kr, err := keyring.Open(keyring.Config{FileDir: c.Wallets.KeyringFile})
+func NewKeyring(c config) (*Keyring, error) {
+	kr, err := keyring.Open(keyring.Config{ServiceName: "kwil"})
 	if err != nil {
 		return nil, err
 	}
@@ -32,12 +35,12 @@ func NewKeyring(c *types.Config) (*Keyring, error) {
 }
 
 func (k *Keyring) importConfigKey() error {
-	key, err := files.LoadFileFromRoot(k.conf.Wallets.Ethereum.PrivKeyPath)
+	key, err := files.LoadFileFromRoot(k.conf.GetPrivKeyPath())
 	if err != nil {
 		return err
 	}
 
-	err = k.Set(k.conf.Wallets.Ethereum.KeyName, key)
+	err = k.Set(k.conf.GetKeyName(), key)
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,6 @@
 package crypto
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/types"
 	"reflect"
 	"testing"
 
@@ -12,7 +11,7 @@ func TestKeyring_GetAccount(t *testing.T) {
 	k := MockKeyRing{}
 	type fields struct {
 		kr   MockKeyRing
-		conf *types.Config
+		conf config
 	}
 	type args struct {
 		n string

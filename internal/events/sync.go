@@ -19,7 +19,7 @@ func (ef *EventFeed) GetUnsyncedRange(ctx context.Context) (*big.Int, *big.Int, 
 		return nil, nil, err
 	}
 
-	highH := curHead.Number.Sub(curHead.Number, big.NewInt(int64(ef.Config.ClientChain.RequiredConfirmations))) // Subtracting the max buffer size from the current height
+	highH := curHead.Number.Sub(curHead.Number, big.NewInt(int64(ef.conf.GetReqConfirmations()))) // Subtracting the max buffer size from the current height
 	// Now we run through all heights from lowH to highH
 	return lowH, highH, nil
 }
@@ -29,7 +29,7 @@ func (ef *EventFeed) GetUnsyncedEvents(ctx context.Context, low *big.Int, high *
 	// Define event array
 	evs := []Event{}
 	// Get contract address
-	addr := common.HexToAddress(ef.Config.ClientChain.DepositContract.Address)
+	addr := common.HexToAddress(ef.conf.GetDepositAddress())
 
 	// Make query based on params
 	filter := ethereum.FilterQuery{
@@ -64,7 +64,7 @@ func (ef *EventFeed) IndicateLastHeight() error {
 	}
 
 	// This is 0 in case it somehow does not get updated
-	if lastHeight.Cmp(big.NewInt(int64(ef.Config.ClientChain.LowestHeight))) >= 0 { // Comparing the lowest tracked height to the stored height
+	if lastHeight.Cmp(big.NewInt(int64(ef.conf.GetLowestHeight()))) >= 0 { // Comparing the lowest tracked height to the stored height
 		// This means that the deposit store height is greater than the lowest possible.
 		// We should use the stored height to sync from.
 		ef.log.Debug().Msgf("using stored height to sync from: %s", lastHeight.String())
@@ -76,8 +76,8 @@ func (ef *EventFeed) IndicateLastHeight() error {
 	} else {
 		// This means that the deposit store height is less than the lowest possible.
 		// We should use the lowest possible height to sync from.
-		ef.log.Debug().Msgf("using lowest possible height to sync from: %d", ef.Config.ClientChain.LowestHeight)
-		lowH := big.NewInt(int64(ef.Config.ClientChain.LowestHeight))
+		ef.log.Debug().Msgf("using lowest possible height to sync from: %d", ef.conf.GetLowestHeight())
+		lowH := big.NewInt(int64(ef.conf.GetLowestHeight()))
 		err = ef.ds.SetLastHeight(lowH)
 		if err != nil {
 			return err

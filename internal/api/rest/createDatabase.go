@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kwilteam/kwil-db/pkg/types"
+	"github.com/kwilteam/kwil-db/internal/api/types"
 	"github.com/rs/zerolog/log"
 )
 
 // CreateDatabase Handler for CreateDatabase
 func (h *Handler) CreateDatabase(w http.ResponseWriter, r *http.Request) {
-	var db types.CreateDatabase
+	var db types.CreateDatabaseMsg
 
 	// Validate JSON
 	err := json.NewDecoder(r.Body).Decode(&db)

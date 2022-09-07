@@ -39,10 +39,6 @@
             "path": "./.kwilbadger"
         }
     },
-    "api": {
-        "port": "8080",
-        "timeout_time": "10"
-    },
     "cost": {
         "database": {
             "create": "5"
@@ -64,6 +60,11 @@
             }
         }
     },
+    "api": {
+        "port": "8080",
+        "timeout_time": "10"
+    },
+    "price_path": "./prices.json",
     "auth": {
         "token_expiration_time": "60"
     },

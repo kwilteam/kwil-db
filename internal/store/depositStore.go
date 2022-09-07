@@ -22,7 +22,12 @@ type DepositStore struct {
 	wal    types.Wal
 }
 
-func NewDepositStore(conf *types.Config, wal types.Wal) (*DepositStore, error) {
+type Config interface {
+	GetKVPath() string
+	GetChainID() int
+}
+
+func NewDepositStore(conf Config, wal types.Wal) (*DepositStore, error) {
 	kvStore, err := New(conf)
 	//kvStore.PrintAll()
 	if err != nil {

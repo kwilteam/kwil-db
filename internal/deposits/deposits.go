@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/store"
 	"github.com/kwilteam/kwil-db/internal/wal"
 	"github.com/kwilteam/kwil-db/pkg/types"
-	//"math/big"
 )
 
 /*
@@ -23,9 +23,20 @@ type Deposits struct {
 	wal   *types.Wal
 }
 
+type Config interface {
+	GetChainID() int
+	GetKVPath() string
+	GetContractABI() abi.ABI
+	GetDepositAddress() string
+	GetReqConfirmations() int
+	GetBufferSize() int
+	GetBlockTimeout() int
+	GetLowestHeight() int64
+}
+
 const walPath = ".wal"
 
-func Init(ctx context.Context, conf *types.Config, client *ethclient.Client) (*Deposits, error) {
+func Init(ctx context.Context, conf Config, client *ethclient.Client) (*Deposits, error) {
 
 	// Make a WAL
 	wal, err := wal.OpenEthTxWal(walPath)
