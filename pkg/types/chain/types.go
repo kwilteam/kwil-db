@@ -25,9 +25,8 @@ type ClientChain struct {
 }
 
 type Wallets struct {
-	KeyringFile string         `json:"keyring_file" mapstructure:"keyring_file"`
-	Ethereum    EthereumWallet `json:"ethereum" mapstructure:"ethereum"`
-	Cosmos      CosmosWallet   `json:"cosmos" mapstructure:"cosmos"`
+	Ethereum EthereumWallet `json:"ethereum" mapstructure:"ethereum"`
+	Cosmos   CosmosWallet   `json:"cosmos" mapstructure:"cosmos"`
 }
 
 type EthereumWallet struct {

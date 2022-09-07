@@ -11,7 +11,7 @@ import (
 
 // This function takes a channel of block heights and returns a channel of events.
 func (ef *EventFeed) processBlocks(ctx context.Context, ch chan *big.Int) {
-	addr := common.HexToAddress(ef.Config.ClientChain.DepositContract.Address)
+	addr := common.HexToAddress(ef.conf.GetDepositAddress())
 	go func() {
 		for {
 			// At this point, we have received a finalized ethereum block

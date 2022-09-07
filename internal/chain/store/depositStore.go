@@ -9,7 +9,6 @@ import (
 	"math/big"
 
 	w "github.com/kwilteam/kwil-db/internal/chain/utils"
-	ptypes "github.com/kwilteam/kwil-db/pkg/types/chain"
 	etypes "github.com/kwilteam/kwil-db/pkg/types/errs"
 	"github.com/rs/zerolog/log"
 )
@@ -24,7 +23,12 @@ type DepositStore struct {
 	wal    w.Wal
 }
 
-func NewDepositStore(conf *ptypes.Config, wal w.Wal) (*DepositStore, error) {
+type Config interface {
+	GetKVPath() string
+	GetChainID() int
+}
+
+func NewDepositStore(conf Config, wal w.Wal) (*DepositStore, error) {
 	kvStore, err := New(conf)
 	//kvStore.PrintAll()
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/badger/v3"
-	types "github.com/kwilteam/kwil-db/pkg/types/chain"
 	"github.com/kwilteam/kwil-db/pkg/types/db"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -24,12 +23,16 @@ type KVStore interface {
 
 type DBLoader struct {
 	log    *zerolog.Logger
-	Config *types.Config
+	Config config
 	kv     KVStore
 }
 
-func NewLoader(conf *types.Config, kv KVStore) (*DBLoader, error) { // potentially returning an error in case we need more complex constructor later
-	logger := log.With().Str("module", "dba").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
+type config interface {
+	GetChainID() int
+}
+
+func NewLoader(conf config, kv KVStore) (*DBLoader, error) { // potentially returning an error in case we need more complex constructor later
+	logger := log.With().Str("module", "dba").Int64("chainID", int64(conf.GetChainID())).Logger()
 
 	go kv.RunGC()
 

@@ -6,7 +6,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/chain/db"
 	"github.com/kwilteam/kwil-db/internal/chain/store"
 	"github.com/kwilteam/kwil-db/internal/common/utils"
-	types "github.com/kwilteam/kwil-db/pkg/types/chain"
 	dbp "github.com/kwilteam/kwil-db/pkg/types/db"
 )
 
@@ -14,7 +13,12 @@ const configPath = "/configs/test_config.json"
 const sqlConfigPath = "/configs/test_sql_config.json"
 const emptyDBPath = "/configs/test_empty_db_config.json"
 
-func GetTestConfig(t *testing.T) *types.Config {
+type config interface {
+	GetChainID() int
+	GetKVPath() string
+}
+
+func GetTestingConfig(t *testing.T) config {
 	dir := utils.GetCallerPath() + configPath
 	con, err := loadConfig(dir)
 	if err != nil {
@@ -24,7 +28,7 @@ func GetTestConfig(t *testing.T) *types.Config {
 }
 
 func GetTestStore(t *testing.T) *store.BadgerDB {
-	conf := GetTestConfig(t)
+	conf := GetTestingConfig(t)
 	st, err := store.New(conf)
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +37,7 @@ func GetTestStore(t *testing.T) *store.BadgerDB {
 }
 
 func GetTestLoader(t *testing.T) *db.DBLoader {
-	conf := GetTestConfig(t)
+	conf := GetTestingConfig(t)
 
 	kv := GetTestStore(t)
 

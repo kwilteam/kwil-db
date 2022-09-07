@@ -46,6 +46,7 @@ func NewHandler(service service.Service, a Authenticator) *Handler {
 
 func (h *Handler) mapRoutes() {
 	h.Router.HandleFunc("/api/v0/peer-auth", h.PeerAuth)
+	h.Router.HandleFunc("/api/v0/connect", h.GetAddress).Methods("GET")
 	h.Router.HandleFunc("/api/v0/create-database", JWTAuth(h.CreateDatabase)).Methods("POST")
 }
 

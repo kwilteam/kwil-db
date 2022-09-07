@@ -5,7 +5,6 @@ import (
 
 	"github.com/99designs/keyring"
 	kconf "github.com/kwilteam/kwil-db/internal/chain/config/test"
-	types "github.com/kwilteam/kwil-db/pkg/types/chain"
 )
 
 type MockKeyRing struct {
@@ -29,7 +28,7 @@ func (k *MockKeyRing) GetAccount(n string) (*Account, error) {
 
 func TestNewKeyring(t *testing.T) {
 	type args struct {
-		c *types.Config
+		c config
 	}
 	tests := []struct {
 		name    string
@@ -57,14 +56,14 @@ func TestNewKeyring(t *testing.T) {
 }
 
 func TestKeyring_ImportConfigKey(t *testing.T) {
-	kr, err := keyring.Open(keyring.Config{FileDir: kconf.GetTestConfig().Wallets.KeyringFile})
+	kr, err := keyring.Open(keyring.Config{ServiceName: "kwil"})
 	if err != nil {
 		t.Error(err)
 	}
 
 	type fields struct {
 		kr   keyring.Keyring
-		conf *types.Config
+		conf config
 	}
 	tests := []struct {
 		name    string

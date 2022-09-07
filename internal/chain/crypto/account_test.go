@@ -4,8 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	types "github.com/kwilteam/kwil-db/pkg/types/chain"
-
 	kconf "github.com/kwilteam/kwil-db/internal/chain/config/test"
 )
 
@@ -13,7 +11,7 @@ func TestKeyring_GetAccount(t *testing.T) {
 	k := MockKeyRing{}
 	type fields struct {
 		kr   MockKeyRing
-		conf *types.Config
+		conf config
 	}
 	type args struct {
 		n string

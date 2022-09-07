@@ -4,16 +4,17 @@ import (
 	"errors"
 	"math/big"
 
-	types "github.com/kwilteam/kwil-db/pkg/types/chain"
+	apitypes "github.com/kwilteam/kwil-db/internal/api/types"
+	"github.com/kwilteam/kwil-db/pkg/pricing"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 // Service Struct for service logic
 type Service struct {
-	conf *types.Config
-	ds   DepositStore
-	log  zerolog.Logger
+	ds      DepositStore
+	log     zerolog.Logger
+	pricing pricing.PriceBuilder
 }
 
 type DepositStore interface {
@@ -22,37 +23,32 @@ type DepositStore interface {
 }
 
 // NewService returns a pointer Service.
-func NewService(conf *types.Config, ds DepositStore) *Service {
+func NewService(ds DepositStore, p pricing.PriceBuilder) *Service {
 	logger := log.With().Str("module", "service").Logger()
 	return &Service{
-		log:  logger,
-		conf: conf,
-		ds:   ds,
+		log:     logger,
+		ds:      ds,
+		pricing: p,
 	}
 }
-
-var ErrNotEnoughFunds = errors.New("not enough funds")
-var ErrFeeTooLow = errors.New("the sent fee is too low for the requested operation")
-var ErrInvalidSignature = errors.New("invalid signature")
 
 // validateBalances checks to ensure that the sender has enough funds to cover the fee.
 // It also checks to ensure that the fee is not too low.
 // Finally, it returns what the new balance should be if the operation is to be executed.
 // It also returns an error if the amount is not enough
-func (s *Service) validateBalances(from, op, f *string) (*big.Int, error) {
+func (s *Service) validateBalances(from *string, op *byte, cr *byte, fe *string) (*big.Int, error) {
 
 	fb := big.NewInt(0) // final balance
 
-	// convert cost from string to big.Int
-	cost := new(big.Int)
-	cost, ok := cost.SetString(*op, 10)
-	if !ok {
-		return fb, errors.New("failed to parse cost")
-	}
+	// get the cost of the operation
+	c := s.pricing.Operation(*op).Crud(*cr).Build()
+
+	// convert cost from int64 to big.Int
+	cost := big.NewInt(c)
 
 	// convert the sent fee from string to big.Int
 	fee := new(big.Int)
-	fee, ok = fee.SetString(*f, 10)
+	fee, ok := fee.SetString(*fe, 10)
 	if !ok {
 		return fb, errors.New("failed to parse fee")
 	}
@@ -60,7 +56,7 @@ func (s *Service) validateBalances(from, op, f *string) (*big.Int, error) {
 	// compare the cost to what is sent
 	if cost.Cmp(fee) > 0 {
 		s.log.Debug().Msg("fee is too low for the requested operation")
-		return fb, ErrFeeTooLow
+		return fb, apitypes.ErrFeeTooLow
 	}
 
 	// get the balance of the sender
@@ -73,7 +69,7 @@ func (s *Service) validateBalances(from, op, f *string) (*big.Int, error) {
 	// check if the balance is greater than the fee
 	if fee.Cmp(bal) > 0 {
 		s.log.Debug().Msg("not enough funds")
-		return fb, ErrNotEnoughFunds
+		return fb, apitypes.ErrNotEnoughFunds
 	}
 
 	// TODO: Write to WAL

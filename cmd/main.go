@@ -12,6 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/chain/crypto"
 	"github.com/kwilteam/kwil-db/internal/chain/deposits"
 	"github.com/kwilteam/kwil-db/internal/common/logging"
+	"github.com/kwilteam/kwil-db/pkg/pricing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -24,14 +25,14 @@ func main() {
 	}
 
 	// Load Config
-	err = config.LoadConfig(".")
+	conf, err := config.LoadConfig("kwil_config.json")
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load config")
 		os.Exit(1)
 	}
 
 	// Initialize the global logger
-	logging.InitLogger(config.BuildInfo.Version, config.Conf.Log.Debug, config.Conf.Log.Human)
+	logging.InitLogger(config.BuildInfo.Version, conf.Log.Debug, conf.Log.Human)
 
 	ctx := context.Background()
 	log.Debug().Msg("debug turned on")
@@ -45,7 +46,7 @@ func main() {
 	}
 
 	// Initialize deposits
-	d, err := deposits.Init(ctx, &config.Conf, client)
+	d, err := deposits.Init(ctx, conf, client)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize deposits")
 		os.Exit(1)
@@ -54,7 +55,7 @@ func main() {
 	defer d.Store.Close()
 
 	// Creating Account
-	kr, err := crypto.NewKeyring(&config.Conf)
+	kr, err := crypto.NewKeyring(conf)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create keyring")
 		os.Exit(1)
@@ -65,17 +66,34 @@ func main() {
 		os.Exit(1)
 	}
 	// Creating Authenticator
-	a := auth.NewAuth(&config.Conf, acc)
+	a := auth.NewAuth(conf, acc)
 
 	// Authenticate with peers
 	a.Client.AuthAll()
+
+	// Get the pricing config as bytes
+	ppath := conf.GetPricePath()
+	pbytes, err := files.LoadFileFromRoot(ppath)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to load pricing config")
+		os.Exit(1)
+	}
+
+	// Initialize pricing
+	p, err := pricing.New(pbytes)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize pricing")
+		os.Exit(1)
+	}
+	// Creating Authenticator
+	ath := auth.NewAuth(conf, acc)
 
 	// Making a channel listening for interruptions or errors
 	fmt.Println("Node is running properly!")
 
 	// HTTP server
-	serv := service.NewService(&config.Conf, d.Store)
-	httpHandler := rest.NewHandler(*serv, a.Authenticator)
+	serv := service.NewService(d.Store, p)
+	httpHandler := rest.NewHandler(*serv, ath.Authenticator)
 	if err := httpHandler.Serve(); err != nil {
 		log.Fatal().Err(err).Msg("failed to start http server")
 		os.Exit(1)

@@ -7,8 +7,19 @@ import (
 	"os"
 	"path"
 
+	"path/filepath"
+	"runtime"
+
 	"github.com/kwilteam/kwil-db/internal/common/errs"
 )
+
+// Loads file from the root directory of Kwil
+func LoadFileFromRoot(path string) ([]byte, error) {
+	// MAKE SURE THIS FILE DOES NOT MOVE OR IT WILL BREAK
+	_, b, _, _ := runtime.Caller(0)
+	basepath := filepath.Dir(b)
+	return os.ReadFile(filepath.Join(basepath, "../../../", path))
+}
 
 // Get current node key to store associated WAL
 // will ensure that the WAL is correlated to the

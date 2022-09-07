@@ -19,10 +19,10 @@ type authClient struct {
 	keys map[string]string // maps ip to nonce
 	acc  account
 	log  zerolog.Logger
-	conf *types.Config
+	conf config
 }
 
-func newAuthClient(c *types.Config, a account) *authClient {
+func newAuthClient(c config, a account) *authClient {
 	logger := log.With().Str("component", "auth_client").Logger()
 	return &authClient{
 		keys: make(map[string]string),
@@ -54,7 +54,7 @@ var ErrAuthRefused = errors.New("authentication refused")
 
 // AuthAll will try to authenticate with all peers in the peer list
 func (ac *authClient) AuthAll() {
-	for _, p := range ac.conf.Peers {
+	for _, p := range ac.conf.GetPeers() {
 		ok, err := ac.RequestAuth(p)
 		if err != nil || !ok {
 			log.Warn().Err(err).Msgf("failed to authenticate with peer %s", p)

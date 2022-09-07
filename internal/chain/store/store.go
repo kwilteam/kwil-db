@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
-	types "github.com/kwilteam/kwil-db/pkg/types/chain"
 	etypes "github.com/kwilteam/kwil-db/pkg/types/errs"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -27,12 +26,12 @@ type BadgerDB struct {
 	log zerolog.Logger
 }
 
-func New(conf *types.Config) (*BadgerDB, error) {
+func New(conf Config) (*BadgerDB, error) {
 	// create logger
-	logger := log.With().Str("module", "store").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
+	logger := log.With().Str("module", "store").Int64("chainID", int64(conf.GetChainID())).Logger()
 
 	// create badger db
-	opts := badger.DefaultOptions(conf.Storage.Badger.Path)
+	opts := badger.DefaultOptions(conf.GetKVPath())
 	opts.SyncWrites = true
 	opts.Logger = nil
 

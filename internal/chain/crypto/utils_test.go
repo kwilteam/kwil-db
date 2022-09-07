@@ -3,6 +3,8 @@ package crypto
 import (
 	"reflect"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/internal/chain/utils"
 )
 
 // Despite its simplicity, I felt this test was necessary
@@ -28,7 +30,7 @@ func TestLoadFileFromRoot(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := loadFileFromRoot(tt.args.path)
+			got, err := utils.LoadFileFromRoot(tt.args.path)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("LoadFileFromRoot() error = %v, wantErr %v", err, tt.wantErr)
 				return

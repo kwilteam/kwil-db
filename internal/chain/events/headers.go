@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	etypes "github.com/ethereum/go-ethereum/core/types"
-	cfg "github.com/kwilteam/kwil-db/internal/chain/config"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/rs/zerolog/log"
 )
 
 func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, error) {
-	headers := make(chan *etypes.Header)
+	headers := make(chan *types.Header)
 
 	sub, err := ef.EthClient.SubscribeNewHead(ctx, headers)
 	if err != nil {
@@ -30,12 +29,12 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 		last:  lh,
 	}
 
-	retChan := make(chan *big.Int, cfg.Conf.ClientChain.MaxBufferSize)
+	retChan := make(chan *big.Int, ef.conf.GetBufferSize())
 
 	// goroutine listens to new headers
 	go func() {
 		// Duration needs time in nanoseconds
-		timeoutTime := time.Duration(1000000000 * cfg.Conf.ClientChain.BlockTimeout)
+		timeoutTime := time.Duration(1000000000 * ef.conf.GetBlockTimeout())
 		for {
 			select {
 			case err := <-sub.Err():
@@ -97,7 +96,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 
 				for {
 					// if queue is longer than required confirmations, we will pop and send
-					if len(headerStore.queue) > cfg.Conf.ClientChain.RequiredConfirmations {
+					if len(headerStore.queue) > ef.conf.GetReqConfirmations() {
 						retChan <- headerStore.pop()
 					} else {
 						break
@@ -114,7 +113,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 }
 
 // Make a function that will resubscribe to the block headers
-func (ef *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *etypes.Header) ethereum.Subscription {
+func (ef *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *types.Header) ethereum.Subscription {
 	sub, err := ef.EthClient.SubscribeNewHead(ctx, headers)
 	log.Debug().Msg("resubscribing to eth client")
 	if err != nil {

@@ -1,0 +1,19 @@
+{
+    "database": {
+        "create": "5"
+    },
+    "table": {
+        "create": "3",
+        "delete": "2",
+        "modify": "2"
+    },
+    "role": {
+        "create": "2",
+        "delete": "1",
+        "modify": "1"
+    },
+    "query": {
+        "create": "2",
+        "delete": "1"
+    }
+}
