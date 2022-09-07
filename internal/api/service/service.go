@@ -2,10 +2,11 @@ package service
 
 import (
 	"errors"
-	"github.com/kwilteam/kwil-db/pkg/types"
+	"math/big"
+
+	types "github.com/kwilteam/kwil-db/pkg/types/chain"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"math/big"
 )
 
 // Service Struct for service logic

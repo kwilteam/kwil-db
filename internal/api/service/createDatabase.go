@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
-	"github.com/kwilteam/kwil-db/internal/crypto"
-	"github.com/kwilteam/kwil-db/pkg/types"
+
+	"github.com/kwilteam/kwil-db/internal/chain/crypto"
+	types "github.com/kwilteam/kwil-db/pkg/types/db"
 )
 
 // CreateDatabase Service Function for CreateDatabase

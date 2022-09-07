@@ -1,0 +1,14 @@
+{
+    "name": "query1",
+    "query": "SELECT ...",
+    "parameters": [
+        {
+            "name": "param1",
+            "type": "string"
+        },
+        {
+            "name": "param2",
+            "type": "string"
+        }
+    ]
+}

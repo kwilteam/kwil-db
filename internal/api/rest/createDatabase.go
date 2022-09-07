@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kwilteam/kwil-db/pkg/types"
+	types "github.com/kwilteam/kwil-db/pkg/types/db"
 	"github.com/rs/zerolog/log"
 )
 

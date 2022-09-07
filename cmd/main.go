@@ -7,11 +7,11 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/api/rest"
 	"github.com/kwilteam/kwil-db/internal/api/service"
-	"github.com/kwilteam/kwil-db/internal/auth"
-	"github.com/kwilteam/kwil-db/internal/config"
-	"github.com/kwilteam/kwil-db/internal/crypto"
-	"github.com/kwilteam/kwil-db/internal/deposits"
-	"github.com/kwilteam/kwil-db/internal/logging"
+	"github.com/kwilteam/kwil-db/internal/chain/auth"
+	"github.com/kwilteam/kwil-db/internal/chain/config"
+	"github.com/kwilteam/kwil-db/internal/chain/crypto"
+	"github.com/kwilteam/kwil-db/internal/chain/deposits"
+	"github.com/kwilteam/kwil-db/internal/common/logging"
 	"github.com/rs/zerolog/log"
 )
 

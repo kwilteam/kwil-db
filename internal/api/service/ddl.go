@@ -3,8 +3,9 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/kwilteam/kwil-db/internal/crypto"
-	"github.com/kwilteam/kwil-db/pkg/types"
+
+	"github.com/kwilteam/kwil-db/internal/chain/crypto"
+	types "github.com/kwilteam/kwil-db/pkg/types/db"
 )
 
 func (s *Service) DDL(ctx context.Context, ddl *types.DDL) error {
