@@ -24,7 +24,11 @@ type Auth struct {
 
 type authenticator struct {
 	keys map[string]bool
+<<<<<<< HEAD
 	conf config
+=======
+	conf *types.Config
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	log  zerolog.Logger
 }
 
@@ -32,7 +36,11 @@ type authenticator struct {
 // As long as we switch to redis we should be fine
 // If we don't switch to redis, we should routinely copy the map to a new one to prevent memory leaks
 
+<<<<<<< HEAD
 func newAuthenticator(c config) *authenticator {
+=======
+func newAuthenticator(c *types.Config) *authenticator {
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	km := make(map[string]bool)
 	logger := log.With().Str("component", "authenticator").Logger()
 	return &authenticator{
@@ -42,12 +50,16 @@ func newAuthenticator(c config) *authenticator {
 	}
 }
 
+<<<<<<< HEAD
 type config interface {
 	IsFriend(string) bool
 	GetPeers() []string
 }
 
 func NewAuth(c config, a account) *Auth {
+=======
+func NewAuth(c *types.Config, a account) *Auth {
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	return &Auth{
 		Authenticator: newAuthenticator(c),
 		Client:        newAuthClient(c, a),
@@ -58,7 +70,11 @@ func NewAuth(c config, a account) *Auth {
 }*/
 
 func (a *authenticator) isFriend(s string) bool {
+<<<<<<< HEAD
 	return a.conf.IsFriend(s)
+=======
+	return a.conf.Friends[s]
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 }
 
 var ErrAddressNotFriend = errors.New("address is not a friend")

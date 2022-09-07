@@ -25,12 +25,21 @@ type BadgerDB struct {
 	log zerolog.Logger
 }
 
+<<<<<<< HEAD
 func New(conf Config) (*BadgerDB, error) {
 	// create logger
 	logger := log.With().Str("module", "store").Int64("chainID", int64(conf.GetChainID())).Logger()
 
 	// create badger db
 	opts := badger.DefaultOptions(conf.GetKVPath())
+=======
+func New(conf *types.Config) (*BadgerDB, error) {
+	// create logger
+	logger := log.With().Str("module", "store").Int64("chainID", int64(conf.ClientChain.GetChainID())).Logger()
+
+	// create badger db
+	opts := badger.DefaultOptions(conf.Storage.Badger.Path)
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	opts.SyncWrites = true
 	opts.Logger = nil
 

@@ -40,7 +40,11 @@ func (k *Keyring) GetAccount(n string) (*Account, error) {
 }
 
 func (k *Keyring) GetDefaultAccount() (*Account, error) {
+<<<<<<< HEAD
 	return k.GetAccount(k.conf.GetKeyName())
+=======
+	return k.GetAccount(k.conf.Wallets.Ethereum.KeyName)
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 }
 
 func (a *Account) Sign(data []byte) (string, error) {

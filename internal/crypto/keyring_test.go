@@ -5,6 +5,10 @@ import (
 
 	"github.com/99designs/keyring"
 	kconf "github.com/kwilteam/kwil-db/internal/config/test"
+<<<<<<< HEAD
+=======
+	"github.com/kwilteam/kwil-db/pkg/types"
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 )
 
 type MockKeyRing struct {
@@ -28,7 +32,11 @@ func (k *MockKeyRing) GetAccount(n string) (*Account, error) {
 
 func TestNewKeyring(t *testing.T) {
 	type args struct {
+<<<<<<< HEAD
 		c config
+=======
+		c *types.Config
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	}
 	tests := []struct {
 		name    string
@@ -56,14 +64,22 @@ func TestNewKeyring(t *testing.T) {
 }
 
 func TestKeyring_ImportConfigKey(t *testing.T) {
+<<<<<<< HEAD
 	kr, err := keyring.Open(keyring.Config{ServiceName: "kwil"})
+=======
+	kr, err := keyring.Open(keyring.Config{FileDir: kconf.GetTestConfig().Wallets.KeyringFile})
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	if err != nil {
 		t.Error(err)
 	}
 
 	type fields struct {
 		kr   keyring.Keyring
+<<<<<<< HEAD
 		conf config
+=======
+		conf *types.Config
+>>>>>>> b64dc94cf02f1f9d814336627f167ff5d29bb7d5
 	}
 	tests := []struct {
 		name    string
