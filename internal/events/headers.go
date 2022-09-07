@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/kwilteam/kwil-db/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,12 +29,12 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 		last:  lh,
 	}
 
-	retChan := make(chan *big.Int, config.Conf.ClientChain.MaxBufferSize)
+	retChan := make(chan *big.Int, ef.conf.GetBufferSize())
 
 	// goroutine listens to new headers
 	go func() {
 		// Duration needs time in nanoseconds
-		timeoutTime := time.Duration(1000000000 * config.Conf.ClientChain.BlockTimeout)
+		timeoutTime := time.Duration(1000000000 * ef.conf.GetBlockTimeout())
 		for {
 			select {
 			case err := <-sub.Err():
@@ -97,7 +96,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 
 				for {
 					// if queue is longer than required confirmations, we will pop and send
-					if len(headerStore.queue) > config.Conf.ClientChain.RequiredConfirmations {
+					if len(headerStore.queue) > ef.conf.GetReqConfirmations() {
 						retChan <- headerStore.pop()
 					} else {
 						break
