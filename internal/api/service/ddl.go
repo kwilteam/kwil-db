@@ -3,8 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+
 	apitypes "github.com/kwilteam/kwil-db/internal/api/types"
-	"github.com/kwilteam/kwil-db/internal/crypto"
+	"github.com/kwilteam/kwil-db/internal/chain/crypto"
 )
 
 func (s *Service) AlterDatabase(ctx context.Context, m *apitypes.AlterDatabaseMsg) error {

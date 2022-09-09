@@ -1,0 +1,9 @@
+{
+    "name": "role1",
+    "permissions": {
+        "ddl": true,
+        "parameterized_queries": [
+            "query1"
+        ]
+    }
+}

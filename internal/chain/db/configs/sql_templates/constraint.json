@@ -1,0 +1,14 @@
+{
+    "name": "fk_table1_table2",
+    "type": "foreign_key",
+    "key": {
+        "schema": "schema1",
+        "table": "table1",
+        "column": "column1"
+    },
+    "reference": {
+        "schema": "schema1",
+        "table": "table2",
+        "column": "column2"
+    }
+}

@@ -7,13 +7,13 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/api/rest"
 	"github.com/kwilteam/kwil-db/internal/api/service"
-	"github.com/kwilteam/kwil-db/internal/auth"
-	"github.com/kwilteam/kwil-db/internal/config"
-	"github.com/kwilteam/kwil-db/internal/crypto"
-	"github.com/kwilteam/kwil-db/internal/deposits"
-	"github.com/kwilteam/kwil-db/internal/logging"
-	"github.com/kwilteam/kwil-db/internal/utils/files"
-	"github.com/kwilteam/kwil-db/pkg/pricing"
+	"github.com/kwilteam/kwil-db/internal/chain/auth"
+	"github.com/kwilteam/kwil-db/internal/chain/config"
+	"github.com/kwilteam/kwil-db/internal/chain/crypto"
+	"github.com/kwilteam/kwil-db/internal/chain/deposits"
+	"github.com/kwilteam/kwil-db/internal/chain/utils"
+	"github.com/kwilteam/kwil-db/internal/common/logging"
+	"github.com/kwilteam/kwil-db/pkg/types/chain/pricing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -74,7 +74,7 @@ func main() {
 
 	// Get the pricing config as bytes
 	ppath := conf.GetPricePath()
-	pbytes, err := files.LoadFileFromRoot(ppath)
+	pbytes, err := utils.LoadFileFromRoot(ppath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load pricing config")
 		os.Exit(1)

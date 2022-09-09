@@ -7,13 +7,14 @@ package service
 
 import (
 	"context"
-	apitypes "github.com/kwilteam/kwil-db/internal/api/types"
-	"github.com/kwilteam/kwil-db/internal/crypto"
 	"strings"
+
+	types "github.com/kwilteam/kwil-db/internal/api/types"
+	"github.com/kwilteam/kwil-db/internal/chain/crypto"
 )
 
 // CreateDatabase Service Function for CreateDatabase
-func (s *Service) CreateDatabase(ctx context.Context, db *apitypes.CreateDatabaseMsg) error {
+func (s *Service) CreateDatabase(ctx context.Context, db *types.CreateDatabaseMsg) error {
 
 	/*
 		Service Function for CreateDatabase
@@ -31,16 +32,16 @@ func (s *Service) CreateDatabase(ctx context.Context, db *apitypes.CreateDatabas
 
 	// check that operation and crud are valid
 	if int8(db.Operation) != 0 {
-		return apitypes.ErrIncorrectOperation
+		return types.ErrIncorrectOperation
 	}
 
 	if int8(db.Crud) != 0 {
-		return apitypes.ErrIncorrectCrud
+		return types.ErrIncorrectCrud
 	}
 
 	// check ID
 	if !db.CheckID() {
-		return apitypes.ErrInvalidID
+		return types.ErrInvalidID
 	}
 
 	//  check the signature
@@ -49,7 +50,7 @@ func (s *Service) CreateDatabase(ctx context.Context, db *apitypes.CreateDatabas
 		return err
 	}
 	if !valid {
-		return apitypes.ErrInvalidSignature
+		return types.ErrInvalidSignature
 	}
 
 	// Next, check the balances

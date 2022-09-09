@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"github.com/kwilteam/kwil-db/pkg/pricing"
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/types/chain/pricing"
+
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	apitypes "github.com/kwilteam/kwil-db/internal/api/types"
-	"github.com/kwilteam/kwil-db/internal/crypto"
+	"github.com/kwilteam/kwil-db/internal/chain/crypto"
 	"github.com/rs/zerolog"
 )
 

@@ -1,0 +1,25 @@
+{
+    "name": "table1",
+    "schema": "schema1",
+    "primary_key": "column1",
+    "columns": [
+        {
+            "name": "column1",
+            "nullable": false,
+            "column_type": {
+                "type": "varchar",
+                "length": "255"
+            }
+        },
+        {
+            "name": "column2",
+            "nullable": true,
+            "column_type": {
+                "type": "int",
+                "default": "0",
+                "seed_value": "0",
+                "increment": 1
+            }
+        }
+    ]
+}
