@@ -4,11 +4,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	c "github.com/kwilteam/kwil-db/internal/chain/config"
 	"github.com/spf13/viper"
 )
 
 func loadConfig(path string) (config, error) {
-	var dbConfig config
+	var dbConfig c.Config
 
 	dir, file := filepath.Split(path)
 	strs := strings.Split(file, ".")
@@ -26,5 +27,5 @@ func loadConfig(path string) (config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return dbConfig, nil
+	return &dbConfig, nil
 }

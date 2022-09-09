@@ -56,7 +56,8 @@ func TestNewKeyring(t *testing.T) {
 }
 
 func TestKeyring_ImportConfigKey(t *testing.T) {
-	kr, err := keyring.Open(keyring.Config{ServiceName: "kwil"})
+	kr, err := keyring.Open(getKeyRingConfig("kwil"))
+
 	if err != nil {
 		t.Error(err)
 	}

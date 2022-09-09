@@ -8,7 +8,7 @@ import (
 const configPath = "/test_config.json"
 
 func GetTestConfig() *config.Config {
-	dir := utils.GetCallerPath() + configPath
+	dir := utils.GetGoFilePathOfCaller() + configPath
 	con, err := config.LoadConfig(dir)
 	if err != nil {
 		panic(err)

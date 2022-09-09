@@ -14,7 +14,7 @@ const sqlConfigPath = "/configs/test_sql_config.json"
 const emptyDBPath = "/configs/test_empty_db_config.json"
 
 func GetTestConfig(t *testing.T) config {
-	dir := u.GetCallerPath() + configPath
+	dir := u.GetGoFilePathOfCaller() + configPath
 	con, err := loadConfig(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func GetTestLoader(t *testing.T) *db.DBLoader {
 }
 
 func GetTestSQLConfig(t *testing.T) *tdba.SqlDatabaseConfig {
-	curDir := u.GetCallerPath()
+	curDir := u.GetGoFilePathOfCaller()
 	conf, err := db.LoadSQLConfig(curDir + sqlConfigPath)
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func GetTestSQLConfig(t *testing.T) *tdba.SqlDatabaseConfig {
 }
 
 func GetEmptySQLConfig(t *testing.T) *tdba.SqlDatabaseConfig {
-	curDir := u.GetCallerPath()
+	curDir := u.GetGoFilePathOfCaller()
 	conf, err := db.LoadSQLConfig(curDir + emptyDBPath)
 	if err != nil {
 		t.Fatal(err)

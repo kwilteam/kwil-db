@@ -1,6 +1,8 @@
 package crypto
 
 import (
+	"os"
+
 	"github.com/99designs/keyring"
 	"github.com/kwilteam/kwil-db/internal/chain/utils"
 )
@@ -16,7 +18,7 @@ type config interface {
 }
 
 func NewKeyring(c config) (*Keyring, error) {
-	kr, err := keyring.Open(keyring.Config{ServiceName: "kwil"})
+	kr, err := keyring.Open(getKeyRingConfig("kwil"))
 	if err != nil {
 		return nil, err
 	}
@@ -58,4 +60,16 @@ func (k *Keyring) Set(name string, key []byte) error {
 func (k *Keyring) Get(name string) ([]byte, error) {
 	item, err := k.kr.Get(name)
 	return item.Data, err
+}
+
+func getKeyRingConfig(serviceName string) keyring.Config {
+	wsl, ok := os.LookupEnv("WSL_RUNTIME")
+	if !ok || wsl != "true" {
+		return keyring.Config{ServiceName: serviceName}
+	}
+
+	return keyring.Config{ServiceName: "kwil", FileDir: "~/",
+		FilePasswordFunc: func(prompt string) (string, error) {
+			return "test", nil
+		}}
 }
