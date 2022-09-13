@@ -44,7 +44,10 @@ var chainCmd = &cobra.Command{
 		// set chain
 		viper.Set("chain", res)
 		viper.Set("chain-id", cid)
-		viper.WriteConfig()
+		if err = viper.WriteConfig(); err != nil {
+			fmt.Println(err)
+			return
+		}
 	},
 }
 

@@ -75,9 +75,11 @@ func LoadConfig(f string) (*Config, error) {
 		return &c, err // Returning empty config if error occurs
 	}
 
-	err = Init(&c)
+	if err = Init(&c); err != nil {
+		return &c, err
+	}
 
-	c.loadABI(c.ClientChain.DepositContract.ABIPath)
+	err = c.loadABI(c.ClientChain.DepositContract.ABIPath)
 
 	return &c, err
 }

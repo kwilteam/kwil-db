@@ -15,7 +15,7 @@ import (
 // Loads file from the root directory of Kwil
 func LoadFileFromRoot(path string) ([]byte, error) {
 	// MAKE SURE THIS FILE DOES NOT MOVE OR IT WILL BREAK
-	//basepath := u.GetGoFilePathOfCallerParent()
+	// basepath := u.GetGoFilePathOfCallerParent()
 	_, b, _, _ := runtime.Caller(0)
 	basepath := filepath.Dir(b)
 

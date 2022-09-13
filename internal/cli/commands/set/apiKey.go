@@ -29,7 +29,10 @@ var apiKeyCmd = &cobra.Command{
 		}
 
 		viper.Set("api-key", args[0])
-		viper.WriteConfig()
+		if err = viper.WriteConfig(); err != nil {
+			fmt.Println(err)
+			return
+		}
 	},
 }
 

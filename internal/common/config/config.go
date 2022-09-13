@@ -137,13 +137,15 @@ func (c *configImpl) normalize(key string) string {
 }
 
 func GetConfig() Config {
-	//should look for a metaConfig.etc to specify things like useEnv, various files, etc
+	// should look for a metaConfig.etc to specify things like useEnv, various files, etc
 	cfgOnce.Do(func() {
-		configFile := *flag.String("cfg", "", "Path to configuration file")
+		var configFile string
+		flag.StringVar(&configFile, "cfg", "", "Path to configuration file")
+
 		useNoEnv := flag.Bool("cfg-no-env", false, "Do NOT use  environment variables")
 		flag.Parse()
 		if configFile == "" {
-			//look for yaml config (e.g., config.yaml, config.yml, app-config.yaml, etc)
+			// look for yaml config (e.g., config.yaml, config.yml, app-config.yaml, etc)
 			var prefix = getAppNameOrDefault("app")
 			configFile = getConfigFile("./" + prefix + "-config.yaml")
 			if configFile == "" {

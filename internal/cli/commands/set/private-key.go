@@ -32,7 +32,10 @@ var privateKeyCmd = &cobra.Command{
 
 		// set private key
 		viper.Set("private-key", args[0])
-		viper.WriteConfig()
+		if err = viper.WriteConfig(); err != nil {
+			fmt.Println(err)
+			return
+		}
 
 		// check to make sure the arg is a valid private key
 	},

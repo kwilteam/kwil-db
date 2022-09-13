@@ -31,9 +31,9 @@ func (ef *EventFeed) unpackDeposit(vLog ethTypes.Log) (*DepositEvent, error) {
 }
 
 type Deposit struct {
-	Caller common.Address //`abi:"caller"`
-	Target common.Address //`abi:"target"`
-	Amount *big.Int       //`abi:"amount"`
+	Caller common.Address // `abi:"caller"`
+	Target common.Address // `abi:"target"`
+	Amount *big.Int       // `abi:"amount"`
 }
 
 func (ef *EventFeed) parseEvent(vLog ethTypes.Log) (Event, error) {

@@ -68,13 +68,18 @@ var connectCmd = &cobra.Command{
 		// now we need to read the response body
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			fmt.Println(err)
+			c := color.New(color.FgRed)
+			c.Println("Error: ", err)
 			return
 		}
 
 		// set the node-address to the body
 		viper.Set("node-address", string(body))
-		viper.WriteConfig()
+		if err = viper.WriteConfig(); err != nil {
+			c := color.New(color.FgRed)
+			c.Println("Error: ", err)
+			return
+		}
 
 		c := color.New(color.FgGreen)
 		c.Println("connection successful")

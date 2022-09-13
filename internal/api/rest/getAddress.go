@@ -11,5 +11,5 @@ func (h *Handler) GetAddress(w http.ResponseWriter, r *http.Request) {
 
 	// Return the address
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(address))
+	_, _ = w.Write([]byte(address))
 }

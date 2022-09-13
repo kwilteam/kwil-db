@@ -31,7 +31,10 @@ var kwilUrlCmd = &cobra.Command{
 		}
 
 		viper.Set("endpoint", args[0])
-		viper.WriteConfig()
+		if err = viper.WriteConfig(); err != nil {
+			fmt.Println(err)
+			return
+		}
 
 	},
 }
@@ -61,7 +64,10 @@ var ethProviderCmd = &cobra.Command{
 		}
 
 		viper.Set("eth-provider", args[0])
-		viper.WriteConfig()
+		if err = viper.WriteConfig(); err != nil {
+			fmt.Println(err)
+			return
+		}
 
 	},
 }

@@ -2,10 +2,11 @@ package table
 
 import (
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/kwilteam/kwil-db/internal/cli/utils"
 	"strconv"
 	"strings"
+
+	"github.com/fatih/color"
+	"github.com/kwilteam/kwil-db/internal/cli/utils"
 )
 
 func CreateTable() {

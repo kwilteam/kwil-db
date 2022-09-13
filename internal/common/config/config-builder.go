@@ -44,7 +44,7 @@ func (b *configBuilderImpl) Build() (Config, error) {
 
 func (b *configBuilderImpl) WithRoot(root string) {
 	if root != "" {
-		root = root + "."
+		root += "."
 	}
 	b.root = root
 }
@@ -97,7 +97,7 @@ func loadFromRaw(data []byte) (map[interface{}]interface{}, error) {
 
 func flatten(flattened map[string]string, prefix string, m map[interface{}]interface{}) {
 	if prefix != "" && !strings.HasSuffix(prefix, ".") {
-		prefix = prefix + "."
+		prefix += "."
 	}
 
 	for k, v := range m {
@@ -106,15 +106,16 @@ func flatten(flattened map[string]string, prefix string, m map[interface{}]inter
 			flatten(flattened, key, v.(map[interface{}]interface{}))
 		} else {
 			var t = reflect.TypeOf(v).Kind()
-			if t == reflect.String {
+			switch t {
+			case reflect.String:
 				flattened[key] = v.(string)
-			} else if t == reflect.Int || t == reflect.Uint {
+			case reflect.Int:
 				flattened[key] = strconv.FormatInt(reflect.ValueOf(v).Int(), 10)
-			} else if t == reflect.Uint {
+			case reflect.Uint:
 				flattened[key] = strconv.FormatUint(reflect.ValueOf(v).Uint(), 10)
-			} else if t == reflect.Bool {
+			case reflect.Bool:
 				flattened[key] = strconv.FormatBool(reflect.ValueOf(v).Bool())
-			} else {
+			default:
 				panic("Unsupported type in config ('" + key + "'): " + t.String())
 			}
 		}

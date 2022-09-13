@@ -6,11 +6,10 @@ package database
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/internal/cli/utils"
-	//"github.com/fatih/color"
 	"github.com/kwilteam/kwil-db/internal/cli/commands/database/queries"
 	"github.com/kwilteam/kwil-db/internal/cli/commands/database/roles"
 	"github.com/kwilteam/kwil-db/internal/cli/commands/database/table"
+	"github.com/kwilteam/kwil-db/internal/cli/utils"
 	"github.com/spf13/cobra"
 )
 
