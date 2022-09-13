@@ -1,6 +1,6 @@
 services:
   api:
-    image: kwil-api
+    image: kwilapi
     build:
       context: .
       dockerfile: docker/api.dockerfile

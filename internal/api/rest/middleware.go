@@ -2,11 +2,13 @@ package rest
 
 import (
 	"context"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/kwilteam/kwil-db/internal/chain/config"
+	"github.com/rs/zerolog/log"
 )
 
 func JSONMiddleware(next http.Handler) http.Handler {
@@ -36,4 +38,23 @@ func TimeoutMiddleware(next http.Handler) http.Handler {
 		defer cancel()
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func RecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().Msgf("panic: %v", r)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func ApiKeyMiddleware(cfg config.Config) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		})
+	}
 }
