@@ -1,8 +1,6 @@
 package crypto
 
 import (
-	"os"
-
 	"github.com/99designs/keyring"
 	"github.com/kwilteam/kwil-db/internal/chain/utils"
 )
@@ -63,12 +61,7 @@ func (k *Keyring) Get(name string) ([]byte, error) {
 }
 
 func getKeyRingConfig(serviceName string) keyring.Config {
-	wsl, ok := os.LookupEnv("WSL_RUNTIME")
-	if !ok || wsl != "true" {
-		return keyring.Config{ServiceName: serviceName}
-	}
-
-	return keyring.Config{ServiceName: "kwil", FileDir: "~/",
+	return keyring.Config{ServiceName: "kwil", FileDir: "~",
 		FilePasswordFunc: func(prompt string) (string, error) {
 			return "test", nil
 		}}

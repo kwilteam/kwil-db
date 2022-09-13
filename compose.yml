@@ -1,0 +1,19 @@
+services:
+  api:
+    image: kwil-api
+    build:
+      context: .
+      dockerfile: docker/api.dockerfile
+    ports:
+      - "8080:8080"
+    networks:
+      kwil-net:
+        ipv4_address: 172.16.1.100
+
+networks:
+  kwil-net:
+    name: kwil-net
+    ipam:
+      config:
+        - subnet: 172.16.1.0/24
+          gateway: 172.16.1.1
