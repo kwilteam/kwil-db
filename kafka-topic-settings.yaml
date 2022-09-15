@@ -1,0 +1,19 @@
+cluster-settings: &cluster-settings
+  bootstrap.servers: ${KAFKA_CLUSTER_ENDPOINT}
+  session.timeout.ms: 45000
+  security.protocol: SASL_SSL
+  sasl:
+    mechanisms: PLAIN
+    username: ${KAFKA_CLUSTER_USER}
+    password: ${KAFKA_CLUSTER_PASSWORD}
+
+tx-to-topic-producer-service:
+  broker-settings: *cluster-settings
+  topic: kwil_chain_txns
+  linger-ms: 1000
+
+tx-to-db-consumer-service:
+  broker-settings: *cluster-settings
+  topic: kwil_chain_txns
+  group-id: kwil_chain_txns_to_db_cg
+	auto-offset-reset: earliest

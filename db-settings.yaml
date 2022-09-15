@@ -1,0 +1,4 @@
+  host: ${DB_CLUSTER_ENDPOINT}
+  port: 5432
+  user: ${DB_CLUSTER_USER}
+  password: ${DB_CLUSTER_PASSWORD}

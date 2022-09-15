@@ -1,0 +1,8 @@
+# if max tx is reached, then *commit* block
+block-tx-max: 10000
+
+# if max tx is reached, then *commit* block
+block-tx-bytes-max: 10000000
+
+# wait at least one second prior to *committing* a new block if # tx is below max
+block-tx-linger-ms: 1000 

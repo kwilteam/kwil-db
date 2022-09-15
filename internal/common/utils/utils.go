@@ -96,6 +96,11 @@ func DEFAULT[T any]() T {
 	return t
 }
 
+func ExpandHomeDirAndEnv(path string) string {
+	path = Ignore(path, TryExpandHomeDir)
+	return os.ExpandEnv(path)
+}
+
 func ExpandHomeDir(path string) string {
 	return Ignore(path, TryExpandHomeDir)
 }

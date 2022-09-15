@@ -1,0 +1,11 @@
+env-settings: "~/.kwil-server/env-settings.yaml"
+
+chain-service: "./chain-settings.yaml"
+
+sql-repository-service: "./db-settings.yaml"
+
+chain-producer-service: "chain-producer, ./kafka-topic-settings.yaml"
+
+chain-producer-consumer-fanout-service: "chain-processor-fanout, ./kafka-topic-settings.yaml"
+
+command-to-sql-consumer-service: "command-consumer, ./kafka-topic-settings.yaml"
