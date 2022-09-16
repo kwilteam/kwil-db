@@ -11,12 +11,14 @@ import (
 var swagger []byte
 
 func ServeSwaggerJSON(w http.ResponseWriter, r *http.Request) {
-	http.ServeContent(w, r, "swagger.json", time.Time{}, bytes.NewReader(swagger))
+	var t time.Time
+	http.ServeContent(w, r, "swagger.json", t, bytes.NewReader(swagger))
 }
 
 //go:embed swaggerui.html
 var swaggerUI []byte
 
 func ServeSwaggerUI(w http.ResponseWriter, r *http.Request) {
-	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(swaggerUI))
+	var t time.Time
+	http.ServeContent(w, r, "index.html", t, bytes.NewReader(swaggerUI))
 }
