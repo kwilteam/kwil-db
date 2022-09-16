@@ -227,6 +227,6 @@ func getField(v any, field string) any {
 
 func byte2int16(b []byte) int16 {
 	var i int16
-	binary.Read(bytes.NewReader(b), binary.LittleEndian, &i)
+	_ = binary.Read(bytes.NewReader(b), binary.LittleEndian, &i)
 	return i
 }

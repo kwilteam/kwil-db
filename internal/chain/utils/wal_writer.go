@@ -56,6 +56,7 @@ func openWalWriter(dir, name string) (*walWriter, error) {
 	return w, nil
 }
 
+// nolint:unused
 func openWalWriterFromHomeDir(homeDir string, name string) (*walWriter, error) {
 	walDir := concatWithRootChainPath(homeDir, name)
 	return openWalWriter(walDir, "")

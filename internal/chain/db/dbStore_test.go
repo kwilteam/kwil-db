@@ -18,7 +18,7 @@ func TestDB_StoreAllNoTx(t *testing.T) {
 	// Going to set my own name, owner, dbType, and defaultRole
 
 	// Testing for non-transactiom
-	db.StoreAll(false)
+	_ = db.StoreAll(false)
 
 	retName, err := db.Get([]byte("name"))
 	assert.NoError(t, err)
@@ -50,7 +50,7 @@ func TestDB_StoreAllTx(t *testing.T) {
 	// Going to set my own name, owner, dbType, and defaultRole
 
 	// Testing for transactiom
-	db.StoreAll(true)
+	_ = db.StoreAll(true)
 
 	retName, err := db.Get([]byte("name"))
 	assert.NoError(t, err)
@@ -86,7 +86,7 @@ func TestDB_StoreAndGetRole(t *testing.T) {
 	db := ktest.GetEmptyTestDB(t)
 	defer db.Close()
 
-	pdb.StoreRole(&testRole, db)
+	_ = pdb.StoreRole(&testRole, db)
 	retRole, err := db.GetRole("kwiller")
 	assert.NoError(t, err)
 	assert.Equal(t, testRole, *retRole)

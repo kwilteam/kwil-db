@@ -1,0 +1,22 @@
+services:
+  kwild:
+    image: kwild
+    build:
+      context: .
+      dockerfile: docker/kwild.dockerfile
+    ports:
+      - "50051:50051"
+      - "8080:8080"
+  kwild-gateway:
+    image: kwild-gateway
+    build:
+      context: .
+      dockerfile: docker/kwild-gateway.dockerfile
+    environment:
+      KWIL_GRPC_ENDPOINT: kwild:50051
+    ports:
+      - "8081:8080"
+
+networks:
+  kwil-net:
+    name: kwil-net

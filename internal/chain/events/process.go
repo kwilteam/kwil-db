@@ -18,9 +18,9 @@ func (ef *EventFeed) ProcessEvent(ev Event) error {
 	switch ev.GetName() {
 	case "Deposit":
 		return ef.ProcessDeposit(ev.(*DepositEvent))
+	default:
+		return nil
 	}
-
-	return nil
 }
 
 func (ef *EventFeed) ProcessDeposit(ev *DepositEvent) error {
