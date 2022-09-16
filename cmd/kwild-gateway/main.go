@@ -30,6 +30,15 @@ func run() error {
 			if err != nil {
 				return err
 			}
+
+			mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+				v0.ServeSwaggerJSON(w, r)
+			})
+
+			mux.HandlePath(http.MethodGet, "/swagger/ui", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+				v0.ServeSwaggerUI(w, r)
+			})
+
 			return http.ListenAndServe(":8080", mux)
 		},
 	}
