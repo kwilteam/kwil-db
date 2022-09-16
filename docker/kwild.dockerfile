@@ -13,4 +13,6 @@ FROM scratch
 WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/ ./
+EXPOSE 8080
+EXPOSE 50051
 ENTRYPOINT ["/app/kwild"]

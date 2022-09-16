@@ -4,15 +4,9 @@ services:
     build:
       context: .
       dockerfile: docker/kwild.dockerfile
-    environment:
-      KWIL_GRPC_PORT: 50051
-      KWIL_HTTP_PORT: 8080
     ports:
       - "50051:50051"
       - "8080:8080"
-    networks:
-      kwil-net:
-        ipv4_address: 172.16.1.100
   kwild-gateway:
     image: kwild-gateway
     build:
@@ -20,17 +14,9 @@ services:
       dockerfile: docker/kwild-gateway.dockerfile
     environment:
       KWIL_GRPC_ENDPOINT: kwild:50051
-      KWIL_HTTP_PORT: 8081
     ports:
-      - "8081:8081"
-    networks:
-      kwil-net:
-        ipv4_address: 172.16.1.101
+      - "8081:8080"
 
 networks:
   kwil-net:
     name: kwil-net
-    ipam:
-      config:
-        - subnet: 172.16.1.0/24
-          gateway: 172.16.1.1

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -19,7 +18,7 @@ type Authenticator interface {
 	Authenticate(*websocket.Conn) error
 }
 
-func NewHandler(port int, a Authenticator) *Handler {
+func NewHandler(a Authenticator) *Handler {
 	h := &Handler{
 		Router: mux.NewRouter(),
 		Auth:   a,
@@ -28,7 +27,7 @@ func NewHandler(port int, a Authenticator) *Handler {
 	h.Router.HandleFunc("/api/v0/peer-auth", h.PeerAuth)
 
 	h.Server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    ":8080",
 		Handler: h.Router,
 	}
 

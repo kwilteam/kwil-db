@@ -16,7 +16,6 @@ import (
 
 const (
 	grpcEndpointEnv = "KWIL_GRPC_ENDPOINT"
-	httpPortEnv     = "KWIL_HTTP_PORT"
 )
 
 func run() error {
@@ -31,17 +30,13 @@ func run() error {
 			if err != nil {
 				return err
 			}
-			return http.ListenAndServe(fmt.Sprintf(":%d", viper.GetInt("port")), mux)
+			return http.ListenAndServe(":8080", mux)
 		},
 	}
 
 	cmd.PersistentFlags().String("endpoint", "localhost:50051", "gRPC server endpoint")
 	viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
 	viper.BindEnv("endpoint", grpcEndpointEnv)
-
-	cmd.PersistentFlags().Int("port", 8081, "HTTP server port")
-	viper.BindPFlag("port", cmd.PersistentFlags().Lookup("port"))
-	viper.BindEnv("port", httpPortEnv)
 
 	return cmd.Execute()
 }
