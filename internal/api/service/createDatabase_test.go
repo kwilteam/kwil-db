@@ -9,7 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/types/chain/pricing"
 
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	apitypes "github.com/kwilteam/kwil-db/internal/api/types"
+	proto "github.com/kwilteam/kwil-db/internal/api/proto/v0"
 	"github.com/kwilteam/kwil-db/internal/chain/crypto"
 	"github.com/rs/zerolog"
 )
@@ -84,8 +84,8 @@ var from = "0x995d95245698212D4Af52c8031F614C3D3127994"
 var name = "testdb"
 var fee = "5"
 var dbt = "postgres"
-var oper byte = 0
-var crd byte = 0
+var oper int32 = 0
+var crd int32 = 0
 
 func TestService_CreateDatabase(t *testing.T) {
 	pb := getTestPriceBuilder()
@@ -97,7 +97,7 @@ func TestService_CreateDatabase(t *testing.T) {
 	}
 	type args struct {
 		ctx context.Context
-		db  *apitypes.CreateDatabaseMsg
+		db  *proto.CreateDatabaseRequest
 	}
 	tests := []struct {
 		name    string
@@ -114,14 +114,14 @@ func TestService_CreateDatabase(t *testing.T) {
 			},
 			args: args{
 				ctx: context.Background(),
-				db: &apitypes.CreateDatabaseMsg{
-					ID:        string(createDBID(from, name, fee)),
-					DBType:    dbt,
+				db: &proto.CreateDatabaseRequest{
+					Id:        string(createDatabaseID(from, name, fee)),
+					Type:      dbt,
 					Name:      name,
 					Operation: oper,
 					Crud:      crd,
 					Fee:       fee,
-					Signature: tsign(string(createDBID(from, name, fee))),
+					Signature: tsign(string(createDatabaseID(from, name, fee))),
 					From:      from,
 				},
 			},
@@ -136,14 +136,14 @@ func TestService_CreateDatabase(t *testing.T) {
 			},
 			args: args{
 				ctx: context.Background(),
-				db: &apitypes.CreateDatabaseMsg{
-					ID:        string(createDBID(from, name, "1")),
-					DBType:    dbt,
+				db: &proto.CreateDatabaseRequest{
+					Id:        string(createDatabaseID(from, name, "1")),
+					Type:      dbt,
 					Name:      name,
 					Operation: oper,
 					Crud:      crd,
 					Fee:       "1",
-					Signature: tsign(string(createDBID(from, name, "1"))),
+					Signature: tsign(string(createDatabaseID(from, name, "1"))),
 					From:      from,
 				},
 			},
@@ -158,9 +158,9 @@ func TestService_CreateDatabase(t *testing.T) {
 			},
 			args: args{
 				ctx: context.Background(),
-				db: &apitypes.CreateDatabaseMsg{
-					ID:        string(createDBID(from, name, fee)),
-					DBType:    dbt,
+				db: &proto.CreateDatabaseRequest{
+					Id:        string(createDatabaseID(from, name, fee)),
+					Type:      dbt,
 					Name:      name,
 					Operation: oper,
 					Crud:      crd,
@@ -180,9 +180,9 @@ func TestService_CreateDatabase(t *testing.T) {
 			},
 			args: args{
 				ctx: context.Background(),
-				db: &apitypes.CreateDatabaseMsg{
-					ID:        string(createDBID(from, name, fee)),
-					DBType:    dbt,
+				db: &proto.CreateDatabaseRequest{
+					Id:        string(createDatabaseID(from, name, fee)),
+					Type:      dbt,
 					Name:      name,
 					Operation: oper,
 					Crud:      crd,
@@ -201,7 +201,7 @@ func TestService_CreateDatabase(t *testing.T) {
 				log:     tt.fields.log,
 				pricing: tt.fields.pricing,
 			}
-			if err := s.CreateDatabase(tt.args.ctx, tt.args.db); (err != nil) != tt.wantErr {
+			if _, err := s.CreateDatabase(tt.args.ctx, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("Service.CreateDatabase() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
