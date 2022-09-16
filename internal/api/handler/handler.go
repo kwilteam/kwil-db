@@ -9,34 +9,12 @@ import (
 	"go.uber.org/zap"
 )
 
-type Handler struct {
-	Router *mux.Router
-	Server *http.Server
-	Auth   PeerAuthenticator
-	Logger logx.Logger
-}
-
 type PeerAuthenticator interface {
 	Authenticate(*websocket.Conn) error
 }
 
-func NewHandler(logger logx.Logger, a PeerAuthenticator) *Handler {
-	h := &Handler{
-		Router: mux.NewRouter(),
-		Auth:   a,
-		Logger: logger,
-	}
-
-	h.Router.HandleFunc("/api/v0/peer-auth", h.PeerAuth)
-	h.Server = &http.Server{
-		Addr:    ":8080",
-		Handler: h.Router,
-	}
-
-	return h
-}
-
-func (h *Handler) PeerAuth(w http.ResponseWriter, r *http.Request) {
+func New(logger logx.Logger, authenticator PeerAuthenticator) http.Handler {
+	serveMux := mux.NewRouter()
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -45,18 +23,22 @@ func (h *Handler) PeerAuth(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		h.Logger.Error("failed to upgrade to websocket", zap.Error(err))
-		return
-	}
-	defer conn.Close()
+	serveMux.HandleFunc("/api/v0/peer-auth", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			logger.Error("failed to upgrade to websocket", zap.Error(err))
+			return
+		}
+		defer conn.Close()
 
-	err = h.Auth.Authenticate(conn)
-	if err != nil {
-		h.Logger.Error("failed to authenticate", zap.Error(err))
-		return
-	}
+		err = authenticator.Authenticate(conn)
+		if err != nil {
+			logger.Error("failed to authenticate", zap.Error(err))
+			return
+		}
 
-	w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	return serveMux
 }

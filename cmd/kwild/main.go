@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -73,11 +74,14 @@ func execute(logger logx.Logger) error {
 	}
 
 	serv := service.NewService(d.Store, p)
-	return serve(logger, a.Authenticator, serv)
+	httpHandler := handler.New(logger, a.Authenticator)
+
+	return serve(logger, httpHandler, serv)
 }
 
-func serve(logger logx.Logger, auth handler.PeerAuthenticator, srv v0.KwilServiceServer) error {
+func serve(logger logx.Logger, httpHandler http.Handler, srv v0.KwilServiceServer) error {
 	var g run.Group
+
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
@@ -91,14 +95,16 @@ func serve(logger logx.Logger, auth handler.PeerAuthenticator, srv v0.KwilServic
 		listener.Close()
 	})
 
-	httpHandler := handler.NewHandler(logger, auth)
-
+	httpServer := http.Server{
+		Addr:    ":8080",
+		Handler: httpHandler,
+	}
 	g.Add(func() error {
-		return httpHandler.Server.ListenAndServe()
+		return httpServer.ListenAndServe()
 	}, func(error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = httpHandler.Server.Shutdown(ctx)
+		_ = httpServer.Shutdown(ctx)
 	})
 
 	cancelInterrupt := make(chan struct{})
