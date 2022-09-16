@@ -64,12 +64,7 @@
     },
     "price_path": "./prices.json",
     "auth": {
-        "token_expiration_time": "60",
-        "whitelist": [
-            "dJog7696emOh5kdnUX2HKXy6ry5RLMNvUOQ1hTO1QeupikrH3h8oYU3LwgzBMm5uKlC9rwWE8lsrMimQE9AaMVmOXU9Jy2aN5LfhJTKjTd0LQK0825schM9k3cEyyjpo",
-            "p345VDpmXjDh4FbDTUHHaGjzyg2ZLJXAyGOcAfZ4G4dkzsQvUyddJLOGYS1Ko1W8gfwweEENcJokFFBYFyjR20XCOXsBvIUcQOeJT1dFHaSX0hxfmd0D68UaR7RT0COs",
-            "M1Emfv3CieJ8zdj5L5i6vB9SOMQIzzepinmatMMlPxSvTuzLybvdUk9dRoGIQylIqKowumTaf6ycbPBXD4qKqzHtmL9sRta7mmYFEOZKtKTKmNuuKf5em6CHZ7AmDHuZ"
-        ]
+        "token_expiration_time": "60"
     },
     "friends": [
         "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",

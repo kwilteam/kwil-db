@@ -25,6 +25,7 @@ func Execute() error {
 	}
 
 	cobra.OnInitialize(initConfig)
+
 	cmd.AddCommand(
 		connect.NewCmdConnect(),
 		fund.NewCmdFund(),

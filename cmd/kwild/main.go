@@ -17,11 +17,10 @@ import (
 	"github.com/kwilteam/kwil-db/internal/chain/crypto"
 	"github.com/kwilteam/kwil-db/internal/chain/deposits"
 	"github.com/kwilteam/kwil-db/internal/chain/utils"
-	"github.com/kwilteam/kwil-db/internal/common/logging"
+	"github.com/kwilteam/kwil-db/internal/grpcx"
+	"github.com/kwilteam/kwil-db/internal/logx"
 	"github.com/kwilteam/kwil-db/pkg/types/chain/pricing"
 	"github.com/oklog/run"
-	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -29,23 +28,15 @@ const (
 	httpPortEnv = "KWIL_HTTP_PORT"
 )
 
-func serve() error {
+func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	err := config.InitBuildInfo()
-	if err != nil {
-		return fmt.Errorf("failed to initialize build info: %w", err)
-	}
 
 	// Load Config
 	conf, err := config.LoadConfig("kwil_config.json")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-
-	// Initialize the global logger
-	logging.InitLogger(config.BuildInfo.Version, conf.Log.Debug, conf.Log.Human)
 
 	client, err := config.ConnectChain()
 	if err != nil {
@@ -81,8 +72,11 @@ func serve() error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	fmt.Println("Node is running properly!")
+	serv := service.NewService(d.Store, p)
+	return serve(logger, a.Authenticator, serv)
+}
 
+func serve(logger logx.Logger, auth handler.PeerAuthenticator, srv v0.KwilServiceServer) error {
 	var g run.Group
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
@@ -90,16 +84,14 @@ func serve() error {
 	}
 
 	g.Add(func() error {
-		grpcServer := grpc.NewServer()
-		serv := service.NewService(d.Store, p)
-		v0.RegisterKwilServiceServer(grpcServer, serv)
+		grpcServer := grpcx.NewServer(logger)
+		v0.RegisterKwilServiceServer(grpcServer, srv)
 		return grpcServer.Serve(listener)
 	}, func(error) {
 		listener.Close()
 	})
 
-	ath := auth.NewAuth(conf, acc)
-	httpHandler := handler.NewHandler(ath.Authenticator)
+	httpHandler := handler.NewHandler(logger, auth)
 
 	g.Add(func() error {
 		return httpHandler.Server.ListenAndServe()
@@ -127,7 +119,9 @@ func serve() error {
 }
 
 func main() {
-	if err := serve(); err != nil {
-		log.Fatal().Err(err).Send()
+	logger := logx.New()
+
+	if err := execute(logger); err != nil {
+		logger.Sugar().Error(err)
 	}
 }

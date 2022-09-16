@@ -5,27 +5,29 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/rs/zerolog/log"
+	"github.com/kwilteam/kwil-db/internal/logx"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
 	Router *mux.Router
 	Server *http.Server
-	Auth   Authenticator
+	Auth   PeerAuthenticator
+	Logger logx.Logger
 }
 
-type Authenticator interface {
+type PeerAuthenticator interface {
 	Authenticate(*websocket.Conn) error
 }
 
-func NewHandler(a Authenticator) *Handler {
+func NewHandler(logger logx.Logger, a PeerAuthenticator) *Handler {
 	h := &Handler{
 		Router: mux.NewRouter(),
 		Auth:   a,
+		Logger: logger,
 	}
 
 	h.Router.HandleFunc("/api/v0/peer-auth", h.PeerAuth)
-
 	h.Server = &http.Server{
 		Addr:    ":8080",
 		Handler: h.Router,
@@ -45,14 +47,14 @@ func (h *Handler) PeerAuth(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to upgrade to websocket")
+		h.Logger.Error("failed to upgrade to websocket", zap.Error(err))
 		return
 	}
 	defer conn.Close()
 
 	err = h.Auth.Authenticate(conn)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to authenticate")
+		h.Logger.Error("failed to authenticate", zap.Error(err))
 		return
 	}
 

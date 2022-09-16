@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
 	"github.com/kwilteam/kwil-db/internal/chain/crypto"
@@ -35,8 +36,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *v0.CreateDatabaseRequ
 
 	err = s.ds.SetBalance(req.From, amt)
 	if err != nil {
-		s.log.Debug().Err(err).Msgf("failed to set balance for %s", req.From)
-		return nil, err
+		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
 
 	return &v0.CreateDatabaseResponse{}, nil
@@ -63,8 +63,7 @@ func (s *Service) UpdateDatabase(ctx context.Context, req *v0.UpdateDatabaseRequ
 
 	err = s.ds.SetBalance(req.From, amt)
 	if err != nil {
-		s.log.Debug().Err(err).Msgf("failed to set balance for %s", req.From)
-		return nil, err
+		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
 
 	// Forward message to Kafka

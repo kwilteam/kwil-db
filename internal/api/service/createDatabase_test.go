@@ -198,7 +198,6 @@ func TestService_CreateDatabase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Service{
 				ds:      tt.fields.ds,
-				log:     tt.fields.log,
 				pricing: tt.fields.pricing,
 			}
 			if _, err := s.CreateDatabase(tt.args.ctx, tt.args.db); (err != nil) != tt.wantErr {
