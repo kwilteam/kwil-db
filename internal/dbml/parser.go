@@ -59,7 +59,7 @@ func (p *Parser) Parse() (*DBML, error) {
 
 			// TODO:
 			// * register table to tables map, for check ref
-			dbml.Tables = append(dbml.Tables, *table)
+			dbml.Tables = append(dbml.Tables, table)
 
 		case REF:
 			ref, err := p.parseRefs()
@@ -70,10 +70,15 @@ func (p *Parser) Parse() (*DBML, error) {
 
 			// TODO:
 			// * Check refs is valid or not (by tables map)
-			dbml.Refs = append(dbml.Refs, *ref)
+			dbml.Refs = append(dbml.Refs, ref)
 
 		case ROLE:
-			return nil, fmt.Errorf("role is not supported yet")
+			role, err := p.parseRole()
+			if err != nil {
+				return nil, err
+			}
+			p.debug("role", role)
+			dbml.Roles = append(dbml.Roles, role)
 
 		case QUERY:
 			query, err := p.parseQuery()
@@ -81,7 +86,7 @@ func (p *Parser) Parse() (*DBML, error) {
 				return nil, err
 			}
 			p.debug("query", query)
-			dbml.Queries = append(dbml.Queries, *query)
+			dbml.Queries = append(dbml.Queries, query)
 
 		case ENUM:
 			enum, err := p.parseEnum()
@@ -89,7 +94,7 @@ func (p *Parser) Parse() (*DBML, error) {
 				return nil, err
 			}
 			p.debug("Enum", enum)
-			dbml.Enums = append(dbml.Enums, *enum)
+			dbml.Enums = append(dbml.Enums, enum)
 
 		case TABLEGROUP:
 			tableGroup, err := p.parseTableGroup()
@@ -97,7 +102,7 @@ func (p *Parser) Parse() (*DBML, error) {
 				return nil, err
 			}
 			p.debug("TableGroup", tableGroup)
-			dbml.TableGroups = append(dbml.TableGroups, *tableGroup)
+			dbml.TableGroups = append(dbml.TableGroups, tableGroup)
 		case EOF:
 			return dbml, nil
 		default:
@@ -108,7 +113,88 @@ func (p *Parser) Parse() (*DBML, error) {
 }
 
 func (p *Parser) parseRole() (*Role, error) {
-	return nil, nil
+	role := &Role{}
+	p.advance()
+
+	// Handle for role <optional_name>...
+	if IsIdent(p.token) {
+		role.Name = p.lit
+		p.advance()
+	}
+
+	if p.token == LBRACK {
+		// Handle settings [settings...]
+		commaAllowed := false
+
+		for {
+			p.advance()
+			if p.token == NOTE {
+				note, err := p.parseDescription()
+				if err != nil {
+					return nil, p.expect("note: 'role note'")
+				}
+				role.Note = note
+			} else if p.token == COMMA {
+				if !commaAllowed {
+					return nil, p.expect("[role settings...]")
+				}
+			} else if p.token == RBRACK {
+				p.advance()
+				break
+			} else if p.token == DEFAULT {
+				role.Default = true
+			} else {
+				return nil, p.expect("note|default")
+			}
+			commaAllowed = !commaAllowed
+		}
+	}
+
+	var block bool
+
+	switch p.token {
+	case COLON:
+		block = false
+	case LBRACE:
+		block = true
+	default:
+		return nil, p.expect(":|{")
+	}
+
+	commaAllowed := false
+	for {
+		if block {
+			p.advance()
+		} else {
+			p.advanceIgnore(COMMENT, WHITESPACE)
+		}
+
+		switch p.token {
+		case IDENT:
+			role.Queries = append(role.Queries, p.lit)
+			commaAllowed = true
+		case NEWLINE:
+			if !block {
+				p.advance()
+				return role, nil
+			}
+			commaAllowed = false
+			fallthrough
+		case COMMA:
+			if !commaAllowed {
+				return nil, p.expect("role queries...")
+			}
+			commaAllowed = false
+		case RBRACE:
+			if block {
+				p.advance()
+				return role, nil
+			}
+			return nil, p.expect(",|ident")
+		default:
+			return nil, p.expect("ident")
+		}
+	}
 }
 
 func (p *Parser) parseQuery() (query *Query, err error) {
@@ -117,16 +203,17 @@ func (p *Parser) parseQuery() (query *Query, err error) {
 	p.s.BlockMode(func() {
 		p.advance()
 
-		// Handle for query <optional_name>...
-		if IsIdent(p.token) {
-			query.Name = p.lit
-			p.advance()
+		if p.token != IDENT {
+			err = p.expect("query name")
+			return
 		}
+		query.Name = p.lit
+		p.advance()
 
 		switch p.token {
 		case COLON:
 			p.advance()
-			if p.token != EXPR && p.token != TSTRING {
+			if p.token != EXPR && p.token != TSTRING && p.token != STRING {
 				err = p.expect("expr | tstring")
 				return
 			}
@@ -210,9 +297,7 @@ func (p *Parser) parseEnum() (*Enum, error) {
 	p.advance()
 
 	for IsIdent(p.token) {
-		enumValue := EnumValue{
-			Name: p.lit,
-		}
+		enumValue := &EnumValue{Name: p.lit}
 		p.advance()
 		if p.token == LBRACK {
 			// handle [Note: ...]
@@ -408,7 +493,7 @@ func (p *Parser) parseTable() (*Table, error) {
 					if err != nil {
 						return nil, err
 					}
-					table.Columns = append(table.Columns, *column)
+					table.Columns = append(table.Columns, column)
 				}
 			}
 		}
@@ -417,8 +502,8 @@ func (p *Parser) parseTable() (*Table, error) {
 	}
 }
 
-func (p *Parser) parseIndexes() ([]Index, error) {
-	indexes := []Index{}
+func (p *Parser) parseIndexes() ([]*Index, error) {
+	indexes := []*Index{}
 
 	p.advance()
 	if p.token != LBRACE {
@@ -437,7 +522,7 @@ func (p *Parser) parseIndexes() ([]Index, error) {
 			return nil, err
 		}
 		p.debug("index", index)
-		indexes = append(indexes, *index)
+		indexes = append(indexes, index)
 	}
 }
 
@@ -476,17 +561,17 @@ func (p *Parser) parseIndex() (*Index, error) {
 				if err != nil {
 					return nil, p.expect("name: 'index_name'")
 				}
-				index.Settings.Name = name
+				index.Attributes.Name = name
 			case p.token == NOTE:
 				note, err := p.parseDescription()
 				if err != nil {
 					return nil, p.expect("note: 'index note'")
 				}
-				index.Settings.Note = note
+				index.Attributes.Note = note
 			case p.token == PK:
-				index.Settings.PK = true
+				index.Attributes.PK = true
 			case p.token == UNIQUE:
-				index.Settings.Unique = true
+				index.Attributes.Unique = true
 			case p.token == TYPE:
 				p.advance()
 				if p.token != COLON {
@@ -496,7 +581,7 @@ func (p *Parser) parseIndex() (*Index, error) {
 				if p.token != IDENT || (p.lit != "hash" && p.lit != "btree") {
 					return nil, p.expect("hash|btree")
 				}
-				index.Settings.Type = p.lit
+				index.Attributes.Type = p.lit
 			case p.token == COMMA:
 				if !commaAllowed {
 					return nil, p.expect("[index settings...]")
@@ -563,15 +648,15 @@ func (p *Parser) parseColumn(name string) (*Column, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse column settings: %w", err)
 		}
-		column.Settings = *columnSetting
+		column.Attributes = *columnSetting
 	}
 
 	p.debug("column", column)
 	return column, nil
 }
 
-func (p *Parser) parseColumnSettings() (*ColumnSetting, error) {
-	columnSetting := &ColumnSetting{}
+func (p *Parser) parseColumnSettings() (*ColumnAttributes, error) {
+	columnSetting := &ColumnAttributes{}
 	commaAllowed := false
 
 	p.advance()

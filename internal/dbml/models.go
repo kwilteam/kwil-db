@@ -11,13 +11,13 @@ const (
 )
 
 type DBML struct {
-	Project     Project      `json:"project,omitempty"`
-	Tables      []Table      `json:"tables,omitempty"`
-	Enums       []Enum       `json:"enums,omitempty"`
-	Refs        []Ref        `json:"refs,omitempty"`
-	Queries     []Query      `json:"queries,omitempty"`
-	Roles       []Role       `json:"roles,omitempty"`
-	TableGroups []TableGroup `json:"tableGroups,omitempty"`
+	Project     Project       `json:"project,omitempty"`
+	Tables      []*Table      `json:"tables,omitempty"`
+	Enums       []*Enum       `json:"enums,omitempty"`
+	Refs        []*Ref        `json:"refs,omitempty"`
+	Queries     []*Query      `json:"queries,omitempty"`
+	Roles       []*Role       `json:"roles,omitempty"`
+	TableGroups []*TableGroup `json:"tableGroups,omitempty"`
 }
 
 type Project struct {
@@ -27,11 +27,11 @@ type Project struct {
 }
 
 type Table struct {
-	Name    string   `json:"name,omitempty"`
-	Alias   string   `json:"alias,omitempty"`
-	Columns []Column `json:"columns,omitempty"`
-	Indexes []Index  `json:"indexes,omitempty"`
-	Note    string   `json:"note,omitempty"`
+	Name    string    `json:"name,omitempty"`
+	Alias   string    `json:"alias,omitempty"`
+	Columns []*Column `json:"columns,omitempty"`
+	Indexes []*Index  `json:"indexes,omitempty"`
+	Note    string    `json:"note,omitempty"`
 }
 
 type Query struct {
@@ -40,16 +40,20 @@ type Query struct {
 }
 
 type Role struct {
+	Name    string   `json:"name,omitempty"`
+	Queries []string `json:"queries,omitempty"`
+	Note    string   `json:"note,omitempty"`
+	Default bool     `json:"default,omitempty"`
 }
 
 type Column struct {
-	Name     string        `json:"name,omitempty"`
-	Type     string        `json:"type,omitempty"`
-	Size     int           `json:"size,omitempty"`
-	Settings ColumnSetting `json:"settings"`
+	Name       string           `json:"name,omitempty"`
+	Type       string           `json:"type,omitempty"`
+	Size       int              `json:"size,omitempty"`
+	Attributes ColumnAttributes `json:"attributes,omitempty"`
 }
 
-type ColumnSetting struct {
+type ColumnAttributes struct {
 	Note          string     `json:"note,omitempty"`
 	PK            bool       `json:"pk,omitempty"`
 	Unique        bool       `json:"unique,omitempty"`
@@ -72,11 +76,11 @@ type Rel struct {
 }
 
 type Index struct {
-	Fields   []string     `json:"fields,omitempty"`
-	Settings IndexSetting `json:"settings,omitempty"`
+	Fields     []string        `json:"fields,omitempty"`
+	Attributes IndexAttributes `json:"attributes,omitempty"`
 }
 
-type IndexSetting struct {
+type IndexAttributes struct {
 	Type   string `json:"type,omitempty"`
 	Name   string `json:"name,omitempty"`
 	Unique bool   `json:"unique,omitempty"`
@@ -103,8 +107,8 @@ type Ref struct {
 }
 
 type Enum struct {
-	Name   string      `json:"name,omitempty"`
-	Values []EnumValue `json:"values,omitempty"`
+	Name   string       `json:"name,omitempty"`
+	Values []*EnumValue `json:"values,omitempty"`
 }
 
 type EnumValue struct {
