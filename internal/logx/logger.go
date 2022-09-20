@@ -16,7 +16,7 @@ func New() Logger {
 	fields := make([]zap.Field, 0, 10)
 
 	if info, ok := debug.ReadBuildInfo(); ok {
-		fields = append(fields, zap.String("build_tools_version", info.GoVersion))
+		fields = append(fields, zap.String("goversion", info.GoVersion))
 		if info.Main.Version != "" {
 			fields = append(fields, zap.String("mod_version", info.Main.Version))
 		}

@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	v0 "github.com/kwilteam/kwil-db/internal/api/v0"
 )
 
 func (s *Service) Connect(ctx context.Context, req *v0.ConnectRequest) (*v0.ConnectResponse, error) {

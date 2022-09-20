@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 
-	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	v0 "github.com/kwilteam/kwil-db/internal/api/v0"
 )
 
 func (s *Service) CreateTable(ctx context.Context, req *v0.CreateTableRequest) (*v0.CreateTableResponse, error) {

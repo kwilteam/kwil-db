@@ -1,7 +1,7 @@
 package grpcx
 
 import (
-	"github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/kwilteam/kwil-db/internal/logx"
 	"go.uber.org/zap"

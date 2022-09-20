@@ -9,7 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/types/chain/pricing"
 
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	proto "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	proto "github.com/kwilteam/kwil-db/internal/api/v0"
 	"github.com/kwilteam/kwil-db/internal/chain/crypto"
 	"github.com/rs/zerolog"
 )

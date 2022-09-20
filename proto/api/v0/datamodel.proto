@@ -1,0 +1,68 @@
+syntax = "proto3";
+package kwil.api.v0;
+option go_package = "github.com/kwilteam/kwil-db/internal/api/v0";
+
+message Database {
+    string name = 1;
+    repeated Table tables = 2;
+    repeated Enum enums = 3;
+    repeated Query queries = 4;
+    repeated Relation relations = 5;
+    repeated Role roles = 6;
+}
+
+message Table {
+    string name = 1;
+    repeated Column columns = 2;
+    repeated Index indexes = 3;
+    string note = 4;
+}
+
+message Column {
+    string name = 1;
+    string type = 2;
+    int32 size = 3;
+    string note = 4;
+
+    string default = 10;
+    bool not_null = 11;
+    bool unique = 12;
+    bool primary_key = 13;
+    bool auto_increment = 14;
+    bool array = 15;
+    bool unsigned = 16;
+}
+
+message Query {
+    string name = 1;
+    string expression = 2;
+}
+
+message Ref {
+    string name = 1;
+    repeated string columns = 2;
+}
+
+message Relation {
+    string name = 1;
+    Ref from = 2;
+    Ref to = 3;
+}
+
+message Index {
+    string name = 1;
+    repeated string fields = 2;
+    string type = 3;
+    bool unique = 4;
+    bool primary_key = 5;
+    string note = 6;
+}
+
+message Enum {
+    string name = 1;
+    repeated string values = 2;
+}
+
+message Role {
+    string name = 1;
+}

@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/cli/cmds/connect"
 	"github.com/kwilteam/kwil-db/internal/cli/cmds/database"
 	"github.com/kwilteam/kwil-db/internal/cli/cmds/fund"
+	"github.com/kwilteam/kwil-db/internal/cli/cmds/plan"
 	"github.com/kwilteam/kwil-db/internal/cli/cmds/role"
 	"github.com/kwilteam/kwil-db/internal/cli/cmds/table"
 	"github.com/manifoldco/promptui"
@@ -33,6 +34,7 @@ func Execute() error {
 		database.NewCmdDatabase(),
 		table.NewCmdTable(),
 		role.NewCmdRole(),
+		plan.NewCmdPlan(),
 	)
 
 	if err := cmd.Execute(); err != nil {

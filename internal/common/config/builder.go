@@ -12,6 +12,7 @@ import (
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
+	"go.uber.org/multierr"
 )
 
 func Builder() ConfigBuilder {
@@ -25,12 +26,12 @@ type configBuilderImpl struct {
 }
 
 func (b *configBuilderImpl) Build() (Config, error) {
-	return &koanfConfig{Koanf: b.cfg}, nil
+	return &koanfConfig{Koanf: b.cfg}, multierr.Combine(b.errs...)
 }
 
 func (b *configBuilderImpl) UseEnv(prefix string) ConfigBuilder {
 	err := b.cfg.Load(env.Provider(prefix, ".", func(s string) string {
-		return strings.Replace(strings.ToLower(strings.TrimPrefix(s, prefix)), "_", ".", -1)
+		return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s, prefix)), "_", ".")
 	}), nil)
 	if err != nil {
 		b.errs = append(b.errs, err)

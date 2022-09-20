@@ -1,4 +1,3 @@
 version: v1
-name: buf.build/kwil/kwilapi
 deps:
   - buf.build/googleapis/googleapis

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	v0 "github.com/kwilteam/kwil-db/internal/api/v0"
 	"github.com/kwilteam/kwil-db/internal/logx"
 	"github.com/kwilteam/kwil-db/pkg/types/chain/pricing"
 )

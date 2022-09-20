@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/internal/api/handler"
-	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
 	"github.com/kwilteam/kwil-db/internal/api/service"
+	v0 "github.com/kwilteam/kwil-db/internal/api/v0"
 	"github.com/kwilteam/kwil-db/internal/chain/auth"
 	"github.com/kwilteam/kwil-db/internal/chain/config"
 	"github.com/kwilteam/kwil-db/internal/chain/crypto"
