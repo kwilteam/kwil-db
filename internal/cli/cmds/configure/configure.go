@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	v0 "github.com/kwilteam/kwil-db/internal/api/v0"
 	"github.com/kwilteam/kwil-db/internal/cli/util"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"

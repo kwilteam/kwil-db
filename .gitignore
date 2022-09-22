@@ -18,3 +18,4 @@ cmd/kwil-cosmos/cmd/kwild/__debug_bin
 cmd/__debug_bin
 cmd/cmd
 .lck
+.data/

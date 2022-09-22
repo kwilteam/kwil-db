@@ -1,0 +1,12 @@
+syntax = "proto3";
+package kwil.api.v0;
+option go_package = "github.com/kwilteam/kwil-db/internal/api/v0";
+
+
+import "api/v0/datamodel.proto";
+
+message PlanRequest {
+    Database db = 1;
+}
+
+message PlanResponse {}

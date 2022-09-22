@@ -43,7 +43,12 @@
                 "--only-same-user=false"
             ],
             "args": [
-                "database"
+                "schema",
+                "plan",
+                "--target",
+                ".data/first.hcl",
+                "--source",
+                "postgres://localhost:5432/postgres?sslmode=disable",
             ],
             "cwd": "${workspaceFolder}"
         }

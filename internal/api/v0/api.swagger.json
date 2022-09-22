@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "internal/api/proto/v0/api.proto",
+    "title": "api/v0/datamodel.proto",
     "version": "version not set"
   },
   "tags": [
@@ -603,6 +603,45 @@
         }
       }
     },
+    "v0Column": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "note": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "notNull": {
+          "type": "boolean"
+        },
+        "unique": {
+          "type": "boolean"
+        },
+        "primaryKey": {
+          "type": "boolean"
+        },
+        "autoIncrement": {
+          "type": "boolean"
+        },
+        "array": {
+          "type": "boolean"
+        },
+        "unsigned": {
+          "type": "boolean"
+        }
+      }
+    },
     "v0ConnectResponse": {
       "type": "object",
       "properties": {
@@ -651,6 +690,38 @@
     "v0CreateTableResponse": {
       "type": "object"
     },
+    "v0Database": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Table"
+          }
+        },
+        "enums": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Enum"
+          }
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Query"
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Role"
+          }
+        }
+      }
+    },
     "v0DeleteDatabaseResponse": {
       "type": "object"
     },
@@ -659,6 +730,20 @@
     },
     "v0DeleteTableResponse": {
       "type": "object"
+    },
+    "v0Enum": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v0GetDatabaseResponse": {
       "type": "object"
@@ -669,6 +754,32 @@
     "v0GetTableResponse": {
       "type": "object"
     },
+    "v0Index": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string"
+        },
+        "unique": {
+          "type": "boolean"
+        },
+        "primaryKey": {
+          "type": "boolean"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
     "v0ListDatabasesResponse": {
       "type": "object"
     },
@@ -677,6 +788,86 @@
     },
     "v0ListTablesResponse": {
       "type": "object"
+    },
+    "v0PlanResponse": {
+      "type": "object"
+    },
+    "v0Query": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string"
+        }
+      }
+    },
+    "v0Relation": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "target": {
+          "type": "string"
+        },
+        "targetColumns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v0Role": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v0Table": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Column"
+          }
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Index"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Relation"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      }
     },
     "v0UpdateDatabaseResponse": {
       "type": "object"

@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	v0 "github.com/kwilteam/kwil-db/internal/api/v0"
 )
 
 const (
