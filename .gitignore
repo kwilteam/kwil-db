@@ -19,3 +19,5 @@ cmd/__debug_bin
 cmd/cmd
 .lck
 .data/
+.build/
+.task/

@@ -1,0 +1,60 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task: build
+
+  build:
+    desc: Builds the project
+    deps: [build:cli, build:api, build:api-gateway]
+
+  build:cli:
+    desc: Builds the CLI
+    cmds:
+      - go build -o ./.build/kwil ./cmd/kwil
+    generates:
+      - .build/kwil
+
+  build:api:
+    desc: Builds the API
+    deps: [build:api:proto]
+    cmds:
+      - go build -o ./.build/kwild ./cmd/kwild
+    generates:
+      - .build/kwild
+
+  build:api:proto:
+    desc: Compiles the protobuf for the API
+    cmds:
+      - buf generate proto --template proto/api.gen.yaml
+    sources:
+      - proto/api/v0/*
+    generates:
+      - internal/api/v0/*
+
+  build:api-gateway:
+    desc: Builds the API Gateway
+    cmds:
+      - go build -o ./.build/kwild-gateway ./cmd/kwild-gateway
+    generates:
+      - .build/kwild-gateway
+
+  cli:
+    desc: Runs the CLI
+    cmds:
+      - go run ./cmd/kwil {{.CLI_ARGS}}
+
+  deps:
+    desc: Install tools required to build this app
+    cmds:
+      - task: go-install
+        vars: { REPO: github.com/bufbuild/buf/cmd/buf@latest }
+
+  go-install:
+    cmds:
+      - go install {{.REPO}}
+
+  brew-install:
+    cmds:
+      - brew install {{.PACKAGE}}
