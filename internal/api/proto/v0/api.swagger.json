@@ -91,6 +91,86 @@
         ]
       }
     },
+    "/api/v0/databases/{databaseId}/queries": {
+      "get": {
+        "operationId": "KwilService_GetQueries",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v0GetQueriesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
+    "/api/v0/databases/{databaseId}/query": {
+      "post": {
+        "summary": "Queries",
+        "operationId": "KwilService_PostQuery",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v0PostQueryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string"
+                },
+                "signature": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
     "/api/v0/databases/{databaseId}/roles": {
       "get": {
         "operationId": "KwilService_ListRoles",
@@ -573,23 +653,76 @@
           "KwilService"
         ]
       }
+    },
+    "/api/v0/wallets/{id}/balance": {
+      "get": {
+        "summary": "Wallets",
+        "operationId": "KwilService_GetBalance",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v0GetBalanceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
+    "/api/v0/wallets/{id}/{databaseId}/role": {
+      "get": {
+        "operationId": "KwilService_GetWalletRole",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v0GetWalletRoleResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
     }
   },
   "definitions": {
-    "GetRoleResponseperms": {
-      "type": "object",
-      "properties": {
-        "ddl": {
-          "type": "boolean"
-        },
-        "queries": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -674,8 +807,27 @@
     "v0DeleteTableResponse": {
       "type": "object"
     },
+    "v0GetBalanceResponse": {
+      "type": "object",
+      "properties": {
+        "balance": {
+          "type": "string"
+        }
+      }
+    },
     "v0GetDatabaseResponse": {
       "type": "object"
+    },
+    "v0GetQueriesResponse": {
+      "type": "object",
+      "properties": {
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Query"
+          }
+        }
+      }
     },
     "v0GetRoleResponse": {
       "type": "object",
@@ -684,12 +836,51 @@
           "type": "string"
         },
         "permissions": {
-          "$ref": "#/definitions/GetRoleResponseperms"
+          "$ref": "#/definitions/v0GetRoleResponseperms"
+        }
+      }
+    },
+    "v0GetRoleResponseperms": {
+      "type": "object",
+      "properties": {
+        "ddl": {
+          "type": "boolean"
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
     "v0GetTableResponse": {
       "type": "object"
+    },
+    "v0GetWalletRoleResponse": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "permissions": {
+          "$ref": "#/definitions/v0GetWalletRoleResponseperms"
+        }
+      }
+    },
+    "v0GetWalletRoleResponseperms": {
+      "type": "object",
+      "properties": {
+        "ddl": {
+          "type": "boolean"
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v0ListDatabasesResponse": {
       "type": "object"
@@ -708,6 +899,26 @@
     "v0ListTablesResponse": {
       "type": "object"
     },
+    "v0PostQueryResponse": {
+      "type": "object"
+    },
+    "v0Query": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0input"
+          }
+        }
+      }
+    },
     "v0UpdateDatabaseResponse": {
       "type": "object"
     },
@@ -716,6 +927,17 @@
     },
     "v0UpdateTableResponse": {
       "type": "object"
+    },
+    "v0input": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
     }
   }
 }

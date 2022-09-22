@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
 	"github.com/kwilteam/kwil-db/internal/chain/crypto"
+	types "github.com/kwilteam/kwil-db/pkg/types/db"
 )
 
 func (s *Service) CreateDatabase(ctx context.Context, req *v0.CreateDatabaseRequest) (*v0.CreateDatabaseResponse, error) {
@@ -80,4 +82,64 @@ func (s *Service) GetDatabase(ctx context.Context, req *v0.GetDatabaseRequest) (
 
 func (s *Service) DeleteDatabase(ctx context.Context, req *v0.DeleteDatabaseRequest) (*v0.DeleteDatabaseResponse, error) {
 	return &v0.DeleteDatabaseResponse{}, nil
+}
+
+func (s *Service) PostQuery(ctx context.Context, req *v0.PostQueryRequest) (*v0.PostQueryResponse, error) {
+	return &v0.PostQueryResponse{}, nil
+}
+
+func (s *Service) GetQueries(ctx context.Context, req *v0.GetQueriesRequest) (*v0.GetQueriesResponse, error) {
+	// TODO: Implement
+	// returning some mock data right now
+
+	q := struct {
+		Queries []*types.ParameterizedQuery `json:"queries"`
+	}{
+		Queries: []*types.ParameterizedQuery{
+			{
+				Name:  "test_insert",
+				Query: "Insert into...",
+				Parameters: []types.Parameter{
+					{
+						Name: "name",
+						Type: "string",
+					},
+					{
+						Name: "age",
+						Type: "int32",
+					},
+				},
+			},
+			{
+				Name:  "test2",
+				Query: "Select * from...",
+				Parameters: []types.Parameter{
+					{
+						Name: "name",
+						Type: "string",
+					},
+					{
+						Name: "height",
+						Type: "int32",
+					},
+				},
+			},
+		},
+	}
+
+	// marshalling then unmarshalling to get the correct type.  Is this the best way to do this?
+	// convert to bytes
+	b, err := json.Marshal(q)
+	if err != nil {
+		return nil, err
+	}
+
+	// unmarshal to proto
+	var pqs v0.GetQueriesResponse
+	err = json.Unmarshal(b, &pqs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pqs, nil
 }

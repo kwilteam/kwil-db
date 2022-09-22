@@ -37,6 +37,12 @@ type KwilServiceClient interface {
 	GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*GetRoleResponse, error)
 	UpdateRole(ctx context.Context, in *UpdateRoleRequest, opts ...grpc.CallOption) (*UpdateRoleResponse, error)
 	DeleteRole(ctx context.Context, in *DeleteRoleRequest, opts ...grpc.CallOption) (*DeleteRoleResponse, error)
+	// Queries
+	PostQuery(ctx context.Context, in *PostQueryRequest, opts ...grpc.CallOption) (*PostQueryResponse, error)
+	GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesResponse, error)
+	// Wallets
+	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
+	GetWalletRole(ctx context.Context, in *GetWalletRoleRequest, opts ...grpc.CallOption) (*GetWalletRoleResponse, error)
 }
 
 type kwilServiceClient struct {
@@ -191,6 +197,42 @@ func (c *kwilServiceClient) DeleteRole(ctx context.Context, in *DeleteRoleReques
 	return out, nil
 }
 
+func (c *kwilServiceClient) PostQuery(ctx context.Context, in *PostQueryRequest, opts ...grpc.CallOption) (*PostQueryResponse, error) {
+	out := new(PostQueryResponse)
+	err := c.cc.Invoke(ctx, "/api.v0.KwilService/PostQuery", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kwilServiceClient) GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesResponse, error) {
+	out := new(GetQueriesResponse)
+	err := c.cc.Invoke(ctx, "/api.v0.KwilService/GetQueries", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kwilServiceClient) GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error) {
+	out := new(GetBalanceResponse)
+	err := c.cc.Invoke(ctx, "/api.v0.KwilService/GetBalance", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kwilServiceClient) GetWalletRole(ctx context.Context, in *GetWalletRoleRequest, opts ...grpc.CallOption) (*GetWalletRoleResponse, error) {
+	out := new(GetWalletRoleResponse)
+	err := c.cc.Invoke(ctx, "/api.v0.KwilService/GetWalletRole", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KwilServiceServer is the server API for KwilService service.
 // All implementations must embed UnimplementedKwilServiceServer
 // for forward compatibility
@@ -214,6 +256,12 @@ type KwilServiceServer interface {
 	GetRole(context.Context, *GetRoleRequest) (*GetRoleResponse, error)
 	UpdateRole(context.Context, *UpdateRoleRequest) (*UpdateRoleResponse, error)
 	DeleteRole(context.Context, *DeleteRoleRequest) (*DeleteRoleResponse, error)
+	// Queries
+	PostQuery(context.Context, *PostQueryRequest) (*PostQueryResponse, error)
+	GetQueries(context.Context, *GetQueriesRequest) (*GetQueriesResponse, error)
+	// Wallets
+	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
+	GetWalletRole(context.Context, *GetWalletRoleRequest) (*GetWalletRoleResponse, error)
 	mustEmbedUnimplementedKwilServiceServer()
 }
 
@@ -268,6 +316,18 @@ func (UnimplementedKwilServiceServer) UpdateRole(context.Context, *UpdateRoleReq
 }
 func (UnimplementedKwilServiceServer) DeleteRole(context.Context, *DeleteRoleRequest) (*DeleteRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteRole not implemented")
+}
+func (UnimplementedKwilServiceServer) PostQuery(context.Context, *PostQueryRequest) (*PostQueryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PostQuery not implemented")
+}
+func (UnimplementedKwilServiceServer) GetQueries(context.Context, *GetQueriesRequest) (*GetQueriesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetQueries not implemented")
+}
+func (UnimplementedKwilServiceServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
+}
+func (UnimplementedKwilServiceServer) GetWalletRole(context.Context, *GetWalletRoleRequest) (*GetWalletRoleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetWalletRole not implemented")
 }
 func (UnimplementedKwilServiceServer) mustEmbedUnimplementedKwilServiceServer() {}
 
@@ -570,6 +630,78 @@ func _KwilService_DeleteRole_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KwilService_PostQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PostQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KwilServiceServer).PostQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.v0.KwilService/PostQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KwilServiceServer).PostQuery(ctx, req.(*PostQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KwilService_GetQueries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetQueriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KwilServiceServer).GetQueries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.v0.KwilService/GetQueries",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KwilServiceServer).GetQueries(ctx, req.(*GetQueriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KwilService_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBalanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KwilServiceServer).GetBalance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.v0.KwilService/GetBalance",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KwilServiceServer).GetBalance(ctx, req.(*GetBalanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KwilService_GetWalletRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWalletRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KwilServiceServer).GetWalletRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.v0.KwilService/GetWalletRole",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KwilServiceServer).GetWalletRole(ctx, req.(*GetWalletRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KwilService_ServiceDesc is the grpc.ServiceDesc for KwilService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -640,6 +772,22 @@ var KwilService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteRole",
 			Handler:    _KwilService_DeleteRole_Handler,
+		},
+		{
+			MethodName: "PostQuery",
+			Handler:    _KwilService_PostQuery_Handler,
+		},
+		{
+			MethodName: "GetQueries",
+			Handler:    _KwilService_GetQueries_Handler,
+		},
+		{
+			MethodName: "GetBalance",
+			Handler:    _KwilService_GetBalance_Handler,
+		},
+		{
+			MethodName: "GetWalletRole",
+			Handler:    _KwilService_GetWalletRole_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

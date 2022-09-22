@@ -29,7 +29,7 @@ func (s *Service) GetRole(ctx context.Context, req *v0.GetRoleRequest) (*v0.GetR
 		Name: "admin",
 		Permissions: types.Permissions{
 			DDL:                  true,
-			ParamaterizedQueries: []string{"table1_insert", "table1_update", "table1_delete"},
+			ParamaterizedQueries: []string{"test_insert"},
 		},
 	}
 

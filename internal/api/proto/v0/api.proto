@@ -98,6 +98,19 @@ service KwilService {
     };
   }
 
+  // Queries
+  rpc PostQuery(PostQueryRequest) returns (PostQueryResponse) { // this is for submitting data to Kwil
+    option (google.api.http) = {
+      post: "/api/v0/databases/{databaseId}/query"
+      body: "*"
+    };
+  }
+  rpc GetQueries(GetQueriesRequest) returns (GetQueriesResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases/{databaseId}/queries"
+    };
+  }
+
   // Wallets
   rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
     option (google.api.http) = {
@@ -211,6 +224,32 @@ message DeleteRoleRequest {
   string databaseId = 2;
 }
 message DeleteRoleResponse {}
+
+message PostQueryRequest {
+  string databaseId = 1;
+  string query = 2;
+  string from = 3;
+  string signature = 4;
+}
+message PostQueryResponse {}
+
+message GetQueriesRequest {
+  string databaseId = 1;
+}
+message GetQueriesResponse {
+  repeated Query queries = 1;
+}
+
+message input {
+  string name = 1;
+  string type = 2;
+};
+
+message Query{
+  string name = 1;
+  string query = 2;
+  repeated input parameters = 3;
+}
 
 message GetBalanceRequest {
   string id = 1;
