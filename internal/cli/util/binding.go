@@ -3,6 +3,7 @@ package util
 import (
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -32,4 +33,18 @@ func BindChainFlags(fs *pflag.FlagSet) {
 	viper.BindPFlag("funding-pool", fs.Lookup("funding-pool"))
 	viper.BindPFlag("node-address", fs.Lookup("node-address"))
 	viper.BindPFlag("eth-provider", fs.Lookup("eth-provider"))
+}
+
+func MaybeSetFlag(cmd *cobra.Command, name, envVal string) error {
+	fl := cmd.Flag(name)
+	if fl == nil {
+		return nil
+	}
+	if fl.Changed {
+		return nil
+	}
+	if envVal == "" {
+		return nil
+	}
+	return cmd.Flags().Set(name, envVal)
 }
