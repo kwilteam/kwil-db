@@ -46,6 +46,20 @@
                 "database"
             ],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Tester",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/tester",
+            "debugAdapter": "dlv-dap",
+            "showLog": true,
+            "console": "integratedTerminal",
+            "dlvFlags": [
+                "--only-same-user=false"
+            ],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

@@ -714,12 +714,6 @@
             "$ref": "#/definitions/v0Query"
           }
         },
-        "relations": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0Relation"
-          }
-        },
         "roles": {
           "type": "array",
           "items": {
@@ -766,7 +760,7 @@
         "name": {
           "type": "string"
         },
-        "fields": {
+        "columns": {
           "type": "array",
           "items": {
             "type": "string"
@@ -809,7 +803,7 @@
         }
       }
     },
-    "v0Ref": {
+    "v0Relation": {
       "type": "object",
       "properties": {
         "name": {
@@ -820,20 +814,15 @@
           "items": {
             "type": "string"
           }
-        }
-      }
-    },
-    "v0Relation": {
-      "type": "object",
-      "properties": {
-        "name": {
+        },
+        "target": {
           "type": "string"
         },
-        "from": {
-          "$ref": "#/definitions/v0Ref"
-        },
-        "to": {
-          "$ref": "#/definitions/v0Ref"
+        "targetColumns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -842,6 +831,12 @@
       "properties": {
         "name": {
           "type": "string"
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -861,6 +856,12 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/v0Index"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0Relation"
           }
         },
         "note": {
