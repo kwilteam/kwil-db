@@ -4,6 +4,7 @@ import (
 	"context"
 
 	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	types "github.com/kwilteam/kwil-db/pkg/types/db"
 )
 
 func (s *Service) CreateRole(ctx context.Context, req *v0.CreateRoleRequest) (*v0.CreateRoleResponse, error) {
@@ -15,11 +16,27 @@ func (s *Service) UpdateRole(ctx context.Context, req *v0.UpdateRoleRequest) (*v
 }
 
 func (s *Service) ListRoles(ctx context.Context, req *v0.ListRolesRequest) (*v0.ListRolesResponse, error) {
-	return &v0.ListRolesResponse{}, nil
+
+	// TODO: this needs to be implemented.
+	return &v0.ListRolesResponse{
+		Roles: []string{"admin", "default"},
+	}, nil
 }
 
 func (s *Service) GetRole(ctx context.Context, req *v0.GetRoleRequest) (*v0.GetRoleResponse, error) {
-	return &v0.GetRoleResponse{}, nil
+
+	myRole := types.Role{
+		Name: "admin",
+		Permissions: types.Permissions{
+			DDL:                  true,
+			ParamaterizedQueries: []string{"table1_insert", "table1_update", "table1_delete"},
+		},
+	}
+
+	return &v0.GetRoleResponse{
+		Name:        myRole.Name,
+		Permissions: &v0.GetRoleResponsePerms{Ddl: myRole.Permissions.DDL, Queries: myRole.Permissions.ParamaterizedQueries},
+	}, nil
 }
 
 func (s *Service) DeleteRole(ctx context.Context, req *v0.DeleteRoleRequest) (*v0.DeleteRoleResponse, error) {

@@ -97,6 +97,18 @@ service KwilService {
       delete: "/api/v0/databases/{databaseId}/roles/{id}"
     };
   }
+
+  // Wallets
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/wallets/{id}/balance"
+    };
+  }
+  rpc GetWalletRole(GetWalletRoleRequest) returns (GetWalletRoleResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/wallets/{id}/{databaseId}/role"
+    };
+  }
 }
 
 message ConnectRequest {}
@@ -173,12 +185,22 @@ message CreateRoleResponse {}
 message ListRolesRequest {
   string databaseId = 1;
 }
-message ListRolesResponse {}
+message ListRolesResponse {
+  repeated string roles = 1;
+}
 message GetRoleRequest {
   string id = 1;
   string databaseId = 2;
 }
-message GetRoleResponse {}
+message GetRoleResponse {
+  string name = 1;
+  message perms {
+    bool ddl = 1;
+    repeated string queries = 2;
+  };
+  perms permissions = 2;
+}
+
 message UpdateRoleRequest {
   string id = 1;
   string databaseId = 2;
@@ -189,3 +211,24 @@ message DeleteRoleRequest {
   string databaseId = 2;
 }
 message DeleteRoleResponse {}
+
+message GetBalanceRequest {
+  string id = 1;
+}
+message GetBalanceResponse {
+  string balance = 1;
+}
+
+message GetWalletRoleRequest {
+  string id = 1;
+  string databaseId = 2;
+}
+
+message GetWalletRoleResponse {
+  string name = 1;
+  message perms {
+    bool ddl = 1;
+    repeated string queries = 2;
+  };
+  perms permissions = 2;
+}

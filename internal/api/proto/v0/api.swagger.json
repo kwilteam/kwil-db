@@ -576,6 +576,20 @@
     }
   },
   "definitions": {
+    "GetRoleResponseperms": {
+      "type": "object",
+      "properties": {
+        "ddl": {
+          "type": "boolean"
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -664,7 +678,15 @@
       "type": "object"
     },
     "v0GetRoleResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "permissions": {
+          "$ref": "#/definitions/GetRoleResponseperms"
+        }
+      }
     },
     "v0GetTableResponse": {
       "type": "object"
@@ -673,7 +695,15 @@
       "type": "object"
     },
     "v0ListRolesResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v0ListTablesResponse": {
       "type": "object"
