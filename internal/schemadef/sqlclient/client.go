@@ -75,7 +75,7 @@ func (c *Client) Tx(ctx context.Context, opts *sql.TxOptions) (*TxClient, error)
 	}
 	drv, err := c.openDriver(tx)
 	if err != nil {
-		return nil, fmt.Errorf("sql/sqlclient: opening atlas driver: %w", err)
+		return nil, fmt.Errorf("sql/sqlclient: opening driver: %w", err)
 	}
 	ic := *c
 	ic.Driver = drv

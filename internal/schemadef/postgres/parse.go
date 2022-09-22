@@ -48,8 +48,7 @@ func ParseSchemaFiles(paths ...string) (*schema.Schema, error) {
 	return &s, nil
 }
 
-// mayParse will parse the file in path if it is an HCL file. If the file is an Atlas
-// project file an error is returned.
+// mayParse will parse the file in path if it is an HCL file.
 func mayParse(p *hclparse.Parser, path string) error {
 	if n := filepath.Base(path); filepath.Ext(n) != ".hcl" {
 		return nil
