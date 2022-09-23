@@ -52,8 +52,8 @@ func (s *Schema) AddAttrs(attrs ...Attr) *Schema {
 }
 
 // SetRealm sets the database/realm of the schema.
-func (s *Schema) SetRealm(r *Realm) *Schema {
-	s.Realm = r
+func (s *Schema) SetRealm(r *Database) *Schema {
+	s.Db = r
 	return s
 }
 
@@ -75,17 +75,17 @@ func (s *Schema) AddTables(tables ...*Table) *Schema {
 	return s
 }
 
-// NewRealm creates a new Realm.
-func NewRealm(schemas ...*Schema) *Realm {
-	r := &Realm{Schemas: schemas}
+// NewDatabase creates a new Database.
+func NewDatabase(schemas ...*Schema) *Database {
+	r := &Database{Schemas: schemas}
 	for _, s := range schemas {
-		s.Realm = r
+		s.Db = r
 	}
 	return r
 }
 
 // AddSchemas adds and links the given schemas to the realm.
-func (r *Realm) AddSchemas(schemas ...*Schema) *Realm {
+func (r *Database) AddSchemas(schemas ...*Schema) *Database {
 	for _, s := range schemas {
 		s.SetRealm(r)
 	}
@@ -95,32 +95,32 @@ func (r *Realm) AddSchemas(schemas ...*Schema) *Realm {
 
 // SetCharset sets or appends the Charset attribute
 // to the realm with the given value.
-func (r *Realm) SetCharset(v string) *Realm {
+func (r *Database) SetCharset(v string) *Database {
 	replaceOrAppend(&r.Attrs, &Charset{V: v})
 	return r
 }
 
 // UnsetCharset unsets the Charset attribute.
-func (r *Realm) UnsetCharset() *Realm {
+func (r *Database) UnsetCharset() *Database {
 	del(&r.Attrs, &Charset{})
 	return r
 }
 
 // SetCollation sets or appends the Collation attribute
 // to the realm with the given value.
-func (r *Realm) SetCollation(v string) *Realm {
+func (r *Database) SetCollation(v string) *Database {
 	replaceOrAppend(&r.Attrs, &Collation{V: v})
 	return r
 }
 
 // UnsetCollation the Collation attribute.
-func (r *Realm) UnsetCollation() *Realm {
+func (r *Database) UnsetCollation() *Database {
 	del(&r.Attrs, &Collation{})
 	return r
 }
 
 // AddQueries adds the given queries to the realm.
-func (r *Realm) AddQueries(queries ...*Query) *Realm {
+func (r *Database) AddQueries(queries ...*Query) *Database {
 	for _, q := range queries {
 		q.SetRealm(r)
 	}
@@ -129,9 +129,9 @@ func (r *Realm) AddQueries(queries ...*Query) *Realm {
 }
 
 // AddRoles adds the given roles to the realm.
-func (r *Realm) AddRoles(roles ...*Role) *Realm {
+func (r *Database) AddRoles(roles ...*Role) *Database {
 	for _, s := range roles {
-		s.SetRealm(r)
+		s.SetDatabase(r)
 	}
 	r.Roles = append(r.Roles, roles...)
 	return r
@@ -608,8 +608,8 @@ func (q *Query) SetName(name string) *Query {
 	return q
 }
 
-func (q *Query) SetRealm(r *Realm) *Query {
-	q.Realm = r
+func (q *Query) SetRealm(r *Database) *Query {
+	q.Db = r
 	return q
 }
 
@@ -627,8 +627,8 @@ func (r *Role) SetName(name string) *Role {
 	return r
 }
 
-func (r *Role) SetRealm(s *Realm) *Role {
-	r.Realm = s
+func (r *Role) SetDatabase(s *Database) *Role {
+	r.Db = s
 	return r
 }
 

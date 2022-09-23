@@ -99,7 +99,7 @@ func TestDriver_UnlockError(t *testing.T) {
 
 type mockInspector struct {
 	schema.Inspector
-	realm  *schema.Realm
+	realm  *schema.Database
 	schema *schema.Schema
 }
 
@@ -110,6 +110,6 @@ func (m *mockInspector) InspectSchema(context.Context, string, *schema.InspectOp
 	return m.schema, nil
 }
 
-func (m *mockInspector) InspectRealm(context.Context, *schema.InspectRealmOption) (*schema.Realm, error) {
+func (m *mockInspector) InspectRealm(context.Context, *schema.InspectRealmOption) (*schema.Database, error) {
 	return m.realm, nil
 }

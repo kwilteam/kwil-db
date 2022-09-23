@@ -18,7 +18,7 @@ type inspect struct{ conn }
 var _ schema.Inspector = (*inspect)(nil)
 
 // InspectRealm returns schema descriptions of all resources in the given realm.
-func (i *inspect) InspectRealm(ctx context.Context, opts *schema.InspectRealmOption) (*schema.Realm, error) {
+func (i *inspect) InspectRealm(ctx context.Context, opts *schema.InspectRealmOption) (*schema.Database, error) {
 	schemas, err := i.schemas(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -26,7 +26,7 @@ func (i *inspect) InspectRealm(ctx context.Context, opts *schema.InspectRealmOpt
 	if opts == nil {
 		opts = &schema.InspectRealmOption{}
 	}
-	r := schema.NewRealm(schemas...).SetCollation(i.collate)
+	r := schema.NewDatabase(schemas...).SetCollation(i.collate)
 	r.Attrs = append(r.Attrs, &CType{V: i.ctype})
 	if len(schemas) == 0 || !schema.ModeInspectRealm(opts).Is(schema.InspectTables) {
 		return schema.ExcludeRealm(r, opts.Exclude)
@@ -54,7 +54,7 @@ func (i *inspect) InspectSchema(ctx context.Context, name string, opts *schema.I
 	if opts == nil {
 		opts = &schema.InspectOptions{}
 	}
-	r := schema.NewRealm(schemas...).SetCollation(i.collate)
+	r := schema.NewDatabase(schemas...).SetCollation(i.collate)
 	r.Attrs = append(r.Attrs, &CType{V: i.ctype})
 	if schema.ModeInspectSchema(opts).Is(schema.InspectTables) {
 		if err := i.inspectTables(ctx, r, opts); err != nil {
@@ -65,7 +65,7 @@ func (i *inspect) InspectSchema(ctx context.Context, name string, opts *schema.I
 	return schema.ExcludeSchema(r.Schemas[0], opts.Exclude)
 }
 
-func (i *inspect) inspectTables(ctx context.Context, r *schema.Realm, opts *schema.InspectOptions) error {
+func (i *inspect) inspectTables(ctx context.Context, r *schema.Database, opts *schema.InspectOptions) error {
 	if err := i.tables(ctx, r, opts); err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func (i *inspect) inspectTables(ctx context.Context, r *schema.Realm, opts *sche
 }
 
 // table returns the table from the database, or a NotExistError if the table was not found.
-func (i *inspect) tables(ctx context.Context, realm *schema.Realm, opts *schema.InspectOptions) error {
+func (i *inspect) tables(ctx context.Context, realm *schema.Database, opts *schema.InspectOptions) error {
 	var (
 		args  []any
 		query = fmt.Sprintf(tablesQuery, nArgs(0, len(realm.Schemas)))

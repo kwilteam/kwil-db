@@ -252,7 +252,7 @@ enum "account_type" {
 			{SeqNo: 0, C: exp.Tables[1].Columns[0]},
 		},
 	}
-	exp.Realm = schema.NewRealm(exp)
+	exp.Db = schema.NewDatabase(exp)
 	require.EqualValues(t, exp, &s)
 }
 
@@ -335,7 +335,7 @@ table "logs" {
 		c := schema.NewStringColumn("name", "text")
 		expected := schema.New("test").
 			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{C: c}}}))
-		expected.SetRealm(schema.NewRealm(expected))
+		expected.SetRealm(schema.NewDatabase(expected))
 		require.Equal(t, expected, s)
 	})
 
@@ -366,7 +366,7 @@ table "logs" {
 		c := schema.NewStringColumn("name", "text")
 		expected := schema.New("test").
 			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeRange, Parts: []*PartitionPart{{C: c}, {X: &schema.RawExpr{X: "lower(name)"}}}}))
-		expected.SetRealm(schema.NewRealm(expected))
+		expected.SetRealm(schema.NewDatabase(expected))
 		require.Equal(t, expected, s)
 	})
 
@@ -766,7 +766,7 @@ table "users" {
 					schema.NewIntColumn("c3", "int").SetGeneratedExpr(&schema.GeneratedExpr{Expr: "3", Type: "STORED"}),
 				),
 		)
-	expected.SetRealm(schema.NewRealm(expected))
+	expected.SetRealm(schema.NewDatabase(expected))
 	require.EqualValues(t, expected, &s)
 }
 
@@ -1381,7 +1381,7 @@ func TestMarshalRealm(t *testing.T) {
 	// Reference is qualified with s1.
 	t5.AddForeignKeys(schema.NewForeignKey("oid2id2").AddColumns(t5.Columns[0]).SetRefTable(t2).AddRefColumns(t2.Columns[0]))
 
-	r := schema.NewRealm(
+	r := schema.NewDatabase(
 		schema.New("s1").AddTables(t1, t2),
 		schema.New("s2").AddTables(t3, t4, t5),
 	)

@@ -34,11 +34,11 @@ type SpecSet struct {
 	Roles   []*Role
 }
 
-// Scan populates the Realm from the schemas and table specs.
-func Scan(r *schema.Realm, ss *SpecSet, convertTable ConvertTableFunc) error {
+// Scan populates the Database from the schemas and table specs.
+func Scan(r *schema.Database, ss *SpecSet, convertTable ConvertTableFunc) error {
 	// Build the schemas.
 	for _, schemaSpec := range ss.Schemas {
-		sch := &schema.Schema{Name: schemaSpec.Name, Realm: r}
+		sch := &schema.Schema{Name: schemaSpec.Name, Db: r}
 		for _, tableSpec := range ss.Tables {
 			name, err := SchemaName(tableSpec.Schema)
 			if err != nil {
@@ -567,7 +567,7 @@ func externalRef(ref *hcl.Ref, sch *schema.Schema) (*schema.Table, *schema.Colum
 }
 
 // findTable finds the table referenced by ref in the provided schema. If the table
-// is not in the provided schema.Schema other schemas in the connected schema.Realm
+// is not in the provided schema.Schema other schemas in the connected schema.Database
 // are searched as well.
 func findTable(ref *hcl.Ref, sch *schema.Schema) (*schema.Table, error) {
 	qualifier, tblName, err := tableName(ref)
@@ -582,11 +582,11 @@ func findTable(ref *hcl.Ref, sch *schema.Schema) (*schema.Table, error) {
 		}
 		return tbl, nil
 	}
-	if sch.Realm == nil {
+	if sch.Db == nil {
 		return nil, fmt.Errorf("sqlspec: table %s.%s not found", qualifier, tblName)
 	}
 	// Search for the table in another schemas in the realm.
-	sch, ok := sch.Realm.Schema(qualifier)
+	sch, ok := sch.Db.Schema(qualifier)
 	if !ok {
 		return nil, fmt.Errorf("sqlspec: schema %q not found", qualifier)
 	}

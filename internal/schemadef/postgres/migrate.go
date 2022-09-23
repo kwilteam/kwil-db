@@ -748,8 +748,8 @@ func (s *state) mayDropEnum(alter *alterChange, ns *schema.Schema, e *schema.Enu
 	}
 	schemas := []*schema.Schema{ns}
 	// In case there is a realm attached, traverse the entire tree.
-	if ns.Realm != nil && len(ns.Realm.Schemas) > 0 {
-		schemas = ns.Realm.Schemas
+	if ns.Db != nil && len(ns.Db.Schemas) > 0 {
+		schemas = ns.Db.Schemas
 	}
 	for i := range schemas {
 		for _, t := range schemas[i].Tables {

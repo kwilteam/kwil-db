@@ -85,6 +85,8 @@ func ListAttr(k string, litValues ...string) *hcl.Attr {
 type doc struct {
 	Tables  []*Table  `spec:"table"`
 	Schemas []*Schema `spec:"schema"`
+	Queries []*Query  `spec:"query"`
+	Roles   []*Role   `spec:"role"`
 }
 
 // Marshal marshals v into a DDL document using a hcl.Marshaler. Marshal uses the given
@@ -99,7 +101,7 @@ func Marshal(v any, marshaler hcl.Marshaler, schemaSpec func(schem *schema.Schem
 		}
 		d.Tables = tables
 		d.Schemas = []*Schema{ss}
-	case *schema.Realm:
+	case *schema.Database:
 		for _, s := range s.Schemas {
 			ss, tables, err := schemaSpec(s)
 			if err != nil {
@@ -143,7 +145,7 @@ func QualifyDuplicates(tableSpecs []*Table) error {
 }
 
 // QualifyReferences qualifies any reference with qualifier.
-func QualifyReferences(tableSpecs []*Table, realm *schema.Realm) error {
+func QualifyReferences(tableSpecs []*Table, realm *schema.Database) error {
 	type cref struct{ s, t string }
 	byRef := make(map[cref]*Table)
 	for _, t := range tableSpecs {

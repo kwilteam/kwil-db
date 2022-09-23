@@ -36,37 +36,26 @@ func init() {
 
 // evalSpec evaluates a DDL document into v using the input.
 func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
+	db, ok := v.(*schema.Database)
+	if !ok {
+		return fmt.Errorf("invalid type %T, expected *schema.Database", v)
+	}
+
 	var d Document
 	if err := hclState.Eval(p, &d, input); err != nil {
 		return err
 	}
 	ss := &spec.SpecSet{Tables: d.Tables, Schemas: d.Schemas, Queries: d.Queries, Roles: d.Roles}
 
-	switch v := v.(type) {
-	case *schema.Realm:
-		if err := spec.Scan(v, ss, convertTable); err != nil {
-			return fmt.Errorf("spec: failed converting to *schema.Realm: %w", err)
-		}
-		if len(d.Enums) > 0 {
-			if err := convertEnums(d.Tables, d.Enums, v); err != nil {
-				return err
-			}
-		}
-	case *schema.Schema:
-		if len(d.Schemas) != 1 {
-			return fmt.Errorf("spec: expecting document to contain a single schema, got %d", len(d.Schemas))
-		}
-		r := &schema.Realm{}
-		if err := spec.Scan(r, ss, convertTable); err != nil {
-			return err
-		}
-		if err := convertEnums(d.Tables, d.Enums, r); err != nil {
-			return err
-		}
-		*v = *r.Schemas[0]
-	default:
-		return fmt.Errorf("spec: failed unmarshaling spec. %T is not supported", v)
+	if err := spec.Scan(db, ss, convertTable); err != nil {
+		return fmt.Errorf("spec: failed converting to *schema.Database: %w", err)
 	}
+	if len(d.Enums) > 0 {
+		if err := convertEnums(d.Tables, d.Enums, db); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -83,7 +72,7 @@ func MarshalSpec(v any, marshaler hcl.Marshaler) ([]byte, error) {
 		d.Tables = doc.Tables
 		d.Schemas = doc.Schemas
 		d.Enums = doc.Enums
-	case *schema.Realm:
+	case *schema.Database:
 		for _, s := range s.Schemas {
 			doc, err := schemaSpec(s)
 			if err != nil {
@@ -356,7 +345,7 @@ func convertColumnType(s *spec.Column) (schema.Type, error) {
 
 // convertEnums converts possibly referenced column types (like enums) to
 // an actual schema.Type and sets it on the correct schema.Column.
-func convertEnums(tables []*spec.Table, enums []*Enum, r *schema.Realm) error {
+func convertEnums(tables []*spec.Table, enums []*Enum, r *schema.Database) error {
 	var (
 		used   = make(map[*Enum]struct{})
 		byName = make(map[string]*Enum)
