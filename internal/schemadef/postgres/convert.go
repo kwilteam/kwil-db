@@ -180,7 +180,7 @@ func ParseType(typ string) (schema.Type, error) {
 func columnType(c *columnDesc) (schema.Type, error) {
 	var typ schema.Type
 	switch t := c.typ; strings.ToLower(t) {
-	case TypeBigInt, TypeInt8, TypeInt, TypeInteger, TypeInt4, TypeSmallInt, TypeInt2, TypeInt64:
+	case TypeBigInt, TypeInt8, TypeInt, TypeInteger, TypeInt4, TypeSmallInt, TypeInt2:
 		typ = &schema.IntegerType{T: t}
 	case TypeBit, TypeBitVar:
 		typ = &BitType{T: t, Len: c.size}
@@ -194,7 +194,7 @@ func columnType(c *columnDesc) (schema.Type, error) {
 		typ = &schema.StringType{T: t, Size: int(c.size)}
 	case TypeCIDR, TypeInet, TypeMACAddr, TypeMACAddr8:
 		typ = &NetworkType{T: t}
-	case TypeCircle, TypeLine, TypeLseg, TypeBox, TypePath, TypePolygon, TypePoint, TypeGeometry:
+	case TypeCircle, TypeLine, TypeLseg, TypeBox, TypePath, TypePolygon, TypePoint:
 		typ = &schema.SpatialType{T: t}
 	case TypeDate:
 		typ = &schema.TimeType{T: t}

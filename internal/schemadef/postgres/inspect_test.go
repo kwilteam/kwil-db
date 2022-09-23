@@ -9,7 +9,7 @@ import (
 	"unicode"
 
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlx"
+	"github.com/kwilteam/kwil-db/internal/sqlx"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
@@ -53,13 +53,11 @@ func rows(table string) *sqlmock.Rows {
 
 // Single table queries used by the different tests.
 var (
-	queryFKs         = sqlx.Escape(fmt.Sprintf(fksQuery, "$2"))
-	queryTables      = sqlx.Escape(fmt.Sprintf(tablesQuery, "$1"))
-	queryChecks      = sqlx.Escape(fmt.Sprintf(checksQuery, "$2"))
-	queryColumns     = sqlx.Escape(fmt.Sprintf(columnsQuery, "$2"))
-	queryCrdbColumns = sqlx.Escape(fmt.Sprintf(crdbColumnsQuery, "$2"))
-	queryIndexes     = sqlx.Escape(fmt.Sprintf(indexesQuery, "$2"))
-	queryCrdbIndexes = sqlx.Escape(fmt.Sprintf(crdbIndexesQuery, "$2"))
+	queryFKs     = sqlx.Escape(fmt.Sprintf(fksQuery, "$2"))
+	queryTables  = sqlx.Escape(fmt.Sprintf(tablesQuery, "$1"))
+	queryChecks  = sqlx.Escape(fmt.Sprintf(checksQuery, "$2"))
+	queryColumns = sqlx.Escape(fmt.Sprintf(columnsQuery, "$2"))
+	queryIndexes = sqlx.Escape(fmt.Sprintf(indexesQuery, "$2"))
 )
 
 func TestDriver_InspectTable(t *testing.T) {
@@ -425,79 +423,6 @@ logs3      | c5         | integer   | integer   | NO          |                |
 		{X: &schema.RawExpr{X: "(a + b)"}},
 		{X: &schema.RawExpr{X: "(a + (b * 2))"}},
 	}, key.Parts)
-}
-
-func TestDriver_InspectCRDBSchema(t *testing.T) {
-	db, m, err := sqlmock.New()
-	require.NoError(t, err)
-	mk := mock{m}
-	mk.ExpectQuery(sqlx.Escape(paramsQuery)).
-		WillReturnRows(rows(`
-					setting
-				------------
-				130000
-				en_US.utf8
-				en_US.utf8
-				cockroach
-				`))
-	drv, err := Open(db)
-	require.NoError(t, err)
-	mk.ExpectQuery(sqlx.Escape(fmt.Sprintf(schemasQueryArgs, "= $1"))).
-		WithArgs("public").
-		WillReturnRows(rows(`
-schema_name
---------------------
-public
-`))
-	mk.tableExists("public", "users", true)
-	mk.ExpectQuery(queryCrdbColumns).
-		WithArgs("public", "users").
-		WillReturnRows(rows(`
-table_name  | column_name | data_type | formatted | is_nullable |              column_default               | character_maximum_length | numeric_precision | datetime_precision | numeric_scale | interval_type | character_set_name | collation_name | is_identity | identity_start | identity_increment |   identity_last  |  identity_generation  | generation_expression | comment | typtype | typelem | elemtyp | oid
-------------+-------------+-----------+-----------+-------------+-------------------------------------------+--------------------------+-------------------+--------------------+---------------+---------------+--------------------+----------------|-------------+----------------+--------------------+------------------+-----------------------+-----------------------+---------+---------+---------+---------+-----
-users       | a           | bigint    | bigint    | NO          |                                           |                          |                64 |                    |             0 |               |                    |                | NO          |                |                    |                  |                       |                       |         | b       |         |         | 20
-users       | b           | bigint    | bigint    | NO          |                                           |                          |                64 |                    |             0 |               |                    |                | NO          |                |                    |                  |                       |                       |         | b       |         |         | 20
-users       | c           | bigint    | bigint    | NO          |                                           |                          |                64 |                    |             0 |               |                    |                | NO          |                |                    |                  |                       |                       |         | b       |         |         | 20
-users       | d           | bigint    | bigint    | NO          |                                           |                          |                64 |                    |             0 |               |                    |                | NO          |                |                    |                  |                       |                       |         | b       |         |         | 20
-`))
-	mk.ExpectQuery(queryCrdbIndexes).
-		WithArgs("public", "users").
-		WillReturnRows(rows(`
-table_name  | index_name | column_name | primary | unique | constraint_type |                                   create_stmt                                   | predicate | expression | comment
-------------+------------+-------------+---------+--------+-----------------+---------------------------------------------------------------------------------+-----------+------------+---------
-users       | idx1       | a           | false   | false  |                 | CREATE INDEX idx1 ON defaultdb.public.serial USING btree (a ASC)                |           | a          |
-users       | idx2       | b           | false   | true   | u               | CREATE UNIQUE INDEX idx2 ON defaultdb.public.serial USING btree (b ASC)         |           | b          |
-users       | idx3       | c           | false   | false  |                 | CREATE INDEX idx3 ON defaultdb.public.serial USING btree (c DESC)               |           | c          | boring
-users       | idx4       | d           | false   | false  |                 | CREATE INDEX idx5 ON defaultdb.public.serial USING btree (d ASC) WHERE (d < 10) | d < 10    | d          |
-users       | idx5       | a           | false   | false  |                 | CREATE INDEX idx5 ON defaultdb.public.serial USING btree (a ASC, b ASC, c ASC)  |           | a          |
-users       | idx5       | b           | false   | false  |                 | CREATE INDEX idx5 ON defaultdb.public.serial USING btree (a ASC, b ASC, c ASC)  |           | b          |
-users       | idx5       | c           | false   | false  |                 | CREATE INDEX idx5 ON defaultdb.public.serial USING btree (a ASC, b ASC, c ASC)  |           | c          |
-`))
-	mk.noFKs()
-	mk.noChecks()
-	s, err := drv.InspectSchema(context.Background(), "public", nil)
-	require.NoError(t, err)
-	tbl := s.Tables[0]
-	require.Equal(t, "users", tbl.Name)
-	columns := []*schema.Column{
-		{Name: "a", Type: &schema.ColumnType{Raw: "bigint", Type: &schema.IntegerType{T: "bigint"}}},
-		{Name: "b", Type: &schema.ColumnType{Raw: "bigint", Type: &schema.IntegerType{T: "bigint"}}},
-		{Name: "c", Type: &schema.ColumnType{Raw: "bigint", Type: &schema.IntegerType{T: "bigint"}}},
-		{Name: "d", Type: &schema.ColumnType{Raw: "bigint", Type: &schema.IntegerType{T: "bigint"}}},
-	}
-	indexes := []*schema.Index{
-		{Name: "idx1", Table: tbl, Attrs: []schema.Attr{&IndexType{T: "btree"}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[0]}}},
-		{Name: "idx2", Unique: true, Table: tbl, Attrs: []schema.Attr{&IndexType{T: "btree"}, &ConType{T: "u"}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[1]}}},
-		{Name: "idx3", Table: tbl, Attrs: []schema.Attr{&IndexType{T: "btree"}, &schema.Comment{Text: "boring"}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[2], Desc: true}}},
-		{Name: "idx4", Table: tbl, Attrs: []schema.Attr{&IndexType{T: "btree"}, &IndexPredicate{P: `d < 10`}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[3]}}},
-		{Name: "idx5", Table: tbl, Attrs: []schema.Attr{&IndexType{T: "btree"}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[0]}, {SeqNo: 2, C: columns[1]}, {SeqNo: 3, C: columns[2]}}},
-	}
-	columns[0].Indexes = []*schema.Index{indexes[0], indexes[4]}
-	columns[1].Indexes = []*schema.Index{indexes[1], indexes[4]}
-	columns[2].Indexes = []*schema.Index{indexes[2], indexes[4]}
-	columns[3].Indexes = []*schema.Index{indexes[3]}
-	require.EqualValues(t, columns, tbl.Columns)
-	require.EqualValues(t, indexes, tbl.Indexes)
 }
 
 func TestDriver_InspectSchema(t *testing.T) {

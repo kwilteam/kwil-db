@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlx"
+	"github.com/kwilteam/kwil-db/internal/sqlx"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"

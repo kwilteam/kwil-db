@@ -12,7 +12,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
 	"github.com/kwilteam/kwil-db/internal/schemadef/sqlclient"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlx"
+	"github.com/kwilteam/kwil-db/internal/sqlx"
 )
 
 type (
@@ -33,7 +33,6 @@ type (
 		collate string
 		ctype   string
 		version int
-		crdb    bool
 	}
 )
 
@@ -95,15 +94,6 @@ func Open(db sqlx.ExecQuerier) (schema.Driver, error) {
 	}
 	if c.version < 10_00_00 {
 		return nil, fmt.Errorf("postgres: unsupported postgres version: %d", c.version)
-	}
-	// Means we are connected to CockroachDB because we have a result for name='crdb_version'. see `paramsQuery`.
-	if c.crdb = len(params) == 4; c.crdb {
-		return &Driver{
-			conn:      c,
-			Differ:    &schema.Diff{DiffDriver: &crdbDiff{diff{}}},
-			Inspector: &crdbInspect{inspect{c}},
-			Planner:   &planner{},
-		}, nil
 	}
 	return &Driver{
 		conn:      c,

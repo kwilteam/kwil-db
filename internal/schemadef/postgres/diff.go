@@ -9,7 +9,7 @@ import (
 	"unicode"
 
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlx"
+	"github.com/kwilteam/kwil-db/internal/sqlx"
 )
 
 // A diff provides a PostgreSQL implementation for schema.DiffDriver.

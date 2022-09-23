@@ -27,12 +27,19 @@ type (
 	CheckSpecFunc         func(*schema.Check) *Check
 )
 
+type SpecSet struct {
+	Schemas []*Schema
+	Tables  []*Table
+	Queries []*Query
+	Roles   []*Role
+}
+
 // Scan populates the Realm from the schemas and table specs.
-func Scan(r *schema.Realm, schemas []*Schema, tables []*Table, convertTable ConvertTableFunc) error {
+func Scan(r *schema.Realm, ss *SpecSet, convertTable ConvertTableFunc) error {
 	// Build the schemas.
-	for _, schemaSpec := range schemas {
+	for _, schemaSpec := range ss.Schemas {
 		sch := &schema.Schema{Name: schemaSpec.Name, Realm: r}
-		for _, tableSpec := range tables {
+		for _, tableSpec := range ss.Tables {
 			name, err := SchemaName(tableSpec.Schema)
 			if err != nil {
 				return fmt.Errorf("spec: cannot extract schema name for table %q: %w", tableSpec.Name, err)
@@ -50,7 +57,7 @@ func Scan(r *schema.Realm, schemas []*Schema, tables []*Table, convertTable Conv
 	// Link the foreign keys.
 	for _, sch := range r.Schemas {
 		for _, tbl := range sch.Tables {
-			tableSpec, err := findTableSpec(tables, sch.Name, tbl.Name)
+			tableSpec, err := findTableSpec(ss.Tables, sch.Name, tbl.Name)
 			if err != nil {
 				return err
 			}
@@ -76,7 +83,7 @@ func findTableSpec(tableSpecs []*Table, schemaName, tableName string) (*Table, e
 	return nil, fmt.Errorf("table %s.%s not found", schemaName, tableName)
 }
 
-// ToTable converts a ToTable to a schema.ToTable. ToTable conversion is done without converting
+// ToTable converts a Table to a schema.Table. Table conversion is done without converting
 // ForeignKeySpecs into ForeignKeys, as the target tables do not necessarily exist in the schema
 // at this point. Instead, the linking is done by the Schema function.
 func ToTable(
@@ -125,7 +132,7 @@ func ToTable(
 	return tbl, nil
 }
 
-// ToColumn converts a ToColumn into a schema.ToColumn.
+// ToColumn converts a Column into a schema.Column.
 func ToColumn(s *Column, conv ConvertTypeFunc) (*schema.Column, error) {
 	out := &schema.Column{
 		Name: s.Name,
@@ -154,7 +161,14 @@ func ToColumn(s *Column, conv ConvertTypeFunc) (*schema.Column, error) {
 	return out, err
 }
 
-// ToIndex converts a ToIndex to a schema.ToIndex. The optional arguments allow
+func ToQuery(q *Query) (*schema.Query, error) {
+	out := &schema.Query{
+		Name: q.Name,
+	}
+	return out, nil
+}
+
+// ToIndex converts a Index to a schema.Index. The optional arguments allow
 // passing functions for mutating the created index-part (e.g. add attributes).
 func ToIndex(s *Index, parent *schema.Table, partFns ...func(*IndexPart, *schema.IndexPart) error) (*schema.Index, error) {
 	parts := make([]*schema.IndexPart, 0, len(s.Columns)+len(s.Parts))
@@ -211,7 +225,7 @@ func ToIndex(s *Index, parent *schema.Table, partFns ...func(*IndexPart, *schema
 	return i, nil
 }
 
-// ToPrimaryKey converts a ToPrimaryKey to a schema.Index.
+// ToPrimaryKey converts a PrimaryKey to a schema.Index.
 func ToPrimaryKey(s *PrimaryKey, parent *schema.Table) (*schema.Index, error) {
 	parts := make([]*schema.IndexPart, 0, len(s.Columns))
 	for seqno, c := range s.Columns {
@@ -665,7 +679,7 @@ func ToVar(s string) string { return strings.ReplaceAll(s, " ", "_") }
 // FromVar is the inverse function of Var.
 func FromVar(s string) string { return strings.ReplaceAll(s, "_", " ") }
 
-// Check converts a sqlspec.Check to a schema.Check.
+// Check converts a Check to a schema.Check.
 func ToCheck(s *Check) (*schema.Check, error) {
 	return &schema.Check{
 		Name: s.Name,
@@ -673,7 +687,7 @@ func ToCheck(s *Check) (*schema.Check, error) {
 	}, nil
 }
 
-// FromCheck converts schema.Check to sqlspec.Check.
+// FromCheck converts schema.Check to Check.
 func FromCheck(s *schema.Check) *Check {
 	return &Check{
 		Name: s.Name,

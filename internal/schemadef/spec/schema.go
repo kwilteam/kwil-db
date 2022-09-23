@@ -70,6 +70,19 @@ type (
 		hcl.DefaultExtension
 	}
 
+	Query struct {
+		Name string `spec:",name"`
+		Expr string `spec:"expr"`
+		hcl.DefaultExtension
+	}
+
+	Role struct {
+		Name    string     `spec:",name"`
+		Queries []*hcl.Ref `spec:"query"`
+		Default bool       `spec:"default,omitempty"`
+		hcl.DefaultExtension
+	}
+
 	// Type represents a database agnostic column type.
 	Type string
 )
@@ -77,4 +90,6 @@ type (
 func init() {
 	hcl.Register("table", &Table{})
 	hcl.Register("schema", &Schema{})
+	hcl.Register("query", &Query{})
+	hcl.Register("role", &Role{})
 }

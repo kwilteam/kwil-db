@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlx"
+	"github.com/kwilteam/kwil-db/internal/sqlx"
 )
 
 // A planner provides migration capabilities for schema elements.

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlx"
+	"github.com/kwilteam/kwil-db/internal/sqlx"
 )
 
 // A diff provides a PostgreSQL implementation for schema.Inspector.
@@ -143,9 +143,6 @@ func (i *inspect) tables(ctx context.Context, realm *schema.Realm, opts *schema.
 // columns queries and appends the columns of the given table.
 func (i *inspect) columns(ctx context.Context, s *schema.Schema) error {
 	query := columnsQuery
-	if i.crdb {
-		query = crdbColumnsQuery
-	}
 	rows, err := i.querySchema(ctx, query, s)
 	if err != nil {
 		return fmt.Errorf("postgres: querying schema %q columns: %w", s.Name, err)
@@ -296,12 +293,10 @@ func (i *inspect) enumValues(ctx context.Context, s *schema.Schema) error {
 // indexes queries and appends the indexes of the given table.
 func (i *inspect) indexes(ctx context.Context, s *schema.Schema) error {
 	query := indexesQuery
-	switch {
-	case i.conn.crdb:
-		return i.crdbIndexes(ctx, s)
-	case !i.conn.supportsIndexInclude():
+	if !i.conn.supportsIndexInclude() {
 		query = indexesQueryNoInclude
 	}
+
 	rows, err := i.querySchema(ctx, query, s)
 	if err != nil {
 		return fmt.Errorf("postgres: querying schema %q indexes: %w", s.Name, err)

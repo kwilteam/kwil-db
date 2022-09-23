@@ -10,7 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/schemadef/hcl"
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
 	"github.com/kwilteam/kwil-db/internal/schemadef/spec"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlx"
+	"github.com/kwilteam/kwil-db/internal/sqlx"
 )
 
 type (
@@ -18,6 +18,8 @@ type (
 		Tables  []*spec.Table  `spec:"table"`
 		Enums   []*Enum        `spec:"enum"`
 		Schemas []*spec.Schema `spec:"schema"`
+		Queries []*spec.Query  `spec:"query"`
+		Roles   []*spec.Role   `spec:"role"`
 	}
 
 	Enum struct {
@@ -38,9 +40,11 @@ func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
 	if err := hclState.Eval(p, &d, input); err != nil {
 		return err
 	}
+	ss := &spec.SpecSet{Tables: d.Tables, Schemas: d.Schemas, Queries: d.Queries, Roles: d.Roles}
+
 	switch v := v.(type) {
 	case *schema.Realm:
-		if err := spec.Scan(v, d.Schemas, d.Tables, convertTable); err != nil {
+		if err := spec.Scan(v, ss, convertTable); err != nil {
 			return fmt.Errorf("spec: failed converting to *schema.Realm: %w", err)
 		}
 		if len(d.Enums) > 0 {
@@ -53,7 +57,7 @@ func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
 			return fmt.Errorf("spec: expecting document to contain a single schema, got %d", len(d.Schemas))
 		}
 		r := &schema.Realm{}
-		if err := spec.Scan(r, d.Schemas, d.Tables, convertTable); err != nil {
+		if err := spec.Scan(r, ss, convertTable); err != nil {
 			return err
 		}
 		if err := convertEnums(d.Tables, d.Enums, r); err != nil {
