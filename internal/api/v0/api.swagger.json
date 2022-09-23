@@ -837,6 +837,23 @@
     "v0CreateTableResponse": {
       "type": "object"
     },
+    "v0DBQuery": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/v0input"
+          }
+        }
+      }
+    },
     "v0Database": {
       "type": "object",
       "properties": {
@@ -892,6 +909,14 @@
         }
       }
     },
+    "v0GetBalanceResponse": {
+      "type": "object",
+      "properties": {
+        "balance": {
+          "type": "string"
+        }
+      }
+    },
     "v0GetDatabaseResponse": {
       "type": "object"
     },
@@ -901,7 +926,7 @@
         "queries": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/v0Query"
+            "$ref": "#/definitions/v0DBQuery"
           }
         }
       }
@@ -933,6 +958,31 @@
     },
     "v0GetTableResponse": {
       "type": "object"
+    },
+    "v0GetWalletRoleResponse": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "permissions": {
+          "$ref": "#/definitions/v0GetWalletRoleResponseperms"
+        }
+      }
+    },
+    "v0GetWalletRoleResponseperms": {
+      "type": "object",
+      "properties": {
+        "ddl": {
+          "type": "boolean"
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v0Index": {
       "type": "object",
@@ -978,6 +1028,9 @@
       "type": "object"
     },
     "v0PlanResponse": {
+      "type": "object"
+    },
+    "v0PostQueryResponse": {
       "type": "object"
     },
     "v0Query": {

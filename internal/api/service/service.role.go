@@ -4,6 +4,7 @@ import (
 	"context"
 
 	v0 "github.com/kwilteam/kwil-db/internal/api/v0"
+	types "github.com/kwilteam/kwil-db/pkg/types/db"
 )
 
 func (s *Service) CreateRole(ctx context.Context, req *v0.CreateRoleRequest) (*v0.CreateRoleResponse, error) {

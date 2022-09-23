@@ -209,7 +209,7 @@ func (c *kwilServiceClient) DeleteRole(ctx context.Context, in *DeleteRoleReques
 
 func (c *kwilServiceClient) PostQuery(ctx context.Context, in *PostQueryRequest, opts ...grpc.CallOption) (*PostQueryResponse, error) {
 	out := new(PostQueryResponse)
-	err := c.cc.Invoke(ctx, "/api.v0.KwilService/PostQuery", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/kwil.api.v0.KwilService/PostQuery", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func (c *kwilServiceClient) PostQuery(ctx context.Context, in *PostQueryRequest,
 
 func (c *kwilServiceClient) GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesResponse, error) {
 	out := new(GetQueriesResponse)
-	err := c.cc.Invoke(ctx, "/api.v0.KwilService/GetQueries", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/kwil.api.v0.KwilService/GetQueries", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +227,7 @@ func (c *kwilServiceClient) GetQueries(ctx context.Context, in *GetQueriesReques
 
 func (c *kwilServiceClient) GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error) {
 	out := new(GetBalanceResponse)
-	err := c.cc.Invoke(ctx, "/api.v0.KwilService/GetBalance", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/kwil.api.v0.KwilService/GetBalance", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (c *kwilServiceClient) GetBalance(ctx context.Context, in *GetBalanceReques
 
 func (c *kwilServiceClient) GetWalletRole(ctx context.Context, in *GetWalletRoleRequest, opts ...grpc.CallOption) (*GetWalletRoleResponse, error) {
 	out := new(GetWalletRoleResponse)
-	err := c.cc.Invoke(ctx, "/api.v0.KwilService/GetWalletRole", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/kwil.api.v0.KwilService/GetWalletRole", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -672,7 +672,7 @@ func _KwilService_PostQuery_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.v0.KwilService/PostQuery",
+		FullMethod: "/kwil.api.v0.KwilService/PostQuery",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(KwilServiceServer).PostQuery(ctx, req.(*PostQueryRequest))
@@ -690,7 +690,7 @@ func _KwilService_GetQueries_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.v0.KwilService/GetQueries",
+		FullMethod: "/kwil.api.v0.KwilService/GetQueries",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(KwilServiceServer).GetQueries(ctx, req.(*GetQueriesRequest))
@@ -708,7 +708,7 @@ func _KwilService_GetBalance_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.v0.KwilService/GetBalance",
+		FullMethod: "/kwil.api.v0.KwilService/GetBalance",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(KwilServiceServer).GetBalance(ctx, req.(*GetBalanceRequest))
@@ -726,7 +726,7 @@ func _KwilService_GetWalletRole_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.v0.KwilService/GetWalletRole",
+		FullMethod: "/kwil.api.v0.KwilService/GetWalletRole",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(KwilServiceServer).GetWalletRole(ctx, req.(*GetWalletRoleRequest))

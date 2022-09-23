@@ -1694,7 +1694,7 @@ func RegisterKwilServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v0.KwilService/PostQuery", runtime.WithHTTPPathPattern("/api/v0/databases/{databaseId}/query"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/kwil.api.v0.KwilService/PostQuery", runtime.WithHTTPPathPattern("/api/v0/databases/{databaseId}/query"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1719,7 +1719,7 @@ func RegisterKwilServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v0.KwilService/GetQueries", runtime.WithHTTPPathPattern("/api/v0/databases/{databaseId}/queries"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/kwil.api.v0.KwilService/GetQueries", runtime.WithHTTPPathPattern("/api/v0/databases/{databaseId}/queries"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1744,7 +1744,7 @@ func RegisterKwilServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v0.KwilService/GetBalance", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/balance"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/kwil.api.v0.KwilService/GetBalance", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/balance"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1769,7 +1769,7 @@ func RegisterKwilServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v0.KwilService/GetWalletRole", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/{databaseId}/role"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/kwil.api.v0.KwilService/GetWalletRole", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/{databaseId}/role"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2207,7 +2207,7 @@ func RegisterKwilServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/api.v0.KwilService/PostQuery", runtime.WithHTTPPathPattern("/api/v0/databases/{databaseId}/query"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/kwil.api.v0.KwilService/PostQuery", runtime.WithHTTPPathPattern("/api/v0/databases/{databaseId}/query"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2229,7 +2229,7 @@ func RegisterKwilServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/api.v0.KwilService/GetQueries", runtime.WithHTTPPathPattern("/api/v0/databases/{databaseId}/queries"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/kwil.api.v0.KwilService/GetQueries", runtime.WithHTTPPathPattern("/api/v0/databases/{databaseId}/queries"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2251,7 +2251,7 @@ func RegisterKwilServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/api.v0.KwilService/GetBalance", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/balance"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/kwil.api.v0.KwilService/GetBalance", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/balance"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2273,7 +2273,7 @@ func RegisterKwilServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/api.v0.KwilService/GetWalletRole", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/{databaseId}/role"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/kwil.api.v0.KwilService/GetWalletRole", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/{databaseId}/role"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return

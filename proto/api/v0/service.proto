@@ -241,7 +241,7 @@ message GetQueriesRequest {
   string databaseId = 1;
 }
 message GetQueriesResponse {
-  repeated Query queries = 1;
+  repeated DBQuery queries = 1;
 }
 
 message input {
@@ -249,7 +249,7 @@ message input {
   string type = 2;
 };
 
-message Query{
+message DBQuery{
   string name = 1;
   string query = 2;
   repeated input parameters = 3;
