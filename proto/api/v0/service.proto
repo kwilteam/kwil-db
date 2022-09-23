@@ -235,7 +235,10 @@ message PostQueryRequest {
   string from = 3;
   string signature = 4;
 }
-message PostQueryResponse {}
+message PostQueryResponse {
+  string id = 1;
+  string msg = 2;
+}
 
 message GetQueriesRequest {
   string databaseId = 1;

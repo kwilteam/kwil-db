@@ -85,7 +85,10 @@ func (s *Service) DeleteDatabase(ctx context.Context, req *v0.DeleteDatabaseRequ
 }
 
 func (s *Service) PostQuery(ctx context.Context, req *v0.PostQueryRequest) (*v0.PostQueryResponse, error) {
-	return &v0.PostQueryResponse{}, nil
+	return &v0.PostQueryResponse{
+		Id:  "123",
+		Msg: "success!",
+	}, nil
 }
 
 func (s *Service) GetQueries(ctx context.Context, req *v0.GetQueriesRequest) (*v0.GetQueriesResponse, error) {

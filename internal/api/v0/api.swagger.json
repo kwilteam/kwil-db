@@ -1031,7 +1031,15 @@
       "type": "object"
     },
     "v0PostQueryResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        }
+      }
     },
     "v0Query": {
       "type": "object",
