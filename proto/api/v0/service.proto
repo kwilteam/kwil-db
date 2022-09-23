@@ -1,8 +1,9 @@
 syntax = "proto3";
-package api.v0;
+package kwil.api.v0;
 option go_package = "github.com/kwilteam/kwil-db/internal/api/v0";
 
 import "google/api/annotations.proto";
+import "api/v0/plan.proto";
 
 service KwilService {
   rpc Connect(ConnectRequest) returns (ConnectResponse) {
@@ -10,6 +11,8 @@ service KwilService {
       get: "/api/v0/connect"
     };
   }
+
+  rpc Plan(PlanRequest) returns (PlanResponse) {}
 
   // Databases
   rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse) {
@@ -128,6 +131,7 @@ message ConnectRequest {}
 message ConnectResponse {
     string address = 1;
 }
+
 
 message CreateDatabaseRequest {
     string id = 1;

@@ -3,7 +3,7 @@ package database
 import (
 	"context"
 
-	v0 "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	v0 "github.com/kwilteam/kwil-db/internal/api/v0"
 	"github.com/kwilteam/kwil-db/internal/cli/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

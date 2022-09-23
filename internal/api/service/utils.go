@@ -3,7 +3,7 @@ package service
 import (
 	"strings"
 
-	proto "github.com/kwilteam/kwil-db/internal/api/proto/v0"
+	proto "github.com/kwilteam/kwil-db/internal/api/v0"
 	"github.com/kwilteam/kwil-db/internal/chain/crypto"
 )
 
