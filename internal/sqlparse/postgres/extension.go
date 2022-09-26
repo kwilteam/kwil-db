@@ -3,8 +3,8 @@
 package postgres
 
 import (
-	"github.com/kwilteam/kwil-db/internal/sqlparse/postgres/contrib"
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
+	"github.com/kwilteam/kwil-db/internal/sqlparse/postgres/contrib"
 )
 
 func loadExtension(name string) *catalog.Schema {

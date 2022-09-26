@@ -11,10 +11,10 @@ import (
 
 type (
 	Differ interface {
-		// DatabaseDiff returns a diff report for migrating a realm
+		// RealmDiff returns a diff report for migrating a realm
 		// (or a database) from state "from" to state "to". An error
 		// is returned if such step is not possible.
-		DatabaseDiff(from, to *Database) ([]SchemaChange, error)
+		RealmDiff(from, to *Realm) ([]SchemaChange, error)
 
 		// SchemaDiff returns a diff report for migrating a schema
 		// from state "from" to state "to". An error is returned
@@ -401,9 +401,9 @@ func (*ModifyCheck) change()      {}
 func (*IfExists) clause()    {}
 func (*IfNotExists) clause() {}
 
-// DatabaseDiff implements the Differ for Database objects and returns a list of changes
+// RealmDiff implements the Differ for Realm objects and returns a list of changes
 // that need to be applied in order to move a database from the current state to the desired.
-func (d *Diff) DatabaseDiff(from, to *Database) ([]SchemaChange, error) {
+func (d *Diff) RealmDiff(from, to *Realm) ([]SchemaChange, error) {
 	var changes []SchemaChange
 	// Drop or modify
 	for _, s1 := range from.Schemas {

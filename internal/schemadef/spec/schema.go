@@ -70,13 +70,14 @@ type (
 		hcl.DefaultExtension
 	}
 
+	// Query holds a specification for a query.
 	Query struct {
-		Schema *hcl.Ref `spec:"schema"`
-		Name   string   `spec:",name"`
-		Expr   string   `spec:"expr"`
+		Name string `spec:",name"`
+		Expr string `spec:"expr"`
 		hcl.DefaultExtension
 	}
 
+	// Role holds a specification for a role.
 	Role struct {
 		Name    string     `spec:",name"`
 		Queries []*hcl.Ref `spec:"queries"`

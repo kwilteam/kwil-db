@@ -72,6 +72,6 @@ type (
 		// "attached schema" (e.g. SCHEMA() in MySQL or CURRENT_SCHEMA() in PostgreSQL).
 		// A NotExistError error is returned if the schema does not exist in the database.
 		InspectSchema(ctx context.Context, name string, opts *InspectOptions) (*Schema, error)
-		InspectRealm(ctx context.Context, opts *InspectRealmOption) (*Database, error)
+		InspectRealm(ctx context.Context, opts *InspectRealmOption) (*Realm, error)
 	}
 )

@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Earthdistance() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func EarthdistanceFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name:       "earth",
 			Args:       []*catalog.Argument{},
@@ -100,5 +99,16 @@ func Earthdistance() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "double precision"},
 		},
 	}
+}
+
+func EarthdistanceFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, EarthdistanceFuncs0()...)
+	return funcs
+}
+
+func Earthdistance() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = EarthdistanceFuncs()
 	return s
 }

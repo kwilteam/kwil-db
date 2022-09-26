@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Pgrowlocks() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgrowlocksFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "pgrowlocks",
 			Args: []*catalog.Argument{
@@ -21,5 +20,16 @@ func Pgrowlocks() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "record"},
 		},
 	}
+}
+
+func PgrowlocksFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgrowlocksFuncs0()...)
+	return funcs
+}
+
+func Pgrowlocks() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgrowlocksFuncs()
 	return s
 }

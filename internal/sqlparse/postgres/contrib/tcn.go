@@ -7,14 +7,24 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Tcn() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func TcnFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name:       "triggered_change_notification",
 			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "trigger"},
 		},
 	}
+}
+
+func TcnFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, TcnFuncs0()...)
+	return funcs
+}
+
+func Tcn() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = TcnFuncs()
 	return s
 }

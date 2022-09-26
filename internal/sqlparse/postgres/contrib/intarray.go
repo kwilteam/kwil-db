@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Intarray() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func IntarrayFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "_int_contained",
 			Args: []*catalog.Argument{
@@ -329,5 +328,16 @@ func Intarray() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "integer[]"},
 		},
 	}
+}
+
+func IntarrayFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, IntarrayFuncs0()...)
+	return funcs
+}
+
+func Intarray() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = IntarrayFuncs()
 	return s
 }

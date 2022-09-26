@@ -92,12 +92,12 @@ type (
 	// The types below provides a few builtin options for reading a state
 	// from a migration directory, a static object (e.g. a parsed file).
 	StateReader interface {
-		ReadState(ctx context.Context) (*Database, error)
+		ReadState(ctx context.Context) (*Realm, error)
 	}
 
 	// The StateReaderFunc type is an adapter to allow the use of
 	// ordinary functions as state readers.
-	StateReaderFunc func(ctx context.Context) (*Database, error)
+	StateReaderFunc func(ctx context.Context) (*Realm, error)
 
 	// Snapshotter wraps the Snapshot method.
 	Snapshotter interface {
@@ -112,39 +112,39 @@ type (
 )
 
 // ReadState calls f(ctx).
-func (f StateReaderFunc) ReadState(ctx context.Context) (*Database, error) {
+func (f StateReaderFunc) ReadState(ctx context.Context) (*Realm, error) {
 	return f(ctx)
 }
 
-// NewDatabaseReader returns a StateReader for the static Database object.
-func NewDatabaseReader(r *Database) StateReader {
-	return StateReaderFunc(func(context.Context) (*Database, error) {
+// NewRealmReader returns a StateReader for the static Realm object.
+func NewRealmReader(r *Realm) StateReader {
+	return StateReaderFunc(func(context.Context) (*Realm, error) {
 		return r, nil
 	})
 }
 
 // Schema returns a StateReader for the static Schema object.
 func NewSchemaReader(s *Schema) StateReader {
-	return StateReaderFunc(func(context.Context) (*Database, error) {
-		r := &Database{Schemas: []*Schema{s}}
-		if s.Db != nil {
-			r.Attrs = s.Db.Attrs
+	return StateReaderFunc(func(context.Context) (*Realm, error) {
+		r := &Realm{Schemas: []*Schema{s}}
+		if s.Realm != nil {
+			r.Attrs = s.Realm.Attrs
 		}
-		s.Db = r
+		s.Realm = r
 		return r, nil
 	})
 }
 
 // RealmConn returns a StateReader for a Driver connected to a database.
 func NewRealmConn(drv Driver, opts *InspectRealmOption) StateReader {
-	return StateReaderFunc(func(ctx context.Context) (*Database, error) {
+	return StateReaderFunc(func(ctx context.Context) (*Realm, error) {
 		return drv.InspectRealm(ctx, opts)
 	})
 }
 
 // SchemaConn returns a StateReader for a Driver connected to a
 func NewSchemaConn(drv Driver, name string, opts *InspectOptions) StateReader {
-	return StateReaderFunc(func(ctx context.Context) (*Database, error) {
+	return StateReaderFunc(func(ctx context.Context) (*Realm, error) {
 		s, err := drv.InspectSchema(ctx, name, opts)
 		if err != nil {
 			return nil, err

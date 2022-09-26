@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Fuzzystrmatch() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func FuzzystrmatchFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "difference",
 			Args: []*catalog.Argument{
@@ -143,5 +142,16 @@ func Fuzzystrmatch() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "text"},
 		},
 	}
+}
+
+func FuzzystrmatchFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, FuzzystrmatchFuncs0()...)
+	return funcs
+}
+
+func Fuzzystrmatch() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = FuzzystrmatchFuncs()
 	return s
 }

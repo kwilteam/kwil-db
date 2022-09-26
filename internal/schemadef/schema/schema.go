@@ -3,22 +3,22 @@ package schema
 import "fmt"
 
 type (
-	// A Database or a database describes a domain of schema resources that are logically connected
+	// A Realm or a database describes a domain of schema resources that are logically connected
 	// and can be accessed and queried in the same connection (e.g. a physical database instance).
-	Database struct {
+	Realm struct {
 		Schemas []*Schema
 		Roles   []*Role
 		Attrs   []Attr
+		Queries []*Query
 	}
 
 	// A Schema describes a database schema (i.e. named database).
 	Schema struct {
-		Name    string
-		Db      *Database
-		Tables  []*Table
-		Queries []*Query
-		Enums   []*Enum
-		Attrs   []Attr
+		Name   string
+		Realm  *Realm
+		Tables []*Table
+		Enums  []*Enum
+		Attrs  []Attr
 	}
 
 	// A Table represents a table definition.
@@ -89,20 +89,20 @@ type (
 	}
 
 	Query struct {
-		Name   string
-		Schema *Schema
-		Expr   Expr
+		Name  string
+		Realm *Realm
+		Expr  Expr
 	}
 
 	Role struct {
 		Name    string
 		Queries []*Query
-		Db      *Database
+		Realm   *Realm
 		Default bool
 	}
 )
 
-func (r *Database) Schema(name string) (*Schema, bool) {
+func (r *Realm) Schema(name string) (*Schema, bool) {
 	for _, s := range r.Schemas {
 		if s.Name == name {
 			return s, true
@@ -111,7 +111,16 @@ func (r *Database) Schema(name string) (*Schema, bool) {
 	return nil, false
 }
 
-func (r *Database) Role(name string) (*Role, bool) {
+func (r *Realm) Query(name string) (*Query, bool) {
+	for _, q := range r.Queries {
+		if q.Name == name {
+			return q, true
+		}
+	}
+	return nil, false
+}
+
+func (r *Realm) Role(name string) (*Role, bool) {
 	for _, q := range r.Roles {
 		if q.Name == name {
 			return q, true
@@ -124,15 +133,6 @@ func (s *Schema) Table(name string) (*Table, bool) {
 	for _, t := range s.Tables {
 		if t.Name == name {
 			return t, true
-		}
-	}
-	return nil, false
-}
-
-func (r *Schema) Query(name string) (*Query, bool) {
-	for _, q := range r.Queries {
-		if q.Name == name {
-			return q, true
 		}
 	}
 	return nil, false

@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func UuidOssp() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func UuidOsspFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name:       "uuid_generate_v1",
 			Args:       []*catalog.Argument{},
@@ -79,5 +78,16 @@ func UuidOssp() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "uuid"},
 		},
 	}
+}
+
+func UuidOsspFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, UuidOsspFuncs0()...)
+	return funcs
+}
+
+func UuidOssp() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = UuidOsspFuncs()
 	return s
 }

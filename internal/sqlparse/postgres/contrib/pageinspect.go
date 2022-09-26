@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Pageinspect() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PageinspectFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "brin_metapage_info",
 			Args: []*catalog.Argument{
@@ -83,7 +82,7 @@ func Pageinspect() *catalog.Schema {
 				},
 				{
 					Name: "blkno",
-					Type: &ast.TypeName{Name: "integer"},
+					Type: &ast.TypeName{Name: "bigint"},
 				},
 			},
 			ReturnType: &ast.TypeName{Name: "record"},
@@ -97,7 +96,7 @@ func Pageinspect() *catalog.Schema {
 				},
 				{
 					Name: "blkno",
-					Type: &ast.TypeName{Name: "integer"},
+					Type: &ast.TypeName{Name: "bigint"},
 				},
 			},
 			ReturnType: &ast.TypeName{Name: "record"},
@@ -119,7 +118,7 @@ func Pageinspect() *catalog.Schema {
 					Type: &ast.TypeName{Name: "text"},
 				},
 				{
-					Type: &ast.TypeName{Name: "integer"},
+					Type: &ast.TypeName{Name: "bigint"},
 				},
 			},
 			ReturnType: &ast.TypeName{Name: "bytea"},
@@ -134,7 +133,7 @@ func Pageinspect() *catalog.Schema {
 					Type: &ast.TypeName{Name: "text"},
 				},
 				{
-					Type: &ast.TypeName{Name: "integer"},
+					Type: &ast.TypeName{Name: "bigint"},
 				},
 			},
 			ReturnType: &ast.TypeName{Name: "bytea"},
@@ -161,6 +160,40 @@ func Pageinspect() *catalog.Schema {
 		},
 		{
 			Name: "gin_page_opaque_info",
+			Args: []*catalog.Argument{
+				{
+					Name: "page",
+					Type: &ast.TypeName{Name: "bytea"},
+				},
+			},
+			ReturnType: &ast.TypeName{Name: "record"},
+		},
+		{
+			Name: "gist_page_items",
+			Args: []*catalog.Argument{
+				{
+					Name: "page",
+					Type: &ast.TypeName{Name: "bytea"},
+				},
+				{
+					Name: "index_oid",
+					Type: &ast.TypeName{Name: "regclass"},
+				},
+			},
+			ReturnType: &ast.TypeName{Name: "record"},
+		},
+		{
+			Name: "gist_page_items_bytea",
+			Args: []*catalog.Argument{
+				{
+					Name: "page",
+					Type: &ast.TypeName{Name: "bytea"},
+				},
+			},
+			ReturnType: &ast.TypeName{Name: "record"},
+		},
+		{
+			Name: "gist_page_opaque_info",
 			Args: []*catalog.Argument{
 				{
 					Name: "page",
@@ -288,7 +321,7 @@ func Pageinspect() *catalog.Schema {
 				},
 				{
 					Name: "blkno",
-					Type: &ast.TypeName{Name: "integer"},
+					Type: &ast.TypeName{Name: "bigint"},
 				},
 			},
 			ReturnType: &ast.TypeName{Name: "smallint"},
@@ -360,5 +393,16 @@ func Pageinspect() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "bytea[]"},
 		},
 	}
+}
+
+func PageinspectFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PageinspectFuncs0()...)
+	return funcs
+}
+
+func Pageinspect() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PageinspectFuncs()
 	return s
 }

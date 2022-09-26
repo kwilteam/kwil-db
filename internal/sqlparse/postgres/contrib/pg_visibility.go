@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func PgVisibility() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgVisibilityFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "pg_check_frozen",
 			Args: []*catalog.Argument{
@@ -91,5 +90,16 @@ func PgVisibility() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "record"},
 		},
 	}
+}
+
+func PgVisibilityFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgVisibilityFuncs0()...)
+	return funcs
+}
+
+func PgVisibility() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgVisibilityFuncs()
 	return s
 }

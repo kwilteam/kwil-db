@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func PgTrgm() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgTrgmFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "gtrgm_in",
 			Args: []*catalog.Argument{
@@ -208,5 +207,16 @@ func PgTrgm() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "boolean"},
 		},
 	}
+}
+
+func PgTrgmFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgTrgmFuncs0()...)
+	return funcs
+}
+
+func PgTrgm() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgTrgmFuncs()
 	return s
 }

@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Hstore() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func HstoreFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "akeys",
 			Args: []*catalog.Argument{
@@ -516,5 +515,16 @@ func Hstore() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "hstore"},
 		},
 	}
+}
+
+func HstoreFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, HstoreFuncs0()...)
+	return funcs
+}
+
+func Hstore() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = HstoreFuncs()
 	return s
 }

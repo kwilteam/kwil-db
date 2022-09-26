@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Citext() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func CitextFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "citext",
 			Args: []*catalog.Argument{
@@ -566,5 +565,16 @@ func Citext() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "text"},
 		},
 	}
+}
+
+func CitextFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, CitextFuncs0()...)
+	return funcs
+}
+
+func Citext() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = CitextFuncs()
 	return s
 }

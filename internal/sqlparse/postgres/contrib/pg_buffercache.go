@@ -7,14 +7,24 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func PgBuffercache() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgBuffercacheFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name:       "pg_buffercache_pages",
 			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "record"},
 		},
 	}
+}
+
+func PgBuffercacheFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgBuffercacheFuncs0()...)
+	return funcs
+}
+
+func PgBuffercache() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgBuffercacheFuncs()
 	return s
 }

@@ -34,11 +34,11 @@ type SpecSet struct {
 	Roles   []*Role
 }
 
-// Scan populates the Database from the schemas and table specs.
-func Scan(db *schema.Database, ss *SpecSet, convertTable ConvertTableFunc) error {
+// Scan populates the Realm from the schemas and table specs.
+func Scan(db *schema.Realm, ss *SpecSet, convertTable ConvertTableFunc) error {
 	// Build the schemas.
 	for _, schemaSpec := range ss.Schemas {
-		sch := &schema.Schema{Name: schemaSpec.Name, Db: db}
+		sch := &schema.Schema{Name: schemaSpec.Name, Realm: db}
 		for _, tableSpec := range ss.Tables {
 			name, err := SchemaName(tableSpec.Schema)
 			if err != nil {
@@ -54,14 +54,6 @@ func Scan(db *schema.Database, ss *SpecSet, convertTable ConvertTableFunc) error
 		}
 		db.Schemas = append(db.Schemas, sch)
 
-		// Build the queries.
-		for _, querySpec := range ss.Queries {
-			q, err := ToQuery(sch, querySpec)
-			if err != nil {
-				return err
-			}
-			sch.Queries = append(sch.Queries, q)
-		}
 	}
 	// Link the foreign keys.
 	for _, sch := range db.Schemas {
@@ -74,6 +66,15 @@ func Scan(db *schema.Database, ss *SpecSet, convertTable ConvertTableFunc) error
 				return err
 			}
 		}
+	}
+
+	// Build the queries.
+	for _, querySpec := range ss.Queries {
+		q, err := ToQuery(db, querySpec)
+		if err != nil {
+			return err
+		}
+		db.Queries = append(db.Queries, q)
 	}
 
 	// Build the roles.
@@ -100,11 +101,11 @@ func FromQuery(q *schema.Query) (*Query, error) {
 	}, nil
 }
 
-func ToQuery(sch *schema.Schema, q *Query) (*schema.Query, error) {
+func ToQuery(db *schema.Realm, q *Query) (*schema.Query, error) {
 	return &schema.Query{
-		Name:   q.Name,
-		Schema: sch,
-		Expr:   &schema.RawExpr{X: q.Expr},
+		Name:  q.Name,
+		Realm: db,
+		Expr:  &schema.RawExpr{X: q.Expr},
 	}, nil
 }
 
@@ -120,7 +121,7 @@ func FromRole(r *schema.Role) (*Role, error) {
 	}, nil
 }
 
-func ToRole(db *schema.Database, r *Role) (*schema.Role, error) {
+func ToRole(db *schema.Realm, r *Role) (*schema.Role, error) {
 	queries := make([]*schema.Query, len(r.Queries))
 	for i := range queries {
 		q, err := QueryByRef(db, r.Queries[i])
@@ -131,7 +132,7 @@ func ToRole(db *schema.Database, r *Role) (*schema.Role, error) {
 	}
 	return &schema.Role{
 		Name:    r.Name,
-		Db:      db,
+		Realm:   db,
 		Queries: queries,
 		Default: r.Default,
 	}, nil
@@ -603,16 +604,14 @@ func SchemaName(ref *hcl.Ref) (string, error) {
 }
 
 // QueryByRef returns a query by its reference.
-func QueryByRef(db *schema.Database, ref *hcl.Ref) (*schema.Query, error) {
+func QueryByRef(db *schema.Realm, ref *hcl.Ref) (*schema.Query, error) {
 	s := strings.Split(ref.V, "$query.")
 	if len(s) != 2 {
 		return nil, fmt.Errorf("spec: failed to extract query name from %q", ref)
 	}
 
-	for _, sch := range db.Schemas {
-		if c, ok := sch.Query(s[1]); ok {
-			return c, nil
-		}
+	if c, ok := db.Query(s[1]); ok {
+		return c, nil
 	}
 	return nil, fmt.Errorf("spec: unknown query %q", s[1])
 }
@@ -643,7 +642,7 @@ func externalRef(ref *hcl.Ref, sch *schema.Schema) (*schema.Table, *schema.Colum
 }
 
 // findTable finds the table referenced by ref in the provided schema. If the table
-// is not in the provided schema.Schema other schemas in the connected schema.Database
+// is not in the provided schema.Schema other schemas in the connected schema.Realm
 // are searched as well.
 func findTable(ref *hcl.Ref, sch *schema.Schema) (*schema.Table, error) {
 	qualifier, tblName, err := tableName(ref)
@@ -658,11 +657,11 @@ func findTable(ref *hcl.Ref, sch *schema.Schema) (*schema.Table, error) {
 		}
 		return tbl, nil
 	}
-	if sch.Db == nil {
+	if sch.Realm == nil {
 		return nil, fmt.Errorf("sqlspec: table %s.%s not found", qualifier, tblName)
 	}
 	// Search for the table in another schemas in the realm.
-	sch, ok := sch.Db.Schema(qualifier)
+	sch, ok := sch.Realm.Schema(qualifier)
 	if !ok {
 		return nil, fmt.Errorf("sqlspec: schema %q not found", qualifier)
 	}

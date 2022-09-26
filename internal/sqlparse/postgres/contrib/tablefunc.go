@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Tablefunc() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func TablefuncFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "connectby",
 			Args: []*catalog.Argument{
@@ -182,5 +181,16 @@ func Tablefunc() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "double precision"},
 		},
 	}
+}
+
+func TablefuncFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, TablefuncFuncs0()...)
+	return funcs
+}
+
+func Tablefunc() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = TablefuncFuncs()
 	return s
 }

@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Unaccent() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func UnaccentFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "unaccent",
 			Args: []*catalog.Argument{
@@ -32,5 +31,16 @@ func Unaccent() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "text"},
 		},
 	}
+}
+
+func UnaccentFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, UnaccentFuncs0()...)
+	return funcs
+}
+
+func Unaccent() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = UnaccentFuncs()
 	return s
 }

@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Xml2() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func Xml2Funcs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "xml_encode_special_chars",
 			Args: []*catalog.Argument{
@@ -185,5 +184,16 @@ func Xml2() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "text"},
 		},
 	}
+}
+
+func Xml2Funcs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, Xml2Funcs0()...)
+	return funcs
+}
+
+func Xml2() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = Xml2Funcs()
 	return s
 }

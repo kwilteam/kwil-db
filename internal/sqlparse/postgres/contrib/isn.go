@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Isn() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func IsnFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "btean13cmp",
 			Args: []*catalog.Argument{
@@ -2800,5 +2799,16 @@ func Isn() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "upc"},
 		},
 	}
+}
+
+func IsnFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, IsnFuncs0()...)
+	return funcs
+}
+
+func Isn() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = IsnFuncs()
 	return s
 }

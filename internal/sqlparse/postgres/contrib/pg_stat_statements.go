@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func PgStatStatements() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgStatStatementsFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "pg_stat_statements",
 			Args: []*catalog.Argument{
@@ -18,6 +17,11 @@ func PgStatStatements() *catalog.Schema {
 					Type: &ast.TypeName{Name: "boolean"},
 				},
 			},
+			ReturnType: &ast.TypeName{Name: "record"},
+		},
+		{
+			Name:       "pg_stat_statements_info",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "record"},
 		},
 		{
@@ -42,5 +46,16 @@ func PgStatStatements() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "void"},
 		},
 	}
+}
+
+func PgStatStatementsFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgStatStatementsFuncs0()...)
+	return funcs
+}
+
+func PgStatStatements() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgStatStatementsFuncs()
 	return s
 }

@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Dblink() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func DblinkFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "dblink",
 			Args: []*catalog.Argument{
@@ -499,5 +498,16 @@ func Dblink() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "integer"},
 		},
 	}
+}
+
+func DblinkFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, DblinkFuncs0()...)
+	return funcs
+}
+
+func Dblink() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = DblinkFuncs()
 	return s
 }

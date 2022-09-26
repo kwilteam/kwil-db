@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func PgFreespacemap() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgFreespacemapFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "pg_freespace",
 			Args: []*catalog.Argument{
@@ -33,5 +32,16 @@ func PgFreespacemap() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "smallint"},
 		},
 	}
+}
+
+func PgFreespacemapFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgFreespacemapFuncs0()...)
+	return funcs
+}
+
+func PgFreespacemap() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgFreespacemapFuncs()
 	return s
 }

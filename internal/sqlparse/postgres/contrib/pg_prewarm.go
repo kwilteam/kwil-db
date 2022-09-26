@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func PgPrewarm() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgPrewarmFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name:       "autoprewarm_dump_now",
 			Args:       []*catalog.Argument{},
@@ -50,5 +49,16 @@ func PgPrewarm() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "bigint"},
 		},
 	}
+}
+
+func PgPrewarmFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgPrewarmFuncs0()...)
+	return funcs
+}
+
+func PgPrewarm() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgPrewarmFuncs()
 	return s
 }

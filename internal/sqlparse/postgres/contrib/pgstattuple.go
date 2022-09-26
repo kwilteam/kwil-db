@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Pgstattuple() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgstattupleFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "pg_relpages",
 			Args: []*catalog.Argument{
@@ -101,5 +100,16 @@ func Pgstattuple() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "record"},
 		},
 	}
+}
+
+func PgstattupleFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgstattupleFuncs0()...)
+	return funcs
+}
+
+func Pgstattuple() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgstattupleFuncs()
 	return s
 }

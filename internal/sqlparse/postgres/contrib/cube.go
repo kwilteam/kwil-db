@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Cube() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func CubeFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "cube",
 			Args: []*catalog.Argument{
@@ -311,6 +310,15 @@ func Cube() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "boolean"},
 		},
 		{
+			Name: "cube_send",
+			Args: []*catalog.Argument{
+				{
+					Type: &ast.TypeName{Name: "cube"},
+				},
+			},
+			ReturnType: &ast.TypeName{Name: "bytea"},
+		},
+		{
 			Name: "cube_size",
 			Args: []*catalog.Argument{
 				{
@@ -380,5 +388,16 @@ func Cube() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "double precision"},
 		},
 	}
+}
+
+func CubeFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, CubeFuncs0()...)
+	return funcs
+}
+
+func Cube() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = CubeFuncs()
 	return s
 }

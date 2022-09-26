@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func BtreeGin() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func BtreeGinFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "gin_enum_cmp",
 			Args: []*catalog.Argument{
@@ -35,5 +34,16 @@ func BtreeGin() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "integer"},
 		},
 	}
+}
+
+func BtreeGinFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, BtreeGinFuncs0()...)
+	return funcs
+}
+
+func BtreeGin() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = BtreeGinFuncs()
 	return s
 }

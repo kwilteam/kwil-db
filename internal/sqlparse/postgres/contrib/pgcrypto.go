@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Pgcrypto() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func PgcryptoFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "armor",
 			Args: []*catalog.Argument{
@@ -476,5 +475,16 @@ func Pgcrypto() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "bytea"},
 		},
 	}
+}
+
+func PgcryptoFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, PgcryptoFuncs0()...)
+	return funcs
+}
+
+func Pgcrypto() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = PgcryptoFuncs()
 	return s
 }

@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func BtreeGist() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func BtreeGistFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "cash_dist",
 			Args: []*catalog.Argument{
@@ -245,5 +244,16 @@ func BtreeGist() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "interval"},
 		},
 	}
+}
+
+func BtreeGistFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, BtreeGistFuncs0()...)
+	return funcs
+}
+
+func BtreeGist() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = BtreeGistFuncs()
 	return s
 }

@@ -444,7 +444,7 @@ test
 	s, err := drv.InspectSchema(context.Background(), "", &schema.InspectOptions{})
 	require.NoError(t, err)
 	require.EqualValues(t, func() *schema.Schema {
-		r := &schema.Database{
+		r := &schema.Realm{
 			Schemas: []*schema.Schema{
 				{
 					Name: "test",
@@ -460,7 +460,7 @@ test
 				},
 			},
 		}
-		r.Schemas[0].Db = r
+		r.Schemas[0].Realm = r
 		return r.Schemas[0]
 	}(), s)
 }
@@ -484,8 +484,8 @@ public
 		WillReturnRows(sqlmock.NewRows([]string{"table_schema", "table_name", "comment", "partition_attrs", "partition_strategy", "partition_exprs"}))
 	realm, err := drv.InspectRealm(context.Background(), &schema.InspectRealmOption{})
 	require.NoError(t, err)
-	require.EqualValues(t, func() *schema.Database {
-		r := &schema.Database{
+	require.EqualValues(t, func() *schema.Realm {
+		r := &schema.Realm{
 			Schemas: []*schema.Schema{
 				{
 					Name: "test",
@@ -504,8 +504,8 @@ public
 				},
 			},
 		}
-		r.Schemas[0].Db = r
-		r.Schemas[1].Db = r
+		r.Schemas[0].Realm = r
+		r.Schemas[1].Realm = r
 		return r
 	}(), realm)
 
@@ -522,8 +522,8 @@ public
 		WillReturnRows(sqlmock.NewRows([]string{"table_schema", "table_name", "comment", "partition_attrs", "partition_strategy", "partition_exprs"}))
 	realm, err = drv.InspectRealm(context.Background(), &schema.InspectRealmOption{Schemas: []string{"test", "public"}})
 	require.NoError(t, err)
-	require.EqualValues(t, func() *schema.Database {
-		r := &schema.Database{
+	require.EqualValues(t, func() *schema.Realm {
+		r := &schema.Realm{
 			Schemas: []*schema.Schema{
 				{
 					Name: "test",
@@ -542,8 +542,8 @@ public
 				},
 			},
 		}
-		r.Schemas[0].Db = r
-		r.Schemas[1].Db = r
+		r.Schemas[0].Realm = r
+		r.Schemas[1].Realm = r
 		return r
 	}(), realm)
 
@@ -559,8 +559,8 @@ public
 		WillReturnRows(sqlmock.NewRows([]string{"table_schema", "table_name", "comment", "partition_attrs", "partition_strategy", "partition_exprs"}))
 	realm, err = drv.InspectRealm(context.Background(), &schema.InspectRealmOption{Schemas: []string{"test"}})
 	require.NoError(t, err)
-	require.EqualValues(t, func() *schema.Database {
-		r := &schema.Database{
+	require.EqualValues(t, func() *schema.Realm {
+		r := &schema.Realm{
 			Schemas: []*schema.Schema{
 				{
 					Name: "test",
@@ -576,7 +576,7 @@ public
 				},
 			},
 		}
-		r.Schemas[0].Db = r
+		r.Schemas[0].Realm = r
 		return r
 	}(), realm)
 }
@@ -597,8 +597,8 @@ public
 	require.NoError(t, err)
 	realm, err := drv.InspectRealm(context.Background(), &schema.InspectRealmOption{Mode: schema.InspectSchemas})
 	require.NoError(t, err)
-	require.EqualValues(t, func() *schema.Database {
-		r := &schema.Database{
+	require.EqualValues(t, func() *schema.Realm {
+		r := &schema.Realm{
 			Schemas: []*schema.Schema{
 				{
 					Name: "test",
@@ -617,8 +617,8 @@ public
 				},
 			},
 		}
-		r.Schemas[0].Db = r
-		r.Schemas[1].Db = r
+		r.Schemas[0].Realm = r
+		r.Schemas[1].Realm = r
 		return r
 	}(), realm)
 }

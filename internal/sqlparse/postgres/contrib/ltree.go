@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Ltree() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func LtreeFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "_lt_q_regex",
 			Args: []*catalog.Argument{
@@ -746,5 +745,16 @@ func Ltree() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "ltree"},
 		},
 	}
+}
+
+func LtreeFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, LtreeFuncs0()...)
+	return funcs
+}
+
+func Ltree() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = LtreeFuncs()
 	return s
 }

@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Lo() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func LoFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name:       "lo_manage",
 			Args:       []*catalog.Argument{},
@@ -25,5 +24,16 @@ func Lo() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "oid"},
 		},
 	}
+}
+
+func LoFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, LoFuncs0()...)
+	return funcs
+}
+
+func Lo() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = LoFuncs()
 	return s
 }

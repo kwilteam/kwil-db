@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Sslinfo() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func SslinfoFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name:       "ssl_cipher",
 			Args:       []*catalog.Argument{},
@@ -69,5 +68,16 @@ func Sslinfo() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "text"},
 		},
 	}
+}
+
+func SslinfoFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, SslinfoFuncs0()...)
+	return funcs
+}
+
+func Sslinfo() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = SslinfoFuncs()
 	return s
 }

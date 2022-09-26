@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Seg() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func SegFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "seg_center",
 			Args: []*catalog.Argument{
@@ -257,5 +256,16 @@ func Seg() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "real"},
 		},
 	}
+}
+
+func SegFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, SegFuncs0()...)
+	return funcs
+}
+
+func Seg() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = SegFuncs()
 	return s
 }

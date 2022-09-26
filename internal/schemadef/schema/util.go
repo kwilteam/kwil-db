@@ -38,7 +38,7 @@ func ModeInspectRealm(o *InspectRealmOption) InspectMode {
 }
 
 // ExcludeRealm filters resources in the realm based on the given patterns.
-func ExcludeRealm(r *Database, patterns []string) (*Database, error) {
+func ExcludeRealm(r *Realm, patterns []string) (*Realm, error) {
 	if len(patterns) == 0 {
 		return r, nil
 	}
@@ -79,13 +79,13 @@ func ExcludeSchema(s *Schema, patterns []string) (*Schema, error) {
 	if len(patterns) == 0 {
 		return s, nil
 	}
-	if s.Db == nil {
+	if s.Realm == nil {
 		return nil, fmt.Errorf("missing realm for schema %q", s.Name)
 	}
 	for i, p := range patterns {
 		patterns[i] = fmt.Sprintf("%s.%s", s.Name, p)
 	}
-	if _, err := ExcludeRealm(s.Db, patterns); err != nil {
+	if _, err := ExcludeRealm(s.Realm, patterns); err != nil {
 		return nil, err
 	}
 	return s, nil

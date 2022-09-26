@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Adminpack() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func AdminpackFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "pg_file_rename",
 			Args: []*catalog.Argument{
@@ -76,5 +75,16 @@ func Adminpack() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "record"},
 		},
 	}
+}
+
+func AdminpackFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, AdminpackFuncs0()...)
+	return funcs
+}
+
+func Adminpack() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = AdminpackFuncs()
 	return s
 }

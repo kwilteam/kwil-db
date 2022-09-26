@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func FileFdw() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func FileFdwFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name:       "file_fdw_handler",
 			Args:       []*catalog.Argument{},
@@ -28,5 +27,16 @@ func FileFdw() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "void"},
 		},
 	}
+}
+
+func FileFdwFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, FileFdwFuncs0()...)
+	return funcs
+}
+
+func FileFdw() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = FileFdwFuncs()
 	return s
 }

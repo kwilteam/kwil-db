@@ -101,7 +101,7 @@ func Marshal(v any, marshaler hcl.Marshaler, schemaSpec func(schem *schema.Schem
 		}
 		d.Tables = tables
 		d.Schemas = []*Schema{ss}
-	case *schema.Database:
+	case *schema.Realm:
 		for _, s := range v.Schemas {
 			ss, tables, err := schemaSpec(s)
 			if err != nil {
@@ -109,13 +109,14 @@ func Marshal(v any, marshaler hcl.Marshaler, schemaSpec func(schem *schema.Schem
 			}
 			d.Tables = append(d.Tables, tables...)
 			d.Schemas = append(d.Schemas, ss)
-			for _, q := range s.Queries {
-				qs, err := FromQuery(q)
-				if err != nil {
-					return nil, fmt.Errorf("spec: failed converting query to spec: %w", err)
-				}
-				d.Queries = append(d.Queries, qs)
+		}
+
+		for _, q := range v.Queries {
+			qs, err := FromQuery(q)
+			if err != nil {
+				return nil, fmt.Errorf("spec: failed converting query to spec: %w", err)
 			}
+			d.Queries = append(d.Queries, qs)
 		}
 
 		for _, r := range v.Roles {
@@ -161,7 +162,7 @@ func QualifyDuplicates(tableSpecs []*Table) error {
 }
 
 // QualifyReferences qualifies any reference with qualifier.
-func QualifyReferences(tableSpecs []*Table, realm *schema.Database) error {
+func QualifyReferences(tableSpecs []*Table, realm *schema.Realm) error {
 	type cref struct{ s, t string }
 	byRef := make(map[cref]*Table)
 	for _, t := range tableSpecs {

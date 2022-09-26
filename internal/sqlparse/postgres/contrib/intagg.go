@@ -7,9 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
 )
 
-func Intagg() *catalog.Schema {
-	s := &catalog.Schema{Name: "pg_catalog"}
-	s.Funcs = []*catalog.Function{
+func IntaggFuncs0() []*catalog.Function {
+	return []*catalog.Function{
 		{
 			Name: "int_array_aggregate",
 			Args: []*catalog.Argument{
@@ -29,5 +28,16 @@ func Intagg() *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "integer"},
 		},
 	}
+}
+
+func IntaggFuncs() []*catalog.Function {
+	funcs := []*catalog.Function{}
+	funcs = append(funcs, IntaggFuncs0()...)
+	return funcs
+}
+
+func Intagg() *catalog.Schema {
+	s := &catalog.Schema{Name: "pg_catalog"}
+	s.Funcs = IntaggFuncs()
 	return s
 }

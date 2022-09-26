@@ -25,7 +25,7 @@ type (
 	}
 	// Evaluator is the interface that wraps the Eval function.
 	Evaluator interface {
-		// Eval evaluates parsed HCL files using input variables into a schema.Database.
+		// Eval evaluates parsed HCL files using input variables into a schema.Realm.
 		Eval(*hclparse.Parser, any, map[string]string) error
 	}
 	// EvalFunc is an adapter that allows the use of an ordinary function as an Evaluator.
