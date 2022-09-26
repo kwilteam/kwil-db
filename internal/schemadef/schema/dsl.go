@@ -120,12 +120,12 @@ func (r *Database) UnsetCollation() *Database {
 }
 
 // AddQueries adds the given queries to the realm.
-func (r *Database) AddQueries(queries ...*Query) *Database {
+func (s *Schema) AddQueries(queries ...*Query) *Schema {
 	for _, q := range queries {
-		q.SetRealm(r)
+		q.SetSchema(s)
 	}
-	r.Queries = append(r.Queries, queries...)
-	return r
+	s.Queries = append(s.Queries, queries...)
+	return s
 }
 
 // AddRoles adds the given roles to the realm.
@@ -608,8 +608,8 @@ func (q *Query) SetName(name string) *Query {
 	return q
 }
 
-func (q *Query) SetRealm(r *Database) *Query {
-	q.Db = r
+func (q *Query) SetSchema(s *Schema) *Query {
+	q.Schema = s
 	return q
 }
 

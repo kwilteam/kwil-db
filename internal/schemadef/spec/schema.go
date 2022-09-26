@@ -71,14 +71,15 @@ type (
 	}
 
 	Query struct {
-		Name string `spec:",name"`
-		Expr string `spec:"expr"`
+		Schema *hcl.Ref `spec:"schema"`
+		Name   string   `spec:",name"`
+		Expr   string   `spec:"expr"`
 		hcl.DefaultExtension
 	}
 
 	Role struct {
 		Name    string     `spec:",name"`
-		Queries []*hcl.Ref `spec:"query"`
+		Queries []*hcl.Ref `spec:"queries"`
 		Default bool       `spec:"default,omitempty"`
 		hcl.DefaultExtension
 	}

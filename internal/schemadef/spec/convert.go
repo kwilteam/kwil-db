@@ -35,10 +35,10 @@ type SpecSet struct {
 }
 
 // Scan populates the Database from the schemas and table specs.
-func Scan(r *schema.Database, ss *SpecSet, convertTable ConvertTableFunc) error {
+func Scan(db *schema.Database, ss *SpecSet, convertTable ConvertTableFunc) error {
 	// Build the schemas.
 	for _, schemaSpec := range ss.Schemas {
-		sch := &schema.Schema{Name: schemaSpec.Name, Db: r}
+		sch := &schema.Schema{Name: schemaSpec.Name, Db: db}
 		for _, tableSpec := range ss.Tables {
 			name, err := SchemaName(tableSpec.Schema)
 			if err != nil {
@@ -52,10 +52,19 @@ func Scan(r *schema.Database, ss *SpecSet, convertTable ConvertTableFunc) error 
 				sch.Tables = append(sch.Tables, tbl)
 			}
 		}
-		r.Schemas = append(r.Schemas, sch)
+		db.Schemas = append(db.Schemas, sch)
+
+		// Build the queries.
+		for _, querySpec := range ss.Queries {
+			q, err := ToQuery(sch, querySpec)
+			if err != nil {
+				return err
+			}
+			sch.Queries = append(sch.Queries, q)
+		}
 	}
 	// Link the foreign keys.
-	for _, sch := range r.Schemas {
+	for _, sch := range db.Schemas {
 		for _, tbl := range sch.Tables {
 			tableSpec, err := findTableSpec(ss.Tables, sch.Name, tbl.Name)
 			if err != nil {
@@ -66,7 +75,66 @@ func Scan(r *schema.Database, ss *SpecSet, convertTable ConvertTableFunc) error 
 			}
 		}
 	}
+
+	// Build the roles.
+	for _, roleSpec := range ss.Roles {
+		r, err := ToRole(db, roleSpec)
+		if err != nil {
+			return err
+		}
+		db.Roles = append(db.Roles, r)
+	}
+
 	return nil
+}
+
+func FromQuery(q *schema.Query) (*Query, error) {
+	e, ok := q.Expr.(*schema.RawExpr)
+	if !ok {
+		return nil, fmt.Errorf("spec: cannot convert query %q: only raw expressions are supported", q.Name)
+	}
+
+	return &Query{
+		Name: q.Name,
+		Expr: e.X,
+	}, nil
+}
+
+func ToQuery(sch *schema.Schema, q *Query) (*schema.Query, error) {
+	return &schema.Query{
+		Name:   q.Name,
+		Schema: sch,
+		Expr:   &schema.RawExpr{X: q.Expr},
+	}, nil
+}
+
+func FromRole(r *schema.Role) (*Role, error) {
+	queries := make([]*hcl.Ref, len(r.Queries))
+	for i := range queries {
+		queries[i] = QueryRef(r.Queries[i].Name)
+	}
+	return &Role{
+		Name:    r.Name,
+		Queries: queries,
+		Default: r.Default,
+	}, nil
+}
+
+func ToRole(db *schema.Database, r *Role) (*schema.Role, error) {
+	queries := make([]*schema.Query, len(r.Queries))
+	for i := range queries {
+		q, err := QueryByRef(db, r.Queries[i])
+		if err != nil {
+			return nil, err
+		}
+		queries[i] = q
+	}
+	return &schema.Role{
+		Name:    r.Name,
+		Db:      db,
+		Queries: queries,
+		Default: r.Default,
+	}, nil
 }
 
 // findTableSpec searches tableSpecs for a spec of a table named tableName in a schema named schemaName.
@@ -159,13 +227,6 @@ func ToColumn(s *Column, conv ConvertTypeFunc) (*schema.Column, error) {
 		return nil, err
 	}
 	return out, err
-}
-
-func ToQuery(q *Query) (*schema.Query, error) {
-	out := &schema.Query{
-		Name: q.Name,
-	}
-	return out, nil
 }
 
 // ToIndex converts a Index to a schema.Index. The optional arguments allow
@@ -541,6 +602,21 @@ func SchemaName(ref *hcl.Ref) (string, error) {
 	return parts[1], nil
 }
 
+// QueryByRef returns a query by its reference.
+func QueryByRef(db *schema.Database, ref *hcl.Ref) (*schema.Query, error) {
+	s := strings.Split(ref.V, "$query.")
+	if len(s) != 2 {
+		return nil, fmt.Errorf("spec: failed to extract query name from %q", ref)
+	}
+
+	for _, sch := range db.Schemas {
+		if c, ok := sch.Query(s[1]); ok {
+			return c, nil
+		}
+	}
+	return nil, fmt.Errorf("spec: unknown query %q", s[1])
+}
+
 // ColumnByRef returns a column from the table by its reference.
 func ColumnByRef(t *schema.Table, ref *hcl.Ref) (*schema.Column, error) {
 	s := strings.Split(ref.V, "$column.")
@@ -622,6 +698,11 @@ func isLocalRef(r *hcl.Ref) bool {
 // ColumnRef returns the reference of a column by its name.
 func ColumnRef(cName string) *hcl.Ref {
 	return &hcl.Ref{V: "$column." + cName}
+}
+
+// QueryRef returns the reference of a query by its name.
+func QueryRef(name string) *hcl.Ref {
+	return &hcl.Ref{V: "$query." + name}
 }
 
 func externalColRef(cName string, tName string) *hcl.Ref {

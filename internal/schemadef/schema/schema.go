@@ -7,18 +7,18 @@ type (
 	// and can be accessed and queried in the same connection (e.g. a physical database instance).
 	Database struct {
 		Schemas []*Schema
-		Queries []*Query
 		Roles   []*Role
 		Attrs   []Attr
 	}
 
 	// A Schema describes a database schema (i.e. named database).
 	Schema struct {
-		Name   string
-		Db     *Database
-		Tables []*Table
-		Enums  []*Enum
-		Attrs  []Attr
+		Name    string
+		Db      *Database
+		Tables  []*Table
+		Queries []*Query
+		Enums   []*Enum
+		Attrs   []Attr
 	}
 
 	// A Table represents a table definition.
@@ -89,9 +89,9 @@ type (
 	}
 
 	Query struct {
-		Name string
-		Db   *Database
-		Expr Expr
+		Name   string
+		Schema *Schema
+		Expr   Expr
 	}
 
 	Role struct {
@@ -111,15 +111,6 @@ func (r *Database) Schema(name string) (*Schema, bool) {
 	return nil, false
 }
 
-func (r *Database) Query(name string) (*Query, bool) {
-	for _, q := range r.Queries {
-		if q.Name == name {
-			return q, true
-		}
-	}
-	return nil, false
-}
-
 func (r *Database) Role(name string) (*Role, bool) {
 	for _, q := range r.Roles {
 		if q.Name == name {
@@ -133,6 +124,15 @@ func (s *Schema) Table(name string) (*Table, bool) {
 	for _, t := range s.Tables {
 		if t.Name == name {
 			return t, true
+		}
+	}
+	return nil, false
+}
+
+func (r *Schema) Query(name string) (*Query, bool) {
+	for _, q := range r.Queries {
+		if q.Name == name {
+			return q, true
 		}
 	}
 	return nil, false

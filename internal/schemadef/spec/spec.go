@@ -93,27 +93,43 @@ type doc struct {
 // schemaSpec function to convert a *schema.Schema into *Schema and []*Table.
 func Marshal(v any, marshaler hcl.Marshaler, schemaSpec func(schem *schema.Schema) (*Schema, []*Table, error)) ([]byte, error) {
 	d := &doc{}
-	switch s := v.(type) {
+	switch v := v.(type) {
 	case *schema.Schema:
-		ss, tables, err := schemaSpec(s)
+		ss, tables, err := schemaSpec(v)
 		if err != nil {
 			return nil, fmt.Errorf("spec: failed converting schema to spec: %w", err)
 		}
 		d.Tables = tables
 		d.Schemas = []*Schema{ss}
 	case *schema.Database:
-		for _, s := range s.Schemas {
+		for _, s := range v.Schemas {
 			ss, tables, err := schemaSpec(s)
 			if err != nil {
 				return nil, fmt.Errorf("spec: failed converting schema to spec: %w", err)
 			}
 			d.Tables = append(d.Tables, tables...)
 			d.Schemas = append(d.Schemas, ss)
+			for _, q := range s.Queries {
+				qs, err := FromQuery(q)
+				if err != nil {
+					return nil, fmt.Errorf("spec: failed converting query to spec: %w", err)
+				}
+				d.Queries = append(d.Queries, qs)
+			}
 		}
+
+		for _, r := range v.Roles {
+			rs, err := FromRole(r)
+			if err != nil {
+				return nil, fmt.Errorf("spec: failed converting role to spec: %w", err)
+			}
+			d.Roles = append(d.Roles, rs)
+		}
+
 		if err := QualifyDuplicates(d.Tables); err != nil {
 			return nil, err
 		}
-		if err := QualifyReferences(d.Tables, s); err != nil {
+		if err := QualifyReferences(d.Tables, v); err != nil {
 			return nil, err
 		}
 	default:

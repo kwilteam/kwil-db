@@ -44,10 +44,10 @@
             ],
             "args": [
                 "schema",
-                "plan",
-                "--target",
+                "diff",
+                "--to",
                 ".data/first.hcl",
-                "--source",
+                "--from",
                 "postgres://localhost:5432/postgres?sslmode=disable",
             ],
             "cwd": "${workspaceFolder}"

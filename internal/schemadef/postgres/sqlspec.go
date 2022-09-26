@@ -36,24 +36,36 @@ func init() {
 
 // evalSpec evaluates a DDL document into v using the input.
 func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
-	db, ok := v.(*schema.Database)
-	if !ok {
-		return fmt.Errorf("invalid type %T, expected *schema.Database", v)
-	}
-
 	var d Document
 	if err := hclState.Eval(p, &d, input); err != nil {
 		return err
 	}
 	ss := &spec.SpecSet{Tables: d.Tables, Schemas: d.Schemas, Queries: d.Queries, Roles: d.Roles}
 
-	if err := spec.Scan(db, ss, convertTable); err != nil {
-		return fmt.Errorf("spec: failed converting to *schema.Database: %w", err)
-	}
-	if len(d.Enums) > 0 {
-		if err := convertEnums(d.Tables, d.Enums, db); err != nil {
+	switch v := v.(type) {
+	case *schema.Database:
+		if err := spec.Scan(v, ss, convertTable); err != nil {
+			return fmt.Errorf("specutil: failed converting to *schema.Realm: %w", err)
+		}
+		if len(d.Enums) > 0 {
+			if err := convertEnums(d.Tables, d.Enums, v); err != nil {
+				return err
+			}
+		}
+	case *schema.Schema:
+		if len(d.Schemas) != 1 {
+			return fmt.Errorf("specutil: expecting document to contain a single schema, got %d", len(d.Schemas))
+		}
+		r := &schema.Database{}
+		if err := spec.Scan(r, ss, convertTable); err != nil {
 			return err
 		}
+		if err := convertEnums(d.Tables, d.Enums, r); err != nil {
+			return err
+		}
+		*v = *r.Schemas[0]
+	default:
+		return fmt.Errorf("specutil: failed unmarshaling spec. %T is not supported", v)
 	}
 
 	return nil
@@ -62,10 +74,10 @@ func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
 // MarshalSpec marshals v into a DDL document using a hcl.Marshaler.
 func MarshalSpec(v any, marshaler hcl.Marshaler) ([]byte, error) {
 	var d Document
-	switch s := v.(type) {
+	switch v := v.(type) {
 	case *schema.Schema:
 		var err error
-		doc, err := schemaSpec(s)
+		doc, err := schemaSpec(v)
 		if err != nil {
 			return nil, fmt.Errorf("spec: failed converting schema to spec: %w", err)
 		}
@@ -73,7 +85,7 @@ func MarshalSpec(v any, marshaler hcl.Marshaler) ([]byte, error) {
 		d.Schemas = doc.Schemas
 		d.Enums = doc.Enums
 	case *schema.Database:
-		for _, s := range s.Schemas {
+		for _, s := range v.Schemas {
 			doc, err := schemaSpec(s)
 			if err != nil {
 				return nil, fmt.Errorf("spec: failed converting schema to spec: %w", err)
@@ -81,11 +93,28 @@ func MarshalSpec(v any, marshaler hcl.Marshaler) ([]byte, error) {
 			d.Tables = append(d.Tables, doc.Tables...)
 			d.Schemas = append(d.Schemas, doc.Schemas...)
 			d.Enums = append(d.Enums, doc.Enums...)
+
+			for _, q := range s.Queries {
+				qs, err := spec.FromQuery(q)
+				if err != nil {
+					return nil, fmt.Errorf("spec: failed converting query to spec: %w", err)
+				}
+				d.Queries = append(d.Queries, qs)
+			}
 		}
+
+		for _, r := range v.Roles {
+			rs, err := spec.FromRole(r)
+			if err != nil {
+				return nil, fmt.Errorf("spec: failed converting role to spec: %w", err)
+			}
+			d.Roles = append(d.Roles, rs)
+		}
+
 		if err := spec.QualifyDuplicates(d.Tables); err != nil {
 			return nil, err
 		}
-		if err := spec.QualifyReferences(d.Tables, s); err != nil {
+		if err := spec.QualifyReferences(d.Tables, v); err != nil {
 			return nil, err
 		}
 	default:
