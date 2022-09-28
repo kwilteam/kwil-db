@@ -42,6 +42,9 @@ func (c *Engine) ParseStatement(src string) ([]*Query, error) {
 
 	stmts, err := c.Parse(strings.NewReader(src))
 	if err != nil {
+		if errors.Is(err, core.ErrUnsupportedOS) {
+			return nil, err
+		}
 		return nil, source.NewError("", src, 0, err)
 	}
 

@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"kwil/x/schemadef/hclspec"
 	"kwil/x/schemadef/schema"
 	"kwil/x/sql/catalog"
+	"kwil/x/sql/core"
 	"kwil/x/sql/engine"
 	sqlx "kwil/x/sql/x"
 
@@ -69,7 +71,9 @@ func validateQueries(e *engine.Engine, r *schema.Realm) error {
 	for _, q := range r.Queries {
 		_, err := e.ParseStatement(q.Statement)
 		if err != nil {
-			return fmt.Errorf("spec: failed parsing query %q: %w", q.Name, err)
+			if !errors.Is(err, core.ErrUnsupportedOS) {
+				return fmt.Errorf("spec: failed parsing query %q: %w", q.Name, err)
+			}
 		}
 	}
 	return nil
