@@ -2,7 +2,7 @@ package config_testing
 
 import (
 	"kwil/x/chain/config"
-	"kwil/x/common/utils"
+	"kwil/x/utils"
 )
 
 const configPath = "/test_config.json"

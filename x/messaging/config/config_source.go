@@ -4,29 +4,30 @@ import (
 	"fmt"
 	"os"
 
+	"kwil/x/utils"
+
 	"gopkg.in/yaml.v2"
-	utils "kwil/x/common/utils"
 )
 
 type configSourceImpl struct {
-	ConfigSource
+	Source
 	name    string
-	sources []ConfigSourceItem
+	sources []SourceItem
 }
 
-func createConfigSource(name string, sources ...ConfigSourceItem) ConfigSource {
+func createConfigSource(name string, sources ...SourceItem) Source {
 	return &configSourceImpl{name: name, sources: sources}
 }
 
-func createConfigFileSource(path string) ConfigFileSource {
+func createConfigFileSource(path string) FileSource {
 	return &configFileSourceImpl{path: path}
 }
 
-func createConfigFileSelectorSource(path string, selector string) ConfigFileSelectorSource {
+func createConfigFileSelectorSource(path string, selector string) FileSelectorSource {
 	return &configFileSelectorSourceImpl{path: path, selector: selector}
 }
 
-func (c *configSourceImpl) add(source ConfigSourceItem) {
+func (c *configSourceImpl) add(source SourceItem) {
 	c.sources = append(c.sources, source)
 }
 
@@ -34,14 +35,14 @@ func (c *configSourceImpl) Name() string {
 	return "configSourceImpl"
 }
 
-func (c *configSourceImpl) Items() []ConfigSourceItem {
-	var local = []ConfigSourceItem{}
+func (c *configSourceImpl) Items() []SourceItem {
+	var local []SourceItem
 	copy(local, c.sources)
 	return local
 }
 
 type configFileSourceImpl struct {
-	ConfigFileSource
+	FileSource
 	path string
 }
 
@@ -50,7 +51,7 @@ func (c *configFileSourceImpl) Path() string {
 }
 
 type configFileSelectorSourceImpl struct {
-	ConfigFileSelectorSource
+	FileSelectorSource
 	path     string
 	selector string
 }
@@ -93,5 +94,5 @@ func loadAs(path string, out interface{}) error {
 		return err
 	}
 
-	return yaml.Unmarshal([]byte(data), out)
+	return yaml.Unmarshal(data, out)
 }

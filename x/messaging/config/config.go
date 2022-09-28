@@ -143,23 +143,23 @@ func (c *configImpl) GetInt64(key string, defaultValue int64) (int64, error) {
 		return 0, err
 	}
 
-	return int64(result), nil
+	return result, nil
 }
 
 func (c *configImpl) normalize(key string) string {
 	return c.prefix + key
 }
 
-var loadedConfigSources []ConfigSource
+var loadedConfigSources []Source
 
-func getConfigSourcesInternal() []ConfigSource {
-	getConfigInteral() //ensure it is loaded
+func getConfigSourcesInternal() []Source {
+	getConfigInternal() //ensure it is loaded
 
-	var local []ConfigSource
+	var local []Source
 	return append(local, loadedConfigSources...)
 }
 
-func getConfigInteral() Config {
+func getConfigInternal() Config {
 	//should look for a metaConfig.etc to specify things like useEnv, various files, etc
 	cfgOnce.Do(func() {
 		configFile := *flag.String("meta-config", "", "Path to configuration file")
@@ -178,21 +178,24 @@ func getConfigInteral() Config {
 			}
 		}
 
-		root_builder := &configBuilderImpl{}
+		rootBuilder := &configBuilderImpl{}
 
-		cfg, err := root_builder.UseFile("meta-config", configFile).Build()
+		cfg, err := rootBuilder.UseFile("meta-config", configFile).Build()
 		if err != nil {
 			panic(err)
 		}
 
-		if env_settings := cfg.GetString("env-settings", ""); env_settings != "" {
-			env, err := builder().UseFile("env", env_settings).Build()
+		if envSettings := cfg.GetString("env-settings", ""); envSettings != "" {
+			env, err := builder().UseFile("env", envSettings).Build()
 			if err != nil {
 				panic(err)
 			}
 
 			for k, v := range env.ToStringMap() {
-				os.Setenv(k, os.ExpandEnv(v))
+				err := os.Setenv(k, os.ExpandEnv(v))
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 
@@ -213,7 +216,7 @@ func getConfigInteral() Config {
 			panic(err)
 		}
 
-		loadedConfigSources = root_builder.sources
+		loadedConfigSources = rootBuilder.sources
 		defaultConfig = cfg
 	})
 

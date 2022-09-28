@@ -8,7 +8,6 @@ import (
 
 	"github.com/gofrs/flock"
 	"github.com/tidwall/wal"
-	"kwil/x/common/errs"
 )
 
 // Struct for write ahead log. Contains fields for the block that the log is for
@@ -32,7 +31,7 @@ func openWalWriter(dir, name string) (*walWriter, error) {
 	lck := flock.New(dir + ".lck")
 	locked, err := lck.TryLock()
 	if err != nil {
-		return nil, errs.NewError(err, "unable to obtain wal lock")
+		return nil, errors.New("unable to obtain wal lock: " + err.Error())
 	}
 
 	if !locked {

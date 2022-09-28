@@ -1,11 +1,11 @@
 package config
 
-func GetConfigSources() []ConfigSource {
+func GetConfigSources() []Source {
 	return getConfigSourcesInternal()
 }
 
 func GetConfig() Config {
-	return getConfigInteral()
+	return getConfigInternal()
 }
 
 type Config interface {
@@ -26,21 +26,21 @@ type Config interface {
 	ToMap() map[string]interface{}
 }
 
-type ConfigSource interface {
+type Source interface {
 	Name() string
-	Sources() []ConfigSourceItem
+	Sources() []SourceItem
 }
 
-type ConfigSourceItem interface {
+type SourceItem interface {
 	As(out interface{}) error
 }
 
-type ConfigFileSource interface {
-	ConfigSourceItem
+type FileSource interface {
+	SourceItem
 	Path() string
 }
 
-type ConfigFileSelectorSource interface {
-	ConfigFileSource
+type FileSelectorSource interface {
+	FileSource
 	Selector() string
 }

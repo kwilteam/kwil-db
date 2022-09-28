@@ -4,7 +4,7 @@ import (
 	"errors"
 	"math/big"
 
-	"kwil/x/common/utils"
+	u "kwil/x/utils"
 )
 
 type WalEthTx struct {
@@ -45,7 +45,7 @@ func (w *WalEthTx) Close() {
 }
 
 func (w *WalEthTx) appendEthBlock(msgType uint16, h *big.Int) error {
-	m := newWalMessage(msgType).append(utils.BigInt2Bytes(h)...)
+	m := newWalMessage(msgType).append(u.BigInt2Bytes(h)...)
 	return w.inner.appendMsgToWal(m)
 }
 

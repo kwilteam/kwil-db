@@ -1,15 +1,80 @@
 package utils
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"math/big"
 	"os"
 	"path"
 	"runtime"
 	"strings"
+	"time"
 
-	"kwil/x/common/errs"
+	typ "kwil/x/types"
 )
+
+// Mod e.g., modulo returns the remainder of x/y
+func Mod[T typ.Integer](x, y T) T {
+	return (x%y + y) % y
+}
+
+// Max returns the larger of x or y.
+func Max[T typ.Integer](x, y T) T {
+	if x > y {
+		return x
+	}
+	return y
+}
+
+// Min returns the smaller of x or y.
+func Min[T typ.Integer](x, y T) T {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+// IsContextTimeout returns true if the underlying error is a timeout. This function
+// counts canceled contexts as timeouts.
+// source article:
+// https://blog.afoolishmanifesto.com/posts/context-deadlines-in-golang/
+func IsContextTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	switch {
+	case errors.Is(err, context.Canceled):
+		return true
+	case errors.Is(err, context.DeadlineExceeded):
+		return true
+	default:
+		return false
+	}
+}
+
+func FileExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
+func DirExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return info.IsDir()
+}
+
+func PanicIfError(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
 
 func Coalesce[T comparable](check T, alt T) T {
 	var d T
@@ -91,7 +156,7 @@ func IsNotNil[T any](v *T) bool {
 	return v != nil
 }
 
-func DEFAULT[T any]() T {
+func AsDefault[T any]() T {
 	var t T
 	return t
 }
@@ -110,7 +175,10 @@ func TryExpandHomeDir(path string) (expandedPath string, expanded bool) {
 		return path, false
 	}
 
-	home := errs.PanicIfErrorFn(os.UserHomeDir)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
 
 	return home + path[1:], true
 }
@@ -149,4 +217,24 @@ func GetGoFilePathOfCaller() string {
 	_, filename, _, _ := runtime.Caller(1)
 
 	return path.Dir(filename)
+}
+
+// Deadline implements the deadline/timeout resiliency pattern.
+type Deadline struct {
+	deadline time.Time
+}
+
+// Expiry will return the time at which the deadline will expire
+func (d *Deadline) Expiry() time.Time {
+	return d.deadline
+}
+
+// HasExpired will return true if the deadline has expired
+func (d *Deadline) HasExpired() bool {
+	return !d.deadline.Before(time.Now())
+}
+
+// NewDeadline constructs a new Deadline with the given timeout.
+func NewDeadline(timeout time.Duration) *Deadline {
+	return &Deadline{time.Now().Add(time.Millisecond * timeout)}
 }

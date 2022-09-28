@@ -20,7 +20,7 @@ func builder() configBuilder {
 
 type configBuilderImpl struct {
 	root    string
-	sources []ConfigSource
+	sources []Source
 }
 
 func (b *configBuilderImpl) Build() (Config, error) {
@@ -28,7 +28,7 @@ func (b *configBuilderImpl) Build() (Config, error) {
 		return emptyConfig, nil
 	}
 
-	root_map := make(map[interface{}]interface{})
+	rootMap := make(map[interface{}]interface{})
 	for _, source := range b.sources {
 		if len(source.Sources()) == 0 {
 			continue
@@ -45,16 +45,16 @@ func (b *configBuilderImpl) Build() (Config, error) {
 			return nil, err
 		}
 
-		root_map[source.Name()] = m
+		rootMap[source.Name()] = m
 	}
 
-	flattened_map := make(map[string]string)
+	flattenedMap := make(map[string]string)
 
-	expand(root_map)
+	expand(rootMap)
 
-	flatten(flattened_map, b.root, root_map)
+	flatten(flattenedMap, b.root, rootMap)
 
-	return &configImpl{flattened_map, root_map, b.root}, nil
+	return &configImpl{flattenedMap, rootMap, b.root}, nil
 }
 
 func (b *configBuilderImpl) UseFile(name string, path string) configBuilder {
