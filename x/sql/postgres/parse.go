@@ -588,11 +588,35 @@ func translate(node *nodes.Node) (ast.Node, error) {
 				Type:    rel.TypeName(),
 				NewName: makeString(n.Newname),
 			}, nil
-
 		}
 		return nil, errSkip
 
 	default:
 		return convert(node)
 	}
+}
+
+func isArray(n *nodes.TypeName) bool {
+	if n == nil {
+		return false
+	}
+	return len(n.ArrayBounds) > 0
+}
+
+func isNotNull(n *nodes.ColumnDef) bool {
+	if n.IsNotNull {
+		return true
+	}
+	for _, c := range n.Constraints {
+		switch inner := c.Node.(type) {
+		case *nodes.Node_Constraint:
+			if inner.Constraint.Contype == nodes.ConstrType_CONSTR_NOTNULL {
+				return true
+			}
+			if inner.Constraint.Contype == nodes.ConstrType_CONSTR_PRIMARY {
+				return true
+			}
+		}
+	}
+	return false
 }
