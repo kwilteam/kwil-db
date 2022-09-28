@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kwilteam/kwil-db/internal/cli"
+	"kwil/x/cli"
 )
 
 func main() {

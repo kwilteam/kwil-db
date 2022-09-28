@@ -1,6 +1,6 @@
 syntax = "proto3";
 package kwil.api.v0;
-option go_package = "github.com/kwilteam/kwil-db/internal/api/v0";
+option go_package = "kwil/x/api/v0";
 
 import "google/api/annotations.proto";
 import "api/v0/plan.proto";
@@ -100,6 +100,31 @@ service KwilService {
       delete: "/api/v0/databases/{databaseId}/roles/{id}"
     };
   }
+
+  // Queries
+  rpc PostQuery(PostQueryRequest) returns (PostQueryResponse) { // this is for submitting data to Kwil
+    option (google.api.http) = {
+      post: "/api/v0/databases/{databaseId}/query"
+      body: "*"
+    };
+  }
+  rpc GetQueries(GetQueriesRequest) returns (GetQueriesResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases/{databaseId}/queries"
+    };
+  }
+
+  // Wallets
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/wallets/{id}/balance"
+    };
+  }
+  rpc GetWalletRole(GetWalletRoleRequest) returns (GetWalletRoleResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/wallets/{id}/{databaseId}/role"
+    };
+  }
 }
 
 message ConnectRequest {}
@@ -177,12 +202,22 @@ message CreateRoleResponse {}
 message ListRolesRequest {
   string databaseId = 1;
 }
-message ListRolesResponse {}
+message ListRolesResponse {
+  repeated string roles = 1;
+}
 message GetRoleRequest {
   string id = 1;
   string databaseId = 2;
 }
-message GetRoleResponse {}
+message GetRoleResponse {
+  string name = 1;
+  message perms {
+    bool ddl = 1;
+    repeated string queries = 2;
+  };
+  perms permissions = 2;
+}
+
 message UpdateRoleRequest {
   string id = 1;
   string databaseId = 2;
@@ -193,3 +228,50 @@ message DeleteRoleRequest {
   string databaseId = 2;
 }
 message DeleteRoleResponse {}
+
+message PostQueryRequest {
+  string databaseId = 1;
+  string query = 2;
+  string from = 3;
+  string signature = 4;
+}
+message PostQueryResponse {}
+
+message GetQueriesRequest {
+  string databaseId = 1;
+}
+message GetQueriesResponse {
+  repeated DBQuery queries = 1;
+}
+
+message input {
+  string name = 1;
+  string type = 2;
+};
+
+message DBQuery{
+  string name = 1;
+  string query = 2;
+  repeated input parameters = 3;
+}
+
+message GetBalanceRequest {
+  string id = 1;
+}
+message GetBalanceResponse {
+  string balance = 1;
+}
+
+message GetWalletRoleRequest {
+  string id = 1;
+  string databaseId = 2;
+}
+
+message GetWalletRoleResponse {
+  string name = 1;
+  message perms {
+    bool ddl = 1;
+    repeated string queries = 2;
+  };
+  perms permissions = 2;
+}

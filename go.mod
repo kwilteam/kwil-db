@@ -1,4 +1,4 @@
-module github.com/kwilteam/kwil-db
+module kwil
 
 go 1.18
 
