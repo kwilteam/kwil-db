@@ -12,7 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/core"
 	"github.com/kwilteam/kwil-db/internal/sql/source"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlerr"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlx"
+	sqlx "github.com/kwilteam/kwil-db/internal/sql/x"
 	"go.uber.org/multierr"
 )
 

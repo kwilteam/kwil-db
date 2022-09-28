@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kwilteam/kwil-db/internal/sql/sqlx"
+	sqlx "github.com/kwilteam/kwil-db/internal/sql/x"
 )
 
 type (

@@ -11,7 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/schemadef/hclspec"
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
 	"github.com/kwilteam/kwil-db/internal/sql/engine"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlx"
+	sqlx "github.com/kwilteam/kwil-db/internal/sql/x"
 )
 
 // evalSpec evaluates a DDL document into v using the input.

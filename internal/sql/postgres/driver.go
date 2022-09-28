@@ -12,7 +12,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlclient"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlx"
+	sqlx "github.com/kwilteam/kwil-db/internal/sql/x"
 )
 
 type (

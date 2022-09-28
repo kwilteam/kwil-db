@@ -11,7 +11,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/schemadef/hcl"
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlx"
+	sqlx "github.com/kwilteam/kwil-db/internal/sql/x"
 )
 
 type (
