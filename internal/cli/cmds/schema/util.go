@@ -6,13 +6,13 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/kwilteam/kwil-db/internal/schemadef/postgres"
 	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlclient"
+	"github.com/kwilteam/kwil-db/internal/sql/postgres"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlclient"
 	"github.com/spf13/cobra"
 )
 
-func loadSchema(ctx context.Context, p string, exclude []string) (*schema.Schema, error) {
+func loadRealm(ctx context.Context, p string, exclude []string) (*schema.Realm, error) {
 	parts := strings.SplitN(p, "://", 2)
 	var scheme, path string
 	switch len(parts) {
@@ -31,7 +31,11 @@ func loadSchema(ctx context.Context, p string, exclude []string) (*schema.Schema
 			return nil, err
 		}
 		defer client.Close()
-		return client.InspectSchema(ctx, client.URL.Schema, &schema.InspectOptions{Exclude: exclude})
+		opts := &schema.InspectRealmOption{}
+		if client.URL.Schema != "" {
+			opts.Schemas = append(opts.Schemas, client.URL.Schema)
+		}
+		return client.InspectRealm(ctx, opts)
 	default:
 		return nil, fmt.Errorf("unknown schema scheme: %s", scheme)
 	}

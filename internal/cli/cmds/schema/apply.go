@@ -2,8 +2,9 @@ package schema
 
 import (
 	"github.com/kwilteam/kwil-db/internal/cli/util"
-	"github.com/kwilteam/kwil-db/internal/schemadef/postgres"
-	"github.com/kwilteam/kwil-db/internal/schemadef/sqlclient"
+	"github.com/kwilteam/kwil-db/internal/schemadef/schema"
+	"github.com/kwilteam/kwil-db/internal/sql/postgres"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlclient"
 	"github.com/spf13/cobra"
 )
 
@@ -32,12 +33,16 @@ func createApplyCmd() *cobra.Command {
 			}
 			defer client.Close()
 
-			target, err := client.InspectSchema(cmd.Context(), client.URL.Schema, nil)
+			targetOpts := &schema.InspectRealmOption{}
+			if client.URL.Schema != "" {
+				targetOpts.Schemas = append(targetOpts.Schemas, client.URL.Schema)
+			}
+			target, err := client.InspectRealm(cmd.Context(), targetOpts)
 			if err != nil {
 				return err
 			}
 
-			changes, err := client.SchemaDiff(target, schemaFile)
+			changes, err := client.RealmDiff(target, schemaFile)
 			if err != nil {
 				return err
 			}
@@ -47,7 +52,7 @@ func createApplyCmd() *cobra.Command {
 				return nil
 			}
 
-			plan, err := client.PlanChanges(cmd.Context(), changes)
+			plan, err := client.PlanChanges(changes)
 			if err != nil {
 				return err
 			}

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kwilteam/kwil-db/internal/sqlx"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlx"
 )
 
 type (
@@ -67,7 +67,7 @@ type (
 	// on the database.
 	Planner interface {
 		// PlanChanges returns a migration plan for applying the given changeset.
-		PlanChanges(context.Context, []SchemaChange, ...PlanOption) (*Plan, error)
+		PlanChanges([]SchemaChange, ...PlanOption) (*Plan, error)
 	}
 	// PlanApplier wraps the methods for applying changes on the database.
 	PlanApplier interface {
@@ -155,12 +155,12 @@ func NewSchemaConn(drv Driver, name string, opts *InspectOptions) StateReader {
 
 type ExecPlanner interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
-	PlanChanges(context.Context, []SchemaChange, ...PlanOption) (*Plan, error)
+	PlanChanges([]SchemaChange, ...PlanOption) (*Plan, error)
 }
 
 // ApplyChanges is a helper used by the different drivers to apply changes.
 func ApplyChanges(ctx context.Context, changes []SchemaChange, p ExecPlanner, opts ...PlanOption) error {
-	plan, err := p.PlanChanges(ctx, changes, opts...)
+	plan, err := p.PlanChanges(changes, opts...)
 	if err != nil {
 		return err
 	}

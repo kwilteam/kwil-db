@@ -50,7 +50,7 @@ package {{.Pkg}}
 
 import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/ast"
-	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
+	"github.com/kwilteam/kwil-db/internal/catalog"
 )
 
 {{- $funcName := .GenFnName }}
@@ -134,7 +134,7 @@ package postgres
 
 import (
 	"github.com/kwilteam/kwil-db/internal/sqlparse/postgres/contrib"
-	"github.com/kwilteam/kwil-db/internal/sqlparse/catalog"
+	"github.com/kwilteam/kwil-db/internal/catalog"
 )
 
 func loadExtension(name string) *catalog.Schema {

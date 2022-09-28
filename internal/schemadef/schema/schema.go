@@ -63,12 +63,12 @@ type (
 	IndexPart struct {
 		// SeqNo represents the sequence number of the key part in the index.
 		SeqNo int
-		// Desc indicates if the key part is stored in descending
+		// Descending indicates if the key part is stored in descending
 		// order. All databases use ascending order as default.
-		Desc  bool
-		X     Expr
-		C     *Column
-		Attrs []Attr
+		Descending bool
+		X          Expr
+		C          *Column
+		Attrs      []Attr
 	}
 
 	// A ForeignKey represents an index definition.
@@ -89,9 +89,9 @@ type (
 	}
 
 	Query struct {
-		Name  string
-		Realm *Realm
-		Expr  Expr
+		Name      string
+		Realm     *Realm
+		Statement string
 	}
 
 	Role struct {
@@ -99,6 +99,22 @@ type (
 		Queries []*Query
 		Realm   *Realm
 		Default bool
+	}
+
+	Function struct {
+		Name               string
+		Args               []*Argument
+		ReturnType         Type
+		Comment            string
+		Description        string
+		ReturnTypeNullable bool
+	}
+
+	Argument struct {
+		Name       string
+		Type       Type
+		HasDefault bool
+		Mode       FuncParamMode
 	}
 )
 
@@ -203,6 +219,16 @@ const (
 	Cascade    ReferenceOption = "CASCADE"
 	SetNull    ReferenceOption = "SET NULL"
 	SetDefault ReferenceOption = "SET DEFAULT"
+)
+
+type FuncParamMode int
+
+const (
+	FuncParamIn FuncParamMode = iota
+	FuncParamOut
+	FuncParamInOut
+	FuncParamVariadic
+	FuncParamTable
 )
 
 type (
