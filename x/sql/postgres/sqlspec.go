@@ -9,6 +9,7 @@ import (
 	"kwil/x/schemadef/hcl"
 	"kwil/x/schemadef/hclspec"
 	"kwil/x/schemadef/schema"
+	"kwil/x/sql/catalog"
 	"kwil/x/sql/engine"
 	sqlx "kwil/x/sql/x"
 
@@ -23,7 +24,8 @@ func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
 	}
 
 	c := NewCatalog()
-	e := engine.NewEngine(NewParser(), c, NewCatalogUpdater(c))
+	up := catalog.NewUpdater(c)
+	e := engine.NewEngine(NewParser(), c)
 	conv := &specConverter{}
 
 	switch v := v.(type) {
@@ -32,7 +34,7 @@ func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
 			return fmt.Errorf("spec: failed converting to *schema.Realm: %w", err)
 		}
 		for _, s := range v.Schemas {
-			if err := e.AddSchema(s); err != nil {
+			if err := up.UpdateSchema(s, &catalogConverter{}); err != nil {
 				return fmt.Errorf("spec: failed adding schema %q: %w", s.Name, err)
 			}
 		}
@@ -49,7 +51,7 @@ func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
 			return err
 		}
 		*v = *r.Schemas[0]
-		if err := e.AddSchema(v); err != nil {
+		if err := up.UpdateSchema(v, &catalogConverter{}); err != nil {
 			return fmt.Errorf("spec: failed adding schema %q: %w", v.Name, err)
 		}
 		if err := validateQueries(e, r); err != nil {
@@ -65,11 +67,10 @@ func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
 
 func validateQueries(e *engine.Engine, r *schema.Realm) error {
 	for _, q := range r.Queries {
-		queries, err := e.ParseStatement(q.Statement)
+		_, err := e.ParseStatement(q.Statement)
 		if err != nil {
 			return fmt.Errorf("spec: failed parsing query %q: %w", q.Name, err)
 		}
-		_ = queries
 	}
 	return nil
 }

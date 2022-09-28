@@ -5,7 +5,7 @@ import (
 	"kwil/x/sql/sqlerr"
 )
 
-func (c *Catalog) createViewAST(stmt *ast.ViewStmt, colGen columnGenerator) error {
+func (c *Catalog) createViewAST(stmt *ast.ViewStmt, colGen ColumnGenerator) error {
 	cols, err := colGen.OutputColumns(stmt.Query)
 	if err != nil {
 		return err

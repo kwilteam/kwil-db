@@ -104,10 +104,10 @@ type Column struct {
 	Length    *int
 }
 
-// An interface is used to resolve a circular import between the catalog and compiler packages.
+// An interface is used to resolve a circular import between the catalog and engine packages.
 // The createView function requires access to functions in the compiler package to parse the SELECT
 // statement that defines the view.
-type columnGenerator interface {
+type ColumnGenerator interface {
 	OutputColumns(node ast.Node) ([]*Column, error)
 }
 
@@ -344,7 +344,7 @@ func (c *Catalog) renameTableAST(stmt *ast.RenameTableStmt) error {
 	return nil
 }
 
-func (c *Catalog) createTableAsAST(stmt *ast.CreateTableAsStmt, colGen columnGenerator) error {
+func (c *Catalog) createTableAsAST(stmt *ast.CreateTableAsStmt, colGen ColumnGenerator) error {
 	cols, err := colGen.OutputColumns(stmt.Query)
 	if err != nil {
 		return err
