@@ -9,12 +9,14 @@ type Runnable func()
 // The below are internally used to adapt handlers to a common
 // callback type Methods of the structs are used as function
 // pointers with the handler callbacks from a task
+// TODO: in the future, move to using interfaces for simpler readability
+// over any potential/unlikely meaningful perf gains
 
 type continuationRequestAdapter struct {
 	fn func(error)
 }
 
-func (r *continuationRequestAdapter) invoke(_ struct{}, err error) {
+func (r *continuationRequestAdapter) invoke(_ Void, err error) {
 	r.fn(err)
 }
 
@@ -22,7 +24,7 @@ type onSuccessContinuationHandler struct {
 	fn Runnable
 }
 
-func (h *onSuccessContinuationHandler) invoke(_ struct{}, err error) {
+func (h *onSuccessContinuationHandler) invoke(_ Void, err error) {
 	if err == nil {
 		h.fn()
 	}
@@ -32,7 +34,7 @@ type continuationRequestAdapterAsync struct {
 	fn func(error)
 }
 
-func (r *continuationRequestAdapterAsync) invoke(_ struct{}, err error) {
+func (r *continuationRequestAdapterAsync) invoke(_ Void, err error) {
 	go r.fn(err)
 }
 
@@ -40,7 +42,7 @@ type onSuccessContinuationHandlerAsync struct {
 	fn Runnable
 }
 
-func (h *onSuccessContinuationHandlerAsync) invoke(_ struct{}, err error) {
+func (h *onSuccessContinuationHandlerAsync) invoke(_ Void, err error) {
 	if err == nil {
 		go h.fn()
 	}
@@ -99,11 +101,11 @@ type asContinuationHandler[T any] struct {
 }
 
 func (h *asContinuationHandler[T]) invoke(_ T, err error) {
-	h.c.task.CompleteOrFail(struct{}{}, err)
+	h.c.task.CompleteOrFail(Void{}, err)
 }
 
 type onDoneChanBlockRunHandler[T any] struct {
-	chDone chan struct{}
+	chDone chan Void
 	fn     Handler[T]
 }
 

@@ -8,25 +8,41 @@ import (
 // NewTask creates a new task that will execution
 // continuations synchronously
 func NewTask[T any]() *Task[T] {
-	status := uint32(0)
-	return &Task[T]{status: &status}
+	var state unsafe.Pointer
+	return &Task[T]{&taskState{
+		status: uint32(0),
+		state:  state,
+	}}
 }
 
 // NewTaskAsync creates a new task that will initiate
 // execution of continuations asynchronously
 func NewTaskAsync[T any]() *Task[T] {
-	status := _ASYNC_CONTINUATIONS
-	return &Task[T]{status: &status}
+	var state unsafe.Pointer
+	return &Task[T]{&taskState{
+		status: _ASYNC_CONTINUATIONS,
+		state:  state,
+	}}
 }
 
 // Success returns a completed Task with the param 'value'.
 func Success[T any](value T) *Task[T] {
-	return &Task[T]{state: unsafe.Pointer(&value), status: _taskValuePtr}
+	return &Task[T]{&taskState{
+		status: _VALUE,
+		state:  unsafe.Pointer(&value),
+	}}
 }
 
 // Failure returns an errored Task with the param 'err'.
 func Failure[T any](err error) *Task[T] {
-	return &Task[T]{state: unsafe.Pointer(&err), status: _taskErrorPtr}
+	status := _ERROR
+	if err == ErrCancelled {
+		status = _CANCELLED_OR_ERROR
+	}
+	return &Task[T]{&taskState{
+		status: status,
+		state:  unsafe.Pointer(&err),
+	}}
 }
 
 // FailureC will return a new Continuation that is in a completed failed state
@@ -40,9 +56,9 @@ func SuccessC() *Continuation {
 }
 
 func Exec(fn func() error) *Continuation {
-	task := NewTask[struct{}]()
+	task := NewTask[Void]()
 
-	go func(f func() error, t *Task[struct{}]) {
+	go func(f func() error, t *Task[Void]) {
 		if t.IsDone() {
 			return
 		}
@@ -57,7 +73,7 @@ func Exec(fn func() error) *Continuation {
 			}
 		}()
 
-		t.CompleteOrFail(struct{}{}, f())
+		t.CompleteOrFail(Void{}, f())
 	}(fn, task)
 
 	return &Continuation{task}

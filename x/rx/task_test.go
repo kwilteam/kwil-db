@@ -79,7 +79,7 @@ func Test_TaskOnError(t *testing.T) {
 
 	task := NewTask[*TestStruct]()
 
-	task.Catch(
+	task.CatchAsync(
 		func(err error) {
 			t.Log(err)
 			wg.Done()
@@ -90,13 +90,13 @@ func Test_TaskOnError(t *testing.T) {
 	wg.Wait()
 }
 
-func Test_SetCompleteNil(t *testing.T) {
-	t.Run("Test_SetCompleteNil", func(t *testing.T) {
-		task := NewTask[*TestStruct]()
-		task.Complete(nil)
-		v := task.Get()
-		if v != nil {
-			t.Fail()
-		}
-	})
+func Test_TaskCopyResultAreSame(t *testing.T) {
+	task := NewTask[string]()
+	task2 := *task
+	task.Complete("test_copy")
+	fmt.Println(task.Get())
+	fmt.Println(task2.Get())
+	if task.Get() != task2.Get() {
+		t.Fail()
+	}
 }

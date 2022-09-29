@@ -1,6 +1,6 @@
 package rx
 
-// Map will execute the function and set the result if the promise
+// Map will execute the function and set the result if the Task
 // is successful, else it will propagate the source error
 func Map[T, R any](source Listenable[T], fn func(T) R) *Task[R] {
 	task := NewTask[R]()
@@ -16,9 +16,9 @@ func Map[T, R any](source Listenable[T], fn func(T) R) *Task[R] {
 	return task
 }
 
-// FlatMap will execute the function and await the additional promise,
+// FlatMap will execute the function and await the additional Listenable,
 // if the source is errored, the fn will not be called and the error
-// will be propagated, else the promise returned by the function will
+// will be propagated, else the Listenable returned by the function will
 // be awaited and returned as the value or an error if it results in an
 // errored stated
 func FlatMap[T, R any](source Listenable[T], fn func(T) Listenable[R]) *Task[R] {

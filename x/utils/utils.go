@@ -19,7 +19,7 @@ func Mod[T typ.Integer](x, y T) T {
 	return (x%y + y) % y
 }
 
-// Max returns the larger of x or y.
+// Max returns the largest of x or y.
 func Max[T typ.Integer](x, y T) T {
 	if x > y {
 		return x
@@ -27,7 +27,7 @@ func Max[T typ.Integer](x, y T) T {
 	return y
 }
 
-// Min returns the smaller of x or y.
+// Min returns the smallest of x or y.
 func Min[T typ.Integer](x, y T) T {
 	if x < y {
 		return x

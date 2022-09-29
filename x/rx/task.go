@@ -3,19 +3,20 @@ package rx
 import (
 	"context"
 	"errors"
-	"unsafe"
 )
 
-// ErrCancelled is the error returned when a Task/Promise/Continuation
+// Void An empty struct{} typed as 'Void'
+type Void struct{}
+
+// ErrCancelled is the error returned when a Task/Continuation
 // has been previously cancelled
 var ErrCancelled = errors.New("cancelled prior to completion")
 
-// Task is the primary implementation of the Promise interface
-// It can be used as the controlling handle for setting completion
-// of a Promise or as a Promise itself.
+// Task is the primary implementation of the Promise-like
+// interface. It can be used as the controller for setting
+// completion of a Continuation or the Task itself.
 type Task[T any] struct {
-	status *uint32
-	state  unsafe.Pointer
+	store *taskState
 }
 
 // GetError will return the contained error or nil if the
@@ -37,6 +38,9 @@ func (r *Task[T]) IsError() bool { return r._isError() }
 // It will return false if it has not yet completed.
 func (r *Task[T]) IsCancelled() bool { return r._isCancelled() }
 
+// IsErrorOrCancelled will return true if the Result is an error
+// or cancelled (NOTE: cancelled is always an error).
+// It will return false if it has not yet completed.
 func (r *Task[T]) IsErrorOrCancelled() bool { return r._isErrorOrCancelled() }
 
 // IsDone will return true if the Result is complete
@@ -44,7 +48,7 @@ func (r *Task[T]) IsDone() bool { return r._isDone() }
 
 // DoneChan will return a channel that will be closed when the
 // result/error has been set
-func (r *Task[T]) DoneChan() <-chan struct{} { return r._doneChan() }
+func (r *Task[T]) DoneChan() <-chan Void { return r._doneChan() }
 
 // Fail will set the result to an error
 func (r *Task[T]) Fail(err error) bool { return r._fail(err) }
@@ -123,4 +127,10 @@ func (r *Task[T]) AsContinuationAsync() *Continuation {
 // when the source task has been completed
 func (r *Task[T]) AsAsync() *Task[T] {
 	return r._async()
+}
+
+// IsAsync returns true if the task was created to call
+// continuations asynchronously
+func (r *Task[T]) IsAsync() bool {
+	return isAsync(r.store.status)
 }

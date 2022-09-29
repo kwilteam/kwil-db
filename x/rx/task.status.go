@@ -12,11 +12,11 @@ const _CANCELLED_OR_ERROR = _ERROR | _CANCELLED
 const _DONE = _VALUE | _ERROR | _CANCELLED
 const _ANY_HANDLER = _FN | _INCOMPLETE_ORIGIN
 
-var _taskValue = _VALUE
-var _taskValuePtr = &_taskValue
-var _taskErrorPtr = &_taskValue
+//var _taskValue = _VALUE
+//var _taskValuePtr = &_taskValue
+//var _taskErrorPtr = &_taskValue
 
-var _closedChan = make(chan struct{})
+var _closedChan = make(chan Void)
 
 func init() {
 	close(_closedChan)
