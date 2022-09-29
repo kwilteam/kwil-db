@@ -4,6 +4,7 @@ import (
 	"context"
 	"kwil/x/utils"
 	"sync/atomic"
+	"unsafe"
 )
 
 func (r *Task[T]) _cancel() bool {
@@ -23,7 +24,7 @@ func (r *Task[T]) _fail(err error) bool {
 }
 
 func (r *Task[T]) _isDone() bool {
-	current := atomic.LoadUint32(r.status)
+	current := atomic.LoadUint32(&r.store.status)
 	return isDone(current)
 }
 
@@ -36,7 +37,7 @@ func (r *Task[T]) _addHandler(fn Handler[T]) *Task[T] {
 }
 
 func (r *Task[T]) _await(ctx context.Context) (ok bool) {
-	if isCompletedOrigin(*r.status) {
+	if isCompletedOrigin(r.store.status) {
 		return true
 	}
 
@@ -54,12 +55,12 @@ func (r *Task[T]) _await(ctx context.Context) (ok bool) {
 }
 
 func (r *Task[T]) _isError() bool {
-	current := atomic.LoadUint32(r.status)
+	current := atomic.LoadUint32(&r.store.status)
 	return hasError(current)
 }
 
 func (r *Task[T]) _isCancelled() bool {
-	current := atomic.LoadUint32(r.status)
+	current := atomic.LoadUint32(&r.store.status)
 	return isCancelled(current)
 }
 
@@ -70,12 +71,12 @@ func (r *Task[T]) _isErrorOrCancelled() bool {
 func (r *Task[T]) _getOrError() (T, error) {
 	<-r._doneChan()
 
-	current := atomic.LoadUint32(r.status)
+	current := atomic.LoadUint32(&r.store.status)
 	return r.loadValueOrErrorUnsafe(current)
 }
 
-func (r *Task[T]) _doneChan() <-chan struct{} {
-	if isCompletedOrigin(*r.status) {
+func (r *Task[T]) _doneChan() <-chan Void {
+	if isCompletedOrigin(r.store.status) {
 		return _closedChan
 	}
 
@@ -83,8 +84,14 @@ func (r *Task[T]) _doneChan() <-chan struct{} {
 }
 
 func (r *Task[T]) _asContinuation(async bool) *Continuation {
+	var state unsafe.Pointer
 	status := utils.IfElse(async, _ASYNC_CONTINUATIONS, uint32(0))
-	h := asContinuationHandler[T]{&Continuation{task: &Task[struct{}]{status: &status}}}
+	h := asContinuationHandler[T]{&Continuation{task: &Task[Void]{
+		&taskState{
+			status: status,
+			state:  state,
+		},
+	}}}
 	r._onComplete(h.invoke)
 	return h.c
 }

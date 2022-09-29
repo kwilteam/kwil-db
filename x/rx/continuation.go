@@ -2,10 +2,10 @@ package rx
 
 import "context"
 
-// Continuation is for us with non typed functional continuations
-// from tasks/promises
+// Continuation is for use with non typed functional
+// continuations from tasks
 type Continuation struct {
-	task *Task[struct{}]
+	task *Task[Void]
 }
 
 // Cancel will cancel the Continuation
@@ -16,7 +16,7 @@ func (c *Continuation) IsDone() bool {
 	return c.task.IsDone()
 }
 
-// IsError will return true if the Result is an erroc.
+// IsError will return true if the Result is an error.
 // It will return false if it has not yet completed.
 func (c *Continuation) IsError() bool {
 	return c.task.IsError()
@@ -26,6 +26,13 @@ func (c *Continuation) IsError() bool {
 // It will return false if it has not yet completed.
 func (c *Continuation) IsCancelled() bool {
 	return c.task.IsCancelled()
+}
+
+// IsErrorOrCancelled will return true if the Result is an error
+// or cancelled (NOTE: cancelled is always an error).
+// It will return false if it has not yet completed.
+func (c *Continuation) IsErrorOrCancelled() bool {
+	return c.task.IsErrorOrCancelled()
 }
 
 // Await will block until the result is complete or the context
@@ -38,7 +45,6 @@ func (c *Continuation) Await(ctx context.Context) bool {
 
 // GetError will return the contained error or nil if the
 // result is not an error
-//
 // NOTE: this is a blocking call
 func (c *Continuation) GetError() error {
 	return c.task.GetError()
@@ -46,7 +52,7 @@ func (c *Continuation) GetError() error {
 
 // DoneChan will return a channel that will be closed when the
 // result/error has been set
-func (c *Continuation) DoneChan() <-chan struct{} {
+func (c *Continuation) DoneChan() <-chan Void {
 	return c.task.DoneChan()
 }
 
@@ -68,7 +74,7 @@ func (c *Continuation) OnComplete(fn func(error)) *Continuation {
 }
 
 // WhenComplete will call the func when the result has been set
-func (c *Continuation) WhenComplete(fn Handler[struct{}]) {
+func (c *Continuation) WhenComplete(fn Handler[Void]) {
 	c.task.WhenComplete(fn)
 }
 
@@ -99,7 +105,7 @@ func (c *Continuation) WhenCompleteAsync(fn func(error)) *Continuation {
 
 // OnCompleteAsync will asynchronously call the func when the result
 // has been set
-func (c *Continuation) OnCompleteAsync(fn Handler[struct{}]) {
+func (c *Continuation) OnCompleteAsync(fn Handler[Void]) {
 	c.task.OnCompleteAsync(fn)
 }
 
@@ -114,4 +120,10 @@ func (c *Continuation) OnCompleteRunAsync(fn Runnable) {
 // completed
 func (c *Continuation) AsAsync() *Continuation {
 	return c.task.AsContinuationAsync()
+}
+
+// IsAsync returns true if the continuation was created to call
+// continuations asynchronously
+func (c *Continuation) IsAsync() bool {
+	return c.task.IsAsync()
 }

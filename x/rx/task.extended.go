@@ -6,26 +6,31 @@ import (
 	"unsafe"
 )
 
+type taskState struct {
+	status uint32
+	state  unsafe.Pointer
+}
+
 func (r *Task[T]) lock() (previous uint32) {
 	for {
-		current := atomic.LoadUint32(r.status)
+		current := atomic.LoadUint32(&r.store.status)
 
 		if isDone(current) {
 			return current
 		}
 
-		if !isLocked(current) && atomic.CompareAndSwapUint32(r.status, current, current|_LOCKED) {
+		if !isLocked(current) && atomic.CompareAndSwapUint32(&r.store.status, current, current|_LOCKED) {
 			return current
 		}
 	}
 }
 
 func (r *Task[T]) unlock(status uint32) {
-	atomic.StoreUint32(r.status, status)
+	atomic.StoreUint32(&r.store.status, status)
 }
 
 func (r *Task[T]) completeOrFail(val T, err error) bool {
-	if isCompletedOrigin(*r.status) {
+	if isCompletedOrigin(r.store.status) {
 		return false
 	}
 
@@ -53,8 +58,8 @@ func (r *Task[T]) completeOrFail(val T, err error) bool {
 }
 
 func (r *Task[T]) addFnHandler(fn Handler[T], noTask bool) *Task[T] {
-	if isCompletedOrigin(*r.status) {
-		return r.executeHandlerUnsafe(*r.status, fn)
+	if isCompletedOrigin(r.store.status) {
+		return r.executeHandlerUnsafe(r.store.status, fn)
 	}
 
 	current := r.lock()
@@ -70,7 +75,7 @@ func (r *Task[T]) addFnHandler(fn Handler[T], noTask bool) *Task[T] {
 	return task
 }
 
-func (r *Task[T]) getOrAddDoneBlockChanHandler() chan struct{} {
+func (r *Task[T]) getOrAddDoneBlockChanHandler() chan Void {
 	current := r.lock()
 	if isDone(current) {
 		r.unlock(current)
@@ -91,13 +96,13 @@ func (r *Task[T]) getOrAddDoneBlockChanHandler() chan struct{} {
 
 func (r *Task[T]) loadValueOrErrorUnsafe(status uint32) (value T, err error) {
 	if hasError(status) {
-		//err = *(*error)(atomic.LoadPointer(&r.state))
-		err = *(*error)(r.state)
+		//err = *(*error)(atomic.LoadPointer(&r.taskState.state))
+		err = *(*error)(r.store.state)
 		return
 	}
 
-	//ptr := (*T)(atomic.LoadPointer(&r.state))
-	ptr := (*T)(r.state)
+	//ptr := (*T)(atomic.LoadPointer(&r.taskState.state))
+	ptr := (*T)(r.store.state)
 	if ptr != nil {
 		return *ptr, nil
 	}
@@ -111,7 +116,7 @@ func (r *Task[T]) setEitherNoReturn(value T, err error) {
 
 func (r *Task[T]) handlerStackPushUnsafe(current uint32, fn Handler[T], noTask bool) *Task[T] {
 	if !hasAnyHandler(current) {
-		// first fn, so just encode and store
+		// first fn, so just encode and taskState
 		r.encodeFnAndStoreUnsafe(fn)
 		return r
 	}
@@ -141,8 +146,10 @@ func (r *Task[T]) getCombinedHandler(newer Handler[T], older Handler[T], noTask 
 		return r, h.invoke
 	}
 
-	st := _FN
-	task := &Task[T]{status: &st, state: unsafe.Pointer(&newer)}
+	task := &Task[T]{&taskState{
+		status: _FN,
+		state:  unsafe.Pointer(&newer),
+	}}
 	h := onSuccessOrErrorTaskHandler[T]{task, older}
 
 	return task, h.invoke
@@ -154,7 +161,7 @@ func (r *Task[T]) getAndEncodeNewDoneChanBlockRunHandlerUnsafe(current uint32) *
 		fn = r.getHandlerUnsafe()
 	}
 
-	bkh := &onDoneChanBlockRunHandler[T]{chDone: make(chan struct{}), fn: fn}
+	bkh := &onDoneChanBlockRunHandler[T]{chDone: make(chan Void), fn: fn}
 	r.encodeToBlockChanAndStoreUnsafe(bkh)
 
 	return bkh
@@ -176,7 +183,7 @@ func (r *Task[T]) executeHandlerWithValOrErr(val T, err error, fn Handler[T], as
 	}
 }
 
-func (r *Task[T]) getAnyHandlerUnsafe(current uint32) (Handler[T], chan struct{}) {
+func (r *Task[T]) getAnyHandlerUnsafe(current uint32) (Handler[T], chan Void) {
 	if hasBlockingDoneHandler(current) {
 		bkh := r.getDoneChanBlockHandlerUnsafe()
 		return bkh.invoke, bkh.chDone
@@ -190,34 +197,34 @@ func (r *Task[T]) getAnyHandlerUnsafe(current uint32) (Handler[T], chan struct{}
 }
 
 func (r *Task[T]) getHandlerUnsafe() Handler[T] {
-	return *(*Handler[T])(r.state)
-	//return *(*Handler[T])(atomic.LoadPointer(&r.state))
+	return *(*Handler[T])(r.store.state)
+	//return *(*Handler[T])(atomic.LoadPointer(&r.taskState.state))
 }
 
 func (r *Task[T]) getDoneChanBlockHandlerUnsafe() *onDoneChanBlockRunHandler[T] {
-	return (*onDoneChanBlockRunHandler[T])(r.state)
-	//return (*onDoneChanBlockRunHandler[T])(atomic.LoadPointer(&r.state))
+	return (*onDoneChanBlockRunHandler[T])(r.store.state)
+	//return (*onDoneChanBlockRunHandler[T])(atomic.LoadPointer(&r.taskState.state))
 }
 
 func (r *Task[T]) encodeToBlockChanAndStoreUnsafe(bkh *onDoneChanBlockRunHandler[T]) {
-	r.state = unsafe.Pointer(bkh)
-	//atomic.StorePointer(&r.state, unsafe.Pointer(&bkh))
+	//*r.state = unsafe.Pointer(bkh)
+	atomic.StorePointer(&r.store.state, unsafe.Pointer(&bkh))
 }
 
 func (r *Task[T]) encodeFnAndStoreUnsafe(fn Handler[T]) {
-	r.state = unsafe.Pointer(&fn)
-	//atomic.StorePointer(&r.state, unsafe.Pointer(&fn))
+	//*r.state = unsafe.Pointer(&fn)
+	atomic.StorePointer(&r.store.state, unsafe.Pointer(&fn))
 }
 
 func (r *Task[T]) encodeValOrErrAndStoreUnsafe(val T, err error) uint32 {
 	if err == nil {
-		r.state = unsafe.Pointer(&val)
-		//atomic.StorePointer(&r.state, unsafe.Pointer(&val))
+		//*r.state = unsafe.Pointer(&val)
+		atomic.StorePointer(&r.store.state, unsafe.Pointer(&val))
 		return _VALUE
 	}
 
-	r.state = unsafe.Pointer(&err)
-	//atomic.StorePointer(&r.state, unsafe.Pointer(&err))
+	//*r.state = unsafe.Pointer(&err)
+	atomic.StorePointer(&r.store.state, unsafe.Pointer(&err))
 
 	return utils.IfElse(err == ErrCancelled, _CANCELLED_OR_ERROR, _ERROR)
 }

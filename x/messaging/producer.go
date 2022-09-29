@@ -16,9 +16,9 @@ import (
 type Producer[T any] struct {
 	kp      *kafka.Producer
 	topic   string
-	chClose chan struct{}
+	chClose chan rx.Void
 	serdes  Serdes[T]
-	onDone  *rx.Task[struct{}]
+	onDone  *rx.Task[rx.Void]
 	mu      sync.RWMutex
 	out     chan *messageWithCtx
 }
@@ -40,9 +40,9 @@ func NewProducer[T any](config cfg.Config, serdes Serdes[T]) (*Producer[T], erro
 	p := &Producer[T]{
 		kp:      kp,
 		topic:   tp,
-		chClose: make(chan struct{}),
+		chClose: make(chan rx.Void),
 		serdes:  serdes,
-		onDone:  rx.NewTask[struct{}](),
+		onDone:  rx.NewTask[rx.Void](),
 		mu:      sync.RWMutex{},
 		out:     make(chan *messageWithCtx, 100),
 	}
@@ -58,7 +58,7 @@ func (c *Producer[T]) Submit(ctx context.Context, message T) *rx.Continuation {
 		return rx.FailureC(err)
 	}
 
-	task := rx.NewTask[struct{}]()
+	task := rx.NewTask[rx.Void]()
 
 	if ctx == nil {
 		ctx = context.Background()
@@ -118,7 +118,7 @@ func (c *Producer[T]) enqueue(msg *messageWithCtx) {
 	}
 }
 
-func (c *Producer[T]) createMessage(key []byte, payload []byte, task *rx.Task[struct{}]) *kafka.Message {
+func (c *Producer[T]) createMessage(key []byte, payload []byte, task *rx.Task[rx.Void]) *kafka.Message {
 	return &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &c.topic},
 		Key:            key,
@@ -152,8 +152,8 @@ func handleEvent(e kafka.Event, done *int) {
 			return
 		}
 
-		task := m.Opaque.(*rx.Task[struct{}])
-		task.CompleteOrFail(struct{}{}, m.TopicPartition.Error)
+		task := m.Opaque.(*rx.Task[rx.Void])
+		task.CompleteOrFail(rx.Void{}, m.TopicPartition.Error)
 	}
 }
 
@@ -189,7 +189,7 @@ func load(config cfg.Config) (topic string, kp *kafka.Producer, err error) {
 	return topic, p, nil
 }
 
-func (c *Producer[T]) beginEventProcessing(onDone *rx.Task[struct{}], out chan *messageWithCtx) {
+func (c *Producer[T]) beginEventProcessing(onDone *rx.Task[rx.Void], out chan *messageWithCtx) {
 	ev := c.kp.Events()
 	done := 0
 	for done == 0 {
@@ -238,7 +238,7 @@ func (c *Producer[T]) beginEventProcessing(onDone *rx.Task[struct{}], out chan *
 	if done == 4 {
 		onDone.Fail(ErrUnexpectedProducerError)
 	} else {
-		onDone.Complete(struct{}{})
+		onDone.Complete(rx.Void{})
 	}
 }
 
@@ -248,5 +248,5 @@ type messageWithCtx struct {
 }
 
 func (c *messageWithCtx) fail(err error) {
-	c.msg.Opaque.(*rx.Task[struct{}]).Fail(err)
+	c.msg.Opaque.(*rx.Task[rx.Void]).Fail(err)
 }
