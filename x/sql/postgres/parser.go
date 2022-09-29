@@ -1,6 +1,16 @@
 package postgres
 
-import "strings"
+import (
+	"kwil/x/sql/core"
+	"strings"
+)
+
+func NewParser() *Parser {
+	return &Parser{}
+}
+
+type Parser struct {
+}
 
 // https://www.postgresql.org/docs/current/sql-keywords-appendix.html
 func (p *Parser) IsReservedKeyword(s string) bool {
@@ -109,4 +119,16 @@ func (p *Parser) IsReservedKeyword(s string) bool {
 		return false
 	}
 	return true
+}
+
+// https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-COMMENTS
+func (p *Parser) CommentSyntax() core.CommentSyntax {
+	return core.CommentSyntax{
+		Dash:      true,
+		SlashStar: true,
+	}
+}
+
+func (p *Parser) Kind() core.EngineKind {
+	return core.EnginePostgreSQL
 }
