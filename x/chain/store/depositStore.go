@@ -143,6 +143,10 @@ func (ds *DepositStore) GetBalance(addr string) (*big.Int, error) {
 	key := append(ds.prefix, []byte(addr)...)
 	val, err := ds.db.Get(key)
 	if err != nil {
+		// if error is key not found, then return 0
+		if err == etypes.ErrNotFound {
+			return big.NewInt(0), nil
+		}
 		return nil, err
 	}
 

@@ -117,6 +117,7 @@ func (ef *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *typ
 	sub, err := ef.EthClient.SubscribeNewHead(ctx, headers)
 	log.Debug().Msg("resubscribing to eth client")
 	if err != nil {
+		time.Sleep(5 * time.Second)
 		log.Fatal().Err(err).Msg("failed to subscribe to new block headers")
 	}
 	return sub

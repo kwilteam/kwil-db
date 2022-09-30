@@ -22,3 +22,15 @@ func (s *Service) GetWalletRole(ctx context.Context, req *v0.GetWalletRoleReques
 		Permissions: &v0.GetWalletRoleResponsePerms{Ddl: myRole.Permissions.DDL, Queries: myRole.Permissions.ParamaterizedQueries},
 	}, nil
 }
+
+func (s *Service) GetBalance(ctx context.Context, req *v0.GetBalanceRequest) (*v0.GetBalanceResponse, error) {
+
+	bal, err := s.ds.GetBalance(req.Id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &v0.GetBalanceResponse{
+		Balance: bal.String(),
+	}, nil
+}
