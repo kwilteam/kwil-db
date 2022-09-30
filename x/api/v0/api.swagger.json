@@ -920,15 +920,7 @@
       "type": "object"
     },
     "v0PostQueryResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "msg": {
-          "type": "string"
-        }
-      }
+      "type": "object"
     },
     "v0UpdateDatabaseResponse": {
       "type": "object"
