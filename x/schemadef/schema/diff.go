@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"sort"
 
-	"kwil/x/schemadef/sqlx"
+	sqlx "kwil/x/sql/x"
 )
 
 type (
@@ -626,7 +626,7 @@ func (d *Diff) partsChange(from, to []*IndexPart) ChangeKind {
 	sort.Slice(from, func(i, j int) bool { return from[i].SeqNo < from[j].SeqNo })
 	for i := range from {
 		switch {
-		case from[i].Desc != to[i].Desc || d.IndexPartAttrChanged(from[i], to[i]):
+		case from[i].Descending != to[i].Descending || d.IndexPartAttrChanged(from[i], to[i]):
 			return ChangeParts
 		case from[i].C != nil && to[i].C != nil:
 			if from[i].C.Name != to[i].C.Name {

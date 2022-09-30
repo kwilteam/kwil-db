@@ -3,7 +3,6 @@ package kwil.api.v0;
 option go_package = "kwil/x/api/v0";
 
 import "google/api/annotations.proto";
-import "api/v0/plan.proto";
 
 service KwilService {
   rpc Connect(ConnectRequest) returns (ConnectResponse) {
@@ -127,6 +126,8 @@ service KwilService {
   }
 }
 
+message PlanRequest {}
+message PlanResponse {}
 message ConnectRequest {}
 message ConnectResponse {
     string address = 1;

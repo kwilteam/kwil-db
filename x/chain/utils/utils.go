@@ -4,12 +4,11 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"io"
+	"kwil/x/utils"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime"
-
-	"kwil/x/common/errs"
 )
 
 // Loads file from the root directory of Kwil
@@ -32,7 +31,7 @@ func concatWithRootChainPath(homeDir, name string) string {
 
 func getNodeKeyHash(dir string) string {
 	f, err := os.Open(path.Join(dir, "config", "node_key.json"))
-	errs.PanicIfError(err)
+	utils.PanicIfError(err)
 
 	defer func(f *os.File) {
 		_ = f.Close()
@@ -41,7 +40,7 @@ func getNodeKeyHash(dir string) string {
 	h := md5.New()
 
 	_, err = io.Copy(h, f)
-	errs.PanicIfError(err)
+	utils.PanicIfError(err)
 
 	return hex.EncodeToString(h.Sum(nil))
 }

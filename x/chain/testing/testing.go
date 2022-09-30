@@ -6,7 +6,7 @@ import (
 	tdba "kwil/pkg/types/db"
 	"kwil/x/chain/db"
 	"kwil/x/chain/store"
-	u "kwil/x/common/utils"
+	u "kwil/x/utils"
 )
 
 const configPath = "/configs/test_config.json"

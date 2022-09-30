@@ -1,8 +1,9 @@
 package schema
 
 import (
+	"kwil/x/sql/postgres"
+
 	"github.com/spf13/cobra"
-	"kwil/x/schemadef/postgres"
 )
 
 func createDiffCmd() *cobra.Command {
@@ -12,28 +13,30 @@ func createDiffCmd() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "diff",
-		Short: "Compute the diff between a source schema and a target schema.",
-		Long:  "`kwil schema diff` calculates the diff between a source schema and a target schema. Source and target can be a database URL or the path to an HCL file.",
+		Use:           "diff",
+		Short:         "Compute the diff between a source schema and a target schema.",
+		Long:          "`kwil schema diff` calculates the diff between a source schema and a target schema. Source and target can be a database URL or the path to an HCL file.",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			from, err := loadSchema(cmd.Context(), opts.From, nil)
+			from, err := loadRealm(cmd.Context(), opts.From, nil)
 			if err != nil {
 				return err
 			}
 
-			to, err := loadSchema(cmd.Context(), opts.To, nil)
+			to, err := loadRealm(cmd.Context(), opts.To, nil)
 			if err != nil {
 				return err
 			}
 
 			differ := postgres.NewDiffer()
-			changes, err := differ.SchemaDiff(from, to)
+			changes, err := differ.RealmDiff(from, to)
 			if err != nil {
 				return err
 			}
 
 			planner := postgres.NewPlanner()
-			plan, err := planner.PlanChanges(cmd.Context(), changes)
+			plan, err := planner.PlanChanges(changes)
 			if err != nil {
 				return err
 			}

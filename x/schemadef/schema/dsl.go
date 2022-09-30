@@ -66,6 +66,16 @@ func (r *Schema) AddEnums(enums ...*Enum) *Schema {
 	return r
 }
 
+// GetEnum returns the enum with the given name.
+func (s *Schema) GetEnum(name string) (*Enum, bool) {
+	for _, e := range s.Enums {
+		if e.Name == name {
+			return e, true
+		}
+	}
+	return nil, false
+}
+
 // AddTables adds and links the given tables to the schema.
 func (s *Schema) AddTables(tables ...*Table) *Schema {
 	for _, t := range tables {
@@ -73,6 +83,16 @@ func (s *Schema) AddTables(tables ...*Table) *Schema {
 	}
 	s.Tables = append(s.Tables, tables...)
 	return s
+}
+
+// GetTable returns the table with the given name.
+func (s *Schema) GetTable(name string) (*Table, bool) {
+	for _, t := range s.Tables {
+		if t.Name == name {
+			return t, true
+		}
+	}
+	return nil, false
 }
 
 // NewRealm creates a new Realm.
@@ -91,6 +111,36 @@ func (r *Realm) AddSchemas(schemas ...*Schema) *Realm {
 	}
 	r.Schemas = append(r.Schemas, schemas...)
 	return r
+}
+
+// GetSchema returns the schema with the given name.
+func (r *Realm) GetSchema(name string) (*Schema, bool) {
+	for _, s := range r.Schemas {
+		if s.Name == name {
+			return s, true
+		}
+	}
+	return nil, false
+}
+
+// GetQuery returns the query with the given name.
+func (r *Realm) GetQuery(name string) (*Query, bool) {
+	for _, q := range r.Queries {
+		if q.Name == name {
+			return q, true
+		}
+	}
+	return nil, false
+}
+
+// GetRole returns the role with the given name.
+func (r *Realm) GetRole(name string) (*Role, bool) {
+	for _, s := range r.Roles {
+		if s.Name == name {
+			return s, true
+		}
+	}
+	return nil, false
 }
 
 // SetCharset sets or appends the Charset attribute
@@ -120,26 +170,21 @@ func (r *Realm) UnsetCollation() *Realm {
 }
 
 // AddQueries adds the given queries to the realm.
-func (r *Realm) AddQueries(queries ...*Query) *Realm {
+func (s *Realm) AddQueries(queries ...*Query) *Realm {
 	for _, q := range queries {
-		q.SetRealm(r)
+		q.Realm = s
 	}
-	r.Queries = append(r.Queries, queries...)
-	return r
+	s.Queries = append(s.Queries, queries...)
+	return s
 }
 
 // AddRoles adds the given roles to the realm.
 func (r *Realm) AddRoles(roles ...*Role) *Realm {
 	for _, s := range roles {
-		s.SetRealm(r)
+		s.Realm = r
 	}
 	r.Roles = append(r.Roles, roles...)
 	return r
-}
-
-func (e *Enum) SetSchema(s *Schema) *Enum {
-	e.Schema = s
-	return e
 }
 
 // NewTable creates a new Table.
@@ -194,7 +239,7 @@ func (t *Table) AddChecks(checks ...*Check) *Table {
 	return t
 }
 
-// SetPrimaryKey sets the primary-key of the table.
+// SetPrimaryKey sets the primary key of the table.
 func (t *Table) SetPrimaryKey(pk *Index) *Table {
 	pk.Table = t
 	t.PrimaryKey = pk
@@ -576,7 +621,7 @@ func NewExprPart(x Expr) *IndexPart { return &IndexPart{X: x} }
 
 // SetDesc configures the "DESC" attribute of the key part.
 func (p *IndexPart) SetDesc(b bool) *IndexPart {
-	p.Desc = b
+	p.Descending = b
 	return p
 }
 
@@ -603,40 +648,23 @@ func NewQuery(name string) *Query {
 	return &Query{Name: name}
 }
 
-func (q *Query) SetName(name string) *Query {
-	q.Name = name
+// SetStatement sets the statement of the query.
+func (q *Query) SetStatement(x string) *Query {
+	q.Statement = x
 	return q
 }
 
-func (q *Query) SetRealm(r *Realm) *Query {
-	q.Realm = r
-	return q
-}
-
-func (q *Query) SetExpression(x Expr) *Query {
-	q.Expr = x
-	return q
-}
-
+// NewRole creates a new role with the given name.
 func NewRole(name string) *Role {
 	return &Role{Name: name}
 }
 
-func (r *Role) SetName(name string) *Role {
-	r.Name = name
-	return r
+// NewDefaultRole creates a new default role.
+func NewDefaultRole(name string) *Role {
+	return &Role{Name: name, Default: true}
 }
 
-func (r *Role) SetRealm(s *Realm) *Role {
-	r.Realm = s
-	return r
-}
-
-func (r *Role) SetDefault(b bool) *Role {
-	r.Default = b
-	return r
-}
-
+// AddQueries adds the given queries to the role.
 func (r *Role) AddQueries(queries ...*Query) *Role {
 	r.Queries = append(r.Queries, queries...)
 	return r

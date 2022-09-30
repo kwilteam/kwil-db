@@ -1,11 +1,12 @@
 package schema
 
 import (
+	"kwil/x/schemadef/schema"
+	_ "kwil/x/sql/postgres"
+	"kwil/x/sql/sqlclient"
+
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
-	_ "kwil/x/schemadef/postgres"
-	"kwil/x/schemadef/schema"
-	"kwil/x/schemadef/sqlclient"
 )
 
 func createInspectCmd() *cobra.Command {
@@ -16,9 +17,11 @@ func createInspectCmd() *cobra.Command {
 	}
 
 	var cmd = &cobra.Command{
-		Use:   "inspect",
-		Short: "Inspect a database and print its schema in Kwil DDL syntax.",
-		Long:  "",
+		Use:           "inspect",
+		Short:         "Inspect a database and print its schema in Kwil DDL syntax.",
+		Long:          "",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := sqlclient.Open(cmd.Context(), opts.URL)
 			if err != nil {

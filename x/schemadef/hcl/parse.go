@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclparse"
 )
 
-// parseHCLPaths parses the HCL files in the given paths. If a path represents a directory,
+// ParsePaths parses the HCL files in the given paths. If a path represents a directory,
 // its direct descendants will be considered, skipping any subdirectories.
 func ParsePaths(paths ...string) (*hclparse.Parser, error) {
 	p := hclparse.NewParser()
