@@ -21,8 +21,8 @@ func FormatType(t schema.Type) (string, error) {
 		f = strings.ToLower(t.T)
 		// BIT without a length is equivalent to BIT(1),
 		// BIT VARYING has unlimited length.
-		if f == TypeBit && t.Len > 1 || f == TypeBitVar && t.Len > 0 {
-			f = fmt.Sprintf("%s(%d)", f, t.Len)
+		if f == TypeBit && t.Width > 1 || f == TypeBitVar && t.Width > 0 {
+			f = fmt.Sprintf("%s(%d)", f, t.Width)
 		}
 	case *schema.BoolType:
 		// BOOLEAN can be abbreviated as BOOL.
@@ -183,7 +183,7 @@ func columnType(c *columnDesc) (schema.Type, error) {
 	case TypeBigInt, TypeInt8, TypeInt, TypeInteger, TypeInt4, TypeSmallInt, TypeInt2:
 		typ = &schema.IntegerType{T: t}
 	case TypeBit, TypeBitVar:
-		typ = &BitType{T: t, Len: c.size}
+		typ = &BitType{T: t, Width: c.size}
 	case TypeBool, TypeBoolean:
 		typ = &schema.BoolType{T: t}
 	case TypeBytea:

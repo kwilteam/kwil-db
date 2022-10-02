@@ -182,26 +182,26 @@ func ToIndex(s *Index, parent *schema.Table, partFns ...func(*IndexPart, *schema
 				return nil, err
 			}
 			parts = append(parts, &schema.IndexPart{
-				SeqNo: i,
-				C:     c,
+				Seq:    i,
+				Column: c,
 			})
 		}
 	case m > 0:
 		for i, p := range s.Parts {
-			part := &schema.IndexPart{SeqNo: i, Descending: p.Desc}
+			part := &schema.IndexPart{Seq: i, Descending: p.Desc}
 			switch {
 			case p.Column == nil && p.Expr == "":
 				return nil, fmt.Errorf(`"column" or "expr" are required for index %q at position %d`, s.Name, i)
 			case p.Column != nil && p.Expr != "":
 				return nil, fmt.Errorf(`cannot use both "column" and "expr" in index %q at position %d`, s.Name, i)
 			case p.Expr != "":
-				part.X = &schema.RawExpr{X: p.Expr}
+				part.Expr = &schema.RawExpr{X: p.Expr}
 			case p.Column != nil:
 				c, err := ColumnByRef(parent, p.Column)
 				if err != nil {
 					return nil, err
 				}
-				part.C = c
+				part.Column = c
 			}
 			for _, f := range partFns {
 				if err := f(p, part); err != nil {
@@ -388,7 +388,7 @@ func FromTable(t *schema.Table, colFn ColumnSpecFunc, pkFn PrimaryKeySpecFunc, i
 func FromPrimaryKey(s *schema.Index) (*PrimaryKey, error) {
 	c := make([]*hcl.Ref, 0, len(s.Parts))
 	for _, v := range s.Parts {
-		c = append(c, ColumnRef(v.C.Name))
+		c = append(c, ColumnRef(v.Column.Name))
 	}
 	return &PrimaryKey{
 		Columns: c,
@@ -481,16 +481,16 @@ func FromIndex(idx *schema.Index, partFns ...func(*schema.IndexPart, *IndexPart)
 	for i, p := range idx.Parts {
 		part := &IndexPart{Desc: p.Descending}
 		switch {
-		case p.C == nil && p.X == nil:
+		case p.Column == nil && p.Expr == nil:
 			return nil, fmt.Errorf("missing column or expression for key part of index %q", idx.Name)
-		case p.C != nil && p.X != nil:
+		case p.Column != nil && p.Expr != nil:
 			return nil, fmt.Errorf("multiple key part definitions for index %q", idx.Name)
-		case p.C != nil:
-			part.Column = ColumnRef(p.C.Name)
-		case p.X != nil:
-			x, ok := p.X.(*schema.RawExpr)
+		case p.Column != nil:
+			part.Column = ColumnRef(p.Column.Name)
+		case p.Expr != nil:
+			x, ok := p.Expr.(*schema.RawExpr)
 			if !ok {
-				return nil, fmt.Errorf("unexpected expression %T for index %q", p.X, idx.Name)
+				return nil, fmt.Errorf("unexpected expression %T for index %q", p.Expr, idx.Name)
 			}
 			part.Expr = x.X
 		}
@@ -505,10 +505,10 @@ func FromIndex(idx *schema.Index, partFns ...func(*schema.IndexPart, *IndexPart)
 func columnsOnly(idx *schema.Index) ([]*hcl.Ref, bool) {
 	parts := make([]*hcl.Ref, len(idx.Parts))
 	for i, p := range idx.Parts {
-		if p.C == nil || p.Descending {
+		if p.Column == nil || p.Descending {
 			return nil, false
 		}
-		parts[i] = ColumnRef(p.C.Name)
+		parts[i] = ColumnRef(p.Column.Name)
 	}
 	return parts, true
 }

@@ -874,10 +874,10 @@ func (s *state) indexParts(b *sqlx.Builder, parts []*schema.IndexPart) {
 	b.Wrap(func(b *sqlx.Builder) {
 		b.MapComma(parts, func(i int, b *sqlx.Builder) {
 			switch part := parts[i]; {
-			case part.C != nil:
-				b.Ident(part.C.Name)
-			case part.X != nil:
-				b.WriteString(sqlx.MayWrap(part.X.(*schema.RawExpr).X))
+			case part.Column != nil:
+				b.Ident(part.Column.Name)
+			case part.Expr != nil:
+				b.WriteString(sqlx.MayWrap(part.Expr.(*schema.RawExpr).X))
 			}
 			s.partAttrs(b, parts[i])
 		})
@@ -937,11 +937,11 @@ func (s *state) index(b *sqlx.Builder, idx *schema.Index) {
 		})
 	}
 	if p := (IndexPredicate{}); schema.Has(idx.Attrs, &p) {
-		b.P("WHERE").P(p.P)
+		b.P("WHERE").P(p.Predicate)
 	}
 	for _, attr := range idx.Attrs {
 		switch attr.(type) {
-		case *schema.Comment, *ConType, *IndexType, *IndexInclude, *IndexPredicate, *IndexStorageParams:
+		case *schema.Comment, *ConstraintType, *IndexType, *IndexInclude, *IndexPredicate, *IndexStorageParams:
 		default:
 			panic(fmt.Sprintf("unexpected index attribute: %T", attr))
 		}
@@ -1005,7 +1005,7 @@ search:
 		// See https://www.postgresql.org/docs/current/sql-altertable.html
 		case *schema.DropIndex:
 			for _, p := range c.I.Parts {
-				if p.C != nil && dropC[p.C.Name] {
+				if p.Column != nil && dropC[p.Column.Name] {
 					continue search
 				}
 			}
@@ -1060,13 +1060,13 @@ func check(b *sqlx.Builder, c *schema.Check) {
 
 // isUniqueConstraint reports if the index is a valid UNIQUE constraint.
 func isUniqueConstraint(i *schema.Index) bool {
-	if c := (ConType{}); !schema.Has(i.Attrs, &c) || !c.IsUnique() || !i.Unique {
+	if c := (ConstraintType{}); !schema.Has(i.Attrs, &c) || !c.IsUnique() || !i.Unique {
 		return false
 	}
 	// UNIQUE constraint cannot use functional indexes,
 	// and all its parts must have the default sort ordering.
 	for _, p := range i.Parts {
-		if p.X != nil || p.Descending {
+		if p.Expr != nil || p.Descending {
 			return false
 		}
 	}

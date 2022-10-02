@@ -188,3 +188,11 @@ func formatTime() hcl.TypeSpecOption {
 
 // generatedType returns the default and only type for a generated column.
 func generatedType(string) string { return "STORED" }
+
+func columnNames(cols []*schema.Column) []string {
+	names := make([]string, len(cols))
+	for i, c := range cols {
+		names[i] = c.Name
+	}
+	return names
+}

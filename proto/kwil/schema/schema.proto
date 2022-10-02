@@ -1,0 +1,266 @@
+syntax = "proto3";
+package schemapb;
+option go_package = "kwil/x/proto/schemapb";
+
+import "kwil/pgschema/postgres.proto";
+
+message Realm {
+    repeated Schema schemas = 1;
+    repeated Role roles = 2;
+    repeated Query queries = 3;
+    repeated Attr attrs = 4;
+}
+
+message Schema {
+    string name = 1;
+    repeated Table tables = 2;
+    repeated Enum enums = 3;
+    repeated Attr attrs = 4;
+}
+
+message Table {
+    string name = 1;
+    repeated Column columns = 2;
+    repeated Index indexes = 3;
+    Index primary_key = 4;
+    repeated ForeignKey foreign_keys = 5;
+    repeated Attr attrs = 6;
+}
+
+message Column {
+    string name = 1;
+    ColumnType type = 2;
+    Expr default = 3;
+    repeated Index indexes = 4;
+    repeated ForeignKey foreign_keys = 5;
+    repeated Attr attrs = 6;
+}
+
+message ColumnType {
+    Type type = 1;
+    string raw = 2;
+    bool nullable = 3;
+}
+
+message Index {
+    string name = 1;
+    bool unique = 2;
+    repeated IndexPart parts = 3;
+    repeated Attr attrs = 4;
+}
+
+message IndexPart {
+    int64 seq = 1;
+    bool descending = 2;
+    oneof value {
+        Expr expr = 3;
+        string column = 4;
+    }
+    repeated Attr attrs = 5;
+}
+
+message ForeignKey {
+    string symbol = 1;
+    string table = 2;
+    repeated string columns = 3;
+    string ref_table = 4;
+    repeated string ref_columns = 5;
+    ReferenceOption on_update = 6;
+    ReferenceOption on_delete = 7;
+}
+
+message Enum {
+    string name = 1;
+    repeated string values = 2;
+}
+
+message Query {
+    string name = 1;
+    string statement = 2;
+}
+
+message Role {
+    string name = 1;
+    bool default = 2;
+    repeated string queries = 3;
+}
+
+message Function {
+    string name = 1;
+    repeated Argument args = 2;
+    Type return_type = 3;
+    string comment = 4;
+    string description = 5;
+    bool return_type_nullable = 6;
+}
+
+message Argument {
+    string name = 1;
+    Type type = 2;
+    bool has_default = 3;
+    FuncParamMode mode = 4;
+}
+
+enum ReferenceOption {
+    NoAction   = 0;
+    Restrict   = 1;
+    Cascade    = 2;
+    SetNull    = 3;
+    SetDefault = 4;
+}
+
+enum FuncParamMode {
+    InParam  = 0;
+    OutParam = 1;
+    InOutParam = 2;
+    VariadicParam = 3;
+    TableParam = 4;
+}
+
+message Literal {
+    string value = 1;
+}
+message RawExpr {
+    string expr = 1;
+}
+message Expr {
+    oneof value {
+        Literal literal = 1;
+        RawExpr raw_expr = 2;
+    }
+}
+
+
+// Base types
+message EnumType {
+    string type = 1;
+    repeated string values = 2;
+}
+message BinaryType {
+    string type = 1;
+    optional int64 size = 2;
+}
+message StringType {
+    string type = 1;
+    int64 size = 2;
+}
+message BoolType {
+    string type = 1;
+}
+message IntegerType {
+    string type = 1;
+    int64 size = 2;
+    bool unsigned = 3;
+    repeated Attr attrs = 4;
+}
+message TimeType {
+    string type = 1;
+    optional int64 precision = 2;
+}
+message SpatialType {
+    string type = 1;
+}
+message DecimalType {
+    string type = 1;
+    int64 precision = 2;
+    int64 scale = 3;
+    bool unsigned = 4;
+}
+message FloatType {
+    string type = 1;
+    int64 precision = 2;
+    bool unsigned = 3;
+}
+message JsonType {
+    string type = 1;
+}
+
+// Postgres specific types
+message CType {
+    string value = 1;
+}
+message UserDefinedType {
+    string type = 1;
+}
+message ArrayType {
+    string type = 1;
+}
+message BitType {
+    string type = 1;
+    int64 width = 2;
+}
+message IntervalType {
+    string type = 1;
+    string field = 2;
+    optional int64 precision = 3;
+}
+message NetworkType {
+    string type = 1;
+    int64 width = 2;
+}
+message CurrencyType {
+    string type = 1;
+    int64 precision = 2;
+    string sequence_name = 3;
+}
+message UUIDType {
+    string type = 1;
+}
+message XMLType {
+    string type = 1;
+}
+
+// Unsupported
+message UnsupportedType {
+    string type = 1;
+}
+message Type {
+    oneof value {
+        EnumType enum_type = 1;
+        BinaryType binary_type = 2;
+        StringType string_type = 3;
+        BoolType bool_type = 4;
+        IntegerType integer_type = 5;
+        TimeType time_type = 6;
+        SpatialType spatial_type = 7;
+        DecimalType decimal_type = 8;
+        FloatType float_type = 9;
+        JsonType json_type = 10;
+        pgschemapb.Type pg_type = 20;
+        UnsupportedType unsupported_type = 100;
+    }
+}
+
+
+
+// Base attributes
+message CommentAttr {
+    string text = 1;
+}
+message CharsetAttr {
+    string value = 1;
+}
+message CollationAttr {
+    string value = 1;
+}
+message CheckAttr {
+    string name = 1;
+    string expr = 2;
+    repeated Attr attrs = 3;
+}
+message GeneratedExprAttr {
+    string expr = 1;
+    string type = 2;
+}
+
+message Attr {
+    oneof value {
+        CommentAttr comment_attr = 1;
+        CharsetAttr charset_attr = 2;
+        CollationAttr collation_attr = 3;
+        CheckAttr check_attr = 4;
+        GeneratedExprAttr generated_expr_attr = 5;
+
+        pgschemapb.Attr pg_attr = 20;
+    }
+}

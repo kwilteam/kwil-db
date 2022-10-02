@@ -622,18 +622,16 @@ func (d *Diff) partsChange(from, to []*IndexPart) ChangeKind {
 	if len(from) != len(to) {
 		return ChangeParts
 	}
-	sort.Slice(to, func(i, j int) bool { return to[i].SeqNo < to[j].SeqNo })
-	sort.Slice(from, func(i, j int) bool { return from[i].SeqNo < from[j].SeqNo })
+	sort.Slice(to, func(i, j int) bool { return to[i].Seq < to[j].Seq })
+	sort.Slice(from, func(i, j int) bool { return from[i].Seq < from[j].Seq })
 	for i := range from {
 		switch {
 		case from[i].Descending != to[i].Descending || d.IndexPartAttrChanged(from[i], to[i]):
 			return ChangeParts
-		case from[i].C != nil && to[i].C != nil:
-			if from[i].C.Name != to[i].C.Name {
-				return ChangeParts
-			}
-		case from[i].X != nil && to[i].X != nil:
-			x1, x2 := from[i].X.(*RawExpr).X, to[i].X.(*RawExpr).X
+		case from[i].Column != to[i].Column:
+			return ChangeParts
+		case from[i].Expr != nil && to[i].Expr != nil:
+			x1, x2 := from[i].Expr.(*RawExpr).X, to[i].Expr.(*RawExpr).X
 			if x1 != x2 && x1 != sqlx.MayWrap(x2) {
 				return ChangeParts
 			}

@@ -125,10 +125,10 @@ func (*diff) partitionChanged(from, to *schema.Table) error {
 func (d *diff) IsGeneratedIndexName(t *schema.Table, idx *schema.Index) bool {
 	names := make([]string, len(idx.Parts))
 	for i, p := range idx.Parts {
-		if p.C == nil {
+		if p.Column == nil {
 			return false
 		}
-		names[i] = p.C.Name
+		names[i] = p.Column.Name
 	}
 	// Auto-generate index names will have the following format: <table>_<c1>_..._key.
 	// In case of conflict, PostgreSQL adds additional index at the end (e.g. "key1").
@@ -155,7 +155,7 @@ func (*diff) IndexAttrChanged(from, to []schema.Attr) bool {
 		return true
 	}
 	var p1, p2 IndexPredicate
-	if schema.Has(from, &p1) != schema.Has(to, &p2) || (p1.P != p2.P && p1.P != sqlx.MayWrap(p2.P)) {
+	if schema.Has(from, &p1) != schema.Has(to, &p2) || (p1.Predicate != p2.Predicate && p1.Predicate != sqlx.MayWrap(p2.Predicate)) {
 		return true
 	}
 	if indexIncludeChanged(from, to) {
@@ -310,10 +310,10 @@ func formatPartition(p Partition) (string, error) {
 	b.Wrap(func(b *sqlx.Builder) {
 		b.MapComma(p.Parts, func(i int, b *sqlx.Builder) {
 			switch k := p.Parts[i]; {
-			case k.C != nil:
-				b.Ident(k.C.Name)
-			case k.X != nil:
-				b.P(sqlx.MayWrap(k.X.(*schema.RawExpr).X))
+			case k.Column != nil:
+				b.Ident(k.Column.Name)
+			case k.Expr != nil:
+				b.P(sqlx.MayWrap(k.Expr.(*schema.RawExpr).X))
 			}
 		})
 	})

@@ -339,10 +339,10 @@ func (i *inspect) addIndexes(s *schema.Schema, rows *sql.Rows) error {
 				idx.Attrs = append(idx.Attrs, &schema.Comment{Text: comment.String})
 			}
 			if sqlx.ValidString(contype) {
-				idx.Attrs = append(idx.Attrs, &ConType{T: contype.String})
+				idx.Attrs = append(idx.Attrs, &ConstraintType{T: contype.String})
 			}
 			if sqlx.ValidString(pred) {
-				idx.Attrs = append(idx.Attrs, &IndexPredicate{P: pred.String})
+				idx.Attrs = append(idx.Attrs, &IndexPredicate{Predicate: pred.String})
 			}
 			if sqlx.ValidString(options) {
 				p, err := newIndexStorage(options.String)
@@ -358,7 +358,7 @@ func (i *inspect) addIndexes(s *schema.Schema, rows *sql.Rows) error {
 				t.Indexes = append(t.Indexes, idx)
 			}
 		}
-		part := &schema.IndexPart{SeqNo: len(idx.Parts) + 1, Descending: desc.Bool}
+		part := &schema.IndexPart{Seq: len(idx.Parts) + 1, Descending: desc.Bool}
 		if nullsfirst.Bool || nullslast.Bool {
 			part.Attrs = append(part.Attrs, &IndexColumnProperty{
 				NullsFirst: nullsfirst.Bool,
@@ -376,14 +376,14 @@ func (i *inspect) addIndexes(s *schema.Schema, rows *sql.Rows) error {
 			include.Columns = append(include.Columns, c)
 			schema.ReplaceOrAppend(&idx.Attrs, &include)
 		case sqlx.ValidString(column):
-			part.C, ok = t.Column(column.String)
+			part.Column, ok = t.Column(column.String)
 			if !ok {
 				return fmt.Errorf("postgres: column %q was not found for index %q", column.String, idx.Name)
 			}
-			part.C.Indexes = append(part.C.Indexes, idx)
+			part.Column.Indexes = append(part.Column.Indexes, idx)
 			idx.Parts = append(idx.Parts, part)
 		case sqlx.ValidString(expr):
-			part.X = &schema.RawExpr{
+			part.Expr = &schema.RawExpr{
 				X: expr.String,
 			}
 			idx.Parts = append(idx.Parts, part)
@@ -426,7 +426,7 @@ func (i *inspect) partitions(s *schema.Schema) error {
 					return fmt.Errorf("postgres: no expression found in partition key: %q", d.exprs)
 				}
 				d.Parts = append(d.Parts, &PartitionPart{
-					X: &schema.RawExpr{X: d.exprs[:j+1]},
+					Expr: &schema.RawExpr{X: d.exprs[:j+1]},
 				})
 				d.exprs = strings.TrimPrefix(d.exprs[j+1:], ", ")
 			// A column at index idx-1.
@@ -435,7 +435,7 @@ func (i *inspect) partitions(s *schema.Schema) error {
 					return fmt.Errorf("postgres: unexpected column index %d", idx)
 				}
 				d.Parts = append(d.Parts, &PartitionPart{
-					C: t.Columns[idx-1],
+					Column: t.Columns[idx-1],
 				})
 			}
 		}
@@ -650,8 +650,8 @@ type (
 	// https://postgresql.org/docs/current/datatype-bit.html
 	BitType struct {
 		schema.Type
-		T   string
-		Len int64
+		T     string
+		Width int64
 	}
 
 	// IntervalType defines an interval type.
@@ -667,8 +667,8 @@ type (
 	// https://postgresql.org/docs/current/datatype-net-types.html
 	NetworkType struct {
 		schema.Type
-		T   string
-		Len int64
+		T     string
+		Width int64
 	}
 
 	// A CurrencyType defines a currency type.
@@ -701,9 +701,9 @@ type (
 		T string
 	}
 
-	// ConType describes constraint type.
+	// ConstraintType describes constraint type.
 	// https://postgresql.org/docs/current/catalog-pg-constraint.html
-	ConType struct {
+	ConstraintType struct {
 		schema.Attr
 		T string // c, f, p, u, t, x.
 	}
@@ -735,7 +735,7 @@ type (
 	// https://postgresql.org/docs/current/catalog-pg-index.html
 	IndexPredicate struct {
 		schema.Attr
-		P string
+		Predicate string
 	}
 
 	// IndexColumnProperty describes an index column property.
@@ -798,14 +798,14 @@ type (
 	// An PartitionPart represents an index part that
 	// can be either an expression or a column.
 	PartitionPart struct {
-		X     schema.Expr
-		C     *schema.Column
-		Attrs []schema.Attr
+		Expr   schema.Expr
+		Column *schema.Column
+		Attrs  []schema.Attr
 	}
 )
 
 // IsUnique reports if the type is unique constraint.
-func (c ConType) IsUnique() bool { return strings.ToLower(c.T) == "u" }
+func (c ConstraintType) IsUnique() bool { return strings.ToLower(c.T) == "u" }
 
 // IntegerType returns the underlying integer type this serial type represents.
 func (s *SerialType) IntegerType() *schema.IntegerType {

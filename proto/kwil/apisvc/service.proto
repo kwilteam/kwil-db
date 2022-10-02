@@ -1,0 +1,191 @@
+syntax = "proto3";
+package apisvc;
+option go_package = "kwil/x/proto/apisvc";
+
+import "google/api/annotations.proto";
+
+import "kwil/apisvc/schema.proto";
+import "kwil/apisvc/role.proto";
+import "kwil/apisvc/table.proto";
+import "kwil/apisvc/database.proto";
+
+service KwilService {
+  rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
+  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {}
+
+
+  rpc Connect(ConnectRequest) returns (ConnectResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/connect"
+    };
+  }
+
+  // Databases
+  rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/databases"
+      body: "*"
+    };
+  }
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases"
+    };
+  }
+  rpc GetDatabase(GetDatabaseRequest) returns (GetDatabaseResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases/{id}"
+    };
+  }
+  rpc UpdateDatabase(UpdateDatabaseRequest) returns (UpdateDatabaseResponse) {
+    option (google.api.http) = {
+      put: "/api/v0/databases/{id}"
+      body: "*"
+    };
+  }
+  rpc DeleteDatabase(DeleteDatabaseRequest) returns (DeleteDatabaseResponse) {
+    option (google.api.http) = {
+      delete: "/api/v0/databases/{id}"
+    };
+  }
+
+  // Tables
+  rpc CreateTable(CreateTableRequest) returns (CreateTableResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/databases/{databaseId}/tables"
+      body: "*"
+    };
+  }
+  rpc ListTables(ListTablesRequest) returns (ListTablesResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases/{databaseId}/tables"
+    };
+  }
+  rpc GetTable(GetTableRequest) returns (GetTableResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases/{databaseId}/tables/{id}"
+    };
+  }
+  rpc UpdateTable(UpdateTableRequest) returns (UpdateTableResponse) {
+    option (google.api.http) = {
+      put: "/api/v0/databases/{databaseId}/tables/{id}"
+      body: "*"
+    };
+  }
+  rpc DeleteTable(DeleteTableRequest) returns (DeleteTableResponse) {
+    option (google.api.http) = {
+      delete: "/api/v0/databases/{databaseId}/tables/{id}"
+    };
+  }
+
+  // Roles
+  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/databases/{databaseId}/roles"
+      body: "*"
+    };
+  }
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases/{databaseId}/roles"
+    };
+  }
+  rpc GetRole(GetRoleRequest) returns (GetRoleResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases/{databaseId}/roles/{id}"
+    };
+  }
+  rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse) {
+    option (google.api.http) = {
+      put: "/api/v0/databases/{databaseId}/roles/{id}"
+      body: "*"
+    };
+  }
+  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse) {
+    option (google.api.http) = {
+      delete: "/api/v0/databases/{databaseId}/roles/{id}"
+    };
+  }
+
+  // Queries
+  rpc PostQuery(PostQueryRequest) returns (PostQueryResponse) { // this is for submitting data to Kwil
+    option (google.api.http) = {
+      post: "/api/v0/databases/{databaseId}/query"
+      body: "*"
+    };
+  }
+  rpc GetQueries(GetQueriesRequest) returns (GetQueriesResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/databases/{databaseId}/queries"
+    };
+  }
+
+  // Wallets
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/wallets/{id}/balance"
+    };
+  }
+  rpc GetWalletRole(GetWalletRoleRequest) returns (GetWalletRoleResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/wallets/{id}/{databaseId}/role"
+    };
+  }
+}
+
+
+message ConnectRequest {}
+message ConnectResponse {
+    string address = 1;
+}
+
+
+
+
+
+message PostQueryRequest {
+  string databaseId = 1;
+  string query = 2;
+  string from = 3;
+  string signature = 4;
+}
+message PostQueryResponse {}
+
+message GetQueriesRequest {
+  string databaseId = 1;
+}
+message GetQueriesResponse {
+  repeated DBQuery queries = 1;
+}
+
+message input {
+  string name = 1;
+  string type = 2;
+};
+
+message DBQuery{
+  string name = 1;
+  string query = 2;
+  repeated input parameters = 3;
+}
+
+message GetBalanceRequest {
+  string id = 1;
+}
+message GetBalanceResponse {
+  string balance = 1;
+}
+
+message GetWalletRoleRequest {
+  string id = 1;
+  string databaseId = 2;
+}
+
+message GetWalletRoleResponse {
+  string name = 1;
+  message perms {
+    bool ddl = 1;
+    repeated string queries = 2;
+  };
+  perms permissions = 2;
+}

@@ -3,10 +3,11 @@ package database
 import (
 	"context"
 
+	"kwil/x/cli/util"
+	apipb "kwil/x/proto/apisvc"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	v0 "kwil/x/api/v0"
-	"kwil/x/cli/util"
 )
 
 func dropDatabaseCmd() *cobra.Command {
@@ -15,8 +16,8 @@ func dropDatabaseCmd() *cobra.Command {
 		Short: "Drop is used to delete a database.",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc v0.KwilServiceClient) error {
-				resp, err := ksc.DeleteDatabase(ctx, &v0.DeleteDatabaseRequest{})
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc apipb.KwilServiceClient) error {
+				resp, err := ksc.DeleteDatabase(ctx, &apipb.DeleteDatabaseRequest{})
 				if err != nil {
 					return err
 				}

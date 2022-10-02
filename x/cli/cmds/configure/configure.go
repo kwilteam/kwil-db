@@ -4,12 +4,13 @@ import (
 	"context"
 	"strings"
 
+	"kwil/x/cli/util"
+	apipb "kwil/x/proto/apisvc"
+
 	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	v0 "kwil/x/api/v0"
-	"kwil/x/cli/util"
 )
 
 func NewCmdConfigure() *cobra.Command {
@@ -64,8 +65,8 @@ func NewCmdConfigure() *cobra.Command {
 			}
 
 			if doConnect == "yes" {
-				err := util.ConnectKwil(cmd.Context(), v, func(ctx context.Context, client v0.KwilServiceClient) error {
-					res, err := client.Connect(ctx, &v0.ConnectRequest{})
+				err := util.ConnectKwil(cmd.Context(), v, func(ctx context.Context, client apipb.KwilServiceClient) error {
+					res, err := client.Connect(ctx, &apipb.ConnectRequest{})
 					if err != nil {
 						return err
 					}

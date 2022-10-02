@@ -1,0 +1,74 @@
+syntax = "proto3";
+package schemasvc;
+option go_package = "kwil/x/proto/schemasvc";
+
+service SchemaService {
+    rpc Plan(PlanRequest) returns (PlanResponse) {}
+    rpc Apply(ApplyRequest) returns (ApplyResponse) {}
+}
+
+message PlanRequest {
+    string schema = 1;
+}
+
+message PlanResponse {
+    string id = 1;
+}
+
+
+message Change {
+    string cmd = 1;
+    repeated string args = 2;
+    string comment = 3;
+    string reverse = 4;
+}
+
+message Plan {
+    string id = 1;
+    string version = 2;
+    string name = 3;
+    bool reversible = 4;
+    bool transactional = 5;
+    repeated Change changes = 6;
+}
+
+message ApplyRequest {
+    string plan_id = 1;
+}
+
+message ApplyResponse {}
+
+
+
+// Plan struct {
+//     // Version and Name of the plan. Provided by the user or auto-generated.
+//     Version, Name string
+
+//     // Reversible describes if the changeset is reversible.
+//     Reversible bool
+
+//     // Transactional describes if the changeset is transactional.
+//     Transactional bool
+
+//     // Changes defines the list of changeset in the plan.
+//     Changes []*Change
+// }
+
+// // A Change of migration.
+// Change struct {
+//     // Cmd or statement to execute.
+//     Cmd string
+
+//     // Args for placeholder parameters in the statement above.
+//     Args []any
+
+//     // A Comment describes the change.
+//     Comment string
+
+//     // Reverse contains the "reversed statement" if
+//     // command is reversible.
+//     Reverse string
+
+//     // The Source that caused this change, or nil.
+//     Source SchemaChange
+// }

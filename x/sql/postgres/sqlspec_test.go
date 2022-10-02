@@ -218,7 +218,7 @@ enum "account_type" {
 	exp.Tables[0].PrimaryKey = &schema.Index{
 		Table: exp.Tables[0],
 		Parts: []*schema.IndexPart{
-			{SeqNo: 0, C: exp.Tables[0].Columns[0]},
+			{Seq: 0, Column: exp.Tables[0].Columns[0]},
 		},
 	}
 	exp.Tables[0].Indexes = []*schema.Index{
@@ -227,13 +227,13 @@ enum "account_type" {
 			Table:  exp.Tables[0],
 			Unique: true,
 			Parts: []*schema.IndexPart{
-				{SeqNo: 0, C: exp.Tables[0].Columns[0]},
-				{SeqNo: 1, C: exp.Tables[0].Columns[1]},
+				{Seq: 0, Column: exp.Tables[0].Columns[0]},
+				{Seq: 1, Column: exp.Tables[0].Columns[1]},
 			},
 			Attrs: []schema.Attr{
 				&schema.Comment{Text: "index comment"},
 				&IndexType{T: IndexTypeHash},
-				&IndexPredicate{P: "active"},
+				&IndexPredicate{Predicate: "active"},
 			},
 		},
 	}
@@ -250,7 +250,7 @@ enum "account_type" {
 	exp.Tables[1].PrimaryKey = &schema.Index{
 		Table: exp.Tables[1],
 		Parts: []*schema.IndexPart{
-			{SeqNo: 0, C: exp.Tables[1].Columns[0]},
+			{Seq: 0, Column: exp.Tables[1].Columns[0]},
 		},
 	}
 	exp.Realm = schema.NewRealm(exp)
@@ -335,7 +335,7 @@ table "logs" {
 		require.NoError(t, err)
 		c := schema.NewStringColumn("name", "text")
 		expected := schema.New("test").
-			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{C: c}}}))
+			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c}}}))
 		expected.SetRealm(schema.NewRealm(expected))
 		require.Equal(t, expected, s)
 	})
@@ -366,7 +366,7 @@ table "logs" {
 		require.NoError(t, err)
 		c := schema.NewStringColumn("name", "text")
 		expected := schema.New("test").
-			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeRange, Parts: []*PartitionPart{{C: c}, {X: &schema.RawExpr{X: "lower(name)"}}}}))
+			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeRange, Parts: []*PartitionPart{{Column: c}, {Expr: &schema.RawExpr{X: "lower(name)"}}}}))
 		expected.SetRealm(schema.NewRealm(expected))
 		require.Equal(t, expected, s)
 	})
@@ -416,7 +416,7 @@ func TestMarshalSpec_Partitioned(t *testing.T) {
 	t.Run("Columns", func(t *testing.T) {
 		c := schema.NewStringColumn("name", "text")
 		s := schema.New("test").
-			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{C: c}}}))
+			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c}}}))
 		buf, err := MarshalHCL(s)
 		require.NoError(t, err)
 		require.Equal(t, `table "logs" {
@@ -438,7 +438,7 @@ schema "test" {
 	t.Run("Parts", func(t *testing.T) {
 		c := schema.NewStringColumn("name", "text")
 		s := schema.New("test").
-			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{C: c}, {X: &schema.RawExpr{X: "lower(name)"}}}}))
+			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c}, {Expr: &schema.RawExpr{X: "lower(name)"}}}}))
 		buf, err := MarshalHCL(s)
 		require.NoError(t, err)
 		require.Equal(t, `table "logs" {
@@ -486,10 +486,10 @@ func TestMarshalSpec_IndexPredicate(t *testing.T) {
 			Table:  s.Tables[0],
 			Unique: true,
 			Parts: []*schema.IndexPart{
-				{SeqNo: 0, C: s.Tables[0].Columns[0]},
+				{Seq: 0, Column: s.Tables[0].Columns[0]},
 			},
 			Attrs: []schema.Attr{
-				&IndexPredicate{P: "id <> 0"},
+				&IndexPredicate{Predicate: "id <> 0"},
 			},
 		},
 	}
@@ -536,7 +536,7 @@ func TestMarshalSpec_BRINIndex(t *testing.T) {
 			Table:  s.Tables[0],
 			Unique: true,
 			Parts: []*schema.IndexPart{
-				{SeqNo: 0, C: s.Tables[0].Columns[0]},
+				{Seq: 0, Column: s.Tables[0].Columns[0]},
 			},
 			Attrs: []schema.Attr{
 				&IndexType{T: IndexTypeBRIN},
@@ -632,7 +632,7 @@ table "t" {
 	var include IndexInclude
 	require.True(t, schema.Has(idx.Attrs, &include))
 	require.Len(t, include.Columns, 1)
-	require.Equal(t, "d", include.Columns[0].Name)
+	require.Equal(t, "d", include.Columns[0])
 }
 
 func TestMarshalSpec_IndexInclude(t *testing.T) {
@@ -661,7 +661,7 @@ func TestMarshalSpec_IndexInclude(t *testing.T) {
 			Name:  "index",
 			Table: s.Tables[0],
 			Parts: []*schema.IndexPart{
-				{SeqNo: 0, C: s.Tables[0].Columns[0]},
+				{Seq: 0, Column: s.Tables[0].Columns[0]},
 			},
 			Attrs: []schema.Attr{
 				&IndexInclude{Columns: s.Tables[0].Columns[1:]},
@@ -882,7 +882,7 @@ func TestTypes(t *testing.T) {
 	}{
 		{
 			typeExpr: "bit(10)",
-			expected: &BitType{T: TypeBit, Len: 10},
+			expected: &BitType{T: TypeBit, Width: 10},
 		},
 		{
 			typeExpr: `hstore`,
@@ -890,7 +890,7 @@ func TestTypes(t *testing.T) {
 		},
 		{
 			typeExpr: "bit_varying(10)",
-			expected: &BitType{T: TypeBitVar, Len: 10},
+			expected: &BitType{T: TypeBitVar, Width: 10},
 		},
 		{
 			typeExpr: "boolean",

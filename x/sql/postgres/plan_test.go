@@ -139,7 +139,7 @@ func TestPlanChanges(t *testing.T) {
 							&schema.DropIndex{
 								I: schema.NewUniqueIndex("unique_nickname").
 									AddColumns(schema.NewColumn("nickname")).
-									AddAttrs(&ConType{T: "u"}),
+									AddAttrs(&ConstraintType{T: "u"}),
 							},
 						},
 					}
@@ -190,7 +190,7 @@ func TestPlanChanges(t *testing.T) {
 							&schema.Check{Name: "id_nonzero", Expr: `("id" > 0)`},
 							&schema.Check{Name: "text_len", Expr: `(length("text") > 0)`, Attrs: []schema.Attr{&NoInherit{}}},
 							&schema.Check{Name: "a_in_b", Expr: `(a) in (b)`},
-							&Partition{T: "HASH", Parts: []*PartitionPart{{C: schema.NewColumn("text")}}},
+							&Partition{T: "HASH", Parts: []*PartitionPart{{Column: schema.NewColumn("text")}}},
 						},
 					},
 				},
@@ -349,11 +349,11 @@ func TestPlanChanges(t *testing.T) {
 								I: &schema.Index{
 									Name: "id_key",
 									Parts: []*schema.IndexPart{
-										{C: users.Columns[0], Descending: true},
+										{Column: users.Columns[0], Descending: true},
 									},
 									Attrs: []schema.Attr{
 										&schema.Comment{Text: "comment"},
-										&IndexPredicate{P: "success"},
+										&IndexPredicate{Predicate: "success"},
 									},
 								},
 							},
@@ -361,7 +361,7 @@ func TestPlanChanges(t *testing.T) {
 								I: &schema.Index{
 									Name: "id_brin",
 									Parts: []*schema.IndexPart{
-										{C: users.Columns[0], Descending: true},
+										{Column: users.Columns[0], Descending: true},
 									},
 									Attrs: []schema.Attr{
 										&IndexType{T: IndexTypeBRIN},
@@ -383,7 +383,7 @@ func TestPlanChanges(t *testing.T) {
 								I: &schema.Index{
 									Name: "include_key",
 									Parts: []*schema.IndexPart{
-										{C: users.Columns[0]},
+										{Column: users.Columns[0]},
 									},
 									Attrs: []schema.Attr{
 										&IndexInclude{Columns: []*schema.Column{schema.NewColumn("a"), schema.NewColumn("b")}},

@@ -113,36 +113,6 @@ func (r *Realm) AddSchemas(schemas ...*Schema) *Realm {
 	return r
 }
 
-// GetSchema returns the schema with the given name.
-func (r *Realm) GetSchema(name string) (*Schema, bool) {
-	for _, s := range r.Schemas {
-		if s.Name == name {
-			return s, true
-		}
-	}
-	return nil, false
-}
-
-// GetQuery returns the query with the given name.
-func (r *Realm) GetQuery(name string) (*Query, bool) {
-	for _, q := range r.Queries {
-		if q.Name == name {
-			return q, true
-		}
-	}
-	return nil, false
-}
-
-// GetRole returns the role with the given name.
-func (r *Realm) GetRole(name string) (*Role, bool) {
-	for _, s := range r.Roles {
-		if s.Name == name {
-			return s, true
-		}
-	}
-	return nil, false
-}
-
 // SetCharset sets or appends the Charset attribute
 // to the realm with the given value.
 func (r *Realm) SetCharset(v string) *Realm {
@@ -176,6 +146,12 @@ func (s *Realm) AddQueries(queries ...*Query) *Realm {
 	}
 	s.Queries = append(s.Queries, queries...)
 	return s
+}
+
+// AddAttrs adds and additional attributes to the table.
+func (r *Realm) AddAttrs(attrs ...Attr) *Realm {
+	r.Attrs = append(r.Attrs, attrs...)
+	return r
 }
 
 // AddRoles adds the given roles to the realm.
@@ -244,11 +220,11 @@ func (t *Table) SetPrimaryKey(pk *Index) *Table {
 	pk.Table = t
 	t.PrimaryKey = pk
 	for _, p := range pk.Parts {
-		if p.C == nil {
+		if p.Column == nil {
 			continue
 		}
-		if _, ok := t.Column(p.C.Name); !ok {
-			t.AddColumns(p.C)
+		if _, ok := t.Column(p.Column.Name); !ok {
+			t.AddColumns(p.Column)
 		}
 	}
 	return t
@@ -517,6 +493,18 @@ func (c *Column) AddAttrs(attrs ...Attr) *Column {
 	return c
 }
 
+// AddIndexes appends the given indexes to the table index list.
+func (t *Column) AddIndexes(indexes ...*Index) *Column {
+	t.Indexes = append(t.Indexes, indexes...)
+	return t
+}
+
+// AddForeignKeys appends the given indexes to the table index list.
+func (t *Column) AddForeignKeys(fks ...*ForeignKey) *Column {
+	t.ForeignKeys = append(t.ForeignKeys, fks...)
+	return t
+}
+
 // NewIndex creates a new index with the given name.
 func NewIndex(name string) *Index {
 	return &Index{Name: name}
@@ -570,7 +558,7 @@ func (i *Index) AddColumns(columns ...*Column) *Index {
 		if !c.hasIndex(i) {
 			c.Indexes = append(c.Indexes, i)
 		}
-		i.Parts = append(i.Parts, &IndexPart{SeqNo: len(i.Parts), C: c})
+		i.Parts = append(i.Parts, &IndexPart{Seq: len(i.Parts), Column: c})
 	}
 	return i
 }
@@ -587,7 +575,7 @@ func (c *Column) hasIndex(idx *Index) bool {
 // AddExprs adds the expressions to index parts.
 func (i *Index) AddExprs(exprs ...Expr) *Index {
 	for _, x := range exprs {
-		i.Parts = append(i.Parts, &IndexPart{SeqNo: len(i.Parts), X: x})
+		i.Parts = append(i.Parts, &IndexPart{Seq: len(i.Parts), Expr: x})
 	}
 	return i
 }
@@ -595,10 +583,10 @@ func (i *Index) AddExprs(exprs ...Expr) *Index {
 // AddParts appends the given parts.
 func (i *Index) AddParts(parts ...*IndexPart) *Index {
 	for _, p := range parts {
-		if p.C != nil && !p.C.hasIndex(i) {
-			p.C.Indexes = append(p.C.Indexes, i)
+		if p.Column != nil && !p.Column.hasIndex(i) {
+			p.Column.Indexes = append(p.Column.Indexes, i)
 		}
-		p.SeqNo = len(i.Parts)
+		p.Seq = len(i.Parts)
 		i.Parts = append(i.Parts, p)
 	}
 	return i
@@ -614,10 +602,10 @@ func (c *Column) SetGeneratedExpr(x *GeneratedExpr) *Column {
 func NewIndexPart() *IndexPart { return &IndexPart{} }
 
 // NewColumnPart creates a new index part with the given column.
-func NewColumnPart(c *Column) *IndexPart { return &IndexPart{C: c} }
+func NewColumnPart(c *Column) *IndexPart { return &IndexPart{Column: c} }
 
 // NewExprPart creates a new index part with the given expression.
-func NewExprPart(x Expr) *IndexPart { return &IndexPart{X: x} }
+func NewExprPart(x Expr) *IndexPart { return &IndexPart{Expr: x} }
 
 // SetDesc configures the "DESC" attribute of the key part.
 func (p *IndexPart) SetDesc(b bool) *IndexPart {
@@ -633,13 +621,13 @@ func (p *IndexPart) AddAttrs(attrs ...Attr) *IndexPart {
 
 // SetColumn sets the column of the index-part.
 func (p *IndexPart) SetColumn(c *Column) *IndexPart {
-	p.C = c
+	p.Column = c
 	return p
 }
 
 // SetExpr sets the expression of the index-part.
 func (p *IndexPart) SetExpr(x Expr) *IndexPart {
-	p.X = x
+	p.Expr = x
 	return p
 }
 
@@ -724,6 +712,15 @@ func (f *ForeignKey) SetOnUpdate(o ReferenceOption) *ForeignKey {
 func (f *ForeignKey) SetOnDelete(o ReferenceOption) *ForeignKey {
 	f.OnDelete = o
 	return f
+}
+
+func NewEnum(name string) *Enum {
+	return &Enum{Name: name}
+}
+
+func (e *Enum) AddValues(values ...string) *Enum {
+	e.Values = append(e.Values, values...)
+	return e
 }
 
 // replaceOrAppend searches an attribute of the same type as v in

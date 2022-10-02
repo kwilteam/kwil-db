@@ -133,8 +133,8 @@ func TestDriver_InspectTable(t *testing.T) {
 					{Name: "id", Type: &schema.ColumnType{Raw: "bigint", Type: &schema.IntegerType{T: "bigint"}}, Attrs: []schema.Attr{&Identity{Generation: "BY DEFAULT", Sequence: &Sequence{Start: 100, Increment: 1, Last: 1}}}},
 					{Name: "rank", Type: &schema.ColumnType{Raw: "integer", Nullable: true, Type: &schema.IntegerType{T: "integer"}}, Attrs: []schema.Attr{&schema.Comment{Text: "rank"}}},
 					{Name: "c1", Type: &schema.ColumnType{Raw: "smallint", Type: &schema.IntegerType{T: "smallint"}}, Default: &schema.Literal{V: "1000"}},
-					{Name: "c2", Type: &schema.ColumnType{Raw: "bit", Type: &BitType{T: "bit", Len: 1}}},
-					{Name: "c3", Type: &schema.ColumnType{Raw: "bit varying", Type: &BitType{T: "bit varying", Len: 10}}},
+					{Name: "c2", Type: &schema.ColumnType{Raw: "bit", Type: &BitType{T: "bit", Width: 1}}},
+					{Name: "c3", Type: &schema.ColumnType{Raw: "bit varying", Type: &BitType{T: "bit varying", Width: 10}}},
 					{Name: "c4", Type: &schema.ColumnType{Raw: "boolean", Type: &schema.BoolType{T: "boolean"}}},
 					{Name: "c5", Type: &schema.ColumnType{Raw: "bytea", Type: &schema.BinaryType{T: "bytea"}}},
 					{Name: "c6", Type: &schema.ColumnType{Raw: "character", Type: &schema.StringType{T: "character", Size: 100}}},
@@ -214,20 +214,20 @@ users           | idx2            | btree       | parent_id   | t        | f    
 					{Name: "parent_id", Type: &schema.ColumnType{Raw: "bigint", Nullable: true, Type: &schema.IntegerType{T: "bigint"}}},
 				}
 				indexes := []*schema.Index{
-					{Name: "idx", Table: t, Attrs: []schema.Attr{&IndexType{T: "hash"}, &schema.Comment{Text: "boring"}}, Parts: []*schema.IndexPart{{SeqNo: 1, X: &schema.RawExpr{X: `"left"((c11)::text, 100)`}, Descending: true, Attrs: []schema.Attr{&IndexColumnProperty{NullsFirst: true}}}}},
-					{Name: "idx1", Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}, &IndexPredicate{P: `(id <> NULL::integer)`}}, Parts: []*schema.IndexPart{{SeqNo: 1, X: &schema.RawExpr{X: `"left"((c11)::text, 100)`}, Descending: true, Attrs: []schema.Attr{&IndexColumnProperty{NullsFirst: true}}}}},
-					{Name: "t1_c1_key", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}, &ConType{T: "u"}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[1], Descending: true, Attrs: []schema.Attr{&IndexColumnProperty{NullsFirst: true}}}}},
-					{Name: "idx4", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[1]}, {SeqNo: 2, C: columns[0], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}}},
-					{Name: "idx5", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[1]}, {SeqNo: 2, X: &schema.RawExpr{X: `coalesce(parent_id, 0)`}}}},
-					{Name: "idx6", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "brin"}, &IndexStorageParams{AutoSummarize: true, PagesPerRange: 2}}, Parts: []*schema.IndexPart{{SeqNo: 1, C: columns[1]}}},
-					{Name: "idx2", Unique: false, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}, &IndexInclude{Columns: columns[1:]}}, Parts: []*schema.IndexPart{{SeqNo: 1, X: &schema.RawExpr{X: `((c * 2))`}, Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}, {SeqNo: 2, C: columns[1], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}, {SeqNo: 3, C: columns[0], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}}},
+					{Name: "idx", Table: t, Attrs: []schema.Attr{&IndexType{T: "hash"}, &schema.Comment{Text: "boring"}}, Parts: []*schema.IndexPart{{Seq: 1, Expr: &schema.RawExpr{X: `"left"((c11)::text, 100)`}, Descending: true, Attrs: []schema.Attr{&IndexColumnProperty{NullsFirst: true}}}}},
+					{Name: "idx1", Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}, &IndexPredicate{Predicate: `(id <> NULL::integer)`}}, Parts: []*schema.IndexPart{{Seq: 1, Expr: &schema.RawExpr{X: `"left"((c11)::text, 100)`}, Descending: true, Attrs: []schema.Attr{&IndexColumnProperty{NullsFirst: true}}}}},
+					{Name: "t1_c1_key", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}, &ConstraintType{T: "u"}}, Parts: []*schema.IndexPart{{Seq: 1, Column: columns[1], Descending: true, Attrs: []schema.Attr{&IndexColumnProperty{NullsFirst: true}}}}},
+					{Name: "idx4", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}}, Parts: []*schema.IndexPart{{Seq: 1, Column: columns[1]}, {Seq: 2, Column: columns[0], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}}},
+					{Name: "idx5", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}}, Parts: []*schema.IndexPart{{Seq: 1, Column: columns[1]}, {Seq: 2, Expr: &schema.RawExpr{X: `coalesce(parent_id, 0)`}}}},
+					{Name: "idx6", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "brin"}, &IndexStorageParams{AutoSummarize: true, PagesPerRange: 2}}, Parts: []*schema.IndexPart{{Seq: 1, Column: columns[1]}}},
+					{Name: "idx2", Unique: false, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}, &IndexInclude{Columns: columns[1:]}}, Parts: []*schema.IndexPart{{Seq: 1, Expr: &schema.RawExpr{X: `((c * 2))`}, Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}, {Seq: 2, Column: columns[1], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}, {Seq: 3, Column: columns[0], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}}},
 				}
 				pk := &schema.Index{
 					Name:   "t1_pkey",
 					Unique: true,
 					Table:  t,
-					Attrs:  []schema.Attr{&IndexType{T: "btree"}, &ConType{T: "p"}},
-					Parts:  []*schema.IndexPart{{SeqNo: 1, C: columns[0], Descending: true}},
+					Attrs:  []schema.Attr{&IndexType{T: "btree"}, &ConstraintType{T: "p"}},
+					Parts:  []*schema.IndexPart{{Seq: 1, Column: columns[0], Descending: true}},
 				}
 				columns[0].Indexes = append(columns[0].Indexes, pk, indexes[3], indexes[6])
 				columns[1].Indexes = indexes[2:]
@@ -410,7 +410,7 @@ logs3      | c5         | integer   | integer   | NO          |                |
 	key := t2.Attrs[0].(*Partition)
 	require.Equal(t, PartitionTypeRange, key.T)
 	require.Equal(t, []*PartitionPart{
-		{C: &schema.Column{Name: "c2", Type: &schema.ColumnType{Raw: "integer", Type: &schema.IntegerType{T: "integer"}}}},
+		{Column: &schema.Column{Name: "c2", Type: &schema.ColumnType{Raw: "integer", Type: &schema.IntegerType{T: "integer"}}}},
 	}, key.Parts)
 
 	t3, ok := s.Table("logs3")
@@ -419,9 +419,9 @@ logs3      | c5         | integer   | integer   | NO          |                |
 	key = t3.Attrs[0].(*Partition)
 	require.Equal(t, PartitionTypeList, key.T)
 	require.Equal(t, []*PartitionPart{
-		{C: &schema.Column{Name: "c5", Type: &schema.ColumnType{Raw: "integer", Type: &schema.IntegerType{T: "integer"}}}},
-		{X: &schema.RawExpr{X: "(a + b)"}},
-		{X: &schema.RawExpr{X: "(a + (b * 2))"}},
+		{Column: &schema.Column{Name: "c5", Type: &schema.ColumnType{Raw: "integer", Type: &schema.IntegerType{T: "integer"}}}},
+		{Expr: &schema.RawExpr{X: "(a + b)"}},
+		{Expr: &schema.RawExpr{X: "(a + (b * 2))"}},
 	}, key.Parts)
 }
 

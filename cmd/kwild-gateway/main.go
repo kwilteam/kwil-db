@@ -6,13 +6,13 @@ import (
 	"os"
 	"regexp"
 
+	apipb "kwil/x/proto/apisvc"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	v0 "kwil/x/api/v0"
 )
 
 const (
@@ -22,22 +22,22 @@ const (
 func run() error {
 	cmd := &cobra.Command{
 		Use:   "api-gateway",
-		Short: "api-gateway is a gRPC to HTTP gateway",
+		Short: "api-gateway is a HTTP to gRPC gateway",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mux := runtime.NewServeMux()
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			err := v0.RegisterKwilServiceHandlerFromEndpoint(cmd.Context(), mux, viper.GetString("endpoint"), opts)
+			err := apipb.RegisterKwilServiceHandlerFromEndpoint(cmd.Context(), mux, viper.GetString("endpoint"), opts)
 			if err != nil {
 				return err
 			}
 
 			mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-				v0.ServeSwaggerJSON(w, r)
+				apipb.ServeSwaggerJSON(w, r)
 			})
 
 			mux.HandlePath(http.MethodGet, "/swagger/ui", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-				v0.ServeSwaggerUI(w, r)
+				apipb.ServeSwaggerUI(w, r)
 			})
 
 			return http.ListenAndServe(":8080", cors(mux))

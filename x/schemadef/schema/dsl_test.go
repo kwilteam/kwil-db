@@ -80,13 +80,13 @@ func TestSchema_AddTables(t *testing.T) {
 				},
 			}
 			s.Tables = append(s.Tables, users)
-			users.PrimaryKey = &schema.Index{Unique: true, Parts: []*schema.IndexPart{{C: users.Columns[0]}}}
+			users.PrimaryKey = &schema.Index{Unique: true, Parts: []*schema.IndexPart{{Column: users.Columns[0]}}}
 			users.PrimaryKey.Table = users
 			users.Columns[0].Indexes = append(users.Columns[0].Indexes, users.PrimaryKey)
 			users.Indexes = append(users.Indexes, &schema.Index{
 				Name:   "unique_name",
 				Unique: true,
-				Parts:  []*schema.IndexPart{{C: users.Columns[2]}},
+				Parts:  []*schema.IndexPart{{Column: users.Columns[2]}},
 				Attrs:  []schema.Attr{&schema.Comment{Text: "index comment"}},
 			})
 			users.Indexes[0].Table = users
@@ -105,7 +105,7 @@ func TestSchema_AddTables(t *testing.T) {
 				},
 			}
 			s.Tables = append(s.Tables, posts)
-			posts.PrimaryKey = &schema.Index{Unique: true, Parts: []*schema.IndexPart{{C: posts.Columns[0]}}}
+			posts.PrimaryKey = &schema.Index{Unique: true, Parts: []*schema.IndexPart{{Column: posts.Columns[0]}}}
 			posts.PrimaryKey.Table = posts
 			posts.Columns[0].Indexes = append(posts.Columns[0].Indexes, posts.PrimaryKey)
 			posts.ForeignKeys = append(posts.ForeignKeys, &schema.ForeignKey{

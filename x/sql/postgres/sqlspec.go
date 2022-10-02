@@ -312,8 +312,8 @@ func (sc *specConverter) convertPrimaryKey(s *hclspec.PrimaryKey, parent *schema
 			return nil, nil
 		}
 		parts = append(parts, &schema.IndexPart{
-			SeqNo: seqno,
-			C:     c,
+			Seq:    seqno,
+			Column: c,
 		})
 	}
 	return &schema.Index{
@@ -340,7 +340,7 @@ func (sc *specConverter) convertIndex(s *hclspec.Index, t *schema.Table) (*schem
 		if err != nil {
 			return nil, err
 		}
-		idx.Attrs = append(idx.Attrs, &IndexPredicate{P: p})
+		idx.Attrs = append(idx.Attrs, &IndexPredicate{Predicate: p})
 	}
 	if attr, ok := s.Attr("page_per_range"); ok {
 		p, err := attr.Int64()
@@ -408,7 +408,7 @@ func (sc *specConverter) convertPartition(s hcl.Resource, table *schema.Table) e
 			if err != nil {
 				return err
 			}
-			key.Parts = append(key.Parts, &PartitionPart{C: c})
+			key.Parts = append(key.Parts, &PartitionPart{Column: c})
 		}
 	case m > 0:
 		for i, p := range p.Parts {
@@ -422,9 +422,9 @@ func (sc *specConverter) convertPartition(s hcl.Resource, table *schema.Table) e
 				if err != nil {
 					return err
 				}
-				key.Parts = append(key.Parts, &PartitionPart{C: c})
+				key.Parts = append(key.Parts, &PartitionPart{Column: c})
 			case p.Expr != "":
-				key.Parts = append(key.Parts, &PartitionPart{X: &schema.RawExpr{X: p.Expr}})
+				key.Parts = append(key.Parts, &PartitionPart{Expr: &schema.RawExpr{X: p.Expr}})
 			}
 		}
 	}
@@ -481,10 +481,10 @@ func fromPartition(p Partition) *hcl.Resource {
 	columns, ok := func() (*hcl.ListValue, bool) {
 		parts := make([]hcl.Value, 0, len(p.Parts))
 		for _, p := range p.Parts {
-			if p.C == nil {
+			if p.Column == nil {
 				return nil, false
 			}
-			parts = append(parts, hclspec.ColumnRef(p.C.Name))
+			parts = append(parts, hclspec.ColumnRef(p.Column.Name))
 		}
 		return &hcl.ListValue{V: parts}, true
 	}()
@@ -495,10 +495,10 @@ func fromPartition(p Partition) *hcl.Resource {
 	for _, p := range p.Parts {
 		part := &hcl.Resource{Type: "by"}
 		switch {
-		case p.C != nil:
-			part.Attrs = append(part.Attrs, hclspec.RefAttr("column", hclspec.ColumnRef(p.C.Name)))
-		case p.X != nil:
-			part.Attrs = append(part.Attrs, hclspec.StrAttr("expr", p.X.(*schema.RawExpr).X))
+		case p.Column != nil:
+			part.Attrs = append(part.Attrs, hclspec.RefAttr("column", hclspec.ColumnRef(p.Column.Name)))
+		case p.Expr != nil:
+			part.Attrs = append(part.Attrs, hclspec.StrAttr("expr", p.Expr.(*schema.RawExpr).X))
 		}
 		key.Children = append(key.Children, part)
 	}
@@ -618,8 +618,8 @@ func indexSpec(idx *schema.Index) (*hclspec.Index, error) {
 			V: attr,
 		})
 	}
-	if i := (IndexPredicate{}); schema.Has(idx.Attrs, &i) && i.P != "" {
-		s.Extra.Attrs = append(s.Extra.Attrs, hclspec.VarAttr("where", strconv.Quote(i.P)))
+	if i := (IndexPredicate{}); schema.Has(idx.Attrs, &i) && i.Predicate != "" {
+		s.Extra.Attrs = append(s.Extra.Attrs, hclspec.VarAttr("where", strconv.Quote(i.Predicate)))
 	}
 	if p, ok := indexStorageParams(idx.Attrs); ok {
 		s.Extra.Attrs = append(s.Extra.Attrs, hclspec.Int64Attr("page_per_range", p.PagesPerRange))

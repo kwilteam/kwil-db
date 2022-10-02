@@ -2,10 +2,9 @@ package hcl
 
 import (
 	"fmt"
+	"kwil/x/schemadef/schema"
 	"reflect"
 	"strconv"
-
-	"kwil/x/schemadef/schema"
 )
 
 type (
