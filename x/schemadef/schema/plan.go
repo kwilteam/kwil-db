@@ -16,8 +16,11 @@ type (
 	// drivers to indicate if the changeset is transactional (can be rolled-back) and
 	// reversible (a down file can be generated to it).
 	Plan struct {
-		// Version and Name of the plan. Provided by the user or auto-generated.
-		Version, Name string
+		// Version of the plan. Provided by the user or auto-generated.
+		Version string
+
+		// Name of the plan. Provided by the user or auto-generated.
+		Name string
 
 		// Reversible describes if the changeset is reversible.
 		Reversible bool
@@ -40,8 +43,7 @@ type (
 		// A Comment describes the change.
 		Comment string
 
-		// Reverse contains the "reversed statement" if
-		// command is reversible.
+		// Reverse contains the "reversed statement" if the command is reversible.
 		Reverse string
 
 		// The Source that caused this change, or nil.
@@ -87,71 +89,7 @@ type (
 
 	// PlanOption allows configuring a drivers' plan using functional arguments.
 	PlanOption func(*PlanOptions)
-
-	// StateReader wraps the method for reading a database/schema state.
-	// The types below provides a few builtin options for reading a state
-	// from a migration directory, a static object (e.g. a parsed file).
-	StateReader interface {
-		ReadState(ctx context.Context) (*Realm, error)
-	}
-
-	// The StateReaderFunc type is an adapter to allow the use of
-	// ordinary functions as state readers.
-	StateReaderFunc func(ctx context.Context) (*Realm, error)
-
-	// Snapshotter wraps the Snapshot method.
-	Snapshotter interface {
-		// Snapshot takes a snapshot of the current database state and returns a function that can be called to restore
-		// that state. Snapshot should return an error, if the current state can not be restored completely, e.g. if
-		// there is a table already containing some rows.
-		Snapshot(context.Context) (RestoreFunc, error)
-	}
-
-	// RestoreFunc is returned by the Snapshoter to explicitly restore the database state.
-	RestoreFunc func(context.Context) error
 )
-
-// ReadState calls f(ctx).
-func (f StateReaderFunc) ReadState(ctx context.Context) (*Realm, error) {
-	return f(ctx)
-}
-
-// NewRealmReader returns a StateReader for the static Realm object.
-func NewRealmReader(r *Realm) StateReader {
-	return StateReaderFunc(func(context.Context) (*Realm, error) {
-		return r, nil
-	})
-}
-
-// Schema returns a StateReader for the static Schema object.
-func NewSchemaReader(s *Schema) StateReader {
-	return StateReaderFunc(func(context.Context) (*Realm, error) {
-		r := &Realm{Schemas: []*Schema{s}}
-		if s.Realm != nil {
-			r.Attrs = s.Realm.Attrs
-		}
-		s.Realm = r
-		return r, nil
-	})
-}
-
-// RealmConn returns a StateReader for a Driver connected to a database.
-func NewRealmConn(drv Driver, opts *InspectRealmOption) StateReader {
-	return StateReaderFunc(func(ctx context.Context) (*Realm, error) {
-		return drv.InspectRealm(ctx, opts)
-	})
-}
-
-// SchemaConn returns a StateReader for a Driver connected to a
-func NewSchemaConn(drv Driver, name string, opts *InspectOptions) StateReader {
-	return StateReaderFunc(func(ctx context.Context) (*Realm, error) {
-		s, err := drv.InspectSchema(ctx, name, opts)
-		if err != nil {
-			return nil, err
-		}
-		return NewSchemaReader(s).ReadState(ctx)
-	})
-}
 
 type ExecPlanner interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
@@ -359,7 +297,7 @@ func checkFK(fk *ForeignKey) error {
 		cause = append(cause, "parent columns")
 	}
 	if len(cause) != 0 {
-		return fmt.Errorf("missing %q for foreign key: %q", cause, fk.Symbol)
+		return fmt.Errorf("missing %q for foreign key: %q", cause, fk.Name)
 	}
 	return nil
 }

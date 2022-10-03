@@ -220,7 +220,7 @@ users           | idx2            | btree       | parent_id   | t        | f    
 					{Name: "idx4", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}}, Parts: []*schema.IndexPart{{Seq: 1, Column: columns[1]}, {Seq: 2, Column: columns[0], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}}},
 					{Name: "idx5", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}}, Parts: []*schema.IndexPart{{Seq: 1, Column: columns[1]}, {Seq: 2, Expr: &schema.RawExpr{X: `coalesce(parent_id, 0)`}}}},
 					{Name: "idx6", Unique: true, Table: t, Attrs: []schema.Attr{&IndexType{T: "brin"}, &IndexStorageParams{AutoSummarize: true, PagesPerRange: 2}}, Parts: []*schema.IndexPart{{Seq: 1, Column: columns[1]}}},
-					{Name: "idx2", Unique: false, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}, &IndexInclude{Columns: columns[1:]}}, Parts: []*schema.IndexPart{{Seq: 1, Expr: &schema.RawExpr{X: `((c * 2))`}, Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}, {Seq: 2, Column: columns[1], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}, {Seq: 3, Column: columns[0], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}}},
+					{Name: "idx2", Unique: false, Table: t, Attrs: []schema.Attr{&IndexType{T: "btree"}, &IndexInclude{Columns: columnNames(columns[1:])}}, Parts: []*schema.IndexPart{{Seq: 1, Expr: &schema.RawExpr{X: `((c * 2))`}, Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}, {Seq: 2, Column: columns[1], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}, {Seq: 3, Column: columns[0], Attrs: []schema.Attr{&IndexColumnProperty{NullsLast: true}}}}},
 				}
 				pk := &schema.Index{
 					Name:   "t1_pkey",
@@ -268,8 +268,8 @@ self_reference  | users      | uid         | public       | users               
 				require.Equal("users", t.Name)
 				require.Equal("public", t.Schema.Name)
 				fks := []*schema.ForeignKey{
-					{Symbol: "multi_column", Table: t, OnUpdate: schema.NoAction, OnDelete: schema.Cascade, RefTable: &schema.Table{Name: "t1", Schema: t.Schema}, RefColumns: []*schema.Column{{Name: "gid"}, {Name: "xid"}}},
-					{Symbol: "self_reference", Table: t, OnUpdate: schema.NoAction, OnDelete: schema.Cascade, RefTable: t},
+					{Name: "multi_column", Table: t, OnUpdate: schema.NoAction, OnDelete: schema.Cascade, RefTable: &schema.Table{Name: "t1", Schema: t.Schema}, RefColumns: []*schema.Column{{Name: "gid"}, {Name: "xid"}}},
+					{Name: "self_reference", Table: t, OnUpdate: schema.NoAction, OnDelete: schema.Cascade, RefTable: t},
 				}
 				columns := []*schema.Column{
 					{Name: "id", Type: &schema.ColumnType{Raw: "integer", Type: &schema.IntegerType{T: "integer"}}, ForeignKeys: fks[0:1]},
@@ -410,7 +410,7 @@ logs3      | c5         | integer   | integer   | NO          |                |
 	key := t2.Attrs[0].(*Partition)
 	require.Equal(t, PartitionTypeRange, key.T)
 	require.Equal(t, []*PartitionPart{
-		{Column: &schema.Column{Name: "c2", Type: &schema.ColumnType{Raw: "integer", Type: &schema.IntegerType{T: "integer"}}}},
+		{Column: "c2"},
 	}, key.Parts)
 
 	t3, ok := s.Table("logs3")
@@ -419,7 +419,7 @@ logs3      | c5         | integer   | integer   | NO          |                |
 	key = t3.Attrs[0].(*Partition)
 	require.Equal(t, PartitionTypeList, key.T)
 	require.Equal(t, []*PartitionPart{
-		{Column: &schema.Column{Name: "c5", Type: &schema.ColumnType{Raw: "integer", Type: &schema.IntegerType{T: "integer"}}}},
+		{Column: "c5"},
 		{Expr: &schema.RawExpr{X: "(a + b)"}},
 		{Expr: &schema.RawExpr{X: "(a + (b * 2))"}},
 	}, key.Parts)

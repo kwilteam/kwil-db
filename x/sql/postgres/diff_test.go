@@ -70,7 +70,7 @@ func TestDiff_TableDiff(t *testing.T) {
 			from: schema.NewTable("logs").
 				AddAttrs(&Partition{
 					T:     PartitionTypeRange,
-					Parts: []*PartitionPart{{Column: schema.NewColumn("c")}},
+					Parts: []*PartitionPart{{Column: "c"}},
 				}),
 			to:      schema.NewTable("logs"),
 			wantErr: true,
@@ -81,7 +81,7 @@ func TestDiff_TableDiff(t *testing.T) {
 			to: schema.NewTable("logs").
 				AddAttrs(&Partition{
 					T:     PartitionTypeRange,
-					Parts: []*PartitionPart{{Column: schema.NewColumn("c")}},
+					Parts: []*PartitionPart{{Column: "c"}},
 				}),
 			wantErr: true,
 		},
@@ -90,12 +90,12 @@ func TestDiff_TableDiff(t *testing.T) {
 			from: schema.NewTable("logs").
 				AddAttrs(&Partition{
 					T:     PartitionTypeRange,
-					Parts: []*PartitionPart{{Column: schema.NewColumn("c")}},
+					Parts: []*PartitionPart{{Column: "c"}},
 				}),
 			to: schema.NewTable("logs").
 				AddAttrs(&Partition{
 					T:     PartitionTypeRange,
-					Parts: []*PartitionPart{{Column: schema.NewColumn("d")}},
+					Parts: []*PartitionPart{{Column: "d"}},
 				}),
 			wantErr: true,
 		},
@@ -104,12 +104,12 @@ func TestDiff_TableDiff(t *testing.T) {
 			from: schema.NewTable("logs").
 				AddAttrs(&Partition{
 					T:     PartitionTypeRange,
-					Parts: []*PartitionPart{{Column: schema.NewColumn("c")}},
+					Parts: []*PartitionPart{{Column: "c"}},
 				}),
 			to: schema.NewTable("logs").
 				AddAttrs(&Partition{
 					T:     PartitionTypeHash,
-					Parts: []*PartitionPart{{Column: schema.NewColumn("c")}},
+					Parts: []*PartitionPart{{Column: "c"}},
 				}),
 			wantErr: true,
 		},
@@ -342,9 +342,9 @@ func TestDiff_TableDiff(t *testing.T) {
 				{Name: "c3_predicate", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}},
 				{Name: "c4_predicate", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexPredicate{Predicate: "(c4 <> NULL)"}}},
 				{Name: "c4_storage_params", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexStorageParams{PagesPerRange: 4}}},
-				{Name: "c5_include_no_change", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexInclude{Columns: from.Columns[:1]}}},
+				{Name: "c5_include_no_change", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexInclude{Columns: columnNames(from.Columns[:1])}}},
 				{Name: "c5_include_added", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}},
-				{Name: "c5_include_dropped", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexInclude{Columns: from.Columns[:1]}}},
+				{Name: "c5_include_dropped", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexInclude{Columns: columnNames(from.Columns[:1])}}},
 			}
 			to.Indexes = []*schema.Index{
 				{Name: "c1_index", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[0]}}},
@@ -352,8 +352,8 @@ func TestDiff_TableDiff(t *testing.T) {
 				{Name: "c3_predicate", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexPredicate{Predicate: "c3 <> NULL"}}},
 				{Name: "c4_predicate", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexPredicate{Predicate: "c4 <> NULL"}}},
 				{Name: "c4_storage_params", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexStorageParams{PagesPerRange: 2}}},
-				{Name: "c5_include_no_change", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexInclude{Columns: from.Columns[:1]}}},
-				{Name: "c5_include_added", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexInclude{Columns: from.Columns[:1]}}},
+				{Name: "c5_include_no_change", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexInclude{Columns: columnNames(from.Columns[:1])}}},
+				{Name: "c5_include_added", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}, Attrs: []schema.Attr{&IndexInclude{Columns: columnNames(from.Columns[:1])}}},
 				{Name: "c5_include_dropped", Table: from, Parts: []*schema.IndexPart{{Seq: 1, Column: from.Columns[1]}}},
 			}
 			return testcase{

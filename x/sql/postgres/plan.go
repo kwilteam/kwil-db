@@ -380,7 +380,7 @@ func (s *state) alterTable(t *schema.Table, changes []schema.SchemaChange) error
 				s.fks(b, change.F)
 				reverse = append(reverse, &schema.DropForeignKey{F: change.F})
 			case *schema.DropForeignKey:
-				b.P("DROP CONSTRAINT").Ident(change.F.Symbol)
+				b.P("DROP CONSTRAINT").Ident(change.F.Name)
 				reverse = append(reverse, &schema.AddForeignKey{F: change.F})
 			case *schema.AddCheck:
 				check(b.P("ADD"), change.C)
@@ -919,7 +919,7 @@ func (s *state) index(b *sqlx.Builder, idx *schema.Index) {
 		b.P("INCLUDE")
 		b.Wrap(func(b *sqlx.Builder) {
 			b.MapComma(c.Columns, func(i int, b *sqlx.Builder) {
-				b.Ident(c.Columns[i].Name)
+				b.Ident(c.Columns[i])
 			})
 		})
 	}
@@ -951,8 +951,8 @@ func (s *state) index(b *sqlx.Builder, idx *schema.Index) {
 func (s *state) fks(b *sqlx.Builder, fks ...*schema.ForeignKey) {
 	b.MapComma(fks, func(i int, b *sqlx.Builder) {
 		fk := fks[i]
-		if fk.Symbol != "" {
-			b.P("CONSTRAINT").Ident(fk.Symbol)
+		if fk.Name != "" {
+			b.P("CONSTRAINT").Ident(fk.Name)
 		}
 		b.P("FOREIGN KEY")
 		b.Wrap(func(b *sqlx.Builder) {

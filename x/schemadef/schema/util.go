@@ -173,7 +173,7 @@ func excludeT(t *Table, pattern string) (err error) {
 		if _, ok := ef[fk]; ok {
 			return true, nil
 		}
-		return filepath.Match(pattern, fk.Symbol)
+		return filepath.Match(pattern, fk.Name)
 	})
 
 	return

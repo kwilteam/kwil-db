@@ -310,8 +310,8 @@ func formatPartition(p Partition) (string, error) {
 	b.Wrap(func(b *sqlx.Builder) {
 		b.MapComma(p.Parts, func(i int, b *sqlx.Builder) {
 			switch k := p.Parts[i]; {
-			case k.Column != nil:
-				b.Ident(k.Column.Name)
+			case k.Column != "":
+				b.Ident(k.Column)
 			case k.Expr != nil:
 				b.P(sqlx.MayWrap(k.Expr.(*schema.RawExpr).X))
 			}
@@ -340,7 +340,7 @@ func indexIncludeChanged(from, to []schema.Attr) bool {
 		return true
 	}
 	for i := range fromI.Columns {
-		if fromI.Columns[i].Name != toI.Columns[i].Name {
+		if fromI.Columns[i] != toI.Columns[i] {
 			return true
 		}
 	}

@@ -63,7 +63,7 @@ func TestPlanChanges(t *testing.T) {
 						},
 					}
 					fk := &schema.ForeignKey{
-						Symbol:     "pets_user_id_fkey",
+						Name:       "pets_user_id_fkey",
 						Table:      pets,
 						OnUpdate:   schema.NoAction,
 						OnDelete:   schema.Cascade,
@@ -190,7 +190,7 @@ func TestPlanChanges(t *testing.T) {
 							&schema.Check{Name: "id_nonzero", Expr: `("id" > 0)`},
 							&schema.Check{Name: "text_len", Expr: `(length("text") > 0)`, Attrs: []schema.Attr{&NoInherit{}}},
 							&schema.Check{Name: "a_in_b", Expr: `(a) in (b)`},
-							&Partition{T: "HASH", Parts: []*PartitionPart{{Column: schema.NewColumn("text")}}},
+							&Partition{T: "HASH", Parts: []*PartitionPart{{Column: "text"}}},
 						},
 					},
 				},
@@ -386,7 +386,7 @@ func TestPlanChanges(t *testing.T) {
 										{Column: users.Columns[0]},
 									},
 									Attrs: []schema.Attr{
-										&IndexInclude{Columns: []*schema.Column{schema.NewColumn("a"), schema.NewColumn("b")}},
+										&IndexInclude{Columns: []string{"a", "b"}},
 									},
 								},
 							},

@@ -60,7 +60,7 @@ tasks:
       - |
         protoc -I proto -I proto/kwil \
         --go_out=. --go_opt module=kwil \
-        proto/kwil/{schema,pgschema}/*.proto
+        proto/kwil/schema/*.proto
 
   build:api-gateway:
     desc: Builds the API Gateway

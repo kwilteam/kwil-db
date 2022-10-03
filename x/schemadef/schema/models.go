@@ -75,7 +75,7 @@ type (
 
 	// A ForeignKey represents an index definition.
 	ForeignKey struct {
-		Symbol     string
+		Name       string
 		Table      *Table
 		Columns    []*Column
 		RefTable   *Table
@@ -129,6 +129,26 @@ func (r *Realm) Schema(name string) (*Schema, bool) {
 	return nil, false
 }
 
+func (r *Realm) GetOrCreateSchema(name string) *Schema {
+	s, ok := r.Schema(name)
+	if !ok {
+		s = &Schema{Name: name, Realm: r}
+		r.Schemas = append(r.Schemas, s)
+	}
+	return s
+}
+
+func (r *Realm) Table(schemaName, tableName string) (*Table, bool) {
+	if schema, ok := r.Schema(schemaName); ok {
+		return schema.Table(tableName)
+	}
+	return nil, false
+}
+
+func (r *Realm) GetOrCreateTable(schemaName, tableName string) *Table {
+	return r.GetOrCreateSchema(schemaName).GetOrCreateTable(tableName)
+}
+
 func (r *Realm) Query(name string) (*Query, bool) {
 	for _, q := range r.Queries {
 		if q.Name == name {
@@ -136,6 +156,15 @@ func (r *Realm) Query(name string) (*Query, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (r *Realm) GetOrCreateQuery(name string) *Query {
+	q, ok := r.Query(name)
+	if !ok {
+		q = &Query{Name: name, Realm: r}
+		r.Queries = append(r.Queries, q)
+	}
+	return q
 }
 
 func (r *Realm) Role(name string) (*Role, bool) {
@@ -147,6 +176,15 @@ func (r *Realm) Role(name string) (*Role, bool) {
 	return nil, false
 }
 
+func (r *Realm) GetOrCreateRole(name string) *Role {
+	role, ok := r.Role(name)
+	if !ok {
+		role = &Role{Name: name, Realm: r}
+		r.Roles = append(r.Roles, role)
+	}
+	return role
+}
+
 func (s *Schema) Table(name string) (*Table, bool) {
 	for _, t := range s.Tables {
 		if t.Name == name {
@@ -154,6 +192,15 @@ func (s *Schema) Table(name string) (*Table, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (s *Schema) GetOrCreateTable(name string) *Table {
+	t, ok := s.Table(name)
+	if !ok {
+		t = &Table{Name: name, Schema: s}
+		s.Tables = append(s.Tables, t)
+	}
+	return t
 }
 
 func (s *Schema) Enum(name string) (*Enum, bool) {
@@ -165,6 +212,15 @@ func (s *Schema) Enum(name string) (*Enum, bool) {
 	return nil, false
 }
 
+func (s *Schema) GetOrCreateEnum(name string) *Enum {
+	e, ok := s.Enum(name)
+	if !ok {
+		e = &Enum{Name: name, Schema: s}
+		s.Enums = append(s.Enums, e)
+	}
+	return e
+}
+
 func (t *Table) Column(name string) (*Column, bool) {
 	for _, c := range t.Columns {
 		if c.Name == name {
@@ -172,6 +228,15 @@ func (t *Table) Column(name string) (*Column, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (t *Table) GetOrCreateColumn(name string) *Column {
+	c, ok := t.Column(name)
+	if !ok {
+		c = &Column{Name: name}
+		t.Columns = append(t.Columns, c)
+	}
+	return c
 }
 
 func (t *Table) Index(name string) (*Index, bool) {
@@ -183,9 +248,18 @@ func (t *Table) Index(name string) (*Index, bool) {
 	return nil, false
 }
 
-func (t *Table) ForeignKey(symbol string) (*ForeignKey, bool) {
+func (t *Table) GetOrCreateIndex(name string) *Index {
+	i, ok := t.Index(name)
+	if !ok {
+		i = &Index{Name: name, Table: t}
+		t.Indexes = append(t.Indexes, i)
+	}
+	return i
+}
+
+func (t *Table) ForeignKey(name string) (*ForeignKey, bool) {
 	for _, f := range t.ForeignKeys {
-		if f.Symbol == symbol {
+		if f.Name == name {
 			return f, true
 		}
 	}

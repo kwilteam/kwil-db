@@ -3,7 +3,7 @@ package hclspec
 import "kwil/x/schemadef/hcl"
 
 type (
-	Document struct {
+	Realm struct {
 		Tables  []*Table  `spec:"table"`
 		Enums   []*Enum   `spec:"enum"`
 		Schemas []*Schema `spec:"schema"`
@@ -33,7 +33,7 @@ type (
 	// Column holds a specification for a column in an SQL table.
 	Column struct {
 		Name     string    `spec:",name"`
-		Nullable bool      `spec:"null"`
+		Nullable bool      `spec:"null,omitempty"`
 		Type     *hcl.Type `spec:"type"`
 		Default  hcl.Value `spec:"default"`
 		hcl.DefaultExtension

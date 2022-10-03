@@ -109,7 +109,7 @@ func TestSchema_AddTables(t *testing.T) {
 			posts.PrimaryKey.Table = posts
 			posts.Columns[0].Indexes = append(posts.Columns[0].Indexes, posts.PrimaryKey)
 			posts.ForeignKeys = append(posts.ForeignKeys, &schema.ForeignKey{
-				Symbol:     "author_id",
+				Name:       "author_id",
 				Table:      posts,
 				Columns:    posts.Columns[2:],
 				RefTable:   users,

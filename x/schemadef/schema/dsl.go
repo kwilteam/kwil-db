@@ -658,10 +658,15 @@ func (r *Role) AddQueries(queries ...*Query) *Role {
 	return r
 }
 
+func (r *Role) SetDefault(b bool) *Role {
+	r.Default = b
+	return r
+}
+
 // NewForeignKey creates a new foreign-key with
 // the given constraints/symbol name.
 func NewForeignKey(symbol string) *ForeignKey {
-	return &ForeignKey{Symbol: symbol}
+	return &ForeignKey{Name: symbol}
 }
 
 // SetTable configures the table that holds the foreign-key (child table).

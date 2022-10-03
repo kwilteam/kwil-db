@@ -239,7 +239,7 @@ enum "account_type" {
 	}
 	exp.Tables[0].ForeignKeys = []*schema.ForeignKey{
 		{
-			Symbol:     "accounts",
+			Name:       "accounts",
 			Table:      exp.Tables[0],
 			Columns:    []*schema.Column{exp.Tables[0].Columns[3]},
 			RefTable:   exp.Tables[1],
@@ -335,7 +335,7 @@ table "logs" {
 		require.NoError(t, err)
 		c := schema.NewStringColumn("name", "text")
 		expected := schema.New("test").
-			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c}}}))
+			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c.Name}}}))
 		expected.SetRealm(schema.NewRealm(expected))
 		require.Equal(t, expected, s)
 	})
@@ -366,7 +366,7 @@ table "logs" {
 		require.NoError(t, err)
 		c := schema.NewStringColumn("name", "text")
 		expected := schema.New("test").
-			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeRange, Parts: []*PartitionPart{{Column: c}, {Expr: &schema.RawExpr{X: "lower(name)"}}}}))
+			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeRange, Parts: []*PartitionPart{{Column: c.Name}, {Expr: &schema.RawExpr{X: "lower(name)"}}}}))
 		expected.SetRealm(schema.NewRealm(expected))
 		require.Equal(t, expected, s)
 	})
@@ -416,7 +416,7 @@ func TestMarshalSpec_Partitioned(t *testing.T) {
 	t.Run("Columns", func(t *testing.T) {
 		c := schema.NewStringColumn("name", "text")
 		s := schema.New("test").
-			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c}}}))
+			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c.Name}}}))
 		buf, err := MarshalHCL(s)
 		require.NoError(t, err)
 		require.Equal(t, `table "logs" {
@@ -438,7 +438,7 @@ schema "test" {
 	t.Run("Parts", func(t *testing.T) {
 		c := schema.NewStringColumn("name", "text")
 		s := schema.New("test").
-			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c}, {Expr: &schema.RawExpr{X: "lower(name)"}}}}))
+			AddTables(schema.NewTable("logs").AddColumns(c).AddAttrs(&Partition{T: PartitionTypeHash, Parts: []*PartitionPart{{Column: c.Name}, {Expr: &schema.RawExpr{X: "lower(name)"}}}}))
 		buf, err := MarshalHCL(s)
 		require.NoError(t, err)
 		require.Equal(t, `table "logs" {
@@ -664,7 +664,7 @@ func TestMarshalSpec_IndexInclude(t *testing.T) {
 				{Seq: 0, Column: s.Tables[0].Columns[0]},
 			},
 			Attrs: []schema.Attr{
-				&IndexInclude{Columns: s.Tables[0].Columns[1:]},
+				&IndexInclude{Columns: columnNames(s.Tables[0].Columns[1:])},
 			},
 		},
 	}

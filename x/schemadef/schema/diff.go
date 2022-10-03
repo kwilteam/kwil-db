@@ -532,7 +532,7 @@ func (d *Diff) TableDiff(from, to *Table) ([]SchemaChange, error) {
 
 	// Drop or modify foreign-keys.
 	for _, fk1 := range from.ForeignKeys {
-		fk2, ok := to.ForeignKey(fk1.Symbol)
+		fk2, ok := to.ForeignKey(fk1.Name)
 		if !ok {
 			changes = append(changes, &DropForeignKey{F: fk1})
 			continue
@@ -547,7 +547,7 @@ func (d *Diff) TableDiff(from, to *Table) ([]SchemaChange, error) {
 	}
 	// Add foreign-keys.
 	for _, fk1 := range to.ForeignKeys {
-		if _, ok := from.ForeignKey(fk1.Symbol); !ok {
+		if _, ok := from.ForeignKey(fk1.Name); !ok {
 			changes = append(changes, &AddForeignKey{F: fk1})
 		}
 	}
@@ -714,7 +714,7 @@ func SchemaFKs(s *Schema, rows *sql.Rows) error {
 		fk, ok := t.ForeignKey(name)
 		if !ok {
 			fk = &ForeignKey{
-				Symbol:   name,
+				Name:     name,
 				Table:    t,
 				RefTable: t,
 				OnDelete: ReferenceOption(deleteRule),
@@ -733,7 +733,7 @@ func SchemaFKs(s *Schema, rows *sql.Rows) error {
 		}
 		c, ok := t.Column(column)
 		if !ok {
-			return fmt.Errorf("column %q was not found for fk %q", column, fk.Symbol)
+			return fmt.Errorf("column %q was not found for fk %q", column, fk.Name)
 		}
 		// Rows are ordered by ORDINAL_POSITION that specifies
 		// the position of the column in the FK definition.
@@ -748,7 +748,7 @@ func SchemaFKs(s *Schema, rows *sql.Rows) error {
 		} else if c, ok := t.Column(refColumn); ok {
 			rc = c
 		} else {
-			return fmt.Errorf("referenced column %q was not found for fk %q", refColumn, fk.Symbol)
+			return fmt.Errorf("referenced column %q was not found for fk %q", refColumn, fk.Name)
 		}
 		if _, ok := fk.RefColumn(rc.Name); !ok {
 			fk.RefColumns = append(fk.RefColumns, rc)

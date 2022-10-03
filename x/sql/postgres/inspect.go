@@ -239,7 +239,7 @@ func (i *inspect) enumValues(ctx context.Context, s *schema.Schema) error {
 		args  []any
 		ids   = make(map[int64][]*schema.EnumType)
 		query = "SELECT enumtypid, enumlabel FROM pg_enum WHERE enumtypid IN (%s)"
-		newE  = func(e1 *enumType) *schema.EnumType {
+		newE  = func(e1 *EnumType) *schema.EnumType {
 			if _, ok := ids[e1.ID]; !ok {
 				args = append(args, e1.ID)
 			}
@@ -256,12 +256,12 @@ func (i *inspect) enumValues(ctx context.Context, s *schema.Schema) error {
 	for _, t := range s.Tables {
 		for _, c := range t.Columns {
 			switch t := c.Type.Type.(type) {
-			case *enumType:
+			case *EnumType:
 				e := newE(t)
 				c.Type.Type = e
 				c.Type.Raw = e.T
 			case *ArrayType:
-				if e, ok := t.Type.(*enumType); ok {
+				if e, ok := t.Type.(*EnumType); ok {
 					t.Type = newE(e)
 				}
 			}
@@ -373,7 +373,7 @@ func (i *inspect) addIndexes(s *schema.Schema, rows *sql.Rows) error {
 			}
 			var include IndexInclude
 			schema.Has(idx.Attrs, &include)
-			include.Columns = append(include.Columns, c)
+			include.Columns = append(include.Columns, c.Name)
 			schema.ReplaceOrAppend(&idx.Attrs, &include)
 		case sqlx.ValidString(column):
 			part.Column, ok = t.Column(column.String)
@@ -435,7 +435,7 @@ func (i *inspect) partitions(s *schema.Schema) error {
 					return fmt.Errorf("postgres: unexpected column index %d", idx)
 				}
 				d.Parts = append(d.Parts, &PartitionPart{
-					Column: t.Columns[idx-1],
+					Column: t.Columns[idx-1].Name,
 				})
 			}
 		}
@@ -600,7 +600,7 @@ func canConvert(t *schema.ColumnType, x string) (string, bool) {
 	q := x[0:i]
 	x = x[1 : i-1]
 	switch t.Type.(type) {
-	case *enumType:
+	case *EnumType:
 		return q, true
 	case *schema.BoolType:
 		if sqlx.IsLiteralBool(x) {
@@ -629,9 +629,9 @@ type (
 		T string
 	}
 
-	// enumType represents an enum type. It serves aa intermediate representation of a Postgres enum type,
+	// EnumType represents an enum type. It serves aa intermediate representation of a Postgres enum type,
 	// to temporary save TypeID and TypeName of an enum column until the enum values can be extracted.
-	enumType struct {
+	EnumType struct {
 		schema.Type
 		T      string // Type name.
 		Schema string // Optional schema name.
@@ -764,7 +764,7 @@ type (
 	// https://www.postgresql.org/docs/current/sql-createindex.html
 	IndexInclude struct {
 		schema.Attr
-		Columns []*schema.Column
+		Columns []string
 	}
 
 	// NoInherit attribute defines the NO INHERIT flag for CHECK constraint.
@@ -799,7 +799,7 @@ type (
 	// can be either an expression or a column.
 	PartitionPart struct {
 		Expr   schema.Expr
-		Column *schema.Column
+		Column string
 		Attrs  []schema.Attr
 	}
 )
@@ -869,9 +869,9 @@ func newIndexStorage(opts string) (*IndexStorageParams, error) {
 // reEnumType extracts the enum type and an option schema qualifier.
 var reEnumType = regexp.MustCompile(`^(?:(".+"|\w+)\.)?(".+"|\w+)$`)
 
-func newEnumType(t string, id int64) *enumType {
+func newEnumType(t string, id int64) *EnumType {
 	var (
-		e     = &enumType{T: t, ID: id}
+		e     = &EnumType{T: t, ID: id}
 		parts = reEnumType.FindStringSubmatch(e.T)
 		r     = func(s string) string {
 			s = strings.ReplaceAll(s, `""`, `"`)

@@ -51,7 +51,7 @@ type (
 )
 
 // Scan populates the Realm from the schemas and table specs.
-func Scan(db *schema.Realm, doc *Document, conv SchemaConverter) error {
+func Scan(db *schema.Realm, doc *Realm, conv SchemaConverter) error {
 	// Build the schemas.
 	for _, schemaSpec := range doc.Schemas {
 		sch := &schema.Schema{Name: schemaSpec.Name, Realm: db}
@@ -69,7 +69,6 @@ func Scan(db *schema.Realm, doc *Document, conv SchemaConverter) error {
 			}
 		}
 		db.Schemas = append(db.Schemas, sch)
-
 	}
 	// Link the foreign keys.
 	for _, sch := range db.Schemas {
@@ -106,8 +105,29 @@ func Scan(db *schema.Realm, doc *Document, conv SchemaConverter) error {
 		if err := conv.ConvertEnums(doc.Tables, doc.Enums, db); err != nil {
 			return err
 		}
+		for _, e := range doc.Enums {
+			if err := loadEnum(db, e); err != nil {
+				return err
+			}
+		}
 	}
 
+	return nil
+}
+
+func loadEnum(r *schema.Realm, e *Enum) error {
+	schemaName, err := SchemaName(e.Schema)
+	if err != nil {
+		return err
+	}
+	s, ok := r.Schema(schemaName)
+	if !ok {
+		return fmt.Errorf("spec: schema %q not found", schemaName)
+	}
+
+	out := &schema.Enum{Name: e.Name}
+	out.Values = append(out.Values, e.Values...)
+	s.AddEnums(out)
 	return nil
 }
 
@@ -286,7 +306,7 @@ func findTableSpec(tableSpecs []*Table, schemaName, tableName string) (*Table, e
 // are reachable from the provided schema or its connected realm.
 func linkForeignKeys(tbl *schema.Table, sch *schema.Schema, table *Table) error {
 	for _, s := range table.ForeignKeys {
-		fk := &schema.ForeignKey{Symbol: s.Symbol, Table: tbl}
+		fk := &schema.ForeignKey{Name: s.Symbol, Table: tbl}
 		if s.OnUpdate != nil {
 			fk.OnUpdate = schema.ReferenceOption(FromVar(s.OnUpdate.V))
 		}
@@ -294,7 +314,7 @@ func linkForeignKeys(tbl *schema.Table, sch *schema.Schema, table *Table) error 
 			fk.OnDelete = schema.ReferenceOption(FromVar(s.OnDelete.V))
 		}
 		if n, m := len(s.Columns), len(s.RefColumns); n != m {
-			return fmt.Errorf("sqlspec: number of referencing and referenced columns do not match for foreign-key %q", fk.Symbol)
+			return fmt.Errorf("sqlspec: number of referencing and referenced columns do not match for foreign-key %q", fk.Name)
 		}
 		for _, ref := range s.Columns {
 			c, err := ColumnByRef(tbl, ref)
@@ -313,7 +333,7 @@ func linkForeignKeys(tbl *schema.Table, sch *schema.Schema, table *Table) error 
 				return err
 			}
 			if i > 0 && fk.RefTable != t {
-				return fmt.Errorf("sqlspec: more than 1 table was referenced for foreign-key %q", fk.Symbol)
+				return fmt.Errorf("sqlspec: more than 1 table was referenced for foreign-key %q", fk.Name)
 			}
 			fk.RefTable = t
 			fk.RefColumns = append(fk.RefColumns, c)
@@ -528,7 +548,7 @@ func FromForeignKey(s *schema.ForeignKey) (*ForeignKey, error) {
 		r = append(r, ref)
 	}
 	fk := &ForeignKey{
-		Symbol:     s.Symbol,
+		Symbol:     s.Name,
 		Columns:    c,
 		RefColumns: r,
 	}

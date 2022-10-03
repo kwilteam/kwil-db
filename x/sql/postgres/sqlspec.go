@@ -10,6 +10,7 @@ import (
 	"kwil/x/schemadef/hcl"
 	"kwil/x/schemadef/hclspec"
 	"kwil/x/schemadef/schema"
+
 	"kwil/x/sql/catalog"
 	"kwil/x/sql/core"
 	"kwil/x/sql/engine"
@@ -20,7 +21,7 @@ import (
 
 // evalSpec evaluates a DDL document into v using the input.
 func evalSpec(p *hclparse.Parser, v any, input map[string]string) error {
-	var d hclspec.Document
+	var d hclspec.Realm
 	if err := hclState.Eval(p, &d, input); err != nil {
 		return err
 	}
@@ -81,7 +82,7 @@ func validateQueries(e *engine.Engine, r *schema.Realm) error {
 
 // MarshalSpec marshals v into a DDL document using a hcl.Marshaler.
 func MarshalSpec(v any, marshaler hcl.Marshaler) ([]byte, error) {
-	var d hclspec.Document
+	var d hclspec.Realm
 	switch v := v.(type) {
 	case *schema.Schema:
 		r := &schema.Realm{Schemas: []*schema.Schema{v}}
@@ -357,11 +358,13 @@ func (sc *specConverter) convertIndex(s *hclspec.Index, t *schema.Table) (*schem
 		if len(refs) == 0 {
 			return nil, fmt.Errorf("unexpected empty INCLUDE in index %q definition", s.Name)
 		}
-		include := make([]*schema.Column, len(refs))
+		include := make([]string, len(refs))
 		for i, r := range refs {
-			if include[i], err = hclspec.ColumnByRef(t, r); err != nil {
+			col, err := hclspec.ColumnByRef(t, r)
+			if err != nil {
 				return nil, err
 			}
+			include[i] = col.Name
 		}
 		idx.Attrs = append(idx.Attrs, &IndexInclude{Columns: include})
 	}
@@ -408,7 +411,7 @@ func (sc *specConverter) convertPartition(s hcl.Resource, table *schema.Table) e
 			if err != nil {
 				return err
 			}
-			key.Parts = append(key.Parts, &PartitionPart{Column: c})
+			key.Parts = append(key.Parts, &PartitionPart{Column: c.Name})
 		}
 	case m > 0:
 		for i, p := range p.Parts {
@@ -422,7 +425,7 @@ func (sc *specConverter) convertPartition(s hcl.Resource, table *schema.Table) e
 				if err != nil {
 					return err
 				}
-				key.Parts = append(key.Parts, &PartitionPart{Column: c})
+				key.Parts = append(key.Parts, &PartitionPart{Column: c.Name})
 			case p.Expr != "":
 				key.Parts = append(key.Parts, &PartitionPart{Expr: &schema.RawExpr{X: p.Expr}})
 			}
@@ -481,10 +484,10 @@ func fromPartition(p Partition) *hcl.Resource {
 	columns, ok := func() (*hcl.ListValue, bool) {
 		parts := make([]hcl.Value, 0, len(p.Parts))
 		for _, p := range p.Parts {
-			if p.Column == nil {
+			if p.Column == "" {
 				return nil, false
 			}
-			parts = append(parts, hclspec.ColumnRef(p.Column.Name))
+			parts = append(parts, hclspec.ColumnRef(p.Column))
 		}
 		return &hcl.ListValue{V: parts}, true
 	}()
@@ -495,8 +498,8 @@ func fromPartition(p Partition) *hcl.Resource {
 	for _, p := range p.Parts {
 		part := &hcl.Resource{Type: "by"}
 		switch {
-		case p.Column != nil:
-			part.Attrs = append(part.Attrs, hclspec.RefAttr("column", hclspec.ColumnRef(p.Column.Name)))
+		case p.Column != "":
+			part.Attrs = append(part.Attrs, hclspec.RefAttr("column", hclspec.ColumnRef(p.Column)))
 		case p.Expr != nil:
 			part.Attrs = append(part.Attrs, hclspec.StrAttr("expr", p.Expr.(*schema.RawExpr).X))
 		}
@@ -521,8 +524,8 @@ func enumRef(n string) *hcl.Ref {
 	}
 }
 
-func realmSpec(r *schema.Realm) (*hclspec.Document, error) {
-	d := &hclspec.Document{}
+func realmSpec(r *schema.Realm) (*hclspec.Realm, error) {
+	d := &hclspec.Realm{}
 
 	for _, s := range r.Schemas {
 		doc, err := schemaSpec(s)
@@ -554,12 +557,12 @@ func realmSpec(r *schema.Realm) (*hclspec.Document, error) {
 }
 
 // schemaSpec converts from a concrete Postgres schema to spec.
-func schemaSpec(schem *schema.Schema) (*hclspec.Document, error) {
+func schemaSpec(schem *schema.Schema) (*hclspec.Realm, error) {
 	s, tbls, err := hclspec.FromSchema(schem, tableSpec)
 	if err != nil {
 		return nil, err
 	}
-	d := &hclspec.Document{
+	d := &hclspec.Realm{
 		Tables:  tbls,
 		Schemas: []*hclspec.Schema{s},
 	}
@@ -611,7 +614,7 @@ func indexSpec(idx *schema.Index) (*hclspec.Index, error) {
 	if i := (IndexInclude{}); schema.Has(idx.Attrs, &i) && len(i.Columns) > 0 {
 		attr := &hcl.ListValue{}
 		for _, c := range i.Columns {
-			attr.V = append(attr.V, hclspec.ColumnRef(c.Name))
+			attr.V = append(attr.V, hclspec.ColumnRef(c))
 		}
 		s.Extra.Attrs = append(s.Extra.Attrs, &hcl.Attr{
 			K: "include",
