@@ -2,8 +2,8 @@ package schema
 
 import (
 	"kwil/x/cli/util"
+	"kwil/x/schemadef/postgres"
 	"kwil/x/schemadef/schema"
-	"kwil/x/sql/postgres"
 	"kwil/x/sql/sqlclient"
 
 	"github.com/spf13/cobra"

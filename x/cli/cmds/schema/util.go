@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"kwil/x/schemadef/postgres"
 	"kwil/x/schemadef/schema"
-	"kwil/x/sql/postgres"
 	"kwil/x/sql/sqlclient"
 
 	"github.com/fatih/color"

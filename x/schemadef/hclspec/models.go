@@ -33,7 +33,7 @@ type (
 	// Column holds a specification for a column in an SQL table.
 	Column struct {
 		Name     string    `spec:",name"`
-		Nullable bool      `spec:"null,omitempty"`
+		Nullable bool      `spec:"null"`
 		Type     *hcl.Type `spec:"type"`
 		Default  hcl.Value `spec:"default"`
 		hcl.DefaultExtension

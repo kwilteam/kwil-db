@@ -94,6 +94,8 @@ type (
 		Name      string
 		Realm     *Realm
 		Statement string
+		// Inputs []*QueryInput
+		// Outputs []*QueryOutput
 	}
 
 	Role struct {

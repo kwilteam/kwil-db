@@ -12,7 +12,7 @@ import (
 	"kwil/x/schemadef/hcl"
 	"kwil/x/schemadef/schema"
 
-	sqlx "kwil/x/sql/x"
+	"kwil/x/sql/sqlutil"
 )
 
 type (
@@ -40,7 +40,7 @@ type (
 		hcl.Evaluator
 
 		// A func to open a schema.Driver with a given schema.ExecQuerier. Used when creating a TxClient.
-		openDriver func(sqlx.ExecQuerier) (schema.Driver, error)
+		openDriver func(sqlutil.ExecQuerier) (schema.Driver, error)
 	}
 
 	// TxClient is returned by calling Client.Tx. It behaves the same as Client,
@@ -217,7 +217,7 @@ func OpenSchema(s string) OpenOption {
 
 type (
 	registerOptions struct {
-		openDriver func(sqlx.ExecQuerier) (schema.Driver, error)
+		openDriver func(sqlutil.ExecQuerier) (schema.Driver, error)
 		parser     URLParser
 		flavours   []string
 		codec      interface {
@@ -263,14 +263,14 @@ func RegisterCodec(m hcl.Marshaler, e hcl.Evaluator) RegisterOption {
 // RegisterDriverOpener registers a func to create a schema.Driver from a schema.ExecQuerier.
 // Registering this function is implicitly done when using DriverOpener.
 // The passed opener is used when creating a TxClient.
-func RegisterDriverOpener(open func(sqlx.ExecQuerier) (schema.Driver, error)) RegisterOption {
+func RegisterDriverOpener(open func(sqlutil.ExecQuerier) (schema.Driver, error)) RegisterOption {
 	return func(opts *registerOptions) {
 		opts.openDriver = open
 	}
 }
 
 // DriverOpener is a helper Opener creator for sharing between all drivers.
-func DriverOpener(open func(sqlx.ExecQuerier) (schema.Driver, error)) Opener {
+func DriverOpener(open func(sqlutil.ExecQuerier) (schema.Driver, error)) Opener {
 	return OpenerFunc(func(_ context.Context, u *url.URL) (*Client, error) {
 		v, ok := drivers.Load(u.Scheme)
 		if !ok {

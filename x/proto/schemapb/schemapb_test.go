@@ -1,8 +1,8 @@
 package schemapb
 
 import (
+	"kwil/x/schemadef/postgres"
 	"kwil/x/schemadef/schema"
-	"kwil/x/sql/postgres"
 	"testing"
 
 	"github.com/stretchr/testify/require"

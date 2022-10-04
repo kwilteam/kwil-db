@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"sort"
 
-	sqlx "kwil/x/sql/x"
+	"kwil/x/sql/sqlutil"
 )
 
 type (
@@ -628,11 +628,13 @@ func (d *Diff) partsChange(from, to []*IndexPart) ChangeKind {
 		switch {
 		case from[i].Descending != to[i].Descending || d.IndexPartAttrChanged(from[i], to[i]):
 			return ChangeParts
-		case from[i].Column != to[i].Column:
-			return ChangeParts
+		case from[i].Column != nil && to[i].Column != nil:
+			if from[i].Column.Name != to[i].Column.Name {
+				return ChangeParts
+			}
 		case from[i].Expr != nil && to[i].Expr != nil:
 			x1, x2 := from[i].Expr.(*RawExpr).X, to[i].Expr.(*RawExpr).X
-			if x1 != x2 && x1 != sqlx.MayWrap(x2) {
+			if x1 != x2 && x1 != sqlutil.MayWrap(x2) {
 				return ChangeParts
 			}
 		default: // (C1 != nil) != (C2 != nil) || (X1 != nil) != (X2 != nil).
@@ -815,8 +817,8 @@ func CommentDiff(from, to []Attr) SchemaChange {
 			To:   &toC,
 		}
 	default:
-		v1, err1 := sqlx.Unquote(fromC.Text)
-		v2, err2 := sqlx.Unquote(toC.Text)
+		v1, err1 := sqlutil.Unquote(fromC.Text)
+		v2, err2 := sqlutil.Unquote(toC.Text)
 		if err1 == nil && err2 == nil && v1 != v2 {
 			return &ModifyAttr{
 				From: &fromC,

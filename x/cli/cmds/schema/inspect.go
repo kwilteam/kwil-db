@@ -1,8 +1,8 @@
 package schema
 
 import (
+	_ "kwil/x/schemadef/postgres"
 	"kwil/x/schemadef/schema"
-	_ "kwil/x/sql/postgres"
 	"kwil/x/sql/sqlclient"
 
 	_ "github.com/lib/pq"

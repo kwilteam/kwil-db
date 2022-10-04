@@ -49,8 +49,7 @@ const catalogTmpl = `
 package {{.Pkg}}
 
 import (
-	"kwil/x/sqlparse/ast"
-	"kwil/x/catalog"
+	"kwil/x/sql/catalog"
 )
 
 {{- $funcName := .GenFnName }}
@@ -68,14 +67,14 @@ func {{ $funcName }}Funcs{{ $i }}() []*catalog.Function {
 				{{- if .HasDefault}}
 				HasDefault: true,
 				{{- end}}
-				Type: &ast.TypeName{Name: "{{.TypeName}}"},
+				Type: &catalog.QualName{Name: "{{.TypeName}}"},
 				{{- if ne .Mode "i" }}
 				Mode: {{ .GoMode }},
 				{{- end}}
 				},
 				{{end}}
 			},
-			ReturnType: &ast.TypeName{Name: "{{.ReturnTypeName}}"},
+			ReturnType: &catalog.QualName{Name: "{{.ReturnTypeName}}"},
 		},
 		{{- end}}
 	}
@@ -97,7 +96,7 @@ func {{.GenFnName}}() *catalog.Schema {
 	s.Tables = []*catalog.Table {
 	    {{- range .Relations }}
 		{
-			Rel: &ast.TableName{
+			Rel: &catalog.QualName{
 				Catalog: "{{.Catalog}}",
 				Schema: "{{.SchemaName}}",
 				Name: "{{.Name}}",
@@ -106,7 +105,7 @@ func {{.GenFnName}}() *catalog.Schema {
 				{{- range .Columns}}
 				{
 					Name: "{{.Name}}",
-					Type: ast.TypeName{Name: "{{.Type}}"},
+					Type: &catalog.QualName{Name: "{{.Type}}"},
 					{{- if .IsNotNull}}
 					IsNotNull: true,
 					{{- end}}
@@ -133,8 +132,8 @@ const loaderFuncTmpl = `
 package postgres
 
 import (
-	"kwil/x/sqlparse/postgres/contrib"
-	"kwil/x/catalog"
+	"kwil/x/sql/sqlparse/postgres/contrib"
+	"kwil/x/sql/catalog"
 )
 
 func loadExtension(name string) *catalog.Schema {

@@ -1,8 +1,8 @@
 package schemapb
 
 import (
+	"kwil/x/schemadef/postgres"
 	"kwil/x/schemadef/schema"
-	"kwil/x/sql/postgres"
 )
 
 func ToChanges(changes []*Change) []schema.SchemaChange {
@@ -588,11 +588,11 @@ func toType(pb *Type) (schema.Type, bool) {
 	case *Type_ArrayType:
 		return postgres.ArrayType{T: pb.ArrayType.Type}, true
 	case *Type_BitType:
-		return &postgres.BitType{T: pb.BitType.Type, Width: pb.BitType.Width}, true
+		return &postgres.BitType{T: pb.BitType.Type, Size: pb.BitType.Width}, true
 	case *Type_IntervalType:
 		return &postgres.IntervalType{T: pb.IntervalType.Type, F: pb.IntervalType.Field}, true
 	case *Type_NetworkType:
-		return &postgres.NetworkType{T: pb.NetworkType.Type, Width: pb.NetworkType.Width}, true
+		return &postgres.NetworkType{T: pb.NetworkType.Type, Size: pb.NetworkType.Width}, true
 	case *Type_CurrencyType:
 		return &postgres.CurrencyType{T: pb.CurrencyType.Type}, true
 	case *Type_UuidType:
@@ -641,7 +641,7 @@ func fromType(t schema.Type) *Type {
 	case *postgres.ArrayType:
 		return &Type{Value: &Type_ArrayType{ArrayType: &ArrayType{Type: t.T}}}
 	case *postgres.BitType:
-		return &Type{Value: &Type_BitType{BitType: &BitType{Type: t.T, Width: t.Width}}}
+		return &Type{Value: &Type_BitType{BitType: &BitType{Type: t.T, Width: t.Size}}}
 	case *postgres.IntervalType:
 		var precision *int64
 		if t.Precision != nil {
@@ -650,7 +650,7 @@ func fromType(t schema.Type) *Type {
 		}
 		return &Type{Value: &Type_IntervalType{IntervalType: &IntervalType{Type: t.T, Precision: precision}}}
 	case *postgres.NetworkType:
-		return &Type{Value: &Type_NetworkType{NetworkType: &NetworkType{Type: t.T, Width: t.Width}}}
+		return &Type{Value: &Type_NetworkType{NetworkType: &NetworkType{Type: t.T, Width: t.Size}}}
 	case *postgres.CurrencyType:
 		return &Type{Value: &Type_CurrencyType{CurrencyType: &CurrencyType{Type: t.T}}}
 	case *postgres.SerialType:

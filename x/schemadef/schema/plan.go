@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sort"
 
-	sqlx "kwil/x/sql/x"
+	"kwil/x/sql/sqlutil"
 )
 
 type (
@@ -59,7 +59,7 @@ type (
 	// methods for generating migration plan for applying the actual changes on the database.
 	Driver interface {
 		Differ
-		sqlx.ExecQuerier
+		sqlutil.ExecQuerier
 		Inspector
 		Planner
 		PlanApplier

@@ -1,0 +1,48 @@
+package validate
+
+import (
+	"errors"
+	"fmt"
+
+	"kwil/x/sql/sqlerr"
+	"kwil/x/sql/sqlparse/ast"
+	"kwil/x/sql/sqlparse/astutils"
+)
+
+func ParamRef(n ast.Node) (map[int]bool, bool, error) {
+	var allrefs []*ast.ParamRef
+	var dollar bool
+	var nodollar bool
+	// Find all parameter references
+	astutils.Walk(astutils.VisitorFunc(func(node ast.Node) {
+		switch n := node.(type) {
+		case *ast.ParamRef:
+			ref := node.(*ast.ParamRef)
+			if ref.Dollar {
+				dollar = true
+			} else {
+				nodollar = true
+			}
+			allrefs = append(allrefs, n)
+		}
+	}), n)
+	if dollar && nodollar {
+		return nil, false, errors.New("can not mix $1 format with ? format")
+	}
+
+	seen := map[int]bool{}
+	for _, r := range allrefs {
+		if r.Number > 0 {
+			seen[r.Number] = true
+		}
+	}
+	for i := 1; i <= len(seen); i += 1 {
+		if _, ok := seen[i]; !ok {
+			return nil, false, &sqlerr.Error{
+				Code:    "42P18",
+				Message: fmt.Sprintf("could not determine data type of parameter $%d", i),
+			}
+		}
+	}
+	return seen, !nodollar, nil
+}

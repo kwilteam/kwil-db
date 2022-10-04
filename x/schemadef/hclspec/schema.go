@@ -180,6 +180,7 @@ func ToColumn(s *Column, conv SchemaTypeConverter) (*schema.Column, error) {
 	}
 
 	out.Type.Type = ct
+	out.Type.Raw = s.Type.T
 	if err := ConvertCommentFromSpec(s, &out.Attrs); err != nil {
 		return nil, err
 	}
