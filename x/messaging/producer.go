@@ -3,6 +3,7 @@ package messaging
 import (
 	"context"
 	"fmt"
+	"kwil/x"
 	cfg "kwil/x/messaging/config"
 	"kwil/x/rx"
 	"kwil/x/syncx"
@@ -14,14 +15,14 @@ var ErrUnexpectedProducerError = fmt.Errorf("producer event response unknown")
 type Producer[T any] interface {
 	// Submit publishes a message to an underlying message
 	// provider.
-	Submit(ctx context.Context, message T) *rx.Continuation
+	Submit(ctx context.Context, message T) rx.Continuation
 
 	// Close closes the producer and releases all resources.
 	Close()
 
 	// OnClosed returns a channel that is closed when the
 	// producer is closed.
-	OnClosed() <-chan rx.Void
+	OnClosed() <-chan x.Void
 }
 
 func NewProducer[T any](config cfg.Config, serdes Serdes[T]) (Producer[T], error) {

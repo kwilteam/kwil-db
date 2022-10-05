@@ -1,5 +1,7 @@
 package rx
 
+import "kwil/x"
+
 type ArgsHandler[T, U any] func(args U, value T, err error)
 type Handler[T any] func(T, error)
 type ValueHandler[T any] func(T)
@@ -16,7 +18,7 @@ type continuationRequestAdapter struct {
 	fn func(error)
 }
 
-func (r *continuationRequestAdapter) invoke(_ Void, err error) {
+func (r *continuationRequestAdapter) invoke(_ x.Void, err error) {
 	r.fn(err)
 }
 
@@ -24,7 +26,7 @@ type onSuccessContinuationHandler struct {
 	fn Runnable
 }
 
-func (h *onSuccessContinuationHandler) invoke(_ Void, err error) {
+func (h *onSuccessContinuationHandler) invoke(_ x.Void, err error) {
 	if err == nil {
 		h.fn()
 	}
@@ -34,7 +36,7 @@ type continuationRequestAdapterAsync struct {
 	fn func(error)
 }
 
-func (r *continuationRequestAdapterAsync) invoke(_ Void, err error) {
+func (r *continuationRequestAdapterAsync) invoke(_ x.Void, err error) {
 	go r.fn(err)
 }
 
@@ -42,7 +44,7 @@ type onSuccessContinuationHandlerAsync struct {
 	fn Runnable
 }
 
-func (h *onSuccessContinuationHandlerAsync) invoke(_ Void, err error) {
+func (h *onSuccessContinuationHandlerAsync) invoke(_ x.Void, err error) {
 	if err == nil {
 		go h.fn()
 	}
@@ -97,15 +99,15 @@ func (h *onCompleteRunHandler[T]) invoke(_ T, _ error) {
 }
 
 type asContinuationHandler[T any] struct {
-	c *Continuation
+	c *continuation
 }
 
 func (h *asContinuationHandler[T]) invoke(_ T, err error) {
-	h.c.task.CompleteOrFail(Void{}, err)
+	h.c.task.CompleteOrFail(x.Void{}, err)
 }
 
 type onDoneChanBlockRunHandler[T any] struct {
-	chDone chan Void
+	chDone chan x.Void
 	fn     Handler[T]
 }
 

@@ -1,44 +1,45 @@
 package syncx
 
 import (
+	"kwil/x"
 	"kwil/x/rx"
 	"testing"
 )
 
 func Test_Chan_Close_Basics(t *testing.T) {
-	ch := NewChanBuffered[rx.Void](10)
+	ch := NewChanBuffered[x.Void](10)
 
-	if !ch.Write(rx.Void{}) {
+	if !ch.Write(x.Void{}) {
 		t.Fail()
 	}
 
-	if !ch.Write(rx.Void{}) {
+	if !ch.Write(x.Void{}) {
 		t.Fail()
 	}
 
 	ch.Close()
 
-	if ch.Write(rx.Void{}) {
+	if ch.Write(x.Void{}) {
 		t.Fail()
 	}
 }
 
 func Test_Chan_Drain(t *testing.T) {
-	ch := NewChanBuffered[rx.Void](10)
+	ch := NewChanBuffered[x.Void](10)
 	c := rx.NewContinuation()
 
 	go func() {
-		if !ch.Write(rx.Void{}) {
+		if !ch.Write(x.Void{}) {
 			t.Fail()
 		}
 
-		if !ch.Write(rx.Void{}) {
+		if !ch.Write(x.Void{}) {
 			t.Fail()
 		}
 
 		ch.Close()
 
-		if ch.Write(rx.Void{}) {
+		if ch.Write(x.Void{}) {
 			t.Fail()
 		}
 
@@ -58,11 +59,11 @@ func Test_Chan_Drain(t *testing.T) {
 }
 
 func Test_Chan_Read(t *testing.T) {
-	ch := NewChanBuffered[rx.Void](50)
+	ch := NewChanBuffered[x.Void](50)
 
 	go func() {
 		for i := 0; i < 100; i++ {
-			if !ch.Write(rx.Void{}) {
+			if !ch.Write(x.Void{}) {
 				t.Fail()
 			}
 		}

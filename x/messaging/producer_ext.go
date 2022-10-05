@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
+	"kwil/x"
 	cfg "kwil/x/messaging/config"
 	"kwil/x/rx"
 	"kwil/x/syncx"
@@ -17,16 +18,16 @@ type producer[T any] struct {
 	topic  string
 	serdes Serdes[T]
 	out    syncx.Chan[*messageWithCtx]
-	done   chan rx.Void
+	done   chan x.Void
 }
 
-func (p *producer[T]) Submit(ctx context.Context, message T) *rx.Continuation {
+func (p *producer[T]) Submit(ctx context.Context, message T) rx.Continuation {
 	key, payload, err := p.serdes.Serialize(message)
 	if err != nil {
 		return rx.FailureC(err)
 	}
 
-	task := rx.NewTask[rx.Void]()
+	task := rx.NewTask[x.Void]()
 
 	msg := &messageWithCtx{
 		ctx: utils.IfElse(ctx != nil, ctx, context.Background()),
@@ -44,11 +45,11 @@ func (p *producer[T]) Close() {
 	p.out.Close()
 }
 
-func (p *producer[T]) OnClosed() <-chan rx.Void {
+func (p *producer[T]) OnClosed() <-chan x.Void {
 	return p.done
 }
 
-func (p *producer[T]) createMessage(key []byte, payload []byte, task rx.Task[rx.Void]) *kafka.Message {
+func (p *producer[T]) createMessage(key []byte, payload []byte, task rx.Task[x.Void]) *kafka.Message {
 	return &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &p.topic},
 		Key:            key,
@@ -72,18 +73,17 @@ func (p *producer[T]) doSend(mc *messageWithCtx) {
 func handleEvent(e kafka.Event, done *int) {
 	switch m := e.(type) {
 	case *kafka.Message:
-		if m.Opaque == nil {
-			// producer is closed or some other unrecoverable error has occurred
-			// CONFIRM: possible deadlock by CommitBlock() caller if close does not flush out all messages to event that are pending call back
-			fmt.Println("producer is closed or some other unrecoverable error has occurred")
-			if done != nil {
-				*done = 3
-			}
+		if completeOrFail(m) {
 			return
 		}
 
-		task := m.Opaque.(rx.Task[rx.Void])
-		task.CompleteOrFail(rx.Void{}, m.TopicPartition.Error)
+		// producer is closed or some other unrecoverable error has occurred
+		// CONFIRM: possible deadlock by CommitBlock() caller if close does
+		// not flush out all messages to event that are pending call back
+		fmt.Println("producer is closed or some other unrecoverable error has occurred")
+		if done != nil {
+			*done = 3
+		}
 	}
 }
 
@@ -168,5 +168,15 @@ type messageWithCtx struct {
 }
 
 func (c *messageWithCtx) fail(err error) {
-	c.msg.Opaque.(rx.Task[rx.Void]).Fail(err)
+	c.msg.Opaque.(rx.Task[x.Void]).Fail(err)
+}
+
+func completeOrFail(m *kafka.Message) bool {
+	if m.Opaque != nil {
+		return false
+	}
+	task := m.Opaque.(rx.Task[x.Void])
+	task.CompleteOrFail(x.Void{}, m.TopicPartition.Error)
+
+	return true
 }

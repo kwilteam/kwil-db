@@ -2,15 +2,8 @@ package rx
 
 import (
 	"context"
-	"errors"
+	"kwil/x"
 )
-
-// ErrCancelled is the error returned when a task/Continuation
-// has been previously cancelled
-var ErrCancelled = errors.New("cancelled prior to completion")
-
-// Void An empty struct{} typed as 'Void'
-type Void struct{}
 
 // Task is a Promise-like interface. It can be used as the
 // controller for setting completion of a Continuation or
@@ -52,7 +45,7 @@ type Task[T any] interface {
 
 	// DoneChan will return a channel that will be closed when the
 	// result/error has been set
-	DoneChan() <-chan Void
+	DoneChan() <-chan x.Void
 
 	// Await will block until the result is complete or the context
 	// is cancelled, reached its timeout or deadline. 'ok' will be true
@@ -110,11 +103,11 @@ type Task[T any] interface {
 
 	// AsContinuation returns a continuation that will be completed
 	// when the source task has been completed
-	AsContinuation() *Continuation
+	AsContinuation() Continuation
 
 	// AsContinuationAsync returns a continuation that will be completed
 	// asynchronously when the source task has been completed
-	AsContinuationAsync() *Continuation
+	AsContinuationAsync() Continuation
 
 	// AsAsync returns a task that will be completed asynchronously
 	// when the source task has been completed

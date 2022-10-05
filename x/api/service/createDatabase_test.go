@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"kwil/x/logx"
 	"math/big"
 	"testing"
 
@@ -199,6 +200,7 @@ func TestService_CreateDatabase(t *testing.T) {
 			s := &Service{
 				ds:      tt.fields.ds,
 				pricing: tt.fields.pricing,
+				log:     logx.New(),
 			}
 			if _, err := s.CreateDatabase(tt.args.ctx, tt.args.db); (err != nil) != tt.wantErr {
 				t.Errorf("Service.CreateDatabase() error = %v, wantErr %v", err, tt.wantErr)

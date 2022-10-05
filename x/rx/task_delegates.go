@@ -2,13 +2,14 @@ package rx
 
 import (
 	"context"
+	"kwil/x"
 	"kwil/x/utils"
 	"sync/atomic"
 	"unsafe"
 )
 
 func (r *task[T]) _cancel() bool {
-	return r.completeOrFail(utils.AsDefault[T](), ErrCancelled)
+	return r.completeOrFail(x.AsDefault[T](), x.ErrOperationCancelled)
 }
 
 func (r *task[T]) _completeOrFail(value T, err error) bool {
@@ -20,7 +21,7 @@ func (r *task[T]) _complete(val T) bool {
 }
 
 func (r *task[T]) _fail(err error) bool {
-	return r.completeOrFail(utils.AsDefault[T](), err)
+	return r.completeOrFail(x.AsDefault[T](), err)
 }
 
 func (r *task[T]) _isDone() bool {
@@ -37,10 +38,6 @@ func (r *task[T]) _addHandler(fn Handler[T]) *task[T] {
 }
 
 func (r *task[T]) _await(ctx context.Context) (ok bool) {
-	if isCompletedOrigin(r.status) {
-		return true
-	}
-
 	if ctx == nil {
 		<-r._doneChan()
 		return true
@@ -75,23 +72,14 @@ func (r *task[T]) _getOrError() (T, error) {
 	return r.loadValueOrErrorUnsafe(current)
 }
 
-func (r *task[T]) _doneChan() <-chan Void {
-	if isCompletedOrigin(r.status) {
-		return _closedChan
-	}
-
-	ch := make(chan Void)
-	r._addHandlerNoReturn(func(_ T, _ error) {
-		close(ch)
-	})
-
-	return ch
+func (r *task[T]) _doneChan() <-chan x.Void {
+	return r.getOrAddDoneChan()
 }
 
-func (r *task[T]) _asContinuation(async bool) *Continuation {
+func (r *task[T]) _asContinuation(async bool) Continuation {
 	var state unsafe.Pointer
 	status := utils.IfElse(async, _ASYNC_CONTINUATIONS, uint32(0))
-	h := asContinuationHandler[T]{&Continuation{task: &task[Void]{
+	h := asContinuationHandler[T]{&continuation{task: &task[x.Void]{
 		status: status,
 		state:  state,
 	}}}

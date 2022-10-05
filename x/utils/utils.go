@@ -4,21 +4,21 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"kwil/x"
 	"math/big"
 	"os"
 	"path"
 	"runtime"
 	"strings"
-	"time"
 )
 
 // Mod e.g., modulo returns the remainder of x/y
-func Mod[T Integer](x, y T) T {
+func Mod[T x.Integer](x, y T) T {
 	return (x%y + y) % y
 }
 
 // Max returns the largest of x or y.
-func Max[T Integer](x, y T) T {
+func Max[T x.Integer](x, y T) T {
 	if x > y {
 		return x
 	}
@@ -26,7 +26,7 @@ func Max[T Integer](x, y T) T {
 }
 
 // Min returns the smallest of x or y.
-func Min[T Integer](x, y T) T {
+func Min[T x.Integer](x, y T) T {
 	if x < y {
 		return x
 	}
@@ -90,13 +90,6 @@ func CoalesceF[T comparable](check T, alt func() T) T {
 	return alt()
 }
 
-func CoalesceP[T any](check *T, alt *T) *T {
-	if !IsNil(check) {
-		return check
-	}
-	return alt
-}
-
 func Any[T comparable](compare T, params ...T) bool {
 	for _, param := range params {
 		if compare == param {
@@ -152,19 +145,6 @@ func IsDefault[T comparable](compare T) bool {
 func IsNotDefault[T comparable](compare T) bool {
 	var d T
 	return compare != d
-}
-
-func IsNil[T any](v *T) bool {
-	return v == nil
-}
-
-func IsNotNil[T any](v *T) bool {
-	return v != nil
-}
-
-func AsDefault[T any]() T {
-	var t T
-	return t
 }
 
 func ExpandHomeDirAndEnv(path string) string {
@@ -223,58 +203,4 @@ func GetGoFilePathOfCaller() string {
 	_, filename, _, _ := runtime.Caller(1)
 
 	return path.Dir(filename)
-}
-
-// Deadline implements the deadline/timeout resiliency pattern.
-type Deadline struct {
-	deadline time.Time
-}
-
-// Expiry will return the time at which the deadline will expire
-func (d *Deadline) Expiry() time.Time {
-	return d.deadline
-}
-
-// HasExpired will return true if the deadline has expired
-func (d *Deadline) HasExpired() bool {
-	return !d.deadline.Before(time.Now())
-}
-
-// NewDeadline constructs a new Deadline with the given timeout.
-func NewDeadline(timeout time.Duration) *Deadline {
-	return &Deadline{time.Now().Add(time.Millisecond * timeout)}
-}
-
-// Tuple is a combination of two values of any type.
-// In general, it is used in place of declaring one-off
-// structs for passing around a pair of values.
-type Tuple[T, U any] struct {
-	First  T
-	Second U
-}
-
-// Integer is a type that represents the various
-// uint and int golang types
-type Integer interface {
-	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 |
-		~int | ~int8 | ~int16 | ~int32 | ~int64
-}
-
-// Closeable is an interface that represents a type
-// that can be closed
-type Closeable interface {
-	Close()
-}
-
-// Iterable is an interface that indicates a type
-// can be iterated by a provided Iterator
-type Iterable[T any] interface {
-	GetIterator() Iterator[T]
-}
-
-// Iterator is an interface that represents a type
-// that can be iterated over
-type Iterator[T any] interface {
-	HasNext() bool
-	Value() T
 }

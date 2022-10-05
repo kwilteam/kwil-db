@@ -2,7 +2,7 @@ package rx
 
 import (
 	"fmt"
-	"unsafe"
+	"kwil/x"
 )
 
 // NewTask creates a new task that will execute
@@ -19,50 +19,42 @@ func NewTaskAsync[T any]() Task[T] {
 
 // NewContinuation creates a new task that will execute
 // continuations synchronously
-func NewContinuation() *Continuation {
-	return &Continuation{newTask[Void]()}
+func NewContinuation() Continuation {
+	return &continuation{newTask[x.Void]()}
 }
 
 // NewContinuationAsync creates a new task that will execute
 // continuations synchronously
-func NewContinuationAsync() *Continuation {
-	return &Continuation{newTaskAsync[Void]()}
+func NewContinuationAsync() Continuation {
+	return &continuation{newTaskAsync[x.Void]()}
 }
 
 // Success returns a completed task with the param 'value'.
 func Success[T any](value T) Task[T] {
-	return &task[T]{
-		status: _VALUE,
-		state:  unsafe.Pointer(&value),
-	}
+	return &task_value[T]{value}
 }
 
 // Failure returns an errored task with the param 'err'.
 func Failure[T any](err error) Task[T] {
-	status := _ERROR
-	if err == ErrCancelled {
-		status = _CANCELLED_OR_ERROR
-	}
-	return &task[T]{
-		status: status,
-		state:  unsafe.Pointer(&err),
-	}
+	return &task_error[T]{err}
 }
 
-// FailureC will return a new Continuation that is in a completed failed state
-func FailureC(err error) *Continuation {
-	return Failure[struct{}](err).AsContinuation()
+// FailureC will return a new Continuation that is in a
+// completed failed state
+func FailureC(err error) Continuation {
+	return &cont_err{err}
 }
 
-// SuccessC will return a new Continuation that is in a completed successful state
-func SuccessC() *Continuation {
-	return Success(struct{}{}).AsContinuation()
+// SuccessC will return a new Continuation that is in a
+// completed successful state
+func SuccessC() Continuation {
+	return &cont_value{}
 }
 
-func Exec(fn func() error) *Continuation {
-	task := newTask[Void]()
+func Exec(fn func() error) Continuation {
+	task := newTask[x.Void]()
 
-	go func(f func() error, t Task[Void]) {
+	go func(f func() error, t Task[x.Void]) {
 		if t.IsDone() {
 			return
 		}
@@ -77,10 +69,10 @@ func Exec(fn func() error) *Continuation {
 			}
 		}()
 
-		t.CompleteOrFail(Void{}, f())
+		t.CompleteOrFail(x.Void{}, f())
 	}(fn, task)
 
-	return &Continuation{task}
+	return &continuation{task}
 }
 
 func Invoke[T any](fn func() T) Task[T] {
