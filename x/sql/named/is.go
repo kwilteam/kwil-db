@@ -16,7 +16,7 @@ func IsParamFunc(node ast.Node) bool {
 		return false
 	}
 
-	isValid := call.Func.Schema == "sqlc" && (call.Func.Name == "arg" || call.Func.Name == "narg")
+	isValid := call.Func.Schema == "kwil" && (call.Func.Name == "arg" || call.Func.Name == "narg")
 	return isValid
 }
 

@@ -48,12 +48,12 @@ func init() {
 		sqlclient.RegisterDriverOpener(Open),
 		sqlclient.RegisterFlavours("postgresql"),
 		sqlclient.RegisterCodec(MarshalHCL, EvalHCL),
-		sqlclient.RegisterURLParser(parser{}),
+		sqlclient.RegisterURLParser(urlParser{}),
 	)
 }
 
 func opener(_ context.Context, u *url.URL) (*sqlclient.Client, error) {
-	ur := parser{}.ParseURL(u)
+	ur := urlParser{}.ParseURL(u)
 	db, err := sql.Open(DriverName, ur.DSN)
 	if err != nil {
 		return nil, err
@@ -179,15 +179,15 @@ func (c *conn) supportsIndexInclude() bool {
 	return c.version >= 11_00_00
 }
 
-type parser struct{}
+type urlParser struct{}
 
 // ParseURL implements the sqlclient.URLParser interface.
-func (parser) ParseURL(u *url.URL) *sqlclient.URL {
+func (urlParser) ParseURL(u *url.URL) *sqlclient.URL {
 	return &sqlclient.URL{URL: u, DSN: u.String(), Schema: u.Query().Get("search_path")}
 }
 
 // ChangeSchema implements the sqlclient.SchemaChanger interface.
-func (parser) ChangeSchema(u *url.URL, s string) *url.URL {
+func (urlParser) ChangeSchema(u *url.URL, s string) *url.URL {
 	nu := *u
 	q := nu.Query()
 	q.Set("search_path", s)

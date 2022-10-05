@@ -12,144 +12,7 @@ import (
 	nodes "github.com/pganalyze/pg_query_go/v2"
 
 	"kwil/x/sql/ast"
-	"kwil/x/sql/core"
 )
-
-func stringSlice(list *nodes.List) []string {
-	items := []string{}
-	for _, item := range list.Items {
-		if n, ok := item.Node.(*nodes.Node_String_); ok {
-			items = append(items, n.String_.Str)
-		}
-	}
-	return items
-}
-
-func stringSliceFromNodes(s []*nodes.Node) []string {
-	var items []string
-	for _, item := range s {
-		if n, ok := item.Node.(*nodes.Node_String_); ok {
-			items = append(items, n.String_.Str)
-		}
-	}
-	return items
-}
-
-type relation struct {
-	Catalog string
-	Schema  string
-	Name    string
-}
-
-func (r relation) TableName() *ast.TableName {
-	return &ast.TableName{
-		Catalog: r.Catalog,
-		Schema:  r.Schema,
-		Name:    r.Name,
-	}
-}
-
-func (r relation) TypeName() *ast.TypeName {
-	return &ast.TypeName{
-		Catalog: r.Catalog,
-		Schema:  r.Schema,
-		Name:    r.Name,
-	}
-}
-
-func (r relation) FuncName() *ast.FuncName {
-	return &ast.FuncName{
-		Catalog: r.Catalog,
-		Schema:  r.Schema,
-		Name:    r.Name,
-	}
-}
-
-func parseRelationFromNodes(list []*nodes.Node) (*relation, error) {
-	parts := stringSliceFromNodes(list)
-	switch len(parts) {
-	case 1:
-		return &relation{
-			Name: parts[0],
-		}, nil
-	case 2:
-		return &relation{
-			Schema: parts[0],
-			Name:   parts[1],
-		}, nil
-	case 3:
-		return &relation{
-			Catalog: parts[0],
-			Schema:  parts[1],
-			Name:    parts[2],
-		}, nil
-	default:
-		return nil, fmt.Errorf("invalid name: %s", joinNodes(list, "."))
-	}
-}
-
-func parseRelationFromRangeVar(rv *nodes.RangeVar) *relation {
-	return &relation{
-		Catalog: rv.Catalogname,
-		Schema:  rv.Schemaname,
-		Name:    rv.Relname,
-	}
-}
-
-func parseRelation(in *nodes.Node) (*relation, error) {
-	switch n := in.Node.(type) {
-	case *nodes.Node_List:
-		return parseRelationFromNodes(n.List.Items)
-	case *nodes.Node_RangeVar:
-		return parseRelationFromRangeVar(n.RangeVar), nil
-	case *nodes.Node_TypeName:
-		return parseRelationFromNodes(n.TypeName.Names)
-	default:
-		return nil, fmt.Errorf("unexpected node type: %T", n)
-	}
-}
-
-func parseColName(node *nodes.Node) (*ast.ColumnRef, *ast.TableName, error) {
-	switch n := node.Node.(type) {
-	case *nodes.Node_List:
-		parts := stringSlice(n.List)
-		var tbl *ast.TableName
-		var ref *ast.ColumnRef
-		switch len(parts) {
-		case 2:
-			tbl = &ast.TableName{Name: parts[0]}
-			ref = &ast.ColumnRef{Name: parts[1]}
-		case 3:
-			tbl = &ast.TableName{Schema: parts[0], Name: parts[1]}
-			ref = &ast.ColumnRef{Name: parts[2]}
-		case 4:
-			tbl = &ast.TableName{Catalog: parts[0], Schema: parts[1], Name: parts[2]}
-			ref = &ast.ColumnRef{Name: parts[3]}
-		default:
-			return nil, nil, fmt.Errorf("column specifier %q is not the proper format, expected '[catalog.][schema.]colname.tablename'", strings.Join(parts, "."))
-		}
-		return ref, tbl, nil
-	default:
-		return nil, nil, fmt.Errorf("parseColName: unexpected node type: %T", n)
-	}
-}
-
-func join(list *nodes.List, sep string) string {
-	return strings.Join(stringSlice(list), sep)
-}
-
-func joinNodes(list []*nodes.Node, sep string) string {
-	return strings.Join(stringSliceFromNodes(list), sep)
-}
-
-func NewParser() *Parser {
-	return &Parser{}
-}
-
-type Parser struct {
-}
-
-var errSkip = errors.New("skip stmt")
 
 func (p *Parser) Parse(r io.Reader) ([]ast.Statement, error) {
 	contents, err := io.ReadAll(r)
@@ -182,18 +45,6 @@ func (p *Parser) Parse(r io.Reader) ([]ast.Statement, error) {
 		})
 	}
 	return stmts, nil
-}
-
-// https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-COMMENTS
-func (p *Parser) CommentSyntax() core.CommentSyntax {
-	return core.CommentSyntax{
-		Dash:      true,
-		SlashStar: true,
-	}
-}
-
-func (p *Parser) Kind() core.EngineKind {
-	return core.EnginePostgreSQL
 }
 
 func translate(node *nodes.Node) (ast.Node, error) {
@@ -620,3 +471,132 @@ func isNotNull(n *nodes.ColumnDef) bool {
 	}
 	return false
 }
+
+func stringSlice(list *nodes.List) []string {
+	items := []string{}
+	for _, item := range list.Items {
+		if n, ok := item.Node.(*nodes.Node_String_); ok {
+			items = append(items, n.String_.Str)
+		}
+	}
+	return items
+}
+
+func stringSliceFromNodes(s []*nodes.Node) []string {
+	var items []string
+	for _, item := range s {
+		if n, ok := item.Node.(*nodes.Node_String_); ok {
+			items = append(items, n.String_.Str)
+		}
+	}
+	return items
+}
+
+type relation struct {
+	Catalog string
+	Schema  string
+	Name    string
+}
+
+func (r relation) TableName() *ast.TableName {
+	return &ast.TableName{
+		Catalog: r.Catalog,
+		Schema:  r.Schema,
+		Name:    r.Name,
+	}
+}
+
+func (r relation) TypeName() *ast.TypeName {
+	return &ast.TypeName{
+		Catalog: r.Catalog,
+		Schema:  r.Schema,
+		Name:    r.Name,
+	}
+}
+
+func (r relation) FuncName() *ast.FuncName {
+	return &ast.FuncName{
+		Catalog: r.Catalog,
+		Schema:  r.Schema,
+		Name:    r.Name,
+	}
+}
+
+func parseRelationFromNodes(list []*nodes.Node) (*relation, error) {
+	parts := stringSliceFromNodes(list)
+	switch len(parts) {
+	case 1:
+		return &relation{
+			Name: parts[0],
+		}, nil
+	case 2:
+		return &relation{
+			Schema: parts[0],
+			Name:   parts[1],
+		}, nil
+	case 3:
+		return &relation{
+			Catalog: parts[0],
+			Schema:  parts[1],
+			Name:    parts[2],
+		}, nil
+	default:
+		return nil, fmt.Errorf("invalid name: %s", joinNodes(list, "."))
+	}
+}
+
+func parseRelationFromRangeVar(rv *nodes.RangeVar) *relation {
+	return &relation{
+		Catalog: rv.Catalogname,
+		Schema:  rv.Schemaname,
+		Name:    rv.Relname,
+	}
+}
+
+func parseRelation(in *nodes.Node) (*relation, error) {
+	switch n := in.Node.(type) {
+	case *nodes.Node_List:
+		return parseRelationFromNodes(n.List.Items)
+	case *nodes.Node_RangeVar:
+		return parseRelationFromRangeVar(n.RangeVar), nil
+	case *nodes.Node_TypeName:
+		return parseRelationFromNodes(n.TypeName.Names)
+	default:
+		return nil, fmt.Errorf("unexpected node type: %T", n)
+	}
+}
+
+func parseColName(node *nodes.Node) (*ast.ColumnRef, *ast.TableName, error) {
+	switch n := node.Node.(type) {
+	case *nodes.Node_List:
+		parts := stringSlice(n.List)
+		var tbl *ast.TableName
+		var ref *ast.ColumnRef
+		switch len(parts) {
+		case 2:
+			tbl = &ast.TableName{Name: parts[0]}
+			ref = &ast.ColumnRef{Name: parts[1]}
+		case 3:
+			tbl = &ast.TableName{Schema: parts[0], Name: parts[1]}
+			ref = &ast.ColumnRef{Name: parts[2]}
+		case 4:
+			tbl = &ast.TableName{Catalog: parts[0], Schema: parts[1], Name: parts[2]}
+			ref = &ast.ColumnRef{Name: parts[3]}
+		default:
+			return nil, nil, fmt.Errorf("column specifier %q is not the proper format, expected '[catalog.][schema.]colname.tablename'", strings.Join(parts, "."))
+		}
+		return ref, tbl, nil
+	default:
+		return nil, nil, fmt.Errorf("parseColName: unexpected node type: %T", n)
+	}
+}
+
+func join(list *nodes.List, sep string) string {
+	return strings.Join(stringSlice(list), sep)
+}
+
+func joinNodes(list []*nodes.Node, sep string) string {
+	return strings.Join(stringSliceFromNodes(list), sep)
+}
+
+var errSkip = errors.New("skip stmt")
