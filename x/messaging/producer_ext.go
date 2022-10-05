@@ -29,7 +29,7 @@ func (p *producer[T]) Submit(ctx context.Context, message T) *rx.Continuation {
 	task := rx.NewTask[rx.Void]()
 
 	msg := &messageWithCtx{
-		ctx: utils.CoalesceF(ctx, context.Background),
+		ctx: utils.IfElse(ctx != nil, ctx, context.Background()),
 		msg: p.createMessage(key, payload, task),
 	}
 
@@ -92,7 +92,7 @@ func (p *producer[T]) beginEventProcessing() {
 	done := 0
 	for done == 0 {
 		select {
-		case <-p.out.ClosingCh():
+		case <-p.out.ClosedCh():
 			done = 1
 		case m, ok := <-p.out.Read():
 			if !ok {
