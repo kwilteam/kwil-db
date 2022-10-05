@@ -1,8 +1,8 @@
 package rx
 
-// Map will execute the function and set the result if the Task
+// Map will execute the function and set the result if the task
 // is successful, else it will propagate the source error
-func Map[T, R any](source Listenable[T], fn func(T) R) *Task[R] {
+func Map[T, R any](source Listenable[T], fn func(T) R) Task[R] {
 	task := NewTask[R]()
 
 	source.OnComplete(func(v T, err error) {
@@ -21,7 +21,7 @@ func Map[T, R any](source Listenable[T], fn func(T) R) *Task[R] {
 // will be propagated, else the Listenable returned by the function will
 // be awaited and returned as the value or an error if it results in an
 // errored stated
-func FlatMap[T, R any](source Listenable[T], fn func(T) Listenable[R]) *Task[R] {
+func FlatMap[T, R any](source Listenable[T], fn func(T) Listenable[R]) Task[R] {
 	task := NewTask[R]()
 
 	source.OnComplete(func(v T, e error) {
@@ -42,7 +42,7 @@ func FlatMap[T, R any](source Listenable[T], fn func(T) Listenable[R]) *Task[R] 
 	return task
 }
 
-func Any[T any](sources ...Listenable[T]) *Task[T] {
+func Any[T any](sources ...Listenable[T]) Task[T] {
 	task := NewTask[T]()
 
 	for _, source := range sources {
@@ -54,7 +54,7 @@ func Any[T any](sources ...Listenable[T]) *Task[T] {
 	return task
 }
 
-func All[T any](sources ...Listenable[T]) *Task[[]T] {
+func All[T any](sources ...Listenable[T]) Task[[]T] {
 	if len(sources) == 0 {
 		return Success([]T{})
 	}

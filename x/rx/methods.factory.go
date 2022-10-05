@@ -5,44 +5,48 @@ import (
 	"unsafe"
 )
 
-// NewTask creates a new task that will execution
+// NewTask creates a new task that will execute
 // continuations synchronously
-func NewTask[T any]() *Task[T] {
-	var state unsafe.Pointer
-	return &Task[T]{&taskState{
-		status: uint32(0),
-		state:  state,
-	}}
+func NewTask[T any]() Task[T] {
+	return newTask[T]()
 }
 
-// NewTaskAsync creates a new task that will initiate
-// execution of continuations asynchronously
-func NewTaskAsync[T any]() *Task[T] {
-	var state unsafe.Pointer
-	return &Task[T]{&taskState{
-		status: _ASYNC_CONTINUATIONS,
-		state:  state,
-	}}
+// NewTaskAsync creates a new task that will execute
+// continuations synchronously
+func NewTaskAsync[T any]() Task[T] {
+	return newTaskAsync[T]()
 }
 
-// Success returns a completed Task with the param 'value'.
-func Success[T any](value T) *Task[T] {
-	return &Task[T]{&taskState{
+// NewContinuation creates a new task that will execute
+// continuations synchronously
+func NewContinuation() *Continuation {
+	return &Continuation{newTask[Void]()}
+}
+
+// NewContinuationAsync creates a new task that will execute
+// continuations synchronously
+func NewContinuationAsync() *Continuation {
+	return &Continuation{newTaskAsync[Void]()}
+}
+
+// Success returns a completed task with the param 'value'.
+func Success[T any](value T) Task[T] {
+	return &task[T]{
 		status: _VALUE,
 		state:  unsafe.Pointer(&value),
-	}}
+	}
 }
 
-// Failure returns an errored Task with the param 'err'.
-func Failure[T any](err error) *Task[T] {
+// Failure returns an errored task with the param 'err'.
+func Failure[T any](err error) Task[T] {
 	status := _ERROR
 	if err == ErrCancelled {
 		status = _CANCELLED_OR_ERROR
 	}
-	return &Task[T]{&taskState{
+	return &task[T]{
 		status: status,
 		state:  unsafe.Pointer(&err),
-	}}
+	}
 }
 
 // FailureC will return a new Continuation that is in a completed failed state
@@ -56,9 +60,9 @@ func SuccessC() *Continuation {
 }
 
 func Exec(fn func() error) *Continuation {
-	task := NewTask[Void]()
+	task := newTask[Void]()
 
-	go func(f func() error, t *Task[Void]) {
+	go func(f func() error, t Task[Void]) {
 		if t.IsDone() {
 			return
 		}
@@ -79,10 +83,10 @@ func Exec(fn func() error) *Continuation {
 	return &Continuation{task}
 }
 
-func Invoke[T any](fn func() T) *Task[T] {
+func Invoke[T any](fn func() T) Task[T] {
 	task := NewTask[T]()
 
-	go func(f func() T, t *Task[T]) {
+	go func(f func() T, t Task[T]) {
 		if t.IsDone() {
 			return
 		}
@@ -103,10 +107,10 @@ func Invoke[T any](fn func() T) *Task[T] {
 	return task
 }
 
-func Call[T any](fn func() (T, error)) *Task[T] {
+func Call[T any](fn func() (T, error)) Task[T] {
 	task := NewTask[T]()
 
-	go func(f func() (T, error), t *Task[T]) {
+	go func(f func() (T, error), t Task[T]) {
 		if t.IsDone() {
 			return
 		}
@@ -128,10 +132,10 @@ func Call[T any](fn func() (T, error)) *Task[T] {
 	return task
 }
 
-func InvokeWithArgs[T, U any](args U, fn func(U) T) *Task[T] {
+func InvokeWithArgs[T, U any](args U, fn func(U) T) Task[T] {
 	task := NewTask[T]()
 
-	go func(a U, f func(U) T, t *Task[T]) {
+	go func(a U, f func(U) T, t Task[T]) {
 		if t.IsDone() {
 			return
 		}
@@ -152,10 +156,10 @@ func InvokeWithArgs[T, U any](args U, fn func(U) T) *Task[T] {
 	return task
 }
 
-func CallWithArgs[T, U any](args U, fn func(U) (T, error)) *Task[T] {
+func CallWithArgs[T, U any](args U, fn func(U) (T, error)) Task[T] {
 	task := NewTask[T]()
 
-	go func(a U, f func(U) (T, error), t *Task[T]) {
+	go func(a U, f func(U) (T, error), t Task[T]) {
 		if t.IsDone() {
 			return
 		}

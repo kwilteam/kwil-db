@@ -49,7 +49,7 @@ func (h *onSuccessContinuationHandlerAsync) invoke(_ Void, err error) {
 }
 
 type onSuccessOrErrorTaskHandler[T any] struct {
-	task *Task[T]
+	task *task[T]
 	fn   Handler[T]
 }
 

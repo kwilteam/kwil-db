@@ -10,17 +10,15 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	typ "kwil/x/types"
 )
 
 // Mod e.g., modulo returns the remainder of x/y
-func Mod[T typ.Integer](x, y T) T {
+func Mod[T Integer](x, y T) T {
 	return (x%y + y) % y
 }
 
 // Max returns the largest of x or y.
-func Max[T typ.Integer](x, y T) T {
+func Max[T Integer](x, y T) T {
 	if x > y {
 		return x
 	}
@@ -28,7 +26,7 @@ func Max[T typ.Integer](x, y T) T {
 }
 
 // Min returns the smallest of x or y.
-func Min[T typ.Integer](x, y T) T {
+func Min[T Integer](x, y T) T {
 	if x < y {
 		return x
 	}
@@ -82,6 +80,14 @@ func Coalesce[T comparable](check T, alt T) T {
 		return check
 	}
 	return alt
+}
+
+func CoalesceF[T comparable](check T, alt func() T) T {
+	var d T
+	if check == d {
+		return check
+	}
+	return alt()
 }
 
 func CoalesceP[T any](check *T, alt *T) *T {
@@ -237,4 +243,38 @@ func (d *Deadline) HasExpired() bool {
 // NewDeadline constructs a new Deadline with the given timeout.
 func NewDeadline(timeout time.Duration) *Deadline {
 	return &Deadline{time.Now().Add(time.Millisecond * timeout)}
+}
+
+// Tuple is a combination of two values of any type.
+// In general, it is used in place of declaring one-off
+// structs for passing around a pair of values.
+type Tuple[T, U any] struct {
+	First  T
+	Second U
+}
+
+// Integer is a type that represents the various
+// uint and int golang types
+type Integer interface {
+	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 |
+		~int | ~int8 | ~int16 | ~int32 | ~int64
+}
+
+// Closeable is an interface that represents a type
+// that can be closed
+type Closeable interface {
+	Close()
+}
+
+// Iterable is an interface that indicates a type
+// can be iterated by a provided Iterator
+type Iterable[T any] interface {
+	GetIterator() Iterator[T]
+}
+
+// Iterator is an interface that represents a type
+// that can be iterated over
+type Iterator[T any] interface {
+	HasNext() bool
+	Value() T
 }

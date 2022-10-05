@@ -2,7 +2,6 @@ package rx
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 )
@@ -12,21 +11,22 @@ type TestStruct struct {
 }
 
 func Test_SetComplete(t *testing.T) {
-	t.Run("Test_SetComplete", func(t *testing.T) {
-		tc := &TestStruct{"done_test1"}
-		task := NewTask[*TestStruct]()
-		task.Complete(tc)
-		v := task.Get()
-		t.Log(v.value)
-	})
+	tc := &TestStruct{"done_test1"}
+	task := NewTask[*TestStruct]()
+	task.Complete(tc)
+	v := task.Get()
+	if v.value != tc.value {
+		t.Fail()
+	}
 }
 
 func Test_SetError(t *testing.T) {
 	task := NewTask[*TestStruct]()
-	task.Fail(errors.New("test error"))
-	rr := task.GetError()
-	fmt.Println(rr)
-	t.Log(task.GetError())
+	err := errors.New("test error")
+	task.Fail(err)
+	if err != task.GetError() {
+		t.Fail()
+	}
 }
 
 func Test_TaskOnSuccessOrError(t *testing.T) {
@@ -36,19 +36,36 @@ func Test_TaskOnSuccessOrError(t *testing.T) {
 	tc := &TestStruct{"done_TaskOnSuccessOrError"}
 	task := NewTask[*TestStruct]()
 
+	count := 4
+
 	task.Then(
 		func(value *TestStruct) {
-			t.Log(value.value)
+			if count != 1 {
+				t.Fail()
+			}
+			count--
 			wg.Done()
 		}).WhenComplete(
 		func(value *TestStruct, err error) {
-			t.Log(value.value)
+			if count != 2 {
+				t.Fail()
+			}
+			count--
 			wg.Done()
 		}).WhenComplete(
 		func(value *TestStruct, err error) {
-			t.Log(value.value)
+			if count != 3 {
+				t.Fail()
+			}
+			count--
 			wg.Done()
-		}).OnCompleteRunAsync(wg.Done)
+		}).OnCompleteRun(func() {
+		if count != 4 {
+			t.Fail()
+		}
+		count--
+		wg.Done()
+	})
 
 	task.Complete(tc)
 
@@ -64,7 +81,6 @@ func Test_TaskOnSuccess(t *testing.T) {
 
 	task.AsAsync().Then(
 		func(value *TestStruct) {
-			t.Log(value.value)
 			wg.Done()
 		})
 
@@ -81,7 +97,6 @@ func Test_TaskOnError(t *testing.T) {
 
 	task.CatchAsync(
 		func(err error) {
-			t.Log(err)
 			wg.Done()
 		})
 
@@ -92,10 +107,8 @@ func Test_TaskOnError(t *testing.T) {
 
 func Test_TaskCopyResultAreSame(t *testing.T) {
 	task := NewTask[string]()
-	task2 := *task
+	task2 := task
 	task.Complete("test_copy")
-	fmt.Println(task.Get())
-	fmt.Println(task2.Get())
 	if task.Get() != task2.Get() {
 		t.Fail()
 	}

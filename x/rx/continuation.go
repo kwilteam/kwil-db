@@ -5,8 +5,17 @@ import "context"
 // Continuation is for use with non typed functional
 // continuations from tasks
 type Continuation struct {
-	task *Task[Void]
+	task *task[Void]
 }
+
+// Fail will set the result to an error
+func (c *Continuation) Fail(err error) bool { return c.task.Fail(err) }
+
+// Complete will set the result to a value
+func (c *Continuation) Complete() bool { return c.task.Complete(Void{}) }
+
+// CompleteOrFail will set the result to either a value or an error
+func (c *Continuation) CompleteOrFail(err error) bool { return c.task.CompleteOrFail(Void{}, err) }
 
 // Cancel will cancel the Continuation
 func (c *Continuation) Cancel() bool { return c.task.Cancel() }
@@ -59,18 +68,18 @@ func (c *Continuation) DoneChan() <-chan Void {
 // Then will call the func when the result has been successfully set
 func (c *Continuation) Then(fn Runnable) *Continuation {
 	h := onSuccessContinuationHandler{fn: fn}
-	return &Continuation{task: c.task.WhenComplete(h.invoke)}
+	return c.task.WhenComplete(h.invoke).AsContinuation()
 }
 
 // Catch will call the func if the result is an error
 func (c *Continuation) Catch(fn ErrorHandler) *Continuation {
-	return &Continuation{task: c.task.Catch(fn)}
+	return c.task.Catch(fn).AsContinuation()
 }
 
 // OnComplete will call the func when the result has been set
 func (c *Continuation) OnComplete(fn func(error)) *Continuation {
 	r := &continuationRequestAdapter{fn: fn}
-	return &Continuation{task: c.task.WhenComplete(r.invoke)}
+	return c.task.WhenComplete(r.invoke).AsContinuation()
 }
 
 // WhenComplete will call the func when the result has been set
@@ -87,20 +96,20 @@ func (c *Continuation) OnCompleteRun(fn Runnable) {
 // been successfully set
 func (c *Continuation) ThenAsync(fn Runnable) *Continuation {
 	h := onSuccessContinuationHandlerAsync{fn: fn}
-	return &Continuation{task: c.task.WhenComplete(h.invoke)}
+	return c.task.WhenComplete(h.invoke).AsContinuation()
 }
 
 // CatchAsync will asynchronously call the func if the
 // result is an error
 func (c *Continuation) CatchAsync(fn ErrorHandler) *Continuation {
-	return &Continuation{task: c.task.CatchAsync(fn)}
+	return c.task.CatchAsync(fn).AsContinuation()
 }
 
 // WhenCompleteAsync will asynchronously call the func when the result
 // has been set
 func (c *Continuation) WhenCompleteAsync(fn func(error)) *Continuation {
 	r := &continuationRequestAdapterAsync{fn: fn}
-	return &Continuation{task: c.task.WhenComplete(r.invoke)}
+	return c.task.WhenComplete(r.invoke).AsContinuation()
 }
 
 // OnCompleteAsync will asynchronously call the func when the result
@@ -115,7 +124,13 @@ func (c *Continuation) OnCompleteRunAsync(fn Runnable) {
 	c.task.OnCompleteRunAsync(fn)
 }
 
-// AsAsync returns a continuation that will be completed
+// AsContinuation returns an opaque continuation that will be completed
+// when the source task has been completed
+func (c *Continuation) AsContinuation() *Continuation {
+	return c.task.AsContinuation()
+}
+
+// AsAsync returns an opaque continuation that will be completed
 // asynchronously when the source continuation has been
 // completed
 func (c *Continuation) AsAsync() *Continuation {
