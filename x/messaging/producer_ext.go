@@ -13,7 +13,7 @@ import (
 	"os"
 )
 
-type producer[T any] struct {
+type producer[T Message] struct {
 	kp     *kafka.Producer
 	topic  string
 	serdes Serdes[T]
@@ -21,7 +21,7 @@ type producer[T any] struct {
 	done   chan x.Void
 }
 
-func (p *producer[T]) Submit(ctx context.Context, message T) rx.Continuation {
+func (p *producer[T]) Submit(ctx context.Context, message *T) rx.Continuation {
 	key, payload, err := p.serdes.Serialize(message)
 	if err != nil {
 		return rx.FailureC(err)
@@ -84,6 +84,8 @@ func handleEvent(e kafka.Event, done *int) {
 		if done != nil {
 			*done = 3
 		}
+	default:
+		fmt.Printf("Ignored event: %s\n", e)
 	}
 }
 
@@ -137,9 +139,14 @@ func load(config cfg.Config) (topic string, kp *kafka.Producer, err error) {
 
 	m := make(kafka.ConfigMap)
 
-	settings := config.Select("cluster-settings").ToMap()
+	settings := config.Select("broker-settings").ToStringMap()
+	if len(settings) > 0 {
+		fmt.Printf("using kafka producer settings:")
+	}
+
 	for k, v := range settings {
 		m[k] = kafka.ConfigValue(v)
+		fmt.Printf("\t%s=%s\n", k, v)
 	}
 
 	topic = config.String("topic")
@@ -152,7 +159,7 @@ func load(config cfg.Config) (topic string, kp *kafka.Producer, err error) {
 		m["client.id"] = h + "_" + uuid.New().String()
 	}
 
-	m["linger.ms"] = config.Int32("linger-ms", 50)
+	m["linger.ms"] = config.GetString("linger-ms", "50")
 
 	p, err := kafka.NewProducer(&m)
 	if err != nil {
@@ -172,7 +179,7 @@ func (c *messageWithCtx) fail(err error) {
 }
 
 func completeOrFail(m *kafka.Message) bool {
-	if m.Opaque != nil {
+	if m.Opaque == nil {
 		return false
 	}
 	task := m.Opaque.(rx.Task[x.Void])

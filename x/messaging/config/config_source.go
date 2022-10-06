@@ -10,9 +10,12 @@ import (
 )
 
 type configSourceImpl struct {
-	Source
 	name    string
 	sources []SourceItem
+}
+
+func (c *configSourceImpl) Sources() []SourceItem {
+	return c.sources
 }
 
 func createConfigSource(name string, sources ...SourceItem) Source {
@@ -32,7 +35,7 @@ func (c *configSourceImpl) add(source SourceItem) {
 }
 
 func (c *configSourceImpl) Name() string {
-	return "configSourceImpl"
+	return c.name
 }
 
 func (c *configSourceImpl) Items() []SourceItem {
@@ -42,7 +45,6 @@ func (c *configSourceImpl) Items() []SourceItem {
 }
 
 type configFileSourceImpl struct {
-	FileSource
 	path string
 }
 
@@ -51,7 +53,6 @@ func (c *configFileSourceImpl) Path() string {
 }
 
 type configFileSelectorSourceImpl struct {
-	FileSelectorSource
 	path     string
 	selector string
 }

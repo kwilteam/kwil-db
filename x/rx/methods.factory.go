@@ -172,3 +172,28 @@ func CallWithArgs[T, U any](args U, fn func(U) (T, error)) Task[T] {
 
 	return task
 }
+
+func FromHandler[T any](fn Handler[T]) *Completion[T] {
+	return &Completion[T]{
+		Then: func(v T) {
+			fn(v, nil)
+		},
+		Catch: func(e error) {
+			fn(x.AsDefault[T](), e)
+		},
+	}
+}
+func FromValueHandler[T any](fn ValueHandler[T]) *Completion[T] {
+	return &Completion[T]{
+		Then: func(v T) {
+			fn(v)
+		},
+	}
+}
+func FromErrorHandler[T any](fn ErrorHandler) *Completion[T] {
+	return &Completion[T]{
+		Catch: func(e error) {
+			fn(e)
+		},
+	}
+}

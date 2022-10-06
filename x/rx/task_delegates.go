@@ -3,7 +3,6 @@ package rx
 import (
 	"context"
 	"kwil/x"
-	"kwil/x/utils"
 	"sync/atomic"
 	"unsafe"
 )
@@ -77,14 +76,18 @@ func (r *task[T]) _doneChan() <-chan x.Void {
 }
 
 func (r *task[T]) _asContinuation(async bool) Continuation {
-	var state unsafe.Pointer
-	status := utils.IfElse(async, _ASYNC_CONTINUATIONS, uint32(0))
-	h := asContinuationHandler[T]{&continuation{task: &task[x.Void]{
-		status: status,
-		state:  state,
-	}}}
-	r._onComplete(h.invoke)
-	return h.c
+	var c Continuation
+	if async {
+		c = NewContinuationAsync()
+	} else {
+		c = NewContinuation()
+	}
+
+	r.WhenComplete(func(_ T, err error) {
+		c.CompleteOrFail(err)
+	})
+
+	return c
 }
 
 func (r *task[T]) _async() *task[T] {
@@ -105,40 +108,6 @@ func (r *task[T]) _catch(fn ErrorHandler) *task[T] {
 
 func (r *task[T]) _whenComplete(fn Handler[T]) *task[T] {
 	return r._addHandler(fn)
-}
-
-func (r *task[T]) _onComplete(fn Handler[T]) {
-	r._addHandlerNoReturn(fn)
-}
-
-func (r *task[T]) _onCompleteRun(fn Runnable) {
-	h := onCompleteRunHandler[T]{fn: fn}
-	r._addHandlerNoReturn(h.invoke)
-}
-
-func (r *task[T]) _thenAsync(fn ValueHandler[T]) *task[T] {
-	h := &onSuccessHandlerAsync[T]{fn: fn}
-	return r._addHandler(h.invoke)
-}
-
-func (r *task[T]) _catchErrorAsync(fn ErrorHandler) *task[T] {
-	h := &onErrorHandlerAsync[T]{fn: fn}
-	return r._addHandler(h.invoke)
-}
-
-func (r *task[T]) _whenCompleteAsync(fn Handler[T]) *task[T] {
-	h := &onCompleteHandlerAsync[T]{fn: fn}
-	return r._addHandler(h.invoke)
-}
-
-func (r *task[T]) _onCompleteAsync(fn Handler[T]) {
-	h := &onCompleteHandlerAsync[T]{fn: fn}
-	r._addHandlerNoReturn(h.invoke)
-}
-
-func (r *task[T]) _onCompleteRunAsync(fn Runnable) {
-	h := onCompleteRunHandlerAsync[T]{fn: fn}
-	r._addHandlerNoReturn(h.invoke)
 }
 
 func (r *task[T]) _getError() error {

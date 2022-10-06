@@ -2,6 +2,8 @@ package utils
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"kwil/x"
@@ -203,4 +205,25 @@ func GetGoFilePathOfCaller() string {
 	_, filename, _, _ := runtime.Caller(1)
 
 	return path.Dir(filename)
+}
+
+// GenerateRandomBytes returns securely generated random bytes.
+// It will panic if the system's secure random number generator
+// fails to function correctly, in which case the caller should
+// not continue.
+// ref: https://stackoverflow.com/questions/35781197/generating-a-random-fixed-length-byte-array-in-go
+func GenerateRandomBytes(n int) []byte {
+	b := make([]byte, n)
+	_, err := rand.Read(b)
+	if err != nil {
+		// Note that err == nil only if we read len(b) bytes.
+		panic(err)
+	}
+
+	return b
+}
+
+func GenerateRandomBase64String(min_size int) string {
+	b := GenerateRandomBytes(min_size)
+	return base64.RawStdEncoding.EncodeToString(b)
 }

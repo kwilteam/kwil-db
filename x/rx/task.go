@@ -75,31 +75,11 @@ type Task[T any] interface {
 	// WhenComplete will call the func when the result has been set
 	WhenComplete(fn Handler[T]) Task[T]
 
-	// OnCompleteRun will call the func when the result has been set
-	OnCompleteRun(fn Runnable)
+	// WhenCompleteInvoke will call the func when the result has been set
+	WhenCompleteInvoke(fn *Completion[T]) Task[T]
 
 	// OnComplete will call the func when the result has been set
-	OnComplete(fn Handler[T])
-
-	// ThenAsync will asynchronously call the func when the result has
-	// been successfully set
-	ThenAsync(fn ValueHandler[T]) Task[T]
-
-	// CatchAsync will asynchronously call the func if the
-	// result is an error
-	CatchAsync(fn ErrorHandler) Task[T]
-
-	// WhenCompleteAsync will asynchronously call the func when the result
-	// has been set
-	WhenCompleteAsync(fn Handler[T]) Task[T]
-
-	// OnCompleteAsync will asynchronously call the func when the result
-	// has been set
-	OnCompleteAsync(fn Handler[T])
-
-	// OnCompleteRunAsync will asynchronously call the func when the result
-	// has been set
-	OnCompleteRunAsync(fn Runnable)
+	OnComplete(fn *Completion[T])
 
 	// AsContinuation returns a continuation that will be completed
 	// when the source task has been completed

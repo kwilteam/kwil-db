@@ -10,7 +10,7 @@ import (
 //  2. Write checks without panic on a closed channel.
 //  3. Events for write locking and channel closure.
 //  4. Convenience methods for draining, close w/ block,
-//     close w/ timeout, and getting capacity/length.
+//     close w/ timeout, and capacity/length.
 type Chan[T any] interface {
 
 	// Read returns a channel to use for reading items

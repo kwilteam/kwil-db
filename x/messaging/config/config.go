@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"flag"
+	"kwil/x/utils"
 	"log"
 	"os"
 	"reflect"
@@ -16,6 +17,9 @@ import (
 var (
 	cfgOnce       sync.Once
 	defaultConfig Config
+
+	testCfgOnce       sync.Once
+	testDefaultConfig Config
 )
 
 type configImpl struct {
@@ -58,10 +62,7 @@ func (c *configImpl) ToMap() map[string]interface{} {
 
 	for k, v := range c.source {
 		key := k.(string)
-		if strings.HasPrefix(key, c.prefix) {
-			k2 := strings.TrimPrefix(key, c.prefix)
-			result[k2] = v
-		}
+		result[key] = v
 	}
 
 	return result
@@ -151,6 +152,7 @@ func (c *configImpl) normalize(key string) string {
 }
 
 var loadedConfigSources []Source
+var loadedTestConfigSources []Source
 
 func getConfigSourcesInternal() []Source {
 	getConfigInternal() //ensure it is loaded
@@ -158,18 +160,44 @@ func getConfigSourcesInternal() []Source {
 	var local []Source
 	return append(local, loadedConfigSources...)
 }
+func getTestConfigSourcesInternal() []Source {
+	getTestConfigInternal() //ensure it is loaded
+
+	var local []Source
+	return append(local, loadedTestConfigSources...)
+}
+
+func getTestConfigInternal() Config {
+	return _getConfigInternal(true)
+}
 
 func getConfigInternal() Config {
+	return _getConfigInternal(false)
+}
+
+func getConfigFile(path string) string {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return ""
+	}
+
+	return path
+}
+
+func _getConfigInternal(test bool) Config {
+	once := utils.IfElse(test, &testCfgOnce, &cfgOnce)
+
 	//should look for a metaConfig.etc to specify things like useEnv, various files, etc
-	cfgOnce.Do(func() {
-		configFile := *flag.String("meta-config", "", "Path to configuration file")
+	once.Do(func() {
+		file := utils.IfElse(test, "meta-config-test", "meta-config")
+
+		configFile := *flag.String(file, "", "Path to configuration file")
 		flag.Parse()
 		if configFile == "" {
-			configFile = getConfigFile("./meta-config.yaml")
+			configFile = getConfigFile("./" + file + ".yaml")
 			if configFile == "" {
-				configFile = getConfigFile("./meta-config.yml")
+				configFile = getConfigFile("./" + file + ".yml")
 				if configFile == "" {
-					configFile = getConfigFile("./meta-config.json")
+					configFile = getConfigFile("./" + file + ".json")
 					if configFile == "" {
 						flag.Usage()
 						os.Exit(2)
@@ -180,13 +208,13 @@ func getConfigInternal() Config {
 
 		rootBuilder := &configBuilderImpl{}
 
-		cfg, err := rootBuilder.UseFile("meta-config", configFile).Build()
+		cfg, err := rootBuilder.UseFile("", configFile).Build()
 		if err != nil {
 			panic(err)
 		}
 
 		if envSettings := cfg.GetString("env-settings", ""); envSettings != "" {
-			env, err := builder().UseFile("env", envSettings).Build()
+			env, err := builder().UseFile("kenv", envSettings).Build()
 			if err != nil {
 				panic(err)
 			}
@@ -201,6 +229,9 @@ func getConfigInternal() Config {
 
 		b := builder()
 		for k, v := range cfg.ToStringMap() {
+			if k == "env-settings" {
+				continue
+			}
 			values := strings.Split(v, ",")
 			if len(values) == 1 {
 				b = b.UseFile(k, v)
@@ -216,17 +247,14 @@ func getConfigInternal() Config {
 			panic(err)
 		}
 
-		loadedConfigSources = rootBuilder.sources
-		defaultConfig = cfg
+		if test {
+			loadedTestConfigSources = rootBuilder.sources
+			testDefaultConfig = cfg
+		} else {
+			loadedConfigSources = rootBuilder.sources
+			defaultConfig = cfg
+		}
 	})
 
-	return defaultConfig
-}
-
-func getConfigFile(path string) string {
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return ""
-	}
-
-	return path
+	return utils.IfElse(test, testDefaultConfig, defaultConfig)
 }

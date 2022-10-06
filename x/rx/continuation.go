@@ -58,34 +58,14 @@ type Continuation interface {
 	// Catch will call the func if the result is an error
 	Catch(fn ErrorHandler) Continuation
 
-	// OnComplete will call the func when the result has been set
-	OnComplete(fn func(error)) Continuation
-
 	// WhenComplete will call the func when the result has been set
-	WhenComplete(fn Handler[x.Void])
+	WhenComplete(fn func(error)) Continuation
 
-	// OnCompleteRun will call the func when the result has been set
-	OnCompleteRun(fn Runnable)
+	// WhenCompleteInvoke will call the func when the result has been set
+	WhenCompleteInvoke(fn *CompletionC) Continuation
 
-	// ThenAsync will asynchronously call the func when the result has
-	// been successfully set
-	ThenAsync(fn Runnable) Continuation
-
-	// CatchAsync will asynchronously call the func if the
-	// result is an error
-	CatchAsync(fn ErrorHandler) Continuation
-
-	// WhenCompleteAsync will asynchronously call the func when the result
-	// has been set
-	WhenCompleteAsync(fn func(error)) Continuation
-
-	// OnCompleteAsync will asynchronously call the func when the result
-	// has been set
-	OnCompleteAsync(fn Handler[x.Void])
-
-	// OnCompleteRunAsync will asynchronously call the func when the result
-	// has been set
-	OnCompleteRunAsync(fn Runnable)
+	// OnComplete will call the func when the result has been set
+	OnComplete(fn *Completion[x.Void])
 
 	// AsContinuation returns an opaque continuation that will be completed
 	// when the source task has been completed

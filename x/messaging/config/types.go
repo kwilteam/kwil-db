@@ -4,8 +4,16 @@ func GetConfigSources() []Source {
 	return getConfigSourcesInternal()
 }
 
+func GetTestConfigSources() []Source {
+	return getTestConfigSourcesInternal()
+}
+
 func GetConfig() Config {
 	return getConfigInternal()
+}
+
+func GetTestConfig() Config {
+	return getTestConfigInternal()
 }
 
 type Config interface {
@@ -41,6 +49,6 @@ type FileSource interface {
 }
 
 type FileSelectorSource interface {
-	FileSource
+	SourceItem
 	Selector() string
 }

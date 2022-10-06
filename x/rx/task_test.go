@@ -59,13 +59,14 @@ func Test_TaskOnSuccessOrError(t *testing.T) {
 			}
 			count--
 			wg.Done()
-		}).OnCompleteRun(func() {
-		if count != 4 {
-			t.Fail()
-		}
-		count--
-		wg.Done()
-	})
+		}).OnComplete(&Completion[*TestStruct]{
+		Finally: func() {
+			if count != 4 {
+				t.Fail()
+			}
+			count--
+			wg.Done()
+		}})
 
 	task.Complete(tc)
 
@@ -95,7 +96,7 @@ func Test_TaskOnError(t *testing.T) {
 
 	task := NewTask[*TestStruct]()
 
-	task.CatchAsync(
+	task.Catch(
 		func(err error) {
 			wg.Done()
 		})

@@ -54,39 +54,17 @@ func (c *continuation) Catch(fn ErrorHandler) Continuation {
 	return c.task.Catch(fn).AsContinuation()
 }
 
-func (c *continuation) OnComplete(fn func(error)) Continuation {
+func (c *continuation) OnComplete(fn *Completion[x.Void]) {
+	c.task.WhenComplete(fn.Invoke).AsContinuation()
+}
+
+func (c *continuation) WhenComplete(fn func(error)) Continuation {
 	r := &continuationRequestAdapter{fn: fn}
 	return c.task.WhenComplete(r.invoke).AsContinuation()
 }
 
-func (c *continuation) WhenComplete(fn Handler[x.Void]) {
-	c.task.WhenComplete(fn)
-}
-
-func (c *continuation) OnCompleteRun(fn Runnable) {
-	c.task.OnCompleteRun(fn)
-}
-
-func (c *continuation) ThenAsync(fn Runnable) Continuation {
-	h := onSuccessContinuationHandlerAsync{fn: fn}
-	return c.task.WhenComplete(h.invoke).AsContinuation()
-}
-
-func (c *continuation) CatchAsync(fn ErrorHandler) Continuation {
-	return c.task.CatchAsync(fn).AsContinuation()
-}
-
-func (c *continuation) WhenCompleteAsync(fn func(error)) Continuation {
-	r := &continuationRequestAdapterAsync{fn: fn}
-	return c.task.WhenComplete(r.invoke).AsContinuation()
-}
-
-func (c *continuation) OnCompleteAsync(fn Handler[x.Void]) {
-	c.task.OnCompleteAsync(fn)
-}
-
-func (c *continuation) OnCompleteRunAsync(fn Runnable) {
-	c.task.OnCompleteRunAsync(fn)
+func (c *continuation) WhenCompleteInvoke(fn *CompletionC) Continuation {
+	return c.WhenComplete(fn.Invoke)
 }
 
 func (c *continuation) AsContinuation() Continuation {

@@ -18,7 +18,7 @@ type Listenable[T any] interface {
 	// IsDone will return true if the Result is complete
 	IsDone() bool
 
-	// OnComplete will call the func when the result has been
-	// set
-	OnComplete(Handler[T])
+	// OnComplete will call the func when the result has
+	// been set
+	OnComplete(*Completion[T])
 }
