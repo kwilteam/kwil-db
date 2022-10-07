@@ -25,7 +25,7 @@ func (c *cont_value) WhenComplete(fn func(error)) Continuation { fn(nil); return
 func (c *cont_value) AsContinuation() Continuation             { return c }
 func (c *cont_value) AsAsync() Continuation                    { return c.AsAsync() }
 func (c *cont_value) IsAsync() bool                            { return false }
-func (c *cont_value) WhenCompleteInvoke(fn *CompletionC) Continuation {
+func (c *cont_value) ThenCatchFinally(fn *CompletionC) Continuation {
 	fn.Invoke(nil)
 	return c
 }

@@ -58,11 +58,11 @@ type Continuation interface {
 	// Catch will call the func if the result is an error
 	Catch(fn ErrorHandler) Continuation
 
+	// ThenCatchFinally will call the func when the result has been set
+	ThenCatchFinally(fn *CompletionC) Continuation
+
 	// WhenComplete will call the func when the result has been set
 	WhenComplete(fn func(error)) Continuation
-
-	// WhenCompleteInvoke will call the func when the result has been set
-	WhenCompleteInvoke(fn *CompletionC) Continuation
 
 	// OnComplete will call the func when the result has been set
 	OnComplete(fn *Completion[x.Void])

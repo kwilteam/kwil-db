@@ -183,6 +183,7 @@ func FromHandler[T any](fn Handler[T]) *Completion[T] {
 		},
 	}
 }
+
 func FromValueHandler[T any](fn ValueHandler[T]) *Completion[T] {
 	return &Completion[T]{
 		Then: func(v T) {
@@ -190,6 +191,7 @@ func FromValueHandler[T any](fn ValueHandler[T]) *Completion[T] {
 		},
 	}
 }
+
 func FromErrorHandler[T any](fn ErrorHandler) *Completion[T] {
 	return &Completion[T]{
 		Catch: func(e error) {

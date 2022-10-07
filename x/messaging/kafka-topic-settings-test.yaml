@@ -17,3 +17,4 @@ messaging-consumer-service-test:
   topic: kwil_chain_txns
   group-id: kwil_chain_txns_to_db_cg_test
   auto-offset-reset: earliest
+  enable.auto.commit: false

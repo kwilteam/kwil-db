@@ -27,32 +27,9 @@ func (c *cont_err) OnComplete(fn *Completion[x.Void])        { fn.Invoke(x.Void{
 func (c *cont_err) AsContinuation() Continuation             { return c }
 func (c *cont_err) AsAsync() Continuation                    { return c._asAsync() }
 func (c *cont_err) IsAsync() bool                            { return false }
-func (c *cont_err) WhenCompleteInvoke(fn *CompletionC) Continuation {
+func (c *cont_err) ThenCatchFinally(fn *CompletionC) Continuation {
 	fn.Invoke(c.err)
 	return c
-}
-
-func (c *cont_err) _catchAsync(fn ErrorHandler) Continuation {
-	go func(fn ErrorHandler, err error) { fn(err) }(fn, c.err)
-	return c
-}
-
-func (c *cont_err) _whenCompleteAsync(fn func(error)) Continuation {
-	go func(fn ErrorHandler, err error) { fn(err) }(fn, c.err)
-	return c
-}
-
-func (c *cont_err) _whenCompleteRunAsync(fn Runnable) Continuation {
-	go fn()
-	return c
-}
-
-func (_ *cont_err) _onCompleteAsync(fn Handler[x.Void]) {
-	go fn(x.Void{}, nil)
-}
-
-func (_ *cont_err) _onCompleteRunAsync(fn Runnable) {
-	go fn()
 }
 
 func (c *cont_err) _asAsync() Continuation {

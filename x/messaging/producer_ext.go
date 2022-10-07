@@ -7,13 +7,13 @@ import (
 	"gopkg.in/confluentinc/confluent-kafka-go.v1/kafka"
 	"kwil/x"
 	cfg "kwil/x/messaging/config"
-	"kwil/x/rx"
 	"kwil/x/syncx"
 	"kwil/x/utils"
 	"os"
+	"strings"
 )
 
-type producer[T Message] struct {
+type producer[T any] struct {
 	kp     *kafka.Producer
 	topic  string
 	serdes Serdes[T]
@@ -21,24 +21,18 @@ type producer[T Message] struct {
 	done   chan x.Void
 }
 
-func (p *producer[T]) Submit(ctx context.Context, message *T) rx.Continuation {
-	key, payload, err := p.serdes.Serialize(message)
+func (p *producer[T]) Submit(ctx context.Context, message ProducerMessage[T]) error {
+	m, err := p.createMessage(message)
 	if err != nil {
-		return rx.FailureC(err)
+		return err
 	}
 
-	task := rx.NewTask[x.Void]()
-
-	msg := &messageWithCtx{
-		ctx: utils.IfElse(ctx != nil, ctx, context.Background()),
-		msg: p.createMessage(key, payload, task),
+	ctx = utils.IfElse(ctx != nil, ctx, context.Background())
+	if !p.out.Write(&messageWithCtx{ctx, m}) {
+		return ErrProducerClosed
 	}
 
-	if !p.out.Write(msg) {
-		task.Fail(ErrProducerClosed)
-	}
-
-	return task.AsContinuation()
+	return nil
 }
 
 func (p *producer[T]) Close() {
@@ -49,13 +43,18 @@ func (p *producer[T]) OnClosed() <-chan x.Void {
 	return p.done
 }
 
-func (p *producer[T]) createMessage(key []byte, payload []byte, task rx.Task[x.Void]) *kafka.Message {
+func (p *producer[T]) createMessage(message ProducerMessage[T]) (*kafka.Message, error) {
+	key, payload, err := p.serdes.Serialize(message.Payload())
+	if err != nil {
+		return nil, err
+	}
+
 	return &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &p.topic},
 		Key:            key,
 		Value:          payload,
-		Opaque:         task,
-	}
+		Opaque:         message.GetAckNack(),
+	}, nil
 }
 
 func (p *producer[T]) doSend(mc *messageWithCtx) {
@@ -89,9 +88,16 @@ func handleEvent(e kafka.Event, done *int) {
 	}
 }
 
-func (p *producer[T]) beginEventProcessing() {
+func (p *producer[T]) start() {
+	go p.begin_processing()
+}
+
+func (p *producer[T]) begin_processing() {
 	ev := p.kp.Events()
 	done := 0
+
+	defer p.doCleanup(done, ev)
+
 	for done == 0 {
 		select {
 		case <-p.out.ClosedCh():
@@ -110,7 +116,9 @@ func (p *producer[T]) beginEventProcessing() {
 			}
 		}
 	}
+}
 
+func (p *producer[T]) doCleanup(done int, ev chan kafka.Event) {
 	if done != 1 {
 		p.Close()
 	}
@@ -132,7 +140,7 @@ func (p *producer[T]) beginEventProcessing() {
 	close(p.done) // signal that producer is now closed
 }
 
-func load(config cfg.Config) (topic string, kp *kafka.Producer, err error) {
+func loadP(config cfg.Config) (topic string, kp *kafka.Producer, err error) {
 	if config == nil {
 		return "", nil, fmt.Errorf("config is nil")
 	}
@@ -140,13 +148,8 @@ func load(config cfg.Config) (topic string, kp *kafka.Producer, err error) {
 	m := make(kafka.ConfigMap)
 
 	settings := config.Select("broker-settings").ToStringMap()
-	if len(settings) > 0 {
-		fmt.Printf("using kafka producer settings:")
-	}
-
 	for k, v := range settings {
 		m[k] = kafka.ConfigValue(v)
-		fmt.Printf("\t%s=%s\n", k, v)
 	}
 
 	topic = config.String("topic")
@@ -160,6 +163,17 @@ func load(config cfg.Config) (topic string, kp *kafka.Producer, err error) {
 	}
 
 	m["linger.ms"] = config.GetString("linger-ms", "50")
+
+	if len(m) > 0 {
+		fmt.Printf("using kafka consumer settings:\n")
+	}
+
+	for k, v := range m {
+		if strings.Contains(k, "password") || strings.Contains(k, "secret") {
+			v = "********"
+		}
+		fmt.Printf("\t%s=%s\n", k, v)
+	}
 
 	p, err := kafka.NewProducer(&m)
 	if err != nil {
@@ -175,15 +189,25 @@ type messageWithCtx struct {
 }
 
 func (c *messageWithCtx) fail(err error) {
-	c.msg.Opaque.(rx.Task[x.Void]).Fail(err)
+	if c.msg.Opaque == nil {
+		return
+	}
+
+	ackNack, ok := c.msg.Opaque.(AckNackFn)
+	if ok {
+		ackNack(err)
+	}
 }
 
 func completeOrFail(m *kafka.Message) bool {
 	if m.Opaque == nil {
 		return false
 	}
-	task := m.Opaque.(rx.Task[x.Void])
-	task.CompleteOrFail(x.Void{}, m.TopicPartition.Error)
+
+	ackNack, ok := m.Opaque.(AckNackFn)
+	if ok {
+		ackNack(m.TopicPartition.Error)
+	}
 
 	return true
 }

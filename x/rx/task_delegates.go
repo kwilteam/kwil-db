@@ -106,6 +106,18 @@ func (r *task[T]) _catch(fn ErrorHandler) *task[T] {
 	return r._addHandler(h.invoke)
 }
 
+func (r *task[T]) _handle(fn func(T, error) (T, error)) Task[T] {
+	h := onHandle[T]{NewTask[T](), fn}
+	r._addHandlerNoReturn(h.invoke)
+	return h.task
+}
+
+func (r *task[T]) _compose(fn func(T, error) Task[T]) Task[T] {
+	h := onCompose[T]{NewTask[T](), fn}
+	r._addHandlerNoReturn(h.invoke)
+	return h.task
+}
+
 func (r *task[T]) _whenComplete(fn Handler[T]) *task[T] {
 	return r._addHandler(fn)
 }

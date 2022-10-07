@@ -13,28 +13,30 @@ type task[T any] struct {
 	state  unsafe.Pointer
 }
 
-func (r *task[T]) GetError() error                              { return r._getError() }
-func (r *task[T]) Get() T                                       { return r._get() }
-func (r *task[T]) IsError() bool                                { return r._isError() }
-func (r *task[T]) IsCancelled() bool                            { return r._isCancelled() }
-func (r *task[T]) IsErrorOrCancelled() bool                     { return r._isErrorOrCancelled() }
-func (r *task[T]) IsDone() bool                                 { return r._isDone() }
-func (r *task[T]) DoneChan() <-chan x.Void                      { return r._doneChan() }
-func (r *task[T]) Fail(err error) bool                          { return r._fail(err) }
-func (r *task[T]) Complete(value T) bool                        { return r._complete(value) }
-func (r *task[T]) CompleteOrFail(value T, err error) bool       { return r._completeOrFail(value, err) }
-func (r *task[T]) Cancel() bool                                 { return r._cancel() }
-func (r *task[T]) GetOrError() (T, error)                       { return r._getOrError() }
-func (r *task[T]) Await(ctx context.Context) (ok bool)          { return r._await(ctx) }
-func (r *task[T]) Then(fn ValueHandler[T]) Task[T]              { return r._then(fn) }
-func (r *task[T]) Catch(fn ErrorHandler) Task[T]                { return r._catch(fn) }
-func (r *task[T]) WhenComplete(fn Handler[T]) Task[T]           { return r._whenComplete(fn) }
-func (r *task[T]) WhenCompleteInvoke(fn *Completion[T]) Task[T] { return r._whenComplete(fn.Invoke) }
-func (r *task[T]) OnComplete(fn *Completion[T])                 { r.WhenComplete(fn.Invoke) }
-func (r *task[T]) AsContinuation() Continuation                 { return r._asContinuation(false) }
-func (r *task[T]) AsContinuationAsync() Continuation            { return r._asContinuation(true) }
-func (r *task[T]) AsAsync() Task[T]                             { return r._async() }
-func (r *task[T]) IsAsync() bool                                { return isAsync(r.status) }
+func (r *task[T]) GetError() error                             { return r._getError() }
+func (r *task[T]) Get() T                                      { return r._get() }
+func (r *task[T]) IsError() bool                               { return r._isError() }
+func (r *task[T]) IsCancelled() bool                           { return r._isCancelled() }
+func (r *task[T]) IsErrorOrCancelled() bool                    { return r._isErrorOrCancelled() }
+func (r *task[T]) IsDone() bool                                { return r._isDone() }
+func (r *task[T]) DoneChan() <-chan x.Void                     { return r._doneChan() }
+func (r *task[T]) Fail(err error) bool                         { return r._fail(err) }
+func (r *task[T]) Complete(value T) bool                       { return r._complete(value) }
+func (r *task[T]) CompleteOrFail(value T, err error) bool      { return r._completeOrFail(value, err) }
+func (r *task[T]) Cancel() bool                                { return r._cancel() }
+func (r *task[T]) GetOrError() (T, error)                      { return r._getOrError() }
+func (r *task[T]) Await(ctx context.Context) (ok bool)         { return r._await(ctx) }
+func (r *task[T]) Then(fn ValueHandler[T]) Task[T]             { return r._then(fn) }
+func (r *task[T]) Catch(fn ErrorHandler) Task[T]               { return r._catch(fn) }
+func (r *task[T]) Handle(fn func(T, error) (T, error)) Task[T] { return r._handle(fn) }
+func (r *task[T]) Compose(fn func(T, error) Task[T]) Task[T]   { return r._compose(fn) }
+func (r *task[T]) ThenCatchFinally(fn *Completion[T]) Task[T]  { return r._whenComplete(fn.Invoke) }
+func (r *task[T]) WhenComplete(fn Handler[T]) Task[T]          { return r._whenComplete(fn) }
+func (r *task[T]) OnComplete(fn *Completion[T])                { r.WhenComplete(fn.Invoke) }
+func (r *task[T]) AsContinuation() Continuation                { return r._asContinuation(false) }
+func (r *task[T]) AsContinuationAsync() Continuation           { return r._asContinuation(true) }
+func (r *task[T]) AsAsync() Task[T]                            { return r._async() }
+func (r *task[T]) IsAsync() bool                               { return isAsync(r.status) }
 
 func (r *task[T]) lock() (previous uint32) {
 	for {
@@ -137,7 +139,7 @@ func (r *task[T]) handlerStackPushUnsafe(current uint32, fn Handler[T], noTask b
 func (r *task[T]) getCombinedHandler(newer Handler[T], older Handler[T], noTask bool) (*task[T], Handler[T]) {
 	// already have a handler, so wrap the current one and the new one
 	if noTask {
-		h := &onSuccessOrErrorHandler[T]{older: older, newer: newer}
+		h := &onCompleteStackNodeHandler[T]{next: older, fn: newer}
 		return r, h.invoke
 	}
 

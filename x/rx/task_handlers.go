@@ -32,24 +32,6 @@ func (h *onSuccessContinuationHandler) invoke(_ x.Void, err error) {
 	}
 }
 
-type continuationRequestAdapterAsync struct {
-	fn func(error)
-}
-
-func (r *continuationRequestAdapterAsync) invoke(_ x.Void, err error) {
-	go r.fn(err)
-}
-
-type onSuccessContinuationHandlerAsync struct {
-	fn Runnable
-}
-
-func (h *onSuccessContinuationHandlerAsync) invoke(_ x.Void, err error) {
-	if err == nil {
-		go h.fn()
-	}
-}
-
 type onSuccessOrErrorTaskHandler[T any] struct {
 	task *task[T]
 	fn   Handler[T]
@@ -60,14 +42,14 @@ func (h *onSuccessOrErrorTaskHandler[T]) invoke(value T, err error) {
 	h.fn(value, err)
 }
 
-type onSuccessOrErrorHandler[T any] struct {
-	older Handler[T]
-	newer Handler[T]
+type onCompleteStackNodeHandler[T any] struct {
+	next Handler[T]
+	fn   Handler[T]
 }
 
-func (h *onSuccessOrErrorHandler[T]) invoke(value T, err error) {
-	h.newer(value, err)
-	h.older(value, err)
+func (h *onCompleteStackNodeHandler[T]) invoke(value T, err error) {
+	h.fn(value, err)
+	h.next(value, err)
 }
 
 type onSuccessHandler[T any] struct {
@@ -90,22 +72,6 @@ func (h *onErrorHandler[T]) invoke(_ T, err error) {
 	}
 }
 
-type onCompleteRunHandler[T any] struct {
-	fn Runnable
-}
-
-func (h *onCompleteRunHandler[T]) invoke(_ T, _ error) {
-	h.fn()
-}
-
-type asContinuationHandler[T any] struct {
-	c *continuation
-}
-
-func (h *asContinuationHandler[T]) invoke(_ T, err error) {
-	h.c.task.CompleteOrFail(x.Void{}, err)
-}
-
 type onDoneChanBlockRunHandler[T any] struct {
 	chDone chan x.Void
 	fn     Handler[T]
@@ -116,38 +82,24 @@ func (h *onDoneChanBlockRunHandler[T]) invoke(v T, err error) {
 	h.fn(v, err)
 }
 
-type onSuccessHandlerAsync[T any] struct {
-	fn ValueHandler[T]
+type onCompose[T any] struct {
+	task Task[T]
+	fn   func(T, error) Task[T]
 }
 
-func (h *onSuccessHandlerAsync[T]) invoke(value T, err error) {
-	if err == nil {
-		go h.fn(value)
-	}
+func (h *onCompose[T]) invoke(v T, err error) {
+	h.fn(v, err).WhenComplete(h.fn_complete)
 }
 
-type onErrorHandlerAsync[T any] struct {
-	fn ErrorHandler
+func (h *onCompose[T]) fn_complete(v T, e error) {
+	h.task.CompleteOrFail(v, e)
 }
 
-func (h *onErrorHandlerAsync[T]) invoke(_ T, err error) {
-	if err != nil {
-		go h.fn(err)
-	}
+type onHandle[T any] struct {
+	task Task[T]
+	fn   func(T, error) (T, error)
 }
 
-type onCompleteRunHandlerAsync[T any] struct {
-	fn Runnable
-}
-
-func (h *onCompleteRunHandlerAsync[T]) invoke(_ T, _ error) {
-	go h.fn()
-}
-
-type onCompleteHandlerAsync[T any] struct {
-	fn Handler[T]
-}
-
-func (h *onCompleteHandlerAsync[T]) invoke(val T, err error) {
-	go h.fn(val, err)
+func (h *onHandle[T]) invoke(v T, e error) {
+	h.task.CompleteOrFail(h.fn(v, e))
 }

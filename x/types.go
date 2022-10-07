@@ -50,14 +50,14 @@ type Iterable[T any] interface {
 	GetIterator() Iterator[T]
 }
 
+func AsDefault[T any]() T {
+	var t T
+	return t
+}
+
 // Iterator is an interface that represents a type
 // that can be iterated over
 type Iterator[T any] interface {
 	HasNext() bool
 	Value() T
-}
-
-func AsDefault[T any]() T {
-	var t T
-	return t
 }

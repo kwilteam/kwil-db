@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"kwil/x"
 	cfg "kwil/x/messaging/config"
-	"kwil/x/rx"
 	"kwil/x/syncx"
 )
 
 var ErrProducerClosed = fmt.Errorf("producer closed")
 var ErrUnexpectedProducerError = fmt.Errorf("producer event response unknown")
 
-type Producer[T Message] interface {
+type Producer[T any] interface {
 	// Submit publishes a message to an underlying message
-	// provider.
-	Submit(ctx context.Context, message *T) rx.Continuation
+	// provider. If an ack is provided on the message, it will
+	// be used to signal the message was successfully published, else
+	// no status will be returned.
+	Submit(ctx context.Context, message ProducerMessage[T]) error
 
 	// Close closes the producer and releases all resources.
 	Close()
@@ -25,12 +26,12 @@ type Producer[T Message] interface {
 	OnClosed() <-chan x.Void
 }
 
-func NewProducer[T Message](config cfg.Config, serdes Serdes[T]) (Producer[T], error) {
+func NewProducer[T any](config cfg.Config, serdes Serdes[T]) (Producer[T], error) {
 	if serdes == nil {
 		return nil, fmt.Errorf("serdes is nil")
 	}
 
-	tp, kp, err := load(config)
+	tp, kp, err := loadP(config)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +56,7 @@ func NewProducer[T Message](config cfg.Config, serdes Serdes[T]) (Producer[T], e
 		done:   make(chan x.Void),
 	}
 
-	go p.beginEventProcessing()
+	p.start()
 
 	return p, nil
 }

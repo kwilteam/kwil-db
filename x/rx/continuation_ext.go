@@ -63,7 +63,7 @@ func (c *continuation) WhenComplete(fn func(error)) Continuation {
 	return c.task.WhenComplete(r.invoke).AsContinuation()
 }
 
-func (c *continuation) WhenCompleteInvoke(fn *CompletionC) Continuation {
+func (c *continuation) ThenCatchFinally(fn *CompletionC) Continuation {
 	return c.WhenComplete(fn.Invoke)
 }
 

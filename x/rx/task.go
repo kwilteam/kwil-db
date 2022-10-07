@@ -72,11 +72,17 @@ type Task[T any] interface {
 	// Catch will call the func if the result is an error
 	Catch(fn ErrorHandler) Task[T]
 
+	// Handle will call the func when the result has been set
+	Handle(fn func(T, error) (T, error)) Task[T]
+
+	// Compose will call the func when the result has been set
+	Compose(fn func(T, error) Task[T]) Task[T]
+
+	// ThenCatchFinally will call the func when the result has been set
+	ThenCatchFinally(fn *Completion[T]) Task[T]
+
 	// WhenComplete will call the func when the result has been set
 	WhenComplete(fn Handler[T]) Task[T]
-
-	// WhenCompleteInvoke will call the func when the result has been set
-	WhenCompleteInvoke(fn *Completion[T]) Task[T]
 
 	// OnComplete will call the func when the result has been set
 	OnComplete(fn *Completion[T])
