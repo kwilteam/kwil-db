@@ -411,7 +411,7 @@ variadic = enum("a","b","c")
 
 func TestEmptyStrSQL(t *testing.T) {
 	s := hcl.New(hcl.WithTypes(nil))
-	h := `x = sql("")`
+	h := `mx = sql("")`
 	err := s.EvalBytes([]byte(h), &struct{}{}, nil)
 	require.ErrorContains(t, err, "empty expression")
 }

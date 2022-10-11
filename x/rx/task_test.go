@@ -59,7 +59,7 @@ func Test_Order(t *testing.T) {
 			}
 			count--
 			wg.Done()
-		}).OnComplete(&Completion[*TestStruct]{
+		}).OnComplete(&ContinuationT[*TestStruct]{
 		Finally: func() {
 			if count != 4 {
 				t.Fail()
@@ -80,14 +80,14 @@ func Test_WhenComplete(t *testing.T) {
 	tc := &TestStruct{"done_TaskOnSuccess"}
 	task := NewTask[*TestStruct]()
 
-	task.WhenComplete((&Completion[*TestStruct]{
+	task.ThenCatchFinally(&ContinuationT[*TestStruct]{
 		Then: func(value *TestStruct) {
 			if value.value != tc.value {
 				t.Fail()
 			}
 			wg.Done()
 		},
-	}).Invoke)
+	})
 
 	task.Complete(tc)
 
@@ -125,7 +125,7 @@ func Test_ThenCatchFinally(t *testing.T) {
 
 	task := NewTask[*TestStruct]()
 
-	task.ThenCatchFinally(&Completion[*TestStruct]{
+	task.ThenCatchFinally(&ContinuationT[*TestStruct]{
 		Then: func(v *TestStruct) {
 			wg.Done()
 		},
@@ -143,14 +143,22 @@ func Test_ThenCatchFinally(t *testing.T) {
 
 	task2 := NewTask[*TestStruct]()
 
-	task2.ThenCatchFinally(&Completion[*TestStruct]{
+	count := 2
+	task2.ThenCatchFinally(&ContinuationT[*TestStruct]{
 		Then: func(v *TestStruct) {
 			t.Fail()
 		},
 		Catch: func(err error) {
+			if count != 2 {
+				t.Fail()
+			}
 			wg.Done()
+			count--
 		},
 		Finally: func() {
+			if count != 1 {
+				t.Fail()
+			}
 			wg.Done()
 		},
 	})
@@ -167,7 +175,7 @@ func Test_AsAsync(t *testing.T) {
 	task := NewTask[*TestStruct]()
 
 	d := []int{0}
-	task.AsAsync().Then(
+	task.AsAsync(nil).Then(
 		func(value *TestStruct) {
 			d[0] = 1
 		})
@@ -183,7 +191,7 @@ func Test_AsAsync(t *testing.T) {
 	task2 := NewTask[*TestStruct]()
 
 	d2 := []int{0}
-	task2.AsAsync().Then(
+	task2.AsAsync(nil).Then(
 		func(value *TestStruct) {
 			d2[0] = 1
 			wg.Done()
@@ -197,6 +205,19 @@ func Test_AsAsync(t *testing.T) {
 	wg.Wait()
 
 	if d2[0] != 1 {
+		t.Fail()
+	}
+
+	task3 := NewTask[*TestStruct]()
+
+	d3 := []int{0}
+	task3.AsAsync(ImmediateExecutor()).Then(
+		func(value *TestStruct) {
+			d3[0] = 1
+		})
+
+	task3.Complete(tc)
+	if d3[0] != 1 {
 		t.Fail()
 	}
 }
@@ -238,13 +259,14 @@ func Test_Compose(t *testing.T) {
 		}
 
 		if err != nil {
-			t.Fail()
+			t.Error(err)
+			return Failure[*TestStruct](err)
 		}
 
-		return Invoke(func() *TestStruct {
+		return Call(func() (*TestStruct, error) {
 			d[0] = 1
 			defer wg.Done()
-			return &TestStruct{"inner"}
+			return &TestStruct{"inner"}, nil
 		})
 	})
 

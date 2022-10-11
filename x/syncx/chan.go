@@ -34,14 +34,21 @@ type Chan[T any] interface {
 	TryWrite(ctx context.Context, value T) (ok bool, err error)
 
 	// Close will either close the channel or lock
-	// if there are active writers.
-	Close()
+	// if there are active writers. The method will
+	// return false if Close was previously called, else
+	// it will return true.
+	Close() bool
+
+	// CloseAndDrain will call Close and returns all remaining
+	// items from the channel a slice.
+	CloseAndDrain(ctx context.Context) ([]T, error)
 
 	// CloseAndWait will either close the channel or lock
-	// if there are active writers. The call will BLOCK
-	// until all writers have completed or the context
-	// is cancelled. If the context is nil, the call will
-	// only block until all writers have completed.
+	// if there are active writers (e.g., effectively Close).
+	// The call will BLOCK until all writers have completed
+	// or the context is cancelled. If the context is nil,
+	// the call will only block until all writers have
+	// completed.
 	CloseAndWait(ctx context.Context) error
 
 	// ClosedCh returns a channel to use when needing to
@@ -51,7 +58,7 @@ type Chan[T any] interface {
 	ClosedCh() <-chan x.Void
 
 	// LockCh returns a channel to use when needing to
-	// respond to the Chan being locked for writes. This
+	// respond to the Chan being _locked for writes. This
 	// allows a writer to halt concurrent writes that may
 	// be competing/contentious with the channel closure.
 	// Any items in the channel can still be read/drained.

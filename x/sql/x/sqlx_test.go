@@ -25,10 +25,10 @@ func TestMayWrap(t *testing.T) {
 		{`("\\\\(((('")`, false},
 		{`('(')||(')')`, true},
 		// Test examples from SQLite.
-		{"b || 'x'", true},
+		{"b || 'mx'", true},
 		{"a+1", true},
-		{"substr(x, 2)", true},
-		{"(json_extract(x, '$.a'))", false},
+		{"substr(mx, 2)", true},
+		{"(json_extract(mx, '$.a'))", false},
 		{"(substr(a, 2) COLLATE NOCASE)", false},
 		{"(b+random())", false},
 	}
@@ -54,14 +54,14 @@ func TestExprLastIndex(t *testing.T) {
 		{"'('", 2},
 		{"('(')", 4},
 		{"('text')", 7},
-		{"floor(x), y", 7},
-		{"f(floor(x), y)", 13},
-		{"f(floor(x), y, (z))", 18},
-		{"f(x, (x*2)), y, (z)", 10},
+		{"floor(mx), y", 7},
+		{"f(floor(mx), y)", 13},
+		{"f(floor(mx), y, (z))", 18},
+		{"f(mx, (mx*2)), y, (z)", 10},
 		{"(a || ' ' || b)", 14},
 		{"(a || ', ' || b)", 15},
-		{"a || ', ' || b, x", 13},
-		{"(a || ', ' || b), x", 15},
+		{"a || ', ' || b, mx", 13},
+		{"(a || ', ' || b), mx", 15},
 	}
 	for i, tt := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {

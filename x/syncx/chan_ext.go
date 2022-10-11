@@ -3,8 +3,7 @@ package syncx
 import (
 	"context"
 	"kwil/x"
-	"math"
-	"sync/atomic"
+	"sync"
 )
 
 type _chan[T any] struct {
@@ -12,21 +11,27 @@ type _chan[T any] struct {
 	// and writing data.
 	data_ch chan T
 
-	// lock_ch signals that no more writes should be allowed.
+	// lock_ch signals that no more writes are allowed.
 	lock_ch chan x.Void
 
 	// closed_ch indicates that the channel is closed
 	// and there are no more writers.
 	closed_ch chan x.Void
 
-	// writer_and_lock_state keeps track of the # of
-	// concurrent writers, whether a close request has
-	// been submitted, or whether the channel is closed.
-	writers uint32
-}
+	// mu is used to ensure a consistent for the status
+	// and writers count.
+	mu sync.RWMutex
 
-var chan_locked = uint32(2147483648)   // mutex locked bit
-var chan_done = uint32(math.MaxUint32) // mutex done
+	// writers is the number of writers currently
+	// writing to the channel.
+	writers int32
+
+	// status is the current status of the channel.
+	// writable: 0
+	// locked:   1
+	// closed:   2
+	status int8
+}
 
 // NewChan creates a new Chan.
 func NewChan[T any]() Chan[T] {
@@ -34,6 +39,7 @@ func NewChan[T any]() Chan[T] {
 		data_ch:   make(chan T),
 		lock_ch:   make(chan x.Void),
 		closed_ch: make(chan x.Void),
+		mu:        sync.RWMutex{},
 	}
 }
 
@@ -43,11 +49,108 @@ func NewChanBuffered[T any](size int) Chan[T] {
 		data_ch:   make(chan T, size),
 		lock_ch:   make(chan x.Void),
 		closed_ch: make(chan x.Void),
+		mu:        sync.RWMutex{},
 	}
 }
 
 func (c *_chan[T]) Read() <-chan T {
 	return c.data_ch
+}
+
+func (c *_chan[T]) Write(value T) (ok bool) {
+	if !c.increment_writers() {
+		return false
+	}
+
+	defer c.decrement_writers()
+
+	select {
+	case c.data_ch <- value:
+		return true
+	case <-c.lock_ch:
+		return false
+	}
+}
+
+func (c *_chan[T]) TryWrite(ctx context.Context, value T) (ok bool, err error) {
+	if !c.increment_writers() {
+		return false, nil
+	}
+
+	defer c.decrement_writers()
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	select {
+	case c.data_ch <- value:
+		return true, nil
+	case <-c.lock_ch:
+		return false, nil
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
+}
+
+func (c *_chan[T]) IsClosed() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.is_closed_unsafe()
+}
+
+func (c *_chan[T]) IsLocked() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.is_lockedOrClosed_unsafe()
+}
+
+func (c *_chan[T]) Close() bool {
+	c.mu.Lock()
+	if c.is_lockedOrClosed_unsafe() {
+		c.mu.Unlock()
+		return false
+	}
+
+	if c.writers > 0 {
+		c.set_locked_unsafe()
+	} else {
+		c.set_closed_unsafe()
+		defer c.do_close()
+	}
+
+	c.mu.Unlock()
+
+	close(c.lock_ch)
+
+	return true
+}
+
+func (c *_chan[T]) CloseAndWait(ctx context.Context) error {
+	if !c.Close() {
+		return nil
+	}
+
+	if ctx == nil {
+		<-c.closed_ch
+		return nil
+	}
+
+	select {
+	case <-c.closed_ch:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *_chan[T]) CloseAndDrain(ctx context.Context) ([]T, error) {
+	err := c.CloseAndWait(ctx)
+	if err != nil {
+		return []T{}, err
+	}
+
+	return c.Drain(ctx)
 }
 
 func (c *_chan[T]) Drain(ctx context.Context) ([]T, error) {
@@ -79,82 +182,6 @@ func (c *_chan[T]) Drain(ctx context.Context) ([]T, error) {
 	return []T{}, nil
 }
 
-func (c *_chan[T]) Write(value T) (ok bool) {
-	ok, _ = c.TryWrite(nil, value)
-	return ok
-}
-
-func (c *_chan[T]) TryWrite(ctx context.Context, value T) (ok bool, err error) {
-	var writers uint32
-	if !c.incrementWriterCount(&writers) {
-		return false, nil
-	}
-
-	defer c.decrementWriterCount(writers)
-
-	if ctx == nil {
-		select {
-		case c.data_ch <- value:
-			return true, nil
-		case <-c.lock_ch:
-			return false, nil
-		}
-	}
-
-	select {
-	case c.data_ch <- value:
-		return true, nil
-	case <-c.lock_ch:
-		return false, nil
-	case <-ctx.Done():
-		return false, ctx.Err()
-	}
-}
-
-func (c *_chan[T]) IsClosed() bool {
-	return c._isClosed(c.loadWriters())
-}
-
-func (c *_chan[T]) IsLocked() bool {
-	return c._isLockRequested(c.loadWriters())
-}
-
-func (c *_chan[T]) Close() {
-	writers := atomic.LoadUint32(&c.writers)
-	for {
-		if c._isLockRequested(writers) {
-			return
-		}
-
-		if c._cas(writers, writers|chan_locked) {
-			break
-		}
-
-		writers = atomic.LoadUint32(&c.writers)
-	}
-
-	close(c.lock_ch)
-	if writers == 0 {
-		c.doClose()
-	}
-}
-
-func (c *_chan[T]) CloseAndWait(ctx context.Context) error {
-	c.Close()
-
-	if ctx == nil {
-		<-c.closed_ch
-		return nil
-	}
-
-	select {
-	case <-c.closed_ch:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 func (c *_chan[T]) ClosedCh() <-chan x.Void {
 	return c.closed_ch
 }
@@ -171,66 +198,56 @@ func (c *_chan[T]) Capacity() int {
 	return cap(c.data_ch)
 }
 
-func (c *_chan[T]) incrementWriterCount(out *uint32) bool {
-	writers := atomic.LoadUint32(&c.writers)
-	for {
-		if c._isLockRequested(writers) {
-			return false
-		}
+func (c *_chan[T]) increment_writers() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-		if c._cas(writers, writers+1) {
-			writers++
-			break
-		}
-
-		writers = atomic.LoadUint32(&c.writers)
+	if c.is_lockedOrClosed_unsafe() {
+		return false
 	}
 
-	*out = writers
+	c.writers++
 
 	return true
 }
 
-func (c *_chan[T]) decrementWriterCount(writers uint32) {
-	if c._cas(writers, writers-1) {
+func (c *_chan[T]) decrement_writers() {
+	c.mu.Lock()
+	c.writers--
+	if c.writers > 0 || !c.is_locked_unsafe() {
+		c.mu.Unlock()
 		return
 	}
 
-	for {
-		writers = atomic.LoadUint32(&c.writers)
-		if !c._cas(writers, writers-1) {
-			continue
-		}
+	c.mu.TryLock()
+	c.set_closed_unsafe()
 
-		writers--
-		if c._isLockRequested(writers) && !c._hasOutstandingWriters(writers) {
-			c.doClose()
-			break
-		}
-	}
+	c.mu.Unlock()
+
+	c.do_close() // do after unlock
 }
 
-func (c *_chan[T]) doClose() {
+func (c *_chan[T]) do_close() {
 	close(c.data_ch)
 	close(c.closed_ch)
 }
 
-func (c *_chan[T]) loadWriters() uint32 {
-	return atomic.LoadUint32(&c.writers)
+func (c *_chan[T]) is_closed_unsafe() bool {
+	return c.status == 2
 }
 
-func (_ *_chan[T]) _isClosed(status uint32) bool {
-	return status == math.MaxUint32
+func (c *_chan[T]) is_locked_unsafe() bool {
+	return c.status == 1
 }
 
-func (_ *_chan[T]) _hasOutstandingWriters(writers uint32) bool {
-	return writers^chan_done > 0
+func (c *_chan[T]) is_lockedOrClosed_unsafe() bool {
+	return c.status > 0
 }
 
-func (c *_chan[T]) _isLockRequested(writers uint32) bool {
-	return writers&chan_locked == chan_locked
+func (c *_chan[T]) set_closed_unsafe() {
+	c.status = 2
 }
 
-func (c *_chan[T]) _cas(expected, updated uint32) bool {
-	return atomic.CompareAndSwapUint32(&c.writers, expected, updated)
+func (c *_chan[T]) set_locked_unsafe() {
+	c.status = 1
 }

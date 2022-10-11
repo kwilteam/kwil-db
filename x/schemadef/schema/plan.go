@@ -256,7 +256,7 @@ func detachReferences(changes []SchemaChange) []SchemaChange {
 	return append(planned, deferred...)
 }
 
-// errCycle is an x error to indicate a case of a cycle.
+// errCycle is an mx error to indicate a case of a cycle.
 var errCycle = errors.New("cycle detected")
 
 // sortMap returns an index-map indicates the position of table in a topological

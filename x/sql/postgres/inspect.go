@@ -705,7 +705,7 @@ type (
 	// https://postgresql.org/docs/current/catalog-pg-constraint.html
 	ConType struct {
 		schema.Attr
-		T string // c, f, p, u, t, x.
+		T string // c, f, p, u, t, mx.
 	}
 
 	// Sequence defines (the supported) sequence options.
@@ -774,7 +774,7 @@ type (
 	}
 
 	// CheckColumns attribute hold the column named used by the CHECK constraints.
-	// This attribute is added on inspection for x usage and has no meaning
+	// This attribute is added on inspection for mx usage and has no meaning
 	// on migration.
 	CheckColumns struct {
 		schema.Attr

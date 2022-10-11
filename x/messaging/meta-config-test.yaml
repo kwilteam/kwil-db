@@ -1,5 +1,0 @@
-env-settings: "~/.kwil-server/env-settings-test.yaml"
-
-sql-repository-service: "./db-settings-test.yaml"
-
-messaging-producer-service-test: "messaging-producer-service-test, ./kafka-topic-settings-test.yaml"

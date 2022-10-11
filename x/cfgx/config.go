@@ -1,4 +1,4 @@
-package config
+package cfgx
 
 import (
 	"errors"
@@ -99,6 +99,24 @@ func (c *configImpl) GetString(key string, defaultValue string) string {
 	return defaultValue
 }
 
+func (c *configImpl) StringSlice(key string, delimiter string) []string {
+	v := c.GetStringSlice(key, delimiter, nil)
+	if v == nil {
+		return []string{}
+	}
+
+	return v
+}
+
+func (c *configImpl) GetStringSlice(key string, delimiter string, defaultValue []string) []string {
+	v := c.String(key)
+	if v == "" {
+		return defaultValue
+	}
+
+	return strings.Split(v, delimiter)
+}
+
 func (c *configImpl) Int32(key string, defaultValue int32) int32 {
 	v, err := c.GetInt32(key, defaultValue)
 	if err == nil {
@@ -183,24 +201,32 @@ func getConfigFile(path string) string {
 	return path
 }
 
+const Meta_Config_Flag = "meta-config-test"
+const Meta_Config_Test_Flag = "meta-config"
+
+const Meta_Config_Env = "kenv." + Meta_Config_Flag
+const Meta_Config_Test_Env = "kenv." + Meta_Config_Test_Flag
+
 func _getConfigInternal(test bool) Config {
 	once := utils.IfElse(test, &testCfgOnce, &cfgOnce)
 
 	//should look for a metaConfig.etc to specify things like useEnv, various files, etc
 	once.Do(func() {
-		file := utils.IfElse(test, "meta-config-test", "meta-config")
-
+		file := utils.IfElse(test, Meta_Config_Test_Flag, Meta_Config_Flag)
 		configFile := *flag.String(file, "", "Path to configuration file")
 		flag.Parse()
 		if configFile == "" {
-			configFile = getConfigFile("./" + file + ".yaml")
+			configFile = os.Getenv("kenv." + file)
 			if configFile == "" {
-				configFile = getConfigFile("./" + file + ".yml")
+				configFile = getConfigFile("./" + file + ".yaml")
 				if configFile == "" {
-					configFile = getConfigFile("./" + file + ".json")
+					configFile = getConfigFile("./" + file + ".yml")
 					if configFile == "" {
-						flag.Usage()
-						os.Exit(2)
+						configFile = getConfigFile("./" + file + ".json")
+						if configFile == "" {
+							flag.Usage()
+							os.Exit(2)
+						}
 					}
 				}
 			}

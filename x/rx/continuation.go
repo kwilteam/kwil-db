@@ -1,82 +1,79 @@
 package rx
 
-import (
-	"context"
-	"kwil/x"
-)
+type Executor interface {
+	Execute(fn func())
+}
 
-// Continuation is for use with non typed functional
-// continuations from tasks
-type Continuation interface {
+type async_executor struct{}
 
-	// Fail will set the result to an error
-	Fail(err error) bool
+func (e *async_executor) Execute(fn func()) {
+	go fn()
+}
 
-	// Complete will set the result to a value
-	Complete() bool
+var asyncExecutor Executor = &async_executor{}
 
-	// CompleteOrFail will set the result to either a value or an error
-	CompleteOrFail(err error) bool
+func AsyncExecutor() Executor {
+	return asyncExecutor
+}
 
-	// Cancel will cancel the Continuation
-	Cancel() bool
+type immediate_executor struct{}
 
-	// IsDone will return true if the Result is complete
-	IsDone() bool
+func (e *immediate_executor) Execute(fn func()) {
+	fn()
+}
 
-	// IsError will return true if the Result is an error.
-	// It will return false if it has not yet completed.
-	IsError() bool
+var immediateExecutor Executor = &immediate_executor{}
 
-	// IsCancelled will return true if the Result is cancelled.
-	// It will return false if it has not yet completed.
-	IsCancelled() bool
+func ImmediateExecutor() Executor {
+	return immediateExecutor
+}
 
-	// IsErrorOrCancelled will return true if the Result is an error
-	// or cancelled (NOTE: cancelled is always an error).
-	// It will return false if it has not yet completed.
-	IsErrorOrCancelled() bool
+type Continuation struct {
+	next *Continuation
+	run  func()
+	done bool
+}
 
-	// Await will block until the result is complete or the context
-	// is cancelled, reached its timeout or deadline. 'ok' will be true
-	// if the result is complete, otherwise it will be false. Passing a
-	// nil ctx will block until result completion.
-	Await(ctx context.Context) bool
+type ContinuationT[T any] struct {
+	Then    func(T)
+	Catch   func(error)
+	Finally func()
+}
 
-	// GetError will return the contained error or nil if the
-	// result is not an error
-	// NOTE: this is a blocking call
-	GetError() error
+func (c *ContinuationT[T]) invoke(value T, err error) {
+	if err == nil {
+		if c.Then != nil {
+			c.Then(value)
+		}
+	} else {
+		if c.Catch != nil {
+			c.Catch(err)
+		}
+	}
 
-	// DoneChan will return a channel that will be closed when the
-	// result/error has been set
-	DoneChan() <-chan x.Void
+	if c.Finally != nil {
+		c.Finally()
+	}
+}
 
-	// Then will call the func when the result has been successfully set
-	Then(fn Runnable) Continuation
+type ContinuationA struct {
+	Then    func()
+	Catch   func(error)
+	Finally func()
+}
 
-	// Catch will call the func if the result is an error
-	Catch(fn ErrorHandler) Continuation
+func (c *ContinuationA) invoke(err error) {
+	if err == nil {
+		if c.Then != nil {
+			c.Then()
+		}
+	} else {
+		if c.Catch != nil {
+			c.Catch(err)
+		}
+	}
 
-	// ThenCatchFinally will call the func when the result has been set
-	ThenCatchFinally(fn *CompletionC) Continuation
-
-	// WhenComplete will call the func when the result has been set
-	WhenComplete(fn func(error)) Continuation
-
-	// OnComplete will call the func when the result has been set
-	OnComplete(fn *Completion[x.Void])
-
-	// AsContinuation returns an opaque continuation that will be completed
-	// when the source task has been completed
-	AsContinuation() Continuation
-
-	// AsAsync returns an opaque continuation that will be completed
-	// asynchronously when the source continuation has been
-	// completed
-	AsAsync() Continuation
-
-	// IsAsync returns true if the continuation was created to call
-	// continuations asynchronously
-	IsAsync() bool
+	if c.Finally != nil {
+		c.Finally()
+	}
 }

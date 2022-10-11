@@ -2,11 +2,11 @@ package rx
 
 import (
 	"context"
-	"kwil/x"
+	. "kwil/x"
 )
 
 // Task is a Promise-like interface. It can be used as the
-// controller for setting completion of a Continuation or
+// controller for setting completion of an Action or
 // a task itself.
 type Task[T any] interface {
 	// GetError will return the contained error or nil if the
@@ -45,7 +45,7 @@ type Task[T any] interface {
 
 	// DoneChan will return a channel that will be closed when the
 	// result/error has been set
-	DoneChan() <-chan x.Void
+	DoneChan() <-chan Void
 
 	// Await will block until the result is complete or the context
 	// is cancelled, reached its timeout or deadline. 'ok' will be true
@@ -67,10 +67,10 @@ type Task[T any] interface {
 	Cancel() bool
 
 	// Then will call the func when the result has been successfully set
-	Then(fn ValueHandler[T]) Task[T]
+	Then(fn func(T)) Task[T]
 
 	// Catch will call the func if the result is an error
-	Catch(fn ErrorHandler) Task[T]
+	Catch(fn func(error)) Task[T]
 
 	// Handle will call the func when the result has been set
 	Handle(fn func(T, error) (T, error)) Task[T]
@@ -79,25 +79,27 @@ type Task[T any] interface {
 	Compose(fn func(T, error) Task[T]) Task[T]
 
 	// ThenCatchFinally will call the func when the result has been set
-	ThenCatchFinally(fn *Completion[T]) Task[T]
+	ThenCatchFinally(fn *ContinuationT[T]) Task[T]
 
 	// WhenComplete will call the func when the result has been set
-	WhenComplete(fn Handler[T]) Task[T]
+	WhenComplete(fn func(T, error)) Task[T]
 
 	// OnComplete will call the func when the result has been set
-	OnComplete(fn *Completion[T])
+	OnComplete(*ContinuationT[T])
 
-	// AsContinuation returns a continuation that will be completed
+	// AsAction returns an action that will be completed
 	// when the source task has been completed
-	AsContinuation() Continuation
+	AsAction() Action
 
-	// AsContinuationAsync returns a continuation that will be completed
-	// asynchronously when the source task has been completed
-	AsContinuationAsync() Continuation
+	// AsListenable is a convenience method for casting the current Task
+	// to a Listenable
+	AsListenable() Listenable[T]
 
 	// AsAsync returns a task that will be completed asynchronously
-	// when the source task has been completed
-	AsAsync() Task[T]
+	// when the source task has been completed, using the provided
+	// executor. If the executor is nil, then the default async executor
+	// will be used.
+	AsAsync(e Executor) Task[T]
 
 	// IsAsync returns true if the task was created to call
 	// func continuations asynchronously

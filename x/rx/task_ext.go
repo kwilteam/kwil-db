@@ -2,43 +2,44 @@ package rx
 
 import (
 	"context"
-	"kwil/x"
+	. "kwil/x"
+	"kwil/x/errx"
 	"kwil/x/utils"
 	"sync/atomic"
 	"unsafe"
 )
 
-type task[T any] struct {
+type _task[T any] struct {
 	status uint32
 	state  unsafe.Pointer
 }
 
-func (r *task[T]) GetError() error                             { return r._getError() }
-func (r *task[T]) Get() T                                      { return r._get() }
-func (r *task[T]) IsError() bool                               { return r._isError() }
-func (r *task[T]) IsCancelled() bool                           { return r._isCancelled() }
-func (r *task[T]) IsErrorOrCancelled() bool                    { return r._isErrorOrCancelled() }
-func (r *task[T]) IsDone() bool                                { return r._isDone() }
-func (r *task[T]) DoneChan() <-chan x.Void                     { return r._doneChan() }
-func (r *task[T]) Fail(err error) bool                         { return r._fail(err) }
-func (r *task[T]) Complete(value T) bool                       { return r._complete(value) }
-func (r *task[T]) CompleteOrFail(value T, err error) bool      { return r._completeOrFail(value, err) }
-func (r *task[T]) Cancel() bool                                { return r._cancel() }
-func (r *task[T]) GetOrError() (T, error)                      { return r._getOrError() }
-func (r *task[T]) Await(ctx context.Context) (ok bool)         { return r._await(ctx) }
-func (r *task[T]) Then(fn ValueHandler[T]) Task[T]             { return r._then(fn) }
-func (r *task[T]) Catch(fn ErrorHandler) Task[T]               { return r._catch(fn) }
-func (r *task[T]) Handle(fn func(T, error) (T, error)) Task[T] { return r._handle(fn) }
-func (r *task[T]) Compose(fn func(T, error) Task[T]) Task[T]   { return r._compose(fn) }
-func (r *task[T]) ThenCatchFinally(fn *Completion[T]) Task[T]  { return r._whenComplete(fn.Invoke) }
-func (r *task[T]) WhenComplete(fn Handler[T]) Task[T]          { return r._whenComplete(fn) }
-func (r *task[T]) OnComplete(fn *Completion[T])                { r.WhenComplete(fn.Invoke) }
-func (r *task[T]) AsContinuation() Continuation                { return r._asContinuation(false) }
-func (r *task[T]) AsContinuationAsync() Continuation           { return r._asContinuation(true) }
-func (r *task[T]) AsAsync() Task[T]                            { return r._async() }
-func (r *task[T]) IsAsync() bool                               { return isAsync(r.status) }
+func (r *_task[T]) GetError() error                               { return r._getError() }
+func (r *_task[T]) Get() T                                        { return r._get() }
+func (r *_task[T]) IsError() bool                                 { return r._isError() }
+func (r *_task[T]) IsCancelled() bool                             { return r._isCancelled() }
+func (r *_task[T]) IsErrorOrCancelled() bool                      { return r._isErrorOrCancelled() }
+func (r *_task[T]) IsDone() bool                                  { return r._isDone() }
+func (r *_task[T]) DoneChan() <-chan Void                         { return r._doneChan() }
+func (r *_task[T]) Fail(err error) bool                           { return r._fail(err) }
+func (r *_task[T]) Complete(value T) bool                         { return r._complete(value) }
+func (r *_task[T]) CompleteOrFail(value T, err error) bool        { return r._completeOrFail(value, err) }
+func (r *_task[T]) Cancel() bool                                  { return r._cancel() }
+func (r *_task[T]) GetOrError() (T, error)                        { return r._getOrError() }
+func (r *_task[T]) Await(ctx context.Context) (ok bool)           { return r._await(ctx) }
+func (r *_task[T]) Then(fn func(T)) Task[T]                       { return r._then(fn) }
+func (r *_task[T]) Catch(fn func(error)) Task[T]                  { return r._catch(fn) }
+func (r *_task[T]) Handle(fn func(T, error) (T, error)) Task[T]   { return r._handle(fn) }
+func (r *_task[T]) Compose(fn func(T, error) Task[T]) Task[T]     { return r._compose(fn) }
+func (r *_task[T]) ThenCatchFinally(fn *ContinuationT[T]) Task[T] { return r._whenComplete(fn.invoke) }
+func (r *_task[T]) WhenComplete(fn func(T, error)) Task[T]        { return r._whenComplete(fn) }
+func (r *_task[T]) OnComplete(fn *ContinuationT[T])               { r.WhenComplete(fn.invoke) }
+func (r *_task[T]) AsAction() Action                              { return r._asAction() }
+func (r *_task[T]) AsListenable() Listenable[T]                   { return r }
+func (r *_task[T]) AsAsync(e Executor) Task[T]                    { return r._async(e) }
+func (r *_task[T]) IsAsync() bool                                 { return isAsync(r.status) }
 
-func (r *task[T]) lock() (previous uint32) {
+func (r *_task[T]) lock() (previous uint32) {
 	for {
 		current := atomic.LoadUint32(&r.status)
 
@@ -52,20 +53,24 @@ func (r *task[T]) lock() (previous uint32) {
 	}
 }
 
-func (r *task[T]) unlock(status uint32) {
+func (r *_task[T]) unlock(status uint32) {
 	atomic.StoreUint32(&r.status, status)
 }
 
-func (r *task[T]) completeOrFail(val T, err error) bool {
+func (r *_task[T]) completeOrFailNoReturn(val T, err error) {
+	r.completeOrFail(val, err)
+}
+
+func (r *_task[T]) completeOrFail(val T, err error) bool {
 	current := r.lock()
 	if isDone(current) {
 		r.unlock(current)
 		return false
 	}
 
-	fn, ch := r.getAnyHandlerUnsafe(current)
+	fn, ch := r.getAnyHandler(current)
 
-	updated := r.encodeValOrErrAndStoreUnsafe(val, err)
+	updated := r.encodeValOrErrAndStore(val, err)
 
 	r.unlock(updated)
 
@@ -80,8 +85,8 @@ func (r *task[T]) completeOrFail(val T, err error) bool {
 	return true
 }
 
-func (r *task[T]) getOrAddDoneChan() <-chan x.Void {
-	ch := make(chan x.Void)
+func (r *_task[T]) getOrAddDoneChan() <-chan Void {
+	ch := make(chan Void)
 	r.addFnHandler(func(_ T, _ error) {
 		close(ch)
 	}, true)
@@ -89,29 +94,27 @@ func (r *task[T]) getOrAddDoneChan() <-chan x.Void {
 	return ch
 }
 
-func (r *task[T]) addFnHandler(fn Handler[T], noTask bool) *task[T] {
+func (r *_task[T]) addFnHandler(fn func(T, error), noTask bool) *_task[T] {
 	current := r.lock()
 	if isDone(current) {
 		r.unlock(current)
-		return r.executeHandlerUnsafe(current, fn)
+		return r.executeHandler(current, fn)
 	}
 
-	task := r.handlerStackPushUnsafe(current, fn, noTask)
+	task := r.handlerStackPush(current, fn, noTask)
 
 	r.unlock(current | _FN)
 
 	return task
 }
 
-func (r *task[T]) loadValueOrErrorUnsafe(status uint32) (value T, err error) {
+func (r *_task[T]) loadValueOrError(status uint32) (value T, err error) {
 	if hasError(status) {
-		//err = *(*error)(atomic.LoadPointer(&r.taskState.state))
-		err = *(*error)(r.state)
+		err = *(*error)(atomic.LoadPointer(&r.state))
 		return
 	}
 
-	//ptr := (*T)(atomic.LoadPointer(&r.taskState.state))
-	ptr := (*T)(r.state)
+	ptr := (*T)(atomic.LoadPointer(&r.state))
 	if ptr != nil {
 		return *ptr, nil
 	}
@@ -119,45 +122,45 @@ func (r *task[T]) loadValueOrErrorUnsafe(status uint32) (value T, err error) {
 	return
 }
 
-func (r *task[T]) setEitherNoReturn(value T, err error) {
+func (r *_task[T]) setEitherNoReturn(value T, err error) {
 	r.completeOrFail(value, err)
 }
 
-func (r *task[T]) handlerStackPushUnsafe(current uint32, fn Handler[T], noTask bool) *task[T] {
+func (r *_task[T]) handlerStackPush(current uint32, fn func(T, error), noTask bool) *_task[T] {
 	if !hasHandler(current) {
-		// first fn, so just encode and taskState
-		r.encodeFnAndStoreUnsafe(fn)
+		// first fn, so just set it
+		r.encodeFnAndStore(fn)
 		return r
 	}
 
-	task, h := r.getCombinedHandler(fn, r.getHandlerUnsafe(), noTask)
-	r.encodeFnAndStoreUnsafe(h)
+	task, h := r.getCombinedHandler(fn, r.getHandler(), noTask)
+	r.encodeFnAndStore(h)
 
 	return task
 }
 
-func (r *task[T]) getCombinedHandler(newer Handler[T], older Handler[T], noTask bool) (*task[T], Handler[T]) {
+func (r *_task[T]) getCombinedHandler(newer func(T, error), older func(T, error), noTask bool) (*_task[T], func(T, error)) {
 	// already have a handler, so wrap the current one and the new one
 	if noTask {
 		h := &onCompleteStackNodeHandler[T]{next: older, fn: newer}
 		return r, h.invoke
 	}
 
-	task := &task[T]{_FN, unsafe.Pointer(&newer)}
+	task := &_task[T]{_FN, unsafe.Pointer(&newer)}
 	h := onSuccessOrErrorTaskHandler[T]{task, older}
 
 	return task, h.invoke
 }
 
-func (r *task[T]) executeHandlerUnsafe(current uint32, fn Handler[T]) *task[T] {
-	v, err := r.loadValueOrErrorUnsafe(current)
+func (r *_task[T]) executeHandler(current uint32, fn func(T, error)) *_task[T] {
+	v, err := r.loadValueOrError(current)
 
 	r.executeHandlerWithValOrErr(v, err, fn, isAsync(current))
 
 	return r
 }
 
-func (r *task[T]) executeHandlerWithValOrErr(val T, err error, fn Handler[T], async bool) {
+func (r *_task[T]) executeHandlerWithValOrErr(val T, err error, fn func(T, error), async bool) {
 	if !async {
 		fn(val, err)
 	} else {
@@ -165,28 +168,23 @@ func (r *task[T]) executeHandlerWithValOrErr(val T, err error, fn Handler[T], as
 	}
 }
 
-func (r *task[T]) getAnyHandlerUnsafe(current uint32) (Handler[T], chan x.Void) {
+func (r *_task[T]) getAnyHandler(current uint32) (func(T, error), chan Void) {
 	if hasHandler(current) {
-		return r.getHandlerUnsafe(), nil
+		return r.getHandler(), nil
 	}
 
 	return nil, nil
 }
 
-func (r *task[T]) getHandlerUnsafe() Handler[T] {
-	return *(*Handler[T])(r.state)
-	//return *(*Handler[T])(atomic.LoadPointer(&r.taskState.state))
+func (r *_task[T]) getHandler() func(T, error) {
+	return *(*func(T, error))(atomic.LoadPointer(&r.state))
 }
 
-func (r *task[T]) encodeToBlockChanAndStoreUnsafe(bkh *onDoneChanBlockRunHandler[T]) {
-	atomic.StorePointer(&r.state, unsafe.Pointer(&bkh))
-}
-
-func (r *task[T]) encodeFnAndStoreUnsafe(fn Handler[T]) {
+func (r *_task[T]) encodeFnAndStore(fn func(T, error)) {
 	atomic.StorePointer(&r.state, unsafe.Pointer(&fn))
 }
 
-func (r *task[T]) encodeValOrErrAndStoreUnsafe(val T, err error) uint32 {
+func (r *_task[T]) encodeValOrErrAndStore(val T, err error) uint32 {
 	if err == nil {
 		atomic.StorePointer(&r.state, unsafe.Pointer(&val))
 		return _VALUE
@@ -194,5 +192,5 @@ func (r *task[T]) encodeValOrErrAndStoreUnsafe(val T, err error) uint32 {
 
 	atomic.StorePointer(&r.state, unsafe.Pointer(&err))
 
-	return utils.IfElse(err == x.ErrOperationCancelled, _CANCELLED_OR_ERROR, _ERROR)
+	return utils.IfElse(errx.IsCancelled(err), _CANCELLED_OR_ERROR, _ERROR)
 }

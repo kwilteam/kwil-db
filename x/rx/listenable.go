@@ -20,5 +20,5 @@ type Listenable[T any] interface {
 
 	// OnComplete will call the func when the result has
 	// been set
-	OnComplete(*Completion[T])
+	OnComplete(*ContinuationT[T])
 }

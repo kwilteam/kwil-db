@@ -1,11 +1,9 @@
 package utils
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"kwil/x"
 	"math/big"
 	"os"
@@ -14,12 +12,12 @@ import (
 	"strings"
 )
 
-// Mod e.g., modulo returns the remainder of x/y
+// Mod e.g., modulo returns the remainder of mx/y
 func Mod[T x.Integer](x, y T) T {
 	return (x%y + y) % y
 }
 
-// Max returns the largest of x or y.
+// Max returns the largest of mx or y.
 func Max[T x.Integer](x, y T) T {
 	if x > y {
 		return x
@@ -27,31 +25,12 @@ func Max[T x.Integer](x, y T) T {
 	return y
 }
 
-// Min returns the smallest of x or y.
+// Min returns the smallest of mx or y.
 func Min[T x.Integer](x, y T) T {
 	if x < y {
 		return x
 	}
 	return y
-}
-
-// IsContextTimeout returns true if the underlying error is a timeout. This function
-// counts canceled contexts as timeouts.
-// source article:
-// https://blog.afoolishmanifesto.com/posts/context-deadlines-in-golang/
-func IsContextTimeout(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	switch {
-	case errors.Is(err, context.Canceled):
-		return true
-	case errors.Is(err, context.DeadlineExceeded):
-		return true
-	default:
-		return false
-	}
 }
 
 func FileExists(path string) bool {

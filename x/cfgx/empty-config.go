@@ -1,4 +1,4 @@
-package config
+package cfgx
 
 type emptyConfigImpl struct {
 }
@@ -31,6 +31,14 @@ func (c *emptyConfigImpl) String(_ string) string {
 
 func (c *emptyConfigImpl) GetString(_ string, defaultValue string) string {
 	return defaultValue
+}
+
+func (c *emptyConfigImpl) GetStringSlice(_ string, _ string, defaultValue []string) []string {
+	return defaultValue
+}
+
+func (c *emptyConfigImpl) StringSlice(_ string, _ string) []string {
+	return []string{}
 }
 
 func (c *emptyConfigImpl) GetInt32(_ string, defaultValue int32) (int32, error) {

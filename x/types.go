@@ -1,34 +1,48 @@
 package x
 
+var _closedChan chan Void
+
 func init() {
 	ch := make(chan Void)
 	close(ch)
-	ClosedChan = ch
+	_closedChan = ch
 }
 
 // Void An empty struct{} typed as 'Void'
 type Void struct{}
 
-// ClosedChan is a closed Void channel that can be
+// ClosedChanVoid is a closed Void channel that can be
 // used in default closed use cases or in context
 // of atomic CAS operations for closure scenarios.
-var ClosedChan chan Void
+func ClosedChanVoid() chan Void {
+	return _closedChan
+}
 
 // Tuple2 is a combination of two values of any type.
 // In general, it is used in place of declaring one-off
 // structs for passing around a pair of values.
 type Tuple2[T, U any] struct {
-	First  T
-	Second U
+	P1 T
+	P2 U
 }
 
 // Tuple3 is a combination of three values of any type.
 // In general, it is used in place of declaring one-off
 // structs for passing around three values.
 type Tuple3[T, U, V any] struct {
-	First  T
-	Second U
-	Third  V
+	P1 T
+	P2 U
+	P3 V
+}
+
+// Tuple4 is a combination of four values of any type.
+// In general, it is used in place of declaring one-off
+// structs for passing around four values.
+type Tuple4[T, U, V, W any] struct {
+	P1 T
+	P2 U
+	P3 V
+	P4 W
 }
 
 // Integer is a type that represents the various

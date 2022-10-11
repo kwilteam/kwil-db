@@ -1,16 +1,12 @@
 package rx
 
-import "kwil/x"
-
-type ArgsHandler[T, U any] func(args U, value T, err error)
-type Handler[T any] func(T, error)
-type ValueHandler[T any] func(T)
-type ErrorHandler func(error)
-type Runnable func()
+import (
+	. "kwil/x"
+)
 
 // The below are internally used to adapt handlers to a common
 // callback type Methods of the structs are used as function
-// pointers with the handler callbacks from a task
+// pointers with the handler callbacks from a _task
 // TODO: in the future, move to using interfaces for simpler readability
 // over any potential/unlikely meaningful perf gains
 
@@ -18,23 +14,23 @@ type continuationRequestAdapter struct {
 	fn func(error)
 }
 
-func (r *continuationRequestAdapter) invoke(_ x.Void, err error) {
+func (r *continuationRequestAdapter) invoke(_ Void, err error) {
 	r.fn(err)
 }
 
 type onSuccessContinuationHandler struct {
-	fn Runnable
+	fn func()
 }
 
-func (h *onSuccessContinuationHandler) invoke(_ x.Void, err error) {
+func (h *onSuccessContinuationHandler) invoke(_ Void, err error) {
 	if err == nil {
 		h.fn()
 	}
 }
 
 type onSuccessOrErrorTaskHandler[T any] struct {
-	task *task[T]
-	fn   Handler[T]
+	task *_task[T]
+	fn   func(T, error)
 }
 
 func (h *onSuccessOrErrorTaskHandler[T]) invoke(value T, err error) {
@@ -43,8 +39,8 @@ func (h *onSuccessOrErrorTaskHandler[T]) invoke(value T, err error) {
 }
 
 type onCompleteStackNodeHandler[T any] struct {
-	next Handler[T]
-	fn   Handler[T]
+	next func(T, error)
+	fn   func(T, error)
 }
 
 func (h *onCompleteStackNodeHandler[T]) invoke(value T, err error) {
@@ -53,7 +49,7 @@ func (h *onCompleteStackNodeHandler[T]) invoke(value T, err error) {
 }
 
 type onSuccessHandler[T any] struct {
-	fn ValueHandler[T]
+	fn func(T)
 }
 
 func (h *onSuccessHandler[T]) invoke(value T, err error) {
@@ -63,7 +59,7 @@ func (h *onSuccessHandler[T]) invoke(value T, err error) {
 }
 
 type onErrorHandler[T any] struct {
-	fn ErrorHandler
+	fn func(error)
 }
 
 func (h *onErrorHandler[T]) invoke(_ T, err error) {
@@ -73,8 +69,8 @@ func (h *onErrorHandler[T]) invoke(_ T, err error) {
 }
 
 type onDoneChanBlockRunHandler[T any] struct {
-	chDone chan x.Void
-	fn     Handler[T]
+	chDone chan Void
+	fn     func(T, error)
 }
 
 func (h *onDoneChanBlockRunHandler[T]) invoke(v T, err error) {
@@ -83,7 +79,7 @@ func (h *onDoneChanBlockRunHandler[T]) invoke(v T, err error) {
 }
 
 type onCompose[T any] struct {
-	task Task[T]
+	task *_task[T]
 	fn   func(T, error) Task[T]
 }
 
@@ -92,14 +88,49 @@ func (h *onCompose[T]) invoke(v T, err error) {
 }
 
 func (h *onCompose[T]) fn_complete(v T, e error) {
-	h.task.CompleteOrFail(v, e)
+	h.task.completeOrFailNoReturn(v, e)
 }
 
 type onHandle[T any] struct {
-	task Task[T]
+	task *_task[T]
 	fn   func(T, error) (T, error)
 }
 
 func (h *onHandle[T]) invoke(v T, e error) {
-	h.task.CompleteOrFail(h.fn(v, e))
+	h.task.completeOrFailNoReturn(h.fn(v, e))
+}
+
+type onAsyncHandler[T any] struct {
+	task *_task[T]
+}
+
+func (h *onAsyncHandler[T]) invoke(v T, e error) {
+	if !h.task.IsDone() {
+		go h.task.completeOrFail(v, e)
+	}
+}
+
+type asActionHandler[T any] struct {
+	action *action
+}
+
+func (h *asActionHandler[T]) invoke(_ T, err error) {
+	h.action.CompleteOrFail(err)
+}
+
+type executorHandler[T any] struct {
+	task *_task[T]
+	e    Executor
+	err  error
+	v    T
+}
+
+func (h *executorHandler[T]) run() {
+	h.task.CompleteOrFail(h.v, h.err)
+}
+
+func (h *executorHandler[T]) invoke(v T, err error) {
+	h.err = err
+	h.v = v
+	h.e.Execute(h.run)
 }

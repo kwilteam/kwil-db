@@ -1,4 +1,4 @@
-package config
+package cfgx
 
 func GetConfigSources() []Source {
 	return getConfigSourcesInternal()
@@ -23,9 +23,11 @@ type Config interface {
 	Exists(key string) bool
 
 	String(key string) string
+	StringSlice(key string, delimiter string) []string
 	Int32(key string, defaultValue int32) int32
 	Int64(key string, defaultValue int64) int64
 
+	GetStringSlice(key string, delimiter string, defaultValue []string) []string
 	GetString(key string, defaultValue string) string
 	GetInt32(key string, defaultValue int32) (int32, error)
 	GetInt64(key string, defaultValue int64) (int64, error)
