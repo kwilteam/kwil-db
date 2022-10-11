@@ -472,7 +472,7 @@ func normalizeLiterals(attr *Attr) *Attr {
 	if !ok {
 		return attr
 	}
-	exp := "x = " + lv.V
+	exp := "mx = " + lv.V
 	p := hclparse.NewParser()
 	if _, diag := p.ParseHCL([]byte(exp), ""); diag != nil {
 		return &Attr{K: attr.K, V: &RawExpr{X: lv.V}}

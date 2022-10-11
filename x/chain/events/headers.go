@@ -240,9 +240,9 @@ func copyBigInt(v *big.Int) *big.Int {
 							ef.log.Debug().Str("expected", expected.String()).Str("received", header.Number.String()).Msg("received block out of order")
 							endloop := header.Number.Add(header.Number, big.NewInt(1))
 							for i := new(big.Int).Set(expected); i.Cmp(endloop) < 0; i.Add(i, big.NewInt(1)) {
-								x := new(big.Int).Set(i) //copy
-								fmt.Println("recovering: ", x.String())
-								headerQueue <- x
+								mx := new(big.Int).Set(i) //copy
+								fmt.Println("recovering: ", mx.String())
+								headerQueue <- mx
 								notifierChannel <- true
 							}
 							//headerQueue <- header.Number

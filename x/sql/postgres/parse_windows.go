@@ -4,7 +4,6 @@
 package postgres
 
 import (
-	"errors"
 	"io"
 
 	"kwil/x/sql/ast"

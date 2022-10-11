@@ -31,7 +31,7 @@ tasks:
     sources:
       - proto/api/v0/*
     generates:
-      - x/api/v0/*
+      - mx/api/v0/*
 
   build:api-gateway:
     desc: Builds the API Gateway

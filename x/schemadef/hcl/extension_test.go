@@ -141,7 +141,7 @@ func TestRef(t *testing.T) {
 	}
 	hcl.Register("a", &A{})
 	resource := &hcl.Resource{
-		Name: "x",
+		Name: "mx",
 		Type: "a",
 		Attrs: []*hcl.Attr{
 			{
@@ -167,7 +167,7 @@ func TestListRef(t *testing.T) {
 	}
 	hcl.Register("b", &B{})
 	resource := &hcl.Resource{
-		Name: "x",
+		Name: "mx",
 		Type: "b",
 		Attrs: []*hcl.Attr{
 			{

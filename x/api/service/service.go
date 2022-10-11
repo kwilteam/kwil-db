@@ -27,6 +27,7 @@ func NewService(ds DepositStore, p pricing.PriceBuilder) *Service {
 	return &Service{
 		ds:      ds,
 		pricing: p,
+		log:     logx.New(),
 	}
 }
 
@@ -53,7 +54,7 @@ func (s *Service) validateBalances(from *string, op *int32, cr *int32, fe *strin
 	// compare the cost to what is sent
 	if cost.Cmp(fee) > 0 {
 		s.log.Debug("fee is too low for the requested operation")
-		return fb, ErrFeeTooLow
+		return nil, ErrFeeTooLow
 	}
 
 	// get the balance of the sender

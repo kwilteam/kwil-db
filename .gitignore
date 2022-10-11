@@ -14,10 +14,10 @@ keys/*
 .kwilbadger/
 .testkwilbadger/
 .wal/
-cmd/kwil-cosmos/cmd/kwild/__debug_bin
-cmd/__debug_bin
 cmd/cmd
 .lck
 .data/
 .build/
 .task/
+**/__debug_bin.exe
+**/__debug_bin

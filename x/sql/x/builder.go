@@ -76,7 +76,7 @@ func (b *Builder) Comma() *Builder {
 	return b
 }
 
-// MapComma maps the slice x using the function f and joins the result with
+// MapComma maps the slice mx using the function f and joins the result with
 // a comma separating between the written elements.
 func (b *Builder) MapComma(x any, f func(i int, b *Builder)) *Builder {
 	s := reflect.ValueOf(x)
