@@ -45,11 +45,12 @@ func Init(ctx context.Context, conf Config, client *ethclient.Client) (*Deposits
 
 	// First initialize a deposit store
 	ds, err := store.NewDepositStore(conf, wal)
-	ds.PrintAllBalances()
-	ds.PrintCurrentHeight()
 	if err != nil {
 		return nil, err
 	}
+
+	//defer ds.Close()
+	ds.PrintAllBalances()
 
 	// Next initialize an event feed
 	ef, err := events.New(conf, client, wal, ds)
@@ -85,7 +86,6 @@ func Init(ctx context.Context, conf Config, client *ethclient.Client) (*Deposits
 func Sync(ctx context.Context, ef *events.EventFeed) error {
 	fmt.Printf("Beginning sync...\n")
 	low, high, err := ef.GetUnsyncedRange(ctx)
-	//high = high.Add(high, big.NewInt(1))
 	if err != nil {
 		return err
 	}

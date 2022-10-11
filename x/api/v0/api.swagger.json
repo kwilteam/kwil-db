@@ -654,6 +654,38 @@
         ]
       }
     },
+    "/api/v0/wallets/withdraw": {
+      "post": {
+        "operationId": "KwilService_ReturnFunds",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v0ReturnFundsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v0ReturnFundsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
     "/api/v0/wallets/{id}/balance": {
       "get": {
         "summary": "Wallets",
@@ -920,7 +952,52 @@
       "type": "object"
     },
     "v0PostQueryResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        }
+      }
+    },
+    "v0ReturnFundsRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        }
+      }
+    },
+    "v0ReturnFundsResponse": {
+      "type": "object",
+      "properties": {
+        "amtReturned": {
+          "type": "string"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "balance": {
+          "type": "string"
+        },
+        "txid": {
+          "type": "string"
+        }
+      }
     },
     "v0UpdateDatabaseResponse": {
       "type": "object"

@@ -12,4 +12,5 @@ var (
 	ErrIncorrectOperation = errors.New("incorrect operation")
 	ErrIncorrectCrud      = errors.New("incorrect crud")
 	ErrInvalidDDLType     = errors.New("invalid ddl type")
+	ErrInvalidAmount      = errors.New("invalid amount")
 )

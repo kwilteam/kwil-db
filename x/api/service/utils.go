@@ -15,6 +15,14 @@ func createDatabaseID(owner, name, fee string) string {
 	return string(crypto.Sha384([]byte(sb.String())))
 }
 
+func createFundsReturnID(amount, nonce, address string) string {
+	sb := strings.Builder{}
+	sb.WriteString(amount)
+	sb.WriteString(nonce)
+	sb.WriteString(address)
+	return string(crypto.Sha384([]byte(sb.String())))
+}
+
 func updateDatabaseID(m *proto.UpdateDatabaseRequest) string {
 	sb := strings.Builder{}
 	sb.WriteString(m.Owner)

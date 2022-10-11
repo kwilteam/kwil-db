@@ -41,6 +41,8 @@ func (s *Service) CreateDatabase(ctx context.Context, req *v0.CreateDatabaseRequ
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
 
+	// Forward message to Kafka
+
 	return &v0.CreateDatabaseResponse{}, nil
 }
 
