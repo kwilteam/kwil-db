@@ -13,7 +13,6 @@ import (
 
 func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, error) {
 	headers := make(chan *types.Header)
-
 	sub, err := ef.EthClient.SubscribeNewHead(ctx, headers)
 	if err != nil {
 		return nil, err
@@ -69,6 +68,7 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 				if header.Number.Cmp(expected) == 0 {
 
 					// This is the expected header
+					ef.log.Debug().Msgf("received expected header %s", header.Number.String())
 					headerStore.append(header.Number)
 
 				} else if header.Number.Cmp(expected) > 0 {
@@ -82,16 +82,11 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 						x := copyBigInt(i) //copy
 						headerStore.append(x)
 					}
-
 				} else {
-
 					ef.log.Debug().Msgf("received header is less than expected.  expected: %s | received: %s", header.Number.String(), expected.String())
 					// do nothing here
-
 				}
-
 				// 2.
-
 				for {
 					// if queue is longer than required confirmations, we will pop and send
 					if len(headerStore.queue) > ef.conf.GetReqConfirmations() {
@@ -115,8 +110,17 @@ func (ef *EventFeed) resubscribeEthClient(ctx context.Context, headers chan *typ
 	sub, err := ef.EthClient.SubscribeNewHead(ctx, headers)
 	log.Debug().Msg("resubscribing to eth client")
 	if err != nil {
-		time.Sleep(5 * time.Second)
-		log.Fatal().Err(err).Msg("failed to subscribe to new block headers")
+		log.Warn().Err(err).Msg("failed to subscribe to new block headers, waiting 1 second and trying again")
+		time.Sleep(1 * time.Second)
+		sub, err = ef.EthClient.SubscribeNewHead(ctx, headers)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to subscribe to new block headers after 1 second, waiting 5 seconds and trying again")
+			time.Sleep(5 * time.Second)
+			sub, err = ef.EthClient.SubscribeNewHead(ctx, headers)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to subscribe to new block headers after 5 seconds, exiting")
+			}
+		}
 	}
 	return sub
 }

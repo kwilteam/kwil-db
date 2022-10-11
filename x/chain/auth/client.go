@@ -14,7 +14,7 @@ import (
 
 type account interface {
 	Sign(data []byte) (string, error)
-	GetAddress() common.Address
+	GetAddress() *common.Address
 }
 
 type authClient struct {

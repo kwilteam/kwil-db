@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -30,7 +31,21 @@ func (ef *EventFeed) processBlocks(ctx context.Context, ch chan *big.Int) {
 			// Get a channel that will return the events
 			logs, err := ef.EthClient.FilterLogs(ctx, query)
 			if err != nil {
-				ef.log.Fatal().Err(err).Msg("error reading in block data")
+				ef.log.Warn().Err(err).Msg("error reading in block data, retrying...")
+				// retry FilterLogs
+				time.Sleep(1 * time.Second)
+
+				logs, err = ef.EthClient.FilterLogs(ctx, query)
+				if err != nil {
+					ef.log.Warn().Err(err).Msg("error reading in block data during first retry, retrying again...")
+
+					time.Sleep(5 * time.Second)
+
+					logs, err = ef.EthClient.FilterLogs(ctx, query)
+					if err != nil {
+						ef.log.Fatal().Err(err).Msg("error reading in block data during second retry, exiting...")
+					}
+				}
 			}
 
 			for i := 0; i < len(logs); i++ {

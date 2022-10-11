@@ -126,7 +126,7 @@ service KwilService {
   }
   rpc ReturnFunds(ReturnFundsRequest) returns (ReturnFundsResponse) {
     option (google.api.http) = {
-      post: "/api/v0/wallets/return"
+      post: "/api/v0/wallets/withdraw"
       body: "*"
     };
   }

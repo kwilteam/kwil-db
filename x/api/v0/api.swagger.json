@@ -654,7 +654,7 @@
         ]
       }
     },
-    "/api/v0/wallets/return": {
+    "/api/v0/wallets/withdraw": {
       "post": {
         "operationId": "KwilService_ReturnFunds",
         "responses": {

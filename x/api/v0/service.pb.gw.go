@@ -1828,7 +1828,7 @@ func RegisterKwilServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/kwil.api.v0.KwilService/ReturnFunds", runtime.WithHTTPPathPattern("/api/v0/wallets/return"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/kwil.api.v0.KwilService/ReturnFunds", runtime.WithHTTPPathPattern("/api/v0/wallets/withdraw"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2354,7 +2354,7 @@ func RegisterKwilServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/kwil.api.v0.KwilService/ReturnFunds", runtime.WithHTTPPathPattern("/api/v0/wallets/return"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/kwil.api.v0.KwilService/ReturnFunds", runtime.WithHTTPPathPattern("/api/v0/wallets/withdraw"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2416,7 +2416,7 @@ var (
 
 	pattern_KwilService_GetWalletRole_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v0", "wallets", "id", "databaseId", "role"}, ""))
 
-	pattern_KwilService_ReturnFunds_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v0", "wallets", "return"}, ""))
+	pattern_KwilService_ReturnFunds_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v0", "wallets", "withdraw"}, ""))
 )
 
 var (

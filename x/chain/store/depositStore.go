@@ -31,7 +31,6 @@ type Config interface {
 
 func NewDepositStore(conf Config, wal w.Wal) (*DepositStore, error) {
 	kvStore, err := New(conf)
-	//kvStore.PrintAll()
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +46,7 @@ func NewDepositStore(conf Config, wal w.Wal) (*DepositStore, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if lh.Cmp(big.NewInt(0)) == 0 {
 		_ = ds.SetLastHeight(lh)
 	}
