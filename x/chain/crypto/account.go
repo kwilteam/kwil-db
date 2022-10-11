@@ -4,13 +4,14 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/common"
 	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
 type Account struct {
-	Name    string `json:"name" mapstructure:"name"`
-	Address string `json:"address" mapstructure:"address"`
-	kr      KR
+	Name    string         `json:"name" mapstructure:"name"`
+	Address common.Address `json:"address" mapstructure:"address"`
+	kr      KR             //keyring
 }
 
 type KR interface {
@@ -35,7 +36,7 @@ func (k *Keyring) GetAccount(n string) (*Account, error) {
 	addr := ec.PubkeyToAddress(pk.PublicKey)
 	return &Account{
 		Name:    n,
-		Address: addr.Hex(),
+		Address: addr,
 		kr:      k,
 	}, nil
 }
@@ -45,27 +46,27 @@ func (k *Keyring) GetDefaultAccount() (*Account, error) {
 }
 
 func (a *Account) Sign(data []byte) (string, error) {
-	pKey, err := a.getPrivateKey()
+	pKey, err := a.GetPrivateKey()
 	if err != nil {
 		return "", err
 	}
 
-	sig, err := pKey.sign(data)
+	sig, err := Sign(data, pKey)
 	if err != nil {
 		return "", err
 	}
 
 	// overwrite pk
-	*pKey.key = ecdsa.PrivateKey{}
+	*pKey = ecdsa.PrivateKey{}
 
 	return sig, nil
 }
 
-func (a *Account) GetAddress() string {
-	return a.Address
+func (a *Account) GetAddress() *common.Address {
+	return &a.Address
 }
 
-func (a *Account) getPrivateKey() (*PrivateKey, error) {
+func (a *Account) GetPrivateKey() (*ecdsa.PrivateKey, error) {
 	pkb, err := a.getPrivateKeyBytes()
 	if err != nil {
 		return nil, err
@@ -77,9 +78,7 @@ func (a *Account) getPrivateKey() (*PrivateKey, error) {
 		return nil, err
 	}
 
-	return &PrivateKey{
-		key: &pk,
-	}, nil
+	return &pk, nil
 }
 
 func (a *Account) getPrivateKeyBytes() ([]byte, error) {

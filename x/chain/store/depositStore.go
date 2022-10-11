@@ -13,6 +13,7 @@ import (
 	w "kwil/x/chain/utils"
 )
 
+var SpentKey = []byte("spent")
 var DepositKey = []byte("deposit")
 var BlockKey = []byte("block")
 var HeightKey = []byte("lh") // stands for last height
@@ -207,4 +208,33 @@ func (ds *DepositStore) PrintCurrentHeight() {
 		panic(err)
 	}
 	fmt.Printf("Last synced height: %s\n", height.String())
+}
+
+func (ds *DepositStore) GetSpent(addr string) (*big.Int, error) {
+	key := append(ds.prefix, []byte(addr)...)
+	val, err := ds.db.Get(key)
+	if err != nil {
+		return nil, err
+	}
+	return new(big.Int).SetBytes(val), nil
+}
+
+// SetSpent sets the amount an address has spent
+func (ds *DepositStore) SetSpent(addr string, amt *big.Int) error {
+	key := append(ds.prefix, []byte(addr)...)
+	return ds.db.Set(key, amt.Bytes())
+}
+
+// AddSpent adds the amount spent to the address's spent amount
+func (ds *DepositStore) AddSpent(addr string, amt *big.Int) error {
+	// Get the current amount
+	curAmt, err := ds.GetSpent(addr)
+	if err != nil {
+		return err
+	}
+
+	// Add
+	amt.Add(amt, curAmt)
+
+	return ds.SetSpent(addr, amt)
 }

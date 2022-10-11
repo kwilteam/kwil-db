@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	v0 "kwil/x/api/v0"
 	"kwil/x/chain/auth"
 	"kwil/x/chain/config"
+	"kwil/x/chain/contracts"
 	"kwil/x/chain/crypto"
 	"kwil/x/chain/deposits"
 	"kwil/x/chain/utils"
@@ -55,6 +57,7 @@ func execute(logger logx.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to create keyring: %w", err)
 	}
+
 	acc, err := kr.GetDefaultAccount()
 	if err != nil {
 		return fmt.Errorf("failed to get default account: %w", err)
@@ -73,7 +76,12 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	serv := service.NewService(d.Store, p)
+	c, err := contracts.NewContractClient(acc, client, conf.ClientChain.DepositContract.Address, strconv.Itoa(conf.ClientChain.ChainID))
+	if err != nil {
+		return fmt.Errorf("failed to initialize contract client: %w", err)
+	}
+
+	serv := service.NewService(d.Store, p, c)
 	httpHandler := handler.New(logger, a.Authenticator)
 
 	return serve(logger, httpHandler, serv)

@@ -41,7 +41,10 @@ func (ef *EventFeed) processBlocks(ctx context.Context, ch chan *big.Int) {
 			}
 
 			// At this point, we have confirmed stored all changes for the block, and can now delete any of the txs stored in the deposit store
-			_ = ef.ds.CommitBlock(height)
+			err = ef.ds.CommitBlock(height)
+			if err != nil {
+				ef.log.Error().Err(err).Msg("error committing block")
+			}
 		}
 	}()
 }

@@ -4,13 +4,6 @@ import (
 	"math/big"
 )
 
-/*type Event struct {
-	Name   string
-	Height *big.Int
-	Data   interface{}
-	Tx     []byte
-}*/
-
 type Event interface {
 	GetName() string
 	GetHeight() *big.Int

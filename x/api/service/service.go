@@ -1,10 +1,13 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"kwil/pkg/types/chain/pricing"
 	v0 "kwil/x/api/v0"
 	"kwil/x/logx"
@@ -16,17 +19,25 @@ type Service struct {
 	ds      DepositStore
 	log     logx.Logger
 	pricing pricing.PriceBuilder
+	cc      ContractClient
 }
 
 type DepositStore interface {
 	GetBalance(address string) (*big.Int, error)
 	SetBalance(address string, balance *big.Int) error
+	GetSpent(addr string) (*big.Int, error)
+	SetSpent(addr string, amt *big.Int) error
 }
 
-func NewService(ds DepositStore, p pricing.PriceBuilder) *Service {
+type ContractClient interface {
+	ReturnFunds(ctx context.Context, recip common.Address, amt *big.Int, fee *big.Int) (*types.Transaction, error)
+}
+
+func NewService(ds DepositStore, p pricing.PriceBuilder, cc ContractClient) *Service {
 	return &Service{
 		ds:      ds,
 		pricing: p,
+		cc:      cc,
 	}
 }
 

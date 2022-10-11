@@ -12,7 +12,7 @@ func (p *PrivateKey) sign(data []byte) (string, error) {
 	return Sign(data, p.key)
 }
 
-// I (brennan) need to correct this area of code.  We need this sign function externally but the pkey.sign function is also a dependency
+// I (brennan) need to correct this area of code.  We need this sign function externally but the pkey.sign function is also required for the tests
 func Sign(data []byte, k *ecdsa.PrivateKey) (string, error) {
 	hash := ec.Keccak256Hash(data)
 	sig, err := ec.Sign(hash.Bytes(), k)

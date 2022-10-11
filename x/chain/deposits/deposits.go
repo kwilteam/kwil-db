@@ -85,7 +85,6 @@ func Init(ctx context.Context, conf Config, client *ethclient.Client) (*Deposits
 func Sync(ctx context.Context, ef *events.EventFeed) error {
 	fmt.Printf("Beginning sync...\n")
 	low, high, err := ef.GetUnsyncedRange(ctx)
-	//high = high.Add(high, big.NewInt(1))
 	if err != nil {
 		return err
 	}

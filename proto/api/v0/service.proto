@@ -124,6 +124,12 @@ service KwilService {
       get: "/api/v0/wallets/{id}/{databaseId}/role"
     };
   }
+  rpc ReturnFunds(ReturnFundsRequest) returns (ReturnFundsResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/wallets/return"
+      body: "*"
+    };
+  }
 }
 
 message PlanRequest {}
@@ -278,4 +284,19 @@ message GetWalletRoleResponse {
     repeated string queries = 2;
   };
   perms permissions = 2;
+}
+
+message ReturnFundsRequest {
+  string id = 1;
+  string amount = 2;
+  string nonce = 3;
+  string from = 4;
+  string signature = 5;
+}
+
+message ReturnFundsResponse {
+  string amtReturned = 1;
+  string fee = 2;
+  string balance = 3;
+  string txid = 4; // ethereum transaction id
 }

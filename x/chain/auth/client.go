@@ -8,11 +8,13 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	types "kwil/pkg/types/chain"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type account interface {
 	Sign(data []byte) (string, error)
-	GetAddress() string
+	GetAddress() common.Address
 }
 
 type authClient struct {
@@ -73,7 +75,7 @@ func (ac *authClient) RequestAuth(ip string) (bool, error) {
 
 	// Send AuthRequest
 	ar := &types.AuthRequest{
-		Address: ac.acc.GetAddress(),
+		Address: ac.acc.GetAddress().String(),
 	}
 
 	// Convert ar to bytes

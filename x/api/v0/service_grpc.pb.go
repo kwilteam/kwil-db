@@ -44,6 +44,7 @@ type KwilServiceClient interface {
 	// Wallets
 	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
 	GetWalletRole(ctx context.Context, in *GetWalletRoleRequest, opts ...grpc.CallOption) (*GetWalletRoleResponse, error)
+	ReturnFunds(ctx context.Context, in *ReturnFundsRequest, opts ...grpc.CallOption) (*ReturnFundsResponse, error)
 }
 
 type kwilServiceClient struct {
@@ -243,6 +244,15 @@ func (c *kwilServiceClient) GetWalletRole(ctx context.Context, in *GetWalletRole
 	return out, nil
 }
 
+func (c *kwilServiceClient) ReturnFunds(ctx context.Context, in *ReturnFundsRequest, opts ...grpc.CallOption) (*ReturnFundsResponse, error) {
+	out := new(ReturnFundsResponse)
+	err := c.cc.Invoke(ctx, "/kwil.api.v0.KwilService/ReturnFunds", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KwilServiceServer is the server API for KwilService service.
 // All implementations must embed UnimplementedKwilServiceServer
 // for forward compatibility
@@ -273,6 +283,7 @@ type KwilServiceServer interface {
 	// Wallets
 	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
 	GetWalletRole(context.Context, *GetWalletRoleRequest) (*GetWalletRoleResponse, error)
+	ReturnFunds(context.Context, *ReturnFundsRequest) (*ReturnFundsResponse, error)
 	mustEmbedUnimplementedKwilServiceServer()
 }
 
@@ -342,6 +353,9 @@ func (UnimplementedKwilServiceServer) GetBalance(context.Context, *GetBalanceReq
 }
 func (UnimplementedKwilServiceServer) GetWalletRole(context.Context, *GetWalletRoleRequest) (*GetWalletRoleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWalletRole not implemented")
+}
+func (UnimplementedKwilServiceServer) ReturnFunds(context.Context, *ReturnFundsRequest) (*ReturnFundsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReturnFunds not implemented")
 }
 func (UnimplementedKwilServiceServer) mustEmbedUnimplementedKwilServiceServer() {}
 
@@ -734,6 +748,24 @@ func _KwilService_GetWalletRole_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KwilService_ReturnFunds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReturnFundsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KwilServiceServer).ReturnFunds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/kwil.api.v0.KwilService/ReturnFunds",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KwilServiceServer).ReturnFunds(ctx, req.(*ReturnFundsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KwilService_ServiceDesc is the grpc.ServiceDesc for KwilService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -824,6 +856,10 @@ var KwilService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetWalletRole",
 			Handler:    _KwilService_GetWalletRole_Handler,
+		},
+		{
+			MethodName: "ReturnFunds",
+			Handler:    _KwilService_ReturnFunds_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

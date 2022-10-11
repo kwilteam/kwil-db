@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/viper"
-	"kwil/x/cli/abi"
+	"kwil/abi"
 )
 
 type Config struct {
@@ -31,7 +31,7 @@ type Client struct {
 	TokenAddr     *common.Address
 	PoolAddr      *common.Address
 	ValidatorAddr *common.Address
-	abi           *abi.Abi
+	escrow        *abi.Escrow
 	erc20         *abi.Erc20
 	client        *ethclient.Client
 }
@@ -65,7 +65,7 @@ func NewClient(c *Config) (*Client, error) {
 	}
 
 	// load abi
-	a, err := loadPoolSC(client, poolAddr)
+	a, err := loadEscrowSC(client, poolAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func NewClient(c *Config) (*Client, error) {
 		ChainID:       c.ChainId,
 		PrivateKey:    pkey,
 		Address:       &addr,
-		abi:           a,
+		escrow:        a,
 		erc20:         e,
 		client:        client,
 		TokenAddr:     &tAddr,
@@ -100,7 +100,7 @@ func (c *Client) GetBalance() (*big.Int, error) {
 }
 
 func (c *Client) GetDepositBalance() (*big.Int, error) {
-	return c.abi.Amounts(nil, *c.ValidatorAddr, *c.Address)
+	return c.escrow.Pools(nil, *c.ValidatorAddr, *c.Address)
 }
 
 // approve approves the pool to spend the user's tokens
@@ -137,7 +137,7 @@ func (c *Client) Deposit(amt *big.Int, target string) error {
 	tAddr := common.HexToAddress(target)
 
 	// deposit the user's tokens
-	tx, err := c.abi.Deposit(auth, tAddr, amt)
+	tx, err := c.escrow.Deposit(auth, tAddr, amt)
 	if err != nil {
 		return err
 	}
@@ -192,9 +192,9 @@ func (c *Client) newEthAuth() (*bind.TransactOpts, error) {
 	return auth, nil
 }
 
-func loadPoolSC(client *ethclient.Client, pAddr common.Address) (*abi.Abi, error) {
+func loadEscrowSC(client *ethclient.Client, pAddr common.Address) (*abi.Escrow, error) {
 	// load the pool contract
-	return abi.NewAbi(pAddr, client)
+	return abi.NewEscrow(pAddr, client)
 }
 
 func loadErc20SC(client *ethclient.Client, addr common.Address) (*abi.Erc20, error) {
@@ -226,19 +226,21 @@ func (c *Client) GetTokenDecimals() (uint8, error) {
 }
 
 func (c *Client) Withdraw(amt *big.Int) error {
-	auth, err := c.newEthAuth()
-	if err != nil {
-		return err
-	}
+	// TODO: fix for new contract
+	/*
+		auth, err := c.newEthAuth()
+		if err != nil {
+			return err
+		}
 
-	// withdraw the user's tokens
-	tx, err := c.abi.RequestReturn(auth, *c.ValidatorAddr, amt)
-	if err != nil {
-		return err
-	}
+		// withdraw the user's tokens
+		tx, err := c.escrow.RequestReturn(auth, *c.ValidatorAddr, amt)
+		if err != nil {
+			return err
+		}
 
-	fmt.Println("Success!")
-	printTx(tx, c.ChainID)
+		fmt.Println("Success!")
+		printTx(tx, c.ChainID)*/
 
 	return nil
 }
