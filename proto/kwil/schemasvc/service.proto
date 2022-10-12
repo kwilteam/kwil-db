@@ -2,9 +2,71 @@ syntax = "proto3";
 package schemasvc;
 option go_package = "kwil/x/proto/schemasvc";
 
+import "kwil/schemasvc/schema.proto";
+
 service SchemaService {
     rpc Plan(PlanRequest) returns (PlanResponse) {}
     rpc Apply(ApplyRequest) returns (ApplyResponse) {}
+
+    rpc ListRoles(ListRolesRequest) returns (ListRolesResponse) {
+        option (google.api.http) = {
+          get: "/api/v0/roles"
+        };
+    }
+
+    rpc GetRole(GetRoleRequest) returns (Role) {
+        option (google.api.http) = {
+          get: "/api/v0/roles/{name}"
+        };
+    }
+
+    rpc ListQueries(ListQueriesRequest) returns (ListQueriesResponse) {}
+    rpc GetQuery(GetQueryRequest) returns (Query) {}
+}
+
+
+message ListRolesRequest {
+    message Filter {
+        oneof filter {
+            string user = 1;
+            string query = 2;
+        }
+    }
+
+    string page_token = 1;
+    int32 page_size = 2;
+    optional Filter filter = 3;
+}
+
+message ListRolesResponse {
+    repeated Role roles = 1;
+    string next_page_token = 2;
+}
+
+message ListQueriesRequest {
+    message Filter {
+        oneof filter {
+            string user = 1;
+            string role = 2;
+        }
+    }
+
+    string page_token = 1;
+    int32 page_size = 2;
+    optional Filter filter = 3;
+}
+
+message ListQueriesResponse {
+    repeated Query queries = 1;
+    string next_page_token = 2;
+}
+
+message GetRoleRequest {
+    string name = 1;
+}
+
+message GetQueryRequest {
+    string name = 1;
 }
 
 message PlanRequest {
@@ -39,36 +101,3 @@ message ApplyRequest {
 message ApplyResponse {}
 
 
-
-// Plan struct {
-//     // Version and Name of the plan. Provided by the user or auto-generated.
-//     Version, Name string
-
-//     // Reversible describes if the changeset is reversible.
-//     Reversible bool
-
-//     // Transactional describes if the changeset is transactional.
-//     Transactional bool
-
-//     // Changes defines the list of changeset in the plan.
-//     Changes []*Change
-// }
-
-// // A Change of migration.
-// Change struct {
-//     // Cmd or statement to execute.
-//     Cmd string
-
-//     // Args for placeholder parameters in the statement above.
-//     Args []any
-
-//     // A Comment describes the change.
-//     Comment string
-
-//     // Reverse contains the "reversed statement" if
-//     // command is reversible.
-//     Reverse string
-
-//     // The Source that caused this change, or nil.
-//     Source SchemaChange
-// }

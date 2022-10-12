@@ -1,8 +1,8 @@
 package schemapb
 
 import (
-	"kwil/x/schemadef/postgres"
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/pgschema"
+	"kwil/x/schemadef/sqlschema"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -80,12 +80,12 @@ enum "account_type" {
 schema "schema" {
 }
 `
-	r := &schema.Realm{}
-	err := postgres.EvalHCLBytes([]byte(model), r, nil)
+	r := &sqlschema.Realm{}
+	err := pgschema.EvalHCLBytes([]byte(model), r, nil)
 	require.Nil(t, err)
 	pb := FromRealm(r)
 	conv := ToRealm(pb)
-	data, err := postgres.MarshalHCL(conv)
+	data, err := pgschema.MarshalHCL(conv)
 	require.Nil(t, err)
 	require.Equal(t, model, string(data))
 }

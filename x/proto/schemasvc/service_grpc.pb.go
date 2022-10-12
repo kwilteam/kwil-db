@@ -24,6 +24,10 @@ const _ = grpc.SupportPackageIsVersion7
 type SchemaServiceClient interface {
 	Plan(ctx context.Context, in *PlanRequest, opts ...grpc.CallOption) (*PlanResponse, error)
 	Apply(ctx context.Context, in *ApplyRequest, opts ...grpc.CallOption) (*ApplyResponse, error)
+	ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error)
+	GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*Role, error)
+	ListQueries(ctx context.Context, in *ListQueriesRequest, opts ...grpc.CallOption) (*ListQueriesResponse, error)
+	GetQuery(ctx context.Context, in *GetQueryRequest, opts ...grpc.CallOption) (*Query, error)
 }
 
 type schemaServiceClient struct {
@@ -52,12 +56,52 @@ func (c *schemaServiceClient) Apply(ctx context.Context, in *ApplyRequest, opts 
 	return out, nil
 }
 
+func (c *schemaServiceClient) ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error) {
+	out := new(ListRolesResponse)
+	err := c.cc.Invoke(ctx, "/schemasvc.SchemaService/ListRoles", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *schemaServiceClient) GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*Role, error) {
+	out := new(Role)
+	err := c.cc.Invoke(ctx, "/schemasvc.SchemaService/GetRole", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *schemaServiceClient) ListQueries(ctx context.Context, in *ListQueriesRequest, opts ...grpc.CallOption) (*ListQueriesResponse, error) {
+	out := new(ListQueriesResponse)
+	err := c.cc.Invoke(ctx, "/schemasvc.SchemaService/ListQueries", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *schemaServiceClient) GetQuery(ctx context.Context, in *GetQueryRequest, opts ...grpc.CallOption) (*Query, error) {
+	out := new(Query)
+	err := c.cc.Invoke(ctx, "/schemasvc.SchemaService/GetQuery", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SchemaServiceServer is the server API for SchemaService service.
 // All implementations must embed UnimplementedSchemaServiceServer
 // for forward compatibility
 type SchemaServiceServer interface {
 	Plan(context.Context, *PlanRequest) (*PlanResponse, error)
 	Apply(context.Context, *ApplyRequest) (*ApplyResponse, error)
+	ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error)
+	GetRole(context.Context, *GetRoleRequest) (*Role, error)
+	ListQueries(context.Context, *ListQueriesRequest) (*ListQueriesResponse, error)
+	GetQuery(context.Context, *GetQueryRequest) (*Query, error)
 	mustEmbedUnimplementedSchemaServiceServer()
 }
 
@@ -70,6 +114,18 @@ func (UnimplementedSchemaServiceServer) Plan(context.Context, *PlanRequest) (*Pl
 }
 func (UnimplementedSchemaServiceServer) Apply(context.Context, *ApplyRequest) (*ApplyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Apply not implemented")
+}
+func (UnimplementedSchemaServiceServer) ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRoles not implemented")
+}
+func (UnimplementedSchemaServiceServer) GetRole(context.Context, *GetRoleRequest) (*Role, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRole not implemented")
+}
+func (UnimplementedSchemaServiceServer) ListQueries(context.Context, *ListQueriesRequest) (*ListQueriesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListQueries not implemented")
+}
+func (UnimplementedSchemaServiceServer) GetQuery(context.Context, *GetQueryRequest) (*Query, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetQuery not implemented")
 }
 func (UnimplementedSchemaServiceServer) mustEmbedUnimplementedSchemaServiceServer() {}
 
@@ -120,6 +176,78 @@ func _SchemaService_Apply_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SchemaService_ListRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRolesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchemaServiceServer).ListRoles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/schemasvc.SchemaService/ListRoles",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchemaServiceServer).ListRoles(ctx, req.(*ListRolesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SchemaService_GetRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchemaServiceServer).GetRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/schemasvc.SchemaService/GetRole",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchemaServiceServer).GetRole(ctx, req.(*GetRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SchemaService_ListQueries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListQueriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchemaServiceServer).ListQueries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/schemasvc.SchemaService/ListQueries",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchemaServiceServer).ListQueries(ctx, req.(*ListQueriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SchemaService_GetQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SchemaServiceServer).GetQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/schemasvc.SchemaService/GetQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SchemaServiceServer).GetQuery(ctx, req.(*GetQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SchemaService_ServiceDesc is the grpc.ServiceDesc for SchemaService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -134,6 +262,22 @@ var SchemaService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Apply",
 			Handler:    _SchemaService_Apply_Handler,
+		},
+		{
+			MethodName: "ListRoles",
+			Handler:    _SchemaService_ListRoles_Handler,
+		},
+		{
+			MethodName: "GetRole",
+			Handler:    _SchemaService_GetRole_Handler,
+		},
+		{
+			MethodName: "ListQueries",
+			Handler:    _SchemaService_ListQueries_Handler,
+		},
+		{
+			MethodName: "GetQuery",
+			Handler:    _SchemaService_GetQuery_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

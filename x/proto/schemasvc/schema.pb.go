@@ -9,7 +9,6 @@ package schemasvc
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	anypb "google.golang.org/protobuf/types/known/anypb"
 	reflect "reflect"
 	sync "sync"
 )
@@ -21,883 +20,19 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type ReferenceOption int32
-
-const (
-	ReferenceOption_NoAction   ReferenceOption = 0
-	ReferenceOption_Restrict   ReferenceOption = 1
-	ReferenceOption_Cascade    ReferenceOption = 2
-	ReferenceOption_SetNull    ReferenceOption = 3
-	ReferenceOption_SetDefault ReferenceOption = 4
-)
-
-// Enum value maps for ReferenceOption.
-var (
-	ReferenceOption_name = map[int32]string{
-		0: "NoAction",
-		1: "Restrict",
-		2: "Cascade",
-		3: "SetNull",
-		4: "SetDefault",
-	}
-	ReferenceOption_value = map[string]int32{
-		"NoAction":   0,
-		"Restrict":   1,
-		"Cascade":    2,
-		"SetNull":    3,
-		"SetDefault": 4,
-	}
-)
-
-func (x ReferenceOption) Enum() *ReferenceOption {
-	p := new(ReferenceOption)
-	*p = x
-	return p
-}
-
-func (x ReferenceOption) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (ReferenceOption) Descriptor() protoreflect.EnumDescriptor {
-	return file_kwil_schemasvc_schema_proto_enumTypes[0].Descriptor()
-}
-
-func (ReferenceOption) Type() protoreflect.EnumType {
-	return &file_kwil_schemasvc_schema_proto_enumTypes[0]
-}
-
-func (x ReferenceOption) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use ReferenceOption.Descriptor instead.
-func (ReferenceOption) EnumDescriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{0}
-}
-
-type Realm struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Schemas []*Schema    `protobuf:"bytes,1,rep,name=schemas,proto3" json:"schemas,omitempty"`
-	Roles   []*Role      `protobuf:"bytes,2,rep,name=roles,proto3" json:"roles,omitempty"`
-	Queries []*Query     `protobuf:"bytes,3,rep,name=queries,proto3" json:"queries,omitempty"`
-	Attrs   []*anypb.Any `protobuf:"bytes,4,rep,name=attrs,proto3" json:"attrs,omitempty"`
-}
-
-func (x *Realm) Reset() {
-	*x = Realm{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[0]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Realm) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Realm) ProtoMessage() {}
-
-func (x *Realm) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[0]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Realm.ProtoReflect.Descriptor instead.
-func (*Realm) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Realm) GetSchemas() []*Schema {
-	if x != nil {
-		return x.Schemas
-	}
-	return nil
-}
-
-func (x *Realm) GetRoles() []*Role {
-	if x != nil {
-		return x.Roles
-	}
-	return nil
-}
-
-func (x *Realm) GetQueries() []*Query {
-	if x != nil {
-		return x.Queries
-	}
-	return nil
-}
-
-func (x *Realm) GetAttrs() []*anypb.Any {
-	if x != nil {
-		return x.Attrs
-	}
-	return nil
-}
-
-type Schema struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Name   string       `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Tables []*Table     `protobuf:"bytes,2,rep,name=tables,proto3" json:"tables,omitempty"`
-	Enums  []*Enum      `protobuf:"bytes,3,rep,name=enums,proto3" json:"enums,omitempty"`
-	Attrs  []*anypb.Any `protobuf:"bytes,4,rep,name=attrs,proto3" json:"attrs,omitempty"`
-}
-
-func (x *Schema) Reset() {
-	*x = Schema{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[1]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Schema) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Schema) ProtoMessage() {}
-
-func (x *Schema) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[1]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Schema.ProtoReflect.Descriptor instead.
-func (*Schema) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *Schema) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *Schema) GetTables() []*Table {
-	if x != nil {
-		return x.Tables
-	}
-	return nil
-}
-
-func (x *Schema) GetEnums() []*Enum {
-	if x != nil {
-		return x.Enums
-	}
-	return nil
-}
-
-func (x *Schema) GetAttrs() []*anypb.Any {
-	if x != nil {
-		return x.Attrs
-	}
-	return nil
-}
-
-type Table struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Name        string        `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Columns     []*Column     `protobuf:"bytes,2,rep,name=columns,proto3" json:"columns,omitempty"`
-	Indexes     []*Index      `protobuf:"bytes,3,rep,name=indexes,proto3" json:"indexes,omitempty"`
-	PrimaryKey  *Index        `protobuf:"bytes,4,opt,name=primary_key,json=primaryKey,proto3" json:"primary_key,omitempty"`
-	ForeignKeys []*ForeignKey `protobuf:"bytes,5,rep,name=foreign_keys,json=foreignKeys,proto3" json:"foreign_keys,omitempty"`
-	Attrs       []*anypb.Any  `protobuf:"bytes,6,rep,name=attrs,proto3" json:"attrs,omitempty"`
-}
-
-func (x *Table) Reset() {
-	*x = Table{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[2]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Table) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Table) ProtoMessage() {}
-
-func (x *Table) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[2]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Table.ProtoReflect.Descriptor instead.
-func (*Table) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *Table) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *Table) GetColumns() []*Column {
-	if x != nil {
-		return x.Columns
-	}
-	return nil
-}
-
-func (x *Table) GetIndexes() []*Index {
-	if x != nil {
-		return x.Indexes
-	}
-	return nil
-}
-
-func (x *Table) GetPrimaryKey() *Index {
-	if x != nil {
-		return x.PrimaryKey
-	}
-	return nil
-}
-
-func (x *Table) GetForeignKeys() []*ForeignKey {
-	if x != nil {
-		return x.ForeignKeys
-	}
-	return nil
-}
-
-func (x *Table) GetAttrs() []*anypb.Any {
-	if x != nil {
-		return x.Attrs
-	}
-	return nil
-}
-
-type Column struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Name string      `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type *ColumnType `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	// Types that are assignable to Default:
-	//
-	//	*Column_Literal
-	//	*Column_Expr
-	Default     isColumn_Default `protobuf_oneof:"default"`
-	Indexes     []*Index         `protobuf:"bytes,5,rep,name=indexes,proto3" json:"indexes,omitempty"`
-	ForeignKeys []*ForeignKey    `protobuf:"bytes,6,rep,name=foreign_keys,json=foreignKeys,proto3" json:"foreign_keys,omitempty"`
-	Attrs       []*anypb.Any     `protobuf:"bytes,7,rep,name=attrs,proto3" json:"attrs,omitempty"`
-}
-
-func (x *Column) Reset() {
-	*x = Column{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[3]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Column) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Column) ProtoMessage() {}
-
-func (x *Column) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[3]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Column.ProtoReflect.Descriptor instead.
-func (*Column) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *Column) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *Column) GetType() *ColumnType {
-	if x != nil {
-		return x.Type
-	}
-	return nil
-}
-
-func (m *Column) GetDefault() isColumn_Default {
-	if m != nil {
-		return m.Default
-	}
-	return nil
-}
-
-func (x *Column) GetLiteral() string {
-	if x, ok := x.GetDefault().(*Column_Literal); ok {
-		return x.Literal
-	}
-	return ""
-}
-
-func (x *Column) GetExpr() string {
-	if x, ok := x.GetDefault().(*Column_Expr); ok {
-		return x.Expr
-	}
-	return ""
-}
-
-func (x *Column) GetIndexes() []*Index {
-	if x != nil {
-		return x.Indexes
-	}
-	return nil
-}
-
-func (x *Column) GetForeignKeys() []*ForeignKey {
-	if x != nil {
-		return x.ForeignKeys
-	}
-	return nil
-}
-
-func (x *Column) GetAttrs() []*anypb.Any {
-	if x != nil {
-		return x.Attrs
-	}
-	return nil
-}
-
-type isColumn_Default interface {
-	isColumn_Default()
-}
-
-type Column_Literal struct {
-	Literal string `protobuf:"bytes,3,opt,name=literal,proto3,oneof"`
-}
-
-type Column_Expr struct {
-	Expr string `protobuf:"bytes,4,opt,name=expr,proto3,oneof"`
-}
-
-func (*Column_Literal) isColumn_Default() {}
-
-func (*Column_Expr) isColumn_Default() {}
-
-type ColumnType struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Type     *anypb.Any `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	Raw      string     `protobuf:"bytes,2,opt,name=raw,proto3" json:"raw,omitempty"`
-	Nullable bool       `protobuf:"varint,3,opt,name=nullable,proto3" json:"nullable,omitempty"`
-}
-
-func (x *ColumnType) Reset() {
-	*x = ColumnType{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[4]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ColumnType) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ColumnType) ProtoMessage() {}
-
-func (x *ColumnType) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[4]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ColumnType.ProtoReflect.Descriptor instead.
-func (*ColumnType) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *ColumnType) GetType() *anypb.Any {
-	if x != nil {
-		return x.Type
-	}
-	return nil
-}
-
-func (x *ColumnType) GetRaw() string {
-	if x != nil {
-		return x.Raw
-	}
-	return ""
-}
-
-func (x *ColumnType) GetNullable() bool {
-	if x != nil {
-		return x.Nullable
-	}
-	return false
-}
-
-type Index struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Name   string       `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Unique bool         `protobuf:"varint,2,opt,name=unique,proto3" json:"unique,omitempty"`
-	Parts  []*IndexPart `protobuf:"bytes,3,rep,name=parts,proto3" json:"parts,omitempty"`
-	Attrs  []*anypb.Any `protobuf:"bytes,4,rep,name=attrs,proto3" json:"attrs,omitempty"`
-}
-
-func (x *Index) Reset() {
-	*x = Index{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[5]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Index) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Index) ProtoMessage() {}
-
-func (x *Index) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[5]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Index.ProtoReflect.Descriptor instead.
-func (*Index) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *Index) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *Index) GetUnique() bool {
-	if x != nil {
-		return x.Unique
-	}
-	return false
-}
-
-func (x *Index) GetParts() []*IndexPart {
-	if x != nil {
-		return x.Parts
-	}
-	return nil
-}
-
-func (x *Index) GetAttrs() []*anypb.Any {
-	if x != nil {
-		return x.Attrs
-	}
-	return nil
-}
-
-type IndexPart struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Seq        int64 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
-	Descending bool  `protobuf:"varint,2,opt,name=descending,proto3" json:"descending,omitempty"`
-	// Types that are assignable to Value:
-	//
-	//	*IndexPart_Literal
-	//	*IndexPart_Expr
-	//	*IndexPart_Column
-	Value isIndexPart_Value `protobuf_oneof:"value"`
-	Attrs []*anypb.Any      `protobuf:"bytes,6,rep,name=attrs,proto3" json:"attrs,omitempty"`
-}
-
-func (x *IndexPart) Reset() {
-	*x = IndexPart{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[6]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *IndexPart) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*IndexPart) ProtoMessage() {}
-
-func (x *IndexPart) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[6]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use IndexPart.ProtoReflect.Descriptor instead.
-func (*IndexPart) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *IndexPart) GetSeq() int64 {
-	if x != nil {
-		return x.Seq
-	}
-	return 0
-}
-
-func (x *IndexPart) GetDescending() bool {
-	if x != nil {
-		return x.Descending
-	}
-	return false
-}
-
-func (m *IndexPart) GetValue() isIndexPart_Value {
-	if m != nil {
-		return m.Value
-	}
-	return nil
-}
-
-func (x *IndexPart) GetLiteral() string {
-	if x, ok := x.GetValue().(*IndexPart_Literal); ok {
-		return x.Literal
-	}
-	return ""
-}
-
-func (x *IndexPart) GetExpr() string {
-	if x, ok := x.GetValue().(*IndexPart_Expr); ok {
-		return x.Expr
-	}
-	return ""
-}
-
-func (x *IndexPart) GetColumn() string {
-	if x, ok := x.GetValue().(*IndexPart_Column); ok {
-		return x.Column
-	}
-	return ""
-}
-
-func (x *IndexPart) GetAttrs() []*anypb.Any {
-	if x != nil {
-		return x.Attrs
-	}
-	return nil
-}
-
-type isIndexPart_Value interface {
-	isIndexPart_Value()
-}
-
-type IndexPart_Literal struct {
-	Literal string `protobuf:"bytes,3,opt,name=literal,proto3,oneof"`
-}
-
-type IndexPart_Expr struct {
-	Expr string `protobuf:"bytes,4,opt,name=expr,proto3,oneof"`
-}
-
-type IndexPart_Column struct {
-	Column string `protobuf:"bytes,5,opt,name=column,proto3,oneof"`
-}
-
-func (*IndexPart_Literal) isIndexPart_Value() {}
-
-func (*IndexPart_Expr) isIndexPart_Value() {}
-
-func (*IndexPart_Column) isIndexPart_Value() {}
-
-type ForeignKey struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Symbol     string          `protobuf:"bytes,1,opt,name=symbol,proto3" json:"symbol,omitempty"`
-	Table      string          `protobuf:"bytes,2,opt,name=table,proto3" json:"table,omitempty"`
-	Columns    []string        `protobuf:"bytes,3,rep,name=columns,proto3" json:"columns,omitempty"`
-	RefTable   string          `protobuf:"bytes,4,opt,name=ref_table,json=refTable,proto3" json:"ref_table,omitempty"`
-	RefColumns []string        `protobuf:"bytes,5,rep,name=ref_columns,json=refColumns,proto3" json:"ref_columns,omitempty"`
-	OnUpdate   ReferenceOption `protobuf:"varint,6,opt,name=on_update,json=onUpdate,proto3,enum=schemasvc.ReferenceOption" json:"on_update,omitempty"`
-	OnDelete   ReferenceOption `protobuf:"varint,7,opt,name=on_delete,json=onDelete,proto3,enum=schemasvc.ReferenceOption" json:"on_delete,omitempty"`
-}
-
-func (x *ForeignKey) Reset() {
-	*x = ForeignKey{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[7]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ForeignKey) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ForeignKey) ProtoMessage() {}
-
-func (x *ForeignKey) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[7]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ForeignKey.ProtoReflect.Descriptor instead.
-func (*ForeignKey) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *ForeignKey) GetSymbol() string {
-	if x != nil {
-		return x.Symbol
-	}
-	return ""
-}
-
-func (x *ForeignKey) GetTable() string {
-	if x != nil {
-		return x.Table
-	}
-	return ""
-}
-
-func (x *ForeignKey) GetColumns() []string {
-	if x != nil {
-		return x.Columns
-	}
-	return nil
-}
-
-func (x *ForeignKey) GetRefTable() string {
-	if x != nil {
-		return x.RefTable
-	}
-	return ""
-}
-
-func (x *ForeignKey) GetRefColumns() []string {
-	if x != nil {
-		return x.RefColumns
-	}
-	return nil
-}
-
-func (x *ForeignKey) GetOnUpdate() ReferenceOption {
-	if x != nil {
-		return x.OnUpdate
-	}
-	return ReferenceOption_NoAction
-}
-
-func (x *ForeignKey) GetOnDelete() ReferenceOption {
-	if x != nil {
-		return x.OnDelete
-	}
-	return ReferenceOption_NoAction
-}
-
-type Enum struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Name   string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Values []string `protobuf:"bytes,2,rep,name=values,proto3" json:"values,omitempty"`
-}
-
-func (x *Enum) Reset() {
-	*x = Enum{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[8]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Enum) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Enum) ProtoMessage() {}
-
-func (x *Enum) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[8]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Enum.ProtoReflect.Descriptor instead.
-func (*Enum) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *Enum) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *Enum) GetValues() []string {
-	if x != nil {
-		return x.Values
-	}
-	return nil
-}
-
-type Query struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Name      string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Statement string `protobuf:"bytes,2,opt,name=statement,proto3" json:"statement,omitempty"`
-}
-
-func (x *Query) Reset() {
-	*x = Query{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[9]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *Query) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Query) ProtoMessage() {}
-
-func (x *Query) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[9]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Query.ProtoReflect.Descriptor instead.
-func (*Query) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *Query) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *Query) GetStatement() string {
-	if x != nil {
-		return x.Statement
-	}
-	return ""
-}
-
 type Role struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Name    string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Default bool     `protobuf:"varint,2,opt,name=default,proto3" json:"default,omitempty"`
-	Queries []string `protobuf:"bytes,3,rep,name=queries,proto3" json:"queries,omitempty"`
+	Name    string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Default bool   `protobuf:"varint,2,opt,name=default,proto3" json:"default,omitempty"`
 }
 
 func (x *Role) Reset() {
 	*x = Role{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_schemasvc_schema_proto_msgTypes[10]
+		mi := &file_kwil_schemasvc_schema_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -910,7 +45,7 @@ func (x *Role) String() string {
 func (*Role) ProtoMessage() {}
 
 func (x *Role) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_schemasvc_schema_proto_msgTypes[10]
+	mi := &file_kwil_schemasvc_schema_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -923,7 +58,7 @@ func (x *Role) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Role.ProtoReflect.Descriptor instead.
 func (*Role) Descriptor() ([]byte, []int) {
-	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{10}
+	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Role) GetName() string {
@@ -940,11 +75,201 @@ func (x *Role) GetDefault() bool {
 	return false
 }
 
-func (x *Role) GetQueries() []string {
+type Query struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name      string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Statement string   `protobuf:"bytes,2,opt,name=statement,proto3" json:"statement,omitempty"`
+	Inputs    []*Input `protobuf:"bytes,3,rep,name=inputs,proto3" json:"inputs,omitempty"`
+	Output    *Output  `protobuf:"bytes,4,opt,name=output,proto3,oneof" json:"output,omitempty"`
+}
+
+func (x *Query) Reset() {
+	*x = Query{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_schemasvc_schema_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Query) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Query) ProtoMessage() {}
+
+func (x *Query) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_schemasvc_schema_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Query.ProtoReflect.Descriptor instead.
+func (*Query) Descriptor() ([]byte, []int) {
+	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Query) GetName() string {
 	if x != nil {
-		return x.Queries
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Query) GetStatement() string {
+	if x != nil {
+		return x.Statement
+	}
+	return ""
+}
+
+func (x *Query) GetInputs() []*Input {
+	if x != nil {
+		return x.Inputs
 	}
 	return nil
+}
+
+func (x *Query) GetOutput() *Output {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
+
+type Input struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name     *string `protobuf:"bytes,1,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	Position int32   `protobuf:"varint,2,opt,name=position,proto3" json:"position,omitempty"`
+	Type     string  `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+}
+
+func (x *Input) Reset() {
+	*x = Input{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_schemasvc_schema_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Input) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Input) ProtoMessage() {}
+
+func (x *Input) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_schemasvc_schema_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Input.ProtoReflect.Descriptor instead.
+func (*Input) Descriptor() ([]byte, []int) {
+	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Input) GetName() string {
+	if x != nil && x.Name != nil {
+		return *x.Name
+	}
+	return ""
+}
+
+func (x *Input) GetPosition() int32 {
+	if x != nil {
+		return x.Position
+	}
+	return 0
+}
+
+func (x *Input) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+type Output struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name     string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type     string `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Nullable bool   `protobuf:"varint,3,opt,name=nullable,proto3" json:"nullable,omitempty"`
+}
+
+func (x *Output) Reset() {
+	*x = Output{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_schemasvc_schema_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Output) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Output) ProtoMessage() {}
+
+func (x *Output) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_schemasvc_schema_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Output.ProtoReflect.Descriptor instead.
+func (*Output) Descriptor() ([]byte, []int) {
+	return file_kwil_schemasvc_schema_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Output) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Output) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *Output) GetNullable() bool {
+	if x != nil {
+		return x.Nullable
+	}
+	return false
 }
 
 var File_kwil_schemasvc_schema_proto protoreflect.FileDescriptor
@@ -952,128 +277,33 @@ var File_kwil_schemasvc_schema_proto protoreflect.FileDescriptor
 var file_kwil_schemasvc_schema_proto_rawDesc = []byte{
 	0x0a, 0x1b, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63,
 	0x2f, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x09, 0x73,
-	0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x1a, 0x19, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
-	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x61, 0x6e, 0x79, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x22, 0xb3, 0x01, 0x0a, 0x05, 0x52, 0x65, 0x61, 0x6c, 0x6d, 0x12, 0x2b, 0x0a,
-	0x07, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x11,
-	0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x53, 0x63, 0x68, 0x65, 0x6d,
-	0x61, 0x52, 0x07, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x12, 0x25, 0x0a, 0x05, 0x72, 0x6f,
-	0x6c, 0x65, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x73, 0x63, 0x68, 0x65,
-	0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x52, 0x6f, 0x6c, 0x65, 0x52, 0x05, 0x72, 0x6f, 0x6c, 0x65,
-	0x73, 0x12, 0x2a, 0x0a, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03,
-	0x28, 0x0b, 0x32, 0x10, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x51,
-	0x75, 0x65, 0x72, 0x79, 0x52, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x12, 0x2a, 0x0a,
-	0x05, 0x61, 0x74, 0x74, 0x72, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x67,
-	0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x41,
-	0x6e, 0x79, 0x52, 0x05, 0x61, 0x74, 0x74, 0x72, 0x73, 0x22, 0x99, 0x01, 0x0a, 0x06, 0x53, 0x63,
-	0x68, 0x65, 0x6d, 0x61, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x28, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c,
-	0x65, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d,
-	0x61, 0x73, 0x76, 0x63, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c,
-	0x65, 0x73, 0x12, 0x25, 0x0a, 0x05, 0x65, 0x6e, 0x75, 0x6d, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28,
-	0x0b, 0x32, 0x0f, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x45, 0x6e,
-	0x75, 0x6d, 0x52, 0x05, 0x65, 0x6e, 0x75, 0x6d, 0x73, 0x12, 0x2a, 0x0a, 0x05, 0x61, 0x74, 0x74,
-	0x72, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c,
-	0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x41, 0x6e, 0x79, 0x52, 0x05,
-	0x61, 0x74, 0x74, 0x72, 0x73, 0x22, 0x8d, 0x02, 0x0a, 0x05, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x12,
-	0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e,
-	0x61, 0x6d, 0x65, 0x12, 0x2b, 0x0a, 0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x18, 0x02,
-	0x20, 0x03, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63,
-	0x2e, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x52, 0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73,
-	0x12, 0x2a, 0x0a, 0x07, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28,
-	0x0b, 0x32, 0x10, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x49, 0x6e,
-	0x64, 0x65, 0x78, 0x52, 0x07, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x65, 0x73, 0x12, 0x31, 0x0a, 0x0b,
-	0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x5f, 0x6b, 0x65, 0x79, 0x18, 0x04, 0x20, 0x01, 0x28,
-	0x0b, 0x32, 0x10, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x49, 0x6e,
-	0x64, 0x65, 0x78, 0x52, 0x0a, 0x70, 0x72, 0x69, 0x6d, 0x61, 0x72, 0x79, 0x4b, 0x65, 0x79, 0x12,
-	0x38, 0x0a, 0x0c, 0x66, 0x6f, 0x72, 0x65, 0x69, 0x67, 0x6e, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x18,
-	0x05, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76,
-	0x63, 0x2e, 0x46, 0x6f, 0x72, 0x65, 0x69, 0x67, 0x6e, 0x4b, 0x65, 0x79, 0x52, 0x0b, 0x66, 0x6f,
-	0x72, 0x65, 0x69, 0x67, 0x6e, 0x4b, 0x65, 0x79, 0x73, 0x12, 0x2a, 0x0a, 0x05, 0x61, 0x74, 0x74,
-	0x72, 0x73, 0x18, 0x06, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c,
-	0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x41, 0x6e, 0x79, 0x52, 0x05,
-	0x61, 0x74, 0x74, 0x72, 0x73, 0x22, 0x96, 0x02, 0x0a, 0x06, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e,
+	0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x22, 0x34, 0x0a, 0x04, 0x52, 0x6f, 0x6c, 0x65,
 	0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04,
-	0x6e, 0x61, 0x6d, 0x65, 0x12, 0x29, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x0b, 0x32, 0x15, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x43,
-	0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12,
-	0x1a, 0x0a, 0x07, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09,
-	0x48, 0x00, 0x52, 0x07, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12, 0x14, 0x0a, 0x04, 0x65,
-	0x78, 0x70, 0x72, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x04, 0x65, 0x78, 0x70,
-	0x72, 0x12, 0x2a, 0x0a, 0x07, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x65, 0x73, 0x18, 0x05, 0x20, 0x03,
-	0x28, 0x0b, 0x32, 0x10, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x49,
-	0x6e, 0x64, 0x65, 0x78, 0x52, 0x07, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x65, 0x73, 0x12, 0x38, 0x0a,
-	0x0c, 0x66, 0x6f, 0x72, 0x65, 0x69, 0x67, 0x6e, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x18, 0x06, 0x20,
-	0x03, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e,
-	0x46, 0x6f, 0x72, 0x65, 0x69, 0x67, 0x6e, 0x4b, 0x65, 0x79, 0x52, 0x0b, 0x66, 0x6f, 0x72, 0x65,
-	0x69, 0x67, 0x6e, 0x4b, 0x65, 0x79, 0x73, 0x12, 0x2a, 0x0a, 0x05, 0x61, 0x74, 0x74, 0x72, 0x73,
-	0x18, 0x07, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x41, 0x6e, 0x79, 0x52, 0x05, 0x61, 0x74,
-	0x74, 0x72, 0x73, 0x42, 0x09, 0x0a, 0x07, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x22, 0x64,
-	0x0a, 0x0a, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x54, 0x79, 0x70, 0x65, 0x12, 0x28, 0x0a, 0x04,
-	0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x67, 0x6f, 0x6f,
-	0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x41, 0x6e, 0x79,
-	0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x72, 0x61, 0x77, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x03, 0x72, 0x61, 0x77, 0x12, 0x1a, 0x0a, 0x08, 0x6e, 0x75, 0x6c, 0x6c,
-	0x61, 0x62, 0x6c, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x6e, 0x75, 0x6c, 0x6c,
-	0x61, 0x62, 0x6c, 0x65, 0x22, 0x8b, 0x01, 0x0a, 0x05, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x12, 0x12,
-	0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61,
-	0x6d, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x75, 0x6e, 0x69, 0x71, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x08, 0x52, 0x06, 0x75, 0x6e, 0x69, 0x71, 0x75, 0x65, 0x12, 0x2a, 0x0a, 0x05, 0x70, 0x61,
-	0x72, 0x74, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x73, 0x63, 0x68, 0x65,
-	0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x50, 0x61, 0x72, 0x74, 0x52,
-	0x05, 0x70, 0x61, 0x72, 0x74, 0x73, 0x12, 0x2a, 0x0a, 0x05, 0x61, 0x74, 0x74, 0x72, 0x73, 0x18,
-	0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x41, 0x6e, 0x79, 0x52, 0x05, 0x61, 0x74, 0x74,
-	0x72, 0x73, 0x22, 0xbe, 0x01, 0x0a, 0x09, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x50, 0x61, 0x72, 0x74,
-	0x12, 0x10, 0x0a, 0x03, 0x73, 0x65, 0x71, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x03, 0x73,
-	0x65, 0x71, 0x12, 0x1e, 0x0a, 0x0a, 0x64, 0x65, 0x73, 0x63, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0a, 0x64, 0x65, 0x73, 0x63, 0x65, 0x6e, 0x64, 0x69,
-	0x6e, 0x67, 0x12, 0x1a, 0x0a, 0x07, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x18, 0x03, 0x20,
-	0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x07, 0x6c, 0x69, 0x74, 0x65, 0x72, 0x61, 0x6c, 0x12, 0x14,
-	0x0a, 0x04, 0x65, 0x78, 0x70, 0x72, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x04,
-	0x65, 0x78, 0x70, 0x72, 0x12, 0x18, 0x0a, 0x06, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x18, 0x05,
-	0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x06, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x12, 0x2a,
-	0x0a, 0x05, 0x61, 0x74, 0x74, 0x72, 0x73, 0x18, 0x06, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x14, 0x2e,
-	0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e,
-	0x41, 0x6e, 0x79, 0x52, 0x05, 0x61, 0x74, 0x74, 0x72, 0x73, 0x42, 0x07, 0x0a, 0x05, 0x76, 0x61,
-	0x6c, 0x75, 0x65, 0x22, 0x84, 0x02, 0x0a, 0x0a, 0x46, 0x6f, 0x72, 0x65, 0x69, 0x67, 0x6e, 0x4b,
-	0x65, 0x79, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x79, 0x6d, 0x62, 0x6f, 0x6c, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x06, 0x73, 0x79, 0x6d, 0x62, 0x6f, 0x6c, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x61,
-	0x62, 0x6c, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x74, 0x61, 0x62, 0x6c, 0x65,
-	0x12, 0x18, 0x0a, 0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28,
-	0x09, 0x52, 0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x12, 0x1b, 0x0a, 0x09, 0x72, 0x65,
-	0x66, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72,
-	0x65, 0x66, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x72, 0x65, 0x66, 0x5f, 0x63,
-	0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x09, 0x52, 0x0a, 0x72, 0x65,
-	0x66, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x12, 0x37, 0x0a, 0x09, 0x6f, 0x6e, 0x5f, 0x75,
-	0x70, 0x64, 0x61, 0x74, 0x65, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x73, 0x63,
-	0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x52, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63,
-	0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x08, 0x6f, 0x6e, 0x55, 0x70, 0x64, 0x61, 0x74,
-	0x65, 0x12, 0x37, 0x0a, 0x09, 0x6f, 0x6e, 0x5f, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x18, 0x07,
-	0x20, 0x01, 0x28, 0x0e, 0x32, 0x1a, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63,
-	0x2e, 0x52, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e,
-	0x52, 0x08, 0x6f, 0x6e, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x22, 0x32, 0x0a, 0x04, 0x45, 0x6e,
-	0x75, 0x6d, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73,
-	0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x06, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x22, 0x39,
-	0x0a, 0x05, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x1c, 0x0a, 0x09, 0x73,
-	0x74, 0x61, 0x74, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09,
-	0x73, 0x74, 0x61, 0x74, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x22, 0x4e, 0x0a, 0x04, 0x52, 0x6f, 0x6c,
-	0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x12,
-	0x18, 0x0a, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x09,
-	0x52, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x2a, 0x57, 0x0a, 0x0f, 0x52, 0x65, 0x66,
-	0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x0c, 0x0a, 0x08,
-	0x4e, 0x6f, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x10, 0x00, 0x12, 0x0c, 0x0a, 0x08, 0x52, 0x65,
-	0x73, 0x74, 0x72, 0x69, 0x63, 0x74, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x43, 0x61, 0x73, 0x63,
-	0x61, 0x64, 0x65, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x53, 0x65, 0x74, 0x4e, 0x75, 0x6c, 0x6c,
-	0x10, 0x03, 0x12, 0x0e, 0x0a, 0x0a, 0x53, 0x65, 0x74, 0x44, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74,
-	0x10, 0x04, 0x42, 0x18, 0x5a, 0x16, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x78, 0x2f, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x2f, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x6e, 0x61, 0x6d, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x22, 0x9e,
+	0x01, 0x0a, 0x05, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x1c, 0x0a, 0x09,
+	0x73, 0x74, 0x61, 0x74, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x09, 0x73, 0x74, 0x61, 0x74, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x12, 0x28, 0x0a, 0x06, 0x69, 0x6e,
+	0x70, 0x75, 0x74, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x73, 0x63, 0x68,
+	0x65, 0x6d, 0x61, 0x73, 0x76, 0x63, 0x2e, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x52, 0x06, 0x69, 0x6e,
+	0x70, 0x75, 0x74, 0x73, 0x12, 0x2e, 0x0a, 0x06, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x18, 0x04,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73, 0x76, 0x63,
+	0x2e, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x48, 0x00, 0x52, 0x06, 0x6f, 0x75, 0x74, 0x70, 0x75,
+	0x74, 0x88, 0x01, 0x01, 0x42, 0x09, 0x0a, 0x07, 0x5f, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x22,
+	0x59, 0x0a, 0x05, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x12, 0x17, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x88, 0x01,
+	0x01, 0x12, 0x1a, 0x0a, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x05, 0x52, 0x08, 0x70, 0x6f, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x12, 0x0a,
+	0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x79, 0x70,
+	0x65, 0x42, 0x07, 0x0a, 0x05, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x4c, 0x0a, 0x06, 0x4f, 0x75,
+	0x74, 0x70, 0x75, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x1a, 0x0a, 0x08,
+	0x6e, 0x75, 0x6c, 0x6c, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08,
+	0x6e, 0x75, 0x6c, 0x6c, 0x61, 0x62, 0x6c, 0x65, 0x42, 0x18, 0x5a, 0x16, 0x6b, 0x77, 0x69, 0x6c,
+	0x2f, 0x78, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x73,
+	0x76, 0x63, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1088,51 +318,21 @@ func file_kwil_schemasvc_schema_proto_rawDescGZIP() []byte {
 	return file_kwil_schemasvc_schema_proto_rawDescData
 }
 
-var file_kwil_schemasvc_schema_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kwil_schemasvc_schema_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_kwil_schemasvc_schema_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_kwil_schemasvc_schema_proto_goTypes = []interface{}{
-	(ReferenceOption)(0), // 0: schemasvc.ReferenceOption
-	(*Realm)(nil),        // 1: schemasvc.Realm
-	(*Schema)(nil),       // 2: schemasvc.Schema
-	(*Table)(nil),        // 3: schemasvc.Table
-	(*Column)(nil),       // 4: schemasvc.Column
-	(*ColumnType)(nil),   // 5: schemasvc.ColumnType
-	(*Index)(nil),        // 6: schemasvc.Index
-	(*IndexPart)(nil),    // 7: schemasvc.IndexPart
-	(*ForeignKey)(nil),   // 8: schemasvc.ForeignKey
-	(*Enum)(nil),         // 9: schemasvc.Enum
-	(*Query)(nil),        // 10: schemasvc.Query
-	(*Role)(nil),         // 11: schemasvc.Role
-	(*anypb.Any)(nil),    // 12: google.protobuf.Any
+	(*Role)(nil),   // 0: schemasvc.Role
+	(*Query)(nil),  // 1: schemasvc.Query
+	(*Input)(nil),  // 2: schemasvc.Input
+	(*Output)(nil), // 3: schemasvc.Output
 }
 var file_kwil_schemasvc_schema_proto_depIdxs = []int32{
-	2,  // 0: schemasvc.Realm.schemas:type_name -> schemasvc.Schema
-	11, // 1: schemasvc.Realm.roles:type_name -> schemasvc.Role
-	10, // 2: schemasvc.Realm.queries:type_name -> schemasvc.Query
-	12, // 3: schemasvc.Realm.attrs:type_name -> google.protobuf.Any
-	3,  // 4: schemasvc.Schema.tables:type_name -> schemasvc.Table
-	9,  // 5: schemasvc.Schema.enums:type_name -> schemasvc.Enum
-	12, // 6: schemasvc.Schema.attrs:type_name -> google.protobuf.Any
-	4,  // 7: schemasvc.Table.columns:type_name -> schemasvc.Column
-	6,  // 8: schemasvc.Table.indexes:type_name -> schemasvc.Index
-	6,  // 9: schemasvc.Table.primary_key:type_name -> schemasvc.Index
-	8,  // 10: schemasvc.Table.foreign_keys:type_name -> schemasvc.ForeignKey
-	12, // 11: schemasvc.Table.attrs:type_name -> google.protobuf.Any
-	5,  // 12: schemasvc.Column.type:type_name -> schemasvc.ColumnType
-	6,  // 13: schemasvc.Column.indexes:type_name -> schemasvc.Index
-	8,  // 14: schemasvc.Column.foreign_keys:type_name -> schemasvc.ForeignKey
-	12, // 15: schemasvc.Column.attrs:type_name -> google.protobuf.Any
-	12, // 16: schemasvc.ColumnType.type:type_name -> google.protobuf.Any
-	7,  // 17: schemasvc.Index.parts:type_name -> schemasvc.IndexPart
-	12, // 18: schemasvc.Index.attrs:type_name -> google.protobuf.Any
-	12, // 19: schemasvc.IndexPart.attrs:type_name -> google.protobuf.Any
-	0,  // 20: schemasvc.ForeignKey.on_update:type_name -> schemasvc.ReferenceOption
-	0,  // 21: schemasvc.ForeignKey.on_delete:type_name -> schemasvc.ReferenceOption
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	2, // 0: schemasvc.Query.inputs:type_name -> schemasvc.Input
+	3, // 1: schemasvc.Query.output:type_name -> schemasvc.Output
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_kwil_schemasvc_schema_proto_init() }
@@ -1142,126 +342,6 @@ func file_kwil_schemasvc_schema_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_kwil_schemasvc_schema_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Realm); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Schema); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Table); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Column); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ColumnType); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Index); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*IndexPart); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ForeignKey); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Enum); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Query); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_schemasvc_schema_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Role); i {
 			case 0:
 				return &v.state
@@ -1273,29 +353,57 @@ func file_kwil_schemasvc_schema_proto_init() {
 				return nil
 			}
 		}
+		file_kwil_schemasvc_schema_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Query); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_schemasvc_schema_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Input); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_schemasvc_schema_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Output); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
-	file_kwil_schemasvc_schema_proto_msgTypes[3].OneofWrappers = []interface{}{
-		(*Column_Literal)(nil),
-		(*Column_Expr)(nil),
-	}
-	file_kwil_schemasvc_schema_proto_msgTypes[6].OneofWrappers = []interface{}{
-		(*IndexPart_Literal)(nil),
-		(*IndexPart_Expr)(nil),
-		(*IndexPart_Column)(nil),
-	}
+	file_kwil_schemasvc_schema_proto_msgTypes[1].OneofWrappers = []interface{}{}
+	file_kwil_schemasvc_schema_proto_msgTypes[2].OneofWrappers = []interface{}{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_kwil_schemasvc_schema_proto_rawDesc,
-			NumEnums:      1,
-			NumMessages:   11,
+			NumEnums:      0,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_kwil_schemasvc_schema_proto_goTypes,
 		DependencyIndexes: file_kwil_schemasvc_schema_proto_depIdxs,
-		EnumInfos:         file_kwil_schemasvc_schema_proto_enumTypes,
 		MessageInfos:      file_kwil_schemasvc_schema_proto_msgTypes,
 	}.Build()
 	File_kwil_schemasvc_schema_proto = out.File

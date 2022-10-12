@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"kwil/x/schemadef/postgres"
+	"kwil/x/schemadef/pgschema"
 
 	"github.com/spf13/cobra"
 )
@@ -29,13 +29,13 @@ func createDiffCmd() *cobra.Command {
 				return err
 			}
 
-			differ := postgres.NewDiffer()
+			differ := pgschema.NewDiffer()
 			changes, err := differ.RealmDiff(from, to)
 			if err != nil {
 				return err
 			}
 
-			planner := postgres.NewPlanner()
+			planner := pgschema.NewPlanner()
 			plan, err := planner.PlanChanges(changes)
 			if err != nil {
 				return err

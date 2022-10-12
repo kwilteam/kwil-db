@@ -5,7 +5,7 @@ import (
 	"io"
 	"kwil/x/cli/util"
 	apipb "kwil/x/proto/apisvc"
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/sqlschema"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -24,7 +24,7 @@ func createPlanCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rd, err := schema.GatherFiles(opts.SchemaFiles...)
+			rd, err := sqlschema.GatherFiles(opts.SchemaFiles...)
 			if err != nil {
 				return err
 			}

@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"kwil/x/schemadef/hcl"
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/sqlschema"
 
 	"kwil/x/sql/sqlutil"
 )
@@ -29,7 +29,7 @@ type (
 		URL *URL
 
 		// A migration driver for the attached dialect.
-		schema.Driver
+		sqlschema.Driver
 		// Additional closers that can be closed at the
 		// end of the client lifetime.
 		closers []io.Closer
@@ -39,8 +39,8 @@ type (
 		hcl.Marshaler
 		hcl.Evaluator
 
-		// A func to open a schema.Driver with a given schema.ExecQuerier. Used when creating a TxClient.
-		openDriver func(sqlutil.ExecQuerier) (schema.Driver, error)
+		// A func to open a sqlschema.Driver with a given sqlschema.ExecQuerier. Used when creating a TxClient.
+		openDriver func(sqlutil.ExecQuerier) (sqlschema.Driver, error)
 	}
 
 	// TxClient is returned by calling Client.Tx. It behaves the same as Client,
@@ -129,7 +129,7 @@ type (
 	// URLParserFunc allows using a function as an URLParser.
 	URLParserFunc func(*url.URL) *URL
 
-	// SchemaChanger is implemented by a driver if it how to change the connection URL to represent another schema.
+	// SchemaChanger is implemented by a driver if it how to change the connection URL to represent another sqlschema.
 	SchemaChanger interface {
 		ChangeSchema(*url.URL, string) *url.URL
 	}
@@ -164,7 +164,7 @@ type (
 	OpenOption func(*openOptions) error
 )
 
-// ErrUnsupported is returned if a registered driver does not support changing the schema.
+// ErrUnsupported is returned if a registered driver does not support changing the sqlschema.
 var ErrUnsupported = errors.New("sql/sqlclient: driver does not support changing connected schema")
 
 // Open opens an Kwil client by its provided url string.
@@ -206,7 +206,7 @@ func OpenURL(ctx context.Context, u *url.URL, opts ...OpenOption) (*Client, erro
 	return client, nil
 }
 
-// OpenSchema opens the connection to the given schema.
+// OpenSchema opens the connection to the given sqlschema.
 // If the registered driver does not support this, ErrUnsupported is returned instead.
 func OpenSchema(s string) OpenOption {
 	return func(c *openOptions) error {
@@ -217,7 +217,7 @@ func OpenSchema(s string) OpenOption {
 
 type (
 	registerOptions struct {
-		openDriver func(sqlutil.ExecQuerier) (schema.Driver, error)
+		openDriver func(sqlutil.ExecQuerier) (sqlschema.Driver, error)
 		parser     URLParser
 		flavours   []string
 		codec      interface {
@@ -260,17 +260,17 @@ func RegisterCodec(m hcl.Marshaler, e hcl.Evaluator) RegisterOption {
 	}
 }
 
-// RegisterDriverOpener registers a func to create a schema.Driver from a schema.ExecQuerier.
+// RegisterDriverOpener registers a func to create a sqlschema.Driver from a sqlschema.ExecQuerier.
 // Registering this function is implicitly done when using DriverOpener.
 // The passed opener is used when creating a TxClient.
-func RegisterDriverOpener(open func(sqlutil.ExecQuerier) (schema.Driver, error)) RegisterOption {
+func RegisterDriverOpener(open func(sqlutil.ExecQuerier) (sqlschema.Driver, error)) RegisterOption {
 	return func(opts *registerOptions) {
 		opts.openDriver = open
 	}
 }
 
 // DriverOpener is a helper Opener creator for sharing between all drivers.
-func DriverOpener(open func(sqlutil.ExecQuerier) (schema.Driver, error)) Opener {
+func DriverOpener(open func(sqlutil.ExecQuerier) (sqlschema.Driver, error)) Opener {
 	return OpenerFunc(func(_ context.Context, u *url.URL) (*Client, error) {
 		v, ok := drivers.Load(u.Scheme)
 		if !ok {

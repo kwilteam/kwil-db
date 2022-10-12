@@ -2,7 +2,7 @@ package catalog
 
 import (
 	"fmt"
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/sqlschema"
 	"kwil/x/sql/sqlerr"
 )
 
@@ -14,7 +14,7 @@ func NewUpdater(c *Catalog) Updater {
 	return &updater{Catalog: c}
 }
 
-func (c *updater) UpdateSchema(s *schema.Schema, conv ColumnConverter) error {
+func (c *updater) UpdateSchema(s *sqlschema.Schema, conv ColumnConverter) error {
 	if _, ok := c.Schema(s.Name); !ok {
 		c.Schemas = append(c.Schemas, &Schema{Name: s.Name})
 	}
@@ -28,7 +28,7 @@ func (c *updater) UpdateSchema(s *schema.Schema, conv ColumnConverter) error {
 	return nil
 }
 
-func (c *updater) addTable(tab *schema.Table, conv ColumnConverter) error {
+func (c *updater) addTable(tab *sqlschema.Table, conv ColumnConverter) error {
 	ns := ""
 	if tab.Schema != nil {
 		ns = tab.Schema.Name
@@ -44,8 +44,8 @@ func (c *updater) addTable(tab *schema.Table, conv ColumnConverter) error {
 		return sqlerr.RelationExists(tab.Name)
 	}
 
-	var com schema.Comment
-	schema.Has(tab.Attrs, &com)
+	var com sqlschema.Comment
+	sqlschema.Has(tab.Attrs, &com)
 
 	tbl := Table{QualName: &QualName{Schema: ns, Name: tab.Name}, Comment: com.Text}
 	com.Text = ""

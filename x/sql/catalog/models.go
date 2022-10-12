@@ -1,7 +1,7 @@
 package catalog
 
 import (
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/sqlschema"
 	"kwil/x/sql/sqlparse/ast"
 )
 
@@ -72,11 +72,11 @@ type (
 
 type (
 	Updater interface {
-		UpdateSchema(*schema.Schema, ColumnConverter) error
+		UpdateSchema(*sqlschema.Schema, ColumnConverter) error
 	}
 
 	ColumnConverter interface {
-		ConvertColumn(tab *schema.Table, col *schema.Column) (*Column, error)
+		ConvertColumn(tab *sqlschema.Table, col *sqlschema.Column) (*Column, error)
 	}
 
 	ColumnGenerator interface {

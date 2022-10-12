@@ -44,6 +44,7 @@ require (
 
 require (
 	github.com/agext/levenshtein v1.2.1 // indirect
+	github.com/alecthomas/participle/v2 v2.0.0-beta.5 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.0 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect

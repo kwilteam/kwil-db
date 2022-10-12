@@ -2,8 +2,8 @@ package schema
 
 import (
 	"kwil/x/cli/util"
-	"kwil/x/schemadef/postgres"
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/pgschema"
+	"kwil/x/schemadef/sqlschema"
 	"kwil/x/sql/sqlclient"
 
 	"github.com/spf13/cobra"
@@ -23,7 +23,7 @@ func createApplyCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			schemaFile, err := postgres.ParseSchemaFiles(opts.SchemaFiles...)
+			schemaFile, err := pgschema.ParseSchemaFiles(opts.SchemaFiles...)
 			if err != nil {
 				return err
 			}
@@ -34,7 +34,7 @@ func createApplyCmd() *cobra.Command {
 			}
 			defer client.Close()
 
-			targetOpts := &schema.InspectRealmOption{}
+			targetOpts := &sqlschema.InspectRealmOption{}
 			if client.URL.Schema != "" {
 				targetOpts.Schemas = append(targetOpts.Schemas, client.URL.Schema)
 			}

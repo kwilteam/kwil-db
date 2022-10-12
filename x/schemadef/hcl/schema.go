@@ -2,7 +2,7 @@ package hcl
 
 import (
 	"fmt"
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/sqlschema"
 
 	"reflect"
 	"strconv"
@@ -62,9 +62,9 @@ type (
 		T          string
 		Attributes []*TypeAttr
 
-		// RType is the reflect.Type of the schema.Type used to describe the TypeSpec.
+		// RType is the reflect.Type of the sqlschema.Type used to describe the TypeSpec.
 		// This field is optional and used to determine the TypeSpec in cases where the
-		// schema.Type does not have a `T` field.
+		// sqlschema.Type does not have a `T` field.
 		RType reflect.Type
 
 		// Format is an optional formatting function.
@@ -74,24 +74,24 @@ type (
 		// FromSpec is an optional function that can be attached
 		// to the type spec and allows converting the schema spec
 		// type to a schema type (from document to databse).
-		FromSpec func(*Type) (schema.Type, error)
+		FromSpec func(*Type) (sqlschema.Type, error)
 
 		// ToSpec is an optional function that can be attached
 		// to the type spec and allows converting the schema type
 		// to a schema spec type (from database to document).
-		ToSpec func(schema.Type) (*Type, error)
+		ToSpec func(sqlschema.Type) (*Type, error)
 	}
 
 	// TypeAttr describes an attribute of a TypeSpec, for example `varchar` fields
 	// can have a `size` attribute.
 	TypeAttr struct {
-		// Name should be a snake_case of related the schema.Type struct field.
+		// Name should be a snake_case of related the sqlschema.Type struct field.
 		Name     string
 		Kind     reflect.Kind
 		Required bool
 	}
 
-	// Type represents the type of the field in a schema.
+	// Type represents the type of the field in a sqlschema.
 	Type struct {
 		T     string
 		Attrs []*Attr
