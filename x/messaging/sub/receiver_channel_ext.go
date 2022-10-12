@@ -48,7 +48,7 @@ package sub
 //	return c.out.Read()
 //}
 //
-//func (c *receiver_channel[T]) OnClosed() <-chan x.Void {
+//func (c *receiver_channel[T]) onClosed() <-chan x.Void {
 //	return c.done
 //}
 //

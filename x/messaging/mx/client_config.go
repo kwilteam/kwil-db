@@ -11,31 +11,22 @@ import (
 	"time"
 )
 
-type ClientConfig[T any] struct {
-	Brokers   []string
-	User      string
-	Pwd       string
-	Linger    time.Duration
-	Client_id string
-	Buffer    int
-	Serdes    Serdes[T]
-	Dialer    *tls.Dialer
-	Group     string
+type ClientConfig struct {
+	Brokers      []string
+	User         string
+	Pwd          string
+	Linger       time.Duration
+	Client_id    string
+	Buffer       int
+	Dialer       *tls.Dialer
+	Group        string
+	DefaultTopic string
 }
 
-func (e *ClientConfig[T]) ToString() string {
-	panic("implement me")
-}
-
-func NewEmitterConfig[T any](config cfgx.Config, serdes Serdes[T]) (cfg *ClientConfig[T], err error) {
+func NewEmitterClientConfig(config cfgx.Config) (cfg *ClientConfig, err error) {
 	buffer := int(config.Int32("out_buffer_size", 10))
 	if buffer < 0 {
 		err = fmt.Errorf("out_buffer_size cannot be a negative #")
-		return
-	}
-
-	user, pwd, dialer, brokers, client_id, err := getCommonConfig(config)
-	if err != nil {
 		return
 	}
 
@@ -45,30 +36,39 @@ func NewEmitterConfig[T any](config cfgx.Config, serdes Serdes[T]) (cfg *ClientC
 		return nil, fmt.Errorf("invalid linger.ms")
 	}
 
-	return &ClientConfig[T]{
-		Brokers:   brokers,
-		User:      user,
-		Pwd:       pwd,
-		Linger:    time.Duration(linger) * time.Millisecond,
-		Client_id: client_id,
-		Buffer:    buffer,
-		Serdes:    serdes,
-		Dialer:    dialer,
-	}, nil
-}
-
-func NewReceiverConfig[T any](config cfgx.Config, serdes Serdes[T]) (cfg *ClientConfig[T], err error) {
 	user, pwd, dialer, brokers, client_id, err := getCommonConfig(config)
 	if err != nil {
 		return
 	}
 
-	return &ClientConfig[T]{
+	id := config.String("emitter.id")
+	if id == "" {
+		client_id = "_emitter__" + uuid.New().String()
+	}
+
+	return &ClientConfig{
+		Brokers:      brokers,
+		User:         user,
+		Pwd:          pwd,
+		Linger:       time.Duration(linger) * time.Millisecond,
+		Client_id:    client_id,
+		Buffer:       buffer,
+		Dialer:       dialer,
+		DefaultTopic: config.String("default-topic"),
+	}, nil
+}
+
+func NewReceiverConfig(config cfgx.Config) (cfg *ClientConfig, err error) {
+	user, pwd, dialer, brokers, client_id, err := getCommonConfig(config)
+	if err != nil {
+		return
+	}
+
+	return &ClientConfig{
 		Brokers:   brokers,
 		User:      user,
 		Pwd:       pwd,
 		Client_id: client_id,
-		Serdes:    serdes,
 		Dialer:    dialer,
 	}, nil
 }

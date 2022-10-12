@@ -17,8 +17,8 @@ func ResultSuccess[T any](value T) *Result[T] {
 	return &Result[T]{state: 1, value: unsafe.Pointer(&value)}
 }
 
-// ResultFailure will return a new Result in an errored state
-func ResultFailure[T any](err error) *Result[T] {
+// ResultError will return a new Result in an errored state
+func ResultError[T any](err error) *Result[T] {
 	return &Result[T]{state: 2, value: unsafe.Pointer(&err)}
 }
 

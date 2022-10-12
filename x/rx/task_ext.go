@@ -20,7 +20,7 @@ func (r *_task[T]) IsError() bool                                 { return r._is
 func (r *_task[T]) IsCancelled() bool                             { return r._isCancelled() }
 func (r *_task[T]) IsErrorOrCancelled() bool                      { return r._isErrorOrCancelled() }
 func (r *_task[T]) IsDone() bool                                  { return r._isDone() }
-func (r *_task[T]) DoneChan() <-chan Void                         { return r._doneChan() }
+func (r *_task[T]) DoneCh() <-chan Void                           { return r._doneChan() }
 func (r *_task[T]) Fail(err error) bool                           { return r._fail(err) }
 func (r *_task[T]) Complete(value T) bool                         { return r._complete(value) }
 func (r *_task[T]) CompleteOrFail(value T, err error) bool        { return r._completeOrFail(value, err) }
@@ -28,12 +28,15 @@ func (r *_task[T]) Cancel() bool                                  { return r._ca
 func (r *_task[T]) GetOrError() (T, error)                        { return r._getOrError() }
 func (r *_task[T]) Await(ctx context.Context) (ok bool)           { return r._await(ctx) }
 func (r *_task[T]) Then(fn func(T)) Task[T]                       { return r._then(fn) }
+func (r *_task[T]) ThenCh(ch chan T) Task[T]                      { return r._thenCh(ch) }
 func (r *_task[T]) Catch(fn func(error)) Task[T]                  { return r._catch(fn) }
+func (r *_task[T]) CatchCh(ch chan error) Task[T]                 { return r._catchCh(ch) }
 func (r *_task[T]) Handle(fn func(T, error) (T, error)) Task[T]   { return r._handle(fn) }
 func (r *_task[T]) Compose(fn func(T, error) Task[T]) Task[T]     { return r._compose(fn) }
 func (r *_task[T]) ThenCatchFinally(fn *ContinuationT[T]) Task[T] { return r._whenComplete(fn.invoke) }
 func (r *_task[T]) WhenComplete(fn func(T, error)) Task[T]        { return r._whenComplete(fn) }
-func (r *_task[T]) OnComplete(fn *ContinuationT[T])               { r.WhenComplete(fn.invoke) }
+func (r *_task[T]) WhenCompleteCh(ch chan *Result[T]) Task[T]     { return r._whenCompleteCh(ch) }
+func (r *_task[T]) OnComplete(fn *ContinuationT[T])               { r._whenComplete(fn.invoke) }
 func (r *_task[T]) AsAction() Action                              { return r._asAction() }
 func (r *_task[T]) AsListenable() Listenable[T]                   { return r }
 func (r *_task[T]) AsAsync(e Executor) Task[T]                    { return r._async(e) }

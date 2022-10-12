@@ -102,9 +102,21 @@ func (r *_task[T]) _then(fn func(T)) Task[T] {
 	return r._addHandler(h.invoke)
 }
 
+func (r *_task[T]) _thenCh(ch chan T) Task[T] {
+	return r._addHandler(func(v T, _ error) {
+		ch <- v
+	})
+}
+
 func (r *_task[T]) _catch(fn func(error)) Task[T] {
 	h := &onErrorHandler[T]{fn: fn}
 	return r._addHandler(h.invoke)
+}
+
+func (r *_task[T]) _catchCh(ch chan error) Task[T] {
+	return r._addHandler(func(_ T, err error) {
+		ch <- err
+	})
 }
 
 func (r *_task[T]) _handle(fn func(T, error) (T, error)) Task[T] {
@@ -121,6 +133,16 @@ func (r *_task[T]) _compose(fn func(T, error) Task[T]) Task[T] {
 
 func (r *_task[T]) _whenComplete(fn func(T, error)) Task[T] {
 	return r._addHandler(fn)
+}
+
+func (r *_task[T]) _whenCompleteCh(ch chan *Result[T]) Task[T] {
+	return r._addHandler(func(v T, err error) {
+		if err != nil {
+			ch <- ResultSuccess[T](v)
+		} else {
+			ch <- ResultError[T](err)
+		}
+	})
 }
 
 func (r *_task[T]) _getError() error {

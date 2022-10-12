@@ -10,6 +10,8 @@ import (
 	"kwil/x/chain/crypto"
 )
 
+const DATABASE_EMITTER_ALIAS = "service.database.emitter"
+
 func (s *Service) CreateDatabase(ctx context.Context, req *v0.CreateDatabaseRequest) (*v0.CreateDatabaseResponse, error) {
 	if req.Operation != 0 {
 		return nil, ErrIncorrectOperation
@@ -39,6 +41,10 @@ func (s *Service) CreateDatabase(ctx context.Context, req *v0.CreateDatabaseRequ
 	err = s.ds.SetBalance(req.From, amt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
+	}
+
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	// Forward message to Kafka

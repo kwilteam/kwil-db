@@ -1,7 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"kwil/x"
+	"kwil/x/api/service"
+	"kwil/x/cfgx"
+	"kwil/x/messaging/mx"
+	"kwil/x/messaging/pub"
 	"net/http"
 	"os"
 	"regexp"
@@ -20,6 +26,11 @@ const (
 )
 
 func run() error {
+	ctx, err := setupRootRequestCtx()
+	if err != nil {
+		return err
+	}
+
 	cmd := &cobra.Command{
 		Use:   "api-gateway",
 		Short: "api-gateway is a gRPC to HTTP gateway",
@@ -32,21 +43,34 @@ func run() error {
 				return err
 			}
 
-			mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			err = mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 				v0.ServeSwaggerJSON(w, r)
 			})
+			if err != nil {
+				return err
+			}
 
-			mux.HandlePath(http.MethodGet, "/swagger/ui", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			err = mux.HandlePath(http.MethodGet, "/swagger/ui", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 				v0.ServeSwaggerUI(w, r)
 			})
+			if err != nil {
+				return err
+			}
 
-			return http.ListenAndServe(":8080", cors(mux))
+			return http.ListenAndServe(":8080", cors(ctx, mux))
 		},
 	}
 
 	cmd.PersistentFlags().String("endpoint", "localhost:50051", "gRPC server endpoint")
-	viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
-	viper.BindEnv("endpoint", grpcEndpointEnv)
+	err = viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
+	if err != nil {
+		return err
+	}
+
+	err = viper.BindEnv("endpoint", grpcEndpointEnv)
+	if err != nil {
+		return err
+	}
 
 	return cmd.Execute()
 }
@@ -58,17 +82,19 @@ func main() {
 	}
 }
 
-func cors(h http.Handler) http.Handler {
+func cors(ctx context.Context, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if allowedOrigin(r.Header.Get("Origin")) {
 			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType")
 		}
+
 		if r.Method == "OPTIONS" {
 			return
 		}
-		h.ServeHTTP(w, r)
+
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -80,4 +106,23 @@ func allowedOrigin(origin string) bool {
 		return true
 	}
 	return false
+}
+
+func setupRootRequestCtx() (context.Context, error) {
+	cfg := cfgx.GetTestConfig().Select("messaging-emitter")
+
+	// Once the message type is known, we will create the
+	// appropriate serdes
+	serdes := mx.SerdesByteArray()
+
+	// Using NewEmitterSingleClient for now. Once we need
+	// more than one emitter, we will need to create the client
+	// separately and close it our upon application shutdown.
+	e, err := pub.NewEmitterSingleClient(cfg, serdes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Not sure where else to inject a service for down stream consumption
+	return x.Wrap(x.RootContext(), service.DATABASE_EMITTER_ALIAS, e), nil
 }

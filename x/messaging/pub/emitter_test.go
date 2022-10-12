@@ -17,6 +17,10 @@ var test_msg = mx.RawMessage{
 }
 
 func Test_Emitter_Basic(t *testing.T) {
+	if t == nil {
+		return // intentionally ignore this test for normal ops
+	}
+
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
@@ -26,19 +30,17 @@ func Test_Emitter_Basic(t *testing.T) {
 	}
 
 	cfg := GetTestConfig().Select("messaging-emitter")
-	topic := cfg.String("topic")
+	topic := cfg.String("default-topic")
 	if topic == "" {
-		t.Fatal(fmt.Errorf("topic cannot be empty for test case"))
+		t.Fatal(fmt.Errorf("default-topic cannot be empty for test case"))
 	}
 
-	se := mx.SerdesByteArray()
-
-	e, err := NewEmitter(cfg, se)
+	e, err := NewEmitterSingleClient(cfg, mx.SerdesByteArray())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	msg := NewMessage(topic, test_msg, getAck[mx.RawMessage](t, wg))
+	msg := NewMessage(test_msg, getAck(t, wg))
 	err = e.Send(context.Background(), msg)
 	if err != nil {
 		t.Error(err)
@@ -48,8 +50,8 @@ func Test_Emitter_Basic(t *testing.T) {
 	e.Close()
 }
 
-func getAck[T any](t *testing.T, wg *sync.WaitGroup) AckNackFn {
-	return AckNack(func(e error) {
+func getAck(t *testing.T, wg *sync.WaitGroup) AckNackFn {
+	return AckNackSync(func(e error) {
 		if e != nil {
 			t.Fatal(e)
 		} else {

@@ -16,7 +16,7 @@ func (_ *task_error[T]) IsError() bool                               { return tr
 func (r *task_error[T]) IsCancelled() bool                           { return errx.IsCancelled(r.err) }
 func (_ *task_error[T]) IsErrorOrCancelled() bool                    { return true }
 func (_ *task_error[T]) IsDone() bool                                { return true }
-func (_ *task_error[T]) DoneChan() <-chan Void                       { return ClosedChanVoid() }
+func (_ *task_error[T]) DoneCh() <-chan Void                         { return ClosedChanVoid() }
 func (_ *task_error[T]) Fail(_ error) bool                           { return false }
 func (_ *task_error[T]) Complete(_ T) bool                           { return false }
 func (_ *task_error[T]) CompleteOrFail(_ T, _ error) bool            { return false }
@@ -24,7 +24,9 @@ func (_ *task_error[T]) Cancel() bool                                { return fa
 func (r *task_error[T]) GetOrError() (T, error)                      { return AsDefault[T](), r.err }
 func (r *task_error[T]) Await(_ context.Context) (ok bool)           { return true }
 func (r *task_error[T]) Then(_ func(T)) Task[T]                      { return r }
+func (r *task_error[T]) ThenCh(_ chan T) Task[T]                     { return r }
 func (r *task_error[T]) Catch(fn func(error)) Task[T]                { fn(r.err); return r }
+func (r *task_error[T]) CatchCh(ch chan error) Task[T]               { ch <- r.err; return r }
 func (r *task_error[T]) Handle(fn func(T, error) (T, error)) Task[T] { return r._handle(fn) }
 func (r *task_error[T]) Compose(fn func(T, error) Task[T]) Task[T]   { return r._compose(fn) }
 func (r *task_error[T]) WhenComplete(fn func(T, error)) Task[T]      { fn(AsDefault[T](), r.err); return r }
@@ -35,6 +37,10 @@ func (r *task_error[T]) AsAsync(e Executor) Task[T]                  { return r.
 func (r *task_error[T]) IsAsync() bool                               { return false }
 func (r *task_error[T]) ThenCatchFinally(fn *ContinuationT[T]) Task[T] {
 	return r.WhenComplete(fn.invoke)
+}
+func (r *task_error[T]) WhenCompleteCh(ch chan *Result[T]) Task[T] {
+	ch <- ResultError[T](r.err)
+	return r
 }
 
 func (r *task_error[T]) _asAsync(e Executor) Task[T] {

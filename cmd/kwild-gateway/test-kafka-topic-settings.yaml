@@ -5,8 +5,8 @@ broker-settings: &broker-settings
 
 messaging-emitter:
   broker-settings: *broker-settings
-  default-topic: kwil_chain_txns
   linger-ms: 75
+  default-topic: kwil_chain_txns
 
 messaging-receiver:
   broker-settings: *broker-settings
