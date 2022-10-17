@@ -6,6 +6,7 @@ import (
 	"kwil/x/api/service"
 	"kwil/x/cfgx"
 	"kwil/x/messaging/pub"
+	request "kwil/x/request_service"
 	"net/http"
 	"os"
 	"regexp"
@@ -31,7 +32,7 @@ func main() {
 }
 
 func run() error {
-	inject, err := getInjector()
+	inject, err := getServiceInjector()
 	if err != nil {
 		return err
 	}
@@ -106,7 +107,7 @@ func allowedOrigin(origin string) bool {
 	return false
 }
 
-func getInjector() (x.RequestInjectorFn, error) {
+func getServiceInjector() (x.RequestInjectorFn, error) {
 	// TODO: we need to use a config to bootstrap the various emitters/receivers needed
 	cfg := cfgx.GetTestConfig().Select("messaging-emitter")
 
@@ -118,11 +119,12 @@ func getInjector() (x.RequestInjectorFn, error) {
 		return nil, err
 	}
 
-	id := service.DATABASE_EMITTER_ALIAS
-
 	// Not sure where else to inject a service for downstream consumption.
 	// Ignoring the additional function for clearing context for now.
-	fn, _ := x.Injectable(id, e).AsRequestInjector()
+	fn, _ := x.
+		Injectable(service.DATABASE_EMITTER_ALIAS, e).
+		Include(request.MANAGER_ALIAS, request.GetManager()).
+		AsRequestInjector()
 
 	return fn, nil
 }

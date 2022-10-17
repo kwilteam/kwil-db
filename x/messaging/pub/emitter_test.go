@@ -42,8 +42,8 @@ func Test_Emitter_Sync(t *testing.T) {
 		t.Error(err)
 	}
 
-	if e != nil {
-		t.Fatal(e)
+	if err != nil {
+		t.Fatal(err)
 	} else {
 		t.Log("Message sent")
 	}

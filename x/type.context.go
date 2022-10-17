@@ -29,10 +29,17 @@ type RequestInjectorFn func(r *http.Request) *http.Request
 
 // InjectItem is a single item that has been injected into
 // a request.
-type InjectItem struct {
-	ID   string
-	Item interface{}
-	next *InjectItem
+type InjectItem interface {
+	as() *inject_item
+	Include(id string, item interface{}) InjectItem
+	AsRequestInjector() (RequestInjectorFn, Clearable[InjectItem])
+	AsContextInjector() (ContextInjectorFn, Clearable[InjectItem])
+}
+
+type inject_item struct {
+	id   string
+	item interface{}
+	next *inject_item
 }
 
 // Injectable is a convenience function for creating InjectItem
@@ -41,25 +48,31 @@ func Injectable[T any](id string, item T) InjectItem {
 		panic(errContextIdEmpty)
 	}
 
-	return InjectItem{ID: id, Item: item}
+	return &inject_item{id: id, item: item}
+}
+
+// Include will append the given items to the option set.
+func (i *inject_item) Include(id string, item interface{}) InjectItem {
+	return &inject_item{id, item, i}
 }
 
 // Append will append the given items to the option set.
-func (i InjectItem) Append(id string, item interface{}) *InjectItem {
-	return &InjectItem{id, item, &i}
+func (i *inject_item) as() *inject_item {
+	return i
 }
 
 // ContextInjector returns a function that can be used to inject
 // data into a context, and a function that can be used to remove
 // the injected data.
-func ContextInjector(options ...*InjectItem) (ContextInjectorFn, Clearable[*InjectItem]) {
+func ContextInjector(options ...InjectItem) (ContextInjectorFn, Clearable[InjectItem]) {
 	if len(options) == 0 {
 		return contextIdentityFn, &item_Iterator{m: empty_map, pos: -1}
 	}
 
 	m := make(map[string]interface{}, len(options))
 	for _, opt := range options {
-		m[opt.ID] = opt.Item
+		inj := opt.as()
+		m[inj.id] = inj.item
 	}
 
 	mm := &m
@@ -72,28 +85,29 @@ func ContextInjector(options ...*InjectItem) (ContextInjectorFn, Clearable[*Inje
 	}, iter
 }
 
-// AsRequestInjector is a convenience method for simplifying composition
-// of the use of RequestInjector.
-func (i InjectItem) AsRequestInjector() (RequestInjectorFn, Clearable[*InjectItem]) {
-	next := &i
+// AsRequestInjector is a convenience method for simplifying
+// composition of the use of RequestInjector.
+func (i *inject_item) AsRequestInjector() (RequestInjectorFn, Clearable[InjectItem]) {
+	next := i
 
-	var items []*InjectItem
+	var items []InjectItem
 	for next != nil {
-		items = append(items, &InjectItem{ID: next.ID, Item: next.Item})
+		items = append(items, &inject_item{id: next.id, item: next.item})
 		next = next.next
 	}
 
 	return RequestInjector(items...)
 }
 
-// AsContextInjector is a convenience method for simplifying composition
-// of the use of ContextInjector.
-func (i InjectItem) AsContextInjector() (ContextInjectorFn, Clearable[*InjectItem]) {
-	next := &i
+// AsContextInjector is a convenience method for simplifying
+// composition of the use of ContextInjector.
+func (i *inject_item) AsContextInjector() (ContextInjectorFn, Clearable[InjectItem]) {
+	next := i
 
-	var items []*InjectItem
+	var items []InjectItem
 	for next != nil {
-		items = append(items, &InjectItem{ID: next.ID, Item: next.Item})
+
+		items = append(items, &inject_item{id: next.id, item: next.item})
 		next = next.next
 	}
 
@@ -103,14 +117,15 @@ func (i InjectItem) AsContextInjector() (ContextInjectorFn, Clearable[*InjectIte
 // RequestInjector returns a function that can be used to inject
 // data into a request, and a function that can be used to remove
 // the injected data.
-func RequestInjector(options ...*InjectItem) (RequestInjectorFn, Clearable[*InjectItem]) {
+func RequestInjector(options ...InjectItem) (RequestInjectorFn, Clearable[InjectItem]) {
 	if len(options) == 0 {
 		return requestIdentityFn, &item_Iterator{m: empty_map, pos: -1}
 	}
 
 	m := make(map[string]interface{}, len(options))
 	for _, opt := range options {
-		m[opt.ID] = opt.Item
+		inj := opt.as()
+		m[inj.id] = inj.item
 	}
 
 	mm := &m
@@ -215,8 +230,8 @@ func (m *multi_value_context) Value(key interface{}) interface{} {
 type item_Iterator struct {
 	m       map[string]interface{}
 	pos     int
-	items   []*InjectItem
-	current *InjectItem
+	items   []*inject_item
+	current *inject_item
 }
 
 func (t *item_Iterator) HasNext() bool {
@@ -225,9 +240,9 @@ func (t *item_Iterator) HasNext() bool {
 	}
 
 	if t.items == nil {
-		var items []*InjectItem
+		var items []*inject_item
 		for k, v := range t.m {
-			items = append(items, &InjectItem{ID: k, Item: v})
+			items = append(items, &inject_item{id: k, item: v})
 		}
 		t.items = items
 	}
@@ -244,10 +259,10 @@ func (t *item_Iterator) HasNext() bool {
 	return true
 }
 
-func (t *item_Iterator) Value() *InjectItem {
+func (t *item_Iterator) Value() InjectItem {
 	return t.current
 }
 
-func (t *item_Iterator) Clear() Iterator[*InjectItem] {
+func (t *item_Iterator) Clear() Iterator[InjectItem] {
 	return t
 }
