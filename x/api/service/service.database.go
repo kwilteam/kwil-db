@@ -8,6 +8,7 @@ import (
 	"kwil/x/messaging/mx"
 	"kwil/x/messaging/pub"
 	request "kwil/x/request_manager"
+	"math/big"
 
 	types "kwil/pkg/types/db"
 	v0 "kwil/x/api/v0"

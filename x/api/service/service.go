@@ -49,18 +49,7 @@ func (s *Service) validateBalances(from *string, op *int32, cr *int32, fe *big.I
 	// compare the cost to what is sent
 	if cost.Cmp(fe) > 0 {
 		s.log.Debug("fee is too low for the requested operation")
-		return nil, ErrFeeTooLow
-	}
-
-	// get the balance of the sender
-	bal, err := s.ds.GetBalance(*from)
-	if err != nil {
-		return fb, fmt.Errorf("failed to get balance for %s: %w", *from, err)
-	}
-
-	// check if the balance is greater than the fee
-	if fee.Cmp(bal) > 0 {
-		return fb, ErrNotEnoughFunds
+		return false
 	}
 
 	return true

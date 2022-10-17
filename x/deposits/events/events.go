@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"kwil/x/common/config"
+	"kwil/x/cfgx"
 	cc "kwil/x/deposits/chainclient"
 	ct "kwil/x/deposits/chainclient/types"
 )
@@ -19,7 +19,7 @@ type EventFeed interface {
 
 type eventFeed struct {
 	log       *zerolog.Logger
-	conf      config.Config
+	conf      cfgx.Config
 	client    ct.Client
 	reqConfs  uint16
 	timeout   time.Duration
@@ -27,30 +27,30 @@ type eventFeed struct {
 	sc        ct.Contract
 }
 
-func New(conf config.Config, start int64) (EventFeed, error) {
-	chnid := conf.String("chain")
+func New(c cfgx.Config, start int64) (EventFeed, error) {
+	chnid := c.String("chain")
 	logger := log.With().Str("module", "deposits").Str("chainID", chnid).Logger()
 
 	// build client
 	cb := cc.Builder()
 
-	client, err := cb.Chain(chnid).Endpoint(conf.String("provider-endpoint")).Build()
+	client, err := cb.Chain(chnid).Endpoint(c.String("provider-endpoint")).Build()
 	if err != nil {
 		return nil, err
 	}
 
 	// get contract
-	sc, err := client.GetContract(conf.String("contract-address"))
+	sc, err := client.GetContract(c.String("contract-address"))
 	if err != nil {
 		return nil, err
 	}
 
 	return &eventFeed{
 		log:       &logger,
-		conf:      conf,
+		conf:      c,
 		client:    client,
-		reqConfs:  uint16(conf.Int("required-confirmations")),
-		timeout:   time.Duration(conf.Int("block-timeout")) * time.Second,
+		reqConfs:  uint16(c.Int64("required-confirmations", 12)), // 12 as default as defined by Ethereum yellow paper
+		timeout:   time.Duration(c.Int64("block-timeout", 20)) * time.Second,
 		lastBlock: start,
 		sc:        sc,
 	}, nil
@@ -69,7 +69,7 @@ func (ef *eventFeed) Listen(
 func (ef *eventFeed) listenForBlocks(ctx context.Context) (<-chan int64, <-chan error, error) {
 	ef.log.Debug().Msg("starting block listener")
 
-	headers := make(chan int64, ef.conf.Int("block-buffer")) // this channel is for blocks before finalization
+	headers := make(chan int64, ef.conf.Int64("block-buffer", 100)) // this channel is for blocks before finalization
 	errs := make(chan error)
 	sub, err := ef.client.SubscribeBlocks(ctx, headers)
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"sync"
 
-	"kwil/x/common/config"
+	"kwil/x/cfgx"
 	ct "kwil/x/deposits/chainclient/types"
 	"kwil/x/deposits/events"
 	"kwil/x/deposits/store"
@@ -24,14 +24,14 @@ type Deposits interface {
 
 type deposits struct {
 	log  *zerolog.Logger
-	conf config.Config
+	conf cfgx.Config
 	ef   events.EventFeed
 	sc   ct.Contract
 	lh   int64
 	ds   store.DepositStore
 }
 
-func New(c config.Config) (*deposits, error) {
+func New(c cfgx.Config) (*deposits, error) {
 	logger := log.With().Str("module", "deposits").Logger()
 
 	ds, err := store.New(c)

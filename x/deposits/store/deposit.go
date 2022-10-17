@@ -3,7 +3,7 @@ package store
 import (
 	"math/big"
 
-	"kwil/x/common/config"
+	"kwil/x/cfgx"
 	"kwil/x/deposits/store/kv"
 )
 
@@ -28,7 +28,7 @@ type DepositStore interface {
 	GetSpent(string) (*big.Int, error)
 }
 
-func New(conf config.Config) (*depositStore, error) {
+func New(conf cfgx.Config) (*depositStore, error) {
 
 	db, err := kv.New(conf.String("kv.path"))
 	if err != nil {
