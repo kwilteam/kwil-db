@@ -2,32 +2,31 @@ package events
 
 import (
 	"fmt"
-	"math/big"
 	"sync"
 )
 
-/* the queue is a FIFO queue. It is used to store headers that are received from the websocket
-and are waiting to be confirmed.  The queue is a slice of big.Ints, which are the block numbers
+/* the queue is a FIFO queue. It is used to store block heights that are received from the websocket
+and are waiting to be confirmed.  The queue is a slice of int64s, which are the block numbers
 */
 
 type Queue struct {
-	queue []*big.Int
-	head  *big.Int
-	tail  *big.Int
-	len   int
+	queue []int64
+	head  int64
+	tail  int64
+	len   uint16
 	mu    sync.Mutex
 }
 
 func NewQueue() *Queue {
 	return &Queue{
-		queue: make([]*big.Int, 0),
-		head:  big.NewInt(0),
-		tail:  big.NewInt(0),
+		queue: make([]int64, 0),
+		head:  0,
+		tail:  0,
 		len:   0,
 	}
 }
 
-func (q *Queue) Append(height *big.Int) {
+func (q *Queue) Append(height int64) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.queue = append(q.queue, height)
@@ -38,11 +37,11 @@ func (q *Queue) Append(height *big.Int) {
 	q.len++
 }
 
-func (q *Queue) Pop() *big.Int {
+func (q *Queue) Pop() int64 {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.len == 0 {
-		return nil
+		return -1
 	}
 	ret := q.queue[0]
 	q.queue = q.queue[1:]
@@ -51,28 +50,31 @@ func (q *Queue) Pop() *big.Int {
 	return ret
 }
 
-func (q *Queue) Len() int {
+func (q *Queue) Len() uint16 {
 	q.mu.Lock()
-	defer q.mu.Unlock()
-	return q.len
+	l := q.len
+	q.mu.Unlock()
+	return l
 }
 
-func (q *Queue) Head() *big.Int {
+func (q *Queue) Head() int64 {
 	q.mu.Lock()
-	defer q.mu.Unlock()
-	return q.head
+	h := q.head
+	q.mu.Unlock()
+	return h
 }
 
-func (q *Queue) Tail() *big.Int {
+func (q *Queue) Tail() int64 {
 	q.mu.Lock()
-	defer q.mu.Unlock()
-	return q.tail
+	t := q.tail
+	q.mu.Unlock()
+	return t
 }
 
 func (q *Queue) Print() {
 	q.mu.Lock()
-	defer q.mu.Unlock()
 	for _, v := range q.queue {
 		fmt.Println(v)
 	}
+	q.mu.Unlock()
 }

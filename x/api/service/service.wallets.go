@@ -6,7 +6,7 @@ import (
 
 	types "kwil/pkg/types/db"
 	v0 "kwil/x/api/v0"
-	"kwil/x/chain/crypto"
+	"kwil/x/crypto"
 
 	"github.com/ethereum/go-ethereum/common"
 )

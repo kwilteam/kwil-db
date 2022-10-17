@@ -19,9 +19,10 @@ import (
 	"kwil/x/chain/auth"
 	"kwil/x/chain/config"
 	"kwil/x/chain/contracts"
-	"kwil/x/chain/crypto"
-	"kwil/x/chain/deposits"
 	"kwil/x/chain/utils"
+	nc "kwil/x/common/config"
+	"kwil/x/crypto"
+	nd "kwil/x/deposits"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 )
@@ -46,12 +47,18 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to connect to client chain: %w", err)
 	}
 
-	d, err := deposits.Init(ctx, conf, client)
+	cb := nc.Builder()
+	depConf, err := cb.UseFile("deposit-config.yaml").Build()
 	if err != nil {
-		return fmt.Errorf("failed to initialize deposits: %w", err)
+		return fmt.Errorf("failed to load deposit config: %w", err)
 	}
 
-	defer d.Store.Close()
+	d, err := nd.New(depConf)
+	defer d.Close()
+	if err != nil {
+		return fmt.Errorf("failed to initialize new deposits: %w", err)
+	}
+	d.Listen(ctx)
 
 	kr, err := crypto.NewKeyring(conf)
 	if err != nil {
@@ -81,7 +88,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize contract client: %w", err)
 	}
 
-	serv := service.NewService(d.Store, p, c)
+	serv := service.NewService(d, p, c)
 	httpHandler := handler.New(logger, a.Authenticator)
 
 	return serve(logger, httpHandler, serv)
