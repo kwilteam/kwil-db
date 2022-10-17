@@ -25,7 +25,7 @@ func TestLoadPrivateKey(t *testing.T) {
 			args: args{
 				path: "keys/test_ethereum.pem",
 			},
-			want: "89355112857472319494816659106955228330902517123274613390065382679092431902501", // x of public key
+			want: "89355112857472319494816659106955228330902517123274613390065382679092431902501", // mx of public key
 		},
 	}
 	for _, tt := range tests {
@@ -37,7 +37,7 @@ func TestLoadPrivateKey(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(x, tt.want) {
-				t.Errorf("public key x: %s, want %v", x, tt.want)
+				t.Errorf("public key mx: %s, want %v", x, tt.want)
 			}
 		})
 	}

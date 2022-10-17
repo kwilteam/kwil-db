@@ -2,7 +2,7 @@ package utils
 
 /*import (
 	//keepertest "kwil-cosmos/testutil/keeper"
-	//"kwil-cosmos/x/kwil/keeper"
+	//"kwil-cosmos/mx/kwil/keeper"
 	"reflect"
 	"testing"
 

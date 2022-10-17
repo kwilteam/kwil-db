@@ -1233,7 +1233,7 @@ func (a *application) applyList(parent ast.Node, name string) {
 			break
 		}
 
-		// element x may be nil in a bad AST - be cautious
+		// element mx may be nil in a bad AST - be cautious
 		var x ast.Node
 		if e := v.Index(a.iter.index); e.IsValid() {
 			x = e.Interface().(ast.Node)

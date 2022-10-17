@@ -1,57 +1,36 @@
 package utils
 
 import (
-	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
-	"errors"
+	"kwil/x"
 	"math/big"
 	"os"
 	"path"
 	"runtime"
 	"strings"
-	"time"
-
-	typ "kwil/x/types"
 )
 
-// Mod e.g., modulo returns the remainder of x/y
-func Mod[T typ.Integer](x, y T) T {
+// Mod e.g., modulo returns the remainder of mx/y
+func Mod[T x.Integer](x, y T) T {
 	return (x%y + y) % y
 }
 
-// Max returns the largest of x or y.
-func Max[T typ.Integer](x, y T) T {
+// Max returns the largest of mx or y.
+func Max[T x.Integer](x, y T) T {
 	if x > y {
 		return x
 	}
 	return y
 }
 
-// Min returns the smallest of x or y.
-func Min[T typ.Integer](x, y T) T {
+// Min returns the smallest of mx or y.
+func Min[T x.Integer](x, y T) T {
 	if x < y {
 		return x
 	}
 	return y
-}
-
-// IsContextTimeout returns true if the underlying error is a timeout. This function
-// counts canceled contexts as timeouts.
-// source article:
-// https://blog.afoolishmanifesto.com/posts/context-deadlines-in-golang/
-func IsContextTimeout(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	switch {
-	case errors.Is(err, context.Canceled):
-		return true
-	case errors.Is(err, context.DeadlineExceeded):
-		return true
-	default:
-		return false
-	}
 }
 
 func FileExists(path string) bool {
@@ -84,11 +63,12 @@ func Coalesce[T comparable](check T, alt T) T {
 	return alt
 }
 
-func CoalesceP[T any](check *T, alt *T) *T {
-	if !IsNil(check) {
+func CoalesceF[T comparable](check T, alt func() T) T {
+	var d T
+	if check == d {
 		return check
 	}
-	return alt
+	return alt()
 }
 
 func Any[T comparable](compare T, params ...T) bool {
@@ -146,19 +126,6 @@ func IsDefault[T comparable](compare T) bool {
 func IsNotDefault[T comparable](compare T) bool {
 	var d T
 	return compare != d
-}
-
-func IsNil[T any](v *T) bool {
-	return v == nil
-}
-
-func IsNotNil[T any](v *T) bool {
-	return v != nil
-}
-
-func AsDefault[T any]() T {
-	var t T
-	return t
 }
 
 func ExpandHomeDirAndEnv(path string) string {
@@ -219,22 +186,23 @@ func GetGoFilePathOfCaller() string {
 	return path.Dir(filename)
 }
 
-// Deadline implements the deadline/timeout resiliency pattern.
-type Deadline struct {
-	deadline time.Time
+// GenerateRandomBytes returns securely generated random bytes.
+// It will panic if the system's secure random number generator
+// fails to function correctly, in which case the caller should
+// not continue.
+// ref: https://stackoverflow.com/questions/35781197/generating-a-random-fixed-length-byte-array-in-go
+func GenerateRandomBytes(n int) []byte {
+	b := make([]byte, n)
+	_, err := rand.Read(b)
+	if err != nil {
+		// Note that err == nil only if we read len(b) bytes.
+		panic(err)
+	}
+
+	return b
 }
 
-// Expiry will return the time at which the deadline will expire
-func (d *Deadline) Expiry() time.Time {
-	return d.deadline
-}
-
-// HasExpired will return true if the deadline has expired
-func (d *Deadline) HasExpired() bool {
-	return !d.deadline.Before(time.Now())
-}
-
-// NewDeadline constructs a new Deadline with the given timeout.
-func NewDeadline(timeout time.Duration) *Deadline {
-	return &Deadline{time.Now().Add(time.Millisecond * timeout)}
+func GenerateRandomBase64String(min_size int) string {
+	b := GenerateRandomBytes(min_size)
+	return base64.RawStdEncoding.EncodeToString(b)
 }

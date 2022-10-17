@@ -2,6 +2,10 @@ package main
 
 import (
 	"fmt"
+	"kwil/x"
+	"kwil/x/api/service"
+	"kwil/x/cfgx"
+	"kwil/x/messaging/pub"
 	"net/http"
 	"os"
 	"regexp"
@@ -19,7 +23,19 @@ const (
 	grpcEndpointEnv = "KWIL_GRPC_ENDPOINT"
 )
 
+func main() {
+	if err := run(); err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
+}
+
 func run() error {
+	inject, err := getInjector()
+	if err != nil {
+		return err
+	}
+
 	cmd := &cobra.Command{
 		Use:   "api-gateway",
 		Short: "api-gateway is a gRPC to HTTP gateway",
@@ -32,43 +48,51 @@ func run() error {
 				return err
 			}
 
-			mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			err = mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 				v0.ServeSwaggerJSON(w, r)
 			})
+			if err != nil {
+				return err
+			}
 
-			mux.HandlePath(http.MethodGet, "/swagger/ui", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			err = mux.HandlePath(http.MethodGet, "/swagger/ui", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 				v0.ServeSwaggerUI(w, r)
 			})
+			if err != nil {
+				return err
+			}
 
-			return http.ListenAndServe(":8080", cors(mux))
+			return http.ListenAndServe(":8080", cors(inject, mux))
 		},
 	}
 
 	cmd.PersistentFlags().String("endpoint", "localhost:50051", "gRPC server endpoint")
-	viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
-	viper.BindEnv("endpoint", grpcEndpointEnv)
+	err = viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
+	if err != nil {
+		return err
+	}
+
+	err = viper.BindEnv("endpoint", grpcEndpointEnv)
+	if err != nil {
+		return err
+	}
 
 	return cmd.Execute()
 }
 
-func main() {
-	if err := run(); err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
-	}
-}
-
-func cors(h http.Handler) http.Handler {
+func cors(inject x.RequestInjectorFn, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if allowedOrigin(r.Header.Get("Origin")) {
 			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType")
 		}
+
 		if r.Method == "OPTIONS" {
 			return
 		}
-		h.ServeHTTP(w, r)
+
+		h.ServeHTTP(w, inject(r))
 	})
 }
 
@@ -80,4 +104,25 @@ func allowedOrigin(origin string) bool {
 		return true
 	}
 	return false
+}
+
+func getInjector() (x.RequestInjectorFn, error) {
+	// TODO: we need to use a config to bootstrap the various emitters/receivers needed
+	cfg := cfgx.GetTestConfig().Select("messaging-emitter")
+
+	// Using NewEmitterSingleClient for now. Once we need
+	// more than one emitter, we will need to create the client
+	// separately and close it on application shutdown.
+	e, err := pub.NewEmitterSingleClient(cfg, service.GetDbRequestSerdes())
+	if err != nil {
+		return nil, err
+	}
+
+	id := service.DATABASE_EMITTER_ALIAS
+
+	// Not sure where else to inject a service for downstream consumption.
+	// Ignoring the additional function for clearing context for now.
+	fn, _ := x.Injectable(id, e).AsRequestInjector()
+
+	return fn, nil
 }

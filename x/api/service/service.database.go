@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
+	"kwil/x"
+	"kwil/x/messaging/mx"
+	"kwil/x/messaging/pub"
+	request "kwil/x/request_manager"
 
 	types "kwil/pkg/types/db"
 	v0 "kwil/x/api/v0"
@@ -47,7 +50,16 @@ func (s *Service) CreateDatabase(ctx context.Context, req *v0.CreateDatabaseRequ
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
 
-	// Forward message to Kafka
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
+	request_id, err := doSubmitRequest(ctx, req, func(req *v0.CreateDatabaseRequest) *DBRequest {
+		return getCreateDbRequest(req)
+	})
+
+	_ = request_id // remove, not using compile error for now
+	// need to update te response with the request id
 
 	return &v0.CreateDatabaseResponse{}, nil
 }
@@ -81,30 +93,36 @@ func (s *Service) UpdateDatabase(ctx context.Context, req *v0.UpdateDatabaseRequ
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
 
-	// Forward message to Kafka
+	request_id, err := doSubmitRequest(ctx, req, func(req *v0.UpdateDatabaseRequest) *DBRequest {
+		return getUpdateDbRequest(req)
+	})
+
+	_ = request_id // remove, not using compile error for now
+	// need to update te response with the request id
+
 	return &v0.UpdateDatabaseResponse{}, nil
 }
 
-func (s *Service) ListDatabases(ctx context.Context, req *v0.ListDatabasesRequest) (*v0.ListDatabasesResponse, error) {
+func (s *Service) ListDatabases(_ context.Context, _ *v0.ListDatabasesRequest) (*v0.ListDatabasesResponse, error) {
 	return &v0.ListDatabasesResponse{}, nil
 }
 
-func (s *Service) GetDatabase(ctx context.Context, req *v0.GetDatabaseRequest) (*v0.GetDatabaseResponse, error) {
+func (s *Service) GetDatabase(_ context.Context, _ *v0.GetDatabaseRequest) (*v0.GetDatabaseResponse, error) {
 	return &v0.GetDatabaseResponse{}, nil
 }
 
-func (s *Service) DeleteDatabase(ctx context.Context, req *v0.DeleteDatabaseRequest) (*v0.DeleteDatabaseResponse, error) {
+func (s *Service) DeleteDatabase(_ context.Context, _ *v0.DeleteDatabaseRequest) (*v0.DeleteDatabaseResponse, error) {
 	return &v0.DeleteDatabaseResponse{}, nil
 }
 
-func (s *Service) PostQuery(ctx context.Context, req *v0.PostQueryRequest) (*v0.PostQueryResponse, error) {
+func (s *Service) PostQuery(_ context.Context, _ *v0.PostQueryRequest) (*v0.PostQueryResponse, error) {
 	return &v0.PostQueryResponse{
 		Id:  "123",
 		Msg: "success!",
 	}, nil
 }
 
-func (s *Service) GetQueries(ctx context.Context, req *v0.GetQueriesRequest) (*v0.GetQueriesResponse, error) {
+func (s *Service) GetQueries(_ context.Context, _ *v0.GetQueriesRequest) (*v0.GetQueriesResponse, error) {
 	// TODO: Implement
 	// returning some mock data right now
 
@@ -158,4 +176,44 @@ func (s *Service) GetQueries(ctx context.Context, req *v0.GetQueriesRequest) (*v
 	}
 
 	return &pqs, nil
+}
+
+type createDatabaseRequestSerdes struct {
+}
+
+func GetDbRequestSerdes() mx.Serdes[*DBRequest] {
+	panic("implement me")
+}
+
+func (c *createDatabaseRequestSerdes) Serialize(_ *DBRequest) (key []byte, value []byte, err error) {
+	// TODO: get serialize logic from Bryan
+	panic("not implemented")
+}
+
+func (c *createDatabaseRequestSerdes) Deserialize(_ []byte, _ []byte) (*DBRequest, error) {
+	// TODO: get deserialize logic from Bryan
+	panic("not implemented")
+}
+
+func doSubmitRequest[T any](ctx context.Context, req T, fn func(T) *DBRequest) (string, error) {
+	emitter := x.Resolve[pub.Emitter[*DBRequest]](ctx, DATABASE_EMITTER_ALIAS)
+	if emitter == nil {
+		return "", fmt.Errorf("failed to resolve emitter %s", DATABASE_EMITTER_ALIAS)
+	}
+
+	if emitter == nil {
+		return "", fmt.Errorf("failed to resolve emitter %s", DATABASE_EMITTER_ALIAS)
+	}
+
+	db_req := fn(req)
+	a := emitter.Send(ctx, db_req)
+	<-a.DoneCh() // blocking call
+
+	requestManager := x.Resolve[request.Manager](ctx, request.MANAGER_ALIAS)
+	info, err := requestManager.Create(ctx, db_req.IdempotentKey)
+	if err == nil {
+		return "", err
+	}
+
+	return info.ID(), nil
 }

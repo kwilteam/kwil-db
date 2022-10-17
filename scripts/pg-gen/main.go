@@ -49,8 +49,8 @@ const catalogTmpl = `
 package {{.Pkg}}
 
 import (
-	"kwil/x/sqlparse/ast"
-	"kwil/x/catalog"
+	"kwil/mx/sqlparse/ast"
+	"kwil/mx/catalog"
 )
 
 {{- $funcName := .GenFnName }}
@@ -133,8 +133,8 @@ const loaderFuncTmpl = `
 package postgres
 
 import (
-	"kwil/x/sqlparse/postgres/contrib"
-	"kwil/x/catalog"
+	"kwil/mx/sqlparse/postgres/contrib"
+	"kwil/mx/catalog"
 )
 
 func loadExtension(name string) *catalog.Schema {

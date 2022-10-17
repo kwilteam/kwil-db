@@ -16,11 +16,11 @@ import (
 	"kwil/x/api/handler"
 	"kwil/x/api/service"
 	v0 "kwil/x/api/v0"
+	cfgx "kwil/x/cfgx"
 	"kwil/x/chain/auth"
 	"kwil/x/chain/config"
 	"kwil/x/chain/contracts"
 	"kwil/x/chain/utils"
-	nc "kwil/x/common/config"
 	"kwil/x/crypto"
 	nd "kwil/x/deposits"
 	"kwil/x/grpcx"
@@ -47,13 +47,9 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to connect to client chain: %w", err)
 	}
 
-	cb := nc.Builder()
-	depConf, err := cb.UseFile("deposit-config.yaml").Build()
-	if err != nil {
-		return fmt.Errorf("failed to load deposit config: %w", err)
-	}
+	dc := cfgx.GetConfig().Select("deposit-config.yaml")
 
-	d, err := nd.New(depConf)
+	d, err := nd.New(dc)
 	defer d.Close()
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
