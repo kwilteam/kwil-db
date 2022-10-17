@@ -73,7 +73,7 @@ func (ac *authClient) RequestAuth(ip string) (bool, error) {
 	}
 	log.Debug().Msgf("connected to peer at %s", ip)
 
-	// Send AuthRequest
+	// SendMessage AuthRequest
 	ar := &types.AuthRequest{
 		Address: ac.acc.GetAddress().String(),
 	}
@@ -85,7 +85,7 @@ func (ac *authClient) RequestAuth(ip string) (bool, error) {
 		return false, err
 	}
 
-	// Send AuthRequest
+	// SendMessage AuthRequest
 	err = c.WriteMessage(websocket.TextMessage, b)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to send AuthRequest")
@@ -114,7 +114,7 @@ func (ac *authClient) RequestAuth(ip string) (bool, error) {
 		return false, err
 	}
 
-	// Send AuthChallengeResponse
+	// SendMessage AuthChallengeResponse
 	acr := &types.AuthChallengeResponse{
 		Signature: sig,
 		Nonce:     acm.Nonce,
@@ -127,7 +127,7 @@ func (ac *authClient) RequestAuth(ip string) (bool, error) {
 		return false, err
 	}
 
-	// Send AuthChallengeResponse
+	// SendMessage AuthChallengeResponse
 	err = c.WriteMessage(websocket.TextMessage, b)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to send AuthChallengeResponse")

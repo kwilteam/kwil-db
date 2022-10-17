@@ -1,8 +1,8 @@
 package sub
 
 import (
+	"kwil/x/async"
 	mx "kwil/x/messaging/mx"
-	"kwil/x/rx"
 )
 
 type MessageIterator[T any] interface {
@@ -13,5 +13,5 @@ type MessageIterator[T any] interface {
 	// largest offset consumed for the batch. The
 	// offset committed will be based on how far the
 	// message iterator has been advanced.
-	Commit() rx.Action
+	Commit() async.Action
 }

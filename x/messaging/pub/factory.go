@@ -30,6 +30,7 @@ func NewEmitterSingleClient[T any](config cfgx.Config, serdes mx.Serdes[T]) (Emi
 	return NewEmitter(client, serdes)
 }
 
+// emitter id's are unique per client per emitter.
 var counter int32
 
 // NewEmitter creates a new emitter that uses the provided client.
@@ -52,6 +53,7 @@ func NewEmitter[T any](client mx.Client, serdes mx.Serdes[T]) (Emitter[T], error
 		id:     int(atomic.AddInt32(&counter, 1)),
 		client: c,
 		serdes: serdes,
+		done:   make(chan x.Void),
 	}
 
 	fn, err := c.attach(e)
@@ -75,11 +77,12 @@ func NewClient(config cfgx.Config) (mx.Client, error) {
 	}
 
 	var out syncx.Chan[*message_with_ctx]
-	if cfg.Buffer == 0 {
-		out = syncx.NewChan[*message_with_ctx]()
-	} else {
-		out = syncx.NewChanBuffered[*message_with_ctx](cfg.Buffer)
+	buf := cfg.Buffer
+	if buf < 1 {
+		buf = 1
 	}
+
+	out = syncx.NewChanBuffered[*message_with_ctx](buf)
 
 	kp, err := kgo.NewClient(
 		kgo.DefaultProduceTopic(cfg.DefaultTopic),

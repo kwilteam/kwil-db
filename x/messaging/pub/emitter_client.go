@@ -24,7 +24,7 @@ type emitter_client struct {
 }
 
 func (e *emitter_client) GetClientType() mx.ClientType {
-	return mx.Emitter
+	return mx.Emitter_Type
 }
 
 func (e *emitter_client) IsClosed() bool {
@@ -117,17 +117,17 @@ func (e *emitter_client) doCleanup() {
 
 	// close and wait for each underlying emitter
 	// to close out.
-	for id, e := range emitters {
+	for id, em := range emitters {
 		delete(emitters, id)
-		e.Close()
-		<-e.OnClosed()
+		em.Close()
+		<-em.OnClosed()
 	}
 
 	// signal that client is now closed
 	e.done.Close()
 }
 
-func (e *emitter_client) attach(emitter internal.Closable) (func() <-chan x.Void, error) {
+func (e *emitter_client) attach(emitter internal.Closable) (func() bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -146,10 +146,9 @@ func (e *emitter_client) attach(emitter internal.Closable) (func() <-chan x.Void
 	id := emitter.ID()
 	out := e.out
 	mu := &e.mu
-	done := e.done
 	emitters := e.emitters
 
-	return func() <-chan x.Void {
+	return func() bool {
 		mu.Lock()
 		defer mu.Unlock()
 		inner := emitters[id]
@@ -157,16 +156,14 @@ func (e *emitter_client) attach(emitter internal.Closable) (func() <-chan x.Void
 			// in case of a cyclic shutdown (e.g., emitter.Close() ->
 			// client.Close() -> emitter.Close(), etc.) we check for
 			// a nil emitter here.
-			return done.ClosedCh()
+			return false
 		}
 
 		delete(emitters, id)
-		if len(emitters) > 0 {
-			return x.ClosedChanVoid()
+		if len(emitters) == 0 {
+			out.Close()
 		}
 
-		out.Close()
-
-		return done.ClosedCh()
+		return true
 	}, nil
 }

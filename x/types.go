@@ -1,5 +1,11 @@
 package x
 
+import (
+	"fmt"
+	"sync/atomic"
+	"unsafe"
+)
+
 var _closedChan chan Void
 
 func init() {
@@ -74,4 +80,29 @@ func AsDefault[T any]() T {
 type Iterator[T any] interface {
 	HasNext() bool
 	Value() T
+}
+
+type Runnable func()
+type Callable[T any] func() T
+type ApplyT[T, R any] func(T) R
+type AcceptT[T any] func(T)
+type BiAccept[T, U any] func(T, U)
+
+type Executor interface {
+	Execute(Runnable)
+}
+
+type Clearable[T any] interface {
+	Clear() Iterator[T]
+}
+
+func PrintIfError(err error) {
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func CAS(addr *any, old *any, new *any) bool {
+	ptr := unsafe.Pointer(addr)
+	return atomic.CompareAndSwapPointer(&ptr, unsafe.Pointer(old), unsafe.Pointer(new))
 }

@@ -3,19 +3,13 @@ package syncx
 import (
 	"fmt"
 	"kwil/x"
-	"kwil/x/rx"
+	"kwil/x/async"
 	"sync"
 	"sync/atomic"
 	"testing"
 )
 
 func Test_Chan_Close_Basics(t *testing.T) {
-
-	var s *string
-
-	r := x.ResultSuccess(s)
-	fmt.Println(r.IsError())
-
 	ch := NewChanBuffered[x.Void](10)
 
 	m := sync.Mutex{}
@@ -37,7 +31,7 @@ func Test_Chan_Close_Basics(t *testing.T) {
 
 func Test_Chan_Drain(t *testing.T) {
 	ch := NewChanBuffered[x.Void](10)
-	c := rx.NewAction()
+	c := async.NewAction()
 
 	go func() {
 		if !ch.Write(x.Void{}) {

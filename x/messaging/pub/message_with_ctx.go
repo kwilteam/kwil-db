@@ -24,8 +24,8 @@ func (c *message_with_ctx) completeOrFail(err error) (out bool) {
 		return false
 	}
 
-	ptr := unsafe.Pointer(&c.ackNack)
-	if !atomic.CompareAndSwapPointer(&ptr, unsafe.Pointer(&a), unsafe.Pointer(&none_ack)) {
+	ptr := unsafe.Pointer(c.ackNack)
+	if !atomic.CompareAndSwapPointer(&ptr, unsafe.Pointer(a), unsafe.Pointer(&none_ack)) {
 		return false
 	}
 

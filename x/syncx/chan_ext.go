@@ -7,7 +7,7 @@ import (
 )
 
 type _chan[T any] struct {
-	// data_ch used as the primary channel for reading
+	// data_ch used node the primary channel for reading
 	// and writing data.
 	data_ch chan T
 
@@ -27,9 +27,7 @@ type _chan[T any] struct {
 	writers int32
 
 	// status is the current status of the channel.
-	// writable: 0
-	// locked:   1
-	// closed:   2
+	// writable: 0, closed: 1, closed: 2
 	status int8
 }
 

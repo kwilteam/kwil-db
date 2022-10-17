@@ -1,4 +1,4 @@
-package rx
+package async
 
 const _VALUE = uint32(1)
 const _ERROR = uint32(2)

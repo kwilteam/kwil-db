@@ -5,8 +5,8 @@ import "kwil/x"
 type ClientType int
 
 const (
-	Emitter ClientType = iota
-	Receiver
+	Emitter_Type ClientType = iota
+	Receiver_Type
 )
 
 type Client interface {

@@ -1,7 +1,8 @@
-package rx
+package async
 
 import (
 	"errors"
+	"kwil/x"
 	"sync"
 	"testing"
 )
@@ -59,7 +60,7 @@ func Test_Order(t *testing.T) {
 			}
 			count--
 			wg.Done()
-		}).OnComplete(&ContinuationT[*TestStruct]{
+		}).OnComplete(&Continuation[*TestStruct]{
 		Finally: func() {
 			if count != 4 {
 				t.Fail()
@@ -80,7 +81,7 @@ func Test_WhenComplete(t *testing.T) {
 	tc := &TestStruct{"done_TaskOnSuccess"}
 	task := NewTask[*TestStruct]()
 
-	task.ThenCatchFinally(&ContinuationT[*TestStruct]{
+	task.ThenCatchFinally(&Continuation[*TestStruct]{
 		Then: func(value *TestStruct) {
 			if value.value != tc.value {
 				t.Fail()
@@ -125,7 +126,7 @@ func Test_ThenCatchFinally(t *testing.T) {
 
 	task := NewTask[*TestStruct]()
 
-	task.ThenCatchFinally(&ContinuationT[*TestStruct]{
+	task.ThenCatchFinally(&Continuation[*TestStruct]{
 		Then: func(v *TestStruct) {
 			wg.Done()
 		},
@@ -144,7 +145,7 @@ func Test_ThenCatchFinally(t *testing.T) {
 	task2 := NewTask[*TestStruct]()
 
 	count := 2
-	task2.ThenCatchFinally(&ContinuationT[*TestStruct]{
+	task2.ThenCatchFinally(&Continuation[*TestStruct]{
 		Then: func(v *TestStruct) {
 			t.Fail()
 		},
@@ -211,7 +212,7 @@ func Test_AsAsync(t *testing.T) {
 	task3 := NewTask[*TestStruct]()
 
 	d3 := []int{0}
-	task3.AsAsync(ImmediateExecutor()).Then(
+	task3.AsAsync(x.ImmediateExecutor()).Then(
 		func(value *TestStruct) {
 			d3[0] = 1
 		})
@@ -260,7 +261,7 @@ func Test_Compose(t *testing.T) {
 
 		if err != nil {
 			t.Error(err)
-			return Failure[*TestStruct](err)
+			return FailedTask[*TestStruct](err)
 		}
 
 		return Call(func() (*TestStruct, error) {

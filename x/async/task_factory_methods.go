@@ -1,4 +1,4 @@
-package rx
+package async
 
 import (
 	"kwil/x/errx"
@@ -28,37 +28,36 @@ func NewActionAsync() Action {
 	return _newActionAsync()
 }
 
-// Success returns a completed Task with the param 'value'.
-func Success[T any](value T) Task[T] {
+// CompletedTask returns a completed Task with the param 'value'.
+func CompletedTask[T any](value T) Task[T] {
 	return &task_value[T]{value}
 }
 
-// Failure returns an errored Task with the param 'err'.
-func Failure[T any](err error) Task[T] {
+// FailedTask returns an errored Task with the param 'err'.
+func FailedTask[T any](err error) Task[T] {
 	return &task_error[T]{err}
 }
 
-// Cancelled returns a cancelled Task. Equivalent
-// to an errored task containing a context.Cancelled
-func Cancelled[T any]() Task[T] {
-	//l := context.Canceled
+// CancelledTask returns a cancelled Task. Equivalent
+// to an errored task containing a context.CancelledTask
+func CancelledTask[T any]() Task[T] {
 	return &task_error[T]{errx.ErrOperationCancelled()}
 }
 
-// FailureA will return a new Action that is in a
+// FailedAction will return a new Action that is in a
 // completed failed state
-func FailureA(err error) Action {
+func FailedAction(err error) Action {
 	return &action_err{err}
 }
 
-// SuccessA will return a new Action that is in a
+// CompletedAction will return a new Action that is in a
 // completed successful state
-func SuccessA() Action {
+func CompletedAction() Action {
 	return &action_value{}
 }
 
-// CancelledA returns a cancelled Task. Equivalent
-// to an errored task containing a context.Cancelled
-func CancelledA() Action {
+// CancelledAction returns a cancelled Task. Equivalent
+// to an errored task containing a context.CancelledTask
+func CancelledAction() Action {
 	return &action_err{errx.ErrOperationCancelled()}
 }

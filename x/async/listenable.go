@@ -1,4 +1,4 @@
-package rx
+package async
 
 // Listenable is an interface that allows for
 // combining/composing different Promise-like
@@ -20,5 +20,5 @@ type Listenable[T any] interface {
 
 	// OnComplete will call the func when the result has
 	// been set
-	OnComplete(*ContinuationT[T])
+	OnComplete(*Continuation[T])
 }

@@ -1,4 +1,4 @@
-package rx
+package async
 
 import (
 	"context"
@@ -43,7 +43,7 @@ type Task[T any] interface {
 	// IsDone will return true if the Result is complete
 	IsDone() bool
 
-	// DoneCh will return a channel that will be closed when the
+	// DoneCh will return a channel that will be stopping when the
 	// result/error has been set
 	DoneCh() <-chan Void
 
@@ -91,7 +91,7 @@ type Task[T any] interface {
 	Compose(fn func(T, error) Task[T]) Task[T]
 
 	// ThenCatchFinally will call the func when the result has been set
-	ThenCatchFinally(fn *ContinuationT[T]) Task[T]
+	ThenCatchFinally(fn *Continuation[T]) Task[T]
 
 	// WhenComplete will call the func when the result has been set
 	WhenComplete(fn func(T, error)) Task[T]
@@ -103,7 +103,7 @@ type Task[T any] interface {
 	WhenCompleteCh(chan *Result[T]) Task[T]
 
 	// OnComplete will call the func when the result has been set
-	OnComplete(*ContinuationT[T])
+	OnComplete(*Continuation[T])
 
 	// AsAction returns an action that will be completed
 	// when the source task has been completed

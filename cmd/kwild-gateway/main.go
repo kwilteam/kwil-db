@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"kwil/x"
 	"kwil/x/api/service"
 	"kwil/x/cfgx"
-	"kwil/x/messaging/mx"
 	"kwil/x/messaging/pub"
 	"net/http"
 	"os"
@@ -25,8 +23,15 @@ const (
 	grpcEndpointEnv = "KWIL_GRPC_ENDPOINT"
 )
 
+func main() {
+	if err := run(); err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
+}
+
 func run() error {
-	ctx, err := setupRootRequestCtx()
+	inject, err := getInjector()
 	if err != nil {
 		return err
 	}
@@ -57,7 +62,7 @@ func run() error {
 				return err
 			}
 
-			return http.ListenAndServe(":8080", cors(ctx, mux))
+			return http.ListenAndServe(":8080", cors(inject, mux))
 		},
 	}
 
@@ -75,14 +80,7 @@ func run() error {
 	return cmd.Execute()
 }
 
-func main() {
-	if err := run(); err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
-	}
-}
-
-func cors(ctx context.Context, h http.Handler) http.Handler {
+func cors(inject x.RequestInjectorFn, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if allowedOrigin(r.Header.Get("Origin")) {
 			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
@@ -94,7 +92,7 @@ func cors(ctx context.Context, h http.Handler) http.Handler {
 			return
 		}
 
-		h.ServeHTTP(w, r.WithContext(ctx))
+		h.ServeHTTP(w, inject(r))
 	})
 }
 
@@ -108,21 +106,23 @@ func allowedOrigin(origin string) bool {
 	return false
 }
 
-func setupRootRequestCtx() (context.Context, error) {
+func getInjector() (x.RequestInjectorFn, error) {
+	// TODO: we need to use a config to bootstrap the various emitters/receivers needed
 	cfg := cfgx.GetTestConfig().Select("messaging-emitter")
-
-	// Once the message type is known, we will create the
-	// appropriate serdes
-	serdes := mx.SerdesByteArray()
 
 	// Using NewEmitterSingleClient for now. Once we need
 	// more than one emitter, we will need to create the client
-	// separately and close it our upon application shutdown.
-	e, err := pub.NewEmitterSingleClient(cfg, serdes)
+	// separately and close it on application shutdown.
+	e, err := pub.NewEmitterSingleClient(cfg, service.GetDbRequestSerdes())
 	if err != nil {
 		return nil, err
 	}
 
-	// Not sure where else to inject a service for down stream consumption
-	return x.Wrap(x.RootContext(), service.DATABASE_EMITTER_ALIAS, e), nil
+	id := service.DATABASE_EMITTER_ALIAS
+
+	// Not sure where else to inject a service for downstream consumption.
+	// Ignoring the additional function for clearing context for now.
+	fn, _ := x.Injectable(id, e).AsRequestInjector()
+
+	return fn, nil
 }

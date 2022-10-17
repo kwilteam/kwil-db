@@ -1,4 +1,4 @@
-package rx
+package async
 
 import (
 	"context"
@@ -30,12 +30,12 @@ func (r *task_error[T]) CatchCh(ch chan error) Task[T]               { ch <- r.e
 func (r *task_error[T]) Handle(fn func(T, error) (T, error)) Task[T] { return r._handle(fn) }
 func (r *task_error[T]) Compose(fn func(T, error) Task[T]) Task[T]   { return r._compose(fn) }
 func (r *task_error[T]) WhenComplete(fn func(T, error)) Task[T]      { fn(AsDefault[T](), r.err); return r }
-func (r *task_error[T]) OnComplete(fn *ContinuationT[T])             { r.WhenComplete(fn.invoke) }
+func (r *task_error[T]) OnComplete(fn *Continuation[T])              { r.WhenComplete(fn.invoke) }
 func (r *task_error[T]) AsAction() Action                            { return &action_err{r.err} }
 func (r *task_error[T]) AsListenable() Listenable[T]                 { return r }
 func (r *task_error[T]) AsAsync(e Executor) Task[T]                  { return r._asAsync(e) }
 func (r *task_error[T]) IsAsync() bool                               { return false }
-func (r *task_error[T]) ThenCatchFinally(fn *ContinuationT[T]) Task[T] {
+func (r *task_error[T]) ThenCatchFinally(fn *Continuation[T]) Task[T] {
 	return r.WhenComplete(fn.invoke)
 }
 func (r *task_error[T]) WhenCompleteCh(ch chan *Result[T]) Task[T] {
@@ -45,7 +45,7 @@ func (r *task_error[T]) WhenCompleteCh(ch chan *Result[T]) Task[T] {
 
 func (r *task_error[T]) _asAsync(e Executor) Task[T] {
 	if e != nil {
-		e = asyncExecutor
+		e = AsyncExecutor()
 	}
 
 	t := newTask[T]()
@@ -58,9 +58,9 @@ func (r *task_error[T]) _asAsync(e Executor) Task[T] {
 func (r *task_error[T]) _handle(fn func(T, error) (T, error)) Task[T] {
 	v, e := fn(AsDefault[T](), r.err)
 	if e != nil {
-		return Failure[T](e)
+		return FailedTask[T](e)
 	} else {
-		return Success(v)
+		return CompletedTask(v)
 	}
 }
 

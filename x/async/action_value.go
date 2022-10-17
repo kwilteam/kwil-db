@@ -1,4 +1,4 @@
-package rx
+package async
 
 import (
 	"context"
@@ -22,7 +22,7 @@ func (a *action_value) Then(fn func()) Action                       { fn(); retu
 func (a *action_value) ThenCh(ch chan Void) Action                  { ch <- Void{}; return a }
 func (a *action_value) Catch(_ func(error)) Action                  { return a }
 func (a *action_value) CatchCh(_ chan error) Action                 { return a }
-func (a *action_value) OnComplete(fn *ContinuationT[Void])          { fn.invoke(Void{}, nil) }
+func (a *action_value) OnComplete(fn *Continuation[Void])           { fn.invoke(Void{}, nil) }
 func (a *action_value) WhenComplete(fn func(error)) Action          { fn(nil); return a }
 func (a *action_value) WhenCompleteCh(ch chan *Result[Void]) Action { return a._whenCompleteCh(ch) }
 func (a *action_value) AsAction() Action                            { return a }
@@ -36,7 +36,7 @@ func (a *action_value) ThenCatchFinally(fn *ContinuationA) Action {
 
 func (a *action_value) _asAsync(e Executor) Action {
 	if e != nil {
-		e = asyncExecutor
+		e = AsyncExecutor()
 	}
 
 	n := _newAction()

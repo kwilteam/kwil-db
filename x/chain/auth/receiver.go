@@ -106,7 +106,7 @@ func (a *authenticator) Authenticate(c *websocket.Conn) error {
 	// Generate nonce
 	nonce := generateID(32)
 
-	// Send nonce to client
+	// SendMessage nonce to client
 	cr := types.AuthChallenge{
 		Nonce: nonce,
 		Valid: true,
@@ -119,7 +119,7 @@ func (a *authenticator) Authenticate(c *websocket.Conn) error {
 		return err
 	}
 
-	// Send response
+	// SendMessage response
 	err = c.WriteMessage(websocket.TextMessage, bb)
 	if err != nil {
 		log.Warn().Err(err).Msg("error sending response")
@@ -161,7 +161,7 @@ func (a *authenticator) Authenticate(c *websocket.Conn) error {
 	// Store nonce in keys map
 	a.keys[csr.Nonce] = true
 
-	// Send response
+	// SendMessage response
 	ar := types.AuthResponse{
 		Nonce: csr.Nonce,
 		Valid: true,
@@ -174,7 +174,7 @@ func (a *authenticator) Authenticate(c *websocket.Conn) error {
 		return err
 	}
 
-	// Send response
+	// SendMessage response
 	err = c.WriteMessage(websocket.TextMessage, bb)
 	if err != nil {
 		log.Warn().Err(err).Msg("error sending response")

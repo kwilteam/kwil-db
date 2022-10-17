@@ -1,4 +1,4 @@
-package rx
+package async
 
 import (
 	"context"
@@ -27,7 +27,7 @@ func (a *action_err) Catch(fn func(error)) Action                 { fn(a.err); r
 func (a *action_err) CatchCh(ch chan error) Action                { ch <- a.err; return a }
 func (a *action_err) WhenComplete(fn func(error)) Action          { fn(a.err); return a }
 func (a *action_err) WhenCompleteCh(ch chan *Result[Void]) Action { return a._whenCompleteCh(ch) }
-func (a *action_err) OnComplete(fn *ContinuationT[Void])          { fn.invoke(Void{}, a.err) }
+func (a *action_err) OnComplete(fn *Continuation[Void])           { fn.invoke(Void{}, a.err) }
 func (a *action_err) AsAction() Action                            { return a }
 func (a *action_err) AsListenable() Listenable[Void]              { return a }
 func (a *action_err) AsAsync(e Executor) Action                   { return a._asAsync(e) }
@@ -39,7 +39,7 @@ func (a *action_err) ThenCatchFinally(fn *ContinuationA) Action {
 
 func (a *action_err) _asAsync(e Executor) Action {
 	if e != nil {
-		e = asyncExecutor
+		e = AsyncExecutor()
 	}
 
 	c := _newAction()

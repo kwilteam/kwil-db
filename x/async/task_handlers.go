@@ -1,4 +1,4 @@
-package rx
+package async
 
 import (
 	. "kwil/x"

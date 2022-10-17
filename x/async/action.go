@@ -1,4 +1,4 @@
-package rx
+package async
 
 import (
 	"context"
@@ -47,7 +47,7 @@ type Action interface {
 	// NOTE: this is a blocking call
 	GetError() error
 
-	// DoneCh will return a channel that will be closed when the
+	// DoneCh will return a channel that will be stopping when the
 	// result/error has been set
 	DoneCh() <-chan Void
 
@@ -79,7 +79,7 @@ type Action interface {
 	WhenCompleteCh(chan *Result[Void]) Action
 
 	// OnComplete will call the func when the result has been set
-	OnComplete(*ContinuationT[Void])
+	OnComplete(*Continuation[Void])
 
 	// AsAction returns an opaque continuation that will be completed
 	// when the source task has been completed

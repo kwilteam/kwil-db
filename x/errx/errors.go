@@ -41,7 +41,7 @@ func IsOperationCancelled(err error) bool {
 		return false
 	}
 
-	return errors.Is(err, _errOperationCancelled) || _isContextTimeout(err)
+	return errors.Is(err, _errOperationCancelled)
 }
 
 // IsCancelled returns true if the underlying error is ErrOperationCancelled

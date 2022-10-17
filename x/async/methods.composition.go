@@ -1,4 +1,4 @@
-package rx
+package async
 
 import "kwil/x"
 
@@ -7,7 +7,7 @@ import "kwil/x"
 func Map[T, R any](source Listenable[T], fn func(T) R) Task[R] {
 	tk := NewTask[R]()
 
-	source.OnComplete(&ContinuationT[T]{
+	source.OnComplete(&Continuation[T]{
 		Then: func(value T) {
 			tk.Complete(fn(value))
 		},
@@ -75,7 +75,7 @@ func Any[T any](sources ...Listenable[T]) Task[T] {
 
 func All[T any](sources ...Listenable[T]) Task[[]T] {
 	if len(sources) == 0 {
-		return Success([]T{})
+		return CompletedTask([]T{})
 	}
 
 	tk := NewTask[[]T]()
@@ -100,8 +100,8 @@ func All[T any](sources ...Listenable[T]) Task[[]T] {
 	return tk
 }
 
-func fromHandler[T any](fn func(T, error)) *ContinuationT[T] {
-	return &ContinuationT[T]{
+func fromHandler[T any](fn func(T, error)) *Continuation[T] {
+	return &Continuation[T]{
 		Then: func(v T) {
 			fn(v, nil)
 		},
