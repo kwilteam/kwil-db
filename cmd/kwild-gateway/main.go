@@ -5,8 +5,8 @@ import (
 	"kwil/x"
 	"kwil/x/cfgx"
 	"kwil/x/messaging/pub"
-	request "kwil/x/request_service"
 	"kwil/x/service/apisvc"
+	tracking "kwil/x/tracking_service"
 	"net/http"
 	"os"
 	"regexp"
@@ -123,7 +123,7 @@ func getServiceInjector() (x.RequestInjectorFn, error) {
 	// Ignoring the additional function for clearing context for now.
 	fn, _ := x.
 		Injectable(apisvc.DATABASE_EMITTER_ALIAS, e).
-		Include(request.MANAGER_ALIAS, request.GetManager()).
+		Include(tracking.SERVICE_ALIAS, tracking.GetService()).
 		AsRequestInjector()
 
 	return fn, nil

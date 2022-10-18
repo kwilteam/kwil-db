@@ -1,18 +1,18 @@
-package request
+package tracking
 
 import (
 	"context"
 	"sync"
 )
 
-const MANAGER_ALIAS = "service.REQUEST_MANAGER" // todo: ensure unique
+const SERVICE_ALIAS = "service.TRACKING_SERVICE" // todo: ensure unique
 
-var managerFn func() Manager
+var managerFn func() Service
 
 func init() {
 	once := sync.Once{}
-	var m Manager
-	managerFn = func() Manager {
+	var m Service
+	managerFn = func() Service {
 		once.Do(func() {
 			m = &manager{}
 		})
@@ -20,11 +20,11 @@ func init() {
 	}
 }
 
-func GetManager() Manager {
+func GetService() Service {
 	return managerFn()
 }
 
-type Manager interface {
+type Service interface {
 	// Create creates a new request to track commands submitted for execution
 	Create(ctx context.Context, source_identifier string) (Info, error)
 

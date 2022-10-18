@@ -7,7 +7,7 @@ import (
 	"kwil/x"
 	"kwil/x/messaging/mx"
 	"kwil/x/messaging/pub"
-	request "kwil/x/request_service"
+	request "kwil/x/tracking_service"
 	"math/big"
 
 	types "kwil/pkg/types/db"
@@ -210,9 +210,9 @@ func doSubmitRequest[T any](ctx context.Context, req T, fn func(T) *DBRequest) (
 	a := emitter.Send(ctx, db_req)
 	<-a.DoneCh() // blocking call
 
-	requestManager := x.Resolve[request.Manager](ctx, request.MANAGER_ALIAS)
+	requestManager := x.Resolve[request.Service](ctx, request.SERVICE_ALIAS)
 	if requestManager == nil {
-		return "", fmt.Errorf("failed to resolve request manager %s", request.MANAGER_ALIAS)
+		return "", fmt.Errorf("failed to resolve request manager %s", request.SERVICE_ALIAS)
 	}
 
 	info, err := requestManager.Create(ctx, db_req.IdempotentKey)
