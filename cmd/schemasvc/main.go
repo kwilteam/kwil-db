@@ -5,7 +5,7 @@ import (
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 	schemapb "kwil/x/proto/schemasvc"
-	"kwil/x/svc/schemasvc"
+	"kwil/x/service/schemasvc"
 	"net"
 	"os"
 )

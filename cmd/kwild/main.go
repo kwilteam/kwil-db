@@ -19,7 +19,7 @@ import (
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 	apipb "kwil/x/proto/apisvc"
-	"kwil/x/svc/apisvc"
+	"kwil/x/service/apisvc"
 
 	"github.com/oklog/run"
 )

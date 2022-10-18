@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/logging v1.5.0
 	github.com/99designs/keyring v1.1.6
 	github.com/DATA-DOG/go-sqlmock v1.5.0
+	github.com/alecthomas/participle/v2 v2.0.0-beta.5
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/ethereum/go-ethereum v1.10.21
 	github.com/fatih/color v1.13.0
@@ -44,7 +45,6 @@ require (
 
 require (
 	github.com/agext/levenshtein v1.2.1 // indirect
-	github.com/alecthomas/participle/v2 v2.0.0-beta.5 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.0 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
