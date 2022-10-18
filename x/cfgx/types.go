@@ -46,11 +46,11 @@ type SourceItem interface {
 }
 
 type FileSource interface {
-	SourceItem
 	Path() string
+	As(out interface{}) error
 }
 
 type FileSelectorSource interface {
-	SourceItem
 	Selector() string
+	As(out interface{}) error
 }

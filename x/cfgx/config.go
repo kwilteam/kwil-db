@@ -3,15 +3,17 @@ package cfgx
 import (
 	"errors"
 	"flag"
+	"fmt"
+	"gopkg.in/yaml.v2"
 	"kwil/x/utils"
 	"log"
+	"math"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
-
-	"gopkg.in/yaml.v2"
+	"time"
 )
 
 var (
@@ -92,8 +94,7 @@ func (c *configImpl) String(key string) string {
 
 func (c *configImpl) GetString(key string, defaultValue string) string {
 	if v, ok := c.root[c.normalize(key)]; ok {
-		s := reflect.ValueOf(v).String()
-		return s
+		return reflect.ValueOf(v).String()
 	}
 
 	return defaultValue
@@ -123,7 +124,17 @@ func (c *configImpl) Int32(key string, defaultValue int32) int32 {
 		return v
 	}
 
-	log.Default().Println("Failed to parse num as int32", err)
+	log.Default().Printf("Failed to parse %s as int32: %v\n", key, err)
+	return defaultValue
+}
+
+func (c *configImpl) UInt32(key string, defaultValue uint32) uint32 {
+	v, err := c.GetUInt32(key, defaultValue)
+	if err == nil {
+		return v
+	}
+
+	log.Default().Printf("Failed to parse %s as uint32: %v\n", key, err)
 	return defaultValue
 }
 
@@ -133,7 +144,17 @@ func (c *configImpl) Int64(key string, defaultValue int64) int64 {
 		return v
 	}
 
-	log.Default().Println("Failed to parse num as int64", err)
+	log.Default().Printf("Failed to parse %s as int64: %v\n", key, err)
+	return defaultValue
+}
+
+func (c *configImpl) UInt64(key string, defaultValue uint64) uint64 {
+	v, err := c.GetUInt64(key, defaultValue)
+	if err == nil {
+		return v
+	}
+
+	log.Default().Printf("Failed to parse %s as uint64: %v\n", key, err)
 	return defaultValue
 }
 
@@ -151,6 +172,24 @@ func (c *configImpl) GetInt32(key string, defaultValue int32) (int32, error) {
 	return int32(result), nil
 }
 
+func (c *configImpl) GetUInt32(key string, defaultValue uint32) (uint32, error) {
+	s := c.String(key)
+	if s == "" {
+		return defaultValue, nil
+	}
+
+	result, err := strconv.ParseUint(s, 10, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	if result > math.MaxUint32 {
+		return 0, errors.New("value is too big")
+	}
+
+	return uint32(result), nil
+}
+
 func (c *configImpl) GetInt64(key string, defaultValue int64) (int64, error) {
 	s := c.String(key)
 	if s == "" {
@@ -163,6 +202,58 @@ func (c *configImpl) GetInt64(key string, defaultValue int64) (int64, error) {
 	}
 
 	return result, nil
+}
+
+func (c *configImpl) GetUInt64(key string, defaultValue uint64) (uint64, error) {
+	s := c.String(key)
+	if s == "" {
+		return defaultValue, nil
+	}
+
+	result, err := strconv.ParseUint(s, 10, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	return result, nil
+}
+
+func (c *configImpl) Bool(key string, defaultValue bool) bool {
+	v, err := c.GetBool(key, defaultValue)
+	if err == nil {
+		return v
+	}
+
+	log.Default().Printf("Failed to parse %s as bool: %v\n", key, err)
+	return defaultValue
+}
+
+func (c *configImpl) GetBool(key string, defaultValue bool) (bool, error) {
+	s := c.String(key)
+	if s == "" {
+		return defaultValue, nil
+	}
+
+	return strconv.ParseBool(s)
+}
+
+func (c *configImpl) Duration(key string, defaultValue time.Duration) time.Duration {
+	v, err := c.GetDuration(key, defaultValue)
+	if err == nil {
+		return v
+	}
+
+	log.Default().Printf("Failed to parse %s as Duration: %v\n", key, err)
+	return defaultValue
+}
+
+func (c *configImpl) GetDuration(key string, defaultValue time.Duration) (time.Duration, error) {
+	s := c.String(key)
+	if s == "" {
+		return defaultValue, nil
+	}
+
+	return time.ParseDuration(s)
 }
 
 func (c *configImpl) normalize(key string) string {
@@ -201,6 +292,7 @@ func getConfigFile(path string) string {
 	return path
 }
 
+const ENV_SETTINGS_PATH = "env-settings"
 const Meta_Config_Flag = "meta-config"
 const Meta_Config_Test_Flag = "meta-config-test"
 
@@ -210,7 +302,7 @@ const Meta_Config_Test_Env = "kenv." + Meta_Config_Test_Flag
 func _getConfigInternal(test bool) Config {
 	once := utils.IfElse(test, &testCfgOnce, &cfgOnce)
 
-	//should look for a metaConfig.etc to specify things like useEnv, various files, etc
+	//should look for a metaConfig to specify things like useEnv, various files, etc
 	once.Do(func() {
 		file := utils.IfElse(test, Meta_Config_Test_Flag, Meta_Config_Flag)
 		configFile := *flag.String(file, "", "Path to configuration file")
@@ -224,7 +316,7 @@ func _getConfigInternal(test bool) Config {
 					if configFile == "" {
 						configFile = getConfigFile("./" + file + ".json")
 						if configFile == "" {
-							flag.Usage()
+							fmt.Println(getConfigFileUsage())
 							os.Exit(2)
 						}
 					}
@@ -283,4 +375,18 @@ func _getConfigInternal(test bool) Config {
 	})
 
 	return utils.IfElse(test, testDefaultConfig, defaultConfig)
+}
+
+func getConfigFileUsage() string {
+	return "No meta-config file found. " +
+		"By default, the lookup logic is as follows:\n" +
+		"a) Use the path specified on the command line via --" + Meta_Config_Flag + "\n" +
+		"b) Use the path specified in the environment variable '" + Meta_Config_Env + "'\n" +
+		"c) Look in the current application's working directory for a file called\n" +
+		"   " + Meta_Config_Flag + ".yaml or " + Meta_Config_Flag + ".yml.\n\n" +
+		"Inside of the resolved meta config, a section called '" + ENV_SETTINGS_PATH + "' is used to inject\n" +
+		"key/value pairs into the environment variables via os.Setenv(). This is done prior\n" +
+		"to parsing config files specified in the meta config. All config files resolved are then\n" +
+		"parsed using os.ExpandEnv() to inject any values for placeholders specified as environment\n" +
+		"variable names (subject to the same rules indicated for os.ExpandEnv())\n"
 }
