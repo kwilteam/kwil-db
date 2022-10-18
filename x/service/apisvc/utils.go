@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"kwil/x/chain/crypto"
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 )
 
 func createDatabaseID(owner, name, fee string) string {

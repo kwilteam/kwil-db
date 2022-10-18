@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 	"kwil/x/cli/util"
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 	"kwil/x/schemadef/sqlschema"
 
 	"github.com/spf13/cobra"

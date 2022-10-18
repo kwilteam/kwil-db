@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
-	schemapb "kwil/x/proto/schemasvc"
+	"kwil/x/proto/schemapb"
 	"kwil/x/service/schemasvc"
 	"net"
 	"os"

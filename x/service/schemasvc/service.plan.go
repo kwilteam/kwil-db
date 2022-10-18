@@ -2,7 +2,7 @@ package schemasvc
 
 import (
 	"context"
-	schemapb "kwil/x/proto/schemasvc"
+	"kwil/x/proto/schemapb"
 )
 
 func (s *service) Plan(ctx context.Context, req *schemapb.PlanRequest) (*schemapb.PlanResponse, error) {

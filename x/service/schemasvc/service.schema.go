@@ -1,7 +1,7 @@
 package schemasvc
 
 // import (
-// 	schemapb "kwil/x/proto/schemasvc"
+// 	"kwil/x/proto/schemapb"
 // )
 
 // func (s *service) ListRoles(req *schemapb.ListRolesRequest, resp schemapb.SchemaService_ListRolesServer) error {

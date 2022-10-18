@@ -7,7 +7,7 @@ import (
 
 	"kwil/pkg/types/chain/pricing"
 	"kwil/x/logx"
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 )
 
 type Service struct {

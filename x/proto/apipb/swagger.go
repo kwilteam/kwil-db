@@ -1,4 +1,4 @@
-package apisvc
+package apipb
 
 import (
 	"bytes"

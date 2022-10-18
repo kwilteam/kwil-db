@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"kwil/x/cli/util"
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

@@ -2,7 +2,7 @@ package schemasvc
 
 import (
 	"context"
-	schemapb "kwil/x/proto/schemasvc"
+	"kwil/x/proto/schemapb"
 )
 
 func (s *service) Apply(ctx context.Context, req *schemapb.ApplyRequest) (*schemapb.ApplyResponse, error) {

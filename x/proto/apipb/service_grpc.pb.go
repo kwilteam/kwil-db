@@ -4,7 +4,7 @@
 // - protoc             v3.21.6
 // source: kwil/apisvc/service.proto
 
-package apisvc
+package apipb
 
 import (
 	context "context"

@@ -1,7 +1,7 @@
 package schemasvc
 
 import (
-	schemapb "kwil/x/proto/schemasvc"
+	"kwil/x/proto/schemapb"
 )
 
 type service struct {

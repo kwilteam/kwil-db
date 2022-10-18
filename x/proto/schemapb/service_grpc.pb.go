@@ -4,7 +4,7 @@
 // - protoc             v3.21.6
 // source: kwil/schemasvc/service.proto
 
-package schemasvc
+package schemapb
 
 import (
 	context "context"

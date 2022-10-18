@@ -2,11 +2,11 @@
 // source: kwil/apisvc/service.proto
 
 /*
-Package apisvc is a reverse proxy.
+Package apipb is a reverse proxy.
 
 It translates gRPC into RESTful JSON APIs.
 */
-package apisvc
+package apipb
 
 import (
 	"context"

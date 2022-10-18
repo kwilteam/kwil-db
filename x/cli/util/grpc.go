@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"

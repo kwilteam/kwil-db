@@ -1,6 +1,6 @@
 syntax = "proto3";
 package apisvc;
-option go_package = "kwil/x/proto/apisvc";
+option go_package = ""kwil/x/proto/apipb";
 
 import "google/api/annotations.proto";
 

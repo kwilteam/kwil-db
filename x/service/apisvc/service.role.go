@@ -4,7 +4,7 @@ import (
 	"context"
 
 	types "kwil/pkg/types/db"
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 )
 
 func (s *Service) CreateRole(ctx context.Context, req *apipb.CreateRoleRequest) (*apipb.CreateRoleResponse, error) {

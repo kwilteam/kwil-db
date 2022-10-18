@@ -3,7 +3,7 @@ package apisvc
 import (
 	"context"
 
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 )
 
 func (s *Service) CreateTable(ctx context.Context, req *apipb.CreateTableRequest) (*apipb.CreateTableResponse, error) {

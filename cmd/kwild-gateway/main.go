@@ -6,7 +6,7 @@ import (
 	"os"
 	"regexp"
 
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"

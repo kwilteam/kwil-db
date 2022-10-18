@@ -7,7 +7,7 @@ import (
 
 	types "kwil/pkg/types/db"
 	"kwil/x/chain/crypto"
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 )
 
 func (s *Service) CreateDatabase(ctx context.Context, req *apipb.CreateDatabaseRequest) (*apipb.CreateDatabaseResponse, error) {

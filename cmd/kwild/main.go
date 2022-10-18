@@ -18,7 +18,7 @@ import (
 	"kwil/x/chain/utils"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 	"kwil/x/service/apisvc"
 
 	"github.com/oklog/run"

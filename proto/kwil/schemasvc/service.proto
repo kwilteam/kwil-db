@@ -1,6 +1,6 @@
 syntax = "proto3";
 package schemasvc;
-option go_package = "kwil/x/proto/schemasvc";
+option go_package = "kwil/x/proto/schemapb";
 
 import "google/api/annotations.proto";
 import "kwil/schemasvc/schema.proto";

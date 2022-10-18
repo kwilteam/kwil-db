@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"kwil/x/cli/util"
-	apipb "kwil/x/proto/apisvc"
+	"kwil/x/proto/apipb"
 
 	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
