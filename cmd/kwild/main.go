@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/oklog/run"
 	"kwil/pkg/types/chain/pricing"
 	"kwil/x/api/handler"
 	"kwil/x/api/service"
@@ -25,6 +24,8 @@ import (
 	nd "kwil/x/deposits"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
+
+	"github.com/oklog/run"
 )
 
 const (
@@ -47,13 +48,13 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to connect to client chain: %w", err)
 	}
 
-	dc := cfgx.GetConfig().Select("deposit-config.yaml")
+	dc := cfgx.GetConfig().Select("deposit-settings")
 
 	d, err := nd.New(dc)
-	defer d.Close()
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
+	defer d.Close()
 	d.Listen(ctx)
 
 	kr, err := crypto.NewKeyring(conf)
