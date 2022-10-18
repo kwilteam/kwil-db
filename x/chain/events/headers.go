@@ -37,7 +37,9 @@ func (ef *EventFeed) listenForBlockHeaders(ctx context.Context) (chan *big.Int, 
 		for {
 			select {
 			case err := <-sub.Err():
-				log.Fatal().Err(err).Msg("failed to subscribe to new block headers")
+				log.Warn().Err(err).Msg("unknown error from eth client, resubscribing")
+				sub.Unsubscribe()
+				sub = ef.resubscribeEthClient(ctx, headers)
 			case <-time.After(timeoutTime):
 				// Websocket might have closed, re-launching
 				ef.log.Warn().Dur("timeout", timeoutTime).Msgf("web socket timeout, reconnecting")

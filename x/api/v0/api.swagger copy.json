@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/apisvc/database.proto",
+    "title": "api/v0/service.proto",
     "version": "version not set"
   },
   "tags": [
@@ -23,7 +23,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcApplyResponse"
+              "$ref": "#/definitions/v0ApplyResponse"
             }
           },
           "default": {
@@ -39,7 +39,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/apisvcApplyRequest"
+              "$ref": "#/definitions/v0ApplyRequest"
             }
           }
         ],
@@ -55,7 +55,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcConnectResponse"
+              "$ref": "#/definitions/v0ConnectResponse"
             }
           },
           "default": {
@@ -77,7 +77,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcListDatabasesResponse"
+              "$ref": "#/definitions/v0ListDatabasesResponse"
             }
           },
           "default": {
@@ -98,7 +98,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcCreateDatabaseResponse"
+              "$ref": "#/definitions/v0CreateDatabaseResponse"
             }
           },
           "default": {
@@ -114,7 +114,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/apisvcCreateDatabaseRequest"
+              "$ref": "#/definitions/v0CreateDatabaseRequest"
             }
           }
         ],
@@ -130,7 +130,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcGetQueriesResponse"
+              "$ref": "#/definitions/v0GetQueriesResponse"
             }
           },
           "default": {
@@ -161,7 +161,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcPostQueryResponse"
+              "$ref": "#/definitions/v0PostQueryResponse"
             }
           },
           "default": {
@@ -210,7 +210,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcListRolesResponse"
+              "$ref": "#/definitions/v0ListRolesResponse"
             }
           },
           "default": {
@@ -239,7 +239,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcCreateRoleResponse"
+              "$ref": "#/definitions/v0CreateRoleResponse"
             }
           },
           "default": {
@@ -277,7 +277,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcGetRoleResponse"
+              "$ref": "#/definitions/v0GetRoleResponse"
             }
           },
           "default": {
@@ -311,7 +311,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcDeleteRoleResponse"
+              "$ref": "#/definitions/v0DeleteRoleResponse"
             }
           },
           "default": {
@@ -345,7 +345,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcUpdateRoleResponse"
+              "$ref": "#/definitions/v0UpdateRoleResponse"
             }
           },
           "default": {
@@ -389,7 +389,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcListTablesResponse"
+              "$ref": "#/definitions/v0ListTablesResponse"
             }
           },
           "default": {
@@ -418,7 +418,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcCreateTableResponse"
+              "$ref": "#/definitions/v0CreateTableResponse"
             }
           },
           "default": {
@@ -456,7 +456,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcGetTableResponse"
+              "$ref": "#/definitions/v0GetTableResponse"
             }
           },
           "default": {
@@ -490,7 +490,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcDeleteTableResponse"
+              "$ref": "#/definitions/v0DeleteTableResponse"
             }
           },
           "default": {
@@ -524,7 +524,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcUpdateTableResponse"
+              "$ref": "#/definitions/v0UpdateTableResponse"
             }
           },
           "default": {
@@ -568,7 +568,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcGetDatabaseResponse"
+              "$ref": "#/definitions/v0GetDatabaseResponse"
             }
           },
           "default": {
@@ -596,7 +596,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcDeleteDatabaseResponse"
+              "$ref": "#/definitions/v0DeleteDatabaseResponse"
             }
           },
           "default": {
@@ -624,7 +624,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcUpdateDatabaseResponse"
+              "$ref": "#/definitions/v0UpdateDatabaseResponse"
             }
           },
           "default": {
@@ -693,7 +693,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcReturnFundsResponse"
+              "$ref": "#/definitions/v0ReturnFundsResponse"
             }
           },
           "default": {
@@ -709,7 +709,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/apisvcReturnFundsRequest"
+              "$ref": "#/definitions/v0ReturnFundsRequest"
             }
           }
         ],
@@ -726,7 +726,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcGetBalanceResponse"
+              "$ref": "#/definitions/v0GetBalanceResponse"
             }
           },
           "default": {
@@ -756,7 +756,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcGetWalletRoleResponse"
+              "$ref": "#/definitions/v0GetWalletRoleResponse"
             }
           },
           "default": {
@@ -787,7 +787,34 @@
     }
   },
   "definitions": {
-    "apisvcApplyRequest": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v0ApplyRequest": {
       "type": "object",
       "properties": {
         "id": {
@@ -810,7 +837,7 @@
         }
       }
     },
-    "apisvcApplyResponse": {
+    "v0ApplyResponse": {
       "type": "object",
       "properties": {
         "success": {
@@ -818,10 +845,7 @@
         }
       }
     },
-    "apisvcApplySchemaResponse": {
-      "type": "object"
-    },
-    "apisvcConnectResponse": {
+    "v0ConnectResponse": {
       "type": "object",
       "properties": {
         "address": {
@@ -829,7 +853,7 @@
         }
       }
     },
-    "apisvcCreateDatabaseRequest": {
+    "v0CreateDatabaseRequest": {
       "type": "object",
       "properties": {
         "id": {
@@ -860,16 +884,16 @@
         }
       }
     },
-    "apisvcCreateDatabaseResponse": {
+    "v0CreateDatabaseResponse": {
       "type": "object"
     },
-    "apisvcCreateRoleResponse": {
+    "v0CreateRoleResponse": {
       "type": "object"
     },
-    "apisvcCreateTableResponse": {
+    "v0CreateTableResponse": {
       "type": "object"
     },
-    "apisvcDBQuery": {
+    "v0DBQuery": {
       "type": "object",
       "properties": {
         "name": {
@@ -881,21 +905,21 @@
         "parameters": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/apisvcinput"
+            "$ref": "#/definitions/v0input"
           }
         }
       }
     },
-    "apisvcDeleteDatabaseResponse": {
+    "v0DeleteDatabaseResponse": {
       "type": "object"
     },
-    "apisvcDeleteRoleResponse": {
+    "v0DeleteRoleResponse": {
       "type": "object"
     },
-    "apisvcDeleteTableResponse": {
+    "v0DeleteTableResponse": {
       "type": "object"
     },
-    "apisvcGetBalanceResponse": {
+    "v0GetBalanceResponse": {
       "type": "object",
       "properties": {
         "balance": {
@@ -903,32 +927,32 @@
         }
       }
     },
-    "apisvcGetDatabaseResponse": {
+    "v0GetDatabaseResponse": {
       "type": "object"
     },
-    "apisvcGetQueriesResponse": {
+    "v0GetQueriesResponse": {
       "type": "object",
       "properties": {
         "queries": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/apisvcDBQuery"
+            "$ref": "#/definitions/v0DBQuery"
           }
         }
       }
     },
-    "apisvcGetRoleResponse": {
+    "v0GetRoleResponse": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string"
         },
         "permissions": {
-          "$ref": "#/definitions/apisvcGetRoleResponseperms"
+          "$ref": "#/definitions/v0GetRoleResponseperms"
         }
       }
     },
-    "apisvcGetRoleResponseperms": {
+    "v0GetRoleResponseperms": {
       "type": "object",
       "properties": {
         "ddl": {
@@ -942,21 +966,21 @@
         }
       }
     },
-    "apisvcGetTableResponse": {
+    "v0GetTableResponse": {
       "type": "object"
     },
-    "apisvcGetWalletRoleResponse": {
+    "v0GetWalletRoleResponse": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string"
         },
         "permissions": {
-          "$ref": "#/definitions/apisvcGetWalletRoleResponseperms"
+          "$ref": "#/definitions/v0GetWalletRoleResponseperms"
         }
       }
     },
-    "apisvcGetWalletRoleResponseperms": {
+    "v0GetWalletRoleResponseperms": {
       "type": "object",
       "properties": {
         "ddl": {
@@ -970,10 +994,10 @@
         }
       }
     },
-    "apisvcListDatabasesResponse": {
+    "v0ListDatabasesResponse": {
       "type": "object"
     },
-    "apisvcListRolesResponse": {
+    "v0ListRolesResponse": {
       "type": "object",
       "properties": {
         "roles": {
@@ -984,21 +1008,13 @@
         }
       }
     },
-    "apisvcListTablesResponse": {
+    "v0ListTablesResponse": {
       "type": "object"
     },
-    "apisvcPlanResponse": {
+    "v0PlanResponse": {
       "type": "object"
     },
-    "apisvcPlanSchemaResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        }
-      }
-    },
-    "apisvcPostQueryResponse": {
+    "v0PostQueryResponse": {
       "type": "object",
       "properties": {
         "id": {
@@ -1009,7 +1025,7 @@
         }
       }
     },
-    "apisvcReturnFundsRequest": {
+    "v0ReturnFundsRequest": {
       "type": "object",
       "properties": {
         "id": {
@@ -1029,7 +1045,7 @@
         }
       }
     },
-    "apisvcReturnFundsResponse": {
+    "v0ReturnFundsResponse": {
       "type": "object",
       "properties": {
         "amtReturned": {
@@ -1046,16 +1062,16 @@
         }
       }
     },
-    "apisvcUpdateDatabaseResponse": {
+    "v0UpdateDatabaseResponse": {
       "type": "object"
     },
-    "apisvcUpdateRoleResponse": {
+    "v0UpdateRoleResponse": {
       "type": "object"
     },
-    "apisvcUpdateTableResponse": {
+    "v0UpdateTableResponse": {
       "type": "object"
     },
-    "apisvcinput": {
+    "v0input": {
       "type": "object",
       "properties": {
         "name": {
@@ -1063,33 +1079,6 @@
         },
         "type": {
           "type": "string"
-        }
-      }
-    },
-    "protobufAny": {
-      "type": "object",
-      "properties": {
-        "@type": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": {}
-    },
-    "rpcStatus": {
-      "type": "object",
-      "properties": {
-        "code": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "message": {
-          "type": "string"
-        },
-        "details": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/protobufAny"
-          }
         }
       }
     }

@@ -20,6 +20,14 @@ service KwilService {
     };
   }
 
+  rpc Plan(PlanRequest) returns (PlanResponse) {}
+  rpc Apply(ApplyRequest) returns (ApplyResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/apply"
+      body: "*"
+    };
+  }
+
   // Databases
   rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse) {
     option (google.api.http) = {
@@ -139,7 +147,27 @@ service KwilService {
   }
 }
 
-
+message PlanRequest {
+  string id = 1;
+  string hash = 2;
+  string dbName = 3;
+  string owner = 4;
+  string from = 5;
+  bytes schema = 6;
+  string signature = 7;
+}
+message PlanResponse {}
+message ApplyRequest {
+  string id = 1;
+  string planId = 2;
+  string fee = 3;
+  string nonce = 4;
+  string from = 5;
+  string signature = 6;
+}
+message ApplyResponse {
+  bool success = 1;
+}
 message ConnectRequest {}
 message ConnectResponse {
     string address = 1;

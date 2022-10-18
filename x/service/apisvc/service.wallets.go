@@ -5,7 +5,7 @@ import (
 	"math/big"
 
 	types "kwil/pkg/types/db"
-	"kwil/x/chain/crypto"
+	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -87,7 +87,7 @@ func (s *Service) ReturnFunds(ctx context.Context, req *apipb.ReturnFundsRequest
 	// now we call the smart contract to return the funds
 	// convert req.From to common.Address
 	from := common.HexToAddress(req.From)
-	_, err = s.cc.ReturnFunds(ctx, from, amt, spent)
+	_, err = s.cc.ReturnFunds(ctx, from, amt, spent) // we need to build tracing here
 	if err != nil {
 		return nil, err
 	}

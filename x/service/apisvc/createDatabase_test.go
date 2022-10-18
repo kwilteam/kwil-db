@@ -9,7 +9,7 @@ import (
 
 	"kwil/pkg/types/chain/pricing"
 
-	"kwil/x/chain/crypto"
+	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
 
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"

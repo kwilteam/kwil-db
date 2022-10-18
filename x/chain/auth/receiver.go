@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	types "kwil/pkg/types/chain"
-	kc "kwil/x/chain/crypto"
+	kc "kwil/x/crypto"
 )
 
 /*
