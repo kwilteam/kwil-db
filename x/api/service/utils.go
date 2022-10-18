@@ -36,3 +36,24 @@ func updateDatabaseID(m *proto.UpdateDatabaseRequest) string {
 
 	return string(crypto.Sha384([]byte(sb.String())))
 }
+
+func planID(m *proto.PlanRequest) string {
+	sb := strings.Builder{}
+	sb.WriteString(m.DatabaseId)
+	sb.WriteString(m.Owner)
+	sb.WriteString(m.Nonce)
+	sb.WriteString(m.From)
+	sb.Write(m.Plan)
+
+	return string(crypto.Sha384([]byte(sb.String())))
+}
+
+func applyID(m *proto.ApplyRequest) string {
+	sb := strings.Builder{}
+	sb.WriteString(m.PlanId)
+	sb.WriteString(m.Fee)
+	sb.WriteString(m.Nonce)
+	sb.WriteString(m.From)
+
+	return string(crypto.Sha384([]byte(sb.String())))
+}

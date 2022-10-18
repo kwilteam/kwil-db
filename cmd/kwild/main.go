@@ -36,6 +36,11 @@ func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	err := os.Setenv(cfgx.Meta_Config_Env, "../../meta-config.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to set env: %w", err)
+	}
+
 	// Load Config
 	conf, err := config.LoadConfig("kwil_config.json")
 	if err != nil {
@@ -47,7 +52,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to connect to client chain: %w", err)
 	}
 
-	dc := cfgx.GetConfig().Select("deposit-config.yaml")
+	dc := cfgx.GetConfig().Select("deposit-settings")
 
 	d, err := nd.New(dc)
 	defer d.Close()
