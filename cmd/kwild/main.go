@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/oklog/run"
 	"kwil/pkg/types/chain/pricing"
 	"kwil/x/api/handler"
 	"kwil/x/api/service"
@@ -25,6 +24,8 @@ import (
 	nd "kwil/x/deposits"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
+
+	"github.com/oklog/run"
 )
 
 const (
