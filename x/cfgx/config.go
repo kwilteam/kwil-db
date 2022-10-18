@@ -201,8 +201,8 @@ func getConfigFile(path string) string {
 	return path
 }
 
-const Meta_Config_Flag = "meta-config-test"
-const Meta_Config_Test_Flag = "meta-config"
+const Meta_Config_Flag = "meta-config"
+const Meta_Config_Test_Flag = "meta-config-test"
 
 const Meta_Config_Env = "kenv." + Meta_Config_Flag
 const Meta_Config_Test_Env = "kenv." + Meta_Config_Test_Flag
