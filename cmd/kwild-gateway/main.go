@@ -2,10 +2,6 @@ package main
 
 import (
 	"fmt"
-	"kwil/x"
-	"kwil/x/api/service"
-	"kwil/x/cfgx"
-	"kwil/x/messaging/pub"
 	"net/http"
 	"os"
 	"regexp"
@@ -31,10 +27,10 @@ func main() {
 }
 
 func run() error {
-	inject, err := getInjector()
-	if err != nil {
-		return err
-	}
+	//inject, err := getInjector()
+	//if err != nil {
+	//return err
+	//}
 
 	cmd := &cobra.Command{
 		Use:   "api-gateway",
@@ -62,12 +58,12 @@ func run() error {
 				return err
 			}
 
-			return http.ListenAndServe(":8080", cors(inject, mux))
+			return http.ListenAndServe(":8080", cors( /*inject,*/ mux))
 		},
 	}
 
 	cmd.PersistentFlags().String("endpoint", "localhost:50051", "gRPC server endpoint")
-	err = viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
+	err := viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
 	if err != nil {
 		return err
 	}
@@ -80,7 +76,7 @@ func run() error {
 	return cmd.Execute()
 }
 
-func cors(inject x.RequestInjectorFn, h http.Handler) http.Handler {
+func cors( /*inject x.RequestInjectorFn,*/ h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if allowedOrigin(r.Header.Get("Origin")) {
 			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
@@ -92,7 +88,7 @@ func cors(inject x.RequestInjectorFn, h http.Handler) http.Handler {
 			return
 		}
 
-		h.ServeHTTP(w, inject(r))
+		h.ServeHTTP(w, r) //inject(r))
 	})
 }
 
@@ -106,7 +102,7 @@ func allowedOrigin(origin string) bool {
 	return false
 }
 
-func getInjector() (x.RequestInjectorFn, error) {
+/*func getInjector() (x.RequestInjectorFn, error) {
 	// TODO: we need to use a config to bootstrap the various emitters/receivers needed
 	cfg := cfgx.GetTestConfig().Select("messaging-emitter")
 
@@ -126,3 +122,4 @@ func getInjector() (x.RequestInjectorFn, error) {
 
 	return fn, nil
 }
+*/
