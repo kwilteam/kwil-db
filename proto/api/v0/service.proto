@@ -140,11 +140,11 @@ service KwilService {
 
 message PlanRequest {
   string id = 1;
-  string databaseId = 2;
-  string owner = 3;
-  string nonce = 4;
+  string hash = 2;
+  string dbName = 3;
+  string owner = 4;
   string from = 5;
-  bytes plan = 6;
+  bytes schema = 6;
   string signature = 7;
 }
 message PlanResponse {}

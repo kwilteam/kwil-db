@@ -36,11 +36,6 @@ func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err := os.Setenv(cfgx.Meta_Config_Env, "../../meta-config.yaml")
-	if err != nil {
-		return fmt.Errorf("failed to set env: %w", err)
-	}
-
 	// Load Config
 	conf, err := config.LoadConfig("kwil_config.json")
 	if err != nil {
@@ -55,10 +50,10 @@ func execute(logger logx.Logger) error {
 	dc := cfgx.GetConfig().Select("deposit-settings")
 
 	d, err := nd.New(dc)
-	defer d.Close()
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
+	defer d.Close()
 	d.Listen(ctx)
 
 	kr, err := crypto.NewKeyring(conf)
