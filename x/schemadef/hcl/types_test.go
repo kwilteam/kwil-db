@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/sqlschema"
 
 	"github.com/stretchr/testify/require"
 )
@@ -161,24 +161,24 @@ func TestRegistryConvert(t *testing.T) {
 	)
 	require.NoError(t, err)
 	for _, tt := range []struct {
-		typ         schema.Type
+		typ         sqlschema.Type
 		expected    *Type
 		expectedErr string
 	}{
 		{
-			typ:      &schema.StringType{T: "varchar", Size: 255},
+			typ:      &sqlschema.StringType{T: "varchar", Size: 255},
 			expected: &Type{T: "varchar", Attrs: []*Attr{LitAttr("size", "255")}},
 		},
 		{
-			typ:      &schema.IntegerType{T: "int", Unsigned: true},
+			typ:      &sqlschema.IntegerType{T: "int", Unsigned: true},
 			expected: &Type{T: "int", Attrs: []*Attr{LitAttr("unsigned", "true")}},
 		},
 		{
-			typ:      &schema.IntegerType{T: "int", Unsigned: true},
+			typ:      &sqlschema.IntegerType{T: "int", Unsigned: true},
 			expected: &Type{T: "int", Attrs: []*Attr{LitAttr("unsigned", "true")}},
 		},
 		{
-			typ: &schema.EnumType{T: "enum", Values: []string{"on", "off"}},
+			typ: &sqlschema.EnumType{T: "enum", Values: []string{"on", "off"}},
 			expected: &Type{T: "enum", Attrs: []*Attr{
 				ListAttr("values", `"on"`, `"off"`),
 			}},
@@ -186,7 +186,7 @@ func TestRegistryConvert(t *testing.T) {
 		{
 			typ:         nil,
 			expected:    &Type{},
-			expectedErr: "spec: invalid schema.Type on Convert",
+			expectedErr: "spec: invalid sqlschema.Type on Convert",
 		},
 	} {
 		t.Run(tt.expected.T, func(t *testing.T) {

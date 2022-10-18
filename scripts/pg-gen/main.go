@@ -15,6 +15,8 @@ import (
 
 	pgx "github.com/jackc/pgx/v4"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // https://dba.stackexchange.com/questions/255412/how-to-select-functions-that-belong-in-a-given-extension-in-postgresql
@@ -49,8 +51,7 @@ const catalogTmpl = `
 package {{.Pkg}}
 
 import (
-	"kwil/mx/sqlparse/ast"
-	"kwil/mx/catalog"
+	"kwil/x/sql/catalog"
 )
 
 {{- $funcName := .GenFnName }}
@@ -68,14 +69,14 @@ func {{ $funcName }}Funcs{{ $i }}() []*catalog.Function {
 				{{- if .HasDefault}}
 				HasDefault: true,
 				{{- end}}
-				Type: &ast.TypeName{Name: "{{.TypeName}}"},
+				Type: &catalog.QualName{Name: "{{.TypeName}}"},
 				{{- if ne .Mode "i" }}
 				Mode: {{ .GoMode }},
 				{{- end}}
 				},
 				{{end}}
 			},
-			ReturnType: &ast.TypeName{Name: "{{.ReturnTypeName}}"},
+			ReturnType: &catalog.QualName{Name: "{{.ReturnTypeName}}"},
 		},
 		{{- end}}
 	}
@@ -97,7 +98,7 @@ func {{.GenFnName}}() *catalog.Schema {
 	s.Tables = []*catalog.Table {
 	    {{- range .Relations }}
 		{
-			Rel: &ast.TableName{
+			Rel: &catalog.QualName{
 				Catalog: "{{.Catalog}}",
 				Schema: "{{.SchemaName}}",
 				Name: "{{.Name}}",
@@ -106,7 +107,7 @@ func {{.GenFnName}}() *catalog.Schema {
 				{{- range .Columns}}
 				{
 					Name: "{{.Name}}",
-					Type: ast.TypeName{Name: "{{.Type}}"},
+					Type: &catalog.QualName{Name: "{{.Type}}"},
 					{{- if .IsNotNull}}
 					IsNotNull: true,
 					{{- end}}
@@ -133,8 +134,8 @@ const loaderFuncTmpl = `
 package postgres
 
 import (
-	"kwil/mx/sqlparse/postgres/contrib"
-	"kwil/mx/catalog"
+	"kwil/x/sql/sqlparse/postgres/contrib"
+	"kwil/x/sql/catalog"
 )
 
 func loadExtension(name string) *catalog.Schema {
@@ -273,6 +274,7 @@ func chunkSlice[T any](slice []T, chunkSize int) [][]T {
 }
 
 func run(ctx context.Context, output, url string) error {
+	titleCaser := cases.Title(language.English)
 	tmpl, err := template.New("").Parse(catalogTmpl)
 	if err != nil {
 		return err
@@ -330,7 +332,7 @@ func run(ctx context.Context, output, url string) error {
 
 		var funcName string
 		for _, part := range strings.Split(name, "_") {
-			funcName += strings.Title(part)
+			funcName += titleCaser.String(part)
 		}
 
 		_, err := conn.Exec(ctx, fmt.Sprintf("CREATE EXTENSION IF NOT EXISTS \"%s\"", extension))

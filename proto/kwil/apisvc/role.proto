@@ -1,0 +1,38 @@
+syntax = "proto3";
+package apisvc;
+option go_package = "kwil/x/proto/apipb";
+
+
+message CreateRoleRequest {
+  string databaseId = 1;
+}
+message CreateRoleResponse {}
+message ListRolesRequest {
+  string databaseId = 1;
+}
+message ListRolesResponse {
+  repeated string roles = 1;
+}
+message GetRoleRequest {
+  string id = 1;
+  string databaseId = 2;
+}
+message GetRoleResponse {
+  string name = 1;
+  message perms {
+    bool ddl = 1;
+    repeated string queries = 2;
+  };
+  perms permissions = 2;
+}
+
+message UpdateRoleRequest {
+  string id = 1;
+  string databaseId = 2;
+}
+message UpdateRoleResponse {}
+message DeleteRoleRequest {
+  string id = 1;
+  string databaseId = 2;
+}
+message DeleteRoleResponse {}

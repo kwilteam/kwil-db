@@ -93,15 +93,15 @@ func (a *Arg) TypeName() string {
 func (a *Arg) GoMode() string {
 	switch a.Mode {
 	case "", "i":
-		return "ast.FuncParamIn"
+		return "catalog.FuncParamIn"
 	case "o":
-		return "ast.FuncParamOut"
+		return "catalog.FuncParamOut"
 	case "b":
-		return "ast.FuncParamInOut"
+		return "catalog.FuncParamInOut"
 	case "v":
-		return "ast.FuncParamVariadic"
+		return "catalog.FuncParamVariadic"
 	case "t":
-		return "ast.FuncParamTable"
+		return "catalog.FuncParamTable"
 	}
 
 	return ""

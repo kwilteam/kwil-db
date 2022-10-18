@@ -1,0 +1,21 @@
+syntax = "proto3";
+package apisvc;
+option go_package = "kwil/x/proto/apipb";
+
+message PlanSchemaRequest {
+  bytes schema = 1;
+}
+
+message PlanSchemaResponse {
+  string id = 1;
+}
+
+message Plan {
+  string id = 1;
+}
+
+message ApplySchemaRequest {
+  string plan_id = 1;
+}
+
+message ApplySchemaResponse {}

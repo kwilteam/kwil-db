@@ -8,13 +8,13 @@ import (
 	"strconv"
 	"strings"
 
-	"kwil/x/schemadef/schema"
+	"kwil/x/schemadef/sqlschema"
 
 	"github.com/go-openapi/inflect"
 )
 
 // PrintType returns the string representation of a column type which can be parsed
-// by the driver into a schema.Type.
+// by the driver into a sqlschema.Type.
 func (r *TypeRegistry) PrintType(typ *Type) (string, error) {
 	spec, ok := r.findT(typ.T)
 	if !ok {
@@ -67,15 +67,15 @@ func (r *TypeRegistry) PrintType(typ *Type) (string, error) {
 // TypeRegistry is a collection of *hcl.TypeSpec.
 type TypeRegistry struct {
 	r      []*TypeSpec
-	spec   func(schema.Type) (*Type, error)
-	parser func(string) (schema.Type, error)
+	spec   func(sqlschema.Type) (*Type, error)
+	parser func(string) (sqlschema.Type, error)
 }
 
 // WithFormatter configures the registry to use a formatting function for printing
-// schema.Type as string.
-func WithFormatter(f func(schema.Type) (string, error)) TypeRegistryOption {
+// sqlschema.Type as string.
+func WithFormatter(f func(sqlschema.Type) (string, error)) TypeRegistryOption {
 	return func(registry *TypeRegistry) error {
-		registry.spec = func(t schema.Type) (*Type, error) {
+		registry.spec = func(t sqlschema.Type) (*Type, error) {
 			s, err := f(t)
 			if err != nil {
 				return nil, fmt.Errorf("spec: cannot format type %T: %w", t, err)
@@ -87,8 +87,8 @@ func WithFormatter(f func(schema.Type) (string, error)) TypeRegistryOption {
 }
 
 // WithSpecFunc configures the registry to use the given function for converting
-// a schema.Type to hcl.Type
-func WithSpecFunc(spec func(schema.Type) (*Type, error)) TypeRegistryOption {
+// a sqlschema.Type to hcl.Type
+func WithSpecFunc(spec func(sqlschema.Type) (*Type, error)) TypeRegistryOption {
 	return func(registry *TypeRegistry) error {
 		registry.spec = spec
 		return nil
@@ -96,8 +96,8 @@ func WithSpecFunc(spec func(schema.Type) (*Type, error)) TypeRegistryOption {
 }
 
 // WithParser configures the registry to use a parsing function for converting
-// a string to a schema.Type.
-func WithParser(parser func(string) (schema.Type, error)) TypeRegistryOption {
+// a string to a sqlschema.Type.
+func WithParser(parser func(string) (sqlschema.Type, error)) TypeRegistryOption {
 	return func(registry *TypeRegistry) error {
 		registry.parser = parser
 		return nil
@@ -180,9 +180,9 @@ func (r *TypeRegistry) findT(t string) (*TypeSpec, bool) {
 	return nil, false
 }
 
-// Convert converts the schema.Type to a *hcl.Type.
-func (r *TypeRegistry) Convert(typ schema.Type) (*Type, error) {
-	if ut, ok := typ.(*schema.UnsupportedType); ok {
+// Convert converts the sqlschema.Type to a *hcl.Type.
+func (r *TypeRegistry) Convert(typ sqlschema.Type) (*Type, error) {
+	if ut, ok := typ.(*sqlschema.UnsupportedType); ok {
 		return &Type{
 			T: ut.T,
 		}, nil
@@ -192,7 +192,7 @@ func (r *TypeRegistry) Convert(typ schema.Type) (*Type, error) {
 		rv = rv.Elem()
 	}
 	if !rv.IsValid() {
-		return nil, errors.New("spec: invalid schema.Type on Convert")
+		return nil, errors.New("spec: invalid sqlschema.Type on Convert")
 	}
 	typeSpec, ok := r.findType(rv)
 	if !ok {
@@ -207,7 +207,7 @@ func (r *TypeRegistry) Convert(typ schema.Type) (*Type, error) {
 		attr := typeSpec.Attributes[i]
 		n := inflect.Camelize(attr.Name)
 		field := rv.FieldByName(n)
-		// If TypeSpec has an attribute that isn't mapped to a field on the schema.Type skip it.
+		// If TypeSpec has an attribute that isn't mapped to a field on the sqlschema.Type skip it.
 		if !field.IsValid() || field.Kind() == reflect.Ptr && field.IsNil() {
 			continue
 		}
@@ -274,8 +274,8 @@ func (r *TypeRegistry) Specs() []*TypeSpec {
 	return r.r
 }
 
-// Type converts a *hcl.Type into a schema.Type.
-func (r *TypeRegistry) Type(typ *Type, extra []*Attr) (schema.Type, error) {
+// Type converts a *hcl.Type into a sqlschema.Type.
+func (r *TypeRegistry) Type(typ *Type, extra []*Attr) (sqlschema.Type, error) {
 	typeSpec, ok := r.findT(typ.T)
 	if !ok {
 		return r.parser(typ.T)
@@ -314,14 +314,14 @@ func WithTypeFormatter(f func(*Type) (string, error)) TypeSpecOption {
 }
 
 // WithFromSpec allows configuring the FromSpec convert function using functional options.
-func WithFromSpec(f func(*Type) (schema.Type, error)) TypeSpecOption {
+func WithFromSpec(f func(*Type) (sqlschema.Type, error)) TypeSpecOption {
 	return func(spec *TypeSpec) {
 		spec.FromSpec = f
 	}
 }
 
 // WithToSpec allows configuring the ToSpec convert function using functional options.
-func WithToSpec(f func(schema.Type) (*Type, error)) TypeSpecOption {
+func WithToSpec(f func(sqlschema.Type) (*Type, error)) TypeSpecOption {
 	return func(spec *TypeSpec) {
 		spec.ToSpec = f
 	}

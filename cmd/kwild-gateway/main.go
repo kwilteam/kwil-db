@@ -3,21 +3,21 @@ package main
 import (
 	"fmt"
 	"kwil/x"
-	"kwil/x/api/service"
 	"kwil/x/cfgx"
 	"kwil/x/messaging/pub"
 	request "kwil/x/request_service"
+	"kwil/x/service/apisvc"
 	"net/http"
 	"os"
 	"regexp"
+
+	"kwil/x/proto/apipb"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	v0 "kwil/x/api/v0"
 )
 
 const (
@@ -39,25 +39,25 @@ func run() error {
 
 	cmd := &cobra.Command{
 		Use:   "api-gateway",
-		Short: "api-gateway is a gRPC to HTTP gateway",
+		Short: "api-gateway is a HTTP to gRPC gateway",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mux := runtime.NewServeMux()
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			err := v0.RegisterKwilServiceHandlerFromEndpoint(cmd.Context(), mux, viper.GetString("endpoint"), opts)
+			err := apipb.RegisterKwilServiceHandlerFromEndpoint(cmd.Context(), mux, viper.GetString("endpoint"), opts)
 			if err != nil {
 				return err
 			}
 
 			err = mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-				v0.ServeSwaggerJSON(w, r)
+				apipb.ServeSwaggerJSON(w, r)
 			})
 			if err != nil {
 				return err
 			}
 
 			err = mux.HandlePath(http.MethodGet, "/swagger/ui", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-				v0.ServeSwaggerUI(w, r)
+				apipb.ServeSwaggerUI(w, r)
 			})
 			if err != nil {
 				return err
@@ -114,7 +114,7 @@ func getServiceInjector() (x.RequestInjectorFn, error) {
 	// Using NewEmitterSingleClient for now. Once we need
 	// more than one emitter, we will need to create the client
 	// separately and close it on application shutdown.
-	e, err := pub.NewEmitterSingleClient(cfg, service.GetDbRequestSerdes())
+	e, err := pub.NewEmitterSingleClient(cfg, apisvc.GetDbRequestSerdes())
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func getServiceInjector() (x.RequestInjectorFn, error) {
 	// Not sure where else to inject a service for downstream consumption.
 	// Ignoring the additional function for clearing context for now.
 	fn, _ := x.
-		Injectable(service.DATABASE_EMITTER_ALIAS, e).
+		Injectable(apisvc.DATABASE_EMITTER_ALIAS, e).
 		Include(request.MANAGER_ALIAS, request.GetManager()).
 		AsRequestInjector()
 

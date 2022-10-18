@@ -3,10 +3,11 @@ package connect
 import (
 	"context"
 
+	"kwil/x/cli/util"
+	"kwil/x/proto/apipb"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	v0 "kwil/x/api/v0"
-	"kwil/x/cli/util"
 )
 
 func NewCmdConnect() *cobra.Command {
@@ -19,8 +20,8 @@ func NewCmdConnect() *cobra.Command {
 		exchanges relevant information regarding the node's capabilities, keys, etc..`,
 
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, client v0.KwilServiceClient) error {
-				res, err := client.Connect(ctx, &v0.ConnectRequest{})
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, client apipb.KwilServiceClient) error {
+				res, err := client.Connect(ctx, &apipb.ConnectRequest{})
 				if err != nil {
 					return err
 				}

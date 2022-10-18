@@ -18,20 +18,41 @@ tasks:
 
   build:api:
     desc: Builds the API
-    deps: [build:api:proto]
+    deps: [build:api:pb]
     cmds:
       - go build -o ./.build/kwild ./cmd/kwild
     generates:
       - .build/kwild
 
-  build:api:proto:
+  build:api:pb:
     desc: Compiles the protobuf for the API
     cmds:
-      - buf generate proto --template proto/api.gen.yaml
+      - |
+        mkdir -p x/proto
+        protoc -I proto \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=x/proto/apipb/api \
+        proto/kwil/apisvc/*.proto
     sources:
-      - proto/api/v0/*
+      - proto/kwil/apisvc/*.proto
     generates:
-      - mx/api/v0/*
+      - x/proto/apipb/*
+
+  build:schema:pb:
+    desc: Compiles the protobuf for the Schema Service
+    cmds:
+      - |
+        mkdir -p x/proto
+        protoc -I proto -I proto/kwil \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        proto/kwil/schemasvc/*.proto
+    sources:
+      - proto/kwil/schemasvc/*.proto
+    generates:
+      - x/proto/schemapb/*
 
   build:api-gateway:
     desc: Builds the API Gateway
@@ -45,7 +66,7 @@ tasks:
     cmds:
       - abigen --abi ./abi/escrow.json --pkg abi --type Escrow --out ./abi/escrow.go
       - abigen --abi ./abi/erc20.json --pkg abi --type Erc20 --out ./abi/erc20.go
-    
+
   cli:
     desc: Runs the CLI
     cmds:
@@ -54,8 +75,7 @@ tasks:
   deps:
     desc: Install tools required to build this app
     cmds:
-      - task: go-install
-        vars: { REPO: github.com/bufbuild/buf/cmd/buf@latest }
+      - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
 
   go-install:
     cmds:

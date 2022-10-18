@@ -3,10 +3,11 @@ package database
 import (
 	"context"
 
+	"kwil/x/cli/util"
+	"kwil/x/proto/apipb"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	v0 "kwil/x/api/v0"
-	"kwil/x/cli/util"
 )
 
 func createDatabaseCmd() *cobra.Command {
@@ -32,8 +33,8 @@ func createDatabaseCmd() *cobra.Command {
 			cmd.Println(dbName)
 			cmd.Println(bucketName)
 
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc v0.KwilServiceClient) error {
-				resp, err := ksc.CreateDatabase(ctx, &v0.CreateDatabaseRequest{
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc apipb.KwilServiceClient) error {
+				resp, err := ksc.CreateDatabase(ctx, &apipb.CreateDatabaseRequest{
 					Name: dbName,
 				})
 				if err != nil {

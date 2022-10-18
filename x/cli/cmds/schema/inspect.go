@@ -1,8 +1,8 @@
 package schema
 
 import (
-	"kwil/x/schemadef/schema"
-	_ "kwil/x/sql/postgres"
+	_ "kwil/x/schemadef/pgschema"
+	"kwil/x/schemadef/sqlschema"
 	"kwil/x/sql/sqlclient"
 
 	_ "github.com/lib/pq"
@@ -32,7 +32,7 @@ func createInspectCmd() *cobra.Command {
 			if client.URL.Schema != "" {
 				schemas = append(schemas, client.URL.Schema)
 			}
-			s, err := client.InspectRealm(cmd.Context(), &schema.InspectRealmOption{
+			s, err := client.InspectRealm(cmd.Context(), &sqlschema.InspectRealmOption{
 				Schemas: schemas,
 				Exclude: opts.Exclude,
 			})

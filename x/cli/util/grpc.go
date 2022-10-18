@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 
+	"kwil/x/proto/apipb"
+
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	v0 "kwil/x/api/v0"
 )
 
-type RoundTripper func(context.Context, v0.KwilServiceClient) error
+type RoundTripper func(context.Context, apipb.KwilServiceClient) error
 
 func ConnectKwil(ctx context.Context, v *viper.Viper, fn RoundTripper) (err error) {
 	endpoint := v.GetString("endpoint")
@@ -37,5 +38,5 @@ func ConnectKwil(ctx context.Context, v *viper.Viper, fn RoundTripper) (err erro
 	}
 	defer cc.Close()
 
-	return fn(clientContext, v0.NewKwilServiceClient(cc))
+	return fn(clientContext, apipb.NewKwilServiceClient(cc))
 }
