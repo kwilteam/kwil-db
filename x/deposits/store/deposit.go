@@ -213,8 +213,13 @@ func (ds *depositStore) SetLastHeight(h int64) error {
 
 func (ds *depositStore) GetLastHeight() (int64, error) {
 	val, err := ds.db.Get(LASTHEIGHT)
+
 	if err != nil {
-		return 0, err
+		if err == kv.ErrNotFound {
+			val = int64ToBytes(0)
+		} else {
+			return 0, err
+		}
 	}
 
 	return bytesToInt64(val), nil

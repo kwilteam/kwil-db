@@ -9,12 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 )
 
-type deposit struct {
-	ed    *abi.EscrowDeposit
-	token *string
-}
-
-func (c *contract) GetDeposits(ctx context.Context, from, to int64) ([]ct.Deposit, error) {
+func (c *contract) GetDeposits(ctx context.Context, from, to int64) ([]*ct.Deposit, error) {
 	end := uint64(to)
 	queryOpts := &bind.FilterOpts{Context: ctx, Start: uint64(from), End: &end}
 
@@ -23,55 +18,28 @@ func (c *contract) GetDeposits(ctx context.Context, from, to int64) ([]ct.Deposi
 		return nil, err
 	}
 
-	return convertDeposits(edi, &c.token), nil
+	return convertDeposits(edi, c.token), nil
 }
 
-func (d *deposit) Caller() string {
-	return d.ed.Caller.Hex()
-}
-
-func (d *deposit) Target() string {
-	return d.ed.Target.Hex()
-}
-
-func (d *deposit) Amount() string {
-	return d.ed.Amount.String()
-}
-
-func (d *deposit) Height() int64 {
-	return int64(d.ed.Raw.BlockNumber)
-}
-
-func (d *deposit) Tx() string {
-	return d.ed.Raw.TxHash.Hex()
-}
-
-func (d *deposit) Type() uint8 {
-	return 0
-}
-
-func (d *deposit) Token() string {
-	return *d.token
-}
-
-func convertDeposits(edi *abi.EscrowDepositIterator, token *string) []ct.Deposit {
-	var deposits []ct.Deposit
+func convertDeposits(edi *abi.EscrowDepositIterator, token string) []*ct.Deposit {
+	var deposits []*ct.Deposit
 	for {
-		deposits = append(deposits, escToDeposit(edi.Event, token))
+
 		if !edi.Next() {
 			break
+		} else {
+			deposits = append(deposits, escToDeposit(edi.Event, token))
 		}
 	}
 
 	return deposits
 }
 
-// escToDeposit converts abi.EscrowDeposit to ct.Deposit
-func escToDeposit(ed *abi.EscrowDeposit, token *string) ct.Deposit {
-	return &deposit{
-		ed:    ed,
-		token: token,
-	}
+// escToDeposit converts abi.EscrowDeposit to deposit
+func escToDeposit(ed *abi.EscrowDeposit, token string) *ct.Deposit {
+	// print all fields
+
+	return ct.NewDeposit(ed.Caller.Hex(), ed.Target.Hex(), ed.Amount.String(), int64(ed.Raw.BlockNumber), ed.Raw.TxHash.Hex(), 0, token)
 }
 
 // we don't need this anymore

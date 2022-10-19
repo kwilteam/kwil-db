@@ -5,11 +5,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"kwil/x/cfgx"
 	cc "kwil/x/deposits/chainclient"
 	ct "kwil/x/deposits/chainclient/types"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type EventFeed interface {
@@ -128,6 +129,8 @@ func (ef *eventFeed) listenForBlocks(ctx context.Context) (<-chan int64, <-chan 
 				for {
 					if q.Len() > ef.reqConfs {
 						// we have enough blocks, send the oldest one
+						// wait .01 seconds between each send in case there is a flood of blocks
+						time.Sleep(10 * time.Millisecond)
 						retChan <- q.Pop()
 					} else {
 						// we don't have enough blocks, break out of the loop
@@ -173,4 +176,14 @@ func (ef *eventFeed) resubscribe(ctx context.Context, headers chan int64) (ct.Bl
 
 func (ef *eventFeed) Contract() ct.Contract {
 	return ef.sc
+}
+
+func (ef *eventFeed) GetLastConfirmedBlock(ctx context.Context) (int64, error) {
+	// get the most recent block from ethereum and subtract reqConfs
+	lb, err := ef.client.GetLatestBlock(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return lb - int64(ef.reqConfs), nil
 }

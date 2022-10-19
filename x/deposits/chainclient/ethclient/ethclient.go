@@ -18,7 +18,7 @@ type ethClient struct {
 	log    *zerolog.Logger
 }
 
-func New(endpoint, chainCode string) (ct.Client, error) {
+func New(endpoint, chainCode string) (*ethClient, error) {
 	logger := log.With().Str("module", "ethclient").Str("chain_code", chainCode).Logger()
 
 	client, err := ethc.Dial(endpoint)
@@ -59,4 +59,13 @@ func (ec *ethClient) SubscribeBlocks(ctx context.Context, channel chan<- int64) 
 
 func (ec *ethClient) GetContract(addr string) (ct.Contract, error) {
 	return esc.New(ec.client, addr)
+}
+
+func (ec *ethClient) GetLatestBlock(ctx context.Context) (int64, error) {
+	h, err := ec.client.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	return h.Number.Int64(), nil
 }

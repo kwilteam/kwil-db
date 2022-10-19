@@ -2,6 +2,7 @@ package deposits
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -29,6 +30,7 @@ type deposits struct {
 	sc   ct.Contract
 	lh   int64
 	ds   store.DepositStore
+	// TODO: add keyring
 }
 
 func New(c cfgx.Config) (*deposits, error) {
@@ -36,17 +38,17 @@ func New(c cfgx.Config) (*deposits, error) {
 
 	ds, err := store.New(c)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize deposit store. %w", err)
 	}
 
 	lb, err := ds.GetLastHeight()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get last block height. %w", err)
 	}
 
 	ef, err := events.New(c, lb)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize event feed. %w", err)
 	}
 
 	return &deposits{
@@ -120,6 +122,9 @@ func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
 			d.log.Warn().Int64("height", blk).Str("tx", dep.Tx()).Str("amount", dep.Amount()).Msg("failed to parse amount")
 			continue
 		}
+		if dep.Target() == "" {
+			continue // TODO: make this check against the local node's address
+		}
 		err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, dep.Height())
 		if err != nil {
 			if err == store.ErrTxExists {
@@ -164,4 +169,9 @@ func (d *deposits) Spend(addr string, amt *big.Int) error {
 
 func (d *deposits) Close() error {
 	return d.ds.Close()
+}
+
+// sync syncs the deposits with the chain
+func (d *deposits) Sync(ctx context.Context) error {
+	return nil
 }

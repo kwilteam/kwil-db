@@ -58,7 +58,7 @@ func execute(logger logx.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
-	defer d.Close()
+	// when should i defer close?  This function returns after ~1 second
 	d.Listen(ctx)
 
 	kr, err := crypto.NewKeyring(conf)
