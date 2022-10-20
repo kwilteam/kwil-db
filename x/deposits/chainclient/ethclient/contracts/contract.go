@@ -12,7 +12,7 @@ import (
 
 type Contract interface {
 	ReturnFunds(string, string, string) error
-	GetDeposits(context.Context, int64, int64) ([]ct.Deposit, error)
+	GetDeposits(context.Context, int64, int64, string) ([]ct.Deposit, error)
 }
 
 type contract struct {

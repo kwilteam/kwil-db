@@ -1,27 +1,30 @@
 package crypto
 
 import (
-	"github.com/99designs/keyring"
+	"kwil/x/cfgx"
 	"kwil/x/chain/utils"
+
+	kr "github.com/99designs/keyring"
 )
 
-type Keyring struct {
-	kr   keyring.Keyring
-	conf config
+type Keyring interface {
+	Get(string) ([]byte, error)
+	Set(string, []byte) error
+	GetAccount(string) (*account, error)
 }
 
-type config interface {
-	GetPrivKeyPath() string
-	GetKeyName() string
+type keyring struct {
+	kr   kr.Keyring
+	conf cfgx.Config
 }
 
-func NewKeyring(c config) (*Keyring, error) {
-	kr, err := keyring.Open(getKeyRingConfig("kwil"))
+func NewKeyring(c cfgx.Config) (*keyring, error) {
+	kr, err := kr.Open(getKeyRingConfig("kwil"))
 	if err != nil {
 		return nil, err
 	}
 
-	nkr := &Keyring{
+	nkr := &keyring{
 		kr:   kr,
 		conf: c,
 	}
@@ -34,13 +37,13 @@ func NewKeyring(c config) (*Keyring, error) {
 	return nkr, nil
 }
 
-func (k *Keyring) importConfigKey() error {
-	key, err := utils.LoadFileFromRoot(k.conf.GetPrivKeyPath())
+func (k *keyring) importConfigKey() error {
+	key, err := utils.LoadFileFromRoot(k.conf.String("keys.key-path"))
 	if err != nil {
 		return err
 	}
 
-	err = k.Set(k.conf.GetKeyName(), key)
+	err = k.Set("kwil_main", key)
 	if err != nil {
 		return err
 	}
@@ -48,20 +51,20 @@ func (k *Keyring) importConfigKey() error {
 	return nil
 }
 
-func (k *Keyring) Set(name string, key []byte) error {
-	return k.kr.Set(keyring.Item{
+func (k *keyring) Set(name string, key []byte) error {
+	return k.kr.Set(kr.Item{
 		Key:  name,
 		Data: key,
 	})
 }
 
-func (k *Keyring) Get(name string) ([]byte, error) {
+func (k *keyring) Get(name string) ([]byte, error) {
 	item, err := k.kr.Get(name)
 	return item.Data, err
 }
 
-func getKeyRingConfig(serviceName string) keyring.Config {
-	return keyring.Config{ServiceName: "kwil", FileDir: "~",
+func getKeyRingConfig(serviceName string) kr.Config {
+	return kr.Config{ServiceName: serviceName, FileDir: "~",
 		FilePasswordFunc: func(prompt string) (string, error) {
 			return "test", nil
 		}}

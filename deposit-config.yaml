@@ -4,6 +4,10 @@ starting-block: 0
 block-buffer: 100
 chain: eth-mainnet
 provider-endpoint: wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41
-contract-address: 0x6175349559Dca9B90FcA3B97119bfdCC14ba2c4E
+contract-address: 0x4a332c275852FfAeEa57574584296502EA24f7EF
 kv:
   path: ./.kwilbadger
+keys:
+  key-path: "./keys/ethereum.pem"
+sync:
+  chunk-size: 100000

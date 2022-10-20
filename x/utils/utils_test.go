@@ -1,10 +1,10 @@
-package crypto
+package utils_test
 
 import (
 	"reflect"
 	"testing"
 
-	"kwil/x/chain/utils"
+	"kwil/x/utils"
 )
 
 // Despite its simplicity, I felt this test was necessary

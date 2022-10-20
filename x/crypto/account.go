@@ -8,7 +8,13 @@ import (
 	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
-type Account struct {
+type Account interface {
+	Sign(data []byte) (string, error)
+	GetAddress() *common.Address
+	GetPrivateKey() (*ecdsa.PrivateKey, error)
+}
+
+type account struct {
 	Name    string         `json:"name" mapstructure:"name"`
 	Address common.Address `json:"address" mapstructure:"address"`
 	kr      KR             //keyring
@@ -17,10 +23,10 @@ type Account struct {
 type KR interface {
 	Get(n string) ([]byte, error)
 	Set(n string, pkb []byte) error
-	GetAccount(n string) (*Account, error)
+	GetAccount(n string) (*account, error)
 }
 
-func (k *Keyring) GetAccount(n string) (*Account, error) {
+func (k *keyring) GetAccount(n string) (*account, error) {
 	key, err := k.Get(n)
 	if err != nil {
 		return nil, err
@@ -34,18 +40,18 @@ func (k *Keyring) GetAccount(n string) (*Account, error) {
 
 	// Now we need to get the address from the private key
 	addr := ec.PubkeyToAddress(pk.PublicKey)
-	return &Account{
+	return &account{
 		Name:    n,
 		Address: addr,
 		kr:      k,
 	}, nil
 }
 
-func (k *Keyring) GetDefaultAccount() (*Account, error) {
-	return k.GetAccount(k.conf.GetKeyName())
+func (k *keyring) GetDefaultAccount() (*account, error) {
+	return k.GetAccount("kwil_main")
 }
 
-func (a *Account) Sign(data []byte) (string, error) {
+func (a *account) Sign(data []byte) (string, error) {
 	pKey, err := a.GetPrivateKey()
 	if err != nil {
 		return "", err
@@ -62,11 +68,11 @@ func (a *Account) Sign(data []byte) (string, error) {
 	return sig, nil
 }
 
-func (a *Account) GetAddress() *common.Address {
+func (a *account) GetAddress() *common.Address {
 	return &a.Address
 }
 
-func (a *Account) GetPrivateKey() (*ecdsa.PrivateKey, error) {
+func (a *account) GetPrivateKey() (*ecdsa.PrivateKey, error) {
 	pkb, err := a.getPrivateKeyBytes()
 	if err != nil {
 		return nil, err
@@ -81,7 +87,7 @@ func (a *Account) GetPrivateKey() (*ecdsa.PrivateKey, error) {
 	return &pk, nil
 }
 
-func (a *Account) getPrivateKeyBytes() ([]byte, error) {
+func (a *account) getPrivateKeyBytes() ([]byte, error) {
 	pkb, err := a.kr.Get(a.Name)
 	if err != nil {
 		return nil, err

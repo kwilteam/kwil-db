@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"encoding/hex"
 	"reflect"
 	"testing"
 )
@@ -38,6 +39,63 @@ func TestLoadPrivateKey(t *testing.T) {
 			}
 			if !reflect.DeepEqual(x, tt.want) {
 				t.Errorf("public key mx: %s, want %v", x, tt.want)
+			}
+		})
+	}
+}
+
+func TestSha384(t *testing.T) {
+	res, err := hex.DecodeString("82835f0f3732e85736f1372184640199c9155a81980f562b4418aadabe2a21f57cb580b48f2f06b439bdf204f4b3dcb7")
+	if err != nil {
+		t.Errorf("Error with TestSha384")
+	}
+
+	type args struct {
+		data []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want []byte
+	}{
+		{
+			name: "test1",
+			args: args{
+				data: []byte("kwil"),
+			},
+			want: res,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Sha384(tt.args.data); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Sha384() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSha384Str(t *testing.T) {
+	type args struct {
+		data []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "test1",
+			args: args{
+				data: []byte("kwil"),
+			},
+			want: "82835f0f3732e85736f1372184640199c9155a81980f562b4418aadabe2a21f57cb580b48f2f06b439bdf204f4b3dcb7",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Sha384Str(tt.args.data); got != tt.want {
+				t.Errorf("Sha384Str() = %v, want %v", got, tt.want)
 			}
 		})
 	}

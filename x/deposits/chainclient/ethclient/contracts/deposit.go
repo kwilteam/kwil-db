@@ -7,13 +7,16 @@ import (
 	ct "kwil/x/deposits/chainclient/types"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 )
 
-func (c *contract) GetDeposits(ctx context.Context, from, to int64) ([]*ct.Deposit, error) {
+func (c *contract) GetDeposits(ctx context.Context, from, to int64, addr string) ([]*ct.Deposit, error) {
 	end := uint64(to)
 	queryOpts := &bind.FilterOpts{Context: ctx, Start: uint64(from), End: &end}
 
-	edi, err := c.ctr.FilterDeposit(queryOpts)
+	ads := common.HexToAddress(addr)
+
+	edi, err := c.ctr.FilterDeposit(queryOpts, []common.Address{ads})
 	if err != nil {
 		return nil, err
 	}

@@ -16,6 +16,7 @@ import (
 type EventFeed interface {
 	Listen(context.Context) (<-chan int64, <-chan error, error)
 	Contract() ct.Contract
+	GetLastConfirmedBlock(context.Context) (int64, error)
 }
 
 type eventFeed struct {
@@ -46,12 +47,18 @@ func New(c cfgx.Config, start int64) (EventFeed, error) {
 		return nil, err
 	}
 
+	// get timeout
+	toint64 := c.Int64("block-timeout", 30)
+
+	// convert to duration
+	timeout := time.Duration(toint64) * time.Second
+
 	return &eventFeed{
 		log:       &logger,
 		conf:      c,
 		client:    client,
 		reqConfs:  uint16(c.Int64("required-confirmations", 12)), // 12 as default as defined by Ethereum yellow paper
-		timeout:   time.Duration(c.Int64("block-timeout", 20)) * time.Second,
+		timeout:   timeout,
 		lastBlock: start,
 		sc:        sc,
 	}, nil

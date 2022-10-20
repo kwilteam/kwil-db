@@ -30,7 +30,7 @@ var (
 
 // EscrowMetaData contains all meta data concerning the Escrow contract.
 var EscrowMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_escrowToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"target\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Deposit\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"receiver\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"Withdrawal\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"validator\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"}],\"name\":\"deposit\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowToken\",\"outputs\":[{\"internalType\":\"contractIERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"pools\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"returnDeposit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_escrowToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"target\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Deposit\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"receiver\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"Withdrawal\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"validator\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"}],\"name\":\"deposit\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowToken\",\"outputs\":[{\"internalType\":\"contractIERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"pools\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"returnDeposit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
 }
 
 // EscrowABI is the input ABI used to generate the binding from.
@@ -360,10 +360,15 @@ type EscrowDeposit struct {
 
 // FilterDeposit is a free log retrieval operation binding the contract event 0x5548c837ab068cf56a2c2479df0882a4922fd203edb7517321831d95078c5f62.
 //
-// Solidity: event Deposit(address caller, address target, uint256 amount)
-func (_Escrow *EscrowFilterer) FilterDeposit(opts *bind.FilterOpts) (*EscrowDepositIterator, error) {
+// Solidity: event Deposit(address caller, address indexed target, uint256 amount)
+func (_Escrow *EscrowFilterer) FilterDeposit(opts *bind.FilterOpts, target []common.Address) (*EscrowDepositIterator, error) {
 
-	logs, sub, err := _Escrow.contract.FilterLogs(opts, "Deposit")
+	var targetRule []interface{}
+	for _, targetItem := range target {
+		targetRule = append(targetRule, targetItem)
+	}
+
+	logs, sub, err := _Escrow.contract.FilterLogs(opts, "Deposit", targetRule)
 	if err != nil {
 		return nil, err
 	}
@@ -372,10 +377,15 @@ func (_Escrow *EscrowFilterer) FilterDeposit(opts *bind.FilterOpts) (*EscrowDepo
 
 // WatchDeposit is a free log subscription operation binding the contract event 0x5548c837ab068cf56a2c2479df0882a4922fd203edb7517321831d95078c5f62.
 //
-// Solidity: event Deposit(address caller, address target, uint256 amount)
-func (_Escrow *EscrowFilterer) WatchDeposit(opts *bind.WatchOpts, sink chan<- *EscrowDeposit) (event.Subscription, error) {
+// Solidity: event Deposit(address caller, address indexed target, uint256 amount)
+func (_Escrow *EscrowFilterer) WatchDeposit(opts *bind.WatchOpts, sink chan<- *EscrowDeposit, target []common.Address) (event.Subscription, error) {
 
-	logs, sub, err := _Escrow.contract.WatchLogs(opts, "Deposit")
+	var targetRule []interface{}
+	for _, targetItem := range target {
+		targetRule = append(targetRule, targetItem)
+	}
+
+	logs, sub, err := _Escrow.contract.WatchLogs(opts, "Deposit", targetRule)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +419,7 @@ func (_Escrow *EscrowFilterer) WatchDeposit(opts *bind.WatchOpts, sink chan<- *E
 
 // ParseDeposit is a log parse operation binding the contract event 0x5548c837ab068cf56a2c2479df0882a4922fd203edb7517321831d95078c5f62.
 //
-// Solidity: event Deposit(address caller, address target, uint256 amount)
+// Solidity: event Deposit(address caller, address indexed target, uint256 amount)
 func (_Escrow *EscrowFilterer) ParseDeposit(log types.Log) (*EscrowDeposit, error) {
 	event := new(EscrowDeposit)
 	if err := _Escrow.contract.UnpackLog(event, "Deposit", log); err != nil {
@@ -497,10 +507,15 @@ type EscrowWithdrawal struct {
 
 // FilterWithdrawal is a free log retrieval operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
 //
-// Solidity: event Withdrawal(address receiver, address caller, uint256 amount, uint256 fee)
-func (_Escrow *EscrowFilterer) FilterWithdrawal(opts *bind.FilterOpts) (*EscrowWithdrawalIterator, error) {
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
+func (_Escrow *EscrowFilterer) FilterWithdrawal(opts *bind.FilterOpts, caller []common.Address) (*EscrowWithdrawalIterator, error) {
 
-	logs, sub, err := _Escrow.contract.FilterLogs(opts, "Withdrawal")
+	var callerRule []interface{}
+	for _, callerItem := range caller {
+		callerRule = append(callerRule, callerItem)
+	}
+
+	logs, sub, err := _Escrow.contract.FilterLogs(opts, "Withdrawal", callerRule)
 	if err != nil {
 		return nil, err
 	}
@@ -509,10 +524,15 @@ func (_Escrow *EscrowFilterer) FilterWithdrawal(opts *bind.FilterOpts) (*EscrowW
 
 // WatchWithdrawal is a free log subscription operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
 //
-// Solidity: event Withdrawal(address receiver, address caller, uint256 amount, uint256 fee)
-func (_Escrow *EscrowFilterer) WatchWithdrawal(opts *bind.WatchOpts, sink chan<- *EscrowWithdrawal) (event.Subscription, error) {
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
+func (_Escrow *EscrowFilterer) WatchWithdrawal(opts *bind.WatchOpts, sink chan<- *EscrowWithdrawal, caller []common.Address) (event.Subscription, error) {
 
-	logs, sub, err := _Escrow.contract.WatchLogs(opts, "Withdrawal")
+	var callerRule []interface{}
+	for _, callerItem := range caller {
+		callerRule = append(callerRule, callerItem)
+	}
+
+	logs, sub, err := _Escrow.contract.WatchLogs(opts, "Withdrawal", callerRule)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +566,7 @@ func (_Escrow *EscrowFilterer) WatchWithdrawal(opts *bind.WatchOpts, sink chan<-
 
 // ParseWithdrawal is a log parse operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
 //
-// Solidity: event Withdrawal(address receiver, address caller, uint256 amount, uint256 fee)
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
 func (_Escrow *EscrowFilterer) ParseWithdrawal(log types.Log) (*EscrowWithdrawal, error) {
 	event := new(EscrowWithdrawal)
 	if err := _Escrow.contract.UnpackLog(event, "Withdrawal", log); err != nil {

@@ -28,15 +28,9 @@ import (
 )
 
 func execute(logger logx.Logger) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Load Config
-	path, err := os.Getwd()
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(path)
 	conf, err := config.LoadConfig("kwil_config.json")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -54,14 +48,7 @@ func execute(logger logx.Logger) error {
 
 	dc := cfgx.GetConfig().Select("deposit-settings")
 
-	d, err := deposits.New(dc)
-	if err != nil {
-		return fmt.Errorf("failed to initialize new deposits: %w", err)
-	}
-	// when should i defer close?  This function returns after ~1 second
-	d.Listen(ctx)
-
-	kr, err := crypto.NewKeyring(conf)
+	kr, err := crypto.NewKeyring(dc)
 	if err != nil {
 		return fmt.Errorf("failed to create keyring: %w", err)
 	}
@@ -72,6 +59,12 @@ func execute(logger logx.Logger) error {
 	}
 	a := auth.NewAuth(conf, acc)
 	a.Client.AuthAll()
+
+	d, err := deposits.New(dc, acc)
+	if err != nil {
+		return fmt.Errorf("failed to initialize new deposits: %w", err)
+	}
+	//d.Listen(ctx)
 
 	ppath := conf.GetPricePath()
 	pbytes, err := utils.LoadFileFromRoot(ppath)
@@ -92,6 +85,7 @@ func execute(logger logx.Logger) error {
 	serv := apisvc.NewService(d, p, c)
 	httpHandler := apisvc.NewHandler(logger, a.Authenticator)
 
+	logger.Warn("starting kwil service")
 	return serve(logger, httpHandler, serv)
 }
 

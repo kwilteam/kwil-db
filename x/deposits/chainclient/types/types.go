@@ -17,7 +17,7 @@ type Client interface {
 }
 
 type Contract interface {
-	GetDeposits(context.Context, int64, int64) ([]*Deposit, error)
+	GetDeposits(context.Context, int64, int64, string) ([]*Deposit, error)
 }
 
 type Log interface {

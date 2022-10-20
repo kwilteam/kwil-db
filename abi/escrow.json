@@ -20,7 +20,7 @@
 				"type": "address"
 			},
 			{
-				"indexed": false,
+				"indexed": true,
 				"internalType": "address",
 				"name": "target",
 				"type": "address"
@@ -45,7 +45,7 @@
 				"type": "address"
 			},
 			{
-				"indexed": false,
+				"indexed": true,
 				"internalType": "address",
 				"name": "caller",
 				"type": "address"
