@@ -1,4 +1,4 @@
-host: ${kenv.DB_CLUSTER_ENDPOINT}
+host: ${kenv.DB_CLUSTER.ENDPOINT}
 port: 5432
-user: ${kenv.DB_CLUSTER_USER}
-password: ${kenv.DB_CLUSTER_PASSWORD}
+user: ${kenv.DB_CLUSTER.USER}
+password: ${kenv.DB_CLUSTER.PASSWORD}
