@@ -12,12 +12,13 @@ import (
 	"time"
 
 	"kwil/pkg/types/chain/pricing"
+	"kwil/x/cfgx"
 	"kwil/x/chain/auth"
 	"kwil/x/chain/config"
 	"kwil/x/chain/contracts"
-	"kwil/x/chain/crypto"
-	"kwil/x/chain/deposits"
 	"kwil/x/chain/utils"
+	"kwil/x/crypto"
+	"kwil/x/deposits"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
@@ -27,13 +28,17 @@ import (
 )
 
 func execute(logger logx.Logger) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Load Config
 	conf, err := config.LoadConfig("kwil_config.json")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	err = os.Setenv(cfgx.Meta_Config_Env, "meta-config.yaml")
+	if err != nil {
+		panic(err)
 	}
 
 	client, err := config.ConnectChain()
@@ -41,14 +46,9 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to connect to client chain: %w", err)
 	}
 
-	d, err := deposits.Init(ctx, conf, client)
-	if err != nil {
-		return fmt.Errorf("failed to initialize deposits: %w", err)
-	}
+	dc := cfgx.GetConfig().Select("deposit-settings")
 
-	defer d.Store.Close()
-
-	kr, err := crypto.NewKeyring(conf)
+	kr, err := crypto.NewKeyring(dc)
 	if err != nil {
 		return fmt.Errorf("failed to create keyring: %w", err)
 	}
@@ -59,6 +59,12 @@ func execute(logger logx.Logger) error {
 	}
 	a := auth.NewAuth(conf, acc)
 	a.Client.AuthAll()
+
+	d, err := deposits.New(dc, acc)
+	if err != nil {
+		return fmt.Errorf("failed to initialize new deposits: %w", err)
+	}
+	//d.Listen(ctx)
 
 	ppath := conf.GetPricePath()
 	pbytes, err := utils.LoadFileFromRoot(ppath)
@@ -76,9 +82,10 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize contract client: %w", err)
 	}
 
-	serv := apisvc.NewService(d.Store, p, c)
+	serv := apisvc.NewService(d, p, c)
 	httpHandler := apisvc.NewHandler(logger, a.Authenticator)
 
+	logger.Warn("starting kwil service")
 	return serve(logger, httpHandler, serv)
 }
 

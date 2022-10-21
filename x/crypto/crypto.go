@@ -1,11 +1,13 @@
 package crypto
 
 import (
-	c "crypto"
 	"crypto/ecdsa"
+	c "crypto/sha512"
+	"encoding/hex"
+
+	"kwil/x/chain/utils"
 
 	ec "github.com/ethereum/go-ethereum/crypto"
-	"kwil/x/chain/utils"
 )
 
 type PrivateKey struct {
@@ -29,5 +31,11 @@ func LoadPrivateKey(path string) (*PrivateKey, error) {
 
 // Sha384 returns the sha384 hash of the data.
 func Sha384(data []byte) []byte { // I wrapped this in a function so that we know it is standard
-	return c.SHA384.New().Sum(data)
+	h := c.New384()
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+func Sha384Str(data []byte) string {
+	return hex.EncodeToString(Sha384(data))
 }

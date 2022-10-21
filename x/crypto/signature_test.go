@@ -7,32 +7,26 @@ import (
 	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
-func TestPrivateKey_Sign(t *testing.T) {
+func TestSign(t *testing.T) {
 	pk, err := ec.HexToECDSA("4bb214b1f3a0737d758bc3828cdff371e3769fe84a2678da34700cb18d50770e")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	type fields struct {
-		key *ecdsa.PrivateKey
-	}
 	type args struct {
 		data []byte
+		k    *ecdsa.PrivateKey
 	}
 	tests := []struct {
 		name    string
-		fields  fields
 		args    args
 		want    string
 		wantErr bool
 	}{
 		{
 			name: "valid_sig",
-			fields: fields{
-				key: pk,
-			},
 			args: args{
 				data: []byte("kwil"),
+				k:    pk,
 			},
 			want:    "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
 			wantErr: false,
@@ -40,16 +34,13 @@ func TestPrivateKey_Sign(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &PrivateKey{
-				key: tt.fields.key,
-			}
-			got, err := p.sign(tt.args.data)
+			got, err := Sign(tt.args.data, tt.args.k)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("PrivateKey.Sign() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Sign() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("PrivateKey.Sign() = %v, want %v", got, tt.want)
+				t.Errorf("Sign() = %v, want %v", got, tt.want)
 			}
 		})
 	}

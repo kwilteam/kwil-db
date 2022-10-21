@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
+
 	types "kwil/pkg/types/db"
-	"kwil/x/chain/crypto"
+	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
 	"kwil/x/svcx/composer"
 )
@@ -31,12 +33,17 @@ func (s *Service) CreateDatabase(ctx context.Context, req *apipb.CreateDatabaseR
 		return nil, ErrInvalidSignature
 	}
 
-	amt, err := s.validateBalances(&req.From, &req.Operation, &req.Crud, &req.Fee)
-	if err != nil {
+	amt, errb := big.NewInt(0).SetString(req.Fee, 10)
+	if errb {
 		return nil, err
 	}
 
-	err = s.ds.SetBalance(req.From, amt)
+	// validate that the fee is enough
+	if !s.validateBalances(&req.From, &req.Operation, &req.Crud, amt) {
+		return nil, ErrNotEnoughFunds
+	}
+
+	err = s.ds.Spend(req.From, amt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
@@ -69,12 +76,17 @@ func (s *Service) UpdateDatabase(ctx context.Context, req *apipb.UpdateDatabaseR
 		return nil, ErrInvalidSignature
 	}
 
-	amt, err := s.validateBalances(&req.From, &req.Operation, &req.Crud, &req.Fee)
-	if err != nil {
+	amt, errb := big.NewInt(0).SetString(req.Fee, 10)
+	if errb {
 		return nil, err
 	}
 
-	err = s.ds.SetBalance(req.From, amt)
+	// validate that the fee is enough
+	if !s.validateBalances(&req.From, &req.Operation, &req.Crud, amt) {
+		return nil, ErrNotEnoughFunds
+	}
+
+	err = s.ds.Spend(req.From, amt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}

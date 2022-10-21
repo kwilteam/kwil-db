@@ -30,7 +30,7 @@ var (
 
 // EscrowMetaData contains all meta data concerning the Escrow contract.
 var EscrowMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_escrowToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"sender\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"validator\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Deposited\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"receiver\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"validator\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"Return\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"validator\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"}],\"name\":\"deposit\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowToken\",\"outputs\":[{\"internalType\":\"contractIERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"pools\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"returnDeposit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_escrowToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"target\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Deposit\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"receiver\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"Withdrawal\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"validator\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"}],\"name\":\"deposit\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowToken\",\"outputs\":[{\"internalType\":\"contractIERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"pools\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"returnDeposit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
 }
 
 // EscrowABI is the input ABI used to generate the binding from.
@@ -283,9 +283,9 @@ func (_Escrow *EscrowTransactorSession) ReturnDeposit(recipient common.Address, 
 	return _Escrow.Contract.ReturnDeposit(&_Escrow.TransactOpts, recipient, amt, fee)
 }
 
-// EscrowDepositedIterator is returned from FilterDeposited and is used to iterate over the raw logs and unpacked data for Deposited events raised by the Escrow contract.
-type EscrowDepositedIterator struct {
-	Event *EscrowDeposited // Event containing the contract specifics and raw log
+// EscrowDepositIterator is returned from FilterDeposit and is used to iterate over the raw logs and unpacked data for Deposit events raised by the Escrow contract.
+type EscrowDepositIterator struct {
+	Event *EscrowDeposit // Event containing the contract specifics and raw log
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -299,7 +299,7 @@ type EscrowDepositedIterator struct {
 // Next advances the iterator to the subsequent event, returning whether there
 // are any more events found. In case of a retrieval or parsing error, false is
 // returned and Error() can be queried for the exact failure.
-func (it *EscrowDepositedIterator) Next() bool {
+func (it *EscrowDepositIterator) Next() bool {
 	// If the iterator failed, stop iterating
 	if it.fail != nil {
 		return false
@@ -308,7 +308,7 @@ func (it *EscrowDepositedIterator) Next() bool {
 	if it.done {
 		select {
 		case log := <-it.logs:
-			it.Event = new(EscrowDeposited)
+			it.Event = new(EscrowDeposit)
 			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 				it.fail = err
 				return false
@@ -323,7 +323,7 @@ func (it *EscrowDepositedIterator) Next() bool {
 	// Iterator still in progress, wait for either a data or an error event
 	select {
 	case log := <-it.logs:
-		it.Event = new(EscrowDeposited)
+		it.Event = new(EscrowDeposit)
 		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 			it.fail = err
 			return false
@@ -339,43 +339,53 @@ func (it *EscrowDepositedIterator) Next() bool {
 }
 
 // Error returns any retrieval or parsing error occurred during filtering.
-func (it *EscrowDepositedIterator) Error() error {
+func (it *EscrowDepositIterator) Error() error {
 	return it.fail
 }
 
 // Close terminates the iteration process, releasing any pending underlying
 // resources.
-func (it *EscrowDepositedIterator) Close() error {
+func (it *EscrowDepositIterator) Close() error {
 	it.sub.Unsubscribe()
 	return nil
 }
 
-// EscrowDeposited represents a Deposited event raised by the Escrow contract.
-type EscrowDeposited struct {
-	Sender    common.Address
-	Validator common.Address
-	Amount    *big.Int
-	Raw       types.Log // Blockchain specific contextual infos
+// EscrowDeposit represents a Deposit event raised by the Escrow contract.
+type EscrowDeposit struct {
+	Caller common.Address
+	Target common.Address
+	Amount *big.Int
+	Raw    types.Log // Blockchain specific contextual infos
 }
 
-// FilterDeposited is a free log retrieval operation binding the contract event 0x8752a472e571a816aea92eec8dae9baf628e840f4929fbcc2d155e6233ff68a7.
+// FilterDeposit is a free log retrieval operation binding the contract event 0x5548c837ab068cf56a2c2479df0882a4922fd203edb7517321831d95078c5f62.
 //
-// Solidity: event Deposited(address sender, address validator, uint256 amount)
-func (_Escrow *EscrowFilterer) FilterDeposited(opts *bind.FilterOpts) (*EscrowDepositedIterator, error) {
+// Solidity: event Deposit(address caller, address indexed target, uint256 amount)
+func (_Escrow *EscrowFilterer) FilterDeposit(opts *bind.FilterOpts, target []common.Address) (*EscrowDepositIterator, error) {
 
-	logs, sub, err := _Escrow.contract.FilterLogs(opts, "Deposited")
+	var targetRule []interface{}
+	for _, targetItem := range target {
+		targetRule = append(targetRule, targetItem)
+	}
+
+	logs, sub, err := _Escrow.contract.FilterLogs(opts, "Deposit", targetRule)
 	if err != nil {
 		return nil, err
 	}
-	return &EscrowDepositedIterator{contract: _Escrow.contract, event: "Deposited", logs: logs, sub: sub}, nil
+	return &EscrowDepositIterator{contract: _Escrow.contract, event: "Deposit", logs: logs, sub: sub}, nil
 }
 
-// WatchDeposited is a free log subscription operation binding the contract event 0x8752a472e571a816aea92eec8dae9baf628e840f4929fbcc2d155e6233ff68a7.
+// WatchDeposit is a free log subscription operation binding the contract event 0x5548c837ab068cf56a2c2479df0882a4922fd203edb7517321831d95078c5f62.
 //
-// Solidity: event Deposited(address sender, address validator, uint256 amount)
-func (_Escrow *EscrowFilterer) WatchDeposited(opts *bind.WatchOpts, sink chan<- *EscrowDeposited) (event.Subscription, error) {
+// Solidity: event Deposit(address caller, address indexed target, uint256 amount)
+func (_Escrow *EscrowFilterer) WatchDeposit(opts *bind.WatchOpts, sink chan<- *EscrowDeposit, target []common.Address) (event.Subscription, error) {
 
-	logs, sub, err := _Escrow.contract.WatchLogs(opts, "Deposited")
+	var targetRule []interface{}
+	for _, targetItem := range target {
+		targetRule = append(targetRule, targetItem)
+	}
+
+	logs, sub, err := _Escrow.contract.WatchLogs(opts, "Deposit", targetRule)
 	if err != nil {
 		return nil, err
 	}
@@ -385,8 +395,8 @@ func (_Escrow *EscrowFilterer) WatchDeposited(opts *bind.WatchOpts, sink chan<- 
 			select {
 			case log := <-logs:
 				// New log arrived, parse the event and forward to the user
-				event := new(EscrowDeposited)
-				if err := _Escrow.contract.UnpackLog(event, "Deposited", log); err != nil {
+				event := new(EscrowDeposit)
+				if err := _Escrow.contract.UnpackLog(event, "Deposit", log); err != nil {
 					return err
 				}
 				event.Raw = log
@@ -407,21 +417,21 @@ func (_Escrow *EscrowFilterer) WatchDeposited(opts *bind.WatchOpts, sink chan<- 
 	}), nil
 }
 
-// ParseDeposited is a log parse operation binding the contract event 0x8752a472e571a816aea92eec8dae9baf628e840f4929fbcc2d155e6233ff68a7.
+// ParseDeposit is a log parse operation binding the contract event 0x5548c837ab068cf56a2c2479df0882a4922fd203edb7517321831d95078c5f62.
 //
-// Solidity: event Deposited(address sender, address validator, uint256 amount)
-func (_Escrow *EscrowFilterer) ParseDeposited(log types.Log) (*EscrowDeposited, error) {
-	event := new(EscrowDeposited)
-	if err := _Escrow.contract.UnpackLog(event, "Deposited", log); err != nil {
+// Solidity: event Deposit(address caller, address indexed target, uint256 amount)
+func (_Escrow *EscrowFilterer) ParseDeposit(log types.Log) (*EscrowDeposit, error) {
+	event := new(EscrowDeposit)
+	if err := _Escrow.contract.UnpackLog(event, "Deposit", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log
 	return event, nil
 }
 
-// EscrowReturnIterator is returned from FilterReturn and is used to iterate over the raw logs and unpacked data for Return events raised by the Escrow contract.
-type EscrowReturnIterator struct {
-	Event *EscrowReturn // Event containing the contract specifics and raw log
+// EscrowWithdrawalIterator is returned from FilterWithdrawal and is used to iterate over the raw logs and unpacked data for Withdrawal events raised by the Escrow contract.
+type EscrowWithdrawalIterator struct {
+	Event *EscrowWithdrawal // Event containing the contract specifics and raw log
 
 	contract *bind.BoundContract // Generic contract to use for unpacking event data
 	event    string              // Event name to use for unpacking event data
@@ -435,7 +445,7 @@ type EscrowReturnIterator struct {
 // Next advances the iterator to the subsequent event, returning whether there
 // are any more events found. In case of a retrieval or parsing error, false is
 // returned and Error() can be queried for the exact failure.
-func (it *EscrowReturnIterator) Next() bool {
+func (it *EscrowWithdrawalIterator) Next() bool {
 	// If the iterator failed, stop iterating
 	if it.fail != nil {
 		return false
@@ -444,7 +454,7 @@ func (it *EscrowReturnIterator) Next() bool {
 	if it.done {
 		select {
 		case log := <-it.logs:
-			it.Event = new(EscrowReturn)
+			it.Event = new(EscrowWithdrawal)
 			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 				it.fail = err
 				return false
@@ -459,7 +469,7 @@ func (it *EscrowReturnIterator) Next() bool {
 	// Iterator still in progress, wait for either a data or an error event
 	select {
 	case log := <-it.logs:
-		it.Event = new(EscrowReturn)
+		it.Event = new(EscrowWithdrawal)
 		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
 			it.fail = err
 			return false
@@ -475,44 +485,54 @@ func (it *EscrowReturnIterator) Next() bool {
 }
 
 // Error returns any retrieval or parsing error occurred during filtering.
-func (it *EscrowReturnIterator) Error() error {
+func (it *EscrowWithdrawalIterator) Error() error {
 	return it.fail
 }
 
 // Close terminates the iteration process, releasing any pending underlying
 // resources.
-func (it *EscrowReturnIterator) Close() error {
+func (it *EscrowWithdrawalIterator) Close() error {
 	it.sub.Unsubscribe()
 	return nil
 }
 
-// EscrowReturn represents a Return event raised by the Escrow contract.
-type EscrowReturn struct {
-	Receiver  common.Address
-	Validator common.Address
-	Amount    *big.Int
-	Fee       *big.Int
-	Raw       types.Log // Blockchain specific contextual infos
+// EscrowWithdrawal represents a Withdrawal event raised by the Escrow contract.
+type EscrowWithdrawal struct {
+	Receiver common.Address
+	Caller   common.Address
+	Amount   *big.Int
+	Fee      *big.Int
+	Raw      types.Log // Blockchain specific contextual infos
 }
 
-// FilterReturn is a free log retrieval operation binding the contract event 0xadf247d5d167e5c6c708ae45d0beb8c3a670079b1a4097a05c8844964ff0a9ee.
+// FilterWithdrawal is a free log retrieval operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
 //
-// Solidity: event Return(address receiver, address validator, uint256 amount, uint256 fee)
-func (_Escrow *EscrowFilterer) FilterReturn(opts *bind.FilterOpts) (*EscrowReturnIterator, error) {
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
+func (_Escrow *EscrowFilterer) FilterWithdrawal(opts *bind.FilterOpts, caller []common.Address) (*EscrowWithdrawalIterator, error) {
 
-	logs, sub, err := _Escrow.contract.FilterLogs(opts, "Return")
+	var callerRule []interface{}
+	for _, callerItem := range caller {
+		callerRule = append(callerRule, callerItem)
+	}
+
+	logs, sub, err := _Escrow.contract.FilterLogs(opts, "Withdrawal", callerRule)
 	if err != nil {
 		return nil, err
 	}
-	return &EscrowReturnIterator{contract: _Escrow.contract, event: "Return", logs: logs, sub: sub}, nil
+	return &EscrowWithdrawalIterator{contract: _Escrow.contract, event: "Withdrawal", logs: logs, sub: sub}, nil
 }
 
-// WatchReturn is a free log subscription operation binding the contract event 0xadf247d5d167e5c6c708ae45d0beb8c3a670079b1a4097a05c8844964ff0a9ee.
+// WatchWithdrawal is a free log subscription operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
 //
-// Solidity: event Return(address receiver, address validator, uint256 amount, uint256 fee)
-func (_Escrow *EscrowFilterer) WatchReturn(opts *bind.WatchOpts, sink chan<- *EscrowReturn) (event.Subscription, error) {
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
+func (_Escrow *EscrowFilterer) WatchWithdrawal(opts *bind.WatchOpts, sink chan<- *EscrowWithdrawal, caller []common.Address) (event.Subscription, error) {
 
-	logs, sub, err := _Escrow.contract.WatchLogs(opts, "Return")
+	var callerRule []interface{}
+	for _, callerItem := range caller {
+		callerRule = append(callerRule, callerItem)
+	}
+
+	logs, sub, err := _Escrow.contract.WatchLogs(opts, "Withdrawal", callerRule)
 	if err != nil {
 		return nil, err
 	}
@@ -522,8 +542,8 @@ func (_Escrow *EscrowFilterer) WatchReturn(opts *bind.WatchOpts, sink chan<- *Es
 			select {
 			case log := <-logs:
 				// New log arrived, parse the event and forward to the user
-				event := new(EscrowReturn)
-				if err := _Escrow.contract.UnpackLog(event, "Return", log); err != nil {
+				event := new(EscrowWithdrawal)
+				if err := _Escrow.contract.UnpackLog(event, "Withdrawal", log); err != nil {
 					return err
 				}
 				event.Raw = log
@@ -544,12 +564,12 @@ func (_Escrow *EscrowFilterer) WatchReturn(opts *bind.WatchOpts, sink chan<- *Es
 	}), nil
 }
 
-// ParseReturn is a log parse operation binding the contract event 0xadf247d5d167e5c6c708ae45d0beb8c3a670079b1a4097a05c8844964ff0a9ee.
+// ParseWithdrawal is a log parse operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
 //
-// Solidity: event Return(address receiver, address validator, uint256 amount, uint256 fee)
-func (_Escrow *EscrowFilterer) ParseReturn(log types.Log) (*EscrowReturn, error) {
-	event := new(EscrowReturn)
-	if err := _Escrow.contract.UnpackLog(event, "Return", log); err != nil {
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
+func (_Escrow *EscrowFilterer) ParseWithdrawal(log types.Log) (*EscrowWithdrawal, error) {
+	event := new(EscrowWithdrawal)
+	if err := _Escrow.contract.UnpackLog(event, "Withdrawal", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log
