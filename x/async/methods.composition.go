@@ -4,7 +4,7 @@ import "kwil/x"
 
 // Map will execute the function and set the result if the Task
 // is successful, else it will propagate the source error.
-func Map[T, R any](source Listenable[T], fn func(T) R) Task[R] {
+func Map[T, R any](source Task[T], fn func(T) R) Task[R] {
 	tk := NewTask[R]()
 
 	source.OnComplete(&Continuation[T]{
@@ -96,6 +96,50 @@ func All[T any](sources ...Listenable[T]) Task[[]T] {
 			}
 		}))
 	}
+
+	return tk
+}
+
+func Compose[T, R any](fn1 func() Task[T], fn2 func(T) Task[R]) Task[R] {
+	tk := NewTask[R]()
+
+	fn1().WhenComplete(func(t T, e error) {
+		if e != nil {
+			tk.Fail(e)
+			return
+		}
+
+		fn2(t).WhenComplete(func(v R, e2 error) {
+			if e2 != nil {
+				tk.Fail(e2)
+				return
+			}
+
+			tk.Complete(v)
+		})
+	})
+
+	return tk
+}
+
+func ComposeA[T any](fna func() Action, fn func() Task[T]) Task[T] {
+	tk := NewTask[T]()
+
+	fna().WhenComplete(func(e error) {
+		if e != nil {
+			tk.Fail(e)
+			return
+		}
+
+		fn().WhenComplete(func(v T, e2 error) {
+			if e2 != nil {
+				tk.Fail(e2)
+				return
+			}
+
+			tk.Complete(v)
+		})
+	})
 
 	return tk
 }

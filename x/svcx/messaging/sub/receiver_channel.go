@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x"
-	"kwil/x/messaging/mx"
+	"kwil/x/svcx/messaging/mx"
 )
 
 var ErrReceiverClosed = fmt.Errorf("receiver closed")

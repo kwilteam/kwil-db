@@ -17,8 +17,8 @@ type Chan[T any] interface {
 	// emitted via Write.
 	Read() <-chan T
 
-	// Drain reads all items from the channel and returns
-	// them node a slice.
+	// Drain empties the channel and returns the values
+	// as a slice.
 	Drain(ctx context.Context) ([]T, error)
 
 	// Write will put a value in the channel and return
@@ -27,10 +27,10 @@ type Chan[T any] interface {
 	Write(value T) bool
 
 	// TryWrite will put a value in the channel and return
-	// true if the channel is still open and not in
-	// a close requested state, else it will return false.
-	// If the context is nil, the method will effectively
-	// behave the same node Write.
+	// true if the channel is still open and not in a close
+	// requested state, else it will return false. If the
+	// context is nil, the method will effectively behave
+	// the same node Write.
 	TryWrite(ctx context.Context, value T) (ok bool, err error)
 
 	// Close will either close the channel or lock

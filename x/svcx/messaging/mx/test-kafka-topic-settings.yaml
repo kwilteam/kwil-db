@@ -1,7 +1,7 @@
 broker-settings: &broker-settings
-  bootstrap.servers: ${kenv.KAFKA_CLUSTER_ENDPOINT}
-  username: ${kenv.KAFKA_CLUSTER_USER}
-  password: ${kenv.KAFKA_CLUSTER_PASSWORD}
+  bootstrap.servers: ${kenv.KAFKA_CLUSTER.ENDPOINT}
+  username: ${kenv.KAFKA_CLUSTER.USER}
+  password: ${kenv.KAFKA_CLUSTER.PASSWORD}
 
 messaging-emitter:
   broker-settings: *broker-settings
@@ -14,3 +14,4 @@ messaging-receiver:
   group-id: kwil_chain_txns_to_db_cg_test
   auto-offset-reset: earliest
   enable.auto.commit: false
+  

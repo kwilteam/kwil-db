@@ -4,14 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"kwil/x"
-	"kwil/x/messaging/mx"
-	"kwil/x/messaging/pub"
-	request "kwil/x/tracking_service"
-
 	types "kwil/pkg/types/db"
 	"kwil/x/chain/crypto"
 	"kwil/x/proto/apipb"
+	"kwil/x/svcx/composer"
 )
 
 func (s *Service) CreateDatabase(ctx context.Context, req *apipb.CreateDatabaseRequest) (*apipb.CreateDatabaseResponse, error) {
@@ -49,7 +45,7 @@ func (s *Service) CreateDatabase(ctx context.Context, req *apipb.CreateDatabaseR
 		return nil, ctx.Err()
 	}
 
-	request_id, err := doSubmitRequest(ctx, req, func(req *apipb.CreateDatabaseRequest) *DBRequest {
+	request_id, err := doSubmitRequest(ctx, req, func(req *apipb.CreateDatabaseRequest) *composer.Message {
 		return getCreateDbRequest(req)
 	})
 
@@ -83,7 +79,7 @@ func (s *Service) UpdateDatabase(ctx context.Context, req *apipb.UpdateDatabaseR
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
 
-	request_id, err := doSubmitRequest(ctx, req, func(req *apipb.UpdateDatabaseRequest) *DBRequest {
+	request_id, err := doSubmitRequest(ctx, req, func(req *apipb.UpdateDatabaseRequest) *composer.Message {
 		return getUpdateDbRequest(req)
 	})
 
@@ -166,48 +162,4 @@ func (s *Service) GetQueries(_ context.Context, _ *apipb.GetQueriesRequest) (*ap
 	}
 
 	return &pqs, nil
-}
-
-type createDatabaseRequestSerdes struct {
-}
-
-func GetDbRequestSerdes() mx.Serdes[*DBRequest] {
-	panic("implement me")
-}
-
-func (c *createDatabaseRequestSerdes) Serialize(_ *DBRequest) (key []byte, value []byte, err error) {
-	// TODO: get serialize logic from Bryan
-	panic("not implemented")
-}
-
-func (c *createDatabaseRequestSerdes) Deserialize(_ []byte, _ []byte) (*DBRequest, error) {
-	// TODO: get deserialize logic from Bryan
-	panic("not implemented")
-}
-
-func doSubmitRequest[T any](ctx context.Context, req T, fn func(T) *DBRequest) (string, error) {
-	emitter := x.Resolve[pub.Emitter[*DBRequest]](ctx, DATABASE_EMITTER_ALIAS)
-	if emitter == nil {
-		return "", fmt.Errorf("failed to resolve emitter %s", DATABASE_EMITTER_ALIAS)
-	}
-
-	if emitter == nil {
-		return "", fmt.Errorf("failed to resolve emitter %s", DATABASE_EMITTER_ALIAS)
-	}
-
-	db_req := fn(req)
-	a := emitter.Send(ctx, db_req)
-	<-a.DoneCh() // blocking call
-
-	requestManager := x.Resolve[request.Service](ctx, request.SERVICE_ALIAS)
-	if requestManager == nil {
-		return "", fmt.Errorf("failed to resolve request manager %s", request.SERVICE_ALIAS)
-	}
-
-	info, err := requestManager.Create(ctx, db_req.IdempotentKey)
-	if err == nil {
-		return "", err
-	}
-
-	return info.ID(), nil
 }

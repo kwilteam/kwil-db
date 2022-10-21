@@ -1,0 +1,7 @@
+env-settings: "~/.kwil-server/env-settings-test.yaml"
+
+sql-repository-service: "../mx/test-db-settings.yaml"
+
+messaging-emitter: "messaging-emitter, ../mx/test-kafka-topic-settings.yaml"
+
+#tracking-service: "tracking_service, ../mx/test-tracking-service-settings.yaml"

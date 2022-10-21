@@ -52,7 +52,9 @@ type Emitter[T any] interface {
 	// Close closes the emitter and releases all resources.
 	Close()
 
-	// CloseAndWait closes the emitter and releases all resources.
+	// CloseAndWait closes the emitter, releases all resources,
+	// and waits for overall shutdown of the emitter. An error
+	// will be returned if the ctx has been cancelled.
 	CloseAndWait(ctx context.Context) error
 
 	// OnClosed returns a channel that is closed when the

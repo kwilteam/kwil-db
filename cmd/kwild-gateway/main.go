@@ -3,10 +3,6 @@ package main
 import (
 	"fmt"
 	"kwil/x"
-	"kwil/x/cfgx"
-	"kwil/x/messaging/pub"
-	"kwil/x/service/apisvc"
-	tracking "kwil/x/tracking_service"
 	"net/http"
 	"os"
 	"regexp"
@@ -108,23 +104,30 @@ func allowedOrigin(origin string) bool {
 }
 
 func getServiceInjector() (x.RequestInjectorFn, error) {
-	// TODO: we need to use a config to bootstrap the various emitters/receivers needed
-	cfg := cfgx.GetTestConfig().Select("messaging-emitter")
+	//// TODO: we need to use a config to bootstrap the various emitters/receivers needed
+	//root_cfg := cfgx.GetTestConfig()
+	//
+	//tracker, err := tracking.New(root_cfg.Select("tracking-service"))
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//c, err := composer.New(root_cfg.Select("composer-emitter"), tracker)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//// Not sure where else to inject a service for downstream consumption.
+	//// Ignoring the additional function for clearing context for now.
+	//fn, _ := x.
+	//	Injectable(composer.SERVICE_ALIAS, c).
+	//	Include(tracking.SERVICE_ALIAS, tracker).
+	//	AsRequestInjector()
+	//
+	//
+	//return fn, nil
 
-	// Using NewEmitterSingleClient for now. Once we need
-	// more than one emitter, we will need to create the client
-	// separately and close it on application shutdown.
-	e, err := pub.NewEmitterSingleClient(cfg, apisvc.GetDbRequestSerdes())
-	if err != nil {
-		return nil, err
-	}
-
-	// Not sure where else to inject a service for downstream consumption.
-	// Ignoring the additional function for clearing context for now.
-	fn, _ := x.
-		Injectable(apisvc.DATABASE_EMITTER_ALIAS, e).
-		Include(tracking.SERVICE_ALIAS, tracking.GetService()).
-		AsRequestInjector()
-
-	return fn, nil
+	return func(r *http.Request) *http.Request {
+		return r
+	}, nil
 }

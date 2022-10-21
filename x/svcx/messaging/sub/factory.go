@@ -3,7 +3,7 @@ package sub
 //import (
 //	"fmt"
 //	"kwil/x/cfgx"
-//	"kwil/x/messaging/mx"
+//	"kwil/x/composer/mx"
 //)
 //
 //func NewChannelBroker[T any](config cfgx.Config, serdes mx.Serdes[T]) (ChannelBroker[T], error) {

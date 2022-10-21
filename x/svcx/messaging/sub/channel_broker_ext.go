@@ -8,7 +8,7 @@ package sub
 //	"github.com/twmb/franz-go/pkg/kgo"
 //	"github.com/twmb/franz-go/pkg/sasl/plain"
 //	"kwil/x"
-//	"kwil/x/messaging/mx"
+//	"kwil/x/composer/mx"
 //	"kwil/x/syncx"
 //	"sync"
 //)

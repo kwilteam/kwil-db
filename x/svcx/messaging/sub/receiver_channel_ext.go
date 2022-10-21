@@ -4,7 +4,7 @@ package sub
 //import (
 //	"context"
 //	"kwil/x"
-//	"kwil/x/messaging/mx"
+//	"kwil/x/composer/mx"
 //	"kwil/x/syncx"
 //)
 //

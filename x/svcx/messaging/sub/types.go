@@ -2,7 +2,7 @@ package sub
 
 import (
 	"kwil/x/async"
-	mx "kwil/x/messaging/mx"
+	"kwil/x/svcx/messaging/mx"
 )
 
 type MessageIterator[T any] interface {

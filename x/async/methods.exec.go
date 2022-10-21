@@ -4,6 +4,9 @@ import (
 	"fmt"
 )
 
+// Call executes the given function asynchronously in a go routine. A Task
+// is returned either completed with the result of the function or an error
+// if the function returns an error.
 func Call[T any](fn func() (T, error)) Task[T] {
 	task := NewTask[T]()
 
@@ -29,6 +32,8 @@ func Call[T any](fn func() (T, error)) Task[T] {
 	return task
 }
 
+// CallWithArgs has all the same behavior as Call, but additionally pass an argument
+// to the function.
 func CallWithArgs[T, U any](args U, fn func(U) (T, error)) Task[T] {
 	task := NewTask[T]()
 

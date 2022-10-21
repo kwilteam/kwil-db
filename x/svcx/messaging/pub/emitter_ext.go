@@ -5,7 +5,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"kwil/x"
 	"kwil/x/async"
-	"kwil/x/messaging/mx"
+	"kwil/x/svcx/messaging/mx"
 )
 
 type emitter[T any] struct {
@@ -14,6 +14,10 @@ type emitter[T any] struct {
 	serdes mx.Serdes[T]
 	fn     func() bool
 	done   chan x.Void
+}
+
+func (e *emitter[T]) ID() int {
+	return e.id
 }
 
 func (e *emitter[T]) Send(ctx context.Context, item T) async.Action {
@@ -47,25 +51,6 @@ func (e *emitter[T]) SendNoAckT(ctx context.Context, topic string, item T) error
 	return e.client.send_async(ctx, m, nil)
 }
 
-func (e *emitter[T]) _send(ctx context.Context, topic string, item T) async.Action {
-	m, err := e.createMessageFrom(topic, item)
-	if err != nil {
-		return async.FailedAction(err)
-	}
-
-	ack, a := ackAsync()
-	err = e.client.send_async(ctx, m, ack)
-	if err != nil {
-		a.Fail(err)
-	}
-
-	return a
-}
-
-func (e *emitter[T]) ID() int {
-	return e.id
-}
-
 func (e *emitter[T]) Close() {
 	if e.fn() {
 		close(e.done)
@@ -84,6 +69,21 @@ func (e *emitter[T]) CloseAndWait(ctx context.Context) error {
 
 func (e *emitter[T]) OnClosed() <-chan x.Void {
 	return e.done
+}
+
+func (e *emitter[T]) _send(ctx context.Context, topic string, item T) async.Action {
+	m, err := e.createMessageFrom(topic, item)
+	if err != nil {
+		return async.FailedAction(err)
+	}
+
+	ack, a := ackAsync()
+	err = e.client.send_async(ctx, m, ack)
+	if err != nil {
+		a.Fail(err)
+	}
+
+	return a
 }
 
 func (e *emitter[T]) createMessageFrom(topic string, item T) (*kgo.Record, error) {
