@@ -2,7 +2,7 @@ package crypto
 
 import (
 	"kwil/x/cfgx"
-	"kwil/x/chain/utils"
+	"kwil/x/utils"
 
 	kr "github.com/99designs/keyring"
 )
@@ -64,8 +64,15 @@ func (k *keyring) Get(name string) ([]byte, error) {
 }
 
 func getKeyRingConfig(serviceName string) kr.Config {
+	return kr.Config{ServiceName: "kwil", KeychainName: "kwil",
+		KeychainTrustApplication: true}
+}
+
+/*
+	func getKeyRingConfig(serviceName string) kr.Config {
 	return kr.Config{ServiceName: serviceName, FileDir: "~",
 		FilePasswordFunc: func(prompt string) (string, error) {
 			return "test", nil
 		}}
 }
+*/

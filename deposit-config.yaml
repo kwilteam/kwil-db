@@ -1,5 +1,5 @@
 required-confirmations: 12
-block-timeout: 20 ## seconds
+block-timeout: 30 ## seconds
 starting-block: 0
 block-buffer: 100
 chain: eth-mainnet

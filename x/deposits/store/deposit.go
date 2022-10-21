@@ -5,6 +5,7 @@ import (
 
 	"kwil/x/cfgx"
 	"kwil/x/deposits/store/kv"
+	"kwil/x/logx"
 )
 
 var DEPOSITKEY = []byte("d")
@@ -28,9 +29,9 @@ type DepositStore interface {
 	GetSpent(string) (*big.Int, error)
 }
 
-func New(conf cfgx.Config) (*depositStore, error) {
+func New(conf cfgx.Config, l logx.Logger) (*depositStore, error) {
 
-	db, err := kv.New(conf.String("kv.path"))
+	db, err := kv.New(l, conf.String("kv.path"))
 	if err != nil {
 		return nil, err
 	}

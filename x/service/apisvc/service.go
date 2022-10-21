@@ -1,15 +1,11 @@
 package apisvc
 
 import (
-	"context"
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"kwil/pkg/types/chain/pricing"
 	"kwil/x/deposits"
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
+	"math/big"
 )
 
 type Service struct {
@@ -18,19 +14,13 @@ type Service struct {
 	ds      deposits.Deposits
 	log     logx.Logger
 	pricing pricing.PriceBuilder
-	cc      ContractClient
 }
 
-type ContractClient interface {
-	ReturnFunds(ctx context.Context, recip common.Address, amt *big.Int, fee *big.Int) (*types.Transaction, error)
-}
-
-func NewService(ds deposits.Deposits, p pricing.PriceBuilder, cc ContractClient) *Service {
+func NewService(ds deposits.Deposits, p pricing.PriceBuilder) *Service {
 	return &Service{
 		ds:      ds,
 		pricing: p,
 		log:     logx.New(),
-		cc:      cc,
 	}
 }
 

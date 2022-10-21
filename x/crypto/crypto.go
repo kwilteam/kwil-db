@@ -5,7 +5,7 @@ import (
 	c "crypto/sha512"
 	"encoding/hex"
 
-	"kwil/x/chain/utils"
+	"kwil/x/utils"
 
 	ec "github.com/ethereum/go-ethereum/crypto"
 )

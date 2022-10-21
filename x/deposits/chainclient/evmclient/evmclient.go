@@ -1,35 +1,33 @@
-package ethclient
+package evmclient
 
 import (
 	"context"
 
-	esc "kwil/x/deposits/chainclient/ethclient/contracts"
+	esc "kwil/x/deposits/chainclient/evmclient/contracts"
 	ct "kwil/x/deposits/chainclient/types"
+	"kwil/x/logx"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	ethc "github.com/ethereum/go-ethereum/ethclient"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type ethClient struct {
 	client *ethc.Client
-	log    *zerolog.Logger
+	log    logx.SugaredLogger
 }
 
-func New(endpoint, chainCode string) (*ethClient, error) {
-	logger := log.With().Str("module", "ethclient").Str("chain_code", chainCode).Logger()
+func New(l logx.Logger, endpoint, chainCode string) (*ethClient, error) {
 
 	client, err := ethc.Dial(endpoint)
+	log := l.Sugar().With("chain", chainCode)
 	if err != nil {
-		logger.Warn().Err(err).Msg("failed to connect to client chain")
+		log.Errorf("failed to connect to ethereum client: %v", err)
 		return nil, err
 	}
 
 	return &ethClient{
 		client: client,
-		log:    &logger,
+		log:    log,
 	}, nil
 }
 
@@ -38,7 +36,7 @@ func (ec *ethClient) SubscribeBlocks(ctx context.Context, channel chan<- int64) 
 	headerChan := make(chan *types.Header)
 	sub, err := ec.client.SubscribeNewHead(ctx, headerChan)
 	if err != nil {
-		ec.log.Warn().Err(err).Msg("failed to subscribe to new blocks")
+		ec.log.Errorf("failed to subscribe to new block headers: %v", err)
 		return sub, err
 	}
 
