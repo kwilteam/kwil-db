@@ -1,6 +1,8 @@
 package crypto
 
 import (
+	"runtime"
+
 	"kwil/x/cfgx"
 	"kwil/x/utils"
 
@@ -64,15 +66,12 @@ func (k *keyring) Get(name string) ([]byte, error) {
 }
 
 func getKeyRingConfig(serviceName string) kr.Config {
-	return kr.Config{ServiceName: "kwil", KeychainName: "kwil",
-		KeychainTrustApplication: true}
-}
-
-/*
-	func getKeyRingConfig(serviceName string) kr.Config {
+	if runtime.GOOS == "darwin" {
+		return kr.Config{ServiceName: serviceName, KeychainName: "kwil",
+			KeychainTrustApplication: true}
+	}
 	return kr.Config{ServiceName: serviceName, FileDir: "~",
 		FilePasswordFunc: func(prompt string) (string, error) {
 			return "test", nil
 		}}
 }
-*/

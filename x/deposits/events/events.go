@@ -125,10 +125,6 @@ func (ef *eventFeed) listenForBlocks(ctx context.Context, start int64) (<-chan i
 					for i := exp; i <= header; i++ {
 						q.Append(i)
 					}
-				} else if header < exp { // received is less than expected
-					// do nothing
-				} else {
-					panic("RAHHHHHHHHHHHHHHHH") // TODO: delete this
 				}
 
 				// now we set the last block to the tail

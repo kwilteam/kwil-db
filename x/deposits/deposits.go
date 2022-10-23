@@ -45,6 +45,8 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
 		return nil, fmt.Errorf("failed to get last block height. %w", err)
 	}
 
+	l.Sugar().Infof("last block height: %d", lb)
+
 	ef, err := events.New(c, l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize event feed. %w", err)
@@ -75,7 +77,8 @@ func (d *deposits) Listen(ctx context.Context) error {
 		return err
 	}
 
-	go func() {
+	go func(*deposits) {
+		defer d.ds.Close()
 		for {
 			select {
 			case <-ctx.Done():
@@ -84,10 +87,14 @@ func (d *deposits) Listen(ctx context.Context) error {
 				d.log.Warnf("error from event feed: %v", err)
 				return
 			case blk := <-blks:
-				d.processBlock(ctx, blk)
+				err := d.processBlock(ctx, blk)
+				if err != nil {
+					d.log.Warnf("failed to process block %d. %v", blk, err)
+					return
+				}
 			}
 		}
-	}()
+	}(d)
 
 	return nil
 }
@@ -117,7 +124,7 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 
 	wg.Wait()
 	d.lh = blk + 1
-	return d.ds.CommitBlock(blk)
+	return d.ds.CommitBlock(blk, d.lh)
 }
 
 func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
@@ -197,25 +204,28 @@ func (d *deposits) Close() error {
 	Withdrawals aren't necessary since validators (e.g. us) trigger them
 
 	It will loop through each deposit and process it
-	It will then commit the block height to the deposit store, auto incrementing the last processed block height
+	It will then commit the block height to the deposit store
+	Chunks are identified and committed by the first block in the chunk
+	The last block in the chunk needs to be auto incremented
 */
-
-// TODO: if on the last chunk the db crashes, the last chunk will get partially processed but not confirmed.
-// since the last chunk is not a "full" chunk (e.g. having 100,000 blocks), the txKey generated before the crash
-// will be different than the one after the crash.  This will cause the tx to be processed again.
 
 // sync syncs the deposits with the chain
 func (d *deposits) Sync(ctx context.Context) error {
-	d.log.Info("syncing deposits...")
 	lb, err := d.ef.GetLastConfirmedBlock(ctx)
 	if err != nil {
 		return err
 	}
 
-	d.log.Infof("syncing from block %d to %d", d.lh, lb)
+	d.log.Infof("syncing deposits from block %d to %d...", d.lh, lb)
+
+	if d.lh == lb+1 {
+		// already synced
+		return nil
+	}
 
 	chunks := splitBlocks(d.lh, lb, d.conf.Int64("sync.chunk-size", 10000))
 
+	d.log.Infof("syncing in %d chunks", len(chunks))
 	for _, chunk := range chunks {
 		// get deposits for the chunk
 		deps, err := d.sc.GetDeposits(ctx, chunk[0], chunk[1], d.addr)
@@ -229,26 +239,28 @@ func (d *deposits) Sync(ctx context.Context) error {
 			// get amount in big int
 			amt, errb := big.NewInt(0).SetString(dep.Amount(), 10)
 			if errb {
-				d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | chunk-end: | err: %v", dep.Amount(), dep.Tx(), chunk[1], errb)
+				d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | chunk-end: | err: %v", dep.Amount(), dep.Tx(), chunk[0], errb)
 				continue
 			}
-			err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, chunk[1])
+			err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, chunk[0])
 			if err != nil {
-				d.log.Errorf("failed to process deposit. tx: %s | chunk-end: %d | err: %v", dep.Tx(), chunk[1], err)
+				d.log.Errorf("failed to process deposit. tx: %s | chunk-end: %d | err: %v", dep.Tx(), chunk[0], err)
 				continue
 			}
 		}
 
 		// commit the chunk
-		d.log.Debugf("committing chunk, range %d to %d", chunk[0], chunk[1])
-		d.lh = chunk[1] + 1
-		err = d.ds.CommitBlock(chunk[1])
+		d.lh = chunk[1]
+		d.log.Infof("committing chunk, range %d to %d", chunk[0], chunk[1])
+		err = d.ds.CommitBlock(chunk[0], d.lh)
 		if err != nil {
-			d.log.Errorf("failed to commit chunk.  chunk-end: %d | err: %v", chunk[1], err)
+			d.log.Errorf("failed to commit chunk.  chunk-beginning: %d | err: %v", chunk[0], err)
 			return err
 		}
-		// last height should now be n+1 of the last height in the chunk that was just processed
+
 	}
+
+	d.log.Infof("synced deposits to block %d", d.lh)
 	return nil
 }
 
@@ -258,12 +270,14 @@ split into chunks of n blocks
 e.g. if we are at block 0 and the last block is 350,000 and chunk-size is 100,000,
 we will process [0, 99999] [100000, 199999], [200000, 299999], [300000, 349999]
 
-this technically means that the very last block won't be included, but as soon as the next block
-gets received it will be recognized as being too high and be compensated for
+the last chunk should have an additional block added to it
 */
 type chunk [2]int64
 
 func splitBlocks(start, end, chunkSize int64) []chunk {
+	if start == end {
+		return []chunk{{start, start}}
+	}
 	var chunks []chunk
 	for i := start; i < end; i += chunkSize {
 		chunkEnd := i + chunkSize
@@ -271,6 +285,10 @@ func splitBlocks(start, end, chunkSize int64) []chunk {
 			chunkEnd = end
 		}
 		chunks = append(chunks, chunk{i, chunkEnd - 1})
+	}
+
+	if chunks[len(chunks)-1][1] != end {
+		chunks[len(chunks)-1][1] = end
 	}
 	return chunks
 }

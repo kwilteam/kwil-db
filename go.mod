@@ -10,7 +10,6 @@ require (
 	github.com/ethereum/go-ethereum v1.10.21
 	github.com/fatih/color v1.13.0
 	github.com/go-openapi/inflect v0.19.0
-	github.com/gofrs/flock v0.8.1
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
@@ -22,16 +21,13 @@ require (
 	github.com/lib/pq v1.10.7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/oklog/run v1.0.0
-	github.com/osamingo/boolconv v0.0.0-20151016060535-9ef56333404f
 	github.com/pganalyze/pg_query_go/v2 v2.1.2
 	github.com/rs/zerolog v1.27.0
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.0
-	github.com/tidwall/wal v1.1.7
 	github.com/twmb/franz-go v1.8.0
 	github.com/zclconf/go-cty v1.11.0
 	go.uber.org/multierr v1.7.0
@@ -46,6 +42,7 @@ require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.0 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
 )
 
@@ -118,10 +115,6 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/status-im/keycard-go v0.0.0-20200402102358-957c09536969 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
-	github.com/tidwall/gjson v1.10.2 // indirect
-	github.com/tidwall/match v1.1.1 // indirect
-	github.com/tidwall/pretty v1.2.0 // indirect
-	github.com/tidwall/tinylru v1.1.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.2.0 // indirect

@@ -46,7 +46,6 @@ type KVStore interface {
 
 func New(l logx.Logger, path string) (KVStore, error) {
 	// create logger
-	logger := l.With(logx.Field{String: "module"}, logx.Field{String: "kvstore"})
 
 	// create badger db
 	opts := badger.DefaultOptions(path)
@@ -60,7 +59,7 @@ func New(l logx.Logger, path string) (KVStore, error) {
 
 	return &badgerDB{
 		db:  db,
-		log: logger,
+		log: l,
 	}, nil
 }
 

@@ -22,7 +22,7 @@ type DepositStore interface {
 	Deposit(string, string, *big.Int, int64) error
 	GetBalance(string) (*big.Int, error)
 	Spend(string, *big.Int) error
-	CommitBlock(int64) error
+	CommitBlock(int64, int64) error
 	Close() error
 	GetLastHeight() (int64, error)
 	SetLastHeight(int64) error
@@ -166,7 +166,8 @@ func (ds *depositStore) GetBalance(addr string) (*big.Int, error) {
 
 // CommitBlock deletes all transactions with the block prefix.
 // It will also increase the height by 1, in the same db transaction.
-func (ds *depositStore) CommitBlock(h int64) error {
+// n is the new height.  Unless syncing, this should be the current height + 1
+func (ds *depositStore) CommitBlock(h, n int64) error {
 
 	key := append(BLOCKKEY, int64ToBytes(h)...)
 	txn := ds.db.NewTransaction(true)
@@ -187,7 +188,7 @@ func (ds *depositStore) CommitBlock(h int64) error {
 	}
 
 	// increase the height by 1
-	err = txn.Set(LASTHEIGHT, int64ToBytes(h+1))
+	err = txn.Set(LASTHEIGHT, int64ToBytes(n))
 	if err != nil {
 		return err
 	}
@@ -204,12 +205,7 @@ func (ds *depositStore) SetLastHeight(h int64) error {
 	}
 
 	// commit last height
-	err = ds.CommitBlock(curH)
-	if err != nil {
-		return err
-	}
-
-	return ds.db.Set(LASTHEIGHT, int64ToBytes(h))
+	return ds.CommitBlock(curH, h)
 }
 
 func (ds *depositStore) GetLastHeight() (int64, error) {
