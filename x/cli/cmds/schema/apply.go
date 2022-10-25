@@ -2,9 +2,10 @@ package schema
 
 import (
 	"kwil/x/cli/util"
-	"kwil/x/schemadef/pgschema"
-	"kwil/x/schemadef/sqlschema"
-	"kwil/x/sql/sqlclient"
+
+	"github.com/kwilteam/ksl/kslparse"
+	"github.com/kwilteam/ksl/sqlclient"
+	"github.com/kwilteam/ksl/sqlspec"
 
 	"github.com/spf13/cobra"
 )
@@ -23,9 +24,14 @@ func createApplyCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			schemaFile, err := pgschema.ParseSchemaFiles(opts.SchemaFiles...)
+			fs, err := kslparse.ParseKwilFiles(opts.SchemaFiles...)
 			if err != nil {
 				return err
+			}
+
+			target, diags := sqlspec.Decode(fs)
+			if diags.HasErrors() {
+				return diags
 			}
 
 			client, err := sqlclient.Open(cmd.Context(), opts.DatabaseUrl)
@@ -34,16 +40,16 @@ func createApplyCmd() *cobra.Command {
 			}
 			defer client.Close()
 
-			targetOpts := &sqlschema.InspectRealmOption{}
+			targetOpts := &sqlspec.InspectRealmOption{}
 			if client.URL.Schema != "" {
 				targetOpts.Schemas = append(targetOpts.Schemas, client.URL.Schema)
 			}
-			target, err := client.InspectRealm(cmd.Context(), targetOpts)
+			source, err := client.InspectRealm(cmd.Context(), targetOpts)
 			if err != nil {
 				return err
 			}
 
-			changes, err := client.RealmDiff(target, schemaFile)
+			changes, err := client.RealmDiff(source, target)
 			if err != nil {
 				return err
 			}

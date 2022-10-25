@@ -5,27 +5,24 @@ go 1.18
 require (
 	cloud.google.com/go/logging v1.5.0
 	github.com/99designs/keyring v1.1.6
-	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/ethereum/go-ethereum v1.10.21
 	github.com/fatih/color v1.13.0
-	github.com/go-openapi/inflect v0.19.0
 	github.com/gofrs/flock v0.8.1
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0
-	github.com/hashicorp/hcl/v2 v2.14.0
 	github.com/jackc/pgx/v4 v4.17.2
 	github.com/knadh/koanf v1.4.3
+	github.com/kwilteam/ksl v0.0.0-20221025201513-0ad364326001
 	github.com/lib/pq v1.10.7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/oklog/run v1.0.0
 	github.com/osamingo/boolconv v0.0.0-20151016060535-9ef56333404f
-	github.com/pganalyze/pg_query_go/v2 v2.1.2
 	github.com/rs/zerolog v1.27.0
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
@@ -33,7 +30,6 @@ require (
 	github.com/stretchr/testify v1.8.0
 	github.com/tidwall/wal v1.1.7
 	github.com/twmb/franz-go v1.8.0
-	github.com/zclconf/go-cty v1.11.0
 	go.uber.org/multierr v1.7.0
 	go.uber.org/zap v1.23.0
 	google.golang.org/genproto v0.0.0-20221014213838-99cd37c6964a
@@ -43,10 +39,12 @@ require (
 )
 
 require (
-	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
-	github.com/mitchellh/go-wordwrap v1.0.0 // indirect
-	github.com/sergi/go-diff v1.1.0 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
+	github.com/zclconf/go-cty v1.11.1 // indirect
+	golang.org/x/exp v0.0.0-20221025133541-111beb427cde // indirect
 )
 
 replace (
@@ -135,7 +133,7 @@ require (
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
-	golang.org/x/text v0.3.8
+	golang.org/x/text v0.4.0
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
 	google.golang.org/api v0.84.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

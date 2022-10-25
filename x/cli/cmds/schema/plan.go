@@ -1,14 +1,7 @@
 package schema
 
 import (
-	"context"
-	"io"
-	"kwil/x/cli/util"
-	"kwil/x/proto/apipb"
-	"kwil/x/schemadef/sqlschema"
-
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func createPlanCmd() *cobra.Command {
@@ -24,26 +17,27 @@ func createPlanCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rd, err := sqlschema.GatherFiles(opts.SchemaFiles...)
-			if err != nil {
-				return err
-			}
-			defer rd.Close()
+			return nil
+			// fs, err := kslparse.ParseKwilFiles(opts.SchemaFiles...)
+			// if err != nil {
+			// 	return err
+			// }
+			// defer rd.Close()
 
-			data, err := io.ReadAll(rd)
-			if err != nil {
-				return err
-			}
+			// data, err := io.ReadAll(rd)
+			// if err != nil {
+			// 	return err
+			// }
 
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc apipb.KwilServiceClient) error {
-				req := &apipb.PlanSchemaRequest{Schema: data}
-				resp, err := ksc.PlanSchema(ctx, req)
-				if err != nil {
-					return err
-				}
-				_ = resp
-				return nil
-			})
+			// return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc apipb.KwilServiceClient) error {
+			// 	req := &apipb.PlanSchemaRequest{Schema: data}
+			// 	resp, err := ksc.PlanSchema(ctx, req)
+			// 	if err != nil {
+			// 		return err
+			// 	}
+			// 	_ = resp
+			// 	return nil
+			// })
 		},
 	}
 
