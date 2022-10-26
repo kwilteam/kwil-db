@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"kwil/x/schemadef/pgschema"
-	"kwil/x/schemadef/sqlschema"
-	"kwil/x/sql/sqlclient"
-
 	"github.com/fatih/color"
+	"github.com/kwilteam/ksl/sqlclient"
+	"github.com/kwilteam/ksl/sqlspec"
 	"github.com/spf13/cobra"
 )
 
-func loadRealm(ctx context.Context, p string, exclude []string) (*sqlschema.Realm, error) {
+func loadRealm(ctx context.Context, p string, exclude []string) (*sqlspec.Realm, error) {
 	parts := strings.SplitN(p, "://", 2)
 	var scheme, path string
 	switch len(parts) {
@@ -25,14 +23,14 @@ func loadRealm(ctx context.Context, p string, exclude []string) (*sqlschema.Real
 
 	switch scheme {
 	case "file":
-		return pgschema.ParseSchemaFiles(path)
+		return sqlspec.UnmarshalFile(path)
 	case "postgres":
 		client, err := sqlclient.Open(ctx, p)
 		if err != nil {
 			return nil, err
 		}
 		defer client.Close()
-		opts := &sqlschema.InspectRealmOption{}
+		opts := &sqlspec.InspectRealmOption{}
 		if client.URL.Schema != "" {
 			opts.Schemas = append(opts.Schemas, client.URL.Schema)
 		}
@@ -42,7 +40,7 @@ func loadRealm(ctx context.Context, p string, exclude []string) (*sqlschema.Real
 	}
 }
 
-func planSummary(cmd *cobra.Command, plan *sqlschema.Plan) error {
+func planSummary(cmd *cobra.Command, plan *sqlspec.Plan) error {
 	cmd.Println("Planned Changes:")
 	for _, c := range plan.Changes {
 		if c.Comment != "" {

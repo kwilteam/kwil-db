@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"kwil/x/schemadef/pgschema"
+	"github.com/kwilteam/ksl/sqlspec"
 
 	"github.com/spf13/cobra"
 )
@@ -29,13 +29,13 @@ func createDiffCmd() *cobra.Command {
 				return err
 			}
 
-			differ := pgschema.NewDiffer()
+			differ := sqlspec.NewDiffer()
 			changes, err := differ.RealmDiff(from, to)
 			if err != nil {
 				return err
 			}
 
-			planner := pgschema.NewPlanner()
+			planner := sqlspec.NewPlanner()
 			plan, err := planner.PlanChanges(changes)
 			if err != nil {
 				return err
