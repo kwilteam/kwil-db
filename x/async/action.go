@@ -38,8 +38,12 @@ type Action interface {
 
 	// Await will block until the result is complete or the context
 	// is cancelled, reached its timeout or deadline. 'ok' will be true
-	// if the result is complete, otherwise it will be false. Passing a
-	// nil ctx will block until result completion.
+	// if the result is completed successfully, otherwise it will be
+	// false. If the ctx is cancelled, the corresponding Action will also
+	// be cancelled. It is up to the callee that returned the Action to
+	// handle the cancellation. Passing a nil ctx will block until
+	// result completion.
+	// NOTE: this is a blocking call
 	Await(ctx context.Context) bool
 
 	// GetError will return the contained error or nil if the
@@ -70,16 +74,19 @@ type Action interface {
 	CatchCh(chan error) Action
 
 	// ThenCatchFinally will call the func when the result has been set
-	ThenCatchFinally(fn *ContinuationA) Action
+	ThenCatchFinally(*ContinuationA) Action
 
 	// WhenComplete will call the func when the result has been set
-	WhenComplete(fn func(error)) Action
+	WhenComplete(func(error)) Action
 
 	// WhenCompleteCh will call the func when the result has been set
 	WhenCompleteCh(chan *Result[Void]) Action
 
 	// OnComplete will call the func when the result has been set
 	OnComplete(*Continuation[Void])
+
+	// OnCompleteA will call the func when the result has been set
+	OnCompleteA(*ContinuationA)
 
 	// AsAction returns an opaque continuation that will be completed
 	// when the source task has been completed

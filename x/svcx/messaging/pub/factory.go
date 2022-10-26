@@ -7,7 +7,7 @@ import (
 	"kwil/x"
 	"kwil/x/cfgx"
 	"kwil/x/svcx/messaging/internal"
-	mx2 "kwil/x/svcx/messaging/mx"
+	"kwil/x/svcx/messaging/mx"
 	"kwil/x/syncx"
 	"sync"
 	"sync/atomic"
@@ -16,7 +16,7 @@ import (
 // NewEmitterSingleClient creates a new emitter that uses a single client.
 // The client is created using the provided config. A client that connects to
 // a cluster with multiple brokers will multiplex the emitter to all brokers.
-func NewEmitterSingleClient[T any](config cfgx.Config, serdes mx2.Serdes[T]) (Emitter[T], error) {
+func NewEmitterSingleClient[T any](config cfgx.Config, serdes mx.Serdes[T]) (Emitter[T], error) {
 	err := assertValid(serdes)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func NewEmitterSingleClient[T any](config cfgx.Config, serdes mx2.Serdes[T]) (Em
 var counter int32
 
 // NewEmitter creates a new emitter that uses the provided client.
-func NewEmitter[T any](client mx2.Client, serdes mx2.Serdes[T]) (Emitter[T], error) {
+func NewEmitter[T any](client mx.Client, serdes mx.Serdes[T]) (Emitter[T], error) {
 	if client == nil {
 		return nil, fmt.Errorf("client is nil")
 	}
@@ -66,12 +66,31 @@ func NewEmitter[T any](client mx2.Client, serdes mx2.Serdes[T]) (Emitter[T], err
 	return e, nil
 }
 
+type ByteEmitter Emitter[*mx.RawMessage]
+
+// NewByteEmitterSingleClient creates a new emitter that uses a single client.
+// The client is created using the provided config. A client that connects to
+// a cluster with multiple brokers will multiplex the emitter to all brokers.
+func NewByteEmitterSingleClient(config cfgx.Config) (ByteEmitter, error) {
+	client, err := NewClient(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewByteEmitter(client)
+}
+
+// NewByteEmitter creates a new emitter that uses the provided client.
+func NewByteEmitter(client mx.Client) (ByteEmitter, error) {
+	return NewEmitter[*mx.RawMessage](client, mx.SerdesByteArray())
+}
+
 // NewClient creates a new client that uses the provided config. A client
 // that connects to a cluster is used to multiplex using a single underlying
 // producer. Once all connect emitters are closed, the client will be closed.
 // Conversely, if the client is closed, all emitters will be closed.
-func NewClient(config cfgx.Config) (mx2.Client, error) {
-	cfg, err := mx2.NewEmitterClientConfig(config)
+func NewClient(config cfgx.Config) (mx.Client, error) {
+	cfg, err := mx.NewEmitterClientConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +129,7 @@ func NewClient(config cfgx.Config) (mx2.Client, error) {
 	return e, nil
 }
 
-func assertValid[T any](serdes mx2.Serdes[T]) error {
+func assertValid[T any](serdes mx.Serdes[T]) error {
 	if serdes == nil {
 		return fmt.Errorf("serdes is nil")
 	}

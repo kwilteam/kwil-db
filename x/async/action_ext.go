@@ -9,53 +9,56 @@ type action struct {
 	task *_task[Void]
 }
 
-func (c *action) Fail(err error) bool                         { return c.task.Fail(err) }
-func (c *action) Complete() bool                              { return c.task.Complete(Void{}) }
-func (c *action) CompleteOrFail(err error) bool               { return c.task.CompleteOrFail(Void{}, err) }
-func (c *action) Cancel() bool                                { return c.task.Cancel() }
-func (c *action) IsDone() bool                                { return c.task.IsDone() }
-func (c *action) IsError() bool                               { return c.task.IsError() }
-func (c *action) IsCancelled() bool                           { return c.task.IsCancelled() }
-func (c *action) IsErrorOrCancelled() bool                    { return c.task.IsErrorOrCancelled() }
-func (c *action) Await(ctx context.Context) bool              { return c.task.Await(ctx) }
-func (c *action) GetError() error                             { return c.task.GetError() }
-func (c *action) DoneCh() <-chan Void                         { return c.task.DoneCh() }
-func (c *action) Then(fn func()) Action                       { return c._then(fn) }
-func (c *action) ThenCh(ch chan Void) Action                  { return c.task.ThenCh(ch).AsAction() }
-func (c *action) Catch(fn func(error)) Action                 { return c.task.Catch(fn).AsAction() }
-func (c *action) CatchCh(ch chan error) Action                { return c.task.CatchCh(ch).AsAction() }
-func (c *action) ThenCatchFinally(fn *ContinuationA) Action   { return c._whenComplete(fn.invoke) }
-func (c *action) WhenComplete(fn func(error)) Action          { return c._whenComplete(fn) }
-func (c *action) WhenCompleteCh(ch chan *Result[Void]) Action { return c._whenCompleteCh(ch) }
-func (c *action) OnComplete(fn *Continuation[Void])           { c.task.WhenComplete(fn.invoke).AsAction() }
-func (c *action) AsAction() Action                            { return c.task.AsAction() }
-func (c *action) AsListenable() Listenable[Void]              { return c.task.AsListenable() }
-func (c *action) AsAsync(e Executor) Action                   { return c._asAsync(e) }
-func (c *action) IsAsync() bool                               { return c.task.IsAsync() }
+func (a *action) Fail(err error) bool                         { return a.task.Fail(err) }
+func (a *action) Complete() bool                              { return a.task.Complete(Void{}) }
+func (a *action) CompleteOrFail(err error) bool               { return a.task.CompleteOrFail(Void{}, err) }
+func (a *action) Cancel() bool                                { return a.task.Cancel() }
+func (a *action) IsDone() bool                                { return a.task.IsDone() }
+func (a *action) IsError() bool                               { return a.task.IsError() }
+func (a *action) IsCancelled() bool                           { return a.task.IsCancelled() }
+func (a *action) IsErrorOrCancelled() bool                    { return a.task.IsErrorOrCancelled() }
+func (a *action) Await(ctx context.Context) bool              { return a.task.Await(ctx) }
+func (a *action) GetError() error                             { return a.task.GetError() }
+func (a *action) DoneCh() <-chan Void                         { return a.task.DoneCh() }
+func (a *action) Then(fn func()) Action                       { return a._then(fn) }
+func (a *action) ThenCh(ch chan Void) Action                  { return a.task.ThenCh(ch).AsAction() }
+func (a *action) Catch(fn func(error)) Action                 { return a.task.Catch(fn).AsAction() }
+func (a *action) CatchCh(ch chan error) Action                { return a.task.CatchCh(ch).AsAction() }
+func (a *action) ThenCatchFinally(fn *ContinuationA) Action   { return a._whenComplete(fn.invoke) }
+func (a *action) WhenComplete(fn func(error)) Action          { return a._whenComplete(fn) }
+func (a *action) WhenCompleteCh(ch chan *Result[Void]) Action { return a._whenCompleteCh(ch) }
+func (a *action) OnComplete(fn *Continuation[Void])           { a.task.WhenComplete(fn.invoke).AsAction() }
+func (a *action) AsAction() Action                            { return a.task.AsAction() }
+func (a *action) AsListenable() Listenable[Void]              { return a.task.AsListenable() }
+func (a *action) AsAsync(e Executor) Action                   { return a._asAsync(e) }
+func (a *action) IsAsync() bool                               { return a.task.IsAsync() }
+func (a *action) OnCompleteA(c *ContinuationA) {
+	a._whenComplete(c.invoke)
+}
 
-func (c *action) _then(fn func()) Action {
+func (a *action) _then(fn func()) Action {
 	h := onSuccessContinuationHandler{fn: fn}
-	return c.task.WhenComplete(h.invoke).AsAction()
+	return a.task.WhenComplete(h.invoke).AsAction()
 }
 
-func (c *action) _whenComplete(fn func(error)) Action {
+func (a *action) _whenComplete(fn func(error)) Action {
 	r := &continuationRequestAdapter{fn: fn}
-	return c.task.WhenComplete(r.invoke).AsAction()
+	return a.task.WhenComplete(r.invoke).AsAction()
 }
 
-func (c *action) _whenCompleteCh(ch chan *Result[Void]) Action {
-	return c.task.WhenCompleteCh(ch).AsAction()
+func (a *action) _whenCompleteCh(ch chan *Result[Void]) Action {
+	return a.task.WhenCompleteCh(ch).AsAction()
 }
 
-func (c *action) _asAsync(e Executor) Action {
+func (a *action) _asAsync(e Executor) Action {
 	if e == nil {
 		e = AsyncExecutor()
 	}
 
-	a := _newAction()
-	h := executorHandler[Void]{task: a.task, e: e}
-	c.task._addHandlerNoReturn(h.invoke)
-	return a
+	n := _newAction()
+	h := executorHandler[Void]{task: n.task, e: e}
+	a.task._addHandlerNoReturn(h.invoke)
+	return n
 }
 
 func _newAction() *action      { return &action{newTask[Void]()} }

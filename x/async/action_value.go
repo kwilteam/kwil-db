@@ -28,10 +28,13 @@ func (a *action_value) WhenCompleteCh(ch chan *Result[Void]) Action { return a._
 func (a *action_value) AsAction() Action                            { return a }
 func (a *action_value) AsListenable() Listenable[Void]              { return a }
 func (a *action_value) AsAsync(e Executor) Action                   { return a._asAsync(e) }
-func (a *action_value) IsAsync() bool                               { return false }
+func (_ *action_value) IsAsync() bool                               { return false }
 func (a *action_value) ThenCatchFinally(fn *ContinuationA) Action {
 	fn.invoke(nil)
 	return a
+}
+func (a *action_value) OnCompleteA(c *ContinuationA) {
+	c.invoke(nil)
 }
 
 func (a *action_value) _asAsync(e Executor) Action {

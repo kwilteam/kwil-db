@@ -49,8 +49,11 @@ type Task[T any] interface {
 
 	// Await will block until the result is complete or the context
 	// is cancelled, reached its timeout or deadline. 'ok' will be true
-	// if the result is complete, otherwise it will be false. Passing a
-	// nil ctx will block until result completion.
+	// if the result is completed successfully, otherwise it will be
+	// false. If the ctx is cancelled, the corresponding Task will also
+	// be cancelled. It is up to the callee that returned the Task to
+	// handle the cancellation. Passing a nil ctx will block until
+	// result completion.
 	// NOTE: this is a blocking call
 	Await(ctx context.Context) (ok bool)
 

@@ -43,16 +43,18 @@ func (r *_task[T]) _addHandler(fn func(T, error)) *_task[T] {
 
 func (r *_task[T]) _await(ctx context.Context) (ok bool) {
 	if ctx == nil {
-		<-r._doneChan()
-		return true
+		ctx = context.Background()
 	}
 
 	select {
 	case <-ctx.Done():
-		return false
+		r.Cancel()
+		break
 	case <-r._doneChan():
-		return true
+		break
 	}
+
+	return !r.IsError()
 }
 
 func (r *_task[T]) _isError() bool {
