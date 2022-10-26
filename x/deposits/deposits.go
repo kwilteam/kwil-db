@@ -8,12 +8,10 @@ import (
 
 	"kwil/x/cfgx"
 	kc "kwil/x/crypto"
-	ct "kwil/x/deposits/chainclient/types"
 	"kwil/x/deposits/events"
 	"kwil/x/deposits/store"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	ct "kwil/x/deposits/types"
+	"kwil/x/logx"
 )
 
 type Deposits interface {
@@ -21,11 +19,12 @@ type Deposits interface {
 	GetBalance(string) (*big.Int, error)
 	GetSpent(string) (*big.Int, error)
 	Spend(string, *big.Int) error
+	Withdraw(string, *big.Int) error
 	Close() error
 }
 
 type deposits struct {
-	log  *zerolog.Logger
+	log  logx.SugaredLogger
 	conf cfgx.Config
 	ef   events.EventFeed
 	sc   ct.Contract
@@ -35,10 +34,9 @@ type deposits struct {
 	addr string
 }
 
-func New(c cfgx.Config, acc kc.Account) (*deposits, error) {
-	logger := log.With().Str("module", "deposits").Logger()
+func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
 
-	ds, err := store.New(c)
+	ds, err := store.New(c, l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize deposit store. %w", err)
 	}
@@ -48,13 +46,15 @@ func New(c cfgx.Config, acc kc.Account) (*deposits, error) {
 		return nil, fmt.Errorf("failed to get last block height. %w", err)
 	}
 
-	ef, err := events.New(c, lb)
+	l.Sugar().Infof("last block height: %d", lb)
+
+	ef, err := events.New(c, l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize event feed. %w", err)
 	}
 
 	return &deposits{
-		log:  &logger,
+		log:  l.Sugar(),
 		conf: c,
 		ef:   ef,
 		sc:   ef.Contract(),
@@ -67,31 +67,41 @@ func New(c cfgx.Config, acc kc.Account) (*deposits, error) {
 
 func (d *deposits) Listen(ctx context.Context) error {
 
-	blks, errs, err := d.ef.Listen(ctx)
+	// sync
+	err := d.Sync(ctx)
 	if err != nil {
 		return err
 	}
 
-	go func() {
+	blks, errs, err := d.ef.Listen(ctx, d.lh)
+	if err != nil {
+		return err
+	}
+
+	go func(*deposits) {
+		defer d.ds.Close()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case err := <-errs:
-				d.log.Warn().Err(err).Msg("error from event feed")
+				d.log.Warnf("error from event feed: %v", err)
 				return
 			case blk := <-blks:
-				d.processBlock(ctx, blk)
+				err := d.processBlock(ctx, blk)
+				if err != nil {
+					d.log.Warnf("failed to process block %d. %v", blk, err)
+					return
+				}
 			}
 		}
-	}()
+	}(d)
 
 	return nil
 }
 
 func (d *deposits) processBlock(ctx context.Context, blk int64) error {
-	d.log.Debug().Int64("height", blk).Msg("processing block")
-
+	d.log.Infof("processing block %d", blk)
 	wg := sync.WaitGroup{}
 	wg.Add(2) // processing deposits and withdrawals simultaneously
 
@@ -99,7 +109,7 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 		// process deposits
 		err := d.processDeposits(ctx, blk)
 		if err != nil {
-			d.log.Warn().Err(err).Int64("height", blk).Msg("failed to process deposits")
+			d.log.Warnf("failed to process deposits for block %d. %v", blk, err)
 		}
 		wg.Done()
 	}(ctx, blk)
@@ -108,17 +118,17 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 		// process withdrawals
 		err := d.processWithdrawals(ctx, blk)
 		if err != nil {
-			d.log.Warn().Err(err).Int64("height", blk).Msg("failed to process withdrawals")
+			d.log.Warnf("failed to process withdrawals for block %d. %v", blk, err)
 		}
 		wg.Done()
 	}(ctx, blk)
 
 	wg.Wait()
-	return d.ds.CommitBlock(blk)
+	d.lh = blk + 1
+	return d.ds.CommitBlock(blk, d.lh)
 }
 
 func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
-	d.log.Debug().Int64("height", blk).Msg("processing deposits")
 
 	// get deposits
 	depos, err := d.sc.GetDeposits(ctx, blk, blk, d.addr)
@@ -129,9 +139,9 @@ func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
 	// process deposits
 	for _, dep := range depos {
 		// get amount in big int
-		amt, errb := big.NewInt(0).SetString(dep.Amount(), 10)
-		if errb {
-			d.log.Warn().Int64("height", blk).Str("tx", dep.Tx()).Str("amount", dep.Amount()).Msg("failed to parse amount")
+		amt, ok := big.NewInt(0).SetString(dep.Amount(), 10)
+		if !ok {
+			d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | ok: %v", dep.Amount(), dep.Tx(), ok)
 			continue
 		}
 		if dep.Target() != d.addr { // only process deposits to this address
@@ -140,13 +150,15 @@ func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
 		err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, dep.Height())
 		if err != nil {
 			if err == store.ErrTxExists {
-				d.log.Debug().Int64("height", blk).Str("tx", dep.Tx()).Str("amount", dep.Amount()).Msg("deposit already processed")
+				d.log.Debugf("deposit already processed. tx: %s", dep.Tx())
 				continue
 			} else {
-				d.log.Warn().Err(err).Int64("height", blk).Str("tx", dep.Tx()).Str("amount", dep.Amount()).Err(err).Msg("failed to process deposit")
+				d.log.Errorf("failed to process deposit. tx: %s | err: %v", dep.Tx(), err)
 				continue
 			}
 		}
+
+		d.log.Infof("processed deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx(), dep.Caller(), dep.Amount(), dep.Height())
 	}
 
 	return nil
@@ -195,23 +207,28 @@ func (d *deposits) Close() error {
 	Withdrawals aren't necessary since validators (e.g. us) trigger them
 
 	It will loop through each deposit and process it
-	It will then commit the block height to the deposit store, auto incrementing the last processed block height
+	It will then commit the block height to the deposit store
+	Chunks are identified and committed by the first block in the chunk
+	The last block in the chunk needs to be auto incremented
 */
-
-// TODO: if on the last chunk the db crashes, the last chunk will get partially processed but not confirmed.
-// since the last chunk is not a "full" chunk (e.g. having 100,000 blocks), the txKey generated before the crash
-// will be different than the one after the crash.  This will cause the tx to be processed again.
 
 // sync syncs the deposits with the chain
 func (d *deposits) Sync(ctx context.Context) error {
-	d.log.Debug().Msg("syncing deposits...")
 	lb, err := d.ef.GetLastConfirmedBlock(ctx)
 	if err != nil {
 		return err
 	}
 
+	d.log.Infof("syncing deposits from block %d to %d...", d.lh, lb)
+
+	if d.lh == lb+1 {
+		// already synced
+		return nil
+	}
+
 	chunks := splitBlocks(d.lh, lb, d.conf.Int64("sync.chunk-size", 10000))
 
+	d.log.Infof("syncing in %d chunks", len(chunks))
 	for _, chunk := range chunks {
 		// get deposits for the chunk
 		deps, err := d.sc.GetDeposits(ctx, chunk[0], chunk[1], d.addr)
@@ -223,24 +240,32 @@ func (d *deposits) Sync(ctx context.Context) error {
 		// the height we use will be the last height in the chunk
 		for _, dep := range deps {
 			// get amount in big int
-			amt, errb := big.NewInt(0).SetString(dep.Amount(), 10)
-			if errb {
-				d.log.Warn().Int64("height", dep.Height()).Int64("chunk-start", chunk[0]).Int64("chunk-end", chunk[1]).Str("amount-received", dep.Amount()).Str("tx", dep.Tx()).Msg("failed to parse amount")
+			amt, ok := big.NewInt(0).SetString(dep.Amount(), 10)
+			if !ok {
+				d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | chunk-end: | ok: %v", dep.Amount(), dep.Tx(), chunk[0], ok)
 				continue
 			}
-			err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, chunk[1])
+			err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, chunk[0])
 			if err != nil {
-				d.log.Warn().Err(err).Str("tx", dep.Tx()).Msg("failed to insert deposit")
+				d.log.Errorf("failed to process deposit. tx: %s | chunk-end: %d | err: %v", dep.Tx(), chunk[0], err)
 				continue
 			}
+
+			d.log.Infof("processed deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx(), dep.Caller(), dep.Amount(), chunk[0])
 		}
 
 		// commit the chunk
-		return d.ds.CommitBlock(chunk[1])
-		// last height should now be n+1 of the last height in the chunk that was just processed
+		d.lh = chunk[1]
+		d.log.Infof("committing chunk, range %d to %d", chunk[0], chunk[1])
+		err = d.ds.CommitBlock(chunk[0], d.lh)
+		if err != nil {
+			d.log.Errorf("failed to commit chunk.  chunk-beginning: %d | err: %v", chunk[0], err)
+			return err
+		}
+
 	}
 
-	d.log.Debug().Msg("sync deposits finished")
+	d.log.Infof("synced deposits to block %d", d.lh)
 	return nil
 }
 
@@ -250,12 +275,14 @@ split into chunks of n blocks
 e.g. if we are at block 0 and the last block is 350,000 and chunk-size is 100,000,
 we will process [0, 99999] [100000, 199999], [200000, 299999], [300000, 349999]
 
-this technically means that the very last block won't be included, but as soon as the next block
-gets received it will be recognized as being too high and be compensated for
+the last chunk should have an additional block added to it
 */
 type chunk [2]int64
 
 func splitBlocks(start, end, chunkSize int64) []chunk {
+	if start == end {
+		return []chunk{{start, start}}
+	}
 	var chunks []chunk
 	for i := start; i < end; i += chunkSize {
 		chunkEnd := i + chunkSize
@@ -263,6 +290,10 @@ func splitBlocks(start, end, chunkSize int64) []chunk {
 			chunkEnd = end
 		}
 		chunks = append(chunks, chunk{i, chunkEnd - 1})
+	}
+
+	if chunks[len(chunks)-1][1] != end {
+		chunks[len(chunks)-1][1] = end
 	}
 	return chunks
 }

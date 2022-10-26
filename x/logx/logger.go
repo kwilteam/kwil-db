@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
+type SugaredLogger = *zap.SugaredLogger
 type Logger = *zap.Logger
 type Field = zap.Field
 

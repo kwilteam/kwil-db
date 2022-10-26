@@ -3,9 +3,11 @@ package fund
 import (
 	"fmt"
 
+	"kwil/x/cli/chain"
+
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"kwil/x/cli/chain"
 )
 
 func balancesCmd() *cobra.Command {
@@ -48,9 +50,13 @@ func balancesCmd() *cobra.Command {
 				return fmt.Errorf("error converting balance to decimal: %w", err)
 			}
 
+			color.Set(color.Bold)
 			cmd.Printf("Pool: %s\n", c.GetPoolAddress())
+			color.Unset()
+			color.Set(color.FgGreen)
 			cmd.Printf("Allowance: %s (%s %s)\n", allowance, af.String(), sym)
 			cmd.Printf("Balance: %s (%s %s)\n", balance, bf.String(), sym)
+			color.Unset()
 
 			return nil
 		},

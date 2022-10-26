@@ -7,44 +7,25 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	"kwil/pkg/types/chain/pricing"
 	"kwil/x/cfgx"
-	"kwil/x/chain/auth"
-	"kwil/x/chain/config"
-	"kwil/x/chain/contracts"
-	"kwil/x/chain/utils"
 	"kwil/x/crypto"
 	"kwil/x/deposits"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
 	"kwil/x/service/apisvc"
+	"kwil/x/utils"
 
 	"github.com/oklog/run"
 )
 
 func execute(logger logx.Logger) error {
-	_, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	conf, err := config.LoadConfig("kwil_config.json")
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	err = os.Setenv(cfgx.Meta_Config_Env, "meta-config.yaml")
-	if err != nil {
-		panic(err)
-	}
-
-	client, err := config.ConnectChain()
-	if err != nil {
-		return fmt.Errorf("failed to connect to client chain: %w", err)
-	}
 
 	dc := cfgx.GetConfig().Select("deposit-settings")
 
@@ -57,16 +38,14 @@ func execute(logger logx.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
-	a := auth.NewAuth(conf, acc)
-	a.Client.AuthAll()
 
-	d, err := deposits.New(dc, acc)
+	d, err := deposits.New(dc, logger, acc)
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
-	//d.Listen(ctx)
+	d.Listen(ctx)
 
-	ppath := conf.GetPricePath()
+	ppath := "./prices.json"
 	pbytes, err := utils.LoadFileFromRoot(ppath)
 	if err != nil {
 		return fmt.Errorf("failed to load pricing config: %w", err)
@@ -77,15 +56,9 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	c, err := contracts.NewContractClient(acc, client, conf.ClientChain.DepositContract.Address, strconv.Itoa(conf.ClientChain.ChainID))
-	if err != nil {
-		return fmt.Errorf("failed to initialize contract client: %w", err)
-	}
+	serv := apisvc.NewService(d, p)
+	httpHandler := apisvc.NewHandler(logger)
 
-	serv := apisvc.NewService(d, p, c)
-	httpHandler := apisvc.NewHandler(logger, a.Authenticator)
-
-	logger.Warn("starting kwil service")
 	return serve(logger, httpHandler, serv)
 }
 

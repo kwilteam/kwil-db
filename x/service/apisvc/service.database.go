@@ -33,8 +33,8 @@ func (s *Service) CreateDatabase(ctx context.Context, req *apipb.CreateDatabaseR
 		return nil, ErrInvalidSignature
 	}
 
-	amt, errb := big.NewInt(0).SetString(req.Fee, 10)
-	if errb {
+	amt, ok := big.NewInt(0).SetString(req.Fee, 10)
+	if !ok {
 		return nil, err
 	}
 
@@ -76,8 +76,8 @@ func (s *Service) UpdateDatabase(ctx context.Context, req *apipb.UpdateDatabaseR
 		return nil, ErrInvalidSignature
 	}
 
-	amt, errb := big.NewInt(0).SetString(req.Fee, 10)
-	if errb {
+	amt, ok := big.NewInt(0).SetString(req.Fee, 10)
+	if !ok {
 		return nil, err
 	}
 

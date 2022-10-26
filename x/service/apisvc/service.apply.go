@@ -30,8 +30,8 @@ func (s *Service) Apply(ctx context.Context, req *apipb.ApplyRequest) (*apipb.Ap
 	// Flat payment for now - based on diff later?
 
 	// big int from fee
-	amt, errb := big.NewInt(0).SetString(req.Fee, 10)
-	if errb {
+	amt, ok := big.NewInt(0).SetString(req.Fee, 10)
+	if !ok {
 		return nil, fmt.Errorf("failed to parse fee: %s", req.Fee)
 	}
 

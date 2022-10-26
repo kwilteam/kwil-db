@@ -5,38 +5,42 @@ import (
 
 	"kwil/x/cfgx"
 	"kwil/x/deposits/store/kv"
+	"kwil/x/logx"
 )
 
 var DEPOSITKEY = []byte("d")
 var SPENTKEY = []byte("s")
 var WITHDRAWALKEY = []byte("w")
+var EXPIRYKEY = []byte("e")
 var BLOCKKEY = []byte("b")
 var LASTHEIGHT = []byte("l")
 
 type depositStore struct {
-	db kv.KVStore
+	db  kv.KVStore
+	log logx.Logger
 }
 
 type DepositStore interface {
 	Deposit(string, string, *big.Int, int64) error
 	GetBalance(string) (*big.Int, error)
 	Spend(string, *big.Int) error
-	CommitBlock(int64) error
+	CommitBlock(int64, int64) error
 	Close() error
 	GetLastHeight() (int64, error)
 	SetLastHeight(int64) error
 	GetSpent(string) (*big.Int, error)
 }
 
-func New(conf cfgx.Config) (*depositStore, error) {
+func New(conf cfgx.Config, l logx.Logger) (*depositStore, error) {
 
-	db, err := kv.New(conf.String("kv.path"))
+	db, err := kv.New(l, conf.String("kv.path"))
 	if err != nil {
 		return nil, err
 	}
 
 	return &depositStore{
-		db: db,
+		db:  db,
+		log: l,
 	}, nil
 }
 
@@ -50,7 +54,7 @@ func (ds *depositStore) Deposit(txid, addr string, amt *big.Int, h int64) error 
 	// get the current amount
 	curAmt, err := ds.db.Get(key) // I use this instead of GetBalance since GetBalance returns a bigint
 	if err != nil {
-		if err == ErrNotFound { // If it could not find a value, then set the total to 0
+		if err == kv.ErrNotFound { // If it could not find a value, then set the total to 0
 			curAmt = []byte{0, 0, 0, 0, 0, 0, 0, 0}
 		} else {
 			return err
@@ -165,7 +169,8 @@ func (ds *depositStore) GetBalance(addr string) (*big.Int, error) {
 
 // CommitBlock deletes all transactions with the block prefix.
 // It will also increase the height by 1, in the same db transaction.
-func (ds *depositStore) CommitBlock(h int64) error {
+// n is the new height.  Unless syncing, this should be the current height + 1
+func (ds *depositStore) CommitBlock(h, n int64) error {
 
 	key := append(BLOCKKEY, int64ToBytes(h)...)
 	txn := ds.db.NewTransaction(true)
@@ -186,7 +191,7 @@ func (ds *depositStore) CommitBlock(h int64) error {
 	}
 
 	// increase the height by 1
-	err = txn.Set(LASTHEIGHT, int64ToBytes(h+1))
+	err = txn.Set(LASTHEIGHT, int64ToBytes(n))
 	if err != nil {
 		return err
 	}
@@ -203,12 +208,7 @@ func (ds *depositStore) SetLastHeight(h int64) error {
 	}
 
 	// commit last height
-	err = ds.CommitBlock(curH)
-	if err != nil {
-		return err
-	}
-
-	return ds.db.Set(LASTHEIGHT, int64ToBytes(h))
+	return ds.CommitBlock(curH, h)
 }
 
 func (ds *depositStore) GetLastHeight() (int64, error) {

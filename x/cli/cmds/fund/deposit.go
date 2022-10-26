@@ -1,12 +1,15 @@
 package fund
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
+	"kwil/x/cli/chain"
+
+	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"kwil/x/cli/chain"
 )
 
 func depositCmd() *cobra.Command {
@@ -59,16 +62,20 @@ func depositCmd() *cobra.Command {
 			_ = tokenName
 			_ = amtFloat
 
-			// fmt.Printf("You will be depositing %s %s into funding pool %s\n", amtFloat.String(), tokenName, c.getPoolAddress())
-			// res, err := utils.PromptStringInput("Continue? (y/n)")
-			// if err != nil {
-			// 	return err
-			// }
+			fmt.Printf("You will be depositing %s %s into funding pool %s\n", amtFloat.String(), tokenName, c.GetPoolAddress())
+			pr := promptui.Select{
+				Label: "Continue?",
+				Items: []string{"yes", "no"},
+			}
 
-			// if res != "y" {
-			// 	fmt.Println("Aborting...")
-			// 	return nil
-			// }
+			_, res, err := pr.Run()
+			if err != nil {
+				return err
+			}
+
+			if res != "yes" {
+				return errors.New("transaction cancelled")
+			}
 
 			// now deposit
 			// get the validator address

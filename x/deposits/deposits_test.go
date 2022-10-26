@@ -38,7 +38,21 @@ func Test_splitBlocks(t *testing.T) {
 				},
 				{
 					300000,
-					349999,
+					350000,
+				},
+			},
+		},
+		{
+			name: "one_chunk",
+			args: args{
+				start:     435602,
+				end:       435615,
+				chunkSize: 100000,
+			},
+			want: []chunk{
+				{
+					435602,
+					435615,
 				},
 			},
 		},

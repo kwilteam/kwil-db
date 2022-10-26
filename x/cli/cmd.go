@@ -5,10 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/manifoldco/promptui"
-	"github.com/mitchellh/go-homedir"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"kwil/x/cli/cmds/configure"
 	"kwil/x/cli/cmds/connect"
 	"kwil/x/cli/cmds/database"
@@ -16,6 +12,11 @@ import (
 	"kwil/x/cli/cmds/role"
 	"kwil/x/cli/cmds/schema"
 	"kwil/x/cli/cmds/table"
+
+	"github.com/manifoldco/promptui"
+	"github.com/mitchellh/go-homedir"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func Execute() error {

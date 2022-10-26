@@ -3,17 +3,14 @@ package apisvc
 import (
 	"net/http"
 
+	"kwil/x/logx"
+
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
-	"kwil/x/logx"
 )
 
-type PeerAuthenticator interface {
-	Authenticate(*websocket.Conn) error
-}
-
-func NewHandler(logger logx.Logger, authenticator PeerAuthenticator) http.Handler {
+func NewHandler(logger logx.Logger) http.Handler {
 	serveMux := mux.NewRouter()
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -31,11 +28,13 @@ func NewHandler(logger logx.Logger, authenticator PeerAuthenticator) http.Handle
 		}
 		defer conn.Close()
 
-		err = authenticator.Authenticate(conn)
+		// commenting this out since I'm removing auth for now
+		// it won't be in the first version and it will likely change a lot
+		/*err = authenticator.Authenticate(conn)
 		if err != nil {
 			logger.Error("failed to authenticate", zap.Error(err))
 			return
-		}
+		}*/
 
 		w.WriteHeader(http.StatusOK)
 	})
