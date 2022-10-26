@@ -2,9 +2,11 @@ package evmclient
 
 import (
 	"context"
+	"errors"
+	"math/big"
 
 	esc "kwil/x/deposits/chainclient/evmclient/contracts"
-	ct "kwil/x/deposits/chainclient/types"
+	ct "kwil/x/deposits/types"
 	"kwil/x/logx"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -14,6 +16,7 @@ import (
 type ethClient struct {
 	client *ethc.Client
 	log    logx.SugaredLogger
+	cid    *big.Int
 }
 
 func New(l logx.Logger, endpoint, chainCode string) (*ethClient, error) {
@@ -25,9 +28,16 @@ func New(l logx.Logger, endpoint, chainCode string) (*ethClient, error) {
 		return nil, err
 	}
 
+	cid, err := determineChainID(chainCode)
+	if err != nil {
+		log.Errorf("failed to determine chain id: %v", err)
+		return nil, err
+	}
+
 	return &ethClient{
 		client: client,
 		log:    log,
+		cid:    cid,
 	}, nil
 }
 
@@ -56,7 +66,7 @@ func (ec *ethClient) SubscribeBlocks(ctx context.Context, channel chan<- int64) 
 }
 
 func (ec *ethClient) GetContract(addr string) (ct.Contract, error) {
-	return esc.New(ec.client, addr)
+	return esc.New(ec.client, addr, ec.cid)
 }
 
 func (ec *ethClient) GetLatestBlock(ctx context.Context) (int64, error) {
@@ -67,3 +77,16 @@ func (ec *ethClient) GetLatestBlock(ctx context.Context) (int64, error) {
 
 	return h.Number.Int64(), nil
 }
+
+func determineChainID(c string) (*big.Int, error) {
+	switch c {
+	default:
+		return big.NewInt(0), ErrInvalidChain
+	case "eth-mainnet":
+		return big.NewInt(1), nil
+	case "eth-goerli":
+		return big.NewInt(5), nil
+	}
+}
+
+var ErrInvalidChain = errors.New("invalid chain")

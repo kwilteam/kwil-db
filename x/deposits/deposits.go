@@ -8,9 +8,9 @@ import (
 
 	"kwil/x/cfgx"
 	kc "kwil/x/crypto"
-	ct "kwil/x/deposits/chainclient/types"
 	"kwil/x/deposits/events"
 	"kwil/x/deposits/store"
+	ct "kwil/x/deposits/types"
 	"kwil/x/logx"
 )
 
@@ -19,6 +19,7 @@ type Deposits interface {
 	GetBalance(string) (*big.Int, error)
 	GetSpent(string) (*big.Int, error)
 	Spend(string, *big.Int) error
+	Withdraw(string, *big.Int) error
 	Close() error
 }
 
@@ -138,9 +139,9 @@ func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
 	// process deposits
 	for _, dep := range depos {
 		// get amount in big int
-		amt, errb := big.NewInt(0).SetString(dep.Amount(), 10)
-		if errb {
-			d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | err: %v", dep.Amount(), dep.Tx(), errb)
+		amt, ok := big.NewInt(0).SetString(dep.Amount(), 10)
+		if !ok {
+			d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | ok: %v", dep.Amount(), dep.Tx(), ok)
 			continue
 		}
 		if dep.Target() != d.addr { // only process deposits to this address
@@ -156,6 +157,8 @@ func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
 				continue
 			}
 		}
+
+		d.log.Infof("processed deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx(), dep.Caller(), dep.Amount(), dep.Height())
 	}
 
 	return nil
@@ -237,9 +240,9 @@ func (d *deposits) Sync(ctx context.Context) error {
 		// the height we use will be the last height in the chunk
 		for _, dep := range deps {
 			// get amount in big int
-			amt, errb := big.NewInt(0).SetString(dep.Amount(), 10)
-			if errb {
-				d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | chunk-end: | err: %v", dep.Amount(), dep.Tx(), chunk[0], errb)
+			amt, ok := big.NewInt(0).SetString(dep.Amount(), 10)
+			if !ok {
+				d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | chunk-end: | ok: %v", dep.Amount(), dep.Tx(), chunk[0], ok)
 				continue
 			}
 			err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, chunk[0])
@@ -247,6 +250,8 @@ func (d *deposits) Sync(ctx context.Context) error {
 				d.log.Errorf("failed to process deposit. tx: %s | chunk-end: %d | err: %v", dep.Tx(), chunk[0], err)
 				continue
 			}
+
+			d.log.Infof("processed deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx(), dep.Caller(), dep.Amount(), chunk[0])
 		}
 
 		// commit the chunk

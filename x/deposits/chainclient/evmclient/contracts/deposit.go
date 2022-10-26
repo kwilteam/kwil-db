@@ -2,9 +2,11 @@ package contracts
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"math/big"
 
 	"kwil/abi"
-	ct "kwil/x/deposits/chainclient/types"
+	ct "kwil/x/deposits/types"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -45,15 +47,18 @@ func escToDeposit(ed *abi.EscrowDeposit, token string) *ct.Deposit {
 	return ct.NewDeposit(ed.Caller.Hex(), ed.Target.Hex(), ed.Amount.String(), int64(ed.Raw.BlockNumber), ed.Raw.TxHash.Hex(), 0, token)
 }
 
-// we don't need this anymore
-/*func (c *contract) SubDepositEvents(ctx context.Context) (event.Subscription, chan<- *abi.EscrowDeposit, error) {
-	watchOpts := &bind.WatchOpts{Context: ctx, Start: nil}
+// RetrunFunds calls the returnDeposit function
+func (c *contract) ReturnFunds(ctx context.Context, key *ecdsa.PrivateKey, recipient, nonce string, amt *big.Int, fee *big.Int) error {
 
-	ch := make(chan *abi.EscrowDeposit)
-	sub, err := c.ctr.WatchDeposit(watchOpts, ch)
+	txOpts, err := bind.NewKeyedTransactorWithChainID(key, c.cid)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
-	return sub, ch, nil
-}*/
+	_, err = c.ctr.ReturnDeposit(txOpts, common.HexToAddress(recipient), amt, fee, nonce)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

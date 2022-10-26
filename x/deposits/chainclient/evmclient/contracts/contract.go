@@ -1,26 +1,22 @@
 package contracts
 
 import (
-	"context"
+	"math/big"
 
 	"kwil/abi"
-	ct "kwil/x/deposits/chainclient/types"
+	ct "kwil/x/deposits/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-type Contract interface {
-	ReturnFunds(string, string, string) error
-	GetDeposits(context.Context, int64, int64, string) ([]ct.Deposit, error)
-}
-
 type contract struct {
 	ctr   *abi.Escrow
 	token string
+	cid   *big.Int
 }
 
-func New(client *ethclient.Client, addr string) (ct.Contract, error) {
+func New(client *ethclient.Client, addr string, chainID *big.Int) (ct.Contract, error) {
 	ctr, err := abi.NewEscrow(common.HexToAddress(addr), client)
 	if err != nil {
 		return nil, err
@@ -34,10 +30,6 @@ func New(client *ethclient.Client, addr string) (ct.Contract, error) {
 	return &contract{
 		ctr:   ctr,
 		token: tokAddr.Hex(),
+		cid:   chainID,
 	}, nil
-}
-
-func (c *contract) ReturnFunds(token, amount, recipient string) error {
-	// TODO: implement
-	return nil
 }

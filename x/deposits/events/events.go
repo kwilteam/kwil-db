@@ -7,7 +7,8 @@ import (
 
 	"kwil/x/cfgx"
 	cc "kwil/x/deposits/chainclient"
-	ct "kwil/x/deposits/chainclient/types"
+	"kwil/x/deposits/structures"
+	ct "kwil/x/deposits/types"
 
 	"kwil/x/logx"
 )
@@ -87,7 +88,7 @@ func (ef *eventFeed) listenForBlocks(ctx context.Context, start int64) (<-chan i
 
 	retChan := make(chan int64, 10) // getting returned, this is for blocks after finalization
 
-	q := NewQueue()
+	q := structures.NewQueue()
 
 	go func(context.Context, int64) {
 		exp := start

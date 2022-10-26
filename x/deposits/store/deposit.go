@@ -11,11 +11,13 @@ import (
 var DEPOSITKEY = []byte("d")
 var SPENTKEY = []byte("s")
 var WITHDRAWALKEY = []byte("w")
+var EXPIRYKEY = []byte("e")
 var BLOCKKEY = []byte("b")
 var LASTHEIGHT = []byte("l")
 
 type depositStore struct {
-	db kv.KVStore
+	db  kv.KVStore
+	log logx.Logger
 }
 
 type DepositStore interface {
@@ -37,7 +39,8 @@ func New(conf cfgx.Config, l logx.Logger) (*depositStore, error) {
 	}
 
 	return &depositStore{
-		db: db,
+		db:  db,
+		log: l,
 	}, nil
 }
 
@@ -51,7 +54,7 @@ func (ds *depositStore) Deposit(txid, addr string, amt *big.Int, h int64) error 
 	// get the current amount
 	curAmt, err := ds.db.Get(key) // I use this instead of GetBalance since GetBalance returns a bigint
 	if err != nil {
-		if err == ErrNotFound { // If it could not find a value, then set the total to 0
+		if err == kv.ErrNotFound { // If it could not find a value, then set the total to 0
 			curAmt = []byte{0, 0, 0, 0, 0, 0, 0, 0}
 		} else {
 			return err

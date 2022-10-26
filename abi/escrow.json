@@ -3,6 +3,52 @@
 		"inputs": [
 			{
 				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amt",
+				"type": "uint256"
+			}
+		],
+		"name": "deposit",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amt",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "fee",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "nonce",
+				"type": "string"
+			}
+		],
+		"name": "returnDeposit",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
 				"name": "_escrowToken",
 				"type": "address"
 			}
@@ -61,28 +107,16 @@
 				"internalType": "uint256",
 				"name": "fee",
 				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "nonce",
+				"type": "string"
 			}
 		],
 		"name": "Withdrawal",
 		"type": "event"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "validator",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "amt",
-				"type": "uint256"
-			}
-		],
-		"name": "deposit",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
 	},
 	{
 		"inputs": [],
@@ -119,29 +153,6 @@
 			}
 		],
 		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "recipient",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "amt",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "fee",
-				"type": "uint256"
-			}
-		],
-		"name": "returnDeposit",
-		"outputs": [],
-		"stateMutability": "nonpayable",
 		"type": "function"
 	}
 ]

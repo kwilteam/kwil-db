@@ -2,6 +2,8 @@ package types
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"math/big"
 )
 
 type BlockSubscription interface {
@@ -18,6 +20,7 @@ type Client interface {
 
 type Contract interface {
 	GetDeposits(context.Context, int64, int64, string) ([]*Deposit, error)
+	ReturnFunds(context.Context, *ecdsa.PrivateKey, string, string, *big.Int, *big.Int) error
 }
 
 type Log interface {
@@ -32,14 +35,6 @@ type IDeposit interface {
 	Amount() string
 	Target() string
 	Caller() string
-}
-
-type IWithdrawal interface {
-	Log
-	Token() string
-	Amount() string
-	Recipient() string
-	Sender() string
 }
 
 type Deposit struct {

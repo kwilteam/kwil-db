@@ -1,7 +1,7 @@
-package events_test
+package structures_test
 
 import (
-	"kwil/x/deposits/events"
+	events "kwil/x/deposits/structures"
 	"testing"
 )
 
@@ -43,4 +43,9 @@ func TestQueue(t *testing.T) {
 		t.Error("expected -1 when popping empty queue")
 	}
 
+	// add more
+	q.Append(4)
+
+	// print for coverage
+	q.Print()
 }

@@ -3,7 +3,7 @@ package chainclient
 import (
 	"errors"
 
-	"kwil/x/deposits/chainclient/types"
+	"kwil/x/deposits/types"
 	"kwil/x/logx"
 
 	"kwil/x/deposits/chainclient/evmclient"
@@ -27,6 +27,8 @@ var ErrChainNotSpecified = errors.New("chain not specified")
 func (c *clientBuilder) Build() (types.Client, error) {
 	switch c.chainCode {
 	case "eth-mainnet":
+		return evmclient.New(c.logger, c.endpoint, c.chainCode)
+	case "eth-goerli": // for now it is the same as eth mainnet
 		return evmclient.New(c.logger, c.endpoint, c.chainCode)
 	default:
 		return nil, ErrChainNotSpecified
@@ -58,6 +60,7 @@ func Builder() ClientBuilder {
 	Supported Chains | Code
 	-----------------+------
 	Ethereum         | eth-mainnet
+	Goerli           | eth-goerli
 	-----------------+------
 
 */
