@@ -1,7 +1,7 @@
 broker-settings: &broker-settings
-  bootstrap.servers: ${kenv.KAFKA_CLUSTER.ENDPOINT}
-  username: ${kenv.KAFKA_CLUSTER.USER}
-  password: ${kenv.KAFKA_CLUSTER.PASSWORD}
+  bootstrap.servers: ${KAFKA_CLUSTER.ENDPOINT}
+  username: ${KAFKA_CLUSTER.USER}
+  password: ${KAFKA_CLUSTER.PASSWORD}
 
 messaging-emitter:
   broker-settings: *broker-settings

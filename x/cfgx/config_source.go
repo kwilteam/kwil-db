@@ -6,17 +6,17 @@ type Source interface {
 }
 
 type SourceItem interface {
-	As(out interface{}) error
+	As(out any) error
 }
 
 type FileSource interface {
 	Path() string
-	As(out interface{}) error
+	As(out any) error
 }
 
 type FileSelectorSource interface {
 	Selector() string
-	As(out interface{}) error
+	As(out any) error
 }
 
 type ConfigSource interface {

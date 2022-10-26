@@ -7,7 +7,11 @@ type emptyConfigImpl struct {
 
 var emptyConfig = &emptyConfigImpl{}
 
-func (c *emptyConfigImpl) As(_ interface{}) error {
+func (c *emptyConfigImpl) Extract(_ string, _ any) error {
+	return nil
+}
+
+func (c *emptyConfigImpl) As(_ any) error {
 	return nil
 }
 
@@ -19,8 +23,8 @@ func (c *emptyConfigImpl) ToStringMap() map[string]string {
 	return make(map[string]string)
 }
 
-func (c *emptyConfigImpl) ToMap() map[string]interface{} {
-	return make(map[string]interface{})
+func (c *emptyConfigImpl) ToMap() map[string]any {
+	return make(map[string]any)
 }
 
 func (c *emptyConfigImpl) Select(_ string) Config {

@@ -9,8 +9,10 @@ import (
 )
 
 type config_builder struct {
-	root    string
-	sources []Source
+	root       string
+	sources    []Source
+	env_prefix string
+	maps       []map[string]any
 }
 
 func (b *config_builder) Build() (Config, error) {
@@ -25,7 +27,7 @@ func (b *config_builder) Build() (Config, error) {
 		}
 
 		if len(source.Sources()) > 1 {
-			//this should not happen, but just in case
+			//this should not happen with current sources, but just in case
 			panic("only one source is supported")
 		}
 
@@ -38,35 +40,75 @@ func (b *config_builder) Build() (Config, error) {
 		rootMap[source.Name()] = m
 	}
 
+	if len(b.maps) > 0 {
+		for _, m := range b.maps {
+			for k, v := range m {
+				rootMap[k] = v
+			}
+		}
+	}
+
+	b.expand(rootMap)
+
 	flattenedMap := make(map[string]string)
 
-	expand(rootMap)
+	if b.env_prefix != "" {
+		for _, e := range os.Environ() {
+			pair := strings.SplitN(e, "=", 2)
+			if strings.HasPrefix(pair[0], b.env_prefix) {
+				key := strings.TrimPrefix(pair[0], b.env_prefix)
+				if key != "" {
+					flattenedMap[key] = pair[1]
+				}
+			}
+		}
+	}
 
 	flatten(flattenedMap, b.root, rootMap)
 
 	return &config{flattenedMap, rootMap, b.root}, nil
 }
 
+func (b *config_builder) UseEnv(filter string) ConfigBuilder {
+	if filter != "" && !strings.HasSuffix(filter, "_") {
+		filter = filter + "_"
+	}
+
+	return &config_builder{b.root, b.sources, filter, b.maps}
+}
+
+func (b *config_builder) UseMap(m map[string]any) ConfigBuilder {
+	if m == nil {
+		return b
+	}
+
+	return &config_builder{b.root, b.sources, b.env_prefix, append(b.maps, m)}
+}
+
 func (b *config_builder) UseFile(name string, path string) ConfigBuilder {
 	source := createConfigSource(name, createConfigFileSource(path))
-	return &config_builder{b.root, append(b.sources, source)}
+	return &config_builder{b.root, append(b.sources, source), b.env_prefix, b.maps}
 }
 
 func (b *config_builder) UseFileSelection(name string, selector string, path string) ConfigBuilder {
 	source := createConfigSource(name, createConfigFileSelectorSource(path, selector))
-	return &config_builder{b.root, append(b.sources, source)}
+	return &config_builder{b.root, append(b.sources, source), b.env_prefix, b.maps}
 }
 
-func expand(m map[interface{}]interface{}) {
+func (b *config_builder) expand(m map[interface{}]interface{}) {
 	for k, v := range m {
 		kind := reflect.TypeOf(v).Kind()
 		switch kind {
 		case reflect.Map:
-			expand(v.(map[interface{}]interface{}))
+			b.expand(v.(map[interface{}]interface{}))
 		case reflect.String:
-			m[k] = os.ExpandEnv(v.(string))
+			m[k] = os.Expand(v.(string), b.getEnv)
 		}
 	}
+}
+
+func (b *config_builder) getEnv(key string) string {
+	return os.Getenv(b.env_prefix + key)
 }
 
 func flatten(flattened map[string]string, prefix string, m map[interface{}]interface{}) {
@@ -103,14 +145,3 @@ func flatten(flattened map[string]string, prefix string, m map[interface{}]inter
 		}
 	}
 }
-
-//func (b *config_builder) UseEnv(filter x.Predicate[string]) ConfigBuilder {
-//	if filter == nil {
-//		filter = x.TruePredicate[string]()
-//	}
-//	return &config_builder{b.root, append(b.sources, &env_source{filter: filter})}
-//}
-
-//func (b *config_builder) UseSource(source Source) ConfigBuilder {
-//	return &config_builder{b.root, append(b.sources, source)}
-//}

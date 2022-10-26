@@ -3,6 +3,7 @@ package cfgx
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"kwil/x/utils"
 
@@ -65,12 +66,12 @@ func (c *config_file_selector_source) Selector() string {
 	return c.selector
 }
 
-func (c *config_file_source) As(out interface{}) error {
+func (c *config_file_source) As(out any) error {
 	return loadAs(c.path, out)
 }
 
-func (c *config_file_selector_source) As(out interface{}) error {
-	m := make(map[interface{}]interface{})
+func (c *config_file_selector_source) As(out any) error {
+	m := make(map[any]any)
 	err := loadAs(c.path, m)
 	if err != nil {
 		return err
@@ -89,11 +90,16 @@ func (c *config_file_selector_source) As(out interface{}) error {
 	return yaml.Unmarshal(b, out)
 }
 
-func loadAs(path string, out interface{}) error {
-	data, err := os.ReadFile(utils.ExpandHomeDirAndEnv(path))
-	if err != nil {
-		return err
-	}
+func loadAs(path string, out any) error {
+	switch filepath.Ext(path) {
+	case ".yaml", ".yml", ".json":
+		data, err := os.ReadFile(utils.ExpandHomeDirAndEnv(path))
+		if err != nil {
+			return err
+		}
 
-	return yaml.Unmarshal(data, out)
+		return yaml.Unmarshal(data, out)
+	default:
+		return fmt.Errorf("unknown file extension: %s", path)
+	}
 }

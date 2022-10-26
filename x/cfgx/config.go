@@ -6,8 +6,10 @@ type Config interface {
 	Select(key string) Config
 
 	// As will unmarshal the config into a given struct
-	As(out interface{}) error
+	As(out any) error
 	Exists(key string) bool
+
+	Extract(key string, out any) error
 
 	String(key string) string
 	GetString(key string, defaultValue string) string
@@ -34,5 +36,5 @@ type Config interface {
 	GetUInt64(key string, defaultValue uint64) (uint64, error)
 
 	ToStringMap() map[string]string
-	ToMap() map[string]interface{}
+	ToMap() map[string]any
 }

@@ -27,11 +27,15 @@ var (
 
 type config struct {
 	root   map[string]string
-	source map[interface{}]interface{}
+	source map[any]any
 	prefix string
 }
 
-func (c *config) As(out interface{}) error {
+func (c *config) Extract(key string, out any) error {
+	return c.Select(key).As(out)
+}
+
+func (c *config) As(out any) error {
 	b, err := yaml.Marshal(c.source)
 	if err != nil {
 		return err
@@ -60,8 +64,8 @@ func (c *config) ToStringMap() map[string]string {
 	return result
 }
 
-func (c *config) ToMap() map[string]interface{} {
-	result := make(map[string]interface{})
+func (c *config) ToMap() map[string]any {
+	result := make(map[string]any)
 
 	for k, v := range c.source {
 		key := k.(string)
@@ -83,10 +87,10 @@ func (c *config) Select(key string) Config {
 
 	var k = c.normalize(key) + "."
 	if ok && reflect.TypeOf(m).Kind() == reflect.Map {
-		return &config{c.root, m.(map[interface{}]interface{}), k}
+		return &config{c.root, m.(map[any]any), k}
 	}
 
-	return &config{c.root, make(map[interface{}]interface{}), k}
+	return &config{c.root, make(map[any]any), k}
 }
 
 func (c *config) String(key string) string {
@@ -293,12 +297,14 @@ func getConfigFile(path string) string {
 	return path
 }
 
+const ENV_KEY_PREFIX_DEFAULT = "kenv"
+const ENV_OS_KEY_FILTER = "env-key-filter"
 const ENV_SETTINGS_PATH = "env-settings"
 const Meta_Config_Flag = "meta-config"
 const Meta_Config_Test_Flag = "meta-config-test"
 
-const Meta_Config_Env = "kenv." + Meta_Config_Flag
-const Meta_Config_Test_Env = "kenv." + Meta_Config_Test_Flag
+const Meta_Config_Env = ENV_KEY_PREFIX_DEFAULT + "_" + Meta_Config_Flag
+const Meta_Config_Test_Env = ENV_KEY_PREFIX_DEFAULT + "_" + Meta_Config_Test_Flag
 
 func _getConfigInternal(test bool) Config {
 	once := utils.IfElse(test, &testCfgOnce, &cfgOnce)
@@ -309,7 +315,7 @@ func _getConfigInternal(test bool) Config {
 		configFile := *flag.String(file, "", "Path to configuration file")
 		flag.Parse()
 		if configFile == "" {
-			configFile = os.Getenv("kenv." + file)
+			configFile = os.Getenv(ENV_KEY_PREFIX_DEFAULT + "_" + file)
 			if configFile == "" {
 				configFile = getConfigFile("./" + file + ".yaml")
 				if configFile == "" {
@@ -332,13 +338,15 @@ func _getConfigInternal(test bool) Config {
 			panic(err)
 		}
 
-		if envSettings := cfg.GetString("env-settings", ""); envSettings != "" {
-			env, err := Builder().UseFile("kenv", envSettings).Build()
+		filter := cfg.GetString(ENV_OS_KEY_FILTER, ENV_KEY_PREFIX_DEFAULT) + "_"
+		if envSettings := cfg.GetString(ENV_SETTINGS_PATH, ""); envSettings != "" {
+			env, err := Builder().UseFile(filter, envSettings).Build()
 			if err != nil {
 				panic(err)
 			}
 
 			for k, v := range env.ToStringMap() {
+				k := strings.Replace(k, filter+".", filter, 1)
 				err := os.Setenv(k, os.ExpandEnv(v))
 				if err != nil {
 					panic(err)
@@ -346,11 +354,12 @@ func _getConfigInternal(test bool) Config {
 			}
 		}
 
-		b := Builder()
+		b := Builder().UseEnv(filter)
 		for k, v := range cfg.ToStringMap() {
-			if k == "env-settings" {
+			if k == ENV_SETTINGS_PATH || k == ENV_OS_KEY_FILTER {
 				continue
 			}
+
 			values := strings.Split(v, ",")
 			if len(values) == 1 {
 				b = b.UseFile(k, v)
