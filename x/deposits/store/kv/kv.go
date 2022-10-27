@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"kwil/x/logx"
+
 	"github.com/dgraph-io/badger/v3"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 /*
@@ -27,7 +27,7 @@ const (
 
 type badgerDB struct {
 	db  *badger.DB
-	log zerolog.Logger
+	log logx.Logger
 	mu  sync.Mutex
 }
 
@@ -44,9 +44,8 @@ type KVStore interface {
 	PrintAll()
 }
 
-func New(path string) (KVStore, error) {
+func New(l logx.Logger, path string) (KVStore, error) {
 	// create logger
-	logger := log.With().Str("module", "store").Logger()
 
 	// create badger db
 	opts := badger.DefaultOptions(path)
@@ -60,7 +59,7 @@ func New(path string) (KVStore, error) {
 
 	return &badgerDB{
 		db:  db,
-		log: logger,
+		log: l,
 	}, nil
 }
 
@@ -106,9 +105,9 @@ func (db *badgerDB) RunGC() {
 		if err != nil {
 			// don't report error when GC didn't result in any cleanup
 			if err == badger.ErrNoRewrite {
-				db.log.Debug().Err(err).Msg("no cleanup done")
+				db.log.Debug("no value log GC required")
 			} else {
-				db.log.Error().Err(err).Msg("failed to run GC")
+				db.log.Error("error during value log GC", logx.Field{Interface: err})
 			}
 		}
 	}

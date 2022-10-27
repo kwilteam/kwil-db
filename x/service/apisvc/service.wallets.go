@@ -79,18 +79,21 @@ func (s *Service) ReturnFunds(ctx context.Context, req *apipb.ReturnFundsRequest
 	}
 
 	// now we need to get the amount they have spent, since we will cash it out in the smart contract
-	spent, err := s.ds.GetSpent(req.From)
+	_, err = s.ds.GetSpent(req.From)
 	if err != nil {
 		return nil, err
 	}
 
 	// now we call the smart contract to return the funds
 	// convert req.From to common.Address
-	from := common.HexToAddress(req.From)
-	_, err = s.cc.ReturnFunds(ctx, from, amt, spent) // we need to build tracing here
-	if err != nil {
-		return nil, err
-	}
+	_ = common.HexToAddress(req.From)
+
+	/*
+		_, err = s.cc.ReturnFunds(ctx, from, amt, spent) // we need to build tracing here
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	return &apipb.ReturnFundsResponse{}, nil
 }

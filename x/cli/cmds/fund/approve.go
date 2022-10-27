@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"math/big"
 
+	"kwil/x/cli/chain"
+
+	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"kwil/x/cli/chain"
 )
 
 func approveCmd() *cobra.Command {
@@ -45,9 +47,17 @@ func approveCmd() *cobra.Command {
 			// if err != nil {
 			// 	return err
 			// }
-			res := "n"
+			pr := promptui.Select{
+				Label: "Continue?",
+				Items: []string{"yes", "no"},
+			}
 
-			if res != "y" {
+			_, res, err := pr.Run()
+			if err != nil {
+				return err
+			}
+
+			if res != "yes" {
 				return errors.New("transaction cancelled")
 			}
 

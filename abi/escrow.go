@@ -30,7 +30,7 @@ var (
 
 // EscrowMetaData contains all meta data concerning the Escrow contract.
 var EscrowMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_escrowToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"target\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Deposit\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"receiver\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"Withdrawal\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"validator\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"}],\"name\":\"deposit\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"escrowToken\",\"outputs\":[{\"internalType\":\"contractIERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"pools\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"}],\"name\":\"returnDeposit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"validator\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"}],\"name\":\"deposit\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amt\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"},{\"internalType\":\"string\",\"name\":\"nonce\",\"type\":\"string\"}],\"name\":\"returnDeposit\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_escrowToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"target\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"Deposit\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"receiver\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"caller\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"fee\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"string\",\"name\":\"nonce\",\"type\":\"string\"}],\"name\":\"Withdrawal\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"escrowToken\",\"outputs\":[{\"internalType\":\"contractIERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"pools\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
 }
 
 // EscrowABI is the input ABI used to generate the binding from.
@@ -262,25 +262,25 @@ func (_Escrow *EscrowTransactorSession) Deposit(validator common.Address, amt *b
 	return _Escrow.Contract.Deposit(&_Escrow.TransactOpts, validator, amt)
 }
 
-// ReturnDeposit is a paid mutator transaction binding the contract method 0x24d20ef4.
+// ReturnDeposit is a paid mutator transaction binding the contract method 0x05da2820.
 //
-// Solidity: function returnDeposit(address recipient, uint256 amt, uint256 fee) returns()
-func (_Escrow *EscrowTransactor) ReturnDeposit(opts *bind.TransactOpts, recipient common.Address, amt *big.Int, fee *big.Int) (*types.Transaction, error) {
-	return _Escrow.contract.Transact(opts, "returnDeposit", recipient, amt, fee)
+// Solidity: function returnDeposit(address recipient, uint256 amt, uint256 fee, string nonce) returns()
+func (_Escrow *EscrowTransactor) ReturnDeposit(opts *bind.TransactOpts, recipient common.Address, amt *big.Int, fee *big.Int, nonce string) (*types.Transaction, error) {
+	return _Escrow.contract.Transact(opts, "returnDeposit", recipient, amt, fee, nonce)
 }
 
-// ReturnDeposit is a paid mutator transaction binding the contract method 0x24d20ef4.
+// ReturnDeposit is a paid mutator transaction binding the contract method 0x05da2820.
 //
-// Solidity: function returnDeposit(address recipient, uint256 amt, uint256 fee) returns()
-func (_Escrow *EscrowSession) ReturnDeposit(recipient common.Address, amt *big.Int, fee *big.Int) (*types.Transaction, error) {
-	return _Escrow.Contract.ReturnDeposit(&_Escrow.TransactOpts, recipient, amt, fee)
+// Solidity: function returnDeposit(address recipient, uint256 amt, uint256 fee, string nonce) returns()
+func (_Escrow *EscrowSession) ReturnDeposit(recipient common.Address, amt *big.Int, fee *big.Int, nonce string) (*types.Transaction, error) {
+	return _Escrow.Contract.ReturnDeposit(&_Escrow.TransactOpts, recipient, amt, fee, nonce)
 }
 
-// ReturnDeposit is a paid mutator transaction binding the contract method 0x24d20ef4.
+// ReturnDeposit is a paid mutator transaction binding the contract method 0x05da2820.
 //
-// Solidity: function returnDeposit(address recipient, uint256 amt, uint256 fee) returns()
-func (_Escrow *EscrowTransactorSession) ReturnDeposit(recipient common.Address, amt *big.Int, fee *big.Int) (*types.Transaction, error) {
-	return _Escrow.Contract.ReturnDeposit(&_Escrow.TransactOpts, recipient, amt, fee)
+// Solidity: function returnDeposit(address recipient, uint256 amt, uint256 fee, string nonce) returns()
+func (_Escrow *EscrowTransactorSession) ReturnDeposit(recipient common.Address, amt *big.Int, fee *big.Int, nonce string) (*types.Transaction, error) {
+	return _Escrow.Contract.ReturnDeposit(&_Escrow.TransactOpts, recipient, amt, fee, nonce)
 }
 
 // EscrowDepositIterator is returned from FilterDeposit and is used to iterate over the raw logs and unpacked data for Deposit events raised by the Escrow contract.
@@ -502,12 +502,13 @@ type EscrowWithdrawal struct {
 	Caller   common.Address
 	Amount   *big.Int
 	Fee      *big.Int
+	Nonce    string
 	Raw      types.Log // Blockchain specific contextual infos
 }
 
-// FilterWithdrawal is a free log retrieval operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
+// FilterWithdrawal is a free log retrieval operation binding the contract event 0xfbe316db8c3cfdc314d06e8ab0b8baf61d03bd5aa62893c764ef1215a962d268.
 //
-// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee, string nonce)
 func (_Escrow *EscrowFilterer) FilterWithdrawal(opts *bind.FilterOpts, caller []common.Address) (*EscrowWithdrawalIterator, error) {
 
 	var callerRule []interface{}
@@ -522,9 +523,9 @@ func (_Escrow *EscrowFilterer) FilterWithdrawal(opts *bind.FilterOpts, caller []
 	return &EscrowWithdrawalIterator{contract: _Escrow.contract, event: "Withdrawal", logs: logs, sub: sub}, nil
 }
 
-// WatchWithdrawal is a free log subscription operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
+// WatchWithdrawal is a free log subscription operation binding the contract event 0xfbe316db8c3cfdc314d06e8ab0b8baf61d03bd5aa62893c764ef1215a962d268.
 //
-// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee, string nonce)
 func (_Escrow *EscrowFilterer) WatchWithdrawal(opts *bind.WatchOpts, sink chan<- *EscrowWithdrawal, caller []common.Address) (event.Subscription, error) {
 
 	var callerRule []interface{}
@@ -564,9 +565,9 @@ func (_Escrow *EscrowFilterer) WatchWithdrawal(opts *bind.WatchOpts, sink chan<-
 	}), nil
 }
 
-// ParseWithdrawal is a log parse operation binding the contract event 0xc2b4a290c20fb28939d29f102514fbffd2b73c059ffba8b78250c94161d5fcc6.
+// ParseWithdrawal is a log parse operation binding the contract event 0xfbe316db8c3cfdc314d06e8ab0b8baf61d03bd5aa62893c764ef1215a962d268.
 //
-// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee)
+// Solidity: event Withdrawal(address receiver, address indexed caller, uint256 amount, uint256 fee, string nonce)
 func (_Escrow *EscrowFilterer) ParseWithdrawal(log types.Log) (*EscrowWithdrawal, error) {
 	event := new(EscrowWithdrawal)
 	if err := _Escrow.contract.UnpackLog(event, "Withdrawal", log); err != nil {
