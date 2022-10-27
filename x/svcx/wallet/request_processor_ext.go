@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"context"
+	"fmt"
 	"kwil/x"
 	"kwil/x/async"
 	"kwil/x/svcx/messaging/mx"
@@ -79,7 +80,8 @@ func (r *request_processor) run() {
 
 func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 	if !iter.HasNext() {
-		r.wg.Done()
+		iter.Commit().WhenComplete(r.on_iter_complete)
+		return
 	}
 
 	// TODO: makes more sense to add batch call
@@ -88,15 +90,8 @@ func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 	msg, offset := iter.Next()
 	r.handle_message(msg, offset).
 		OnCompleteA(&async.ContinuationA{
-			Then: func() {
-				// iterate next item once item has been emitted
-				r.handle_messages(iter)
-			},
-			Catch: func(err error) {
-				// log error
-				r.wg.Done()
-				_ = r.Stop()
-			},
+			Then:  r.get_next(iter),
+			Catch: r.handle_if_error,
 		})
 }
 
@@ -125,4 +120,26 @@ func (r *request_processor) is_stopping() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.stopping
+}
+
+func (r *request_processor) get_next(iter sub.MessageIterator) func() {
+	return func() {
+		// iterate next item once item has been emitted
+		r.handle_messages(iter)
+	}
+}
+
+func (r *request_processor) on_iter_complete(err error) {
+	r.wg.Done()
+	r.handle_if_error(err)
+}
+
+func (r *request_processor) handle_if_error(err error) {
+	if err == nil {
+		return
+	}
+
+	fmt.Printf("error handling message: %v\n", err)
+	r.wg.Done()
+	_ = r.Stop()
 }
