@@ -90,7 +90,7 @@ func (r *_task[T]) _asAction() Action {
 
 func (r *_task[T]) _async(e Executor) Task[T] {
 	if e == nil {
-		e = AsyncExecutor()
+		e = DefaultExecutor()
 	}
 
 	h := executorHandler[T]{task: newTask[T](), e: e}

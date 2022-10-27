@@ -45,7 +45,7 @@ func (r *task_error[T]) WhenCompleteCh(ch chan *Result[T]) Task[T] {
 
 func (r *task_error[T]) _asAsync(e Executor) Task[T] {
 	if e != nil {
-		e = AsyncExecutor()
+		e = DefaultExecutor()
 	}
 
 	t := newTask[T]()

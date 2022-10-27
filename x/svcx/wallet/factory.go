@@ -1,9 +1,11 @@
 package wallet
 
 import (
+	"kwil/x"
 	"kwil/x/async"
 	"kwil/x/cfgx"
 	"kwil/x/svcx/messaging/pub"
+	"kwil/x/svcx/messaging/sub"
 	"sync"
 )
 
@@ -27,10 +29,10 @@ func NewRequestProcessor(cfg cfgx.Config) (RequestProcessor, error) {
 		return nil, err
 	}
 
-	c, err := newRequestEvents(cfg.Select("wallet-request-processor"))
+	c, err := sub.NewTransientReceiver(cfg.Select("wallet-request-processor"))
 	if err != nil {
 		return nil, err
 	}
 
-	return &request_processor{p, c}, nil
+	return &request_processor{p, c, make(chan x.Void), make(chan x.Void), &sync.WaitGroup{}, &sync.Mutex{}, false}, nil
 }

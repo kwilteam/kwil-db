@@ -3,15 +3,22 @@ package sub
 import (
 	"context"
 	"fmt"
+
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"kwil/x"
+	"kwil/x/cfgx"
 	"kwil/x/svcx/messaging/mx"
 	"kwil/x/syncx"
 	"sync"
 )
 
-func NewChannelBroker(cfg *mx.ClientConfig) (ChannelBroker, error) {
+func NewChannelBroker(config cfgx.Config) (ChannelBroker, error) {
+	cfg, err := mx.NewReceiverConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	cb := &channel_broker{
 		receiver_assigned: make(chan ReceiverChannel, 32),
 		done:              make(chan x.Void),
@@ -53,7 +60,13 @@ func NewChannelBroker(cfg *mx.ClientConfig) (ChannelBroker, error) {
 
 	return cb, nil
 }
-func NewTransientReceiver(cfg *mx.ClientConfig) (TransientReceiver, error) {
+
+func NewTransientReceiver(config cfgx.Config) (TransientReceiver, error) {
+	cfg, err := mx.NewReceiverConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(cfg.ConsumerTopics) != 1 {
 		return nil, fmt.Errorf("transient receiver can only be created for a single topic")
 	}
@@ -62,10 +75,33 @@ func NewTransientReceiver(cfg *mx.ClientConfig) (TransientReceiver, error) {
 		return nil, fmt.Errorf("transient receiver cannot be used with a consumer group")
 	}
 
+	//var adm *kadm.Client
+	//{
+	//	cl, err := kgo.NewClient(kgo.SeedBrokers(cfg.Brokers...))
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	adm = kadm.NewClient(cl)
+	//}
+	//
+	//md, err := adm.Metadata(context.Background(), cfg.ConsumerTopics[0])
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//detail, ok := md.Topics[cfg.ConsumerTopics[0]]
+	//if !ok {
+	//	return nil, fmt.Errorf("topic (%s) not found", cfg.ConsumerTopics[0])
+	//}
+	//
+	////map[topic]map[paritition_id]Offset
+	//partition_count := len(detail.Partitions)
+
 	c, err := kgo.NewClient(
+		//kgo.ConsumePartitions(),
 		kgo.Dialer(cfg.Dialer.DialContext),
 		kgo.SASL(plain.Auth{User: cfg.User, Pass: cfg.Pwd}.AsMechanism()),
-		kgo.ConsumeTopics(cfg.ConsumerTopics...),
+		kgo.ConsumeTopics(cfg.ConsumerTopics[0]),
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ClientID(cfg.Client_id),
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()))
@@ -79,12 +115,13 @@ func NewTransientReceiver(cfg *mx.ClientConfig) (TransientReceiver, error) {
 	return &transient_receiver{
 		c,
 		cfg.ConsumerTopics[0],
-		syncx.NewChanBuffered[MessageIterator](1),
+		make(chan MessageIterator, 32), // todo: buffer should be == to partition count
 		make(chan x.Void),
 		ctx,
 		fn,
 		cfg.MaxPollRecords,
-		sync.Mutex{},
+		&sync.WaitGroup{},
+		&sync.Mutex{},
 		false,
 	}, nil
 }
