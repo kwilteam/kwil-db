@@ -27,7 +27,7 @@ func (c *contract) ReturnFunds(ctx context.Context, key *ecdsa.PrivateKey, recip
 	return nil
 }
 
-func (c *contract) GetWithdrawals(ctx context.Context, from, to int64, addr string) ([]*ct.Withdrawal, error) {
+func (c *contract) GetWithdrawals(ctx context.Context, from, to int64, addr string) ([]*ct.WithdrawalConfirmation, error) {
 	end := uint64(to)
 	queryOpts := &bind.FilterOpts{Context: ctx, Start: uint64(from), End: &end}
 
@@ -41,8 +41,8 @@ func (c *contract) GetWithdrawals(ctx context.Context, from, to int64, addr stri
 	return convertWithdrawals(edi, c.token), nil
 }
 
-func convertWithdrawals(edi *abi.EscrowWithdrawalIterator, token string) []*ct.Withdrawal {
-	var withdrawals []*ct.Withdrawal
+func convertWithdrawals(edi *abi.EscrowWithdrawalIterator, token string) []*ct.WithdrawalConfirmation {
+	var withdrawals []*ct.WithdrawalConfirmation
 	for {
 
 		if !edi.Next() {
@@ -55,6 +55,6 @@ func convertWithdrawals(edi *abi.EscrowWithdrawalIterator, token string) []*ct.W
 	return withdrawals
 }
 
-func escToWithdrawal(ed *abi.EscrowWithdrawal, token string) *ct.Withdrawal {
+func escToWithdrawal(ed *abi.EscrowWithdrawal, token string) *ct.WithdrawalConfirmation {
 	return ct.NewWithdrawal(ed.Caller.Hex(), ed.Receiver.Hex(), ed.Amount.String(), ed.Fee.String(), ed.Nonce, int64(ed.Raw.BlockNumber), ed.Raw.TxHash.Hex(), 0, token)
 }

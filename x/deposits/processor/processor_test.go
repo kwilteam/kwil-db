@@ -375,7 +375,7 @@ func (m *mockContract) GetDeposits(ctx context.Context, start int64, end int64, 
 	return nil, nil
 }
 
-func (m *mockContract) GetWithdrawals(ctx context.Context, start int64, end int64, addr string) ([]*types.Withdrawal, error) {
+func (m *mockContract) GetWithdrawals(ctx context.Context, start int64, end int64, addr string) ([]*types.WithdrawalConfirmation, error) {
 	return nil, nil
 }
 

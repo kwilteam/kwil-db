@@ -39,6 +39,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
+	// TODO: implement wallet service processor
 	d, err := deposits.New(dc, logger, acc)
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)

@@ -8,6 +8,8 @@ The chain client is a wrapper around different blockchain clients.  The intent o
 - Getting the latest block number
 - Providing a contract interface
 
+When new events are received from the chain client, they are sent via the Request Service (Kafka producer) to the processor.  All sent events are asynchronous calls, and the chain client does not wait for a response from the processor.  See info at the bottom of this page on how different events are serialized and sent to the processor.
+
 ### Contract Interface
 The contract interface is a the main interface for interacting with specific blockchain events.  The interface is a wrapper around the generated contract bindings.  For EVM chains, these bindings are generated using the [abigen](https://geth.ethereum.org/docs/install-and-build/installing-geth) tool. The contract interface is responsible for:
 - Getting deposit events.  It filters events by a range of blocks, and the intended deposit recipient (the address of a node).
@@ -50,6 +52,21 @@ Currently Kwil can technically suppot EVM chain, but is only set up to handle a 
 | Ethereum | eth-mainnet | 1 |
 | Goerli | eth-goerli | 5 |
 
+## Event Serialization
+Events sent from the deposit module to Kafka are serialized according to a predeterimined schema.  This enables the consumer to identify the type of event, deserialize into the correct struct, and handle the event accordingly.  Serialized events start with a magic byte set as 0.  This is included in case we need to add more event types later.  The second byte identifies the event type:
+
+Magic Byte | Event Type | Data
+
+Below is a table of the different events, their byte indicator, and the struct they are deserialized into.
+
+| Event Type | Byte | Struct |
+|------------|------|--------|
+| Deposit | 0 | DepositEvent |
+| Withdrawal Request | 1 | WithdrawalEvent |
+| Withdrawal Confirmation | 2 | WithdrawalConfirmationEvent |
+| End of Block | 3 | EndOfBlockEvent |
+| Spend | 4 | SpendEvent |
+
 ## Store
-**This is not currently being used, and has been replaced with Kafka + the processor+**
+**This is not currently being used, and has been replaced with Kafka + the processor**
 The store is responsible for persistently storing user's deposit, spent, and pending withdrawal values.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"kwil/x"
 	"kwil/x/async"
+	"kwil/x/deposits/processor"
 	"kwil/x/svcx/messaging/mx"
 	"kwil/x/svcx/messaging/pub"
 	"kwil/x/svcx/messaging/sub"
@@ -18,6 +19,7 @@ type request_processor struct {
 	wg       *sync.WaitGroup
 	mu       *sync.Mutex
 	stopping bool
+	pr       processor.Processor
 }
 
 func (r *request_processor) Start() error {
@@ -82,10 +84,8 @@ func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 		r.wg.Done()
 	}
 
-	// TODO: makes more sense to add batch call
-	// to emitter and just send a batch from here
-
 	msg, offset := iter.Next()
+
 	r.handle_message(msg, offset).
 		OnCompleteA(&async.ContinuationA{
 			Then: func() {
@@ -110,8 +110,6 @@ func (r *request_processor) handle_message(msg *mx.RawMessage, offset mx.Offset)
 }
 
 func (r *request_processor) handle(msg *mx.RawMessage, offset mx.Offset, request_id string) async.Action {
-	// process request event here
-	// ...
 
 	if request_id == "" {
 		return async.CompletedAction()

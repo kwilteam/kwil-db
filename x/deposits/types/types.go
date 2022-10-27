@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"math/big"
 )
 
@@ -20,7 +21,7 @@ type Client interface {
 
 type Contract interface {
 	GetDeposits(context.Context, int64, int64, string) ([]*Deposit, error)
-	GetWithdrawals(context.Context, int64, int64, string) ([]*Withdrawal, error)
+	GetWithdrawals(context.Context, int64, int64, string) ([]*WithdrawalConfirmation, error)
 	ReturnFunds(context.Context, *ecdsa.PrivateKey, string, string, *big.Int, *big.Int) error
 }
 
@@ -46,6 +47,17 @@ type Deposit struct {
 	tx     string
 	typ    uint8
 	token  string
+}
+
+func (d *Deposit) Serialize() ([]byte, error) {
+	b, err := json.Marshal(d)
+	if err != nil {
+		return nil, err
+	}
+
+	// add magic byte and type
+	b = append([]byte{0, 0}, b...)
+	return b, nil
 }
 
 func NewDeposit(caller, target, amount string, height int64, tx string, typ uint8, token string) *Deposit {
@@ -88,7 +100,7 @@ func (d *Deposit) Caller() string {
 	return d.caller
 }
 
-type Withdrawal struct {
+type WithdrawalConfirmation struct {
 	caller   string
 	receiver string
 	amount   string
@@ -100,8 +112,19 @@ type Withdrawal struct {
 	token    string
 }
 
-func NewWithdrawal(caller, receiver, amount, fee, nonce string, height int64, tx string, typ uint8, token string) *Withdrawal {
-	return &Withdrawal{
+func (w *WithdrawalConfirmation) Serialize() ([]byte, error) {
+	b, err := json.Marshal(w)
+	if err != nil {
+		return nil, err
+	}
+
+	// add magic byte and type
+	b = append([]byte{0, 2}, b...)
+	return b, nil
+}
+
+func NewWithdrawal(caller, receiver, amount, fee, nonce string, height int64, tx string, typ uint8, token string) *WithdrawalConfirmation {
+	return &WithdrawalConfirmation{
 		caller:   caller,
 		receiver: receiver,
 		amount:   amount,
@@ -114,38 +137,38 @@ func NewWithdrawal(caller, receiver, amount, fee, nonce string, height int64, tx
 	}
 }
 
-func (w *Withdrawal) Type() uint8 {
+func (w *WithdrawalConfirmation) Type() uint8 {
 	return w.typ
 }
 
-func (w *Withdrawal) Height() int64 {
+func (w *WithdrawalConfirmation) Height() int64 {
 	return w.height
 }
 
-func (w *Withdrawal) Tx() string {
+func (w *WithdrawalConfirmation) Tx() string {
 	return w.tx
 }
 
-func (w *Withdrawal) Token() string {
+func (w *WithdrawalConfirmation) Token() string {
 	return w.token
 }
 
-func (w *Withdrawal) Amount() string {
+func (w *WithdrawalConfirmation) Amount() string {
 	return w.amount
 }
 
-func (w *Withdrawal) Fee() string {
+func (w *WithdrawalConfirmation) Fee() string {
 	return w.fee
 }
 
-func (w *Withdrawal) Nonce() string {
+func (w *WithdrawalConfirmation) Nonce() string {
 	return w.nonce
 }
 
-func (w *Withdrawal) Receiver() string {
+func (w *WithdrawalConfirmation) Receiver() string {
 	return w.receiver
 }
 
-func (w *Withdrawal) Caller() string {
+func (w *WithdrawalConfirmation) Caller() string {
 	return w.caller
 }
