@@ -82,7 +82,7 @@ func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 		r.wg.Done()
 	}
 
-	// TODO:  makes more sense to add batch call
+	// TODO: makes more sense to add batch call
 	// to emitter and just send a batch from here
 
 	msg, offset := iter.Next()
@@ -101,32 +101,24 @@ func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 }
 
 func (r *request_processor) handle_message(msg *mx.RawMessage, offset mx.Offset) async.Action {
-	w, s, err := deserialize_request(msg)
+	msg, request_id, err := decode_message(msg)
 	if err != nil {
 		return async.FailedAction(err)
 	}
 
-	if s != nil {
-		return r.handle_spend(s, offset)
+	return r.handle(msg, offset, request_id)
+}
+
+func (r *request_processor) handle(msg *mx.RawMessage, offset mx.Offset, request_id string) async.Action {
+	// process request event here
+	// ...
+
+	if request_id == "" {
+		return async.CompletedAction()
 	}
 
-	return r.handle_withdrawal(w, offset)
-}
-
-func (r *request_processor) handle_withdrawal(request *WithdrawalRequest, offset mx.Offset) async.Action {
-	// process request event here
-	// ...
-
 	// emit confirmation event
-	return r.p.Send(context.Background(), request.AsRawEvent())
-}
-
-func (r *request_processor) handle_spend(request *SpendRequest, offset mx.Offset) async.Action {
-	// process request event here
-	// ...
-
-	// emit confirmation event
-	return r.p.Send(context.Background(), request.AsRawEvent())
+	return r.p.Send(context.Background(), encode_event(request_id, msg))
 }
 
 func (r *request_processor) is_stopping() bool {

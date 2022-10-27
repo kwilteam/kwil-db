@@ -1,47 +1,31 @@
 package wallet
 
-import "math/big"
+import (
+	"fmt"
+	"kwil/x/svcx/messaging/mx"
+)
 
-type WithdrawnEvent struct {
-	walletId   string
-	balance    big.Int
+type ConfirmationEvent struct {
 	request_id string
-	// ...
+	message    mx.RawMessage
 }
 
-type SpentEvent struct {
-	walletId   string
-	balance    big.Int
-	request_id string
-	// ...
+func encode_event(request_id string, msg *mx.RawMessage) *mx.RawMessage {
+	payload := []byte(request_id)
+	return &mx.RawMessage{Key: msg.Key, Value: append(payload, msg.Value...)}
 }
 
-type DepositedEvent struct {
-	walletId string
-	balance  big.Int
-	// ...
-}
+func decode_event(msg *mx.RawMessage) (*mx.RawMessage, string, error) {
+	if len(msg.Value) == 0 {
+		return nil, "", fmt.Errorf("empty message")
+	}
 
-func (d *DepositedEvent) WalletId() string {
-	return d.walletId
-}
+	if len(msg.Value) < 36 {
+		return nil, "", fmt.Errorf("invalid request message")
+	}
 
-func (d *DepositedEvent) Current() big.Int {
-	return d.balance
-}
+	request_id := string(msg.Value[0:36])
+	payload := msg.Value[36:]
 
-func (d *SpentEvent) WalletId() string {
-	return d.walletId
-}
-
-func (d *SpentEvent) Current() big.Int {
-	return d.balance
-}
-
-func (d *WithdrawnEvent) WalletId() string {
-	return d.walletId
-}
-
-func (d *WithdrawnEvent) Current() big.Int {
-	return d.balance
+	return &mx.RawMessage{Key: msg.Key, Value: payload}, request_id, nil
 }
