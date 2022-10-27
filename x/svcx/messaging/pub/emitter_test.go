@@ -38,7 +38,7 @@ func Test_Emitter_Sync(t *testing.T) {
 	}
 
 	// ToDO: Need actual message
-	err = e.SendSync(context.Background(), test_msg)
+	err = e.SendSync(context.Background(), &test_msg)
 	if err != nil {
 		t.Error(err)
 	}
@@ -76,7 +76,7 @@ func Test_Emitter_Async(t *testing.T) {
 
 	// ToDO: Need actual message
 	ctx := context.Background()
-	<-e.Send(ctx, test_msg).
+	<-e.Send(ctx, &test_msg).
 		WhenComplete(func(err error) {
 			if err != nil {
 				t.Error(err)

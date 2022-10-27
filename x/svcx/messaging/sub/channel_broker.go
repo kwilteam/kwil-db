@@ -1,16 +1,13 @@
 package sub
 
 import (
-	"context"
 	"kwil/x"
 )
 
-type ChannelBroker[T any] interface {
-	Start(topics ...string) error
+type ChannelBroker interface {
+	Start() error
+	Stop()
+	OnStop() <-chan x.Void
 
-	OnChannelAssigned() <-chan ReceiverChannel[T]
-
-	Shutdown()
-	ShutdownAndWait(ctx context.Context) error
-	OnShutdown() <-chan x.Void
+	OnChannelAssigned() <-chan ReceiverChannel
 }

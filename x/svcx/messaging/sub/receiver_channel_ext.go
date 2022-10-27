@@ -1,66 +1,58 @@
 package sub
 
+import (
+	"kwil/x"
+	"kwil/x/svcx/messaging/mx"
+	"kwil/x/syncx"
+)
+
+type receiver_channel struct {
+	topic       string
+	partitionId mx.PartitionId
+	out         syncx.Chan[MessageIterator]
+	done        chan x.Void
+}
+
+func new_receiver_channel(topic string, partitionId mx.PartitionId) receiver_channel {
+	return receiver_channel{
+		topic:       topic,
+		partitionId: partitionId,
+		out:         syncx.NewChanBuffered[MessageIterator](1),
+		done:        make(chan x.Void),
+	}
+}
+
+// Implement the ReceiverChannel interface and MessageIterator
+// MessageIterator will return false when close is called
 //
-//import (
-//	"context"
-//	"kwil/x"
-//	"kwil/x/composer/mx"
-//	"kwil/x/syncx"
-//)
-//
-//type receiver_channel[T any] struct {
-//	serdes      mx.Serdes[T]
-//	topic       string
-//	partitionId mx.PartitionId
-//	out         syncx.Chan[MessageIterator[T]]
-//	done        chan x.Void
-//}
-//
-//func new_receiver_channel[T any](serdes mx.Serdes[T], topic string, partitionId mx.PartitionId) receiver_channel[T] {
-//	return receiver_channel[T]{
-//		serdes:      serdes,
-//		topic:       topic,
-//		partitionId: partitionId,
-//		out:         syncx.NewChanBuffered[MessageIterator[T]](1),
-//		done:        make(chan x.Void),
-//	}
-//}
-//
-//// Implement the ReceiverChannel interface and MessageIterator
-//// MessageIterator will return false when close is called
-////
-//
-//// chan MessageIterator[T]
-//func (c *receiver_channel[T]) push(MessageIterator[T]) string {
-//	// put into internal channel
-//	// use an event loop to push to out channel?
-//}
-//
-//func (c *receiver_channel[T]) Topic() string {
-//	return c.topic
-//}
-//
-//func (c *receiver_channel[T]) PartitionId() mx.PartitionId {
-//	return c.partitionId
-//}
-//
-//func (c *receiver_channel[T]) OnReceive() <-chan MessageIterator[T] {
-//	return c.out.Read()
-//}
-//
-//func (c *receiver_channel[T]) onClosed() <-chan x.Void {
-//	return c.done
-//}
-//
-//func (c *receiver_channel[T]) Close() {
-//	close(c.done)
-//}
-//
-//func (c *receiver_channel[T]) CloseAndWait(ctx context.Context) error {
-//	c.Close()
-//	return nil
-//}
-//
-//func (c *receiver_channel[T]) close() {
-//	c.out.Close()
-//}
+
+// chan MessageIterator
+func (c *receiver_channel) push(MessageIterator) string {
+	// put into internal channel
+	// use an event loop to push to out channel?
+	panic("not implemented")
+}
+
+func (c *receiver_channel) Topic() string {
+	return c.topic
+}
+
+func (c *receiver_channel) PartitionId() mx.PartitionId {
+	return c.partitionId
+}
+
+func (c *receiver_channel) OnReceive() <-chan MessageIterator {
+	return c.out.Read()
+}
+
+func (c *receiver_channel) OnStop() <-chan x.Void {
+	return c.done
+}
+
+func (c *receiver_channel) Stop() {
+	close(c.done)
+}
+
+func (c *receiver_channel) close() {
+	c.out.Close()
+}

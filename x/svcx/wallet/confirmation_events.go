@@ -5,13 +5,16 @@ import (
 	"kwil/x/async"
 )
 
-// ConfirmationEvents
-// All nodes consume
+// ConfirmationEvents background process consuming
+// events emitted to confirmation topic by
+// Consumes all topic partitions for events per node
 type ConfirmationEvents interface {
-	OnDeposited(func(DepositedEvent) async.Action) // topic: confirmations, type: deposit
-	OnWithdrawn(func(WithdrawnEvent) async.Action) // topic: confirmations, type: withdrawal
-	OnSpent(func(SpentEvent) async.Action)         // topic: confirmations, type: spend
+	OnDeposited(func(DepositedEvent) async.Action)
+	OnWithdrawn(func(WithdrawnEvent) async.Action)
+	OnSpent(func(SpentEvent) async.Action)
 
-	Close() error
-	OnClosed() <-chan x.Void
+	Start() error
+	Stop() error
+
+	OnStop() <-chan x.Void
 }
