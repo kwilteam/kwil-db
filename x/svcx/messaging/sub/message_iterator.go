@@ -5,9 +5,11 @@ import (
 	"kwil/x/svcx/messaging/mx"
 )
 
-type MessageIterator[T any] interface {
+type MessageIterator interface {
+	PartitionId() mx.PartitionId
+
 	HasNext() bool
-	Next() (T, mx.Offset)
+	Next() (*mx.RawMessage, mx.Offset)
 
 	// Commit is used to signal the broker to commit the
 	// largest offset consumed for the batch. The

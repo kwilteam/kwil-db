@@ -12,6 +12,8 @@ type RequestService interface {
 	SubmitSpend(ctx context.Context, request *SpendRequest) async.Action
 	SubmitWithdrawal(ctx context.Context, request *WithdrawalRequest) async.Action
 
-	Close() error
-	OnClosed() <-chan x.Void
+	Start() error
+	Stop() error
+
+	OnStop() <-chan x.Void
 }

@@ -12,15 +12,17 @@ import (
 )
 
 type ClientConfig struct {
-	Brokers      []string
-	User         string
-	Pwd          string
-	Linger       time.Duration
-	Client_id    string
-	Buffer       int
-	Dialer       *tls.Dialer
-	Group        string
-	DefaultTopic string
+	Brokers        []string
+	User           string
+	Pwd            string
+	Linger         time.Duration
+	Client_id      string
+	Buffer         int
+	Dialer         *tls.Dialer
+	Group          string
+	DefaultTopic   string
+	ConsumerTopics []string
+	MaxPollRecords int
 }
 
 func NewEmitterClientConfig(config cfgx.Config) (cfg *ClientConfig, err error) {

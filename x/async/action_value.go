@@ -39,7 +39,7 @@ func (a *action_value) OnCompleteA(c *ContinuationA) {
 
 func (a *action_value) _asAsync(e Executor) Action {
 	if e != nil {
-		e = AsyncExecutor()
+		e = DefaultExecutor()
 	}
 
 	n := _newAction()

@@ -1,9 +1,11 @@
 package wallet
 
 import (
+	"kwil/x"
 	"kwil/x/async"
 	"kwil/x/cfgx"
 	"kwil/x/svcx/messaging/pub"
+	"kwil/x/svcx/messaging/sub"
 	"sync"
 )
 
@@ -18,10 +20,19 @@ func NewRequestService(cfg cfgx.Config) (RequestService, error) {
 		return nil, err
 	}
 
-	r := &request_Service{p, c, sync.Mutex{}, make(map[string]async.Action)}
+	return &request_Service{p, c, sync.Mutex{}, make(map[string]async.Action)}, nil
+}
 
-	c.OnSpent(r.onSpent)
-	c.OnWithdrawn(r.onWithdrawn)
+func NewRequestProcessor(cfg cfgx.Config) (RequestProcessor, error) {
+	p, err := pub.NewByteEmitterSingleClient(cfg.Select("wallet-confirmation-emitter"))
+	if err != nil {
+		return nil, err
+	}
 
-	return r, nil
+	c, err := sub.NewTransientReceiver(cfg.Select("wallet-request-processor"))
+	if err != nil {
+		return nil, err
+	}
+
+	return &request_processor{p, c, make(chan x.Void), make(chan x.Void), &sync.WaitGroup{}, &sync.Mutex{}, false}, nil
 }

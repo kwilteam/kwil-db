@@ -2,7 +2,6 @@ package async
 
 import (
 	"errors"
-	"kwil/x"
 	"sync"
 	"testing"
 )
@@ -212,7 +211,7 @@ func Test_AsAsync(t *testing.T) {
 	task3 := NewTask[*TestStruct]()
 
 	d3 := []int{0}
-	task3.AsAsync(x.ImmediateExecutor()).Then(
+	task3.AsAsync(ImmediateExecutor()).Then(
 		func(value *TestStruct) {
 			d3[0] = 1
 		})

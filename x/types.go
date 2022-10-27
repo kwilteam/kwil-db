@@ -32,6 +32,10 @@ type Tuple2[T, U any] struct {
 	P2 U
 }
 
+func NewTuple2[T, U any](t T, u U) *Tuple2[T, U] {
+	return &Tuple2[T, U]{t, u}
+}
+
 // Tuple3 is a combination of three values of any type.
 // In general, it is used in place of declaring one-off
 // structs for passing around three values.
@@ -87,10 +91,6 @@ type Callable[T any] func() T
 type ApplyT[T, R any] func(T) R
 type AcceptT[T any] func(T)
 type BiAccept[T, U any] func(T, U)
-
-type Executor interface {
-	Execute(Runnable)
-}
 
 type Clearable[T any] interface {
 	Clear() Iterator[T]

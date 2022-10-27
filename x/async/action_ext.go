@@ -52,7 +52,7 @@ func (a *action) _whenCompleteCh(ch chan *Result[Void]) Action {
 
 func (a *action) _asAsync(e Executor) Action {
 	if e == nil {
-		e = AsyncExecutor()
+		e = DefaultExecutor()
 	}
 
 	n := _newAction()

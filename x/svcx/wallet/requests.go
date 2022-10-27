@@ -26,10 +26,24 @@ func (s *WithdrawalRequest) AsMessage() *mx.RawMessage {
 	panic("implement me")
 }
 
-func NewSpendRequest(walletId string /* ... */) SpendRequest {
+func (s *SpendRequest) AsRawEvent() *mx.RawMessage {
 	panic("implement me")
 }
 
-func NewWithdrawalRequest(walletId string /* ... */) WithdrawalRequest {
+func (s *WithdrawalRequest) AsRawEvent() *mx.RawMessage {
+	panic("implement me")
+}
+
+func NewSpendRequest(walletId string /* other params here */) SpendRequest {
+	// generate request id (uuid)
+	panic("implement me")
+}
+
+func NewWithdrawalRequest(walletId string /* other params here */) WithdrawalRequest {
+	// generate request id (uuid)
+	panic("implement me")
+}
+
+func deserialize_request(msg *mx.RawMessage) (*WithdrawalRequest, *SpendRequest, error) {
 	panic("implement me")
 }
