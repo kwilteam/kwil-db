@@ -1,49 +1,45 @@
 package wallet
 
-import "kwil/x/svcx/messaging/mx"
+import (
+	"fmt"
+	"github.com/google/uuid"
+	"kwil/x/svcx/messaging/mx"
+)
 
-type SpendRequest struct {
-	request_id string
-	WalletId   string
-	// ...
+type Request struct {
+	WalletId string // used as key
+	Payload  []byte
 }
 
-type WithdrawalRequest struct {
-	request_id string
-	WalletId   string
-	// ...
+func encode_message_async(msg *mx.RawMessage) *mx.RawMessage {
+	payload := []byte{byte(0)}
+	return &mx.RawMessage{Key: msg.Key, Value: append(payload, msg.Value...)}
 }
 
-func (s *SpendRequest) AsMessage() *mx.RawMessage {
-	// wallet id as key
-	// request as value (need to include type as a marker in order to deserialize later during processing)
-	panic("implement me")
+func encode_message(msg *mx.RawMessage) (*mx.RawMessage, string) {
+	request_id := uuid.New().String()
+
+	payload := []byte{byte(1)}
+	payload = append(payload, []byte(request_id)...)
+
+	return &mx.RawMessage{Key: msg.Key, Value: payload}, request_id
 }
 
-func (s *WithdrawalRequest) AsMessage() *mx.RawMessage {
-	// wallet id as key
-	// request as value (need to include type as a marker in order to deserialize later during processing)
-	panic("implement me")
-}
+func decode_message(msg *mx.RawMessage) (*mx.RawMessage, string, error) {
+	if len(msg.Value) == 0 {
+		return nil, "", fmt.Errorf("empty message")
+	}
 
-func (s *SpendRequest) AsRawEvent() *mx.RawMessage {
-	panic("implement me")
-}
+	if msg.Value[0] == byte(0) {
+		return &mx.RawMessage{Key: msg.Key, Value: msg.Value[1:]}, "", nil
+	}
 
-func (s *WithdrawalRequest) AsRawEvent() *mx.RawMessage {
-	panic("implement me")
-}
+	if len(msg.Value) < 37 {
+		return nil, "", fmt.Errorf("invalid request message")
+	}
 
-func NewSpendRequest(walletId string /* other params here */) SpendRequest {
-	// generate request id (uuid)
-	panic("implement me")
-}
+	request_id := string(msg.Value[1:37])
+	payload := msg.Value[37:]
 
-func NewWithdrawalRequest(walletId string /* other params here */) WithdrawalRequest {
-	// generate request id (uuid)
-	panic("implement me")
-}
-
-func deserialize_request(msg *mx.RawMessage) (*WithdrawalRequest, *SpendRequest, error) {
-	panic("implement me")
+	return &mx.RawMessage{Key: msg.Key, Value: payload}, request_id, nil
 }

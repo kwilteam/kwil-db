@@ -4,13 +4,14 @@ import (
 	"context"
 	"kwil/x"
 	"kwil/x/async"
+	"kwil/x/svcx/messaging/mx"
 )
 
 // RequestService
 // Enacted via gRpc endpoint (all nodes produce)
 type RequestService interface {
-	SubmitSpend(ctx context.Context, request *SpendRequest) async.Action
-	SubmitWithdrawal(ctx context.Context, request *WithdrawalRequest) async.Action
+	Submit(ctx context.Context, msg *mx.RawMessage) async.Action
+	SubmitAsync(ctx context.Context, msg *mx.RawMessage) async.Action
 
 	Start() error
 	Stop() error
