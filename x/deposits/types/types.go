@@ -20,6 +20,7 @@ type Client interface {
 
 type Contract interface {
 	GetDeposits(context.Context, int64, int64, string) ([]*Deposit, error)
+	GetWithdrawals(context.Context, int64, int64, string) ([]*Withdrawal, error)
 	ReturnFunds(context.Context, *ecdsa.PrivateKey, string, string, *big.Int, *big.Int) error
 }
 
@@ -85,4 +86,66 @@ func (d *Deposit) Target() string {
 
 func (d *Deposit) Caller() string {
 	return d.caller
+}
+
+type Withdrawal struct {
+	caller   string
+	receiver string
+	amount   string
+	fee      string
+	nonce    string
+	height   int64
+	tx       string
+	typ      uint8
+	token    string
+}
+
+func NewWithdrawal(caller, receiver, amount, fee, nonce string, height int64, tx string, typ uint8, token string) *Withdrawal {
+	return &Withdrawal{
+		caller:   caller,
+		receiver: receiver,
+		amount:   amount,
+		fee:      fee,
+		nonce:    nonce,
+		height:   height,
+		tx:       tx,
+		typ:      typ,
+		token:    token,
+	}
+}
+
+func (w *Withdrawal) Type() uint8 {
+	return w.typ
+}
+
+func (w *Withdrawal) Height() int64 {
+	return w.height
+}
+
+func (w *Withdrawal) Tx() string {
+	return w.tx
+}
+
+func (w *Withdrawal) Token() string {
+	return w.token
+}
+
+func (w *Withdrawal) Amount() string {
+	return w.amount
+}
+
+func (w *Withdrawal) Fee() string {
+	return w.fee
+}
+
+func (w *Withdrawal) Nonce() string {
+	return w.nonce
+}
+
+func (w *Withdrawal) Receiver() string {
+	return w.receiver
+}
+
+func (w *Withdrawal) Caller() string {
+	return w.caller
 }

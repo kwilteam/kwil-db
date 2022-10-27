@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"sync"
 
 	"kwil/x/cfgx"
 	kc "kwil/x/crypto"
 	"kwil/x/deposits/events"
+	"kwil/x/deposits/processor"
 	"kwil/x/deposits/store"
 	ct "kwil/x/deposits/types"
 	"kwil/x/logx"
@@ -102,6 +102,48 @@ func (d *deposits) Listen(ctx context.Context) error {
 
 func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 	d.log.Infof("processing block %d", blk)
+	// get deposits for the block
+	deposits, err := d.sc.GetDeposits(ctx, blk, blk, d.addr)
+	if err != nil {
+		return fmt.Errorf("failed to get deposits for block %d. %w", blk, err)
+	}
+
+	for _, dep := range deposits {
+		d.log.Infof("deposit: %v", dep)
+		// TODO: send to kafka
+	}
+
+	// get withdrawals for the block
+	withdrawals, err := d.sc.GetWithdrawals(ctx, blk, blk, d.addr)
+	if err != nil {
+		return fmt.Errorf("failed to get withdrawals for block %d. %w", blk, err)
+	}
+
+	for _, wd := range withdrawals {
+		d.log.Infof("withdrawal: %v", wd)
+		// TODO: send to kafka
+	}
+
+	// TODO: Send end-block
+
+	return nil
+}
+
+func (d *deposits) LaunchProcessor(ctx context.Context) error {
+	// create new processor
+	p := processor.NewProcessor(d.log.Desugar(), d.sc, d.acc)
+
+	go func(context.Context, processor.Processor) {
+		// TODO: how do i implement consumer?
+	}(ctx, p)
+
+	return nil
+}
+
+/*
+
+func (d *deposits) processBlock(ctx context.Context, blk int64) error {
+	d.log.Infof("processing block %d", blk)
 	wg := sync.WaitGroup{}
 	wg.Add(2) // processing deposits and withdrawals simultaneously
 
@@ -162,22 +204,7 @@ func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
 	}
 
 	return nil
-}
-
-func (d *deposits) processWithdrawals(ctx context.Context, blk int64) error {
-	/*d.log.Debug().Int64("height", blk).Msg("processing withdrawals")
-
-	// get withdrawals
-	withdrawals, err := d.sc.GetWithdrawals(ctx, blk)
-	if err != nil {
-		return err
-	}
-
-	// process withdrawals
-	for _, w := range withdrawals {
-	}*/
-	return nil
-}
+}*/
 
 func (d *deposits) GetBalance(addr string) (*big.Int, error) {
 	return d.ds.GetBalance(addr)

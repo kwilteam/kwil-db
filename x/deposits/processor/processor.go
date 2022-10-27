@@ -2,7 +2,9 @@ package processor
 
 import (
 	"errors"
+	"kwil/x/crypto"
 	st "kwil/x/deposits/structures"
+	"kwil/x/deposits/types"
 	"kwil/x/logx"
 	"math/big"
 	"sync"
@@ -10,30 +12,43 @@ import (
 
 // Processor keeps in-memory information about balances, deposits, and withdrawals.
 
-type Processor struct {
+type Processor interface {
+	ProcessDeposit(d Deposit) error
+	ProcessWithdrawalRequest(w WithdrawalRequest) error
+	ProcessWithdrawalConfirmation(w WithdrawalConfirmation)
+	ProcessFinalizedBlock(b FinalizedBlock) error
+	GetBalance(addr string) *big.Int
+	NonceExist(n string) bool
+}
+
+type processor struct {
 	wt    *st.WithdrawalTracker
 	bals  map[string]*big.Int
 	spent map[string]*big.Int
 	log   logx.SugaredLogger
 	mu    sync.Mutex
+	ctr   types.Contract
+	acc   crypto.Account
 }
 
 var ErrCantParseAmount = errors.New("can't parse amount")
 var ErrInsufficientBalance = errors.New("insufficient balance")
 
 // NewProcessor creates a new Processor instance.
-func NewProcessor(l logx.Logger) *Processor {
-	return &Processor{
+func NewProcessor(l logx.Logger, ctr types.Contract, acc crypto.Account) *processor {
+	return &processor{
 		wt:    st.NewWithdrawalTracker(),
 		bals:  map[string]*big.Int{},
 		spent: map[string]*big.Int{},
 		log:   l.Sugar().With("module", "processor"),
 		mu:    sync.Mutex{},
+		ctr:   ctr,
+		acc:   acc,
 	}
 }
 
 // Process Deposit increment the callers height by the amount
-func (p *Processor) ProcessDeposit(d Deposit) error {
+func (p *processor) ProcessDeposit(d Deposit) error {
 	curAmt := p.GetBalance(d.Caller())
 
 	// parse the amount
@@ -50,7 +65,7 @@ func (p *Processor) ProcessDeposit(d Deposit) error {
 
 // Process begin withdrawal subtracts the amount from the callers balance and puts the withdrawal
 // in the withdrawal tracker
-func (p *Processor) ProcessWithdrawalRequest(w WithdrawalRequest) error {
+func (p *processor) ProcessWithdrawalRequest(w WithdrawalRequest) error {
 	// parse the amount
 
 	withdrawAmt, ok := new(big.Int).SetString(w.Amount(), 10)
@@ -92,12 +107,12 @@ func (p *Processor) ProcessWithdrawalRequest(w WithdrawalRequest) error {
 }
 
 // ProcessWithdrawalConfirmation removes the withdrawal from the withdrawal tracker
-func (p *Processor) ProcessWithdrawalConfirmation(w WithdrawalConfirmation) {
+func (p *processor) ProcessWithdrawalConfirmation(w WithdrawalConfirmation) {
 	p.wt.RemoveByNonce(w.Nonce())
 }
 
 // ProcessFinalizedBlock removes all withdrawals that have expired and re-credits the account
-func (p *Processor) ProcessFinalizedBlock(b FinalizedBlock) error {
+func (p *processor) ProcessFinalizedBlock(b FinalizedBlock) error {
 	// pop all withdrawals that have expired
 	expired := p.wt.PopExpired(b.Height())
 	p.log.Infof("amount of expired withdrawals: %d", len(expired))
@@ -133,7 +148,7 @@ func (p *Processor) ProcessFinalizedBlock(b FinalizedBlock) error {
 }
 
 // ProcessSpend subtracts the amount from the callers balance
-func (p *Processor) ProcessSpend(s Spend) error {
+func (p *processor) ProcessSpend(s Spend) error {
 	// parse the amount
 	amt, ok := new(big.Int).SetString(s.Amount(), 10)
 	if !ok {
@@ -156,7 +171,7 @@ func (p *Processor) ProcessSpend(s Spend) error {
 
 // GetBalance returns the callers balance
 // if nil, return 0
-func (p *Processor) GetBalance(addr string) *big.Int {
+func (p *processor) GetBalance(addr string) *big.Int {
 	bal := p.bals[addr]
 
 	if bal == nil {
@@ -168,7 +183,7 @@ func (p *Processor) GetBalance(addr string) *big.Int {
 
 // GetSpent returns the amount spent by the caller
 // if nil, return 0
-func (p *Processor) GetSpent(addr string) *big.Int {
+func (p *processor) GetSpent(addr string) *big.Int {
 	spt := p.spent[addr]
 
 	if spt == nil {
@@ -180,7 +195,7 @@ func (p *Processor) GetSpent(addr string) *big.Int {
 
 // setbalance sets the balance for a wallet.
 // if the amount is 0 it should delete the key
-func (pw *Processor) setBalance(addr string, amt *big.Int) {
+func (pw *processor) setBalance(addr string, amt *big.Int) {
 	if amt.Cmp(big.NewInt(0)) == 0 {
 		delete(pw.bals, addr)
 		return
@@ -191,7 +206,7 @@ func (pw *Processor) setBalance(addr string, amt *big.Int) {
 
 // setspent sets the spent for a wallet
 // if the amount is 0 it should delete the key
-func (pw *Processor) setSpent(addr string, amt *big.Int) {
+func (pw *processor) setSpent(addr string, amt *big.Int) {
 	if amt.Cmp(big.NewInt(0)) == 0 {
 		delete(pw.spent, addr)
 		return
@@ -200,13 +215,13 @@ func (pw *Processor) setSpent(addr string, amt *big.Int) {
 	pw.spent[addr] = amt
 }
 
-func (p *Processor) NonceExist(n string) bool {
+func (p *processor) NonceExist(n string) bool {
 	return p.wt.GetByNonce(n) != nil
 }
 
 // RunGC recreates the balances and spent maps.
 // This is because golang maps are not garbage collected.
-func (p *Processor) RunGC() {
+func (p *processor) RunGC() {
 	p.wt.RunGC() // we want to run this blocking
 	// this outer function will likely be called non blocking, so p.wt.RunGC() has mutexs
 
@@ -256,7 +271,7 @@ func (pw pendingWithdrawal) Spent() string {
 	return pw.spent.String()
 }
 
-func (p *Processor) logWithdrawal(wdrl *st.Node) {
+func (p *processor) logWithdrawal(wdrl *st.Node) {
 	p.log.Infof(`withdrawal:
 	Wallet  | %s
 	Deposit | %s

@@ -1,1 +1,1 @@
-deposit-settings: "deposit-config.yaml"
+deposit-settings: "./x/deposits/deposit-config.yaml"
