@@ -118,15 +118,14 @@ func NewTransientReceiver(config cfgx.Config) (TransientReceiver, error) {
 	ctx, fn := context.WithCancel(context.Background())
 
 	return &transient_receiver{
-		c,
-		cfg.ConsumerTopics[0],
-		make(chan MessageIterator, 32), // todo: buffer should be == to partition count
-		make(chan x.Void),
-		ctx,
-		fn,
-		cfg.MaxPollRecords,
-		&sync.WaitGroup{},
-		&sync.Mutex{},
-		false,
+		client:           c,
+		topic:            cfg.ConsumerTopics[0],
+		out:              make(chan MessageIterator, 32), // todo: buffer should be == to partition count
+		done:             make(chan x.Void),
+		ctx:              ctx,
+		cancelFn:         fn,
+		max_poll_records: cfg.MaxPollRecords,
+		wg:               &sync.WaitGroup{},
+		mu:               &sync.Mutex{},
 	}, nil
 }

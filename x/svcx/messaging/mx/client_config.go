@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -61,17 +62,36 @@ func NewEmitterClientConfig(config cfgx.Config) (cfg *ClientConfig, err error) {
 }
 
 func NewReceiverConfig(config cfgx.Config) (cfg *ClientConfig, err error) {
+	topics := strings.Split(config.String("default-topic"), ",")
+	if len(topics) == 0 {
+		topic := config.String("default-topic")
+		if topic == "" {
+			err = fmt.Errorf("no topic foudn in config")
+			return
+		}
+		topics = append(topics, topic)
+	}
+
+	max_poll_str := config.GetString("max-poll-records", "100")
+	max_poll, err := strconv.Atoi(max_poll_str)
+	if err != nil || max_poll < 0 {
+		return nil, fmt.Errorf("invalid max-poll-records")
+	}
+
 	user, pwd, dialer, brokers, client_id, err := getCommonConfig(config)
 	if err != nil {
 		return
 	}
 
 	return &ClientConfig{
-		Brokers:   brokers,
-		User:      user,
-		Pwd:       pwd,
-		Client_id: client_id,
-		Dialer:    dialer,
+		Brokers:        brokers,
+		User:           user,
+		Pwd:            pwd,
+		Client_id:      client_id,
+		Dialer:         dialer,
+		ConsumerTopics: topics,
+		MaxPollRecords: max_poll,
+		Group:          config.String("group-id"),
 	}, nil
 }
 
