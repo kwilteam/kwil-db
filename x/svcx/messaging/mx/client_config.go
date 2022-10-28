@@ -13,17 +13,18 @@ import (
 )
 
 type ClientConfig struct {
-	Brokers        []string
-	User           string
-	Pwd            string
-	Linger         time.Duration
-	Client_id      string
-	Buffer         int
-	Dialer         *tls.Dialer
-	Group          string
-	DefaultTopic   string
-	ConsumerTopics []string
-	MaxPollRecords int
+	Brokers          []string
+	User             string
+	Pwd              string
+	Linger           time.Duration
+	Client_id        string
+	Buffer           int
+	Dialer           *tls.Dialer
+	Group            string
+	DefaultTopic     string
+	ConsumerTopics   []string
+	MaxPollRecords   int
+	AssignPartitions []int32
 }
 
 func NewEmitterClientConfig(config cfgx.Config) (cfg *ClientConfig, err error) {
@@ -62,14 +63,14 @@ func NewEmitterClientConfig(config cfgx.Config) (cfg *ClientConfig, err error) {
 }
 
 func NewReceiverConfig(config cfgx.Config) (cfg *ClientConfig, err error) {
-	topics := strings.Split(config.String("default-topic"), ",")
-	if len(topics) == 0 {
+	topics := strings.Split(config.String("topics"), ",")
+	if len(topics) == 0 || topics[0] == "" {
 		topic := config.String("default-topic")
 		if topic == "" {
-			err = fmt.Errorf("no topic foudn in config")
+			err = fmt.Errorf("no topic found in config")
 			return
 		}
-		topics = append(topics, topic)
+		topics = []string{topic}
 	}
 
 	max_poll_str := config.GetString("max-poll-records", "100")
@@ -83,15 +84,37 @@ func NewReceiverConfig(config cfgx.Config) (cfg *ClientConfig, err error) {
 		return
 	}
 
+	group_id := config.String("group-id")
+
+	var partitions []int32
+	if group_id == "" {
+		partitionsStr := strings.Split(config.String("partitions"), ",")
+		if len(partitionsStr) != 0 && partitionsStr[0] != "" {
+			for _, p := range partitionsStr {
+				v, err := strconv.Atoi(p)
+				if err != nil {
+					return nil, fmt.Errorf("invalid partition")
+				}
+
+				partitions = append(partitions, int32(v))
+			}
+		}
+
+		if partitions == nil {
+			return nil, fmt.Errorf("no partitions found in config and no group-id")
+		}
+	}
+
 	return &ClientConfig{
-		Brokers:        brokers,
-		User:           user,
-		Pwd:            pwd,
-		Client_id:      client_id,
-		Dialer:         dialer,
-		ConsumerTopics: topics,
-		MaxPollRecords: max_poll,
-		Group:          config.String("group-id"),
+		Brokers:          brokers,
+		User:             user,
+		Pwd:              pwd,
+		Client_id:        client_id,
+		Dialer:           dialer,
+		ConsumerTopics:   topics,
+		MaxPollRecords:   max_poll,
+		Group:            group_id,
+		AssignPartitions: partitions,
 	}, nil
 }
 

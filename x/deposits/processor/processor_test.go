@@ -1,26 +1,17 @@
 package processor_test
 
 import (
-	"context"
-	"crypto/ecdsa"
-	kc "kwil/x/crypto"
 	"kwil/x/deposits/processor"
-	"kwil/x/deposits/types"
 	"kwil/x/logx"
-	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestProcessor(t *testing.T) {
 	l := logx.New()
-	mockCtr := mockContract{}
-	mockAcc := mockAccount{}
 
-	p := processor.NewProcessor(l, &mockCtr, &mockAcc)
+	p := processor.NewProcessor(l)
 
 	// Test deposit
 	md := mockDeposit{
@@ -140,10 +131,8 @@ func TestProcessor(t *testing.T) {
 
 func TestBadParsing(t *testing.T) {
 	l := logx.New()
-	mockCtr := mockContract{}
-	mockAcc := mockAccount{}
 
-	p := processor.NewProcessor(l, &mockCtr, &mockAcc)
+	p := processor.NewProcessor(l)
 
 	// test depositing a bad amount
 	md := mockDeposit{
@@ -176,10 +165,8 @@ func TestBadParsing(t *testing.T) {
 
 func TestWithdrawNoMoney(t *testing.T) {
 	l := logx.New()
-	mockCtr := mockContract{}
-	mockAcc := mockAccount{}
 
-	p := processor.NewProcessor(l, &mockCtr, &mockAcc)
+	p := processor.NewProcessor(l)
 
 	mwr := mockWithdrawalRequest{
 		wallet:     "bennan",
@@ -201,10 +188,8 @@ func TestWithdrawNoMoney(t *testing.T) {
 
 func TestExpiredWithdrawals(t *testing.T) {
 	l := logx.New()
-	mockCtr := mockContract{}
-	mockAcc := mockAccount{}
 
-	p := processor.NewProcessor(l, &mockCtr, &mockAcc)
+	p := processor.NewProcessor(l)
 
 	// deposit some funds
 	// Test deposit
@@ -366,39 +351,4 @@ type mockFinalizedBlock struct {
 
 func (m mockFinalizedBlock) Height() int64 {
 	return m.height
-}
-
-type mockContract struct {
-}
-
-func (m *mockContract) GetDeposits(ctx context.Context, start int64, end int64, addr string) ([]*types.Deposit, error) {
-	return nil, nil
-}
-
-func (m *mockContract) GetWithdrawals(ctx context.Context, start int64, end int64, addr string) ([]*types.WithdrawalConfirmation, error) {
-	return nil, nil
-}
-
-func (m *mockContract) ReturnFunds(ctx context.Context, key *ecdsa.PrivateKey, recipient, nonce string, amt *big.Int, fee *big.Int) error {
-	return nil
-}
-
-type mockAccount struct{}
-
-func (m *mockAccount) GetAddress() *common.Address {
-	addr := common.HexToAddress("0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D")
-	return &addr
-}
-
-func (m *mockAccount) GetPrivateKey() (*ecdsa.PrivateKey, error) {
-	pem := "4bb214b1f3a0737d758bc3828cdff371e3769fe84a2678da34700cb18d50770e"
-	return crypto.HexToECDSA(pem)
-}
-
-func (m *mockAccount) Sign(d []byte) (string, error) {
-	pk, err := m.GetPrivateKey()
-	if err != nil {
-		return "", err
-	}
-	return kc.Sign(d, pk)
 }

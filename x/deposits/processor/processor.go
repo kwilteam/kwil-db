@@ -2,9 +2,7 @@ package processor
 
 import (
 	"errors"
-	"kwil/x/crypto"
 	st "kwil/x/deposits/structures"
-	"kwil/x/deposits/types"
 	"kwil/x/logx"
 	"math/big"
 	"sync"
@@ -27,23 +25,19 @@ type processor struct {
 	spent map[string]*big.Int
 	log   logx.SugaredLogger
 	mu    sync.Mutex
-	ctr   types.Contract
-	acc   crypto.Account
 }
 
 var ErrCantParseAmount = errors.New("can't parse amount")
 var ErrInsufficientBalance = errors.New("insufficient balance")
 
 // NewProcessor creates a new Processor instance.
-func NewProcessor(l logx.Logger, ctr types.Contract, acc crypto.Account) *processor {
+func NewProcessor(l logx.Logger) *processor {
 	return &processor{
 		wt:    st.NewWithdrawalTracker(),
 		bals:  map[string]*big.Int{},
 		spent: map[string]*big.Int{},
 		log:   l.Sugar().With("module", "processor"),
 		mu:    sync.Mutex{},
-		ctr:   ctr,
-		acc:   acc,
 	}
 }
 

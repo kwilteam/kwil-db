@@ -4,24 +4,26 @@ broker-settings: &broker-settings
   password: ${KAFKA_CLUSTER.PASSWORD}
 
 wallet-request-publisher:
-    broker-settings: *broker-settings
-    default-topic: wallet_requests
-    linger-ms: 75
+  broker-settings: *broker-settings
+  default-topic: wallet_requests
+  linger-ms: 75
 
 wallet-request-consumer:
-    broker-settings: *broker-settings
-    topic: wallet_requests
-    ## currently using transient consumer ##
-    # group-id: kwil_wallet_requests_cg_test
-    # auto-offset-reset: earliest
-    # enable.auto.commit: false
+  broker-settings: *broker-settings
+  topics: wallet_requests
+  partitions: "0,1,2"
+  ## currently using transient consumer ##
+  # group-id: kwil_wallet_requests_cg_test
+  # auto-offset-reset: earliest
+  # enable.auto.commit: false
 
 wallet-confirmation-publisher:
-    broker-settings: *broker-settings
-    default-topic: wallet_confirmations
-    linger-ms: 75
+  broker-settings: *broker-settings
+  default-topic: wallet_confirmations
+  linger-ms: 75
 
 wallet-confirmation-consumer:
-    broker-settings: *broker-settings
-    topic: wallet_confirmations
-    # will always be a transient consumer
+  broker-settings: *broker-settings
+  topics: wallet_confirmations
+  partitions: "0,1,2"
+  # will always be a transient consumer

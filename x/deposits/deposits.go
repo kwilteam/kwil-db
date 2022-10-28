@@ -58,7 +58,7 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService
 		return nil, fmt.Errorf("failed to initialize event feed. %w", err)
 	}
 
-	pr := processor.NewProcessor(l, ef.Contract(), acc)
+	pr := processor.NewProcessor(l)
 
 	prsr, err := wallet.NewRequestProcessor(c, pr)
 	if err != nil {
@@ -150,17 +150,6 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 
 	// TODO: Send end block to all partitions
 	d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte("block"), Value: []byte(fmt.Sprintf("%d", blk))})
-
-	return nil
-}
-
-func (d *deposits) LaunchProcessor(ctx context.Context) error {
-	// create new processor
-	p := processor.NewProcessor(d.log.Desugar(), d.sc, d.acc)
-
-	go func(context.Context, processor.Processor) {
-		// TODO: how do i implement consumer?
-	}(ctx, p)
 
 	return nil
 }

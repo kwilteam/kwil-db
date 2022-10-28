@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"kwil/x/deposits/processor"
+	"kwil/x/svcx/wallet"
 	"net"
 	"net/http"
 	"os"
@@ -18,7 +20,6 @@ import (
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
 	"kwil/x/service/apisvc"
-	"kwil/x/svcx/wallet"
 	"kwil/x/utils"
 
 	"github.com/oklog/run"
@@ -28,8 +29,7 @@ func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	conf := cfgx.GetConfig()
-	dc := conf.Select("deposits")
+	dc := cfgx.GetConfig().Select("deposit-settings")
 
 	kr, err := crypto.NewKeyring(dc)
 	if err != nil {
@@ -41,12 +41,12 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
-	wrs, err := wallet.NewRequestService(conf)
+	wrs, err := loadWalletService(logger)
 	if err != nil {
-		return fmt.Errorf("failed to create wallet request service: %w", err)
+		return fmt.Errorf("failed to load wallet service: %w", err)
 	}
 
-	d, err := deposits.New(conf, logger, acc, wrs)
+	d, err := deposits.New(dc, logger, acc, wrs)
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
@@ -114,8 +114,65 @@ func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceSe
 	return g.Run()
 }
 
+func loadWalletService(l logx.Logger) (wallet.RequestService, error) {
+	pr := processor.NewProcessor(l)
+
+	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), pr)
+	if err != nil {
+		return nil, err
+	}
+
+	w, err := wallet.NewRequestService(cfgx.GetConfig())
+	if err != nil {
+		return nil, err
+	}
+
+	err = p.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	err = w.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return w, nil
+}
+
 func main() {
 	logger := logx.New()
+
+	// Below confirmed *working* on first message for wallet service
+	// TODO: look at issue in processing service
+
+	/*w, err := loadWalletService()
+	  if err != nil {
+	  	logger.Sugar().Error(err)
+	  	return
+	  }
+
+	  wg := &sync.WaitGroup{}
+	  wg.Add(10)
+
+	  for i := 0; i < 10; i++ {
+	  	w.Submit(context.Background(), &mx.RawMessage{
+	  		Key:   []byte("test_key"),
+	  		Value: []byte("test_payload"),
+	  	}).ThenCatchFinally(&async.ContinuationA{
+	  		Then: func() {
+	  			logger.Sugar().Info("success")
+	  		},
+	  		Catch: func(err error) {
+	  			logger.Sugar().Error(err)
+	  		},
+	  		Finally: func() {
+	  			wg.Done()
+	  		},
+	  	})
+	  }
+
+	  wg.Wait()*/
 
 	if err := execute(logger); err != nil {
 		logger.Sugar().Error(err)

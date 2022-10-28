@@ -3,8 +3,6 @@ package sub
 import (
 	"context"
 	"fmt"
-	"github.com/twmb/franz-go/pkg/kadm"
-
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"kwil/x"
@@ -76,27 +74,12 @@ func NewTransientReceiver(config cfgx.Config) (TransientReceiver, error) {
 		return nil, fmt.Errorf("transient receiver cannot be used with a consumer group")
 	}
 
-	var adm *kadm.Client
-	{
-		cl, err := kgo.NewClient(kgo.SeedBrokers(cfg.Brokers...))
-		if err != nil {
-			return nil, err
-		}
-		adm = kadm.NewClient(cl)
-	}
-
-	md, err := adm.Metadata(context.Background(), cfg.ConsumerTopics[0])
-	if err != nil {
-		return nil, err
-	}
-
-	detail, ok := md.Topics[cfg.ConsumerTopics[0]]
-	if !ok {
-		return nil, fmt.Errorf("topic (%s) not found", cfg.ConsumerTopics[0])
+	if len(cfg.AssignPartitions) == 0 {
+		return nil, fmt.Errorf("transient receiver must configured with partitions")
 	}
 
 	p_map := make(map[int32]kgo.Offset)
-	for p_id, _ := range detail.Partitions {
+	for _, p_id := range cfg.AssignPartitions {
 		p_map[p_id] = kgo.NewOffset().AtEnd()
 	}
 
@@ -107,7 +90,6 @@ func NewTransientReceiver(config cfgx.Config) (TransientReceiver, error) {
 		kgo.ConsumePartitions(t_map),
 		kgo.Dialer(cfg.Dialer.DialContext),
 		kgo.SASL(plain.Auth{User: cfg.User, Pass: cfg.Pwd}.AsMechanism()),
-		kgo.ConsumeTopics(cfg.ConsumerTopics[0]),
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ClientID(cfg.Client_id))
 

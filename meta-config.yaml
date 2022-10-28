@@ -8,4 +8,4 @@ wallet-request-publisher: "wallet-request-publisher, ./kafka-topic-settings.yaml
 
 wallet-request-consumer: "wallet-request-consumer, ./kafka-topic-settings.yaml"
 
-deposits: "./x/deposits/deposit-config.yaml"
+deposit-settings: "deposit-config.yaml"
