@@ -56,5 +56,15 @@ func convertWithdrawals(edi *abi.EscrowWithdrawalIterator, token string) []*ct.W
 }
 
 func escToWithdrawal(ed *abi.EscrowWithdrawal, token string) *ct.WithdrawalConfirmation {
-	return ct.NewWithdrawal(ed.Caller.Hex(), ed.Receiver.Hex(), ed.Amount.String(), ed.Fee.String(), ed.Nonce, int64(ed.Raw.BlockNumber), ed.Raw.TxHash.Hex(), 0, token)
+
+	return &ct.WithdrawalConfirmation{
+		Amount:   ed.Amount.String(),
+		Caller:   ed.Caller.Hex(),
+		Height:   int64(ed.Raw.BlockNumber),
+		Receiver: ed.Receiver.Hex(),
+		Tx:       ed.Raw.TxHash.Hex(),
+		Token:    token,
+		Fee:      ed.Fee.String(),
+		Nonce:    ed.Nonce,
+	}
 }

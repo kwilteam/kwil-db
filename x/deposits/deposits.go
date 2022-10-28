@@ -8,7 +8,6 @@ import (
 	"kwil/x/cfgx"
 	kc "kwil/x/crypto"
 	"kwil/x/deposits/events"
-	"kwil/x/deposits/processor"
 	"kwil/x/deposits/store"
 	ct "kwil/x/deposits/types"
 	"kwil/x/logx"
@@ -35,7 +34,6 @@ type deposits struct {
 	acc  kc.Account
 	addr string
 	svc  wallet.RequestService
-	prsr wallet.RequestProcessor
 }
 
 func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService) (*deposits, error) {
@@ -58,13 +56,6 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService
 		return nil, fmt.Errorf("failed to initialize event feed. %w", err)
 	}
 
-	pr := processor.NewProcessor(l)
-
-	prsr, err := wallet.NewRequestProcessor(c, pr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize request processor. %w", err)
-	}
-
 	return &deposits{
 		log:  l.Sugar(),
 		conf: c,
@@ -75,7 +66,6 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService
 		acc:  acc,
 		addr: acc.GetAddress().Hex(),
 		svc:  svc,
-		prsr: prsr,
 	}, nil
 }
 
@@ -129,7 +119,7 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 			continue
 		}
 
-		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller()), Value: bts})
+		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller), Value: bts})
 	}
 
 	// get withdrawals for the block
@@ -145,11 +135,11 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 			continue
 		}
 
-		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(wd.Caller()), Value: bts})
+		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(wd.Caller), Value: bts})
 	}
 
 	// TODO: Send end block to all partitions
-	d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte("block"), Value: []byte(fmt.Sprintf("%d", blk))})
+	//d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte("block"), Value: []byte(fmt.Sprintf("%d", blk))})
 
 	return nil
 }
@@ -282,11 +272,16 @@ func (d *deposits) Sync(ctx context.Context) error {
 		for _, dep := range deps {
 			bts, err := dep.Serialize()
 			if err != nil {
-				d.log.Errorf("failed to serialize deposit.  amt: %s | tx: %s | chunk-end: | ok: %v", dep.Amount(), dep.Tx(), chunk[0])
+				d.log.Errorf("failed to serialize deposit.  amt: %s | tx: %s | chunk-end: | ok: %v", dep.Amount, dep.Tx, chunk[0])
 				continue
 			}
 
-			d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller()), Value: bts})
+			d.log.Infof("submitting deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx, dep.Caller, dep.Amount, chunk[1])
+			err = d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller), Value: bts}).GetError()
+			if err != nil {
+				d.log.Errorf("failed to submit deposit to Kafka. tx: %s | err: %v", dep.Tx, err)
+				continue
+			}
 		}
 
 		wdrls, err := d.sc.GetWithdrawals(ctx, chunk[0], chunk[1], d.addr)
@@ -297,10 +292,10 @@ func (d *deposits) Sync(ctx context.Context) error {
 		for _, wdrl := range wdrls {
 			bts, err := wdrl.Serialize()
 			if err != nil {
-				d.log.Errorf("failed to serialize withdrawal.  amt: %s | tx: %s | chunk-end: | ok: %v", wdrl.Amount(), wdrl.Tx(), chunk[0])
+				d.log.Errorf("failed to serialize withdrawal.  amt: %s | tx: %s | chunk-end: | ok: %v", wdrl.Amount, wdrl.Tx, chunk[0])
 				continue
 			}
-			d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(wdrl.Caller()), Value: bts})
+			d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(wdrl.Caller), Value: bts})
 		}
 
 		// commit the chunk

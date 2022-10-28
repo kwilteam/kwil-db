@@ -42,5 +42,12 @@ func convertDeposits(edi *abi.EscrowDepositIterator, token string) []*ct.Deposit
 func escToDeposit(ed *abi.EscrowDeposit, token string) *ct.Deposit {
 	// print all fields
 
-	return ct.NewDeposit(ed.Caller.Hex(), ed.Target.Hex(), ed.Amount.String(), int64(ed.Raw.BlockNumber), ed.Raw.TxHash.Hex(), 0, token)
+	return &ct.Deposit{
+		Amount: ed.Amount.String(),
+		Caller: ed.Caller.Hex(),
+		Height: int64(ed.Raw.BlockNumber),
+		Target: ed.Target.Hex(),
+		Tx:     ed.Raw.TxHash.Hex(),
+		Token:  token,
+	}
 }

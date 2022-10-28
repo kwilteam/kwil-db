@@ -25,28 +25,13 @@ type Contract interface {
 	ReturnFunds(context.Context, *ecdsa.PrivateKey, string, string, *big.Int, *big.Int) error
 }
 
-type Log interface {
-	Type() uint8
-	Height() int64
-	Tx() string
-}
-
-type IDeposit interface {
-	Log
-	Token() string
-	Amount() string
-	Target() string
-	Caller() string
-}
-
 type Deposit struct {
-	caller string
-	target string
-	amount string
-	height int64
-	tx     string
-	typ    uint8
-	token  string
+	Caller string
+	Target string
+	Amount string
+	Height int64
+	Tx     string
+	Token  string
 }
 
 func (d *Deposit) Serialize() ([]byte, error) {
@@ -56,60 +41,19 @@ func (d *Deposit) Serialize() ([]byte, error) {
 	}
 
 	// add magic byte and type
-	b = append([]byte{0, 0}, b...)
+	b = append([]byte{0, 0x00}, b...)
 	return b, nil
 }
 
-func NewDeposit(caller, target, amount string, height int64, tx string, typ uint8, token string) *Deposit {
-	return &Deposit{
-		caller: caller,
-		target: target,
-		amount: amount,
-		height: height,
-		tx:     tx,
-		typ:    typ,
-		token:  token,
-	}
-}
-
-func (d *Deposit) Type() uint8 {
-	return d.typ
-}
-
-func (d *Deposit) Height() int64 {
-	return d.height
-}
-
-func (d *Deposit) Tx() string {
-	return d.tx
-}
-
-func (d *Deposit) Token() string {
-	return d.token
-}
-
-func (d *Deposit) Amount() string {
-	return d.amount
-}
-
-func (d *Deposit) Target() string {
-	return d.target
-}
-
-func (d *Deposit) Caller() string {
-	return d.caller
-}
-
 type WithdrawalConfirmation struct {
-	caller   string
-	receiver string
-	amount   string
-	fee      string
-	nonce    string
-	height   int64
-	tx       string
-	typ      uint8
-	token    string
+	Caller   string
+	Receiver string
+	Amount   string
+	Fee      string
+	Nonce    string
+	Height   int64
+	Tx       string
+	Token    string
 }
 
 func (w *WithdrawalConfirmation) Serialize() ([]byte, error) {
@@ -119,56 +63,66 @@ func (w *WithdrawalConfirmation) Serialize() ([]byte, error) {
 	}
 
 	// add magic byte and type
-	b = append([]byte{0, 2}, b...)
+	b = append([]byte{0, 0x02}, b...)
 	return b, nil
 }
 
-func NewWithdrawal(caller, receiver, amount, fee, nonce string, height int64, tx string, typ uint8, token string) *WithdrawalConfirmation {
-	return &WithdrawalConfirmation{
-		caller:   caller,
-		receiver: receiver,
-		amount:   amount,
-		fee:      fee,
-		nonce:    nonce,
-		height:   height,
-		tx:       tx,
-		typ:      typ,
-		token:    token,
+type WithdrawalRequest struct {
+	Wallet     string `json:"wallet"`
+	Amount     string `json:"amount"`
+	Spent      string `json:"spent"`
+	Nonce      string `json:"nonce"`
+	Expiration int64  `json:"expiration"`
+}
+
+func (wr *WithdrawalRequest) Serialize() ([]byte, error) {
+	b, err := json.Marshal(wr)
+	if err != nil {
+		return nil, err
 	}
+
+	// add magic byte and type
+	b = append([]byte{0, 0x01}, b...)
+	return b, nil
 }
 
-func (w *WithdrawalConfirmation) Type() uint8 {
-	return w.typ
+type EndBlock struct {
+	Height int64 `json:"height"`
 }
 
-func (w *WithdrawalConfirmation) Height() int64 {
-	return w.height
+func (eob *EndBlock) Serialize() ([]byte, error) {
+	b, err := json.Marshal(eob)
+	if err != nil {
+		return nil, err
+	}
+
+	// add magic byte and type
+	b = append([]byte{0, 0x03}, b...)
+	return b, nil
 }
 
-func (w *WithdrawalConfirmation) Tx() string {
-	return w.tx
+type Spend struct {
+	Caller string `json:"caller"`
+	Amount string `json:"amount"`
 }
 
-func (w *WithdrawalConfirmation) Token() string {
-	return w.token
+func (s *Spend) Serialize() ([]byte, error) {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return nil, err
+	}
+
+	// add magic byte and type
+	b = append([]byte{0, 0x04}, b...)
+	return b, nil
 }
 
-func (w *WithdrawalConfirmation) Amount() string {
-	return w.amount
-}
+func Deserialize[T *Deposit | *WithdrawalConfirmation | *WithdrawalRequest | *EndBlock | *Spend](m []byte) (T, error) {
+	var t T
 
-func (w *WithdrawalConfirmation) Fee() string {
-	return w.fee
-}
-
-func (w *WithdrawalConfirmation) Nonce() string {
-	return w.nonce
-}
-
-func (w *WithdrawalConfirmation) Receiver() string {
-	return w.receiver
-}
-
-func (w *WithdrawalConfirmation) Caller() string {
-	return w.caller
+	err := json.Unmarshal(m[2:], &t)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
 }
