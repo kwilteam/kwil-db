@@ -49,6 +49,8 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService
 		return nil, fmt.Errorf("failed to get last block height. %w", err)
 	}
 
+	lb = 7700000 // hardcoding until we can pull last block height from kafka
+
 	l.Sugar().Infof("last block height: %d", lb)
 
 	ef, err := events.New(c, l)
