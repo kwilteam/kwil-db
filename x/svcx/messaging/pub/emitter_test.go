@@ -21,7 +21,7 @@ func Test_Emitter_Sync(t *testing.T) {
 		return // intentionally ignore this test for normal ops
 	}
 
-	err := os.Setenv(Meta_Config_Test_Env, "../mx/test-meta-config.yaml")
+	err := os.Setenv(Root_Test_Dir_Env, "../mx")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func Test_Emitter_Async(t *testing.T) {
 		return // intentionally ignore this test for normal ops
 	}
 
-	err := os.Setenv(Meta_Config_Test_Env, "../mx/test-meta-config.yaml")
+	err := os.Setenv(Root_Test_Dir_Env, "../mx")
 	if err != nil {
 		t.Fatal(err)
 	}

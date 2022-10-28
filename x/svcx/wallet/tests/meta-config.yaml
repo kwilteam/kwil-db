@@ -1,0 +1,11 @@
+env-settings: "~/.kwil-server/env-settings.yaml"
+
+wallet-confirmation-publisher: "wallet-confirmation-publisher, ./kafka-topic-settings.yaml"
+
+wallet-confirmation-consumer: "wallet-confirmation-consumer, ./kafka-topic-settings.yaml"
+
+wallet-request-publisher: "wallet-request-publisher, ./kafka-topic-settings.yaml"
+
+wallet-request-consumer: "wallet-request-consumer, ./kafka-topic-settings.yaml"
+
+#deposit-settings: "deposit-config.yaml"

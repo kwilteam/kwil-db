@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -303,6 +304,12 @@ const ENV_SETTINGS_PATH = "env-settings"
 const Meta_Config_Flag = "meta-config"
 const Meta_Config_Test_Flag = "meta-config-test"
 
+const Root_Dir_Flag = "meta-config-root-dir"
+const Root_Test_Dir_Flag = "meta-config-root-dir-test"
+
+const Root_Dir_Env = ENV_KEY_PREFIX_DEFAULT + "_" + Root_Dir_Flag
+const Root_Test_Dir_Env = ENV_KEY_PREFIX_DEFAULT + "_" + Root_Test_Dir_Flag
+
 const Meta_Config_Env = ENV_KEY_PREFIX_DEFAULT + "_" + Meta_Config_Flag
 const Meta_Config_Test_Env = ENV_KEY_PREFIX_DEFAULT + "_" + Meta_Config_Test_Flag
 
@@ -311,17 +318,21 @@ func _getConfigInternal(test bool) Config {
 
 	//should look for a metaConfig to specify things like useEnv, various files, etc
 	once.Do(func() {
+		root_dir := os.Getenv(utils.IfElse(test, Root_Test_Dir_Env, Root_Dir_Env))
+		if root_dir == "" {
+			root_dir = "./"
+		}
 		file := utils.IfElse(test, Meta_Config_Test_Flag, Meta_Config_Flag)
 		configFile := *flag.String(file, "", "Path to configuration file")
 		flag.Parse()
 		if configFile == "" {
 			configFile = os.Getenv(ENV_KEY_PREFIX_DEFAULT + "_" + file)
 			if configFile == "" {
-				configFile = getConfigFile("./" + file + ".yaml")
+				configFile = getConfigFile(path.Join(root_dir, file) + ".yaml")
 				if configFile == "" {
-					configFile = getConfigFile("./" + file + ".yml")
+					configFile = getConfigFile(path.Join(root_dir, file) + ".yml")
 					if configFile == "" {
-						configFile = getConfigFile("./" + file + ".json")
+						configFile = getConfigFile(path.Join(root_dir, file) + ".json")
 						if configFile == "" {
 							fmt.Println(getConfigFileUsage())
 							os.Exit(2)
@@ -362,9 +373,9 @@ func _getConfigInternal(test bool) Config {
 
 			values := strings.Split(v, ",")
 			if len(values) == 1 {
-				b = b.UseFile(k, v)
+				b = b.UseFile(k, path.Join(root_dir, v))
 			} else if len(values) == 2 {
-				b = b.UseFileSelection(k, strings.TrimSpace(values[0]), strings.TrimSpace(values[1]))
+				b = b.UseFileSelection(k, strings.TrimSpace(values[0]), path.Join(root_dir, strings.TrimSpace(values[1])))
 			} else {
 				panic("invalid config value: " + v)
 			}

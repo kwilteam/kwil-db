@@ -1,172 +1,116 @@
 package main
 
 import (
-    "context"
-    "fmt"
-    "kwil/x/svcx/wallet"
-    "net"
-    "net/http"
-    "os"
-    "os/signal"
-    "syscall"
-    "time"
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-    "kwil/pkg/types/chain/pricing"
-    "kwil/x/cfgx"
-    "kwil/x/crypto"
-    "kwil/x/deposits"
-    "kwil/x/grpcx"
-    "kwil/x/logx"
-    "kwil/x/proto/apipb"
-    "kwil/x/service/apisvc"
-    "kwil/x/utils"
+	"kwil/pkg/types/chain/pricing"
+	"kwil/x/cfgx"
+	"kwil/x/crypto"
+	"kwil/x/deposits"
+	"kwil/x/grpcx"
+	"kwil/x/logx"
+	"kwil/x/proto/apipb"
+	"kwil/x/service/apisvc"
+	"kwil/x/utils"
 
-    "github.com/oklog/run"
+	"github.com/oklog/run"
 )
 
 func execute(logger logx.Logger) error {
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-    dc := cfgx.GetConfig().Select("deposit-settings")
+	dc := cfgx.GetConfig().Select("deposit-settings")
 
-    kr, err := crypto.NewKeyring(dc)
-    if err != nil {
-        return fmt.Errorf("failed to create keyring: %w", err)
-    }
+	kr, err := crypto.NewKeyring(dc)
+	if err != nil {
+		return fmt.Errorf("failed to create keyring: %w", err)
+	}
 
-    acc, err := kr.GetDefaultAccount()
-    if err != nil {
-        return fmt.Errorf("failed to get default account: %w", err)
-    }
+	acc, err := kr.GetDefaultAccount()
+	if err != nil {
+		return fmt.Errorf("failed to get default account: %w", err)
+	}
 
-    d, err := deposits.New(dc, logger, acc)
-    if err != nil {
-        return fmt.Errorf("failed to initialize new deposits: %w", err)
-    }
-    d.Listen(ctx)
+	d, err := deposits.New(dc, logger, acc)
+	if err != nil {
+		return fmt.Errorf("failed to initialize new deposits: %w", err)
+	}
+	_ = d.Listen(ctx)
 
-    ppath := "./prices.json"
-    pbytes, err := utils.LoadFileFromRoot(ppath)
-    if err != nil {
-        return fmt.Errorf("failed to load pricing config: %w", err)
-    }
+	ppath := "./prices.json"
+	pbytes, err := utils.LoadFileFromRoot(ppath)
+	if err != nil {
+		return fmt.Errorf("failed to load pricing config: %w", err)
+	}
 
-    p, err := pricing.New(pbytes)
-    if err != nil {
-        return fmt.Errorf("failed to initialize pricing: %w", err)
-    }
+	p, err := pricing.New(pbytes)
+	if err != nil {
+		return fmt.Errorf("failed to initialize pricing: %w", err)
+	}
 
-    serv := apisvc.NewService(d, p)
-    httpHandler := apisvc.NewHandler(logger)
+	serv := apisvc.NewService(d, p)
+	httpHandler := apisvc.NewHandler(logger)
 
-    return serve(logger, httpHandler, serv)
+	return serve(logger, httpHandler, serv)
 }
 
 func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceServer) error {
-    var g run.Group
+	var g run.Group
 
-    listener, err := net.Listen("tcp", "0.0.0.0:50051")
-    if err != nil {
-        return fmt.Errorf("failed to listen: %w", err)
-    }
+	listener, err := net.Listen("tcp", "0.0.0.0:50051")
+	if err != nil {
+		return fmt.Errorf("failed to listen: %w", err)
+	}
 
-    g.Add(func() error {
-        grpcServer := grpcx.NewServer(logger)
-        apipb.RegisterKwilServiceServer(grpcServer, srv)
-        return grpcServer.Serve(listener)
-    }, func(error) {
-        listener.Close()
-    })
+	g.Add(func() error {
+		grpcServer := grpcx.NewServer(logger)
+		apipb.RegisterKwilServiceServer(grpcServer, srv)
+		return grpcServer.Serve(listener)
+	}, func(error) {
+		_ = listener.Close()
+	})
 
-    httpServer := http.Server{
-        Addr:    ":8080",
-        Handler: httpHandler,
-    }
-    g.Add(func() error {
-        return httpServer.ListenAndServe()
-    }, func(error) {
-        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-        defer cancel()
-        _ = httpServer.Shutdown(ctx)
-    })
+	httpServer := http.Server{
+		Addr:    ":8080",
+		Handler: httpHandler,
+	}
+	g.Add(func() error {
+		return httpServer.ListenAndServe()
+	}, func(error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(ctx)
+	})
 
-    cancelInterrupt := make(chan struct{})
-    g.Add(func() error {
-        c := make(chan os.Signal, 1)
-        signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-        select {
-        case sig := <-c:
-            return fmt.Errorf("received signal %s", sig)
-        case <-cancelInterrupt:
-            return nil
-        }
-    }, func(error) {
-        close(cancelInterrupt)
-    })
+	cancelInterrupt := make(chan struct{})
+	g.Add(func() error {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		select {
+		case sig := <-c:
+			return fmt.Errorf("received signal %s", sig)
+		case <-cancelInterrupt:
+			return nil
+		}
+	}, func(error) {
+		close(cancelInterrupt)
+	})
 
-    return g.Run()
-}
-
-func loadWalletService() (wallet.RequestService, error) {
-    p, err := wallet.NewRequestProcessor(cfgx.GetConfig())
-    if err != nil {
-        return nil, err
-    }
-
-    w, err := wallet.NewRequestService(cfgx.GetConfig())
-    if err != nil {
-        return nil, err
-    }
-
-    err = p.Start()
-    if err != nil {
-        return nil, err
-    }
-
-    err = w.Start()
-    if err != nil {
-        return nil, err
-    }
-
-    return w, nil
+	return g.Run()
 }
 
 func main() {
-    logger := logx.New()
+	logger := logx.New()
 
-    // Below confirmed *working* on first message for wallet service
-    // TODO: look at issue in processing service
-
-    /*w, err := loadWalletService()
-      if err != nil {
-      	logger.Sugar().Error(err)
-      	return
-      }
-
-      wg := &sync.WaitGroup{}
-      wg.Add(10)
-
-      for i := 0; i < 10; i++ {
-      	w.Submit(context.Background(), &mx.RawMessage{
-      		Key:   []byte("test_key"),
-      		Value: []byte("test_payload"),
-      	}).ThenCatchFinally(&async.ContinuationA{
-      		Then: func() {
-      			logger.Sugar().Info("success")
-      		},
-      		Catch: func(err error) {
-      			logger.Sugar().Error(err)
-      		},
-      		Finally: func() {
-      			wg.Done()
-      		},
-      	})
-      }
-
-      wg.Wait()*/
-
-    if err := execute(logger); err != nil {
-        logger.Sugar().Error(err)
-    }
+	if err := execute(logger); err != nil {
+		logger.Sugar().Error(err)
+	}
 }
