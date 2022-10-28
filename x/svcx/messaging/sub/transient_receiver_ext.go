@@ -48,7 +48,7 @@ func (c *transient_receiver) Start() error {
 			f := c.client.PollRecords(c.ctx, c.max_poll_records)
 			err := f.Err()
 			if err == nil {
-				c._send(f)
+				c._process(f)
 				continue
 			}
 
@@ -76,7 +76,7 @@ func (c *transient_receiver) OnStop() <-chan x.Void {
 	return c.done
 }
 
-func (c *transient_receiver) _send(fetches kgo.Fetches) {
+func (c *transient_receiver) _process(fetches kgo.Fetches) {
 	var partitions []*x.Tuple2[mx.PartitionId, []*kgo.Record]
 	fetches.EachPartition(func(ftp kgo.FetchTopicPartition) {
 		var records []*kgo.Record

@@ -7,7 +7,7 @@ import (
 
 type ConfirmationEvent struct {
 	request_id string
-	message    mx.RawMessage
+	message    *mx.RawMessage
 }
 
 func encode_event(request_id string, msg *mx.RawMessage) *mx.RawMessage {

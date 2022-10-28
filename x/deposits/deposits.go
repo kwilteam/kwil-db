@@ -35,6 +35,7 @@ type deposits struct {
 	acc  kc.Account
 	addr string
 	svc  wallet.RequestService
+	prsr wallet.RequestProcessor
 }
 
 func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService) (*deposits, error) {
@@ -57,6 +58,13 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService
 		return nil, fmt.Errorf("failed to initialize event feed. %w", err)
 	}
 
+	pr := processor.NewProcessor(l, ef.Contract(), acc)
+
+	prsr, err := wallet.NewRequestProcessor(c, pr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize request processor. %w", err)
+	}
+
 	return &deposits{
 		log:  l.Sugar(),
 		conf: c,
@@ -67,6 +75,7 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService
 		acc:  acc,
 		addr: acc.GetAddress().Hex(),
 		svc:  svc,
+		prsr: prsr,
 	}, nil
 }
 

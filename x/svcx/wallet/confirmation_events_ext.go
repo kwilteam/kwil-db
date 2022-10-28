@@ -1,10 +1,120 @@
 package wallet
 
-import "kwil/x/cfgx"
+import (
+	"fmt"
+	"kwil/x"
+	"kwil/x/async"
+	"kwil/x/svcx/messaging/sub"
+	"sync"
+)
 
 type confirmation_events struct {
+	e       sub.TransientReceiver
+	wg      sync.WaitGroup
+	stop    chan x.Void
+	done    chan x.Void
+	mu      sync.Mutex
+	handler func(ConfirmationEvent) async.Action
+	status  int
 }
 
-func newConfirmationEvents(cfg cfgx.Config) (ConfirmationEvents, error) {
-	panic("implement me")
+func (c *confirmation_events) Start() error {
+	c.mu.Lock()
+	if c.status != 0 {
+		c.mu.Unlock()
+		return fmt.Errorf("already started")
+	}
+
+	c.status = 1
+	c.mu.Unlock()
+
+	err := c.e.Start()
+	if err != nil {
+		return err
+	}
+
+	go c.run()
+
+	return nil
+}
+
+func (c *confirmation_events) Stop() error {
+	c.mu.Lock()
+	if c.status != 1 {
+		c.mu.Unlock()
+		return fmt.Errorf("confirmation event service is not running")
+	}
+
+	c.status = 2
+	c.mu.Unlock()
+
+	close(c.stop)
+	c.e.Stop()
+
+	return nil
+}
+
+func (c *confirmation_events) OnStop() <-chan x.Void {
+	return c.done
+}
+
+func (c *confirmation_events) run() {
+	done := false
+	for !done {
+		select {
+		case <-c.stop:
+			done = true
+		case it := <-c.e.OnReceive():
+			c.wg.Add(1)
+			go c.handle_messages(it)
+		}
+	}
+
+	c.wg.Wait()
+
+	close(c.done)
+}
+
+func (c *confirmation_events) handle_messages(iter sub.MessageIterator) {
+	if !iter.HasNext() {
+		iter.Commit().WhenComplete(c.on_iter_complete)
+		return
+	}
+
+	msg, _ := iter.Next()
+	msg, request_id, err := decode_event(msg)
+	if err != nil {
+		fmt.Printf("error decoding event: %v", err)
+		_ = c.Stop()
+		return
+	}
+
+	ev := ConfirmationEvent{request_id, msg}
+	c.handler(ev).
+		OnCompleteA(&async.ContinuationA{
+			Then:  c.get_next(iter),
+			Catch: c.handle_if_error,
+		})
+}
+
+func (c *confirmation_events) get_next(iter sub.MessageIterator) func() {
+	return func() {
+		// iterate next now that event was handled
+		c.handle_messages(iter)
+	}
+}
+
+func (c *confirmation_events) on_iter_complete(err error) {
+	c.wg.Done()
+	c.handle_if_error(err)
+}
+
+func (c *confirmation_events) handle_if_error(err error) {
+	if err == nil {
+		return
+	}
+
+	fmt.Printf("error handling message: %v\n", err)
+	c.wg.Done()
+	_ = c.Stop()
 }

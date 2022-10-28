@@ -3,6 +3,7 @@ package sub
 import (
 	"context"
 	"fmt"
+	"github.com/twmb/franz-go/pkg/kadm"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
@@ -75,36 +76,40 @@ func NewTransientReceiver(config cfgx.Config) (TransientReceiver, error) {
 		return nil, fmt.Errorf("transient receiver cannot be used with a consumer group")
 	}
 
-	//var adm *kadm.Client
-	//{
-	//	cl, err := kgo.NewClient(kgo.SeedBrokers(cfg.Brokers...))
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	adm = kadm.NewClient(cl)
-	//}
-	//
-	//md, err := adm.Metadata(context.Background(), cfg.ConsumerTopics[0])
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//detail, ok := md.Topics[cfg.ConsumerTopics[0]]
-	//if !ok {
-	//	return nil, fmt.Errorf("topic (%s) not found", cfg.ConsumerTopics[0])
-	//}
-	//
-	////map[topic]map[paritition_id]Offset
-	//partition_count := len(detail.Partitions)
+	var adm *kadm.Client
+	{
+		cl, err := kgo.NewClient(kgo.SeedBrokers(cfg.Brokers...))
+		if err != nil {
+			return nil, err
+		}
+		adm = kadm.NewClient(cl)
+	}
+
+	md, err := adm.Metadata(context.Background(), cfg.ConsumerTopics[0])
+	if err != nil {
+		return nil, err
+	}
+
+	detail, ok := md.Topics[cfg.ConsumerTopics[0]]
+	if !ok {
+		return nil, fmt.Errorf("topic (%s) not found", cfg.ConsumerTopics[0])
+	}
+
+	p_map := make(map[int32]kgo.Offset)
+	for p_id, _ := range detail.Partitions {
+		p_map[p_id] = kgo.NewOffset().AtEnd()
+	}
+
+	t_map := make(map[string]map[int32]kgo.Offset)
+	t_map[cfg.ConsumerTopics[0]] = p_map
 
 	c, err := kgo.NewClient(
-		//kgo.ConsumePartitions(),
+		kgo.ConsumePartitions(t_map),
 		kgo.Dialer(cfg.Dialer.DialContext),
 		kgo.SASL(plain.Auth{User: cfg.User, Pass: cfg.Pwd}.AsMechanism()),
 		kgo.ConsumeTopics(cfg.ConsumerTopics[0]),
 		kgo.SeedBrokers(cfg.Brokers...),
-		kgo.ClientID(cfg.Client_id),
-		kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()))
+		kgo.ClientID(cfg.Client_id))
 
 	if err != nil {
 		return nil, err
@@ -113,15 +118,14 @@ func NewTransientReceiver(config cfgx.Config) (TransientReceiver, error) {
 	ctx, fn := context.WithCancel(context.Background())
 
 	return &transient_receiver{
-		c,
-		cfg.ConsumerTopics[0],
-		make(chan MessageIterator, 32), // todo: buffer should be == to partition count
-		make(chan x.Void),
-		ctx,
-		fn,
-		cfg.MaxPollRecords,
-		&sync.WaitGroup{},
-		&sync.Mutex{},
-		false,
+		client:           c,
+		topic:            cfg.ConsumerTopics[0],
+		out:              make(chan MessageIterator, 32), // todo: buffer should be == to partition count
+		done:             make(chan x.Void),
+		ctx:              ctx,
+		cancelFn:         fn,
+		max_poll_records: cfg.MaxPollRecords,
+		wg:               &sync.WaitGroup{},
+		mu:               &sync.Mutex{},
 	}, nil
 }

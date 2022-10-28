@@ -18,6 +18,7 @@ import (
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
 	"kwil/x/service/apisvc"
+	"kwil/x/svcx/wallet"
 	"kwil/x/utils"
 
 	"github.com/oklog/run"
@@ -27,7 +28,8 @@ func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dc := cfgx.GetConfig().Select("deposit-settings")
+	conf := cfgx.GetConfig()
+	dc := conf.Select("deposits")
 
 	kr, err := crypto.NewKeyring(dc)
 	if err != nil {
@@ -39,8 +41,12 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
-	// TODO: implement wallet service processor
-	d, err := deposits.New(dc, logger, acc)
+	wrs, err := wallet.NewRequestService(conf)
+	if err != nil {
+		return fmt.Errorf("failed to create wallet request service: %w", err)
+	}
+
+	d, err := deposits.New(conf, logger, acc, wrs)
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
@@ -57,7 +63,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	serv := apisvc.NewService(d, p)
+	serv := apisvc.NewService(d, p, wrs)
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(logger, httpHandler, serv)

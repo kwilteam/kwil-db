@@ -58,8 +58,6 @@ func (r *request_Service) Start() error {
 		return err
 	}
 
-	r.c.OnEvent(r.onEventResponse)
-
 	return nil
 }
 
@@ -72,7 +70,7 @@ func (r *request_Service) OnStop() <-chan x.Void {
 	return r.c.OnStop()
 }
 
-func (r *request_Service) onEventResponse(ev ConfirmationEvent) async.Action {
+func (r *request_Service) handle_event_response(ev ConfirmationEvent) async.Action {
 	return r.signal_response(ev.request_id)
 }
 
