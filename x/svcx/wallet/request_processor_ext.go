@@ -27,12 +27,6 @@ func (r *request_processor) Start() error {
 		return err
 	}
 
-	err = r.e.Start()
-	if err != nil {
-		r.e.Stop()
-		return err
-	}
-
 	go r.run()
 	return nil
 }
