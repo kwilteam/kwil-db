@@ -119,7 +119,8 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 			continue
 		}
 
-		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller), Value: bts})
+		err = d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller), Value: bts}).GetError()
+		d.log.Infof("failed to submit deposit to wallet service. %v", err)
 	}
 
 	// get withdrawals for the block
