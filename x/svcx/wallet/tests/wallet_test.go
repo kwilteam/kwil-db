@@ -10,6 +10,7 @@ import (
 	"kwil/x/svcx/messaging/mx"
 	"kwil/x/svcx/wallet"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -59,7 +60,15 @@ func run_test(cnt int, t *testing.T) {
 }
 
 func loadWalletService() (wallet.RequestService, error) {
-	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), nil)
+	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), wallet.SyncTransform(func(msg *mx.RawMessage) (*mx.RawMessage, error) {
+		key := string(msg.Key[:])
+		if strings.HasPrefix(key, "key__") {
+			fmt.Println(string(msg.Value[:]))
+		}
+
+		return msg, nil
+	}))
+
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +94,7 @@ func loadWalletService() (wallet.RequestService, error) {
 func newMessage(id int) (context.Context, *mx.RawMessage) {
 	return nil, &mx.RawMessage{
 		Key:   []byte("key__" + strconv.Itoa(id)),
-		Value: append([]byte{byte(0xFF)}, []byte("payload__"+uuid.New().String())...),
+		Value: []byte("payload__" + uuid.New().String()),
 	}
 }
 

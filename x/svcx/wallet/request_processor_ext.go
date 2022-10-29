@@ -98,7 +98,6 @@ func (r *request_processor) handle_message(msg *mx.RawMessage, offset mx.Offset)
 }
 
 func (r *request_processor) handle(msg *mx.RawMessage, _ mx.Offset, request_id string) async.Action {
-
 	return r.transform(msg).ComposeA(r.on_transform(request_id))
 }
 

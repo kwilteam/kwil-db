@@ -22,7 +22,7 @@ func encode_message(msg *mx.RawMessage) (*mx.RawMessage, string) {
 	payload := []byte{byte(1)}
 	payload = append(payload, []byte(request_id)...)
 
-	return &mx.RawMessage{Key: msg.Key, Value: payload}, request_id
+	return &mx.RawMessage{Key: msg.Key, Value: append(payload, msg.Value...)}, request_id
 }
 
 func decode_message(msg *mx.RawMessage) (*mx.RawMessage, string, error) {
