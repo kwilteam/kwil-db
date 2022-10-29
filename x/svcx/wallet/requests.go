@@ -6,11 +6,6 @@ import (
 	"kwil/x/svcx/messaging/mx"
 )
 
-type Request struct {
-	WalletId string // used as key
-	Payload  []byte
-}
-
 func encode_message_async(msg *mx.RawMessage) *mx.RawMessage {
 	payload := []byte{byte(0)}
 	return &mx.RawMessage{Key: msg.Key, Value: append(payload, msg.Value...)}

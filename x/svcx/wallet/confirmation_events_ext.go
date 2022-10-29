@@ -77,7 +77,7 @@ func (c *confirmation_events) run() {
 
 func (c *confirmation_events) handle_messages(iter sub.MessageIterator) {
 	if !iter.HasNext() {
-		iter.Commit().WhenComplete(c.on_iter_complete)
+		iter.Commit().WhenComplete(c.handle_if_error_and_set_wg_done)
 		return
 	}
 
@@ -93,7 +93,7 @@ func (c *confirmation_events) handle_messages(iter sub.MessageIterator) {
 	c.handler(ev).
 		OnCompleteA(&async.ContinuationA{
 			Then:  c.get_next(iter),
-			Catch: c.handle_if_error,
+			Catch: c.handle_if_error_and_set_wg_done,
 		})
 }
 
@@ -104,13 +104,9 @@ func (c *confirmation_events) get_next(iter sub.MessageIterator) func() {
 	}
 }
 
-func (c *confirmation_events) on_iter_complete(err error) {
-	c.wg.Done()
-	c.handle_if_error(err)
-}
-
-func (c *confirmation_events) handle_if_error(err error) {
+func (c *confirmation_events) handle_if_error_and_set_wg_done(err error) {
 	if err == nil {
+		c.wg.Done()
 		return
 	}
 
