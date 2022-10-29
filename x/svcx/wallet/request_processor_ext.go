@@ -36,9 +36,11 @@ func (r *request_processor) Stop() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.stopping {
-		return nil
+		return fmt.Errorf("already stopping")
 	}
 
+	r.stopping = true
+	
 	close(r.stop)
 
 	return nil
@@ -130,12 +132,11 @@ func (r *request_processor) get_next(iter sub.MessageIterator) func() {
 }
 
 func (r *request_processor) handle_if_error_and_set_wg_done(err error) {
+	defer r.wg.Done()
 	if err == nil {
-		r.wg.Done()
 		return
 	}
 
 	fmt.Printf("error handling message: %v\n", err)
-	r.wg.Done()
 	_ = r.Stop()
 }

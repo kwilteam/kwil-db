@@ -6,7 +6,7 @@ broker-settings: &broker-settings
 wallet-request-publisher:
   broker-settings: *broker-settings
   default-topic: wallet_requests
-  linger-ms: 75
+  linger-ms: 5
 
 wallet-request-consumer:
   broker-settings: *broker-settings
@@ -20,7 +20,7 @@ wallet-request-consumer:
 wallet-confirmation-publisher:
   broker-settings: *broker-settings
   default-topic: wallet_confirmations
-  linger-ms: 75
+  linger-ms: 5
 
 wallet-confirmation-consumer:
   broker-settings: *broker-settings

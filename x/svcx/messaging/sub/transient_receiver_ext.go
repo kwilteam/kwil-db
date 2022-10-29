@@ -92,23 +92,41 @@ func (c *transient_receiver) _process(fetches kgo.Fetches) {
 		return
 	}
 
-	c.wg.Add(len(partitions))
+	c.wg.Add(1)
 
+	done := false
 	for _, p := range partitions {
 		select {
 		case <-c.ctx.Done():
-			break
+			done = true
 		default:
-			if !c.enqueue(p) {
-				break
-			}
+			done = !c.enqueue(p)
+		}
+
+		if done {
+			break
 		}
 	}
 
+	c.wg.Done() // for the initial call before each enqueue
 	c.wg.Wait()
 }
 
 func (c *transient_receiver) enqueue(p *x.Tuple2[mx.PartitionId, []*kgo.Record]) bool {
+	iter := c.get_message_iterator(p) // this will add 1 to the wait group
+
+	select {
+	case c.out <- iter:
+		return true
+	case <-c.ctx.Done():
+		c.wg.Done() // the iterator will not be used, so we need to decrement the wait group
+		return false
+	}
+}
+
+func (c *transient_receiver) get_message_iterator(p *x.Tuple2[mx.PartitionId, []*kgo.Record]) *message_iterator {
+	c.wg.Add(1)
+
 	once := &sync.Once{}
 	wg_done := func() {
 		once.Do(func() {
@@ -128,17 +146,7 @@ func (c *transient_receiver) enqueue(p *x.Tuple2[mx.PartitionId, []*kgo.Record])
 		return &mx.RawMessage{Key: r.Key, Value: r.Value}, mx.Offset(r.Offset)
 	}
 
-	iter := &message_iterator{p.P1, next, c.getCommitFn(wg_done), nil, -1}
-
-	c.wg.Add(1)
-
-	select {
-	case c.out <- iter:
-		return true
-	case <-c.ctx.Done():
-		wg_done()
-		return false
-	}
+	return &message_iterator{p.P1, next, c.getCommitFn(wg_done), nil, -1}
 }
 
 func (c *transient_receiver) getCommitFn(fn func()) func() async.Action {
