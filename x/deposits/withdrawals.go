@@ -51,12 +51,8 @@ func validateNonce(n string, low, high int64, l uint8) bool {
 	return true
 }
 
-func generateNonce(expiry int64, l uint8) string {
-	return strconv.FormatInt(expiry, 10) + ":" + generateRandomString(l)
-}
-
 // generateRandomString generates a random string of length l
-func generateRandomString(l uint8) string {
+func generateNonce(l uint8) string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+=-"
 	result := make([]byte, l)
 	for i := uint8(0); i < l; i++ {

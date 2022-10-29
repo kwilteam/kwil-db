@@ -4,6 +4,9 @@ import (
 	"sync"
 )
 
+// This BST was based off the implementation found here: https://flaviocopes.com/golang-data-structure-binary-search-tree/
+// I could not find a license for the code, so I have not included it in the license file.
+
 // Item the type of the binary search tree
 type Item Withdrawal
 

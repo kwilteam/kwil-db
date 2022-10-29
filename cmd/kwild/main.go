@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"kwil/x/deposits/processor"
+	"kwil/x/svcx/wallet"
 	"net"
 	"net/http"
 	"os"
@@ -39,11 +41,16 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
-	d, err := deposits.New(dc, logger, acc)
+	wrs, err := loadWalletService(logger)
+	if err != nil {
+		return fmt.Errorf("failed to load wallet service: %w", err)
+	}
+
+	d, err := deposits.New(dc, logger, acc, wrs)
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
-	_ = d.Listen(ctx)
+	d.Listen(ctx)
 
 	ppath := "./prices.json"
 	pbytes, err := utils.LoadFileFromRoot(ppath)
@@ -56,7 +63,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	serv := apisvc.NewService(d, p)
+	serv := apisvc.NewService(d, p, wrs)
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(logger, httpHandler, serv)
@@ -75,7 +82,7 @@ func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceSe
 		apipb.RegisterKwilServiceServer(grpcServer, srv)
 		return grpcServer.Serve(listener)
 	}, func(error) {
-		_ = listener.Close()
+		listener.Close()
 	})
 
 	httpServer := http.Server{
@@ -105,6 +112,32 @@ func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceSe
 	})
 
 	return g.Run()
+}
+
+func loadWalletService(l logx.Logger) (wallet.RequestService, error) {
+	tr := processor.AsMessageTransform(processor.NewProcessor(l))
+
+	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), tr)
+	if err != nil {
+		return nil, err
+	}
+
+	w, err := wallet.NewRequestService(cfgx.GetConfig())
+	if err != nil {
+		return nil, err
+	}
+
+	err = p.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	err = w.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return w, nil
 }
 
 func main() {

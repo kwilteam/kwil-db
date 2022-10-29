@@ -2,6 +2,7 @@ package processor_test
 
 import (
 	"kwil/x/deposits/processor"
+	dt "kwil/x/deposits/types"
 	"kwil/x/logx"
 	"testing"
 
@@ -14,65 +15,65 @@ func TestProcessor(t *testing.T) {
 	p := processor.NewProcessor(l)
 
 	// Test deposit
-	md := mockDeposit{
-		caller: "bennan",
-		amount: "100",
+	md := dt.Deposit{
+		Caller: "bennan",
+		Amount: "100",
 	}
-	err := p.ProcessDeposit(md)
+	err := p.ProcessDeposit(&md)
 	if err != nil {
 		panic(err)
 	}
 
-	bal := p.GetBalance(md.Caller())
+	bal := p.GetBalance(md.Caller)
 
 	assert.Equal(t, "100", bal.String())
 
 	// test spend
-	ms := mockSpend{
-		caller: "bennan",
-		amount: "50",
+	ms := dt.Spend{
+		Caller: "bennan",
+		Amount: "50",
 	}
 
-	err = p.ProcessSpend(ms)
+	err = p.ProcessSpend(&ms)
 	if err != nil {
 		panic(err)
 	}
 
-	bal = p.GetBalance(ms.Caller())
+	bal = p.GetBalance(ms.Caller)
 	assert.Equal(t, "50", bal.String())
 
 	// check spent
-	spent := p.GetSpent(ms.Caller())
+	spent := p.GetSpent(ms.Caller)
 	assert.Equal(t, "50", spent.String())
 
 	// run gc and check balance and spent again
 	p.RunGC()
 
-	bal = p.GetBalance(ms.Caller())
+	bal = p.GetBalance(ms.Caller)
 	assert.Equal(t, "50", bal.String())
 
 	// check spent
-	spent = p.GetSpent(ms.Caller())
+	spent = p.GetSpent(ms.Caller)
 	assert.Equal(t, "50", spent.String())
 
 	// test withdrawal request
-	mwr := mockWithdrawalRequest{
-		wallet:     "bennan",
-		amount:     "50",
-		nonce:      "n1",
-		expiration: 100,
+	mwr := dt.WithdrawalRequest{
+		Wallet:     "bennan",
+		Amount:     "50",
+		Nonce:      "n1",
+		Expiration: 100,
 	}
 
-	err = p.ProcessWithdrawalRequest(mwr)
+	err = p.ProcessWithdrawalRequest(&mwr)
 	if err != nil {
 		panic(err)
 	}
 
-	bal = p.GetBalance(mwr.Wallet())
+	bal = p.GetBalance(mwr.Wallet)
 	assert.Equal(t, "0", bal.String())
 
 	// now deposit some more
-	err = p.ProcessDeposit(md)
+	err = p.ProcessDeposit(&md)
 	if err != nil {
 		panic(err)
 	}
@@ -81,23 +82,23 @@ func TestProcessor(t *testing.T) {
 	p.RunGC()
 
 	// check the balance
-	bal = p.GetBalance(mwr.Wallet())
+	bal = p.GetBalance(mwr.Wallet)
 	assert.Equal(t, "100", bal.String())
 
 	// now withdraw 200
-	mwr = mockWithdrawalRequest{
-		wallet:     "bennan",
-		amount:     "200",
-		nonce:      "n2",
-		expiration: 100,
+	mwr = dt.WithdrawalRequest{
+		Wallet:     "bennan",
+		Amount:     "200",
+		Nonce:      "n2",
+		Expiration: 100,
 	}
 
-	err = p.ProcessWithdrawalRequest(mwr)
+	err = p.ProcessWithdrawalRequest(&mwr)
 	if err != nil {
 		panic(err)
 	}
 
-	bal = p.GetBalance(mwr.Wallet())
+	bal = p.GetBalance(mwr.Wallet)
 	assert.Equal(t, "0", bal.String())
 
 	// there should now be two withdrawals
@@ -110,23 +111,23 @@ func TestProcessor(t *testing.T) {
 	assert.True(t, exs)
 
 	// try spending money I don't have
-	err = p.ProcessSpend(ms)
+	err = p.ProcessSpend(&ms)
 	assert.Equal(t, processor.ErrInsufficientBalance, err)
 
 	// test withdraw confirmation
-	mwc := mockWithdrawalConfirmation{
-		nonce: "n1",
+	mwc := dt.WithdrawalConfirmation{
+		Nonce: "n1",
 	}
 
-	p.ProcessWithdrawalConfirmation(mwc)
+	p.ProcessWithdrawalConfirmation(&mwc)
 
 	// now test with a nonexistent nonce
-	mwc = mockWithdrawalConfirmation{
-		nonce: "ncewc3",
+	mwc = dt.WithdrawalConfirmation{
+		Nonce: "ncewc3",
 	}
 
 	// this will throw memory error if it fails
-	p.ProcessWithdrawalConfirmation(mwc)
+	p.ProcessWithdrawalConfirmation(&mwc)
 }
 
 func TestBadParsing(t *testing.T) {
@@ -135,31 +136,31 @@ func TestBadParsing(t *testing.T) {
 	p := processor.NewProcessor(l)
 
 	// test depositing a bad amount
-	md := mockDeposit{
-		caller: "bennan",
-		amount: "1d0",
+	md := dt.Deposit{
+		Caller: "bennan",
+		Amount: "1d0",
 	}
 
-	err := p.ProcessDeposit(md)
+	err := p.ProcessDeposit(&md)
 	assert.Equal(t, processor.ErrCantParseAmount, err)
 
 	// test spending a bad amount
-	ms := mockSpend{
-		caller: "bennan",
-		amount: "1fr4e0",
+	ms := dt.Spend{
+		Caller: "bennan",
+		Amount: "1fr4e0",
 	}
-	err = p.ProcessSpend(ms)
+	err = p.ProcessSpend(&ms)
 	assert.Equal(t, processor.ErrCantParseAmount, err)
 
 	// test withdrawal request with bad amount
-	mwr := mockWithdrawalRequest{
-		wallet:     "bennan",
-		amount:     "1fr4e0",
-		nonce:      "n1",
-		expiration: 100,
+	mwr := dt.WithdrawalRequest{
+		Wallet:     "bennan",
+		Amount:     "1fr4e0",
+		Nonce:      "n1",
+		Expiration: 100,
 	}
 
-	err = p.ProcessWithdrawalRequest(mwr)
+	err = p.ProcessWithdrawalRequest(&mwr)
 	assert.Equal(t, processor.ErrCantParseAmount, err)
 }
 
@@ -168,21 +169,21 @@ func TestWithdrawNoMoney(t *testing.T) {
 
 	p := processor.NewProcessor(l)
 
-	mwr := mockWithdrawalRequest{
-		wallet:     "bennan",
-		amount:     "100",
-		nonce:      "n1",
-		expiration: 100,
+	mwr := dt.WithdrawalRequest{
+		Wallet:     "bennan",
+		Amount:     "100",
+		Nonce:      "n1",
+		Expiration: 100,
 	}
 
 	// make sure i have no balance and spent
-	bal := p.GetBalance(mwr.Wallet())
+	bal := p.GetBalance(mwr.Wallet)
 	assert.Equal(t, "0", bal.String())
 
-	spent := p.GetSpent(mwr.Wallet())
+	spent := p.GetSpent(mwr.Wallet)
 	assert.Equal(t, "0", spent.String())
 
-	err := p.ProcessWithdrawalRequest(mwr)
+	err := p.ProcessWithdrawalRequest(&mwr)
 	assert.Equal(t, processor.ErrInsufficientBalance, err)
 }
 
@@ -193,55 +194,55 @@ func TestExpiredWithdrawals(t *testing.T) {
 
 	// deposit some funds
 	// Test deposit
-	md := mockDeposit{
-		caller: "bennan",
-		amount: "1000",
+	md := dt.Deposit{
+		Caller: "bennan",
+		Amount: "1000",
 	}
-	err := p.ProcessDeposit(md)
+	err := p.ProcessDeposit(&md)
 	if err != nil {
 		panic(err)
 	}
 
 	// spend some funds
-	ms := mockSpend{
-		caller: "bennan",
-		amount: "20",
+	ms := dt.Spend{
+		Caller: "bennan",
+		Amount: "20",
 	}
-	err = p.ProcessSpend(ms)
+	err = p.ProcessSpend(&ms)
 	if err != nil {
 		panic(err)
 	}
 
 	// test withdrawal request
-	mwr := mockWithdrawalRequest{
-		wallet:     "bennan",
-		amount:     "50",
-		nonce:      "n1",
-		expiration: 50,
+	mwr := dt.WithdrawalRequest{
+		Wallet:     "bennan",
+		Amount:     "50",
+		Nonce:      "n1",
+		Expiration: 50,
 	}
-	err = p.ProcessWithdrawalRequest(mwr)
+	err = p.ProcessWithdrawalRequest(&mwr)
 	if err != nil {
 		panic(err)
 	}
 
 	// another
-	mwr = mockWithdrawalRequest{
-		wallet:     "bennan",
-		amount:     "200",
-		nonce:      "n2",
-		expiration: 100,
+	mwr = dt.WithdrawalRequest{
+		Wallet:     "bennan",
+		Amount:     "200",
+		Nonce:      "n2",
+		Expiration: 100,
 	}
-	err = p.ProcessWithdrawalRequest(mwr)
+	err = p.ProcessWithdrawalRequest(&mwr)
 	if err != nil {
 		panic(err)
 	}
 
 	// now expire first one
-	mfb := mockFinalizedBlock{
-		height: 50,
+	meb := dt.EndBlock{
+		Height: 50,
 	}
 
-	err = p.ProcessFinalizedBlock(mfb)
+	err = p.ProcessEndBlock(&meb)
 	if err != nil {
 		panic(err)
 	}
@@ -254,24 +255,24 @@ func TestExpiredWithdrawals(t *testing.T) {
 	assert.True(t, exs)
 
 	// now add another
-	mwr = mockWithdrawalRequest{
-		wallet:     "bennan",
-		amount:     "200",
-		nonce:      "n3",
-		expiration: 150,
+	mwr = dt.WithdrawalRequest{
+		Wallet:     "bennan",
+		Amount:     "200",
+		Nonce:      "n3",
+		Expiration: 150,
 	}
 
-	err = p.ProcessWithdrawalRequest(mwr)
+	err = p.ProcessWithdrawalRequest(&mwr)
 	if err != nil {
 		panic(err)
 	}
 
 	// now expire all
-	mfb = mockFinalizedBlock{
-		height: 200,
+	meb = dt.EndBlock{
+		Height: 200,
 	}
 
-	err = p.ProcessFinalizedBlock(mfb)
+	err = p.ProcessEndBlock(&meb)
 	if err != nil {
 		panic(err)
 	}
@@ -286,69 +287,4 @@ func TestExpiredWithdrawals(t *testing.T) {
 	exs = p.NonceExist("n3")
 	assert.False(t, exs)
 
-}
-
-type mockDeposit struct {
-	caller string
-	amount string
-}
-
-func (m mockDeposit) Caller() string {
-	return m.caller
-}
-
-func (m mockDeposit) Amount() string {
-	return m.amount
-}
-
-type mockSpend struct {
-	caller string
-	amount string
-}
-
-func (m mockSpend) Caller() string {
-	return m.caller
-}
-
-func (m mockSpend) Amount() string {
-	return m.amount
-}
-
-type mockWithdrawalRequest struct {
-	wallet     string
-	amount     string
-	nonce      string
-	expiration int64
-}
-
-func (m mockWithdrawalRequest) Wallet() string {
-	return m.wallet
-}
-
-func (m mockWithdrawalRequest) Amount() string {
-	return m.amount
-}
-
-func (m mockWithdrawalRequest) Nonce() string {
-	return m.nonce
-}
-
-func (m mockWithdrawalRequest) Expiration() int64 {
-	return m.expiration
-}
-
-type mockWithdrawalConfirmation struct {
-	nonce string
-}
-
-func (m mockWithdrawalConfirmation) Nonce() string {
-	return m.nonce
-}
-
-type mockFinalizedBlock struct {
-	height int64
-}
-
-func (m mockFinalizedBlock) Height() int64 {
-	return m.height
 }

@@ -5,6 +5,7 @@ import (
 	"kwil/x/deposits"
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
+	"kwil/x/svcx/wallet"
 	"math/big"
 )
 
@@ -14,13 +15,15 @@ type Service struct {
 	ds      deposits.Deposits
 	log     logx.Logger
 	pricing pricing.PriceBuilder
+	svc     wallet.RequestService
 }
 
-func NewService(ds deposits.Deposits, p pricing.PriceBuilder) *Service {
+func NewService(ds deposits.Deposits, p pricing.PriceBuilder, svc wallet.RequestService) *Service {
 	return &Service{
 		ds:      ds,
 		pricing: p,
 		log:     logx.New(),
+		svc:     svc,
 	}
 }
 

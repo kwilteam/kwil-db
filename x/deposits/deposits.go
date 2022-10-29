@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"sync"
 
 	"kwil/x/cfgx"
 	kc "kwil/x/crypto"
@@ -12,6 +11,8 @@ import (
 	"kwil/x/deposits/store"
 	ct "kwil/x/deposits/types"
 	"kwil/x/logx"
+	"kwil/x/svcx/messaging/mx"
+	"kwil/x/svcx/wallet"
 )
 
 type Deposits interface {
@@ -32,19 +33,23 @@ type deposits struct {
 	ds   store.DepositStore
 	acc  kc.Account
 	addr string
+	svc  wallet.RequestService
 }
 
-func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
+func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService) (*deposits, error) {
 
 	ds, err := store.New(c, l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize deposit store. %w", err)
 	}
 
+	// TODO: Get last height from kafka instead of db
 	lb, err := ds.GetLastHeight()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last block height. %w", err)
 	}
+
+	lb = 7700000 // hardcoding until we can pull last block height from kafka
 
 	l.Sugar().Infof("last block height: %d", lb)
 
@@ -62,6 +67,7 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
 		ds:   ds,
 		acc:  acc,
 		addr: acc.GetAddress().Hex(),
+		svc:  svc,
 	}, nil
 }
 
@@ -99,6 +105,48 @@ func (d *deposits) Listen(ctx context.Context) error {
 
 	return nil
 }
+
+func (d *deposits) processBlock(ctx context.Context, blk int64) error {
+	d.log.Infof("processing block %d", blk)
+	// get deposits for the block
+	deposits, err := d.sc.GetDeposits(ctx, blk, blk, d.addr)
+	if err != nil {
+		return fmt.Errorf("failed to get deposits for block %d. %w", blk, err)
+	}
+
+	for _, dep := range deposits {
+		bts, err := dep.Serialize()
+		if err != nil {
+			d.log.Warnf("failed to serialize deposit. %v", err)
+			continue
+		}
+
+		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller), Value: bts})
+	}
+
+	// get withdrawals for the block
+	withdrawals, err := d.sc.GetWithdrawals(ctx, blk, blk, d.addr)
+	if err != nil {
+		return fmt.Errorf("failed to get withdrawals for block %d. %w", blk, err)
+	}
+
+	for _, wd := range withdrawals {
+		bts, err := wd.Serialize()
+		if err != nil {
+			d.log.Warnf("failed to serialize withdrawal confirmation. %v", err)
+			continue
+		}
+
+		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(wd.Caller), Value: bts})
+	}
+
+	// TODO: Send end block to all partitions
+	//d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte("block"), Value: []byte(fmt.Sprintf("%d", blk))})
+
+	return nil
+}
+
+/*
 
 func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 	d.log.Infof("processing block %d", blk)
@@ -162,22 +210,7 @@ func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
 	}
 
 	return nil
-}
-
-func (d *deposits) processWithdrawals(ctx context.Context, blk int64) error {
-	/*d.log.Debug().Int64("height", blk).Msg("processing withdrawals")
-
-	// get withdrawals
-	withdrawals, err := d.sc.GetWithdrawals(ctx, blk)
-	if err != nil {
-		return err
-	}
-
-	// process withdrawals
-	for _, w := range withdrawals {
-	}*/
-	return nil
-}
+}*/
 
 func (d *deposits) GetBalance(addr string) (*big.Int, error) {
 	return d.ds.GetBalance(addr)
@@ -239,29 +272,38 @@ func (d *deposits) Sync(ctx context.Context) error {
 		// we can now batch insert the deps
 		// the height we use will be the last height in the chunk
 		for _, dep := range deps {
-			// get amount in big int
-			amt, ok := big.NewInt(0).SetString(dep.Amount(), 10)
-			if !ok {
-				d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | chunk-end: | ok: %v", dep.Amount(), dep.Tx(), chunk[0], ok)
-				continue
-			}
-			err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, chunk[0])
+			bts, err := dep.Serialize()
 			if err != nil {
-				d.log.Errorf("failed to process deposit. tx: %s | chunk-end: %d | err: %v", dep.Tx(), chunk[0], err)
+				d.log.Errorf("failed to serialize deposit.  amt: %s | tx: %s | chunk-end: | ok: %v", dep.Amount, dep.Tx, chunk[0])
 				continue
 			}
 
-			d.log.Infof("processed deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx(), dep.Caller(), dep.Amount(), chunk[0])
+			d.log.Infof("submitting deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx, dep.Caller, dep.Amount, chunk[1])
+			err = d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller), Value: bts}).GetError()
+			if err != nil {
+				d.log.Errorf("failed to submit deposit to Kafka. tx: %s | err: %v", dep.Tx, err)
+				continue
+			}
+		}
+
+		wdrls, err := d.sc.GetWithdrawals(ctx, chunk[0], chunk[1], d.addr)
+		if err != nil {
+			return err
+		}
+
+		for _, wdrl := range wdrls {
+			bts, err := wdrl.Serialize()
+			if err != nil {
+				d.log.Errorf("failed to serialize withdrawal.  amt: %s | tx: %s | chunk-end: | ok: %v", wdrl.Amount, wdrl.Tx, chunk[0])
+				continue
+			}
+			d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(wdrl.Caller), Value: bts})
 		}
 
 		// commit the chunk
 		d.lh = chunk[1]
 		d.log.Infof("committing chunk, range %d to %d", chunk[0], chunk[1])
-		err = d.ds.CommitBlock(chunk[0], d.lh)
-		if err != nil {
-			d.log.Errorf("failed to commit chunk.  chunk-beginning: %d | err: %v", chunk[0], err)
-			return err
-		}
+		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte("block"), Value: []byte(fmt.Sprintf("%d", chunk[1]))})
 
 	}
 

@@ -4,6 +4,7 @@ import (
 	"kwil/x"
 	"kwil/x/async"
 	"kwil/x/cfgx"
+	"kwil/x/deposits/processor"
 	"kwil/x/svcx/messaging/pub"
 	"kwil/x/svcx/messaging/sub"
 	"sync"
@@ -26,7 +27,7 @@ func NewRequestService(cfg cfgx.Config) (RequestService, error) {
 	return r, nil
 }
 
-func NewRequestProcessor(cfg cfgx.Config) (RequestProcessor, error) {
+func NewRequestProcessor(cfg cfgx.Config, pr processor.Processor) (RequestProcessor, error) {
 	p, err := pub.NewByteEmitterSingleClient(cfg.Select("wallet-confirmation-publisher"))
 	if err != nil {
 		return nil, err
@@ -37,7 +38,7 @@ func NewRequestProcessor(cfg cfgx.Config) (RequestProcessor, error) {
 		return nil, err
 	}
 
-	return &request_processor{p, c, make(chan x.Void), make(chan x.Void), &sync.WaitGroup{}, &sync.Mutex{}, false}, nil
+	return &request_processor{p, c, make(chan x.Void), make(chan x.Void), &sync.WaitGroup{}, &sync.Mutex{}, false, pr}, nil
 }
 
 func newConfirmationEvents(cfg cfgx.Config) (*confirmation_events, error) {

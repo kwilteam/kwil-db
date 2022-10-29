@@ -133,14 +133,6 @@ func (ef *eventFeed) listenForBlocks(ctx context.Context, start int64) (<-chan i
 
 				// now we need to check if we have any finalized blocks in the queue
 
-				/*
-					if q.Len() > ef.reqConfs {
-						iters := q.Len() - ef.reqConfs
-						for i := uint16(0); i < iters; i++ {
-							retChan <- q.Pop()
-						}
-					}*/
-
 				for {
 					if q.Len() > ef.reqConfs {
 						// we have enough blocks, send the oldest one

@@ -2,8 +2,6 @@ package contracts
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"math/big"
 
 	"kwil/abi"
 	ct "kwil/x/deposits/types"
@@ -44,21 +42,12 @@ func convertDeposits(edi *abi.EscrowDepositIterator, token string) []*ct.Deposit
 func escToDeposit(ed *abi.EscrowDeposit, token string) *ct.Deposit {
 	// print all fields
 
-	return ct.NewDeposit(ed.Caller.Hex(), ed.Target.Hex(), ed.Amount.String(), int64(ed.Raw.BlockNumber), ed.Raw.TxHash.Hex(), 0, token)
-}
-
-// RetrunFunds calls the returnDeposit function
-func (c *contract) ReturnFunds(ctx context.Context, key *ecdsa.PrivateKey, recipient, nonce string, amt *big.Int, fee *big.Int) error {
-
-	txOpts, err := bind.NewKeyedTransactorWithChainID(key, c.cid)
-	if err != nil {
-		return err
+	return &ct.Deposit{
+		Amount: ed.Amount.String(),
+		Caller: ed.Caller.Hex(),
+		Height: int64(ed.Raw.BlockNumber),
+		Target: ed.Target.Hex(),
+		Tx:     ed.Raw.TxHash.Hex(),
+		Token:  token,
 	}
-
-	_, err = c.ctr.ReturnDeposit(txOpts, common.HexToAddress(recipient), amt, fee, nonce)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
