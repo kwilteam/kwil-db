@@ -75,7 +75,7 @@ func (r *request_processor) run() {
 
 func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 	if !iter.HasNext() {
-		iter.Commit().WhenComplete(r.on_iter_complete)
+		iter.Commit().WhenComplete(r.handle_if_error_and_set_wg_done)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 	r.handle_message(msg, offset).
 		OnCompleteA(&async.ContinuationA{
 			Then:  r.get_next(iter),
-			Catch: r.handle_if_error,
+			Catch: r.handle_if_error_and_set_wg_done,
 		})
 }
 
@@ -129,13 +129,9 @@ func (r *request_processor) get_next(iter sub.MessageIterator) func() {
 	}
 }
 
-func (r *request_processor) on_iter_complete(err error) {
-	r.wg.Done()
-	r.handle_if_error(err)
-}
-
-func (r *request_processor) handle_if_error(err error) {
+func (r *request_processor) handle_if_error_and_set_wg_done(err error) {
 	if err == nil {
+		r.wg.Done()
 		return
 	}
 
