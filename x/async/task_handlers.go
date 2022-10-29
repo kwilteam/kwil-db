@@ -91,6 +91,19 @@ func (h *onCompose[T]) fn_complete(v T, e error) {
 	h.task.completeOrFailNoReturn(v, e)
 }
 
+type onComposeA[T any] struct {
+	a  *action
+	fn func(T, error) Action
+}
+
+func (h *onComposeA[T]) invoke(v T, err error) {
+	h.fn(v, err).WhenComplete(h.fn_complete)
+}
+
+func (h *onComposeA[T]) fn_complete(e error) {
+	h.a.CompleteOrFail(e)
+}
+
 type onHandle[T any] struct {
 	task *_task[T]
 	fn   func(T, error) (T, error)

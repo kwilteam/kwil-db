@@ -133,6 +133,12 @@ func (r *_task[T]) _compose(fn func(T, error) Task[T]) Task[T] {
 	return h.task
 }
 
+func (r *_task[T]) _composeA(fn func(T, error) Action) Action {
+	h := onComposeA[T]{_newAction(), fn}
+	r._addHandlerNoReturn(h.invoke)
+	return h.a
+}
+
 func (r *_task[T]) _whenComplete(fn func(T, error)) Task[T] {
 	return r._addHandler(fn)
 }

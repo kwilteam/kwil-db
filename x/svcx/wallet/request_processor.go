@@ -1,6 +1,12 @@
 package wallet
 
-import "kwil/x"
+import (
+	"kwil/x"
+	"kwil/x/async"
+	"kwil/x/svcx/messaging/mx"
+)
+
+type MessageTransform func(*mx.RawMessage) async.Task[*mx.RawMessage]
 
 // RequestProcessor
 // Background process enacted by topic events

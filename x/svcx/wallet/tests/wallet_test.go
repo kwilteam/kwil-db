@@ -59,7 +59,7 @@ func run_test(cnt int, t *testing.T) {
 }
 
 func loadWalletService() (wallet.RequestService, error) {
-	p, err := wallet.NewRequestProcessor(cfgx.GetConfig())
+	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func loadWalletService() (wallet.RequestService, error) {
 func newMessage(id int) (context.Context, *mx.RawMessage) {
 	return nil, &mx.RawMessage{
 		Key:   []byte("key__" + strconv.Itoa(id)),
-		Value: []byte("payload__" + uuid.New().String()),
+		Value: append([]byte{byte(0xFF)}, []byte("payload__"+uuid.New().String())...),
 	}
 }
 

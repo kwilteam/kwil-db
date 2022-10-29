@@ -7,5 +7,3 @@ wallet-confirmation-consumer: "wallet-confirmation-consumer, ./kafka-topic-setti
 wallet-request-publisher: "wallet-request-publisher, ./kafka-topic-settings.yaml"
 
 wallet-request-consumer: "wallet-request-consumer, ./kafka-topic-settings.yaml"
-
-#deposit-settings: "deposit-config.yaml"
