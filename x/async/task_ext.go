@@ -33,6 +33,7 @@ func (r *_task[T]) Catch(fn func(error)) Task[T]                 { return r._cat
 func (r *_task[T]) CatchCh(ch chan error) Task[T]                { return r._catchCh(ch) }
 func (r *_task[T]) Handle(fn func(T, error) (T, error)) Task[T]  { return r._handle(fn) }
 func (r *_task[T]) Compose(fn func(T, error) Task[T]) Task[T]    { return r._compose(fn) }
+func (r *_task[T]) ComposeA(fn func(T, error) Action) Action     { return r._composeA(fn) }
 func (r *_task[T]) ThenCatchFinally(fn *Continuation[T]) Task[T] { return r._whenComplete(fn.invoke) }
 func (r *_task[T]) WhenComplete(fn func(T, error)) Task[T]       { return r._whenComplete(fn) }
 func (r *_task[T]) WhenCompleteCh(ch chan *Result[T]) Task[T]    { return r._whenCompleteCh(ch) }

@@ -4,7 +4,7 @@ import (
 	"kwil/x"
 	"kwil/x/async"
 	"kwil/x/cfgx"
-	"kwil/x/deposits/processor"
+	"kwil/x/svcx/messaging/mx"
 	"kwil/x/svcx/messaging/pub"
 	"kwil/x/svcx/messaging/sub"
 	"sync"
@@ -27,7 +27,7 @@ func NewRequestService(cfg cfgx.Config) (RequestService, error) {
 	return r, nil
 }
 
-func NewRequestProcessor(cfg cfgx.Config, pr processor.Processor) (RequestProcessor, error) {
+func NewRequestProcessor(cfg cfgx.Config, transform MessageTransform) (RequestProcessor, error) {
 	p, err := pub.NewByteEmitterSingleClient(cfg.Select("wallet-confirmation-publisher"))
 	if err != nil {
 		return nil, err
@@ -38,7 +38,20 @@ func NewRequestProcessor(cfg cfgx.Config, pr processor.Processor) (RequestProces
 		return nil, err
 	}
 
-	return &request_processor{p, c, make(chan x.Void), make(chan x.Void), &sync.WaitGroup{}, &sync.Mutex{}, false, pr}, nil
+	if transform == nil {
+		transform = SyncTransform(func(msg *mx.RawMessage) (*mx.RawMessage, error) {
+			return msg, nil
+		})
+	}
+
+	return &request_processor{
+		p:         p,
+		e:         c,
+		done:      make(chan x.Void),
+		stop:      make(chan x.Void),
+		transform: transform,
+		wg:        &sync.WaitGroup{},
+		mu:        &sync.Mutex{}}, nil
 }
 
 func newConfirmationEvents(cfg cfgx.Config) (*confirmation_events, error) {
@@ -54,4 +67,15 @@ func newConfirmationEvents(cfg cfgx.Config) (*confirmation_events, error) {
 		done: make(chan x.Void),
 		mu:   sync.Mutex{},
 	}, nil
+}
+
+func SyncTransform(fn func(*mx.RawMessage) (*mx.RawMessage, error)) MessageTransform {
+	return func(msg *mx.RawMessage) async.Task[*mx.RawMessage] {
+		msg, err := fn(msg)
+		if err != nil {
+			return async.FailedTask[*mx.RawMessage](err)
+		}
+
+		return async.CompletedTask(msg)
+	}
 }

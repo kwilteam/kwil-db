@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"kwil/x"
 	"kwil/x/async"
-	"kwil/x/deposits/processor"
-	dt "kwil/x/deposits/types"
 	"kwil/x/svcx/messaging/mx"
 	"kwil/x/svcx/messaging/pub"
 	"kwil/x/svcx/messaging/sub"
@@ -14,14 +12,14 @@ import (
 )
 
 type request_processor struct {
-	p        pub.ByteEmitter
-	e        sub.TransientReceiver
-	done     chan x.Void
-	stop     chan x.Void
-	wg       *sync.WaitGroup
-	mu       *sync.Mutex
-	stopping bool
-	pr       processor.Processor
+	p         pub.ByteEmitter
+	e         sub.TransientReceiver
+	done      chan x.Void
+	stop      chan x.Void
+	transform MessageTransform
+	wg        *sync.WaitGroup
+	mu        *sync.Mutex
+	stopping  bool
 }
 
 func (r *request_processor) Start() error {
@@ -77,7 +75,7 @@ func (r *request_processor) run() {
 
 func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 	if !iter.HasNext() {
-		iter.Commit().WhenComplete(r.on_iter_complete)
+		iter.Commit().WhenComplete(r.handle_if_error_and_set_wg_done)
 		return
 	}
 
@@ -86,7 +84,7 @@ func (r *request_processor) handle_messages(iter sub.MessageIterator) {
 	r.handle_message(msg, offset).
 		OnCompleteA(&async.ContinuationA{
 			Then:  r.get_next(iter),
-			Catch: r.handle_if_error,
+			Catch: r.handle_if_error_and_set_wg_done,
 		})
 }
 
@@ -99,70 +97,23 @@ func (r *request_processor) handle_message(msg *mx.RawMessage, offset mx.Offset)
 	return r.handle(msg, offset, request_id)
 }
 
-func (r *request_processor) handle(msg *mx.RawMessage, offset mx.Offset, request_id string) async.Action {
+func (r *request_processor) handle(msg *mx.RawMessage, _ mx.Offset, request_id string) async.Action {
+	return r.transform(msg).ComposeA(r.on_transform(request_id))
+}
 
-	// determine message type
-	mt := msg.Value[1]
-	switch mt {
-	default:
-		return async.FailedAction(fmt.Errorf("unknown message type: %v", msg.Value))
-	case 0x0:
-		// deposit
-		deposit, err := dt.Deserialize[*dt.Deposit](msg.Value)
+func (r *request_processor) on_transform(request_id string) func(msg *mx.RawMessage, err error) async.Action {
+	return func(msg *mx.RawMessage, err error) async.Action {
 		if err != nil {
 			return async.FailedAction(err)
 		}
 
-		err = r.pr.ProcessDeposit(deposit)
-		if err != nil {
-			return async.FailedAction(err)
-		}
-	case 0x01:
-		// withdrawal request
-		wdr, err := dt.Deserialize[*dt.WithdrawalRequest](msg.Value)
-		if err != nil {
-			return async.FailedAction(err)
+		if request_id == "" {
+			return async.CompletedAction()
 		}
 
-		err = r.pr.ProcessWithdrawalRequest(wdr)
-		if err != nil {
-			return async.FailedAction(err)
-		}
-	case 0x02:
-		// withdrawal confirmation
-		wdc, err := dt.Deserialize[*dt.WithdrawalConfirmation](msg.Value)
-		if err != nil {
-			return async.FailedAction(err)
-		}
-
-		r.pr.ProcessWithdrawalConfirmation(wdc)
-	case 0x03:
-		// End Of Block
-		eob, err := dt.Deserialize[*dt.EndBlock](msg.Value)
-		if err != nil {
-			return async.FailedAction(err)
-		}
-
-		r.pr.ProcessEndBlock(eob)
-	case 0x04:
-		// Spend
-		spend, err := dt.Deserialize[*dt.Spend](msg.Value)
-		if err != nil {
-			return async.FailedAction(err)
-		}
-
-		err = r.pr.ProcessSpend(spend)
-		if err != nil {
-			return async.FailedAction(err)
-		}
+		// emit confirmation event
+		return r.p.Send(context.Background(), encode_event(request_id, msg))
 	}
-
-	if request_id == "" {
-		return async.CompletedAction()
-	}
-
-	// emit confirmation event
-	return r.p.Send(context.Background(), encode_event(request_id, msg))
 }
 
 func (r *request_processor) is_stopping() bool {
@@ -178,13 +129,9 @@ func (r *request_processor) get_next(iter sub.MessageIterator) func() {
 	}
 }
 
-func (r *request_processor) on_iter_complete(err error) {
-	r.wg.Done()
-	r.handle_if_error(err)
-}
-
-func (r *request_processor) handle_if_error(err error) {
+func (r *request_processor) handle_if_error_and_set_wg_done(err error) {
 	if err == nil {
+		r.wg.Done()
 		return
 	}
 

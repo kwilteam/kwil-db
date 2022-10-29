@@ -29,6 +29,7 @@ func (r *task_error[T]) Catch(fn func(error)) Task[T]                { fn(r.err)
 func (r *task_error[T]) CatchCh(ch chan error) Task[T]               { ch <- r.err; return r }
 func (r *task_error[T]) Handle(fn func(T, error) (T, error)) Task[T] { return r._handle(fn) }
 func (r *task_error[T]) Compose(fn func(T, error) Task[T]) Task[T]   { return r._compose(fn) }
+func (r *task_error[T]) ComposeA(fn func(T, error) Action) Action    { return fn(AsDefault[T](), r.err) }
 func (r *task_error[T]) WhenComplete(fn func(T, error)) Task[T]      { fn(AsDefault[T](), r.err); return r }
 func (r *task_error[T]) OnComplete(fn *Continuation[T])              { r.WhenComplete(fn.invoke) }
 func (r *task_error[T]) AsAction() Action                            { return &action_err{r.err} }

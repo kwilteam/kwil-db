@@ -93,6 +93,9 @@ type Task[T any] interface {
 	// Compose will call the func when the result has been set
 	Compose(fn func(T, error) Task[T]) Task[T]
 
+	// ComposeA will call the func when the result has been set
+	ComposeA(fn func(T, error) Action) Action
+
 	// ThenCatchFinally will call the func when the result has been set
 	ThenCatchFinally(fn *Continuation[T]) Task[T]
 

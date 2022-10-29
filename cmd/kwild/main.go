@@ -115,9 +115,9 @@ func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceSe
 }
 
 func loadWalletService(l logx.Logger) (wallet.RequestService, error) {
-	pr := processor.NewProcessor(l)
+	tr := processor.AsMessageTransform(processor.NewProcessor(l))
 
-	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), pr)
+	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), tr)
 	if err != nil {
 		return nil, err
 	}
@@ -143,37 +143,6 @@ func loadWalletService(l logx.Logger) (wallet.RequestService, error) {
 func main() {
 	logger := logx.New()
 
-	// Below confirmed *working* on first message for wallet service
-	// TODO: look at issue in processing service
-	/*
-		w, err := loadWalletService(logger)
-		if err != nil {
-			logger.Sugar().Error(err)
-			return
-		}
-
-		wg := &sync.WaitGroup{}
-		wg.Add(10)
-
-		for i := 0; i < 10; i++ {
-			w.Submit(context.Background(), &mx.RawMessage{
-				Key:   []byte("test_key"),
-				Value: []byte("test_payload"),
-			}).ThenCatchFinally(&async.ContinuationA{
-				Then: func() {
-					logger.Sugar().Info("success")
-				},
-				Catch: func(err error) {
-					logger.Sugar().Error(err)
-				},
-				Finally: func() {
-					wg.Done()
-				},
-			})
-		}
-
-		wg.Wait()
-	*/
 	if err := execute(logger); err != nil {
 		logger.Sugar().Error(err)
 	}

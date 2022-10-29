@@ -20,6 +20,7 @@ type request_Service struct {
 func (r *request_Service) SubmitAsync(ctx context.Context, msg *mx.RawMessage) async.Action {
 	return r.p.Send(ctx, encode_message_async(msg))
 }
+
 func (r *request_Service) Submit(ctx context.Context, msg *mx.RawMessage) async.Action {
 	response := async.NewAction()
 
@@ -81,9 +82,14 @@ func (r *request_Service) add_response(request_id string, response async.Action)
 }
 
 func (r *request_Service) signal_response(request_id string) async.Action {
+	if request_id == "" {
+		return nil
+	}
+
 	r.mu.Lock()
-	response := r.responses[request_id]
-	if response == nil {
+	response, ok := r.responses[request_id]
+	if !ok {
+		r.mu.Unlock()
 		return async.CompletedAction()
 	}
 
