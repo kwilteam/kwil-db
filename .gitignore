@@ -21,3 +21,4 @@ cmd/cmd
 .task/
 **/__debug_bin.exe
 **/__debug_bin
+.pgdata/
