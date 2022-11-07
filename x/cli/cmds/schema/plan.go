@@ -22,7 +22,6 @@ func createPlanCmd() *cobra.Command {
 			// if err != nil {
 			// 	return err
 			// }
-			// defer rd.Close()
 
 			// data, err := io.ReadAll(rd)
 			// if err != nil {

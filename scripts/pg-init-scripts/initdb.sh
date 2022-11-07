@@ -20,8 +20,8 @@ function setup_master_db() {
   echo "  Setting up master database '$database'"
   psql -v ON_ERROR_STOP=1 --username "$database" -d "$database" <<-EOSQL
       CREATE TABLE IF NOT EXISTS users (
-        id serial PRIMARY KEY,
-        api_key varchar(64) NULL
+        user_id serial PRIMARY KEY,
+        api_key varchar(64) NULL UNIQUE
       );
 
       CREATE TABLE IF NOT EXISTS wallets (
