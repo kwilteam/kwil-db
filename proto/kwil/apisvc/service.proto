@@ -8,6 +8,7 @@ import "kwil/apisvc/schema.proto";
 import "kwil/apisvc/role.proto";
 import "kwil/apisvc/table.proto";
 import "kwil/apisvc/database.proto";
+import "kwil/apisvc/wallets.proto";
 
 service KwilService {
   rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
@@ -131,12 +132,13 @@ service KwilService {
   // Wallets
   rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
     option (google.api.http) = {
-      get: "/api/v0/wallets/{id}/balance"
+      get: "/api/v0/wallets/{wallet}/balance"
     };
   }
   rpc GetWalletRole(GetWalletRoleRequest) returns (GetWalletRoleResponse) {
     option (google.api.http) = {
-      get: "/api/v0/wallets/{id}/{databaseId}/role"
+      get: "/api/v0/wallets/{id}/{databaseId}/role" // should this be under database instead of wallets?  Wallets seem to logically correlate to funds, not roles
+      // also, I believe we no longer need this for the first version of the API
     };
   }
   rpc ReturnFunds(ReturnFundsRequest) returns (ReturnFundsResponse) {
@@ -173,10 +175,6 @@ message ConnectResponse {
     string address = 1;
 }
 
-
-
-
-
 message PostQueryRequest {
   string databaseId = 1;
   string query = 2;
@@ -206,13 +204,6 @@ message DBQuery{
   repeated input parameters = 3;
 }
 
-message GetBalanceRequest {
-  string id = 1;
-}
-message GetBalanceResponse {
-  string balance = 1;
-}
-
 message GetWalletRoleRequest {
   string id = 1;
   string databaseId = 2;
@@ -227,17 +218,3 @@ message GetWalletRoleResponse {
   perms permissions = 2;
 }
 
-message ReturnFundsRequest {
-  string id = 1;
-  string amount = 2;
-  string nonce = 3;
-  string from = 4;
-  string signature = 5;
-}
-
-message ReturnFundsResponse {
-  string amtReturned = 1;
-  string fee = 2;
-  string balance = 3;
-  string txid = 4; // ethereum transaction id
-}

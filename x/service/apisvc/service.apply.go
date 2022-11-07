@@ -30,6 +30,7 @@ func (s *Service) Apply(ctx context.Context, req *apipb.ApplyRequest) (*apipb.Ap
 	// Flat payment for now - based on diff later?
 
 	// big int from fee
+	// we only parse this up here so it rejects invalid values passed for fee
 	amt, ok := big.NewInt(0).SetString(req.Fee, 10)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse fee: %s", req.Fee)
@@ -40,7 +41,7 @@ func (s *Service) Apply(ctx context.Context, req *apipb.ApplyRequest) (*apipb.Ap
 		return nil, ErrNotEnoughFunds
 	}
 
-	s.ds.Spend(req.From, amt)
+	s.ds.Spend(req.From, amt.String())
 
 	_ = getPlan(req.PlanId)
 

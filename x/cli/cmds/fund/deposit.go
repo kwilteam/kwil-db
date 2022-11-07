@@ -62,7 +62,7 @@ func depositCmd() *cobra.Command {
 			_ = tokenName
 			_ = amtFloat
 
-			fmt.Printf("You will be depositing %s %s into funding pool %s\n", amtFloat.String(), tokenName, c.GetPoolAddress())
+			fmt.Printf("You will be depositing $%s %s into funding pool %s\n", amtFloat.String(), tokenName, c.GetPoolAddress())
 			pr := promptui.Select{
 				Label: "Continue?",
 				Items: []string{"yes", "no"},

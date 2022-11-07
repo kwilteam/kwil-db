@@ -38,12 +38,12 @@ func (s *Service) CreateDatabase(ctx context.Context, req *apipb.CreateDatabaseR
 		return nil, err
 	}
 
-	// validate that the fee is enough
+	// TODO: get rid of this.validate that the fee is enough
 	if !s.validateBalances(&req.From, &req.Operation, &req.Crud, amt) {
 		return nil, ErrNotEnoughFunds
 	}
 
-	err = s.ds.Spend(req.From, amt)
+	err = s.ds.Spend(req.From, amt.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
@@ -86,7 +86,7 @@ func (s *Service) UpdateDatabase(ctx context.Context, req *apipb.UpdateDatabaseR
 		return nil, ErrNotEnoughFunds
 	}
 
-	err = s.ds.Spend(req.From, amt)
+	err = s.ds.Spend(req.From, amt.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}

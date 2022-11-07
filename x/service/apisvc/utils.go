@@ -20,7 +20,7 @@ func createFundsReturnID(amount, nonce, address string) string {
 	sb.WriteString(amount)
 	sb.WriteString(nonce)
 	sb.WriteString(address)
-	return string(crypto.Sha384([]byte(sb.String())))
+	return crypto.Sha384Str([]byte(sb.String()))
 }
 
 func updateDatabaseID(m *apipb.UpdateDatabaseRequest) string {

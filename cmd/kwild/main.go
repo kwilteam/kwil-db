@@ -46,7 +46,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to load wallet service: %w", err)
 	}
 
-	d, err := deposits.New(dc, logger, acc, wrs)
+	d, err := deposits.New(dc, logger, acc)
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
