@@ -22,7 +22,7 @@ type Client interface {
 type Contract interface {
 	GetDeposits(context.Context, int64, int64, string) ([]*Deposit, error)
 	GetWithdrawals(context.Context, int64, int64, string) ([]*WithdrawalConfirmation, error)
-	ReturnFunds(context.Context, *ecdsa.PrivateKey, string, string, *big.Int, *big.Int) error
+	ReturnFunds(context.Context, *ecdsa.PrivateKey, string, string, *big.Int, *big.Int) (string, error)
 }
 
 type Deposit struct {
@@ -50,7 +50,7 @@ type WithdrawalConfirmation struct {
 	Receiver string
 	Amount   string
 	Fee      string
-	Nonce    string
+	Cid      string
 	Height   int64
 	Tx       string
 	Token    string
@@ -71,8 +71,17 @@ type WithdrawalRequest struct {
 	Wallet     string `json:"wallet"`
 	Amount     string `json:"amount"`
 	Spent      string `json:"spent"`
-	Nonce      string `json:"nonce"`
+	Cid        string `json:"nonce"`
 	Expiration int64  `json:"expiration"`
+}
+
+type PendingWithdrawal struct {
+	Wallet     string `json:"wallet"`
+	Amount     string `json:"amount"`
+	Fee        string `json:"spent"`
+	Cid        string `json:"nonce"`
+	Expiration int64  `json:"expiration"`
+	Tx         string `json:"tx"`
 }
 
 func (wr *WithdrawalRequest) Serialize() ([]byte, error) {

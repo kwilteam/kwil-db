@@ -8,48 +8,78 @@ import (
 	"kwil/x/cfgx"
 	kc "kwil/x/crypto"
 	"kwil/x/deposits/events"
-	"kwil/x/deposits/store"
-	ct "kwil/x/deposits/types"
+	"kwil/x/deposits/store/sql"
+	"kwil/x/deposits/types"
 	"kwil/x/logx"
-	"kwil/x/svcx/messaging/mx"
-	"kwil/x/svcx/wallet"
 )
 
 type Deposits interface {
 	Listen(context.Context) error
 	GetBalance(string) (*big.Int, error)
 	GetSpent(string) (*big.Int, error)
-	Spend(string, *big.Int) error
-	Withdraw(string, *big.Int) error
+	GetBalanceAndSpent(string) (string, string, error)
+	Spend(string, string) error
+	Withdraw(context.Context, string, string) (*types.PendingWithdrawal, error)
 	Close() error
+	GetWithdrawalsForWallet(string) ([]*types.PendingWithdrawal, error)
 }
 
 type deposits struct {
+	run  bool
 	log  logx.SugaredLogger
 	conf cfgx.Config
 	ef   events.EventFeed
-	sc   ct.Contract
+	sc   types.Contract
 	lh   int64
-	ds   store.DepositStore
+	we   int64
+	sql  sql.SQLStore
 	acc  kc.Account
 	addr string
-	svc  wallet.RequestService
 }
 
-func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService) (*deposits, error) {
+func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
 
-	ds, err := store.New(c, l)
+	run, err := c.GetBool("run", false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize deposit store. %w", err)
+		return nil, fmt.Errorf("failed to get run from config. %w", err)
+	}
+	if !run {
+		l.Sugar().Infof("deposits disabled")
+		return &deposits{run: false}, nil
 	}
 
-	// TODO: Get last height from kafka instead of db
-	lb, err := ds.GetLastHeight()
+	port, err := c.GetInt64("db.port", 5432)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get last block height. %w", err)
+		return nil, fmt.Errorf("failed to get db port from config. %w", err)
 	}
 
-	lb = 7700000 // hardcoding until we can pull last block height from kafka
+	we, err := c.GetInt64("withdrawal_expiration", 100)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get withdrawal_expiration from config. %w", err)
+	}
+
+	ssl, err := c.GetBool("db.ssl", false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get db ssl from config. %w", err)
+	}
+
+	pgConf := sql.SQLConfig{
+		Host:     c.GetString("db.host", "localhost"),
+		Port:     port,
+		User:     c.GetString("db.user", "postgres"),
+		Password: c.GetString("db.password", "password"),
+		Database: c.GetString("db.database", "postgres"),
+		SSL:      ssl,
+	}
+	pg, err := sql.New(&pgConf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create sql store. %w", err)
+	}
+
+	lb, err := pg.GetHeight()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last block from db. %w", err)
+	}
 
 	l.Sugar().Infof("last block height: %d", lb)
 
@@ -59,19 +89,24 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account, svc wallet.RequestService
 	}
 
 	return &deposits{
+		run:  run,
 		log:  l.Sugar(),
 		conf: c,
 		ef:   ef,
 		sc:   ef.Contract(),
 		lh:   lb,
-		ds:   ds,
+		we:   we,
+		sql:  pg,
 		acc:  acc,
-		addr: acc.GetAddress().Hex(),
-		svc:  svc,
+		addr: acc.GetAddress().String(),
 	}, nil
 }
 
 func (d *deposits) Listen(ctx context.Context) error {
+
+	if !d.run {
+		return nil
+	}
 
 	// sync
 	err := d.Sync(ctx)
@@ -85,7 +120,7 @@ func (d *deposits) Listen(ctx context.Context) error {
 	}
 
 	go func(*deposits) {
-		defer d.ds.Close()
+		defer d.sql.Close()
 		for {
 			select {
 			case <-ctx.Done():
@@ -106,6 +141,8 @@ func (d *deposits) Listen(ctx context.Context) error {
 	return nil
 }
 
+var ErrDepositsNotRunning = fmt.Errorf("deposits not running")
+
 func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 	d.log.Infof("processing block %d", blk)
 	// get deposits for the block
@@ -115,13 +152,12 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 	}
 
 	for _, dep := range deposits {
-		bts, err := dep.Serialize()
+		ttx := dep.Tx[2:]
+		err = d.sql.Deposit(ttx, dep.Caller, dep.Amount, dep.Height)
 		if err != nil {
-			d.log.Warnf("failed to serialize deposit. %v", err)
+			d.log.Errorf("failed to deposit %s. %v", dep.Tx, err)
 			continue
 		}
-
-		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller), Value: bts})
 	}
 
 	// get withdrawals for the block
@@ -131,101 +167,62 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 	}
 
 	for _, wd := range withdrawals {
-		bts, err := wd.Serialize()
+		exists, err := d.sql.FinishWithdrawal(wd.Cid)
 		if err != nil {
-			d.log.Warnf("failed to serialize withdrawal confirmation. %v", err)
+			d.log.Errorf("failed to finish withdrawal %s. %v", wd.Cid, err)
 			continue
 		}
 
-		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(wd.Caller), Value: bts})
+		if !exists {
+			d.log.Warnf("withdrawal %s does not exist", wd.Cid)
+		}
 	}
 
-	// TODO: Send end block to all partitions
-	//d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte("block"), Value: []byte(fmt.Sprintf("%d", blk))})
+	d.sql.CommitHeight(blk)
 
 	return nil
 }
-
-/*
-
-func (d *deposits) processBlock(ctx context.Context, blk int64) error {
-	d.log.Infof("processing block %d", blk)
-	wg := sync.WaitGroup{}
-	wg.Add(2) // processing deposits and withdrawals simultaneously
-
-	go func(context.Context, int64) {
-		// process deposits
-		err := d.processDeposits(ctx, blk)
-		if err != nil {
-			d.log.Warnf("failed to process deposits for block %d. %v", blk, err)
-		}
-		wg.Done()
-	}(ctx, blk)
-
-	go func(context.Context, int64) {
-		// process withdrawals
-		err := d.processWithdrawals(ctx, blk)
-		if err != nil {
-			d.log.Warnf("failed to process withdrawals for block %d. %v", blk, err)
-		}
-		wg.Done()
-	}(ctx, blk)
-
-	wg.Wait()
-	d.lh = blk + 1
-	return d.ds.CommitBlock(blk, d.lh)
-}
-
-func (d *deposits) processDeposits(ctx context.Context, blk int64) error {
-
-	// get deposits
-	depos, err := d.sc.GetDeposits(ctx, blk, blk, d.addr)
-	if err != nil {
-		return err
-	}
-
-	// process deposits
-	for _, dep := range depos {
-		// get amount in big int
-		amt, ok := big.NewInt(0).SetString(dep.Amount(), 10)
-		if !ok {
-			d.log.Errorf("failed to convert amount to big int.  amt: %s | tx: %s | ok: %v", dep.Amount(), dep.Tx(), ok)
-			continue
-		}
-		if dep.Target() != d.addr { // only process deposits to this address
-			continue
-		}
-		err := d.ds.Deposit(dep.Tx(), dep.Caller(), amt, dep.Height())
-		if err != nil {
-			if err == store.ErrTxExists {
-				d.log.Debugf("deposit already processed. tx: %s", dep.Tx())
-				continue
-			} else {
-				d.log.Errorf("failed to process deposit. tx: %s | err: %v", dep.Tx(), err)
-				continue
-			}
-		}
-
-		d.log.Infof("processed deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx(), dep.Caller(), dep.Amount(), dep.Height())
-	}
-
-	return nil
-}*/
 
 func (d *deposits) GetBalance(addr string) (*big.Int, error) {
-	return d.ds.GetBalance(addr)
+	if !d.run {
+		return nil, ErrDepositsNotRunning
+	}
+
+	return d.sql.GetBalance(addr)
 }
 
 func (d *deposits) GetSpent(addr string) (*big.Int, error) {
-	return d.ds.GetSpent(addr)
+	if !d.run {
+		return nil, ErrDepositsNotRunning
+	}
+
+	return d.sql.GetSpent(addr)
 }
 
-func (d *deposits) Spend(addr string, amt *big.Int) error {
-	return d.ds.Spend(addr, amt)
+// Spend will try to spend the amount from the address.
+// If the addr does not have enough, it will return ErrInsufficientFunds
+func (d *deposits) Spend(addr string, amt string) error {
+	if !d.run {
+		return ErrDepositsNotRunning
+	}
+
+	return d.sql.Spend(addr, amt)
+}
+
+func (d *deposits) GetBalanceAndSpent(addr string) (string, string, error) {
+	if !d.run {
+		return "", "", ErrDepositsNotRunning
+	}
+
+	return d.sql.GetBalanceAndSpent(addr)
 }
 
 func (d *deposits) Close() error {
-	return d.ds.Close()
+	if d.sql == nil {
+		return nil
+	}
+
+	return d.sql.Close()
 }
 
 /*
@@ -247,6 +244,10 @@ func (d *deposits) Close() error {
 
 // sync syncs the deposits with the chain
 func (d *deposits) Sync(ctx context.Context) error {
+	if !d.run {
+		return nil
+	}
+
 	lb, err := d.ef.GetLastConfirmedBlock(ctx)
 	if err != nil {
 		return err
@@ -272,18 +273,19 @@ func (d *deposits) Sync(ctx context.Context) error {
 		// we can now batch insert the deps
 		// the height we use will be the last height in the chunk
 		for _, dep := range deps {
-			bts, err := dep.Serialize()
+			ttx := dep.Tx[2:]
+			err = d.sql.Deposit(ttx, dep.Caller, dep.Amount, chunk[0])
 			if err != nil {
-				d.log.Errorf("failed to serialize deposit.  amt: %s | tx: %s | chunk-end: | ok: %v", dep.Amount, dep.Tx, chunk[0])
-				continue
+				d.log.Errorf("failed to deposit %s. %v", dep.Tx, err)
+				return err // we want to return here since there is a major error
 			}
+		}
 
-			d.log.Infof("submitting deposit. tx: %s | caller: %s | amount: %s | height: %d", dep.Tx, dep.Caller, dep.Amount, chunk[1])
-			err = d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(dep.Caller), Value: bts}).GetError()
-			if err != nil {
-				d.log.Errorf("failed to submit deposit to Kafka. tx: %s | err: %v", dep.Tx, err)
-				continue
-			}
+		// we now need to commit deposits.  This is the first half of committing a block/chunk, but we do not want to expire our withdrawals for the chunk yet
+		err = d.sql.CommitDeposits(chunk[0])
+		if err != nil {
+			d.log.Errorf("failed to commit deposits for chunk %d. %v", chunk[0], err)
+			return err
 		}
 
 		wdrls, err := d.sc.GetWithdrawals(ctx, chunk[0], chunk[1], d.addr)
@@ -292,18 +294,51 @@ func (d *deposits) Sync(ctx context.Context) error {
 		}
 
 		for _, wdrl := range wdrls {
-			bts, err := wdrl.Serialize()
+			exists, err := d.sql.FinishWithdrawal(wdrl.Cid)
 			if err != nil {
-				d.log.Errorf("failed to serialize withdrawal.  amt: %s | tx: %s | chunk-end: | ok: %v", wdrl.Amount, wdrl.Tx, chunk[0])
-				continue
+				return err
 			}
-			d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte(wdrl.Caller), Value: bts})
-		}
 
+			d.log.Infof("withdrawal %s exists: %t", wdrl.Cid, exists)
+
+			if !exists { // if the withdrawal did not exist, then take the fee and amount, add them, and spend them from the wallets balance.  This is b/c the withdrawal was already processed on-chain.
+				// TODO: This covers 99% of cases, but it not s ecure enough for a productiuon env with real money.
+
+				// parse fee and amount to big int
+				bgf, ok := new(big.Int).SetString(wdrl.Fee, 10)
+				if !ok {
+					return err // since this only runs on startup, we want this to return.  Ethereum event logs should be in a correct format, so an error is a problem with our tech
+				}
+
+				bga, ok := new(big.Int).SetString(wdrl.Amount, 10)
+				if !ok {
+					return err
+				}
+
+				// add them
+				bga.Add(bga, bgf)
+
+				// spend them
+				err = d.sql.RemoveBalance(wdrl.Receiver, bga.String())
+				if err != nil {
+					return err
+				}
+			}
+
+			// we must also update the synced balance and spent resulting from a successful withdrawal
+		}
 		// commit the chunk
 		d.lh = chunk[1]
 		d.log.Infof("committing chunk, range %d to %d", chunk[0], chunk[1])
-		d.svc.SubmitAsync(ctx, &mx.RawMessage{Key: []byte("block"), Value: []byte(fmt.Sprintf("%d", chunk[1]))})
+		err = d.sql.Expire(chunk[0]) // the second half of commit block is expire
+		if err != nil {
+			return err // returning here since if this happens then we want this to crash
+		}
+		// set height to chunk[1]+1
+		err = d.sql.SetHeight(d.lh)
+		if err != nil {
+			return err
+		}
 
 	}
 

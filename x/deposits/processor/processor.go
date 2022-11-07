@@ -91,7 +91,7 @@ func (p *processor) ProcessWithdrawalRequest(w *dt.WithdrawalRequest) error {
 	p.setSpent(w.Wallet, big.NewInt(0))
 
 	wdrl := pendingWithdrawal{
-		nonce:  w.Nonce,
+		nonce:  w.Cid,
 		amount: withdrawAmt,
 		wallet: w.Wallet,
 		spent:  spentAmt,
@@ -105,7 +105,7 @@ func (p *processor) ProcessWithdrawalRequest(w *dt.WithdrawalRequest) error {
 
 // ProcessWithdrawalConfirmation removes the withdrawal from the withdrawal tracker
 func (p *processor) ProcessWithdrawalConfirmation(w *dt.WithdrawalConfirmation) {
-	p.wt.RemoveByNonce(w.Nonce)
+	p.wt.RemoveByNonce(w.Cid)
 }
 
 // ProcessFinalizedBlock removes all withdrawals that have expired and re-credits the account

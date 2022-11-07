@@ -12,19 +12,19 @@ import (
 )
 
 // RetrunFunds calls the returnDeposit function
-func (c *contract) ReturnFunds(ctx context.Context, key *ecdsa.PrivateKey, recipient, nonce string, amt *big.Int, fee *big.Int) error {
+func (c *contract) ReturnFunds(ctx context.Context, key *ecdsa.PrivateKey, recipient, nonce string, amt *big.Int, fee *big.Int) (string, error) {
 
 	txOpts, err := bind.NewKeyedTransactorWithChainID(key, c.cid)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	_, err = c.ctr.ReturnDeposit(txOpts, common.HexToAddress(recipient), amt, fee, nonce)
+	res, err := c.ctr.ReturnDeposit(txOpts, common.HexToAddress(recipient), amt, fee, nonce)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return res.Hash().String(), nil
 }
 
 func (c *contract) GetWithdrawals(ctx context.Context, from, to int64, addr string) ([]*ct.WithdrawalConfirmation, error) {
@@ -65,6 +65,6 @@ func escToWithdrawal(ed *abi.EscrowWithdrawal, token string) *ct.WithdrawalConfi
 		Tx:       ed.Raw.TxHash.Hex(),
 		Token:    token,
 		Fee:      ed.Fee.String(),
-		Nonce:    ed.Nonce,
+		Cid:      ed.Nonce,
 	}
 }

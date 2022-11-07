@@ -1,10 +1,11 @@
 package deposits
 
 import (
+	"context"
+	"errors"
+	"kwil/x/deposits/types"
 	"math/big"
 	"math/rand"
-	"strconv"
-	"strings"
 )
 
 /*
@@ -18,45 +19,76 @@ import (
 	   than the amount requested, the validator will return the amount requested, and take the fee.
 */
 
-func (d *deposits) Withdraw(addr string, amt *big.Int) error {
+var ErrCantParseAmount = errors.New("can't parse amount")
 
-	return nil
+type WithdrawalResponse struct {
+	Tx            string `json:"tx"`
+	Amount        string `json:"amount"`
+	Fee           string `json:"fee"`
+	CorrelationId string `json:"correlation_id"`
+	Expiration    int64  `json:"expiration"`
+	Wallet        string `json:"wallet"`
 }
 
-// validateNonce should check that the nonce is in the proper format (with the block expiration prepended)
-// and that the block expiration is within the proper range
-// e.g. 1453052:cmkr3oen3o3g4j0 (block expiration:nonce)
-func validateNonce(n string, low, high int64, l uint8) bool {
-	hvs := strings.Split(n, ":")
-	if len(hvs) != 2 {
-		return false
-	}
+func (d *deposits) Withdraw(ctx context.Context, addr, amt string) (*types.PendingWithdrawal, error) {
+	// generate a nonce
+	cid := generateCid(10)
 
-	// check that the block expiration is a number
-	nm, err := strconv.Atoi(hvs[0])
+	res, err := d.sql.StartWithdrawal(cid, addr, amt, d.we)
 	if err != nil {
-		return false
+		return nil, err
 	}
 
-	// check that the block expiration is within the proper range
-	if int64(nm) < low || int64(nm) > high {
-		return false
+	// now we need to send the withdrawal request to the blockchain
+	pk, err := d.acc.GetPrivateKey()
+	if err != nil {
+		return nil, err
 	}
 
-	// checks hvs[1] is 5 characters long
-	if uint8(len(hvs[1])) != l {
-		return false
+	// parse amt and fee to *big.Int
+	amount, ok := new(big.Int).SetString(res.Amount, 10)
+	if !ok {
+		return nil, ErrCantParseAmount
 	}
 
-	return true
+	fee, ok := new(big.Int).SetString(res.Fee, 10)
+	if !ok {
+		return nil, ErrCantParseAmount
+	}
+
+	// recip, nonce, amt, fee
+	tx, err := d.sc.ReturnFunds(ctx, pk, res.Wallet, res.Cid, amount, fee)
+	if err != nil {
+		d.log.Errorf("error sending withdrawal request to blockchain: %v", err)
+		return nil, err
+	}
+
+	// update the withdrawal request with the tx
+	err = d.sql.AddTx(cid, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.PendingWithdrawal{
+		Tx:         tx,
+		Amount:     res.Amount,
+		Fee:        res.Fee,
+		Cid:        res.Cid,
+		Expiration: res.Expiration,
+		Wallet:     addr,
+	}, nil
 }
 
-// generateRandomString generates a random string of length l
-func generateNonce(l uint8) string {
-	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+=-"
+// generateCid generates a correlation id for the withdrawal
+func generateCid(l uint8) string {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, l)
 	for i := uint8(0); i < l; i++ {
 		result[i] = chars[rand.Intn(len(chars))]
 	}
 	return string(result)
+}
+
+func (d *deposits) GetWithdrawalsForWallet(addr string) ([]*types.PendingWithdrawal, error) {
+	return d.sql.GetWithdrawalsForWallet(addr)
 }
