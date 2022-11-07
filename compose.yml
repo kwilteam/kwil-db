@@ -16,6 +16,22 @@ services:
       KWIL_GRPC_ENDPOINT: kwild:50051
     ports:
       - "8081:8080"
+  postgres:
+      image: postgres:15.0-alpine
+      restart: always
+      environment:
+        - POSTGRES_USER=postgres
+        - POSTGRES_PASSWORD=postgres
+      logging:
+        options:
+          max-size: 10m
+          max-file: "3"
+      ports:
+        - '5438:5432'
+      volumes:
+        - ./.pgdata:/var/lib/postgresql/data
+        # copy the sql script to create tables
+        - ./scripts/pg-init-scripts/:/docker-entrypoint-initdb.d/
 
 networks:
   kwil-net:
