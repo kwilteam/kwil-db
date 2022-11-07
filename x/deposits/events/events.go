@@ -42,6 +42,7 @@ func New(c cfgx.Config, l logx.Logger) (EventFeed, error) {
 
 	// get contract
 	sc, err := client.GetContract(c.String("contract-address"))
+	logger.Infof("listening for events on contract %s, chain %s", c.String("contract-address"), chnid)
 	if err != nil {
 		return nil, err
 	}

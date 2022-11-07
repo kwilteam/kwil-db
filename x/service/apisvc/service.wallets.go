@@ -2,13 +2,10 @@ package apisvc
 
 import (
 	"context"
-	"math/big"
 
 	types "kwil/pkg/types/db"
 	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 func (s *Service) GetWalletRole(ctx context.Context, req *apipb.GetWalletRoleRequest) (*apipb.GetWalletRoleResponse, error) {
@@ -27,21 +24,46 @@ func (s *Service) GetWalletRole(ctx context.Context, req *apipb.GetWalletRoleReq
 	}, nil
 }
 
+func (s *Service) GetWithdrawalsForWallet(ctx context.Context, req *apipb.GetWithdrawalsRequest) (*apipb.GetWithdrawalsResponse, error) {
+	wdr, err := s.ds.GetWithdrawalsForWallet(req.Wallet)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Im sure there is a better way to do this...
+
+	var wds []*apipb.Withdrawal
+	for _, wd := range wdr {
+		wds = append(wds, &apipb.Withdrawal{
+			Tx:            wd.Tx,
+			Amount:        wd.Amount,
+			Fee:           wd.Fee,
+			CorrelationId: wd.Cid,
+			Expiration:    wd.Expiration,
+		})
+	}
+
+	return &apipb.GetWithdrawalsResponse{
+		Withdrawals: wds,
+	}, nil
+}
+
 func (s *Service) GetBalance(ctx context.Context, req *apipb.GetBalanceRequest) (*apipb.GetBalanceResponse, error) {
 
-	bal, err := s.ds.GetBalance(req.Id)
+	bal, sp, err := s.ds.GetBalanceAndSpent(req.Wallet)
 	if err != nil {
 		return nil, err
 	}
 
 	return &apipb.GetBalanceResponse{
-		Balance: bal.String(),
+		Balance: bal,
+		Spent:   sp,
 	}, nil
 }
 
 func (s *Service) ReturnFunds(ctx context.Context, req *apipb.ReturnFundsRequest) (*apipb.ReturnFundsResponse, error) {
 
-	// THIS SHOULD NOT YET BE USED IN PRODUCTION
+	// THIS SHOULD NOT YET BE USED IN PRODUCTION WITH REAL FUNDS
 
 	// reconstruct id
 	// id for return funds is generated from amount, nonce, and address (from)
@@ -60,40 +82,16 @@ func (s *Service) ReturnFunds(ctx context.Context, req *apipb.ReturnFundsRequest
 	if !valid {
 		return nil, ErrInvalidSignature
 	}
-
-	// now validate that the caller has enough funds to return
-	bal, err := s.ds.GetBalance(req.From)
+	wdr, err := s.ds.Withdraw(ctx, req.From, req.Amount)
 	if err != nil {
 		return nil, err
 	}
 
-	// convert req.Amount to big.Int
-	amt, ok := new(big.Int).SetString(req.Amount, 10)
-	if !ok {
-		return nil, ErrInvalidAmount
-	}
-
-	// check to make sure the amount is <= the balance
-	if amt.Cmp(bal) > 0 {
-		return nil, ErrNotEnoughFunds
-	}
-
-	// now we need to get the amount they have spent, since we will cash it out in the smart contract
-	_, err = s.ds.GetSpent(req.From)
-	if err != nil {
-		return nil, err
-	}
-
-	// now we call the smart contract to return the funds
-	// convert req.From to common.Address
-	_ = common.HexToAddress(req.From)
-
-	/*
-		_, err = s.cc.ReturnFunds(ctx, from, amt, spent) // we need to build tracing here
-		if err != nil {
-			return nil, err
-		}
-	*/
-
-	return &apipb.ReturnFundsResponse{}, nil
+	return &apipb.ReturnFundsResponse{
+		Tx:            wdr.Tx,
+		Amount:        wdr.Amount,
+		Fee:           wdr.Fee,
+		CorrelationId: wdr.Cid,
+		Expiration:    wdr.Expiration,
+	}, nil
 }

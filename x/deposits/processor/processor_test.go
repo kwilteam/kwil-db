@@ -60,7 +60,7 @@ func TestProcessor(t *testing.T) {
 	mwr := dt.WithdrawalRequest{
 		Wallet:     "bennan",
 		Amount:     "50",
-		Nonce:      "n1",
+		Cid:        "n1",
 		Expiration: 100,
 	}
 
@@ -89,7 +89,7 @@ func TestProcessor(t *testing.T) {
 	mwr = dt.WithdrawalRequest{
 		Wallet:     "bennan",
 		Amount:     "200",
-		Nonce:      "n2",
+		Cid:        "n2",
 		Expiration: 100,
 	}
 
@@ -116,14 +116,14 @@ func TestProcessor(t *testing.T) {
 
 	// test withdraw confirmation
 	mwc := dt.WithdrawalConfirmation{
-		Nonce: "n1",
+		Cid: "n1",
 	}
 
 	p.ProcessWithdrawalConfirmation(&mwc)
 
 	// now test with a nonexistent nonce
 	mwc = dt.WithdrawalConfirmation{
-		Nonce: "ncewc3",
+		Cid: "ncewc3",
 	}
 
 	// this will throw memory error if it fails
@@ -156,7 +156,7 @@ func TestBadParsing(t *testing.T) {
 	mwr := dt.WithdrawalRequest{
 		Wallet:     "bennan",
 		Amount:     "1fr4e0",
-		Nonce:      "n1",
+		Cid:        "n1",
 		Expiration: 100,
 	}
 
@@ -172,7 +172,7 @@ func TestWithdrawNoMoney(t *testing.T) {
 	mwr := dt.WithdrawalRequest{
 		Wallet:     "bennan",
 		Amount:     "100",
-		Nonce:      "n1",
+		Cid:        "n1",
 		Expiration: 100,
 	}
 
@@ -217,7 +217,7 @@ func TestExpiredWithdrawals(t *testing.T) {
 	mwr := dt.WithdrawalRequest{
 		Wallet:     "bennan",
 		Amount:     "50",
-		Nonce:      "n1",
+		Cid:        "n1",
 		Expiration: 50,
 	}
 	err = p.ProcessWithdrawalRequest(&mwr)
@@ -229,7 +229,7 @@ func TestExpiredWithdrawals(t *testing.T) {
 	mwr = dt.WithdrawalRequest{
 		Wallet:     "bennan",
 		Amount:     "200",
-		Nonce:      "n2",
+		Cid:        "n2",
 		Expiration: 100,
 	}
 	err = p.ProcessWithdrawalRequest(&mwr)
@@ -258,7 +258,7 @@ func TestExpiredWithdrawals(t *testing.T) {
 	mwr = dt.WithdrawalRequest{
 		Wallet:     "bennan",
 		Amount:     "200",
-		Nonce:      "n3",
+		Cid:        "n3",
 		Expiration: 150,
 	}
 

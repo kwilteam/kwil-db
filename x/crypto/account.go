@@ -2,12 +2,12 @@ package crypto
 
 import (
 	"crypto/ecdsa"
-	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
 	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
+// TODO: change getter methods (not idiomatic)
 type Account interface {
 	Sign(data []byte) (string, error)
 	GetAddress() *common.Address
@@ -78,13 +78,15 @@ func (a *account) GetPrivateKey() (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	var pk ecdsa.PrivateKey // this should be overwritten at the end of the function for security
-	err = json.Unmarshal(pkb, &pk)
+	pkStr := string(pkb)
+
+	// convert to private key
+	pk, err := ec.HexToECDSA(pkStr)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pk, nil
+	return pk, nil
 }
 
 func (a *account) getPrivateKeyBytes() ([]byte, error) {
