@@ -197,7 +197,7 @@
         ]
       }
     },
-    "/api/v0/{owner}/{name}/metadata": {
+    "/api/v0/{wallet}/{database}/metadata": {
       "get": {
         "operationId": "KwilService_GetMetadata",
         "responses": {
@@ -216,13 +216,13 @@
         },
         "parameters": [
           {
-            "name": "owner",
+            "name": "wallet",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
-            "name": "name",
+            "name": "database",
             "in": "path",
             "required": true,
             "type": "string"
@@ -235,6 +235,9 @@
     }
   },
   "definitions": {
+    "apisvcApplySchemaResponse": {
+      "type": "object"
+    },
     "apisvcCRUDInput": {
       "type": "object",
       "properties": {
@@ -285,6 +288,20 @@
       "type": "object",
       "properties": {
         "traceId": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcChange": {
+      "type": "object",
+      "properties": {
+        "cmd": {
+          "type": "string"
+        },
+        "comment": {
+          "type": "string"
+        },
+        "reverse": {
           "type": "string"
         }
       }
@@ -353,26 +370,8 @@
     "apisvcGetMetadataResponse": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "queries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcQuery"
-          }
-        },
-        "roles": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcRole"
-          }
-        },
-        "tables": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcTable"
-          }
+        "metadata": {
+          "$ref": "#/definitions/apisvcMetadata"
         }
       }
     },
@@ -387,6 +386,32 @@
         }
       }
     },
+    "apisvcMetadata": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcTable"
+          }
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcQuery"
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcRole"
+          }
+        }
+      }
+    },
     "apisvcOutput": {
       "type": "object",
       "properties": {
@@ -395,6 +420,34 @@
         },
         "type": {
           "type": "string"
+        }
+      }
+    },
+    "apisvcPlan": {
+      "type": "object",
+      "properties": {
+        "planId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcChange"
+          }
+        }
+      }
+    },
+    "apisvcPlanSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "$ref": "#/definitions/apisvcPlan"
         }
       }
     },

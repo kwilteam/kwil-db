@@ -2,17 +2,51 @@ syntax = "proto3";
 package apisvc;
 option go_package = "kwil/x/proto/apipb";
 
+message PlanSchemaRequest {
+    string wallet = 1;
+    string database = 2;
+    bytes schema = 3;
+  }
+
+  message PlanSchemaResponse {
+    Plan plan = 1;
+  }
+
+  message Plan {
+    string plan_id = 1;
+      string version = 2;
+      string name = 3;
+    repeated Change changes = 4;
+  }
+
+  message Change {
+    string cmd = 1;
+    string comment = 2;
+    string reverse = 3;
+  }
+
+  message ApplySchemaRequest {
+    string plan_id = 1;
+  }
+
+  message ApplySchemaResponse {}
+
 message GetMetadataRequest {
-    string owner = 1;
-    string name = 2;
+    string wallet = 1;
+    string database = 2;
 }
 
 message GetMetadataResponse {
-    string name = 1;
-    repeated Query queries = 2;
-    repeated Role roles = 3;
-    repeated Table tables = 4;
+    Metadata metadata = 1;
 }
+
+
+message Metadata {
+    string name = 1;
+    repeated Table tables = 2;
+    repeated Query queries = 3;
+    repeated Role roles = 4;
+  }
 
 message Table {
     string name = 1;

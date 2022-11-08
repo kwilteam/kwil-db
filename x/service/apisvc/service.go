@@ -18,7 +18,7 @@ type Service struct {
 	md      schema.Service
 }
 
-func NewService(ds deposits.Deposits, p pricing.PriceBuilder) *Service {
+func NewService(ds deposits.Deposits, p pricing.PriceBuilder, md schema.Service) *Service {
 	return &Service{
 		ds:      ds,
 		pricing: p,

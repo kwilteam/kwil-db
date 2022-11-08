@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"kwil/x/deposits/processor"
 	"kwil/x/schema"
-	"kwil/x/svcx/wallet"
 	"net"
 	"net/http"
 	"os"
@@ -20,9 +18,7 @@ import (
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
-	"kwil/x/proto/schemapb"
 	"kwil/x/service/apisvc"
-	"kwil/x/service/schemasvc"
 	"kwil/x/utils"
 
 	"github.com/oklog/run"
@@ -61,15 +57,13 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	apiService := apisvc.NewService(d, p)
+	apiService := apisvc.NewService(d, p, schema.NewTestService())
 	httpHandler := apisvc.NewHandler(logger)
 
-	schemaService := schemasvc.NewService(schema.NewTestService())
-
-	return serve(logger, httpHandler, apiService, schemaService)
+	return serve(logger, httpHandler, apiService)
 }
 
-func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilServiceServer, schemaService schemapb.SchemaServiceServer) error {
+func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilServiceServer) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -80,7 +74,6 @@ func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilSe
 	g.Add(func() error {
 		grpcServer := grpcx.NewServer(logger)
 		apipb.RegisterKwilServiceServer(grpcServer, apiService)
-		schemapb.RegisterSchemaServiceServer(grpcServer, schemaService)
 		return grpcServer.Serve(listener)
 	}, func(error) {
 		listener.Close()
@@ -113,32 +106,6 @@ func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilSe
 	})
 
 	return g.Run()
-}
-
-func loadWalletService(l logx.Logger) (wallet.RequestService, error) {
-	tr := processor.AsMessageTransform(processor.NewProcessor(l))
-
-	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), tr)
-	if err != nil {
-		return nil, err
-	}
-
-	w, err := wallet.NewRequestService(cfgx.GetConfig())
-	if err != nil {
-		return nil, err
-	}
-
-	err = p.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	err = w.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	return w, nil
 }
 
 func main() {

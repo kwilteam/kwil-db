@@ -16,9 +16,12 @@ service KwilService {
   }
 
 
+  rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
+  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {}
+
   rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {
     option (google.api.http) = {
-      get: "/api/v0/{owner}/{name}/metadata"
+      get: "/api/v0/{wallet}/{database}/metadata"
     };
   }
 
