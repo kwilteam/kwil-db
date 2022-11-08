@@ -5,6 +5,7 @@ import (
 	dt "kwil/x/deposits/types"
 	"kwil/x/svcx/messaging/mx"
 	"kwil/x/svcx/wallet"
+	"log"
 )
 
 func AsMessageTransform(pr Processor) wallet.MessageTransform {
@@ -25,6 +26,7 @@ func AsMessageTransform(pr Processor) wallet.MessageTransform {
 			if err != nil {
 				return nil, err
 			}
+			log.Println("deposit processed")
 		case 0x01:
 			// withdrawal request
 			wdr, err := dt.Deserialize[*dt.WithdrawalRequest](msg.Value)

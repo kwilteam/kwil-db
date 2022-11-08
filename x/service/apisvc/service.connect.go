@@ -7,5 +7,5 @@ import (
 )
 
 func (s *Service) Connect(ctx context.Context, req *apipb.ConnectRequest) (*apipb.ConnectResponse, error) {
-	return &apipb.ConnectResponse{Address: "0x995d95245698212D4Af52c8031F614C3D3127994"}, nil
+	return &apipb.ConnectResponse{Address: "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D"}, nil
 }

@@ -7,13 +7,14 @@ import (
 	"math"
 	"math/big"
 
+	"kwil/abi"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/spf13/viper"
-	"kwil/abi"
 )
 
 type Config struct {
@@ -51,6 +52,7 @@ func NewClientV(v *viper.Viper) (*Client, error) {
 func NewClient(c *Config) (*Client, error) {
 	vAddr := common.HexToAddress(c.NodeAddress)
 	poolAddr := common.HexToAddress(c.FundingPool)
+	// trim whitespace on c.FundingPool
 	pkey, err := crypto.HexToECDSA(c.PrivateKey)
 	if err != nil {
 		fmt.Println("error parsing private key")

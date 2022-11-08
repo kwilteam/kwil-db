@@ -1108,14 +1108,14 @@ func request_KwilService_GetBalance_0(ctx context.Context, marshaler runtime.Mar
 		_   = err
 	)
 
-	val, ok = pathParams["id"]
+	val, ok = pathParams["wallet"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "wallet")
 	}
 
-	protoReq.Id, err = runtime.String(val)
+	protoReq.Wallet, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "wallet", err)
 	}
 
 	msg, err := client.GetBalance(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -1134,14 +1134,14 @@ func local_request_KwilService_GetBalance_0(ctx context.Context, marshaler runti
 		_   = err
 	)
 
-	val, ok = pathParams["id"]
+	val, ok = pathParams["wallet"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "wallet")
 	}
 
-	protoReq.Id, err = runtime.String(val)
+	protoReq.Wallet, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "wallet", err)
 	}
 
 	msg, err := server.GetBalance(ctx, &protoReq)
@@ -1719,7 +1719,7 @@ func RegisterKwilServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/apisvc.KwilService/GetBalance", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/balance"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/apisvc.KwilService/GetBalance", runtime.WithHTTPPathPattern("/api/v0/wallets/{wallet}/balance"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2229,7 +2229,7 @@ func RegisterKwilServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/apisvc.KwilService/GetBalance", runtime.WithHTTPPathPattern("/api/v0/wallets/{id}/balance"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/apisvc.KwilService/GetBalance", runtime.WithHTTPPathPattern("/api/v0/wallets/{wallet}/balance"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2329,7 +2329,7 @@ var (
 
 	pattern_KwilService_GetQueries_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v0", "databases", "databaseId", "queries"}, ""))
 
-	pattern_KwilService_GetBalance_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v0", "wallets", "id", "balance"}, ""))
+	pattern_KwilService_GetBalance_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"api", "v0", "wallets", "wallet", "balance"}, ""))
 
 	pattern_KwilService_GetWalletRole_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api", "v0", "wallets", "id", "databaseId", "role"}, ""))
 

@@ -1,0 +1,44 @@
+syntax = "proto3";
+package apisvc;
+option go_package = "kwil/x/proto/apipb";
+
+message GetBalanceRequest {
+    string wallet = 1;
+}
+message GetBalanceResponse {
+    string balance = 1;
+    string spent = 2;
+}
+  
+message ReturnFundsRequest {
+    string id = 1;
+    string amount = 2;
+    string nonce = 3;
+    string from = 4;
+    string signature = 5;
+}
+  
+message ReturnFundsResponse {
+    string tx = 1;
+    string amount = 2;
+    string fee = 3;
+    string correlation_id = 4;
+    int64 expiration = 5;
+}
+
+message GetWithdrawalsRequest {
+    string wallet = 1;
+}
+
+message GetWithdrawalsResponse {
+    repeated Withdrawal withdrawals = 1;
+}
+
+message Withdrawal {
+    string correlation_id = 1;
+    string amount = 2;
+    string fee = 3;
+    int64 expiration = 4;
+    string tx = 5;
+    string wallet = 6;
+}

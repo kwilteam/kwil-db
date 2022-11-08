@@ -6,6 +6,7 @@ import (
 	"kwil/x/cli/util"
 	"kwil/x/proto/apipb"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -27,7 +28,9 @@ func NewCmdConnect() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				cmd.Println(res.Address)
+				color.Set(color.FgGreen)
+				cmd.Println("Connection successful ")
+				color.Unset()
 
 				if save {
 					return util.WriteConfig(map[string]any{"node-address": res.Address})
