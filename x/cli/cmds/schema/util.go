@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 	"fmt"
+	"kwil/x/proto/apipb"
 	"strings"
 
 	"github.com/fatih/color"
@@ -41,6 +42,17 @@ func loadRealm(ctx context.Context, p string, exclude []string) (*sqlspec.Realm,
 }
 
 func planSummary(cmd *cobra.Command, plan *sqlspec.Plan) error {
+	cmd.Println("Planned Changes:")
+	for _, c := range plan.Changes {
+		if c.Comment != "" {
+			cmd.Println("--", strings.ToUpper(c.Comment[:1])+c.Comment[1:])
+		}
+		cmd.Println(color.YellowString("   %s", c.Cmd))
+	}
+	return nil
+}
+
+func planSummaryProto(cmd *cobra.Command, plan *apipb.Plan) error {
 	cmd.Println("Planned Changes:")
 	for _, c := range plan.Changes {
 		if c.Comment != "" {

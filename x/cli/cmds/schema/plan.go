@@ -44,7 +44,7 @@ func createPlanCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				_ = resp
+				planSummaryProto(cmd, resp.Plan)
 				return nil
 			})
 		},
@@ -55,6 +55,8 @@ func createPlanCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Wallet, "wallet", "w", "", "Wallet to use for the connection")
 	cmd.Flags().StringVarP(&opts.Database, "database", "d", "", "Database name to connect to")
 	cmd.MarkFlagRequired("file")
+	cmd.MarkFlagRequired("wallet")
+	cmd.MarkFlagRequired("database")
 
 	return cmd
 }

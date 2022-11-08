@@ -23,6 +23,7 @@ func NewService(ds deposits.Deposits, p pricing.PriceBuilder, md schema.Service)
 		ds:      ds,
 		pricing: p,
 		log:     logx.New(),
+		md:      md,
 	}
 }
 
