@@ -76,8 +76,11 @@ func convertMetadata(meta schema.Metadata) *apipb.Metadata {
 	}
 
 	return &apipb.Metadata{
-		Name:   meta.DbName,
-		Tables: tables,
+		Name:        meta.DbName,
+		Tables:      tables,
+		Queries:     queries,
+		Roles:       roles,
+		DefaultRole: meta.DefaultRole,
 	}
 }
 

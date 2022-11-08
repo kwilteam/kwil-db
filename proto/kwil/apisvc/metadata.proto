@@ -46,7 +46,8 @@ message Metadata {
     repeated Table tables = 2;
     repeated Query queries = 3;
     repeated Role roles = 4;
-  }
+    string default_role = 5;
+}
 
 message Table {
     string name = 1;

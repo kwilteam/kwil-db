@@ -28,12 +28,18 @@ func convertSchema(r *sqlspec.Schema) Metadata {
 		roles[i] = convertRole(r)
 	}
 
+	var defaultRole string
+	if r.Realm.DefaultRole != nil {
+		defaultRole = r.Realm.DefaultRole.Name
+	}
+
 	return Metadata{
-		DbName:  r.Name,
-		Tables:  tables,
-		Enums:   enums,
-		Queries: queries,
-		Roles:   roles,
+		DbName:      r.Name,
+		Tables:      tables,
+		Enums:       enums,
+		Queries:     queries,
+		Roles:       roles,
+		DefaultRole: defaultRole,
 	}
 }
 

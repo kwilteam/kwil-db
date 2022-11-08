@@ -409,6 +409,9 @@
           "items": {
             "$ref": "#/definitions/apisvcRole"
           }
+        },
+        "defaultRole": {
+          "type": "string"
         }
       }
     },

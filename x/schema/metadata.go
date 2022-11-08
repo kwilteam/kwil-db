@@ -6,11 +6,12 @@ type RequestMetadata struct {
 }
 
 type Metadata struct {
-	DbName  string
-	Tables  []Table
-	Enums   []Enum
-	Queries []Query
-	Roles   []Role
+	DbName      string
+	Tables      []Table
+	Enums       []Enum
+	Queries     []Query
+	Roles       []Role
+	DefaultRole string
 }
 
 type Table struct {
