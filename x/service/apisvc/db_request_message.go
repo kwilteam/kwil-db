@@ -1,13 +1,5 @@
 package apisvc
 
-import (
-	"context"
-	"fmt"
-	"kwil/x"
-	"kwil/x/proto/apipb"
-	"kwil/x/svcx/composer"
-)
-
 //const DATABASE_EMITTER_ALIAS = "service.database.emitter"
 //
 //// DBRequest DB Request represents the plan to be applied to the DB
@@ -28,6 +20,7 @@ import (
 //}
 
 // Change to plan-changes --> DBRequest
+/*
 func getCreateDbRequest(req *apipb.CreateDatabaseRequest) *composer.Message {
 	panic("not implemented")
 }
@@ -51,3 +44,4 @@ func doSubmitRequest[T any](ctx context.Context, req T, fn func(T) *composer.Mes
 
 	return string(a.Get()), nil
 }
+*/

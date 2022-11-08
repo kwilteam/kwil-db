@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/apisvc/database.proto",
+    "title": "kwil/apisvc/crud.proto",
     "version": "version not set"
   },
   "tags": [
@@ -38,35 +38,14 @@
         ]
       }
     },
-    "/api/v0/databases": {
-      "get": {
-        "operationId": "KwilService_ListDatabases",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcListDatabasesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "KwilService"
-        ]
-      },
+    "/api/v0/read": {
       "post": {
-        "summary": "Databases",
-        "operationId": "KwilService_CreateDatabase",
+        "operationId": "KwilService_Read",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcCreateDatabaseResponse"
+              "$ref": "#/definitions/apisvcReadResponse"
             }
           },
           "default": {
@@ -82,7 +61,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/apisvcCreateDatabaseRequest"
+              "$ref": "#/definitions/apisvcReadRequest"
             }
           }
         ],
@@ -91,45 +70,14 @@
         ]
       }
     },
-    "/api/v0/databases/{databaseId}/queries": {
-      "get": {
-        "operationId": "KwilService_GetQueries",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcGetQueriesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
-    "/api/v0/databases/{databaseId}/query": {
+    "/api/v0/wallets/estimate": {
       "post": {
-        "summary": "Queries",
-        "operationId": "KwilService_PostQuery",
+        "operationId": "KwilService_EstimateCost",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcPostQueryResponse"
+              "$ref": "#/definitions/apisvcEstimateCostResponse"
             }
           },
           "default": {
@@ -140,512 +88,12 @@
           }
         },
         "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
           {
             "name": "body",
             "in": "body",
             "required": true,
             "schema": {
-              "type": "object",
-              "properties": {
-                "query": {
-                  "type": "string"
-                },
-                "from": {
-                  "type": "string"
-                },
-                "signature": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
-    "/api/v0/databases/{databaseId}/roles": {
-      "get": {
-        "operationId": "KwilService_ListRoles",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcListRolesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      },
-      "post": {
-        "summary": "Roles",
-        "operationId": "KwilService_CreateRole",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcCreateRoleResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object"
-            }
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
-    "/api/v0/databases/{databaseId}/roles/{id}": {
-      "get": {
-        "operationId": "KwilService_GetRole",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcGetRoleResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      },
-      "delete": {
-        "operationId": "KwilService_DeleteRole",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcDeleteRoleResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      },
-      "put": {
-        "operationId": "KwilService_UpdateRole",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcUpdateRoleResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object"
-            }
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
-    "/api/v0/databases/{databaseId}/tables": {
-      "get": {
-        "operationId": "KwilService_ListTables",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcListTablesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      },
-      "post": {
-        "summary": "Tables",
-        "operationId": "KwilService_CreateTable",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcCreateTableResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object"
-            }
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
-    "/api/v0/databases/{databaseId}/tables/{id}": {
-      "get": {
-        "operationId": "KwilService_GetTable",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcGetTableResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      },
-      "delete": {
-        "operationId": "KwilService_DeleteTable",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcDeleteTableResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      },
-      "put": {
-        "operationId": "KwilService_UpdateTable",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcUpdateTableResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object"
-            }
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
-    "/api/v0/databases/{id}": {
-      "get": {
-        "operationId": "KwilService_GetDatabase",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcGetDatabaseResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      },
-      "delete": {
-        "operationId": "KwilService_DeleteDatabase",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcDeleteDatabaseResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      },
-      "put": {
-        "operationId": "KwilService_UpdateDatabase",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcUpdateDatabaseResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "owner": {
-                  "type": "string"
-                },
-                "fee": {
-                  "type": "string"
-                },
-                "operation": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "crud": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "instructions": {
-                  "type": "string"
-                },
-                "from": {
-                  "type": "string"
-                },
-                "nonce": {
-                  "type": "string"
-                },
-                "signature": {
-                  "type": "string"
-                }
-              }
+              "$ref": "#/definitions/apisvcEstimateCostRequest"
             }
           }
         ],
@@ -686,42 +134,6 @@
         ]
       }
     },
-    "/api/v0/wallets/{id}/{databaseId}/role": {
-      "get": {
-        "operationId": "KwilService_GetWalletRole",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcGetWalletRoleResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "databaseId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
     "/api/v0/wallets/{wallet}/balance": {
       "get": {
         "summary": "Wallets",
@@ -752,9 +164,145 @@
           "KwilService"
         ]
       }
+    },
+    "/api/v0/write": {
+      "post": {
+        "operationId": "KwilService_Cud",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/apisvcCUDResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/apisvcCUDRequest"
+            }
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
+    "/api/v0/{owner}/{name}/metadata": {
+      "get": {
+        "operationId": "KwilService_GetMetadata",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/apisvcGetMetadataResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
     }
   },
   "definitions": {
+    "apisvcCRUDInput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcCUDRequest": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcCRUDInput"
+          }
+        },
+        "nonce": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcCUDResponse": {
+      "type": "object",
+      "properties": {
+        "traceId": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcColumn": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "nullable": {
+          "type": "boolean"
+        }
+      }
+    },
     "apisvcConnectResponse": {
       "type": "object",
       "properties": {
@@ -763,71 +311,33 @@
         }
       }
     },
-    "apisvcCreateDatabaseRequest": {
+    "apisvcEstimateCostRequest": {
       "type": "object",
       "properties": {
-        "id": {
+        "owner": {
           "type": "string"
         },
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "operation": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "crud": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "from": {
-          "type": "string"
-        },
-        "signature": {
-          "type": "string"
-        }
-      }
-    },
-    "apisvcCreateDatabaseResponse": {
-      "type": "object"
-    },
-    "apisvcCreateRoleResponse": {
-      "type": "object"
-    },
-    "apisvcCreateTableResponse": {
-      "type": "object"
-    },
-    "apisvcDBQuery": {
-      "type": "object",
-      "properties": {
-        "name": {
+        "database": {
           "type": "string"
         },
         "query": {
           "type": "string"
         },
-        "parameters": {
+        "inputs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/apisvcinput"
+            "$ref": "#/definitions/apisvcCRUDInput"
           }
         }
       }
     },
-    "apisvcDeleteDatabaseResponse": {
-      "type": "object"
-    },
-    "apisvcDeleteRoleResponse": {
-      "type": "object"
-    },
-    "apisvcDeleteTableResponse": {
-      "type": "object"
+    "apisvcEstimateCostResponse": {
+      "type": "object",
+      "properties": {
+        "fee": {
+          "type": "string"
+        }
+      }
     },
     "apisvcGetBalanceResponse": {
       "type": "object",
@@ -840,100 +350,99 @@
         }
       }
     },
-    "apisvcGetDatabaseResponse": {
-      "type": "object"
-    },
-    "apisvcGetQueriesResponse": {
-      "type": "object",
-      "properties": {
-        "queries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcDBQuery"
-          }
-        }
-      }
-    },
-    "apisvcGetRoleResponse": {
+    "apisvcGetMetadataResponse": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string"
         },
-        "permissions": {
-          "$ref": "#/definitions/apisvcGetRoleResponseperms"
-        }
-      }
-    },
-    "apisvcGetRoleResponseperms": {
-      "type": "object",
-      "properties": {
-        "ddl": {
-          "type": "boolean"
-        },
         "queries": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/apisvcQuery"
           }
-        }
-      }
-    },
-    "apisvcGetTableResponse": {
-      "type": "object"
-    },
-    "apisvcGetWalletRoleResponse": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
         },
-        "permissions": {
-          "$ref": "#/definitions/apisvcGetWalletRoleResponseperms"
-        }
-      }
-    },
-    "apisvcGetWalletRoleResponseperms": {
-      "type": "object",
-      "properties": {
-        "ddl": {
-          "type": "boolean"
-        },
-        "queries": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "apisvcListDatabasesResponse": {
-      "type": "object"
-    },
-    "apisvcListRolesResponse": {
-      "type": "object",
-      "properties": {
         "roles": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/apisvcRole"
+          }
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcTable"
           }
         }
       }
     },
-    "apisvcListTablesResponse": {
-      "type": "object"
-    },
-    "apisvcPostQueryResponse": {
+    "apisvcInput": {
       "type": "object",
       "properties": {
-        "id": {
+        "name": {
           "type": "string"
         },
-        "msg": {
+        "type": {
           "type": "string"
         }
       }
+    },
+    "apisvcOutput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcQuery": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcInput"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcOutput"
+          }
+        }
+      }
+    },
+    "apisvcReadRequest": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcCRUDInput"
+          }
+        }
+      }
+    },
+    "apisvcReadResponse": {
+      "type": "object"
     },
     "apisvcReturnFundsRequest": {
       "type": "object",
@@ -976,23 +485,31 @@
         }
       }
     },
-    "apisvcUpdateDatabaseResponse": {
-      "type": "object"
-    },
-    "apisvcUpdateRoleResponse": {
-      "type": "object"
-    },
-    "apisvcUpdateTableResponse": {
-      "type": "object"
-    },
-    "apisvcinput": {
+    "apisvcRole": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string"
         },
-        "type": {
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "apisvcTable": {
+      "type": "object",
+      "properties": {
+        "name": {
           "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcColumn"
+          }
         }
       }
     },

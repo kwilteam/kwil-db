@@ -23,31 +23,13 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type KwilServiceClient interface {
 	Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (*ConnectResponse, error)
-	// Databases
-	CreateDatabase(ctx context.Context, in *CreateDatabaseRequest, opts ...grpc.CallOption) (*CreateDatabaseResponse, error)
-	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
-	GetDatabase(ctx context.Context, in *GetDatabaseRequest, opts ...grpc.CallOption) (*GetDatabaseResponse, error)
-	UpdateDatabase(ctx context.Context, in *UpdateDatabaseRequest, opts ...grpc.CallOption) (*UpdateDatabaseResponse, error)
-	DeleteDatabase(ctx context.Context, in *DeleteDatabaseRequest, opts ...grpc.CallOption) (*DeleteDatabaseResponse, error)
-	// Tables
-	CreateTable(ctx context.Context, in *CreateTableRequest, opts ...grpc.CallOption) (*CreateTableResponse, error)
-	ListTables(ctx context.Context, in *ListTablesRequest, opts ...grpc.CallOption) (*ListTablesResponse, error)
-	GetTable(ctx context.Context, in *GetTableRequest, opts ...grpc.CallOption) (*GetTableResponse, error)
-	UpdateTable(ctx context.Context, in *UpdateTableRequest, opts ...grpc.CallOption) (*UpdateTableResponse, error)
-	DeleteTable(ctx context.Context, in *DeleteTableRequest, opts ...grpc.CallOption) (*DeleteTableResponse, error)
-	// Roles
-	CreateRole(ctx context.Context, in *CreateRoleRequest, opts ...grpc.CallOption) (*CreateRoleResponse, error)
-	ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error)
-	GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*GetRoleResponse, error)
-	UpdateRole(ctx context.Context, in *UpdateRoleRequest, opts ...grpc.CallOption) (*UpdateRoleResponse, error)
-	DeleteRole(ctx context.Context, in *DeleteRoleRequest, opts ...grpc.CallOption) (*DeleteRoleResponse, error)
-	// Queries
-	PostQuery(ctx context.Context, in *PostQueryRequest, opts ...grpc.CallOption) (*PostQueryResponse, error)
-	GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesResponse, error)
+	GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error)
+	Cud(ctx context.Context, in *CUDRequest, opts ...grpc.CallOption) (*CUDResponse, error)
+	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	// Wallets
 	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
-	GetWalletRole(ctx context.Context, in *GetWalletRoleRequest, opts ...grpc.CallOption) (*GetWalletRoleResponse, error)
 	ReturnFunds(ctx context.Context, in *ReturnFundsRequest, opts ...grpc.CallOption) (*ReturnFundsResponse, error)
+	EstimateCost(ctx context.Context, in *EstimateCostRequest, opts ...grpc.CallOption) (*EstimateCostResponse, error)
 }
 
 type kwilServiceClient struct {
@@ -67,153 +49,27 @@ func (c *kwilServiceClient) Connect(ctx context.Context, in *ConnectRequest, opt
 	return out, nil
 }
 
-func (c *kwilServiceClient) CreateDatabase(ctx context.Context, in *CreateDatabaseRequest, opts ...grpc.CallOption) (*CreateDatabaseResponse, error) {
-	out := new(CreateDatabaseResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/CreateDatabase", in, out, opts...)
+func (c *kwilServiceClient) GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error) {
+	out := new(GetMetadataResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/GetMetadata", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kwilServiceClient) ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error) {
-	out := new(ListDatabasesResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ListDatabases", in, out, opts...)
+func (c *kwilServiceClient) Cud(ctx context.Context, in *CUDRequest, opts ...grpc.CallOption) (*CUDResponse, error) {
+	out := new(CUDResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/Cud", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kwilServiceClient) GetDatabase(ctx context.Context, in *GetDatabaseRequest, opts ...grpc.CallOption) (*GetDatabaseResponse, error) {
-	out := new(GetDatabaseResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/GetDatabase", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) UpdateDatabase(ctx context.Context, in *UpdateDatabaseRequest, opts ...grpc.CallOption) (*UpdateDatabaseResponse, error) {
-	out := new(UpdateDatabaseResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/UpdateDatabase", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) DeleteDatabase(ctx context.Context, in *DeleteDatabaseRequest, opts ...grpc.CallOption) (*DeleteDatabaseResponse, error) {
-	out := new(DeleteDatabaseResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/DeleteDatabase", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) CreateTable(ctx context.Context, in *CreateTableRequest, opts ...grpc.CallOption) (*CreateTableResponse, error) {
-	out := new(CreateTableResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/CreateTable", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) ListTables(ctx context.Context, in *ListTablesRequest, opts ...grpc.CallOption) (*ListTablesResponse, error) {
-	out := new(ListTablesResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ListTables", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) GetTable(ctx context.Context, in *GetTableRequest, opts ...grpc.CallOption) (*GetTableResponse, error) {
-	out := new(GetTableResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/GetTable", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) UpdateTable(ctx context.Context, in *UpdateTableRequest, opts ...grpc.CallOption) (*UpdateTableResponse, error) {
-	out := new(UpdateTableResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/UpdateTable", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) DeleteTable(ctx context.Context, in *DeleteTableRequest, opts ...grpc.CallOption) (*DeleteTableResponse, error) {
-	out := new(DeleteTableResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/DeleteTable", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) CreateRole(ctx context.Context, in *CreateRoleRequest, opts ...grpc.CallOption) (*CreateRoleResponse, error) {
-	out := new(CreateRoleResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/CreateRole", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) ListRoles(ctx context.Context, in *ListRolesRequest, opts ...grpc.CallOption) (*ListRolesResponse, error) {
-	out := new(ListRolesResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ListRoles", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) GetRole(ctx context.Context, in *GetRoleRequest, opts ...grpc.CallOption) (*GetRoleResponse, error) {
-	out := new(GetRoleResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/GetRole", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) UpdateRole(ctx context.Context, in *UpdateRoleRequest, opts ...grpc.CallOption) (*UpdateRoleResponse, error) {
-	out := new(UpdateRoleResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/UpdateRole", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) DeleteRole(ctx context.Context, in *DeleteRoleRequest, opts ...grpc.CallOption) (*DeleteRoleResponse, error) {
-	out := new(DeleteRoleResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/DeleteRole", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) PostQuery(ctx context.Context, in *PostQueryRequest, opts ...grpc.CallOption) (*PostQueryResponse, error) {
-	out := new(PostQueryResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/PostQuery", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesResponse, error) {
-	out := new(GetQueriesResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/GetQueries", in, out, opts...)
+func (c *kwilServiceClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
+	out := new(ReadResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/Read", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -229,18 +85,18 @@ func (c *kwilServiceClient) GetBalance(ctx context.Context, in *GetBalanceReques
 	return out, nil
 }
 
-func (c *kwilServiceClient) GetWalletRole(ctx context.Context, in *GetWalletRoleRequest, opts ...grpc.CallOption) (*GetWalletRoleResponse, error) {
-	out := new(GetWalletRoleResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/GetWalletRole", in, out, opts...)
+func (c *kwilServiceClient) ReturnFunds(ctx context.Context, in *ReturnFundsRequest, opts ...grpc.CallOption) (*ReturnFundsResponse, error) {
+	out := new(ReturnFundsResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ReturnFunds", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kwilServiceClient) ReturnFunds(ctx context.Context, in *ReturnFundsRequest, opts ...grpc.CallOption) (*ReturnFundsResponse, error) {
-	out := new(ReturnFundsResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ReturnFunds", in, out, opts...)
+func (c *kwilServiceClient) EstimateCost(ctx context.Context, in *EstimateCostRequest, opts ...grpc.CallOption) (*EstimateCostResponse, error) {
+	out := new(EstimateCostResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/EstimateCost", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -252,31 +108,13 @@ func (c *kwilServiceClient) ReturnFunds(ctx context.Context, in *ReturnFundsRequ
 // for forward compatibility
 type KwilServiceServer interface {
 	Connect(context.Context, *ConnectRequest) (*ConnectResponse, error)
-	// Databases
-	CreateDatabase(context.Context, *CreateDatabaseRequest) (*CreateDatabaseResponse, error)
-	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
-	GetDatabase(context.Context, *GetDatabaseRequest) (*GetDatabaseResponse, error)
-	UpdateDatabase(context.Context, *UpdateDatabaseRequest) (*UpdateDatabaseResponse, error)
-	DeleteDatabase(context.Context, *DeleteDatabaseRequest) (*DeleteDatabaseResponse, error)
-	// Tables
-	CreateTable(context.Context, *CreateTableRequest) (*CreateTableResponse, error)
-	ListTables(context.Context, *ListTablesRequest) (*ListTablesResponse, error)
-	GetTable(context.Context, *GetTableRequest) (*GetTableResponse, error)
-	UpdateTable(context.Context, *UpdateTableRequest) (*UpdateTableResponse, error)
-	DeleteTable(context.Context, *DeleteTableRequest) (*DeleteTableResponse, error)
-	// Roles
-	CreateRole(context.Context, *CreateRoleRequest) (*CreateRoleResponse, error)
-	ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error)
-	GetRole(context.Context, *GetRoleRequest) (*GetRoleResponse, error)
-	UpdateRole(context.Context, *UpdateRoleRequest) (*UpdateRoleResponse, error)
-	DeleteRole(context.Context, *DeleteRoleRequest) (*DeleteRoleResponse, error)
-	// Queries
-	PostQuery(context.Context, *PostQueryRequest) (*PostQueryResponse, error)
-	GetQueries(context.Context, *GetQueriesRequest) (*GetQueriesResponse, error)
+	GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error)
+	Cud(context.Context, *CUDRequest) (*CUDResponse, error)
+	Read(context.Context, *ReadRequest) (*ReadResponse, error)
 	// Wallets
 	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
-	GetWalletRole(context.Context, *GetWalletRoleRequest) (*GetWalletRoleResponse, error)
 	ReturnFunds(context.Context, *ReturnFundsRequest) (*ReturnFundsResponse, error)
+	EstimateCost(context.Context, *EstimateCostRequest) (*EstimateCostResponse, error)
 	mustEmbedUnimplementedKwilServiceServer()
 }
 
@@ -287,65 +125,23 @@ type UnimplementedKwilServiceServer struct {
 func (UnimplementedKwilServiceServer) Connect(context.Context, *ConnectRequest) (*ConnectResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Connect not implemented")
 }
-func (UnimplementedKwilServiceServer) CreateDatabase(context.Context, *CreateDatabaseRequest) (*CreateDatabaseResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateDatabase not implemented")
+func (UnimplementedKwilServiceServer) GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetMetadata not implemented")
 }
-func (UnimplementedKwilServiceServer) ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListDatabases not implemented")
+func (UnimplementedKwilServiceServer) Cud(context.Context, *CUDRequest) (*CUDResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Cud not implemented")
 }
-func (UnimplementedKwilServiceServer) GetDatabase(context.Context, *GetDatabaseRequest) (*GetDatabaseResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetDatabase not implemented")
-}
-func (UnimplementedKwilServiceServer) UpdateDatabase(context.Context, *UpdateDatabaseRequest) (*UpdateDatabaseResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateDatabase not implemented")
-}
-func (UnimplementedKwilServiceServer) DeleteDatabase(context.Context, *DeleteDatabaseRequest) (*DeleteDatabaseResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteDatabase not implemented")
-}
-func (UnimplementedKwilServiceServer) CreateTable(context.Context, *CreateTableRequest) (*CreateTableResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateTable not implemented")
-}
-func (UnimplementedKwilServiceServer) ListTables(context.Context, *ListTablesRequest) (*ListTablesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListTables not implemented")
-}
-func (UnimplementedKwilServiceServer) GetTable(context.Context, *GetTableRequest) (*GetTableResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetTable not implemented")
-}
-func (UnimplementedKwilServiceServer) UpdateTable(context.Context, *UpdateTableRequest) (*UpdateTableResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateTable not implemented")
-}
-func (UnimplementedKwilServiceServer) DeleteTable(context.Context, *DeleteTableRequest) (*DeleteTableResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteTable not implemented")
-}
-func (UnimplementedKwilServiceServer) CreateRole(context.Context, *CreateRoleRequest) (*CreateRoleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateRole not implemented")
-}
-func (UnimplementedKwilServiceServer) ListRoles(context.Context, *ListRolesRequest) (*ListRolesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListRoles not implemented")
-}
-func (UnimplementedKwilServiceServer) GetRole(context.Context, *GetRoleRequest) (*GetRoleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRole not implemented")
-}
-func (UnimplementedKwilServiceServer) UpdateRole(context.Context, *UpdateRoleRequest) (*UpdateRoleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateRole not implemented")
-}
-func (UnimplementedKwilServiceServer) DeleteRole(context.Context, *DeleteRoleRequest) (*DeleteRoleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteRole not implemented")
-}
-func (UnimplementedKwilServiceServer) PostQuery(context.Context, *PostQueryRequest) (*PostQueryResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PostQuery not implemented")
-}
-func (UnimplementedKwilServiceServer) GetQueries(context.Context, *GetQueriesRequest) (*GetQueriesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetQueries not implemented")
+func (UnimplementedKwilServiceServer) Read(context.Context, *ReadRequest) (*ReadResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
 func (UnimplementedKwilServiceServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
 }
-func (UnimplementedKwilServiceServer) GetWalletRole(context.Context, *GetWalletRoleRequest) (*GetWalletRoleResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetWalletRole not implemented")
-}
 func (UnimplementedKwilServiceServer) ReturnFunds(context.Context, *ReturnFundsRequest) (*ReturnFundsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReturnFunds not implemented")
+}
+func (UnimplementedKwilServiceServer) EstimateCost(context.Context, *EstimateCostRequest) (*EstimateCostResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EstimateCost not implemented")
 }
 func (UnimplementedKwilServiceServer) mustEmbedUnimplementedKwilServiceServer() {}
 
@@ -378,308 +174,56 @@ func _KwilService_Connect_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KwilService_CreateDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateDatabaseRequest)
+func _KwilService_GetMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMetadataRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KwilServiceServer).CreateDatabase(ctx, in)
+		return srv.(KwilServiceServer).GetMetadata(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/apisvc.KwilService/CreateDatabase",
+		FullMethod: "/apisvc.KwilService/GetMetadata",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).CreateDatabase(ctx, req.(*CreateDatabaseRequest))
+		return srv.(KwilServiceServer).GetMetadata(ctx, req.(*GetMetadataRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KwilService_ListDatabases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListDatabasesRequest)
+func _KwilService_Cud_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CUDRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KwilServiceServer).ListDatabases(ctx, in)
+		return srv.(KwilServiceServer).Cud(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/apisvc.KwilService/ListDatabases",
+		FullMethod: "/apisvc.KwilService/Cud",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).ListDatabases(ctx, req.(*ListDatabasesRequest))
+		return srv.(KwilServiceServer).Cud(ctx, req.(*CUDRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KwilService_GetDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetDatabaseRequest)
+func _KwilService_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KwilServiceServer).GetDatabase(ctx, in)
+		return srv.(KwilServiceServer).Read(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/apisvc.KwilService/GetDatabase",
+		FullMethod: "/apisvc.KwilService/Read",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).GetDatabase(ctx, req.(*GetDatabaseRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_UpdateDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateDatabaseRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).UpdateDatabase(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/UpdateDatabase",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).UpdateDatabase(ctx, req.(*UpdateDatabaseRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_DeleteDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteDatabaseRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).DeleteDatabase(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/DeleteDatabase",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).DeleteDatabase(ctx, req.(*DeleteDatabaseRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_CreateTable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateTableRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).CreateTable(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/CreateTable",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).CreateTable(ctx, req.(*CreateTableRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_ListTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListTablesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).ListTables(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/ListTables",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).ListTables(ctx, req.(*ListTablesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_GetTable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetTableRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).GetTable(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/GetTable",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).GetTable(ctx, req.(*GetTableRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_UpdateTable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateTableRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).UpdateTable(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/UpdateTable",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).UpdateTable(ctx, req.(*UpdateTableRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_DeleteTable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteTableRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).DeleteTable(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/DeleteTable",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).DeleteTable(ctx, req.(*DeleteTableRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_CreateRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreateRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).CreateRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/CreateRole",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).CreateRole(ctx, req.(*CreateRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_ListRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRolesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).ListRoles(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/ListRoles",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).ListRoles(ctx, req.(*ListRolesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_GetRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).GetRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/GetRole",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).GetRole(ctx, req.(*GetRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_UpdateRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).UpdateRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/UpdateRole",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).UpdateRole(ctx, req.(*UpdateRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_DeleteRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).DeleteRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/DeleteRole",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).DeleteRole(ctx, req.(*DeleteRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_PostQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PostQueryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).PostQuery(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/PostQuery",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).PostQuery(ctx, req.(*PostQueryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_GetQueries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetQueriesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).GetQueries(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/GetQueries",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).GetQueries(ctx, req.(*GetQueriesRequest))
+		return srv.(KwilServiceServer).Read(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -702,24 +246,6 @@ func _KwilService_GetBalance_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KwilService_GetWalletRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWalletRoleRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).GetWalletRole(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/GetWalletRole",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).GetWalletRole(ctx, req.(*GetWalletRoleRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _KwilService_ReturnFunds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReturnFundsRequest)
 	if err := dec(in); err != nil {
@@ -738,6 +264,24 @@ func _KwilService_ReturnFunds_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KwilService_EstimateCost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EstimateCostRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KwilServiceServer).EstimateCost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/apisvc.KwilService/EstimateCost",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KwilServiceServer).EstimateCost(ctx, req.(*EstimateCostRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KwilService_ServiceDesc is the grpc.ServiceDesc for KwilService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -750,84 +294,28 @@ var KwilService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _KwilService_Connect_Handler,
 		},
 		{
-			MethodName: "CreateDatabase",
-			Handler:    _KwilService_CreateDatabase_Handler,
+			MethodName: "GetMetadata",
+			Handler:    _KwilService_GetMetadata_Handler,
 		},
 		{
-			MethodName: "ListDatabases",
-			Handler:    _KwilService_ListDatabases_Handler,
+			MethodName: "Cud",
+			Handler:    _KwilService_Cud_Handler,
 		},
 		{
-			MethodName: "GetDatabase",
-			Handler:    _KwilService_GetDatabase_Handler,
-		},
-		{
-			MethodName: "UpdateDatabase",
-			Handler:    _KwilService_UpdateDatabase_Handler,
-		},
-		{
-			MethodName: "DeleteDatabase",
-			Handler:    _KwilService_DeleteDatabase_Handler,
-		},
-		{
-			MethodName: "CreateTable",
-			Handler:    _KwilService_CreateTable_Handler,
-		},
-		{
-			MethodName: "ListTables",
-			Handler:    _KwilService_ListTables_Handler,
-		},
-		{
-			MethodName: "GetTable",
-			Handler:    _KwilService_GetTable_Handler,
-		},
-		{
-			MethodName: "UpdateTable",
-			Handler:    _KwilService_UpdateTable_Handler,
-		},
-		{
-			MethodName: "DeleteTable",
-			Handler:    _KwilService_DeleteTable_Handler,
-		},
-		{
-			MethodName: "CreateRole",
-			Handler:    _KwilService_CreateRole_Handler,
-		},
-		{
-			MethodName: "ListRoles",
-			Handler:    _KwilService_ListRoles_Handler,
-		},
-		{
-			MethodName: "GetRole",
-			Handler:    _KwilService_GetRole_Handler,
-		},
-		{
-			MethodName: "UpdateRole",
-			Handler:    _KwilService_UpdateRole_Handler,
-		},
-		{
-			MethodName: "DeleteRole",
-			Handler:    _KwilService_DeleteRole_Handler,
-		},
-		{
-			MethodName: "PostQuery",
-			Handler:    _KwilService_PostQuery_Handler,
-		},
-		{
-			MethodName: "GetQueries",
-			Handler:    _KwilService_GetQueries_Handler,
+			MethodName: "Read",
+			Handler:    _KwilService_Read_Handler,
 		},
 		{
 			MethodName: "GetBalance",
 			Handler:    _KwilService_GetBalance_Handler,
 		},
 		{
-			MethodName: "GetWalletRole",
-			Handler:    _KwilService_GetWalletRole_Handler,
-		},
-		{
 			MethodName: "ReturnFunds",
 			Handler:    _KwilService_ReturnFunds_Handler,
+		},
+		{
+			MethodName: "EstimateCost",
+			Handler:    _KwilService_EstimateCost_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

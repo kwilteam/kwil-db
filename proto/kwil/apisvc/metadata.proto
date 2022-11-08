@@ -1,0 +1,48 @@
+syntax = "proto3";
+package apisvc;
+option go_package = "kwil/x/proto/apipb";
+
+message GetMetadataRequest {
+    string owner = 1;
+    string name = 2;
+}
+
+message GetMetadataResponse {
+    string name = 1;
+    repeated Query queries = 2;
+    repeated Role roles = 3;
+    repeated Table tables = 4;
+}
+
+message Table {
+    string name = 1;
+    repeated Column columns = 2;
+}
+
+message Column {
+    string name = 1;
+    string type = 2;
+    bool nullable = 3;
+}
+
+message Query {
+    string name = 1;
+    string statement = 2;
+    repeated Input inputs = 3;
+    repeated Output outputs = 4;
+}
+
+message Role {
+    string name = 1;
+    repeated string queries = 2;
+}
+
+message Input {
+    string name = 1;
+    string type = 2;
+}
+
+message Output {
+    string name = 1;
+    string type = 2;
+}

@@ -2,27 +2,11 @@ package apisvc
 
 import (
 	"context"
+	"encoding/json"
 
-	types "kwil/pkg/types/db"
 	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
 )
-
-func (s *Service) GetWalletRole(ctx context.Context, req *apipb.GetWalletRoleRequest) (*apipb.GetWalletRoleResponse, error) {
-
-	myRole := types.Role{
-		Name: "admin",
-		Permissions: types.Permissions{
-			DDL:                  true,
-			ParamaterizedQueries: []string{"test_insert"},
-		},
-	}
-
-	return &apipb.GetWalletRoleResponse{
-		Name:        myRole.Name,
-		Permissions: &apipb.GetWalletRoleResponsePerms{Ddl: myRole.Permissions.DDL, Queries: myRole.Permissions.ParamaterizedQueries},
-	}, nil
-}
 
 func (s *Service) GetWithdrawalsForWallet(ctx context.Context, req *apipb.GetWithdrawalsRequest) (*apipb.GetWithdrawalsResponse, error) {
 	wdr, err := s.ds.GetWithdrawalsForWallet(req.Wallet)
@@ -30,22 +14,19 @@ func (s *Service) GetWithdrawalsForWallet(ctx context.Context, req *apipb.GetWit
 		return nil, err
 	}
 
-	// TODO: Im sure there is a better way to do this...
-
-	var wds []*apipb.Withdrawal
-	for _, wd := range wdr {
-		wds = append(wds, &apipb.Withdrawal{
-			Tx:            wd.Tx,
-			Amount:        wd.Amount,
-			Fee:           wd.Fee,
-			CorrelationId: wd.Cid,
-			Expiration:    wd.Expiration,
-		})
+	// Marshal and unmarshal
+	bts, err := json.Marshal(wdr)
+	if err != nil {
+		return nil, err
 	}
 
-	return &apipb.GetWithdrawalsResponse{
-		Withdrawals: wds,
-	}, nil
+	var m apipb.GetWithdrawalsResponse
+	err = json.Unmarshal(bts, &m)
+	if err != nil {
+		return nil, err
+	}
+
+	return &m, nil
 }
 
 func (s *Service) GetBalance(ctx context.Context, req *apipb.GetBalanceRequest) (*apipb.GetBalanceResponse, error) {
@@ -93,5 +74,12 @@ func (s *Service) ReturnFunds(ctx context.Context, req *apipb.ReturnFundsRequest
 		Fee:           wdr.Fee,
 		CorrelationId: wdr.Cid,
 		Expiration:    wdr.Expiration,
+	}, nil
+}
+
+func (s *Service) EstimateCost(ctx context.Context, req *apipb.EstimateCostRequest) (*apipb.EstimateCostResponse, error) {
+	s.log.Sugar().Warnf("EstimateCost is not yet implemented!")
+	return &apipb.EstimateCostResponse{
+		Fee: "100",
 	}, nil
 }
