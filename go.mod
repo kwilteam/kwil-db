@@ -1,6 +1,6 @@
 module kwil
 
-go 1.18
+go 1.19
 
 require (
 	github.com/99designs/keyring v1.1.6
@@ -12,7 +12,6 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0
-	github.com/kwilteam/ksl v0.0.0-20221107105102-39786d1c5d15
 	github.com/lib/pq v1.10.7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/go-homedir v1.1.0
@@ -27,6 +26,7 @@ require (
 	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v2 v2.4.0
+	ksl v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -43,6 +43,7 @@ require (
 replace (
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	github.com/keybase/go-keychain => github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4
+	ksl => ./ksl
 )
 
 require (

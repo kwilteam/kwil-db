@@ -1,0 +1,26 @@
+
+
+table users {
+    id:    int64     @id
+    email: string    @unique
+    name:  string? @index("users_name_custom_idx")
+    dob:   date?
+    created_at: datetime
+    updated_at: datetime
+}
+
+table posts {
+    id:        int64     @id
+    title:     string?   @size(256)
+    content:   string?
+    e_test: test_enum @default(one)
+    published: bool      @default(true)
+    author_id: int64
+    @@foreign_key(columns=[author_id], references=[users.id], on_delete="SET NULL")
+}
+
+enum test_enum {
+    one
+    two
+    three
+}

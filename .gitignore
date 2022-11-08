@@ -22,3 +22,4 @@ cmd/cmd
 **/__debug_bin.exe
 **/__debug_bin
 .pgdata/
+.DS_Store

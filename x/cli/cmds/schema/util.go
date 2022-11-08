@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/kwilteam/ksl/sqlclient"
-	"github.com/kwilteam/ksl/sqlspec"
 	"github.com/spf13/cobra"
+	"ksl/sqlclient"
+	"ksl/sqlspec"
 )
 
 func loadRealm(ctx context.Context, p string, exclude []string) (*sqlspec.Realm, error) {
