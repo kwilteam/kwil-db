@@ -1,5 +1,7 @@
 package apipb
 
+// this is not generated, DO NOT DELETE
+
 import (
 	"bytes"
 	_ "embed"

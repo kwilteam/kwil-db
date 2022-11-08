@@ -1,8 +1,9 @@
 package database
 
 import (
-	"github.com/spf13/cobra"
 	"kwil/x/cli/util"
+
+	"github.com/spf13/cobra"
 )
 
 func NewCmdDatabase() *cobra.Command {
@@ -14,11 +15,7 @@ func NewCmdDatabase() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		createDatabaseCmd(),
-		updateDatabaseCmd(),
-		dropDatabaseCmd(),
 		viewDatabaseCmd(),
-		listDatabaseCmd(),
 	)
 
 	util.BindKwilFlags(cmd.PersistentFlags())

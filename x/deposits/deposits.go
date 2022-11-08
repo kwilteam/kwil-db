@@ -22,6 +22,7 @@ type Deposits interface {
 	Withdraw(context.Context, string, string) (*types.PendingWithdrawal, error)
 	Close() error
 	GetWithdrawalsForWallet(string) ([]*types.PendingWithdrawal, error)
+	Address() string
 }
 
 type deposits struct {
@@ -45,7 +46,10 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
 	}
 	if !run {
 		l.Sugar().Infof("deposits disabled")
-		return &deposits{run: false}, nil
+		return &deposits{
+			run:  false,
+			addr: "0x0000000000000000000000000000000000000000",
+		}, nil
 	}
 
 	port, err := c.GetInt64("db.port", 5432)
@@ -223,6 +227,10 @@ func (d *deposits) Close() error {
 	}
 
 	return d.sql.Close()
+}
+
+func (d *deposits) Address() string {
+	return d.addr
 }
 
 /*

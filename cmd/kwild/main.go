@@ -41,11 +41,6 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
-	wrs, err := loadWalletService(logger)
-	if err != nil {
-		return fmt.Errorf("failed to load wallet service: %w", err)
-	}
-
 	d, err := deposits.New(dc, logger, acc)
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
@@ -63,7 +58,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	serv := apisvc.NewService(d, p, wrs)
+	serv := apisvc.NewService(d, p)
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(logger, httpHandler, serv)

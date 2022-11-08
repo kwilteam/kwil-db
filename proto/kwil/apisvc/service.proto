@@ -5,10 +5,9 @@ option go_package = "kwil/x/proto/apipb";
 import "google/api/annotations.proto";
 
 import "kwil/apisvc/schema.proto";
-import "kwil/apisvc/role.proto";
-import "kwil/apisvc/table.proto";
-import "kwil/apisvc/database.proto";
 import "kwil/apisvc/wallets.proto";
+import "kwil/apisvc/metadata.proto";
+import "kwil/apisvc/crud.proto";
 
 service KwilService {
   rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
@@ -29,103 +28,23 @@ service KwilService {
     };
   }
 
-  // Databases
-  rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse) {
+  rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {
     option (google.api.http) = {
-      post: "/api/v0/databases"
-      body: "*"
-    };
-  }
-  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
-    option (google.api.http) = {
-      get: "/api/v0/databases"
-    };
-  }
-  rpc GetDatabase(GetDatabaseRequest) returns (GetDatabaseResponse) {
-    option (google.api.http) = {
-      get: "/api/v0/databases/{id}"
-    };
-  }
-  rpc UpdateDatabase(UpdateDatabaseRequest) returns (UpdateDatabaseResponse) {
-    option (google.api.http) = {
-      put: "/api/v0/databases/{id}"
-      body: "*"
-    };
-  }
-  rpc DeleteDatabase(DeleteDatabaseRequest) returns (DeleteDatabaseResponse) {
-    option (google.api.http) = {
-      delete: "/api/v0/databases/{id}"
+      get: "/api/v0/{owner}/{name}/metadata"
     };
   }
 
-  // Tables
-  rpc CreateTable(CreateTableRequest) returns (CreateTableResponse) {
+  rpc Cud (CUDRequest) returns (CUDResponse) {
     option (google.api.http) = {
-      post: "/api/v0/databases/{databaseId}/tables"
+      post: "/api/v0/write"
       body: "*"
-    };
-  }
-  rpc ListTables(ListTablesRequest) returns (ListTablesResponse) {
-    option (google.api.http) = {
-      get: "/api/v0/databases/{databaseId}/tables"
-    };
-  }
-  rpc GetTable(GetTableRequest) returns (GetTableResponse) {
-    option (google.api.http) = {
-      get: "/api/v0/databases/{databaseId}/tables/{id}"
-    };
-  }
-  rpc UpdateTable(UpdateTableRequest) returns (UpdateTableResponse) {
-    option (google.api.http) = {
-      put: "/api/v0/databases/{databaseId}/tables/{id}"
-      body: "*"
-    };
-  }
-  rpc DeleteTable(DeleteTableRequest) returns (DeleteTableResponse) {
-    option (google.api.http) = {
-      delete: "/api/v0/databases/{databaseId}/tables/{id}"
     };
   }
 
-  // Roles
-  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse) {
+  rpc Read (ReadRequest) returns (ReadResponse) {
     option (google.api.http) = {
-      post: "/api/v0/databases/{databaseId}/roles"
+      post: "/api/v0/read"
       body: "*"
-    };
-  }
-  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse) {
-    option (google.api.http) = {
-      get: "/api/v0/databases/{databaseId}/roles"
-    };
-  }
-  rpc GetRole(GetRoleRequest) returns (GetRoleResponse) {
-    option (google.api.http) = {
-      get: "/api/v0/databases/{databaseId}/roles/{id}"
-    };
-  }
-  rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse) {
-    option (google.api.http) = {
-      put: "/api/v0/databases/{databaseId}/roles/{id}"
-      body: "*"
-    };
-  }
-  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse) {
-    option (google.api.http) = {
-      delete: "/api/v0/databases/{databaseId}/roles/{id}"
-    };
-  }
-
-  // Queries
-  rpc PostQuery(PostQueryRequest) returns (PostQueryResponse) { // this is for submitting data to Kwil
-    option (google.api.http) = {
-      post: "/api/v0/databases/{databaseId}/query"
-      body: "*"
-    };
-  }
-  rpc GetQueries(GetQueriesRequest) returns (GetQueriesResponse) {
-    option (google.api.http) = {
-      get: "/api/v0/databases/{databaseId}/queries"
     };
   }
 
@@ -135,15 +54,15 @@ service KwilService {
       get: "/api/v0/wallets/{wallet}/balance"
     };
   }
-  rpc GetWalletRole(GetWalletRoleRequest) returns (GetWalletRoleResponse) {
-    option (google.api.http) = {
-      get: "/api/v0/wallets/{id}/{databaseId}/role" // should this be under database instead of wallets?  Wallets seem to logically correlate to funds, not roles
-      // also, I believe we no longer need this for the first version of the API
-    };
-  }
   rpc ReturnFunds(ReturnFundsRequest) returns (ReturnFundsResponse) {
     option (google.api.http) = {
       post: "/api/v0/wallets/withdraw"
+      body: "*"
+    };
+  }
+  rpc EstimateCost(EstimateCostRequest) returns (EstimateCostResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/wallets/estimate"
       body: "*"
     };
   }
@@ -173,48 +92,5 @@ message ApplyResponse {
 message ConnectRequest {}
 message ConnectResponse {
     string address = 1;
-}
-
-message PostQueryRequest {
-  string databaseId = 1;
-  string query = 2;
-  string from = 3;
-  string signature = 4;
-}
-message PostQueryResponse {
-  string id = 1;
-  string msg = 2;
-}
-
-message GetQueriesRequest {
-  string databaseId = 1;
-}
-message GetQueriesResponse {
-  repeated DBQuery queries = 1;
-}
-
-message input {
-  string name = 1;
-  string type = 2;
-};
-
-message DBQuery{
-  string name = 1;
-  string query = 2;
-  repeated input parameters = 3;
-}
-
-message GetWalletRoleRequest {
-  string id = 1;
-  string databaseId = 2;
-}
-
-message GetWalletRoleResponse {
-  string name = 1;
-  message perms {
-    bool ddl = 1;
-    repeated string queries = 2;
-  };
-  perms permissions = 2;
 }
 
