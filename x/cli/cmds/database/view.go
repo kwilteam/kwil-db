@@ -18,12 +18,8 @@ func viewDatabaseCmd() *cobra.Command {
 		Short: "View is used to view the details of a database.  It requires a database owner and a name",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
-<<<<<<< HEAD
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				ksc := apipb.NewKwilServiceClient(cc)
-				resp, err := ksc.GetDatabase(ctx, &apipb.GetDatabaseRequest{})
-=======
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, client apipb.KwilServiceClient) error {
+				client := apipb.NewKwilServiceClient(cc)
 				// should be two args
 				if len(args) != 2 {
 					return fmt.Errorf("view requires two arguments: owner and name")
@@ -34,7 +30,6 @@ func viewDatabaseCmd() *cobra.Command {
 					Name:  args[1],
 				})
 
->>>>>>> dev
 				if err != nil {
 					return err
 				}
