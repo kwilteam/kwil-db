@@ -1,0 +1,11 @@
+syntax = "proto3";
+package schemasvc;
+option go_package = "kwil/x/proto/schemapb";
+
+import "kwil/schemasvc/schema.proto";
+
+service SchemaService {
+  rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
+  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {}
+  rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/deposits/processor"
+	"kwil/x/schema"
 	"kwil/x/svcx/wallet"
 	"net"
 	"net/http"
@@ -19,7 +20,9 @@ import (
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
+	"kwil/x/proto/schemapb"
 	"kwil/x/service/apisvc"
+	"kwil/x/service/schemasvc"
 	"kwil/x/utils"
 
 	"github.com/oklog/run"
@@ -63,13 +66,15 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	serv := apisvc.NewService(d, p, wrs)
+	apiService := apisvc.NewService(d, p, wrs)
 	httpHandler := apisvc.NewHandler(logger)
 
-	return serve(logger, httpHandler, serv)
+	schemaService := schemasvc.NewService(schema.NewTestService())
+
+	return serve(logger, httpHandler, apiService, schemaService)
 }
 
-func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceServer) error {
+func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilServiceServer, schemaService schemapb.SchemaServiceServer) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -79,7 +84,8 @@ func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceSe
 
 	g.Add(func() error {
 		grpcServer := grpcx.NewServer(logger)
-		apipb.RegisterKwilServiceServer(grpcServer, srv)
+		apipb.RegisterKwilServiceServer(grpcServer, apiService)
+		schemapb.RegisterSchemaServiceServer(grpcServer, schemaService)
 		return grpcServer.Serve(listener)
 	}, func(error) {
 		listener.Close()

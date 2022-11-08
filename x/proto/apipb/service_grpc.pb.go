@@ -22,11 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type KwilServiceClient interface {
-	PlanSchema(ctx context.Context, in *PlanSchemaRequest, opts ...grpc.CallOption) (*PlanSchemaResponse, error)
-	ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*ApplySchemaResponse, error)
 	Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (*ConnectResponse, error)
-	Plan(ctx context.Context, in *PlanRequest, opts ...grpc.CallOption) (*PlanResponse, error)
-	Apply(ctx context.Context, in *ApplyRequest, opts ...grpc.CallOption) (*ApplyResponse, error)
 	// Databases
 	CreateDatabase(ctx context.Context, in *CreateDatabaseRequest, opts ...grpc.CallOption) (*CreateDatabaseResponse, error)
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
@@ -62,45 +58,9 @@ func NewKwilServiceClient(cc grpc.ClientConnInterface) KwilServiceClient {
 	return &kwilServiceClient{cc}
 }
 
-func (c *kwilServiceClient) PlanSchema(ctx context.Context, in *PlanSchemaRequest, opts ...grpc.CallOption) (*PlanSchemaResponse, error) {
-	out := new(PlanSchemaResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/PlanSchema", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*ApplySchemaResponse, error) {
-	out := new(ApplySchemaResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ApplySchema", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *kwilServiceClient) Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (*ConnectResponse, error) {
 	out := new(ConnectResponse)
 	err := c.cc.Invoke(ctx, "/apisvc.KwilService/Connect", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) Plan(ctx context.Context, in *PlanRequest, opts ...grpc.CallOption) (*PlanResponse, error) {
-	out := new(PlanResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/Plan", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) Apply(ctx context.Context, in *ApplyRequest, opts ...grpc.CallOption) (*ApplyResponse, error) {
-	out := new(ApplyResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/Apply", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -291,11 +251,7 @@ func (c *kwilServiceClient) ReturnFunds(ctx context.Context, in *ReturnFundsRequ
 // All implementations must embed UnimplementedKwilServiceServer
 // for forward compatibility
 type KwilServiceServer interface {
-	PlanSchema(context.Context, *PlanSchemaRequest) (*PlanSchemaResponse, error)
-	ApplySchema(context.Context, *ApplySchemaRequest) (*ApplySchemaResponse, error)
 	Connect(context.Context, *ConnectRequest) (*ConnectResponse, error)
-	Plan(context.Context, *PlanRequest) (*PlanResponse, error)
-	Apply(context.Context, *ApplyRequest) (*ApplyResponse, error)
 	// Databases
 	CreateDatabase(context.Context, *CreateDatabaseRequest) (*CreateDatabaseResponse, error)
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
@@ -328,20 +284,8 @@ type KwilServiceServer interface {
 type UnimplementedKwilServiceServer struct {
 }
 
-func (UnimplementedKwilServiceServer) PlanSchema(context.Context, *PlanSchemaRequest) (*PlanSchemaResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PlanSchema not implemented")
-}
-func (UnimplementedKwilServiceServer) ApplySchema(context.Context, *ApplySchemaRequest) (*ApplySchemaResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
-}
 func (UnimplementedKwilServiceServer) Connect(context.Context, *ConnectRequest) (*ConnectResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Connect not implemented")
-}
-func (UnimplementedKwilServiceServer) Plan(context.Context, *PlanRequest) (*PlanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Plan not implemented")
-}
-func (UnimplementedKwilServiceServer) Apply(context.Context, *ApplyRequest) (*ApplyResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Apply not implemented")
 }
 func (UnimplementedKwilServiceServer) CreateDatabase(context.Context, *CreateDatabaseRequest) (*CreateDatabaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateDatabase not implemented")
@@ -416,42 +360,6 @@ func RegisterKwilServiceServer(s grpc.ServiceRegistrar, srv KwilServiceServer) {
 	s.RegisterService(&KwilService_ServiceDesc, srv)
 }
 
-func _KwilService_PlanSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PlanSchemaRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).PlanSchema(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/PlanSchema",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).PlanSchema(ctx, req.(*PlanSchemaRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ApplySchemaRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).ApplySchema(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/ApplySchema",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).ApplySchema(ctx, req.(*ApplySchemaRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _KwilService_Connect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ConnectRequest)
 	if err := dec(in); err != nil {
@@ -466,42 +374,6 @@ func _KwilService_Connect_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(KwilServiceServer).Connect(ctx, req.(*ConnectRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_Plan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PlanRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).Plan(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/Plan",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).Plan(ctx, req.(*PlanRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_Apply_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ApplyRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).Apply(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/Apply",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).Apply(ctx, req.(*ApplyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -874,24 +746,8 @@ var KwilService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*KwilServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "PlanSchema",
-			Handler:    _KwilService_PlanSchema_Handler,
-		},
-		{
-			MethodName: "ApplySchema",
-			Handler:    _KwilService_ApplySchema_Handler,
-		},
-		{
 			MethodName: "Connect",
 			Handler:    _KwilService_Connect_Handler,
-		},
-		{
-			MethodName: "Plan",
-			Handler:    _KwilService_Plan_Handler,
-		},
-		{
-			MethodName: "Apply",
-			Handler:    _KwilService_Apply_Handler,
 		},
 		{
 			MethodName: "CreateDatabase",

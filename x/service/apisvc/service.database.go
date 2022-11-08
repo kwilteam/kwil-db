@@ -52,11 +52,13 @@ func (s *Service) CreateDatabase(ctx context.Context, req *apipb.CreateDatabaseR
 		return nil, ctx.Err()
 	}
 
-	request_id, err := doSubmitRequest(ctx, req, func(req *apipb.CreateDatabaseRequest) *composer.Message {
+	_, err = doSubmitRequest(ctx, req, func(req *apipb.CreateDatabaseRequest) *composer.Message {
 		return getCreateDbRequest(req)
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	_ = request_id // remove, not using compile error for now
 	// need to update te response with the request id
 
 	return &apipb.CreateDatabaseResponse{}, nil
@@ -91,11 +93,13 @@ func (s *Service) UpdateDatabase(ctx context.Context, req *apipb.UpdateDatabaseR
 		return nil, fmt.Errorf("failed to set balance for %s: %w", req.From, err)
 	}
 
-	request_id, err := doSubmitRequest(ctx, req, func(req *apipb.UpdateDatabaseRequest) *composer.Message {
+	_, err = doSubmitRequest(ctx, req, func(req *apipb.UpdateDatabaseRequest) *composer.Message {
 		return getUpdateDbRequest(req)
 	})
 
-	_ = request_id // remove, not using compile error for now
+	if err != nil {
+		return nil, err
+	}
 	// need to update te response with the request id
 
 	return &apipb.UpdateDatabaseResponse{}, nil

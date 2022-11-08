@@ -82,15 +82,15 @@ func (s *testservice) Apply(ctx context.Context, planID uuid.UUID) error {
 	return nil
 }
 
-func (s *testservice) GetDatabase(ctx context.Context, wallet, database string) (Database, error) {
-	realm, ok := s.realms[wallet]
+func (s *testservice) GetMetadata(ctx context.Context, req RequestMetadata) (Metadata, error) {
+	realm, ok := s.realms[req.Wallet]
 	if !ok {
-		return Database{}, ErrDatabaseNotFound
+		return Metadata{}, ErrDatabaseNotFound
 	}
 
-	schema, ok := realm.Schema(database)
+	schema, ok := realm.Schema(req.Database)
 	if !ok {
-		return Database{}, ErrDatabaseNotFound
+		return Metadata{}, ErrDatabaseNotFound
 	}
 
 	return convertSchema(schema), nil

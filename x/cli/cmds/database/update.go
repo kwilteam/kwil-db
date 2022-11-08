@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 func updateDatabaseCmd() *cobra.Command {
@@ -39,7 +40,8 @@ func updateDatabaseCmd() *cobra.Command {
 			// 	queries.Queries()
 			// }
 
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc apipb.KwilServiceClient) error {
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				ksc := apipb.NewKwilServiceClient(cc)
 				resp, err := ksc.UpdateDatabase(ctx, &apipb.UpdateDatabaseRequest{})
 				if err != nil {
 					return err

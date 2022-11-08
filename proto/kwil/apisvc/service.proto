@@ -4,27 +4,14 @@ option go_package = "kwil/x/proto/apipb";
 
 import "google/api/annotations.proto";
 
-import "kwil/apisvc/schema.proto";
 import "kwil/apisvc/role.proto";
 import "kwil/apisvc/table.proto";
 import "kwil/apisvc/database.proto";
 
 service KwilService {
-  rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
-  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {}
-
-
   rpc Connect(ConnectRequest) returns (ConnectResponse) {
     option (google.api.http) = {
       get: "/api/v0/connect"
-    };
-  }
-
-  rpc Plan(PlanRequest) returns (PlanResponse) {}
-  rpc Apply(ApplyRequest) returns (ApplyResponse) {
-    option (google.api.http) = {
-      post: "/api/v0/apply"
-      body: "*"
     };
   }
 

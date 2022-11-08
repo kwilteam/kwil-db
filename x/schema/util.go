@@ -5,7 +5,7 @@ import (
 	"github.com/kwilteam/ksl/sqlspec"
 )
 
-func convertSchema(r *sqlspec.Schema) Database {
+func convertSchema(r *sqlspec.Schema) Metadata {
 	tables := make([]Table, len(r.Tables))
 	for i, t := range r.Tables {
 		tables[i] = convertTable(t)
@@ -28,8 +28,8 @@ func convertSchema(r *sqlspec.Schema) Database {
 		roles[i] = convertRole(r)
 	}
 
-	return Database{
-		Name:    r.Name,
+	return Metadata{
+		DbName:  r.Name,
 		Tables:  tables,
 		Enums:   enums,
 		Queries: queries,

@@ -12,7 +12,7 @@ import (
 type Service interface {
 	Plan(context.Context, PlanRequest) (Plan, error)
 	Apply(context.Context, uuid.UUID) error
-	GetDatabase(context.Context, string, string) (Database, error)
+	GetMetadata(context.Context, RequestMetadata) (Metadata, error)
 }
 
 type sqlservice struct {
@@ -118,27 +118,27 @@ func (s *sqlservice) Apply(ctx context.Context, planID uuid.UUID) error {
 	return client.ApplyChanges(ctx, changes)
 }
 
-func (s *sqlservice) GetDatabase(ctx context.Context, wallet, database string) (Database, error) {
-	url, err := s.connector.GetConnectionInfo(wallet)
+func (s *sqlservice) GetMetadata(ctx context.Context, req RequestMetadata) (Metadata, error) {
+	url, err := s.connector.GetConnectionInfo(req.Wallet)
 	if err != nil {
-		return Database{}, err
+		return Metadata{}, err
 	}
 
 	client, err := sqlclient.Open(ctx, url)
 	if err != nil {
-		return Database{}, err
+		return Metadata{}, err
 	}
 	defer client.Close()
 
-	targetOpts := &sqlspec.InspectRealmOption{Schemas: []string{database}}
+	targetOpts := &sqlspec.InspectRealmOption{Schemas: []string{req.Database}}
 	source, err := client.InspectRealm(ctx, targetOpts)
 	if err != nil {
-		return Database{}, err
+		return Metadata{}, err
 	}
 
-	schema, ok := source.Schema(database)
+	schema, ok := source.Schema(req.Database)
 	if !ok {
-		return Database{}, ErrDatabaseNotFound
+		return Metadata{}, ErrDatabaseNotFound
 	}
 
 	return convertSchema(schema), nil

@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 func createDatabaseCmd() *cobra.Command {
@@ -33,7 +34,8 @@ func createDatabaseCmd() *cobra.Command {
 			cmd.Println(dbName)
 			cmd.Println(bucketName)
 
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc apipb.KwilServiceClient) error {
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				ksc := apipb.NewKwilServiceClient(cc)
 				resp, err := ksc.CreateDatabase(ctx, &apipb.CreateDatabaseRequest{
 					Name: dbName,
 				})

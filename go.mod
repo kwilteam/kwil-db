@@ -12,7 +12,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0
-	github.com/kwilteam/ksl v0.0.0-20221107105102-39786d1c5d15
+	github.com/kwilteam/ksl v0.0.0-20221108053548-1476ff4fd8a9
 	github.com/lib/pq v1.10.7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/go-homedir v1.1.0

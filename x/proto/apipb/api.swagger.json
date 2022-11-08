@@ -16,38 +16,6 @@
     "application/json"
   ],
   "paths": {
-    "/api/v0/apply": {
-      "post": {
-        "operationId": "KwilService_Apply",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcApplyResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/apisvcApplyRequest"
-            }
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
     "/api/v0/connect": {
       "get": {
         "operationId": "KwilService_Connect",
@@ -787,40 +755,6 @@
     }
   },
   "definitions": {
-    "apisvcApplyRequest": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "planId": {
-          "type": "string"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "nonce": {
-          "type": "string"
-        },
-        "from": {
-          "type": "string"
-        },
-        "signature": {
-          "type": "string"
-        }
-      }
-    },
-    "apisvcApplyResponse": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean"
-        }
-      }
-    },
-    "apisvcApplySchemaResponse": {
-      "type": "object"
-    },
     "apisvcConnectResponse": {
       "type": "object",
       "properties": {
@@ -986,17 +920,6 @@
     },
     "apisvcListTablesResponse": {
       "type": "object"
-    },
-    "apisvcPlanResponse": {
-      "type": "object"
-    },
-    "apisvcPlanSchemaResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        }
-      }
     },
     "apisvcPostQueryResponse": {
       "type": "object",
