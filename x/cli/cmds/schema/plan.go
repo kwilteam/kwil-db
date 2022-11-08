@@ -3,7 +3,7 @@ package schema
 import (
 	"context"
 	"kwil/x/cli/util"
-	"kwil/x/proto/schemapb"
+	"kwil/x/proto/apipb"
 
 	"github.com/kwilteam/ksl/kslparse"
 	"github.com/kwilteam/ksl/sqlspec"
@@ -38,8 +38,8 @@ func createPlanCmd() *cobra.Command {
 			}
 
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client := schemapb.NewSchemaServiceClient(cc)
-				req := &schemapb.PlanSchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: fs.Data()}
+				client := apipb.NewKwilServiceClient(cc)
+				req := &apipb.PlanSchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: fs.Data()}
 				resp, err := client.PlanSchema(ctx, req)
 				if err != nil {
 					return err

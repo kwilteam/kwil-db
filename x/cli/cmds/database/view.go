@@ -26,9 +26,11 @@ func viewDatabaseCmd() *cobra.Command {
 				}
 
 				resp, err := client.GetMetadata(ctx, &apipb.GetMetadataRequest{
-					Owner: args[0],
-					Name:  args[1],
+					Wallet:   args[0],
+					Database: args[1],
 				})
+
+				meta := resp.GetMetadata()
 
 				if err != nil {
 					return err
@@ -36,7 +38,7 @@ func viewDatabaseCmd() *cobra.Command {
 
 				// now we print the metadata
 				fmt.Println("Tables:")
-				for _, t := range resp.Tables {
+				for _, t := range meta.Tables {
 					fmt.Printf("  %s\n", t.Name)
 					fmt.Printf("    Columns:\n")
 					for _, c := range t.Columns {
@@ -48,7 +50,7 @@ func viewDatabaseCmd() *cobra.Command {
 
 				// print the roles
 				fmt.Println("Roles:")
-				for _, r := range resp.Roles {
+				for _, r := range meta.Roles {
 					fmt.Printf("  %s\n", r.Name)
 					fmt.Printf("    Permissions:\n")
 					for _, p := range r.Queries {
@@ -58,7 +60,7 @@ func viewDatabaseCmd() *cobra.Command {
 
 				// print queries
 				fmt.Println("Queries:")
-				for _, q := range resp.Queries {
+				for _, q := range meta.Queries {
 					fmt.Printf("  %s\n", q.Name)
 					fmt.Printf("    Statement: %s\n", q.Statement)
 				}
