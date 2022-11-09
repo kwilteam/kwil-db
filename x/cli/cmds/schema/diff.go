@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"github.com/kwilteam/ksl/sqlspec"
+	"ksl/sqlspec"
 
 	"github.com/spf13/cobra"
 )

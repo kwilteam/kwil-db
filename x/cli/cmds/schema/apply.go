@@ -1,11 +1,10 @@
 package schema
 
 import (
+	"ksl/kslparse"
+	"ksl/sqlclient"
+	"ksl/sqlspec"
 	"kwil/x/cli/util"
-
-	"github.com/kwilteam/ksl/kslparse"
-	"github.com/kwilteam/ksl/sqlclient"
-	"github.com/kwilteam/ksl/sqlspec"
 
 	"github.com/spf13/cobra"
 )

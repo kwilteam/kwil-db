@@ -17,11 +17,19 @@ import (
 )
 
 func Test_Wallet_Single_Request(t *testing.T) {
+	if t != nil {
+		fmt.Println("## Skipping test: Test_Wallet_Single_Request ##")
+		return // intentionally ignore this test for normal ops
+	}
 	// uncomment to test (not meant for build based unit testing)
 	//run_test(1, t)
 }
 
 func Test_Wallet_Multi_Request(t *testing.T) {
+	if t != nil {
+		fmt.Println("## Skipping test: Test_Wallet_Multi_Request ##")
+		return // intentionally ignore this test for normal ops
+	}
 	// uncomment to test (not meant for build based unit testing)
 	//run_test(1000, t)
 }

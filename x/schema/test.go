@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/kwilteam/ksl/kslparse"
-	"github.com/kwilteam/ksl/sqlspec"
+	"ksl/kslparse"
+	"ksl/sqlspec"
 )
 
 type testservice struct {

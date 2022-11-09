@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/kwilteam/ksl/kslparse"
-	"github.com/kwilteam/ksl/sqlclient"
-	"github.com/kwilteam/ksl/sqlspec"
+	"ksl/kslparse"
+	"ksl/sqlclient"
+	"ksl/sqlspec"
 )
 
 type Service interface {

@@ -1,9 +1,9 @@
 package schema
 
 import (
-	"github.com/kwilteam/ksl/sqlclient"
-	_ "github.com/kwilteam/ksl/sqldriver"
-	"github.com/kwilteam/ksl/sqlspec"
+	"ksl/sqlclient"
+	_ "ksl/sqldriver"
+	"ksl/sqlspec"
 
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
