@@ -50,13 +50,77 @@ func (s *Service) ApplySchema(ctx context.Context, req *apipb.ApplySchemaRequest
 }
 
 func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest) (*apipb.GetMetadataResponse, error) {
-	meta, err := s.md.GetMetadata(ctx, schema.RequestMetadata{Wallet: req.Wallet, Database: req.Database})
+	_, err := s.md.GetMetadata(ctx, schema.RequestMetadata{Wallet: req.Wallet, Database: req.Database})
 	if err != nil {
 		return nil, err
 	}
+	mdr := &apipb.Metadata{
+		Name: "test",
+		Queries: []*apipb.Query{
+			{
+				Name:      "query2",
+				Statement: "insert...",
+				Inputs: []*apipb.Input{
+					{
+						Name: "input1",
+						Type: "string",
+					},
+					{
+						Name: "input2",
+						Type: "string",
+					},
+				},
+				Outputs: []*apipb.Output{
+					{
+						Name: "output1",
+						Type: "string",
+					},
+				},
+			},
+			{
+				Name:      "query2",
+				Statement: "insert ...",
+				Inputs: []*apipb.Input{
+					{
+						Name: "input1",
+						Type: "string",
+					},
+				},
+				Outputs: []*apipb.Output{
+					{
+						Name: "output1",
+						Type: "string",
+					},
+				},
+			},
+		},
+		Roles: []*apipb.Role{
+			{
+				Name:    "test",
+				Queries: []string{"query1", "query2"},
+			},
+		},
+		Tables: []*apipb.Table{
+			{
+				Name: "table1",
+				Columns: []*apipb.Column{
+					{
+						Name:     "column1",
+						Type:     "string",
+						Nullable: true,
+					},
+					{
+						Name:     "column2",
+						Type:     "string",
+						Nullable: false,
+					},
+				},
+			},
+		},
+	}
 
 	return &apipb.GetMetadataResponse{
-		Metadata: convertMetadata(meta),
+		Metadata: mdr,
 	}, nil
 }
 
