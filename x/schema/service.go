@@ -3,11 +3,10 @@ package schema
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"ksl/kslparse"
 	"ksl/sqlclient"
 	"ksl/sqlspec"
-
-	"github.com/google/uuid"
 )
 
 type Service interface {

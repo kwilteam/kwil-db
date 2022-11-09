@@ -5,9 +5,8 @@ import (
 	"kwil/x/cli/util"
 	"kwil/x/proto/apipb"
 
-	"ksl/kslparse"
-	"ksl/sqlspec"
-
+	"github.com/kwilteam/ksl/kslparse"
+	"github.com/kwilteam/ksl/sqlspec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
