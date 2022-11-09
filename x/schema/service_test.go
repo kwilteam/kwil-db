@@ -42,7 +42,7 @@ func TestService(t *testing.T) {
 	err = service.Apply(ctx, plan.ID)
 	require.NoError(t, err)
 
-	db, err := service.GetDatabase(ctx, "postgres", "public")
+	db, err := service.GetMetadata(ctx, RequestMetadata{"postgres", "public"})
 	require.NoError(t, err)
 	require.NotNil(t, db)
 

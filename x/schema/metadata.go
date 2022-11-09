@@ -1,11 +1,17 @@
 package schema
 
-type Database struct {
-	Name    string
-	Tables  []Table
-	Enums   []Enum
-	Queries []Query
-	Roles   []Role
+type RequestMetadata struct {
+	Wallet   string
+	Database string
+}
+
+type Metadata struct {
+	DbName      string
+	Tables      []Table
+	Enums       []Enum
+	Queries     []Query
+	Roles       []Role
+	DefaultRole string
 }
 
 type Table struct {

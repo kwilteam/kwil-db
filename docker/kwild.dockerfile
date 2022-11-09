@@ -17,6 +17,8 @@ RUN cp *.yaml ./dist
 RUN cp *.yml ./dist
 RUN cp -r ./keys ./dist/keys/
 RUN cp -r ./abi ./dist/abi/
+RUN cp -f ./kwild-gateway-meta-config.yaml ./dist/meta-config.yaml
+RUN cp -f ./kwild-gateway-deposit-config.yaml ./dist/deposit-config.yaml
 
 FROM scratch
 WORKDIR /app

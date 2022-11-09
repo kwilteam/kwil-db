@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"kwil/x/schema"
 	"net"
 	"net/http"
 	"os"
@@ -56,13 +57,13 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	serv := apisvc.NewService(d, p)
+	apiService := apisvc.NewService(d, p, schema.NewTestService())
 	httpHandler := apisvc.NewHandler(logger)
 
-	return serve(logger, httpHandler, serv)
+	return serve(logger, httpHandler, apiService)
 }
 
-func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceServer) error {
+func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilServiceServer) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -72,7 +73,7 @@ func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceSe
 
 	g.Add(func() error {
 		grpcServer := grpcx.NewServer(logger)
-		apipb.RegisterKwilServiceServer(grpcServer, srv)
+		apipb.RegisterKwilServiceServer(grpcServer, apiService)
 		return grpcServer.Serve(listener)
 	}, func(error) {
 		listener.Close()

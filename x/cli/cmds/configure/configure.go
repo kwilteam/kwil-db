@@ -11,6 +11,7 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 func NewCmdConfigure() *cobra.Command {
@@ -65,7 +66,8 @@ func NewCmdConfigure() *cobra.Command {
 			}
 
 			if doConnect == "yes" {
-				err := util.ConnectKwil(cmd.Context(), v, func(ctx context.Context, client apipb.KwilServiceClient) error {
+				err := util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+					client := apipb.NewKwilServiceClient(cc)
 					res, err := client.Connect(ctx, &apipb.ConnectRequest{})
 					if err != nil {
 						return err

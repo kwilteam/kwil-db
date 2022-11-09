@@ -4,33 +4,24 @@ option go_package = "kwil/x/proto/apipb";
 
 import "google/api/annotations.proto";
 
-import "kwil/apisvc/schema.proto";
 import "kwil/apisvc/wallets.proto";
 import "kwil/apisvc/metadata.proto";
 import "kwil/apisvc/crud.proto";
 
 service KwilService {
-  rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
-  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {}
-
-
   rpc Connect(ConnectRequest) returns (ConnectResponse) {
     option (google.api.http) = {
       get: "/api/v0/connect"
     };
   }
 
-  rpc Plan(PlanRequest) returns (PlanResponse) {}
-  rpc Apply(ApplyRequest) returns (ApplyResponse) {
-    option (google.api.http) = {
-      post: "/api/v0/apply"
-      body: "*"
-    };
-  }
+
+  rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
+  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {}
 
   rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {
     option (google.api.http) = {
-      get: "/api/v0/{owner}/{name}/metadata"
+      get: "/api/v0/{wallet}/{database}/metadata"
     };
   }
 

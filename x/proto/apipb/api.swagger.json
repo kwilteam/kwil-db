@@ -16,38 +16,6 @@
     "application/json"
   ],
   "paths": {
-    "/api/v0/apply": {
-      "post": {
-        "operationId": "KwilService_Apply",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcApplyResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/apisvcApplyRequest"
-            }
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
     "/api/v0/connect": {
       "get": {
         "operationId": "KwilService_Connect",
@@ -229,7 +197,7 @@
         ]
       }
     },
-    "/api/v0/{owner}/{name}/metadata": {
+    "/api/v0/{wallet}/{database}/metadata": {
       "get": {
         "operationId": "KwilService_GetMetadata",
         "responses": {
@@ -248,13 +216,13 @@
         },
         "parameters": [
           {
-            "name": "owner",
+            "name": "wallet",
             "in": "path",
             "required": true,
             "type": "string"
           },
           {
-            "name": "name",
+            "name": "database",
             "in": "path",
             "required": true,
             "type": "string"
@@ -267,37 +235,6 @@
     }
   },
   "definitions": {
-    "apisvcApplyRequest": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "planId": {
-          "type": "string"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "nonce": {
-          "type": "string"
-        },
-        "from": {
-          "type": "string"
-        },
-        "signature": {
-          "type": "string"
-        }
-      }
-    },
-    "apisvcApplyResponse": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean"
-        }
-      }
-    },
     "apisvcApplySchemaResponse": {
       "type": "object"
     },
@@ -351,6 +288,20 @@
       "type": "object",
       "properties": {
         "traceId": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcChange": {
+      "type": "object",
+      "properties": {
+        "cmd": {
+          "type": "string"
+        },
+        "comment": {
+          "type": "string"
+        },
+        "reverse": {
           "type": "string"
         }
       }
@@ -419,8 +370,33 @@
     "apisvcGetMetadataResponse": {
       "type": "object",
       "properties": {
+        "metadata": {
+          "$ref": "#/definitions/apisvcMetadata"
+        }
+      }
+    },
+    "apisvcInput": {
+      "type": "object",
+      "properties": {
         "name": {
           "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcMetadata": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcTable"
+          }
         },
         "queries": {
           "type": "array",
@@ -434,21 +410,7 @@
             "$ref": "#/definitions/apisvcRole"
           }
         },
-        "tables": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcTable"
-          }
-        }
-      }
-    },
-    "apisvcInput": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
+        "defaultRole": {
           "type": "string"
         }
       }
@@ -464,14 +426,31 @@
         }
       }
     },
-    "apisvcPlanResponse": {
-      "type": "object"
-    },
-    "apisvcPlanSchemaResponse": {
+    "apisvcPlan": {
       "type": "object",
       "properties": {
         "planId": {
           "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcChange"
+          }
+        }
+      }
+    },
+    "apisvcPlanSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "plan": {
+          "$ref": "#/definitions/apisvcPlan"
         }
       }
     },

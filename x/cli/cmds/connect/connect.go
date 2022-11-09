@@ -9,6 +9,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 func NewCmdConnect() *cobra.Command {
@@ -21,7 +22,8 @@ func NewCmdConnect() *cobra.Command {
 		exchanges relevant information regarding the node's capabilities, keys, etc..`,
 
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, client apipb.KwilServiceClient) error {
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				client := apipb.NewKwilServiceClient(cc)
 				res, err := client.Connect(ctx, &apipb.ConnectRequest{})
 				if err != nil {
 					return err

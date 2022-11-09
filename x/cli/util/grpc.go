@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 
-	"kwil/x/proto/apipb"
-
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 )
 
-type RoundTripper func(context.Context, apipb.KwilServiceClient) error
+type RoundTripper func(context.Context, *grpc.ClientConn) error
 
 func ConnectKwil(ctx context.Context, v *viper.Viper, fn RoundTripper) (err error) {
 	endpoint := v.GetString("endpoint")
@@ -28,8 +27,14 @@ func ConnectKwil(ctx context.Context, v *viper.Viper, fn RoundTripper) (err erro
 		clientContext = metadata.AppendToOutgoingContext(clientContext, "authorization", apiKey)
 	}
 
-	opts := []grpc.DialOption{grpc.WithBlock(), grpc.WithInsecure(), grpc.WithTimeout(timeout)}
-	cc, err := grpc.DialContext(ctx, endpoint, opts...)
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		clientContext, cancel = context.WithTimeout(clientContext, timeout)
+		defer cancel()
+	}
+
+	opts := []grpc.DialOption{grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials())}
+	cc, err := grpc.DialContext(clientContext, endpoint, opts...)
 	if err != nil {
 		if err == context.DeadlineExceeded {
 			return fmt.Errorf("timeout dialing server: %s", endpoint)
@@ -38,5 +43,5 @@ func ConnectKwil(ctx context.Context, v *viper.Viper, fn RoundTripper) (err erro
 	}
 	defer cc.Close()
 
-	return fn(clientContext, apipb.NewKwilServiceClient(cc))
+	return fn(clientContext, cc)
 }

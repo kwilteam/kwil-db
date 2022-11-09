@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 func withdrawCmd() *cobra.Command {
@@ -25,7 +26,8 @@ func withdrawCmd() *cobra.Command {
 
 			// send request
 
-			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, client apipb.KwilServiceClient) error {
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				client := apipb.NewKwilServiceClient(cc)
 				c, err := chain.NewClientV(viper.GetViper())
 				fmt.Println(c.PoolAddr.String())
 				if err != nil {
@@ -75,7 +77,7 @@ func withdrawCmd() *cobra.Command {
 				}
 
 				fmt.Printf(`Withdrawal request sent.
-				Amount Requested: %s 
+				Amount Requested: %s
 				Amount Returned:  %s
 				Fee:              %s
 				Correlation ID:   %s

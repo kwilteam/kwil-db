@@ -1,12 +1,22 @@
 package schema
 
 import (
+	"context"
+	"kwil/x/cli/util"
+	"kwil/x/proto/apipb"
+
+	"github.com/kwilteam/ksl/kslparse"
+	"github.com/kwilteam/ksl/sqlspec"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 func createPlanCmd() *cobra.Command {
 	var opts struct {
 		SchemaFiles []string
+		Wallet      string
+		Database    string
 		AutoApprove bool
 	}
 
@@ -17,32 +27,36 @@ func createPlanCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-			// fs, err := kslparse.ParseKwilFiles(opts.SchemaFiles...)
-			// if err != nil {
-			// 	return err
-			// }
+			fs, err := kslparse.ParseKwilFiles(opts.SchemaFiles...)
+			if err != nil {
+				return err
+			}
+			_, diags := sqlspec.Decode(fs)
+			if diags.HasErrors() {
 
-			// data, err := io.ReadAll(rd)
-			// if err != nil {
-			// 	return err
-			// }
+				return diags
+			}
 
-			// return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, ksc apipb.KwilServiceClient) error {
-			// 	req := &apipb.PlanSchemaRequest{Schema: data}
-			// 	resp, err := ksc.PlanSchema(ctx, req)
-			// 	if err != nil {
-			// 		return err
-			// 	}
-			// 	_ = resp
-			// 	return nil
-			// })
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				client := apipb.NewKwilServiceClient(cc)
+				req := &apipb.PlanSchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: fs.Data()}
+				resp, err := client.PlanSchema(ctx, req)
+				if err != nil {
+					return err
+				}
+				planSummaryProto(cmd, resp.Plan)
+				return nil
+			})
 		},
 	}
 
 	cmd.Flags().StringSliceVarP(&opts.SchemaFiles, "file", "f", nil, "[paths...] file or directory containing the schema definition files")
 	cmd.Flags().BoolVarP(&opts.AutoApprove, "auto-approve", "y", false, "Auto approve. Apply the schema changes without prompting for approval")
+	cmd.Flags().StringVarP(&opts.Wallet, "wallet", "w", "", "Wallet to use for the connection")
+	cmd.Flags().StringVarP(&opts.Database, "database", "d", "", "Database name to connect to")
 	cmd.MarkFlagRequired("file")
+	cmd.MarkFlagRequired("wallet")
+	cmd.MarkFlagRequired("database")
 
 	return cmd
 }
