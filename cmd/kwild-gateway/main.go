@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"kwil/x"
 	"net/http"
 	"os"
 	"regexp"
@@ -28,11 +27,6 @@ func main() {
 }
 
 func run() error {
-	inject, err := getServiceInjector()
-	if err != nil {
-		return err
-	}
-
 	cmd := &cobra.Command{
 		Use:   "api-gateway",
 		Short: "api-gateway is a HTTP to gRPC gateway",
@@ -59,12 +53,12 @@ func run() error {
 				return err
 			}
 
-			return http.ListenAndServe(":8080", cors(inject, mux))
+			return http.ListenAndServe(":8080", cors(mux))
 		},
 	}
 
 	cmd.PersistentFlags().String("endpoint", "localhost:50051", "gRPC server endpoint")
-	err = viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
+	err := viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
 	if err != nil {
 		return err
 	}
@@ -77,7 +71,7 @@ func run() error {
 	return cmd.Execute()
 }
 
-func cors(inject x.RequestInjectorFn, h http.Handler) http.Handler {
+func cors(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if allowedOrigin(r.Header.Get("Origin")) {
 			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
@@ -89,7 +83,7 @@ func cors(inject x.RequestInjectorFn, h http.Handler) http.Handler {
 			return
 		}
 
-		h.ServeHTTP(w, inject(r))
+		h.ServeHTTP(w, r)
 	})
 }
 
@@ -101,33 +95,4 @@ func allowedOrigin(origin string) bool {
 		return true
 	}
 	return false
-}
-
-func getServiceInjector() (x.RequestInjectorFn, error) {
-	//// TODO: we need to use a config to bootstrap the various emitters/receivers needed
-	//root_cfg := cfgx.GetTestConfig()
-	//
-	//tracker, err := tracking.New(root_cfg.Select("tracking-service"))
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//c, err := composer.New(root_cfg.Select("composer-emitter"), tracker)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//// Not sure where else to inject a service for downstream consumption.
-	//// Ignoring the additional function for clearing context for now.
-	//fn, _ := x.
-	//	Injectable(composer.SERVICE_ALIAS, c).
-	//	Include(tracking.SERVICE_ALIAS, tracker).
-	//	AsRequestInjector()
-	//
-	//
-	//return fn, nil
-
-	return func(r *http.Request) *http.Request {
-		return r
-	}, nil
 }

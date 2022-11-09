@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"kwil/x/deposits/processor"
-	"kwil/x/svcx/wallet"
 	"net"
 	"net/http"
 	"os"
@@ -107,32 +105,6 @@ func serve(logger logx.Logger, httpHandler http.Handler, srv apipb.KwilServiceSe
 	})
 
 	return g.Run()
-}
-
-func loadWalletService(l logx.Logger) (wallet.RequestService, error) {
-	tr := processor.AsMessageTransform(processor.NewProcessor(l))
-
-	p, err := wallet.NewRequestProcessor(cfgx.GetConfig(), tr)
-	if err != nil {
-		return nil, err
-	}
-
-	w, err := wallet.NewRequestService(cfgx.GetConfig())
-	if err != nil {
-		return nil, err
-	}
-
-	err = p.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	err = w.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	return w, nil
 }
 
 func main() {
