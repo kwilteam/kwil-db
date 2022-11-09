@@ -2,7 +2,7 @@ package schema
 
 import (
 	"github.com/google/uuid"
-	"github.com/kwilteam/ksl/sqlspec"
+	"ksl/sqlspec"
 )
 
 func convertSchema(r *sqlspec.Schema) Database {

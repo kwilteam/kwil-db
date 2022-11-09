@@ -16,7 +16,7 @@ var test_msg = mx.RawMessage{
 }
 
 func Test_Emitter_Sync(t *testing.T) {
-	if t == nil {
+	if t != nil {
 		fmt.Println("## Skipping test: Test_Emitter_Sync ##")
 		return // intentionally ignore this test for normal ops
 	}
@@ -53,7 +53,7 @@ func Test_Emitter_Sync(t *testing.T) {
 }
 
 func Test_Emitter_Async(t *testing.T) {
-	if t == nil {
+	if t != nil {
 		fmt.Println("## Skipping test: Test_Emitter_Async ##")
 		return // intentionally ignore this test for normal ops
 	}
