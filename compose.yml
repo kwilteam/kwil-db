@@ -5,11 +5,11 @@ services:
       context: .
       dockerfile: docker/kwild.dockerfile
     environment:
-      DEPOSITS_ENABLED: "false"
-      DEPOSITS_CHAIN: eth-goerl
-      DEPOSITS_PROVIDER_ENDPOINT:  wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41
+      DEPOSITS_ENABLED: "true"
+      DEPOSITS_CHAIN: eth-goerli
+      DEPOSITS_PROVIDER_ENDPOINT: wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41
       DEPOSITS_CONTRACT_ADDRESS: 0xF126AFd800C2435230e0f193aBb95050639D9776
-      PG_ENDPOINT: localhost
+      PG_ENDPOINT: postgres_db_container
       PG_PORT: 5432
       PG_USER: postgres
       PG_PASSWORD: postgres
@@ -17,6 +17,11 @@ services:
     ports:
       - "50051:50051"
       - "8080:8080"
+    depends_on:
+      - postgres_db
+    links:
+      - postgres_db
+    network_mode: bridge
   kwild-gateway:
     image: kwild-gateway
     build:
@@ -26,23 +31,22 @@ services:
       KWIL_GRPC_ENDPOINT: kwild:50051
     ports:
       - "8081:8080"
-  postgres:
-      image: postgres:15.0-alpine
-      restart: always
-      environment:
-        - POSTGRES_USER=postgres
-        - POSTGRES_PASSWORD=postgres
-      logging:
-        options:
-          max-size: 10m
-          max-file: "3"
-      ports:
-        - '5438:5432'
-      volumes:
-        - ./.pgdata:/var/lib/postgresql/data
-        # copy the sql script to create tables
-        - ./scripts/pg-init-scripts/:/docker-entrypoint-initdb.d/
-
-networks:
-  kwil-net:
-    name: kwil-net
+    network_mode: bridge
+  postgres_db:
+    image: postgres:15.0-alpine
+    container_name: postgres_db_container
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.pgdata:/var/lib/postgresql/data
+      # copy the sql script to create tables
+      - ./scripts/pg-init-scripts/:/docker-entrypoint-initdb.d/
+    network_mode: bridge

@@ -206,3 +206,13 @@ func GenerateRandomBase64String(min_size int) string {
 	b := GenerateRandomBytes(min_size)
 	return base64.RawStdEncoding.EncodeToString(b)
 }
+
+// IsRunningInContainer returns true if the process is running in a
+// container. NOTE: this has only been validated for docker on Linux.
+func IsRunningInContainer() bool {
+	// we need to check for the existence of the file /proc/1/cgroup
+	if _, err := os.Stat("/.dockerenv"); err != nil {
+		return false
+	}
+	return true
+}

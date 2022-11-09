@@ -1,16 +1,16 @@
-run: ${DEPOSITS_ENABLED} ## false
+run: $DEPOSITS_ENABLED
 required-confirmations: 12
 block-timeout: 30 ## seconds
 withdrawal-expiration: 100
-chain: ${DEPOSITS_CHAIN} ## eth-goerli
-provider-endpoint: ${DEPOSITS_PROVIDER_ENDPOINT} ## wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41
-contract-address: ${DEPOSITS_CONTRACT_ADDRESS}  ## 0xF126AFd800C2435230e0f193aBb95050639D9776
+chain: $DEPOSITS_CHAIN
+provider-endpoint: $DEPOSITS_PROVIDER_ENDPOINT
+contract-address: $DEPOSITS_CONTRACT_ADDRESS
 db:
-  host:  ${PG_ENDPOINT}
-  port: ${PG_PORT}
-  user:  ${PG_USER} ## kwil_dba
-  password:  ${PG_PASSWORD}
-  database:  ${PG_DB}
+  host:  $PG_ENDPOINT
+  port: $PG_PORT
+  user:  $PG_USER
+  password:  $PG_PASSWORD
+  database:  $PG_DB
 keys:
   key-path: "./keys/ethereum.pem"
 sync:

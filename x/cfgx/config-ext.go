@@ -349,15 +349,25 @@ func _getConfigInternal(test bool) Config {
 			panic(err)
 		}
 
-		filter := cfg.GetString(ENV_OS_KEY_FILTER, ENV_KEY_PREFIX_DEFAULT) + "_"
-		if envSettings := cfg.GetString(ENV_SETTINGS_PATH, ""); envSettings != "" {
-			env, err := Builder().UseFile(filter, envSettings).Build()
+		var filter string
+		if utils.IsRunningInContainer() {
+			filter = ""
+		} else if envSettings := cfg.GetString(ENV_SETTINGS_PATH, ""); envSettings != "" {
+			filter = cfg.GetString(ENV_OS_KEY_FILTER, ENV_KEY_PREFIX_DEFAULT)
+			if !strings.HasSuffix(filter, "_") {
+				filter += "_"
+			}
+
+			env, err := Builder().UseFile(ENV_SETTINGS_PATH, envSettings).Build()
 			if err != nil {
 				panic(err)
 			}
 
+			fmt.Printf("Using env settings from %s\n", envSettings)
 			for k, v := range env.ToStringMap() {
-				k := strings.Replace(k, filter+".", filter, 1)
+				if !strings.HasPrefix(k, filter) {
+					k = filter + k
+				}
 				err := os.Setenv(k, os.ExpandEnv(v))
 				if err != nil {
 					panic(err)
