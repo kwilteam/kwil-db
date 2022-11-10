@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"kwil/x/async"
 	"kwil/x/schema"
 	"net"
 	"net/http"
@@ -20,6 +21,8 @@ import (
 	"kwil/x/proto/apipb"
 	"kwil/x/service/apisvc"
 	"kwil/x/utils"
+
+	kg "kwil/cmd/kwild-gateway/server"
 
 	"github.com/oklog/run"
 )
@@ -80,7 +83,7 @@ func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilSe
 	})
 
 	httpServer := http.Server{
-		Addr:    ":8080",
+		Addr:    ":8081",
 		Handler: httpHandler,
 	}
 	g.Add(func() error {
@@ -111,7 +114,49 @@ func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilSe
 func main() {
 	logger := logx.New()
 
-	if err := execute(logger); err != nil {
+	stop := func(err error) {
 		logger.Sugar().Error(err)
+		os.Exit(1)
 	}
+
+	kwild := func() error {
+		return execute(logger)
+	}
+
+	if !isGatewayEnabled() {
+		if err := kwild(); err != nil {
+			stop(err)
+		}
+	}
+
+	async.Run(kg.Start).Catch(stop)
+
+	<-async.Run(kwild).Catch(stop).DoneCh()
+}
+
+func isGatewayEnabled() bool {
+	var args []string
+	with_gateway_flag := false
+	found := -2
+	for i, arg := range os.Args {
+		if i == found+1 {
+			if arg == "true" {
+				with_gateway_flag = true
+			}
+			continue
+		}
+
+		if arg != "--withgateway" {
+			args = append(args, arg)
+			continue
+		}
+
+		found = i
+	}
+
+	if with_gateway_flag {
+		os.Args = args //make sure the flag and value are removed
+	}
+
+	return with_gateway_flag
 }

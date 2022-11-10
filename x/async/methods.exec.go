@@ -58,3 +58,28 @@ func CallWithArgs[T, U any](args U, fn func(U) (T, error)) Task[T] {
 
 	return task
 }
+
+func Run(fn func() error) Action {
+	task := NewAction()
+
+	go func(f func() error, t Action) {
+		if t.IsDone() {
+			return
+		}
+
+		defer func() {
+			if r := recover(); r != nil {
+				e, ok := r.(error)
+				if !ok {
+					e = fmt.Errorf("unknown panic: %v", r)
+				}
+				t.Fail(e)
+			}
+		}()
+
+		err := f()
+		t.CompleteOrFail(err)
+	}(fn, task)
+
+	return task
+}
