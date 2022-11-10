@@ -1,4 +1,4 @@
-run: false
+run: true
 required-confirmations: 12
 block-timeout: 30 ## seconds
 withdrawal-expiration: 100
@@ -9,8 +9,8 @@ db:
   host: localhost
   port: 5432
   user: postgres
-  password: password
-  database: postgres
+  password: postgres
+  database: kwil
   SSL: false
 keys:
   key-path: "./keys/ethereum.pem"
