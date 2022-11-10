@@ -50,10 +50,11 @@ func (s *Service) ApplySchema(ctx context.Context, req *apipb.ApplySchemaRequest
 }
 
 func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest) (*apipb.GetMetadataResponse, error) {
-	_, err := s.md.GetMetadata(ctx, schema.RequestMetadata{Wallet: req.Wallet, Database: req.Database})
+	/*_, err := s.md.GetMetadata(ctx, schema.RequestMetadata{Wallet: req.Wallet, Database: req.Database})
 	if err != nil {
 		return nil, err
-	}
+	}*/
+	s.log.Sugar().Infof("M<OMMMMMY")
 	mdr := &apipb.Metadata{
 		Name: "test",
 		Queries: []*apipb.Query{
