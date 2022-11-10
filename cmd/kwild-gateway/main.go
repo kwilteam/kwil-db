@@ -53,7 +53,7 @@ func run() error {
 				return err
 			}
 
-			return http.ListenAndServe(":8080", cors(mux))
+			return http.ListenAndServe(":8081", cors(mux))
 		},
 	}
 
