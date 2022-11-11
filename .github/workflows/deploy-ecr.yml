@@ -1,10 +1,10 @@
 on:
   push:
-    branches: [ dev ]
+    branches: [ main, 'release/v[1][0-9].[0-9]' ]
   workflow_dispatch:
-    branches: [ dev ]
-
-name: kwild-app
+    branches: [ main ]
+    
+name: kwild-aws-push
 
 jobs:
   deploy:
@@ -38,16 +38,22 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Build, tag, and push the image to Amazon ECR
-      id: build-image
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      
+    - name: Build, tag, and push docker image to Amazon ECR (used with ECS Fargate)
       env:
+        DOCKER_BUILDKIT: 1
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.AWS_KWILD_ECR }}
-        IMAGE_TAG: ${{ github.sha }}
+        IMAGE_HASH_TAG: ${{ github.sha }}
+        IMAGE_TAG: test
       run: |
-        # Build a docker container and push it to ECR 
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        # Build a docker container and push it to ECR
+        docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_HASH_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
         echo "Pushing image to ECR..."
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-        #echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY --all-tags
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY --all-tags" >> $GITHUB_OUTPUT

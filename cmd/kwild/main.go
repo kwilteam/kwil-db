@@ -156,6 +156,9 @@ func isGatewayEnabled() bool {
 
 	if with_gateway_flag {
 		os.Args = args //make sure the flag and value are removed
+	} else {
+		with_gateway_env := os.Getenv("WITH_GATEWAY")
+		with_gateway_flag = with_gateway_env == "true"
 	}
 
 	return with_gateway_flag

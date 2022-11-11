@@ -3,6 +3,7 @@ package server
 import (
 	"kwil/x/proto/apipb"
 	"net/http"
+	"os"
 	"regexp"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -39,15 +40,28 @@ func Start() error {
 			err = mux.HandlePath(http.MethodGet, "/swagger/ui", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 				apipb.ServeSwaggerUI(w, r)
 			})
+
 			if err != nil {
 				return err
 			}
 
-			return http.ListenAndServe(":8080", cors(mux))
+			http_port := os.Getenv("GATEWAY_HTTP_PORT")
+			if http_port == "" {
+				http_port = ":8080"
+			} else if http_port[0] != ':' {
+				http_port = ":" + http_port
+			}
+
+			return http.ListenAndServe(http_port, cors(mux))
 		},
 	}
 
-	cmd.PersistentFlags().String("endpoint", "localhost:50051", "gRPC server endpoint")
+	grpc_url := os.Getenv("GRPC_CONTAINER_ENDPOINT")
+	if grpc_url == "" {
+		grpc_url = "localhost:50051"
+	}
+
+	cmd.PersistentFlags().String("endpoint", grpc_url, "gRPC server endpoint")
 	err := viper.BindPFlag("endpoint", cmd.PersistentFlags().Lookup("endpoint"))
 	if err != nil {
 		return err
@@ -78,10 +92,14 @@ func cors(h http.Handler) http.Handler {
 }
 
 func allowedOrigin(origin string) bool {
-	if viper.GetString("cors") == "*" {
+	cors := os.Getenv("GATEWAY_CORS")
+	if cors == "" {
+		cors = viper.GetString("cors")
+	}
+	if cors == "*" {
 		return true
 	}
-	if matched, _ := regexp.MatchString(viper.GetString("cors"), origin); matched {
+	if matched, _ := regexp.MatchString(cors, origin); matched {
 		return true
 	}
 	return false
