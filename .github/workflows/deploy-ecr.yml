@@ -1,8 +1,8 @@
 on:
   push:
-    branches: [ main, 'release/v[1][0-9].[0-9]' ]
+    branches: [ main, 'test/v[1][0-9].[0-9]' ]
   workflow_dispatch:
-    branches: [ main ]
+    branches: [ main, 'test/v[1][0-9].[0-9]' ]
     
 name: kwild-aws-push
 
