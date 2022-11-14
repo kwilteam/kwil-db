@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/async"
+	"kwil/x/execution"
 	"kwil/x/schema"
 	"net"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"kwil/pkg/types/chain/pricing"
 	"kwil/x/cfgx"
 	"kwil/x/crypto"
 	"kwil/x/deposits"
@@ -20,7 +20,6 @@ import (
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
 	"kwil/x/service/apisvc"
-	"kwil/x/utils"
 
 	kg "kwil/cmd/kwild-gateway/server"
 
@@ -47,20 +46,12 @@ func execute(logger logx.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
-	d.Listen(ctx)
-
-	ppath := "./prices.json"
-	pbytes, err := utils.LoadFileFromRoot(ppath)
+	err = d.Listen(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load pricing config: %w", err)
+		return fmt.Errorf("failed to listen to deposits: %w", err)
 	}
 
-	p, err := pricing.New(pbytes)
-	if err != nil {
-		return fmt.Errorf("failed to initialize pricing: %w", err)
-	}
-
-	apiService := apisvc.NewService(d, p, schema.NewTestService())
+	apiService := apisvc.NewService(d, schema.NewTestService(), execution.NewTestService())
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(logger, httpHandler, apiService)

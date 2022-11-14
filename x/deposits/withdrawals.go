@@ -34,7 +34,7 @@ func (d *deposits) Withdraw(ctx context.Context, addr, amt string) (*types.Pendi
 	// generate a nonce
 	cid := generateCid(10)
 
-	res, err := d.sql.StartWithdrawal(cid, addr, amt, d.we)
+	res, err := d.sql.StartWithdrawal(cid, addr, amt, d.we+d.lh)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,8 @@ func (d *deposits) Withdraw(ctx context.Context, addr, amt string) (*types.Pendi
 	}
 
 	// update the withdrawal request with the tx
-	err = d.sql.AddTx(cid, tx)
+	// trim off the 0x
+	err = d.sql.AddTx(cid, tx[2:])
 	if err != nil {
 		return nil, err
 	}
