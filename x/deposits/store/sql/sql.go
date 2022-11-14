@@ -158,7 +158,11 @@ func (s *sqlstore) CommitHeight(h int64) error {
 	}
 	_, err = tx.Exec("SELECT commit_height($1)", h)
 	if err != nil {
-		return tx.Rollback()
+		err = tx.Rollback()
+		if err != nil { // rollback likely won't fail, but just in case
+			return err
+		}
+		return ErrTxRollback
 	}
 	return tx.Commit()
 }
@@ -230,7 +234,6 @@ func (s *sqlstore) RemoveBalance(addr string, amount string) error {
 }
 
 // will begin the withdrawal process.  This will create a withdrawal request and return the nonce
-// TODO: this should return info regarding the spent amount (fee)
 func (s *sqlstore) StartWithdrawal(nonce, wallet, amount string, expiry int64) (*types.PendingWithdrawal, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -238,7 +241,11 @@ func (s *sqlstore) StartWithdrawal(nonce, wallet, amount string, expiry int64) (
 	}
 	res, err := tx.Query("SELECT start_withdrawal($1, $2, $3, $4);", wallet, nonce, amount, expiry)
 	if err != nil {
-		return nil, tx.Rollback()
+		err = tx.Rollback()
+		if err != nil { // rollback likely won't fail, but just in case=
+			return nil, err
+		}
+		return nil, ErrTxRollback
 	}
 
 	res.Next()
@@ -299,7 +306,11 @@ func (s *sqlstore) FinishWithdrawal(nonce string) (bool, error) {
 	}
 	res, err := tx.Query("SELECT finish_withdrawal($1)", nonce)
 	if err != nil {
-		return false, tx.Rollback()
+		err = tx.Rollback()
+		if err != nil { // rollback likely won't fail, but just in case
+			return false, err
+		}
+		return false, ErrTxRollback
 	}
 
 	res.Next()
@@ -325,7 +336,12 @@ func (s *sqlstore) CommitDeposits(h int64) error {
 
 	_, err = tx.Exec("SELECT commit_deposits($1);", h)
 	if err != nil {
-		return tx.Rollback()
+		err = tx.Rollback()
+		if err != nil { // rollback likely won't fail, but just in case
+			return err
+		}
+
+		return ErrTxRollback
 	}
 
 	return tx.Commit()
@@ -338,7 +354,11 @@ func (s *sqlstore) Expire(h int64) error {
 	}
 	_, err = tx.Exec("SELECT expire($1)", h)
 	if err != nil {
-		return tx.Rollback()
+		err = tx.Rollback()
+		if err != nil { // rollback likely won't fail, but just in case
+			return err
+		}
+		return ErrTxRollback
 	}
 
 	return tx.Commit()

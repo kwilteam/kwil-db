@@ -77,12 +77,14 @@ func withdrawCmd() *cobra.Command {
 				}
 
 				fmt.Printf(`Withdrawal request sent.
-				Amount Requested: %s
-				Amount Returned:  %s
-				Fee:              %s
-				Correlation ID:   %s
-				Tx Hash:          %s
-				`, amount, res.Amount, res.Fee, res.CorrelationId, res.Tx)
+				
+	Amount Requested: %s
+	Amount Returned:  %s
+	Fee:              %s
+	Correlation ID:   %s
+	Tx Hash:          %s
+
+`, amount, res.Amount, res.Fee, res.CorrelationId, res.Tx)
 
 				return nil
 			})

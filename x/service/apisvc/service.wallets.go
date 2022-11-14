@@ -78,8 +78,11 @@ func (s *Service) ReturnFunds(ctx context.Context, req *apipb.ReturnFundsRequest
 }
 
 func (s *Service) EstimateCost(ctx context.Context, req *apipb.EstimateCostRequest) (*apipb.EstimateCostResponse, error) {
-	s.log.Sugar().Warnf("EstimateCost is not yet implemented!")
+	p, err := s.p.GetPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return &apipb.EstimateCostResponse{
-		Fee: "100",
+		Fee: p.String(),
 	}, nil
 }

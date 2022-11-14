@@ -9,9 +9,8 @@ import (
 	"kwil/x/cli/cmds/connect"
 	"kwil/x/cli/cmds/database"
 	"kwil/x/cli/cmds/fund"
-	"kwil/x/cli/cmds/role"
 	"kwil/x/cli/cmds/schema"
-	"kwil/x/cli/cmds/table"
+	"kwil/x/cli/cmds/utils"
 
 	"github.com/manifoldco/promptui"
 	"github.com/mitchellh/go-homedir"
@@ -33,9 +32,8 @@ func Execute() error {
 		fund.NewCmdFund(),
 		configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
-		table.NewCmdTable(),
-		role.NewCmdRole(),
 		schema.NewCmdSchema(),
+		utils.NewCmdUtils(),
 	)
 
 	if err := cmd.Execute(); err != nil {

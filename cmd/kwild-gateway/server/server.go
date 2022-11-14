@@ -78,6 +78,7 @@ func cors(h http.Handler) http.Handler {
 }
 
 func allowedOrigin(origin string) bool {
+	return true
 	if viper.GetString("cors") == "*" {
 		return true
 	}
