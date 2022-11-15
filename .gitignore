@@ -9,7 +9,7 @@
 **/.kwal/
 cmd/kwil-cosmos/cmd/kwild/kwild
 cmd/kwil-cosmos/cmd/kwild/kwild.exe
-keys/cosmos
+!keys/cosmos/test_ethereum.pem
 .kwilbadger/
 .testkwilbadger/
 .wal/
