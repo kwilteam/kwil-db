@@ -38,4 +38,10 @@ type Role struct {
 type Query struct {
 	Name      string
 	Statement string
+	Inputs    []Input
+}
+
+type Input struct {
+	Name string
+	Type string
 }

@@ -2,7 +2,6 @@ package execution
 
 import (
 	"context"
-	"fmt"
 	"ksl/sqlclient"
 	"kwil/x/schema"
 )
@@ -39,7 +38,7 @@ func NewTestService() *executionService {
 }
 
 func LocalConnectionInfo(wallet string) (string, error) {
-	return fmt.Sprintf("postgres://localhost:5432/kwil?sslmode=disable", wallet), nil
+	return "postgres://localhost:5432/kwil?sslmode=disable&user=postgres&password=postgres", nil
 }
 
 /*
@@ -94,7 +93,7 @@ func (s *executionService) Execute(ctx context.Context, owner, name, caller, que
 func getQuery(md *schema.Metadata, query *string) (*schema.Query, error) {
 	var q *schema.Query
 	for _, qs := range md.Queries {
-		if q.Name == *query {
+		if qs.Name == *query {
 			q = &qs
 			break
 		}
