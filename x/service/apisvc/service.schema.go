@@ -2,14 +2,14 @@ package apisvc
 
 import (
 	"context"
+	"kwil/x/metadata"
 	"kwil/x/proto/apipb"
-	"kwil/x/schema"
 
 	"github.com/google/uuid"
 )
 
 func (s *Service) PlanSchema(ctx context.Context, req *apipb.PlanSchemaRequest) (*apipb.PlanSchemaResponse, error) {
-	planReq := schema.PlanRequest{
+	planReq := metadata.PlanRequest{
 		Wallet:     req.Wallet,
 		Database:   req.Database,
 		SchemaData: req.Schema,
@@ -24,15 +24,12 @@ func (s *Service) PlanSchema(ctx context.Context, req *apipb.PlanSchemaRequest) 
 		changes[i] = &apipb.Change{
 			Cmd:     change.Cmd,
 			Comment: change.Comment,
-			Reverse: change.Reverse,
 		}
 	}
 
 	return &apipb.PlanSchemaResponse{
 		Plan: &apipb.Plan{
 			PlanId:  plan.ID.String(),
-			Version: plan.Version,
-			Name:    plan.Name,
 			Changes: changes,
 		},
 	}, nil
@@ -50,7 +47,7 @@ func (s *Service) ApplySchema(ctx context.Context, req *apipb.ApplySchemaRequest
 }
 
 func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest) (*apipb.GetMetadataResponse, error) {
-	meta, err := s.md.GetMetadata(ctx, schema.RequestMetadata{Wallet: req.Wallet, Database: req.Database})
+	meta, err := s.md.GetMetadata(ctx, metadata.RequestMetadata{Wallet: req.Wallet, Database: req.Database})
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +57,7 @@ func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest
 	}, nil
 }
 
-func convertMetadata(meta schema.Metadata) *apipb.Metadata {
+func convertMetadata(meta metadata.Metadata) *apipb.Metadata {
 	tables := make([]*apipb.Table, len(meta.Tables))
 	for i, table := range meta.Tables {
 		tables[i] = convertTable(table)
@@ -84,7 +81,7 @@ func convertMetadata(meta schema.Metadata) *apipb.Metadata {
 	}
 }
 
-func convertTable(table schema.Table) *apipb.Table {
+func convertTable(table metadata.Table) *apipb.Table {
 	columns := make([]*apipb.Column, len(table.Columns))
 	for i, column := range table.Columns {
 		columns[i] = convertColumn(column)
@@ -96,24 +93,77 @@ func convertTable(table schema.Table) *apipb.Table {
 	}
 }
 
-func convertColumn(column schema.Column) *apipb.Column {
+func convertColumn(column metadata.Column) *apipb.Column {
 	return &apipb.Column{
-		Name:     column.Name,
-		Type:     column.Type,
-		Nullable: column.Nullable,
+		Name:  column.Name,
+		Type:  column.Type,
+		Arity: convertArity(column.Arity),
 	}
 }
 
-func convertQuery(query schema.Query) *apipb.Query {
+func convertQuery(query metadata.Query) *apipb.Query {
+	inputs := make([]*apipb.Param, len(query.Inputs))
+	outputs := make([]*apipb.Param, len(query.Outputs))
+
+	for i, input := range query.Inputs {
+		inputs[i] = &apipb.Param{
+			Name:  input.Name,
+			Type:  convertType(input.Type),
+			Arity: convertArity(input.Arity),
+		}
+	}
+
+	for i, output := range query.Outputs {
+		outputs[i] = &apipb.Param{
+			Name:  output.Name,
+			Type:  convertType(output.Type),
+			Arity: convertArity(output.Arity),
+		}
+	}
 	return &apipb.Query{
-		Name:      query.Name,
-		Statement: query.Statement,
+		Name:    query.Name,
+		Inputs:  inputs,
+		Outputs: outputs,
 	}
 }
 
-func convertRole(role schema.Role) *apipb.Role {
+func convertRole(role metadata.Role) *apipb.Role {
 	return &apipb.Role{
 		Name:    role.Name,
 		Queries: role.Queries,
+	}
+}
+
+func convertArity(arity metadata.TypeArity) apipb.Arity {
+	switch arity {
+	case metadata.Optional:
+		return apipb.Arity_OPTIONAL
+	case metadata.Required:
+		return apipb.Arity_REQUIRED
+	case metadata.Repeated:
+		return apipb.Arity_REPEATED
+	default:
+		return apipb.Arity_OPTIONAL
+	}
+}
+
+func convertType(t string) apipb.ParamType {
+	switch t {
+	case metadata.ScalarString:
+		return apipb.ParamType_STRING
+	case metadata.ScalarNumber:
+		return apipb.ParamType_NUMBER
+	case metadata.ScalarBool:
+		return apipb.ParamType_BOOL
+	case metadata.ScalarDate:
+		return apipb.ParamType_DATE
+	case metadata.ScalarTime:
+		return apipb.ParamType_TIME
+	case metadata.ScalarDateTime:
+		return apipb.ParamType_DATETIME
+	case metadata.ScalarBytes:
+		return apipb.ParamType_BYTES
+	default:
+		return apipb.ParamType_VOID
 	}
 }

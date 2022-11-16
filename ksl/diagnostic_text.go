@@ -49,7 +49,6 @@ func (w *diagnosticTextWriter) WriteDiagnostic(diag *Diagnostic) error {
 	case DiagWarning:
 		severityStr = "Warning"
 	default:
-		// should never happen
 		severityStr = "???????"
 	}
 
@@ -59,15 +58,8 @@ func (w *diagnosticTextWriter) WriteDiagnostic(diag *Diagnostic) error {
 		snipRange := *diag.Subject
 		highlightRange := snipRange
 		if diag.Context != nil {
-			// Show enough of the source code to include both the subject
-			// and context ranges, which overlap in all reasonable
-			// situations.
 			snipRange = RangeOver(snipRange, *diag.Context)
 		}
-		// We can't illustrate an empty range, so we'll turn such ranges into
-		// single-character ranges, which might not be totally valid (may point
-		// off the end of a line, or off the end of the file) but are good
-		// enough for the bounds checks we do below.
 		if snipRange.Empty() {
 			snipRange.End.Offset++
 			snipRange.End.Column++

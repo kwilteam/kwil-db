@@ -2,11 +2,10 @@ package schema
 
 import (
 	"context"
+	"ksl/schema"
 	"kwil/x/cli/util"
 	"kwil/x/proto/apipb"
 
-	"github.com/kwilteam/ksl/kslparse"
-	"github.com/kwilteam/ksl/sqlspec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -27,19 +26,14 @@ func createPlanCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fs, err := kslparse.ParseKwilFiles(opts.SchemaFiles...)
-			if err != nil {
-				return err
-			}
-			_, diags := sqlspec.Decode(fs)
-			if diags.HasErrors() {
-
-				return diags
+			ksch := schema.ParseFiles(opts.SchemaFiles...)
+			if ksch.HasErrors() {
+				return ksch.Diagnostics
 			}
 
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				client := apipb.NewKwilServiceClient(cc)
-				req := &apipb.PlanSchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: fs.Data()}
+				req := &apipb.PlanSchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: ksch.Data()}
 				resp, err := client.PlanSchema(ctx, req)
 				if err != nil {
 					return err

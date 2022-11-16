@@ -4,8 +4,8 @@ import (
 	"kwil/pkg/types/chain/pricing"
 	"kwil/x/deposits"
 	"kwil/x/logx"
+	"kwil/x/metadata"
 	"kwil/x/proto/apipb"
-	"kwil/x/schema"
 	"math/big"
 )
 
@@ -15,10 +15,10 @@ type Service struct {
 	ds      deposits.Deposits
 	log     logx.Logger
 	pricing pricing.PriceBuilder
-	md      schema.Service
+	md      metadata.Service
 }
 
-func NewService(ds deposits.Deposits, p pricing.PriceBuilder, md schema.Service) *Service {
+func NewService(ds deposits.Deposits, p pricing.PriceBuilder, md metadata.Service) *Service {
 	return &Service{
 		ds:      ds,
 		pricing: p,

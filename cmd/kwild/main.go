@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"kwil/x/schema"
+	"kwil/x/metadata"
 	"net"
 	"net/http"
 	"os"
@@ -57,7 +57,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize pricing: %w", err)
 	}
 
-	apiService := apisvc.NewService(d, p, schema.NewTestService())
+	apiService := apisvc.NewService(d, p, metadata.NewTestService())
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(logger, httpHandler, apiService)
