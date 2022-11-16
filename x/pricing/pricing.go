@@ -22,7 +22,10 @@ type pricingService struct {
 
 func NewService() *pricingService {
 	return &pricingService{
-		prices: prices{},
+		prices: prices{
+			ddl:    big.NewInt(100000),
+			insert: big.NewInt(2000),
+		},
 	}
 }
 

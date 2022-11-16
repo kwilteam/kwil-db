@@ -10,7 +10,7 @@ message ReadRequest{
 }
 
 message ReadResponse{
-
+    QueryResult result = 1;
 }
 
 message CRUDInput {
@@ -32,4 +32,18 @@ message CUDRequest{
 
 message CUDResponse{
     string trace_id = 1;
+}
+
+message ColumnResult {
+    string name = 1;
+    string value = 2;
+    string type = 3;
+}
+
+message Row {
+    repeated ColumnResult columns = 1;
+}
+
+message QueryResult {
+    repeated Row rows = 1;
 }

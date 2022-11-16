@@ -36,7 +36,7 @@ func (s *executionService) Read(ctx context.Context, owner, name, query string, 
 	defer client.Close()
 
 	// execute
-	res, err := client.DB.Query(q.Statement, ins)
+	res, err := client.DB.Query(q.Statement, ins...)
 	if err != nil {
 		return nil, err
 	}

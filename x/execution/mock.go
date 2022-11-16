@@ -28,7 +28,7 @@ func (m *mockMdService) GetMetadata(ctx context.Context, req schema.RequestMetad
 		Queries: []schema.Query{
 			{
 				Name:      "query1",
-				Statement: "insert...",
+				Statement: "",
 				Inputs: []schema.Input{
 					{
 						Name: "input1",
@@ -42,7 +42,7 @@ func (m *mockMdService) GetMetadata(ctx context.Context, req schema.RequestMetad
 			},
 			{
 				Name:      "query2",
-				Statement: "insert ...",
+				Statement: "select * from wallets where wallet = $1",
 				Inputs: []schema.Input{
 					{
 						Name: "input1",

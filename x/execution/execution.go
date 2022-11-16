@@ -4,6 +4,8 @@ import (
 	"context"
 	"ksl/sqlclient"
 	"kwil/x/schema"
+
+	_ "ksl/sqldriver"
 )
 
 // TODO: replace this with the implementation from kwil/x/schema/database.go
@@ -139,6 +141,7 @@ func hasPermissions(md *schema.Metadata, caller, query *string) (bool, error) {
 
 // this will try to transform the inputs into the types specified in the query
 // it will return the query with the inputs transformed
-func validateTypes(md *schema.Query, query *string, inputs []Input) ([]Input, error) {
-	return inputs, nil
+// TODO: implement this
+func validateTypes(md *schema.Query, query *string, inputs []Input) ([]any, error) {
+	return []any{"0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D"}, nil
 }
