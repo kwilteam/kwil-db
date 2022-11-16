@@ -2,7 +2,7 @@ package execution
 
 import (
 	"context"
-	"kwil/x/schema"
+	"kwil/x/metadata"
 
 	"github.com/google/uuid"
 )
@@ -18,10 +18,10 @@ func (m *mockMdService) Apply(ctx context.Context, planID uuid.UUID) error {
 	return nil
 }
 
-func (m *mockMdService) Plan(ctx context.Context, req schema.PlanRequest) (schema.Plan, error) {
-	return schema.Plan{}, nil
+func (m *mockMdService) Plan(ctx context.Context, req metadata.PlanRequest) (metadata.Plan, error) {
+	return metadata.Plan{}, nil
 }
 
-func (m *mockMdService) GetMetadata(ctx context.Context, req schema.RequestMetadata) (schema.Metadata, error) {
-	return schema.Metadata{}, nil
+func (m *mockMdService) GetMetadata(ctx context.Context, req metadata.RequestMetadata) (metadata.Metadata, error) {
+	return metadata.Metadata{}, nil
 }

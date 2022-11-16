@@ -4,9 +4,9 @@ import (
 	"kwil/x/deposits"
 	"kwil/x/execution"
 	"kwil/x/logx"
+	"kwil/x/metadata"
 	"kwil/x/pricing"
 	"kwil/x/proto/apipb"
-	"kwil/x/schema"
 )
 
 type Service struct {
@@ -14,12 +14,12 @@ type Service struct {
 
 	ds  deposits.Deposits
 	log logx.Logger
-	md  schema.Service
 	p   pricing.Service
+	md  metadata.Service
 	e   execution.Service
 }
 
-func NewService(ds deposits.Deposits, md schema.Service, e execution.Service) *Service {
+func NewService(ds deposits.Deposits, md metadata.Service, e execution.Service) *Service {
 	return &Service{
 		ds:  ds,
 		log: logx.New(),

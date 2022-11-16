@@ -1,18 +1,22 @@
 package schema
 
 import (
-	"ksl/kslparse"
-	"ksl/sqlclient"
-	"ksl/sqlspec"
+	"context"
+	"ksl/schema"
 	"kwil/x/cli/util"
+	"kwil/x/proto/apipb"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 func createApplyCmd() *cobra.Command {
 	var opts struct {
 		DatabaseUrl string
 		SchemaFiles []string
+		Wallet      string
+		Database    string
 		AutoApprove bool
 	}
 
@@ -23,63 +27,39 @@ func createApplyCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fs, err := kslparse.ParseKwilFiles(opts.SchemaFiles...)
-			if err != nil {
-				return err
+			ksch := schema.ParseFiles(opts.SchemaFiles...)
+			if ksch.HasErrors() {
+				return ksch.Diagnostics
 			}
 
-			target, diags := sqlspec.Decode(fs)
-			if diags.HasErrors() {
-				return diags
-			}
-
-			client, err := sqlclient.Open(cmd.Context(), opts.DatabaseUrl)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-
-			targetOpts := &sqlspec.InspectRealmOption{}
-			if client.URL.Schema != "" {
-				targetOpts.Schemas = append(targetOpts.Schemas, client.URL.Schema)
-			}
-			source, err := client.InspectRealm(cmd.Context(), targetOpts)
-			if err != nil {
-				return err
-			}
-
-			changes, err := client.RealmDiff(source, target)
-			if err != nil {
-				return err
-			}
-
-			if len(changes) == 0 {
-				cmd.Println("Schema is synced, no changes to be made")
-				return nil
-			}
-
-			plan, err := client.PlanChanges(changes)
-			if err != nil {
-				return err
-			}
-
-			if err := planSummary(cmd, plan); err != nil {
-				return err
-			}
-
-			if opts.AutoApprove || util.ConfirmPrompt() {
-				if err := client.ApplyChanges(cmd.Context(), changes); err != nil {
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				client := apipb.NewKwilServiceClient(cc)
+				req := &apipb.PlanSchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: ksch.Data()}
+				planResponse, err := client.PlanSchema(ctx, req)
+				if err != nil {
 					return err
 				}
-			}
-			return nil
+				planSummaryProto(cmd, planResponse.Plan)
+				if opts.AutoApprove || util.ConfirmPrompt() {
+					req := &apipb.ApplySchemaRequest{PlanId: planResponse.Plan.PlanId}
+					_, err := client.ApplySchema(cmd.Context(), req)
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			})
 		},
 	}
 
 	cmd.Flags().StringSliceVarP(&opts.SchemaFiles, "file", "f", nil, "[paths...] file or directory containing the schema definition files")
 	cmd.Flags().StringVarP(&opts.DatabaseUrl, "url", "u", "", "URL to the database using the format:\n[driver://username:password@address/dbname?param=value]")
 	cmd.Flags().BoolVarP(&opts.AutoApprove, "auto-approve", "y", false, "Auto approve. Apply the schema changes without prompting for approval")
+	cmd.Flags().StringVarP(&opts.Wallet, "wallet", "w", "", "Wallet to use for the connection")
+	cmd.Flags().StringVarP(&opts.Database, "database", "d", "", "Database name to connect to")
 	cmd.MarkFlagRequired("file")
+	cmd.MarkFlagRequired("wallet")
+	cmd.MarkFlagRequired("database")
 	cmd.MarkFlagRequired("url")
 
 	return cmd

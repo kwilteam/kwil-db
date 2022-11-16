@@ -16,6 +16,13 @@ type Context struct {
 	parent    *Context
 }
 
+func NewContext() *Context {
+	return &Context{
+		Variables: map[string]cty.Value{},
+		Functions: map[string]function.Function{},
+	}
+}
+
 func (ctx *Context) NewChild() *Context {
 	return &Context{parent: ctx}
 }

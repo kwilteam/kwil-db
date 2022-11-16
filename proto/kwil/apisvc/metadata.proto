@@ -3,81 +3,91 @@ package apisvc;
 option go_package = "kwil/x/proto/apipb";
 
 message PlanSchemaRequest {
-    string wallet = 1;
-    string database = 2;
-    bytes schema = 3;
-  }
+	string wallet = 1;
+	string database = 2;
+	bytes schema = 3;
+}
 
-  message PlanSchemaResponse {
-    Plan plan = 1;
-  }
+message PlanSchemaResponse {
+	Plan plan = 1;
+}
 
-  message Plan {
-    string plan_id = 1;
-      string version = 2;
-      string name = 3;
-    repeated Change changes = 4;
-  }
+message Plan {
+	string plan_id = 1;
+	repeated Change changes = 4;
+}
 
-  message Change {
-    string cmd = 1;
-    string comment = 2;
-    string reverse = 3;
-  }
+message Change {
+	string cmd = 1;
+	string comment = 2;
+	string reverse = 3;
+}
 
-  message ApplySchemaRequest {
-    string plan_id = 1;
-  }
+message ApplySchemaRequest {
+	string plan_id = 1;
+}
 
-  message ApplySchemaResponse {}
+message ApplySchemaResponse {}
 
 message GetMetadataRequest {
-    string wallet = 1;
-    string database = 2;
+	string wallet = 1;
+	string database = 2;
 }
 
 message GetMetadataResponse {
-    Metadata metadata = 1;
+	Metadata metadata = 1;
 }
 
 
 message Metadata {
-    string name = 1;
-    repeated Table tables = 2;
-    repeated Query queries = 3;
-    repeated Role roles = 4;
-    string default_role = 5;
+	string name = 1;
+	repeated Table tables = 2;
+	repeated Query queries = 3;
+	repeated Role roles = 4;
+	string default_role = 5;
 }
 
 message Table {
-    string name = 1;
-    repeated Column columns = 2;
+	string name = 1;
+	repeated Column columns = 2;
 }
 
 message Column {
-    string name = 1;
-    string type = 2;
-    bool nullable = 3;
+	string name = 1;
+	string type = 2;
+	Arity arity = 3;
 }
 
 message Query {
-    string name = 1;
-    string statement = 2;
-    repeated Input inputs = 3;
-    repeated Output outputs = 4;
+	string name = 1;
+	repeated Param inputs = 3;
+	repeated Param outputs = 4;
 }
 
 message Role {
-    string name = 1;
-    repeated string queries = 2;
+	string name = 1;
+	repeated string queries = 2;
 }
 
-message Input {
-    string name = 1;
-    string type = 2;
+enum ParamType {
+	VOID = 0;
+	NUMBER = 1;
+	STRING = 2;
+	BOOL = 3;
+	DATE = 4;
+	TIME = 5;
+	DATETIME = 6;
+	BYTES = 7;
 }
 
-message Output {
-    string name = 1;
-    string type = 2;
+enum Arity {
+	OPTIONAL = 0;
+	REQUIRED = 1;
+	REPEATED = 2;
+}
+
+message Param {
+	string name = 1;
+	ParamType type = 2;
+	Arity arity = 3;
 }
