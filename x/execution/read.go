@@ -3,11 +3,11 @@ package execution
 import (
 	"context"
 	"ksl/sqlclient"
-	"kwil/x/schema"
+	"kwil/x/metadata"
 )
 
 func (s *executionService) Read(ctx context.Context, owner, name, query string, inputs []Input) (*Result, error) {
-	md, err := s.md.GetMetadata(ctx, schema.RequestMetadata{Wallet: owner, Database: name})
+	md, err := s.md.GetMetadata(ctx, metadata.RequestMetadata{Wallet: owner, Database: name})
 	if err != nil {
 		return nil, err
 	}
@@ -18,7 +18,7 @@ func (s *executionService) Read(ctx context.Context, owner, name, query string, 
 	}
 
 	// next, we need to verify the types
-	ins, err := validateTypes(q, &query, inputs)
+	_, err = validateTypes(q, &query, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -29,25 +29,26 @@ func (s *executionService) Read(ctx context.Context, owner, name, query string, 
 		return nil, err
 	}
 
-	client, err := sqlclient.Open(ctx, url)
+	client, err := sqlclient.Open(url)
 	if err != nil {
 		return nil, err
 	}
 	defer client.Close()
 
 	// execute
-	res, err := client.DB.Query(q.Statement, ins...)
-	if err != nil {
-		return nil, err
-	}
+	// res, err := client.DB.Query(q.Statement, ins)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	var r Result
-	err = r.Load(res)
-	if err != nil {
-		return nil, err
-	}
+	// var r Result
+	// err = r.Load(res)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	return &r, nil
+	// return &r, nil
+	return nil, nil
 }
 
 //

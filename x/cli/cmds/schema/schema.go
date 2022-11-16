@@ -12,8 +12,6 @@ func NewCmdSchema() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		createInspectCmd(),
-		createDiffCmd(),
 		createPlanCmd(),
 		createApplyCmd(),
 	)

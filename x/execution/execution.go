@@ -3,9 +3,7 @@ package execution
 import (
 	"context"
 	"ksl/sqlclient"
-	"kwil/x/schema"
-
-	_ "ksl/sqldriver"
+	"kwil/x/metadata"
 )
 
 // TODO: replace this with the implementation from kwil/x/schema/database.go
@@ -21,11 +19,11 @@ type Service interface {
 }
 
 type executionService struct {
-	md        schema.Service
-	connector schema.Connector
+	md        metadata.Service
+	connector metadata.Connector
 }
 
-func NewService(md schema.Service, conn schema.Connector) *executionService {
+func NewService(md metadata.Service, conn metadata.Connector) *executionService {
 	return &executionService{
 		md:        md,
 		connector: conn,
@@ -35,7 +33,7 @@ func NewService(md schema.Service, conn schema.Connector) *executionService {
 func NewTestService() *executionService {
 	return &executionService{
 		md:        newMockMdService(),
-		connector: schema.ConnectorFunc(LocalConnectionInfo),
+		connector: metadata.ConnectorFunc(LocalConnectionInfo),
 	}
 }
 
@@ -47,7 +45,7 @@ func LocalConnectionInfo(wallet string) (string, error) {
 There are a lot of things that need to change here
 */
 func (s *executionService) Execute(ctx context.Context, owner, name, caller, query string, inputs []Input) error {
-	md, err := s.md.GetMetadata(ctx, schema.RequestMetadata{Wallet: owner, Database: name})
+	md, err := s.md.GetMetadata(ctx, metadata.RequestMetadata{Wallet: owner, Database: name})
 	if err != nil {
 		return err
 	}
@@ -67,7 +65,7 @@ func (s *executionService) Execute(ctx context.Context, owner, name, caller, que
 	}
 
 	// next, we need to verify the types
-	ins, err := validateTypes(q, &query, inputs)
+	_, err = validateTypes(q, &query, inputs)
 	if err != nil {
 		return err
 	}
@@ -78,22 +76,22 @@ func (s *executionService) Execute(ctx context.Context, owner, name, caller, que
 		return err
 	}
 
-	client, err := sqlclient.Open(ctx, url)
+	client, err := sqlclient.Open(url)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 	// execute
-	_, err = client.DB.Exec(q.Statement, ins)
-	if err != nil {
-		return err
-	}
+	// _, err = client.ExecContext(q.Statement, ins)
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
 
-func getQuery(md *schema.Metadata, query *string) (*schema.Query, error) {
-	var q *schema.Query
+func getQuery(md *metadata.Metadata, query *string) (*metadata.Query, error) {
+	var q *metadata.Query
 	for _, qs := range md.Queries {
 		if qs.Name == *query {
 			q = &qs
@@ -110,9 +108,9 @@ func getQuery(md *schema.Metadata, query *string) (*schema.Query, error) {
 
 // TODO: There should be a more efficient way for finding roles and queries than having to iterate through all of them
 // this will get the callers role and check if they have permissions to execute the query
-func hasPermissions(md *schema.Metadata, caller, query *string) (bool, error) {
+func hasPermissions(md *metadata.Metadata, caller, query *string) (bool, error) {
 	// search for default role
-	var rl *schema.Role
+	var rl *metadata.Role
 	for _, role := range md.Roles {
 		if role.Name == md.DefaultRole {
 			rl = &role
@@ -142,6 +140,6 @@ func hasPermissions(md *schema.Metadata, caller, query *string) (bool, error) {
 // this will try to transform the inputs into the types specified in the query
 // it will return the query with the inputs transformed
 // TODO: implement this
-func validateTypes(md *schema.Query, query *string, inputs []Input) ([]any, error) {
+func validateTypes(md *metadata.Query, query *string, inputs []Input) ([]any, error) {
 	return []any{"0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D"}, nil
 }

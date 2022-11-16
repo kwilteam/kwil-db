@@ -44,7 +44,7 @@ func viewDatabaseCmd() *cobra.Command {
 					for _, c := range t.Columns {
 						fmt.Printf("    %s\n", c.Name)
 						fmt.Printf("      Type: %s\n", c.Type)
-						fmt.Printf("      Nullable: %t\n", c.Nullable)
+						fmt.Printf("      Arity: %v\n", c.Arity)
 					}
 				}
 
@@ -62,7 +62,6 @@ func viewDatabaseCmd() *cobra.Command {
 				fmt.Println("Queries:")
 				for _, q := range meta.Queries {
 					fmt.Printf("  %s\n", q.Name)
-					fmt.Printf("    Statement: %s\n", q.Statement)
 				}
 				return nil
 			})

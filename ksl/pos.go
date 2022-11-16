@@ -2,25 +2,12 @@ package ksl
 
 import (
 	"fmt"
-	"strings"
-	"unicode/utf8"
 )
 
 type Pos struct {
 	Line   int
 	Column int
 	Offset int
-}
-
-func (p *Pos) Advance(span string) {
-	p.Offset += len(span)
-	lines := strings.Count(span, "\n")
-	p.Line += lines
-	if lines == 0 {
-		p.Column += utf8.RuneCountInString(span)
-	} else {
-		p.Column = utf8.RuneCountInString(span[strings.LastIndex(span, "\n"):])
-	}
 }
 
 var InitialPos = Pos{Offset: 0, Line: 1, Column: 1}

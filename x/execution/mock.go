@@ -2,7 +2,7 @@ package execution
 
 import (
 	"context"
-	"kwil/x/schema"
+	"kwil/x/metadata"
 
 	"github.com/google/uuid"
 )
@@ -18,18 +18,17 @@ func (m *mockMdService) Apply(ctx context.Context, planID uuid.UUID) error {
 	return nil
 }
 
-func (m *mockMdService) Plan(ctx context.Context, req schema.PlanRequest) (schema.Plan, error) {
-	return schema.Plan{}, nil
+func (m *mockMdService) Plan(ctx context.Context, req metadata.PlanRequest) (metadata.Plan, error) {
+	return metadata.Plan{}, nil
 }
 
-func (m *mockMdService) GetMetadata(ctx context.Context, req schema.RequestMetadata) (schema.Metadata, error) {
-	mdr := schema.Metadata{
+func (m *mockMdService) GetMetadata(ctx context.Context, req metadata.RequestMetadata) (metadata.Metadata, error) {
+	mdr := metadata.Metadata{
 		DbName: "test",
-		Queries: []schema.Query{
+		Queries: []metadata.Query{
 			{
-				Name:      "query1",
-				Statement: "",
-				Inputs: []schema.Input{
+				Name: "query1",
+				Inputs: []metadata.Param{
 					{
 						Name: "input1",
 						Type: "string",
@@ -41,9 +40,8 @@ func (m *mockMdService) GetMetadata(ctx context.Context, req schema.RequestMetad
 				},
 			},
 			{
-				Name:      "query2",
-				Statement: "select * from wallets where wallet = $1",
-				Inputs: []schema.Input{
+				Name: "query2",
+				Inputs: []metadata.Param{
 					{
 						Name: "input1",
 						Type: "string",
@@ -51,25 +49,23 @@ func (m *mockMdService) GetMetadata(ctx context.Context, req schema.RequestMetad
 				},
 			},
 		},
-		Roles: []schema.Role{
+		Roles: []metadata.Role{
 			{
 				Name:    "test",
 				Queries: []string{"query1", "query2"},
 			},
 		},
-		Tables: []schema.Table{
+		Tables: []metadata.Table{
 			{
 				Name: "table1",
-				Columns: []schema.Column{
+				Columns: []metadata.Column{
 					{
-						Name:     "column1",
-						Type:     "string",
-						Nullable: true,
+						Name: "column1",
+						Type: "string",
 					},
 					{
-						Name:     "column2",
-						Type:     "string",
-						Nullable: false,
+						Name: "column2",
+						Type: "string",
 					},
 				},
 			},
