@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func createApplyCmd() *cobra.Command {
+func createDeployCmd() *cobra.Command {
 	var opts struct {
 		DatabaseUrl string
 		SchemaFiles []string
@@ -21,9 +21,9 @@ func createApplyCmd() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:           "apply",
-		Short:         "Apply a schema to a target database.",
-		Long:          "`kwil schema apply' plans and executes a database migration to bring a given database to the state described in the provided schema.",
+		Use:           "deploy",
+		Short:         "Deploy a schema to a target database.",
+		Long:          "`kwil schema deploy' plans and executes a database migration to bring a given database to the state described in the provided schema.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -31,17 +31,18 @@ func createApplyCmd() *cobra.Command {
 			if ksch.HasErrors() {
 				return ksch.Diagnostics
 			}
+			schemaData := ksch.Data()
 
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				client := apipb.NewKwilServiceClient(cc)
-				req := &apipb.PlanSchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: ksch.Data()}
+				req := &apipb.PlanSchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: schemaData}
 				planResponse, err := client.PlanSchema(ctx, req)
 				if err != nil {
 					return err
 				}
 				planSummaryProto(cmd, planResponse.Plan)
 				if opts.AutoApprove || util.ConfirmPrompt() {
-					req := &apipb.ApplySchemaRequest{PlanId: planResponse.Plan.PlanId}
+					req := &apipb.ApplySchemaRequest{Wallet: opts.Wallet, Database: opts.Database, Schema: schemaData}
 					_, err := client.ApplySchema(cmd.Context(), req)
 					if err != nil {
 						return err

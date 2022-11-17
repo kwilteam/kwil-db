@@ -43,12 +43,12 @@ model Vehicle {
 	owner    User    @ref(fields: [owner_id], references: [id])
 }
 `
-	req := PlanRequest{Wallet: "postgres", Database: "public", SchemaData: []byte(data)}
+	req := SchemaRequest{Wallet: "postgres", Database: "public", SchemaData: []byte(data)}
 	plan, err := service.Plan(ctx, req)
 	require.NoError(t, err)
 	require.NotEmpty(t, plan.Changes)
 
-	err = service.Apply(ctx, plan.ID)
+	err = service.Apply(ctx, req)
 	require.NoError(t, err)
 
 	db, err := service.GetMetadata(ctx, RequestMetadata{"postgres", "public"})

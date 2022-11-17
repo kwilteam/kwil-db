@@ -13,7 +13,6 @@ message PlanSchemaResponse {
 }
 
 message Plan {
-	string plan_id = 1;
 	repeated Change changes = 4;
 }
 
@@ -24,7 +23,9 @@ message Change {
 }
 
 message ApplySchemaRequest {
-	string plan_id = 1;
+	string wallet = 1;
+	string database = 2;
+	bytes schema = 3;
 }
 
 message ApplySchemaResponse {}

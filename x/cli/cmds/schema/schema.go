@@ -12,8 +12,7 @@ func NewCmdSchema() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		createPlanCmd(),
-		createApplyCmd(),
+		createDeployCmd(),
 	)
 
 	return cmd

@@ -4,8 +4,6 @@ import (
 	"ksl"
 	"ksl/postgres"
 	"ksl/sqlschema"
-
-	"github.com/google/uuid"
 )
 
 type metadatadb struct {
@@ -136,7 +134,7 @@ func convertDatabase(db sqlschema.Database) Metadata {
 	return (&metadatadb{db: db, meta: &Metadata{}}).convert()
 }
 
-func convertPlan(id uuid.UUID, p sqlschema.MigrationPlan) Plan {
+func convertPlan(p sqlschema.MigrationPlan) Plan {
 	changes := make([]Change, len(p.Statements))
 	for i, c := range p.Statements {
 		changes[i] = Change{
@@ -146,7 +144,6 @@ func convertPlan(id uuid.UUID, p sqlschema.MigrationPlan) Plan {
 	}
 
 	return Plan{
-		ID:      id,
 		Changes: changes,
 	}
 }
