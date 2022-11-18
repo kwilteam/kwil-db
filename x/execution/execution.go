@@ -2,7 +2,6 @@ package execution
 
 import (
 	"context"
-	"fmt"
 	"ksl/sqlclient"
 	"kwil/x/metadata"
 )
@@ -39,7 +38,7 @@ func NewTestService() *executionService {
 }
 
 func LocalConnectionInfo(wallet string) (string, error) {
-	return fmt.Sprintf("postgres://localhost:5432/kwil?sslmode=disable", wallet), nil
+	return "postgres://localhost:5432/kwil?sslmode=disable&user=postgres&password=postgres", nil
 }
 
 /*
@@ -94,7 +93,7 @@ func (s *executionService) Execute(ctx context.Context, owner, name, caller, que
 func getQuery(md *metadata.Metadata, query *string) (*metadata.Query, error) {
 	var q *metadata.Query
 	for _, qs := range md.Queries {
-		if q.Name == *query {
+		if qs.Name == *query {
 			q = &qs
 			break
 		}
@@ -140,6 +139,7 @@ func hasPermissions(md *metadata.Metadata, caller, query *string) (bool, error) 
 
 // this will try to transform the inputs into the types specified in the query
 // it will return the query with the inputs transformed
-func validateTypes(md *metadata.Query, query *string, inputs []Input) ([]Input, error) {
-	return inputs, nil
+// TODO: implement this
+func validateTypes(md *metadata.Query, query *string, inputs []Input) ([]any, error) {
+	return []any{"0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D"}, nil
 }

@@ -24,28 +24,6 @@ func ECDSAFromHex(hex string) (*ecdsa.PrivateKey, error) {
 	return ec.HexToECDSA(hex)
 }
 
-/*
-func CheckSignature(addr, sig string, data []byte) (bool, error) {
-	hash := ec.Keccak256Hash(data)
-	sb, err := hexutil.Decode(sig)
-	if err != nil {
-		return false, err
-	}
-
-	pubBytes, err := ec.Ecrecover(hash.Bytes(), sb)
-	if err != nil {
-		return false, err // I don't believe this can be reached
-	}
-
-	pub, err := ec.UnmarshalPubkey(pubBytes)
-	if err != nil {
-		return false, err // I don't believe this can be reached
-	}
-	derAddr := ec.PubkeyToAddress(*pub)
-
-	return derAddr == common.HexToAddress(addr), nil
-}*/
-
 func CheckSignature(addr, sig string, data []byte) (bool, error) {
 	switch sig[0:2] {
 	case "00": // PK uncompressed
@@ -99,7 +77,6 @@ func checkSignatureAccountSECP256k1Uncompressed(addr, sig string, data []byte) (
 	}
 
 	derAddr := ec.PubkeyToAddress(*recoveredPubKey)
-
 	return addr == derAddr.Hex(), nil
 }
 
