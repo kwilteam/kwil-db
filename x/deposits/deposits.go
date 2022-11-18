@@ -3,6 +3,8 @@ package deposits
 import (
 	"context"
 	"fmt"
+	"kwil/x/async"
+	"kwil/x/lease"
 	"math/big"
 
 	"kwil/x/cfgx"
@@ -39,7 +41,6 @@ type deposits struct {
 }
 
 func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
-
 	run, err := c.GetBool("run", false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run from config. %w", err)
@@ -52,30 +53,17 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
 		}, nil
 	}
 
-	port, err := c.GetInt64("db.port", 5432)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get db port from config. %w", err)
-	}
-
 	we, err := c.GetInt64("withdrawal_expiration", 100)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get withdrawal_expiration from config. %w", err)
 	}
 
-	ssl, err := c.GetBool("db.ssl", false)
+	pgConf, err := sql.NewConfig(c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get db ssl from config. %w", err)
+		return nil, fmt.Errorf("failed to get pg config. %w", err)
 	}
 
-	pgConf := sql.SQLConfig{
-		Host:     c.GetString("db.host", "localhost"),
-		Port:     port,
-		User:     c.GetString("db.user", "postgres"),
-		Password: c.GetString("db.password", "password"),
-		Database: c.GetString("db.database", "postgres"),
-		SSL:      ssl,
-	}
-	pg, err := sql.New(&pgConf)
+	pg, err := sql.New(pgConf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sql store. %w", err)
 	}
@@ -107,42 +95,69 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
 }
 
 func (d *deposits) Listen(ctx context.Context) error {
-
 	if !d.run {
+		<-ctx.Done()
 		return nil
 	}
 
+	agent, err := d.sql.CreateLeaseAgent("deposits_listener")
+	if err != nil {
+		return err
+	}
+
+	action := async.NewActionAsync()
+	err = agent.Subscribe(ctx, "deposits_lock", lease.Subscriber{
+		OnAcquired: func(l lease.Lease) {
+			d.listen_safe(ctx, l.OnRevoked(), action)
+		},
+		OnFatalError: func(err error) {
+			action.Fail(err)
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	<-action.DoneCh()
+
+	return action.GetError()
+}
+
+func (d *deposits) listen_safe(ctx context.Context, stop <-chan struct{}, action async.Action) {
 	// sync
 	err := d.Sync(ctx)
 	if err != nil {
-		return err
+		action.Fail(err)
+		return
 	}
 
 	blks, errs, err := d.ef.Listen(ctx, d.lh)
 	if err != nil {
-		return err
+		action.Fail(err)
+		return
 	}
 
-	go func(*deposits) {
-		defer d.sql.Close()
-		for {
-			select {
-			case <-ctx.Done():
+	defer d.sql.Close()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-stop:
+			return // no longer the leader
+		case err := <-errs:
+			// TODO: do we start this back up or propagate the failure at all?
+			d.log.Warnf("error from event feed: %v", err)
+			return
+		case blk := <-blks:
+			err := d.processBlock(ctx, blk)
+			if err != nil {
+				// TODO: do we start this back up or propagate the failure at all?
+				d.log.Warnf("failed to process block %d. %v", blk, err)
 				return
-			case err := <-errs:
-				d.log.Warnf("error from event feed: %v", err)
-				return
-			case blk := <-blks:
-				err := d.processBlock(ctx, blk)
-				if err != nil {
-					d.log.Warnf("failed to process block %d. %v", blk, err)
-					return
-				}
 			}
 		}
-	}(d)
-
-	return nil
+	}
 }
 
 var ErrDepositsNotRunning = fmt.Errorf("deposits not running")

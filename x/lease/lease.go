@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-const DefaultLeaseDuration = 60 * time.Second
-const DefaultHeartbeatFrequency = 30 * time.Second
+const DefaultLeaseDuration = 30 * time.Second
+const DefaultHeartbeatFrequency = 15 * time.Second
 
 type Agent interface {
 	Subscribe(ctx context.Context, leaseName string, sub Subscriber) error

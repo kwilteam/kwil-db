@@ -3,7 +3,9 @@ package sql
 import (
 	"database/sql"
 	"fmt"
+	"kwil/x/cfgx"
 	"kwil/x/deposits/types"
+	"kwil/x/lease"
 	"math/big"
 	"os"
 	"strconv"
@@ -38,6 +40,7 @@ type SQLStore interface {
 	RemoveBalance(addr string, amount string) error
 	AddTx(string, string) error
 	GetWithdrawalsForWallet(wallet string) ([]*types.PendingWithdrawal, error)
+	CreateLeaseAgent(owner string) (lease.Agent, error)
 }
 
 type SQLConfig struct {
@@ -47,18 +50,54 @@ type SQLConfig struct {
 	Password string
 	Database string
 	SSL      bool
+	URL      string
+}
+
+func NewConfig(c cfgx.Config) (*SQLConfig, error) {
+	url := c.String("db.url")
+	if url != "" {
+		return &SQLConfig{
+			URL: url,
+		}, nil
+	}
+
+	port, err := c.GetInt64("db.port", 5432)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get db port from config. %w", err)
+	}
+
+	ssl, err := c.GetBool("db.ssl", false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get db ssl from config. %w", err)
+	}
+
+	return &SQLConfig{
+		Host:     c.GetString("db.host", "localhost"),
+		Port:     port,
+		User:     c.GetString("db.user", "postgres"),
+		Password: c.GetString("db.password", "password"),
+		Database: c.GetString("db.database", "postgres"),
+		SSL:      ssl,
+	}, nil
+}
+
+func NewDb(sc *SQLConfig) (*sql.DB, error) {
+	psqlInfo := sc.URL
+	if psqlInfo == "" {
+		ssl := "disable"
+		if sc.SSL {
+			ssl = "require"
+		}
+
+		psqlInfo = fmt.Sprintf("host=%s port=%d user=%s "+
+			"password=%s dbname=%s sslmode=%s", sc.Host, sc.Port, sc.User, sc.Password, sc.Database, ssl)
+	}
+
+	return sql.Open("postgres", psqlInfo)
 }
 
 func New(sc *SQLConfig) (*sqlstore, error) {
-	ssl := "disable"
-	if sc.SSL {
-		ssl = "require"
-	}
-
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=%s", sc.Host, sc.Port, sc.User, sc.Password, sc.Database, ssl)
-
-	db, err := sql.Open("postgres", psqlInfo)
+	db, err := NewDb(sc)
 	if err != nil {
 		return nil, err
 	}
@@ -436,6 +475,10 @@ func (s *sqlstore) GetWithdrawalsForWallet(w string) ([]*types.PendingWithdrawal
 	}
 
 	return wds, nil
+}
+
+func (s *sqlstore) CreateLeaseAgent(owner string) (lease.Agent, error) {
+	return lease.NewAgent(s.db, owner)
 }
 
 func parseBigInt(amt string) (*big.Int, error) {
