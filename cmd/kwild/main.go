@@ -48,6 +48,10 @@ func execute(logger logx.Logger) error {
 	}
 
 	apiService := apisvc.NewService(d, metadata.NewTestService(), execution.NewTestService())
+	mp := metadata.NewProvider(nil /* need db connection here */, false)
+	ms := metadata.NewService(mp)
+
+	apiService := apisvc.NewService(d, ms, execution.NewService(ms, mp))
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(ctx, logger, d, httpHandler, apiService)
