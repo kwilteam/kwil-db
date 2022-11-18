@@ -46,18 +46,14 @@ func execute(logger logx.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
-	err = d.Listen(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to listen to deposits: %w", err)
-	}
-
+	
 	apiService := apisvc.NewService(d, metadata.NewTestService(), execution.NewTestService())
 	httpHandler := apisvc.NewHandler(logger)
 
-	return serve(logger, httpHandler, apiService)
+	return serve(ctx, logger, d, httpHandler, apiService)
 }
 
-func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilServiceServer) error {
+func serve(ctx context.Context, logger logx.Logger, d deposits.Deposits, httpHandler http.Handler, apiService apipb.KwilServiceServer) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -66,11 +62,17 @@ func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilSe
 	}
 
 	g.Add(func() error {
+		return d.Listen(ctx)
+	}, func(error) {
+		_ = d.Close()
+	})
+
+	g.Add(func() error {
 		grpcServer := grpcx.NewServer(logger)
 		apipb.RegisterKwilServiceServer(grpcServer, apiService)
 		return grpcServer.Serve(listener)
 	}, func(error) {
-		listener.Close()
+		_ = listener.Close()
 	})
 
 	httpServer := http.Server{
@@ -90,6 +92,8 @@ func serve(logger logx.Logger, httpHandler http.Handler, apiService apipb.KwilSe
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		select {
+		case <-ctx.Done():
+			return nil
 		case sig := <-c:
 			return fmt.Errorf("received signal %s", sig)
 		case <-cancelInterrupt:
