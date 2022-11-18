@@ -1,0 +1,52 @@
+model User {
+    id int @id
+    name string
+    email string @unique
+    password string @ignore
+
+    posts Post[]
+    comments Comment[]
+
+    @@public([list, get])
+}
+
+model Post {
+    id int @id
+    title string
+    content string
+    published bool
+    author_id int
+
+    comments Comment[]
+    author User @ref(fields: [author_id], references: [id])
+
+    @@public([list, get, create, update, delete])
+}
+
+model Comment {
+    id int @id
+    content string
+    author_id int
+    post_id int
+
+    author User @ref(fields: [author_id], references: [id])
+    post Post @ref(fields: [post_id], references: [id])
+
+    @@public([list, get, create, update, delete])
+}
+
+
+type roles {
+    USER
+    ADMIN
+}
+
+type mutations {
+    CreatePost(input: Post): Post @sql(statement: <<-SQL
+        INSERT INTO Post (title, content, published, author_id) VALUES ($1, $2, $3, $4) RETURNING *
+    SQL) @public
+
+    DeletePost(id: Int!): Post @sql(statement: <<-SQL
+        DELETE FROM Post WHERE id = $1 RETURNING *
+    SQL) @role(ADMIN)
+}

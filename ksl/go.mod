@@ -12,6 +12,8 @@ require (
 )
 
 require (
+	github.com/cstockton/go-conv v1.0.0 // indirect
+	github.com/doug-martin/goqu/v9 v9.18.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect

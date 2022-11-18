@@ -3,6 +3,7 @@ package metadata
 import (
 	"ksl"
 	"ksl/postgres"
+	"ksl/sqlmigrate"
 	"ksl/sqlschema"
 )
 
@@ -134,7 +135,7 @@ func convertDatabase(db sqlschema.Database) Metadata {
 	return (&metadatadb{db: db, meta: &Metadata{}}).convert()
 }
 
-func convertPlan(p sqlschema.MigrationPlan) Plan {
+func convertPlan(p sqlmigrate.MigrationPlan) Plan {
 	changes := make([]Change, len(p.Statements))
 	for i, c := range p.Statements {
 		changes[i] = Change{

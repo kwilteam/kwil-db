@@ -3,6 +3,7 @@ package postgres
 import (
 	"ksl"
 	"ksl/backend"
+	"ksl/sqlmigrate"
 	"ksl/sqlschema"
 )
 
@@ -28,6 +29,6 @@ func (Backend) ParseNativeType(name string, args ...string) (ksl.Type, error) {
 	return Types.ScalarFrom(name, args...)
 }
 
-func (Backend) ColumnTypeChange(old, new sqlschema.ColumnWalker) sqlschema.ColumnTypeChange {
+func (Backend) ColumnTypeChange(old, new sqlschema.ColumnWalker) sqlmigrate.ColumnTypeChange {
 	return columnTypeChange(old, new)
 }

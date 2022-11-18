@@ -83,6 +83,7 @@ type TableWalker Walker[TableID]
 
 func (w TableWalker) Get() *Table           { return &w.schema.Tables[w.ID] }
 func (w TableWalker) Name() string          { return w.Get().Name }
+func (w TableWalker) Comment() string       { return w.Get().Comment }
 func (w TableWalker) SetComment(v string)   { w.Get().Comment = v }
 func (w TableWalker) SetCharset(v string)   { w.Get().Charset = v }
 func (w TableWalker) SetCollation(v string) { w.Get().Collation = v }
@@ -101,6 +102,16 @@ func (w TableWalker) Columns() []ColumnWalker {
 	for i, c := range w.schema.Columns {
 		if c.Table == w.ID {
 			cols = append(cols, w.schema.WalkColumn(ColumnID(i)))
+		}
+	}
+	return cols
+}
+
+func (w TableWalker) ColumnNames() []string {
+	cols := make([]string, 0, len(w.schema.Columns))
+	for i, c := range w.schema.Columns {
+		if c.Table == w.ID {
+			cols = append(cols, w.schema.WalkColumn(ColumnID(i)).Name())
 		}
 	}
 	return cols
@@ -206,12 +217,13 @@ func (w EnumWalker) Values() []string { return w.Get().Values }
 
 type ColumnWalker Walker[ColumnID]
 
-func (w ColumnWalker) Get() *Column       { return &w.schema.Columns[w.ID] }
-func (w ColumnWalker) Table() TableWalker { return w.schema.WalkTable(w.schema.Columns[w.ID].Table) }
-func (w ColumnWalker) Arity() ColumnArity { return w.Get().Type.Arity }
-func (w ColumnWalker) IsRequired() bool   { return w.Arity() == Required }
-func (w ColumnWalker) IsNullable() bool   { return w.Arity() == Nullable }
-func (w ColumnWalker) Type() ColumnType   { return w.Get().Type }
+func (w ColumnWalker) Get() *Column          { return &w.schema.Columns[w.ID] }
+func (w ColumnWalker) Table() TableWalker    { return w.schema.WalkTable(w.schema.Columns[w.ID].Table) }
+func (w ColumnWalker) Arity() ColumnArity    { return w.Get().Type.Arity }
+func (w ColumnWalker) Documentation() string { return w.Get().Comment }
+func (w ColumnWalker) IsRequired() bool      { return w.Arity() == Required }
+func (w ColumnWalker) IsNullable() bool      { return w.Arity() == Nullable }
+func (w ColumnWalker) Type() ColumnType      { return w.Get().Type }
 func (w ColumnWalker) EnumType() mo.Option[EnumWalker] {
 	switch t := w.Type().Type.(type) {
 	case EnumType:

@@ -42,20 +42,4 @@ var BuiltIns = builtin{
 	Decimal:  BuiltInScalar{"decimal"},
 }
 
-type NativeType struct {
-	Name string
-	Args []string
-}
-
-type UnsupportedType struct {
-	Name string
-}
-
-type UserDefinedType struct {
-	Name string
-}
-
-func (BuiltInScalar) typ()   {}
-func (NativeType) typ()      {}
-func (UnsupportedType) typ() {}
-func (UserDefinedType) typ() {}
+func (BuiltInScalar) typ() {}

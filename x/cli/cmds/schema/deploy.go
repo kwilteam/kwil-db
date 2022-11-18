@@ -2,7 +2,7 @@ package schema
 
 import (
 	"context"
-	"ksl/schema"
+	"ksl/ast"
 	"kwil/x/cli/util"
 	"kwil/x/proto/apipb"
 
@@ -27,7 +27,7 @@ func createDeployCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ksch := schema.ParseFiles(opts.SchemaFiles...)
+			ksch := ast.ParseFiles(opts.SchemaFiles...)
 			if ksch.HasErrors() {
 				return ksch.Diagnostics
 			}

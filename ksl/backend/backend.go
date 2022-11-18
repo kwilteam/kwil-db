@@ -11,6 +11,7 @@ var defmu sync.Mutex
 
 type Connector interface {
 	Name() string
+	MaxIdentifierLength() uint
 	ScalarTypeForNativeType(t ksl.Type) ksl.BuiltInScalar
 	DefaultNativeTypeForScalar(t ksl.BuiltInScalar) ksl.Type
 	ParseNativeType(name string, args ...string) (ksl.Type, error)
