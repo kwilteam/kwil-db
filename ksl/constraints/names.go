@@ -1,6 +1,8 @@
 package constraints
 
-import "strings"
+import (
+	"strings"
+)
 
 func PrimaryKeyName(tableName string, maxLength int) string {
 	suffix := "_pkey"

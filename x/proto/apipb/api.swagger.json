@@ -458,9 +458,6 @@
     "apisvcPlan": {
       "type": "object",
       "properties": {
-        "planId": {
-          "type": "string"
-        },
         "changes": {
           "type": "array",
           "items": {

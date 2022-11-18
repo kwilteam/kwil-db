@@ -2,14 +2,14 @@ package syntax
 
 import (
 	"ksl"
-	"ksl/syntax/ast"
 	"ksl/syntax/lex"
+	"ksl/syntax/nodes"
 	"os"
 )
 
 type ParseOption func(*parser)
 
-func Parse(src []byte, filename string, start ksl.Pos, opts ...ParseOption) (*ast.File, ksl.Diagnostics) {
+func Parse(src []byte, filename string, start ksl.Pos, opts ...ParseOption) (*nodes.File, ksl.Diagnostics) {
 	tokens, diags := Lex(src, filename, start)
 
 	peeker := newPeeker(tokens, false)
@@ -32,9 +32,9 @@ func Lex(src []byte, filename string, start ksl.Pos) (lex.Tokens, ksl.Diagnostic
 	return tokens, diags
 }
 
-func ParseFiles(filenames ...string) ([]*ast.File, ksl.Diagnostics) {
+func ParseFiles(filenames ...string) ([]*nodes.File, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var files []*ast.File
+	var files []*nodes.File
 
 	for _, filename := range filenames {
 		data, err := os.ReadFile(filename)

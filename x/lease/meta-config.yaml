@@ -1,0 +1,2 @@
+env-settings: "~/.kwil-server/env-settings.yaml"
+db-settings: "./db-settings.yaml"

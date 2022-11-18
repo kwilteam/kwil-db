@@ -4,16 +4,15 @@ import (
 	"context"
 	"kwil/x/metadata"
 	"kwil/x/proto/apipb"
-
-	"github.com/google/uuid"
 )
 
 func (s *Service) PlanSchema(ctx context.Context, req *apipb.PlanSchemaRequest) (*apipb.PlanSchemaResponse, error) {
-	planReq := metadata.PlanRequest{
+	planReq := metadata.SchemaRequest{
 		Wallet:     req.Wallet,
 		Database:   req.Database,
 		SchemaData: req.Schema,
 	}
+
 	plan, err := s.md.Plan(ctx, planReq)
 	if err != nil {
 		return nil, err
@@ -29,7 +28,6 @@ func (s *Service) PlanSchema(ctx context.Context, req *apipb.PlanSchemaRequest) 
 
 	return &apipb.PlanSchemaResponse{
 		Plan: &apipb.Plan{
-			PlanId:  plan.ID.String(),
 			Changes: changes,
 		},
 	}, nil
@@ -37,12 +35,12 @@ func (s *Service) PlanSchema(ctx context.Context, req *apipb.PlanSchemaRequest) 
 }
 
 func (s *Service) ApplySchema(ctx context.Context, req *apipb.ApplySchemaRequest) (*apipb.ApplySchemaResponse, error) {
-	id, err := uuid.Parse(req.PlanId)
-	if err != nil {
-		return nil, err
+	planReq := metadata.SchemaRequest{
+		Wallet:     req.Wallet,
+		Database:   req.Database,
+		SchemaData: req.Schema,
 	}
-
-	err = s.md.Apply(ctx, id)
+	err := s.md.Apply(ctx, planReq)
 	return &apipb.ApplySchemaResponse{}, err
 }
 

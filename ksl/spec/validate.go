@@ -3,12 +3,12 @@ package spec
 import (
 	"fmt"
 	"ksl"
-	"ksl/syntax/ast"
+	"ksl/syntax/nodes"
 
 	"golang.org/x/exp/slices"
 )
 
-func ValidateDirectives(specs map[string]AnnotSpec, directives ast.Annotations) ksl.Diagnostics {
+func ValidateDirectives(specs map[string]AnnotSpec, directives nodes.Annotations) ksl.Diagnostics {
 	visited := map[string]struct{}{}
 
 	var diags ksl.Diagnostics
@@ -42,11 +42,11 @@ func ValidateDirectives(specs map[string]AnnotSpec, directives ast.Annotations) 
 	return diags
 }
 
-func ValidateArgs(specs map[string]ArgSpec, defaultArg string, container ast.ArgumentHolder) ksl.Diagnostics {
+func ValidateArgs(specs map[string]ArgSpec, defaultArg string, container nodes.ArgumentHolder) ksl.Diagnostics {
 	var diags ksl.Diagnostics
 
 	args := container.GetArgs()
-	argMap := make(map[string]*ast.Argument, len(args))
+	argMap := make(map[string]*nodes.Argument, len(args))
 	for _, arg := range args {
 		argName := arg.GetName()
 		if argName == "" {
@@ -94,18 +94,18 @@ func ValidateArgs(specs map[string]ArgSpec, defaultArg string, container ast.Arg
 	return diags
 }
 
-func ValidateScalarValue(sp ScalarValueSpec, node ast.Expression) ksl.Diagnostics {
+func ValidateScalarValue(sp ScalarValueSpec, node nodes.Expression) ksl.Diagnostics {
 	var diags ksl.Diagnostics
 	var kind ScalarKind
 
 	switch node.(type) {
-	case *ast.Number:
+	case *nodes.Number:
 		kind = NumberKind
-	case *ast.String:
+	case *nodes.String:
 		kind = QuotedStringKind
-	case *ast.Literal:
+	case *nodes.Literal:
 		kind = StringLitKind
-	case *ast.Heredoc:
+	case *nodes.Heredoc:
 		kind = QuotedStringKind
 	default:
 		kind = NoKind
@@ -123,10 +123,10 @@ func ValidateScalarValue(sp ScalarValueSpec, node ast.Expression) ksl.Diagnostic
 	return diags
 }
 
-func ValidateObject(sp ObjectSpec, e ast.Expression) ksl.Diagnostics {
+func ValidateObject(sp ObjectSpec, e nodes.Expression) ksl.Diagnostics {
 	var diags ksl.Diagnostics
-	if obj, ok := e.(*ast.Object); ok {
-		items := make(map[string]ast.Expression, len(obj.Properties))
+	if obj, ok := e.(*nodes.Object); ok {
+		items := make(map[string]nodes.Expression, len(obj.Properties))
 		for _, kv := range obj.Properties {
 			propSpec, ok := sp.Properties[kv.GetName()]
 			if !ok {
@@ -171,9 +171,9 @@ func ValidateObject(sp ObjectSpec, e ast.Expression) ksl.Diagnostics {
 	return diags
 }
 
-func ValidateList(sp ListSpec, value ast.Expression) ksl.Diagnostics {
+func ValidateList(sp ListSpec, value nodes.Expression) ksl.Diagnostics {
 	var diags ksl.Diagnostics
-	if list, ok := value.(*ast.List); ok {
+	if list, ok := value.(*nodes.List); ok {
 		for _, elem := range list.Elements {
 			diags = append(diags, ValidateValue(sp.ElementType, elem)...)
 		}
@@ -188,7 +188,7 @@ func ValidateList(sp ListSpec, value ast.Expression) ksl.Diagnostics {
 	return diags
 }
 
-func ValidateOneOf(sp OneOfSpec, value ast.Expression) ksl.Diagnostics {
+func ValidateOneOf(sp OneOfSpec, value nodes.Expression) ksl.Diagnostics {
 	for _, opt := range sp.Options {
 		if !ValidateValue(opt, value).HasErrors() {
 			return nil
@@ -202,9 +202,9 @@ func ValidateOneOf(sp OneOfSpec, value ast.Expression) ksl.Diagnostics {
 	}}
 }
 
-func ValidateFunc(sp FuncSpec, value ast.Expression) ksl.Diagnostics {
+func ValidateFunc(sp FuncSpec, value nodes.Expression) ksl.Diagnostics {
 	var diags ksl.Diagnostics
-	if fn, ok := value.(*ast.Function); ok {
+	if fn, ok := value.(*nodes.Function); ok {
 		if sp.Name != "" && fn.GetName() != sp.Name {
 			diags = append(diags, &ksl.Diagnostic{
 				Severity: ksl.DiagError,
@@ -216,7 +216,7 @@ func ValidateFunc(sp FuncSpec, value ast.Expression) ksl.Diagnostics {
 		}
 
 		args := fn.GetArgs()
-		items := make(map[string]*ast.Argument, len(args))
+		items := make(map[string]*nodes.Argument, len(args))
 		for _, arg := range args {
 			argName := arg.GetName()
 			if argName == "" {
@@ -273,16 +273,16 @@ func ValidateFunc(sp FuncSpec, value ast.Expression) ksl.Diagnostics {
 	return diags
 }
 
-func ValidateEnum(sp EnumSpec, value ast.Expression) ksl.Diagnostics {
+func ValidateEnum(sp EnumSpec, value nodes.Expression) ksl.Diagnostics {
 	var diags ksl.Diagnostics
 	var scalar string
 	var quoted bool
 
 	switch value := value.(type) {
-	case *ast.String:
+	case *nodes.String:
 		scalar = value.Value
 		quoted = true
-	case *ast.Literal:
+	case *nodes.Literal:
 		scalar = value.Value
 	default:
 		diags = append(diags, &ksl.Diagnostic{
@@ -312,16 +312,16 @@ func ValidateEnum(sp EnumSpec, value ast.Expression) ksl.Diagnostics {
 	return diags
 }
 
-func ValidateConstantValue(sp ConstantValueSpec, value ast.Expression) ksl.Diagnostics {
+func ValidateConstantValue(sp ConstantValueSpec, value nodes.Expression) ksl.Diagnostics {
 	var diags ksl.Diagnostics
 	var actual string
 
 	switch value := value.(type) {
-	case *ast.Number:
+	case *nodes.Number:
 		actual = value.Value
-	case *ast.String:
+	case *nodes.String:
 		actual = value.Value
-	case *ast.Literal:
+	case *nodes.Literal:
 		actual = value.Value
 	default:
 		diags = append(diags, &ksl.Diagnostic{
@@ -344,7 +344,7 @@ func ValidateConstantValue(sp ConstantValueSpec, value ast.Expression) ksl.Diagn
 	return diags
 }
 
-func ValidateValue(sp ValueSpec, value ast.Expression) ksl.Diagnostics {
+func ValidateValue(sp ValueSpec, value nodes.Expression) ksl.Diagnostics {
 	var diags ksl.Diagnostics
 	switch sp := sp.(type) {
 	case ScalarValueSpec:

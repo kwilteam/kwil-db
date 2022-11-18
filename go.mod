@@ -3,6 +3,7 @@ module kwil
 go 1.19
 
 require (
+	cirello.io/pglock v1.10.0
 	github.com/99designs/keyring v1.1.6
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/ethereum/go-ethereum v1.10.21

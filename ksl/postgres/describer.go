@@ -230,7 +230,7 @@ func (d *schemactx) loadColumns(ctx context.Context) error {
 			if enum, ok := d.db.FindEnum(typeName).Get(); ok {
 				nativeType = sqlschema.EnumType{Name: enum.Name(), ID: enum.ID}
 			} else {
-				nativeType = ksl.UserDefinedType{Name: typeName}
+				nativeType = UserDefinedType{name: typeName}
 			}
 		} else {
 			typ, err := ParseNativeType(typeName, itos(typeArgs)...)

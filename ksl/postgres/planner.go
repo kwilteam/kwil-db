@@ -4,34 +4,36 @@ import (
 	"context"
 	"fmt"
 	"ksl"
+	"ksl/sqlmigrate"
 	"ksl/sqlschema"
+	"ksl/ty"
 	"strings"
 )
 
 type Planner struct{}
 
-func (p Planner) Plan(migration sqlschema.Migration) (sqlschema.MigrationPlan, error) {
+func (p Planner) Plan(migration sqlmigrate.Migration) (sqlmigrate.MigrationPlan, error) {
 	return p.PlanContext(context.Background(), migration)
 }
 
-func (p Planner) PlanContext(ctx context.Context, migration sqlschema.Migration) (sqlschema.MigrationPlan, error) {
+func (p Planner) PlanContext(ctx context.Context, migration sqlmigrate.Migration) (sqlmigrate.MigrationPlan, error) {
 	s := &planctx{
-		plan:      sqlschema.MigrationPlan{},
+		plan:      sqlmigrate.MigrationPlan{},
 		migration: migration,
 	}
 	if err := s.planMigration(); err != nil {
-		return sqlschema.MigrationPlan{}, err
+		return sqlmigrate.MigrationPlan{}, err
 	}
 	return s.plan, nil
 }
 
 type planctx struct {
-	plan      sqlschema.MigrationPlan
-	migration sqlschema.Migration
+	plan      sqlmigrate.MigrationPlan
+	migration sqlmigrate.Migration
 }
 
 func (s *planctx) planMigration() error {
-	pair := sqlschema.MakePair(s.migration.Before, s.migration.After)
+	pair := ty.MakePair(s.migration.Before, s.migration.After)
 
 	for _, change := range s.migration.Changes {
 		stmt, err := RenderStep(pair, change)
@@ -43,58 +45,58 @@ func (s *planctx) planMigration() error {
 	return nil
 }
 
-func RenderStep(dbs sqlschema.Pair[sqlschema.Database], step sqlschema.MigrationStep) (sqlschema.Statement, error) {
+func RenderStep(dbs ty.Pair[sqlschema.Database], step sqlmigrate.MigrationStep) (sqlmigrate.Statement, error) {
 	switch step := step.(type) {
-	case sqlschema.AlterEnum:
+	case sqlmigrate.AlterEnum:
 		return renderAlterEnum(dbs, step)
-	case sqlschema.CreateEnum:
+	case sqlmigrate.CreateEnum:
 		return renderCreateEnum(dbs, step)
-	case sqlschema.DropEnum:
+	case sqlmigrate.DropEnum:
 		return renderDropEnum(dbs, step)
-	case sqlschema.CreateTable:
+	case sqlmigrate.CreateTable:
 		return renderCreateTable(dbs, step)
-	case sqlschema.DropTable:
+	case sqlmigrate.DropTable:
 		return renderDropTable(dbs, step)
-	case sqlschema.AddForeignKey:
+	case sqlmigrate.AddForeignKey:
 		return renderAddForeignKey(dbs, step)
-	case sqlschema.DropForeignKey:
+	case sqlmigrate.DropForeignKey:
 		return renderDropForeignKey(dbs, step)
-	case sqlschema.AlterTable:
+	case sqlmigrate.AlterTable:
 		return renderAlterTable(dbs, step)
-	case sqlschema.CreateIndex:
+	case sqlmigrate.CreateIndex:
 		return renderCreateIndex(dbs, step)
-	case sqlschema.DropIndex:
+	case sqlmigrate.DropIndex:
 		return renderDropIndex(dbs, step)
-	case sqlschema.RenameIndex:
+	case sqlmigrate.RenameIndex:
 		return renderRenameIndex(dbs, step)
-	case sqlschema.RenameForeignKey:
+	case sqlmigrate.RenameForeignKey:
 		return renderRenameForeignKey(dbs, step)
-	case sqlschema.CreateExtension:
+	case sqlmigrate.CreateExtension:
 		// return renderCreateExtension(dbs, step)
-	case sqlschema.AlterExtension:
+	case sqlmigrate.AlterExtension:
 		// return renderAlterExtension(dbs, step)
-	case sqlschema.DropExtension:
+	case sqlmigrate.DropExtension:
 		// return renderDropExtension(dbs, step)
 	default:
-		return sqlschema.Statement{}, fmt.Errorf("sqlschema: unknown migration step %T", step)
+		return sqlmigrate.Statement{}, fmt.Errorf("sqlschema: unknown migration step %T", step)
 	}
-	return sqlschema.Statement{Comment: "empty", Steps: []sqlschema.Step{{Cmd: "empty"}}}, nil
+	return sqlmigrate.Statement{Comment: "empty", Steps: []sqlmigrate.Step{{Cmd: "empty"}}}, nil
 }
 
-func renderAlterEnum(pair sqlschema.Pair[sqlschema.Database], step sqlschema.AlterEnum) (sqlschema.Statement, error) {
+func renderAlterEnum(pair ty.Pair[sqlschema.Database], step sqlmigrate.AlterEnum) (sqlmigrate.Statement, error) {
 	if len(step.DroppedVariants) == 0 {
-		var steps []sqlschema.Step
+		var steps []sqlmigrate.Step
 		for _, v := range step.CreatedVariants {
 			name := pair.Prev.WalkEnum(step.Enums.Prev).Name()
-			steps = append(steps, sqlschema.Step{
+			steps = append(steps, sqlmigrate.Step{
 				Cmd:     fmt.Sprintf("ALTER TYPE %s ADD VALUE %s", quoteIdent(name), quoteString(v)),
 				Comment: fmt.Sprintf("Add variant %q to enum %q.", quoteString(v), quoteIdent(name)),
 			})
 		}
-		return sqlschema.Statement{Steps: steps}, nil
+		return sqlmigrate.Statement{Steps: steps}, nil
 	}
 
-	enums := sqlschema.MakePair(pair.Prev.WalkEnum(step.Enums.Prev), pair.Next.WalkEnum(step.Enums.Next))
+	enums := ty.MakePair(pair.Prev.WalkEnum(step.Enums.Prev), pair.Next.WalkEnum(step.Enums.Next))
 	comment := fmt.Sprintf("Alter enum %s", quoteIdent(enums.Prev.Name()))
 	if len(step.CreatedVariants) > 0 {
 		comment += fmt.Sprintf(", adding variants %s", quoteString(step.CreatedVariants...))
@@ -104,19 +106,19 @@ func renderAlterEnum(pair sqlschema.Pair[sqlschema.Database], step sqlschema.Alt
 	}
 	comment += "."
 
-	stmt := sqlschema.Statement{Comment: comment}
+	stmt := sqlmigrate.Statement{Comment: comment}
 
 	tmpName := enums.Next.Name() + "_tmp"
 	tmpOldName := enums.Prev.Name() + "_old"
 
 	// begin transaction
-	stmt.Steps.Add(sqlschema.Step{
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd:     "BEGIN",
 		Comment: "Begin transaction.",
 	})
 
 	// create a new enum with the new name
-	stmt.Steps.Add(sqlschema.Step{
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd:     fmt.Sprintf("CREATE TYPE %s AS ENUM (%s)", quoteIdent(tmpName), quoteString(enums.Next.Values()...)),
 		Comment: fmt.Sprintf("Create new enum %s with variants %s.", quoteIdent(tmpName), quoteString(enums.Next.Values()...)),
 	})
@@ -131,7 +133,7 @@ func renderAlterEnum(pair sqlschema.Pair[sqlschema.Database], step sqlschema.Alt
 				array = "[]"
 			}
 
-			stmt.Steps.Add(sqlschema.Step{
+			stmt.Steps.Add(sqlmigrate.Step{
 				Cmd: fmt.Sprintf(
 					"ALTER TABLE %s ALTER COLUMN %s TYPE %s%s USING %s::text::%s%s",
 					quoteIdent(col.Table().Name()),
@@ -146,19 +148,19 @@ func renderAlterEnum(pair sqlschema.Pair[sqlschema.Database], step sqlschema.Alt
 	}
 
 	// rename old enum
-	stmt.Steps.Add(sqlschema.Step{
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd:     fmt.Sprintf("ALTER TYPE %s RENAME TO %s", quoteIdent(enums.Prev.Name()), quoteIdent(tmpOldName)),
 		Comment: fmt.Sprintf("Rename old enum %s to %s.", quoteIdent(enums.Prev.Name()), quoteIdent(tmpOldName)),
 	})
 
 	// rename new enum
-	stmt.Steps.Add(sqlschema.Step{
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd:     fmt.Sprintf("ALTER TYPE %s RENAME TO %s", quoteIdent(tmpName), quoteIdent(enums.Next.Name())),
 		Comment: fmt.Sprintf("Rename new enum %s to %s.", quoteIdent(tmpName), quoteIdent(enums.Next.Name())),
 	})
 
 	// drop old enum
-	stmt.Steps.Add(sqlschema.Step{
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd:     fmt.Sprintf("DROP TYPE %s", quoteIdent(tmpOldName)),
 		Comment: fmt.Sprintf("Drop old enum %s.", quoteIdent(tmpOldName)),
 	})
@@ -166,31 +168,31 @@ func renderAlterEnum(pair sqlschema.Pair[sqlschema.Database], step sqlschema.Alt
 	// TODO: reinstall dropped defaults
 
 	// finish transaction
-	stmt.Steps.Add(sqlschema.Step{Cmd: "COMMIT", Comment: "Commit transaction."})
+	stmt.Steps.Add(sqlmigrate.Step{Cmd: "COMMIT", Comment: "Commit transaction."})
 
 	return stmt, nil
 }
 
-func renderCreateEnum(pair sqlschema.Pair[sqlschema.Database], step sqlschema.CreateEnum) (sqlschema.Statement, error) {
+func renderCreateEnum(pair ty.Pair[sqlschema.Database], step sqlmigrate.CreateEnum) (sqlmigrate.Statement, error) {
 	enum := pair.Next.WalkEnum(step.Enum)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Create enum %s with variants %s.", quoteIdent(enum.Name()), quoteString(enum.Values()...))}
-	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("CREATE TYPE %s AS ENUM (%s)", quoteIdent(enum.Name()), quoteString(enum.Values()...))})
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Create enum %s with variants %s.", quoteIdent(enum.Name()), quoteString(enum.Values()...))}
+	stmt.Steps.Add(sqlmigrate.Step{Cmd: fmt.Sprintf("CREATE TYPE %s AS ENUM (%s)", quoteIdent(enum.Name()), quoteString(enum.Values()...))})
 	return stmt, nil
 }
 
-func renderDropEnum(pair sqlschema.Pair[sqlschema.Database], step sqlschema.DropEnum) (sqlschema.Statement, error) {
+func renderDropEnum(pair ty.Pair[sqlschema.Database], step sqlmigrate.DropEnum) (sqlmigrate.Statement, error) {
 	enum := pair.Prev.WalkEnum(step.Enum)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Drop enum %s.", quoteIdent(enum.Name()))}
-	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("DROP TYPE %s", quoteIdent(enum.Name()))})
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Drop enum %s.", quoteIdent(enum.Name()))}
+	stmt.Steps.Add(sqlmigrate.Step{Cmd: fmt.Sprintf("DROP TYPE %s", quoteIdent(enum.Name()))})
 	return stmt, nil
 }
 
-func renderCreateTable(pair sqlschema.Pair[sqlschema.Database], step sqlschema.CreateTable) (sqlschema.Statement, error) {
+func renderCreateTable(pair ty.Pair[sqlschema.Database], step sqlmigrate.CreateTable) (sqlmigrate.Statement, error) {
 	table := pair.Next.WalkTable(step.Table)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Create table %s.", quoteIdent(table.Name()))}
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Create table %s.", quoteIdent(table.Name()))}
 	var columnstr string
 	for i, col := range table.Columns() {
-		columnstr += sqlschema.SQLIndentation + renderColumn(col)
+		columnstr += "    " + renderColumn(col)
 		if i < len(table.Columns())-1 {
 			columnstr += ",\n"
 		}
@@ -199,10 +201,10 @@ func renderCreateTable(pair sqlschema.Pair[sqlschema.Database], step sqlschema.C
 	var primaryKey string
 	if pk, ok := table.PrimaryKey().Get(); ok {
 		named := fmt.Sprintf("CONSTRAINT %s ", quoteIdent(pk.Name()))
-		primaryKey = fmt.Sprintf(",\n\n%s%sPRIMARY KEY (%s)", sqlschema.SQLIndentation, named, quoteIdent(pk.ColumnNames()...))
+		primaryKey = fmt.Sprintf(",\n\n    %sPRIMARY KEY (%s)", named, quoteIdent(pk.ColumnNames()...))
 	}
 
-	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("CREATE TABLE %s (\n%s%s\n)", quoteIdent(table.Name()), columnstr, primaryKey)})
+	stmt.Steps.Add(sqlmigrate.Step{Cmd: fmt.Sprintf("CREATE TABLE %s (\n%s%s\n)", quoteIdent(table.Name()), columnstr, primaryKey)})
 	return stmt, nil
 }
 
@@ -237,17 +239,17 @@ func renderColumnType(col sqlschema.ColumnWalker) string {
 	}
 }
 
-func renderDropTable(pair sqlschema.Pair[sqlschema.Database], step sqlschema.DropTable) (sqlschema.Statement, error) {
+func renderDropTable(pair ty.Pair[sqlschema.Database], step sqlmigrate.DropTable) (sqlmigrate.Statement, error) {
 	table := pair.Prev.WalkTable(step.Table)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Drop table %s.", quoteIdent(table.Name()))}
-	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("DROP TABLE %s", quoteIdent(table.Name()))})
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Drop table %s.", quoteIdent(table.Name()))}
+	stmt.Steps.Add(sqlmigrate.Step{Cmd: fmt.Sprintf("DROP TABLE %s", quoteIdent(table.Name()))})
 	return stmt, nil
 }
 
-func renderAddForeignKey(pair sqlschema.Pair[sqlschema.Database], step sqlschema.AddForeignKey) (sqlschema.Statement, error) {
+func renderAddForeignKey(pair ty.Pair[sqlschema.Database], step sqlmigrate.AddForeignKey) (sqlmigrate.Statement, error) {
 	fk := pair.Next.WalkForeignKey(step.ForeignKey)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Add foreign key %s.", quoteIdent(fk.ConstraintName()))}
-	stmt.Steps.Add(sqlschema.Step{
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Add foreign key %s.", quoteIdent(fk.ConstraintName()))}
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd: fmt.Sprintf(
 			"ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s (%s) ON DELETE %s ON UPDATE %s",
 			quoteIdent(fk.Table().Name()),
@@ -262,51 +264,51 @@ func renderAddForeignKey(pair sqlschema.Pair[sqlschema.Database], step sqlschema
 	return stmt, nil
 }
 
-func renderDropForeignKey(pair sqlschema.Pair[sqlschema.Database], step sqlschema.DropForeignKey) (sqlschema.Statement, error) {
+func renderDropForeignKey(pair ty.Pair[sqlschema.Database], step sqlmigrate.DropForeignKey) (sqlmigrate.Statement, error) {
 	fk := pair.Prev.WalkForeignKey(step.ForeignKey)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Drop foreign key %s.", quoteIdent(fk.ConstraintName()))}
-	stmt.Steps.Add(sqlschema.Step{
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Drop foreign key %s.", quoteIdent(fk.ConstraintName()))}
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd: fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s", quoteIdent(fk.Table().Name()), quoteIdent(fk.ConstraintName())),
 	})
 	return stmt, nil
 }
 
-func renderAlterTable(pair sqlschema.Pair[sqlschema.Database], step sqlschema.AlterTable) (sqlschema.Statement, error) {
+func renderAlterTable(pair ty.Pair[sqlschema.Database], step sqlmigrate.AlterTable) (sqlmigrate.Statement, error) {
 	prev, next := pair.Prev.WalkTable(step.Tables.Prev), pair.Next.WalkTable(step.Tables.Next)
 	var lines []string
-	var before, after []sqlschema.Step
-	var stmt sqlschema.Statement
+	var before, after []sqlmigrate.Step
+	var stmt sqlmigrate.Statement
 
 	for _, change := range step.Changes {
 		switch change := change.(type) {
-		case sqlschema.DropPrimaryKey:
+		case sqlmigrate.DropPrimaryKey:
 			lines = append(lines, fmt.Sprintf("DROP CONSTRAINT %s", quoteIdent(prev.PrimaryKey().MustGet().Name())))
-		case sqlschema.RenamePrimaryKey:
+		case sqlmigrate.RenamePrimaryKey:
 			lines = append(lines, fmt.Sprintf("RENAME CONSTRAINT %s TO %s", quoteIdent(prev.PrimaryKey().MustGet().Name()), quoteIdent(next.PrimaryKey().MustGet().Name())))
-		case sqlschema.AddPrimaryKey:
+		case sqlmigrate.AddPrimaryKey:
 			var named string
 			if pk, ok := next.PrimaryKey().Get(); ok {
 				named = fmt.Sprintf(" CONSTRAINT %s", quoteIdent(pk.Name()))
 			}
 			lines = append(lines, fmt.Sprintf("ADD%s PRIMARY KEY (%s)", named, quoteIdent(next.PrimaryKey().MustGet().ColumnNames()...)))
-		case sqlschema.AddColumn:
+		case sqlmigrate.AddColumn:
 			column := pair.Next.WalkColumn(change.Column)
 			lines = append(lines, fmt.Sprintf("ADD COLUMN %s", renderColumn(column)))
-		case sqlschema.AlterColumn:
+		case sqlmigrate.AlterColumn:
 			pc, nc := pair.Prev.WalkColumn(change.Columns.Prev), pair.Next.WalkColumn(change.Columns.Next)
-			b, c, a := renderAlterColumn(sqlschema.MakePair(pc, nc), change.Changes)
+			b, c, a := renderAlterColumn(ty.MakePair(pc, nc), change.Changes)
 			before = append(before, b...)
 			lines = append(lines, c...)
 			after = append(after, a...)
-		case sqlschema.DropColumn:
+		case sqlmigrate.DropColumn:
 			column := pair.Prev.WalkColumn(change.Column)
 			lines = append(lines, fmt.Sprintf("DROP COLUMN %s", quoteIdent(column.Name())))
-		case sqlschema.DropAndRecreateColumn:
+		case sqlmigrate.DropAndRecreateColumn:
 			column := pair.Prev.WalkColumn(change.Columns.Prev)
 			lines = append(lines, fmt.Sprintf("DROP COLUMN %s", quoteIdent(column.Name())))
 			column = pair.Next.WalkColumn(change.Columns.Next)
 			lines = append(lines, fmt.Sprintf("ADD COLUMN %s", renderColumn(column)))
-		case sqlschema.RenameColumn:
+		case sqlmigrate.RenameColumn:
 			column := pair.Prev.WalkColumn(change.Columns.Prev)
 			newColumn := pair.Next.WalkColumn(change.Columns.Next)
 			lines = append(lines, fmt.Sprintf("RENAME COLUMN %s TO %s", quoteIdent(column.Name()), quoteIdent(newColumn.Name())))
@@ -314,7 +316,7 @@ func renderAlterTable(pair sqlschema.Pair[sqlschema.Database], step sqlschema.Al
 	}
 
 	stmt.Steps.Add(before...)
-	stmt.Steps.Add(sqlschema.Step{
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd:     fmt.Sprintf("ALTER TABLE %s %s", quoteIdent(prev.Name()), strings.Join(lines, ",\n")),
 		Comment: fmt.Sprintf("Alter table %s.", quoteIdent(prev.Name())),
 	})
@@ -323,7 +325,7 @@ func renderAlterTable(pair sqlschema.Pair[sqlschema.Database], step sqlschema.Al
 	return stmt, nil
 }
 
-func renderCreateIndex(pair sqlschema.Pair[sqlschema.Database], step sqlschema.CreateIndex) (sqlschema.Statement, error) {
+func renderCreateIndex(pair ty.Pair[sqlschema.Database], step sqlmigrate.CreateIndex) (sqlmigrate.Statement, error) {
 	index := pair.Next.WalkIndex(step.Index)
 
 	var unique string
@@ -347,8 +349,8 @@ func renderCreateIndex(pair sqlschema.Pair[sqlschema.Database], step sqlschema.C
 		columnData = append(columnData, name)
 	}
 
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Create index %s.", quoteIdent(index.Name()))}
-	stmt.Steps.Add(sqlschema.Step{
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Create index %s.", quoteIdent(index.Name()))}
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd: fmt.Sprintf(
 			"CREATE %sINDEX %s ON %s %s(%s)",
 			unique,
@@ -361,30 +363,30 @@ func renderCreateIndex(pair sqlschema.Pair[sqlschema.Database], step sqlschema.C
 	return stmt, nil
 }
 
-func renderDropIndex(pair sqlschema.Pair[sqlschema.Database], step sqlschema.DropIndex) (sqlschema.Statement, error) {
+func renderDropIndex(pair ty.Pair[sqlschema.Database], step sqlmigrate.DropIndex) (sqlmigrate.Statement, error) {
 	index := pair.Prev.WalkIndex(step.Index)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Drop index %s.", quoteIdent(index.Name()))}
-	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("DROP INDEX %s", quoteIdent(index.Name()))})
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Drop index %s.", quoteIdent(index.Name()))}
+	stmt.Steps.Add(sqlmigrate.Step{Cmd: fmt.Sprintf("DROP INDEX %s", quoteIdent(index.Name()))})
 	return stmt, nil
 }
 
-func renderRenameIndex(pair sqlschema.Pair[sqlschema.Database], step sqlschema.RenameIndex) (sqlschema.Statement, error) {
+func renderRenameIndex(pair ty.Pair[sqlschema.Database], step sqlmigrate.RenameIndex) (sqlmigrate.Statement, error) {
 	index := pair.Next.WalkIndex(step.Index.Next)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Rename index %s.", quoteIdent(index.Name()))}
-	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("ALTER INDEX %s RENAME TO %s", quoteIdent(index.Name()), quoteIdent(index.Name()))})
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Rename index %s.", quoteIdent(index.Name()))}
+	stmt.Steps.Add(sqlmigrate.Step{Cmd: fmt.Sprintf("ALTER INDEX %s RENAME TO %s", quoteIdent(index.Name()), quoteIdent(index.Name()))})
 	return stmt, nil
 }
 
-func renderRenameForeignKey(pair sqlschema.Pair[sqlschema.Database], step sqlschema.RenameForeignKey) (sqlschema.Statement, error) {
+func renderRenameForeignKey(pair ty.Pair[sqlschema.Database], step sqlmigrate.RenameForeignKey) (sqlmigrate.Statement, error) {
 	fk := pair.Next.WalkForeignKey(step.ForeignKeys.Next)
-	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Rename foreign key %s.", quoteIdent(fk.ConstraintName()))}
-	stmt.Steps.Add(sqlschema.Step{
+	stmt := sqlmigrate.Statement{Comment: fmt.Sprintf("Rename foreign key %s.", quoteIdent(fk.ConstraintName()))}
+	stmt.Steps.Add(sqlmigrate.Step{
 		Cmd: fmt.Sprintf("ALTER TABLE %s RENAME CONSTRAINT %s TO %s", quoteIdent(fk.Table().Name()), quoteIdent(fk.ConstraintName()), quoteIdent(fk.ConstraintName())),
 	})
 	return stmt, nil
 }
 
-func renderAlterColumn(pair sqlschema.Pair[sqlschema.ColumnWalker], changes sqlschema.ColumnChanges) ([]sqlschema.Step, []string, []sqlschema.Step) {
+func renderAlterColumn(pair ty.Pair[sqlschema.ColumnWalker], changes sqlmigrate.ColumnChanges) ([]sqlmigrate.Step, []string, []sqlmigrate.Step) {
 	acc := expandChanges(pair, changes)
 
 	tableName := quoteIdent(pair.Prev.Table().Name())
@@ -393,7 +395,7 @@ func renderAlterColumn(pair sqlschema.Pair[sqlschema.ColumnWalker], changes sqls
 	alterColumnPrefix := fmt.Sprintf("ALTER COLUMN %s", columnName)
 
 	var clauses []string
-	var before, after []sqlschema.Step
+	var before, after []sqlmigrate.Step
 
 	if acc.DropDefault {
 		clauses = append(clauses, fmt.Sprintf("%s DROP DEFAULT", alterColumnPrefix))
@@ -422,12 +424,12 @@ func renderAlterColumn(pair sqlschema.Pair[sqlschema.ColumnWalker], changes sqls
 
 	if acc.AddSequence {
 		seqName := fmt.Sprintf("%s_%s_seq", tableName, columnName)
-		before = append(before, sqlschema.Step{
+		before = append(before, sqlmigrate.Step{
 			Cmd:     fmt.Sprintf("CREATE SEQUENCE %s", seqName),
 			Comment: fmt.Sprintf("Create sequence %s for column %s.%s.", seqName, tableName, columnName),
 		})
 		clauses = append(clauses, fmt.Sprintf("%s SET DEFAULT nextval(%s)", alterColumnPrefix, quoteString(seqName)))
-		after = append(after, sqlschema.Step{
+		after = append(after, sqlmigrate.Step{
 			Cmd:     fmt.Sprintf("ALTER SEQUENCE %s OWNED BY %s.%s", seqName, tableName, columnName),
 			Comment: fmt.Sprintf("Set sequence %s owner to %s.%s.", seqName, tableName, columnName),
 		})
@@ -440,8 +442,8 @@ func renderDefault(value sqlschema.Value, dataType string) string {
 	return "?????"
 }
 
-func expandChanges(pair sqlschema.Pair[sqlschema.ColumnWalker], changes sqlschema.ColumnChanges) sqlschema.AlterColumnChanges {
-	var acc sqlschema.AlterColumnChanges
+func expandChanges(pair ty.Pair[sqlschema.ColumnWalker], changes sqlmigrate.ColumnChanges) sqlmigrate.AlterColumnChanges {
+	var acc sqlmigrate.AlterColumnChanges
 
 	if changes.DefaultChanged() {
 		if pair.Next.Default() != nil {
@@ -483,23 +485,23 @@ func expandChanges(pair sqlschema.Pair[sqlschema.ColumnWalker], changes sqlschem
 	return acc
 }
 
-// func renderCreateExtension(pair sqlschema.Pair[sqlschema.Database], step CreateExtension) (sqlschema.Statement, error) {
+// func renderCreateExtension(pair ty.Pair[sqlschema.Database], step CreateExtension) (migrate.Statement, error) {
 // 	extension := pair.Next.WalkExtension(step.Extension)
-// 	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Create extension %s.", quoteIdent(extension.Name()))}
-// 	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("CREATE EXTENSION %s", quoteIdent(extension.Name()))})
+// 	stmt := migrate.Statement{Comment: fmt.Sprintf("Create extension %s.", quoteIdent(extension.Name()))}
+// 	stmt.Steps.Add(migrate.Step{Cmd: fmt.Sprintf("CREATE EXTENSION %s", quoteIdent(extension.Name()))})
 // 	return stmt, nil
 // }
 
-// func renderAlterExtension(pair sqlschema.Pair[sqlschema.Database], step AlterExtension) (sqlschema.Statement, error) {
+// func renderAlterExtension(pair ty.Pair[sqlschema.Database], step AlterExtension) (migrate.Statement, error) {
 // 	extension := pair.Next.WalkExtension(step.Extension.Next)
-// 	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Alter extension %s.", quoteIdent(extension.Name()))}
-// 	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("ALTER EXTENSION %s", quoteIdent(extension.Name()))})
+// 	stmt := migrate.Statement{Comment: fmt.Sprintf("Alter extension %s.", quoteIdent(extension.Name()))}
+// 	stmt.Steps.Add(migrate.Step{Cmd: fmt.Sprintf("ALTER EXTENSION %s", quoteIdent(extension.Name()))})
 // 	return stmt, nil
 // }
 
-// func renderDropExtension(pair sqlschema.Pair[sqlschema.Database], step DropExtension) (sqlschema.Statement, error) {
+// func renderDropExtension(pair ty.Pair[sqlschema.Database], step DropExtension) (migrate.Statement, error) {
 // 	extension := pair.Prev.WalkExtension(step.Extension)
-// 	stmt := sqlschema.Statement{Comment: fmt.Sprintf("Drop extension %s.", quoteIdent(extension.Name()))}
-// 	stmt.Steps.Add(sqlschema.Step{Cmd: fmt.Sprintf("DROP EXTENSION %s", quoteIdent(extension.Name()))})
+// 	stmt := migrate.Statement{Comment: fmt.Sprintf("Drop extension %s.", quoteIdent(extension.Name()))}
+// 	stmt.Steps.Add(migrate.Step{Cmd: fmt.Sprintf("DROP EXTENSION %s", quoteIdent(extension.Name()))})
 // 	return stmt, nil
 // }
