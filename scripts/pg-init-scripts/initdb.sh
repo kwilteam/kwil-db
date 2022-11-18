@@ -24,8 +24,9 @@ CREATE TABLE IF NOT EXISTS distributed_locks (
   record_version_number BIGINT,
   data BYTEA,
   owner CHARACTER VARYING(255)
-)
-CREATE SEQUENCE IF NOT EXISTS distributed_locks_rvn OWNED BY distributed_locks.record_version_number
+);
+
+CREATE SEQUENCE IF NOT EXISTS distributed_locks_rvn OWNED BY distributed_locks.record_version_number;
 
 CREATE TABLE IF NOT EXISTS wallet_info (
   wallet_info_id SERIAL PRIMARY KEY,

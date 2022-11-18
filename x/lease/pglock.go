@@ -1,11 +1,12 @@
 package lease
 
 import (
-	plck "cirello.io/pglock"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+
+	plck "cirello.io/pglock"
 	"github.com/google/uuid"
 )
 
@@ -15,7 +16,7 @@ type agent struct {
 
 func NewAgent(db *sql.DB, owner string) (Agent, error) {
 	ower_suffix := uuid.New().String()
-	c, err := plck.New(db,
+	c, err := plck.UnsafeNew(db,
 		plck.WithLeaseDuration(DefaultLeaseDuration),
 		plck.WithHeartbeatFrequency(DefaultHeartbeatFrequency),
 		plck.WithCustomTable("distributed_locks"),

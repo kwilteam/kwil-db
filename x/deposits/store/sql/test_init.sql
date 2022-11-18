@@ -59,6 +59,11 @@ CREATE TABLE IF NOT EXISTS wallets (
 	CREATE OR REPLACE FUNCTION spend_money(addr VARCHAR(44), amt numeric(78)) RETURNS void AS $$
 		DECLARE oldBal NUMERIC(78) = (SELECT balance FROM wallets WHERE wallet = addr); 
 		BEGIN
+			-- check old balance exists
+			IF oldBal IS NULL THEN
+				RAISE EXCEPTION 'Wallet % does not exist', addr;
+			END IF;
+
 			-- TODO: Add sequence ID
 			IF oldBal - amt < 0 THEN RAISE EXCEPTION 'not enough balance'; END IF;
 			UPDATE wallets SET balance = oldBal-amt, spent = (SELECT spent FROM wallets WHERE wallet = addr) + amt WHERE wallet = addr;

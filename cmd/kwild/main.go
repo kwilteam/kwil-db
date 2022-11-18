@@ -42,11 +42,11 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
-	d, err := deposits.New(dc, logger, acc)
+	d, err := deposits.New(dc, logger, acc, "postgres://postgres:postgres@localhost:5432/kwil?sslmode=disable")
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
-	
+
 	apiService := apisvc.NewService(d, metadata.NewTestService(), execution.NewTestService())
 	httpHandler := apisvc.NewHandler(logger)
 

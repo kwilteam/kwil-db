@@ -45,7 +45,7 @@ func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDRes
 		return nil, fmt.Errorf("invalid signature")
 	}
 
-	// spend funds andthen write data!
+	// spend funds and then write data!
 	err = s.ds.Spend(req.From, req.Fee)
 	if err != nil {
 		return nil, err

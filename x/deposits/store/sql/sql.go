@@ -3,7 +3,7 @@ package sql
 import (
 	"database/sql"
 	"fmt"
-	"kwil/x/cfgx"
+	"ksl/sqlclient"
 	"kwil/x/deposits/types"
 	"kwil/x/lease"
 	"math/big"
@@ -43,80 +43,20 @@ type SQLStore interface {
 	CreateLeaseAgent(owner string) (lease.Agent, error)
 }
 
-type SQLConfig struct {
-	Host     string
-	Port     int64
-	User     string
-	Password string
-	Database string
-	SSL      bool
-	URL      string
-}
-
-func NewConfig(c cfgx.Config) (*SQLConfig, error) {
-	url := c.String("db.url")
-	if url != "" {
-		return &SQLConfig{
-			URL: url,
-		}, nil
-	}
-
-	port, err := c.GetInt64("db.port", 5432)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get db port from config. %w", err)
-	}
-
-	ssl, err := c.GetBool("db.ssl", false)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get db ssl from config. %w", err)
-	}
-
-	return &SQLConfig{
-		Host:     c.GetString("db.host", "localhost"),
-		Port:     port,
-		User:     c.GetString("db.user", "postgres"),
-		Password: c.GetString("db.password", "password"),
-		Database: c.GetString("db.database", "postgres"),
-		SSL:      ssl,
-	}, nil
-}
-
-func NewDb(sc *SQLConfig) (*sql.DB, error) {
-	psqlInfo := sc.URL
-	if psqlInfo == "" {
-		ssl := "disable"
-		if sc.SSL {
-			ssl = "require"
-		}
-
-		psqlInfo = fmt.Sprintf("host=%s port=%d user=%s "+
-			"password=%s dbname=%s sslmode=%s", sc.Host, sc.Port, sc.User, sc.Password, sc.Database, ssl)
-	}
-
-	return sql.Open("postgres", psqlInfo)
-}
-
-func New(sc *SQLConfig) (*sqlstore, error) {
-	db, err := NewDb(sc)
+func New(url string) (*sqlstore, error) {
+	client, err := sqlclient.Open(url)
 	if err != nil {
 		return nil, err
 	}
 
 	return &sqlstore{
-		db: db,
+		db: client.DB,
 	}, nil
 }
 
 func TestDB() (*sqlstore, error) {
 
-	db, err := New(&SQLConfig{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "password",
-		Database: "postgres",
-		SSL:      false,
-	})
+	db, err := New("postgres://postgres:password@localhost:5432/postgres?sslmode=disable")
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +151,7 @@ func (s *sqlstore) Spend(addr string, amount string) error {
 	if err != nil {
 		return err
 	}
-	res, err := tx.Exec("SELECT spend_money($1, $2)", addr, amount)
-	fmt.Println(res)
+	_, err = tx.Exec("SELECT spend_money($1, $2)", addr, amount)
 	if err != nil {
 		err = tx.Rollback()
 		if err != nil { // rollback likely won't fail, but just in case

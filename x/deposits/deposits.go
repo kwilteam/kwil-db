@@ -40,7 +40,7 @@ type deposits struct {
 	addr string
 }
 
-func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
+func New(c cfgx.Config, l logx.Logger, acc kc.Account, url string) (*deposits, error) {
 	run, err := c.GetBool("run", false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run from config. %w", err)
@@ -58,12 +58,7 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account) (*deposits, error) {
 		return nil, fmt.Errorf("failed to get withdrawal_expiration from config. %w", err)
 	}
 
-	pgConf, err := sql.NewConfig(c)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get pg config. %w", err)
-	}
-
-	pg, err := sql.New(pgConf)
+	pg, err := sql.New(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sql store. %w", err)
 	}
@@ -120,8 +115,8 @@ func (d *deposits) Listen(ctx context.Context) error {
 	}
 
 	<-action.DoneCh()
-
-	return action.GetError()
+	errr := action.GetError()
+	return errr
 }
 
 func (d *deposits) listen_safe(ctx context.Context, stop <-chan struct{}, action async.Action) {
@@ -138,22 +133,29 @@ func (d *deposits) listen_safe(ctx context.Context, stop <-chan struct{}, action
 		return
 	}
 
-	defer d.sql.Close()
+	clean_up := func() {
+		_ = d.sql.Close()
+		action.Complete()
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
+			clean_up()
 			return
 		case <-stop:
 			return // no longer the leader
 		case err := <-errs:
 			// TODO: do we start this back up or propagate the failure at all?
 			d.log.Warnf("error from event feed: %v", err)
+			clean_up()
 			return
 		case blk := <-blks:
 			err := d.processBlock(ctx, blk)
 			if err != nil {
 				// TODO: do we start this back up or propagate the failure at all?
 				d.log.Warnf("failed to process block %d. %v", blk, err)
+				clean_up()
 				return
 			}
 		}
