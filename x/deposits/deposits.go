@@ -18,7 +18,7 @@ type Deposits interface {
 	GetBalance(string) (*big.Int, error)
 	GetSpent(string) (*big.Int, error)
 	GetBalanceAndSpent(string) (string, string, error)
-	Spend(string, string) error
+	Spend(address string, amount string) error
 	Withdraw(context.Context, string, string) (*types.PendingWithdrawal, error)
 	Close() error
 	GetWithdrawalsForWallet(string) ([]*types.PendingWithdrawal, error)

@@ -37,7 +37,7 @@ func NewCmdConfigure() *cobra.Command {
 				Label:       "API Key",
 				Default:     v.GetString("api-key"),
 				MaskDefault: true,
-				ShowLast:    4,
+				//ShowLast:    4, // took this out because it causes a new line to be printed on each keystroke.
 				HideEntered: true,
 			}
 
@@ -105,7 +105,7 @@ func NewCmdConfigure() *cobra.Command {
 			}
 
 			ethProviderPrompt := util.Prompter{
-				Label:   "Ethereum Provider Address",
+				Label:   "Ethereum Provider Endpoint",
 				Default: v.GetString("eth-provider"),
 			}
 

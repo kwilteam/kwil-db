@@ -17,8 +17,6 @@ func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDRes
 		return nil, err
 	}
 
-	fmt.Println("fee", req.Fee)
-
 	// parse fee
 	fee, ok := parseBigInt(req.Fee)
 	if !ok {
@@ -48,6 +46,11 @@ func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDRes
 	}
 
 	// spend funds andthen write data!
+	err = s.ds.Spend(req.From, req.Fee)
+	if err != nil {
+		return nil, err
+	}
+
 	return &apipb.CUDResponse{
 		TraceId: "",
 	}, nil

@@ -172,7 +172,8 @@ func (s *sqlstore) Spend(addr string, amount string) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("SELECT spend_money($1, $2)", addr, amount)
+	res, err := tx.Exec("SELECT spend_money($1, $2)", addr, amount)
+	fmt.Println(res)
 	if err != nil {
 		err = tx.Rollback()
 		if err != nil { // rollback likely won't fail, but just in case
