@@ -3,6 +3,7 @@ module kwil
 go 1.19
 
 require (
+	cirello.io/pglock v1.10.0
 	github.com/99designs/keyring v1.1.6
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/ethereum/go-ethereum v1.10.21
@@ -29,11 +30,6 @@ require (
 )
 
 require (
-	cirello.io/pglock v1.10.0 // indirect
-	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	go.uber.org/multierr v1.6.0 // indirect

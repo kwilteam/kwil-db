@@ -358,7 +358,7 @@ func _getConfigInternal(test bool) Config {
 				filter += "_"
 			}
 
-			env, err := Builder().UseFile(ENV_SETTINGS_PATH, envSettings).Build()
+			env, err := Builder().UseFile("", envSettings).Build()
 			if err != nil {
 				panic(err)
 			}

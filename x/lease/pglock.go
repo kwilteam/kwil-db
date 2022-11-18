@@ -12,10 +12,12 @@ type agent struct {
 	c *plck.Client
 }
 
-func NewAgent(db *sql.DB) (Agent, error) {
+func NewAgent(db *sql.DB, owner string) (Agent, error) {
 	c, err := plck.New(db,
 		plck.WithLeaseDuration(DefaultLeaseDuration),
 		plck.WithHeartbeatFrequency(DefaultHeartbeatFrequency),
+		plck.WithCustomTable("distributed_locks"),
+		plck.WithOwner(owner),
 	)
 
 	if err != nil {
