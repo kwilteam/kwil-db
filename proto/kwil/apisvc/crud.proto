@@ -2,6 +2,8 @@ syntax = "proto3";
 package apisvc;
 option go_package = "kwil/x/proto/apipb";
 
+import "kwil/apisvc/metadata.proto";
+
 message ReadRequest{
     string owner = 1;
     string database = 2;
@@ -37,7 +39,7 @@ message CUDResponse{
 message ColumnResult {
     string name = 1;
     string value = 2;
-    string type = 3;
+    ParamType type = 3;
 }
 
 message Row {

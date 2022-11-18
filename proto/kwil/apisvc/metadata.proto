@@ -54,7 +54,7 @@ message Table {
 
 message Column {
 	string name = 1;
-	string type = 2;
+	ParamType type = 2;
 	Arity arity = 3;
 }
 

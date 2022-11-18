@@ -60,7 +60,7 @@ func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest
 				Inputs: []*apipb.Param{
 					{
 						Name: "input1",
-						Type: 2,
+						Type: 2, // 2 = string
 					},
 					{
 						Name: "input2",
@@ -102,11 +102,11 @@ func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest
 				Columns: []*apipb.Column{
 					{
 						Name: "column1",
-						Type: "string",
+						Type: 2,
 					},
 					{
 						Name: "column2",
-						Type: "string",
+						Type: 2,
 					},
 				},
 			},
@@ -157,7 +157,7 @@ func convertTable(table metadata.Table) *apipb.Table {
 func convertColumn(column metadata.Column) *apipb.Column {
 	return &apipb.Column{
 		Name:  column.Name,
-		Type:  column.Type,
+		Type:  convertType(column.Type),
 		Arity: convertArity(column.Arity),
 	}
 }

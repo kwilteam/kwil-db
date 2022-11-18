@@ -322,7 +322,7 @@
           "type": "string"
         },
         "type": {
-          "type": "string"
+          "$ref": "#/definitions/apisvcParamType"
         },
         "arity": {
           "$ref": "#/definitions/apisvcArity"
@@ -339,7 +339,7 @@
           "type": "string"
         },
         "type": {
-          "type": "string"
+          "$ref": "#/definitions/apisvcParamType"
         }
       }
     },

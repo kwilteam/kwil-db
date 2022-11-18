@@ -82,7 +82,7 @@ func convertResultColumn(c *execution.Column) *apipb.ColumnResult {
 	return &apipb.ColumnResult{
 		Name:  c.Name,
 		Value: c.Value.String,
-		Type:  c.Type,
+		Type:  convertType(c.Type),
 	}
 }
 

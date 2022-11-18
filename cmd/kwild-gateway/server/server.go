@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"io"
 	"kwil/x/proto/apipb"
 	"net/http"
 	"os"
@@ -52,7 +54,13 @@ func Start() error {
 				http_port = ":" + http_port
 			}
 
-			return http.ListenAndServe(http_port, cors(mux))
+			// add the api key middleware
+			apik, err := newApiKeyMiddleware("keys.json")
+			if err != nil {
+				return err
+			}
+
+			return http.ListenAndServe(http_port, apik(cors(mux)))
 		},
 	}
 
@@ -89,6 +97,45 @@ func cors(h http.Handler) http.Handler {
 
 		h.ServeHTTP(w, r)
 	})
+}
+
+// since I am making this on the last day, a lot of this is hacked together and probably not super optimal
+type keyJson struct {
+	Keys []string `json:"keys"`
+}
+
+// reads in the path and loads the keys
+func newApiKeyMiddleware(path string) (func(http.Handler) http.Handler, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	bts, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	var keys keyJson
+	err = json.Unmarshal(bts, &keys)
+	if err != nil {
+		return nil, err
+	}
+
+	km := make(map[string]struct{})
+	for _, k := range keys.Keys {
+		km[k] = struct{}{}
+	}
+
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := km[r.Header.Get("x-api-key")]; ok {
+				h.ServeHTTP(w, r)
+			} else {
+				w.WriteHeader(http.StatusUnauthorized)
+			}
+		})
+	}, nil
 }
 
 func allowedOrigin(origin string) bool {
