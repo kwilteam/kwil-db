@@ -6,61 +6,32 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"ksl/sqldriver"
 	"net/url"
 	"sync"
-
-	"ksl/sqlspec"
 )
 
-type (
-	// Client provides the common functionalities for working with Kwil from different
-	// applications (e.g. CLI and TF). Note, the Client is dialect specific and should
-	// be instantiated using a call to Open.
-	Client struct {
-		// Name used when creating the client.
-		Name string
+type Client struct {
+	Name string
+	DB   *sql.DB
+	URL  *URL
 
-		// DB used for creating the client.
-		DB *sql.DB
-		// URL holds an enriched url.URL.
-		URL *URL
+	sqldriver.Driver
+	closers []io.Closer
 
-		// A migration driver for the attached dialect.
-		sqlspec.Driver
-		// Additional closers that can be closed at the
-		// end of the client lifetime.
-		closers []io.Closer
+	openDriver func(sqldriver.ExecQuerier) (sqldriver.Driver, error)
+}
 
-		// Marshal and Evaluator functions for decoding
-		// and encoding the schema documents.
-		// hcl.Marshaler
-		// hcl.Evaluator
+type TxClient struct {
+	*Client
+	Tx *sql.Tx
+}
 
-		// A func to open a sqlspec.Driver with a given sqlspec.ExecQuerier. Used when creating a TxClient.
-		openDriver func(sqlspec.ExecQuerier) (sqlspec.Driver, error)
-	}
-
-	// TxClient is returned by calling Client.Tx. It behaves the same as Client,
-	// but wraps all operations within a transaction.
-	TxClient struct {
-		*Client
-
-		// The transaction this Client wraps.
-		Tx *sql.Tx
-	}
-
-	// URL extends the standard url.URL with additional
-	// connection information attached by the Opener (if any).
-	URL struct {
-		*url.URL
-
-		// The DSN used for opening the connection.
-		DSN string
-
-		// The Schema this client is connected to.
-		Schema string
-	}
-)
+type URL struct {
+	*url.URL
+	DSN    string
+	Schema string
+}
 
 // Tx returns a transactional client.
 func (c *Client) Tx(ctx context.Context, opts *sql.TxOptions) (*TxClient, error) {
@@ -80,23 +51,10 @@ func (c *Client) Tx(ctx context.Context, opts *sql.TxOptions) (*TxClient, error)
 	return &TxClient{Client: &ic, Tx: tx}, nil
 }
 
-// Commit the transaction.
-func (c *TxClient) Commit() error {
-	return c.Tx.Commit()
-}
+func (c *TxClient) Commit() error                 { return c.Tx.Commit() }
+func (c *TxClient) Rollback() error               { return c.Tx.Rollback() }
+func (c *Client) AddClosers(closers ...io.Closer) { c.closers = append(c.closers, closers...) }
 
-// Rollback the transaction.
-func (c *TxClient) Rollback() error {
-	return c.Tx.Rollback()
-}
-
-// AddClosers adds list of closers to close at the end of the client lifetime.
-func (c *Client) AddClosers(closers ...io.Closer) {
-	c.closers = append(c.closers, closers...)
-}
-
-// Close closes the underlying database connection and the migration
-// driver in case it implements the io.Closer interface.
 func (c *Client) Close() (err error) {
 	for _, closer := range append(c.closers, c.DB) {
 		if cerr := closer.Close(); cerr != nil {
@@ -109,83 +67,74 @@ func (c *Client) Close() (err error) {
 	return err
 }
 
-type (
-	// Opener opens a migration driver by the given URL.
-	Opener interface {
-		Open(ctx context.Context, u *url.URL) (*Client, error)
-	}
-
-	// OpenerFunc allows using a function as an Opener.
-	OpenerFunc func(context.Context, *url.URL) (*Client, error)
-
-	// URLParser parses an url.URL into an enriched URL and attaches additional info to it.
-	URLParser interface {
-		ParseURL(*url.URL) *URL
-	}
-
-	// URLParserFunc allows using a function as an URLParser.
-	URLParserFunc func(*url.URL) *URL
-
-	// SchemaChanger is implemented by a driver if it how to change the connection URL to represent another sqlspec.
-	SchemaChanger interface {
-		ChangeSchema(*url.URL, string) *url.URL
-	}
-
-	driver struct {
-		Opener
-		name   string
-		parser URLParser
-	}
-)
-
-// Open calls f(ctx, u).
-func (f OpenerFunc) Open(ctx context.Context, u *url.URL) (*Client, error) {
-	return f(ctx, u)
+type Opener interface {
+	Open(u *url.URL) (*Client, error)
 }
 
-// ParseURL calls f(u).
+type OpenerFunc func(*url.URL) (*Client, error)
+
+func (f OpenerFunc) Open(u *url.URL) (*Client, error) {
+	return f(u)
+}
+
+type URLParser interface {
+	ParseURL(*url.URL) *URL
+}
+
+type URLParserFunc func(*url.URL) *URL
+
 func (f URLParserFunc) ParseURL(u *url.URL) *URL {
 	return f(u)
 }
 
+type SchemaChanger interface {
+	ChangeSchema(*url.URL, string) *url.URL
+}
+
+type driver struct {
+	Opener
+	name   string
+	parser URLParser
+}
+
 var drivers sync.Map
 
-type (
-	// openOptions holds additional configuration values for opening a Client.
-	openOptions struct {
-		schema      *string
-		sslDisabled bool
-	}
+type openOptions struct {
+	schema *string
+}
 
-	// OpenOption allows to configure a openOptions using functional arguments.
-	OpenOption func(*openOptions) error
-)
+type OpenOption func(*openOptions) error
 
-// ErrUnsupported is returned if a registered driver does not support changing the sqlspec.
 var ErrUnsupported = errors.New("sql/sqlclient: driver does not support changing connected schema")
 
-// Open opens an Kwil client by its provided url string.
-func Open(ctx context.Context, s string, opts ...OpenOption) (*Client, error) {
+func OpenProvider(provider string, s string, opts ...OpenOption) (*Client, error) {
 	u, err := url.Parse(s)
 	if err != nil {
 		return nil, fmt.Errorf("sql/sqlclient: parse open url: %w", err)
 	}
-	return OpenURL(ctx, u, opts...)
+	return OpenURL(provider, u, opts...)
 }
 
-// OpenURL opens an Kwil client by its provided url.URL.
-func OpenURL(ctx context.Context, u *url.URL, opts ...OpenOption) (*Client, error) {
+func Open(s string, opts ...OpenOption) (*Client, error) {
+	u, err := url.Parse(s)
+	if err != nil {
+		return nil, fmt.Errorf("sql/sqlclient: parse open url: %w", err)
+	}
+	return OpenURL(u.Scheme, u, opts...)
+}
+
+func OpenURL(backend string, u *url.URL, opts ...OpenOption) (*Client, error) {
 	cfg := &openOptions{}
 	for _, opt := range opts {
 		if err := opt(cfg); err != nil {
 			return nil, err
 		}
 	}
-	v, ok := drivers.Load(u.Scheme)
+	v, ok := drivers.Load(backend)
 	if !ok {
 		return nil, fmt.Errorf("sql/sqlclient: no opener was register with name %q", u.Scheme)
 	}
-	// If there is a schema given and the driver allows to change the schema for the url, do it.
+
 	if cfg.schema != nil {
 		sc, ok := v.(*driver).parser.(SchemaChanger)
 		if !ok {
@@ -193,7 +142,7 @@ func OpenURL(ctx context.Context, u *url.URL, opts ...OpenOption) (*Client, erro
 		}
 		u = sc.ChangeSchema(u, *cfg.schema)
 	}
-	client, err := v.(*driver).Open(ctx, u)
+	client, err := v.(*driver).Open(u)
 	if err != nil {
 		return nil, err
 	}
@@ -203,8 +152,6 @@ func OpenURL(ctx context.Context, u *url.URL, opts ...OpenOption) (*Client, erro
 	return client, nil
 }
 
-// OpenSchema opens the connection to the given sqlspec.
-// If the registered driver does not support this, ErrUnsupported is returned instead.
 func OpenSchema(s string) OpenOption {
 	return func(c *openOptions) error {
 		c.schema = &s
@@ -212,87 +159,29 @@ func OpenSchema(s string) OpenOption {
 	}
 }
 
-type (
-	registerOptions struct {
-		openDriver func(sqlspec.ExecQuerier) (sqlspec.Driver, error)
-		parser     URLParser
-		flavours   []string
-		// codec      interface {
-		// 	hcl.Marshaler
-		// 	hcl.Evaluator
-		// }
-	}
-	// RegisterOption allows configuring the Opener
-	// registration using functional options.
-	RegisterOption func(*registerOptions)
-)
+type registerOptions struct {
+	openDriver func(sqldriver.ExecQuerier) (sqldriver.Driver, error)
+	parser     URLParser
+	flavours   []string
+}
+type RegisterOption func(*registerOptions)
 
-// RegisterFlavours allows registering additional flavours
-// (i.e. names), accepted by Kwil to open clients.
 func RegisterFlavours(flavours ...string) RegisterOption {
 	return func(opts *registerOptions) {
 		opts.flavours = flavours
 	}
 }
 
-// RegisterURLParser allows registering a function for parsing
-// the url.URL and attach additional info to the extended URL.
 func RegisterURLParser(p URLParser) RegisterOption {
 	return func(opts *registerOptions) {
 		opts.parser = p
 	}
 }
 
-// RegisterCodec registers static codec for attaching into
-// the client after it is opened.
-// func RegisterCodec(m hcl.Marshaler, e hcl.Evaluator) RegisterOption {
-// 	return func(opts *registerOptions) {
-// 		opts.codec = struct {
-// 			hcl.Marshaler
-// 			hcl.Evaluator
-// 		}{
-// 			Marshaler: m,
-// 			Evaluator: e,
-// 		}
-// 	}
-// }
-
-// RegisterDriverOpener registers a func to create a sqlspec.Driver from a sqlspec.ExecQuerier.
-// Registering this function is implicitly done when using DriverOpener.
-// The passed opener is used when creating a TxClient.
-func RegisterDriverOpener(open func(sqlspec.ExecQuerier) (sqlspec.Driver, error)) RegisterOption {
+func RegisterDriverOpener(open func(sqldriver.ExecQuerier) (sqldriver.Driver, error)) RegisterOption {
 	return func(opts *registerOptions) {
 		opts.openDriver = open
 	}
-}
-
-// DriverOpener is a helper Opener creator for sharing between all drivers.
-func DriverOpener(open func(sqlspec.ExecQuerier) (sqlspec.Driver, error)) Opener {
-	return OpenerFunc(func(_ context.Context, u *url.URL) (*Client, error) {
-		v, ok := drivers.Load(u.Scheme)
-		if !ok {
-			return nil, fmt.Errorf("sql/sqlclient: unexpected missing opener %q", u.Scheme)
-		}
-		ur := v.(*driver).parser.ParseURL(u)
-		db, err := sql.Open(v.(*driver).name, ur.DSN)
-		if err != nil {
-			return nil, err
-		}
-		drv, err := open(db)
-		if err != nil {
-			if cerr := db.Close(); cerr != nil {
-				err = fmt.Errorf("%w: %v", err, cerr)
-			}
-			return nil, err
-		}
-		return &Client{
-			Name:       v.(*driver).name,
-			DB:         db,
-			URL:        ur,
-			Driver:     drv,
-			openDriver: open,
-		}, nil
-	})
 }
 
 // Register registers a client Opener (i.e. creator) with the given name.
@@ -301,28 +190,16 @@ func Register(name string, opener Opener, opts ...RegisterOption) {
 		panic("sql/sqlclient: Register opener is nil")
 	}
 	opt := &registerOptions{
-		// Default URL parser uses the URL as the DSN.
 		parser: URLParserFunc(func(u *url.URL) *URL { return &URL{URL: u, DSN: u.String()} }),
 	}
 	for i := range opts {
 		opts[i](opt)
 	}
-	// if opt.codec != nil {
-	// 	f := opener
-	// 	opener = OpenerFunc(func(ctx context.Context, u *url.URL) (*Client, error) {
-	// 		c, err := f.Open(ctx, u)
-	// 		if err != nil {
-	// 			return nil, err
-	// 		}
-	// 		// c.Marshaler, c.Evaluator = opt.codec, opt.codec
-	// 		return c, nil
-	// 	})
-	// }
-	// If there was a driver opener registered by a call to RegisterDriverOpener, it has precedence.
+
 	if opt.openDriver != nil {
 		f := opener
-		opener = OpenerFunc(func(ctx context.Context, u *url.URL) (*Client, error) {
-			c, err := f.Open(ctx, u)
+		opener = OpenerFunc(func(u *url.URL) (*Client, error) {
+			c, err := f.Open(u)
 			if err != nil {
 				return nil, err
 			}

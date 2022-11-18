@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"kwil/x/async"
 	"kwil/x/execution"
-	"kwil/x/schema"
+	"kwil/x/metadata"
 	"net"
 	"net/http"
 	"os"
@@ -51,7 +51,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to listen to deposits: %w", err)
 	}
 
-	apiService := apisvc.NewService(d, schema.NewTestService(), execution.NewTestService())
+	apiService := apisvc.NewService(d, metadata.NewTestService(), execution.NewTestService())
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(logger, httpHandler, apiService)

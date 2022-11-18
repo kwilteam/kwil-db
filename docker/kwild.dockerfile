@@ -12,13 +12,13 @@ COPY go.mod go.sum ./
 RUN --mount=type=ssh,id=kwil go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o ./dist/kwild ./cmd/kwild
-RUN cp *.json ./dist
-RUN cp *.yaml ./dist
-RUN cp *.yml ./dist
-RUN cp -r ./keys ./dist/keys/
-RUN cp -r ./abi ./dist/abi/
-RUN cp -f ./kwild-gateway-meta-config.yaml ./dist/meta-config.yaml
-RUN cp -f ./kwild-gateway-deposit-config.yaml ./dist/deposit-config.yaml
+COPY *.json ./dist
+COPY *.yaml ./dist
+COPY *.yml ./dist
+COPY ./keys/ ./dist/keys/
+COPY ./abi/ ./dist/abi/
+COPY ./kwild-gateway-meta-config.yaml ./dist/meta-config.yaml
+COPY ./kwild-gateway-deposit-config.yaml ./dist/deposit-config.yaml
 
 FROM scratch
 WORKDIR /app
