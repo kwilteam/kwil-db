@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 func Test_Lease(t *testing.T) {
@@ -31,6 +30,7 @@ func Test_Lease(t *testing.T) {
 	user := cfg.String("user")
 	password := cfg.String("password")
 	database := cfg.String("database")
+	driver := cfg.GetString("driver", "postgres")
 
 	var ssl string
 	if strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") {
@@ -42,7 +42,7 @@ func Test_Lease(t *testing.T) {
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=%s", host, port, user, password, database, ssl)
 
-	db, err := sql.Open("postgres", psqlInfo)
+	db, err := sql.Open(driver, psqlInfo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,6 @@ func Test_Lease(t *testing.T) {
 		err = a.Subscribe(context.Background(), "test", Subscriber{
 			OnAcquired: func(l Lease) {
 				t.Log("acquired lease")
-				time.Sleep(5 * time.Second)
 				wg.Done()
 			},
 			OnFatalError: func(err error) {
