@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"io"
 	"ksl/sqldriver"
+	"ksl/sqlmigrate"
 	"ksl/sqlschema"
 	"ksl/sqlx"
 	"time"
@@ -15,17 +16,21 @@ import (
 
 type Client struct {
 	sqldriver.ExecQuerier
-	sqlschema.Planner
-	sqlschema.Differ
-	sqlschema.Describer
+	sqlmigrate.Planner
+	sqlmigrate.Differ
+	sqlmigrate.Describer
+	sqldriver.Executor
 }
 
 func NewClient(db sqldriver.ExecQuerier) *Client {
+	describer := Describer{Conn: db}
+
 	return &Client{
 		ExecQuerier: db,
 		Planner:     Planner{},
-		Differ:      sqlschema.NewDiffer(Backend{}),
-		Describer:   Describer{Conn: db},
+		Differ:      sqlmigrate.NewDiffer(Backend{}),
+		Describer:   describer,
+		Executor:    &Executor{Describer: describer, Conn: db},
 	}
 }
 
@@ -81,7 +86,7 @@ func (c *Client) ServerVersion(ctx context.Context) (string, error) {
 	return version, nil
 }
 
-func (c *Client) ApplyMigration(ctx context.Context, plan sqlschema.MigrationPlan) error {
+func (c *Client) ApplyMigration(ctx context.Context, plan sqlmigrate.MigrationPlan) error {
 	for _, stmt := range plan.Statements {
 		for _, step := range stmt.Steps {
 			if _, err := c.ExecContext(ctx, step.Cmd, step.Args...); err != nil {
@@ -95,13 +100,13 @@ func (c *Client) ApplyMigration(ctx context.Context, plan sqlschema.MigrationPla
 	return nil
 }
 
-func (c *Client) PlanMigration(ctx context.Context, before, after sqlschema.Database) (sqlschema.MigrationPlan, error) {
+func (c *Client) PlanMigration(ctx context.Context, before, after sqlschema.Database) (sqlmigrate.MigrationPlan, error) {
 	steps, err := c.Diff(before, after)
 	if err != nil {
-		return sqlschema.MigrationPlan{}, err
+		return sqlmigrate.MigrationPlan{}, err
 	}
 
-	migration := sqlschema.Migration{
+	migration := sqlmigrate.Migration{
 		Before:  before,
 		After:   after,
 		Changes: steps,

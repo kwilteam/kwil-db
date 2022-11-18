@@ -26,7 +26,7 @@ var Types pgt
 
 type pgt struct{}
 
-func (pgt) Decimal(args ...int) PostgresType {
+func (pgt) Numeric(args ...int) PostgresType {
 	return lo.Must(Types.ScalarFrom(TypeDecimal, itos(args)...))
 }
 func (pgt) Char(args ...int) PostgresType { return lo.Must(Types.ScalarFrom(TypeChar, itos(args)...)) }
@@ -168,6 +168,16 @@ func (t UnsupportedType) Args() []string { return nil }
 func (t UnsupportedType) String() string { return t.name }
 func (UnsupportedType) pgtyp()           {}
 
+type UserDefinedType struct {
+	ksl.Type
+	name string
+}
+
+func (t UserDefinedType) Name() string   { return t.name }
+func (t UserDefinedType) Args() []string { return nil }
+func (t UserDefinedType) String() string { return t.name }
+func (UserDefinedType) pgtyp()           {}
+
 type scalartype struct {
 	ksl.Type
 	name string
@@ -290,7 +300,7 @@ var scalarTypeDefaults = map[ksl.Type]PostgresType{
 	ksl.BuiltIns.Int:      Types.Integer(),
 	ksl.BuiltIns.BigInt:   Types.BigInt(),
 	ksl.BuiltIns.Float:    Types.Double(),
-	ksl.BuiltIns.Decimal:  Types.Decimal(65, 30),
+	ksl.BuiltIns.Decimal:  Types.Numeric(65, 30),
 	ksl.BuiltIns.Bool:     Types.Boolean(),
 	ksl.BuiltIns.String:   Types.Text(),
 	ksl.BuiltIns.DateTime: Types.Timestamp(3),

@@ -3,9 +3,10 @@ package metadata
 import (
 	"context"
 
-	"ksl/schema"
+	"ksl/ast"
+	"ksl/lift"
 	"ksl/sqlclient"
-	"ksl/sqlschema"
+	"ksl/sqlmigrate"
 )
 
 type Service interface {
@@ -24,34 +25,34 @@ func NewService(connector Connector) Service {
 	}
 }
 
-func (s *sqlservice) planInternal(ctx context.Context, req SchemaRequest, apply bool) (sqlschema.MigrationPlan, error) {
-	ksch := schema.Parse(req.SchemaData, "<schema>")
+func (s *sqlservice) planInternal(ctx context.Context, req SchemaRequest, apply bool) (sqlmigrate.MigrationPlan, error) {
+	ksch := ast.Parse(req.SchemaData, "<schema>")
 
 	if ksch.HasErrors() {
-		return sqlschema.MigrationPlan{}, ksch.Diagnostics
+		return sqlmigrate.MigrationPlan{}, ksch.Diagnostics
 	}
 
 	url, err := s.connector.GetConnectionInfo(req.Wallet)
 	if err != nil {
-		return sqlschema.MigrationPlan{}, err
+		return sqlmigrate.MigrationPlan{}, err
 	}
 
 	client, err := sqlclient.Open(url)
 	if err != nil {
-		return sqlschema.MigrationPlan{}, err
+		return sqlmigrate.MigrationPlan{}, err
 	}
 	defer client.Close()
 
 	source, err := client.DescribeContext(ctx, req.Database)
 	if err != nil {
-		return sqlschema.MigrationPlan{}, err
+		return sqlmigrate.MigrationPlan{}, err
 	}
 
-	target := sqlschema.CalculateSqlSchema(ksch, req.Database)
+	target := lift.Sql(ksch, req.Database)
 
 	plan, err := client.PlanMigration(ctx, source, target)
 	if err != nil {
-		return sqlschema.MigrationPlan{}, err
+		return sqlmigrate.MigrationPlan{}, err
 	}
 
 	if apply {

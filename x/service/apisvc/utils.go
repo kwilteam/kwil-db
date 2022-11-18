@@ -1,6 +1,7 @@
 package apisvc
 
 import (
+	"encoding/json"
 	"strings"
 
 	"kwil/x/crypto"
@@ -15,6 +16,21 @@ func createFundsReturnID(amount, nonce, address string) string {
 	return crypto.Sha384Str([]byte(sb.String()))
 }
 
+// query, inputs, fee, nonce hash
+func cudID(m *apipb.CUDRequest) string {
+	sb := strings.Builder{}
+	bts, err := json.Marshal(m.Inputs)
+	if err != nil {
+		return ""
+	}
+	sb.WriteString(m.Query)
+	sb.Write(bts)
+	sb.WriteString(m.Fee)
+	sb.WriteString(m.Nonce)
+
+	return crypto.Sha384Str([]byte(sb.String()))
+}
+
 func planID(m *apipb.PlanRequest) string {
 	sb := strings.Builder{}
 	sb.WriteString(m.DbName)
@@ -22,7 +38,7 @@ func planID(m *apipb.PlanRequest) string {
 	sb.WriteString(m.From)
 	sb.Write(m.Schema)
 
-	return string(crypto.Sha384([]byte(sb.String())))
+	return crypto.Sha384Str([]byte(sb.String()))
 }
 
 func applyID(m *apipb.ApplyRequest) string {
@@ -32,5 +48,5 @@ func applyID(m *apipb.ApplyRequest) string {
 	sb.WriteString(m.Nonce)
 	sb.WriteString(m.From)
 
-	return string(crypto.Sha384([]byte(sb.String())))
+	return crypto.Sha384Str([]byte(sb.String()))
 }

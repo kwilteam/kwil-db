@@ -1,7 +1,7 @@
 package syntax_test
 
 import (
-	"ksl/schema"
+	"ksl/ast"
 	"os"
 	"testing"
 )
@@ -33,7 +33,7 @@ func TestSyntax(t *testing.T) {
 	}
 `
 
-	sch := schema.ParseString(data, "test.ksl")
+	sch := ast.ParseString(data, "test.ksl")
 	if sch.HasErrors() {
 		sch.WriteDiagnostics(os.Stdout, true)
 	}

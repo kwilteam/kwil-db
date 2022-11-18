@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"ksl/sqlschema"
+	"ksl/sqlmigrate"
 
 	"database/sql"
 	"database/sql/driver"
@@ -52,8 +52,36 @@ type Locker interface {
 	Lock(ctx context.Context, name string, timeout time.Duration) (UnlockFunc, error)
 }
 
-type Caller interface {
-	Call(ctx context.Context, name string, args ...any) (any, error)
+type Executor interface {
+	ExecuteInsert(ctx context.Context, stmt InsertStatement) error
+	ExecuteUpdate(ctx context.Context, stmt UpdateStatement) error
+	ExecuteDelete(ctx context.Context, stmt DeleteStatement) error
+	ExecuteSelect(ctx context.Context, stmt SelectStatement) ([]map[string]any, error)
+}
+
+type SelectStatement struct {
+	Database string
+	Table    string
+	Where    map[string]any
+}
+
+type InsertStatement struct {
+	Database string
+	Table    string
+	Input    map[string]any
+}
+
+type UpdateStatement struct {
+	Database string
+	Table    string
+	Input    map[string]any
+	Where    map[string]any
+}
+
+type DeleteStatement struct {
+	Database string
+	Table    string
+	Where    map[string]any
 }
 
 type Driver interface {
@@ -61,9 +89,10 @@ type Driver interface {
 
 	Locker
 	ExecQuerier
-	sqlschema.Planner
-	sqlschema.Differ
-	sqlschema.Describer
-	sqlschema.Migrator
+	Executor
+	sqlmigrate.Planner
+	sqlmigrate.Differ
+	sqlmigrate.Describer
+	sqlmigrate.Migrator
 	io.Closer
 }

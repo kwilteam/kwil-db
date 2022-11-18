@@ -2,8 +2,8 @@ package syntax
 
 import (
 	"ksl"
-	"ksl/syntax/ast"
 	"ksl/syntax/lex"
+	"ksl/syntax/nodes"
 	"strings"
 
 	"golang.org/x/exp/slices"
@@ -14,10 +14,10 @@ type parser struct {
 	recovery bool
 }
 
-func (p *parser) parseFile(src []byte, filename string) (*ast.File, ksl.Diagnostics) {
+func (p *parser) parseFile(src []byte, filename string) (*nodes.File, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var entries []ast.TopLevel
-	var pendingComment *ast.CommentGroup
+	var entries []nodes.TopLevel
+	var pendingComment *nodes.CommentGroup
 	cancelPendingComment := func() {
 		if pendingComment != nil {
 			diags = append(diags, &ksl.Diagnostic{
@@ -36,7 +36,7 @@ Token:
 	for {
 		next := p.Peek()
 
-		var entry ast.TopLevel
+		var entry nodes.TopLevel
 		var entryDiags ksl.Diagnostics
 
 		switch next.Type {
@@ -88,7 +88,7 @@ Token:
 		pendingComment = nil
 	}
 
-	return &ast.File{
+	return &nodes.File{
 		Name:     filename,
 		Entries:  entries,
 		Contents: src,
@@ -96,16 +96,16 @@ Token:
 	}, diags
 }
 
-func (p *parser) parseDirective() (*ast.Annotation, ksl.Diagnostics) {
+func (p *parser) parseDirective() (*nodes.Annotation, ksl.Diagnostics) {
 	return p.parseFieldAnnotation()
 }
 
-func (p *parser) parseModel(doc *ast.CommentGroup) (*ast.Model, ksl.Diagnostics) {
+func (p *parser) parseModel(doc *nodes.CommentGroup) (*nodes.Model, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var fields ast.Fields
-	var annotations ast.Annotations
-	var pendingComment *ast.CommentGroup
+	var name *nodes.Name
+	var fields nodes.Fields
+	var annotations nodes.Annotations
+	var pendingComment *nodes.CommentGroup
 
 	cancelPendingComment := func() {
 		if pendingComment != nil {
@@ -144,7 +144,7 @@ func (p *parser) parseModel(doc *ast.CommentGroup) (*ast.Model, ksl.Diagnostics)
 		p.recoverTo(lex.TokenNewline, lex.TokenLBrace)
 	} else {
 		p.Read()
-		name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+		name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 	}
 
 	next := p.Peek()
@@ -211,7 +211,7 @@ func (p *parser) parseModel(doc *ast.CommentGroup) (*ast.Model, ksl.Diagnostics)
 		})
 	}
 
-	return &ast.Model{
+	return &nodes.Model{
 		Name:        name,
 		Fields:      fields,
 		Annotations: annotations,
@@ -220,12 +220,12 @@ func (p *parser) parseModel(doc *ast.CommentGroup) (*ast.Model, ksl.Diagnostics)
 	}, diags
 }
 
-func (p *parser) parseField(doc *ast.CommentGroup) (*ast.Field, ksl.Diagnostics) {
+func (p *parser) parseField(doc *nodes.CommentGroup) (*nodes.Field, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name, typ *ast.Name
-	var annotations ast.Annotations
-	var arity ast.FieldArity
-	var fieldType *ast.FieldType
+	var name, typ *nodes.Name
+	var annotations nodes.Annotations
+	var arity nodes.FieldArity
+	var fieldType *nodes.FieldType
 
 	nameTok := p.Peek()
 	if nameTok.Type != lex.TokenIdent {
@@ -240,7 +240,7 @@ func (p *parser) parseField(doc *ast.CommentGroup) (*ast.Field, ksl.Diagnostics)
 	}
 
 	p.Read()
-	name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+	name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 
 	typTok := p.Peek()
 	if !typTok.IsAny(lex.TokenIdent, lex.TokenQualifiedIdent) {
@@ -253,19 +253,19 @@ func (p *parser) parseField(doc *ast.CommentGroup) (*ast.Field, ksl.Diagnostics)
 		p.recover(lex.TokenNewline)
 	} else {
 		p.Read()
-		typ = &ast.Name{Name: typTok.Value, Span: typTok.Range}
+		typ = &nodes.Name{Name: typTok.Value, Span: typTok.Range}
 	}
 
 	tok, next := p.Peek2()
 	if tok.Type == lex.TokenLBrack && next.Type == lex.TokenRBrack {
 		p.ReadN(2)
-		arity = ast.Repeated
+		arity = nodes.Repeated
 		tok = p.Peek()
 	}
 
 	if tok.Type == lex.TokenQuestion {
 		p.Read()
-		if arity == ast.Repeated {
+		if arity == nodes.Repeated {
 			diags = append(diags, &ksl.Diagnostic{
 				Severity: ksl.DiagError,
 				Summary:  DiagInvalidFieldDefinition,
@@ -273,11 +273,11 @@ func (p *parser) parseField(doc *ast.CommentGroup) (*ast.Field, ksl.Diagnostics)
 				Subject:  tok.Range.Ptr(),
 			})
 		} else {
-			arity = ast.Optional
+			arity = nodes.Optional
 		}
 	}
 
-	fieldType = &ast.FieldType{Name: typ, Arity: arity, Span: ksl.RangeBetween(typTok.Range, p.PrevRange())}
+	fieldType = &nodes.FieldType{Name: typ, Arity: arity, Span: ksl.RangeBetween(typTok.Range, p.PrevRange())}
 
 	tok, next = p.Peek2()
 	if tok.Type == lex.TokenLBrack && next.Type == lex.TokenRBrack {
@@ -306,7 +306,7 @@ Token:
 		}
 	}
 
-	return &ast.Field{
+	return &nodes.Field{
 		Name:        name,
 		Type:        fieldType,
 		Comment:     doc,
@@ -315,11 +315,11 @@ Token:
 	}, diags
 }
 
-func (p *parser) parseBlock(doc *ast.CommentGroup) (*ast.Block, ksl.Diagnostics) {
+func (p *parser) parseBlock(doc *nodes.CommentGroup) (*nodes.Block, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var blkType *ast.TypeName
-	var props ast.Properties
+	var name *nodes.Name
+	var blkType *nodes.TypeName
+	var props nodes.Properties
 
 	typeTok := p.Peek()
 	if typeTok.Type != lex.TokenIdent {
@@ -331,7 +331,7 @@ func (p *parser) parseBlock(doc *ast.CommentGroup) (*ast.Block, ksl.Diagnostics)
 		})
 	}
 	p.Read()
-	blkType = &ast.TypeName{Name: typeTok.Value, Span: typeTok.Range}
+	blkType = &nodes.TypeName{Name: typeTok.Value, Span: typeTok.Range}
 
 	nameTok := p.Peek()
 	if !nameTok.IsAny(lex.TokenIdent, lex.TokenQualifiedIdent) {
@@ -344,7 +344,7 @@ func (p *parser) parseBlock(doc *ast.CommentGroup) (*ast.Block, ksl.Diagnostics)
 		p.recoverTo(lex.TokenNewline, lex.TokenLBrace)
 	} else {
 		p.Read()
-		name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+		name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 	}
 
 	next := p.Peek()
@@ -388,7 +388,7 @@ func (p *parser) parseBlock(doc *ast.CommentGroup) (*ast.Block, ksl.Diagnostics)
 		p.Read()
 	}
 
-	return &ast.Block{
+	return &nodes.Block{
 		Type:       blkType,
 		Name:       name,
 		Properties: props,
@@ -397,12 +397,12 @@ func (p *parser) parseBlock(doc *ast.CommentGroup) (*ast.Block, ksl.Diagnostics)
 	}, diags
 }
 
-func (p *parser) parseEnum(doc *ast.CommentGroup) (*ast.Enum, ksl.Diagnostics) {
+func (p *parser) parseEnum(doc *nodes.CommentGroup) (*nodes.Enum, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var values ast.EnumValues
-	var annotations ast.Annotations
-	var pendingComment *ast.CommentGroup
+	var name *nodes.Name
+	var values nodes.EnumValues
+	var annotations nodes.Annotations
+	var pendingComment *nodes.CommentGroup
 	cancelPendingComment := func() {
 		if pendingComment != nil {
 			diags = append(diags, &ksl.Diagnostic{
@@ -440,7 +440,7 @@ func (p *parser) parseEnum(doc *ast.CommentGroup) (*ast.Enum, ksl.Diagnostics) {
 		p.recoverTo(lex.TokenNewline, lex.TokenLBrace)
 	} else {
 		p.Read()
-		name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+		name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 	}
 
 	next := p.Peek()
@@ -507,7 +507,7 @@ func (p *parser) parseEnum(doc *ast.CommentGroup) (*ast.Enum, ksl.Diagnostics) {
 		})
 	}
 
-	return &ast.Enum{
+	return &nodes.Enum{
 		Name:        name,
 		Values:      values,
 		Annotations: annotations,
@@ -516,10 +516,10 @@ func (p *parser) parseEnum(doc *ast.CommentGroup) (*ast.Enum, ksl.Diagnostics) {
 	}, diags
 }
 
-func (p *parser) parseEnumValue(doc *ast.CommentGroup) (*ast.EnumValue, ksl.Diagnostics) {
+func (p *parser) parseEnumValue(doc *nodes.CommentGroup) (*nodes.EnumValue, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var annotations ast.Annotations
+	var name *nodes.Name
+	var annotations nodes.Annotations
 
 	nameTok := p.Peek()
 	if !nameTok.IsAny(lex.TokenIdent, lex.TokenQualifiedIdent) {
@@ -531,7 +531,7 @@ func (p *parser) parseEnumValue(doc *ast.CommentGroup) (*ast.EnumValue, ksl.Diag
 		})
 	} else {
 		p.Read()
-		name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+		name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 	}
 
 Token:
@@ -550,7 +550,7 @@ Token:
 		}
 	}
 
-	return &ast.EnumValue{
+	return &nodes.EnumValue{
 		Name:        name,
 		Comment:     doc,
 		Annotations: annotations,
@@ -558,10 +558,10 @@ Token:
 	}, diags
 }
 
-func (p *parser) parseBlockAnnotation() (*ast.Annotation, ksl.Diagnostics) {
+func (p *parser) parseBlockAnnotation() (*nodes.Annotation, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var args *ast.ArgumentList
+	var name *nodes.Name
+	var args *nodes.ArgumentList
 
 	atTok1 := p.Peek()
 	if atTok1.Type != lex.TokenAt {
@@ -595,7 +595,7 @@ func (p *parser) parseBlockAnnotation() (*ast.Annotation, ksl.Diagnostics) {
 		}}
 	}
 	p.Read()
-	name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+	name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 
 	tok := p.Peek()
 	if tok.Type == lex.TokenLParen {
@@ -604,17 +604,17 @@ func (p *parser) parseBlockAnnotation() (*ast.Annotation, ksl.Diagnostics) {
 		diags = append(diags, argDiags...)
 	}
 
-	return &ast.Annotation{
+	return &nodes.Annotation{
 		Name: name,
 		Args: args,
 		Span: ksl.RangeBetween(atTok1.Range, p.PrevRange()),
 	}, diags
 }
 
-func (p *parser) parseFieldAnnotation() (*ast.Annotation, ksl.Diagnostics) {
+func (p *parser) parseFieldAnnotation() (*nodes.Annotation, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var args *ast.ArgumentList
+	var name *nodes.Name
+	var args *nodes.ArgumentList
 
 	atTok := p.Peek()
 	if atTok.Type != lex.TokenAt {
@@ -637,7 +637,7 @@ func (p *parser) parseFieldAnnotation() (*ast.Annotation, ksl.Diagnostics) {
 		}}
 	}
 	p.Read()
-	name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+	name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 
 	tok := p.Peek()
 	if tok.Type == lex.TokenLParen {
@@ -646,16 +646,16 @@ func (p *parser) parseFieldAnnotation() (*ast.Annotation, ksl.Diagnostics) {
 		diags = append(diags, argDiags...)
 	}
 
-	return &ast.Annotation{
+	return &nodes.Annotation{
 		Name: name,
 		Args: args,
 		Span: ksl.RangeBetween(atTok.Range, p.PrevRange()),
 	}, diags
 }
 
-func (p *parser) parseArgumentList() (*ast.ArgumentList, ksl.Diagnostics) {
+func (p *parser) parseArgumentList() (*nodes.ArgumentList, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var args ast.Arguments
+	var args nodes.Arguments
 	var closeTok lex.Token
 
 	openTok := p.Peek()
@@ -723,22 +723,22 @@ Token:
 		}
 	}
 
-	return &ast.ArgumentList{
+	return &nodes.ArgumentList{
 		Arguments: args,
 		Span:      ksl.RangeBetween(openTok.Range, closeTok.Range),
 	}, diags
 }
 
-func (p *parser) parseArgument() (*ast.Argument, ksl.Diagnostics) {
+func (p *parser) parseArgument() (*nodes.Argument, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var value ast.Expression
+	var name *nodes.Name
+	var value nodes.Expression
 
 	startRange := p.NextRange()
 
 	first, second := p.Peek2()
 	if first.Type == lex.TokenIdent && second.Type == lex.TokenColon {
-		name = &ast.Name{Name: first.Value, Span: first.Range}
+		name = &nodes.Name{Name: first.Value, Span: first.Range}
 		p.ReadN(2)
 	}
 
@@ -746,14 +746,14 @@ func (p *parser) parseArgument() (*ast.Argument, ksl.Diagnostics) {
 	value, exprDiags = p.parseExpression()
 	diags = append(diags, exprDiags...)
 
-	return &ast.Argument{
+	return &nodes.Argument{
 		Name:  name,
 		Value: value,
 		Span:  ksl.RangeBetween(startRange, p.PrevRange()),
 	}, diags
 }
 
-func (p *parser) parseExpression() (ast.Expression, ksl.Diagnostics) {
+func (p *parser) parseExpression() (nodes.Expression, ksl.Diagnostics) {
 	first, second := p.Peek2()
 
 	switch first.Type {
@@ -772,26 +772,26 @@ func (p *parser) parseExpression() (ast.Expression, ksl.Diagnostics) {
 			}
 		default:
 			tok := p.Read()
-			return &ast.Literal{Value: tok.Value, Span: tok.Range}, nil
+			return &nodes.Literal{Value: tok.Value, Span: tok.Range}, nil
 		}
 	case lex.TokenStringLit:
 		p.Read()
 		val, diags := ParseStringLiteralToken(first)
-		return &ast.Literal{Value: val, Span: first.Range}, diags
+		return &nodes.Literal{Value: val, Span: first.Range}, diags
 	case lex.TokenQuotedLit:
 		tok := p.Read()
 		val, diags := ParseStringLiteralToken(tok)
-		return &ast.String{Value: val[1 : len(val)-1], Span: tok.Range}, diags
+		return &nodes.String{Value: val[1 : len(val)-1], Span: tok.Range}, diags
 	case lex.TokenHeredocBegin:
 		return p.parseHeredoc()
 	case lex.TokenNumberLit, lex.TokenIntegerLit, lex.TokenFloatLit:
 		return p.parseNumber()
 	case lex.TokenBoolLit:
 		p.Read()
-		return &ast.Literal{Value: first.Value, Span: first.Range}, nil
+		return &nodes.Literal{Value: first.Value, Span: first.Range}, nil
 	case lex.TokenNullLit:
 		p.Read()
-		return &ast.Literal{Value: first.Value, Span: first.Range}, nil
+		return &nodes.Literal{Value: first.Value, Span: first.Range}, nil
 	case lex.TokenLBrack:
 		return p.parseList()
 	case lex.TokenDollar:
@@ -808,9 +808,9 @@ func (p *parser) parseExpression() (ast.Expression, ksl.Diagnostics) {
 	}
 }
 
-func (p *parser) parseObject() (*ast.Object, ksl.Diagnostics) {
+func (p *parser) parseObject() (*nodes.Object, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var props ast.Properties
+	var props nodes.Properties
 	var closeTok lex.Token
 
 	openTok := p.Read()
@@ -878,16 +878,16 @@ Token:
 		}
 	}
 
-	return &ast.Object{
+	return &nodes.Object{
 		Properties: props,
 		Span:       ksl.RangeBetween(openTok.Range, closeTok.Range),
 	}, diags
 }
 
-func (p *parser) parseProperty() (*ast.Property, ksl.Diagnostics) {
+func (p *parser) parseProperty() (*nodes.Property, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var value ast.Expression
+	var name *nodes.Name
+	var value nodes.Expression
 
 	p.PushIncludeNewlines(true)
 	defer p.PopIncludeNewlines()
@@ -906,7 +906,7 @@ func (p *parser) parseProperty() (*ast.Property, ksl.Diagnostics) {
 		return nil, diags
 	}
 	p.Read()
-	name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+	name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 
 	if eqTok.Type != lex.TokenEqual {
 		diags = append(diags, &ksl.Diagnostic{
@@ -925,16 +925,16 @@ func (p *parser) parseProperty() (*ast.Property, ksl.Diagnostics) {
 		endRange = p.PrevRange()
 	}
 
-	return &ast.Property{
+	return &nodes.Property{
 		Name:  name,
 		Value: value,
 		Span:  ksl.RangeBetween(nameTok.Range, endRange),
 	}, diags
 }
 
-func (p *parser) parseList() (*ast.List, ksl.Diagnostics) {
+func (p *parser) parseList() (*nodes.List, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var elems []ast.Expression
+	var elems []nodes.Expression
 	var closeTok lex.Token
 
 	openTok := p.Read()
@@ -998,13 +998,13 @@ func (p *parser) parseList() (*ast.List, ksl.Diagnostics) {
 		p.Read()
 	}
 
-	return &ast.List{
+	return &nodes.List{
 		Elements: elems,
 		Span:     ksl.RangeBetween(openTok.Range, closeTok.Range),
 	}, diags
 }
 
-func (p *parser) parseNumber() (*ast.Number, ksl.Diagnostics) {
+func (p *parser) parseNumber() (*nodes.Number, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
 	var val string
 
@@ -1020,13 +1020,13 @@ func (p *parser) parseNumber() (*ast.Number, ksl.Diagnostics) {
 	p.Read()
 	val = tok.Value
 
-	return &ast.Number{
+	return &nodes.Number{
 		Value: val,
 		Span:  tok.Range,
 	}, diags
 }
 
-func (p *parser) parseVariable() (*ast.Variable, ksl.Diagnostics) {
+func (p *parser) parseVariable() (*nodes.Variable, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
 
 	dollarTok := p.Read()
@@ -1051,16 +1051,16 @@ func (p *parser) parseVariable() (*ast.Variable, ksl.Diagnostics) {
 
 	p.Read()
 
-	return &ast.Variable{
-		Name: &ast.Name{Name: ident.Value, Span: ident.Range},
+	return &nodes.Variable{
+		Name: &nodes.Name{Name: ident.Value, Span: ident.Range},
 		Span: ksl.RangeBetween(dollarTok.Range, ident.Range),
 	}, diags
 }
 
-func (p *parser) parseFunction() (*ast.Function, ksl.Diagnostics) {
+func (p *parser) parseFunction() (*nodes.Function, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
-	var name *ast.Name
-	var args *ast.ArgumentList
+	var name *nodes.Name
+	var args *nodes.ArgumentList
 
 	nameTok := p.Read()
 	if !nameTok.IsAny(lex.TokenIdent, lex.TokenQualifiedIdent) {
@@ -1071,7 +1071,7 @@ func (p *parser) parseFunction() (*ast.Function, ksl.Diagnostics) {
 			Subject:  &nameTok.Range,
 		}}
 	}
-	name = &ast.Name{Name: nameTok.Value, Span: nameTok.Range}
+	name = &nodes.Name{Name: nameTok.Value, Span: nameTok.Range}
 
 	tok := p.Peek()
 	if tok.Type != lex.TokenLParen {
@@ -1087,14 +1087,14 @@ func (p *parser) parseFunction() (*ast.Function, ksl.Diagnostics) {
 		diags = append(diags, argDiags...)
 	}
 
-	return &ast.Function{
+	return &nodes.Function{
 		Name:      name,
 		Arguments: args,
 		Span:      ksl.RangeBetween(nameTok.Range, p.PrevRange()),
 	}, diags
 }
 
-func (p *parser) parseHeredoc() (*ast.Heredoc, ksl.Diagnostics) {
+func (p *parser) parseHeredoc() (*nodes.Heredoc, ksl.Diagnostics) {
 	var diags ksl.Diagnostics
 	var lines []string
 	var marker string
@@ -1150,7 +1150,7 @@ Token:
 		}
 	}
 
-	return &ast.Heredoc{
+	return &nodes.Heredoc{
 		Marker:      marker,
 		Values:      lines,
 		StripIndent: strip,
@@ -1158,8 +1158,8 @@ Token:
 	}, diags
 }
 
-func (p *parser) parseComments() *ast.CommentGroup {
-	var comments []*ast.Comment
+func (p *parser) parseComments() *nodes.CommentGroup {
+	var comments []*nodes.Comment
 
 	startRange := p.NextRange()
 	for {
@@ -1167,11 +1167,11 @@ func (p *parser) parseComments() *ast.CommentGroup {
 		if next.Type != lex.TokenDocComment {
 			break
 		}
-		comments = append(comments, &ast.Comment{Text: next.Value, Span: next.Range})
+		comments = append(comments, &nodes.Comment{Text: next.Value, Span: next.Range})
 		p.Read()
 	}
 
-	return &ast.CommentGroup{Comments: comments, Span: ksl.RangeBetween(startRange, p.PrevRange())}
+	return &nodes.CommentGroup{Comments: comments, Span: ksl.RangeBetween(startRange, p.PrevRange())}
 }
 
 func (p *parser) recoverTo(end ...lex.TokenType) lex.Token {

@@ -322,10 +322,24 @@
           "type": "string"
         },
         "type": {
-          "type": "string"
+          "$ref": "#/definitions/apisvcParamType"
         },
         "arity": {
           "$ref": "#/definitions/apisvcArity"
+        }
+      }
+    },
+    "apisvcColumnResult": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/apisvcParamType"
         }
       }
     },
@@ -480,6 +494,17 @@
         }
       }
     },
+    "apisvcQueryResult": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcRow"
+          }
+        }
+      }
+    },
     "apisvcReadRequest": {
       "type": "object",
       "properties": {
@@ -501,7 +526,12 @@
       }
     },
     "apisvcReadResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "result": {
+          "$ref": "#/definitions/apisvcQueryResult"
+        }
+      }
     },
     "apisvcReturnFundsRequest": {
       "type": "object",
@@ -554,6 +584,17 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "apisvcRow": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcColumnResult"
           }
         }
       }

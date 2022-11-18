@@ -1,19 +1,23 @@
 package execution
 
-import "database/sql"
+import (
+	"database/sql"
+	"fmt"
+)
 
 type Column struct {
 	Name  string
-	Value interface{}
+	Value sql.NullString
 	Type  string
 }
 
 type Row struct {
 	Columns []Column
+	length  uint8
 }
 
 type Result struct {
-	Outputs []Row
+	Rows []Row
 }
 
 // Load takes a SQLResult and returns a slice of Outputs
@@ -42,11 +46,12 @@ func (r *Result) loadResult(result *sql.Rows, row *Row) error {
 		if err := result.Scan(nr.GetScannable()...); err != nil { // get the values
 			return err
 		}
-		r.Outputs = append(r.Outputs, nr) // append the new row
+		r.Rows = append(r.Rows, nr) // append the new row
 	}
 	return nil
 }
 
+// Define row creates a template row for the result set
 func DefineRow(cols []*sql.ColumnType) (*Row, error) {
 	var row Row
 	for _, ct := range cols {
@@ -72,20 +77,24 @@ func DefineRow(cols []*sql.ColumnType) (*Row, error) {
 			coltp = "bytes"
 		case "BOOL": // bool
 			coltp = "bool"
+		case "NUMERIC": // decimal
+			coltp = "decimal"
 		default:
-			return nil, ErrUnknownType
+			return nil, fmt.Errorf("unsupported type: %s", ct.DatabaseTypeName())
 		}
 		row.Columns = append(row.Columns, Column{Name: ct.Name(), Type: coltp, Value: sql.NullString{}}) // Append the Output to the slice of Outputs
 	}
 
+	row.length = uint8(len(row.Columns))
+
 	return &row, nil
 }
 
-// New creates a new row with an array of interfaces for scanning.
-// The interface array will be sql.StringNull for now, but this may change in the future.
+// copy creates a copy of the row.  This is used to copy the template for rows
 func (r *Row) Copy() Row {
 	var nr Row
-	copy(nr.Columns, r.Columns)
+	nr.Columns = r.Columns
+	nr.length = r.length
 	return nr
 }
 
@@ -94,7 +103,7 @@ func (r *Row) GetScannable() []interface{} {
 	var scns []interface{}
 	// iterate for len(row.Column)
 	// I use this instead of range because range returns a copy of the value
-	for i := 0; i < len(r.Columns); i++ {
+	for i := uint8(0); i < r.length; i++ {
 		scns = append(scns, &r.Columns[i].Value)
 	}
 
