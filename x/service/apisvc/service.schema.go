@@ -73,10 +73,10 @@ func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest
 				},
 			},
 			{
-				Name: "query2",
+				Name: "wallets:select",
 				Inputs: []*apipb.Param{
 					{
-						Name: "input1",
+						Name: "wallet",
 						Type: 2,
 					},
 				},

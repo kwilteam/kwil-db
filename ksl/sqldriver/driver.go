@@ -9,6 +9,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"time"
+
+	query "ksl/models"
 )
 
 var (
@@ -56,7 +58,7 @@ type Executor interface {
 	ExecuteInsert(ctx context.Context, stmt InsertStatement) error
 	ExecuteUpdate(ctx context.Context, stmt UpdateStatement) error
 	ExecuteDelete(ctx context.Context, stmt DeleteStatement) error
-	ExecuteSelect(ctx context.Context, stmt SelectStatement) ([]map[string]string, error)
+	ExecuteSelect(ctx context.Context, stmt SelectStatement) (*query.Result, error)
 }
 
 type SelectStatement struct {

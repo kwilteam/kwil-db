@@ -10,8 +10,9 @@ import (
 	"strings"
 
 	"kwil/x/crypto"
-	"kwil/x/execution"
 	"kwil/x/proto/apipb"
+
+	query "ksl/models"
 )
 
 func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDResponse, error) {
@@ -154,27 +155,31 @@ func (s *Service) Read(ctx context.Context, req *apipb.ReadRequest) (*apipb.Read
 		return nil, err
 	}
 
-	return convertMaps(res), nil
+	ws := convertResult(res)
+
+	return &apipb.ReadResponse{
+		Result: ws,
+	}, nil
 }
 
 func convertMaps(res []map[string]string) *apipb.ReadResponse {
 	// iterate ov
-	var rows []execution.Row
+	var rows []query.Row
 	for _, c := range res {
 		// iterate over columns
-		var cols []execution.Column
+		var cols []query.Column
 		for k, v := range c {
-			cols = append(cols, execution.Column{
+			cols = append(cols, query.Column{
 				Name:  k,
 				Value: sql.NullString{String: v},
 			})
 		}
-		rows = append(rows, execution.Row{
+		rows = append(rows, query.Row{
 			Columns: cols,
 		})
 	}
 
-	result := &execution.Result{
+	result := &query.Result{
 		Rows: rows,
 	}
 
@@ -185,7 +190,7 @@ func convertMaps(res []map[string]string) *apipb.ReadResponse {
 	}
 }
 
-func convertResultColumn(c *execution.Column) *apipb.ColumnResult {
+func convertResultColumn(c *query.Column) *apipb.ColumnResult {
 	return &apipb.ColumnResult{
 		Name:  c.Name,
 		Value: c.Value.String,
@@ -193,7 +198,7 @@ func convertResultColumn(c *execution.Column) *apipb.ColumnResult {
 	}
 }
 
-func convertResultRow(r *execution.Row) *apipb.Row {
+func convertResultRow(r *query.Row) *apipb.Row {
 	var cols []*apipb.ColumnResult
 	for _, c := range r.Columns {
 		cols = append(cols, convertResultColumn(&c))
@@ -203,7 +208,7 @@ func convertResultRow(r *execution.Row) *apipb.Row {
 	}
 }
 
-func convertResult(r *execution.Result) *apipb.QueryResult {
+func convertResult(r *query.Result) *apipb.QueryResult {
 	var rows []*apipb.Row
 	for _, row := range r.Rows {
 		rows = append(rows, convertResultRow(&row))

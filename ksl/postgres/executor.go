@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"ksl"
+	query "ksl/models"
 	"ksl/sqldriver"
 	"ksl/sqlmigrate"
 	"ksl/sqlschema"
@@ -158,7 +159,7 @@ func (c *Executor) ExecuteDelete(ctx context.Context, stmt sqldriver.DeleteState
 	return err
 }
 
-func (c *Executor) ExecuteSelect(ctx context.Context, stmt sqldriver.SelectStatement) ([]map[string]string, error) {
+func (c *Executor) ExecuteSelect(ctx context.Context, stmt sqldriver.SelectStatement) (*query.Result, error) {
 	db, err := c.Describe(stmt.Database)
 	if err != nil {
 		return nil, err
@@ -197,25 +198,34 @@ func (c *Executor) ExecuteSelect(ctx context.Context, stmt sqldriver.SelectState
 	}
 	defer rows.Close()
 
-	results := []map[string]string{}
+	var results query.Result
 
-	for rows.Next() {
-		columns := make([]any, len(columnNames))
-		columnPointers := make([]any, len(columnNames))
-		for i := range columns {
-			columnPointers[i] = &columns[i]
-		}
-		if err := rows.Scan(columnPointers...); err != nil {
-			return nil, err
-		}
-		m := make(map[string]string)
-		for i, colName := range columnNames {
-			val := columnPointers[i].(*string)
-			m[colName.(string)] = *val
-		}
-		results = append(results, m)
+	err = results.Load(rows)
+	if err != nil {
+		return nil, err
 	}
-	return results, err
+
+	return &results, nil
+
+	/*
+
+		for rows.Next() {
+			columns := make([]any, len(columnNames))
+			columnPointers := make([]any, len(columnNames))
+			for i := range columns {
+				columnPointers[i] = &columns[i]
+			}
+			if err := rows.Scan(columnPointers...); err != nil {
+				return nil, err
+			}
+			m := make(map[string]string)
+			for i, colName := range columnNames {
+				val := columnPointers[i].(*string)
+				m[colName.(string)] = *val
+			}
+			results = append(results, m)
+		}
+		return results, err*/
 }
 
 func convert(db sqlschema.Database, name string, input any, typ sqlschema.ColumnType, arity sqlschema.ColumnArity) (any, error) {
