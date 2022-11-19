@@ -56,7 +56,7 @@ type Executor interface {
 	ExecuteInsert(ctx context.Context, stmt InsertStatement) error
 	ExecuteUpdate(ctx context.Context, stmt UpdateStatement) error
 	ExecuteDelete(ctx context.Context, stmt DeleteStatement) error
-	ExecuteSelect(ctx context.Context, stmt SelectStatement) ([]map[string]any, error)
+	ExecuteSelect(ctx context.Context, stmt SelectStatement) ([]map[string]string, error)
 }
 
 type SelectStatement struct {

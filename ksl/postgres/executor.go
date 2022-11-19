@@ -158,7 +158,7 @@ func (c *Executor) ExecuteDelete(ctx context.Context, stmt sqldriver.DeleteState
 	return err
 }
 
-func (c *Executor) ExecuteSelect(ctx context.Context, stmt sqldriver.SelectStatement) ([]map[string]any, error) {
+func (c *Executor) ExecuteSelect(ctx context.Context, stmt sqldriver.SelectStatement) ([]map[string]string, error) {
 	db, err := c.Describe(stmt.Database)
 	if err != nil {
 		return nil, err
@@ -197,7 +197,7 @@ func (c *Executor) ExecuteSelect(ctx context.Context, stmt sqldriver.SelectState
 	}
 	defer rows.Close()
 
-	results := []map[string]any{}
+	results := []map[string]string{}
 
 	for rows.Next() {
 		columns := make([]any, len(columnNames))
@@ -208,9 +208,9 @@ func (c *Executor) ExecuteSelect(ctx context.Context, stmt sqldriver.SelectState
 		if err := rows.Scan(columnPointers...); err != nil {
 			return nil, err
 		}
-		m := make(map[string]interface{})
+		m := make(map[string]string)
 		for i, colName := range columnNames {
-			val := columnPointers[i].(*any)
+			val := columnPointers[i].(*string)
 			m[colName.(string)] = *val
 		}
 		results = append(results, m)

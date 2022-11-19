@@ -2,6 +2,7 @@ package apisvc
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"ksl/sqlclient"
 	"ksl/sqldriver"
@@ -153,14 +154,10 @@ func (s *Service) Read(ctx context.Context, req *apipb.ReadRequest) (*apipb.Read
 		return nil, err
 	}
 
-	return &apipb.ReadResponse{
-		Result: qRes,
-	}, nil
-
-	return nil, nil
+	return convertMaps(res), nil
 }
 
-func convertMaps(res []map[string]any) *apipb.ReadResponse {
+func convertMaps(res []map[string]string) *apipb.ReadResponse {
 	// iterate ov
 	var rows []execution.Row
 	for _, c := range res {
@@ -169,7 +166,7 @@ func convertMaps(res []map[string]any) *apipb.ReadResponse {
 		for k, v := range c {
 			cols = append(cols, execution.Column{
 				Name:  k,
-				Value: string(v),
+				Value: sql.NullString{String: v},
 			})
 		}
 		rows = append(rows, execution.Row{
