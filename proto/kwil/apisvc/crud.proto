@@ -8,7 +8,7 @@ message ReadRequest{
     string owner = 1;
     string database = 2;
     string query = 3;
-    repeated CRUDInput inputs = 4;
+    CRUDInput where = 4;
 }
 
 message ReadResponse{
@@ -30,6 +30,7 @@ message CUDRequest{
     string id = 7;
     string fee = 8;
     string from = 9;
+    CRUDInput where = 10;
 }
 
 message CUDResponse{

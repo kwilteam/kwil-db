@@ -2,9 +2,11 @@ package apisvc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"ksl/sqlclient"
+	"ksl/sqldriver"
 	"math/big"
+	"strings"
 
 	"kwil/x/crypto"
 	"kwil/x/execution"
@@ -51,34 +53,139 @@ func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDRes
 		return nil, err
 	}
 
+	conStr, err := s.mp.GetConnectionInfo(req.From)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := sqlclient.Open(conStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// req.Query is in the form table:CRUD, so parse those out
+	qs := strings.Split(req.Query, ":")
+	if len(qs) != 2 {
+		return nil, fmt.Errorf("invalid query")
+	}
+
+	columns := make(map[string]any)
+	for _, i := range req.Inputs {
+		columns[i.Name] = i.Value
+	}
+
+	where := make(map[string]any)
+	if req.Where.Name != "" {
+		where[req.Where.Name] = req.Where.Value
+	}
+
+	switch qs[1] {
+	case "insert":
+		stmt := sqldriver.InsertStatement{
+			Database: req.Database,
+			Table:    qs[0],
+			Input:    columns,
+		}
+		err = db.ExecuteInsert(ctx, stmt)
+		if err != nil {
+			return nil, err
+		}
+	case "update":
+		stmt := sqldriver.UpdateStatement{
+			Database: req.Database,
+			Table:    qs[0],
+			Input:    columns,
+			Where:    where,
+		}
+		err = db.ExecuteUpdate(ctx, stmt)
+		if err != nil {
+			return nil, err
+		}
+	case "delete":
+		stmt := sqldriver.DeleteStatement{
+			Database: req.Database,
+			Table:    qs[0],
+			Where:    where,
+		}
+		err = db.ExecuteDelete(ctx, stmt)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("invalid query")
+	}
+
 	return &apipb.CUDResponse{
 		TraceId: "",
 	}, nil
 }
 
 func (s *Service) Read(ctx context.Context, req *apipb.ReadRequest) (*apipb.ReadResponse, error) {
-	bi, err := json.Marshal(req.Inputs)
+	where := make(map[string]any)
+	if req.Where.Name != "" {
+		where[req.Where.Name] = req.Where.Value
+	}
+
+	// parse out table name
+	qs := strings.Split(req.Query, ":")
+	if len(qs) != 2 {
+		return nil, fmt.Errorf("invalid query")
+	}
+
+	stmt := sqldriver.SelectStatement{
+		Database: req.Database,
+		Table:    qs[0],
+		Where:    where,
+	}
+
+	conStr, err := s.mp.GetConnectionInfo(req.Owner)
 	if err != nil {
 		return nil, err
 	}
 
-	var ins []execution.Input
-	err = json.Unmarshal(bi, &ins)
+	db, err := sqlclient.Open(conStr)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := s.e.Read(ctx, req.Owner, req.Database, req.Query, ins)
+	res, err := db.ExecuteSelect(ctx, stmt)
 	if err != nil {
 		return nil, err
 	}
-
-	qRes := convertResult(res)
 
 	return &apipb.ReadResponse{
 		Result: qRes,
 	}, nil
 
+	return nil, nil
+}
+
+func convertMaps(res []map[string]any) *apipb.ReadResponse {
+	// iterate ov
+	var rows []execution.Row
+	for _, c := range res {
+		// iterate over columns
+		var cols []execution.Column
+		for k, v := range c {
+			cols = append(cols, execution.Column{
+				Name:  k,
+				Value: string(v),
+			})
+		}
+		rows = append(rows, execution.Row{
+			Columns: cols,
+		})
+	}
+
+	result := &execution.Result{
+		Rows: rows,
+	}
+
+	pbr := convertResult(result)
+
+	return &apipb.ReadResponse{
+		Result: pbr,
+	}
 }
 
 func convertResultColumn(c *execution.Column) *apipb.ColumnResult {

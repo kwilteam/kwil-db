@@ -290,6 +290,9 @@
         },
         "from": {
           "type": "string"
+        },
+        "where": {
+          "$ref": "#/definitions/apisvcCRUDInput"
         }
       }
     },
@@ -517,11 +520,8 @@
         "query": {
           "type": "string"
         },
-        "inputs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcCRUDInput"
-          }
+        "where": {
+          "$ref": "#/definitions/apisvcCRUDInput"
         }
       }
     },
