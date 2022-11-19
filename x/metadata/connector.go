@@ -54,7 +54,7 @@ func (m *ConnectionProvider) Close() error {
 }
 
 func (m *ConnectionProvider) GetConnectionInfo(wallet string) (string, error) {
-	return "postgres://postgres:postgres@localhost:5432/kwil?sslmode=disable", nil
+	//return "postgres://postgres:postgres@localhost:5432/kwil?sslmode=disable", nil
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.refresh.HasExpired() {

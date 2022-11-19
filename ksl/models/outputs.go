@@ -5,9 +5,6 @@ import (
 	"fmt"
 )
 
-// I prepended all of these with E because they came from the execution package, and I didn't want any naming conflicts.
-// I couldn't import the execution package because it would create a circular dependency.
-
 type Column struct {
 	Name  string
 	Value sql.NullString
