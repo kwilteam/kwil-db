@@ -87,6 +87,59 @@ func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest
 					},
 				},
 			},
+			{
+				Name: "wallets:insert",
+				Inputs: []*apipb.Param{
+					{
+						Name: "wallet",
+						Type: 2,
+					},
+					{
+						Name: "wallet_id",
+						Type: 2,
+					},
+				},
+				Outputs: []*apipb.Param{
+					{
+						Name: "output1",
+						Type: 2,
+					},
+				},
+			},
+			{
+				Name: "wallets:update",
+				Inputs: []*apipb.Param{
+					{
+						Name: "wallet",
+						Type: 2,
+					},
+					{
+						Name: "balance",
+						Type: 2,
+					},
+				},
+				Outputs: []*apipb.Param{
+					{
+						Name: "output1",
+						Type: 2,
+					},
+				},
+			},
+			{
+				Name: "wallets:delete",
+				Inputs: []*apipb.Param{
+					{
+						Name: "wallet",
+						Type: 2,
+					},
+				},
+				Outputs: []*apipb.Param{
+					{
+						Name: "output1",
+						Type: 2,
+					},
+				},
+			},
 		},
 		Roles: []*apipb.Role{
 			{

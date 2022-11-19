@@ -50,10 +50,10 @@ func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDRes
 	}
 
 	// spend funds and then write data!
-	err = s.ds.Spend(req.From, req.Fee)
+	/*err = s.ds.Spend(req.From, req.Fee)
 	if err != nil {
 		return nil, err
-	}
+	}*/
 
 	conStr, err := s.mp.GetConnectionInfo(req.From)
 	if err != nil {
