@@ -112,3 +112,16 @@ func TestCheckSignature(t *testing.T) {
 		})
 	}
 }
+
+func TestMiscCrypto(t *testing.T) {
+	pk := "4bb214b1f3a0737d758bc3828cdff371e3769fe84a2678da34700cb18d50770e"
+
+	addr, err := AddressFromPrivateKey(pk)
+	if err != nil {
+		t.Errorf("error getting address from private keys")
+	}
+
+	if addr != "0x995d95245698212D4Af52c8031F614C3D3127994" {
+		t.Errorf("received unexpected address")
+	}
+}

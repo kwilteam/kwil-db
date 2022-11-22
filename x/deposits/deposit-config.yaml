@@ -1,4 +1,4 @@
-run: true
+run: false
 required-confirmations: 12
 block-timeout: 30 ## seconds
 withdrawal-expiration: 100

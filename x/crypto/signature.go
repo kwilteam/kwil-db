@@ -24,6 +24,16 @@ func ECDSAFromHex(hex string) (*ecdsa.PrivateKey, error) {
 	return ec.HexToECDSA(hex)
 }
 
+func AddressFromPrivateKey(key string) (string, error) {
+	ecdk, err := ECDSAFromHex(key)
+	if err != nil {
+		return "", err
+	}
+
+	caddr := ec.PubkeyToAddress(ecdk.PublicKey)
+	return caddr.Hex(), nil
+}
+
 func CheckSignature(addr, sig string, data []byte) (bool, error) {
 	switch sig[0:2] {
 	case "00": // PK uncompressed

@@ -1,0 +1,38 @@
+owner: kwil
+name: mydb
+default_role: bennanmode
+tables:
+  table1:
+    columns:
+      t1col1:
+        type: string
+        constraints:
+          - primary_key
+      t1col2:
+        type: string
+  table2:
+    columns:
+      t2col1:
+        type: int32
+        constraints: 
+          - primary_key
+      t2col2:
+        type: int64
+        constraints:
+          - not_null
+roles:
+  bennanmode:
+    queries:
+      - query1
+      - query2
+  randalmode:
+    queries:
+      - query1
+      - query2
+      - query3
+queries:
+indexes:
+  index1:
+    table: table1
+    column: t1col1
+    using: btree
