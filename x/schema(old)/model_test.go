@@ -29,20 +29,17 @@ func Test_ReadYaml(t *testing.T) {
 
 	fmt.Println(db.Tables)
 
-	ddlStr, err := db.GenerateDDL()
+	pgDB, err := convertToPG(db)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	ddlStr := BuildDDL(pgDB)
 	fmt.Println(ddlStr)
 
-	/*err = Verify(db)
-	if err != nil {
-		t.Fatal(err)
-	}*/
-	err = db.Validate()
+	err = Verify(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	panic("yuh")
 
 }

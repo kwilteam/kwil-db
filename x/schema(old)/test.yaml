@@ -6,20 +6,23 @@ tables:
     columns:
       t1col1:
         type: string
-        attributes:
-          primary_key: true
-          min_length: 10
-          max_length: 100
+          attributes:
+            min: 10
+            max: 100
+        constraints:
+          - primary_key
       t1col2:
         type: string
   table2:
     columns:
       t2col1:
         type: int32
-        attributes:
-          primary_key: true
+        constraints: 
+          - primary_key
       t2col2:
         type: int64
+        constraints:
+          - not_null
 roles:
   bennanmode:
     queries:
@@ -31,9 +34,6 @@ roles:
       - query2
       - query3
 queries:
-  query1:
-  query2:
-  query3:
 indexes:
   index1:
     table: table1
