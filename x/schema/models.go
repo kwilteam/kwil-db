@@ -6,7 +6,7 @@ type Database struct {
 	DefaultRole string           `yaml:"default_role"`
 	Tables      map[string]Table `yaml:"tables"`
 	Roles       map[string]Role  `yaml:"roles"`
-	Queries     map[string]Query `yaml:"queries"`
+	Queries     DefinedQueries   `yaml:"queries"`
 	Indexes     map[string]Index `yaml:"indexes"`
 }
 
@@ -22,7 +22,4 @@ type Index struct {
 
 type Role struct {
 	Queries []string `yaml:"queries"`
-}
-
-type Query struct {
 }

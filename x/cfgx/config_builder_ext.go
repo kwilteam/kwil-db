@@ -97,6 +97,10 @@ func (b *config_builder) UseFileSelection(name string, selector string, path str
 
 func (b *config_builder) expand(m map[interface{}]interface{}) {
 	for k, v := range m {
+		if v == nil {
+			m[k] = nil
+			continue
+		}
 		kind := reflect.TypeOf(v).Kind()
 		switch kind {
 		case reflect.Map:
@@ -118,6 +122,11 @@ func flatten(flattened map[string]string, prefix string, m map[interface{}]inter
 
 	for k, v := range m {
 		var key = prefix + k.(string)
+		if v == nil {
+			flattened[key] = ""
+			continue
+		}
+
 		if reflect.TypeOf(v).Kind() == reflect.Map {
 			flatten(flattened, key, v.(map[interface{}]interface{}))
 		} else {

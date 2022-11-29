@@ -55,6 +55,7 @@ func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDRes
 		return nil, err
 	}*/
 
+	//TODO: use DB name to map to connection string
 	conStr, err := s.mp.GetConnectionInfo(req.From)
 	if err != nil {
 		return nil, err
