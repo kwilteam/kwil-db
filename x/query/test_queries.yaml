@@ -6,18 +6,21 @@ queries:
         - [4321, 'first-name-30', 'last-name-30', 30] # ordinal insert
 
   - updateUser:
-      - columns: [first_name, last_name, age]
-      - if-match:
-          user_id: 1234
-          set-values: ['first-name-21', 'last-name-21', 21]
-      - if-match:
-          user_id: 4321
-          set-values: ['first-name-31', 'last-name-31', 31]
+      columns: [first_name, last_name, age]
+      set-values: ['first-name-31', 'last-name-31', 31]
+      if-match:
+        - eq: {user_id: 1234}
 
   - removeUser:
       if-match:
-        user_id: 1234
+      - eq: {user_id: 1234}
+      - nq: {user_id: 1234}
+      - lt: {user_id: 1234}
+      - gt: {user_id: 1234}
 
   - removeUser:
       if-match:
-        user_id: 4321
+      - eq: {user_id: 1234}
+      - nq: {user_id: 1234}
+      - lt: {user_id: 1234}
+      - gt: {user_id: 1234}

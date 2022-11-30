@@ -62,13 +62,60 @@ func (q *DefinedQueries) Find(name string) (DefinedQuery, error) {
 	return nil, fmt.Errorf("query not found: %s", name)
 }
 
+type defined_query_marshalled struct {
+	Type    string    `yaml:"type"`
+	Table   string    `yaml:"table"`
+	Columns ColumnMap `yaml:"columns"`
+	IfMatch ColumnMap `yaml:"if-match"`
+}
+
+func (q *DefinedQueries) MarshalYAML() (interface{}, error) {
+	if q == nil {
+		return nil, nil
+	}
+
+	var m map[string]defined_query_marshalled
+
+	if q.inserts != nil || len(q.inserts) == 0 {
+		m = make(map[string]defined_query_marshalled)
+		for name, query := range q.inserts {
+			m[name] = defined_query_marshalled{
+				Type:    "create",
+				Columns: query.columns,
+			}
+		}
+	}
+
+	if q.updates != nil || len(q.updates) == 0 {
+		if m == nil {
+			m = make(map[string]defined_query_marshalled)
+		}
+		for name, query := range q.updates {
+			m[name] = defined_query_marshalled{
+				Type:    "update",
+				Columns: query.columns,
+				IfMatch: query.ifMatch,
+			}
+		}
+	}
+
+	if q.deletes != nil || len(q.deletes) == 0 {
+		if m == nil {
+			m = make(map[string]defined_query_marshalled)
+		}
+		for name, query := range q.deletes {
+			m[name] = defined_query_marshalled{
+				Type:    "delete",
+				IfMatch: query.ifMatch,
+			}
+		}
+	}
+
+	return m, nil
+}
+
 func (q *DefinedQueries) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	m := make(map[string]struct {
-		Type    string    `yaml:"type"`
-		Table   string    `yaml:"table"`
-		Columns ColumnMap `yaml:"columns"`
-		IfMatch ColumnMap `yaml:"if-match"`
-	})
+	m := make(map[string]defined_query_marshalled)
 
 	if err := unmarshal(&m); err != nil {
 		return err

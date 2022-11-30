@@ -62,7 +62,7 @@ func Test_Defs_From_Struct(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := TestDefs{}
+	m := Database{}
 	err = yaml.Unmarshal(bts, &m)
 	if err != nil {
 		t.Fatal(err)
