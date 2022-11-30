@@ -11,30 +11,46 @@ const (
 	MAX_INDEX_NAME_LENGTH  = 32
 	MAX_ROLE_NAME_LENGTH   = 32
 	MAX_COLUMNS_PER_TABLE  = 50
+	MAX_DB_NAME_LENGTH     = 16
 )
 
 func (db *Database) Validate() error {
 	/*
-		verify must check:
-		- no empty table names
-		- table names must begin with a letter or underscore
-		- table name is no longer than MAX_TABLE_NAME_LENGTH characters
-		- must verify all tables (using verifyTable function)
+		// verify must check:
+		- DB name is valid
 
-		INDEXES:
-		- no empty index names
-		- index names must begin with a letter or underscore
-		- index name is no longer than MAX_INDEX_NAME_LENGTH characters
-		- columns can have multiple indexes, but they must be different types
-		- must verify all indexes (using verifyIndex function)
+			TABLES:
+			- no empty table names
+			- table names must begin with a letter or underscore
+			- table name is no longer than MAX_TABLE_NAME_LENGTH characters
+			- must verify all tables (using verifyTable function)
 
-		ROLES:
-		- no empty role names
-		- role names must begin with a letter or underscore
-		- role name is no longer than MAX_ROLE_NAME_LENGTH characters
-		- queries must exist
-		- queries must be unique
+			INDEXES:
+			- no empty index names
+			- index names must begin with a letter or underscore
+			- index name is no longer than MAX_INDEX_NAME_LENGTH characters
+			- columns can have multiple indexes, but they must be different types
+			- must verify all indexes (using verifyIndex function)
+
+			ROLES:
+			- no empty role names
+			- role names must begin with a letter or underscore
+			- role name is no longer than MAX_ROLE_NAME_LENGTH characters
+			- queries must exist
+			- queries must be unique
 	*/
+
+	// check db name is valid
+	if len(db.Name) > MAX_DB_NAME_LENGTH {
+		return fmt.Errorf("database name must be less than %d characters", MAX_DB_NAME_LENGTH)
+	}
+	ok, err := checkValidName(db.Name)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("database name must begin with a letter or underscore and contain only letters, numbers, and underscores")
+	}
 
 	// verify table names
 	for name, table := range db.Tables {

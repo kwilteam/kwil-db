@@ -20,6 +20,7 @@ import (
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
 	"kwil/x/service/apisvc"
+	sc "kwil/x/sqlx/executor"
 
 	kg "kwil/cmd/kwild-gateway/server"
 
@@ -54,6 +55,12 @@ func execute(logger logx.Logger) error {
 
 	mp := metadata.NewProvider(client.DB, false)
 	ms := metadata.NewService(mp)
+
+	cl := sc.NewClient(mp)
+	err = cl.Read(ctx, "SELECT * FROM wallets;")
+	if err != nil {
+		return fmt.Errorf("failed to read: %w", err)
+	}
 
 	apiService := apisvc.NewService(d, ms, mp)
 	httpHandler := apisvc.NewHandler(logger)

@@ -2,7 +2,9 @@ package crypto
 
 import (
 	"crypto/ecdsa"
-	c "crypto/sha512"
+	c256 "crypto/sha256"
+	c512 "crypto/sha512"
+
 	"encoding/hex"
 
 	"kwil/x/utils"
@@ -31,11 +33,21 @@ func LoadPrivateKey(path string) (*PrivateKey, error) {
 
 // Sha384 returns the sha384 hash of the data.
 func Sha384(data []byte) []byte { // I wrapped this in a function so that we know it is standard
-	h := c.New384()
+	h := c512.New384()
 	h.Write(data)
 	return h.Sum(nil)
 }
 
 func Sha384Str(data []byte) string {
 	return hex.EncodeToString(Sha384(data))
+}
+
+func Sha224(data []byte) []byte {
+	h := c256.New224()
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+func Sha224Str(data []byte) string {
+	return hex.EncodeToString(Sha224(data))
 }

@@ -2,7 +2,10 @@ package schema
 
 import (
 	"fmt"
+	"kwil/x/crypto"
 	"strings"
+
+	conv "github.com/cstockton/go-conv"
 )
 
 func buildCreateTable(name string, t Table) ([]string, error) {
@@ -55,13 +58,16 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			b.WriteString("ALTER TABLE ")
 			b.WriteString(tableName)
 			b.WriteString(" ADD CONSTRAINT ")
-			b.WriteString(tableName)
-			b.WriteString("_")
-			b.WriteString(columnName)
-			b.WriteString("_minlength CHECK (length(")
+			b.WriteString(constraintName(tableName, columnName, "MinLength"))
+			b.WriteString(" CHECK (length(")
 			b.WriteString(columnName)
 			b.WriteString(") >= ")
-			b.WriteString(c.Attributes[KuniformMinLength])
+			kl := c.Attributes[KuniformMinLength]
+			_, err := conv.Int32(kl)
+			if err != nil {
+				return stmts, fmt.Errorf("MinLength must be an int32. Received %v", kl)
+			}
+			b.WriteString(kl)
 			b.WriteString(");\n")
 			stmts = append(stmts, b.String())
 		case KuniformMaxLength:
@@ -72,13 +78,16 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			b.WriteString("ALTER TABLE ")
 			b.WriteString(tableName)
 			b.WriteString(" ADD CONSTRAINT ")
-			b.WriteString(tableName)
-			b.WriteString("_")
-			b.WriteString(columnName)
-			b.WriteString("_maxlength CHECK (length(")
+			b.WriteString(constraintName(tableName, columnName, "MaxLength"))
+			b.WriteString(" CHECK (length(")
 			b.WriteString(columnName)
 			b.WriteString(") <= ")
-			b.WriteString(c.Attributes[KuniformMaxLength])
+			kl := c.Attributes[KuniformMaxLength]
+			_, err := conv.Int32(kl)
+			if err != nil {
+				return stmts, fmt.Errorf("MaxLength must be an int32. Received %v", kl)
+			}
+			b.WriteString(kl)
 			b.WriteString(");\n")
 			stmts = append(stmts, b.String())
 		case KuniformPrimaryKey:
@@ -110,6 +119,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			b.WriteString(" SET NOT NULL;")
 			stmts = append(stmts, b.String())
 		case KuniformDefault:
+			// TODO: dynamically determine the type of the default value
 			var b strings.Builder
 			b.WriteString("ALTER TABLE ")
 			b.WriteString(tableName)
@@ -126,10 +136,22 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 	return stmts, nil
 }
 
+func constraintName(tableName, columnName, constraintType string) string {
+
+	return constraintType[:1] + crypto.Sha224Str([]byte(tableName+"_"+columnName+"_"+constraintType))
+}
+
+func As[T any](into T, from any) error {
+	return conv.Infer(into, from)
+}
+
+//func (c *KuniformColumn) ToColumnType(s string)
+
 func buildCreateIndex(name string, i Index) string {
 	var b strings.Builder
+	indNm := crypto.Sha224Str([]byte(name))
 	b.WriteString("CREATE INDEX ")
-	b.WriteString(name)
+	b.WriteString(indNm)
 	b.WriteString(" ON ")
 	b.WriteString(i.Table)
 	b.WriteString(" (")
@@ -142,7 +164,7 @@ func (db *Database) GenerateDDL() (string, error) {
 	var sb strings.Builder
 	sb.WriteString("BEGIN:\n")
 	for name, t := range db.Tables {
-		stmts, err := buildCreateTable(name, t)
+		stmts, err := buildCreateTable(db.addSchema(name), t)
 		if err != nil {
 			return "", err
 		}
@@ -152,10 +174,14 @@ func (db *Database) GenerateDDL() (string, error) {
 		}
 	}
 	for name, i := range db.Indexes {
-		sb.WriteString(buildCreateIndex(name, i))
+		sb.WriteString(buildCreateIndex(db.addSchema(name), i))
 	}
-	sb.WriteString("COMMIT;")
+	sb.WriteString("\nCOMMIT;")
 	return sb.String(), nil
+}
+
+func (db *Database) addSchema(s string) string {
+	return db.Owner + "_" + db.Name + "." + s
 }
 
 func (c *KuniformColumn) GetAttributes() ([]KuniformAttribute, error) {
