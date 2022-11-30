@@ -1,8 +1,6 @@
 package schema
 
 import (
-	"fmt"
-	"kwil/x/crypto"
 	"os"
 	"testing"
 )
@@ -28,17 +26,6 @@ func Test_ReadYaml(t *testing.T) {
 		t.Fatal("name should be mydb")
 	}
 
-	fmt.Println(db.Tables)
-
-	ddlStr, err := db.GenerateDDL()
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println(ddlStr)
-
-	shs := crypto.Sha224Str(bts)
-	fmt.Println(shs)
-
 	/*err = Verify(db)
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +34,5 @@ func Test_ReadYaml(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	panic("yuh")
 
 }
