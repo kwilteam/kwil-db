@@ -7,7 +7,7 @@ RUN echo -e "[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/" >> /r
 RUN cat /root/.gitconfig
 RUN mkdir /root/.ssh && echo "StrictHostKeyChecking no " > /root/.ssh/config
 
-COPY ./ksl/go.mod ./ksl/go.sum ./ksl/
+## COPY ./ksl/go.mod ./ksl/go.sum ./ksl/
 COPY go.mod go.sum ./
 RUN --mount=type=ssh,id=kwil go mod download
 COPY . .

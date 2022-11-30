@@ -1,20 +1,6 @@
 package apisvc
 
-import (
-	"context"
-	"database/sql"
-	"fmt"
-	"ksl/sqlclient"
-	"ksl/sqldriver"
-	"math/big"
-	"strings"
-
-	"kwil/x/crypto"
-	"kwil/x/proto/apipb"
-
-	query "ksl/models"
-)
-
+/*
 func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDResponse, error) {
 	p, err := s.p.GetPrice(ctx)
 	if err != nil {
@@ -50,10 +36,6 @@ func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDRes
 	}
 
 	// spend funds and then write data!
-	/*err = s.ds.Spend(req.From, req.Fee)
-	if err != nil {
-		return nil, err
-	}*/
 
 	conStr, err := s.mp.GetConnectionInfo(req.From)
 	if err != nil {
@@ -221,3 +203,4 @@ func convertResult(r *query.Result) *apipb.QueryResult {
 func parseBigInt(s string) (*big.Int, bool) {
 	return new(big.Int).SetString(s, 10)
 }
+*/

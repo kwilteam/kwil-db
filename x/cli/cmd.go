@@ -9,7 +9,6 @@ import (
 	"kwil/x/cli/cmds/connect"
 	"kwil/x/cli/cmds/database"
 	"kwil/x/cli/cmds/fund"
-	"kwil/x/cli/cmds/schema"
 	"kwil/x/cli/cmds/utils"
 
 	"github.com/manifoldco/promptui"
@@ -32,7 +31,6 @@ func Execute() error {
 		fund.NewCmdFund(),
 		configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
-		schema.NewCmdSchema(),
 		utils.NewCmdUtils(),
 	)
 

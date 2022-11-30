@@ -3,9 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"ksl/sqlclient"
 	"kwil/x/async"
-	"kwil/x/metadata"
 	"net"
 	"net/http"
 	"os"
@@ -20,7 +18,6 @@ import (
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
 	"kwil/x/service/apisvc"
-	sc "kwil/x/sqlx/executor"
 
 	kg "kwil/cmd/kwild-gateway/server"
 
@@ -47,22 +44,7 @@ func execute(logger logx.Logger) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
-
-	client, err := sqlclient.Open("postgres://postgres:postgres@localhost:5432/kwil?sslmode=disable")
-	if err != nil {
-		return fmt.Errorf("failed to open sql client: %w", err)
-	}
-
-	mp := metadata.NewProvider(client.DB, false)
-	ms := metadata.NewService(mp)
-
-	cl := sc.NewClient(mp)
-	err = cl.Read(ctx, "SELECT * FROM wallets;")
-	if err != nil {
-		return fmt.Errorf("failed to read: %w", err)
-	}
-
-	apiService := apisvc.NewService(d, ms, mp)
+	apiService := apisvc.NewService(d)
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(ctx, logger, d, httpHandler, apiService)

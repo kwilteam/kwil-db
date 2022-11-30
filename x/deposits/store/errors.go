@@ -1,12 +1,8 @@
-package store
+package sql
 
-import (
-	"errors"
-)
+import "errors"
 
-var (
-	ErrNotFound          = errors.New("not found")
-	ErrTxExists          = errors.New("this transaction already exists, and needs to be committed")
-	ErrInsufficientFunds = errors.New("not enough funds")
-	ErrInvalidNonce      = errors.New("invalid nonce")
-)
+var ErrConstraintPrimaryKey = errors.New("constraint primary key")
+var ErrFailedToParseBigInt = errors.New("failed to parse big int")
+var ErrInsufficientFunds = errors.New("insufficient funds")
+var ErrTxRollback = errors.New("transaction rollback")

@@ -1,11 +1,6 @@
 package apisvc
 
-import (
-	"context"
-	"kwil/x/metadata"
-	"kwil/x/proto/apipb"
-)
-
+/*
 func (s *Service) PlanSchema(ctx context.Context, req *apipb.PlanSchemaRequest) (*apipb.PlanSchemaResponse, error) {
 	planReq := metadata.SchemaRequest{
 		Wallet:     req.Wallet,
@@ -45,10 +40,6 @@ func (s *Service) ApplySchema(ctx context.Context, req *apipb.ApplySchemaRequest
 }
 
 func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest) (*apipb.GetMetadataResponse, error) {
-	/*	mdr, err := s.md.GetMetadata(ctx, schema.RequestMetadata{Wallet: req.Wallet, Database: req.Database})
-		if err != nil {
-			return nil, err
-		}*/
 
 	mdr := &apipb.Metadata{
 		Name: "test",
@@ -279,3 +270,4 @@ func convertType(t string) apipb.ParamType {
 		return apipb.ParamType_VOID
 	}
 }
+*/

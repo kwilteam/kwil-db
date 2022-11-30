@@ -44,7 +44,7 @@ func (db *Database) Validate() error {
 	if len(db.Name) > MAX_DB_NAME_LENGTH {
 		return fmt.Errorf("database name must be less than %d characters", MAX_DB_NAME_LENGTH)
 	}
-	ok, err := checkValidName(db.Name)
+	ok, err := CheckValidName(db.Name)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func (db *Database) Validate() error {
 
 	// verify table names
 	for name, table := range db.Tables {
-		ok, err := checkValidName(name)
+		ok, err := CheckValidName(name)
 		if err != nil {
 			return fmt.Errorf("error checking allowed characters: %w", err)
 		}
@@ -73,7 +73,7 @@ func (db *Database) Validate() error {
 	// verify indexes
 	indexTracker := make(map[string]string)
 	for name, index := range db.Indexes {
-		ok, err := checkValidName(name)
+		ok, err := CheckValidName(name)
 		if err != nil {
 			return fmt.Errorf("error checking allowed characters: %w", err)
 		}
@@ -98,7 +98,7 @@ func (db *Database) Validate() error {
 
 	// verify roles
 	for name, role := range db.Roles {
-		ok, err := checkValidName(name)
+		ok, err := CheckValidName(name)
 		if err != nil {
 			return fmt.Errorf("error checking allowed characters: %w", err)
 		}
@@ -146,7 +146,7 @@ func (t *Table) Validate() error {
 		return fmt.Errorf("table can have at most %d columns", MAX_COLUMNS_PER_TABLE)
 	}
 	for name, column := range t.Columns {
-		ok, err := checkValidName(name)
+		ok, err := CheckValidName(name)
 		if err != nil {
 			return fmt.Errorf("error checking allowed characters: %w", err)
 		}
@@ -243,7 +243,7 @@ func checkAllowedCharacters(s string) (bool, error) {
 	return r.MatchString(s), nil
 }
 
-func checkValidName(s string) (bool, error) {
+func CheckValidName(s string) (bool, error) {
 	if len(s) == 0 {
 		return false, nil
 	}

@@ -1,10 +1,8 @@
 package apisvc
 
 import (
-	"ksl/sqlclient"
 	"kwil/x/deposits"
 	"kwil/x/logx"
-	"kwil/x/metadata"
 	"kwil/x/pricing"
 	"kwil/x/proto/apipb"
 )
@@ -12,20 +10,15 @@ import (
 type Service struct {
 	apipb.UnimplementedKwilServiceServer
 
-	ds      deposits.Deposits
-	log     logx.Logger
-	p       pricing.Service
-	md      metadata.Service
-	sqlOpen sqlclient.OpenerFunc
-	mp      *metadata.ConnectionProvider
+	ds  deposits.Deposits
+	log logx.Logger
+	p   pricing.Service
 }
 
-func NewService(ds deposits.Deposits, md metadata.Service, mp *metadata.ConnectionProvider) *Service {
+func NewService(ds deposits.Deposits) *Service {
 	return &Service{
 		ds:  ds,
 		log: logx.New(),
-		md:  md,
 		p:   pricing.NewService(),
-		mp:  mp,
 	}
 }
