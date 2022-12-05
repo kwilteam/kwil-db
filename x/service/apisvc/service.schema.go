@@ -1,5 +1,63 @@
 package apisvc
 
+import (
+	"context"
+	"fmt"
+	"kwil/x/crypto"
+	"kwil/x/proto/apipb"
+)
+
+func (s *Service) DeploySchema(ctx context.Context, req *apipb.DeploySchemaRequest) (*apipb.DeploySchemaResponse, error) {
+	p, err := s.p.GetPriceForDDL(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// parse fee
+	fee, ok := parseBigInt(req.Fee)
+	if !ok {
+		return nil, fmt.Errorf("invalid fee")
+	}
+
+	// check price is enough
+	if fee.Cmp(p) < 0 {
+		return nil, fmt.Errorf("price is not enough")
+	}
+
+	// generate id
+	id := deployID(req)
+
+	if id != req.Id {
+		return nil, fmt.Errorf("invalid id")
+	}
+
+	// check signature
+	valid, err := crypto.CheckSignature(req.From, req.Signature, []byte(id))
+	if err != nil {
+		return nil, err
+	}
+
+	if !valid {
+		return nil, fmt.Errorf("invalid signature")
+	}
+
+	// spend funds and then write data!
+	/*err = s.ds.Spend(req.From, req.Fee)
+	if err != nil {
+		return nil, err
+	}*/
+
+	err = s.exctr.DeployDDL(ctx, req.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &apipb.DeploySchemaResponse{
+		Txid: id,
+		Msg:  "success",
+	}, nil
+}
+
 /*
 func (s *Service) PlanSchema(ctx context.Context, req *apipb.PlanSchemaRequest) (*apipb.PlanSchemaResponse, error) {
 	planReq := metadata.SchemaRequest{

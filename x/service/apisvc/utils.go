@@ -2,6 +2,7 @@ package apisvc
 
 import (
 	"encoding/json"
+	"math/big"
 	"strings"
 
 	"kwil/x/crypto"
@@ -13,6 +14,15 @@ func createFundsReturnID(amount, nonce, address string) string {
 	sb.WriteString(amount)
 	sb.WriteString(nonce)
 	sb.WriteString(address)
+	return crypto.Sha384Str([]byte(sb.String()))
+}
+
+func deployID(m *apipb.DeploySchemaRequest) string {
+	sb := strings.Builder{}
+	sb.Write(m.Data)
+	sb.WriteString(m.Fee)
+	sb.WriteString(m.Nonce)
+	sb.WriteString(m.From)
 	return crypto.Sha384Str([]byte(sb.String()))
 }
 
@@ -49,4 +59,8 @@ func applyID(m *apipb.ApplyRequest) string {
 	sb.WriteString(m.From)
 
 	return crypto.Sha384Str([]byte(sb.String()))
+}
+
+func parseBigInt(s string) (*big.Int, bool) {
+	return new(big.Int).SetString(s, 10)
 }

@@ -29,7 +29,6 @@ func withdrawCmd() *cobra.Command {
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				client := apipb.NewKwilServiceClient(cc)
 				c, err := chain.NewClientV(viper.GetViper())
-				fmt.Println(c.PoolAddr.String())
 				if err != nil {
 					return fmt.Errorf("error creating chain client: %w", err)
 				}

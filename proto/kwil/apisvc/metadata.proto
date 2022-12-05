@@ -2,14 +2,18 @@ syntax = "proto3";
 package apisvc;
 option go_package = "kwil/x/proto/apipb";
 
-message PlanSchemaRequest {
-	string wallet = 1;
-	string database = 2;
-	bytes schema = 3;
+message DeploySchemaRequest {
+	string id = 1;
+	bytes data = 2;
+	string fee = 3;
+	string nonce = 4;
+	string signature = 5;
+	string from = 6;
 }
 
-message PlanSchemaResponse {
-	Plan plan = 1;
+message DeploySchemaResponse {
+	string txid = 1;
+	string msg = 2;
 }
 
 message Plan {
@@ -21,14 +25,6 @@ message Change {
 	string comment = 2;
 	string reverse = 3;
 }
-
-message ApplySchemaRequest {
-	string wallet = 1;
-	string database = 2;
-	bytes schema = 3;
-}
-
-message ApplySchemaResponse {}
 
 message GetMetadataRequest {
 	string wallet = 1;

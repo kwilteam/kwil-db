@@ -1,6 +1,7 @@
 package sql_test
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -15,6 +16,8 @@ func Test_SQLStore(t *testing.T) {
 		return // intentionally ignore this test for normal ops
 	}
 
+	ctx := context.Background()
+
 	db, err := ks.TestDB()
 	if err != nil {
 		t.Error(err)
@@ -22,7 +25,7 @@ func Test_SQLStore(t *testing.T) {
 	defer db.Close()
 
 	// test to make sure the table deposits exists
-	res, err := db.Query("SELECT tablename FROM pg_catalog.pg_tables WHERE tablename = 'deposits'")
+	res, err := db.Query(ctx, "SELECT tablename FROM pg_catalog.pg_tables WHERE tablename = 'deposits'")
 	if err != nil {
 		t.Error(err)
 	}
@@ -32,12 +35,12 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// test height
-	err = db.SetHeight(123)
+	err = db.SetHeight(ctx, 123)
 	if err != nil {
 		t.Error(err)
 	}
 
-	height, err := db.GetHeight()
+	height, err := db.GetHeight(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -49,13 +52,13 @@ func Test_SQLStore(t *testing.T) {
 	// create random wallet address
 	addr := generateNonce(30)
 	fmt.Println(addr)
-	err = db.RemoveWallet(addr)
+	err = db.RemoveWallet(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// check that balance and spent are 0
-	balance, err := db.GetBalance(addr)
+	balance, err := db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -64,7 +67,7 @@ func Test_SQLStore(t *testing.T) {
 		t.Error("balance is not 0")
 	}
 
-	spent, err := db.GetSpent(addr)
+	spent, err := db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -73,30 +76,44 @@ func Test_SQLStore(t *testing.T) {
 		t.Error("spent is not 0, it is ", spent)
 	}
 
+	fmt.Println(addr)
+	b, s, err := db.GetBalanceAndSpent(ctx, addr)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if b != "" {
+		t.Error("balance should be empty")
+	}
+
+	if s != "" {
+		t.Error("spent should be empty")
+	}
+
 	/* now we make four deposits for 100 dollars each.
 	   one of them will be for height 122, one for 123, one for 124, and one for 125.
 	*/
 
 	// deposit 1
-	err = db.Deposit("txid1", addr, "100", 122)
+	err = db.Deposit(ctx, "txid1", addr, "100", 122)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// deposit 2
-	err = db.Deposit("txid2", addr, "100", 123)
+	err = db.Deposit(ctx, "txid2", addr, "100", 123)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// deposit 3
-	err = db.Deposit("txid3", addr, "100", 124)
+	err = db.Deposit(ctx, "txid3", addr, "100", 124)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// deposit 4
-	err = db.Deposit("txid4", addr, "100", 125)
+	err = db.Deposit(ctx, "txid4", addr, "100", 125)
 	if err != nil {
 		t.Error(err)
 	}
@@ -108,7 +125,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check height is 124
-	err = db.QueryRow("SELECT get_height()").Scan(&height)
+	err = db.QueryRow(ctx, "SELECT get_height()").Scan(&height)
 	if err != nil {
 		t.Error(err)
 	}
@@ -118,7 +135,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check balance is 200
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -128,7 +145,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check spent is 0
-	spent, err = db.GetSpent(addr)
+	spent, err = db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -144,7 +161,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check balance is 100
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -154,7 +171,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check spent is 100
-	spent, err = db.GetSpent(addr)
+	spent, err = db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -191,7 +208,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check balance is 50
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -201,7 +218,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check spent is 0
-	spent, err = db.GetSpent(addr)
+	spent, err = db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -217,7 +234,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check balance is 0
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -243,7 +260,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check balance is 50
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -253,7 +270,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// check spent is 0
-	spent, err = db.GetSpent(addr)
+	spent, err = db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -269,7 +286,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// ensure balance still 250
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -281,10 +298,13 @@ func Test_SQLStore(t *testing.T) {
 }
 
 func Test_Withdrawal(t *testing.T) {
+
 	if t != nil {
 		fmt.Println("## Skipping test: Test_Withdrawal ##")
 		return // intentionally ignore this test for normal ops
 	}
+
+	ctx := context.Background()
 
 	db, err := ks.TestDB()
 	if err != nil {
@@ -293,7 +313,7 @@ func Test_Withdrawal(t *testing.T) {
 	defer db.Close()
 
 	// test to make sure the table deposits exists
-	res, err := db.Query("SELECT tablename FROM pg_catalog.pg_tables WHERE tablename = 'deposits'")
+	res, err := db.Query(ctx, "SELECT tablename FROM pg_catalog.pg_tables WHERE tablename = 'deposits'")
 	if err != nil {
 		t.Error(err)
 	}
@@ -305,13 +325,13 @@ func Test_Withdrawal(t *testing.T) {
 	// create random wallet address
 	addr := generateNonce(30)
 	fmt.Println(addr)
-	err = db.RemoveWallet(addr)
+	err = db.RemoveWallet(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// check balance is 0
-	balance, err := db.GetBalance(addr)
+	balance, err := db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -321,7 +341,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check spent is 0
-	spent, err := db.GetSpent(addr)
+	spent, err := db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -331,7 +351,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// now let's give them some money and no spend
-	err = db.Deposit("txid1", addr, "100", 122)
+	err = db.Deposit(ctx, "txid1", addr, "100", 122)
 	if err != nil {
 		t.Error(err)
 	}
@@ -343,7 +363,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check balance is 00
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -380,7 +400,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check balance is 0
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -390,7 +410,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// deposit more money
-	err = db.Deposit("txid2", addr, "100", 123)
+	err = db.Deposit(ctx, "txid2", addr, "100", 123)
 	if err != nil {
 		t.Error(err)
 	}
@@ -403,7 +423,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check balance is 100
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -419,7 +439,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check balance is 50
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -429,7 +449,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check spent is 50
-	spent, err = db.GetSpent(addr)
+	spent, err = db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -439,7 +459,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// get balance and spent
-	bal, sp, err := db.GetBalanceAndSpent(addr)
+	bal, sp, err := db.GetBalanceAndSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -480,7 +500,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check balance is 0
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -490,7 +510,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check spent is 0
-	spent, err = db.GetSpent(addr)
+	spent, err = db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -500,13 +520,13 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// add tx to second withdrawal
-	err = db.AddTx(nce, "0x132")
+	err = db.AddTx(ctx, nce, "0x132")
 	if err != nil {
 		t.Error(err)
 	}
 
 	// test get withdrawals for wallet
-	wdr, err := db.GetWithdrawalsForWallet(addr)
+	wdr, err := db.GetWithdrawalsForWallet(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -535,7 +555,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// balance should be 150, spent should be 50 since both withdrawals expired
-	balance, err = db.GetBalance(addr)
+	balance, err = db.GetBalance(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -545,7 +565,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// check spent is 50
-	spent, err = db.GetSpent(addr)
+	spent, err = db.GetSpent(ctx, addr)
 	if err != nil {
 		t.Error(err)
 	}

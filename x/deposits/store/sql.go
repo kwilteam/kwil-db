@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"kwil/x/deposits/types"
@@ -15,39 +16,35 @@ import (
 )
 
 type sqlstore struct {
-	db *sql.DB
+	db *sqlclient.DB
 }
 
 type SQLStore interface {
 	Close() error
 	Ping() error
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	Query(query string, args ...interface{}) (*sql.Rows, error)
-	QueryRow(query string, args ...interface{}) *sql.Row
-	SetHeight(h int64) error
-	GetHeight() (int64, error)
-	GetBalance(addr string) (*big.Int, error)
-	GetSpent(addr string) (*big.Int, error)
-	GetBalanceAndSpent(addr string) (string, string, error)
+	Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row
+	SetHeight(ctx context.Context, h int64) error
+	GetHeight(ctx context.Context) (int64, error)
+	GetBalance(ctx context.Context, addr string) (*big.Int, error)
+	GetSpent(ctx context.Context, addr string) (*big.Int, error)
+	GetBalanceAndSpent(ctx context.Context, addr string) (string, string, error)
 	CommitHeight(h int64) error
 	CommitDeposits(h int64) error
 	Expire(h int64) error
 	Spend(addr string, amount string) error
-	Deposit(txid, addr, amount string, h int64) error
-	GetAllWithdrawals(h int64) ([]*types.WithdrawalRequest, error)
+	Deposit(ctx context.Context, txid, addr, amount string, h int64) error
+	GetAllWithdrawals(ctx context.Context, h int64) ([]*types.WithdrawalRequest, error)
 	StartWithdrawal(nonce, wallet, amount string, expiry int64) (*types.PendingWithdrawal, error)
 	FinishWithdrawal(nonce string) (bool, error)
-	RemoveBalance(addr string, amount string) error
-	AddTx(string, string) error
-	GetWithdrawalsForWallet(wallet string) ([]*types.PendingWithdrawal, error)
+	RemoveBalance(ctx context.Context, addr string, amount string) error
+	AddTx(context.Context, string, string) error
+	GetWithdrawalsForWallet(ctx context.Context, wallet string) ([]*types.PendingWithdrawal, error)
 	CreateLeaseAgent(owner string) (lease.Agent, error)
 }
 
-func New(url string) (*sqlstore, error) {
-	client, err := sqlclient.Open(url)
-	if err != nil {
-		return nil, err
-	}
+func New(client *sqlclient.DB) (*sqlstore, error) {
 
 	return &sqlstore{
 		db: client,
@@ -56,7 +53,11 @@ func New(url string) (*sqlstore, error) {
 
 func TestDB() (*sqlstore, error) {
 
-	db, err := New("postgres://postgres:password@localhost:5432/postgres?sslmode=disable")
+	client, err := sqlclient.Open("postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+	if err != nil {
+		return nil, err
+	}
+	db, err := New(client)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +71,9 @@ func TestDB() (*sqlstore, error) {
 	}
 	initSql := string(c)
 
-	_, err = db.Exec(initSql)
+	ctx := context.Background()
+
+	_, err = db.Exec(ctx, initSql)
 	if err != nil {
 		return nil, err
 	}
@@ -86,32 +89,32 @@ func (s *sqlstore) Ping() error {
 	return s.db.Ping()
 }
 
-func (s *sqlstore) Exec(query string, args ...interface{}) (sql.Result, error) {
-	return s.db.Exec(query, args...)
+func (s *sqlstore) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return s.db.Exec(ctx, query, args...)
 }
 
-func (s *sqlstore) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return s.db.Query(query, args...)
+func (s *sqlstore) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return s.db.Query(ctx, query, args...)
 }
 
-func (s *sqlstore) QueryRow(query string, args ...interface{}) *sql.Row {
-	return s.db.QueryRow(query, args...)
+func (s *sqlstore) QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return s.db.QueryRow(ctx, query, args...)
 }
 
-func (s *sqlstore) SetHeight(h int64) error {
-	_, err := s.Exec(" SELECT set_height($1);", h)
+func (s *sqlstore) SetHeight(ctx context.Context, h int64) error {
+	_, err := s.Exec(ctx, " SELECT set_height($1);", h)
 	return err
 }
 
-func (s *sqlstore) GetHeight() (int64, error) {
+func (s *sqlstore) GetHeight(ctx context.Context) (int64, error) {
 	var h int64
-	err := s.QueryRow("SELECT get_height()").Scan(&h)
+	err := s.QueryRow(ctx, "SELECT get_height()").Scan(&h)
 	return h, err
 }
 
-func (s *sqlstore) GetBalance(addr string) (*big.Int, error) {
+func (s *sqlstore) GetBalance(ctx context.Context, addr string) (*big.Int, error) {
 	var bStr string
-	err := s.QueryRow("SELECT get_balance($1)", addr).Scan(&bStr)
+	err := s.QueryRow(ctx, "SELECT get_balance($1)", addr).Scan(&bStr)
 	if err != nil {
 		return big.NewInt(0), nil
 	}
@@ -119,9 +122,9 @@ func (s *sqlstore) GetBalance(addr string) (*big.Int, error) {
 	return parseBigInt(bStr)
 }
 
-func (s *sqlstore) GetSpent(addr string) (*big.Int, error) {
+func (s *sqlstore) GetSpent(ctx context.Context, addr string) (*big.Int, error) {
 	var bStr string
-	err := s.QueryRow("SELECT get_spent($1)", addr).Scan(&bStr)
+	err := s.QueryRow(ctx, "SELECT get_spent($1)", addr).Scan(&bStr)
 	if err != nil {
 		return big.NewInt(0), nil
 	}
@@ -162,20 +165,31 @@ func (s *sqlstore) Spend(addr string, amount string) error {
 	return tx.Commit()
 }
 
-func (s *sqlstore) Deposit(txid, addr string, amount string, h int64) error {
-	_, err := s.Exec("SELECT deposit($1, $2, $3, $4)", txid, addr, amount, h)
+func (s *sqlstore) Deposit(ctx context.Context, txid, addr string, amount string, h int64) error {
+	_, err := s.Exec(ctx, "SELECT deposit($1, $2, $3, $4)", txid, addr, amount, h)
 	return err
 }
 
-func (s *sqlstore) GetBalanceAndSpent(addr string) (string, string, error) {
+func (s *sqlstore) GetBalanceAndSpent(ctx context.Context, addr string) (string, string, error) {
 	var b, sp string
-	err := s.QueryRow("SELECT get_balance($1), get_spent($1)", addr).Scan(&b, &sp)
+	res, err := s.Query(ctx, "SELECT * FROM get_balance_and_spent($1)", addr)
+	if err != nil {
+		return b, sp, err
+	}
+	defer res.Close()
+	if res.Next() {
+		err = res.Scan(&b, &sp)
+		if err != nil {
+			return b, sp, err
+		}
+	}
+
 	return b, sp, err
 }
 
-func (s *sqlstore) GetAllWithdrawals(h int64) ([]*types.WithdrawalRequest, error) {
+func (s *sqlstore) GetAllWithdrawals(ctx context.Context, h int64) ([]*types.WithdrawalRequest, error) {
 	var ret []*types.WithdrawalRequest
-	res, err := s.Query("SELECT get_all_withdrawals($1)", h)
+	res, err := s.Query(ctx, "SELECT get_all_withdrawals($1)", h)
 	if err != nil {
 		return nil, err
 	}
@@ -207,8 +221,8 @@ func (s *sqlstore) GetAllWithdrawals(h int64) ([]*types.WithdrawalRequest, error
 	return ret, err
 }
 
-func (s *sqlstore) RemoveBalance(addr string, amount string) error {
-	_, err := s.Exec("SELECT remove_balance($1, $2)", addr, amount)
+func (s *sqlstore) RemoveBalance(ctx context.Context, addr string, amount string) error {
+	_, err := s.Exec(ctx, "SELECT remove_balance($1, $2)", addr, amount)
 	return err
 }
 
@@ -344,9 +358,9 @@ func (s *sqlstore) Expire(h int64) error {
 }
 
 // should only be used in tests
-func (s *sqlstore) RemoveWallet(addr string) error {
+func (s *sqlstore) RemoveWallet(ctx context.Context, addr string) error {
 	fmt.Println("WARNING: this should only be used in tests, and never in production")
-	rows, err := s.Query("SELECT wallet_id FROM wallets WHERE wallet = '" + addr + "';")
+	rows, err := s.Query(ctx, "SELECT wallet_id FROM wallets WHERE wallet = '"+addr+"';")
 	if err != nil {
 		return err
 	}
@@ -360,26 +374,26 @@ func (s *sqlstore) RemoveWallet(addr string) error {
 		}
 	}
 
-	_, err = s.Exec("DELETE FROM wallets WHERE wallet_id = '" + fmt.Sprint(wallet_id) + "';")
+	_, err = s.Exec(ctx, "DELETE FROM wallets WHERE wallet_id = '"+fmt.Sprint(wallet_id)+"';")
 	if err != nil {
 		return err
 	}
-	_, err = s.Exec("DELETE FROM deposits WHERE wallet = '" + addr + "';")
+	_, err = s.Exec(ctx, "DELETE FROM deposits WHERE wallet = '"+addr+"';")
 	if err != nil {
 		return err
 	}
-	_, err = s.Exec("DELETE FROM withdrawals WHERE wallet_id = '" + fmt.Sprint(wallet_id) + "';")
+	_, err = s.Exec(ctx, "DELETE FROM withdrawals WHERE wallet_id = '"+fmt.Sprint(wallet_id)+"';")
 
 	return err
 }
 
-func (s *sqlstore) AddTx(cid string, tx string) error {
-	_, err := s.Exec("SELECT add_tx($1, $2)", cid, tx)
+func (s *sqlstore) AddTx(ctx context.Context, cid string, tx string) error {
+	_, err := s.Exec(ctx, "SELECT add_tx($1, $2)", cid, tx)
 	return err
 }
 
-func (s *sqlstore) GetWithdrawalsForWallet(w string) ([]*types.PendingWithdrawal, error) {
-	res, err := s.db.Query("SELECT get_withdrawals_addr($1)", w)
+func (s *sqlstore) GetWithdrawalsForWallet(ctx context.Context, w string) ([]*types.PendingWithdrawal, error) {
+	res, err := s.db.Query(ctx, "SELECT get_withdrawals_addr($1)", w)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +431,7 @@ func (s *sqlstore) GetWithdrawalsForWallet(w string) ([]*types.PendingWithdrawal
 }
 
 func (s *sqlstore) CreateLeaseAgent(owner string) (lease.Agent, error) {
-	return lease.NewAgent(s.db, owner)
+	return lease.NewAgent(s.db.DB, owner)
 }
 
 func parseBigInt(amt string) (*big.Int, error) {

@@ -65,7 +65,7 @@ func (d *deposits) Withdraw(ctx context.Context, addr, amt string) (*types.Pendi
 
 	// update the withdrawal request with the tx
 	// trim off the 0x
-	err = d.sql.AddTx(cid, tx[2:])
+	err = d.sql.AddTx(ctx, cid, tx[2:])
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +90,6 @@ func generateCid(l uint8) string {
 	return string(result)
 }
 
-func (d *deposits) GetWithdrawalsForWallet(addr string) ([]*types.PendingWithdrawal, error) {
-	return d.sql.GetWithdrawalsForWallet(addr)
+func (d *deposits) GetWithdrawalsForWallet(ctx context.Context, addr string) ([]*types.PendingWithdrawal, error) {
+	return d.sql.GetWithdrawalsForWallet(ctx, addr)
 }

@@ -12,6 +12,7 @@ const (
 	MAX_ROLE_NAME_LENGTH   = 32
 	MAX_COLUMNS_PER_TABLE  = 50
 	MAX_DB_NAME_LENGTH     = 16
+	MAX_QUERY_NAME_LENGTH  = 32
 )
 
 func (db *Database) Validate() error {
@@ -49,7 +50,7 @@ func (db *Database) Validate() error {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("database name must begin with a letter or underscore and contain only letters, numbers, and underscores")
+		return fmt.Errorf("database name must begin with a letter and contain only letters, numbers, and underscores")
 	}
 
 	// verify table names
@@ -59,7 +60,7 @@ func (db *Database) Validate() error {
 			return fmt.Errorf("error checking allowed characters: %w", err)
 		}
 		if !ok {
-			return fmt.Errorf("table name %s must begin with a letter or underscore", name)
+			return fmt.Errorf("table name %s must begin with a letter", name)
 		}
 		if len(name) > MAX_TABLE_NAME_LENGTH {
 			return fmt.Errorf("table name %s is too long (max length is %d)", name, MAX_TABLE_NAME_LENGTH)
@@ -78,7 +79,7 @@ func (db *Database) Validate() error {
 			return fmt.Errorf("error checking allowed characters: %w", err)
 		}
 		if !ok {
-			return fmt.Errorf("index name %s must begin with a letter or underscore", name)
+			return fmt.Errorf("index name %s must begin with a letter", name)
 		}
 		if len(name) > MAX_INDEX_NAME_LENGTH {
 			return fmt.Errorf("index name %s is too long (max length is %d)", name, MAX_INDEX_NAME_LENGTH)
@@ -103,7 +104,7 @@ func (db *Database) Validate() error {
 			return fmt.Errorf("error checking allowed characters: %w", err)
 		}
 		if !ok {
-			return fmt.Errorf("role name %s must begin with a letter or underscore", name)
+			return fmt.Errorf("role name %s must begin with a letter", name)
 		}
 		if len(name) > MAX_ROLE_NAME_LENGTH {
 			return fmt.Errorf("role name %s is too long (max length is %d)", name, MAX_ROLE_NAME_LENGTH)
@@ -151,7 +152,7 @@ func (t *Table) Validate() error {
 			return fmt.Errorf("error checking allowed characters: %w", err)
 		}
 		if !ok {
-			return fmt.Errorf("column name %s must begin with a letter or underscore", name)
+			return fmt.Errorf("column name %s must begin with a letter", name)
 		}
 		if len(name) > MAX_COLUMN_NAME_LENGTH {
 			return fmt.Errorf("column name %s is too long", name)
@@ -236,15 +237,20 @@ func (r *Role) Validate(db *Database) error {
 }
 
 func checkAllowedCharacters(s string) (bool, error) {
-	r, err := regexp.Compile(`^([[:alpha:]_][[:alnum:]_]*|("[^"]*)+)$`)
+	// regex for postgres identifiers
+	reg, err := regexp.Compile(`^([[:alpha:]_][[:alnum:]_]*|("[^"]*)+)$`)
 	if err != nil {
 		return false, err
 	}
-	return r.MatchString(s), nil
+	return reg.MatchString(s), nil
 }
 
 func CheckValidName(s string) (bool, error) {
 	if len(s) == 0 {
+		return false, nil
+	}
+	// check if s[0] is an underscore.  The regex will catch all other cases
+	if s[0] == '_' {
 		return false, nil
 	}
 	return checkAllowedCharacters(s)

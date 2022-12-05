@@ -35,6 +35,9 @@ func AddressFromPrivateKey(key string) (string, error) {
 }
 
 func CheckSignature(addr, sig string, data []byte) (bool, error) {
+	if len(sig) < 2 {
+		return false, fmt.Errorf("invalid signature")
+	}
 	switch sig[0:2] {
 	case "00": // PK uncompressed
 		return checkSignaturePkSECP256k1Uncompressed(addr, sig[2:], data)

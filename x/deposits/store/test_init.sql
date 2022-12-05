@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS wallets (
 		wallet_id SERIAL PRIMARY KEY,
 		wallet VARCHAR(44) NOT NULL UNIQUE,
-		balance NUMERIC(78),
-		spent NUMERIC(78) DEFAULT '0'
+		balance NUMERIC(78) DEFAULT '0' NOT NULL,
+		spent NUMERIC(78) DEFAULT '0' NOT NULL
 	);
 
 	CREATE TABLE IF NOT EXISTS deposits (
@@ -164,7 +164,8 @@ CREATE TABLE IF NOT EXISTS wallets (
 	END;	
 	$$ LANGUAGE plpgsql;
 
-	CREATE OR REPLACE FUNCTION get_balance_and_spent(addr VARCHAR(44)) RETURNS TABLE (balance NUMERIC(78), spent NUMERIC(78)) AS $$
+	-- get_balance_and_spent will return the balance and spent for a given wallet from the wallets table
+	CREATE OR REPLACE FUNCTION get_balance_and_spent(addr VARCHAR(44)) RETURNS TABLE (bal NUMERIC(78), sp NUMERIC(78)) AS $$
 	BEGIN
 		RETURN QUERY SELECT balance, spent FROM wallets WHERE wallet = addr;
 	END;

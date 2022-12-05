@@ -31,7 +31,7 @@ func buildCreateTable(name string, t Table) ([]string, error) {
 		}
 		alters = append(alters, alterStmts...)
 	}
-	b.WriteString(");\n")
+	b.WriteString("); ")
 	bs = append(bs, b.String())
 	bs = append(bs, alters...)
 	return bs, nil
@@ -68,7 +68,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 				return stmts, fmt.Errorf("MinLength must be an int32. Received %v", kl)
 			}
 			b.WriteString(kl)
-			b.WriteString(");\n")
+			b.WriteString("); ")
 			stmts = append(stmts, b.String())
 		case KuniformMaxLength:
 			if c.Type != KuniformString {
@@ -88,7 +88,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 				return stmts, fmt.Errorf("MaxLength must be an int32. Received %v", kl)
 			}
 			b.WriteString(kl)
-			b.WriteString(");\n")
+			b.WriteString("); ")
 			stmts = append(stmts, b.String())
 		case KuniformPrimaryKey:
 			var b strings.Builder
@@ -96,7 +96,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			b.WriteString(tableName)
 			b.WriteString(" ADD PRIMARY KEY (")
 			b.WriteString(columnName)
-			b.WriteString(");\n")
+			b.WriteString("); ")
 			stmts = append(stmts, b.String())
 		case KuniformUnique:
 			var b strings.Builder
@@ -108,7 +108,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			b.WriteString(columnName)
 			b.WriteString("_unique UNIQUE (")
 			b.WriteString(columnName)
-			b.WriteString(");\n")
+			b.WriteString("); ")
 			stmts = append(stmts, b.String())
 		case KuniformNotNull:
 			var b strings.Builder
@@ -127,7 +127,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			b.WriteString(columnName)
 			b.WriteString(" SET DEFAULT ")
 			b.WriteString(fmt.Sprintf("%v", c.Attributes[KuniformDefault]))
-			b.WriteString(";\n")
+			b.WriteString("; ")
 			stmts = append(stmts, b.String())
 		default:
 			return nil, fmt.Errorf("unknown attribute %s", att)
@@ -147,41 +147,43 @@ func As[T any](into T, from any) error {
 
 //func (c *KuniformColumn) ToColumnType(s string)
 
-func buildCreateIndex(name string, i Index) string {
+func buildCreateIndex(name, schema string, i Index) string {
 	var b strings.Builder
-	indNm := crypto.Sha224Str([]byte(name))
+	indNm := "i" + crypto.Sha224Str([]byte(name))
 	b.WriteString("CREATE INDEX ")
 	b.WriteString(indNm)
 	b.WriteString(" ON ")
+	b.WriteString(schema)
+	b.WriteString(".")
 	b.WriteString(i.Table)
 	b.WriteString(" (")
 	b.WriteString(i.Column)
-	b.WriteString(");")
+	b.WriteString("); ")
 	return b.String()
 }
 
-func (db *Database) GenerateDDL() (string, error) {
-	var sb strings.Builder
-	sb.WriteString("BEGIN:\n")
+func (db *Database) GenerateDDL() ([]string, error) {
+	var stmts []string
 	for name, t := range db.Tables {
-		stmts, err := buildCreateTable(db.addSchema(name), t)
+		tableStmts, err := buildCreateTable(db.addSchema(name), t)
 		if err != nil {
-			return "", err
+			return stmts, err
 		}
 
-		for _, s := range stmts {
-			sb.WriteString(s)
-		}
+		stmts = append(stmts, tableStmts...)
 	}
 	for name, i := range db.Indexes {
-		sb.WriteString(buildCreateIndex(db.addSchema(name), i))
+		stmts = append(stmts, (buildCreateIndex(db.addSchema(name), db.getSchema(), i))) // This is an absolute mess but don't have time to fix it
 	}
-	sb.WriteString("\nCOMMIT;")
-	return sb.String(), nil
+	return stmts, nil
 }
 
 func (db *Database) addSchema(s string) string {
-	return db.Owner + "_" + db.Name + "." + s
+	return db.getSchema() + "." + s
+}
+
+func (db *Database) getSchema() string {
+	return db.Owner + "_" + db.Name
 }
 
 func (c *KuniformColumn) GetAttributes() ([]KuniformAttribute, error) {

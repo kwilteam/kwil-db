@@ -70,6 +70,38 @@
         ]
       }
     },
+    "/api/v0/schema": {
+      "post": {
+        "operationId": "KwilService_DeploySchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/apisvcDeploySchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/apisvcDeploySchemaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
     "/api/v0/wallets/estimate": {
       "post": {
         "operationId": "KwilService_EstimateCost",
@@ -235,9 +267,6 @@
     }
   },
   "definitions": {
-    "apisvcApplySchemaResponse": {
-      "type": "object"
-    },
     "apisvcArity": {
       "type": "string",
       "enum": [
@@ -304,20 +333,6 @@
         }
       }
     },
-    "apisvcChange": {
-      "type": "object",
-      "properties": {
-        "cmd": {
-          "type": "string"
-        },
-        "comment": {
-          "type": "string"
-        },
-        "reverse": {
-          "type": "string"
-        }
-      }
-    },
     "apisvcColumn": {
       "type": "object",
       "properties": {
@@ -350,6 +365,41 @@
       "type": "object",
       "properties": {
         "address": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcDeploySchemaRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "data": {
+          "type": "string",
+          "format": "byte"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcDeploySchemaResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "msg": {
           "type": "string"
         }
       }
@@ -457,25 +507,6 @@
         "BYTES"
       ],
       "default": "VOID"
-    },
-    "apisvcPlan": {
-      "type": "object",
-      "properties": {
-        "changes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcChange"
-          }
-        }
-      }
-    },
-    "apisvcPlanSchemaResponse": {
-      "type": "object",
-      "properties": {
-        "plan": {
-          "$ref": "#/definitions/apisvcPlan"
-        }
-      }
     },
     "apisvcQuery": {
       "type": "object",

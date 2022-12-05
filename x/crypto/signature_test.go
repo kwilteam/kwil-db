@@ -28,7 +28,7 @@ func TestSign(t *testing.T) {
 				data: []byte("kwil"),
 				k:    pk,
 			},
-			want:    "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
+			want:    "000x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
 			wantErr: false,
 		},
 	}
@@ -62,7 +62,7 @@ func TestCheckSignature(t *testing.T) {
 			name: "valid_sig",
 			args: args{
 				addr: "0x995d95245698212D4Af52c8031F614C3D3127994",
-				sig:  "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
+				sig:  "000x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
 				data: []byte("kwil"),
 			},
 			want:    true,
@@ -72,7 +72,7 @@ func TestCheckSignature(t *testing.T) {
 			name: "invalid_msg",
 			args: args{
 				addr: "0x995d95245698212D4Af52c8031F614C3D3127994",
-				sig:  "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
+				sig:  "000x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
 				data: []byte("kwill"),
 			},
 			want:    false,
@@ -92,7 +92,7 @@ func TestCheckSignature(t *testing.T) {
 			name: "too_long_sig",
 			args: args{
 				addr: "0x995d95245698212D4Af52c8031F614C3D3127994",
-				sig:  "0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b425010x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
+				sig:  "000x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b425010x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
 				data: []byte("kwil"),
 			},
 			want:    false,

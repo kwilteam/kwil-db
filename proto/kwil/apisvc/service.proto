@@ -16,8 +16,12 @@ service KwilService {
   }
 
 
-  rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
-  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {}
+  rpc DeploySchema(DeploySchemaRequest) returns (DeploySchemaResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/schema"
+      body: "*"
+    };
+  }
 
   rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {
     option (google.api.http) = {

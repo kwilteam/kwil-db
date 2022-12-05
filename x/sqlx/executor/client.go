@@ -2,10 +2,10 @@ package executor
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"kwil/x/sqlx/schema"
+	"kwil/x/sqlx/sqlclient"
 )
 
 var (
@@ -14,7 +14,7 @@ var (
 	ErrInvalidName = errors.New("invalid database name")
 )
 
-type Client interface {
+type Executor interface {
 	ExecuteTx()
 	Read()
 	DeployDDL(ctx context.Context, ddl []byte) error
@@ -23,10 +23,10 @@ type Client interface {
 }
 
 type client struct {
-	db *sql.DB
+	db *sqlclient.DB
 }
 
-func NewClient(db *sql.DB) *client {
+func New(db *sqlclient.DB) *client {
 	return &client{
 		db: db,
 	}
@@ -50,13 +50,20 @@ func (c *client) DeployDDL(ctx context.Context, ddl []byte) error {
 		return fmt.Errorf("failed to validate ddl: %w", err)
 	}
 
-	// create database
-	err = c.createDB(ctx, yml.Owner, yml.Name)
+	nm := yml.Owner + "_" + yml.Name
+
+	// validate the name
+	val, err := schema.CheckValidName(nm)
 	if err != nil {
-		if err == ErrDBExists {
-			return ErrDBExists
-		}
-		return fmt.Errorf("failed to create database: %w", err)
+		return err
+	}
+	if !val {
+		return ErrInvalidName
+	}
+
+	err = c.NewDB(ctx, nm)
+	if err != nil {
+		return err
 	}
 
 	stmts, err := yml.GenerateDDL()
@@ -64,12 +71,41 @@ func (c *client) DeployDDL(ctx context.Context, ddl []byte) error {
 		return fmt.Errorf("failed to generate ddl: %w", err)
 	}
 
-	_, err = c.db.ExecContext(ctx, stmts)
+	for _, stmt := range stmts {
+		_, err = c.db.ExecContext(ctx, stmt)
+		if err != nil {
+			break // break the loop, it will proceed to delete the schema
+		}
+	}
 	if err != nil {
+		err2 := c.DeleteDB(ctx, yml.Owner, yml.Name)
+		if err2 != nil {
+			return fmt.Errorf("failed to delete database: %w", err2)
+		}
 		return fmt.Errorf("failed to execute ddl: %w", err)
 	}
 
-	// TODO: read in the roles and queries and store them
+	// add the queries
+	for name, _ := range yml.Queries {
+		err = c.AddQuery(ctx, nm, name, []byte("")) // TODO: add the query
+		if err != nil {
+			return fmt.Errorf("failed to add query: %w", err)
+		}
+	}
+
+	// add the roles and permissions
+	for name, rl := range yml.Roles {
+		err = c.AddRole(ctx, nm, name)
+		if err != nil {
+			return fmt.Errorf("failed to add role: %w", err)
+		}
+		for _, q := range rl.Queries {
+			err = c.AddQueryPermission(ctx, nm, name, q)
+			if err != nil {
+				return fmt.Errorf("failed to add query permission: %w", err)
+			}
+		}
+	}
 
 	return nil
 }
@@ -96,6 +132,7 @@ func (c *client) DeleteDB(ctx context.Context, owner, name string) error {
 	}
 
 	// Delete the schema
+	fmt.Println("dropping schema", nm)
 	_, err = c.db.ExecContext(ctx, "DROP SCHEMA "+nm+" CASCADE")
 	if err != nil {
 		return err
@@ -126,28 +163,4 @@ func (c *client) schemaExists(ctx context.Context, schema string) (bool, error) 
 	}
 
 	return exists, nil
-}
-
-// createDB will create a schema in the database named owner_name
-func (c *client) createDB(ctx context.Context, owner, name string) error {
-
-	nm := owner + "_" + name
-
-	// check if the schema already exists
-	var exists bool
-	err := c.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = $1)", nm).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return ErrDBExists
-	}
-
-	// create the schema
-	_, err = c.db.ExecContext(ctx, "CREATE SCHEMA "+nm)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
