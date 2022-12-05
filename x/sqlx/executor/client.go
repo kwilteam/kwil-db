@@ -85,13 +85,15 @@ func (c *client) DeployDDL(ctx context.Context, ddl []byte) error {
 		return fmt.Errorf("failed to execute ddl: %w", err)
 	}
 
-	// add the queries
-	for name, _ := range yml.Queries {
-		err = c.AddQuery(ctx, nm, name, []byte("")) // TODO: add the query
-		if err != nil {
-			return fmt.Errorf("failed to add query: %w", err)
+	/*
+		// add the queries
+		for name, _ := range yml.Queries {
+			err = c.AddQuery(ctx, nm, name, []byte("")) // TODO: add the query
+			if err != nil {
+				return fmt.Errorf("failed to add query: %w", err)
+			}
 		}
-	}
+	*/
 
 	// add the roles and permissions
 	for name, rl := range yml.Roles {

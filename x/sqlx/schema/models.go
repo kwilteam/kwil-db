@@ -1,13 +1,13 @@
 package schema
 
 type Database struct {
-	Owner       string           `yaml:"owner"`
-	Name        string           `yaml:"name"`
-	DefaultRole string           `yaml:"default_role"`
-	Tables      Tables           `yaml:"tables"`
-	Roles       Roles            `yaml:"roles"`
-	Queries     map[string]Query `yaml:"queries"`
-	Indexes     Indices          `yaml:"indexes"`
+	Owner       string         `yaml:"owner"`
+	Name        string         `yaml:"name"`
+	DefaultRole string         `yaml:"default_role"`
+	Tables      Tables         `yaml:"tables"`
+	Roles       Roles          `yaml:"roles"`
+	Queries     DefinedQueries `yaml:"queries"`
+	Indexes     Indices        `yaml:"indexes"`
 }
 
 type Tables map[string]Table
@@ -28,7 +28,4 @@ type Roles map[string]Role
 
 type Role struct {
 	Queries []string `yaml:"queries"`
-}
-
-type Query struct {
 }

@@ -1,0 +1,26 @@
+queries:
+  - createUser:
+      columns: [user_id, first_name, last_name, age]
+      rows:
+        - [1234, 'first-name-20', 'last-name-20', 20] # ordinal insert
+        - [4321, 'first-name-30', 'last-name-30', 30] # ordinal insert
+
+  - updateUser:
+      columns: [first_name, last_name, age]
+      set-values: ['first-name-31', 'last-name-31', 31]
+      if-match:
+        - eq: {user_id: 1234}
+
+  - removeUser:
+      if-match:
+      - eq: {user_id: 1234}
+      - nq: {user_id: 1234}
+      - lt: {user_id: 1234}
+      - gt: {user_id: 1234}
+
+  - removeUser:
+      if-match:
+      - eq: {user_id: 1234}
+      - nq: {user_id: 1234}
+      - lt: {user_id: 1234}
+      - gt: {user_id: 1234}

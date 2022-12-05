@@ -1,0 +1,32 @@
+queries:
+  createUser:
+    type: create
+    table: tblUser
+    columns: {user_id, first_name, last_name, age, user_type: standard}
+
+  updateUser:
+    type: update
+    table: tblUser
+    columns: {first_name, last_name, age}
+    if-match: {user_id, user_type: standard}
+
+  "removeUser": # using both quotes and no quotes works
+    "type": "delete"
+    table: tblUser
+    "if-match": {"user_id", "user_type": "standard"}
+
+  createAdminUser:
+    type: create
+    table: tblUser
+    columns: {user_id, first_name, last_name, age, user_type: admin}
+
+  updateAdminUser:
+    type: update
+    table: tblUser
+    columns: {first_name, last_name, age}
+    if-match: {user_id, user_type: admin}
+
+  removeAdminUser:
+    type: delete
+    table: tblUser
+    if-match: {user_id, user_type: admin}
