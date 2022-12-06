@@ -36,7 +36,7 @@ func deployCmd() *cobra.Command {
 				}
 
 				// parse to yaml
-				db, err := schema.ReadYaml(file)
+				db, err := schema.MarshalDatabase(file)
 				if err != nil {
 					return err
 				}

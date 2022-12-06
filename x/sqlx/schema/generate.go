@@ -138,7 +138,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 
 func constraintName(tableName, columnName, constraintType string) string {
 
-	return constraintType[:1] + crypto.Sha224Str([]byte(tableName+"_"+columnName+"_"+constraintType))
+	return constraintType[:1] + crypto.Sha224Str([]byte(tableName+"_"+columnName+"_"+constraintType)) // adding underscores to prevent collisions
 }
 
 func As[T any](into T, from any) error {

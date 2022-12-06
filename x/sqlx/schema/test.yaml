@@ -2,15 +2,19 @@ owner: kwil
 name: mydb
 default_role: bennanmode
 tables:
-  table1:
+  tblUser:
     columns:
-      t1col1:
-        type: string
+      user_id:
+        type: int32
         attributes:
           primary_key: true
-          min_length: 10
-          max_length: 100
-      t1col2:
+      first_name:
+        type: string
+      last_name:
+        type: string
+      age:
+        type: int32
+      user_type:
         type: string
   table2:
     columns:
@@ -23,19 +27,66 @@ tables:
 roles:
   bennanmode:
     queries:
-      - query1
-      - query2
+      - createUser
+      - updateUser
+      - removeUser
   randalmode:
     queries:
-      - query1
-      - query2
-      - query3
+      - createUser
+      - updateUser
+      - removeUser
+      - createAdminUser
+      - updateAdminUser
+      - removeAdminUser
 queries:
-  query1:
-  query2:
-  query3:
+  createUser:
+    type: create
+    table: tblUser
+    columns: {user_id, first_name, last_name, age, user_type: standard}
+
+  updateUser:
+    type: update
+    table: tblUser
+    columns: {first_name, last_name, age}
+    where: 
+      - {
+        column: user_type,
+        operator: "=",
+        default: standard
+      }
+      - {
+        column: age,
+        operator: ">"
+      }
+
+  removeUser: # using both quotes and no quotes works
+    type: "delete"
+    table: tblUser
+    if-match: {user_id, user_type: standard}
+    where: 
+    - {
+      column: user_type,
+      operator: "=",
+      default: standard
+    }
+
+  createAdminUser:
+    type: create
+    table: tblUser
+    columns: {user_id, first_name, last_name, age, user_type: admin}
+
+  updateAdminUser:
+    type: update
+    table: tblUser
+    columns: {first_name, last_name, age}
+    if-match: {user_id, user_type: admin}
+
+  removeAdminUser:
+    type: delete
+    table: tblUser
+    if-match: {user_id, user_type: admin}
 indexes:
-  index1:
-    table: table1
-    column: t1col1
+  user_age:
+    table: tblUser
+    column: age
     using: btree

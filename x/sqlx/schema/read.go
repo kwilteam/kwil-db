@@ -4,7 +4,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func ReadYaml(bts []byte) (*Database, error) {
+func MarshalDatabase(bts []byte) (*Database, error) {
 	var db Database
 	err := yaml.Unmarshal(bts, &db)
 	if err != nil {

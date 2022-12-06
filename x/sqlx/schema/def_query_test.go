@@ -1,9 +1,10 @@
 package schema
 
 import (
-	"gopkg.in/yaml.v2"
 	"os"
 	"testing"
+
+	"gopkg.in/yaml.v2"
 )
 
 const _YAML_TEST_FILE = "defs_test_simple.yaml"

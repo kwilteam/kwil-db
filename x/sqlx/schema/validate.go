@@ -45,7 +45,7 @@ func (db *Database) Validate() error {
 	if len(db.Name) > MAX_DB_NAME_LENGTH {
 		return fmt.Errorf("database name must be less than %d characters", MAX_DB_NAME_LENGTH)
 	}
-	ok, err := CheckValidName(db.Name)
+	ok, err := CheckValidName(db.SchemaName())
 	if err != nil {
 		return err
 	}
@@ -234,6 +234,10 @@ func (r *Role) Validate(db *Database) error {
 		}
 	}
 	return nil
+}
+
+func (db *Database) SchemaName() string {
+	return db.Owner + "_" + db.Name
 }
 
 func checkAllowedCharacters(s string) (bool, error) {

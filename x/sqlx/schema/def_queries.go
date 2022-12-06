@@ -8,7 +8,7 @@ import (
 type DefinedQuery interface {
 	Name() string
 	Type() QueryType
-	//Prepare() PreparedStatement
+	Prepare(*Database) (*executableQuery, error)
 }
 
 type DefinedQueries struct {
@@ -43,6 +43,21 @@ func (q *DefinedQueries) ListAll() []string {
 	return queries
 }
 
+// GetAll is like ListAll, but returns the queries themselves
+func (q *DefinedQueries) GetAll() map[string]DefinedQuery {
+	queries := make(map[string]DefinedQuery)
+	for name, query := range q.inserts {
+		queries[name] = query
+	}
+	for name, query := range q.updates {
+		queries[name] = query
+	}
+	for name, query := range q.deletes {
+		queries[name] = query
+	}
+	return queries
+}
+
 func (q *DefinedQueries) Find(name string) (DefinedQuery, error) {
 	i, ok := q.inserts[name]
 	if ok {
@@ -54,7 +69,7 @@ func (q *DefinedQueries) Find(name string) (DefinedQuery, error) {
 		return u, nil
 	}
 
-	d, ok := q.updates[name]
+	d, ok := q.deletes[name]
 	if ok {
 		return d, nil
 	}
@@ -63,10 +78,16 @@ func (q *DefinedQueries) Find(name string) (DefinedQuery, error) {
 }
 
 type defined_query_marshalled struct {
-	Type    string    `yaml:"type"`
-	Table   string    `yaml:"table"`
-	Columns ColumnMap `yaml:"columns"`
-	IfMatch ColumnMap `yaml:"if-match"`
+	Type    string            `yaml:"type"`
+	Table   string            `yaml:"table"`
+	Columns ColumnMap         `yaml:"columns"`
+	Where   []where_predicate `yaml:"where"`
+}
+
+type where_predicate struct {
+	Column   string `yaml:"column"`
+	Operator string `yaml:"operator"`
+	Default  string `yaml:"default"`
 }
 
 func (q *DefinedQueries) MarshalYAML() (interface{}, error) {
@@ -94,7 +115,7 @@ func (q *DefinedQueries) MarshalYAML() (interface{}, error) {
 			m[name] = defined_query_marshalled{
 				Type:    "update",
 				Columns: query.columns,
-				IfMatch: query.ifMatch,
+				Where:   query.where,
 			}
 		}
 	}
@@ -105,8 +126,8 @@ func (q *DefinedQueries) MarshalYAML() (interface{}, error) {
 		}
 		for name, query := range q.deletes {
 			m[name] = defined_query_marshalled{
-				Type:    "delete",
-				IfMatch: query.ifMatch,
+				Type:  "delete",
+				Where: query.where,
 			}
 		}
 	}
@@ -138,11 +159,11 @@ func (q *DefinedQueries) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	for name, query := range m {
 		switch query.Type {
 		case "create":
-			q.addCreate(name, query.Columns)
+			q.addCreate(name, query.Table, query.Columns)
 		case "update":
-			q.addUpdate(name, query.Columns, query.IfMatch)
+			q.addUpdate(name, query.Table, query.Columns, query.Where)
 		case "delete":
-			q.addDelete(name, query.IfMatch)
+			q.addDelete(name, query.Table, query.Where)
 		default:
 			return fmt.Errorf("unknown query type: %s", query.Type)
 		}
@@ -151,24 +172,27 @@ func (q *DefinedQueries) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	return nil
 }
 
-func (q *DefinedQueries) addCreate(name string, columns ColumnMap) {
+func (q *DefinedQueries) addCreate(name, table string, columns ColumnMap) {
 	q.inserts[name] = &InsertDef{
 		name:    name,
+		table:   table,
 		columns: columns,
 	}
 }
 
-func (q *DefinedQueries) addUpdate(name string, columns ColumnMap, ifMatch ColumnMap) {
+func (q *DefinedQueries) addUpdate(name, table string, columns ColumnMap, where []where_predicate) {
 	q.updates[name] = &UpdateDef{
 		name:    name,
+		table:   table,
 		columns: columns,
-		ifMatch: ifMatch,
+		where:   where,
 	}
 }
 
-func (q *DefinedQueries) addDelete(name string, ifMatch ColumnMap) {
+func (q *DefinedQueries) addDelete(name, table string, where []where_predicate) {
 	q.deletes[name] = &DeleteDef{
-		name:    name,
-		ifMatch: ifMatch,
+		name:  name,
+		table: table,
+		where: where,
 	}
 }
