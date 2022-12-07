@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	grpcEndpointEnv = "KWIL_GRPC_ENDPOINT"
+	grpcEndpointEnv    = "KWIL_GRPC_ENDPOINT"
+	graphqlEndpointEnv = "GRAPHQL_URL"
 )
 
 func Start() error {
@@ -46,6 +47,15 @@ func Start() error {
 			if err != nil {
 				return err
 			}
+
+			err = mux.HandlePath(http.MethodPost, "/graphql", graphqlHandler)
+			if err != nil {
+				return err
+			}
+
+			// add default source('default') to Hasura
+			hasuraEngine := NewHasuraEngine(viper.GetString("graphql"))
+			_ = hasuraEngine.addDefaultSourceAndSchema()
 
 			http_port := os.Getenv("GATEWAY_HTTP_PORT")
 			if http_port == "" {
@@ -79,6 +89,10 @@ func Start() error {
 	if err != nil {
 		return err
 	}
+
+	cmd.PersistentFlags().String("graphql", "localhost:8081/v1/graphql", "GraphQl server endpoint")
+	viper.BindPFlag("graphql", cmd.PersistentFlags().Lookup("graphql"))
+	viper.BindEnv("graphql", graphqlEndpointEnv)
 
 	return cmd.Execute()
 }
