@@ -75,7 +75,7 @@ func newHasuraPgUntrackTableParams(source, schema, table string) HasuraPgUntrack
 			Source: source,
 			Table: HasuraQulifiedTable{
 				Schema: schema,
-				Name:   table,
+				Name:   convertHasuraTableName(table),
 			},
 			Cascade: false,
 		},

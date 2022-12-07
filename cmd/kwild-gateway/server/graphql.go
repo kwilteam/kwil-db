@@ -15,14 +15,32 @@ import (
 )
 
 func isMutation(query string) bool {
-	// mutation could starts with a operationName or not
-	// NOTE: for now this function should be enough
-	// TODO: @yaiba a more robust function or remove it
-	if strings.Contains(query, "mutation ") || strings.Contains(query, "mutation{") {
-		return true
-	} else {
-		return false
+	// NOTE: enough to correctly block most mutations
+	operations := []string{}
+	rightBracket := -1
+	opens := 0
+	for i, c := range query {
+		if c == '}' {
+			opens -= 1
+			if opens == 0 {
+				rightBracket = i
+			}
+		}
+
+		if c == '{' {
+			if opens == 0 {
+				operations = append(operations, query[rightBracket+1:i])
+			}
+			opens += 1
+		}
 	}
+
+	for _, op := range operations {
+		if strings.Contains(op, "mutation") {
+			return true
+		}
+	}
+	return false
 }
 
 func JSONError(w http.ResponseWriter, err error, code int) {

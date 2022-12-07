@@ -15,7 +15,6 @@ func Test_convertHasuraTableName(t *testing.T) {
 		args args
 		want string
 	}{
-		// TODO: Add test cases.
 		{
 			name: "with space",
 			args: args{"With Space"},
@@ -30,6 +29,11 @@ func Test_convertHasuraTableName(t *testing.T) {
 			name: "simple",
 			args: args{"simple"},
 			want: "simple",
+		},
+		{
+			name: "with_underscore",
+			args: args{"with_underscore"},
+			want: "with_underscore",
 		},
 	}
 	for _, tt := range tests {
@@ -72,37 +76,5 @@ func Test_trackTable(t *testing.T) {
 	err = h.trackTable(DefaultHasuraSource, DefaultHasuraSource, "table1")
 	if err == nil {
 		t.Errorf("trackTable() should raise err")
-	}
-}
-
-func Test_callHasura_trackTable(t *testing.T) {
-	url := "http://127.0.0.1:8080/"
-	h := NewHasuraEngine(url)
-	if err := h.trackTable(DefaultHasuraSource, DefaultHasuraSchema, "profiles"); err != nil {
-		t.Log(err)
-	}
-}
-
-func Test_callHasura_untrackTable(t *testing.T) {
-	url := "http://127.0.0.1:8080/"
-	h := NewHasuraEngine(url)
-	if err := h.untrackTable(DefaultHasuraSource, DefaultHasuraSchema, "profiles"); err != nil {
-		t.Log(err)
-	}
-}
-
-func Test_callHasura_addDefaultSource(t *testing.T) {
-	url := "http://127.0.0.1:8082/"
-	h := NewHasuraEngine(url)
-	if err := h.addDefaultSourceAndSchema(); err != nil {
-		t.Log(err)
-	}
-}
-
-func Test_callHasura_addDefaultSchema(t *testing.T) {
-	url := "http://127.0.0.1:8082/"
-	h := NewHasuraEngine(url)
-	if err := h.addDefaultSchema(); err != nil {
-		t.Log(err)
 	}
 }

@@ -11,27 +11,35 @@ func Test_isMutation(t *testing.T) {
 		args args
 		want bool
 	}{
-		// TODO: Add test cases.
 		{
 			name: "normal",
-			args: args{"mutation insert {insert_profiles(objects: {age: 21}) { affected_rows }}"},
+			args: args{"mutation normal {insert_profiles(objects: {age: 21}) { affected_rows }}"},
 			want: true,
 		},
 		{
 			name: "multi mutation",
-			args: args{"mutation insert {insert_profiles(objects: {age: 21}) { affected_rows }}\nmutation insert {insert_profiles(objects: {age: 21}) { affected_rows }}"},
+			args: args{"mutation multi1 {insert_profiles(objects: {age: 21}) { affected_rows }}\nmutation multi2 {insert_profiles(objects: {age: 21}) { affected_rows }}"},
 			want: true,
 		},
 
 		{
 			name: "hybrid query",
-			args: args{"query {profiles {name}}\nmutation insert {insert_profiles(objects: {age: 21}) { affected_rows }}"},
+			args: args{"query {profiles {name}}\nmutation hybrid {insert_profiles(objects: {age: 21}) { affected_rows }}"},
 			want: true,
 		},
 		{
-			name: "mutation is arguemet",
-			// will fail
-			args: args{"mutation insert {insert_profiles(objects: {address: \"st mutation sf\"}) { affected_rows }}"},
+			name: "mutation in arg",
+			args: args{`query mut{profiles(name: "arg mutation ") { name }}`},
+			want: false,
+		},
+		{
+			name: "mutation in body",
+			args: args{"query mut{profiles(age: 20) { name mutation }}"},
+			want: false,
+		},
+		{
+			name: "close brackets in arg with mutation in body",
+			args: args{`query mut{profiles(name: "}") { name mutation }}`},
 			want: false,
 		},
 	}
