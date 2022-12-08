@@ -2,9 +2,10 @@ package hasura
 
 import (
 	"fmt"
-	"github.com/spf13/viper"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 func snakeCase(name string) string {

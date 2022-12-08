@@ -3,8 +3,6 @@ package graphql
 import (
 	"bytes"
 	"fmt"
-	"github.com/spf13/viper"
-	"github.com/vektah/gqlparser/gqlerror"
 	"io"
 	"kwil/x/graphql/hasura"
 	"kwil/x/logx"
@@ -12,6 +10,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"github.com/spf13/viper"
+	"github.com/vektah/gqlparser/gqlerror"
 )
 
 type GraphqlRProxy struct {

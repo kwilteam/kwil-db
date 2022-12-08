@@ -1,9 +1,10 @@
 package graphql
 
 import (
+	"kwil/x/graphql/hasura"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"kwil/x/graphql/hasura"
 )
 
 func CliSetup(cmd *cobra.Command) {
