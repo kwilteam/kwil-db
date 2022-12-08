@@ -17,7 +17,7 @@ message DropDatabaseRequest {
 	Tx tx = 1;
 }
 
-message DropDatabaseResponse {
+message DropDatabasemettaResponse {
 	string txid = 1;
 	string msg = 2;
 }
@@ -82,7 +82,7 @@ message DefaultInput {
 message Index {
 	string name = 1;
 	string table = 2;
-	string column = 3;
+	repeated string columns = 3;
 	string using = 4;
 }
 
