@@ -2,7 +2,7 @@ package schema
 
 type KuniformColumn struct {
 	Type       KuniformType                 `yaml:"type"`
-	Attributes map[KuniformAttribute]string `yaml:"attributes"`
+	Attributes map[KuniformAttribute]string `yaml:"attributes"` // maps an attribute to its value.  e.g. "min_length": "5"
 }
 
 /*

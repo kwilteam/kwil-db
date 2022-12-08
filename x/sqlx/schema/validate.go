@@ -3,6 +3,7 @@ package schema
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 const (
@@ -236,8 +237,13 @@ func (r *Role) Validate(db *Database) error {
 	return nil
 }
 
+// returns the name of the schema.  If it has not been set, it will be set to the owner + "_" + name
 func (db *Database) SchemaName() string {
-	return db.Owner + "_" + db.Name
+	if db.schemaName == "" {
+		db.schemaName = strings.ToLower(FormatOwner(db.Owner) + "_" + db.Name)
+	}
+
+	return db.schemaName
 }
 
 func checkAllowedCharacters(s string) (bool, error) {
@@ -258,4 +264,11 @@ func CheckValidName(s string) (bool, error) {
 		return false, nil
 	}
 	return checkAllowedCharacters(s)
+}
+
+func CheckValidSchemaName(s string) (bool, error) {
+	// TODO: should make a standalone regex for this
+
+	s = strings.ToLower(s)
+	return CheckValidName(s)
 }

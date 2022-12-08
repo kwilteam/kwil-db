@@ -1,27 +1,24 @@
 package apisvc
 
 import (
-	"kwil/x/deposits"
 	"kwil/x/logx"
 	"kwil/x/pricing"
 	"kwil/x/proto/apipb"
-	"kwil/x/sqlx/executor"
+	"kwil/x/sqlx/manager"
 )
 
 type Service struct {
 	apipb.UnimplementedKwilServiceServer
 
-	ds    deposits.Deposits
-	log   logx.Logger
-	p     pricing.Service
-	exctr executor.Executor
+	log     logx.Logger
+	p       pricing.Service
+	manager *manager.Manager
 }
 
-func NewService(ds deposits.Deposits, exctr executor.Executor) *Service {
+func NewService(mngr *manager.Manager) *Service {
 	return &Service{
-		ds:    ds,
-		log:   logx.New(),
-		p:     pricing.NewService(),
-		exctr: exctr,
+		log:     logx.New(),
+		p:       pricing.NewService(),
+		manager: mngr,
 	}
 }

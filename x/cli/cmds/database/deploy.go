@@ -36,7 +36,8 @@ func deployCmd() *cobra.Command {
 				}
 
 				// parse to yaml
-				db, err := schema.MarshalDatabase(file)
+				db := &schema.Database{}
+				err = db.UnmarshalYAML(file)
 				if err != nil {
 					return err
 				}
@@ -77,12 +78,14 @@ func deployCmd() *cobra.Command {
 
 				// construct the request
 				req := &apipb.DeploySchemaRequest{
-					Id:        id,
-					Data:      file,
-					Fee:       fee,
-					Nonce:     nonce,
-					Signature: sig,
-					From:      c.Address.String(),
+					Tx: &apipb.Tx{
+						Id:        id,
+						Data:      file,
+						Fee:       fee,
+						Nonce:     nonce,
+						Signature: sig,
+						Sender:    c.Address.String(),
+					},
 				}
 
 				// send it

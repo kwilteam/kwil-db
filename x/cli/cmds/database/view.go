@@ -26,7 +26,7 @@ func viewDatabaseCmd() *cobra.Command {
 				}
 
 				resp, err := client.GetMetadata(ctx, &apipb.GetMetadataRequest{
-					Wallet:   args[0],
+					Owner:    args[0],
 					Database: args[1],
 				})
 
@@ -44,7 +44,9 @@ func viewDatabaseCmd() *cobra.Command {
 					for _, c := range t.Columns {
 						fmt.Printf("    %s\n", c.Name)
 						fmt.Printf("      Type: %s\n", c.Type)
-						fmt.Printf("      Arity: %v\n", c.Arity)
+						for _, a := range c.Attributes {
+							fmt.Printf("      %s\n", a)
+						}
 					}
 				}
 

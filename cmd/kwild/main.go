@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/async"
-	"kwil/x/sqlx/executor"
+	"kwil/x/sqlx/manager"
 	"kwil/x/sqlx/sqlclient"
 	"net"
 	"net/http"
@@ -52,9 +52,14 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
 
-	exctr := executor.New(client)
+	mngrCfg := cfgx.GetConfig().Select("manager-settings")
+	mngr, err := manager.New(ctx, client, mngrCfg)
+	err = mngr.SyncCache(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to sync cache: %w", err)
+	}
 
-	apiService := apisvc.NewService(d, exctr)
+	apiService := apisvc.NewService(mngr)
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(ctx, logger, d, httpHandler, apiService)

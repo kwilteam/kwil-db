@@ -14,7 +14,8 @@ func Test_ReadYaml(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err := MarshalDatabase(bts)
+	db := &Database{}
+	err = db.UnmarshalYAML(bts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +33,7 @@ func Test_ReadYaml(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	q := db.Queries.inserts["createUser"]
+	q := db.Queries.Inserts["createUser"]
 	if q == nil {
 		t.Fatal("createUser is nil")
 	}
@@ -41,11 +42,6 @@ func Test_ReadYaml(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(st.Statement)
-	fmt.Println(st.Args)
-	fmt.Println(st.UserInputs)
-
-	fmt.Println("NOW TIME TO PREPARE EXEC")
 
 	inpts := make(UserInputs)
 	inpts["first_name"] = "kwil"
@@ -75,7 +71,8 @@ func Test_UpdateStmt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err := MarshalDatabase(bts)
+	db := &Database{}
+	err = db.UnmarshalYAML(bts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +90,7 @@ func Test_UpdateStmt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	q := db.Queries.updates["updateUser"]
+	q := db.Queries.Updates["updateUser"]
 	if q == nil {
 		t.Fatal("updateUser is nil")
 	}
@@ -129,7 +126,8 @@ func Test_DeleteStmt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err := MarshalDatabase(bts)
+	db := &Database{}
+	err = db.UnmarshalYAML(bts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +145,7 @@ func Test_DeleteStmt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	q := db.Queries.deletes["removeUser"]
+	q := db.Queries.Deletes["removeUser"]
 	if q == nil {
 		t.Fatal("deleteUser is nil")
 	}
@@ -169,4 +167,38 @@ func Test_DeleteStmt(t *testing.T) {
 	fmt.Println(ins)
 
 	panic("	")
+}
+
+func Test_DBMarshalling(t *testing.T) {
+	bts, err := os.ReadFile("test.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := &Database{}
+	err = db.UnmarshalYAML(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bts, err = db.EncodeGOB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	db2 := &Database{}
+	err = db2.DecodeGOB(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bts2, err := db2.EncodeGOB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(bts) != len(bts2) {
+		t.Fatal("bytes are not equal")
+	}
+
+	panic("")
 }

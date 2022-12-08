@@ -1,7 +1,8 @@
 package schema
 
 type Database struct {
-	Owner       string         `yaml:"owner"`
+	Owner       string `yaml:"owner"`
+	schemaName  string
 	Name        string         `yaml:"name"`
 	DefaultRole string         `yaml:"default_role"`
 	Tables      Tables         `yaml:"tables"`

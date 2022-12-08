@@ -1,4 +1,4 @@
-package sql_test
+package deposit_store_test
 
 import (
 	"context"
@@ -155,7 +155,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// spend 100
-	err = db.Spend(addr, "100")
+	err = db.Spend(ctx, addr, "100")
 	if err != nil {
 		t.Error(err)
 	}
@@ -280,7 +280,7 @@ func Test_SQLStore(t *testing.T) {
 	}
 
 	// spend 300
-	err = db.Spend(addr, "300")
+	err = db.Spend(ctx, addr, "300")
 	if err == nil {
 		t.Error("spending more than balance should have failed")
 	}
@@ -433,7 +433,7 @@ func Test_Withdrawal(t *testing.T) {
 	}
 
 	// spend some
-	err = db.Spend(addr, "50")
+	err = db.Spend(ctx, addr, "50")
 	if err != nil {
 		t.Error(err)
 	}

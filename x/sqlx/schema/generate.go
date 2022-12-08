@@ -1,19 +1,24 @@
 package schema
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"kwil/x/crypto"
 	"strings"
 
 	conv "github.com/cstockton/go-conv"
+	"gopkg.in/yaml.v2"
 )
+
+// TODO: use a metadata builder.  There aren't any good public ones yet. so we will have to write our own.
 
 func buildCreateTable(name string, t Table) ([]string, error) {
 	var bs []string
 	var alters []string
 	var b strings.Builder
 	b.WriteString("CREATE TABLE ")
-	b.WriteString(name)
+	b.WriteString(FormatTable(name))
 	b.WriteString(" (")
 	var i uint8
 	for colname, c := range t.Columns {
@@ -56,7 +61,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			}
 			var b strings.Builder
 			b.WriteString("ALTER TABLE ")
-			b.WriteString(tableName)
+			b.WriteString(FormatTable(tableName))
 			b.WriteString(" ADD CONSTRAINT ")
 			b.WriteString(constraintName(tableName, columnName, "MinLength"))
 			b.WriteString(" CHECK (length(")
@@ -76,7 +81,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			}
 			var b strings.Builder
 			b.WriteString("ALTER TABLE ")
-			b.WriteString(tableName)
+			b.WriteString(FormatTable(tableName))
 			b.WriteString(" ADD CONSTRAINT ")
 			b.WriteString(constraintName(tableName, columnName, "MaxLength"))
 			b.WriteString(" CHECK (length(")
@@ -93,7 +98,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 		case KuniformPrimaryKey:
 			var b strings.Builder
 			b.WriteString("ALTER TABLE ")
-			b.WriteString(tableName)
+			b.WriteString(FormatTable(tableName))
 			b.WriteString(" ADD PRIMARY KEY (")
 			b.WriteString(columnName)
 			b.WriteString("); ")
@@ -101,9 +106,9 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 		case KuniformUnique:
 			var b strings.Builder
 			b.WriteString("ALTER TABLE ")
-			b.WriteString(tableName)
+			b.WriteString(FormatTable(tableName))
 			b.WriteString(" ADD CONSTRAINT ")
-			b.WriteString(tableName)
+			b.WriteString(FormatConstraint(tableName))
 			b.WriteString("_")
 			b.WriteString(columnName)
 			b.WriteString("_unique UNIQUE (")
@@ -113,7 +118,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 		case KuniformNotNull:
 			var b strings.Builder
 			b.WriteString("ALTER TABLE ")
-			b.WriteString(tableName)
+			b.WriteString(FormatTable(tableName))
 			b.WriteString(" ALTER COLUMN ")
 			b.WriteString(columnName)
 			b.WriteString(" SET NOT NULL;")
@@ -122,7 +127,7 @@ func (c *KuniformColumn) BuildAttributes(tableName, columnName string) ([]string
 			// TODO: dynamically determine the type of the default value
 			var b strings.Builder
 			b.WriteString("ALTER TABLE ")
-			b.WriteString(tableName)
+			b.WriteString(FormatTable(tableName))
 			b.WriteString(" ALTER COLUMN ")
 			b.WriteString(columnName)
 			b.WriteString(" SET DEFAULT ")
@@ -153,7 +158,7 @@ func buildCreateIndex(name, schema string, i Index) string {
 	b.WriteString("CREATE INDEX ")
 	b.WriteString(indNm)
 	b.WriteString(" ON ")
-	b.WriteString(schema)
+	b.WriteString(FormatOwner(schema))
 	b.WriteString(".")
 	b.WriteString(i.Table)
 	b.WriteString(" (")
@@ -196,4 +201,23 @@ func (c *KuniformColumn) GetAttributes() ([]KuniformAttribute, error) {
 		}
 	}
 	return atts, nil
+}
+
+func (db *Database) EncodeGOB() ([]byte, error) {
+	buf := bytes.NewBuffer([]byte{})
+	err := gob.NewEncoder(buf).Encode(db)
+	return buf.Bytes(), err
+}
+
+func (db *Database) DecodeGOB(b []byte) error {
+	buf := bytes.NewBuffer(b)
+	return gob.NewDecoder(buf).Decode(db)
+}
+
+func (db *Database) UnmarshalYAML(b []byte) error {
+	return yaml.Unmarshal(b, db)
+}
+
+func (db *Database) MarshalYAML() ([]byte, error) {
+	return yaml.Marshal(db)
 }

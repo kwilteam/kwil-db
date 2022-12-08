@@ -21,7 +21,7 @@ type Deposits interface {
 	GetBalance(context.Context, string) (*big.Int, error)
 	GetSpent(context.Context, string) (*big.Int, error)
 	GetBalanceAndSpent(context.Context, string) (string, string, error)
-	Spend(address string, amount string) error
+	Spend(ctx context.Context, address string, amount string) error
 	Withdraw(context.Context, string, string) (*types.PendingWithdrawal, error)
 	Close() error
 	GetWithdrawalsForWallet(context.Context, string) ([]*types.PendingWithdrawal, error)
@@ -36,7 +36,7 @@ type deposits struct {
 	sc   types.Contract
 	lh   int64
 	we   int64
-	sql  sql.SQLStore
+	sql  sql.DepositStore
 	acc  kc.Account
 	addr string
 }
@@ -59,10 +59,7 @@ func New(ctx context.Context, c cfgx.Config, l logx.Logger, acc kc.Account, clie
 		return nil, fmt.Errorf("failed to get withdrawal_expiration from config. %w", err)
 	}
 
-	pg, err := sql.New(client)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sql store. %w", err)
-	}
+	pg := sql.New(client)
 
 	lb, err := pg.GetHeight(ctx)
 	if err != nil {
@@ -223,12 +220,12 @@ func (d *deposits) GetSpent(ctx context.Context, addr string) (*big.Int, error) 
 
 // Spend will try to spend the amount from the address.
 // If the addr does not have enough, it will return ErrInsufficientFunds
-func (d *deposits) Spend(addr string, amt string) error {
+func (d *deposits) Spend(ctx context.Context, addr string, amt string) error {
 	if !d.run {
 		return ErrDepositsNotRunning
 	}
 
-	return d.sql.Spend(addr, amt)
+	return d.sql.Spend(ctx, addr, amt)
 }
 
 func (d *deposits) GetBalanceAndSpent(ctx context.Context, addr string) (string, string, error) {

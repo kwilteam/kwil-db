@@ -8,44 +8,36 @@ import (
 )
 
 type InsertDef struct {
-	name    string
-	table   string
-	columns ColumnMap
-}
-
-func (q *InsertDef) Name() string {
-	return q.name
+	Name    string
+	Table   string
+	Columns ColumnMap
 }
 
 func (q *InsertDef) Type() QueryType {
 	return Create
 }
 
-func (q *InsertDef) Columns() ColumnMap {
-	return q.columns
-}
-
-func (q *InsertDef) Prepare(db *Database) (*executableQuery, error) {
+func (q *InsertDef) Prepare(db *Database) (*ExecutableQuery, error) {
 	// Create a preparedStatement value and initialize its fields
-	tbl, ok := db.Tables[q.table]
+	tbl, ok := db.Tables[q.Table]
 	if !ok {
-		return nil, fmt.Errorf("table %s not found", q.table)
+		return nil, fmt.Errorf("table %s not found", q.Table)
 	}
-	qry := executableQuery{
+	qry := ExecutableQuery{
 		Statement:  "",
 		Args:       make(map[int]arg),
-		UserInputs: make([]requiredInputs, 0),
+		UserInputs: make([]*requiredInput, 0),
 	}
 
 	// Create a statementInput value for each column and add it to the preparedStatement's inputs slice
 	cols := []interface{}{}
 	i := 1
-	for name, val := range q.columns {
+	for name, val := range q.Columns {
 		cols = append(cols, name)
 		fillable := false
 		if val == "" {
 			fillable = true
-			qry.UserInputs = append(qry.UserInputs, requiredInputs{
+			qry.UserInputs = append(qry.UserInputs, &requiredInput{
 				Column: name,
 				Type:   tbl.Columns[name].Type.String(),
 			})
@@ -66,7 +58,7 @@ func (q *InsertDef) Prepare(db *Database) (*executableQuery, error) {
 	}
 
 	// Create the SQL statement
-	stmt, err := InsertBuilder(db.SchemaName() + "." + q.table).Columns(cols).ToSQL()
+	stmt, err := InsertBuilder(db.SchemaName() + "." + q.Table).Columns(cols).ToSQL()
 	if err != nil {
 		return nil, err
 	}

@@ -6,15 +6,14 @@ import (
 )
 
 type DefinedQuery interface {
-	Name() string
 	Type() QueryType
-	Prepare(*Database) (*executableQuery, error)
+	Prepare(*Database) (*ExecutableQuery, error)
 }
 
 type DefinedQueries struct {
-	inserts map[string]*InsertDef
-	updates map[string]*UpdateDef
-	deletes map[string]*DeleteDef
+	Inserts map[string]*InsertDef
+	Updates map[string]*UpdateDef
+	Deletes map[string]*DeleteDef
 
 	statements map[string]PreparedStatement
 
@@ -27,13 +26,13 @@ func (q *DefinedQueries) ListAll() []string {
 	}
 
 	var queries []string
-	for k := range q.inserts {
+	for k := range q.Inserts {
 		queries = append(queries, k)
 	}
-	for k := range q.updates {
+	for k := range q.Updates {
 		queries = append(queries, k)
 	}
-	for k := range q.deletes {
+	for k := range q.Deletes {
 		queries = append(queries, k)
 	}
 
@@ -46,30 +45,30 @@ func (q *DefinedQueries) ListAll() []string {
 // GetAll is like ListAll, but returns the queries themselves
 func (q *DefinedQueries) GetAll() map[string]DefinedQuery {
 	queries := make(map[string]DefinedQuery)
-	for name, query := range q.inserts {
+	for name, query := range q.Inserts {
 		queries[name] = query
 	}
-	for name, query := range q.updates {
+	for name, query := range q.Updates {
 		queries[name] = query
 	}
-	for name, query := range q.deletes {
+	for name, query := range q.Deletes {
 		queries[name] = query
 	}
 	return queries
 }
 
 func (q *DefinedQueries) Find(name string) (DefinedQuery, error) {
-	i, ok := q.inserts[name]
+	i, ok := q.Inserts[name]
 	if ok {
 		return i, nil
 	}
 
-	u, ok := q.updates[name]
+	u, ok := q.Updates[name]
 	if ok {
 		return u, nil
 	}
 
-	d, ok := q.deletes[name]
+	d, ok := q.Deletes[name]
 	if ok {
 		return d, nil
 	}
@@ -97,37 +96,37 @@ func (q *DefinedQueries) MarshalYAML() (interface{}, error) {
 
 	var m map[string]defined_query_marshalled
 
-	if q.inserts != nil || len(q.inserts) == 0 {
+	if q.Inserts != nil || len(q.Inserts) == 0 {
 		m = make(map[string]defined_query_marshalled)
-		for name, query := range q.inserts {
+		for name, query := range q.Inserts {
 			m[name] = defined_query_marshalled{
 				Type:    "create",
-				Columns: query.columns,
+				Columns: query.Columns,
 			}
 		}
 	}
 
-	if q.updates != nil || len(q.updates) == 0 {
+	if q.Updates != nil || len(q.Updates) == 0 {
 		if m == nil {
 			m = make(map[string]defined_query_marshalled)
 		}
-		for name, query := range q.updates {
+		for name, query := range q.Updates {
 			m[name] = defined_query_marshalled{
 				Type:    "update",
-				Columns: query.columns,
-				Where:   query.where,
+				Columns: query.Columns,
+				Where:   query.Where,
 			}
 		}
 	}
 
-	if q.deletes != nil || len(q.deletes) == 0 {
+	if q.Deletes != nil || len(q.Deletes) == 0 {
 		if m == nil {
 			m = make(map[string]defined_query_marshalled)
 		}
-		for name, query := range q.deletes {
+		for name, query := range q.Deletes {
 			m[name] = defined_query_marshalled{
 				Type:  "delete",
-				Where: query.where,
+				Where: query.Where,
 			}
 		}
 	}
@@ -150,10 +149,10 @@ func (q *DefinedQueries) UnmarshalYAML(unmarshal func(interface{}) error) error 
 		*q = DefinedQueries{}
 	}
 
-	if q.inserts == nil {
-		q.inserts = make(map[string]*InsertDef)
-		q.updates = make(map[string]*UpdateDef)
-		q.deletes = make(map[string]*DeleteDef)
+	if q.Inserts == nil {
+		q.Inserts = make(map[string]*InsertDef)
+		q.Updates = make(map[string]*UpdateDef)
+		q.Deletes = make(map[string]*DeleteDef)
 	}
 
 	for name, query := range m {
@@ -173,26 +172,26 @@ func (q *DefinedQueries) UnmarshalYAML(unmarshal func(interface{}) error) error 
 }
 
 func (q *DefinedQueries) addCreate(name, table string, columns ColumnMap) {
-	q.inserts[name] = &InsertDef{
-		name:    name,
-		table:   table,
-		columns: columns,
+	q.Inserts[name] = &InsertDef{
+		Name:    name,
+		Table:   table,
+		Columns: columns,
 	}
 }
 
 func (q *DefinedQueries) addUpdate(name, table string, columns ColumnMap, where []where_predicate) {
-	q.updates[name] = &UpdateDef{
-		name:    name,
-		table:   table,
-		columns: columns,
-		where:   where,
+	q.Updates[name] = &UpdateDef{
+		Name:    name,
+		Table:   table,
+		Columns: columns,
+		Where:   where,
 	}
 }
 
 func (q *DefinedQueries) addDelete(name, table string, where []where_predicate) {
-	q.deletes[name] = &DeleteDef{
-		name:  name,
-		table: table,
-		where: where,
+	q.Deletes[name] = &DeleteDef{
+		Name:  name,
+		Table: table,
+		Where: where,
 	}
 }

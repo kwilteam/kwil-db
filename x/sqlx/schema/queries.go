@@ -9,17 +9,17 @@ func (d *Database) ListQueries() []string {
 	return d.Queries.ListAll()
 }
 
-type executableQuery struct {
+type ExecutableQuery struct {
 	Statement string
 
 	// The inputs by order
 	Args map[int]arg
 
 	// maps column name to arg position
-	UserInputs []requiredInputs
+	UserInputs []*requiredInput
 }
 
-type requiredInputs struct {
+type requiredInput struct {
 	Column string
 	Type   string
 }
@@ -31,6 +31,7 @@ type arg struct {
 	Fillable bool
 }
 
+// maps column name to value
 type UserInputs map[string]string
 
 /*
@@ -41,7 +42,7 @@ If the value is not in the user inputs, it will check to see if there is a defau
 
 If the arg is not fillable, it will use the default value if there is one, otherwise it will return an error.
 */
-func (q *executableQuery) PrepareInputs(usrInpts *UserInputs) ([]string, error) {
+func (q *ExecutableQuery) PrepareInputs(usrInpts *UserInputs) ([]string, error) {
 	var inputs []string
 	i := 1
 	// looping through this way to ensure that the inputs are in the correct order
@@ -71,6 +72,10 @@ func (q *executableQuery) PrepareInputs(usrInpts *UserInputs) ([]string, error) 
 
 }
 
-func (e *executableQuery) Bytes() ([]byte, error) {
+func (e *ExecutableQuery) Bytes() ([]byte, error) {
 	return json.Marshal(e)
+}
+
+func (e *ExecutableQuery) Unmarshal(b []byte) error {
+	return json.Unmarshal(b, e)
 }

@@ -1,0 +1,14 @@
+syntax = "proto3";
+package apisvc;
+option go_package = "kwil/x/proto/apipb";
+
+// TxMsg is a message that can contain any arbitrary data and have
+// associated fees and provenance.
+message Tx{
+    string id = 1;
+    bytes data = 2;
+    string fee = 3;
+    string nonce = 4;
+    string signature = 5;
+    string sender = 6;
+}

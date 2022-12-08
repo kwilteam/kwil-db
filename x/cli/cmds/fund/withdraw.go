@@ -62,12 +62,17 @@ func withdrawCmd() *cobra.Command {
 					return fmt.Errorf("error signing request: %w", err)
 				}
 
+				fmt.Println("THIS IS NOT DONE ThIS DOES NOT WORK YET")
+
 				wdr := apipb.ReturnFundsRequest{
-					Id:        id,
-					Amount:    amount.String(),
-					Nonce:     n,
-					From:      addr,
-					Signature: sig,
+					Tx: &apipb.Tx{
+						Id:        id,
+						Data:      []byte{},
+						Fee:       amount.String(),
+						Nonce:     n,
+						Sender:    addr,
+						Signature: sig,
+					},
 				}
 				res, err := client.ReturnFunds(ctx, &wdr)
 				if err != nil {
@@ -83,7 +88,7 @@ func withdrawCmd() *cobra.Command {
 	Correlation ID:   %s
 	Tx Hash:          %s
 
-`, amount, res.Amount, res.Fee, res.CorrelationId, res.Tx)
+`, amount, res.Amount, res.Fee, res.CorrelationId, res.Txid)
 
 				return nil
 			})

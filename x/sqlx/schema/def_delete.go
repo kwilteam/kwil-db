@@ -8,45 +8,37 @@ import (
 )
 
 type DeleteDef struct {
-	name  string
-	table string
-	where []where_predicate
-}
-
-func (q *DeleteDef) Where() []where_predicate {
-	return q.where
-}
-
-func (q *DeleteDef) Name() string {
-	return q.name
+	Name  string
+	Table string
+	Where []where_predicate
 }
 
 func (q *DeleteDef) Type() QueryType {
 	return Delete
 }
 
-func (q *DeleteDef) Prepare(db *Database) (*executableQuery, error) {
+func (q *DeleteDef) Prepare(db *Database) (*ExecutableQuery, error) {
 	// Create a preparedStatement value and initialize its fields
-	tbl, ok := db.Tables[q.table]
+	tbl, ok := db.Tables[q.Table]
 	if !ok {
-		return nil, fmt.Errorf("table %s not found", q.table)
+		return nil, fmt.Errorf("table %s not found", q.Table)
 	}
 
-	qry := executableQuery{
+	qry := ExecutableQuery{
 		Statement:  "",
 		Args:       make(map[int]arg),
-		UserInputs: make([]requiredInputs, 0),
+		UserInputs: make([]*requiredInput, 0),
 	}
-	statement := DeleteBuilder(db.SchemaName() + "." + q.table)
+	statement := DeleteBuilder(db.SchemaName() + "." + q.Table)
 	i := 1
-	for _, where := range q.where {
+	for _, where := range q.Where {
 		statement.Where(&where)
 
 		fillable := false
 		if where.Default == "" {
 			fillable = true
 
-			qry.UserInputs = append(qry.UserInputs, requiredInputs{
+			qry.UserInputs = append(qry.UserInputs, &requiredInput{
 				Column: where.Column,
 				Type:   tbl.Columns[where.Column].Type.String(),
 			})
