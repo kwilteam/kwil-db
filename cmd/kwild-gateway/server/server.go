@@ -2,11 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"kwil/x/proto/apipb"
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
@@ -16,8 +19,10 @@ import (
 )
 
 const (
-	grpcEndpointEnv    = "KWIL_GRPC_ENDPOINT"
-	graphqlEndpointEnv = "GRAPHQL_URL"
+	grpcEndpointEnv       = "KWIL_GRPC_ENDPOINT"
+	graphqlEndpointEnv    = "GRAPHQL_ENDPOINT"
+	hasuraAdminSecretEnv  = "HASURA_GRAPHQL_ADMIN_SECRET"
+	hasuraUnathorizedRole = "HASURA_GRAPHQL_UNAUTHORIZED_ROLE"
 )
 
 func Start() error {
@@ -48,14 +53,13 @@ func Start() error {
 				return err
 			}
 
-			err = mux.HandlePath(http.MethodPost, "/graphql", graphqlHandler)
+			graphqlRProxy := NewGraphqlRProxy()
+			err = mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
 			if err != nil {
 				return err
 			}
 
-			// add default source('default') to Hasura
-			hasuraEngine := NewHasuraEngine(viper.GetString("graphql"))
-			_ = hasuraEngine.addDefaultSourceAndSchema()
+			go initializeHasura()
 
 			http_port := os.Getenv("GATEWAY_HTTP_PORT")
 			if http_port == "" {
@@ -90,9 +94,10 @@ func Start() error {
 		return err
 	}
 
-	cmd.PersistentFlags().String("graphql", "localhost:8081/v1/graphql", "GraphQl server endpoint")
+	cmd.PersistentFlags().String("graphql", "http://localhost:8082", "GraphQl server endpoint")
 	viper.BindPFlag("graphql", cmd.PersistentFlags().Lookup("graphql"))
 	viper.BindEnv("graphql", graphqlEndpointEnv)
+	viper.BindEnv("hasuraadminsecret", hasuraAdminSecretEnv)
 
 	return cmd.Execute()
 }
@@ -164,4 +169,20 @@ func allowedOrigin(origin string) bool {
 		return true
 	}
 	return false
+}
+
+// initializeHasura ensure Hasura is initialized, add default source('default') and schema
+func initializeHasura() {
+	for {
+		time.Sleep(3 * time.Second)
+		hasuraEngine := NewHasuraEngine(viper.GetString("graphql"))
+		err := hasuraEngine.AddDefaultSourceAndSchema()
+		if err != nil && strings.Contains(err.Error(), "connection refused") {
+			fmt.Println("wait for Hasura running...")
+			continue
+		}
+		// ignore other error
+		fmt.Println("Hasura initialized")
+		break
+	}
 }

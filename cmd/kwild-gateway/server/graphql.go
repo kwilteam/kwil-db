@@ -3,7 +3,9 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"kwil/x/logx"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -13,6 +15,26 @@ import (
 	"github.com/spf13/viper"
 	"github.com/vektah/gqlparser/gqlerror"
 )
+
+type GraphqlRProxy struct {
+	logger logx.SugaredLogger
+	proxy  *httputil.ReverseProxy
+}
+
+func NewGraphqlRProxy() *GraphqlRProxy {
+	ru, err := url.Parse(viper.GetString("graphql"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	u := ru.JoinPath("v1")
+	proxy := httputil.NewSingleHostReverseProxy(u)
+
+	return &GraphqlRProxy{
+		logger: logx.New().Sugar(),
+		proxy:  proxy,
+	}
+}
 
 func isMutation(query string) bool {
 	// NOTE: enough to correctly block most mutations
@@ -49,11 +71,13 @@ func JSONError(w http.ResponseWriter, err error, code int) {
 	json.NewEncoder(w).Encode(err)
 }
 
-func hasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
+func (g *GraphqlRProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			log.Fatal(err)
+			JSONError(w, fmt.Errorf("parse request failed"), http.StatusInternalServerError)
+			g.logger.Errorf("parse request failed: %s", err.Error())
+			return
 		}
 
 		bodyString := string(bodyBytes)
@@ -63,20 +87,20 @@ func hasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// // compile GraphQL queries to sql
+		// sql, err := g.hasura.ExplainQuery(bodyString)
+		// if err != nil {
+		// 	JSONError(w, err, http.StatusBadRequest)
+		// 	return
+		// }
+		// // apply ACL to sql
+
 		// restore body
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		fn(w, r)
 	}
 }
 
-func graphqlHandler(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
-	ru, err := url.Parse(viper.GetString("graphql"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	u := ru.JoinPath("v1")
-
-	proxy := httputil.NewSingleHostReverseProxy(u)
-	hasuraHandler(proxy.ServeHTTP)(w, r)
+func (g *GraphqlRProxy) Handler(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+	g.makeHasuraHandler(g.proxy.ServeHTTP)(w, r)
 }
