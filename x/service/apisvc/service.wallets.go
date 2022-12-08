@@ -1,15 +1,8 @@
 package apisvc
 
-import (
-	"context"
-	"encoding/json"
-
-	"kwil/x/crypto"
-	"kwil/x/proto/apipb"
-)
-
+/*
 func (s *Service) GetWithdrawalsForWallet(ctx context.Context, req *apipb.GetWithdrawalsRequest) (*apipb.GetWithdrawalsResponse, error) {
-	wdr, err := s.ds.GetWithdrawalsForWallet(req.Wallet)
+	wdr, err := s.ds.GetWithdrawalsForWallet(ctx, req.Wallet)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +24,7 @@ func (s *Service) GetWithdrawalsForWallet(ctx context.Context, req *apipb.GetWit
 
 func (s *Service) GetBalance(ctx context.Context, req *apipb.GetBalanceRequest) (*apipb.GetBalanceResponse, error) {
 
-	bal, sp, err := s.ds.GetBalanceAndSpent(req.Wallet)
+	bal, sp, err := s.ds.GetBalanceAndSpent(ctx, req.Wallet)
 	if err != nil {
 		return nil, err
 	}
@@ -86,3 +79,4 @@ func (s *Service) EstimateCost(ctx context.Context, req *apipb.EstimateCostReque
 		Fee: p.String(),
 	}, nil
 }
+*/

@@ -37,6 +37,7 @@ func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDRes
 
 	// spend funds and then write data!
 
+	//TODO: use DB name to map to connection string
 	conStr, err := s.mp.GetConnectionInfo(req.From)
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-package sql
+package deposit_store
 
 import "errors"
 

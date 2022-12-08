@@ -2,36 +2,29 @@ syntax = "proto3";
 package apisvc;
 option go_package = "kwil/x/proto/apipb";
 
-message PlanSchemaRequest {
-	string wallet = 1;
-	string database = 2;
-	bytes schema = 3;
+import "kwil/apisvc/tx.proto";
+
+message DeploySchemaRequest {
+	Tx tx = 1;
 }
 
-message PlanSchemaResponse {
-	Plan plan = 1;
+message DeploySchemaResponse {
+	string txid = 1;
+	string msg = 2;
 }
 
-message Plan {
-	repeated Change changes = 4;
+message DropDatabaseRequest {
+	Tx tx = 1;
 }
 
-message Change {
-	string cmd = 1;
-	string comment = 2;
-	string reverse = 3;
+message DropDatabaseResponse {
+	string txid = 1;
+	string msg = 2;
 }
 
-message ApplySchemaRequest {
-	string wallet = 1;
-	string database = 2;
-	bytes schema = 3;
-}
-
-message ApplySchemaResponse {}
 
 message GetMetadataRequest {
-	string wallet = 1;
+	string owner = 1;
 	string database = 2;
 }
 
@@ -42,10 +35,12 @@ message GetMetadataResponse {
 
 message Metadata {
 	string name = 1;
-	repeated Table tables = 2;
-	repeated Query queries = 3;
-	repeated Role roles = 4;
-	string default_role = 5;
+	string owner = 2;
+	string default_role = 3;
+	repeated Table tables = 4;
+	repeated Query queries = 5;
+	repeated Role roles = 6;
+	repeated Index indexes = 7;
 }
 
 message Table {
@@ -55,14 +50,15 @@ message Table {
 
 message Column {
 	string name = 1;
-	ParamType type = 2;
-	Arity arity = 3;
+	string type = 2;
+	repeated Attribute attributes = 3;
 }
 
 message Query {
 	string name = 1;
-	repeated Param inputs = 3;
-	repeated Param outputs = 4;
+	string statement = 2;
+	repeated Input inputs = 3;
+	repeated DefaultInput defaults = 4;
 }
 
 message Role {
@@ -70,25 +66,27 @@ message Role {
 	repeated string queries = 2;
 }
 
-enum ParamType {
-	VOID = 0;
-	NUMBER = 1;
-	STRING = 2;
-	BOOL = 3;
-	DATE = 4;
-	TIME = 5;
-	DATETIME = 6;
-	BYTES = 7;
-}
-
-enum Arity {
-	OPTIONAL = 0;
-	REQUIRED = 1;
-	REPEATED = 2;
-}
-
-message Param {
+message Input {
 	string name = 1;
-	ParamType type = 2;
-	Arity arity = 3;
+	string type = 2;
+	int32 ordinal = 3;
+}
+
+message DefaultInput {
+	string name = 1;
+	string type = 2;
+	string value = 3;
+	int32 ordinal = 4;
+}
+
+message Index {
+	string name = 1;
+	string table = 2;
+	string column = 3;
+	string using = 4;
+}
+
+message Attribute {
+	string name = 1;
+	string value = 2;
 }

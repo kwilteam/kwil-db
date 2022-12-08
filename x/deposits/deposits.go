@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"kwil/x/async"
 	"kwil/x/lease"
+	"kwil/x/sqlx/sqlclient"
 	"math/big"
 
 	"kwil/x/cfgx"
@@ -17,13 +18,13 @@ import (
 
 type Deposits interface {
 	Listen(context.Context) error
-	GetBalance(string) (*big.Int, error)
-	GetSpent(string) (*big.Int, error)
-	GetBalanceAndSpent(string) (string, string, error)
-	Spend(address string, amount string) error
+	GetBalance(context.Context, string) (*big.Int, error)
+	GetSpent(context.Context, string) (*big.Int, error)
+	GetBalanceAndSpent(context.Context, string) (string, string, error)
+	Spend(ctx context.Context, address string, amount string) error
 	Withdraw(context.Context, string, string) (*types.PendingWithdrawal, error)
 	Close() error
-	GetWithdrawalsForWallet(string) ([]*types.PendingWithdrawal, error)
+	GetWithdrawalsForWallet(context.Context, string) ([]*types.PendingWithdrawal, error)
 	Address() string
 }
 
@@ -35,12 +36,12 @@ type deposits struct {
 	sc   types.Contract
 	lh   int64
 	we   int64
-	sql  sql.SQLStore
+	sql  sql.DepositStore
 	acc  kc.Account
 	addr string
 }
 
-func New(c cfgx.Config, l logx.Logger, acc kc.Account, url string) (*deposits, error) {
+func New(ctx context.Context, c cfgx.Config, l logx.Logger, acc kc.Account, client *sqlclient.DB) (*deposits, error) {
 	run, err := c.GetBool("run", false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get run from config. %w", err)
@@ -58,12 +59,9 @@ func New(c cfgx.Config, l logx.Logger, acc kc.Account, url string) (*deposits, e
 		return nil, fmt.Errorf("failed to get withdrawal_expiration from config. %w", err)
 	}
 
-	pg, err := sql.New(url)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sql store. %w", err)
-	}
+	pg := sql.New(client)
 
-	lb, err := pg.GetHeight()
+	lb, err := pg.GetHeight(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last block from db. %w", err)
 	}
@@ -174,7 +172,7 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 
 	for _, dep := range deposits {
 		ttx := dep.Tx[2:]
-		err = d.sql.Deposit(ttx, dep.Caller, dep.Amount, dep.Height)
+		err = d.sql.Deposit(ctx, ttx, dep.Caller, dep.Amount, dep.Height)
 		if err != nil {
 			d.log.Errorf("failed to deposit %s. %v", dep.Tx, err)
 			continue
@@ -204,38 +202,38 @@ func (d *deposits) processBlock(ctx context.Context, blk int64) error {
 	return nil
 }
 
-func (d *deposits) GetBalance(addr string) (*big.Int, error) {
+func (d *deposits) GetBalance(ctx context.Context, addr string) (*big.Int, error) {
 	if !d.run {
 		return nil, ErrDepositsNotRunning
 	}
 
-	return d.sql.GetBalance(addr)
+	return d.sql.GetBalance(ctx, addr)
 }
 
-func (d *deposits) GetSpent(addr string) (*big.Int, error) {
+func (d *deposits) GetSpent(ctx context.Context, addr string) (*big.Int, error) {
 	if !d.run {
 		return nil, ErrDepositsNotRunning
 	}
 
-	return d.sql.GetSpent(addr)
+	return d.sql.GetSpent(ctx, addr)
 }
 
 // Spend will try to spend the amount from the address.
 // If the addr does not have enough, it will return ErrInsufficientFunds
-func (d *deposits) Spend(addr string, amt string) error {
+func (d *deposits) Spend(ctx context.Context, addr string, amt string) error {
 	if !d.run {
 		return ErrDepositsNotRunning
 	}
 
-	return d.sql.Spend(addr, amt)
+	return d.sql.Spend(ctx, addr, amt)
 }
 
-func (d *deposits) GetBalanceAndSpent(addr string) (string, string, error) {
+func (d *deposits) GetBalanceAndSpent(ctx context.Context, addr string) (string, string, error) {
 	if !d.run {
 		return "", "", ErrDepositsNotRunning
 	}
 
-	return d.sql.GetBalanceAndSpent(addr)
+	return d.sql.GetBalanceAndSpent(ctx, addr)
 }
 
 func (d *deposits) Close() error {
@@ -299,7 +297,7 @@ func (d *deposits) Sync(ctx context.Context) error {
 		// the height we use will be the last height in the chunk
 		for _, dep := range deps {
 			ttx := dep.Tx[2:]
-			err = d.sql.Deposit(ttx, dep.Caller, dep.Amount, chunk[0])
+			err = d.sql.Deposit(ctx, ttx, dep.Caller, dep.Amount, chunk[0])
 			if err != nil {
 				d.log.Errorf("failed to deposit %s. %v", dep.Tx, err)
 				return err // we want to return here since there is a major error
@@ -344,7 +342,7 @@ func (d *deposits) Sync(ctx context.Context) error {
 				bga.Add(bga, bgf)
 
 				// spend them
-				err = d.sql.RemoveBalance(wdrl.Receiver, bga.String())
+				err = d.sql.RemoveBalance(ctx, wdrl.Receiver, bga.String())
 				if err != nil {
 					return err
 				}
@@ -360,7 +358,7 @@ func (d *deposits) Sync(ctx context.Context) error {
 			return err // returning here since if this happens then we want this to crash
 		}
 		// set height to chunk[1]+1
-		err = d.sql.SetHeight(d.lh)
+		err = d.sql.SetHeight(ctx, d.lh)
 		if err != nil {
 			return err
 		}

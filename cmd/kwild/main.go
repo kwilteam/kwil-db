@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/async"
+	"kwil/x/sqlx/manager"
+	"kwil/x/sqlx/sqlclient"
 	"net"
 	"net/http"
 	"os"
@@ -40,11 +42,24 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
-	d, err := deposits.New(dc, logger, acc, "postgres://postgres:postgres@localhost:5432/kwil?sslmode=disable")
+	client, err := sqlclient.Open("postgres://postgres:postgres@localhost:5432/kwil?sslmode=disable")
+	if err != nil {
+		return fmt.Errorf("failed to open sql client: %w", err)
+	}
+
+	d, err := deposits.New(ctx, dc, logger, acc, client)
 	if err != nil {
 		return fmt.Errorf("failed to initialize new deposits: %w", err)
 	}
-	apiService := apisvc.NewService(d)
+
+	mngrCfg := cfgx.GetConfig().Select("manager-settings")
+	mngr, err := manager.New(ctx, client, mngrCfg)
+	err = mngr.SyncCache(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to sync cache: %w", err)
+	}
+
+	apiService := apisvc.NewService(mngr)
 	httpHandler := apisvc.NewHandler(logger)
 
 	return serve(ctx, logger, d, httpHandler, apiService)

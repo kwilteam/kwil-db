@@ -3,3 +3,5 @@
 deposit-settings: "./x/deposits/deposit-config.yaml"
 
 db-settings: "./x/sqlx/config.yaml"
+
+manager-settings: "./x/sqlx/manager/config.yaml"

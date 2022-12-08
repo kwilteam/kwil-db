@@ -16,14 +16,20 @@ service KwilService {
   }
 
 
-  rpc PlanSchema(PlanSchemaRequest) returns (PlanSchemaResponse) {}
-  rpc ApplySchema(ApplySchemaRequest) returns (ApplySchemaResponse) {}
+  rpc DeploySchema(DeploySchemaRequest) returns (DeploySchemaResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/schema"
+      body: "*"
+    };
+  }
+
 
   rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {
     option (google.api.http) = {
-      get: "/api/v0/{wallet}/{database}/metadata"
+      get: "/api/v0/{owner}/{database}/metadata"
     };
   }
+  
 
   rpc Cud (CUDRequest) returns (CUDResponse) {
     option (google.api.http) = {
@@ -59,27 +65,6 @@ service KwilService {
   }
 }
 
-message PlanRequest {
-  string id = 1;
-  string hash = 2;
-  string dbName = 3;
-  string owner = 4;
-  string from = 5;
-  bytes schema = 6;
-  string signature = 7;
-}
-message PlanResponse {}
-message ApplyRequest {
-  string id = 1;
-  string planId = 2;
-  string fee = 3;
-  string nonce = 4;
-  string from = 5;
-  string signature = 6;
-}
-message ApplyResponse {
-  bool success = 1;
-}
 message ConnectRequest {}
 message ConnectResponse {
     string address = 1;

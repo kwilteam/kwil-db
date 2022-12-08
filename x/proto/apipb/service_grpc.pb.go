@@ -23,8 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type KwilServiceClient interface {
 	Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (*ConnectResponse, error)
-	PlanSchema(ctx context.Context, in *PlanSchemaRequest, opts ...grpc.CallOption) (*PlanSchemaResponse, error)
-	ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*ApplySchemaResponse, error)
+	DeploySchema(ctx context.Context, in *DeploySchemaRequest, opts ...grpc.CallOption) (*DeploySchemaResponse, error)
 	GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error)
 	Cud(ctx context.Context, in *CUDRequest, opts ...grpc.CallOption) (*CUDResponse, error)
 	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
@@ -51,18 +50,9 @@ func (c *kwilServiceClient) Connect(ctx context.Context, in *ConnectRequest, opt
 	return out, nil
 }
 
-func (c *kwilServiceClient) PlanSchema(ctx context.Context, in *PlanSchemaRequest, opts ...grpc.CallOption) (*PlanSchemaResponse, error) {
-	out := new(PlanSchemaResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/PlanSchema", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kwilServiceClient) ApplySchema(ctx context.Context, in *ApplySchemaRequest, opts ...grpc.CallOption) (*ApplySchemaResponse, error) {
-	out := new(ApplySchemaResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ApplySchema", in, out, opts...)
+func (c *kwilServiceClient) DeploySchema(ctx context.Context, in *DeploySchemaRequest, opts ...grpc.CallOption) (*DeploySchemaResponse, error) {
+	out := new(DeploySchemaResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/DeploySchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +118,7 @@ func (c *kwilServiceClient) EstimateCost(ctx context.Context, in *EstimateCostRe
 // for forward compatibility
 type KwilServiceServer interface {
 	Connect(context.Context, *ConnectRequest) (*ConnectResponse, error)
-	PlanSchema(context.Context, *PlanSchemaRequest) (*PlanSchemaResponse, error)
-	ApplySchema(context.Context, *ApplySchemaRequest) (*ApplySchemaResponse, error)
+	DeploySchema(context.Context, *DeploySchemaRequest) (*DeploySchemaResponse, error)
 	GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error)
 	Cud(context.Context, *CUDRequest) (*CUDResponse, error)
 	Read(context.Context, *ReadRequest) (*ReadResponse, error)
@@ -147,11 +136,8 @@ type UnimplementedKwilServiceServer struct {
 func (UnimplementedKwilServiceServer) Connect(context.Context, *ConnectRequest) (*ConnectResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Connect not implemented")
 }
-func (UnimplementedKwilServiceServer) PlanSchema(context.Context, *PlanSchemaRequest) (*PlanSchemaResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PlanSchema not implemented")
-}
-func (UnimplementedKwilServiceServer) ApplySchema(context.Context, *ApplySchemaRequest) (*ApplySchemaResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ApplySchema not implemented")
+func (UnimplementedKwilServiceServer) DeploySchema(context.Context, *DeploySchemaRequest) (*DeploySchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeploySchema not implemented")
 }
 func (UnimplementedKwilServiceServer) GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMetadata not implemented")
@@ -202,38 +188,20 @@ func _KwilService_Connect_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KwilService_PlanSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PlanSchemaRequest)
+func _KwilService_DeploySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeploySchemaRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KwilServiceServer).PlanSchema(ctx, in)
+		return srv.(KwilServiceServer).DeploySchema(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/apisvc.KwilService/PlanSchema",
+		FullMethod: "/apisvc.KwilService/DeploySchema",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).PlanSchema(ctx, req.(*PlanSchemaRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _KwilService_ApplySchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ApplySchemaRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KwilServiceServer).ApplySchema(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/apisvc.KwilService/ApplySchema",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).ApplySchema(ctx, req.(*ApplySchemaRequest))
+		return srv.(KwilServiceServer).DeploySchema(ctx, req.(*DeploySchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -358,12 +326,8 @@ var KwilService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _KwilService_Connect_Handler,
 		},
 		{
-			MethodName: "PlanSchema",
-			Handler:    _KwilService_PlanSchema_Handler,
-		},
-		{
-			MethodName: "ApplySchema",
-			Handler:    _KwilService_ApplySchema_Handler,
+			MethodName: "DeploySchema",
+			Handler:    _KwilService_DeploySchema_Handler,
 		},
 		{
 			MethodName: "GetMetadata",

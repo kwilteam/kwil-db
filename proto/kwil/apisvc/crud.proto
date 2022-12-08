@@ -2,7 +2,7 @@ syntax = "proto3";
 package apisvc;
 option go_package = "kwil/x/proto/apipb";
 
-import "kwil/apisvc/metadata.proto";
+import "kwil/apisvc/tx.proto";
 
 message ReadRequest{
     string owner = 1;
@@ -21,16 +21,7 @@ message CRUDInput {
 }
 
 message CUDRequest{
-    string owner = 1;
-    string database = 2;
-    string query = 3;
-    repeated CRUDInput inputs = 4;
-    string nonce = 5;
-    string signature = 6;
-    string id = 7;
-    string fee = 8;
-    string from = 9;
-    CRUDInput where = 10;
+    Tx tx = 1;
 }
 
 message CUDResponse{
@@ -40,7 +31,6 @@ message CUDResponse{
 message ColumnResult {
     string name = 1;
     string value = 2;
-    ParamType type = 3;
 }
 
 message Row {

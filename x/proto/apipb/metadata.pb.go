@@ -20,131 +20,16 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type ParamType int32
-
-const (
-	ParamType_VOID     ParamType = 0
-	ParamType_NUMBER   ParamType = 1
-	ParamType_STRING   ParamType = 2
-	ParamType_BOOL     ParamType = 3
-	ParamType_DATE     ParamType = 4
-	ParamType_TIME     ParamType = 5
-	ParamType_DATETIME ParamType = 6
-	ParamType_BYTES    ParamType = 7
-)
-
-// Enum value maps for ParamType.
-var (
-	ParamType_name = map[int32]string{
-		0: "VOID",
-		1: "NUMBER",
-		2: "STRING",
-		3: "BOOL",
-		4: "DATE",
-		5: "TIME",
-		6: "DATETIME",
-		7: "BYTES",
-	}
-	ParamType_value = map[string]int32{
-		"VOID":     0,
-		"NUMBER":   1,
-		"STRING":   2,
-		"BOOL":     3,
-		"DATE":     4,
-		"TIME":     5,
-		"DATETIME": 6,
-		"BYTES":    7,
-	}
-)
-
-func (x ParamType) Enum() *ParamType {
-	p := new(ParamType)
-	*p = x
-	return p
-}
-
-func (x ParamType) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (ParamType) Descriptor() protoreflect.EnumDescriptor {
-	return file_kwil_apisvc_metadata_proto_enumTypes[0].Descriptor()
-}
-
-func (ParamType) Type() protoreflect.EnumType {
-	return &file_kwil_apisvc_metadata_proto_enumTypes[0]
-}
-
-func (x ParamType) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use ParamType.Descriptor instead.
-func (ParamType) EnumDescriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{0}
-}
-
-type Arity int32
-
-const (
-	Arity_OPTIONAL Arity = 0
-	Arity_REQUIRED Arity = 1
-	Arity_REPEATED Arity = 2
-)
-
-// Enum value maps for Arity.
-var (
-	Arity_name = map[int32]string{
-		0: "OPTIONAL",
-		1: "REQUIRED",
-		2: "REPEATED",
-	}
-	Arity_value = map[string]int32{
-		"OPTIONAL": 0,
-		"REQUIRED": 1,
-		"REPEATED": 2,
-	}
-)
-
-func (x Arity) Enum() *Arity {
-	p := new(Arity)
-	*p = x
-	return p
-}
-
-func (x Arity) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (Arity) Descriptor() protoreflect.EnumDescriptor {
-	return file_kwil_apisvc_metadata_proto_enumTypes[1].Descriptor()
-}
-
-func (Arity) Type() protoreflect.EnumType {
-	return &file_kwil_apisvc_metadata_proto_enumTypes[1]
-}
-
-func (x Arity) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use Arity.Descriptor instead.
-func (Arity) EnumDescriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{1}
-}
-
-type PlanSchemaRequest struct {
+type DeploySchemaRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Wallet   string `protobuf:"bytes,1,opt,name=wallet,proto3" json:"wallet,omitempty"`
-	Database string `protobuf:"bytes,2,opt,name=database,proto3" json:"database,omitempty"`
-	Schema   []byte `protobuf:"bytes,3,opt,name=schema,proto3" json:"schema,omitempty"`
+	Tx *Tx `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
 }
 
-func (x *PlanSchemaRequest) Reset() {
-	*x = PlanSchemaRequest{}
+func (x *DeploySchemaRequest) Reset() {
+	*x = DeploySchemaRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_kwil_apisvc_metadata_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -152,13 +37,13 @@ func (x *PlanSchemaRequest) Reset() {
 	}
 }
 
-func (x *PlanSchemaRequest) String() string {
+func (x *DeploySchemaRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PlanSchemaRequest) ProtoMessage() {}
+func (*DeploySchemaRequest) ProtoMessage() {}
 
-func (x *PlanSchemaRequest) ProtoReflect() protoreflect.Message {
+func (x *DeploySchemaRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_kwil_apisvc_metadata_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -170,42 +55,29 @@ func (x *PlanSchemaRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PlanSchemaRequest.ProtoReflect.Descriptor instead.
-func (*PlanSchemaRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeploySchemaRequest.ProtoReflect.Descriptor instead.
+func (*DeploySchemaRequest) Descriptor() ([]byte, []int) {
 	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *PlanSchemaRequest) GetWallet() string {
+func (x *DeploySchemaRequest) GetTx() *Tx {
 	if x != nil {
-		return x.Wallet
-	}
-	return ""
-}
-
-func (x *PlanSchemaRequest) GetDatabase() string {
-	if x != nil {
-		return x.Database
-	}
-	return ""
-}
-
-func (x *PlanSchemaRequest) GetSchema() []byte {
-	if x != nil {
-		return x.Schema
+		return x.Tx
 	}
 	return nil
 }
 
-type PlanSchemaResponse struct {
+type DeploySchemaResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Plan *Plan `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"`
+	Txid string `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
+	Msg  string `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
-func (x *PlanSchemaResponse) Reset() {
-	*x = PlanSchemaResponse{}
+func (x *DeploySchemaResponse) Reset() {
+	*x = DeploySchemaResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_kwil_apisvc_metadata_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -213,13 +85,13 @@ func (x *PlanSchemaResponse) Reset() {
 	}
 }
 
-func (x *PlanSchemaResponse) String() string {
+func (x *DeploySchemaResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PlanSchemaResponse) ProtoMessage() {}
+func (*DeploySchemaResponse) ProtoMessage() {}
 
-func (x *PlanSchemaResponse) ProtoReflect() protoreflect.Message {
+func (x *DeploySchemaResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_kwil_apisvc_metadata_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -231,28 +103,35 @@ func (x *PlanSchemaResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PlanSchemaResponse.ProtoReflect.Descriptor instead.
-func (*PlanSchemaResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeploySchemaResponse.ProtoReflect.Descriptor instead.
+func (*DeploySchemaResponse) Descriptor() ([]byte, []int) {
 	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *PlanSchemaResponse) GetPlan() *Plan {
+func (x *DeploySchemaResponse) GetTxid() string {
 	if x != nil {
-		return x.Plan
+		return x.Txid
 	}
-	return nil
+	return ""
 }
 
-type Plan struct {
+func (x *DeploySchemaResponse) GetMsg() string {
+	if x != nil {
+		return x.Msg
+	}
+	return ""
+}
+
+type DropDatabaseRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Changes []*Change `protobuf:"bytes,4,rep,name=changes,proto3" json:"changes,omitempty"`
+	Tx *Tx `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
 }
 
-func (x *Plan) Reset() {
-	*x = Plan{}
+func (x *DropDatabaseRequest) Reset() {
+	*x = DropDatabaseRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_kwil_apisvc_metadata_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -260,13 +139,13 @@ func (x *Plan) Reset() {
 	}
 }
 
-func (x *Plan) String() string {
+func (x *DropDatabaseRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Plan) ProtoMessage() {}
+func (*DropDatabaseRequest) ProtoMessage() {}
 
-func (x *Plan) ProtoReflect() protoreflect.Message {
+func (x *DropDatabaseRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_kwil_apisvc_metadata_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -278,30 +157,29 @@ func (x *Plan) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Plan.ProtoReflect.Descriptor instead.
-func (*Plan) Descriptor() ([]byte, []int) {
+// Deprecated: Use DropDatabaseRequest.ProtoReflect.Descriptor instead.
+func (*DropDatabaseRequest) Descriptor() ([]byte, []int) {
 	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *Plan) GetChanges() []*Change {
+func (x *DropDatabaseRequest) GetTx() *Tx {
 	if x != nil {
-		return x.Changes
+		return x.Tx
 	}
 	return nil
 }
 
-type Change struct {
+type DropDatabaseResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Cmd     string `protobuf:"bytes,1,opt,name=cmd,proto3" json:"cmd,omitempty"`
-	Comment string `protobuf:"bytes,2,opt,name=comment,proto3" json:"comment,omitempty"`
-	Reverse string `protobuf:"bytes,3,opt,name=reverse,proto3" json:"reverse,omitempty"`
+	Txid string `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
+	Msg  string `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
-func (x *Change) Reset() {
-	*x = Change{}
+func (x *DropDatabaseResponse) Reset() {
+	*x = DropDatabaseResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_kwil_apisvc_metadata_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -309,13 +187,13 @@ func (x *Change) Reset() {
 	}
 }
 
-func (x *Change) String() string {
+func (x *DropDatabaseResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Change) ProtoMessage() {}
+func (*DropDatabaseResponse) ProtoMessage() {}
 
-func (x *Change) ProtoReflect() protoreflect.Message {
+func (x *DropDatabaseResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_kwil_apisvc_metadata_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -327,131 +205,23 @@ func (x *Change) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Change.ProtoReflect.Descriptor instead.
-func (*Change) Descriptor() ([]byte, []int) {
+// Deprecated: Use DropDatabaseResponse.ProtoReflect.Descriptor instead.
+func (*DropDatabaseResponse) Descriptor() ([]byte, []int) {
 	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *Change) GetCmd() string {
+func (x *DropDatabaseResponse) GetTxid() string {
 	if x != nil {
-		return x.Cmd
+		return x.Txid
 	}
 	return ""
 }
 
-func (x *Change) GetComment() string {
+func (x *DropDatabaseResponse) GetMsg() string {
 	if x != nil {
-		return x.Comment
+		return x.Msg
 	}
 	return ""
-}
-
-func (x *Change) GetReverse() string {
-	if x != nil {
-		return x.Reverse
-	}
-	return ""
-}
-
-type ApplySchemaRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Wallet   string `protobuf:"bytes,1,opt,name=wallet,proto3" json:"wallet,omitempty"`
-	Database string `protobuf:"bytes,2,opt,name=database,proto3" json:"database,omitempty"`
-	Schema   []byte `protobuf:"bytes,3,opt,name=schema,proto3" json:"schema,omitempty"`
-}
-
-func (x *ApplySchemaRequest) Reset() {
-	*x = ApplySchemaRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[4]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ApplySchemaRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ApplySchemaRequest) ProtoMessage() {}
-
-func (x *ApplySchemaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[4]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ApplySchemaRequest.ProtoReflect.Descriptor instead.
-func (*ApplySchemaRequest) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *ApplySchemaRequest) GetWallet() string {
-	if x != nil {
-		return x.Wallet
-	}
-	return ""
-}
-
-func (x *ApplySchemaRequest) GetDatabase() string {
-	if x != nil {
-		return x.Database
-	}
-	return ""
-}
-
-func (x *ApplySchemaRequest) GetSchema() []byte {
-	if x != nil {
-		return x.Schema
-	}
-	return nil
-}
-
-type ApplySchemaResponse struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-}
-
-func (x *ApplySchemaResponse) Reset() {
-	*x = ApplySchemaResponse{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[5]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ApplySchemaResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ApplySchemaResponse) ProtoMessage() {}
-
-func (x *ApplySchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[5]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ApplySchemaResponse.ProtoReflect.Descriptor instead.
-func (*ApplySchemaResponse) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{5}
 }
 
 type GetMetadataRequest struct {
@@ -459,14 +229,14 @@ type GetMetadataRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Wallet   string `protobuf:"bytes,1,opt,name=wallet,proto3" json:"wallet,omitempty"`
+	Owner    string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
 	Database string `protobuf:"bytes,2,opt,name=database,proto3" json:"database,omitempty"`
 }
 
 func (x *GetMetadataRequest) Reset() {
 	*x = GetMetadataRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[6]
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -479,7 +249,7 @@ func (x *GetMetadataRequest) String() string {
 func (*GetMetadataRequest) ProtoMessage() {}
 
 func (x *GetMetadataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[6]
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -492,12 +262,12 @@ func (x *GetMetadataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMetadataRequest.ProtoReflect.Descriptor instead.
 func (*GetMetadataRequest) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{6}
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *GetMetadataRequest) GetWallet() string {
+func (x *GetMetadataRequest) GetOwner() string {
 	if x != nil {
-		return x.Wallet
+		return x.Owner
 	}
 	return ""
 }
@@ -520,7 +290,7 @@ type GetMetadataResponse struct {
 func (x *GetMetadataResponse) Reset() {
 	*x = GetMetadataResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[7]
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -533,7 +303,7 @@ func (x *GetMetadataResponse) String() string {
 func (*GetMetadataResponse) ProtoMessage() {}
 
 func (x *GetMetadataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[7]
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -546,7 +316,7 @@ func (x *GetMetadataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMetadataResponse.ProtoReflect.Descriptor instead.
 func (*GetMetadataResponse) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{7}
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetMetadataResponse) GetMetadata() *Metadata {
@@ -562,16 +332,18 @@ type Metadata struct {
 	unknownFields protoimpl.UnknownFields
 
 	Name        string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Tables      []*Table `protobuf:"bytes,2,rep,name=tables,proto3" json:"tables,omitempty"`
-	Queries     []*Query `protobuf:"bytes,3,rep,name=queries,proto3" json:"queries,omitempty"`
-	Roles       []*Role  `protobuf:"bytes,4,rep,name=roles,proto3" json:"roles,omitempty"`
-	DefaultRole string   `protobuf:"bytes,5,opt,name=default_role,json=defaultRole,proto3" json:"default_role,omitempty"`
+	Owner       string   `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
+	DefaultRole string   `protobuf:"bytes,3,opt,name=default_role,json=defaultRole,proto3" json:"default_role,omitempty"`
+	Tables      []*Table `protobuf:"bytes,4,rep,name=tables,proto3" json:"tables,omitempty"`
+	Queries     []*Query `protobuf:"bytes,5,rep,name=queries,proto3" json:"queries,omitempty"`
+	Roles       []*Role  `protobuf:"bytes,6,rep,name=roles,proto3" json:"roles,omitempty"`
+	Indexes     []*Index `protobuf:"bytes,7,rep,name=indexes,proto3" json:"indexes,omitempty"`
 }
 
 func (x *Metadata) Reset() {
 	*x = Metadata{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[8]
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -584,7 +356,7 @@ func (x *Metadata) String() string {
 func (*Metadata) ProtoMessage() {}
 
 func (x *Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[8]
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,12 +369,26 @@ func (x *Metadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Metadata.ProtoReflect.Descriptor instead.
 func (*Metadata) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{8}
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Metadata) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *Metadata) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *Metadata) GetDefaultRole() string {
+	if x != nil {
+		return x.DefaultRole
 	}
 	return ""
 }
@@ -628,11 +414,11 @@ func (x *Metadata) GetRoles() []*Role {
 	return nil
 }
 
-func (x *Metadata) GetDefaultRole() string {
+func (x *Metadata) GetIndexes() []*Index {
 	if x != nil {
-		return x.DefaultRole
+		return x.Indexes
 	}
-	return ""
+	return nil
 }
 
 type Table struct {
@@ -647,7 +433,7 @@ type Table struct {
 func (x *Table) Reset() {
 	*x = Table{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[9]
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -660,7 +446,7 @@ func (x *Table) String() string {
 func (*Table) ProtoMessage() {}
 
 func (x *Table) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[9]
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -673,7 +459,7 @@ func (x *Table) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Table.ProtoReflect.Descriptor instead.
 func (*Table) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{9}
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Table) GetName() string {
@@ -695,15 +481,15 @@ type Column struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Name  string    `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type  ParamType `protobuf:"varint,2,opt,name=type,proto3,enum=apisvc.ParamType" json:"type,omitempty"`
-	Arity Arity     `protobuf:"varint,3,opt,name=arity,proto3,enum=apisvc.Arity" json:"arity,omitempty"`
+	Name       string       `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type       string       `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Attributes []*Attribute `protobuf:"bytes,3,rep,name=attributes,proto3" json:"attributes,omitempty"`
 }
 
 func (x *Column) Reset() {
 	*x = Column{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[10]
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -716,7 +502,7 @@ func (x *Column) String() string {
 func (*Column) ProtoMessage() {}
 
 func (x *Column) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[10]
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -729,7 +515,7 @@ func (x *Column) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Column.ProtoReflect.Descriptor instead.
 func (*Column) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{10}
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Column) GetName() string {
@@ -739,18 +525,18 @@ func (x *Column) GetName() string {
 	return ""
 }
 
-func (x *Column) GetType() ParamType {
+func (x *Column) GetType() string {
 	if x != nil {
 		return x.Type
 	}
-	return ParamType_VOID
+	return ""
 }
 
-func (x *Column) GetArity() Arity {
+func (x *Column) GetAttributes() []*Attribute {
 	if x != nil {
-		return x.Arity
+		return x.Attributes
 	}
-	return Arity_OPTIONAL
+	return nil
 }
 
 type Query struct {
@@ -758,15 +544,16 @@ type Query struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Name    string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Inputs  []*Param `protobuf:"bytes,3,rep,name=inputs,proto3" json:"inputs,omitempty"`
-	Outputs []*Param `protobuf:"bytes,4,rep,name=outputs,proto3" json:"outputs,omitempty"`
+	Name      string          `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Statement string          `protobuf:"bytes,2,opt,name=statement,proto3" json:"statement,omitempty"`
+	Inputs    []*Input        `protobuf:"bytes,3,rep,name=inputs,proto3" json:"inputs,omitempty"`
+	Defaults  []*DefaultInput `protobuf:"bytes,4,rep,name=defaults,proto3" json:"defaults,omitempty"`
 }
 
 func (x *Query) Reset() {
 	*x = Query{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[11]
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -779,7 +566,7 @@ func (x *Query) String() string {
 func (*Query) ProtoMessage() {}
 
 func (x *Query) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[11]
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -792,7 +579,7 @@ func (x *Query) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Query.ProtoReflect.Descriptor instead.
 func (*Query) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{11}
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Query) GetName() string {
@@ -802,16 +589,23 @@ func (x *Query) GetName() string {
 	return ""
 }
 
-func (x *Query) GetInputs() []*Param {
+func (x *Query) GetStatement() string {
+	if x != nil {
+		return x.Statement
+	}
+	return ""
+}
+
+func (x *Query) GetInputs() []*Input {
 	if x != nil {
 		return x.Inputs
 	}
 	return nil
 }
 
-func (x *Query) GetOutputs() []*Param {
+func (x *Query) GetDefaults() []*DefaultInput {
 	if x != nil {
-		return x.Outputs
+		return x.Defaults
 	}
 	return nil
 }
@@ -828,7 +622,7 @@ type Role struct {
 func (x *Role) Reset() {
 	*x = Role{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_apisvc_metadata_proto_msgTypes[12]
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -841,7 +635,7 @@ func (x *Role) String() string {
 func (*Role) ProtoMessage() {}
 
 func (x *Role) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_apisvc_metadata_proto_msgTypes[12]
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +648,7 @@ func (x *Role) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Role.ProtoReflect.Descriptor instead.
 func (*Role) Descriptor() ([]byte, []int) {
-	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{12}
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Role) GetName() string {
@@ -871,18 +665,153 @@ func (x *Role) GetQueries() []string {
 	return nil
 }
 
-type Param struct {
+type Input struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Name  string    `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type  ParamType `protobuf:"varint,2,opt,name=type,proto3,enum=apisvc.ParamType" json:"type,omitempty"`
-	Arity Arity     `protobuf:"varint,3,opt,name=arity,proto3,enum=apisvc.Arity" json:"arity,omitempty"`
+	Name    string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type    string `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Ordinal int32  `protobuf:"varint,3,opt,name=ordinal,proto3" json:"ordinal,omitempty"`
 }
 
-func (x *Param) Reset() {
-	*x = Param{}
+func (x *Input) Reset() {
+	*x = Input{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Input) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Input) ProtoMessage() {}
+
+func (x *Input) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Input.ProtoReflect.Descriptor instead.
+func (*Input) Descriptor() ([]byte, []int) {
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *Input) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Input) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *Input) GetOrdinal() int32 {
+	if x != nil {
+		return x.Ordinal
+	}
+	return 0
+}
+
+type DefaultInput struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name    string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type    string `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Value   string `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	Ordinal int32  `protobuf:"varint,4,opt,name=ordinal,proto3" json:"ordinal,omitempty"`
+}
+
+func (x *DefaultInput) Reset() {
+	*x = DefaultInput{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DefaultInput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DefaultInput) ProtoMessage() {}
+
+func (x *DefaultInput) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DefaultInput.ProtoReflect.Descriptor instead.
+func (*DefaultInput) Descriptor() ([]byte, []int) {
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DefaultInput) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DefaultInput) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *DefaultInput) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *DefaultInput) GetOrdinal() int32 {
+	if x != nil {
+		return x.Ordinal
+	}
+	return 0
+}
+
+type Index struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name   string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Table  string `protobuf:"bytes,2,opt,name=table,proto3" json:"table,omitempty"`
+	Column string `protobuf:"bytes,3,opt,name=column,proto3" json:"column,omitempty"`
+	Using  string `protobuf:"bytes,4,opt,name=using,proto3" json:"using,omitempty"`
+}
+
+func (x *Index) Reset() {
+	*x = Index{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_kwil_apisvc_metadata_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -890,13 +819,13 @@ func (x *Param) Reset() {
 	}
 }
 
-func (x *Param) String() string {
+func (x *Index) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Param) ProtoMessage() {}
+func (*Index) ProtoMessage() {}
 
-func (x *Param) ProtoReflect() protoreflect.Message {
+func (x *Index) ProtoReflect() protoreflect.Message {
 	mi := &file_kwil_apisvc_metadata_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -908,30 +837,92 @@ func (x *Param) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Param.ProtoReflect.Descriptor instead.
-func (*Param) Descriptor() ([]byte, []int) {
+// Deprecated: Use Index.ProtoReflect.Descriptor instead.
+func (*Index) Descriptor() ([]byte, []int) {
 	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *Param) GetName() string {
+func (x *Index) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *Param) GetType() ParamType {
+func (x *Index) GetTable() string {
 	if x != nil {
-		return x.Type
+		return x.Table
 	}
-	return ParamType_VOID
+	return ""
 }
 
-func (x *Param) GetArity() Arity {
+func (x *Index) GetColumn() string {
 	if x != nil {
-		return x.Arity
+		return x.Column
 	}
-	return Arity_OPTIONAL
+	return ""
+}
+
+func (x *Index) GetUsing() string {
+	if x != nil {
+		return x.Using
+	}
+	return ""
+}
+
+type Attribute struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Name  string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+}
+
+func (x *Attribute) Reset() {
+	*x = Attribute{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_apisvc_metadata_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Attribute) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Attribute) ProtoMessage() {}
+
+func (x *Attribute) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_apisvc_metadata_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Attribute.ProtoReflect.Descriptor instead.
+func (*Attribute) Descriptor() ([]byte, []int) {
+	return file_kwil_apisvc_metadata_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *Attribute) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Attribute) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
 }
 
 var File_kwil_apisvc_metadata_proto protoreflect.FileDescriptor
@@ -939,92 +930,92 @@ var File_kwil_apisvc_metadata_proto protoreflect.FileDescriptor
 var file_kwil_apisvc_metadata_proto_rawDesc = []byte{
 	0x0a, 0x1a, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2f, 0x6d, 0x65,
 	0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x06, 0x61, 0x70,
-	0x69, 0x73, 0x76, 0x63, 0x22, 0x5f, 0x0a, 0x11, 0x50, 0x6c, 0x61, 0x6e, 0x53, 0x63, 0x68, 0x65,
-	0x6d, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x77, 0x61, 0x6c,
-	0x6c, 0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x77, 0x61, 0x6c, 0x6c, 0x65,
-	0x74, 0x12, 0x1a, 0x0a, 0x08, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x08, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x12, 0x16, 0x0a,
-	0x06, 0x73, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x73,
-	0x63, 0x68, 0x65, 0x6d, 0x61, 0x22, 0x36, 0x0a, 0x12, 0x50, 0x6c, 0x61, 0x6e, 0x53, 0x63, 0x68,
-	0x65, 0x6d, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x20, 0x0a, 0x04, 0x70,
-	0x6c, 0x61, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x70, 0x69, 0x73,
-	0x76, 0x63, 0x2e, 0x50, 0x6c, 0x61, 0x6e, 0x52, 0x04, 0x70, 0x6c, 0x61, 0x6e, 0x22, 0x30, 0x0a,
-	0x04, 0x50, 0x6c, 0x61, 0x6e, 0x12, 0x28, 0x0a, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x73,
-	0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e,
-	0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x73, 0x22,
-	0x4e, 0x0a, 0x06, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x63, 0x6d, 0x64,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x63, 0x6d, 0x64, 0x12, 0x18, 0x0a, 0x07, 0x63,
-	0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x63, 0x6f,
-	0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65,
-	0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x76, 0x65, 0x72, 0x73, 0x65, 0x22,
-	0x60, 0x0a, 0x12, 0x41, 0x70, 0x70, 0x6c, 0x79, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x77, 0x61, 0x6c, 0x6c, 0x65, 0x74, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x77, 0x61, 0x6c, 0x6c, 0x65, 0x74, 0x12, 0x1a, 0x0a,
-	0x08, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x08, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x63, 0x68,
-	0x65, 0x6d, 0x61, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x73, 0x63, 0x68, 0x65, 0x6d,
-	0x61, 0x22, 0x15, 0x0a, 0x13, 0x41, 0x70, 0x70, 0x6c, 0x79, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x48, 0x0a, 0x12, 0x47, 0x65, 0x74, 0x4d,
-	0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16,
-	0x0a, 0x06, 0x77, 0x61, 0x6c, 0x6c, 0x65, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06,
-	0x77, 0x61, 0x6c, 0x6c, 0x65, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61,
-	0x73, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x64, 0x61, 0x74, 0x61, 0x62, 0x61,
-	0x73, 0x65, 0x22, 0x43, 0x0a, 0x13, 0x47, 0x65, 0x74, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74,
-	0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2c, 0x0a, 0x08, 0x6d, 0x65, 0x74,
-	0x61, 0x64, 0x61, 0x74, 0x61, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x61, 0x70,
-	0x69, 0x73, 0x76, 0x63, 0x2e, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x08, 0x6d,
-	0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x22, 0xb5, 0x01, 0x0a, 0x08, 0x4d, 0x65, 0x74, 0x61,
-	0x64, 0x61, 0x74, 0x61, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x25, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c,
-	0x65, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76,
-	0x63, 0x2e, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x12,
-	0x27, 0x0a, 0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b,
-	0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52,
-	0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x12, 0x22, 0x0a, 0x05, 0x72, 0x6f, 0x6c, 0x65,
-	0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63,
-	0x2e, 0x52, 0x6f, 0x6c, 0x65, 0x52, 0x05, 0x72, 0x6f, 0x6c, 0x65, 0x73, 0x12, 0x21, 0x0a, 0x0c,
-	0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x5f, 0x72, 0x6f, 0x6c, 0x65, 0x18, 0x05, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x0b, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x52, 0x6f, 0x6c, 0x65, 0x22,
-	0x45, 0x0a, 0x05, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x28, 0x0a, 0x07,
-	0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0e, 0x2e,
-	0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x52, 0x07, 0x63,
-	0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x22, 0x68, 0x0a, 0x06, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e,
+	0x69, 0x73, 0x76, 0x63, 0x1a, 0x14, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x61, 0x70, 0x69, 0x73, 0x76,
+	0x63, 0x2f, 0x74, 0x78, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0x31, 0x0a, 0x13, 0x44, 0x65,
+	0x70, 0x6c, 0x6f, 0x79, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x1a, 0x0a, 0x02, 0x74, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e,
+	0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x54, 0x78, 0x52, 0x02, 0x74, 0x78, 0x22, 0x3c, 0x0a,
+	0x14, 0x44, 0x65, 0x70, 0x6c, 0x6f, 0x79, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x6d, 0x73, 0x67,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6d, 0x73, 0x67, 0x22, 0x31, 0x0a, 0x13, 0x44,
+	0x72, 0x6f, 0x70, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x12, 0x1a, 0x0a, 0x02, 0x74, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a,
+	0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x54, 0x78, 0x52, 0x02, 0x74, 0x78, 0x22, 0x3c,
+	0x0a, 0x14, 0x44, 0x72, 0x6f, 0x70, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x6d, 0x73,
+	0x67, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6d, 0x73, 0x67, 0x22, 0x46, 0x0a, 0x12,
+	0x47, 0x65, 0x74, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x6f, 0x77, 0x6e, 0x65, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x05, 0x6f, 0x77, 0x6e, 0x65, 0x72, 0x12, 0x1a, 0x0a, 0x08, 0x64, 0x61, 0x74, 0x61,
+	0x62, 0x61, 0x73, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x64, 0x61, 0x74, 0x61,
+	0x62, 0x61, 0x73, 0x65, 0x22, 0x43, 0x0a, 0x13, 0x47, 0x65, 0x74, 0x4d, 0x65, 0x74, 0x61, 0x64,
+	0x61, 0x74, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2c, 0x0a, 0x08, 0x6d,
+	0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e,
+	0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52,
+	0x08, 0x6d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x22, 0xf4, 0x01, 0x0a, 0x08, 0x4d, 0x65,
+	0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x6f, 0x77,
+	0x6e, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6f, 0x77, 0x6e, 0x65, 0x72,
+	0x12, 0x21, 0x0a, 0x0c, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x5f, 0x72, 0x6f, 0x6c, 0x65,
+	0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x52,
+	0x6f, 0x6c, 0x65, 0x12, 0x25, 0x0a, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x18, 0x04, 0x20,
+	0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x54, 0x61, 0x62,
+	0x6c, 0x65, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x12, 0x27, 0x0a, 0x07, 0x71, 0x75,
+	0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x70,
+	0x69, 0x73, 0x76, 0x63, 0x2e, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x07, 0x71, 0x75, 0x65, 0x72,
+	0x69, 0x65, 0x73, 0x12, 0x22, 0x0a, 0x05, 0x72, 0x6f, 0x6c, 0x65, 0x73, 0x18, 0x06, 0x20, 0x03,
+	0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x52, 0x6f, 0x6c, 0x65,
+	0x52, 0x05, 0x72, 0x6f, 0x6c, 0x65, 0x73, 0x12, 0x27, 0x0a, 0x07, 0x69, 0x6e, 0x64, 0x65, 0x78,
+	0x65, 0x73, 0x18, 0x07, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76,
+	0x63, 0x2e, 0x49, 0x6e, 0x64, 0x65, 0x78, 0x52, 0x07, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x65, 0x73,
+	0x22, 0x45, 0x0a, 0x05, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x28, 0x0a,
+	0x07, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0e,
+	0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x43, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x52, 0x07,
+	0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x73, 0x22, 0x63, 0x0a, 0x06, 0x43, 0x6f, 0x6c, 0x75, 0x6d,
+	0x6e, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x31, 0x0a, 0x0a, 0x61, 0x74, 0x74,
+	0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x11, 0x2e,
+	0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x41, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65,
+	0x52, 0x0a, 0x61, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73, 0x22, 0x92, 0x01, 0x0a,
+	0x05, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x1c, 0x0a, 0x09, 0x73, 0x74,
+	0x61, 0x74, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x73,
+	0x74, 0x61, 0x74, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x12, 0x25, 0x0a, 0x06, 0x69, 0x6e, 0x70, 0x75,
+	0x74, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76,
+	0x63, 0x2e, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x52, 0x06, 0x69, 0x6e, 0x70, 0x75, 0x74, 0x73, 0x12,
+	0x30, 0x0a, 0x08, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x14, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x44, 0x65, 0x66, 0x61, 0x75,
+	0x6c, 0x74, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x52, 0x08, 0x64, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74,
+	0x73, 0x22, 0x34, 0x0a, 0x04, 0x52, 0x6f, 0x6c, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x18, 0x0a,
+	0x07, 0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07,
+	0x71, 0x75, 0x65, 0x72, 0x69, 0x65, 0x73, 0x22, 0x49, 0x0a, 0x05, 0x49, 0x6e, 0x70, 0x75, 0x74,
 	0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04,
-	0x6e, 0x61, 0x6d, 0x65, 0x12, 0x25, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x0e, 0x32, 0x11, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x50, 0x61, 0x72, 0x61,
-	0x6d, 0x54, 0x79, 0x70, 0x65, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x23, 0x0a, 0x05, 0x61,
-	0x72, 0x69, 0x74, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69,
-	0x73, 0x76, 0x63, 0x2e, 0x41, 0x72, 0x69, 0x74, 0x79, 0x52, 0x05, 0x61, 0x72, 0x69, 0x74, 0x79,
-	0x22, 0x6b, 0x0a, 0x05, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d,
-	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x25, 0x0a,
-	0x06, 0x69, 0x6e, 0x70, 0x75, 0x74, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e,
-	0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x52, 0x06, 0x69, 0x6e,
-	0x70, 0x75, 0x74, 0x73, 0x12, 0x27, 0x0a, 0x07, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x73, 0x18,
-	0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x50,
-	0x61, 0x72, 0x61, 0x6d, 0x52, 0x07, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x73, 0x22, 0x34, 0x0a,
-	0x04, 0x52, 0x6f, 0x6c, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x71, 0x75, 0x65,
-	0x72, 0x69, 0x65, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x71, 0x75, 0x65, 0x72,
-	0x69, 0x65, 0x73, 0x22, 0x67, 0x0a, 0x05, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x12, 0x12, 0x0a, 0x04,
-	0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65,
-	0x12, 0x25, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x11,
-	0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x54, 0x79, 0x70,
-	0x65, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x23, 0x0a, 0x05, 0x61, 0x72, 0x69, 0x74, 0x79,
-	0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x0d, 0x2e, 0x61, 0x70, 0x69, 0x73, 0x76, 0x63, 0x2e,
-	0x41, 0x72, 0x69, 0x74, 0x79, 0x52, 0x05, 0x61, 0x72, 0x69, 0x74, 0x79, 0x2a, 0x64, 0x0a, 0x09,
-	0x50, 0x61, 0x72, 0x61, 0x6d, 0x54, 0x79, 0x70, 0x65, 0x12, 0x08, 0x0a, 0x04, 0x56, 0x4f, 0x49,
-	0x44, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x4e, 0x55, 0x4d, 0x42, 0x45, 0x52, 0x10, 0x01, 0x12,
-	0x0a, 0x0a, 0x06, 0x53, 0x54, 0x52, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x12, 0x08, 0x0a, 0x04, 0x42,
-	0x4f, 0x4f, 0x4c, 0x10, 0x03, 0x12, 0x08, 0x0a, 0x04, 0x44, 0x41, 0x54, 0x45, 0x10, 0x04, 0x12,
-	0x08, 0x0a, 0x04, 0x54, 0x49, 0x4d, 0x45, 0x10, 0x05, 0x12, 0x0c, 0x0a, 0x08, 0x44, 0x41, 0x54,
-	0x45, 0x54, 0x49, 0x4d, 0x45, 0x10, 0x06, 0x12, 0x09, 0x0a, 0x05, 0x42, 0x59, 0x54, 0x45, 0x53,
-	0x10, 0x07, 0x2a, 0x31, 0x0a, 0x05, 0x41, 0x72, 0x69, 0x74, 0x79, 0x12, 0x0c, 0x0a, 0x08, 0x4f,
-	0x50, 0x54, 0x49, 0x4f, 0x4e, 0x41, 0x4c, 0x10, 0x00, 0x12, 0x0c, 0x0a, 0x08, 0x52, 0x45, 0x51,
-	0x55, 0x49, 0x52, 0x45, 0x44, 0x10, 0x01, 0x12, 0x0c, 0x0a, 0x08, 0x52, 0x45, 0x50, 0x45, 0x41,
-	0x54, 0x45, 0x44, 0x10, 0x02, 0x42, 0x14, 0x5a, 0x12, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x78, 0x2f,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x61, 0x70, 0x69, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x33,
+	0x6e, 0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x6f, 0x72, 0x64, 0x69,
+	0x6e, 0x61, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x05, 0x52, 0x07, 0x6f, 0x72, 0x64, 0x69, 0x6e,
+	0x61, 0x6c, 0x22, 0x66, 0x0a, 0x0c, 0x44, 0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x49, 0x6e, 0x70,
+	0x75, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61,
+	0x6c, 0x75, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x12, 0x18, 0x0a, 0x07, 0x6f, 0x72, 0x64, 0x69, 0x6e, 0x61, 0x6c, 0x18, 0x04, 0x20, 0x01, 0x28,
+	0x05, 0x52, 0x07, 0x6f, 0x72, 0x64, 0x69, 0x6e, 0x61, 0x6c, 0x22, 0x5f, 0x0a, 0x05, 0x49, 0x6e,
+	0x64, 0x65, 0x78, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x74, 0x61, 0x62, 0x6c, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x12, 0x16, 0x0a,
+	0x06, 0x63, 0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x63,
+	0x6f, 0x6c, 0x75, 0x6d, 0x6e, 0x12, 0x14, 0x0a, 0x05, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x18, 0x04,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x22, 0x35, 0x0a, 0x09, 0x41,
+	0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05,
+	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c,
+	0x75, 0x65, 0x42, 0x14, 0x5a, 0x12, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x78, 0x2f, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x2f, 0x61, 0x70, 0x69, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1039,45 +1030,42 @@ func file_kwil_apisvc_metadata_proto_rawDescGZIP() []byte {
 	return file_kwil_apisvc_metadata_proto_rawDescData
 }
 
-var file_kwil_apisvc_metadata_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_kwil_apisvc_metadata_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_kwil_apisvc_metadata_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_kwil_apisvc_metadata_proto_goTypes = []interface{}{
-	(ParamType)(0),              // 0: apisvc.ParamType
-	(Arity)(0),                  // 1: apisvc.Arity
-	(*PlanSchemaRequest)(nil),   // 2: apisvc.PlanSchemaRequest
-	(*PlanSchemaResponse)(nil),  // 3: apisvc.PlanSchemaResponse
-	(*Plan)(nil),                // 4: apisvc.Plan
-	(*Change)(nil),              // 5: apisvc.Change
-	(*ApplySchemaRequest)(nil),  // 6: apisvc.ApplySchemaRequest
-	(*ApplySchemaResponse)(nil), // 7: apisvc.ApplySchemaResponse
-	(*GetMetadataRequest)(nil),  // 8: apisvc.GetMetadataRequest
-	(*GetMetadataResponse)(nil), // 9: apisvc.GetMetadataResponse
-	(*Metadata)(nil),            // 10: apisvc.Metadata
-	(*Table)(nil),               // 11: apisvc.Table
-	(*Column)(nil),              // 12: apisvc.Column
-	(*Query)(nil),               // 13: apisvc.Query
-	(*Role)(nil),                // 14: apisvc.Role
-	(*Param)(nil),               // 15: apisvc.Param
+	(*DeploySchemaRequest)(nil),  // 0: apisvc.DeploySchemaRequest
+	(*DeploySchemaResponse)(nil), // 1: apisvc.DeploySchemaResponse
+	(*DropDatabaseRequest)(nil),  // 2: apisvc.DropDatabaseRequest
+	(*DropDatabaseResponse)(nil), // 3: apisvc.DropDatabaseResponse
+	(*GetMetadataRequest)(nil),   // 4: apisvc.GetMetadataRequest
+	(*GetMetadataResponse)(nil),  // 5: apisvc.GetMetadataResponse
+	(*Metadata)(nil),             // 6: apisvc.Metadata
+	(*Table)(nil),                // 7: apisvc.Table
+	(*Column)(nil),               // 8: apisvc.Column
+	(*Query)(nil),                // 9: apisvc.Query
+	(*Role)(nil),                 // 10: apisvc.Role
+	(*Input)(nil),                // 11: apisvc.Input
+	(*DefaultInput)(nil),         // 12: apisvc.DefaultInput
+	(*Index)(nil),                // 13: apisvc.Index
+	(*Attribute)(nil),            // 14: apisvc.Attribute
+	(*Tx)(nil),                   // 15: apisvc.Tx
 }
 var file_kwil_apisvc_metadata_proto_depIdxs = []int32{
-	4,  // 0: apisvc.PlanSchemaResponse.plan:type_name -> apisvc.Plan
-	5,  // 1: apisvc.Plan.changes:type_name -> apisvc.Change
-	10, // 2: apisvc.GetMetadataResponse.metadata:type_name -> apisvc.Metadata
-	11, // 3: apisvc.Metadata.tables:type_name -> apisvc.Table
-	13, // 4: apisvc.Metadata.queries:type_name -> apisvc.Query
-	14, // 5: apisvc.Metadata.roles:type_name -> apisvc.Role
-	12, // 6: apisvc.Table.columns:type_name -> apisvc.Column
-	0,  // 7: apisvc.Column.type:type_name -> apisvc.ParamType
-	1,  // 8: apisvc.Column.arity:type_name -> apisvc.Arity
-	15, // 9: apisvc.Query.inputs:type_name -> apisvc.Param
-	15, // 10: apisvc.Query.outputs:type_name -> apisvc.Param
-	0,  // 11: apisvc.Param.type:type_name -> apisvc.ParamType
-	1,  // 12: apisvc.Param.arity:type_name -> apisvc.Arity
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	15, // 0: apisvc.DeploySchemaRequest.tx:type_name -> apisvc.Tx
+	15, // 1: apisvc.DropDatabaseRequest.tx:type_name -> apisvc.Tx
+	6,  // 2: apisvc.GetMetadataResponse.metadata:type_name -> apisvc.Metadata
+	7,  // 3: apisvc.Metadata.tables:type_name -> apisvc.Table
+	9,  // 4: apisvc.Metadata.queries:type_name -> apisvc.Query
+	10, // 5: apisvc.Metadata.roles:type_name -> apisvc.Role
+	13, // 6: apisvc.Metadata.indexes:type_name -> apisvc.Index
+	8,  // 7: apisvc.Table.columns:type_name -> apisvc.Column
+	14, // 8: apisvc.Column.attributes:type_name -> apisvc.Attribute
+	11, // 9: apisvc.Query.inputs:type_name -> apisvc.Input
+	12, // 10: apisvc.Query.defaults:type_name -> apisvc.DefaultInput
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_kwil_apisvc_metadata_proto_init() }
@@ -1085,9 +1073,10 @@ func file_kwil_apisvc_metadata_proto_init() {
 	if File_kwil_apisvc_metadata_proto != nil {
 		return
 	}
+	file_kwil_apisvc_tx_proto_init()
 	if !protoimpl.UnsafeEnabled {
 		file_kwil_apisvc_metadata_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PlanSchemaRequest); i {
+			switch v := v.(*DeploySchemaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1099,7 +1088,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 			}
 		}
 		file_kwil_apisvc_metadata_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PlanSchemaResponse); i {
+			switch v := v.(*DeploySchemaResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1111,7 +1100,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 			}
 		}
 		file_kwil_apisvc_metadata_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Plan); i {
+			switch v := v.(*DropDatabaseRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1123,7 +1112,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 			}
 		}
 		file_kwil_apisvc_metadata_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Change); i {
+			switch v := v.(*DropDatabaseResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1135,30 +1124,6 @@ func file_kwil_apisvc_metadata_proto_init() {
 			}
 		}
 		file_kwil_apisvc_metadata_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ApplySchemaRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_apisvc_metadata_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ApplySchemaResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_apisvc_metadata_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetMetadataRequest); i {
 			case 0:
 				return &v.state
@@ -1170,7 +1135,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_apisvc_metadata_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_apisvc_metadata_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GetMetadataResponse); i {
 			case 0:
 				return &v.state
@@ -1182,7 +1147,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_apisvc_metadata_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_apisvc_metadata_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Metadata); i {
 			case 0:
 				return &v.state
@@ -1194,7 +1159,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_apisvc_metadata_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_apisvc_metadata_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Table); i {
 			case 0:
 				return &v.state
@@ -1206,7 +1171,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_apisvc_metadata_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_apisvc_metadata_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Column); i {
 			case 0:
 				return &v.state
@@ -1218,7 +1183,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_apisvc_metadata_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_apisvc_metadata_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Query); i {
 			case 0:
 				return &v.state
@@ -1230,7 +1195,7 @@ func file_kwil_apisvc_metadata_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_apisvc_metadata_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_apisvc_metadata_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Role); i {
 			case 0:
 				return &v.state
@@ -1242,8 +1207,44 @@ func file_kwil_apisvc_metadata_proto_init() {
 				return nil
 			}
 		}
+		file_kwil_apisvc_metadata_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Input); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_apisvc_metadata_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*DefaultInput); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 		file_kwil_apisvc_metadata_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Param); i {
+			switch v := v.(*Index); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_apisvc_metadata_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Attribute); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1260,14 +1261,13 @@ func file_kwil_apisvc_metadata_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_kwil_apisvc_metadata_proto_rawDesc,
-			NumEnums:      2,
-			NumMessages:   14,
+			NumEnums:      0,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_kwil_apisvc_metadata_proto_goTypes,
 		DependencyIndexes: file_kwil_apisvc_metadata_proto_depIdxs,
-		EnumInfos:         file_kwil_apisvc_metadata_proto_enumTypes,
 		MessageInfos:      file_kwil_apisvc_metadata_proto_msgTypes,
 	}.Build()
 	File_kwil_apisvc_metadata_proto = out.File

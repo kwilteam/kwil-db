@@ -70,6 +70,38 @@
         ]
       }
     },
+    "/api/v0/schema": {
+      "post": {
+        "operationId": "KwilService_DeploySchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/apisvcDeploySchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/apisvcDeploySchemaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
     "/api/v0/wallets/estimate": {
       "post": {
         "operationId": "KwilService_EstimateCost",
@@ -197,7 +229,7 @@
         ]
       }
     },
-    "/api/v0/{wallet}/{database}/metadata": {
+    "/api/v0/{owner}/{database}/metadata": {
       "get": {
         "operationId": "KwilService_GetMetadata",
         "responses": {
@@ -216,7 +248,7 @@
         },
         "parameters": [
           {
-            "name": "wallet",
+            "name": "owner",
             "in": "path",
             "required": true,
             "type": "string"
@@ -235,17 +267,16 @@
     }
   },
   "definitions": {
-    "apisvcApplySchemaResponse": {
-      "type": "object"
-    },
-    "apisvcArity": {
-      "type": "string",
-      "enum": [
-        "OPTIONAL",
-        "REQUIRED",
-        "REPEATED"
-      ],
-      "default": "OPTIONAL"
+    "apisvcAttribute": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
     },
     "apisvcCRUDInput": {
       "type": "object",
@@ -261,38 +292,8 @@
     "apisvcCUDRequest": {
       "type": "object",
       "properties": {
-        "owner": {
-          "type": "string"
-        },
-        "database": {
-          "type": "string"
-        },
-        "query": {
-          "type": "string"
-        },
-        "inputs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcCRUDInput"
-          }
-        },
-        "nonce": {
-          "type": "string"
-        },
-        "signature": {
-          "type": "string"
-        },
-        "id": {
-          "type": "string"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "from": {
-          "type": "string"
-        },
-        "where": {
-          "$ref": "#/definitions/apisvcCRUDInput"
+        "tx": {
+          "$ref": "#/definitions/apisvcTx"
         }
       }
     },
@@ -304,20 +305,6 @@
         }
       }
     },
-    "apisvcChange": {
-      "type": "object",
-      "properties": {
-        "cmd": {
-          "type": "string"
-        },
-        "comment": {
-          "type": "string"
-        },
-        "reverse": {
-          "type": "string"
-        }
-      }
-    },
     "apisvcColumn": {
       "type": "object",
       "properties": {
@@ -325,10 +312,13 @@
           "type": "string"
         },
         "type": {
-          "$ref": "#/definitions/apisvcParamType"
+          "type": "string"
         },
-        "arity": {
-          "$ref": "#/definitions/apisvcArity"
+        "attributes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcAttribute"
+          }
         }
       }
     },
@@ -340,9 +330,6 @@
         },
         "value": {
           "type": "string"
-        },
-        "type": {
-          "$ref": "#/definitions/apisvcParamType"
         }
       }
     },
@@ -350,6 +337,43 @@
       "type": "object",
       "properties": {
         "address": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcDefaultInput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "apisvcDeploySchemaRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/apisvcTx"
+        }
+      }
+    },
+    "apisvcDeploySchemaResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "msg": {
           "type": "string"
         }
       }
@@ -401,10 +425,48 @@
         }
       }
     },
+    "apisvcIndex": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "column": {
+          "type": "string"
+        },
+        "using": {
+          "type": "string"
+        }
+      }
+    },
+    "apisvcInput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "apisvcMetadata": {
       "type": "object",
       "properties": {
         "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "defaultRole": {
           "type": "string"
         },
         "tables": {
@@ -425,55 +487,11 @@
             "$ref": "#/definitions/apisvcRole"
           }
         },
-        "defaultRole": {
-          "type": "string"
-        }
-      }
-    },
-    "apisvcParam": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "$ref": "#/definitions/apisvcParamType"
-        },
-        "arity": {
-          "$ref": "#/definitions/apisvcArity"
-        }
-      }
-    },
-    "apisvcParamType": {
-      "type": "string",
-      "enum": [
-        "VOID",
-        "NUMBER",
-        "STRING",
-        "BOOL",
-        "DATE",
-        "TIME",
-        "DATETIME",
-        "BYTES"
-      ],
-      "default": "VOID"
-    },
-    "apisvcPlan": {
-      "type": "object",
-      "properties": {
-        "changes": {
+        "indexes": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/apisvcChange"
+            "$ref": "#/definitions/apisvcIndex"
           }
-        }
-      }
-    },
-    "apisvcPlanSchemaResponse": {
-      "type": "object",
-      "properties": {
-        "plan": {
-          "$ref": "#/definitions/apisvcPlan"
         }
       }
     },
@@ -483,16 +501,19 @@
         "name": {
           "type": "string"
         },
+        "statement": {
+          "type": "string"
+        },
         "inputs": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/apisvcParam"
+            "$ref": "#/definitions/apisvcInput"
           }
         },
-        "outputs": {
+        "defaults": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/apisvcParam"
+            "$ref": "#/definitions/apisvcDefaultInput"
           }
         }
       }
@@ -536,27 +557,15 @@
     "apisvcReturnFundsRequest": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "string"
-        },
-        "nonce": {
-          "type": "string"
-        },
-        "from": {
-          "type": "string"
-        },
-        "signature": {
-          "type": "string"
+        "tx": {
+          "$ref": "#/definitions/apisvcTx"
         }
       }
     },
     "apisvcReturnFundsResponse": {
       "type": "object",
       "properties": {
-        "tx": {
+        "txid": {
           "type": "string"
         },
         "amount": {
@@ -612,6 +621,31 @@
           }
         }
       }
+    },
+    "apisvcTx": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "data": {
+          "type": "string",
+          "format": "byte"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "sender": {
+          "type": "string"
+        }
+      },
+      "description": "TxMsg is a message that can contain any arbitrary data and have\nassociated fees and provenance."
     },
     "protobufAny": {
       "type": "object",

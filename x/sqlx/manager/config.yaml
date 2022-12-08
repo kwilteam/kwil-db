@@ -1,0 +1,3 @@
+deposit-manager:
+  spend-enabled: false
+  read-balance-enabled: false
