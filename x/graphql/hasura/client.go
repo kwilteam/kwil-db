@@ -1,4 +1,4 @@
-package server
+package hasura
 
 import (
 	"bytes"
@@ -10,137 +10,37 @@ import (
 	"strings"
 )
 
-const (
-	DefaultHasuraSource = "default"
-	DefaultHasuraSchema = "public"
-)
-
-type HasuraErrorResp struct {
-	Code  string `json:"code"`
-	Error string `json:"error"`
-	Path  string `json:"path"`
-}
-
-type HasuraTableConf struct {
-	CustomName string `json:"custom_name"`
-}
-
-type HasuraQulifiedTable struct {
-	Schema string `json:"schema"`
-	Name   string `json:"name"`
-}
-
-type HasuraPgTrackTableArgs struct {
-	Table         HasuraQulifiedTable `json:"table"`
-	Source        string              `json:"source"`
-	Configuration HasuraTableConf     `json:"configuration"`
-}
-
-type HasuraPgTrackTableParams struct {
-	Type string                 `json:"type"`
-	Args HasuraPgTrackTableArgs `json:"args"`
-}
-
-type HasuraResource struct{}
-
-type HasuraMetadata struct {
-	Version string           `json:"version"`
-	Sources []HasuraResource `json:"sources"`
-}
-
-type HasuraExportMetadataResp struct {
-	ResourceVersion int            `json:"resource_version"`
-	Metadata        HasuraMetadata `json:"metadata"`
-}
-
-type HasuraExplainResp struct {
-	Field string   `json:"field"`
-	Sql   string   `json:"sql"`
-	Plan  []string `json:"plan"`
-}
-
-func snakeCase(name string) string {
-	return strings.ToLower(strings.Replace(name, " ", "_", -1))
-}
-
-// customHasuraTableName return "schema_table".
-func customHasuraTableName(schema, table string) string {
-	names := []string{snakeCase(schema), snakeCase(table)}
-	return strings.Join(names, "_")
-}
-
-func newHasuraPgTrackTableParams(source, schema, table string) HasuraPgTrackTableParams {
-	return HasuraPgTrackTableParams{
-		Type: "pg_track_table",
-		Args: HasuraPgTrackTableArgs{
-			Source: source,
-			Table: HasuraQulifiedTable{
-				Schema: schema,
-				Name:   table,
-			},
-			Configuration: HasuraTableConf{
-				CustomName: customHasuraTableName(schema, table),
-			},
-		},
-	}
-}
-
-type HasuraPgUntrackTableArgs struct {
-	Source  string              `json:"source"`
-	Table   HasuraQulifiedTable `json:"table"`
-	Cascade bool                `json:"cascade"`
-}
-
-type HasuraPgUntrackTableParams struct {
-	Type string                   `json:"type"`
-	Args HasuraPgUntrackTableArgs `json:"args"`
-}
-
-func newHasuraPgUntrackTableParams(source, schema, table string) HasuraPgUntrackTableParams {
-	return HasuraPgUntrackTableParams{
-		Type: "pg_untrack_table",
-		Args: HasuraPgUntrackTableArgs{
-			Source: source,
-			Table: HasuraQulifiedTable{
-				Schema: schema,
-				Name:   table,
-			},
-			Cascade: false,
-		},
-	}
-}
-
-type HasuraEngine struct {
+type Client struct {
 	endpoint string
 }
 
-func NewHasuraEngine(endpoint string) *HasuraEngine {
-	return &HasuraEngine{
+func NewClient(endpoint string) *Client {
+	return &Client{
 		endpoint: endpoint,
 	}
 }
 
-func (h *HasuraEngine) metadataUrl() string {
+func (h *Client) metadataUrl() string {
 	s, _ := url.JoinPath(h.endpoint, "v1/metadata")
 	return s
 }
 
-func (h *HasuraEngine) graphqlUrl() string {
+func (h *Client) graphqlUrl() string {
 	s, _ := url.JoinPath(h.endpoint, "v1/graphql")
 	return s
 }
 
-func (h *HasuraEngine) queryUrl() string {
+func (h *Client) queryUrl() string {
 	s, _ := url.JoinPath(h.endpoint, "v2/query")
 	return s
 }
 
-func (h *HasuraEngine) explainUrl() string {
+func (h *Client) explainUrl() string {
 	s, _ := url.JoinPath(h.endpoint, "v1/graphql/explain")
 	return s
 }
 
-func (h *HasuraEngine) call(req *http.Request) ([]byte, error) {
+func (h *Client) call(req *http.Request) ([]byte, error) {
 	req.Header.Set("Content-Type", "application/json")
 	// uncomment if Hasura admin secret is enabled
 	// req.Header.Set("X-Hasura-Role", "admin")
@@ -168,7 +68,7 @@ func (h *HasuraEngine) call(req *http.Request) ([]byte, error) {
 }
 
 // TrackTable call Hasura API to expose a table under 'source.schema'.
-func (h *HasuraEngine) TrackTable(source, schema, table string) error {
+func (h *Client) TrackTable(source, schema, table string) error {
 	// no space is allowed in schema
 	if strings.Contains(table, " ") {
 		return fmt.Errorf("invalid table name: space is not allowed, '%s'", table)
@@ -189,7 +89,7 @@ func (h *HasuraEngine) TrackTable(source, schema, table string) error {
 }
 
 // UntrackTable call Hasura API to unexpose a able uder 'source.schema'.
-func (h *HasuraEngine) UntrackTable(source, schema, table string) error {
+func (h *Client) UntrackTable(source, schema, table string) error {
 	untrackTableParams := newHasuraPgUntrackTableParams(source, schema, table)
 	jsonBody, err := json.Marshal(untrackTableParams)
 	if err != nil {
@@ -207,7 +107,7 @@ func (h *HasuraEngine) UntrackTable(source, schema, table string) error {
 }
 
 // UpdateTable first untrack table from 'source.schema', then track it again.
-func (h *HasuraEngine) UpdateTable(source, schema, table string) error {
+func (h *Client) UpdateTable(source, schema, table string) error {
 	// if table is already tracked, need to untrack and then track
 	if err := h.UntrackTable(source, schema, table); err != nil {
 		return err
@@ -221,7 +121,7 @@ func (h *HasuraEngine) UpdateTable(source, schema, table string) error {
 
 // AddDefaultSourceAndSchema add 'default' source and 'public' schema
 // from db url configured in ENV.
-func (h *HasuraEngine) AddDefaultSourceAndSchema() error {
+func (h *Client) AddDefaultSourceAndSchema() error {
 	addSource := fmt.Sprintf(
 		`{"type":"pg_add_source",
 	 	  "args":{"name":"default",
@@ -246,7 +146,7 @@ func (h *HasuraEngine) AddDefaultSourceAndSchema() error {
 }
 
 // AddSchema add schema to default source 'default'.
-func (h *HasuraEngine) AddSchema(schema string) error {
+func (h *Client) AddSchema(schema string) error {
 	addSchemaBody := fmt.Sprintf(`{"type":"run_sql",
 			           "args":{"source":"default",
 				               "sql":"create schema %s;",
@@ -264,7 +164,7 @@ func (h *HasuraEngine) AddSchema(schema string) error {
 
 // DeleteSchema delete schema to default source 'default'.
 // Set cascade to true to delete all dependent tables.
-func (h *HasuraEngine) DeleteSchema(schema string, cascade bool) error {
+func (h *Client) DeleteSchema(schema string, cascade bool) error {
 	cascadeValue := ""
 	if cascade {
 		cascadeValue = "cascade"
@@ -286,7 +186,7 @@ func (h *HasuraEngine) DeleteSchema(schema string, cascade bool) error {
 
 // HasInitialized return true if there is a source and a schema configured,
 // otherwise return false.
-func (h *HasuraEngine) HasInitialized() (bool, error) {
+func (h *Client) HasInitialized() (bool, error) {
 	body := `{"type":"export_metadata","version":2,"args":{}}`
 	bodyReader := bytes.NewReader([]byte(body))
 	req, err := http.NewRequest(http.MethodPost, h.metadataUrl(), bodyReader)
@@ -311,23 +211,9 @@ func (h *HasuraEngine) HasInitialized() (bool, error) {
 	}
 }
 
-// queryToExplain return a query body for explain API
-// Does not support Directives yet.
-func queryToExplain(query string) string {
-	queryHead, queryBody, _ := strings.Cut(query, "{")
-	queryHead = strings.Trim(queryHead, " ")
-	s := strings.Split(queryHead, " ")
-	if len(s) <= 1 {
-		return fmt.Sprintf(`{"query": {"query": "{%s"}}`, queryBody)
-	} else {
-		operationName := s[1]
-		return fmt.Sprintf(`{"query": {"query": "%s", "operationName": "%s"}}`, query, operationName)
-	}
-}
-
 // ExplainQuery return compiled sql from query.
 // Right now only support one query.
-func (h *HasuraEngine) ExplainQuery(query string) (string, error) {
+func (h *Client) ExplainQuery(query string) (string, error) {
 	body := queryToExplain(query)
 	bodyReader := bytes.NewReader([]byte(body))
 	req, err := http.NewRequest(http.MethodPost, h.explainUrl(), bodyReader)

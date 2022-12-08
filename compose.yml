@@ -33,7 +33,7 @@ services:
       dockerfile: docker/kwild-gateway.dockerfile
     environment:
       GRPC_CONTAINER_ENDPOINT: kwild:50051
-      GRAPHQL_ENDPOINT: http://graphql-engine:8080
+      KWIL_GRAPHQL_ENDPOINT: http://graphql-engine:8080
       ## uncomment next 2 lines if HASURA_GRAPHQL_ADMIN_SECRET is set in Hasura container
       #HASURA_GRAPHQL_ADMIN_SECRET: secretkeyhasura
       #HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
