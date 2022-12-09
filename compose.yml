@@ -39,6 +39,8 @@ services:
       #HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
     ports:
       - "8081:8080"
+    volumes:
+      - ./keys.json:/app/keys.json
     network_mode: bridge
   postgres_db:
     image: postgres:15.0-alpine
