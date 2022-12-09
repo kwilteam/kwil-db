@@ -12,8 +12,8 @@ func snakeCase(name string) string {
 	return strings.ToLower(strings.Replace(name, " ", "_", -1))
 }
 
-// customHasuraTableName return "schema_table".
-func customHasuraTableName(schema, table string) string {
+// customTableName return "schema_table".
+func customTableName(schema, table string) string {
 	names := []string{snakeCase(schema), snakeCase(table)}
 	return strings.Join(names, "_")
 }
@@ -32,8 +32,8 @@ func queryToExplain(query string) string {
 	}
 }
 
-// InitializeHasura ensure Hasura is initialized, add default source('default') and schema
-func InitializeHasura() {
+// Initialize ensure Hasura is initialized, add default source('default') and schema
+func Initialize() {
 	for {
 		time.Sleep(3 * time.Second)
 		client := NewClient(viper.GetString("graphql"))

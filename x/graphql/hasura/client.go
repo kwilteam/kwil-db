@@ -20,27 +20,27 @@ func NewClient(endpoint string) *Client {
 	}
 }
 
-func (h *Client) metadataUrl() string {
-	s, _ := url.JoinPath(h.endpoint, "v1/metadata")
+func (c *Client) metadataUrl() string {
+	s, _ := url.JoinPath(c.endpoint, "v1/metadata")
 	return s
 }
 
-func (h *Client) graphqlUrl() string {
-	s, _ := url.JoinPath(h.endpoint, "v1/graphql")
+func (c *Client) graphqlUrl() string {
+	s, _ := url.JoinPath(c.endpoint, "v1/graphql")
 	return s
 }
 
-func (h *Client) queryUrl() string {
-	s, _ := url.JoinPath(h.endpoint, "v2/query")
+func (c *Client) queryUrl() string {
+	s, _ := url.JoinPath(c.endpoint, "v2/query")
 	return s
 }
 
-func (h *Client) explainUrl() string {
-	s, _ := url.JoinPath(h.endpoint, "v1/graphql/explain")
+func (c *Client) explainUrl() string {
+	s, _ := url.JoinPath(c.endpoint, "v1/graphql/explain")
 	return s
 }
 
-func (h *Client) call(req *http.Request) ([]byte, error) {
+func (c *Client) call(req *http.Request) ([]byte, error) {
 	req.Header.Set("Content-Type", "application/json")
 	// uncomment if Hasura admin secret is enabled
 	// req.Header.Set("X-Hasura-Role", "admin")
@@ -49,7 +49,7 @@ func (h *Client) call(req *http.Request) ([]byte, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return []byte{}, err
+		return []byte{}, fmt.Errorf("call Hasura failed: %s", err.Error())
 	}
 	defer resp.Body.Close()
 
@@ -59,8 +59,10 @@ func (h *Client) call(req *http.Request) ([]byte, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		var hasuraErr HasuraErrorResp
-		json.Unmarshal(bodyBytes, &hasuraErr)
+		var hasuraErr ErrorResp
+		if err := json.Unmarshal(bodyBytes, &hasuraErr); err != nil {
+			return []byte{}, fmt.Errorf("parse Hasura response failed: %s", err.Error())
+		}
 		return bodyBytes, fmt.Errorf("code: %s, error: %s", hasuraErr.Code, hasuraErr.Error)
 	}
 
@@ -68,7 +70,7 @@ func (h *Client) call(req *http.Request) ([]byte, error) {
 }
 
 // TrackTable call Hasura API to expose a table under 'source.schema'.
-func (h *Client) TrackTable(source, schema, table string) error {
+func (c *Client) TrackTable(source, schema, table string) error {
 	// no space is allowed in schema
 	if strings.Contains(table, " ") {
 		return fmt.Errorf("invalid table name: space is not allowed, '%s'", table)
@@ -79,17 +81,17 @@ func (h *Client) TrackTable(source, schema, table string) error {
 		return err
 	}
 	bodyReader := bytes.NewReader(jsonBody)
-	req, err := http.NewRequest(http.MethodPost, h.metadataUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
 	if err != nil {
 		return err
 	}
 
-	_, err = h.call(req)
+	_, err = c.call(req)
 	return err
 }
 
-// UntrackTable call Hasura API to unexpose a able uder 'source.schema'.
-func (h *Client) UntrackTable(source, schema, table string) error {
+// UntrackTable call Hasura API to un-expose a able under 'source.schema'.
+func (c *Client) UntrackTable(source, schema, table string) error {
 	untrackTableParams := newHasuraPgUntrackTableParams(source, schema, table)
 	jsonBody, err := json.Marshal(untrackTableParams)
 	if err != nil {
@@ -97,23 +99,23 @@ func (h *Client) UntrackTable(source, schema, table string) error {
 	}
 	bodyReader := bytes.NewReader(jsonBody)
 
-	req, err := http.NewRequest(http.MethodPost, h.metadataUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
 	if err != nil {
 		return err
 	}
 
-	_, err = h.call(req)
+	_, err = c.call(req)
 	return err
 }
 
 // UpdateTable first untrack table from 'source.schema', then track it again.
-func (h *Client) UpdateTable(source, schema, table string) error {
+func (c *Client) UpdateTable(source, schema, table string) error {
 	// if table is already tracked, need to untrack and then track
-	if err := h.UntrackTable(source, schema, table); err != nil {
+	if err := c.UntrackTable(source, schema, table); err != nil {
 		return err
 	}
 
-	if err := h.TrackTable(source, schema, table); err != nil {
+	if err := c.TrackTable(source, schema, table); err != nil {
 		return err
 	}
 	return nil
@@ -121,7 +123,7 @@ func (h *Client) UpdateTable(source, schema, table string) error {
 
 // AddDefaultSourceAndSchema add 'default' source and 'public' schema
 // from db url configured in ENV.
-func (h *Client) AddDefaultSourceAndSchema() error {
+func (c *Client) AddDefaultSourceAndSchema() error {
 	addSource := fmt.Sprintf(
 		`{"type":"pg_add_source",
 	 	  "args":{"name":"default",
@@ -136,35 +138,35 @@ func (h *Client) AddDefaultSourceAndSchema() error {
 		"PG_DATABASE_URL")
 	addSourceBody := []byte(addSource)
 	bodyReader := bytes.NewReader(addSourceBody)
-	req, err := http.NewRequest(http.MethodPost, h.metadataUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
 	if err != nil {
 		return err
 	}
 
-	_, err = h.call(req)
+	_, err = c.call(req)
 	return err
 }
 
 // AddSchema add schema to default source 'default'.
-func (h *Client) AddSchema(schema string) error {
+func (c *Client) AddSchema(schema string) error {
 	addSchemaBody := fmt.Sprintf(`{"type":"run_sql",
 			           "args":{"source":"default",
 				               "sql":"create schema %s;",
 						       "cascade":false,
 						       "read_only":false}}`, schema)
 	bodyReader := bytes.NewReader([]byte(addSchemaBody))
-	req, err := http.NewRequest(http.MethodPost, h.queryUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.queryUrl(), bodyReader)
 	if err != nil {
 		return err
 	}
 
-	_, err = h.call(req)
+	_, err = c.call(req)
 	return err
 }
 
 // DeleteSchema delete schema to default source 'default'.
 // Set cascade to true to delete all dependent tables.
-func (h *Client) DeleteSchema(schema string, cascade bool) error {
+func (c *Client) DeleteSchema(schema string, cascade bool) error {
 	cascadeValue := ""
 	if cascade {
 		cascadeValue = "cascade"
@@ -175,31 +177,31 @@ func (h *Client) DeleteSchema(schema string, cascade bool) error {
 						       "cascade":true,
 						       "read_only":false}}`, schema, cascadeValue)
 	bodyReader := bytes.NewReader([]byte(addSchemaBody))
-	req, err := http.NewRequest(http.MethodPost, h.queryUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.queryUrl(), bodyReader)
 	if err != nil {
 		return err
 	}
 
-	_, err = h.call(req)
+	_, err = c.call(req)
 	return err
 }
 
 // HasInitialized return true if there is a source and a schema configured,
 // otherwise return false.
-func (h *Client) HasInitialized() (bool, error) {
+func (c *Client) HasInitialized() (bool, error) {
 	body := `{"type":"export_metadata","version":2,"args":{}}`
 	bodyReader := bytes.NewReader([]byte(body))
-	req, err := http.NewRequest(http.MethodPost, h.metadataUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
 	if err != nil {
 		return false, err
 	}
 
-	respBody, err := h.call(req)
+	respBody, err := c.call(req)
 	if err != nil {
 		return false, err
 	}
 
-	var resp HasuraExportMetadataResp
+	var resp ExportMetadataResp
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return false, err
 	}
@@ -213,20 +215,20 @@ func (h *Client) HasInitialized() (bool, error) {
 
 // ExplainQuery return compiled sql from query.
 // Right now only support one query.
-func (h *Client) ExplainQuery(query string) (string, error) {
+func (c *Client) ExplainQuery(query string) (string, error) {
 	body := queryToExplain(query)
 	bodyReader := bytes.NewReader([]byte(body))
-	req, err := http.NewRequest(http.MethodPost, h.explainUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.explainUrl(), bodyReader)
 	if err != nil {
 		return "", err
 	}
 
-	respBody, err := h.call(req)
+	respBody, err := c.call(req)
 	if err != nil {
 		return "", err
 	}
 
-	var resp []HasuraExplainResp
+	var resp []ExplainResp
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return "", err
 	}

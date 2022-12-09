@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	viper.BindEnv(AdminSecretName, AdminSecretEnv)
+	_ = viper.BindEnv(AdminSecretName, AdminSecretEnv)
 }
 
 func Test_trackTable(t *testing.T) {
@@ -26,7 +26,7 @@ func Test_trackTable(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		}
 		tracked = !tracked
-		w.Write(jsonBody)
+		_, _ = w.Write(jsonBody)
 
 	}))
 	defer backendServer.Close()

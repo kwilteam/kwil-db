@@ -70,8 +70,8 @@ func Test_customHasuraTableName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := customHasuraTableName(tt.args.schema, tt.args.table); got != tt.want {
-				t.Errorf("customHasuraTableName() = %v, want %v", got, tt.want)
+			if got := customTableName(tt.args.schema, tt.args.table); got != tt.want {
+				t.Errorf("customTableName() = %v, want %v", got, tt.want)
 			}
 		})
 	}

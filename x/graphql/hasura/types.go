@@ -1,91 +1,91 @@
 package hasura
 
 const (
-	AdminSecretName = "hasuraadminsecret"
-	AdminSecretEnv  = "HASURA_GRAPHQL_ADMIN_SECRET"
-	UnathorizedRole = "HASURA_GRAPHQL_UNAUTHORIZED_ROLE"
-	DefaultSource   = "default"
-	DefaultSchema   = "public"
-	EndpointEnv     = "KWIL_GRAPHQL_ENDPOINT"
+	AdminSecretName  = "hasuraadminsecret"
+	AdminSecretEnv   = "HASURA_GRAPHQL_ADMIN_SECRET"
+	UnauthorizedRole = "HASURA_GRAPHQL_UNAUTHORIZED_ROLE"
+	DefaultSource    = "default"
+	DefaultSchema    = "public"
+	EndpointEnv      = "KWIL_GRAPHQL_ENDPOINT"
 )
 
-type HasuraErrorResp struct {
+type ErrorResp struct {
 	Code  string `json:"code"`
 	Error string `json:"error"`
 	Path  string `json:"path"`
 }
 
-type HasuraTableConf struct {
+type TableConf struct {
 	CustomName string `json:"custom_name"`
 }
 
-type HasuraQulifiedTable struct {
+type QualifiedTable struct {
 	Schema string `json:"schema"`
 	Name   string `json:"name"`
 }
 
-type HasuraPgTrackTableArgs struct {
-	Table         HasuraQulifiedTable `json:"table"`
-	Source        string              `json:"source"`
-	Configuration HasuraTableConf     `json:"configuration"`
+type PgTrackTableArgs struct {
+	Table         QualifiedTable `json:"table"`
+	Source        string         `json:"source"`
+	Configuration TableConf      `json:"configuration"`
 }
 
-type HasuraResource struct{}
+type Resource struct{}
 
-type HasuraMetadata struct {
-	Version string           `json:"version"`
-	Sources []HasuraResource `json:"sources"`
+type Metadata struct {
+	Version string     `json:"version"`
+	Sources []Resource `json:"sources"`
 }
 
-type HasuraExportMetadataResp struct {
-	ResourceVersion int            `json:"resource_version"`
-	Metadata        HasuraMetadata `json:"metadata"`
+type ExportMetadataResp struct {
+	ResourceVersion int      `json:"resource_version"`
+	Metadata        Metadata `json:"metadata"`
 }
 
-type HasuraExplainResp struct {
+type ExplainResp struct {
 	Field string   `json:"field"`
 	Sql   string   `json:"sql"`
 	Plan  []string `json:"plan"`
 }
 
-type HasuraPgTrackTableParams struct {
-	Type string                 `json:"type"`
-	Args HasuraPgTrackTableArgs `json:"args"`
+type PgTrackTableParams struct {
+	Type string           `json:"type"`
+	Args PgTrackTableArgs `json:"args"`
 }
 
-func newHasuraPgTrackTableParams(source, schema, table string) HasuraPgTrackTableParams {
-	return HasuraPgTrackTableParams{
+func newHasuraPgTrackTableParams(source, schema, table string) PgTrackTableParams {
+	return PgTrackTableParams{
 		Type: "pg_track_table",
-		Args: HasuraPgTrackTableArgs{
+		Args: PgTrackTableArgs{
 			Source: source,
-			Table: HasuraQulifiedTable{
+			Table: QualifiedTable{
 				Schema: schema,
 				Name:   table,
 			},
-			Configuration: HasuraTableConf{
-				CustomName: customHasuraTableName(schema, table),
+			Configuration: TableConf{
+				CustomName: customTableName(schema, table),
 			},
 		},
 	}
 }
 
-type HasuraPgUntrackTableArgs struct {
-	Source  string              `json:"source"`
-	Table   HasuraQulifiedTable `json:"table"`
-	Cascade bool                `json:"cascade"`
+type PgUntrackTableArgs struct {
+	Source  string         `json:"source"`
+	Table   QualifiedTable `json:"table"`
+	Cascade bool           `json:"cascade"`
 }
 
-type HasuraPgUntrackTableParams struct {
-	Type string                   `json:"type"`
-	Args HasuraPgUntrackTableArgs `json:"args"`
+type PgUntrackTableParams struct {
+	Type string             `json:"type"`
+	Args PgUntrackTableArgs `json:"args"`
 }
 
-func newHasuraPgUntrackTableParams(source, schema, table string) HasuraPgUntrackTableParams {
-	return HasuraPgUntrackTableParams{
+func newHasuraPgUntrackTableParams(source, schema, table string) PgUntrackTableParams {
+	return PgUntrackTableParams{
 		Type: "pg_untrack_table",
-		Args: HasuraPgUntrackTableArgs{
+		Args: PgUntrackTableArgs{
 			Source: source,
-			Table: HasuraQulifiedTable{
+			Table: QualifiedTable{
 				Schema: schema,
 				Name:   table,
 			},

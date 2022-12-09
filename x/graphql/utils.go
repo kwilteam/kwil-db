@@ -8,7 +8,7 @@ import (
 
 func isMutation(query string) bool {
 	// NOTE: enough to correctly block most mutations
-	operations := []string{}
+	var operations []string
 	rightBracket := -1
 	opens := 0
 	for i, c := range query {
@@ -35,8 +35,8 @@ func isMutation(query string) bool {
 	return false
 }
 
-func JSONError(w http.ResponseWriter, err error, code int) {
+func jsonError(w http.ResponseWriter, err error, code int) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(err)
+	return json.NewEncoder(w).Encode(err)
 }

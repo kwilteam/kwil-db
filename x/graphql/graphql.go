@@ -15,12 +15,12 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
-type GraphqlRProxy struct {
+type RProxy struct {
 	logger logx.SugaredLogger
 	proxy  *httputil.ReverseProxy
 }
 
-func NewGraphqlRProxy() *GraphqlRProxy {
+func NewRProxy() *RProxy {
 	ru, err := url.Parse(viper.GetString("graphql"))
 	if err != nil {
 		log.Fatal(err)
@@ -28,29 +28,34 @@ func NewGraphqlRProxy() *GraphqlRProxy {
 
 	u := ru.JoinPath("v1")
 
-	go hasura.InitializeHasura()
+	go hasura.Initialize()
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
-	return &GraphqlRProxy{
+	return &RProxy{
 		logger: logx.New().Sugar(),
 		proxy:  proxy,
 	}
 }
 
-func (g *GraphqlRProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
+func (g *RProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			JSONError(w, fmt.Errorf("parse request failed"), http.StatusInternalServerError)
 			g.logger.Errorf("parse request failed: %s", err.Error())
+			if e := jsonError(w, fmt.Errorf("parse request failed"), http.StatusInternalServerError); e != nil {
+				g.logger.Errorf("write response failed: %s", e.Error())
+			}
 			return
 		}
 
 		bodyString := string(bodyBytes)
 		if isMutation(bodyString) {
-			e := gqlerror.Errorf("Only query is allowed")
-			JSONError(w, e, http.StatusBadRequest)
+			err := gqlerror.Errorf("Only query is allowed")
+			g.logger.Errorf("bad request: %s", err.Error())
+			if e := jsonError(w, err, http.StatusBadRequest); e != nil {
+				g.logger.Errorf("write reponse failed: %s", e.Error())
+			}
 			return
 		}
 
@@ -69,6 +74,6 @@ func (g *GraphqlRProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc 
 	}
 }
 
-func (g *GraphqlRProxy) Handler(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+func (g *RProxy) Handler(w http.ResponseWriter, r *http.Request, _ map[string]string) {
 	g.makeHasuraHandler(g.proxy.ServeHTTP)(w, r)
 }

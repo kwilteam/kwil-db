@@ -48,7 +48,7 @@ func Start() error {
 				return err
 			}
 
-			graphqlRProxy := graphql.NewGraphqlRProxy()
+			graphqlRProxy := graphql.NewRProxy()
 			err = mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
 			if err != nil {
 				return err
