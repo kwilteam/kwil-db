@@ -31,9 +31,10 @@ func (q *InsertDef) Prepare(db *Database) (*ExecutableQuery, error) {
 
 	// Create a statementInput value for each column and add it to the preparedStatement's inputs slice
 	cols := []interface{}{}
+	defaultCols := []interface{}{} // I define this separately since we want all default to be at the end
 	i := 1
 	for name, val := range q.Columns {
-		cols = append(cols, name)
+
 		fillable := false
 		if val == "" {
 			fillable = true
@@ -41,6 +42,9 @@ func (q *InsertDef) Prepare(db *Database) (*ExecutableQuery, error) {
 				Column: name,
 				Type:   tbl.Columns[name].Type.String(),
 			})
+			cols = append(cols, name)
+		} else {
+			defaultCols = append(defaultCols, name)
 		}
 
 		pgType, ok := Types[tbl.Columns[name].Type]
@@ -57,6 +61,7 @@ func (q *InsertDef) Prepare(db *Database) (*ExecutableQuery, error) {
 		i++
 	}
 
+	cols = append(cols, defaultCols...)
 	// Create the SQL statement
 	stmt, err := InsertBuilder(db.SchemaName() + "." + q.Table).Columns(cols).ToSQL()
 	if err != nil {

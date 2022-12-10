@@ -20,12 +20,13 @@ message CRUDInput {
     string value = 2;
 }
 
-message CUDRequest{
+message WriteRequest{
     Tx tx = 1;
 }
 
-message CUDResponse{
-    string trace_id = 1;
+message WriteResponse{
+    string txid = 1;
+    string trace_id = 2;
 }
 
 message ColumnResult {

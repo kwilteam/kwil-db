@@ -31,7 +31,7 @@ service KwilService {
   }
   
 
-  rpc Cud (CUDRequest) returns (CUDResponse) {
+  rpc Write (WriteRequest) returns (WriteResponse) {
     option (google.api.http) = {
       post: "/api/v0/write"
       body: "*"
@@ -51,7 +51,7 @@ service KwilService {
       get: "/api/v0/wallets/{wallet}/balance"
     };
   }
-  rpc ReturnFunds(ReturnFundsRequest) returns (ReturnFundsResponse) {
+  rpc ReturnFunds(WithdrawalRequest) returns (WithdrawalResponse) {
     option (google.api.http) = {
       post: "/api/v0/wallets/withdraw"
       body: "*"

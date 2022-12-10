@@ -152,7 +152,7 @@ func As[T any](into T, from any) error {
 
 //func (c *KuniformColumn) ToColumnType(s string)
 
-func buildCreateIndex(name, schema string, i Index) string {
+func buildCreateIndex(name, schema string, i *Index) string {
 	var b strings.Builder
 	indNm := "i" + crypto.Sha224Str([]byte(name))
 	b.WriteString("CREATE INDEX ")
@@ -162,7 +162,12 @@ func buildCreateIndex(name, schema string, i Index) string {
 	b.WriteString(".")
 	b.WriteString(i.Table)
 	b.WriteString(" (")
-	b.WriteString(i.Column)
+	for j, column := range i.Columns {
+		b.WriteString(column)
+		if j < len(i.Columns)-1 {
+			b.WriteString(", ")
+		}
+	}
 	b.WriteString("); ")
 	return b.String()
 }
@@ -177,8 +182,8 @@ func (db *Database) GenerateDDL() ([]string, error) {
 
 		stmts = append(stmts, tableStmts...)
 	}
-	for name, i := range db.Indexes {
-		stmts = append(stmts, (buildCreateIndex(db.addSchema(name), db.getSchema(), i))) // This is an absolute mess but don't have time to fix it
+	for name, index := range db.Indexes {
+		stmts = append(stmts, (buildCreateIndex(db.addSchema(name), db.getSchema(), &index))) // This is an absolute mess but don't have time to fix it
 	}
 	return stmts, nil
 }

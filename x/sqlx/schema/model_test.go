@@ -20,8 +20,8 @@ func Test_ReadYaml(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if db.Owner != "kwil" {
-		t.Fatal("owner should be kwil")
+	if db.Owner != "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D" {
+		t.Fatal("owner should be 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D")
 	}
 
 	if db.Name != "mydb" {
@@ -54,12 +54,7 @@ func Test_ReadYaml(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bts, err = st.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Println(string(bts))
+	fmt.Println(st.Statement)
 	panic("")
 }
 

@@ -12,3 +12,4 @@ message Tx{
     string signature = 5;
     string sender = 6;
 }
+

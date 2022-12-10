@@ -13,11 +13,11 @@ message GetBalanceResponse {
     string spent = 2;
 }
   
-message ReturnFundsRequest {
+message WithdrawalRequest {
     Tx tx = 1;
 }
   
-message ReturnFundsResponse {
+message WithdrawalResponse {
     string txid = 1;
     string amount = 2;
     string fee = 3;

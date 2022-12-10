@@ -65,6 +65,19 @@ func viewDatabaseCmd() *cobra.Command {
 				for _, q := range meta.Queries {
 					fmt.Printf("  %s\n", q.Name)
 				}
+
+				// Print indexes
+				fmt.Println("Indexes:")
+				for _, i := range meta.Indexes {
+					fmt.Printf("  %s:\n", i.Name)
+					fmt.Println("    Type: ", i.Using)
+					fmt.Printf("    Table: %s\n", i.Table)
+					fmt.Printf("    Columns:\n")
+					for _, c := range i.Columns {
+						fmt.Printf("      %s\n", c)
+					}
+
+				}
 				return nil
 			})
 		},

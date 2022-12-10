@@ -87,10 +87,10 @@ func (c *CachedDB) ExportIndexes() []*ExportedIndex {
 
 	for indexName, index := range c.Indexes {
 		indexes = append(indexes, &ExportedIndex{
-			Name:   indexName,
-			Table:  index.Table,
-			Column: index.Column,
-			Using:  index.Using.String(),
+			Name:    indexName,
+			Table:   index.Table,
+			Columns: index.Columns,
+			Using:   index.Using.String(),
 		})
 	}
 	return indexes

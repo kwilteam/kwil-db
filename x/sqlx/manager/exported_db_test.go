@@ -176,16 +176,19 @@ var (
 
 	MockIndexes = []*manager.ExportedIndex{
 		{
-			Name:   "users_first_name_idx",
-			Table:  "users",
-			Column: "first_name",
-			Using:  "btree",
+			Name:  "users_first_name_idx",
+			Table: "users",
+			Columns: []string{
+				"first_name",
+				"last_name",
+			},
+			Using: "btree",
 		},
 		{
-			Name:   "post_user_id_idx",
-			Table:  "posts",
-			Column: "user_id",
-			Using:  "btree",
+			Name:    "post_user_id_idx",
+			Table:   "posts",
+			Columns: []string{"user_id"},
+			Using:   "btree",
 		},
 	}
 )

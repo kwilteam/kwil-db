@@ -64,7 +64,7 @@ func withdrawCmd() *cobra.Command {
 
 				fmt.Println("THIS IS NOT DONE ThIS DOES NOT WORK YET")
 
-				wdr := apipb.ReturnFundsRequest{
+				wdr := apipb.WithdrawalRequest{
 					Tx: &apipb.Tx{
 						Id:        id,
 						Data:      []byte{},

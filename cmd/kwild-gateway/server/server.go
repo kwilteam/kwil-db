@@ -60,7 +60,7 @@ func Start() error {
 				return err
 			}
 
-			return http.ListenAndServe(http_port, apik(cors(mux)))
+			return http.ListenAndServe(http_port, cors(apik(mux)))
 		},
 	}
 
@@ -88,7 +88,7 @@ func cors(h http.Handler) http.Handler {
 		if allowedOrigin(r.Header.Get("Origin")) {
 			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
-			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType")
+			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType, X-Api-Key")
 		}
 
 		if r.Method == "OPTIONS" {
@@ -129,7 +129,7 @@ func newApiKeyMiddleware(path string) (func(http.Handler) http.Handler, error) {
 
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if _, ok := km[r.Header.Get("x-api-key")]; ok {
+			if _, ok := km[r.Header.Get("X-Api-Key")]; ok {
 				h.ServeHTTP(w, r)
 			} else {
 				w.WriteHeader(http.StatusUnauthorized)

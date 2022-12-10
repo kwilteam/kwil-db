@@ -141,7 +141,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcReturnFundsResponse"
+              "$ref": "#/definitions/apisvcWithdrawalResponse"
             }
           },
           "default": {
@@ -157,7 +157,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/apisvcReturnFundsRequest"
+              "$ref": "#/definitions/apisvcWithdrawalRequest"
             }
           }
         ],
@@ -199,12 +199,12 @@
     },
     "/api/v0/write": {
       "post": {
-        "operationId": "KwilService_Cud",
+        "operationId": "KwilService_Write",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/apisvcCUDResponse"
+              "$ref": "#/definitions/apisvcWriteResponse"
             }
           },
           "default": {
@@ -220,7 +220,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/apisvcCUDRequest"
+              "$ref": "#/definitions/apisvcWriteRequest"
             }
           }
         ],
@@ -285,22 +285,6 @@
           "type": "string"
         },
         "value": {
-          "type": "string"
-        }
-      }
-    },
-    "apisvcCUDRequest": {
-      "type": "object",
-      "properties": {
-        "tx": {
-          "$ref": "#/definitions/apisvcTx"
-        }
-      }
-    },
-    "apisvcCUDResponse": {
-      "type": "object",
-      "properties": {
-        "traceId": {
           "type": "string"
         }
       }
@@ -434,8 +418,11 @@
         "table": {
           "type": "string"
         },
-        "column": {
-          "type": "string"
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "using": {
           "type": "string"
@@ -554,35 +541,6 @@
         }
       }
     },
-    "apisvcReturnFundsRequest": {
-      "type": "object",
-      "properties": {
-        "tx": {
-          "$ref": "#/definitions/apisvcTx"
-        }
-      }
-    },
-    "apisvcReturnFundsResponse": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "string"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "correlationId": {
-          "type": "string"
-        },
-        "expiration": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
     "apisvcRole": {
       "type": "object",
       "properties": {
@@ -646,6 +604,54 @@
         }
       },
       "description": "TxMsg is a message that can contain any arbitrary data and have\nassociated fees and provenance."
+    },
+    "apisvcWithdrawalRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/apisvcTx"
+        }
+      }
+    },
+    "apisvcWithdrawalResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "correlationId": {
+          "type": "string"
+        },
+        "expiration": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "apisvcWriteRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/apisvcTx"
+        }
+      }
+    },
+    "apisvcWriteResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": "string"
+        }
+      }
     },
     "protobufAny": {
       "type": "object",

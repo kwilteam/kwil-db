@@ -17,7 +17,7 @@ message DropDatabaseRequest {
 	Tx tx = 1;
 }
 
-message DropDatabasemettaResponse {
+message DropDatabaseResponse {
 	string txid = 1;
 	string msg = 2;
 }

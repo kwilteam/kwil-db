@@ -1,5 +1,56 @@
 package apisvc
 
+import (
+	"context"
+	"encoding/json"
+	"kwil/x/crypto"
+	"kwil/x/proto/apipb"
+)
+
+func (s *Service) Write(ctx context.Context, req *apipb.WriteRequest) (*apipb.WriteResponse, error) {
+	/*
+		price, err := s.p.GetPrice(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if req.Tx == nil {
+			return nil, fmt.Errorf("invalid tx")
+		}
+
+		fmt.Println(req.Tx.Fee)
+
+		// parse fee
+		fee, ok := parseBigInt(req.Tx.Fee)
+		if !ok {
+			return nil, fmt.Errorf("invalid fee")
+		}
+
+		/*
+		// check price is enough
+		if fee.Cmp(price) < 0 {
+			return nil, fmt.Errorf("price is not enough")
+		}
+	*/
+
+	tx := crypto.Tx{}
+	tx.Convert(req.Tx)
+
+	body := CRUD{}
+	json.Unmarshal(tx.Data, &body)
+
+	return nil, nil
+}
+
+type CRUD struct {
+	Query  string `json:"query"`
+	Db     string `json:"db"`
+	Inputs []struct {
+		Ordinality int    `json:"ordinality"`
+		Value      string `json:"value"`
+	}
+}
+
 /*
 func (s *Service) Cud(ctx context.Context, req *apipb.CUDRequest) (*apipb.CUDResponse, error) {
 	p, err := s.p.GetPrice(ctx)

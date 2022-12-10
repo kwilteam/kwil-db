@@ -87,9 +87,9 @@ func (db *Database) Validate() error {
 		}
 
 		// check for duplicate indexes
-		key := fmt.Sprintf("%s.%s.%s", index.Table, index.Column, index.Using)
+		key := fmt.Sprintf("%s.%s.%s", index.Table, index.Columns, index.Using)
 		if indexTracker[key] != "" {
-			return fmt.Errorf("duplicate index %s and %s both index %s.%s", indexTracker[key], name, index.Table, index.Column)
+			return fmt.Errorf("duplicate index %s and %s both index %s.%s", indexTracker[key], name, index.Table, index.Columns)
 		}
 		indexTracker[key] = name
 		err = index.Validate(db)
@@ -205,9 +205,18 @@ func (i *Index) Validate(db *Database) error {
 		return fmt.Errorf("table %s does not exist", i.Table)
 	}
 
-	// check that column exists
-	if _, ok := db.Tables[i.Table].Columns[i.Column]; !ok {
-		return fmt.Errorf("column %s does not exist in table %s", i.Column, i.Table)
+	// check that columns exists and are unique
+	colMap := make(map[string]struct{})
+	for _, c := range i.Columns {
+		if _, ok := db.Tables[i.Table].Columns[c]; !ok {
+			return fmt.Errorf("column %s does not exist in table %s", c, i.Table)
+		}
+
+		// check for duplicate columns
+		if _, ok := colMap[c]; ok {
+			return fmt.Errorf("duplicate column %s in index", c)
+		}
+		colMap[c] = struct{}{}
 	}
 
 	// check that using is valid

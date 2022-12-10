@@ -42,10 +42,10 @@ type ExportedRole struct {
 }
 
 type ExportedIndex struct {
-	Name   string
-	Table  string
-	Column string
-	Using  string
+	Name    string
+	Table   string
+	Columns []string
+	Using   string
 }
 
 type ExportedInput struct {
@@ -168,10 +168,10 @@ func (e *ExportedRole) AsProtobuf() *apipb.Role {
 
 func (e *ExportedIndex) AsProtobuf() *apipb.Index {
 	index := &apipb.Index{
-		Name:   e.Name,
-		Table:  e.Table,
-		Column: e.Column,
-		Using:  e.Using,
+		Name:    e.Name,
+		Table:   e.Table,
+		Columns: e.Columns,
+		Using:   e.Using,
 	}
 	return index
 }

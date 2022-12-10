@@ -25,11 +25,11 @@ type KwilServiceClient interface {
 	Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (*ConnectResponse, error)
 	DeploySchema(ctx context.Context, in *DeploySchemaRequest, opts ...grpc.CallOption) (*DeploySchemaResponse, error)
 	GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error)
-	Cud(ctx context.Context, in *CUDRequest, opts ...grpc.CallOption) (*CUDResponse, error)
+	Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error)
 	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	// Wallets
 	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
-	ReturnFunds(ctx context.Context, in *ReturnFundsRequest, opts ...grpc.CallOption) (*ReturnFundsResponse, error)
+	ReturnFunds(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error)
 	EstimateCost(ctx context.Context, in *EstimateCostRequest, opts ...grpc.CallOption) (*EstimateCostResponse, error)
 }
 
@@ -68,9 +68,9 @@ func (c *kwilServiceClient) GetMetadata(ctx context.Context, in *GetMetadataRequ
 	return out, nil
 }
 
-func (c *kwilServiceClient) Cud(ctx context.Context, in *CUDRequest, opts ...grpc.CallOption) (*CUDResponse, error) {
-	out := new(CUDResponse)
-	err := c.cc.Invoke(ctx, "/apisvc.KwilService/Cud", in, out, opts...)
+func (c *kwilServiceClient) Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error) {
+	out := new(WriteResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/Write", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -95,8 +95,8 @@ func (c *kwilServiceClient) GetBalance(ctx context.Context, in *GetBalanceReques
 	return out, nil
 }
 
-func (c *kwilServiceClient) ReturnFunds(ctx context.Context, in *ReturnFundsRequest, opts ...grpc.CallOption) (*ReturnFundsResponse, error) {
-	out := new(ReturnFundsResponse)
+func (c *kwilServiceClient) ReturnFunds(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error) {
+	out := new(WithdrawalResponse)
 	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ReturnFunds", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -120,11 +120,11 @@ type KwilServiceServer interface {
 	Connect(context.Context, *ConnectRequest) (*ConnectResponse, error)
 	DeploySchema(context.Context, *DeploySchemaRequest) (*DeploySchemaResponse, error)
 	GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error)
-	Cud(context.Context, *CUDRequest) (*CUDResponse, error)
+	Write(context.Context, *WriteRequest) (*WriteResponse, error)
 	Read(context.Context, *ReadRequest) (*ReadResponse, error)
 	// Wallets
 	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
-	ReturnFunds(context.Context, *ReturnFundsRequest) (*ReturnFundsResponse, error)
+	ReturnFunds(context.Context, *WithdrawalRequest) (*WithdrawalResponse, error)
 	EstimateCost(context.Context, *EstimateCostRequest) (*EstimateCostResponse, error)
 	mustEmbedUnimplementedKwilServiceServer()
 }
@@ -142,8 +142,8 @@ func (UnimplementedKwilServiceServer) DeploySchema(context.Context, *DeploySchem
 func (UnimplementedKwilServiceServer) GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMetadata not implemented")
 }
-func (UnimplementedKwilServiceServer) Cud(context.Context, *CUDRequest) (*CUDResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Cud not implemented")
+func (UnimplementedKwilServiceServer) Write(context.Context, *WriteRequest) (*WriteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Write not implemented")
 }
 func (UnimplementedKwilServiceServer) Read(context.Context, *ReadRequest) (*ReadResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
@@ -151,7 +151,7 @@ func (UnimplementedKwilServiceServer) Read(context.Context, *ReadRequest) (*Read
 func (UnimplementedKwilServiceServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
 }
-func (UnimplementedKwilServiceServer) ReturnFunds(context.Context, *ReturnFundsRequest) (*ReturnFundsResponse, error) {
+func (UnimplementedKwilServiceServer) ReturnFunds(context.Context, *WithdrawalRequest) (*WithdrawalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReturnFunds not implemented")
 }
 func (UnimplementedKwilServiceServer) EstimateCost(context.Context, *EstimateCostRequest) (*EstimateCostResponse, error) {
@@ -224,20 +224,20 @@ func _KwilService_GetMetadata_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _KwilService_Cud_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CUDRequest)
+func _KwilService_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WriteRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KwilServiceServer).Cud(ctx, in)
+		return srv.(KwilServiceServer).Write(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/apisvc.KwilService/Cud",
+		FullMethod: "/apisvc.KwilService/Write",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).Cud(ctx, req.(*CUDRequest))
+		return srv.(KwilServiceServer).Write(ctx, req.(*WriteRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -279,7 +279,7 @@ func _KwilService_GetBalance_Handler(srv interface{}, ctx context.Context, dec f
 }
 
 func _KwilService_ReturnFunds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReturnFundsRequest)
+	in := new(WithdrawalRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func _KwilService_ReturnFunds_Handler(srv interface{}, ctx context.Context, dec 
 		FullMethod: "/apisvc.KwilService/ReturnFunds",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).ReturnFunds(ctx, req.(*ReturnFundsRequest))
+		return srv.(KwilServiceServer).ReturnFunds(ctx, req.(*WithdrawalRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -334,8 +334,8 @@ var KwilService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _KwilService_GetMetadata_Handler,
 		},
 		{
-			MethodName: "Cud",
-			Handler:    _KwilService_Cud_Handler,
+			MethodName: "Write",
+			Handler:    _KwilService_Write_Handler,
 		},
 		{
 			MethodName: "Read",

@@ -20,9 +20,9 @@ type Table struct {
 type Indices map[string]Index
 
 type Index struct {
-	Table  string        `yaml:"table"`
-	Column string        `yaml:"column"`
-	Using  KuniformIndex `yaml:"using"`
+	Table   string        `yaml:"table"`
+	Columns []string      `yaml:"columns"`
+	Using   KuniformIndex `yaml:"using"`
 }
 
 type Roles map[string]Role
