@@ -76,6 +76,7 @@ func TestSha384(t *testing.T) {
 }
 
 func TestSha384Str(t *testing.T) {
+
 	type args struct {
 		data []byte
 	}

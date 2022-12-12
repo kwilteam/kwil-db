@@ -51,3 +51,13 @@ func Sha224(data []byte) []byte {
 func Sha224Str(data []byte) string {
 	return hex.EncodeToString(Sha224(data))
 }
+
+func Sha256(data []byte) []byte {
+	h := c256.New()
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+func Sha256Str(data []byte) string {
+	return hex.EncodeToString(Sha256(data))
+}

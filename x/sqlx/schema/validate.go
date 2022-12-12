@@ -276,7 +276,6 @@ func CheckValidName(s string) (bool, error) {
 }
 
 func CheckValidSchemaName(s string) (bool, error) {
-	// TODO: should make a standalone regex for this
 
 	s = strings.ToLower(s)
 	return CheckValidName(s)

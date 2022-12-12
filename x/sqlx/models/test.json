@@ -1,0 +1,149 @@
+{
+    "owner": "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",
+    "name": "mydb",
+    "default_role": "bennanmode",
+    "tables": [
+        {
+            "name": "users",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int32",
+                    "attributes": [
+                        {
+                            "type": "primary_key"
+                        }
+                    ]
+                },
+                {
+                    "name": "name",
+                    "type": "string"
+                },
+                {
+                    "name": "age",
+                    "type": "int32"
+                },
+                {
+                    "name": "wallet",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "posts",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int32",
+                    "attributes": [
+                        {
+                            "type": "primary_key"
+                        }
+                    ]
+                },
+                {
+                    "name": "title",
+                    "type": "string"
+                },
+                {
+                    "name": "body",
+                    "type": "string"
+                },
+                {
+                    "name": "user_id",
+                    "type": "int32",
+                    "attributes": [
+                        {
+                            "type": "max",
+                            "value": 1
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "roles": [
+        {
+            "name": "bennanmode",
+            "permissions": ["create_user", "update_user", "delete_user"]
+        },
+        {
+            "name": "randalmode",
+            "permissions": ["create_user", "update_user"]
+        }
+    ],
+    "sql_queries": [
+        {
+            "name": "create_user",
+            "type": "insert",
+            "table": "users",
+            "params": [
+                {
+                    "column": "name"
+                },
+                {
+                    "column": "age"
+                },
+                {
+                    "column": "wallet",
+                    "static": true,
+                    "value": "",
+                    "modifier": "caller"
+                }
+            ]
+        },
+        {
+            "name": "update_user",
+            "type": "update",
+            "table": "users",
+            "params": [
+                {
+                    "column": "name"
+                },
+                {
+                    "column": "age"
+                }
+            ],
+            "where": [
+                {
+                    "column": "wallet",
+                    "static": true,
+                    "operator": "=",
+                    "value": "",
+                    "modifier": "caller"
+                },
+                {
+                    "column": "name",
+                    "operator": "="
+                }
+            ]
+
+        },
+        {
+            "name": "delete_user",
+            "type": "delete",
+            "table": "users",
+            "where": [
+                {
+                    "column": "wallet",
+                    "static": true,
+                    "operator": "=",
+                    "value": "",
+                    "modifier": "caller"
+                },
+                {
+                    "column": "name",
+                    "operator": "="
+                }
+            ]
+        }
+    ],
+    "indexes": [
+        {
+            "name": "user_wallet_index",
+            "table": "users",
+            "columns": ["wallet"],
+            "using": "btree"
+        }
+    ]
+}
