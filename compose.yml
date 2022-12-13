@@ -24,13 +24,23 @@ services:
     network_mode: bridge
   kwild-gateway:
     image: kwild-gateway
+    depends_on:
+      - "graphql-engine"
+    links:
+      - "graphql-engine"
     build:
       context: .
       dockerfile: docker/kwild-gateway.dockerfile
     environment:
       GRPC_CONTAINER_ENDPOINT: kwild:50051
+      KWIL_GRAPHQL_ENDPOINT: http://graphql-engine:8080
+      ## uncomment next 2 lines if HASURA_GRAPHQL_ADMIN_SECRET is set in Hasura container
+      #HASURA_GRAPHQL_ADMIN_SECRET: secretkeyhasura
+      #HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
     ports:
       - "8081:8080"
+    volumes:
+      - ./keys.json:/app/keys.json
     network_mode: bridge
   postgres_db:
     image: postgres:15.0-alpine
@@ -50,3 +60,30 @@ services:
       # copy the sql script to create tables
       - ./scripts/pg-init-scripts/:/docker-entrypoint-initdb.d/
     network_mode: bridge
+  graphql-engine:
+    image: hasura/graphql-engine:v2.16.0
+    ports:
+      - "8082:8080"
+    depends_on:
+      - "postgres_db"
+    links:
+      - "postgres_db"
+    restart: always
+    environment:
+      ## postgres database to store Hasura metadata
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://postgres:postgres@postgres_db_container:5432/postgres
+      ## this env var can be used to add the above postgres database to Hasura as a data source. this can be removed/updated based on your needs
+      PG_DATABASE_URL: postgres://postgres:postgres@postgres_db_container:5432/kwil
+      ## enable the console served by server
+      HASURA_GRAPHQL_ENABLE_CONSOLE: "true" # set to "false" to disable console
+      ## enable debugging mode. It is recommended to disable this in production
+      HASURA_GRAPHQL_DEV_MODE: "true"
+      HASURA_GRAPHQL_ENABLED_LOG_TYPES: startup, http-log, webhook-log, websocket-log, query-log
+      ## uncomment next line to run console offline (i.e load console assets from server instead of CDN)
+      # HASURA_GRAPHQL_CONSOLE_ASSETS_DIR: /srv/console-assets
+      ## uncomment next line to set an admin secret
+      # HASURA_GRAPHQL_ADMIN_SECRET: secretkeyhasura
+      ## uncomment next line to set an default unauthorized role, if above line is used
+      # HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
+    network_mode: bridge
+

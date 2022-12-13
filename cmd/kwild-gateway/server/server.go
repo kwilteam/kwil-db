@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"io"
+	"kwil/x/graphql"
 	"kwil/x/proto/apipb"
 	"net/http"
 	"os"
@@ -47,6 +48,12 @@ func Start() error {
 				return err
 			}
 
+			graphqlRProxy := graphql.NewRProxy()
+			err = mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
+			if err != nil {
+				return err
+			}
+
 			http_port := os.Getenv("GATEWAY_HTTP_PORT")
 			if http_port == "" {
 				http_port = ":8080"
@@ -79,6 +86,8 @@ func Start() error {
 	if err != nil {
 		return err
 	}
+
+	graphql.CliSetup(cmd)
 
 	return cmd.Execute()
 }
