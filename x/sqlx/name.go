@@ -1,4 +1,4 @@
-package types
+package spec
 
 import (
 	"fmt"
@@ -14,12 +14,14 @@ const (
 	MAX_ROLE_NAME_LENGTH      = 32
 	MAX_COLUMNS_PER_TABLE     = 50
 	MAX_DB_NAME_LENGTH        = 16
+	MAX_SCHEMA_NAME_LENGTH    = 60
 	MAX_QUERY_NAME_LENGTH     = 32
 	MAX_ATTRIBUTE_NAME_LENGTH = 32
 )
 
 const (
 	INVALID_NAME NameType = iota
+	SCHEMA
 	OWNER
 	DATABASE
 	ROLE
@@ -54,6 +56,8 @@ func (n *namingParameters) MaxLen(nameType NameType) int {
 		return MAX_INDEX_NAME_LENGTH
 	case QUERY:
 		return MAX_QUERY_NAME_LENGTH
+	case SCHEMA:
+		return MAX_SCHEMA_NAME_LENGTH
 	}
 	fmt.Println("unknown name type")
 	return 0

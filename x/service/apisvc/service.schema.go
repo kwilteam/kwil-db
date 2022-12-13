@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
-	"kwil/x/sqlx/schema"
+	"kwil/x/sqlx/cache"
+	"kwil/x/sqlx/models"
 	"strings"
+
+	"github.com/cstockton/go-conv"
 )
 
 func (s *Service) DeploySchema(ctx context.Context, req *apipb.DeploySchemaRequest) (*apipb.DeploySchemaResponse, error) {
@@ -35,15 +38,31 @@ func (s *Service) DeploySchema(ctx context.Context, req *apipb.DeploySchemaReque
 		return nil, fmt.Errorf("price is not enough")
 	}
 
-	// spend funds and then write data!
-	// TODO: uncomment this
-
+	// spend funds and then write data
 	err = s.manager.Deposits.Spend(ctx, tx.Sender, tx.Fee)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.manager.Deployment.Deploy(ctx, tx.Sender, tx.Data)
+	/*
+		msgBody, err := Unmarshal[CreateDatabaseBody](tx.Data)
+		if err != nil {
+			return nil, err
+		}*/
+
+	db := &models.Database{}
+	err = db.FromJSON(tx.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal ddl: %w", err)
+	}
+
+	db.Clean()
+
+	if db.Owner != strings.ToLower(tx.Sender) {
+		return nil, fmt.Errorf("db owner must also be tx signer: %s != %s", db.Owner, tx.Sender)
+	}
+
+	err = s.manager.Deployment.Deploy(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -54,63 +73,186 @@ func (s *Service) DeploySchema(ctx context.Context, req *apipb.DeploySchemaReque
 	}, nil
 }
 
-/*
 func (s *Service) DropDatabase(ctx context.Context, req *apipb.DropDatabaseRequest) (*apipb.DropDatabaseResponse, error) {
 
-		// verify the tx
-		tx := crypto.Tx{}
-		tx.Convert(req.Tx)
-		err := tx.Verify()
-		if err != nil {
-			return nil, err
-		}
-
-		p, err := s.p.GetPriceForDeleteSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		// parse fee
-		fee, ok := parseBigInt(req.Tx.Fee)
-		if !ok {
-			return nil, fmt.Errorf("invalid fee")
-		}
-
-		// check price is enough
-		if fee.Cmp(p) < 0 {
-			return nil, fmt.Errorf("price is not enough")
-		}
-
-		// spend funds and then write data!
-
-			err = s.manager.Deposits.Spend(ctx, tx.Sender, tx.Fee)
-
-
-		body, err := Unmarshal[DropDatabaseBody](req.Tx.Data)
-		if err != nil {
-			return nil, err
-		}
-
-		err = s.manager.Deployment.Delete(ctx, body.Database)
-		if err != nil {
-			return nil, err
-		}
-
-		return &apipb.DropDatabaseResponse{
-			Txid: tx.Id,
-			Msg:  "success",
-		}, nil
+	// verify the tx
+	tx := crypto.Tx{}
+	tx.Convert(req.Tx)
+	err := tx.Verify()
+	if err != nil {
+		return nil, err
 	}
-*/
+
+	p, err := s.p.GetPriceForDeleteSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// parse fee
+	fee, ok := parseBigInt(req.Tx.Fee)
+	if !ok {
+		return nil, fmt.Errorf("invalid fee")
+	}
+
+	// check price is enough
+	if fee.Cmp(p) < 0 {
+		return nil, fmt.Errorf("price is not enough")
+	}
+
+	// spend funds and then write data!
+
+	err = s.manager.Deposits.Spend(ctx, tx.Sender, tx.Fee)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := Unmarshal[DropDatabaseBody](req.Tx.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.manager.Deployment.Delete(ctx, body.Database)
+	if err != nil {
+		return nil, err
+	}
+
+	return &apipb.DropDatabaseResponse{
+		Txid: tx.Id,
+		Msg:  "success",
+	}, nil
+}
+
 func (s *Service) GetMetadata(ctx context.Context, req *apipb.GetMetadataRequest) (*apipb.GetMetadataResponse, error) {
 
-	nm := schema.FormatOwner(strings.ToLower(req.Owner + "_" + req.Database))
-	db, err := s.manager.Export(nm)
+	nm := strings.ToLower(req.Database + "_" + req.Owner)
+	db, err := s.manager.GetDatabase(ctx, nm)
 	if err != nil {
 		return nil, err
 	}
 
 	return &apipb.GetMetadataResponse{
-		Metadata: db.AsProtobuf(),
+		Database: convertDb(db),
 	}, nil
+}
+
+func convertDb(db *cache.Database) *apipb.Database {
+	var tables []*apipb.Table
+	for _, t := range db.Tables {
+		tables = append(tables, convertTable(t))
+	}
+
+	var indexes []*apipb.Index
+	for _, i := range db.Indexes {
+		indexes = append(indexes, convertIndex(i))
+	}
+
+	var queries []*apipb.Query
+	for _, q := range db.Queries {
+		queries = append(queries, convertQuery(q))
+	}
+
+	var roles []*apipb.Role
+	for _, r := range db.Roles {
+		roles = append(roles, convertRole(r))
+	}
+
+	return &apipb.Database{
+		Name:    db.Name,
+		Owner:   db.Owner,
+		Tables:  tables,
+		Indexes: indexes,
+		Queries: queries,
+		Roles:   roles,
+	}
+}
+
+func convertTable(t *cache.Table) *apipb.Table {
+	cols := make([]*apipb.Column, len(t.Columns))
+	for i, c := range t.Columns {
+		cols[i] = convertColumn(c)
+	}
+
+	return &apipb.Table{
+		Name:    t.Name,
+		Columns: cols,
+	}
+}
+
+func convertColumn(c *cache.Column) *apipb.Column {
+	attrs := make([]*apipb.Attribute, len(c.Attributes))
+	for i, a := range c.Attributes {
+		attrs[i] = convertAttribute(a)
+	}
+
+	return &apipb.Column{
+		Name:       c.Name,
+		Type:       apipb.DataType(c.Type.Int()),
+		Attributes: attrs,
+	}
+}
+
+func convertAttribute(a *cache.Attribute) *apipb.Attribute {
+	str, err := conv.String(a.Value)
+	if err != nil {
+		fmt.Println("WARNING failed to convert attribute") // delete this once im sure this works fine
+		return nil
+	}
+
+	return &apipb.Attribute{
+		Type:  apipb.AttributeType(a.Type.Int()),
+		Value: str,
+	}
+}
+
+func convertIndex(i *cache.Index) *apipb.Index {
+	return &apipb.Index{
+		Name:    i.Name,
+		Table:   i.Table,
+		Columns: i.Columns,
+		Using:   apipb.IndexType(i.Using.Int()),
+	}
+}
+
+func convertQuery(q *cache.Executable) *apipb.Query {
+	var args []*apipb.Arg
+	for _, a := range q.Args {
+		args = append(args, convertArg(a))
+	}
+
+	return &apipb.Query{
+		Name:      q.Name,
+		Statement: q.Statement,
+		Table:     q.Table,
+		Type:      apipb.QueryType(q.Type.Int()),
+		Args:      args,
+	}
+}
+
+func convertArg(a *cache.Arg) *apipb.Arg {
+	str, err := conv.String(a.Value)
+	if err != nil {
+		fmt.Println("WARNING failed to convert arg") // delete this once im sure this works fine
+		return nil
+	}
+
+	return &apipb.Arg{
+		Position:      int32(a.Position),
+		Static:        a.Static,
+		InputPosition: int32(a.InputPosition),
+		DefaultValue:  str,
+		Type:          apipb.DataType(a.Type.Int()),
+		Modifier:      apipb.ModifierType(a.Modifier.Int()),
+	}
+}
+
+func convertRole(r *cache.Role) *apipb.Role {
+	var perms []string
+	for p := range r.Permissions {
+		perms = append(perms, p)
+	}
+
+	return &apipb.Role{
+		Name:        r.Name,
+		Permissions: perms,
+	}
 }

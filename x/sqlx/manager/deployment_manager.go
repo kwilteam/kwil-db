@@ -3,7 +3,8 @@ package manager
 import (
 	"context"
 	"fmt"
-	"kwil/x/sqlx/schema"
+	spec "kwil/x/sqlx"
+	"kwil/x/sqlx/models"
 	"kwil/x/sqlx/sqlclient"
 )
 
@@ -15,17 +16,16 @@ type DeploymentManager interface {
 	DBExists(ctx context.Context, dbs string) (bool, error)
 	Delete(ctx context.Context, dbs string) error
 	SetDefaultRole(ctx context.Context, dbs string, role string) error
-	SyncCache(ctx context.Context, db *schema.Database, dbs string) error
-	Store(ctx context.Context, db *schema.Database) error
-	Deploy(ctx context.Context, owner string, ddl []byte) error
+	Store(ctx context.Context, db *models.Database) error
+	Deploy(ctx context.Context, db *models.Database) error
 }
 
 type deploymentManager struct {
-	cache  *SchemaCache
+	cache  Cache
 	client *sqlclient.DB
 }
 
-func NewDeploymentManager(cache *SchemaCache, client *sqlclient.DB) *deploymentManager {
+func NewDeploymentManager(cache Cache, client *sqlclient.DB) *deploymentManager {
 	return &deploymentManager{
 		cache:  cache,
 		client: client,
@@ -33,24 +33,15 @@ func NewDeploymentManager(cache *SchemaCache, client *sqlclient.DB) *deploymentM
 }
 
 // Deploy will deploy
-func (m *deploymentManager) Deploy(ctx context.Context, owner string, ddl []byte) error {
-	db := &schema.Database{}
-	err := db.UnmarshalYAML(ddl)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal ddl: %w", err)
-	}
+func (m *deploymentManager) Deploy(ctx context.Context, db *models.Database) error {
 
-	if db.Owner != owner {
-		return fmt.Errorf("owner mismatch: %s != %s", db.Owner, owner)
-	}
-
-	err = db.Validate()
+	err := db.Validate()
 	if err != nil {
 		return fmt.Errorf("failed to validate ddl: %w", err)
 	}
 
 	// check if the schema exists
-	schemaName := db.SchemaName()
+	schemaName := db.GetSchemaName()
 	exists, err := m.DBExists(ctx, schemaName)
 	if err != nil {
 		return err
@@ -61,7 +52,7 @@ func (m *deploymentManager) Deploy(ctx context.Context, owner string, ddl []byte
 
 	err = m.Store(ctx, db)
 	if err != nil {
-		return m.revertDeployment(ctx, db.SchemaName(), err)
+		return m.revertDeployment(ctx, schemaName, err)
 	}
 
 	return nil
@@ -93,12 +84,9 @@ func (m *deploymentManager) NewDB(ctx context.Context, nm, owner string, dbBytes
 }
 
 func (m *deploymentManager) DBExists(ctx context.Context, name string) (bool, error) {
-	val, err := schema.CheckValidName(name)
+	err := models.CheckName(name, spec.SCHEMA)
 	if err != nil {
 		return false, err
-	}
-	if !val {
-		return false, fmt.Errorf("invalid schema name: %s", name)
 	}
 
 	var exists bool
@@ -112,12 +100,9 @@ func (m *deploymentManager) DBExists(ctx context.Context, name string) (bool, er
 
 // DeleteDB deletes a schema and all of its metadata
 func (m *deploymentManager) Delete(ctx context.Context, name string) error {
-	val, err := schema.CheckValidName(name)
+	err := models.CheckName(name, spec.SCHEMA)
 	if err != nil {
 		return err
-	}
-	if !val {
-		return fmt.Errorf("invalid schema name: %s", name)
 	}
 
 	_, err = m.client.ExecContext(ctx, `select delete_database($1);`, name)
@@ -129,20 +114,20 @@ func (m *deploymentManager) SetDefaultRole(ctx context.Context, dbs string, role
 	return err
 }
 
-func (m *deploymentManager) SyncCache(ctx context.Context, db *schema.Database, dbs string) error {
-	return m.cache.Sync(ctx, db, dbs)
+func (m *deploymentManager) Cache(db *models.Database) error {
+	return m.cache.Store(db)
 }
 
-func (m *deploymentManager) Store(ctx context.Context, db *schema.Database) error {
+func (m *deploymentManager) Store(ctx context.Context, db *models.Database) error {
 	// create the schema
-	schemaName := db.SchemaName()
+	schemaName := db.GetSchemaName()
 	bts, err := db.EncodeGOB()
 	if err != nil {
 		return err
 	}
 	err = m.NewDB(ctx, schemaName, db.Owner, bts)
 	if err != nil {
-		return fmt.Errorf("failed to create schema.  Make sure the owner is registed in the wallets table.  Err: %s: %w", schemaName, err)
+		return fmt.Errorf("failed to create schema. Err: %s: %w", schemaName, err)
 	}
 
 	// store ddl
@@ -151,44 +136,9 @@ func (m *deploymentManager) Store(ctx context.Context, db *schema.Database) erro
 		return err
 	}
 
-	for _, stmt := range ddl {
-		_, err := m.client.ExecContext(ctx, stmt)
-		if err != nil {
-			return fmt.Errorf("failed to execute generated ddl: %w", err)
-		}
-	}
-
-	// store queries
-	queries := db.Queries.GetAll()
-	for name, query := range queries {
-		executable, err := query.Prepare(db)
-		if err != nil {
-			return fmt.Errorf("failed to prepare query %s: %w", name, err)
-		}
-
-		execBytes, err := executable.Bytes()
-		if err != nil {
-			return fmt.Errorf("failed to get bytes of query %s: %w", name, err)
-		}
-
-		err = m.AddQuery(ctx, schemaName, name, execBytes)
-		if err != nil {
-			return fmt.Errorf("failed to add query %s: %w", name, err)
-		}
-	}
-
-	// store roles
-	for name, role := range db.Roles {
-		err := m.AddRole(ctx, schemaName, name)
-		if err != nil {
-			return fmt.Errorf("failed to add role: %w", err)
-		}
-		for _, queryName := range role.Queries {
-			err = m.AddQueryPermission(ctx, schemaName, name, queryName)
-			if err != nil {
-				return fmt.Errorf("failed to add query permission: %w", err)
-			}
-		}
+	_, err = m.client.ExecContext(ctx, ddl)
+	if err != nil {
+		return fmt.Errorf("failed to execute generated ddl: %w", err)
 	}
 
 	// set default role
@@ -198,7 +148,7 @@ func (m *deploymentManager) Store(ctx context.Context, db *schema.Database) erro
 	}
 
 	// sync cache
-	return m.SyncCache(ctx, db, schemaName)
+	return m.Cache(db)
 }
 
 // revertDeployment attempts to undo a deployment that has failed midway

@@ -5,7 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	types "kwil/x/sqlx/spec"
+	types "kwil/x/sqlx"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -214,9 +214,8 @@ func (db *Database) GetSchemaName() string {
 
 func (db *Database) PrepareQueries() ([]*ExecutableQuery, error) {
 	var queries []*ExecutableQuery
-	schemaName := db.GetSchemaName()
 	for _, q := range db.SQLQueries {
-		eq, err := q.Prepare(schemaName)
+		eq, err := q.Prepare(db)
 		if err != nil {
 			return nil, err
 		}

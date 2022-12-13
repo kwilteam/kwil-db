@@ -2,7 +2,7 @@ package models
 
 import (
 	"fmt"
-	types "kwil/x/sqlx/spec"
+	types "kwil/x/sqlx"
 )
 
 type Param struct {
@@ -48,4 +48,25 @@ func (p *Param) Validate(table *Table) error {
 	}
 
 	return nil
+}
+
+// including these getters to fulfill arger interface
+func (p *Param) getColumn() string {
+	return p.Column
+}
+
+func (p *Param) getModifier() string {
+	return p.Modifier
+}
+
+func (p *Param) getValue() any {
+	return p.Value
+}
+
+func (p *Param) getStatic() bool {
+	return p.Static
+}
+
+func (p *Param) buildArg(tbl *Table, position int) (*Arg, error) {
+	return buildArg(tbl, position, p)
 }

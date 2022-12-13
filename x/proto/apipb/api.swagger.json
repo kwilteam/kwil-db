@@ -267,16 +267,56 @@
     }
   },
   "definitions": {
+    "apisvcArg": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "static": {
+          "type": "boolean"
+        },
+        "inputPosition": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "defaultValue": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/apisvcDataType"
+        },
+        "modifier": {
+          "$ref": "#/definitions/apisvcModifierType"
+        }
+      }
+    },
     "apisvcAttribute": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
+        "type": {
+          "$ref": "#/definitions/apisvcAttributeType"
         },
         "value": {
           "type": "string"
         }
       }
+    },
+    "apisvcAttributeType": {
+      "type": "string",
+      "enum": [
+        "INVALID_ATTRIBUTE",
+        "PRIMARY_KEY",
+        "UNIQUE",
+        "NOT_NULL",
+        "DEFAULT",
+        "MIN",
+        "MAX",
+        "MIN_LENGTH",
+        "MAX_LENGTH"
+      ],
+      "default": "INVALID_ATTRIBUTE"
     },
     "apisvcCRUDInput": {
       "type": "object",
@@ -296,7 +336,7 @@
           "type": "string"
         },
         "type": {
-          "type": "string"
+          "$ref": "#/definitions/apisvcDataType"
         },
         "attributes": {
           "type": "array",
@@ -325,21 +365,52 @@
         }
       }
     },
-    "apisvcDefaultInput": {
+    "apisvcDataType": {
+      "type": "string",
+      "enum": [
+        "INVALID_TYPE",
+        "STRING",
+        "INT32",
+        "INT64",
+        "BOOLEAN"
+      ],
+      "default": "INVALID_TYPE"
+    },
+    "apisvcDatabase": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string"
         },
-        "type": {
+        "owner": {
           "type": "string"
         },
-        "value": {
+        "defaultRole": {
           "type": "string"
         },
-        "ordinal": {
-          "type": "integer",
-          "format": "int32"
+        "tables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcTable"
+          }
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcQuery"
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcRole"
+          }
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/apisvcIndex"
+          }
         }
       }
     },
@@ -404,8 +475,8 @@
     "apisvcGetMetadataResponse": {
       "type": "object",
       "properties": {
-        "metadata": {
-          "$ref": "#/definitions/apisvcMetadata"
+        "database": {
+          "$ref": "#/definitions/apisvcDatabase"
         }
       }
     },
@@ -425,62 +496,25 @@
           }
         },
         "using": {
-          "type": "string"
+          "$ref": "#/definitions/apisvcIndexType"
         }
       }
     },
-    "apisvcInput": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "ordinal": {
-          "type": "integer",
-          "format": "int32"
-        }
-      }
+    "apisvcIndexType": {
+      "type": "string",
+      "enum": [
+        "INVALID_INDEX",
+        "BTREE"
+      ],
+      "default": "INVALID_INDEX"
     },
-    "apisvcMetadata": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "owner": {
-          "type": "string"
-        },
-        "defaultRole": {
-          "type": "string"
-        },
-        "tables": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcTable"
-          }
-        },
-        "queries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcQuery"
-          }
-        },
-        "roles": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcRole"
-          }
-        },
-        "indexes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcIndex"
-          }
-        }
-      }
+    "apisvcModifierType": {
+      "type": "string",
+      "enum": [
+        "NO_MODIFIER",
+        "CALLER"
+      ],
+      "default": "NO_MODIFIER"
     },
     "apisvcQuery": {
       "type": "object",
@@ -491,16 +525,16 @@
         "statement": {
           "type": "string"
         },
-        "inputs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcInput"
-          }
+        "table": {
+          "type": "string"
         },
-        "defaults": {
+        "type": {
+          "$ref": "#/definitions/apisvcQueryType"
+        },
+        "args": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/apisvcDefaultInput"
+            "$ref": "#/definitions/apisvcArg"
           }
         }
       }
@@ -515,6 +549,17 @@
           }
         }
       }
+    },
+    "apisvcQueryType": {
+      "type": "string",
+      "enum": [
+        "QUERY_INVALID",
+        "QUERY_SELECT",
+        "QUERY_INSERT",
+        "QUERY_UPDATE",
+        "QUERY_DELETE"
+      ],
+      "default": "QUERY_INVALID"
     },
     "apisvcReadRequest": {
       "type": "object",
@@ -547,7 +592,7 @@
         "name": {
           "type": "string"
         },
-        "queries": {
+        "permissions": {
           "type": "array",
           "items": {
             "type": "string"

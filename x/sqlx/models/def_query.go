@@ -2,18 +2,15 @@ package models
 
 import (
 	"fmt"
-	types "kwil/x/sqlx/spec"
-
-	"github.com/doug-martin/goqu/v9"
-	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	types "kwil/x/sqlx"
 )
 
 type SQLQuery struct {
-	Name   string        `json:"name"`
-	Type   string        `json:"type"`
-	Table  string        `json:"table"`
-	Params []Param       `json:"params,omitempty"`
-	Where  []WhereClause `json:"where,omitempty"`
+	Name   string         `json:"name"`
+	Type   string         `json:"type"`
+	Table  string         `json:"table"`
+	Params []*Param       `json:"params,omitempty"`
+	Where  []*WhereClause `json:"where,omitempty"`
 }
 
 func (q *SQLQuery) Validate(db *Database) error {
@@ -71,7 +68,7 @@ func (q *SQLQuery) Validate(db *Database) error {
 // Checks that the query type is valid and that the query has an
 // acceptable parameters and where clauses.
 func (q *SQLQuery) validateQueryType() error {
-	qtype, err := types.Validation.ConvertQueryType(q.Type)
+	qtype, err := types.Conversion.ConvertQueryType(q.Type)
 	if err != nil {
 		return fmt.Errorf(`invalid type for query "%s": %w`, q.Name, err)
 	}
@@ -106,104 +103,4 @@ func (q *SQLQuery) validateQueryType() error {
 	}
 
 	return nil
-}
-
-func (q *SQLQuery) Prepare(schemaName string) (*ExecutableQuery, error) {
-	switch q.Type {
-	case "insert":
-		return q.prepareInsert(schemaName)
-	case "update":
-		//return q.prepareUpdate(schemaName)
-	case "delete":
-		//return q.prepareDelete(schemaName)
-	default:
-		return nil, fmt.Errorf(`invalid query type "%s"`, q.Type)
-	}
-
-	return nil, nil
-}
-
-func (q *SQLQuery) prepareInsert(schemaName string) (*ExecutableQuery, error) {
-	// sort the parameters by whether or not they are static
-	// we want the non-static ones first, since the user will be filling those
-	params, wheres := q.sortStatic()
-
-	// building the statement
-	stmt, err := q.buildInsertStatement(schemaName, params)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ExecutableQuery{
-		Name:         q.Name,
-		Statement:    stmt,
-		Type:         q.Type,
-		Table:        q.Table,
-		Inputs:       params,
-		WhereClauses: wheres,
-	}, nil
-}
-
-func (q *SQLQuery) buildInsertStatement(schemaName string, params map[int]Param) (string, error) {
-	// determine table name
-	var tblName string
-	if schemaName == "" {
-		tblName = q.Table
-	} else {
-		tblName = schemaName + "." + q.Table
-	}
-
-	// get the columns and values
-	var cols []any
-	vals := make([]any, 0, len(params))
-	for _, param := range params {
-		cols = append(cols, param.Column)
-		vals = append(vals, struct{}{})
-	}
-	stmt, _, err := goqu.Dialect("postgres").Insert(tblName).Prepared(true).Cols(cols...).Vals(vals).ToSQL()
-	if err != nil {
-		return "", fmt.Errorf(`error preparing insert statement for query "%s": %w`, q.Name, err)
-	}
-
-	return stmt, nil
-}
-
-func (q *SQLQuery) sortStatic() (map[int]Param, map[int]WhereClause) {
-	var staticParams []*Param
-	var staticWhere []*WhereClause
-	params := make(map[int]Param)
-	where := make(map[int]WhereClause)
-	i := 0
-	// sorting parameters
-	for _, param := range q.Params {
-		if !param.Static {
-			params[i] = param
-		} else {
-			staticParams = append(staticParams, &param)
-			i++
-		}
-	}
-
-	for _, staticParam := range staticParams {
-		params[i] = *staticParam
-		i++
-	}
-
-	// sorting where clauses
-	i = 0
-	for _, whereClause := range q.Where {
-		if !whereClause.Static {
-			where[i] = whereClause
-		} else {
-			staticWhere = append(staticWhere, &whereClause)
-			i++
-		}
-	}
-
-	for _, staticWhere := range staticWhere {
-		where[i] = *staticWhere
-		i++
-	}
-
-	return params, where
 }

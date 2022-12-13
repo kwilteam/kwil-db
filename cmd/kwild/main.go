@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/async"
+	"kwil/x/sqlx/cache"
 	"kwil/x/sqlx/manager"
 	"kwil/x/sqlx/sqlclient"
 	"net"
@@ -53,7 +54,11 @@ func execute(logger logx.Logger) error {
 	}
 
 	mngrCfg := cfgx.GetConfig().Select("manager-settings")
-	mngr, err := manager.New(ctx, client, mngrCfg)
+	cache := cache.New()
+	mngr, err := manager.New(ctx, client, mngrCfg, cache)
+	if err != nil {
+		return fmt.Errorf("failed to initialize new manager: %w", err)
+	}
 	err = mngr.SyncCache(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to sync cache: %w", err)

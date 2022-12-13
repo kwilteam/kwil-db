@@ -1,9 +1,11 @@
 package apisvc
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type RequestBody interface {
-	DropDatabaseBody | ExecuteTxBody
+	DropDatabaseBody | ExecuteTxBody | CreateDatabaseBody
 }
 
 func Marshal[B RequestBody](v B) ([]byte, error) {
@@ -18,8 +20,12 @@ func Unmarshal[B RequestBody](data []byte) (*B, error) {
 	return out, nil
 }
 
+type CreateDatabaseBody struct {
+	Database []byte `json:"database" yaml:"database"`
+}
+
 type DropDatabaseBody struct {
-	Database string `json:"database"`
+	Database string `json:"database" yaml:"database"`
 }
 
 type ExecuteTxBody struct {

@@ -1,4 +1,4 @@
-package types
+package spec
 
 import "fmt"
 
@@ -12,11 +12,15 @@ type QueryType int
 // Queries
 const (
 	INVALID_QUERY QueryType = iota
+	SELECT
 	INSERT
 	UPDATE
-	SELECT
 	DELETE
 )
+
+func (q *QueryType) Int() int {
+	return int(*q)
+}
 
 func (q *QueryType) String() (string, error) {
 	switch *q {
@@ -33,7 +37,7 @@ func (q *QueryType) String() (string, error) {
 }
 
 // ConvertQuery converts a string to a QueryType
-func (v *validation) ConvertQueryType(s string) (QueryType, error) {
+func (v *conversion) ConvertQueryType(s string) (QueryType, error) {
 	switch s {
 	case "insert":
 		return INSERT, nil

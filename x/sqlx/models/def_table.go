@@ -2,8 +2,8 @@ package models
 
 import (
 	"fmt"
+	types "kwil/x/sqlx"
 	ddlb "kwil/x/sqlx/ddl_builder"
-	types "kwil/x/sqlx/spec"
 )
 
 type Table struct {

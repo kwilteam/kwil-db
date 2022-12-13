@@ -1,4 +1,4 @@
-package types
+package spec
 
 import "fmt"
 
@@ -15,6 +15,10 @@ func (i *IndexType) String() string {
 		return "btree"
 	}
 	return "unknown"
+}
+
+func (i *IndexType) Int() int {
+	return int(*i)
 }
 
 // ConvertIndex converts a string to an IndexType

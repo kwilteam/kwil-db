@@ -7,7 +7,7 @@ import (
 	"kwil/x/cli/util"
 	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
-	"kwil/x/sqlx/schema"
+	"kwil/x/sqlx/models"
 	"os"
 	"strings"
 
@@ -36,8 +36,8 @@ func deployCmd() *cobra.Command {
 				}
 
 				// parse to yaml
-				db := &schema.Database{}
-				err = db.UnmarshalYAML(file)
+				db := &models.Database{}
+				err = db.FromJSON(file)
 				if err != nil {
 					return err
 				}

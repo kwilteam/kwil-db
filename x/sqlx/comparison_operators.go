@@ -1,4 +1,4 @@
-package types
+package spec
 
 import "fmt"
 
@@ -30,6 +30,10 @@ func (c *ComparisonOperatorType) String() string {
 		return "<="
 	}
 	return "unknown"
+}
+
+func (c *ComparisonOperatorType) Int() int {
+	return int(*c)
 }
 
 // ConvertComparisonOperator converts a string to a ComparisonOperatorType

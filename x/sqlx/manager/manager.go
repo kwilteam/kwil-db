@@ -3,6 +3,8 @@ package manager
 import (
 	"context"
 	"kwil/x/cfgx"
+	"kwil/x/sqlx/cache"
+	"kwil/x/sqlx/models"
 	"kwil/x/sqlx/sqlclient"
 )
 
@@ -13,7 +15,7 @@ import (
 
 type Manager struct {
 	// The database client
-	cache      *SchemaCache
+	cache      Cache
 	Client     *sqlclient.DB
 	Metadata   MetadataManager
 	Execution  ExecutionManager
@@ -21,13 +23,14 @@ type Manager struct {
 	Deposits   DepositsManager
 }
 
-// NewManager returns a new manager
-func New(ctx context.Context, client *sqlclient.DB, cfg cfgx.Config) (*Manager, error) {
-	mdm := NewMetadataManager(client)
+type Cache interface {
+	Store(db *models.Database) error
+	Get(db string) *cache.Database // I know we shouldn't be coupling our code like this
+}
 
-	// 60 minute interval
-	cache := NewSchemaCache(mdm, 3600)
-	go cache.RunGC(ctx)
+// NewManager returns a new manager
+func New(ctx context.Context, client *sqlclient.DB, cfg cfgx.Config, cache Cache) (*Manager, error) {
+	mdm := NewMetadataManager(client)
 
 	dpm, err := NewDepositsManager(client, cfg)
 	if err != nil {
@@ -45,16 +48,53 @@ func New(ctx context.Context, client *sqlclient.DB, cfg cfgx.Config) (*Manager, 
 }
 
 func (m *Manager) SyncCache(ctx context.Context) error {
-	return m.cache.SyncAll(ctx)
+	dbs, err := m.Metadata.GetAllDatabases(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, db := range dbs {
+		bts, err := m.Metadata.GetMetadataBytes(ctx, db)
+		if err != nil {
+			continue
+		}
+
+		var modelDb models.Database
+		err = modelDb.DecodeGOB(bts)
+		if err != nil {
+			continue
+		}
+
+		err = m.cache.Store(&modelDb)
+		if err != nil {
+			continue
+		}
+	}
+
+	return nil
 }
 
-// ExportDB returns the cachedDB for a given database
-func (m *Manager) Get(dbName string) (*CachedDB, bool) {
-	db, ok := m.cache.DBs[dbName]
-	return db, ok
-}
+func (m *Manager) GetDatabase(ctx context.Context, db string) (*cache.Database, error) {
+	cached := m.cache.Get(db)
+	if cached != nil {
+		return cached, nil
+	}
 
-// Export returns the cachedDB for a given database
-func (m *Manager) Export(dbName string) (*ExportedDB, error) {
-	return m.cache.Export(dbName)
+	bts, err := m.Metadata.GetMetadataBytes(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	var modelDb models.Database
+	err = modelDb.DecodeGOB(bts)
+	if err != nil {
+		return nil, err
+	}
+
+	err = m.cache.Store(&modelDb)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.cache.Get(db), nil
 }

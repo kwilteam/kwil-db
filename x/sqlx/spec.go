@@ -1,4 +1,4 @@
-package types
+package spec
 
 type validation struct{}
 type conversion struct{}

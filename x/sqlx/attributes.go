@@ -1,4 +1,4 @@
-package types
+package spec
 
 import (
 	"fmt"
@@ -40,6 +40,10 @@ func (a *AttributeType) String() string {
 		return `max_length`
 	}
 	return `unknown`
+}
+
+func (a *AttributeType) Int() int {
+	return int(*a)
 }
 
 // ConvertAttribute converts a string to an AttributeType

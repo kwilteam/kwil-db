@@ -1,6 +1,6 @@
 package models
 
-import types "kwil/x/sqlx/spec"
+import types "kwil/x/sqlx"
 
 type Attribute struct {
 	Type  string `json:"type"`

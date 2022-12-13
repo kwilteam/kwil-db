@@ -7,6 +7,7 @@ import "google/api/annotations.proto";
 import "kwil/apisvc/wallets.proto";
 import "kwil/apisvc/metadata.proto";
 import "kwil/apisvc/crud.proto";
+import "kwil/apisvc/schema.proto";
 
 service KwilService {
   rpc Connect(ConnectRequest) returns (ConnectResponse) {

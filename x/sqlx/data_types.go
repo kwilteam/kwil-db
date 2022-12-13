@@ -1,8 +1,9 @@
-package types
+package spec
 
 import (
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 type DataType int
@@ -30,6 +31,10 @@ func (d *DataType) String() string {
 	return `unknown`
 }
 
+func (d *DataType) Int() int {
+	return int(*d)
+}
+
 func (v *validation) CheckType(s string) error {
 	switch s {
 	case `string`:
@@ -46,6 +51,8 @@ func (v *validation) CheckType(s string) error {
 
 // String to Kwil Type converts a string received from JSON/YAML to a Kwil Type
 func (v *conversion) StringToKwilType(s string) (DataType, error) {
+	s = strings.ToLower(s)
+
 	switch s {
 	case `string`:
 		return STRING, nil

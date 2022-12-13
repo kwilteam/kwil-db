@@ -2,7 +2,7 @@ package models
 
 import (
 	"fmt"
-	types "kwil/x/sqlx/spec"
+	types "kwil/x/sqlx"
 )
 
 type Column struct {

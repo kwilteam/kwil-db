@@ -1,4 +1,4 @@
-package types
+package spec
 
 import "fmt"
 
@@ -17,6 +17,10 @@ func (m *ModifierType) String() string {
 		return "caller"
 	}
 	return "unknown"
+}
+
+func (m *ModifierType) Int() int {
+	return int(*m)
 }
 
 // ConvertModifier converts a string to a ModifierType

@@ -2,8 +2,8 @@ package manager
 
 import (
 	"context"
-	"fmt"
-	"kwil/x/sqlx/schema"
+	spec "kwil/x/sqlx"
+	"kwil/x/sqlx/models"
 	"kwil/x/sqlx/sqlclient"
 )
 
@@ -12,7 +12,6 @@ type MetadataManager interface {
 	GetRolesByWallet(ctx context.Context, wlt string, dbs string) ([]string, error)
 	GetQueriesByRole(ctx context.Context, role string, dbs string) ([]string, error)
 	ListRoles(ctx context.Context, dbs string) ([]string, error)
-	GetAllQueries(ctx context.Context, dbs string) (map[string]*schema.ExecutableQuery, error)
 	GetMetadataBytes(ctx context.Context, dbs string) ([]byte, error)
 	GetAllDatabases(ctx context.Context) ([]string, error)
 }
@@ -97,44 +96,12 @@ func (m *metadataManager) ListRoles(ctx context.Context, dbs string) ([]string, 
 	return roles, nil
 }
 
-// GetAllQueries returns all the queries
-func (m *metadataManager) GetAllQueries(ctx context.Context, dbs string) (map[string]*schema.ExecutableQuery, error) {
-	queries := make(map[string]*schema.ExecutableQuery)
-
-	rows, err := m.client.QueryContext(ctx, `SELECT * FROM get_all_queries($1)`, dbs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var queryName string
-		var queryBytes []byte
-		if err := rows.Scan(&queryName, &queryBytes); err != nil {
-			return nil, err
-		}
-
-		var executable schema.ExecutableQuery
-		err = executable.Unmarshal(queryBytes)
-		if err != nil {
-			return nil, err
-		}
-
-		queries[queryName] = &executable
-	}
-
-	return queries, nil
-}
-
 // GetMetadataBytes returns the metadata bytes
 func (m *metadataManager) GetMetadataBytes(ctx context.Context, dbs string) ([]byte, error) {
 	// since this gets called from different areas, will check name to be safe
-	ok, err := schema.CheckValidSchemaName(dbs)
+	err := models.CheckName(dbs, spec.DATABASE)
 	if err != nil {
 		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("invalid database name: %s", dbs)
 	}
 
 	var metadataBytes []byte

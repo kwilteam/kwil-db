@@ -23,11 +23,11 @@ type depositsManager struct {
 }
 
 func NewDepositsManager(client *sqlclient.DB, cfg cfgx.Config) (*depositsManager, error) {
-	spend, err := cfg.GetBool("spend", true)
+	spend, err := cfg.GetBool("deposit-settings.spend-balance", true)
 	if err != nil {
 		return nil, err
 	}
-	read_balance, err := cfg.GetBool("read_balance", true)
+	read_balance, err := cfg.GetBool("deposit-settings.read-balance", true)
 	if err != nil {
 		return nil, err
 	}
@@ -43,9 +43,15 @@ func NewDepositsManager(client *sqlclient.DB, cfg cfgx.Config) (*depositsManager
 }
 
 func (m *depositsManager) Spend(ctx context.Context, wallet string, amount string) error {
+	if !m.config.spend {
+		return nil
+	}
 	return m.depositStore.Spend(ctx, wallet, amount)
 }
 
 func (m *depositsManager) GetBalanceAndSpent(ctx context.Context, wallet string) (string, string, error) {
+	if !m.config.read_balance {
+		return "", "", nil
+	}
 	return m.depositStore.GetBalanceAndSpent(ctx, wallet)
 }

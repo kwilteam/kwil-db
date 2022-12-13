@@ -2,7 +2,7 @@ package models
 
 import (
 	"fmt"
-	types "kwil/x/sqlx/spec"
+	types "kwil/x/sqlx"
 )
 
 type WhereClause struct {
@@ -54,4 +54,25 @@ func (w *WhereClause) Validate(table *Table) error {
 	}
 
 	return nil
+}
+
+// including these getters to fulfill arger interface
+func (w *WhereClause) getColumn() string {
+	return w.Column
+}
+
+func (w *WhereClause) getModifier() string {
+	return w.Modifier
+}
+
+func (w *WhereClause) getStatic() bool {
+	return w.Static
+}
+
+func (w *WhereClause) getValue() any {
+	return w.Value
+}
+
+func (w *WhereClause) buildArg(tbl *Table, position int) (*Arg, error) {
+	return buildArg(tbl, position, w)
 }

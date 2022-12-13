@@ -30,7 +30,7 @@ func viewDatabaseCmd() *cobra.Command {
 					Database: args[1],
 				})
 
-				meta := resp.GetMetadata()
+				meta := resp.GetDatabase()
 
 				if err != nil {
 					return err
@@ -55,7 +55,7 @@ func viewDatabaseCmd() *cobra.Command {
 				for _, r := range meta.Roles {
 					fmt.Printf("  %s\n", r.Name)
 					fmt.Printf("    Permissions:\n")
-					for _, p := range r.Queries {
+					for _, p := range r.Permissions {
 						fmt.Printf("      %s\n", p)
 					}
 				}

@@ -1,0 +1,23 @@
+syntax = "proto3";
+package apisvc;
+option go_package = "kwil/x/proto/apipb";
+
+import "kwil/apisvc/tx.proto";
+
+message DeploySchemaRequest {
+	Tx tx = 1;
+}
+
+message DeploySchemaResponse {
+	string txid = 1;
+	string msg = 2;
+}
+
+message DropDatabaseRequest {
+	Tx tx = 1;
+}
+
+message DropDatabaseResponse {
+	string txid = 1;
+	string msg = 2;
+}
