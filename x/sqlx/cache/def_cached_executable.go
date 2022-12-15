@@ -106,18 +106,18 @@ func (q *Executable) PrepareInputs(sender string, usrInpts []*models.UserInput) 
 			return nil, fmt.Errorf(`missing user input for arg "%d"`, arg.Position)
 		}
 
-		// convert the user input to the correct type
-		kwilType, err := spec.Conversion.AnyToKwilType(usrInpt.Value)
-		if err != nil {
-			return nil, fmt.Errorf(`invalid user input for arg "%d": %w`, arg.Position, err)
-		}
-
 		// check that the user input type matches the arg type
-		if kwilType != arg.Type {
-			return nil, fmt.Errorf(`invalid user input for arg "%d": expected type "%s", got "%s"`, arg.Position, arg.Type.String(), kwilType.String())
+		if usrInpt.Type != arg.Type {
+			return nil, fmt.Errorf(`invalid user input for arg "%d": expected type "%s", got "%s"`, arg.Position, arg.Type.String(), usrInpt.Type.String())
 		}
 
-		returns[arg.Position] = usrInpt.Value
+		// convert the user input value to the arg type
+		converted, err := spec.Conversion.StringToAnyGolangType(usrInpt.Value, arg.Type)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to convert user input for arg "%d": %w`, arg.Position, err)
+		}
+
+		returns[arg.Position] = converted
 	}
 
 	return returns, nil

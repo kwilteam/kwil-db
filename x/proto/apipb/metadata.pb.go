@@ -553,7 +553,7 @@ func (x *Arg) GetModifier() ModifierType {
 	if x != nil {
 		return x.Modifier
 	}
-	return ModifierType_NO_MODIFIER
+	return ModifierType_INVALID_MODIFIER
 }
 
 type Role struct {

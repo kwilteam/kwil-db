@@ -1,5 +1,24 @@
 package apisvc
 
+import (
+	"context"
+	"kwil/x/proto/apipb"
+)
+
+func (s *Service) Connect(ctx context.Context, req *apipb.ConnectRequest) (*apipb.ConnectResponse, error) {
+	return &apipb.ConnectResponse{Address: "0x00000000"}, nil
+}
+
+func (s *Service) EstimateCost(ctx context.Context, req *apipb.EstimateCostRequest) (*apipb.EstimateCostResponse, error) {
+	p, err := s.p.GetPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &apipb.EstimateCostResponse{
+		Fee: p.String(),
+	}, nil
+}
+
 /*
 func (s *Service) GetWithdrawalsForWallet(ctx context.Context, req *apipb.GetWithdrawalsRequest) (*apipb.GetWithdrawalsResponse, error) {
 	wdr, err := s.ds.GetWithdrawalsForWallet(ctx, req.Wallet)

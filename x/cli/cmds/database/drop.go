@@ -9,7 +9,6 @@ import (
 	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
 	"kwil/x/sqlx/models"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,41 +16,17 @@ import (
 	"google.golang.org/grpc"
 )
 
-func deployCmd() *cobra.Command {
+func dropCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "deploy",
-		Short: "Deploy a database",
-		Long:  "Deploy a database",
+		Use:   "drop",
+		Short: "Drops a database",
+		Long:  "Drops a database",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				client := apipb.NewKwilServiceClient(cc)
 				// should be one arg
 				if len(args) != 1 {
-					return fmt.Errorf("deploy requires one argument: path")
-				}
-
-				// read in the file
-				file, err := os.ReadFile(args[0])
-				if err != nil {
-					return err
-				}
-
-				// parse to yaml
-				db := &models.Database{}
-				err = db.FromJSON(file)
-				if err != nil {
-					return err
-				}
-
-				// validate the database
-				if err := db.Validate(); err != nil {
-					return err
-				}
-
-				// try generating the ddl
-				_, err = db.GenerateDDL()
-				if err != nil {
-					return err
+					return fmt.Errorf("deploy requires one argument: database name")
 				}
 
 				c, err := chain.NewClientV(viper.GetViper())
@@ -64,8 +39,9 @@ func deployCmd() *cobra.Command {
 				fee := "1000000000000000000" // TODO: should call the estimate endpoint
 
 				// construct payload
-				payload := models.CreateDatabase{
-					Database: file,
+				payload := models.DropDatabase{
+					Name:  args[0],
+					Owner: c.Address.String(),
 				}
 
 				// marshal payload
@@ -75,7 +51,7 @@ func deployCmd() *cobra.Command {
 				}
 
 				// add message type
-				bts = append([]byte{models.CREATE_DATABASE.Byte()}, bts...)
+				bts = append([]byte{models.DROP_DATABASE.Byte()}, bts...)
 
 				// add version
 				bts = append([]byte{0}, bts...)
@@ -98,7 +74,7 @@ func deployCmd() *cobra.Command {
 				}
 
 				// construct the request
-				req := &apipb.DeploySchemaRequest{
+				req := &apipb.DropSchemaRequest{
 					Tx: &apipb.Tx{
 						Id:        id,
 						Payload:   bts,
@@ -110,7 +86,8 @@ func deployCmd() *cobra.Command {
 				}
 
 				// send it
-				resp, err := client.DeploySchema(ctx, req)
+				resp, err := client.DropSchema(ctx, req)
+
 				if err != nil {
 					return err
 				}

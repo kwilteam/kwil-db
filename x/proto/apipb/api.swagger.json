@@ -38,6 +38,38 @@
         ]
       }
     },
+    "/api/v0/drop-schema": {
+      "post": {
+        "operationId": "KwilService_DropSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/apisvcDropSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/apisvcDropSchemaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
     "/api/v0/read": {
       "post": {
         "operationId": "KwilService_Read",
@@ -433,6 +465,25 @@
         }
       }
     },
+    "apisvcDropSchemaRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/apisvcTx"
+        }
+      }
+    },
+    "apisvcDropSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        }
+      }
+    },
     "apisvcEstimateCostRequest": {
       "type": "object",
       "properties": {
@@ -511,10 +562,11 @@
     "apisvcModifierType": {
       "type": "string",
       "enum": [
+        "INVALID_MODIFIER",
         "NO_MODIFIER",
         "CALLER"
       ],
-      "default": "NO_MODIFIER"
+      "default": "INVALID_MODIFIER"
     },
     "apisvcQuery": {
       "type": "object",
@@ -631,7 +683,7 @@
         "id": {
           "type": "string"
         },
-        "data": {
+        "payload": {
           "type": "string",
           "format": "byte"
         },

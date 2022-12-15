@@ -13,11 +13,11 @@ message DeploySchemaResponse {
 	string msg = 2;
 }
 
-message DropDatabaseRequest {
+message DropSchemaRequest {
 	Tx tx = 1;
 }
 
-message DropDatabaseResponse {
+message DropSchemaResponse {
 	string txid = 1;
 	string msg = 2;
 }

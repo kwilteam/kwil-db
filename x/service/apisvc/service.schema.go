@@ -44,14 +44,13 @@ func (s *Service) DeploySchema(ctx context.Context, req *apipb.DeploySchemaReque
 		return nil, err
 	}
 
-	/*
-		msgBody, err := Unmarshal[CreateDatabaseBody](tx.Data)
-		if err != nil {
-			return nil, err
-		}*/
+	msgBody, err := Unmarshal[models.CreateDatabase](tx.Payload)
+	if err != nil {
+		return nil, err
+	}
 
 	db := &models.Database{}
-	err = db.FromJSON(tx.Data)
+	err = db.FromJSON(msgBody.Database)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ddl: %w", err)
 	}
@@ -73,7 +72,7 @@ func (s *Service) DeploySchema(ctx context.Context, req *apipb.DeploySchemaReque
 	}, nil
 }
 
-func (s *Service) DropDatabase(ctx context.Context, req *apipb.DropDatabaseRequest) (*apipb.DropDatabaseResponse, error) {
+func (s *Service) DropSchema(ctx context.Context, req *apipb.DropSchemaRequest) (*apipb.DropSchemaResponse, error) {
 
 	// verify the tx
 	tx := crypto.Tx{}
@@ -106,17 +105,24 @@ func (s *Service) DropDatabase(ctx context.Context, req *apipb.DropDatabaseReque
 		return nil, err
 	}
 
-	body, err := Unmarshal[DropDatabaseBody](req.Tx.Data)
+	body, err := Unmarshal[models.DropDatabase](req.Tx.Payload)
 	if err != nil {
 		return nil, err
 	}
 
-	err = s.manager.Deployment.Delete(ctx, body.Database)
+	// check if the owner is the same as the tx sender
+	if !strings.EqualFold(body.Owner, tx.Sender) {
+		return nil, fmt.Errorf("db owner must also be tx signer: %s != %s", body.Owner, tx.Sender)
+	}
+
+	dbName := strings.ToLower(body.Name + "_" + body.Owner)
+
+	err = s.manager.Deployment.Delete(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	return &apipb.DropDatabaseResponse{
+	return &apipb.DropSchemaResponse{
 		Txid: tx.Id,
 		Msg:  "success",
 	}, nil
@@ -157,12 +163,13 @@ func convertDb(db *cache.Database) *apipb.Database {
 	}
 
 	return &apipb.Database{
-		Name:    db.Name,
-		Owner:   db.Owner,
-		Tables:  tables,
-		Indexes: indexes,
-		Queries: queries,
-		Roles:   roles,
+		Name:        db.Name,
+		Owner:       db.Owner,
+		DefaultRole: db.DefaultRole,
+		Tables:      tables,
+		Indexes:     indexes,
+		Queries:     queries,
+		Roles:       roles,
 	}
 }
 

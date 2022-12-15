@@ -40,6 +40,20 @@ tasks:
     generates:
       - x/proto/apipb/*
 
+  build:pricing:pb:
+    desc: Compiles the protobuf for the Pricing Service
+    cmds:
+      - |
+        mkdir -p x/pricing
+        protoc -I proto \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        proto/kwil/pricingsvc/*.proto
+    sources:
+      - proto/kwil/pricingsvc/*.proto
+    generates:
+      - x/pricing/entity/*
+
   build:schema:pb:
     desc: Compiles the protobuf for the Schema Service
     cmds:

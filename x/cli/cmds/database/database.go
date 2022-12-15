@@ -17,6 +17,7 @@ func NewCmdDatabase() *cobra.Command {
 	cmd.AddCommand(
 		viewDatabaseCmd(),
 		deployCmd(),
+		dropCmd(),
 	)
 
 	util.BindKwilFlags(cmd.PersistentFlags())

@@ -2,53 +2,60 @@ package apisvc
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"kwil/x/crypto"
 	"kwil/x/proto/apipb"
+	"kwil/x/sqlx/models"
 )
 
 func (s *Service) Write(ctx context.Context, req *apipb.WriteRequest) (*apipb.WriteResponse, error) {
-	/*
-		price, err := s.p.GetPrice(ctx)
-		if err != nil {
-			return nil, err
-		}
 
-		if req.Tx == nil {
-			return nil, fmt.Errorf("invalid tx")
-		}
-
-		fmt.Println(req.Tx.Fee)
-
-		// parse fee
-		fee, ok := parseBigInt(req.Tx.Fee)
-		if !ok {
-			return nil, fmt.Errorf("invalid fee")
-		}
-
-		/*
-		// check price is enough
-		if fee.Cmp(price) < 0 {
-			return nil, fmt.Errorf("price is not enough")
-		}
-	*/
+	if req.Tx == nil {
+		return nil, fmt.Errorf("invalid tx")
+	}
 
 	tx := crypto.Tx{}
 	tx.Convert(req.Tx)
 
-	body := CRUD{}
-	json.Unmarshal(tx.Data, &body)
+	// verify the tx
+	err := tx.Verify()
+	if err != nil {
+		return nil, err
+	}
+
+	// parse fee
+	fee, ok := parseBigInt(req.Tx.Fee)
+	if !ok {
+		return nil, fmt.Errorf("invalid fee")
+	}
+
+	price, err := s.p.GetPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// check price is enough
+	if fee.Cmp(price) > 0 { // TODO: invert this comparison
+		return nil, fmt.Errorf("price is not enough")
+	}
+
+	body, err := Unmarshal[models.QueryTx](tx.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal tx payload: %w", err)
+	}
+
+	// spend funds and then write data
+	err = s.manager.Deposits.Spend(ctx, tx.Sender, tx.Fee)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.manager.Execution.Execute(ctx, body, tx.Sender)
+	if err != nil {
+		return nil, err
+	}
 
 	return nil, nil
-}
-
-type CRUD struct {
-	Query  string `json:"query"`
-	Db     string `json:"db"`
-	Inputs []struct {
-		Ordinality int    `json:"ordinality"`
-		Value      string `json:"value"`
-	}
 }
 
 /*

@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type KwilServiceClient interface {
 	Connect(ctx context.Context, in *ConnectRequest, opts ...grpc.CallOption) (*ConnectResponse, error)
 	DeploySchema(ctx context.Context, in *DeploySchemaRequest, opts ...grpc.CallOption) (*DeploySchemaResponse, error)
+	DropSchema(ctx context.Context, in *DropSchemaRequest, opts ...grpc.CallOption) (*DropSchemaResponse, error)
 	GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error)
 	Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error)
 	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
@@ -53,6 +54,15 @@ func (c *kwilServiceClient) Connect(ctx context.Context, in *ConnectRequest, opt
 func (c *kwilServiceClient) DeploySchema(ctx context.Context, in *DeploySchemaRequest, opts ...grpc.CallOption) (*DeploySchemaResponse, error) {
 	out := new(DeploySchemaResponse)
 	err := c.cc.Invoke(ctx, "/apisvc.KwilService/DeploySchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kwilServiceClient) DropSchema(ctx context.Context, in *DropSchemaRequest, opts ...grpc.CallOption) (*DropSchemaResponse, error) {
+	out := new(DropSchemaResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/DropSchema", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +129,7 @@ func (c *kwilServiceClient) EstimateCost(ctx context.Context, in *EstimateCostRe
 type KwilServiceServer interface {
 	Connect(context.Context, *ConnectRequest) (*ConnectResponse, error)
 	DeploySchema(context.Context, *DeploySchemaRequest) (*DeploySchemaResponse, error)
+	DropSchema(context.Context, *DropSchemaRequest) (*DropSchemaResponse, error)
 	GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error)
 	Write(context.Context, *WriteRequest) (*WriteResponse, error)
 	Read(context.Context, *ReadRequest) (*ReadResponse, error)
@@ -138,6 +149,9 @@ func (UnimplementedKwilServiceServer) Connect(context.Context, *ConnectRequest) 
 }
 func (UnimplementedKwilServiceServer) DeploySchema(context.Context, *DeploySchemaRequest) (*DeploySchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeploySchema not implemented")
+}
+func (UnimplementedKwilServiceServer) DropSchema(context.Context, *DropSchemaRequest) (*DropSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DropSchema not implemented")
 }
 func (UnimplementedKwilServiceServer) GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMetadata not implemented")
@@ -202,6 +216,24 @@ func _KwilService_DeploySchema_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(KwilServiceServer).DeploySchema(ctx, req.(*DeploySchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KwilService_DropSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DropSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KwilServiceServer).DropSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/apisvc.KwilService/DropSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KwilServiceServer).DropSchema(ctx, req.(*DropSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -328,6 +360,10 @@ var KwilService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeploySchema",
 			Handler:    _KwilService_DeploySchema_Handler,
+		},
+		{
+			MethodName: "DropSchema",
+			Handler:    _KwilService_DropSchema_Handler,
 		},
 		{
 			MethodName: "GetMetadata",

@@ -65,11 +65,18 @@
     "roles": [
         {
             "name": "bennanmode",
-            "permissions": ["create_user", "update_user", "delete_user"]
+            "permissions": [
+                "create_user",
+                "update_user",
+                "delete_user"
+            ]
         },
         {
             "name": "randalmode",
-            "permissions": ["create_user", "update_user"]
+            "permissions": [
+                "create_user",
+                "update_user"
+            ]
         }
     ],
     "sql_queries": [
@@ -117,7 +124,6 @@
                     "operator": "="
                 }
             ]
-
         },
         {
             "name": "delete_user",
@@ -142,7 +148,9 @@
         {
             "name": "user_wallet_index",
             "table": "users",
-            "columns": ["wallet"],
+            "columns": [
+                "wallet"
+            ],
             "using": "btree"
         }
     ]

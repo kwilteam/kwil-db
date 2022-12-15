@@ -34,7 +34,7 @@ func (s *SchemaCache) Store(modelDb *models.Database) error {
 	if err != nil {
 		return fmt.Errorf("failed to convert database: %w", err)
 	}
-	s.DBs[db.Name] = &db
+	s.DBs[db.GetSchemaName()] = &db
 
 	return nil
 }
