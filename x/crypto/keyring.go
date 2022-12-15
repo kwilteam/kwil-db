@@ -39,18 +39,18 @@ func NewKeyring(c cfgx.Config) (*keyring, error) {
 	return nkr, nil
 }
 
-func (k *keyring) importConfigKey() error {
-	key, err := utils.LoadFileFromRoot(k.conf.String("keys.key-path"))
+func (k *keyring) importConfigKey() (err error) {
+	key := []byte(k.conf.String("keys.wallet-key"))
+	if len(key) > 0 {
+		return k.Set("kwil_main", key)
+	}
+
+	key, err = utils.LoadFileFromRoot(k.conf.String("keys.key-path"))
 	if err != nil {
 		return err
 	}
 
-	err = k.Set("kwil_main", key)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return k.Set("kwil_main", key)
 }
 
 func (k *keyring) Set(name string, key []byte) error {

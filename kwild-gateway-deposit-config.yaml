@@ -12,6 +12,6 @@ db:
   password:  $PG_PASSWORD
   database:  $PG_DB
 keys:
-  key-path: "./keys/ethereum.pem"
+  wallet-key: $DEPOSITS_WALLET_KEY
 sync:
   chunk-size: 100000
