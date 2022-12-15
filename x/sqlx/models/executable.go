@@ -40,13 +40,13 @@ type Arg struct {
 type UserInput struct {
 	// Position is the position of the input relative to the rest of the inputs
 	// for example, if there are 3 2 params and 1 default, and 1 where and 1 default where, the user-inputted WHERE will be position 3
-	Position int
+	Position int `json:"position" yaml:"position"`
 
 	// InputType is the type of input this is
-	Type types.DataType
+	Type types.DataType `json:"type" yaml:"type"`
 
 	// Value is the value of the input
-	Value any
+	Value string `json:"value" yaml:"value"`
 }
 
 func (e *ExecutableQuery) Bytes() ([]byte, error) {
@@ -84,11 +84,12 @@ func buildArg(tbl *Table, position int, param arger) (*Arg, error) {
 	}
 
 	return &Arg{
-		Position: position,
-		Static:   param.getStatic(),
-		Value:    param.getValue(),
-		Type:     kwilType,
-		Modifier: mod,
+		Position:      position,
+		Static:        param.getStatic(),
+		Value:         param.getValue(),
+		Type:          kwilType,
+		InputPosition: -1,
+		Modifier:      mod,
 	}, nil
 }
 
@@ -98,6 +99,6 @@ func (a *Arg) buildInput(position int) *UserInput {
 	return &UserInput{
 		Position: position,
 		Type:     a.Type,
-		Value:    a.Value,
+		Value:    fmt.Sprintf("%v", a.Value),
 	}
 }

@@ -122,7 +122,7 @@ func (x *DeploySchemaResponse) GetMsg() string {
 	return ""
 }
 
-type DropDatabaseRequest struct {
+type DropSchemaRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -130,8 +130,8 @@ type DropDatabaseRequest struct {
 	Tx *Tx `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
 }
 
-func (x *DropDatabaseRequest) Reset() {
-	*x = DropDatabaseRequest{}
+func (x *DropSchemaRequest) Reset() {
+	*x = DropSchemaRequest{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_kwil_apisvc_schema_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -139,13 +139,13 @@ func (x *DropDatabaseRequest) Reset() {
 	}
 }
 
-func (x *DropDatabaseRequest) String() string {
+func (x *DropSchemaRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DropDatabaseRequest) ProtoMessage() {}
+func (*DropSchemaRequest) ProtoMessage() {}
 
-func (x *DropDatabaseRequest) ProtoReflect() protoreflect.Message {
+func (x *DropSchemaRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_kwil_apisvc_schema_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -157,19 +157,19 @@ func (x *DropDatabaseRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DropDatabaseRequest.ProtoReflect.Descriptor instead.
-func (*DropDatabaseRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DropSchemaRequest.ProtoReflect.Descriptor instead.
+func (*DropSchemaRequest) Descriptor() ([]byte, []int) {
 	return file_kwil_apisvc_schema_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *DropDatabaseRequest) GetTx() *Tx {
+func (x *DropSchemaRequest) GetTx() *Tx {
 	if x != nil {
 		return x.Tx
 	}
 	return nil
 }
 
-type DropDatabaseResponse struct {
+type DropSchemaResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -178,8 +178,8 @@ type DropDatabaseResponse struct {
 	Msg  string `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
-func (x *DropDatabaseResponse) Reset() {
-	*x = DropDatabaseResponse{}
+func (x *DropSchemaResponse) Reset() {
+	*x = DropSchemaResponse{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_kwil_apisvc_schema_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -187,13 +187,13 @@ func (x *DropDatabaseResponse) Reset() {
 	}
 }
 
-func (x *DropDatabaseResponse) String() string {
+func (x *DropSchemaResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DropDatabaseResponse) ProtoMessage() {}
+func (*DropSchemaResponse) ProtoMessage() {}
 
-func (x *DropDatabaseResponse) ProtoReflect() protoreflect.Message {
+func (x *DropSchemaResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_kwil_apisvc_schema_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -205,19 +205,19 @@ func (x *DropDatabaseResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DropDatabaseResponse.ProtoReflect.Descriptor instead.
-func (*DropDatabaseResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DropSchemaResponse.ProtoReflect.Descriptor instead.
+func (*DropSchemaResponse) Descriptor() ([]byte, []int) {
 	return file_kwil_apisvc_schema_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *DropDatabaseResponse) GetTxid() string {
+func (x *DropSchemaResponse) GetTxid() string {
 	if x != nil {
 		return x.Txid
 	}
 	return ""
 }
 
-func (x *DropDatabaseResponse) GetMsg() string {
+func (x *DropSchemaResponse) GetMsg() string {
 	if x != nil {
 		return x.Msg
 	}
@@ -237,16 +237,16 @@ var file_kwil_apisvc_schema_proto_rawDesc = []byte{
 	0x65, 0x70, 0x6c, 0x6f, 0x79, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f,
 	0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
 	0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x6d, 0x73, 0x67, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6d, 0x73, 0x67, 0x22, 0x31, 0x0a, 0x13, 0x44, 0x72, 0x6f,
-	0x70, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x12, 0x1a, 0x0a, 0x02, 0x74, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x61,
-	0x70, 0x69, 0x73, 0x76, 0x63, 0x2e, 0x54, 0x78, 0x52, 0x02, 0x74, 0x78, 0x22, 0x3c, 0x0a, 0x14,
-	0x44, 0x72, 0x6f, 0x70, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x52, 0x65, 0x73, 0x70,
-	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x6d, 0x73, 0x67, 0x18,
-	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6d, 0x73, 0x67, 0x42, 0x14, 0x5a, 0x12, 0x6b, 0x77,
-	0x69, 0x6c, 0x2f, 0x78, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x61, 0x70, 0x69, 0x70, 0x62,
-	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6d, 0x73, 0x67, 0x22, 0x2f, 0x0a, 0x11, 0x44, 0x72, 0x6f,
+	0x70, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a,
+	0x0a, 0x02, 0x74, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x61, 0x70, 0x69,
+	0x73, 0x76, 0x63, 0x2e, 0x54, 0x78, 0x52, 0x02, 0x74, 0x78, 0x22, 0x3a, 0x0a, 0x12, 0x44, 0x72,
+	0x6f, 0x70, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04,
+	0x74, 0x78, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x6d, 0x73, 0x67, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x03, 0x6d, 0x73, 0x67, 0x42, 0x14, 0x5a, 0x12, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x78,
+	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x61, 0x70, 0x69, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -265,13 +265,13 @@ var file_kwil_apisvc_schema_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_kwil_apisvc_schema_proto_goTypes = []interface{}{
 	(*DeploySchemaRequest)(nil),  // 0: apisvc.DeploySchemaRequest
 	(*DeploySchemaResponse)(nil), // 1: apisvc.DeploySchemaResponse
-	(*DropDatabaseRequest)(nil),  // 2: apisvc.DropDatabaseRequest
-	(*DropDatabaseResponse)(nil), // 3: apisvc.DropDatabaseResponse
+	(*DropSchemaRequest)(nil),    // 2: apisvc.DropSchemaRequest
+	(*DropSchemaResponse)(nil),   // 3: apisvc.DropSchemaResponse
 	(*Tx)(nil),                   // 4: apisvc.Tx
 }
 var file_kwil_apisvc_schema_proto_depIdxs = []int32{
 	4, // 0: apisvc.DeploySchemaRequest.tx:type_name -> apisvc.Tx
-	4, // 1: apisvc.DropDatabaseRequest.tx:type_name -> apisvc.Tx
+	4, // 1: apisvc.DropSchemaRequest.tx:type_name -> apisvc.Tx
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -311,7 +311,7 @@ func file_kwil_apisvc_schema_proto_init() {
 			}
 		}
 		file_kwil_apisvc_schema_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DropDatabaseRequest); i {
+			switch v := v.(*DropSchemaRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -323,7 +323,7 @@ func file_kwil_apisvc_schema_proto_init() {
 			}
 		}
 		file_kwil_apisvc_schema_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DropDatabaseResponse); i {
+			switch v := v.(*DropSchemaResponse); i {
 			case 0:
 				return &v.state
 			case 1:

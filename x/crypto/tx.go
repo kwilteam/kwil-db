@@ -4,7 +4,7 @@ import "fmt"
 
 type Tx struct {
 	Id        string
-	Data      []byte
+	Payload   []byte
 	Fee       string
 	Nonce     string
 	Signature string
@@ -15,7 +15,7 @@ type Tx struct {
 // This is primarily for converting the TxMsg protobuf message into a Tx type.
 type TxMsg interface {
 	GetId() string
-	GetData() []byte
+	GetPayload() []byte
 	GetFee() string
 	GetNonce() string
 	GetSignature() string
@@ -26,7 +26,7 @@ type TxMsg interface {
 // For example, it will convert the TxMsg protobuf message into a Tx type.
 func (t *Tx) Convert(txmsg TxMsg) {
 	t.Id = txmsg.GetId()
-	t.Data = txmsg.GetData()
+	t.Payload = txmsg.GetPayload()
 	t.Fee = txmsg.GetFee()
 	t.Nonce = txmsg.GetNonce()
 	t.Signature = txmsg.GetSignature()
@@ -51,8 +51,11 @@ func (t *Tx) Verify() error {
 }
 
 func (t *Tx) GenerateId() string {
+	// hash payload
+	payloadHash := Sha384Str(t.Payload)
+
 	var data []byte
-	data = append(data, t.Data...)
+	data = append(data, []byte(payloadHash)...)
 	data = append(data, []byte(t.Fee)...)
 	data = append(data, []byte(t.Nonce)...)
 	data = append(data, []byte(t.Sender)...)

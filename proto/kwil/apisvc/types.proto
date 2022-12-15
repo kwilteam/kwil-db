@@ -28,8 +28,9 @@ enum IndexType {
 }
 
 enum ModifierType {
-	NO_MODIFIER = 0;
-	CALLER = 1;
+	INVALID_MODIFIER = 0;
+	NO_MODIFIER = 1;
+	CALLER = 2;
 }
 
 enum QueryType {

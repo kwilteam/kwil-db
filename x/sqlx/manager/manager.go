@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"kwil/x/cfgx"
 	"kwil/x/sqlx/cache"
 	"kwil/x/sqlx/models"
@@ -76,25 +77,30 @@ func (m *Manager) SyncCache(ctx context.Context) error {
 
 func (m *Manager) GetDatabase(ctx context.Context, db string) (*cache.Database, error) {
 	cached := m.cache.Get(db)
-	if cached != nil {
-		return cached, nil
+	if cached == nil {
+		return nil, fmt.Errorf("database %s not found", db)
 	}
 
-	bts, err := m.Metadata.GetMetadataBytes(ctx, db)
-	if err != nil {
-		return nil, err
-	}
+	return cached, nil
 
-	var modelDb models.Database
-	err = modelDb.DecodeGOB(bts)
-	if err != nil {
-		return nil, err
-	}
+	// everything is held in memory currently, so we don't need to hit the database
+	/*
+		bts, err := m.Metadata.GetMetadataBytes(ctx, db)
+		if err != nil {
+			return nil,
+		}
 
-	err = m.cache.Store(&modelDb)
-	if err != nil {
-		return nil, err
-	}
+		var modelDb models.Database
+		err = modelDb.DecodeGOB(bts)
+		if err != nil {
+			return nil, err
+		}
 
-	return m.cache.Get(db), nil
+		err = m.cache.Store(&modelDb)
+		if err != nil {
+			return nil, err
+		}
+
+		return m.cache.Get(db), nil
+	*/
 }

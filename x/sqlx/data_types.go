@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/cstockton/go-conv"
 )
 
 type DataType int
@@ -71,9 +73,9 @@ func (c *conversion) GolangToKwilType(k reflect.Kind) (DataType, error) {
 	switch k {
 	case reflect.String:
 		return STRING, nil
-	case reflect.Int32:
+	case reflect.Int32 | reflect.Float32:
 		return INT32, nil
-	case reflect.Int64:
+	case reflect.Int64 | reflect.Float64:
 		return INT64, nil
 	case reflect.Bool:
 		return BOOLEAN, nil
@@ -128,4 +130,19 @@ func (c *conversion) KwilStringToPgType(s string) (string, error) {
 		return ``, err
 	}
 	return c.KwilToPgType(kwilType)
+}
+
+func (c *conversion) StringToAnyGolangType(s string, kt DataType) (any, error) {
+	switch kt {
+	case STRING:
+		return s, nil
+	case INT32:
+		return conv.Int32(s)
+	case INT64:
+		return conv.Int64(s)
+	case BOOLEAN:
+		return conv.Bool(s)
+	default:
+		return nil, fmt.Errorf(`unknown type: "%s"`, s)
+	}
 }

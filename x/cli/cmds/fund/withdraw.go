@@ -67,7 +67,7 @@ func withdrawCmd() *cobra.Command {
 				wdr := apipb.WithdrawalRequest{
 					Tx: &apipb.Tx{
 						Id:        id,
-						Data:      []byte{},
+						Payload:   []byte{},
 						Fee:       amount.String(),
 						Nonce:     n,
 						Sender:    addr,

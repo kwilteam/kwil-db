@@ -24,6 +24,13 @@ service KwilService {
     };
   }
 
+  rpc DropSchema(DropSchemaRequest) returns (DropSchemaResponse) {
+    option (google.api.http) = {
+      post: "/api/v0/drop-schema"
+      body: "*"
+    };
+  }
+
 
   rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {
     option (google.api.http) = {

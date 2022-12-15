@@ -6,7 +6,7 @@ option go_package = "kwil/x/proto/apipb";
 // associated fees and provenance.
 message Tx{
     string id = 1;
-    bytes data = 2;
+    bytes payload = 2;
     string fee = 3;
     string nonce = 4;
     string signature = 5;

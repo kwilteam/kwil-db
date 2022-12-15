@@ -99,7 +99,7 @@ func (m *metadataManager) ListRoles(ctx context.Context, dbs string) ([]string, 
 // GetMetadataBytes returns the metadata bytes
 func (m *metadataManager) GetMetadataBytes(ctx context.Context, dbs string) ([]byte, error) {
 	// since this gets called from different areas, will check name to be safe
-	err := models.CheckName(dbs, spec.DATABASE)
+	err := models.CheckName(dbs, spec.SCHEMA)
 	if err != nil {
 		return nil, err
 	}

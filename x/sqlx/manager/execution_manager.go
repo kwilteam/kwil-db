@@ -8,13 +8,7 @@ import (
 )
 
 type ExecutionManager interface {
-}
-
-type Tx struct {
-	Query  string
-	Inputs []*models.UserInput
-	Caller string
-	Db     string
+	Execute(ctx context.Context, tx *models.QueryTx, caller string) error
 }
 
 type executionManager struct {
@@ -29,18 +23,22 @@ func NewExecutionManager(cache Cache, client *sqlclient.DB) *executionManager {
 	}
 }
 
-func (m *executionManager) Execute(ctx context.Context, tx *Tx) error {
+func (m *executionManager) Execute(ctx context.Context, tx *models.QueryTx, caller string) error {
 	// Checking if the wallet has permission to execute the query
 	// right now, wallets can only be default or owner
-	db := m.cache.Get(tx.Db)
+	db := m.cache.Get(tx.GetSchemaName())
+	if db == nil {
+		return fmt.Errorf("database %s not found", tx.Database)
+	}
+
 	role, ok := db.GetRole(db.DefaultRole)
 	if !ok {
 		return fmt.Errorf("failed to get default role on database %s", db.GetSchemaName())
 	}
 
 	if !role.HasPermission(tx.Query) {
-		if tx.Caller != db.Owner {
-			return fmt.Errorf("wallet %s does not have permission to execute query %s", tx.Caller, tx.Query)
+		if caller != db.Owner {
+			return fmt.Errorf("wallet %s does not have permission to execute query %s", caller, tx.Query)
 		}
 	}
 
@@ -51,12 +49,12 @@ func (m *executionManager) Execute(ctx context.Context, tx *Tx) error {
 		return fmt.Errorf("query %s not found", tx.Query)
 	}
 
-	executableInputs, err := executable.PrepareInputs(tx.Caller, tx.Inputs)
+	executableInputs, err := executable.PrepareInputs(caller, tx.Inputs)
 	if err != nil {
 		return fmt.Errorf("failed to prepare inputs: %w", err)
 	}
 
-	_, err = m.client.ExecContext(ctx, executable.Statement, executableInputs)
+	_, err = m.client.ExecContext(ctx, executable.Statement, executableInputs...)
 
 	return err
 }

@@ -92,5 +92,5 @@ func (c *Database) GetIndex(name string) (*Index, bool) {
 }
 
 func (d *Database) GetSchemaName() string {
-	return d.Owner + "_" + d.Name
+	return d.Name + "_" + d.Owner
 }
