@@ -9,11 +9,11 @@ import (
 )
 
 type Deposit struct {
-	DepositID int32
-	Txid      string
-	Wallet    string
-	Amount    sql.NullString
-	Height    sql.NullInt64
+	ID     int32
+	TxHash string
+	Wallet string
+	Amount string
+	Height int64
 }
 
 type Height struct {
@@ -21,18 +21,18 @@ type Height struct {
 }
 
 type Wallet struct {
-	WalletID int32
-	Wallet   string
-	Balance  string
-	Spent    string
+	ID      int32
+	Wallet  string
+	Balance string
+	Spent   string
 }
 
 type Withdrawal struct {
-	WithdrawalID  int32
+	ID            int32
 	CorrelationID string
-	WalletID      sql.NullInt32
-	Amount        sql.NullString
-	Fee           sql.NullString
-	Expiry        sql.NullInt64
-	Tx            sql.NullString
+	WalletID      int32
+	Amount        string
+	Fee           string
+	Expiry        int64
+	TxHash        sql.NullString
 }
