@@ -2,31 +2,26 @@ package env
 
 import (
 	"fmt"
-	"kwil/x/utils"
 	"os"
 	"strings"
 )
 
 func GetDbConnectionString() string {
-	return GetAltDbConnectionString(os.Getenv("PG_DB"), "kwil")
+	return GetDbConnectionStringByName("PG_DATABASE_URL", "kwil")
 }
 
-func GetAltDbConnectionString(dbEnvKey string, defaultDbName string) string {
-	host := utils.Coalesce(os.Getenv("PG_ENDPOINT"), "localhost")
-	port := utils.Coalesce(os.Getenv("PG_PORT"), "5432")
-	user := utils.Coalesce(os.Getenv("PG_USER"), "postgres")
-	password := utils.Coalesce(os.Getenv("PG_PASSWORD"), "postgres")
-	database := utils.Coalesce(os.Getenv(dbEnvKey), defaultDbName)
-
-	var ssl string
-	if strings.HasPrefix(host, "postgres_db_container_local") || strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") {
-		ssl = "disable"
+func GetDbConnectionStringByName(dbUrlEnvKeyName string, dbNameDefault string) string {
+	url := os.Getenv(dbUrlEnvKeyName)
+	if url == "" {
+		url = fmt.Sprintf("postgres://postgres:postgres@localhost:5432/%s?sslmode=disable", dbNameDefault)
 	} else {
-		ssl = "require"
+		url = os.ExpandEnv(url)
 	}
 
-	url := fmt.Sprintf("USING DB --> postgres://%s:%s@%s:%s/%s?sslmode=%s", user, "REDACTED", host, port, database, ssl)
-	fmt.Println(url)
+	parts := strings.Split(url, "@")
+	if len(parts) == 2 {
+		fmt.Println("USING DB --> postgres://REDACTED@" + parts[1])
+	}
 
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", user, password, host, port, database, ssl)
+	return url
 }
