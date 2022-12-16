@@ -8,6 +8,7 @@ import "kwil/apisvc/wallets.proto";
 import "kwil/apisvc/metadata.proto";
 import "kwil/apisvc/crud.proto";
 import "kwil/apisvc/schema.proto";
+import "kwil/pricingsvc/pricing.proto";
 
 service KwilService {
   rpc Connect(ConnectRequest) returns (ConnectResponse) {
@@ -65,9 +66,9 @@ service KwilService {
       body: "*"
     };
   }
-  rpc EstimateCost(EstimateCostRequest) returns (EstimateCostResponse) {
+  rpc EstimateCost(pricing.EstimateRequest) returns (pricing.EstimateResponse) {
     option (google.api.http) = {
-      post: "/api/v0/wallets/estimate"
+      post: "/api/v0/pricing/estimate"
       body: "*"
     };
   }

@@ -2,7 +2,6 @@ syntax = "proto3";
 package apisvc;
 option go_package = "kwil/x/proto/apipb";
 
-import "kwil/apisvc/crud.proto";
 import "kwil/apisvc/tx.proto";
 
 message GetBalanceRequest {
@@ -40,15 +39,4 @@ message Withdrawal {
     int64 expiration = 4;
     string tx = 5;
     string wallet = 6;
-}
-
-message EstimateCostRequest {
-    string owner = 1;
-    string database = 2;
-    string query = 3;
-    repeated CRUDInput inputs = 4;
-}
-
-message EstimateCostResponse {
-    string fee = 1;
 }

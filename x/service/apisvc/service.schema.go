@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/crypto"
+	"kwil/x/pricing"
 	"kwil/x/proto/apipb"
 	"kwil/x/sqlx/cache"
 	"kwil/x/sqlx/models"
@@ -22,7 +23,7 @@ func (s *Service) DeploySchema(ctx context.Context, req *apipb.DeploySchemaReque
 		return nil, err
 	}
 
-	p, err := s.p.GetPriceForDDL(ctx)
+	p, err := s.p.GetPrice(pricing.Deploy)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func (s *Service) DropSchema(ctx context.Context, req *apipb.DropSchemaRequest) 
 		return nil, err
 	}
 
-	p, err := s.p.GetPriceForDeleteSchema(ctx)
+	p, err := s.p.GetPrice(pricing.Delete)
 	if err != nil {
 		return nil, err
 	}

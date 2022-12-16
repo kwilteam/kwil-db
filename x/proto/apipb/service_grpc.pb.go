@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	entity "kwil/x/pricing/entity"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -31,7 +32,7 @@ type KwilServiceClient interface {
 	// Wallets
 	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
 	ReturnFunds(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WithdrawalResponse, error)
-	EstimateCost(ctx context.Context, in *EstimateCostRequest, opts ...grpc.CallOption) (*EstimateCostResponse, error)
+	EstimateCost(ctx context.Context, in *entity.EstimateRequest, opts ...grpc.CallOption) (*entity.EstimateResponse, error)
 }
 
 type kwilServiceClient struct {
@@ -114,8 +115,8 @@ func (c *kwilServiceClient) ReturnFunds(ctx context.Context, in *WithdrawalReque
 	return out, nil
 }
 
-func (c *kwilServiceClient) EstimateCost(ctx context.Context, in *EstimateCostRequest, opts ...grpc.CallOption) (*EstimateCostResponse, error) {
-	out := new(EstimateCostResponse)
+func (c *kwilServiceClient) EstimateCost(ctx context.Context, in *entity.EstimateRequest, opts ...grpc.CallOption) (*entity.EstimateResponse, error) {
+	out := new(entity.EstimateResponse)
 	err := c.cc.Invoke(ctx, "/apisvc.KwilService/EstimateCost", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -136,7 +137,7 @@ type KwilServiceServer interface {
 	// Wallets
 	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
 	ReturnFunds(context.Context, *WithdrawalRequest) (*WithdrawalResponse, error)
-	EstimateCost(context.Context, *EstimateCostRequest) (*EstimateCostResponse, error)
+	EstimateCost(context.Context, *entity.EstimateRequest) (*entity.EstimateResponse, error)
 	mustEmbedUnimplementedKwilServiceServer()
 }
 
@@ -168,7 +169,7 @@ func (UnimplementedKwilServiceServer) GetBalance(context.Context, *GetBalanceReq
 func (UnimplementedKwilServiceServer) ReturnFunds(context.Context, *WithdrawalRequest) (*WithdrawalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReturnFunds not implemented")
 }
-func (UnimplementedKwilServiceServer) EstimateCost(context.Context, *EstimateCostRequest) (*EstimateCostResponse, error) {
+func (UnimplementedKwilServiceServer) EstimateCost(context.Context, *entity.EstimateRequest) (*entity.EstimateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EstimateCost not implemented")
 }
 func (UnimplementedKwilServiceServer) mustEmbedUnimplementedKwilServiceServer() {}
@@ -329,7 +330,7 @@ func _KwilService_ReturnFunds_Handler(srv interface{}, ctx context.Context, dec 
 }
 
 func _KwilService_EstimateCost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EstimateCostRequest)
+	in := new(entity.EstimateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -341,7 +342,7 @@ func _KwilService_EstimateCost_Handler(srv interface{}, ctx context.Context, dec
 		FullMethod: "/apisvc.KwilService/EstimateCost",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KwilServiceServer).EstimateCost(ctx, req.(*EstimateCostRequest))
+		return srv.(KwilServiceServer).EstimateCost(ctx, req.(*entity.EstimateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

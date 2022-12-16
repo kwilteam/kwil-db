@@ -17,7 +17,7 @@ import (
 
 	"kwil/x/cfgx"
 	"kwil/x/crypto"
-	"kwil/x/deposits"
+	deposits "kwil/x/deposits_old"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"

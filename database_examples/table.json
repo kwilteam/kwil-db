@@ -1,0 +1,31 @@
+{
+    "name": "table_1",
+    "columns": [
+        {
+            "name": "id",
+            "type": "int32",
+            "attributes": [
+                {
+                    "type": "primary_key"
+                }
+            ]
+        },
+        {
+            "name": "name",
+            "type": "string"
+        },
+        {
+            "name": "age",
+            "type": "int32",
+            "attributes": [
+                {
+                    "type": "not_null"
+                },
+                {
+                    "type": "min",
+                    "value": 18
+                }
+            ]
+        }
+    ]
+}

@@ -358,6 +358,53 @@ func (x *EstimateQueryRequest) GetCrud() []*CRUDInput {
 	return nil
 }
 
+type EstimateResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Price string `protobuf:"bytes,1,opt,name=price,proto3" json:"price,omitempty"`
+}
+
+func (x *EstimateResponse) Reset() {
+	*x = EstimateResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_pricingsvc_pricing_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *EstimateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EstimateResponse) ProtoMessage() {}
+
+func (x *EstimateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_pricingsvc_pricing_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EstimateResponse.ProtoReflect.Descriptor instead.
+func (*EstimateResponse) Descriptor() ([]byte, []int) {
+	return file_kwil_pricingsvc_pricing_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *EstimateResponse) GetPrice() string {
+	if x != nil {
+		return x.Price
+	}
+	return ""
+}
+
 var File_kwil_pricingsvc_pricing_proto protoreflect.FileDescriptor
 
 var file_kwil_pricingsvc_pricing_proto_rawDesc = []byte{
@@ -398,9 +445,12 @@ var file_kwil_pricingsvc_pricing_proto_rawDesc = []byte{
 	0x0a, 0x05, 0x71, 0x75, 0x65, 0x72, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x71,
 	0x75, 0x65, 0x72, 0x79, 0x12, 0x25, 0x0a, 0x04, 0x63, 0x72, 0x75, 0x64, 0x18, 0x04, 0x20, 0x03,
 	0x28, 0x0b, 0x32, 0x11, 0x2e, 0x65, 0x6e, 0x74, 0x69, 0x74, 0x79, 0x2e, 0x43, 0x52, 0x55, 0x44,
-	0x49, 0x6e, 0x70, 0x75, 0x74, 0x52, 0x04, 0x63, 0x72, 0x75, 0x64, 0x42, 0x17, 0x5a, 0x15, 0x6b,
-	0x77, 0x69, 0x6c, 0x2f, 0x78, 0x2f, 0x70, 0x72, 0x69, 0x63, 0x69, 0x6e, 0x67, 0x2f, 0x65, 0x6e,
-	0x74, 0x69, 0x74, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x49, 0x6e, 0x70, 0x75, 0x74, 0x52, 0x04, 0x63, 0x72, 0x75, 0x64, 0x22, 0x28, 0x0a, 0x10, 0x45,
+	0x73, 0x74, 0x69, 0x6d, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x14, 0x0a, 0x05, 0x70, 0x72, 0x69, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05,
+	0x70, 0x72, 0x69, 0x63, 0x65, 0x42, 0x17, 0x5a, 0x15, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x78, 0x2f,
+	0x70, 0x72, 0x69, 0x63, 0x69, 0x6e, 0x67, 0x2f, 0x65, 0x6e, 0x74, 0x69, 0x74, 0x79, 0x62, 0x06,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -415,13 +465,14 @@ func file_kwil_pricingsvc_pricing_proto_rawDescGZIP() []byte {
 	return file_kwil_pricingsvc_pricing_proto_rawDescData
 }
 
-var file_kwil_pricingsvc_pricing_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_kwil_pricingsvc_pricing_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_kwil_pricingsvc_pricing_proto_goTypes = []interface{}{
 	(*EstimateRequest)(nil),       // 0: entity.EstimateRequest
 	(*CRUDInput)(nil),             // 1: entity.CRUDInput
 	(*EstimateDeployRequest)(nil), // 2: entity.EstimateDeployRequest
 	(*EstimateDeleteRequest)(nil), // 3: entity.EstimateDeleteRequest
 	(*EstimateQueryRequest)(nil),  // 4: entity.EstimateQueryRequest
+	(*EstimateResponse)(nil),      // 5: entity.EstimateResponse
 }
 var file_kwil_pricingsvc_pricing_proto_depIdxs = []int32{
 	2, // 0: entity.EstimateRequest.deploy:type_name -> entity.EstimateDeployRequest
@@ -501,6 +552,18 @@ func file_kwil_pricingsvc_pricing_proto_init() {
 				return nil
 			}
 		}
+		file_kwil_pricingsvc_pricing_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*EstimateResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	file_kwil_pricingsvc_pricing_proto_msgTypes[0].OneofWrappers = []interface{}{
 		(*EstimateRequest_Deploy)(nil),
@@ -513,7 +576,7 @@ func file_kwil_pricingsvc_pricing_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_kwil_pricingsvc_pricing_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

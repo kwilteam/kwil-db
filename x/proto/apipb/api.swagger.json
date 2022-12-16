@@ -70,6 +70,38 @@
         ]
       }
     },
+    "/api/v0/pricing/estimate": {
+      "post": {
+        "operationId": "KwilService_EstimateCost",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pricingEstimateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pricingEstimateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "KwilService"
+        ]
+      }
+    },
     "/api/v0/read": {
       "post": {
         "operationId": "KwilService_Read",
@@ -126,38 +158,6 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/apisvcDeploySchemaRequest"
-            }
-          }
-        ],
-        "tags": [
-          "KwilService"
-        ]
-      }
-    },
-    "/api/v0/wallets/estimate": {
-      "post": {
-        "operationId": "KwilService_EstimateCost",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/apisvcEstimateCostResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/apisvcEstimateCostRequest"
             }
           }
         ],
@@ -484,34 +484,6 @@
         }
       }
     },
-    "apisvcEstimateCostRequest": {
-      "type": "object",
-      "properties": {
-        "owner": {
-          "type": "string"
-        },
-        "database": {
-          "type": "string"
-        },
-        "query": {
-          "type": "string"
-        },
-        "inputs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/apisvcCRUDInput"
-          }
-        }
-      }
-    },
-    "apisvcEstimateCostResponse": {
-      "type": "object",
-      "properties": {
-        "fee": {
-          "type": "string"
-        }
-      }
-    },
     "apisvcGetBalanceResponse": {
       "type": "object",
       "properties": {
@@ -746,6 +718,84 @@
           "type": "string"
         },
         "traceId": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingCRUDInput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateDeleteRequest": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateDeployRequest": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateQueryRequest": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "crud": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pricingCRUDInput"
+          }
+        }
+      }
+    },
+    "pricingEstimateRequest": {
+      "type": "object",
+      "properties": {
+        "caller": {
+          "type": "string"
+        },
+        "deploy": {
+          "$ref": "#/definitions/pricingEstimateDeployRequest"
+        },
+        "delete": {
+          "$ref": "#/definitions/pricingEstimateDeleteRequest"
+        },
+        "query": {
+          "$ref": "#/definitions/pricingEstimateQueryRequest"
+        }
+      }
+    },
+    "pricingEstimateResponse": {
+      "type": "object",
+      "properties": {
+        "price": {
           "type": "string"
         }
       }

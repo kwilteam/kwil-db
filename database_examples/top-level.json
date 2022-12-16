@@ -1,0 +1,9 @@
+{
+    "owner": "0x0000000000000000000000000000000000000000",
+    "name": "my_database_name",
+    "default_role": "default_role_name",
+    "tables":[],
+    "sql_queries": [],
+    "roles": [],
+    "indexes": []
+}

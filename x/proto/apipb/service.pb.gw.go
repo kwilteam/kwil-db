@@ -11,6 +11,7 @@ package apipb
 import (
 	"context"
 	"io"
+	"kwil/x/pricing/entity"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -344,7 +345,7 @@ func local_request_KwilService_ReturnFunds_0(ctx context.Context, marshaler runt
 }
 
 func request_KwilService_EstimateCost_0(ctx context.Context, marshaler runtime.Marshaler, client KwilServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq EstimateCostRequest
+	var protoReq entity.EstimateRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -361,7 +362,7 @@ func request_KwilService_EstimateCost_0(ctx context.Context, marshaler runtime.M
 }
 
 func local_request_KwilService_EstimateCost_0(ctx context.Context, marshaler runtime.Marshaler, server KwilServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq EstimateCostRequest
+	var protoReq entity.EstimateRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -591,7 +592,7 @@ func RegisterKwilServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/apisvc.KwilService/EstimateCost", runtime.WithHTTPPathPattern("/api/v0/wallets/estimate"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/apisvc.KwilService/EstimateCost", runtime.WithHTTPPathPattern("/api/v0/pricing/estimate"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -831,7 +832,7 @@ func RegisterKwilServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/apisvc.KwilService/EstimateCost", runtime.WithHTTPPathPattern("/api/v0/wallets/estimate"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/apisvc.KwilService/EstimateCost", runtime.WithHTTPPathPattern("/api/v0/pricing/estimate"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -867,7 +868,7 @@ var (
 
 	pattern_KwilService_ReturnFunds_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v0", "wallets", "withdraw"}, ""))
 
-	pattern_KwilService_EstimateCost_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v0", "wallets", "estimate"}, ""))
+	pattern_KwilService_EstimateCost_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "v0", "pricing", "estimate"}, ""))
 )
 
 var (

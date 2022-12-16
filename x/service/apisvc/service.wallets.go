@@ -2,21 +2,21 @@ package apisvc
 
 import (
 	"context"
+	pricing "kwil/x/pricing/entity"
 	"kwil/x/proto/apipb"
 )
 
 func (s *Service) Connect(ctx context.Context, req *apipb.ConnectRequest) (*apipb.ConnectResponse, error) {
-	return &apipb.ConnectResponse{Address: "0x00000000"}, nil
+	return &apipb.ConnectResponse{Address: "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D"}, nil
 }
 
-func (s *Service) EstimateCost(ctx context.Context, req *apipb.EstimateCostRequest) (*apipb.EstimateCostResponse, error) {
-	p, err := s.p.GetPrice(ctx)
+// right now this uses the pricing entity but not the service
+func (s *Service) EstimateCost(ctx context.Context, req *pricing.EstimateRequest) (*pricing.EstimateResponse, error) {
+	p, err := s.p.EstimatePrice(req)
 	if err != nil {
 		return nil, err
 	}
-	return &apipb.EstimateCostResponse{
-		Fee: p.String(),
-	}, nil
+	return p, nil
 }
 
 /*
