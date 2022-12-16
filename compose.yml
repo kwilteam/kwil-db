@@ -13,7 +13,6 @@ services:
       DEPOSITS_WALLET_KEY: 274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988
       PG_DATABASE_URL: "postgres://$PG_USER:$PG_PASSWORD@$PG_ENDPOINT:$PG_PORT/$PG_DB?sslmode=$PG_SSL_MODE"
       WITH_GATEWAY: true
-
       GRPC_CONTAINER_ENDPOINT: kwild:50051
       KWIL_GRAPHQL_ENDPOINT: http://graphql-engine:8080
       ## uncomment next 2 lines if HASURA_GRAPHQL_ADMIN_SECRET is set in Hasura container
@@ -31,12 +30,12 @@ services:
       - "postgres_db"
       - "graphql-engine"
     networks:
-      - kwil-gateway
-      - kwil-backend
+      - gateway
+      - backend
   postgres_db:
     container_name: postgres_db
     image: postgres:15.0-alpine
-    restart: always
+    #restart: always
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -51,7 +50,7 @@ services:
       # copy the sql script to create tables
       - ./scripts/pg-init-scripts/:/docker-entrypoint-initdb.d/
     networks:
-      - kwil-backend
+      - backend
   graphql-engine:
     container_name: graphql-engine
     image: hasura/graphql-engine:v2.16.0
@@ -67,7 +66,7 @@ services:
       PG_DATABASE_URL: "postgres://$PG_USER:$PG_PASSWORD@$PG_ENDPOINT:$PG_PORT/$PG_DB?sslmode=$PG_SSL_MODE"
 
       ## postgres database to store Hasura metadata
-      HASURA_GRAPHQL_METADATA_DATABASE_URL: "$PG_USER:$PG_PASSWORD@$PG_ENDPOINT:$PG_PORT/postgres?sslmode=$PG_SSL_MODE"
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: "postgres://$PG_USER:$PG_PASSWORD@$PG_ENDPOINT:$PG_PORT/postgres?sslmode=$PG_SSL_MODE"
 
       ## enable the console served by server
       HASURA_GRAPHQL_ENABLE_CONSOLE: "true" # set to "false" to disable console
@@ -82,12 +81,11 @@ services:
       # HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
       ## uncomment next line to set an access key for Hasura's CLI
     networks:
-      - kwil-backend
-
+      - backend
 networks:
-  kwil-gateway:
+  gateway:
     external: false
-    name: kwil-gateway
-  kwil-backend:
+    name: gateway
+  backend:
     external: false
-    name: kwil-backend
+    name: backend
