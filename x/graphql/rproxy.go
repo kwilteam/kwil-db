@@ -2,9 +2,11 @@ package graphql
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"kwil/x/graphql/hasura"
+	"kwil/x/graphql/misc"
 	"kwil/x/logx"
 	"log"
 	"net/http"
@@ -14,6 +16,10 @@ import (
 	"github.com/spf13/viper"
 	"github.com/vektah/gqlparser/gqlerror"
 )
+
+type graphqlReq struct {
+	Query string `json:"query"`
+}
 
 type RProxy struct {
 	logger logx.SugaredLogger
@@ -43,17 +49,25 @@ func (g *RProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			g.logger.Errorf("parse request failed: %s", err.Error())
-			if e := jsonError(w, fmt.Errorf("parse request failed"), http.StatusInternalServerError); e != nil {
+			if e := misc.JsonError(w, fmt.Errorf("parse request failed"), http.StatusInternalServerError); e != nil {
 				g.logger.Errorf("write response failed: %s", e.Error())
 			}
 			return
 		}
 
-		bodyString := string(bodyBytes)
-		if isMutation(bodyString) {
+		var body graphqlReq
+		if err := json.Unmarshal(bodyBytes, &body); err != nil {
+			g.logger.Errorf("parse request failed: %s", err.Error())
+			if e := misc.JsonError(w, fmt.Errorf("parse request failed"), http.StatusBadRequest); e != nil {
+				g.logger.Errorf("write response failed: %s", e.Error())
+			}
+			return
+		}
+
+		if misc.IsMutation(body.Query) {
 			err := gqlerror.Errorf("Only query is allowed")
 			g.logger.Errorf("bad request: %s", err.Error())
-			if e := jsonError(w, err, http.StatusBadRequest); e != nil {
+			if e := misc.JsonError(w, err, http.StatusBadRequest); e != nil {
 				g.logger.Errorf("write reponse failed: %s", e.Error())
 			}
 			return

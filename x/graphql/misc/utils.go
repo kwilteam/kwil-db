@@ -1,4 +1,4 @@
-package graphql
+package misc
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func isMutation(query string) bool {
+func IsMutation(query string) bool {
 	// NOTE: enough to correctly block most mutations
 	var operations []string
 	rightBracket := -1
@@ -35,7 +35,7 @@ func isMutation(query string) bool {
 	return false
 }
 
-func jsonError(w http.ResponseWriter, err error, code int) error {
+func JsonError(w http.ResponseWriter, err error, code int) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	return json.NewEncoder(w).Encode(err)

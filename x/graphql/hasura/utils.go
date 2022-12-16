@@ -36,7 +36,7 @@ func queryToExplain(query string) string {
 func Initialize() {
 	for {
 		time.Sleep(3 * time.Second)
-		client := NewClient(viper.GetString("graphql"))
+		client := NewClient(viper.GetString(GraphqlEndpointName))
 		err := client.AddDefaultSourceAndSchema()
 		if err != nil && strings.Contains(err.Error(), "connection refused") {
 			fmt.Println("wait for Hasura running...")

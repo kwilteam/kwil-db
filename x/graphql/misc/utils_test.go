@@ -1,4 +1,4 @@
-package graphql
+package misc
 
 import "testing"
 
@@ -45,7 +45,7 @@ func Test_isMutation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isMutation(tt.args.query); got != tt.want {
+			if got := IsMutation(tt.args.query); got != tt.want {
 				t.Errorf("isMutation() = %v, want %v", got, tt.want)
 			}
 		})

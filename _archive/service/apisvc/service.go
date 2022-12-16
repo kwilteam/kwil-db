@@ -2,6 +2,7 @@ package apisvc
 
 import (
 	"encoding/json"
+	gm "kwil/x/graphql/manager"
 	"kwil/x/logx"
 	pricing "kwil/x/pricing/service"
 	"kwil/x/proto/apipb"
@@ -15,13 +16,16 @@ type Service struct {
 	log     logx.Logger
 	p       pricing.PricingService
 	manager *manager.Manager
+	// hasura manager
+	hm gm.Client
 }
 
-func NewService(mngr *manager.Manager) *Service {
+func NewService(mngr *manager.Manager, hm gm.Client) *Service {
 	return &Service{
 		log:     logx.New(),
 		p:       pricing.NewService(),
 		manager: mngr,
+		hm:      hm,
 	}
 }
 

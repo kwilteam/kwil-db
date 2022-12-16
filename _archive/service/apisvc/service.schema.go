@@ -67,6 +67,14 @@ func (s *Service) DeploySchema(ctx context.Context, req *apipb.DeploySchemaReque
 		return nil, err
 	}
 
+	// track table in Hasura
+	for _, t := range db.Tables {
+		err = s.hm.TrackTable("default", db.GetSchemaName(), t.Name)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &apipb.DeploySchemaResponse{
 		Txid: tx.Id,
 		Msg:  "success",
@@ -117,6 +125,19 @@ func (s *Service) DropSchema(ctx context.Context, req *apipb.DropSchemaRequest) 
 	}
 
 	dbName := strings.ToLower(body.Name + "_" + body.Owner)
+
+	// untrack table in Hasura, need to be called before schema is dropped
+	db, err := s.manager.GetDatabase(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, t := range db.Tables {
+		err = s.hm.UntrackTable("default", db.GetSchemaName(), t.Name)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	err = s.manager.Deployment.Delete(ctx, dbName)
 	if err != nil {

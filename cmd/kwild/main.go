@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/async"
+	gmisc "kwil/x/graphql/misc"
 	"kwil/x/sqlx/env"
 	"kwil/x/sqlx/sqlclient"
 	"net"
@@ -43,6 +44,10 @@ func execute(logger logx.Logger) error {
 	}
 
 	httpHandler := NewHandler(logger)
+	// TODO:
+	//hasuraManager := hasura.NewClient(viper.GetString(hasura.GraphqlEndpointName))
+	//apiService := apisvc.NewService(mngr, hasuraManager)
+	//httpHandler := apisvc.NewHandler(logger)
 
 	return serve(ctx, logger, deposits, httpHandler)
 }
@@ -120,6 +125,8 @@ func main() {
 		logger.Sugar().Error(err)
 		os.Exit(1)
 	}
+
+	gmisc.CliBindEnv()
 
 	kwild := func() error {
 		return execute(logger)

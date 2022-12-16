@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"kwil/x/graphql"
+	gmisc "kwil/x/graphql/misc"
 	"kwil/x/proto/apipb"
 	"net/http"
 	"os"
@@ -82,12 +83,9 @@ func Start() error {
 		return err
 	}
 
-	err = viper.BindEnv("endpoint", grpcEndpointEnv)
-	if err != nil {
-		return err
-	}
+	viper.BindEnv("endpoint", grpcEndpointEnv)
 
-	graphql.CliSetup(cmd)
+	gmisc.CliSetup(cmd)
 
 	return cmd.Execute()
 }
