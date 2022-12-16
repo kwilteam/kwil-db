@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"kwil/x/deposits/structures"
+	"kwil/x/deposits_old/structures"
 )
 
 type mockWithdrawal struct {

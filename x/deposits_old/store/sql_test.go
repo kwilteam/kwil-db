@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"testing"
 
-	ks "kwil/x/deposits/store"
+	ks "kwil/x/deposits_old/store"
 )
 
 func Test_SQLStore(t *testing.T) {

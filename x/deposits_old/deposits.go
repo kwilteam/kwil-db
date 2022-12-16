@@ -300,7 +300,7 @@ func (d *deposits) Sync(ctx context.Context) error {
 			err = d.sql.Deposit(ctx, ttx, dep.Caller, dep.Amount, chunk[0])
 			if err != nil {
 				d.log.Errorf("failed to deposit %s. %v", dep.Tx, err)
-				return err // we want to return here since there is a major error
+				continue
 			}
 		}
 

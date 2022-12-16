@@ -3,7 +3,7 @@ package structures_test
 import (
 	"testing"
 
-	"kwil/x/deposits/structures"
+	"kwil/x/deposits_old/structures"
 
 	"github.com/stretchr/testify/assert"
 )

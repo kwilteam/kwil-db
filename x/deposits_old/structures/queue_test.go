@@ -1,7 +1,7 @@
 package structures_test
 
 import (
-	events "kwil/x/deposits/structures"
+	events "kwil/x/deposits_old/structures"
 	"testing"
 )
 
