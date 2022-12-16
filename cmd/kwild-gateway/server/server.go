@@ -56,7 +56,7 @@ func Start() error {
 
 			http_port := os.Getenv("GATEWAY_HTTP_PORT")
 			if http_port == "" {
-				http_port = ":8080"
+				http_port = ":8082"
 			} else if http_port[0] != ':' {
 				http_port = ":" + http_port
 			}
