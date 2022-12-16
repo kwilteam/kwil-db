@@ -58,17 +58,17 @@ func PanicIfError(err error) {
 func Coalesce[T comparable](check T, alt T) T {
 	var d T
 	if check == d {
-		return check
+		return alt
 	}
-	return alt
+	return check
 }
 
 func CoalesceF[T comparable](check T, alt func() T) T {
 	var d T
 	if check == d {
-		return check
+		return alt()
 	}
-	return alt()
+	return check
 }
 
 func Any[T comparable](compare T, params ...T) bool {

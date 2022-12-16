@@ -5,13 +5,6 @@ withdrawal-expiration: 100
 chain: eth-goerli
 provider-endpoint: wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41
 contract-address: 0xb0a194286A901FeAEA39D2b765247BEd64aD4F41
-db:
-  host: localhost
-  port: 5432
-  user: postgres
-  password: postgres
-  database: kwil
-  SSL: false
 keys:
   key-path: "./keys/ethereum.pem"
 sync:
