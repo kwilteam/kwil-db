@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"kwil/abi"
-	ct "kwil/x/deposits/types"
+	ct "kwil/x/deposits_old/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"

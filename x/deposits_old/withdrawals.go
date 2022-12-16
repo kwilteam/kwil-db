@@ -3,7 +3,7 @@ package deposits
 import (
 	"context"
 	"errors"
-	"kwil/x/deposits/types"
+	"kwil/x/deposits_old/types"
 	"math/big"
 	"math/rand"
 )

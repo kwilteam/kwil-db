@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/crypto"
+	"kwil/x/pricing"
 	"kwil/x/proto/apipb"
 	"kwil/x/sqlx/models"
 )
@@ -28,14 +29,13 @@ func (s *Service) Write(ctx context.Context, req *apipb.WriteRequest) (*apipb.Wr
 	if !ok {
 		return nil, fmt.Errorf("invalid fee")
 	}
-
-	price, err := s.p.GetPrice(ctx)
+	price, err := s.p.GetPrice(pricing.Query)
 	if err != nil {
 		return nil, err
 	}
 
 	// check price is enough
-	if fee.Cmp(price) > 0 { // TODO: invert this comparison
+	if fee.Cmp(price) < 0 {
 		return nil, fmt.Errorf("price is not enough")
 	}
 

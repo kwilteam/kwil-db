@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"kwil/abi"
-	ct "kwil/x/deposits/types"
+	ct "kwil/x/deposits_old/types"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

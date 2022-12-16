@@ -1,5 +1,5 @@
 syntax = "proto3";
-package entity;
+package pricing;
 option go_package = "kwil/x/pricing/entity";
 
 //import "google/api/annotations.proto";
@@ -33,4 +33,8 @@ message EstimateQueryRequest {
     string owner = 2;
     string query = 3;
     repeated CRUDInput crud = 4;
+}
+
+message EstimateResponse {
+    string price = 1;
 }

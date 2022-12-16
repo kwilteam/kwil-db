@@ -3,10 +3,10 @@ package chainclient
 import (
 	"errors"
 
-	"kwil/x/deposits/types"
+	"kwil/x/deposits_old/types"
 	"kwil/x/logx"
 
-	"kwil/x/deposits/chainclient/evmclient"
+	"kwil/x/deposits_old/chainclient/evmclient"
 )
 
 type clientBuilder struct {

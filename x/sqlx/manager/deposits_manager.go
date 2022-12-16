@@ -3,7 +3,7 @@ package manager
 import (
 	"context"
 	"kwil/x/cfgx"
-	deposit_store "kwil/x/deposits/store"
+	deposit_store "kwil/x/deposits_old/store"
 	"kwil/x/sqlx/sqlclient"
 )
 

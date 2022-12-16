@@ -10,9 +10,9 @@ import (
 
 	"kwil/x/cfgx"
 	kc "kwil/x/crypto"
-	"kwil/x/deposits/events"
-	sql "kwil/x/deposits/store"
-	"kwil/x/deposits/types"
+	"kwil/x/deposits_old/events"
+	sql "kwil/x/deposits_old/store"
+	"kwil/x/deposits_old/types"
 	"kwil/x/logx"
 )
 

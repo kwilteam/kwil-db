@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"kwil/x/cfgx"
-	cc "kwil/x/deposits/chainclient"
-	"kwil/x/deposits/structures"
-	ct "kwil/x/deposits/types"
+	cc "kwil/x/deposits_old/chainclient"
+	"kwil/x/deposits_old/structures"
+	ct "kwil/x/deposits_old/types"
 
 	"kwil/x/logx"
 )

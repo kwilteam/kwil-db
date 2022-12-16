@@ -3,7 +3,7 @@ package apisvc
 import (
 	"encoding/json"
 	"kwil/x/logx"
-	"kwil/x/pricing"
+	pricing "kwil/x/pricing/service"
 	"kwil/x/proto/apipb"
 	"kwil/x/sqlx/manager"
 	"kwil/x/sqlx/models"

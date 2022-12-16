@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"kwil/x/deposits/types"
+	"kwil/x/deposits_old/types"
 	"kwil/x/lease"
 	"kwil/x/sqlx/sqlclient"
 	"math/big"
@@ -105,7 +105,7 @@ func (s *depositStore) SetHeight(ctx context.Context, h int64) error {
 
 func (s *depositStore) GetHeight(ctx context.Context) (int64, error) {
 	var h int64
-	err := s.QueryRow(ctx, "SELECT get_height()").Scan(&h)
+	err := s.QueryRow(ctx, "SELECT * from get_height()").Scan(&h)
 	return h, err
 }
 

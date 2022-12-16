@@ -4,7 +4,7 @@ import (
 	"math/big"
 
 	"kwil/abi"
-	ct "kwil/x/deposits/types"
+	ct "kwil/x/deposits_old/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"

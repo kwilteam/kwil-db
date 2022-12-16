@@ -5,8 +5,8 @@ import (
 	"errors"
 	"math/big"
 
-	esc "kwil/x/deposits/chainclient/evmclient/contracts"
-	ct "kwil/x/deposits/types"
+	esc "kwil/x/deposits_old/chainclient/evmclient/contracts"
+	ct "kwil/x/deposits_old/types"
 	"kwil/x/logx"
 
 	"github.com/ethereum/go-ethereum/core/types"
