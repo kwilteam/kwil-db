@@ -10,21 +10,29 @@ import (
 )
 
 const getHeight = `-- name: GetHeight :one
-SELECT height FROM height LIMIT 1
+SELECT
+    height
+FROM
+    height
+LIMIT
+    1
 `
 
 func (q *Queries) GetHeight(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getHeight)
+	row := q.queryRow(ctx, q.getHeightStmt, getHeight)
 	var height int64
 	err := row.Scan(&height)
 	return height, err
 }
 
 const setHeight = `-- name: SetHeight :exec
-UPDATE height SET height = $1
+UPDATE
+    height
+SET
+    height = $1
 `
 
 func (q *Queries) SetHeight(ctx context.Context, height int64) error {
-	_, err := q.db.ExecContext(ctx, setHeight, height)
+	_, err := q.exec(ctx, q.setHeightStmt, setHeight, height)
 	return err
 }

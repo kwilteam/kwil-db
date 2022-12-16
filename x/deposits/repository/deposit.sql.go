@@ -7,36 +7,42 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 )
 
 const commitDeposits = `-- name: CommitDeposits :exec
-UPDATE wallets
-SET balance = balance + deposits.amount
-FROM deposits
-WHERE deposits.height <= $1
-AND deposits.wallet = wallets.wallet
+UPDATE
+    wallets
+SET
+    balance = balance + deposits.amount
+FROM
+    deposits
+WHERE
+    deposits.height <= $1
+    AND deposits.wallet = wallets.wallet
 `
 
-func (q *Queries) CommitDeposits(ctx context.Context, height sql.NullInt64) error {
-	_, err := q.db.ExecContext(ctx, commitDeposits, height)
+func (q *Queries) CommitDeposits(ctx context.Context, height int64) error {
+	_, err := q.exec(ctx, q.commitDepositsStmt, commitDeposits, height)
 	return err
 }
 
 const deposit = `-- name: Deposit :exec
-INSERT INTO deposits (txid, wallet, amount, height) VALUES ($1, $2, $3, $4)
+INSERT INTO
+    deposits (tx_hash, wallet, amount, height)
+VALUES
+    ($1, $2, $3, $4)
 `
 
 type DepositParams struct {
-	Txid   string
+	TxHash string
 	Wallet string
-	Amount sql.NullString
-	Height sql.NullInt64
+	Amount string
+	Height int64
 }
 
-func (q *Queries) Deposit(ctx context.Context, arg DepositParams) error {
-	_, err := q.db.ExecContext(ctx, deposit,
-		arg.Txid,
+func (q *Queries) Deposit(ctx context.Context, arg *DepositParams) error {
+	_, err := q.exec(ctx, q.depositStmt, deposit,
+		arg.TxHash,
 		arg.Wallet,
 		arg.Amount,
 		arg.Height,
