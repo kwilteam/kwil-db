@@ -10,10 +10,14 @@ import (
 )
 
 const spend = `-- name: Spend :exec
-UPDATE wallets
-SET balance = balance - $2, spent = spent + $2
-WHERE wallet = $1
-AND balance >= $2
+UPDATE
+   wallets
+SET
+   balance = balance - $2,
+   spent = spent + $2
+WHERE
+   wallet = $1
+   AND balance >= $2
 `
 
 type SpendParams struct {
@@ -21,7 +25,7 @@ type SpendParams struct {
 	Balance string
 }
 
-func (q *Queries) Spend(ctx context.Context, arg SpendParams) error {
-	_, err := q.db.ExecContext(ctx, spend, arg.Wallet, arg.Balance)
+func (q *Queries) Spend(ctx context.Context, arg *SpendParams) error {
+	_, err := q.exec(ctx, q.spendStmt, spend, arg.Wallet, arg.Balance)
 	return err
 }
