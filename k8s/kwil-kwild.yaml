@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kwil-kwild-deployment
+  labels:
+    kwil/deploy: kwild
+    kwil/component: core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      kwil/app: kwild
+  template:
+    metadata:
+      labels:
+        kwil/app: kwild
+    spec:
+      containers:
+      - name: kwild
+        image: kwild:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8082
+          name: kwil-gw-svc
+        - containerPort: 50051
+          name: kwil-grpc-svc
+        env:
+        - name: GATEWAY_CORS
+          value: "*"
+        - name: GATEWAY_HTTP_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: kwil-kwild-config
+              key: http-port
+        - name: PG_USER
+          valueFrom:
+            secretKeyRef:
+              name: kwil-postgres-secret
+              key: user
+        - name: PG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kwil-postgres-secret
+              key: password
+        - name: PG_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: kwil-postgres-config
+              key: host
+        - name: PG_SSL_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: kwil-postgres-config
+              key: ssl-mode
+        - name: PG_DEFAULT_DB
+          valueFrom:
+            configMapKeyRef:
+              name: kwil-postgres-config
+              key: database
+        - name: PG_DATABASE_URL
+          value: "postgres://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST)/$(PG_DEFAULT_DB)?sslmode=$(PG_SSL_MODE)"
+        - name: WITH_GATEWAY
+          value: "true"
+        - name: GRPC_CONTAINER_ENDPOINT
+          value: "localhost:50051"
+        - name: KWIL_GRAPHQL_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: kwil-hasura-config
+              key: graphql-host
+        - name: KWIL_GRAPHQL_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: kwil-hasura-config
+              key: graphql-port
+        - name: KWIL_GRAPHQL_ENDPOINT
+          value: "http://$(KWIL_GRAPHQL_HOST):$(KWIL_GRAPHQL_PORT)"
+        volumeMounts: # mount into container
+          - name: keys-mnt
+            mountPath: /app/keys.json
+            subPath: keys.json
+            readOnly: true
+      initContainers:
+        - name: init-wait-db-service
+          image: busybox:1.35.0
+          imagePullPolicy: IfNotPresent
+          # TODO: using template
+          command: ['sh', '-c', "until nslookup kwil-postgres-service.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for kwil-postgres-service; sleep 2; done"]
+        - name: init-wait-graphql-service
+          image: busybox:1.35.0
+          imagePullPolicy: IfNotPresent
+          # TODO: using template
+          command: ['sh', '-c', "until nslookup kwil-hasura-service.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for kwil-postgres-service; sleep 2; done"]          
+        - name: init-wait-postgres
+          image: busybox:1.35.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PG_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: kwil-postgres-config
+                  key: host
+            - name: PG_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: kwil-postgres-config
+                  key: port
+          command: ["sh", "-c", "echo scan ${PG_HOST}:${PG_PORT}; for i in $(seq 1 300); do nc -zvw1 ${PG_HOST} ${PG_PORT} && exit 0 || sleep 3; done; exit 1"]      
+        - name: init-wait-hasura
+          image: busybox:1.35.0
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: KWIL_GRAPHQL_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: kwil-hasura-config
+                key: graphql-host
+          - name: KWIL_GRAPHQL_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: kwil-hasura-config
+                key: graphql-port
+          - name: KWIL_GRAPHQL_ENDPOINT
+            value: "http://$(KWIL_GRAPHQL_HOST):$(KWIL_GRAPHQL_PORT)"
+          command: ["sh", "-c", "echo scan ${KWIL_GRAPHQL_HOST}:${KWIL_GRAPHQL_PORT}; for i in $(seq 1 300); do nc -zvw1 ${KWIL_GRAPHQL_HOST} ${KWIL_GRAPHQL_PORT} && exit 0 || sleep 3; done; exit 1"]
+      volumes: # mount into pod
+      - name: keys-mnt
+        configMap:
+          name: kwil-kwild-config-file
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kwil-kwild-service
+spec:
+  selector:
+    kwil/app: kwild
+  type: NodePort
+  ports:
+    - name: kwil-gw
+      protocol: TCP
+      port: 8082
+      targetPort: 8082
+      nodePort: 32102
+    - name: kwil-grpc
+      protocol: TCP
+      port: 50051
+      targetPort: 50051
+      nodePort: 32101

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kwil-postgres-deployment
+  labels:
+    kwil/deploy: postgres
+    kwil/component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      kwil/app: postgres
+  template:
+    metadata:
+      labels:
+        kwil/app: postgres
+    spec:
+      containers:
+      - name: kwil-postgres
+        image: postgres:15.0-alpine
+        ports:
+        - containerPort: 5432
+          name: kwil-db-svc
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: kwil-postgres-secret
+              key: user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kwil-postgres-secret
+              key: password
+        volumeMounts: # mount into container
+          - name: scripts-mnt
+            mountPath: "/docker-entrypoint-initdb.d"
+            readOnly: true
+      volumes: # mount into pod
+      - name: scripts-mnt
+        configMap:
+          name: kwil-postgres-config-file
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kwil-postgres-service
+spec:
+  type: NodePort
+  selector:
+    kwil/app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+      nodePort: 32103
