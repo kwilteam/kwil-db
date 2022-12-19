@@ -16,12 +16,14 @@ type DepositsService interface {
 
 type depositsService struct {
 	doa              *repository.Queries
+	db               sqlclient.DB
 	expirationPeriod int64
 }
 
 func NewService(db sqlclient.DB) DepositsService {
 	return &depositsService{
 		doa:              repository.New(db),
+		db:               db,
 		expirationPeriod: 100,
 	}
 }
