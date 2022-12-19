@@ -12,9 +12,19 @@ import (
 	"time"
 )
 
+// StartWithdrawal begins the withdrawal process.  It will alter a user's balance and assign a correlation ID, which will be used to track the withdrawal on-chain.
 func (s *depositsService) StartWithdrawal(ctx context.Context, withdrawal dto.StartWithdrawal) error {
+	// start a transaction
+	tx, err := s.db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin db transaction for withdrawal: %w", err)
+	}
+	defer tx.Rollback()
+
+	qtx := s.doa.WithTx(tx)
+
 	// will start by getting the wallet balance
-	wallet, err := s.doa.GetBalanceAndSpent(ctx, withdrawal.Wallet)
+	wallet, err := qtx.GetBalanceAndSpent(ctx, withdrawal.Wallet)
 	if err != nil {
 		return err
 	}
@@ -31,7 +41,7 @@ func (s *depositsService) StartWithdrawal(ctx context.Context, withdrawal dto.St
 	}
 
 	// get the current block height
-	blockHeight, err := s.doa.GetHeight(ctx)
+	blockHeight, err := qtx.GetHeight(ctx)
 	if err != nil {
 		return err
 	}
@@ -42,13 +52,19 @@ func (s *depositsService) StartWithdrawal(ctx context.Context, withdrawal dto.St
 		return err
 	}
 
-	return s.doa.NewWithdrawal(ctx, &repository.NewWithdrawalParams{
+	err = qtx.NewWithdrawal(ctx, &repository.NewWithdrawalParams{
 		CorrelationID: correlationId,
 		WalletID:      wallet.ID,
 		Amount:        withdrawal.Amount,
 		Fee:           wallet.Spent,
 		Expiry:        blockHeight + s.expirationPeriod,
 	})
+
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // generateCid generates a correlation id for the withdrawal.

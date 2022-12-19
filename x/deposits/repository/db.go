@@ -24,14 +24,17 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
-	if q.addTxStmt, err = db.PrepareContext(ctx, addTx); err != nil {
-		return nil, fmt.Errorf("error preparing query AddTx: %w", err)
+	if q.addTxHashStmt, err = db.PrepareContext(ctx, addTxHash); err != nil {
+		return nil, fmt.Errorf("error preparing query AddTxHash: %w", err)
 	}
 	if q.commitDepositsStmt, err = db.PrepareContext(ctx, commitDeposits); err != nil {
 		return nil, fmt.Errorf("error preparing query CommitDeposits: %w", err)
 	}
 	if q.depositStmt, err = db.PrepareContext(ctx, deposit); err != nil {
 		return nil, fmt.Errorf("error preparing query Deposit: %w", err)
+	}
+	if q.expireStmt, err = db.PrepareContext(ctx, expire); err != nil {
+		return nil, fmt.Errorf("error preparing query Expire: %w", err)
 	}
 	if q.getBalanceAndSpentStmt, err = db.PrepareContext(ctx, getBalanceAndSpent); err != nil {
 		return nil, fmt.Errorf("error preparing query GetBalanceAndSpent: %w", err)
@@ -56,9 +59,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 
 func (q *Queries) Close() error {
 	var err error
-	if q.addTxStmt != nil {
-		if cerr := q.addTxStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing addTxStmt: %w", cerr)
+	if q.addTxHashStmt != nil {
+		if cerr := q.addTxHashStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing addTxHashStmt: %w", cerr)
 		}
 	}
 	if q.commitDepositsStmt != nil {
@@ -69,6 +72,11 @@ func (q *Queries) Close() error {
 	if q.depositStmt != nil {
 		if cerr := q.depositStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing depositStmt: %w", cerr)
+		}
+	}
+	if q.expireStmt != nil {
+		if cerr := q.expireStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing expireStmt: %w", cerr)
 		}
 	}
 	if q.getBalanceAndSpentStmt != nil {
@@ -140,9 +148,10 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 type Queries struct {
 	db                     DBTX
 	tx                     *sql.Tx
-	addTxStmt              *sql.Stmt
+	addTxHashStmt          *sql.Stmt
 	commitDepositsStmt     *sql.Stmt
 	depositStmt            *sql.Stmt
+	expireStmt             *sql.Stmt
 	getBalanceAndSpentStmt *sql.Stmt
 	getHeightStmt          *sql.Stmt
 	newWithdrawalStmt      *sql.Stmt
@@ -155,9 +164,10 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
 		db:                     tx,
 		tx:                     tx,
-		addTxStmt:              q.addTxStmt,
+		addTxHashStmt:          q.addTxHashStmt,
 		commitDepositsStmt:     q.commitDepositsStmt,
 		depositStmt:            q.depositStmt,
+		expireStmt:             q.expireStmt,
 		getBalanceAndSpentStmt: q.getBalanceAndSpentStmt,
 		getHeightStmt:          q.getHeightStmt,
 		newWithdrawalStmt:      q.newWithdrawalStmt,

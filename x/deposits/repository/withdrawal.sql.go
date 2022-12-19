@@ -10,7 +10,7 @@ import (
 	"database/sql"
 )
 
-const addTx = `-- name: AddTx :exec
+const addTxHash = `-- name: AddTxHash :exec
 UPDATE
     withdrawals
 SET
@@ -19,13 +19,25 @@ WHERE
     correlation_id = $2
 `
 
-type AddTxParams struct {
+type AddTxHashParams struct {
 	TxHash        sql.NullString
 	CorrelationID string
 }
 
-func (q *Queries) AddTx(ctx context.Context, arg *AddTxParams) error {
-	_, err := q.exec(ctx, q.addTxStmt, addTx, arg.TxHash, arg.CorrelationID)
+func (q *Queries) AddTxHash(ctx context.Context, arg *AddTxHashParams) error {
+	_, err := q.exec(ctx, q.addTxHashStmt, addTxHash, arg.TxHash, arg.CorrelationID)
+	return err
+}
+
+const expire = `-- name: Expire :exec
+DELETE FROM
+    withdrawals
+WHERE
+    expiry <= $1
+`
+
+func (q *Queries) Expire(ctx context.Context, expiry int64) error {
+	_, err := q.exec(ctx, q.expireStmt, expire, expiry)
 	return err
 }
 

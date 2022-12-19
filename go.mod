@@ -31,6 +31,7 @@ require (
 )
 
 require (
+	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/sync v0.0.0-20220923202941-7f9b1623fab7 // indirect

@@ -28,11 +28,12 @@ CREATE TABLE IF NOT EXISTS wallet_info (
  );
   -- NETWORK_METADATA
 CREATE TABLE IF NOT EXISTS public.wallets (
-        id SERIAL PRIMARY KEY,
-        wallet VARCHAR(44) NOT NULL UNIQUE,
-        balance NUMERIC(78) DEFAULT '0',
-        spent NUMERIC(78) DEFAULT '0'
-    );
+		id SERIAL PRIMARY KEY,
+		wallet VARCHAR(44) NOT NULL UNIQUE,
+		balance NUMERIC(78) DEFAULT '0',
+		spent NUMERIC(78) DEFAULT '0'
+	);
+
 CREATE TABLE IF NOT EXISTS public.databases(
     id SERIAL PRIMARY KEY,
     dbs_name VARCHAR(63) NOT NULL UNIQUE,

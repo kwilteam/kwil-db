@@ -4,10 +4,16 @@ INSERT INTO
 VALUES
     ($1, $2, $3, $4, $5);
 
--- name: AddTx :exec
+-- name: AddTxHash :exec
 UPDATE
     withdrawals
 SET
     tx_hash = $1
 WHERE
     correlation_id = $2;
+
+-- name: Expire :exec
+DELETE FROM
+    withdrawals
+WHERE
+    expiry <= $1;

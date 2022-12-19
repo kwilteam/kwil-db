@@ -34,6 +34,10 @@ func AddressFromPrivateKey(key string) (string, error) {
 	return caddr.Hex(), nil
 }
 
+func HexFromECDSAPrivateKey(key *ecdsa.PrivateKey) string {
+	return hexutil.Encode(ec.FromECDSA(key))
+}
+
 func CheckSignature(addr, sig string, data []byte) (bool, error) {
 	if len(sig) < 2 {
 		return false, fmt.Errorf("invalid signature")
