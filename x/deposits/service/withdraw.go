@@ -21,7 +21,7 @@ func (s *depositsService) StartWithdrawal(ctx context.Context, withdrawal dto.St
 	}
 	defer tx.Rollback()
 
-	qtx := s.doa.WithTx(tx)
+	qtx := s.dao.WithTx(tx)
 
 	// will start by getting the wallet balance
 	wallet, err := qtx.GetBalanceAndSpent(ctx, withdrawal.Wallet)

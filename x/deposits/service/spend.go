@@ -7,14 +7,14 @@ import (
 )
 
 func (s *depositsService) Spend(ctx context.Context, spend dto.Spend) error {
-	return s.doa.Spend(ctx, &repository.SpendParams{
+	return s.dao.Spend(ctx, &repository.SpendParams{
 		Wallet:  spend.Wallet,
 		Balance: spend.Amount,
 	})
 }
 
 func (s *depositsService) GetBalancesAndSpent(ctx context.Context, wallet string) (*dto.Balance, error) {
-	res, err := s.doa.GetBalanceAndSpent(ctx, wallet)
+	res, err := s.dao.GetBalanceAndSpent(ctx, wallet)
 	if err != nil {
 		return nil, err
 	}

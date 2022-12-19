@@ -8,7 +8,7 @@ import (
 )
 
 func (s *depositsService) Deposit(ctx context.Context, deposit dto.Deposit) error {
-	return s.doa.Deposit(ctx, &repository.DepositParams{
+	return s.dao.Deposit(ctx, &repository.DepositParams{
 		Wallet: strings.ToLower(deposit.Wallet),
 		Amount: deposit.Amount,
 		TxHash: deposit.TxHash,
