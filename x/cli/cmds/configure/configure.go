@@ -50,7 +50,7 @@ func NewCmdConfigure() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
+			// TODO: the connect prompt does not use the endpoint if it was just set.  not sure why but should be fixed
 			v.Set("endpoint", endpoint)
 			v.Set("api-key", apiKey)
 
