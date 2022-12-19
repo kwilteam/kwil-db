@@ -17,13 +17,14 @@ COPY *.yaml ./dist
 COPY *.yml ./dist
 COPY ./keys/ ./dist/keys/
 COPY ./abi/ ./dist/abi/
-COPY ./kwild-gateway-meta-config.yaml ./dist/meta-config.yaml
-COPY ./kwild-gateway-deposit-config.yaml ./dist/deposit-config.yaml
+COPY meta-config.yaml ./dist/meta-config.yaml
+COPY manager-config.yaml ./dist/manager-config.yaml
+COPY deposit-config.yaml ./dist/deposit-config.yaml
 
 FROM scratch
 WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/ ./
-EXPOSE 8080
+EXPOSE 8082
 EXPOSE 50051
 ENTRYPOINT ["/app/kwild"]

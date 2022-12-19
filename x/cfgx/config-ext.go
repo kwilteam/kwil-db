@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"kwil/x/osx"
 	"kwil/x/utils"
 	"log"
 	"math"
@@ -318,7 +319,7 @@ func _getConfigInternal(test bool) Config {
 
 	//should look for a metaConfig to specify things like useEnv, various files, etc
 	once.Do(func() {
-		root_dir := os.Getenv(utils.IfElse(test, Root_Test_Dir_Env, Root_Dir_Env))
+		root_dir := osx.GetEnv(utils.IfElse(test, Root_Test_Dir_Env, Root_Dir_Env))
 		if root_dir == "" {
 			root_dir = "./"
 		}
@@ -326,7 +327,7 @@ func _getConfigInternal(test bool) Config {
 		configFile := *flag.String(file, "", "Path to configuration file")
 		flag.Parse()
 		if configFile == "" {
-			configFile = os.Getenv(ENV_KEY_PREFIX_DEFAULT + "_" + file)
+			configFile = osx.GetEnv(ENV_KEY_PREFIX_DEFAULT + "_" + file)
 			if configFile == "" {
 				configFile = getConfigFile(path.Join(root_dir, file) + ".yaml")
 				if configFile == "" {
@@ -368,7 +369,7 @@ func _getConfigInternal(test bool) Config {
 				if !strings.HasPrefix(k, filter) {
 					k = filter + k
 				}
-				err := os.Setenv(k, os.ExpandEnv(v))
+				err := os.Setenv(k, osx.ExpandEnv(v))
 				if err != nil {
 					panic(err)
 				}
@@ -418,6 +419,6 @@ func getConfigFileUsage() string {
 		"Inside of the resolved meta config, a section called '" + ENV_SETTINGS_PATH + "' is used to inject\n" +
 		"key/value pairs into the environment variables via os.Setenv(). This is done prior\n" +
 		"to parsing config files specified in the meta config. All config files resolved are then\n" +
-		"parsed using os.ExpandEnv() to inject any values for placeholders specified as environment\n" +
-		"variable names (subject to the same rules indicated for os.ExpandEnv())\n"
+		"parsed using osx.ExpandEnv() to inject any values for placeholders specified as environment\n" +
+		"variable names (subject to the same rules indicated for osx.ExpandEnv())\n"
 }

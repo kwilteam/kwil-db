@@ -1,0 +1,3 @@
+deposit-settings:
+  spend-balance: false
+  read-balance: false

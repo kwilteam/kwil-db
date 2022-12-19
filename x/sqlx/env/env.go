@@ -2,31 +2,46 @@ package env
 
 import (
 	"fmt"
+	"kwil/x/cfgx"
+	"kwil/x/osx"
 	"kwil/x/utils"
-	"os"
 	"strings"
 )
 
 func GetDbConnectionString() string {
-	return GetAltDbConnectionString(os.Getenv("PG_DB"), "kwil")
+	return GetDbConnectionStringByName("PG_DATABASE_URL", "kwil")
 }
 
-func GetAltDbConnectionString(dbEnvKey string, defaultDbName string) string {
-	host := utils.Coalesce(os.Getenv("PG_ENDPOINT"), "localhost")
-	port := utils.Coalesce(os.Getenv("PG_PORT"), "5432")
-	user := utils.Coalesce(os.Getenv("PG_USER"), "postgres")
-	password := utils.Coalesce(os.Getenv("PG_PASSWORD"), "postgres")
-	database := utils.Coalesce(os.Getenv(dbEnvKey), defaultDbName)
-
-	var ssl string
-	if strings.HasPrefix(host, "postgres_db_container_local") || strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") {
-		ssl = "disable"
+func GetDbConnectionStringByName(dbUrlEnvKeyName string, dbNameDefault string) string {
+	url := osx.GetEnv(dbUrlEnvKeyName)
+	if url == "" {
+		url = utils.Coalesce(getDbStringFromMetaConfig(), "postgres://postgres:postgres@localhost:5432/%s?sslmode=disable")
+		url = fmt.Sprintf(url, dbNameDefault)
 	} else {
-		ssl = "require"
+		url = fmt.Sprintf(osx.ExpandEnv(url), dbNameDefault)
 	}
 
-	url := fmt.Sprintf("USING DB --> postgres://%s:%s@%s:%s/%s?sslmode=%s", user, "REDACTED", host, port, database, ssl)
-	fmt.Println(url)
+	parts := strings.Split(url, "@")
+	if len(parts) == 2 {
+		fmt.Println("USING DB --> postgres://REDACTED@" + parts[1])
+	}
 
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", user, password, host, port, database, ssl)
+	return url
+}
+
+func getDbStringFromMetaConfig() string {
+	cfg := cfgx.GetConfig().Select("db-settings")
+
+	host := cfg.String("host")
+	if host == "" {
+		return ""
+	}
+
+	port := cfg.Int32("port", 5432)
+	user := cfg.String("user")
+	password := cfg.String("password")
+	database := cfg.String("database")
+	ssl_mode := cfg.GetString("ssl_mode", "disable")
+
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", user, password, host, port, database, ssl_mode)
 }

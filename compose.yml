@@ -1,55 +1,39 @@
 services:
   kwild:
+    container_name: kwild
     image: kwild
     build:
       context: .
       dockerfile: docker/kwild.dockerfile
     environment:
-      DEPOSITS_ENABLED: "false"
-      DEPOSITS_CHAIN: eth-goerli
-      DEPOSITS_PROVIDER_ENDPOINT: wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41
-      DEPOSITS_CONTRACT_ADDRESS: 0xb0a194286A901FeAEA39D2b765247BEd64aD4F41
-      DEPOSITS_WALLET_KEY: 274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988
-      PG_ENDPOINT: postgres_db_container_local
-      PG_PORT: 5432
-      PG_USER: postgres
-      PG_PASSWORD: postgres
-      PG_DB: kwil
-    ports:
-      - "50051:50051"
-      - "8080:8080"
-    depends_on:
-      - postgres_db
-    links:
-      - postgres_db
-    network_mode: bridge
-  kwild-gateway:
-    image: kwild-gateway
-    depends_on:
-      - "graphql-engine"
-    links:
-      - "graphql-engine"
-    build:
-      context: .
-      dockerfile: docker/kwild-gateway.dockerfile
-    environment:
+      PG_DATABASE_URL: "postgres://$PG_USER:$PG_PASSWORD@$PG_ENDPOINT:$PG_PORT/$PG_DB?sslmode=$PG_SSL_MODE"
+      WITH_GATEWAY: true
       GRPC_CONTAINER_ENDPOINT: kwild:50051
       KWIL_GRAPHQL_ENDPOINT: http://graphql-engine:8080
       ## uncomment next 2 lines if HASURA_GRAPHQL_ADMIN_SECRET is set in Hasura container
       #HASURA_GRAPHQL_ADMIN_SECRET: secretkeyhasura
       #HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
-    ports:
-      - "8081:8080"
     volumes:
       - ./keys.json:/app/keys.json
-    network_mode: bridge
+    ports:
+      - "50051:50051"
+      - "8082:8082"
+    depends_on:
+      - "postgres_db"
+      - "graphql-engine"
+    links:
+      - "postgres_db"
+      - "graphql-engine"
+    networks:
+      - gateway
+      - backend
   postgres_db:
+    container_name: postgres_db
     image: postgres:15.0-alpine
-    container_name: postgres_db_container_local
-    restart: always
+    #restart: always
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=$PG_USER
+      - POSTGRES_PASSWORD=$PG_PASSWORD
     logging:
       options:
         max-size: 10m
@@ -60,23 +44,25 @@ services:
       - ./.pgdata:/var/lib/postgresql/data
       # copy the sql script to create tables
       - ./scripts/pg-init-scripts/:/docker-entrypoint-initdb.d/
-    network_mode: bridge
+    networks:
+      - backend
   graphql-engine:
+    container_name: graphql-engine
     image: hasura/graphql-engine:v2.16.0
     ports:
-      - "8082:8080"
+      - "8080:8080"
     depends_on:
       - "postgres_db"
     links:
       - "postgres_db"
     restart: always
     environment:
-      ## TODO: align the DB URL connection string to be the same as the one in the kwild container
+      ## this env var can be used to add the above postgres database to Hasura as a data source. this can be removed/updated based on your needs
+      PG_DATABASE_URL: "postgres://$PG_USER:$PG_PASSWORD@$PG_ENDPOINT:$PG_PORT/$PG_DB?sslmode=$PG_SSL_MODE"
 
       ## postgres database to store Hasura metadata
-      HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://postgres:postgres@postgres_db_container_local:5432/postgres
-      ## this env var can be used to add the above postgres database to Hasura as a data source. this can be removed/updated based on your needs
-      PG_DATABASE_URL: postgres://postgres:postgres@postgres_db_container_local:5432/kwil
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: "postgres://$PG_USER:$PG_PASSWORD@$PG_ENDPOINT:$PG_PORT/postgres?sslmode=$PG_SSL_MODE"
+
       ## enable the console served by server
       HASURA_GRAPHQL_ENABLE_CONSOLE: "true" # set to "false" to disable console
       ## enable debugging mode. It is recommended to disable this in production
@@ -88,5 +74,13 @@ services:
       # HASURA_GRAPHQL_ADMIN_SECRET: secretkeyhasura
       ## uncomment next line to set an default unauthorized role, if above line is used
       # HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous
-    network_mode: bridge
-
+      ## uncomment next line to set an access key for Hasura's CLI
+    networks:
+      - backend
+networks:
+  gateway:
+    external: false
+    name: gateway
+  backend:
+    external: false
+    name: backend

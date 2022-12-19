@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -53,7 +54,7 @@ func New(client *sqlclient.DB) *depositStore {
 
 func TestDB() (*depositStore, error) {
 
-	client, err := sqlclient.Open("postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
+	client, err := sqlclient.Open("postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable", 2*time.Second)
 	if err != nil {
 		return nil, err
 	}
