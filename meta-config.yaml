@@ -1,7 +1,3 @@
-#env-settings: "~/.kwil-server/env-settings.yaml"
-
-deposit-settings: "./x/deposits_old/deposit-config.yaml"
-
-db-settings: "./x/sqlx/config.yaml"
-
-manager-settings: "./x/sqlx/manager/config.yaml"
+db-settings: "./db-settings.yaml"
+deposit-settings: "./deposit-config.yaml"
+manager-settings: "./manager-config.yaml"

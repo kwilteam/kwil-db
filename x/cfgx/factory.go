@@ -11,9 +11,9 @@ package cfgx
 //	Inside the resolved meta config, a top level section called 'env-settings'
 //	is used to inject key/value pairs into the environment variables via os.Setenv().
 //	This is done prior to parsing config files specified in the meta config.
-//	All config files resolved are then updated using os.ExpandEnv(). This will
+//	All config files resolved are then updated using osx.ExpandEnv(). This will
 //	inject (e.g., replace) any environment variable placeholders (subject to
-//	the same rules indicated for os.ExpandEnv()). When specifying a file source,
+//	the same rules indicated for osx.ExpandEnv()). When specifying a file source,
 //	you can optionally specify a selection path to select a subset of the config
 //	file referenced. See 'messaging-emitter' below for an example:
 //

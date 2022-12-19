@@ -2,6 +2,7 @@ package cfgx
 
 import (
 	"fmt"
+	"kwil/x/osx"
 	"os"
 	"reflect"
 	"strconv"
@@ -106,13 +107,13 @@ func (b *config_builder) expand(m map[interface{}]interface{}) {
 		case reflect.Map:
 			b.expand(v.(map[interface{}]interface{}))
 		case reflect.String:
-			m[k] = os.Expand(v.(string), b.getEnv)
+			m[k] = osx.Expand(v.(string), b.getEnv)
 		}
 	}
 }
 
 func (b *config_builder) getEnv(key string) string {
-	return os.Getenv(b.env_prefix + key)
+	return osx.GetEnv(b.env_prefix + key)
 }
 
 func flatten(flattened map[string]string, prefix string, m map[interface{}]interface{}) {

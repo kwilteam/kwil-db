@@ -1,0 +1,6 @@
+host: ${PG_ENDPOINT || localhost}
+port: ${PG_PORT || 5432}
+user: ${PG_USER || postgres}
+password: ${PG_PASSWORD || postgres}
+database: ${PG_DB || kwil}
+ssl_mode: ${PG_SSL_MODE || disable}

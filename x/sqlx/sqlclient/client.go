@@ -4,21 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"kwil/x"
+	"kwil/x/utils"
+	"time"
 )
 
 type DB struct {
 	*sql.DB
 }
 
-func Open(conn string) (*DB, error) {
-	db, err := sql.Open("postgres", conn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-	return &DB{db}, nil
+func Open(conn string, duration time.Duration) (*DB, error) {
+	return open(conn, *x.NewDeadline(duration))
 }
 
 func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
@@ -69,4 +65,38 @@ func (db *DB) ExecTx(query string) error {
 
 func (db *DB) Close() error {
 	return db.DB.Close()
+}
+
+func open(conn string, deadline x.Deadline) (*DB, error) {
+	var outerErr error
+	for {
+		c, err := tryOpen(conn)
+		if err == nil {
+			return c, nil
+		}
+
+		outerErr = err
+		if deadline.HasExpired() {
+			break
+		}
+
+		timeout := time.Duration(utils.Min(500, deadline.RemainingMillis())) * time.Millisecond
+		time.Sleep(timeout)
+		if deadline.HasExpired() {
+			break
+		}
+	}
+
+	return nil, outerErr
+}
+
+func tryOpen(conn string) (*DB, error) {
+	db, err := sql.Open("postgres", conn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+	return &DB{db}, nil
 }

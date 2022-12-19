@@ -20,7 +20,7 @@ func (d *Deadline) Expiry() time.Time {
 
 // HasExpired will return true if the deadline has expired
 func (d *Deadline) HasExpired() bool {
-	return !d.deadline.Before(time.Now())
+	return d.deadline.Before(time.Now())
 }
 
 // Remaining will return the remaining duration before the deadline expires.
@@ -38,9 +38,7 @@ func (d *Deadline) RemainingMillis() int {
 		return 0
 	}
 
-	delta := time.Millisecond / remaining
-
-	return int(delta)
+	return int(remaining.Milliseconds())
 }
 
 // NewDeadline constructs a new Deadline with the given timeout.

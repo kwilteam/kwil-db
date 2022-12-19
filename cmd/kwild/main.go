@@ -44,7 +44,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
-	client, err := sqlclient.Open(env.GetDbConnectionString())
+	client, err := sqlclient.Open(env.GetDbConnectionString(), 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to open sql client: %w", err)
 	}

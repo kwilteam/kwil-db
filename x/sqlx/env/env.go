@@ -2,7 +2,9 @@ package env
 
 import (
 	"fmt"
-	"os"
+	"kwil/x/cfgx"
+	"kwil/x/osx"
+	"kwil/x/utils"
 	"strings"
 )
 
@@ -11,11 +13,12 @@ func GetDbConnectionString() string {
 }
 
 func GetDbConnectionStringByName(dbUrlEnvKeyName string, dbNameDefault string) string {
-	url := os.Getenv(dbUrlEnvKeyName)
+	url := osx.GetEnv(dbUrlEnvKeyName)
 	if url == "" {
-		url = fmt.Sprintf("postgres://postgres:postgres@localhost:5432/%s?sslmode=disable", dbNameDefault)
+		url = utils.Coalesce(getDbStringFromMetaConfig(), "postgres://postgres:postgres@localhost:5432/%s?sslmode=disable")
+		url = fmt.Sprintf(url, dbNameDefault)
 	} else {
-		url = os.ExpandEnv(url)
+		url = fmt.Sprintf(osx.ExpandEnv(url), dbNameDefault)
 	}
 
 	parts := strings.Split(url, "@")
@@ -24,4 +27,21 @@ func GetDbConnectionStringByName(dbUrlEnvKeyName string, dbNameDefault string) s
 	}
 
 	return url
+}
+
+func getDbStringFromMetaConfig() string {
+	cfg := cfgx.GetConfig().Select("db-settings")
+
+	host := cfg.String("host")
+	if host == "" {
+		return ""
+	}
+
+	port := cfg.Int32("port", 5432)
+	user := cfg.String("user")
+	password := cfg.String("password")
+	database := cfg.String("database")
+	ssl_mode := cfg.GetString("ssl_mode", "disable")
+
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", user, password, host, port, database, ssl_mode)
 }
