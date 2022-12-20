@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"kwil/x/cfgx"
+	"kwil/x/chain-client/builder"
 	"kwil/x/chain-client/dto"
 	"kwil/x/logx"
 	"time"
@@ -17,19 +20,53 @@ type ChainClient interface {
 
 // chainClient implements the ChainClient interface
 type chainClient struct {
-	client                client
+	listener              dto.Listener
+	escrow                dto.EscrowContract
 	log                   logx.SugaredLogger
-	timeout               time.Duration
+	maxBlockInterval      time.Duration
 	requiredConfirmations int64
+	chainCode             dto.ChainCode
 }
 
-// client is an interface that allows us to mock the specific chain clients (e.g. EVMClient)
-type client interface {
-	EscrowContract
-	Subscribe(ctx context.Context, confirmed bool) (subscription, error)
-	GetLatestBlock(ctx context.Context) (int64, error)
+func NewChainClient(cfg cfgx.Config, privateKey string) (ChainClient, error) {
+	log := logx.New().Named("chain-client").Sugar()
+
+	chainCode := dto.ChainCode(cfg.Int64("chain-code", 0))
+
+	providerEndpoint := cfg.String("provider-endpoint")
+	if providerEndpoint == "" {
+		return nil, fmt.Errorf("provider endpoint is required")
+	}
+
+	contractAddress := cfg.String("contract-address")
+	if contractAddress == "" {
+		return nil, fmt.Errorf("contract address is required")
+	}
+
+	chainComponents, err := builder.NewChainBuilder().ChainCode(chainCode).ContractAddress(contractAddress).PrivateKey(privateKey).RPCProvider(providerEndpoint).Build()
+	if err != nil {
+		log.Fatalw("failed to build chain components", "error", err)
+	}
+
+	return &chainClient{
+		listener:              chainComponents.Listener,
+		escrow:                chainComponents.Escrow,
+		log:                   log,
+		maxBlockInterval:      time.Duration(cfg.Int64("reconnection-interval", 30)) * time.Second,
+		requiredConfirmations: cfg.Int64("required-confirmations", 12),
+		chainCode:             chainCode,
+	}, nil
 }
 
-func NewChainClient() ChainClient {
-	return &chainClient{}
+/*
+func newChainSpecificClient(endpoint string, chainCode dto.ChainCode) (blockClient, error) {
+	switch chainCode {
+	case dto.ETHEREUM:
+		return evmclient.New(endpoint, chainCode.ToChainId())
+	case dto.GOERLI:
+		return evmclient.New(endpoint, chainCode.ToChainId())
+	default:
+		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainCode))
+	}
 }
+*/

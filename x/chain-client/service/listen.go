@@ -2,28 +2,23 @@ package service
 
 import (
 	"context"
+	"kwil/x/chain-client/dto"
 	"time"
 
 	"github.com/jpillora/backoff"
 )
-
-type subscription interface {
-	Unsubscribe()
-	Err() <-chan error
-	Blocks() <-chan int64
-}
 
 // Listen will listen to new blocks on the chain.  Confirmed
 // determines whether the caller should receive new blocks or only
 // confirmed blocks.
 func (c *chainClient) Listen(ctx context.Context, confirmed bool) (<-chan int64, error) {
 	retChan := make(chan int64)
-	sub, err := c.client.Subscribe(ctx, confirmed)
+	sub, err := c.listener.Subscribe(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	go func(context.Context, subscription, <-chan int64, bool) {
+	go func(context.Context, dto.Subscription, <-chan int64, bool) {
 		select {
 		case <-ctx.Done():
 			sub.Unsubscribe()
@@ -31,7 +26,7 @@ func (c *chainClient) Listen(ctx context.Context, confirmed bool) (<-chan int64,
 		case err := <-sub.Err():
 			c.log.Errorf("subscription error: %v", err)
 			sub = c.resubscribe(ctx, sub, confirmed)
-		case <-time.After(c.timeout):
+		case <-time.After(c.maxBlockInterval):
 			c.log.Errorf("subscription timeout")
 			sub = c.resubscribe(ctx, sub, confirmed)
 		case block := <-sub.Blocks():
@@ -48,7 +43,7 @@ func (c *chainClient) Listen(ctx context.Context, confirmed bool) (<-chan int64,
 // resubscribe will resubscribe to the chain.  This is used when
 // the subscription has an error or is disconnected.
 // It will retry forever until it is successful.
-func (c *chainClient) resubscribe(ctx context.Context, oldSub subscription, confirmed bool) subscription {
+func (c *chainClient) resubscribe(ctx context.Context, oldSub dto.Subscription, confirmed bool) dto.Subscription {
 	// unsubscribe from old subscription and create new channel
 	oldSub.Unsubscribe()
 
@@ -64,7 +59,7 @@ func (c *chainClient) resubscribe(ctx context.Context, oldSub subscription, conf
 	for {
 		// exponential backoff
 		time.Sleep(retrier.Duration())
-		sub, err := c.client.Subscribe(ctx, confirmed)
+		sub, err := c.listener.Subscribe(ctx)
 		if err != nil {
 			continue
 		}

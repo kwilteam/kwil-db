@@ -18,7 +18,7 @@ type contract struct {
 	nodeAddress string
 }
 
-func New(client *ethclient.Client, privateKey *ecdsa.PrivateKey, contractAddress string, chainID *big.Int) (*contract, error) {
+func New(client *ethclient.Client, chainID *big.Int, privateKey, contractAddress string) (*contract, error) {
 	ctr, err := abi.NewEscrow(common.HexToAddress(contractAddress), client)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,13 @@ func New(client *ethclient.Client, privateKey *ecdsa.PrivateKey, contractAddress
 	}
 
 	// private key to address
-	nodeAddress, err := crypto.AddressFromPrivateKey(crypto.HexFromECDSAPrivateKey(privateKey))
+	nodeAddress, err := crypto.AddressFromPrivateKey(privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// get hex private key
+	pKeyHex, err := crypto.ECDSAFromHex(privateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +45,7 @@ func New(client *ethclient.Client, privateKey *ecdsa.PrivateKey, contractAddress
 		ctr:         ctr,
 		token:       tokAddr.Hex(),
 		cid:         chainID,
-		key:         privateKey,
+		key:         pKeyHex,
 		nodeAddress: nodeAddress,
 	}, nil
 }

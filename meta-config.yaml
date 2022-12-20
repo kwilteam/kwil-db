@@ -1,3 +1,4 @@
 db-settings: "./db-settings.yaml"
 deposit-settings: "./deposit-config.yaml"
 manager-settings: "./manager-config.yaml"
+chain-client-settings: "./chain-client-settings.yml"

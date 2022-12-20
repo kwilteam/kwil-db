@@ -1,10 +1,22 @@
 package dto
 
-type ChainType int // this is used to indicate the chain ID.
+import "math/big"
+
+type ChainCode int // this is used to indicate the chain ID.
 // I am using this instead of typicaly ChainIDs beecause we will want to support non-EVM chains (which have no chain ID)
 
 const (
-	UNKNWON_CHAIN ChainType = iota
+	UNKNOWN_CHAIN ChainCode = iota
 	ETHEREUM
 	GOERLI
 )
+
+func (c *ChainCode) ToChainId() *big.Int {
+	switch *c {
+	case ETHEREUM:
+		return big.NewInt(1)
+	case GOERLI:
+		return big.NewInt(5)
+	}
+	return big.NewInt(0)
+}

@@ -5,5 +5,5 @@ type DepositEvent struct {
 	Target string
 	Amount string
 	Height int64
-	Tx     string
+	TxHash string
 }
