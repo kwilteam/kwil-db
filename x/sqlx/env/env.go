@@ -16,11 +16,12 @@ func GetDbConnectionStringByName(dbUrlEnvKeyName string, dbNameDefault string) s
 	url := osx.GetEnv(dbUrlEnvKeyName)
 	if url == "" {
 		url = utils.Coalesce(getDbStringFromMetaConfig(), "postgres://postgres:postgres@localhost:5432/%s?sslmode=disable")
-		url = fmt.Sprintf(url, dbNameDefault)
 	} else {
-		if strings.IndexAny("%s", url) != -1 {
-			url = fmt.Sprintf(osx.ExpandEnv(url), dbNameDefault)
-		}
+		url = osx.ExpandEnv(url)
+	}
+
+	if strings.Index("%s", url) != -1 {
+		url = fmt.Sprintf(url, dbNameDefault)
 	}
 
 	parts := strings.Split(url, "@")
