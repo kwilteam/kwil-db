@@ -82,9 +82,6 @@ func open(conn string, deadline x.Deadline) (*DB, error) {
 
 		timeout := time.Duration(utils.Min(500, deadline.RemainingMillis())) * time.Millisecond
 		time.Sleep(timeout)
-		if deadline.HasExpired() {
-			break
-		}
 	}
 
 	return nil, outerErr
