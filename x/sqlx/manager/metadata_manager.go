@@ -135,7 +135,7 @@ func (m *metadataManager) GetAllDatabases(ctx context.Context) ([]string, error)
 func (m *metadataManager) ListDatabases(ctx context.Context, owner string) ([]string, error) {
 	var databases []string
 
-	rows, err := m.client.QueryContext(ctx, `SELECT dbs_name FROM public.databases WHERE database_owner = $1`, strings.ToLower(owner))
+	rows, err := m.client.QueryContext(ctx, `SELECT dbs_name FROM public.databases WHERE database_owner = (SELECT id FROM public.wallets WHERE wallet LIKE $1)`, strings.ToLower(owner))
 	if err != nil {
 		return nil, err
 	}
