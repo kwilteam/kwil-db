@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"kwil/x/cfgx"
 	"kwil/x/chain-client/builder"
@@ -9,14 +8,6 @@ import (
 	"kwil/x/logx"
 	"time"
 )
-
-type ChainClient interface {
-	Listen(ctx context.Context, confirmed bool) (<-chan int64, error)
-	GetLatestBlock(ctx context.Context, confirmed bool) (int64, error)
-	GetDeposits(ctx context.Context, start, end int64) ([]*dto.DepositEvent, error)
-	GetWithdrawals(ctx context.Context, start, end int64) ([]*dto.WithdrawalConfirmationEvent, error)
-	ReturnFunds(ctx context.Context, params *dto.ReturnFundsParams) (*dto.ReturnFundsResponse, error)
-}
 
 // chainClient implements the ChainClient interface
 type chainClient struct {
@@ -28,7 +19,7 @@ type chainClient struct {
 	chainCode             dto.ChainCode
 }
 
-func NewChainClient(cfg cfgx.Config, privateKey string) (ChainClient, error) {
+func NewChainClient(cfg cfgx.Config, privateKey string) (dto.ChainClient, error) {
 	log := logx.New().Named("chain-client").Sugar()
 
 	chainCode := dto.ChainCode(cfg.Int64("chain-code", 0))

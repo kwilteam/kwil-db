@@ -3,17 +3,18 @@ package service
 import (
 	"context"
 	"crypto/md5"
+	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"kwil/x/deposits/dto"
 	"kwil/x/deposits/repository"
-	"math/big"
+	"kwil/x/math/big"
 	"math/rand"
 	"time"
 )
 
 // StartWithdrawal begins the withdrawal process.  It will alter a user's balance and assign a correlation ID, which will be used to track the withdrawal on-chain.
-func (s *depositsService) StartWithdrawal(ctx context.Context, withdrawal dto.StartWithdrawal) error {
+func (s *depositsService) startWithdrawal(ctx context.Context, withdrawal dto.StartWithdrawal) error {
 	// start a transaction
 	tx, err := s.db.BeginTx(ctx)
 	if err != nil {
@@ -30,7 +31,7 @@ func (s *depositsService) StartWithdrawal(ctx context.Context, withdrawal dto.St
 	}
 
 	// compare the balance to the withdrawal amount
-	cmp, err := compareBigIntStrings(wallet.Balance, withdrawal.Amount)
+	cmp, err := big.BigStr(withdrawal.Amount).Compare(withdrawal.Amount)
 	if err != nil {
 		return err
 	}
@@ -67,6 +68,27 @@ func (s *depositsService) StartWithdrawal(ctx context.Context, withdrawal dto.St
 	return tx.Commit()
 }
 
+// addTxHashToWithdrawal adds a transaction hash to a withdrawal. This primarily occurs after the withdrawal has been submitted to the blockchain.
+func (s *depositsService) addTxHashToWithdrawal(ctx context.Context, txHash string, correlationId string) error {
+	return s.dao.AddTxHash(ctx, &repository.AddTxHashParams{
+		TxHash:        sql.NullString{String: txHash, Valid: true},
+		CorrelationID: correlationId,
+	})
+}
+
+// confirmWithdrawal confirms a withdrawal.  This is called after the withdrawal has been mined and finalized on the blockchain.
+// It identifies the withdrawal by the correlation ID and marks it as confirmed.
+func (s *depositsService) confirmWithdrawal(ctx context.Context, correlationId string) error {
+	return s.dao.ConfirmWithdrawal(ctx, correlationId)
+}
+
+/*
+// expireWithdrawals expires withdrawals that have an expiry block height less than or equal to the given height.
+func (s *depositsService) expireWithdrawals(ctx context.Context, height int64) error {
+	return s.dao.ExpireWithdrawals(ctx, height)
+}
+*/
+
 // generateCid generates a correlation id for the withdrawal.
 // it takes a desired length as well as a string to seed the random number generator
 func generateCid(l uint8, str string) (string, error) {
@@ -84,19 +106,4 @@ func generateCid(l uint8, str string) (string, error) {
 		result[i] = dto.CidCharacters[rand.Intn(len(dto.CidCharacters))]
 	}
 	return string(result), nil
-}
-
-func compareBigIntStrings(a, b string) (int, error) {
-	// convert to big.Int
-	ai, ok := new(big.Int).SetString(a, 10)
-	if !ok {
-		return 0, fmt.Errorf("failed to convert %s to big.Int", a)
-	}
-	bi, ok := new(big.Int).SetString(b, 10)
-	if !ok {
-		return 0, fmt.Errorf("failed to convert %s to big.Int", b)
-	}
-
-	// compare
-	return ai.Cmp(bi), nil
 }

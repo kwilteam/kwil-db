@@ -9,6 +9,25 @@ import (
 	"context"
 )
 
+const decreaseBalance = `-- name: DecreaseBalance :exec
+UPDATE
+    wallets
+SET
+    balance = balance - $2
+WHERE
+    wallet = $1
+`
+
+type DecreaseBalanceParams struct {
+	Wallet  string
+	Balance string
+}
+
+func (q *Queries) DecreaseBalance(ctx context.Context, arg *DecreaseBalanceParams) error {
+	_, err := q.exec(ctx, q.decreaseBalanceStmt, decreaseBalance, arg.Wallet, arg.Balance)
+	return err
+}
+
 const getBalanceAndSpent = `-- name: GetBalanceAndSpent :one
 SELECT
     balance,

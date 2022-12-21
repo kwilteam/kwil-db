@@ -29,15 +29,33 @@ func (q *Queries) AddTxHash(ctx context.Context, arg *AddTxHashParams) error {
 	return err
 }
 
-const expire = `-- name: Expire :exec
+const confirmWithdrawal = `-- name: ConfirmWithdrawal :exec
 DELETE FROM
     withdrawals
 WHERE
-    expiry <= $1
+    correlation_id = $1
 `
 
-func (q *Queries) Expire(ctx context.Context, expiry int64) error {
-	_, err := q.exec(ctx, q.expireStmt, expire, expiry)
+func (q *Queries) ConfirmWithdrawal(ctx context.Context, correlationID string) error {
+	_, err := q.exec(ctx, q.confirmWithdrawalStmt, confirmWithdrawal, correlationID)
+	return err
+}
+
+const expireWithdrawals = `-- name: ExpireWithdrawals :exec
+UPDATE
+    wallets w
+SET
+    balance = balance + wd.amount,
+    spent = spent + wd.fee
+FROM
+    withdrawals wd
+WHERE
+    wd.wallet_id = w.id
+    AND wd.expiry <= $1
+`
+
+func (q *Queries) ExpireWithdrawals(ctx context.Context, expiry int64) error {
+	_, err := q.exec(ctx, q.expireWithdrawalsStmt, expireWithdrawals, expiry)
 	return err
 }
 

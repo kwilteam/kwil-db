@@ -264,3 +264,14 @@ func convertRole(r *cache.Role) *apipb.Role {
 		Permissions: perms,
 	}
 }
+
+func (s *Service) ListDatabases(ctx context.Context, req *apipb.ListDatabasesRequest) (*apipb.ListDatabasesResponse, error) {
+	dbs, err := s.manager.Metadata.ListDatabases(ctx, req.Owner)
+	if err != nil {
+		return nil, err
+	}
+
+	return &apipb.ListDatabasesResponse{
+		Databases: dbs,
+	}, nil
+}

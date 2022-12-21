@@ -27,6 +27,7 @@ type KwilServiceClient interface {
 	DeploySchema(ctx context.Context, in *DeploySchemaRequest, opts ...grpc.CallOption) (*DeploySchemaResponse, error)
 	DropSchema(ctx context.Context, in *DropSchemaRequest, opts ...grpc.CallOption) (*DropSchemaResponse, error)
 	GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error)
+	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
 	Write(ctx context.Context, in *WriteRequest, opts ...grpc.CallOption) (*WriteResponse, error)
 	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	// Wallets
@@ -73,6 +74,15 @@ func (c *kwilServiceClient) DropSchema(ctx context.Context, in *DropSchemaReques
 func (c *kwilServiceClient) GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*GetMetadataResponse, error) {
 	out := new(GetMetadataResponse)
 	err := c.cc.Invoke(ctx, "/apisvc.KwilService/GetMetadata", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kwilServiceClient) ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error) {
+	out := new(ListDatabasesResponse)
+	err := c.cc.Invoke(ctx, "/apisvc.KwilService/ListDatabases", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +142,7 @@ type KwilServiceServer interface {
 	DeploySchema(context.Context, *DeploySchemaRequest) (*DeploySchemaResponse, error)
 	DropSchema(context.Context, *DropSchemaRequest) (*DropSchemaResponse, error)
 	GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error)
+	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
 	Write(context.Context, *WriteRequest) (*WriteResponse, error)
 	Read(context.Context, *ReadRequest) (*ReadResponse, error)
 	// Wallets
@@ -156,6 +167,9 @@ func (UnimplementedKwilServiceServer) DropSchema(context.Context, *DropSchemaReq
 }
 func (UnimplementedKwilServiceServer) GetMetadata(context.Context, *GetMetadataRequest) (*GetMetadataResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMetadata not implemented")
+}
+func (UnimplementedKwilServiceServer) ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDatabases not implemented")
 }
 func (UnimplementedKwilServiceServer) Write(context.Context, *WriteRequest) (*WriteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Write not implemented")
@@ -253,6 +267,24 @@ func _KwilService_GetMetadata_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(KwilServiceServer).GetMetadata(ctx, req.(*GetMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KwilService_ListDatabases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDatabasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KwilServiceServer).ListDatabases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/apisvc.KwilService/ListDatabases",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KwilServiceServer).ListDatabases(ctx, req.(*ListDatabasesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -369,6 +401,10 @@ var KwilService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMetadata",
 			Handler:    _KwilService_GetMetadata_Handler,
+		},
+		{
+			MethodName: "ListDatabases",
+			Handler:    _KwilService_ListDatabases_Handler,
 		},
 		{
 			MethodName: "Write",

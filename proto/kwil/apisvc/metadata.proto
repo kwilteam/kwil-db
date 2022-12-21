@@ -13,6 +13,14 @@ message GetMetadataResponse {
 	Database database = 1;
 }
 
+message ListDatabasesRequest {
+	string owner = 1;
+}
+
+message ListDatabasesResponse {
+	repeated string databases = 1;
+}
+
 message Database {
 	string name = 1;
 	string owner = 2;

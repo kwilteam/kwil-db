@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"kwil/x/async"
 	"kwil/x/sqlx/cache"
-	"kwil/x/sqlx/env"
 	"kwil/x/sqlx/manager"
 	"kwil/x/sqlx/sqlclient"
 	"net"
@@ -44,7 +43,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to get default account: %w", err)
 	}
 
-	client, err := sqlclient.Open(env.GetDbConnectionString(), 60*time.Second)
+	client, err := sqlclient.Open("postgres://postgres:postgres@localhost:5432/kwil?sslmode=disable", 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to open sql client: %w", err)
 	}

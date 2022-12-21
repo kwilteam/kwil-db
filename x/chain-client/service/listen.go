@@ -8,9 +8,6 @@ import (
 	"github.com/jpillora/backoff"
 )
 
-// Listen will listen to new blocks on the chain.  Confirmed
-// determines whether the caller should receive new blocks or only
-// confirmed blocks.
 func (c *chainClient) Listen(ctx context.Context, confirmed bool) (<-chan int64, error) {
 	retChan := make(chan int64)
 	sub, err := c.listener.Subscribe(ctx)
@@ -18,22 +15,28 @@ func (c *chainClient) Listen(ctx context.Context, confirmed bool) (<-chan int64,
 		return nil, err
 	}
 
-	go func(context.Context, dto.Subscription, <-chan int64, bool) {
-		select {
-		case <-ctx.Done():
-			sub.Unsubscribe()
-			return
-		case err := <-sub.Err():
-			c.log.Errorf("subscription error: %v", err)
-			sub = c.resubscribe(ctx, sub, confirmed)
-		case <-time.After(c.maxBlockInterval):
-			c.log.Errorf("subscription timeout")
-			sub = c.resubscribe(ctx, sub, confirmed)
-		case block := <-sub.Blocks():
-			if confirmed {
-				block -= c.requiredConfirmations
+	go func(ctx context.Context, sub dto.Subscription, retChan chan int64, confirmed bool) {
+		defer sub.Unsubscribe()
+		defer close(retChan)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err := <-sub.Err():
+				if err != nil {
+					c.log.Errorf("subscription error: %v", err)
+					sub = c.resubscribe(ctx, sub, confirmed)
+				}
+			case <-time.After(c.maxBlockInterval):
+				c.log.Errorf("subscription timeout")
+				sub = c.resubscribe(ctx, sub, confirmed)
+			case block := <-sub.Blocks():
+				if confirmed {
+					block -= c.requiredConfirmations
+				}
+				retChan <- block
 			}
-			retChan <- block
 		}
 	}(ctx, sub, retChan, confirmed)
 

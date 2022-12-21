@@ -30,11 +30,17 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.commitDepositsStmt, err = db.PrepareContext(ctx, commitDeposits); err != nil {
 		return nil, fmt.Errorf("error preparing query CommitDeposits: %w", err)
 	}
+	if q.confirmWithdrawalStmt, err = db.PrepareContext(ctx, confirmWithdrawal); err != nil {
+		return nil, fmt.Errorf("error preparing query ConfirmWithdrawal: %w", err)
+	}
+	if q.decreaseBalanceStmt, err = db.PrepareContext(ctx, decreaseBalance); err != nil {
+		return nil, fmt.Errorf("error preparing query DecreaseBalance: %w", err)
+	}
 	if q.depositStmt, err = db.PrepareContext(ctx, deposit); err != nil {
 		return nil, fmt.Errorf("error preparing query Deposit: %w", err)
 	}
-	if q.expireStmt, err = db.PrepareContext(ctx, expire); err != nil {
-		return nil, fmt.Errorf("error preparing query Expire: %w", err)
+	if q.expireWithdrawalsStmt, err = db.PrepareContext(ctx, expireWithdrawals); err != nil {
+		return nil, fmt.Errorf("error preparing query ExpireWithdrawals: %w", err)
 	}
 	if q.getBalanceAndSpentStmt, err = db.PrepareContext(ctx, getBalanceAndSpent); err != nil {
 		return nil, fmt.Errorf("error preparing query GetBalanceAndSpent: %w", err)
@@ -69,14 +75,24 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing commitDepositsStmt: %w", cerr)
 		}
 	}
+	if q.confirmWithdrawalStmt != nil {
+		if cerr := q.confirmWithdrawalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing confirmWithdrawalStmt: %w", cerr)
+		}
+	}
+	if q.decreaseBalanceStmt != nil {
+		if cerr := q.decreaseBalanceStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing decreaseBalanceStmt: %w", cerr)
+		}
+	}
 	if q.depositStmt != nil {
 		if cerr := q.depositStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing depositStmt: %w", cerr)
 		}
 	}
-	if q.expireStmt != nil {
-		if cerr := q.expireStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing expireStmt: %w", cerr)
+	if q.expireWithdrawalsStmt != nil {
+		if cerr := q.expireWithdrawalsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing expireWithdrawalsStmt: %w", cerr)
 		}
 	}
 	if q.getBalanceAndSpentStmt != nil {
@@ -150,8 +166,10 @@ type Queries struct {
 	tx                     *sql.Tx
 	addTxHashStmt          *sql.Stmt
 	commitDepositsStmt     *sql.Stmt
+	confirmWithdrawalStmt  *sql.Stmt
+	decreaseBalanceStmt    *sql.Stmt
 	depositStmt            *sql.Stmt
-	expireStmt             *sql.Stmt
+	expireWithdrawalsStmt  *sql.Stmt
 	getBalanceAndSpentStmt *sql.Stmt
 	getHeightStmt          *sql.Stmt
 	newWithdrawalStmt      *sql.Stmt
@@ -166,8 +184,10 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		tx:                     tx,
 		addTxHashStmt:          q.addTxHashStmt,
 		commitDepositsStmt:     q.commitDepositsStmt,
+		confirmWithdrawalStmt:  q.confirmWithdrawalStmt,
+		decreaseBalanceStmt:    q.decreaseBalanceStmt,
 		depositStmt:            q.depositStmt,
-		expireStmt:             q.expireStmt,
+		expireWithdrawalsStmt:  q.expireWithdrawalsStmt,
 		getBalanceAndSpentStmt: q.getBalanceAndSpentStmt,
 		getHeightStmt:          q.getHeightStmt,
 		newWithdrawalStmt:      q.newWithdrawalStmt,

@@ -16,3 +16,11 @@ SET
     spent = $3
 WHERE
     id = $1;
+
+-- name: DecreaseBalance :exec
+UPDATE
+    wallets
+SET
+    balance = balance - $2
+WHERE
+    wallet = $1;

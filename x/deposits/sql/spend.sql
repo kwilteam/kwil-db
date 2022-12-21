@@ -8,9 +8,12 @@ WHERE
    wallet = $1
    AND balance >= $2;
 
-DO $$ DECLARE found BOOLEAN;
+DO $$;
 
-BEGIN IF NOT FOUND THEN RAISE EXCEPTION 'Insufficient balance';
+BEGIN
+   IF NOT FOUND THEN RAISE
+   EXCEPTION
+      'Insufficient balance';
 
 END IF;
 

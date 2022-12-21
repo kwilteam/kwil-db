@@ -38,6 +38,12 @@ service KwilService {
       get: "/api/v0/{owner}/{database}/metadata"
     };
   }
+
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/{owner}/databases"
+    };
+  }
   
 
   rpc Write (WriteRequest) returns (WriteResponse) {
