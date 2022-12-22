@@ -40,12 +40,14 @@ func (c *chainClient) Listen(ctx context.Context, blocks chan<- int64) error {
 				c.log.Errorf("subscription timeout")
 				sub = c.resubscribe(ctx, sub, internalChan)
 			case block := <-internalChan:
+
 				height := block.Height - c.requiredConfirmations
 
 				if height <= c.lastBlock {
 					c.log.Warnf("received block %d that is less than or equal to the latest block %d", height, c.lastBlock)
 					continue
 				}
+
 				if height > c.lastBlock+1 {
 					c.log.Warnf("received block %d that is greater than the latest block %d by more than 1", height, c.lastBlock)
 					for i := c.lastBlock + 1; i < height; i++ {

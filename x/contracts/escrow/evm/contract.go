@@ -7,8 +7,9 @@ import (
 	"kwil/x/crypto"
 	"math/big"
 
+	providerDTO "kwil/x/chain/provider/dto"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 type contract struct {
@@ -19,7 +20,12 @@ type contract struct {
 	nodeAddress string
 }
 
-func New(client *ethclient.Client, chainID *big.Int, privateKey, contractAddress string) (dto.EscrowContract, error) {
+func New(provider providerDTO.ChainProvider, privateKey, contractAddress string) (dto.EscrowContract, error) {
+	client, err := provider.AsEthClient()
+	if err != nil {
+		return nil, err
+	}
+
 	ctr, err := abi.NewEscrow(common.HexToAddress(contractAddress), client)
 	if err != nil {
 		return nil, err
@@ -45,7 +51,7 @@ func New(client *ethclient.Client, chainID *big.Int, privateKey, contractAddress
 	return &contract{
 		ctr:         ctr,
 		token:       tokAddr.Hex(),
-		cid:         chainID,
+		cid:         provider.ChainCode().ToChainId(),
 		key:         pKeyHex,
 		nodeAddress: nodeAddress,
 	}, nil

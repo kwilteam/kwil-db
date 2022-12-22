@@ -11,8 +11,8 @@ const (
 	GOERLI
 )
 
-func (c *ChainCode) ToChainId() *big.Int {
-	switch *c {
+func (c ChainCode) ToChainId() *big.Int {
+	switch c {
 	case ETHEREUM:
 		return big.NewInt(1)
 	case GOERLI:

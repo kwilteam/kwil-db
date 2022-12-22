@@ -10,9 +10,9 @@ import (
 func New(endpoint string, chainCode chain.ChainCode) (dto.ChainProvider, error) {
 	switch chainCode {
 	case chain.ETHEREUM:
-		return evm.New(endpoint, chainCode.ToChainId().Int64())
+		return evm.New(endpoint, chainCode)
 	case chain.GOERLI:
-		return evm.New(endpoint, chainCode.ToChainId().Int64())
+		return evm.New(endpoint, chainCode)
 	default:
 		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainCode))
 	}

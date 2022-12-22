@@ -1,15 +1,16 @@
-package chain
+package chainsync
 
 import "context"
 
 // Listen will listen for new block and update the persistent block number
-func (c *chain) Listen(ctx context.Context) error {
-	blockChan, err := c.chainClient.Listen(ctx, true)
+func (c *chain) listen(ctx context.Context) error {
+	blocks := make(chan int64)
+	err := c.chainClient.Listen(ctx, blocks)
 	if err != nil {
 		return err
 	}
 
-	go func(c *chain, blockChan <-chan int64) {
+	go func(c *chain, blocks <-chan int64) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 
@@ -17,12 +18,12 @@ func (c *chain) Listen(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return
-			case block := <-blockChan:
+			case block := <-blocks:
 				c.processChunk(ctx, c.height+1, block)
 			}
 		}
 
-	}(c, blockChan)
+	}(c, blocks)
 
 	return nil
 }

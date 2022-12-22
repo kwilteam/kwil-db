@@ -1,19 +1,18 @@
-package chain
+package escrowtasks
 
 import (
 	"context"
 	"fmt"
 	"kwil/x/deposits/repository"
+	"kwil/x/deposits/service/tasks"
 	bigutil "kwil/x/math/big"
 	"math/big"
 )
 
 // syncWithdrawals will sync all withdrawals for the chunk to the database
-func (c *chunk) syncWithdrawals(ctx context.Context) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *task) syncWithdrawals(ctx context.Context, chunk *tasks.Chunk) error {
 
-	withdrawals, err := c.chainClient.GetWithdrawals(ctx, c.start, c.finish)
+	withdrawals, err := c.contract.GetWithdrawals(ctx, chunk.Start, chunk.Finish)
 	if err != nil {
 		return err
 	}
