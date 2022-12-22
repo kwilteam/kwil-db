@@ -30,3 +30,14 @@ func (c *chainClient) GetLatestBlock(ctx context.Context) (*provider.Header, err
 
 	return finalizedHeader, nil
 }
+
+func (c *chainClient) setLatestBlock(ctx context.Context) error {
+	latest, err := c.GetLatestBlock(ctx)
+	if err != nil {
+		return err
+	}
+
+	c.lastBlock = latest.Height
+
+	return nil
+}

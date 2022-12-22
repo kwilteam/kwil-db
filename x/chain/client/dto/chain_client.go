@@ -6,6 +6,6 @@ import (
 )
 
 type ChainClient interface {
-	Listen(ctx context.Context, blocks chan<- provider.Header) error
+	Listen(ctx context.Context, blocks chan<- int64) error
 	GetLatestBlock(ctx context.Context) (*provider.Header, error)
 }

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"kwil/x/cfgx"
 	"kwil/x/chain"
 	"kwil/x/chain/client/dto"
@@ -10,44 +9,32 @@ import (
 	"time"
 )
 
-// chainClient implements the ChainClient interface
+// ChainClient implements the ChainClient interface
 type chainClient struct {
 	provider              provider.ChainProvider
 	log                   logx.SugaredLogger
 	maxBlockInterval      time.Duration
 	requiredConfirmations int64
 	chainCode             chain.ChainCode
+	lastBlock             int64
 }
 
-func NewChainClient(cfg cfgx.Config, prov provider.ChainProvider) (dto.ChainClient, error) {
+func NewChainClient(cfg cfgx.Config, prov provider.ChainProvider) dto.ChainClient {
 
-	chainCode := chain.ChainCode(cfg.Int64("chain-code", 0))
+	chainCode := cfg.Int64("chain-code", 0)
+	blockInterval := time.Duration(cfg.Int64("reconnection-interval", 30)) * time.Second
+	reqConfs := cfg.Int64("required-confirmations", 12)
 
-	providerEndpoint := cfg.String("provider-endpoint")
-	if providerEndpoint == "" {
-		return nil, fmt.Errorf("provider endpoint is required")
-	}
+	return NewChainClientNoConfig(prov, chainCode, blockInterval, reqConfs)
+}
 
-	// TODO: @Randal- I am dialing the ETH provider here... I also do this in the contract.  Is it ok to dial twice, or should we focus on using a shared connection?
-
+func NewChainClientNoConfig(prov provider.ChainProvider, chainCode int64, recInterval time.Duration, reqConfs int64) dto.ChainClient {
 	return &chainClient{
 		provider:              prov,
 		log:                   logx.New().Named("chain-client").Sugar(),
-		maxBlockInterval:      time.Duration(cfg.Int64("reconnection-interval", 30)) * time.Second,
-		requiredConfirmations: cfg.Int64("required-confirmations", 12),
-		chainCode:             chainCode,
-	}, nil
-}
-
-/*
-func newChainSpecificClient(endpoint string, chainCode dto.ChainCode) (blockClient, error) {
-	switch chainCode {
-	case dto.ETHEREUM:
-		return evmclient.New(endpoint, chainCode.ToChainId())
-	case dto.GOERLI:
-		return evmclient.New(endpoint, chainCode.ToChainId())
-	default:
-		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainCode))
+		maxBlockInterval:      recInterval,
+		requiredConfirmations: reqConfs,
+		chainCode:             chain.ChainCode(chainCode),
+		lastBlock:             0,
 	}
 }
-*/
