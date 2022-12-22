@@ -21,62 +21,21 @@ spec:
         ports:
         - containerPort: 8080
           name: kwil-hasura-svc
+        envFrom:
+        - configMapRef:
+            name: kwil-postgres-config
+        - configMapRef:
+            name: kwil-hasura-config
+        - secretRef:
+            name: kwil-postgres-secret
         env:
-        - name: PG_USER
-          valueFrom:
-            secretKeyRef:
-              name: kwil-postgres-secret
-              key: user
-        - name: PG_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: kwil-postgres-secret
-              key: password
-        - name: PG_HOST
-          valueFrom:
-            configMapKeyRef:
-              name: kwil-postgres-config
-              key: host
-        - name: PG_PORT
-          valueFrom:
-            configMapKeyRef:
-              name: kwil-postgres-config
-              key: port
-        - name: PG_METADATA_DB
-          valueFrom:
-            configMapKeyRef:
-              name: kwil-hasura-config
-              key: metadata-db
-        - name: PG_DEFAULT_DB
-          valueFrom:
-            configMapKeyRef:
-              name: kwil-postgres-config
-              key: database
-        - name: PG_SSL_MODE
-          valueFrom:
-            configMapKeyRef:
-              name: kwil-postgres-config
-              key: ssl-mode
         # order matters! dependent env vars need to be defined above
         - name: HASURA_GRAPHQL_METADATA_DATABASE_URL
-          value: "postgres://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST):$(PG_PORT)/$(PG_METADATA_DB)?sslmode=$(PG_SSL_MODE)"
+          # value: "postgres://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST):$(PG_PORT)/$(PG_METADATA_DB)?sslmode=$(PG_SSL_MODE)"
+          value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(HASURA_METADATA_DB)?sslmode=$(POSTGRES_SSL_MODE)"
         - name: PG_DATABASE_URL
-          value: "postgres://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST):$(PG_PORT)/$(PG_DEFAULT_DB)?sslmode=$(PG_SSL_MODE)"
-        - name: HASURA_GRAPHQL_ENABLE_CONSOLE
-          valueFrom:
-            configMapKeyRef:
-              name: kwil-hasura-config
-              key: enable-console
-        - name: HASURA_GRAPHQL_DEV_MODE
-          valueFrom:
-            configMapKeyRef:
-              name: kwil-hasura-config
-              key: dev-mode
-        - name: HASURA_GRAPHQL_ENABLED_LOG_TYPES
-          valueFrom:
-            configMapKeyRef:
-              name: kwil-hasura-config
-              key: enabled-log-type
+          # value: "postgres://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST):$(PG_PORT)/$(PG_DEFAULT_DB)?sslmode=$(PG_SSL_MODE)"
+          value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DEFAULT_DB)?sslmode=$(POSTGRES_SSL_MODE)"
       initContainers:
         - name: init-wait-db-service
           image: busybox:1.35.0
@@ -84,19 +43,10 @@ spec:
           command: ['sh', '-c', "until nslookup kwil-postgres-service.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for kwil-postgres-service; sleep 2; done"]
         - name: init-wait-postgres
           image: busybox:1.35.0
-          env:
-            - name: PG_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: kwil-postgres-config
-                  key: host
-            - name: PG_PORT
-              # TODO: use this config value in service
-              valueFrom:
-                configMapKeyRef:
-                  name: kwil-postgres-config
-                  key: port
-          command: ["sh", "-c", "env; echo scan ${PG_HOST}:${PG_PORT}; for i in $(seq 1 300); do nc -zvw1 ${PG_HOST} ${PG_PORT} && exit 0 || sleep 3; done; exit 1"]
+          envFrom:
+          - configMapRef:
+              name: kwil-postgres-config
+          command: ["sh", "-c", "env; echo scan ${POSTGRES_HOST}:${POSTGRES_PORT}; for i in $(seq 1 300); do nc -zvw1 ${POSTGRES_HOST} ${POSTGRES_PORT} && exit 0 || sleep 3; done; exit 1"]
 
 ---
 apiVersion: v1
