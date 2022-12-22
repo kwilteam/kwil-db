@@ -1,0 +1,211 @@
+{
+    "owner": "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",
+    "name": "lukedb",
+    "default_role": "lukemode",
+    "tables": [
+        {
+            "name": "weather",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int64",
+                    "attributes": [
+                        {
+                            "type": "primary_key"
+                        }
+                    ]
+                },
+                {
+                    "name": "name",
+                    "type": "string"
+                },
+                {
+                    "name": "weather",
+                    "type": "string"
+                },
+                {
+                    "name": "auth_sensor",
+                    "type": "boolean"
+                }
+            ]
+        },
+        {
+            "name": "carbon_emissions",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int64",
+                    "attributes": [
+                        {
+                            "type": "primary_key"
+                        }
+                    ]
+                },
+                {
+                    "name": "owner",
+                    "type": "string"
+                },
+                {
+                    "name": "co2_count",
+                    "type": "int64"
+                },
+                {
+                    "name": "program_participant",
+                    "type": "boolean"
+                }
+            ]
+        }
+    ],
+    "roles": [
+        {
+            "name": "lukemode",
+            "permissions": [
+                "create_user_weather",
+                "update_user_weather",
+                "delete_user_weather",
+                "create_user_carbon_emissions",
+                "update_user_carbon_emissions"
+            ]
+        },
+        {
+            "name": "luismode",
+            "permissions": [
+                "create_user_weather",
+                "update_user_weather",
+                "create_user_carbon_emissions",
+                "update_user_carbon_emissions"
+            ]
+        }
+    ],
+    "sql_queries": [
+        {
+            "name": "create_user_weather",
+            "type": "insert",
+            "table": "weather",
+            "params": [
+                {
+                    "column": "id"
+                },
+                {
+                    "column": "name",
+                    "static": true,
+                    "value": "",
+                    "modifier": "caller"
+                },
+                {
+                    "column": "weather"
+                },
+                {
+                    "column": "auth_sensor"
+                }
+            ]
+        },
+        {
+            "name": "update_user_weather",
+            "type": "update",
+            "table": "weather",
+            "params": [
+                {
+                    "column": "auth_sensor"
+                },
+                {
+                    "column": "weather"
+                }
+            ],
+            "where": [
+                {
+                    "column": "id",
+                    "static": true,
+                    "operator": "=",
+                    "value": 1
+                },
+                {
+                    "column": "name",
+                    "operator": "="
+                }
+            ]
+        },
+        {
+            "name": "delete_user_weather",
+            "type": "delete",
+            "table": "weather",
+            "where": [
+                {
+                    "column": "id",
+                    "static": true,
+                    "operator": "=",
+                    "value": 1
+                },
+                {
+                    "column": "name",
+                    "operator": "="
+                }
+            ]
+        },
+        {
+            "name": "create_user_carbon_emissions",
+            "type": "insert",
+            "table": "carbon_emissions",
+            "params": [
+                {
+                    "column": "id"
+                },
+                {
+                    "column": "owner",
+                    "static": true,
+                    "value": "",
+                    "modifier": "caller"
+                },
+                {
+                    "column": "co2_count"
+                },
+                {
+                    "column": "program_participant"
+                }
+            ]
+        },
+        {
+            "name": "update_user_carbon_emissions",
+            "type": "update",
+            "table": "carbon_emissions",
+            "params": [
+                {
+                    "column": "co2_count"
+                },
+                {
+                    "column": "program_participant"
+                }
+            ],
+            "where": [
+                {
+                    "column": "id",
+                    "static": true,
+                    "operator": "=",
+                    "value": 1
+                },
+                {
+                    "column": "owner",
+                    "operator": "="
+                }
+            ]
+        }
+    ],
+    "indexes": [
+        {
+            "name": "weather_index",
+            "table": "weather",
+            "columns": [
+                "id"
+            ],
+            "using": "btree"
+        },
+        {
+            "name": "carbon_index",
+            "table": "carbon_emissions",
+            "columns": [
+                "id"
+            ],
+            "using": "btree"
+        }
+    ]
+}

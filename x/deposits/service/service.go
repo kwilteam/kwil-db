@@ -7,12 +7,12 @@ import (
 	chainClient "kwil/x/chain/client/service"
 	chainProviderDTO "kwil/x/chain/provider/dto"
 	"kwil/x/contracts/escrow"
-	escrowDTO "kwil/x/contracts/escrow/dto"
 	"kwil/x/deposits/dto"
 	"kwil/x/deposits/repository"
 	chainsync "kwil/x/deposits/service/chain-sync"
 	"kwil/x/logx"
 	"kwil/x/sqlx/sqlclient"
+	"sync"
 )
 
 type DepositsService interface {
@@ -22,10 +22,6 @@ type DepositsService interface {
 	startWithdrawal(ctx context.Context, withdrawal dto.StartWithdrawal) error
 }
 
-type chainWriter interface {
-	ReturnFunds(ctx context.Context, params *escrowDTO.ReturnFundsParams) (*escrowDTO.ReturnFundsResponse, error)
-}
-
 // in the future we can make things like expirationPeriod and chunkSize configurable, but these values are good enough for now
 type depositsService struct {
 	dao              *repository.Queries
@@ -33,6 +29,7 @@ type depositsService struct {
 	chain            chainsync.Chain
 	log              logx.SugaredLogger
 	expirationPeriod int64
+	mu               *sync.Mutex
 }
 
 func NewService(cfg cfgx.Config, db *sqlclient.DB, provider chainProviderDTO.ChainProvider, privateKey string) (DepositsService, error) {

@@ -173,9 +173,11 @@ func (c *attribute) addConstraint(name string) *attribute {
 
 func (c *attribute) generateName(name string) string {
 	// to generate a unique name, we can use the schema, table, column, and constraint type
-	// we will hash the string and use the first 63 characters
+	// we will hash the string and use the first 62 characters.  We will also add a prefix
+	// to make sure the name is valid
 
-	return generateName(c.schma, c.tbl, c.col, name)
+	nm := generateName(c.schma, c.tbl, c.col, name)
+	return "c" + nm
 }
 
 func (c *attribute) write(s string) *attribute {
