@@ -1,9 +1,9 @@
-package escrow
+package evm
 
 import (
 	"context"
 	"kwil/abi"
-	"kwil/x/chain-client/dto"
+	"kwil/x/contracts/escrow/dto"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

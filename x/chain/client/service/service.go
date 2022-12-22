@@ -3,46 +3,36 @@ package service
 import (
 	"fmt"
 	"kwil/x/cfgx"
-	"kwil/x/chain-client/builder"
-	"kwil/x/chain-client/dto"
+	"kwil/x/chain"
+	"kwil/x/chain/client/dto"
+	provider "kwil/x/chain/provider/dto"
 	"kwil/x/logx"
 	"time"
 )
 
 // chainClient implements the ChainClient interface
 type chainClient struct {
-	listener              dto.Listener
-	escrow                dto.EscrowContract
+	provider              provider.ChainProvider
 	log                   logx.SugaredLogger
 	maxBlockInterval      time.Duration
 	requiredConfirmations int64
-	chainCode             dto.ChainCode
+	chainCode             chain.ChainCode
 }
 
-func NewChainClient(cfg cfgx.Config, privateKey string) (dto.ChainClient, error) {
-	log := logx.New().Named("chain-client").Sugar()
+func NewChainClient(cfg cfgx.Config, prov provider.ChainProvider) (dto.ChainClient, error) {
 
-	chainCode := dto.ChainCode(cfg.Int64("chain-code", 0))
+	chainCode := chain.ChainCode(cfg.Int64("chain-code", 0))
 
 	providerEndpoint := cfg.String("provider-endpoint")
 	if providerEndpoint == "" {
 		return nil, fmt.Errorf("provider endpoint is required")
 	}
 
-	contractAddress := cfg.String("contract-address")
-	if contractAddress == "" {
-		return nil, fmt.Errorf("contract address is required")
-	}
-
-	chainComponents, err := builder.NewChainBuilder().ChainCode(chainCode).ContractAddress(contractAddress).PrivateKey(privateKey).RPCProvider(providerEndpoint).Build()
-	if err != nil {
-		log.Fatalw("failed to build chain components", "error", err)
-	}
+	// TODO: @Randal- I am dialing the ETH provider here... I also do this in the contract.  Is it ok to dial twice, or should we focus on using a shared connection?
 
 	return &chainClient{
-		listener:              chainComponents.Listener,
-		escrow:                chainComponents.Escrow,
-		log:                   log,
+		provider:              prov,
+		log:                   logx.New().Named("chain-client").Sugar(),
 		maxBlockInterval:      time.Duration(cfg.Int64("reconnection-interval", 30)) * time.Second,
 		requiredConfirmations: cfg.Int64("required-confirmations", 12),
 		chainCode:             chainCode,

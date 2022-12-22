@@ -2,7 +2,7 @@ package chain
 
 import (
 	"context"
-	ccDTO "kwil/x/chain-client/dto"
+	ccDTO "kwil/x/chain/client/dto"
 	"kwil/x/deposits/repository"
 	"kwil/x/logx"
 	"kwil/x/sqlx/sqlclient"

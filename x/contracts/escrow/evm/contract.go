@@ -1,8 +1,9 @@
-package escrow
+package evm
 
 import (
 	"crypto/ecdsa"
 	"kwil/abi"
+	"kwil/x/contracts/escrow/dto"
 	"kwil/x/crypto"
 	"math/big"
 
@@ -18,7 +19,7 @@ type contract struct {
 	nodeAddress string
 }
 
-func New(client *ethclient.Client, chainID *big.Int, privateKey, contractAddress string) (*contract, error) {
+func New(client *ethclient.Client, chainID *big.Int, privateKey, contractAddress string) (dto.EscrowContract, error) {
 	ctr, err := abi.NewEscrow(common.HexToAddress(contractAddress), client)
 	if err != nil {
 		return nil, err
