@@ -22,17 +22,17 @@ type chainClient struct {
 func NewChainClient(cfg cfgx.Config, prov provider.ChainProvider) dto.ChainClient {
 
 	chainCode := cfg.Int64("chain-code", 0)
-	blockInterval := time.Duration(cfg.Int64("reconnection-interval", 30)) * time.Second
+	blockInterval := cfg.Int64("reconnection-interval", 30)
 	reqConfs := cfg.Int64("required-confirmations", 12)
 
 	return NewChainClientNoConfig(prov, chainCode, blockInterval, reqConfs)
 }
 
-func NewChainClientNoConfig(prov provider.ChainProvider, chainCode int64, recInterval time.Duration, reqConfs int64) dto.ChainClient {
+func NewChainClientNoConfig(prov provider.ChainProvider, chainCode int64, recInterval int64, reqConfs int64) dto.ChainClient {
 	return &chainClient{
 		provider:              prov,
 		log:                   logx.New().Named("chain-client").Sugar(),
-		maxBlockInterval:      recInterval,
+		maxBlockInterval:      time.Duration(recInterval) * time.Second,
 		requiredConfirmations: reqConfs,
 		chainCode:             chain.ChainCode(chainCode),
 		lastBlock:             0,
