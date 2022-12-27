@@ -11,13 +11,14 @@ import (
 type task struct {
 	contract dto.EscrowContract
 	dao      *repository.Queries // this will be used and set for each task
-	queries  *repository.Queries // this will be set once on itialization
+	queries  *repository.Queries // this will be set once on initialization
 }
 
 func New(dao *repository.Queries, contract dto.EscrowContract) tasks.Runnable {
 	return &task{
 		contract: contract,
-		dao:      dao,
+		dao:      nil,
+		queries:  dao,
 	}
 }
 
@@ -34,7 +35,7 @@ func (t *task) Run(ctx context.Context, chunk *tasks.Chunk) error {
 		return fmt.Errorf("error syncing withdrawals: %w", err)
 	}
 
-	t.dao = nil // discard the copy
+	t.dao = nil // discard the dao
 
 	return nil
 }

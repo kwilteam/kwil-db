@@ -1,0 +1,15 @@
+syntax = "proto3";
+package depositsvc;
+option go_package = "kwil/x/proto/depositsvc";
+
+import "google/api/annotations.proto";
+
+import "kwil/depositsvc/wallets.proto";
+
+service KwilService {
+    rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse) {
+        option (google.api.http) = {
+            get: "/api/v0/{wallet}/balance"
+        };
+    }
+}

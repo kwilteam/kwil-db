@@ -13,7 +13,7 @@ import (
 type chainClient struct {
 	provider              provider.ChainProvider
 	log                   logx.SugaredLogger
-	maxBlockInterval      time.Duration
+	reconnectInterval     time.Duration
 	requiredConfirmations int64
 	chainCode             chain.ChainCode
 	lastBlock             int64
@@ -22,19 +22,24 @@ type chainClient struct {
 func NewChainClient(cfg cfgx.Config, prov provider.ChainProvider) dto.ChainClient {
 
 	chainCode := cfg.Int64("chain-code", 0)
-	blockInterval := cfg.Int64("reconnection-interval", 30)
+	recInterval := cfg.Int64("reconnection-interval", 30)
 	reqConfs := cfg.Int64("required-confirmations", 12)
 
-	return NewChainClientNoConfig(prov, chainCode, blockInterval, reqConfs)
+	return NewChainClientExplicit(prov, &dto.Config{
+		ChainCode:             chainCode,
+		ReconnectionInterval:  recInterval,
+		RequiredConfirmations: reqConfs,
+	})
 }
 
-func NewChainClientNoConfig(prov provider.ChainProvider, chainCode int64, recInterval int64, reqConfs int64) dto.ChainClient {
+func NewChainClientExplicit(prov provider.ChainProvider, conf *dto.Config) dto.ChainClient {
+
 	return &chainClient{
 		provider:              prov,
 		log:                   logx.New().Named("chain-client").Sugar(),
-		maxBlockInterval:      time.Duration(recInterval) * time.Second,
-		requiredConfirmations: reqConfs,
-		chainCode:             chain.ChainCode(chainCode),
+		reconnectInterval:     time.Duration(conf.ReconnectionInterval) * time.Second,
+		requiredConfirmations: conf.RequiredConfirmations,
+		chainCode:             chain.ChainCode(conf.ChainCode),
 		lastBlock:             0,
 	}
 }

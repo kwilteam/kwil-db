@@ -7,7 +7,7 @@ import (
 	"math/big"
 )
 
-type Service interface {
+type PricingService interface {
 	EstimatePrice(request *entity.EstimateRequest) (*entity.EstimateResponse, error)
 	GetPrice(requestType pricing.PricingRequestType) (*big.Int, error)
 }

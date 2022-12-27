@@ -10,15 +10,19 @@ import (
 )
 
 const commitDeposits = `-- name: CommitDeposits :exec
-UPDATE
-    wallets
-SET
-    balance = balance + deposits.amount
-FROM
-    deposits
-WHERE
-    deposits.height <= $1
-    AND deposits.wallet = wallets.wallet
+WITH deleted_deposits AS (
+    DELETE FROM deposits
+    WHERE height <= $1
+    RETURNING id, tx_hash, wallet, amount, height
+)
+INSERT INTO wallets (wallet, balance)
+SELECT deleted_deposits.wallet, deleted_deposits.amount
+FROM deleted_deposits
+ON CONFLICT (wallet) DO UPDATE SET balance = wallets.balance + (
+    SELECT deleted_deposits.amount
+    FROM deleted_deposits
+    WHERE wallets.wallet = deleted_deposits.wallet
+)
 `
 
 func (q *Queries) CommitDeposits(ctx context.Context, height int64) error {
@@ -48,4 +52,17 @@ func (q *Queries) Deposit(ctx context.Context, arg *DepositParams) error {
 		arg.Height,
 	)
 	return err
+}
+
+const getDepositByTx = `-- name: GetDepositByTx :one
+SELECT id
+FROM deposits
+WHERE tx_hash = $1
+`
+
+func (q *Queries) GetDepositByTx(ctx context.Context, txHash string) (int32, error) {
+	row := q.queryRow(ctx, q.getDepositByTxStmt, getDepositByTx, txHash)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
 }

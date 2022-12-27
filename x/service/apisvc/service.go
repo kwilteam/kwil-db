@@ -13,7 +13,7 @@ type Service struct {
 	apipb.UnimplementedKwilServiceServer
 
 	log     logx.Logger
-	p       pricing.Service
+	p       pricing.PricingService
 	manager *manager.Manager
 }
 

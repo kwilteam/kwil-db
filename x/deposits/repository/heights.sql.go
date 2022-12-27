@@ -13,13 +13,29 @@ const getHeight = `-- name: GetHeight :one
 SELECT
     height
 FROM
-    height
-LIMIT
-    1
+    chains
+WHERE
+    id = $1
 `
 
-func (q *Queries) GetHeight(ctx context.Context) (int64, error) {
-	row := q.queryRow(ctx, q.getHeightStmt, getHeight)
+func (q *Queries) GetHeight(ctx context.Context, id int32) (int64, error) {
+	row := q.queryRow(ctx, q.getHeightStmt, getHeight, id)
+	var height int64
+	err := row.Scan(&height)
+	return height, err
+}
+
+const getHeightByName = `-- name: GetHeightByName :one
+SELECT
+    height
+FROM
+    chains
+WHERE
+    chain = $1
+`
+
+func (q *Queries) GetHeightByName(ctx context.Context, chain string) (int64, error) {
+	row := q.queryRow(ctx, q.getHeightByNameStmt, getHeightByName, chain)
 	var height int64
 	err := row.Scan(&height)
 	return height, err
@@ -27,12 +43,19 @@ func (q *Queries) GetHeight(ctx context.Context) (int64, error) {
 
 const setHeight = `-- name: SetHeight :exec
 UPDATE
-    height
+    chains
 SET
     height = $1
+WHERE
+    id = $2
 `
 
-func (q *Queries) SetHeight(ctx context.Context, height int64) error {
-	_, err := q.exec(ctx, q.setHeightStmt, setHeight, height)
+type SetHeightParams struct {
+	Height int64
+	ID     int32
+}
+
+func (q *Queries) SetHeight(ctx context.Context, arg *SetHeightParams) error {
+	_, err := q.exec(ctx, q.setHeightStmt, setHeight, arg.Height, arg.ID)
 	return err
 }

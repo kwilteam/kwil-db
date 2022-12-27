@@ -1,13 +1,23 @@
 -- name: SetHeight :exec
 UPDATE
-    height
+    chains
 SET
-    height = $1;
+    height = $1
+WHERE
+    id = $2;
 
 -- name: GetHeight :one
 SELECT
     height
 FROM
+    chains
+WHERE
+    id = $1;
+
+-- name: GetHeightByName :one
+SELECT
     height
-LIMIT
-    1;
+FROM
+    chains
+WHERE
+    chain = $1;

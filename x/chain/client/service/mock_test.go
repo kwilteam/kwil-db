@@ -8,7 +8,6 @@ import (
 	"kwil/x/chain/client/service"
 	provider "kwil/x/chain/provider/dto"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -43,9 +42,11 @@ func newMockChainProvider() provider.ChainProvider {
 
 func newMockChainClient() dto.ChainClient {
 
-	interval := 10 * time.Second
-
-	return service.NewChainClientNoConfig(newMockChainProvider(), 2, interval, REQUIRED_CONFIRMATIONS)
+	return service.NewChainClientExplicit(newMockChainProvider(), &dto.Config{
+		ChainCode:             2,
+		ReconnectionInterval:  10,
+		RequiredConfirmations: REQUIRED_CONFIRMATIONS,
+	})
 
 	/*
 		return &chainClient{

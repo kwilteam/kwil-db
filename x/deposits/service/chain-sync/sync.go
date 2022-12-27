@@ -8,7 +8,7 @@ import (
 // Sync synchronizes the deposits and withdrawals up to the latest block.
 func (c *chain) sync(ctx context.Context) error {
 	// get the last synced height
-	lastSynced, err := c.dao.GetHeight(ctx)
+	lastSynced, err := c.dao.GetHeight(ctx, int32(c.chainClient.ChainCode()))
 	if err != nil {
 		return err
 	}

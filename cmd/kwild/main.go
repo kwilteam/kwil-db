@@ -16,14 +16,14 @@ import (
 	"time"
 
 	"kwil/x/cfgx"
-	"kwil/x/crypto"
-	deposits "kwil/x/deposits_old"
 	"kwil/x/grpcx"
 	"kwil/x/logx"
 	"kwil/x/proto/apipb"
+	"kwil/x/proto/depositsvc"
 	"kwil/x/service/apisvc"
 
 	kg "kwil/cmd/kwild-gateway/server"
+	deposits "kwil/x/deposits/app"
 
 	"github.com/oklog/run"
 )
@@ -32,26 +32,20 @@ func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dc := cfgx.GetConfig().Select("deposit-settings")
-
-	kr, err := crypto.NewKeyring(dc)
-	if err != nil {
-		return fmt.Errorf("failed to create keyring: %w", err)
-	}
-
-	acc, err := kr.GetDefaultAccount()
-	if err != nil {
-		return fmt.Errorf("failed to get default account: %w", err)
-	}
-
 	client, err := sqlclient.Open(env.GetDbConnectionString(), 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to open sql client: %w", err)
 	}
 
-	d, err := deposits.New(ctx, dc, logger, acc, client)
+	cfg := cfgx.GetConfig()
+	chainClient, err := buildChainClient(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to initialize new deposits: %w", err)
+		return fmt.Errorf("failed to build chain client: %w", err)
+	}
+
+	deposits, err := buildDeposits(cfg, client, chainClient, "274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988")
+	if err != nil {
+		return fmt.Errorf("failed to build deposits: %w", err)
 	}
 
 	mngrCfg := cfgx.GetConfig().Select("manager-settings")
@@ -68,10 +62,10 @@ func execute(logger logx.Logger) error {
 	apiService := apisvc.NewService(mngr)
 	httpHandler := apisvc.NewHandler(logger)
 
-	return serve(ctx, logger, d, httpHandler, apiService)
+	return serve(ctx, logger, deposits, httpHandler, apiService)
 }
 
-func serve(ctx context.Context, logger logx.Logger, d deposits.Deposits, httpHandler http.Handler, apiService apipb.KwilServiceServer) error {
+func serve(ctx context.Context, logger logx.Logger, d *deposits.Service, httpHandler http.Handler, apiService apipb.KwilServiceServer) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -80,14 +74,24 @@ func serve(ctx context.Context, logger logx.Logger, d deposits.Deposits, httpHan
 	}
 
 	g.Add(func() error {
-		return d.Listen(ctx)
-	}, func(error) {
-		_ = d.Close()
+		err = d.Sync(ctx)
+		if err != nil {
+			return err
+		}
+		logger.Info("deposits synced")
+
+		<-ctx.Done() // if any rungroup actor returns, the whole group stops, so we wait for ctx.Done() to return
+		return nil
+	}, func(err error) {
+		if err != nil {
+			logger.Sugar().Errorf("deposits failed to sync: %d", err)
+		}
 	})
 
 	g.Add(func() error {
 		grpcServer := grpcx.NewServer(logger)
 		apipb.RegisterKwilServiceServer(grpcServer, apiService)
+		depositsvc.RegisterKwilServiceServer(grpcServer, d)
 		return grpcServer.Serve(listener)
 	}, func(error) {
 		_ = listener.Close()

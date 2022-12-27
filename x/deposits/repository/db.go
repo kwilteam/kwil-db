@@ -45,8 +45,14 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getBalanceAndSpentStmt, err = db.PrepareContext(ctx, getBalanceAndSpent); err != nil {
 		return nil, fmt.Errorf("error preparing query GetBalanceAndSpent: %w", err)
 	}
+	if q.getDepositByTxStmt, err = db.PrepareContext(ctx, getDepositByTx); err != nil {
+		return nil, fmt.Errorf("error preparing query GetDepositByTx: %w", err)
+	}
 	if q.getHeightStmt, err = db.PrepareContext(ctx, getHeight); err != nil {
 		return nil, fmt.Errorf("error preparing query GetHeight: %w", err)
+	}
+	if q.getHeightByNameStmt, err = db.PrepareContext(ctx, getHeightByName); err != nil {
+		return nil, fmt.Errorf("error preparing query GetHeightByName: %w", err)
 	}
 	if q.newWithdrawalStmt, err = db.PrepareContext(ctx, newWithdrawal); err != nil {
 		return nil, fmt.Errorf("error preparing query NewWithdrawal: %w", err)
@@ -100,9 +106,19 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getBalanceAndSpentStmt: %w", cerr)
 		}
 	}
+	if q.getDepositByTxStmt != nil {
+		if cerr := q.getDepositByTxStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getDepositByTxStmt: %w", cerr)
+		}
+	}
 	if q.getHeightStmt != nil {
 		if cerr := q.getHeightStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getHeightStmt: %w", cerr)
+		}
+	}
+	if q.getHeightByNameStmt != nil {
+		if cerr := q.getHeightByNameStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getHeightByNameStmt: %w", cerr)
 		}
 	}
 	if q.newWithdrawalStmt != nil {
@@ -171,7 +187,9 @@ type Queries struct {
 	depositStmt            *sql.Stmt
 	expireWithdrawalsStmt  *sql.Stmt
 	getBalanceAndSpentStmt *sql.Stmt
+	getDepositByTxStmt     *sql.Stmt
 	getHeightStmt          *sql.Stmt
+	getHeightByNameStmt    *sql.Stmt
 	newWithdrawalStmt      *sql.Stmt
 	setBalanceAndSpentStmt *sql.Stmt
 	setHeightStmt          *sql.Stmt
@@ -189,7 +207,9 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		depositStmt:            q.depositStmt,
 		expireWithdrawalsStmt:  q.expireWithdrawalsStmt,
 		getBalanceAndSpentStmt: q.getBalanceAndSpentStmt,
+		getDepositByTxStmt:     q.getDepositByTxStmt,
 		getHeightStmt:          q.getHeightStmt,
+		getHeightByNameStmt:    q.getHeightByNameStmt,
 		newWithdrawalStmt:      q.newWithdrawalStmt,
 		setBalanceAndSpentStmt: q.setBalanceAndSpentStmt,
 		setHeightStmt:          q.setHeightStmt,

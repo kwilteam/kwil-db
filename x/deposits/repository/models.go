@@ -8,15 +8,17 @@ import (
 	"database/sql"
 )
 
+type Chain struct {
+	ID     int32
+	Chain  string
+	Height int64
+}
+
 type Deposit struct {
 	ID     int32
 	TxHash string
 	Wallet string
 	Amount string
-	Height int64
-}
-
-type Height struct {
 	Height int64
 }
 

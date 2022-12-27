@@ -7,6 +7,8 @@ import (
 	"kwil/x"
 	"kwil/x/utils"
 	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type DB struct {
@@ -88,7 +90,7 @@ func open(conn string, deadline x.Deadline) (*DB, error) {
 }
 
 func tryOpen(conn string) (*DB, error) {
-	db, err := sql.Open("postgres", conn)
+	db, err := sql.Open("pgx", conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

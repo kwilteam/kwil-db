@@ -16,6 +16,7 @@ import (
 
 type taskRunner struct {
 	tasks []Runnable
+	final Runnable // the final task to run after all other tasks have completed
 }
 
 type Runnable interface {
@@ -51,5 +52,16 @@ func (t *taskRunner) Run(ctx context.Context, chunk *Chunk) error {
 		}
 	}
 
+	if t.final != nil {
+		err := t.final.Run(ctx, chunk)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func (t *taskRunner) SetFinal(task Runnable) {
+	t.final = task
 }
