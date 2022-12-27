@@ -1,0 +1,12 @@
+# NodePort: map containers port to localhost
+service:
+  type: NodePort
+
+hasura:
+  service:
+    type: NodePort
+  postgresql:
+    primary:
+      service:
+        type:
+          NodePort

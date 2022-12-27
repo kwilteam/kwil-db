@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kwil.fullname" . }}
+  labels:
+    {{- include "kwil.labels" . | nindent 4 }}
+data:
+  {{/*- or $graphqlHost := printf "%s-hasura" .Release.Name -*/}}
+  {{- $graphqlHost := include "hasura.fullname" .Subcharts.hasura -}}
+  KWIL_GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) -}}
+  {{/* TODO postgressql from external provider */}}
+  {{- $pgHost := include "postgresql.primary.fullname" .Subcharts.hasura.Subcharts.postgresql -}}
+  {{/*- or $pgHost := printf "%s-postgresql" .Release.Name  -*/}}
+  {{/* TODO: check postgresql.enabled */}}
+  {{- $pgPort := int .Values.hasura.postgresql.primary.service.ports.postgresql -}}
+  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s" .Values.global.postgresql.auth.username .Values.global.postgresql.auth.password $pgHost $pgPort $.Values.global.kwil.database }}
+  WITH_GATEWAY: {{ true | quote }}
+  GATEWAY_CORS: {{ .Values.kwil.gatewayCors | quote }}

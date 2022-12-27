@@ -1,6 +1,6 @@
 apiVersion: v2
-name: hasura
-description: A Helm chart for Hasura.
+name: kwil
+description: A Helm chart for Kwil.
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -21,10 +21,9 @@ version: 0.1.0
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "v2.16.0"
+appVersion: "0.1.0"
 
 dependencies:
-  - name: postgresql
-    version: ~12.1.6
-    repository: https://charts.bitnami.com/bitnami
-    condition: postgresql.enabled
+  - name: hasura
+    version: ~0.1.0
+    condition: hasura.enabled
