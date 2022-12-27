@@ -25,3 +25,6 @@ cmd/cmd
 .DS_Store
 **/**/node_modules
 _ignore
+
+# helm charts deps
+k8s/helm/kwil/charts/hasura/charts/
