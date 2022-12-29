@@ -1,12 +1,21 @@
 # NodePort: map containers port to localhost
 service:
   type: NodePort
+  # comment nodePorts to enable multi instances on local machine
+  nodePorts:
+    kwild: 32101
+    gateway: 32102
 
 hasura:
   service:
     type: NodePort
+    # comment nodePorts to enable multi instances on local machine
+    nodePorts:
+      hasura: 32100
   postgresql:
     primary:
       service:
-        type:
-          NodePort
+        type: NodePort
+        # comment nodePorts to enable multi instances on local machine
+        nodePorts:
+          postgresql: 32103

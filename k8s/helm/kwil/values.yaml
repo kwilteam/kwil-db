@@ -41,9 +41,7 @@ service:
   ports:
     kwild: 50051
     gateway: 8082
-  nodePorts: 
-    kwild: 32101
-    gateway: 32102
+  nodePorts: {}
 
 ingress:
   enabled: false
@@ -102,8 +100,6 @@ hasura:
       service:
         ports:
           postgresql: 5432
-      nodePort:
-        postgresql: "32103"
       persistence:
         # by default disable persistent volume
         enabled: false

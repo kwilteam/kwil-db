@@ -13,6 +13,6 @@ data:
   {{/*- or $pgHost := printf "%s-postgresql" .Release.Name  -*/}}
   {{/* TODO: check postgresql.enabled */}}
   {{- $pgPort := int .Values.hasura.postgresql.primary.service.ports.postgresql -}}
-  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s" .Values.global.postgresql.auth.username .Values.global.postgresql.auth.password $pgHost $pgPort $.Values.global.kwil.database }}
+  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgresql.auth.username .Values.global.postgresql.auth.password $pgHost $pgPort $.Values.global.kwil.database }}
   WITH_GATEWAY: {{ true | quote }}
   GATEWAY_CORS: {{ .Values.kwil.gatewayCors | quote }}

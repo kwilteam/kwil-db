@@ -17,6 +17,6 @@ data:
   HASURA_GRAPHQL_ENABLE_CONSOLE: {{ .enableConsole | quote }}
   HASURA_GRAPHQL_DEV_MODE: {{ .devMode | quote }}
   HASURA_GRAPHQL_ENABLED_LOG_TYPES: {{ .logTypes }}
-  HASURA_GRAPHQL_METADATA_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s" $.Values.global.postgresql.auth.username $.Values.global.postgresql.auth.password $pgHost $pgPort .database }}
-  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s" $.Values.global.postgresql.auth.username $.Values.global.postgresql.auth.password $pgHost $pgPort $.Values.global.kwil.database }}
+  HASURA_GRAPHQL_METADATA_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" $.Values.global.postgresql.auth.username $.Values.global.postgresql.auth.password $pgHost $pgPort .database }}
+  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" $.Values.global.postgresql.auth.username $.Values.global.postgresql.auth.password $pgHost $pgPort $.Values.global.kwil.database }}
   {{- end }}

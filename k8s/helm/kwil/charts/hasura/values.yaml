@@ -40,8 +40,7 @@ service:
   type: ClusterIP
   ports:
     hasura: 8080
-  nodePorts: 
-    hasura: 32100
+  nodePorts: {}
 
 ingress:
   enabled: false
