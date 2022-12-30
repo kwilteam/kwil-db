@@ -37,9 +37,12 @@ func (c *Cors) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.h.ServeHTTP(w, r)
 }
 
-func MCors(cors string) middleware.Middleware {
-	return func(h http.Handler) http.Handler {
-		return newCors(h, cors)
+func MCors(cors string) *middleware.NamedMiddleware {
+	return &middleware.NamedMiddleware{
+		Name: "cors",
+		Mw: func(h http.Handler) http.Handler {
+			return newCors(h, cors)
+		},
 	}
 }
 

@@ -36,8 +36,11 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func MAuth(m Manager) middleware.Middleware {
-	return func(h http.Handler) http.Handler {
-		return newAuth(h, m)
+func MAuth(m Manager) *middleware.NamedMiddleware {
+	return &middleware.NamedMiddleware{
+		Name: "auth",
+		Mw: func(h http.Handler) http.Handler {
+			return newAuth(h, m)
+		},
 	}
 }

@@ -21,24 +21,19 @@ type GWServer struct {
 	h           http.Handler
 }
 
-func NewGWServer(m *runtime.ServeMux, addr string) *GWServer {
-	return &GWServer{mux: m,
+func NewGWServer(mux *runtime.ServeMux, addr string) *GWServer {
+	return &GWServer{mux: mux,
 		addr:   addr,
-		logger: logx.New().Sugar()}
-}
-
-func (g *GWServer) AddMiddleWares(ms []*middleware.NamedMiddleware) {
-	g.h = g.mux
-	for _, m := range ms {
-		g.middlewares = append(g.middlewares, m)
-		g.logger.Infof("apply %s middleware", m.Name)
-		g.h = m.Mw(g.h)
+		logger: logx.New().Sugar(),
+		h:      mux,
 	}
 }
 
-func (g *GWServer) ApplyMiddleWares(ms []*middleware.NamedMiddleware) {
+func (g *GWServer) AddMiddlewares(ms ...*middleware.NamedMiddleware) {
 	for _, m := range ms {
 		g.middlewares = append(g.middlewares, m)
+		g.logger.Infof("apply middleware %s", m.Name)
+		g.h = m.Mw(g.h)
 	}
 }
 

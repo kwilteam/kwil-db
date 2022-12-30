@@ -5,7 +5,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"kwil/x/gateway"
-	"kwil/x/gateway/middleware"
 	"kwil/x/gateway/middleware/auth"
 	"kwil/x/gateway/middleware/cors"
 	"os"
@@ -40,14 +39,11 @@ func Start() error {
 			f.Close()
 
 			_cors := viper.GetString(cors.GatewayCorsName)
-
-			ms := []*middleware.NamedMiddleware{
+			gw.AddMiddlewares(
 				// from innermost middleware
-				{"auth", auth.MAuth(keyManager)},
-				{"cors", cors.MCors(_cors)},
-			}
-
-			gw.AddMiddleWares(ms)
+				auth.MAuth(keyManager),
+				cors.MCors(_cors),
+			)
 
 			return gw.Serve()
 		},
