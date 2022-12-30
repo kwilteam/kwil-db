@@ -1,11 +1,10 @@
 package cors
 
 import (
-	"github.com/spf13/viper"
 	"kwil/x/gateway/middleware"
 	"net/http"
-	"os"
 	"regexp"
+	"strings"
 )
 
 const (
@@ -16,15 +15,16 @@ const (
 )
 
 type Cors struct {
-	h http.Handler
+	h    http.Handler
+	cors string
 }
 
-func newCors(h http.Handler) *Cors {
-	return &Cors{h: h}
+func newCors(h http.Handler, cors string) *Cors {
+	return &Cors{h: h, cors: cors}
 }
 
 func (c *Cors) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if allowedOrigin(r.Header.Get("Origin")) {
+	if allowedOrigin(c.cors, r.Header.Get("Origin")) {
 		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 		w.Header().Set("Access-Control-Allow-Methods", AllowMethods)
 		w.Header().Set("Access-Control-Allow-Headers", AllowHeaders)
@@ -37,22 +37,21 @@ func (c *Cors) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.h.ServeHTTP(w, r)
 }
 
-func MCors() middleware.Middleware {
+func MCors(cors string) middleware.Middleware {
 	return func(h http.Handler) http.Handler {
-		return newCors(h)
+		return newCors(h, cors)
 	}
 }
 
-func allowedOrigin(origin string) bool {
-	cors := os.Getenv("GATEWAY_CORS")
-	if cors == "" {
-		cors = viper.GetString("cors")
-	}
+func allowedOrigin(cors, origin string) bool {
 	if cors == "*" {
 		return true
 	}
-	if matched, _ := regexp.MatchString(cors, origin); matched {
-		return true
+	// allow multiple origins
+	for _, s := range strings.Split(cors, ",") {
+		if matched, _ := regexp.MatchString(s, origin); matched {
+			return true
+		}
 	}
 	return false
 }

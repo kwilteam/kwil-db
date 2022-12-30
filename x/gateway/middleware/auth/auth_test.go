@@ -1,21 +1,13 @@
 package auth
 
 import (
-	"fmt"
 	"io"
+	http2 "kwil/x/test/http"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
-
-type Dummy struct {
-	data string
-}
-
-func (d Dummy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, d.data)
-}
 
 func TestAuth_ServeHTTP(t *testing.T) {
 	type fields struct {
@@ -39,7 +31,7 @@ func TestAuth_ServeHTTP(t *testing.T) {
 		{
 			name: "valid api key",
 			fields: fields{
-				h: &Dummy{testData},
+				h: &http2.DummyHttpHandler{Data: testData},
 				m: km,
 			},
 			args: args{
@@ -55,7 +47,7 @@ func TestAuth_ServeHTTP(t *testing.T) {
 		{
 			name: "nonexist api key",
 			fields: fields{
-				h: &Dummy{testData},
+				h: &http2.DummyHttpHandler{Data: testData},
 				m: km,
 			},
 			args: args{
@@ -71,7 +63,7 @@ func TestAuth_ServeHTTP(t *testing.T) {
 		{
 			name: "api key not present",
 			fields: fields{
-				h: &Dummy{testData},
+				h: &http2.DummyHttpHandler{Data: testData},
 				m: km,
 			},
 			args: args{

@@ -39,10 +39,12 @@ func Start() error {
 			}
 			f.Close()
 
+			_cors := viper.GetString(cors.GatewayCorsName)
+
 			ms := []*middleware.NamedMiddleware{
 				// from innermost middleware
 				{"auth", auth.MAuth(keyManager)},
-				{"cors", cors.MCors()},
+				{"cors", cors.MCors(_cors)},
 			}
 
 			gw.AddMiddleWares(ms)

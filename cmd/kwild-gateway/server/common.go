@@ -35,7 +35,7 @@ func CliSetup(cmd *cobra.Command) {
 	cmd.PersistentFlags().String(hasura.GraphqlEndpointName, defaultGraphqlEndpoint, "GraphQl server endpoint")
 	viper.BindPFlag(hasura.GraphqlEndpointName, cmd.PersistentFlags().Lookup(hasura.GraphqlEndpointName))
 
-	cmd.PersistentFlags().String(cors.GatewayCorsName, defaultCors, "gateway CORS setting")
+	cmd.PersistentFlags().String(cors.GatewayCorsName, defaultCors, "gateway CORS setting, list separated by commas")
 	viper.BindPFlag(cors.GatewayCorsName, cmd.PersistentFlags().Lookup(cors.GatewayCorsName))
 
 	CliBindEnv()
