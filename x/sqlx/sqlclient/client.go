@@ -65,6 +65,14 @@ func (db *DB) ExecTx(query string) error {
 	return tx.Commit()
 }
 
+func (db *DB) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	stmt, err := db.DB.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	return stmt, nil
+}
+
 func (db *DB) Close() error {
 	return db.DB.Close()
 }
