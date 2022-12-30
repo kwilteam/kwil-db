@@ -6,8 +6,8 @@ const (
 	UnauthorizedRole    = "HASURA_GRAPHQL_UNAUTHORIZED_ROLE"
 	DefaultSource       = "default"
 	DefaultSchema       = "public"
-	EndpointEnv         = "KWIL_GRAPHQL_ENDPOINT"
-	GraphqlEndpointName = "graphql"
+	EndpointEnv         = "GRAPHQL_ENDPOINT"
+	GraphqlEndpointName = "graphql-endpoint"
 )
 
 type ErrorResp struct {

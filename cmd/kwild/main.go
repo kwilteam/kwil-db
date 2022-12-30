@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/async"
-	gmisc "kwil/x/graphql/misc"
 	"kwil/x/sqlx/env"
 	"kwil/x/sqlx/sqlclient"
 	"net"
@@ -125,8 +124,6 @@ func main() {
 		logger.Sugar().Error(err)
 		os.Exit(1)
 	}
-
-	gmisc.CliBindEnv()
 
 	kwild := func() error {
 		return execute(logger)

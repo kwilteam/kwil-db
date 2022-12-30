@@ -27,7 +27,7 @@ type RProxy struct {
 }
 
 func NewRProxy() *RProxy {
-	ru, err := url.Parse(viper.GetString("graphql"))
+	ru, err := url.Parse(viper.GetString(hasura.GraphqlEndpointName))
 	if err != nil {
 		log.Fatal(err)
 	}
