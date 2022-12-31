@@ -5,6 +5,6 @@ import "net/http"
 type Middleware func(http.Handler) http.Handler
 
 type NamedMiddleware struct {
-	Name string
-	Mw   Middleware
+	Name       string
+	Middleware Middleware
 }

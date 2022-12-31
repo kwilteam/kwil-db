@@ -33,7 +33,7 @@ func (g *GWServer) AddMiddlewares(ms ...*middleware.NamedMiddleware) {
 	for _, m := range ms {
 		g.middlewares = append(g.middlewares, m)
 		g.logger.Infof("apply middleware %s", m.Name)
-		g.h = m.Mw(g.h)
+		g.h = m.Middleware(g.h)
 	}
 }
 

@@ -1,6 +1,7 @@
 package cors
 
 import (
+	"io"
 	http2 "kwil/x/test/http"
 	"net/http"
 	"net/http/httptest"
@@ -20,10 +21,11 @@ func TestCors_ServeHTTP(t *testing.T) {
 	testOrigin := "http://bar.example"
 	testOrigins := "http://foo.example,http://bar.example"
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   map[string]string
+		name       string
+		fields     fields
+		args       args
+		wantHeader map[string]string
+		wantBody   string
 	}{
 		{
 			name: "cors allow *",
@@ -38,7 +40,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 				}(),
 				cors: "*",
 			},
-			want: map[string]string{
+			wantHeader: map[string]string{
 				"Access-Control-Allow-Origin":  testOrigin,
 				"Access-Control-Allow-Methods": AllowMethods,
 				"Access-Control-Allow-Headers": AllowHeaders,
@@ -57,7 +59,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 				}(),
 				cors: testOrigins,
 			},
-			want: map[string]string{
+			wantHeader: map[string]string{
 				"Access-Control-Allow-Origin":  testOrigin,
 				"Access-Control-Allow-Methods": AllowMethods,
 				"Access-Control-Allow-Headers": AllowHeaders,
@@ -76,21 +78,48 @@ func TestCors_ServeHTTP(t *testing.T) {
 				}(),
 				cors: "",
 			},
-			want: map[string]string{},
+			wantHeader: map[string]string{},
+		},
+		{
+			name: "non options method",
+			fields: fields{
+				h: &http2.DummyHttpHandler{Data: testData},
+			},
+			args: args{
+				r: func() *http.Request {
+					req := httptest.NewRequest(http.MethodGet, "/", nil)
+					return req
+				}(),
+				cors: "",
+			},
+			wantBody: testData,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			c := newCors(tt.fields.h, tt.args.cors)
-			c.ServeHTTP(w, tt.args.r)
+			c := MCors(tt.args.cors)
+			c.Middleware(tt.fields.h).ServeHTTP(w, tt.args.r)
 
 			res := w.Result()
 			defer res.Body.Close()
 
-			for k, v := range tt.want {
-				if res.Header.Get(k) != v {
-					t.Errorf("expect header '%s=%s', got '%s'", k, v, res.Header.Get(k))
+			if tt.wantHeader != nil {
+				for k, v := range tt.wantHeader {
+					if res.Header.Get(k) != v {
+						t.Errorf("expect header '%s=%s', got '%s'", k, v, res.Header.Get(k))
+					}
+				}
+			}
+
+			if tt.wantBody != "" {
+				data, err := io.ReadAll(res.Body)
+				if err != nil {
+					t.Errorf("unexpected error %v", err)
+				}
+
+				if string(data) != tt.wantBody {
+					t.Errorf("expected '%v' got '%v'", tt.wantBody, string(data))
 				}
 			}
 		})
@@ -153,7 +182,7 @@ func Test_allowedOrigin(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := allowedOrigin(tt.args.cors, tt.args.origin); got != tt.want {
-				t.Errorf("allowedOrigin() = %v, want %v", got, tt.want)
+				t.Errorf("allowedOrigin() = %v, wantHeader %v", got, tt.want)
 			}
 		})
 	}

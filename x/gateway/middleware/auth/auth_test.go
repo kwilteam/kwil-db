@@ -58,7 +58,7 @@ func TestAuth_ServeHTTP(t *testing.T) {
 				}(),
 			},
 			wantErr: true,
-			want:    "",
+			want:    MessageUnauthorized,
 		},
 		{
 			name: "api key not present",
@@ -73,17 +73,14 @@ func TestAuth_ServeHTTP(t *testing.T) {
 				}(),
 			},
 			wantErr: true,
-			want:    "",
+			want:    MessageUnauthorized,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			a := &Auth{
-				h: tt.fields.h,
-				m: tt.fields.m,
-			}
-			a.ServeHTTP(w, tt.args.r)
+			a := MAuth(tt.fields.m)
+			a.Middleware(tt.fields.h).ServeHTTP(w, tt.args.r)
 
 			res := w.Result()
 			defer res.Body.Close()
