@@ -5,8 +5,6 @@ metadata:
   labels:
     {{- include "hasura.labels" . | nindent 4 }}
 data:
-  GRAPHQL_HOST: {{ include "hasura.fullname" . }}
-  GRAPHQL_PORT: {{ .Values.service.ports.hasura | quote }}
   {{- $pgHost := include "postgresql.primary.fullname" .Subcharts.postgresql -}}
   {{/* or
   {{- $pgHost := .Release.Name-postgresql -}}

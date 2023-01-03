@@ -33,8 +33,8 @@ spec:
         - name: PG_DATABASE_URL
           # value: "postgres://$(PG_USER):$(PG_PASSWORD)@$(PG_HOST)/$(PG_DEFAULT_DB)?sslmode=$(PG_SSL_MODE)"
           value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DEFAULT_DB)?sslmode=$(POSTGRES_SSL_MODE)"
-        - name: KWIL_GRAPHQL_ENDPOINT
-          value: "http://$(KWIL_GRAPHQL_HOST):$(KWIL_GRAPHQL_PORT)"
+        - name: GRAPHQL_ENDPOINT
+          value: "http://$(GRAPHQL_HOST):$(GRAPHQL_PORT)"
         volumeMounts: # mount into container
           - name: keys-mnt
             mountPath: /app/keys.json
@@ -75,7 +75,7 @@ spec:
           envFrom:
           - configMapRef:
               name: kwil-kwild-config
-          command: ["sh", "-c", "echo scan ${KWIL_GRAPHQL_HOST}:${KWIL_GRAPHQL_PORT}; for i in $(seq 1 300); do nc -zvw1 ${KWIL_GRAPHQL_HOST} ${KWIL_GRAPHQL_PORT} && exit 0 || sleep 3; done; exit 1"]
+          command: ["sh", "-c", "echo scan ${GRAPHQL_HOST}:${GRAPHQL_PORT}; for i in $(seq 1 300); do nc -zvw1 ${GRAPHQL_HOST} ${GRAPHQL_PORT} && exit 0 || sleep 3; done; exit 1"]
       volumes: # mount into pod
       - name: keys-mnt
         configMap:

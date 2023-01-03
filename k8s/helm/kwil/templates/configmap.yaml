@@ -7,7 +7,7 @@ metadata:
 data:
   {{/*- or $graphqlHost := printf "%s-hasura" .Release.Name -*/}}
   {{- $graphqlHost := include "hasura.fullname" .Subcharts.hasura -}}
-  KWIL_GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) -}}
+  GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) -}}
   {{/* TODO postgressql from external provider */}}
   {{- $pgHost := include "postgresql.primary.fullname" .Subcharts.hasura.Subcharts.postgresql -}}
   {{/*- or $pgHost := printf "%s-postgresql" .Release.Name  -*/}}
