@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"kwil/x/graphql/manager"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,7 +14,7 @@ type client struct {
 	endpoint string
 }
 
-func NewClient(endpoint string) manager.Client {
+func NewClient(endpoint string) *client {
 	return &client{
 		endpoint: endpoint,
 	}
