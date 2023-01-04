@@ -3,14 +3,14 @@ package execution
 type ComparisonOperatorType int
 
 const (
-	INVALID_COMPARISON_OPERATOR ComparisonOperatorType = iota
+	INVALID_COMPARISON_OPERATOR_TYPE ComparisonOperatorType = iota
 	EQUAL
 	NOT_EQUAL
 	GREATER_THAN
 	GREATER_THAN_OR_EQUAL
 	LESS_THAN
 	LESS_THAN_OR_EQUAL
-	END_COMPARISON_OPERATOR
+	END_COMPARISON_OPERATOR_TYPE
 )
 
 func (c *ComparisonOperatorType) String() string {
@@ -36,5 +36,5 @@ func (c *ComparisonOperatorType) Int() int {
 }
 
 func (c *ComparisonOperatorType) IsValid() bool {
-	return *c > INVALID_COMPARISON_OPERATOR && *c < END_COMPARISON_OPERATOR
+	return *c > INVALID_COMPARISON_OPERATOR_TYPE && *c < END_COMPARISON_OPERATOR_TYPE
 }

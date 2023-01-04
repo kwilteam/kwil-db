@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"kwil/x/execution/clean"
 	"kwil/x/execution/dto"
+	"kwil/x/execution/executables"
 	"kwil/x/execution/repository"
 	schemabuilder "kwil/x/execution/sql-builder/schema-builder"
 	"kwil/x/sqlx/sqlclient"
@@ -17,6 +19,9 @@ func (s *executionService) DeployDatabase(ctx context.Context, database *dto.Dat
 	if s.databaseExists(database.GetSchemaName()) {
 		return fmt.Errorf(`database "%s" already exists`, database.GetSchemaName())
 	}
+
+	// clean database
+	clean.CleanDatabase(database)
 
 	// validate database
 	err := s.ValidateDatabase(database)
@@ -43,7 +48,21 @@ func (s *executionService) DeployDatabase(ctx context.Context, database *dto.Dat
 	}
 
 	// commit tx
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
+	}
+
+	// we add the database after tx commit since this only gets emptied when a DB is deleted or when the server is restarted
+	dbInterface, err := executables.FromDatabase(database)
+	if err != nil {
+		return fmt.Errorf("failed to generate database interface: %w", err)
+	}
+
+	// add database to in-memory cache
+	s.databases[database.GetSchemaName()] = dbInterface
+
+	return nil
 }
 
 type dbCreator struct {
@@ -97,7 +116,7 @@ func (d *dbCreator) Store(ctx context.Context) error {
 func (d *dbCreator) storeDatabase(ctx context.Context) error {
 	return d.dao.CreateDatabase(ctx, &repository.CreateDatabaseParams{
 		DbName:  d.database.Name,
-		DbOwner: sql.NullString{String: d.database.Owner, Valid: true},
+		DbOwner: d.database.Owner,
 	})
 }
 

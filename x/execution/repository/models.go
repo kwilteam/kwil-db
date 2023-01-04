@@ -24,7 +24,7 @@ type Column struct {
 
 type Database struct {
 	ID      int32
-	DbOwner sql.NullString
+	DbOwner string
 	DbName  string
 }
 

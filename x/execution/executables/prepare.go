@@ -7,7 +7,7 @@ import (
 )
 
 // prepare prepares execution of a query.  It does not check access control rights.
-func (d *databaseInterface) Prepare(query string, caller string, inputs []*dto.UserInput) ([]any, error) {
+func (d *executableInterface) Prepare(query string, caller string, inputs []*dto.UserInput) ([]any, error) {
 	// get the executable
 	executable := d.Executables[query]
 	if executable == nil {
@@ -40,18 +40,13 @@ func (d *databaseInterface) Prepare(query string, caller string, inputs []*dto.U
 			return nil, fmt.Errorf(`missing user input for arg "%s"`, arg.Name)
 		}
 
-		// check that the user input type matches the arg type
-		if input.Type != arg.Type {
-			return nil, fmt.Errorf(`invalid user input for arg "%s": expected type "%s", got "%s"`, arg.Name, arg.Type.String(), input.Type.String())
-		}
-
 		// check that the user input value is convertible to the arg type
-		val, err := execution.DataTypes.StringToAnyGolangType(input.Value, arg.Type)
+		err := execution.DataTypes.CompareAnyToKwilType(input.Value, arg.Type)
 		if err != nil {
 			return nil, fmt.Errorf(`invalid user input type for arg "%s": %w`, arg.Name, err)
 		}
 
-		returns[arg.Position] = val
+		returns[arg.Position] = input.Value
 	}
 
 	return returns, nil

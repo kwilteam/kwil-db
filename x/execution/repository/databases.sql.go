@@ -7,7 +7,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 )
 
 const createDatabase = `-- name: CreateDatabase :exec
@@ -19,10 +18,28 @@ VALUES
 
 type CreateDatabaseParams struct {
 	DbName  string
-	DbOwner sql.NullString
+	DbOwner string
 }
 
 func (q *Queries) CreateDatabase(ctx context.Context, arg *CreateDatabaseParams) error {
 	_, err := q.exec(ctx, q.createDatabaseStmt, createDatabase, arg.DbName, arg.DbOwner)
+	return err
+}
+
+const dropDatabase = `-- name: DropDatabase :exec
+DELETE FROM
+    databases
+WHERE
+    db_name = $1
+    AND db_owner = $2
+`
+
+type DropDatabaseParams struct {
+	DbName  string
+	DbOwner string
+}
+
+func (q *Queries) DropDatabase(ctx context.Context, arg *DropDatabaseParams) error {
+	_, err := q.exec(ctx, q.dropDatabaseStmt, dropDatabase, arg.DbName, arg.DbOwner)
 	return err
 }

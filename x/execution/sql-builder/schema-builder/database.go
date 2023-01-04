@@ -1,12 +1,11 @@
+// schemabuilder uses the ddl package to build a valid schema string from a
+// database.
 package schemabuilder
 
 import (
 	"kwil/x/execution/dto"
 	"strings"
 )
-
-// the schemabuilder package uses the ddl package to build a schema from a
-// database.
 
 func GenerateDDL(db *dto.Database) (string, error) {
 	schemaName := db.GetSchemaName()

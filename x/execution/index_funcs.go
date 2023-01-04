@@ -12,5 +12,5 @@ func (c *indexes) ConvertIndex(s string) (IndexType, error) {
 	case "btree":
 		return BTREE, nil
 	}
-	return INVALID_INDEX, fmt.Errorf("unknown index type")
+	return INVALID_INDEX_TYPE, fmt.Errorf("unknown index type")
 }

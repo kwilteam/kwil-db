@@ -14,5 +14,5 @@ func (c *modifiers) ConvertModifier(s string) (ModifierType, error) {
 	case "":
 		return NO_MODIFIER, nil
 	}
-	return INVALID_MODIFIER, fmt.Errorf("unknown modifier type")
+	return INVALID_MODIFIER_TYPE, fmt.Errorf("unknown modifier type")
 }

@@ -7,8 +7,7 @@ const (
 	MAX_TABLE_NAME_LENGTH     = 32 // 63 is max for Postgres
 	MAX_INDEX_NAME_LENGTH     = 32 // 63 is max for Postgres
 	MAX_ROLE_NAME_LENGTH      = 32 // Kwil roles != Postgres roles, so this is arbitrary
-	MAX_DB_NAME_LENGTH        = 16 // 63 is nax schema name, this gets included in the schema name
-	MAX_SCHEMA_NAME_LENGTH    = 61 // db name + owner name + 1 underscore.  Postgres maximum schema name length is 63, our max is 61
+	MAX_DB_NAME_LENGTH        = 32 // 63 is nax schema name, this gets included in the schema name
 	MAX_QUERY_NAME_LENGTH     = 32 // arbitrary
 	MAX_ATTRIBUTE_NAME_LENGTH = 32 // arbitrary
 )

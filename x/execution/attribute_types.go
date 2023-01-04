@@ -4,7 +4,7 @@ type AttributeType int
 
 // Attributes
 const (
-	INVALID_ATTRIBUTE AttributeType = iota
+	INVALID_ATTRIBUTE_TYPE AttributeType = iota
 	PRIMARY_KEY
 	UNIQUE
 	NOT_NULL
@@ -13,7 +13,7 @@ const (
 	MAX        // Max allowed value
 	MIN_LENGTH // Min allowed length
 	MAX_LENGTH // Max allowed length
-	END_ATTRIBUTE
+	END_ATTRIBUTE_TYPE
 )
 
 func (a *AttributeType) String() string {
@@ -43,5 +43,5 @@ func (a *AttributeType) Int() int {
 }
 
 func (a *AttributeType) IsValid() bool {
-	return *a > INVALID_ATTRIBUTE && *a < END_ATTRIBUTE
+	return *a > INVALID_ATTRIBUTE_TYPE && *a < END_ATTRIBUTE_TYPE
 }

@@ -24,7 +24,7 @@ type attribute struct {
 
 func NewAttributeBuilder() schemaPicker {
 	sb := &strings.Builder{}
-	sb.WriteString("ALTER TABLE ")
+	sb.WriteString(`ALTER TABLE "`)
 	return &attribute{
 		stmt: sb,
 	}
@@ -43,14 +43,14 @@ type constraintPicker interface {
 
 func (c *attribute) Schema(s string) tablePicker {
 	c.write(s)
-	c.write(".")
+	c.write(`"."`)
 	c.schma = s
 	return c
 }
 
 func (c *attribute) Table(t string) constraintPicker {
 	c.write(t)
-	c.write(" ")
+	c.write(`" `)
 	c.tbl = t
 	return c
 }
@@ -165,9 +165,9 @@ func (c *attribute) alterColumn(col string) *attribute {
 // will add constraint and name
 func (c *attribute) addConstraint(name string) *attribute {
 
-	c.write("ADD CONSTRAINT ")
+	c.write(`ADD CONSTRAINT "`)
 	c.write(c.generateName(name))
-	c.write(" ")
+	c.write(`" `)
 	return c
 }
 

@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/async"
-	"kwil/x/sqlx/cache"
 	"kwil/x/sqlx/env"
-	"kwil/x/sqlx/manager"
 	"kwil/x/sqlx/sqlclient"
 	"net"
 	"net/http"
@@ -16,11 +14,7 @@ import (
 	"time"
 
 	"kwil/x/cfgx"
-	"kwil/x/grpcx"
 	"kwil/x/logx"
-	"kwil/x/proto/apipb"
-	"kwil/x/proto/depositsvc"
-	"kwil/x/service/apisvc"
 
 	kg "kwil/cmd/kwild-gateway/server"
 	deposits "kwil/x/deposits/app"
@@ -48,24 +42,12 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to build deposits: %w", err)
 	}
 
-	mngrCfg := cfgx.GetConfig().Select("manager-settings")
-	cache := cache.New()
-	mngr, err := manager.New(ctx, client, mngrCfg, cache)
-	if err != nil {
-		return fmt.Errorf("failed to initialize new manager: %w", err)
-	}
-	err = mngr.SyncCache(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to sync cache: %w", err)
-	}
+	httpHandler := NewHandler(logger)
 
-	apiService := apisvc.NewService(mngr)
-	httpHandler := apisvc.NewHandler(logger)
-
-	return serve(ctx, logger, deposits, httpHandler, apiService)
+	return serve(ctx, logger, deposits, httpHandler)
 }
 
-func serve(ctx context.Context, logger logx.Logger, d *deposits.Service, httpHandler http.Handler, apiService apipb.KwilServiceServer) error {
+func serve(ctx context.Context, logger logx.Logger, d *deposits.Service, httpHandler http.Handler) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -89,10 +71,13 @@ func serve(ctx context.Context, logger logx.Logger, d *deposits.Service, httpHan
 	})
 
 	g.Add(func() error {
-		grpcServer := grpcx.NewServer(logger)
-		apipb.RegisterKwilServiceServer(grpcServer, apiService)
-		depositsvc.RegisterKwilServiceServer(grpcServer, d)
-		return grpcServer.Serve(listener)
+		/*
+			grpcServer := grpcx.NewServer(logger)
+			apipb.RegisterKwilServiceServer(grpcServer, apiService)
+			depositsvc.RegisterKwilServiceServer(grpcServer, d)
+			return grpcServer.Serve(listener)
+		*/
+		return nil
 	}, func(error) {
 		_ = listener.Close()
 	})

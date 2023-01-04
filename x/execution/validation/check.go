@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	"kwil/x/execution"
 	"regexp"
 )
 
@@ -26,8 +27,8 @@ func CheckAddress(address string) error {
 		return fmt.Errorf("address cannot be empty")
 	}
 
-	if len(address) > 44 || len(address) < 42 {
-		return fmt.Errorf("address must be between 42 and 44 characters")
+	if len(address) > execution.MAX_OWNER_NAME_LENGTH {
+		return fmt.Errorf("address must be less than or equal to 44 characters")
 	}
 	return nil
 }

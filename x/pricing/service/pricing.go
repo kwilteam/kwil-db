@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"kwil/x/pricing"
 	"kwil/x/pricing/entity"
+	"kwil/x/proto/pricingpb"
 	"math/big"
 )
 
 type PricingService interface {
-	EstimatePrice(request *entity.EstimateRequest) (*entity.EstimateResponse, error)
+	EstimatePrice(request *pricingpb.EstimateRequest) (*pricingpb.EstimateResponse, error)
 	GetPrice(requestType pricing.PricingRequestType) (*big.Int, error)
 }
 
@@ -19,21 +20,21 @@ func NewService() *pricingService {
 	return &pricingService{}
 }
 
-func (p *pricingService) EstimatePrice(request *entity.EstimateRequest) (*entity.EstimateResponse, error) {
+func (p *pricingService) EstimatePrice(request *pricingpb.EstimateRequest) (*pricingpb.EstimateResponse, error) {
 	// for now, we will just determine the request type and return a fixed price
 
 	req := request.GetRequest()
 	var price string
 	switch req.(type) {
-	case *entity.EstimateRequest_Deploy:
+	case *pricingpb.EstimateRequest_Deploy:
 		price = entity.EstimatePrice(pricing.Deploy)
-	case *entity.EstimateRequest_Delete:
+	case *pricingpb.EstimateRequest_Delete:
 		price = entity.EstimatePrice(pricing.Delete)
-	case *entity.EstimateRequest_Query:
+	case *pricingpb.EstimateRequest_Query:
 		price = entity.EstimatePrice(pricing.Query)
 	}
 
-	return &entity.EstimateResponse{
+	return &pricingpb.EstimateResponse{
 		Price: price,
 	}, nil
 }

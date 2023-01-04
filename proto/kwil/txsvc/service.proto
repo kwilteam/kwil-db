@@ -1,0 +1,15 @@
+syntax = "proto3";
+package transactionsvc;
+option go_package = "kwil/x/proto/transactionpb";
+
+import "google/api/annotations.proto";
+
+import "kwil/txsvc/broadcast.proto";
+
+service KwilService {
+  rpc Broadcast(BroadcastRequest) returns (BroadcastResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/broadcast"
+    };
+  }
+}

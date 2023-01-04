@@ -3,11 +3,11 @@ package app
 import (
 	"kwil/x/logx"
 	"kwil/x/pricing/service"
-	"kwil/x/proto/pricingsvc"
+	"kwil/x/proto/pricingpb"
 )
 
 type Service struct {
-	pricingsvc.UnimplementedKwilServiceServer
+	pricingpb.UnimplementedPricingServiceServer
 
 	log     logx.Logger
 	pricing service.PricingService

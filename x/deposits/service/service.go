@@ -13,8 +13,6 @@ import (
 )
 
 type DepositsService interface {
-	Spend(ctx context.Context, spend dto.Spend) error
-	GetBalancesAndSpent(ctx context.Context, wallet string) (*dto.Balance, error)
 	Sync(ctx context.Context) error
 	startWithdrawal(ctx context.Context, withdrawal dto.StartWithdrawal) error
 }

@@ -8,7 +8,7 @@ import (
 type table struct {
 	schema  string
 	name    string
-	columns map[string]ColumnBuilder // using a map to ensure uniqueness
+	columns []ColumnBuilder
 }
 
 type tableBuilder struct {
@@ -32,7 +32,7 @@ type tableNamePicker interface {
 func NewTableBuilder() tableSchemaPicker {
 	return &tableBuilder{
 		table: &table{
-			columns: make(map[string]ColumnBuilder),
+			columns: []ColumnBuilder{},
 		},
 	}
 }
@@ -48,7 +48,7 @@ func (b *tableBuilder) Name(name string) TableBuilder {
 }
 
 func (b *tableBuilder) AddColumn(col ColumnBuilder) TableBuilder {
-	b.table.columns[col.GetName()] = col
+	b.table.columns = append(b.table.columns, col)
 	return b
 }
 
@@ -56,20 +56,29 @@ func (b *tableBuilder) Build() ([]string, error) {
 	var statements []string
 
 	sb := &strings.Builder{}
-	sb.WriteString("CREATE TABLE ")
+	sb.WriteString(`CREATE TABLE "`)
 	if b.table.schema != "" {
 		sb.WriteString(b.table.schema)
-		sb.WriteString(".")
+		sb.WriteString(`"."`)
 	}
 	sb.WriteString(b.table.name)
-	sb.WriteString(" (")
+	sb.WriteString(`" (`)
 
 	cols := len(b.table.columns)
 	if cols == 0 {
 		return statements, fmt.Errorf("table %s has no columns", b.table.name)
 	}
 	i := 0
+
+	// map to guarantee uniqueness of column names
+	colNames := make(map[string]struct{})
 	for _, col := range b.table.columns {
+		// check for duplicate column names
+		if _, ok := colNames[col.GetName()]; ok {
+			return statements, fmt.Errorf("duplicate column name %s", col.GetName())
+		}
+		colNames[col.GetName()] = struct{}{}
+
 		column := col.Build()
 		sb.WriteString(column)
 		if i < cols-1 {

@@ -1,8 +1,7 @@
 package dto
 
 import (
-	"kwil/x/crypto"
-	"kwil/x/utils"
+	"kwil/x/execution/utils"
 )
 
 type Database struct {
@@ -14,9 +13,9 @@ type Database struct {
 	Indexes    []*Index    `json:"indexes"`
 }
 
+// hashes the lower-cased name and owner and prepends an x
 func (d *Database) GetSchemaName() string {
-
-	return "x" + crypto.Sha224Str(utils.JoinBytes([]byte(d.Name), []byte(d.Owner)))
+	return utils.GenerateSchemaName(d.Owner, d.Name)
 }
 
 func (d *Database) GetQuery(q string) *SQLQuery {
@@ -53,4 +52,14 @@ func (d *Database) GetIndex(i string) *Index {
 		}
 	}
 	return nil
+}
+
+func (d *Database) GetDefaultRoles() []string {
+	var roles []string
+	for _, role := range d.Roles {
+		if role.Default {
+			roles = append(roles, role.Name)
+		}
+	}
+	return roles
 }

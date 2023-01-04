@@ -4,10 +4,10 @@ type ModifierType int
 
 // Modifiers
 const (
-	INVALID_MODIFIER ModifierType = iota
+	INVALID_MODIFIER_TYPE ModifierType = iota - 1 // we start at -1 since modifiers are optional
 	NO_MODIFIER
 	CALLER
-	END_MODIFIER
+	END_MODIFIER_TYPE
 )
 
 func (m ModifierType) String() string {
@@ -23,5 +23,5 @@ func (m ModifierType) Int() int {
 }
 
 func (m ModifierType) IsValid() bool {
-	return m > INVALID_MODIFIER && m < END_MODIFIER
+	return m > INVALID_MODIFIER_TYPE && m < END_MODIFIER_TYPE
 }

@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	pricing "kwil/x/pricing/entity"
+	pricing "kwil/x/proto/pricingpb"
 )
 
 // right now this uses the pricing entity but not the service

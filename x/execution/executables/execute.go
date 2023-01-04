@@ -1,10 +1,11 @@
 package executables
 
-func (d *databaseInterface) CanExecute(wallet, query string) bool {
+func (d *executableInterface) CanExecute(wallet, query string) bool {
 
 	// check if the default roles have permission
 	for _, role := range d.DefaultRoles {
-		if d.Access[role] == query {
+		_, ok := d.Access[role][query]
+		if ok {
 			return true
 		}
 	}

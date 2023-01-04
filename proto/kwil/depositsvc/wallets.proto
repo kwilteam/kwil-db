@@ -1,6 +1,6 @@
 syntax = "proto3";
 package depositsvc;
-option go_package = "kwil/x/proto/depositsvc";
+option go_package = "kwil/x/proto/depositpb";
 
 import "kwil/apisvc/tx.proto";
 

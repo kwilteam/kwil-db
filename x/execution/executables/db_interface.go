@@ -1,6 +1,9 @@
 package executables
 
-import "kwil/x/execution/dto"
+import (
+	"fmt"
+	"kwil/x/execution/dto"
+)
 
 // ExecutablesInterface is an in-memory interface that makes retrieval and preparation of executables for applications easy.
 // It contains executables and access control rules / roles.
@@ -9,21 +12,27 @@ import "kwil/x/execution/dto"
 type ExecutablesInterface interface {
 	CanExecute(wallet string, query string) bool
 	Prepare(query string, caller string, inputs []*dto.UserInput) ([]any, error)
+	ListExecutables() []*dto.Executable
 }
 
-// fulfills DatabaseInterface
-type databaseInterface struct {
+// fulfills ExecutableInterface
+type executableInterface struct {
 	Owner        string
 	Executables  map[string]*dto.Executable
-	Access       map[string]string // maps a role name to an executable
+	Access       map[string]map[string]struct{} // maps a role name to an executable
 	DefaultRoles []string
 }
 
-// NewDatabaseInterface creates a new DatabaseInterface
-func NewDatabaseInterface(executables map[string]*dto.Executable, access map[string]string, defaultRoles []string, Owner string) ExecutablesInterface {
-	return &databaseInterface{
-		Executables:  executables,
-		Access:       access,
-		DefaultRoles: defaultRoles,
+func FromDatabase(db *dto.Database) (ExecutablesInterface, error) {
+	execs, err := GenerateExecutables(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate executables: %w", err)
 	}
+
+	return &executableInterface{
+		Owner:        db.Owner,
+		Executables:  execs,
+		Access:       GenerateAccessParameters(db),
+		DefaultRoles: db.GetDefaultRoles(),
+	}, nil
 }

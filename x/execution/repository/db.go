@@ -45,6 +45,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createTableStmt, err = db.PrepareContext(ctx, createTable); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateTable: %w", err)
 	}
+	if q.dropDatabaseStmt, err = db.PrepareContext(ctx, dropDatabase); err != nil {
+		return nil, fmt.Errorf("error preparing query DropDatabase: %w", err)
+	}
 	if q.roleApplyQueryStmt, err = db.PrepareContext(ctx, roleApplyQuery); err != nil {
 		return nil, fmt.Errorf("error preparing query RoleApplyQuery: %w", err)
 	}
@@ -89,6 +92,11 @@ func (q *Queries) Close() error {
 	if q.createTableStmt != nil {
 		if cerr := q.createTableStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createTableStmt: %w", cerr)
+		}
+	}
+	if q.dropDatabaseStmt != nil {
+		if cerr := q.dropDatabaseStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing dropDatabaseStmt: %w", cerr)
 		}
 	}
 	if q.roleApplyQueryStmt != nil {
@@ -147,6 +155,7 @@ type Queries struct {
 	createQueryStmt     *sql.Stmt
 	createRoleStmt      *sql.Stmt
 	createTableStmt     *sql.Stmt
+	dropDatabaseStmt    *sql.Stmt
 	roleApplyQueryStmt  *sql.Stmt
 	roleApplyWalletStmt *sql.Stmt
 }
@@ -162,6 +171,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createQueryStmt:     q.createQueryStmt,
 		createRoleStmt:      q.createRoleStmt,
 		createTableStmt:     q.createTableStmt,
+		dropDatabaseStmt:    q.dropDatabaseStmt,
 		roleApplyQueryStmt:  q.roleApplyQueryStmt,
 		roleApplyWalletStmt: q.roleApplyWalletStmt,
 	}

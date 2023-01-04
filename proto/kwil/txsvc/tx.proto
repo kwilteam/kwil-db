@@ -1,0 +1,26 @@
+syntax = "proto3";
+package transactionsvc;
+option go_package = "kwil/x/proto/transactionpb";
+
+message Tx {
+    bytes hash = 1;
+    PayloadType payload_type = 2;
+    bytes payload = 3;
+    Signature signature = 4;
+    string fee = 5;
+    string Sender = 6;
+}
+
+message Signature {
+    bytes signature = 1;
+    int32 signature_type = 2;
+}
+
+enum PayloadType {
+    INVALID = 0;
+    DEPLOY_DATABASE = 1;
+    MODIFY_DATABASE = 2;
+    DELETE_DATABASE = 3;
+    EXECUTE_QUERY = 4;
+    WITHDRAW = 5;
+}

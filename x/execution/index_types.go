@@ -3,9 +3,9 @@ package execution
 type IndexType int
 
 const (
-	INVALID_INDEX IndexType = iota
+	INVALID_INDEX_TYPE IndexType = iota
 	BTREE
-	END_INDEX
+	END_INDEX_TYPE
 )
 
 func (i *IndexType) String() string {
@@ -21,5 +21,5 @@ func (i *IndexType) Int() int {
 }
 
 func (i *IndexType) IsValid() bool {
-	return *i > INVALID_INDEX && *i < END_INDEX
+	return *i > INVALID_INDEX_TYPE && *i < END_INDEX_TYPE
 }

@@ -6,12 +6,12 @@ type QueryType int
 
 // Queries
 const (
-	INVALID_QUERY QueryType = iota
-	SELECT
+	INVALID_QUERY_TYPE QueryType = iota
 	INSERT
 	UPDATE
 	DELETE
-	END_QUERY
+	SELECT
+	END_QUERY_TYPE
 )
 
 func (q *QueryType) Int() int {
@@ -24,8 +24,6 @@ func (q *QueryType) String() (string, error) {
 		return "insert", nil
 	case UPDATE:
 		return "update", nil
-	case SELECT:
-		return "select", nil
 	case DELETE:
 		return "delete", nil
 	}
@@ -33,5 +31,5 @@ func (q *QueryType) String() (string, error) {
 }
 
 func (q *QueryType) IsValid() bool {
-	return *q > INVALID_QUERY && *q < END_QUERY
+	return *q > INVALID_QUERY_TYPE && *q < END_QUERY_TYPE
 }

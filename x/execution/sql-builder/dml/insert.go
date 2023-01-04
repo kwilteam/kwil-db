@@ -1,6 +1,8 @@
 package dml
 
-import "github.com/doug-martin/goqu/v9"
+import (
+	"github.com/doug-martin/goqu/v9"
+)
 
 func BuildInsert(schemaName, table string, columns []any) (string, error) {
 	tblName := makeTableName(schemaName, table)

@@ -12,7 +12,7 @@ type Executable struct {
 
 type Arg struct {
 	// position of the arg in the query
-	Position int
+	Position uint8
 
 	// if the arg is static, it will not be filled by the user
 	Static bool
@@ -36,9 +36,6 @@ type UserInput struct {
 	// for example, if there are 3 2 params and 1 default, and 1 where and 1 default where, the user-inputted WHERE will be position 3
 	Name string `json:"name" yaml:"name"`
 
-	// InputType is the type of input this is
-	Type execution.DataType `json:"type" yaml:"type"`
-
 	// Value is the value of the input
-	Value string `json:"value" yaml:"value"`
+	Value any `json:"value" yaml:"value"`
 }

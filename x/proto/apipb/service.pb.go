@@ -10,7 +10,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	entity "kwil/x/pricing/entity"
+	pricingpb "kwil/x/proto/pricingpb"
 	reflect "reflect"
 	sync "sync"
 )
@@ -208,26 +208,26 @@ func file_kwil_apisvc_service_proto_rawDescGZIP() []byte {
 
 var file_kwil_apisvc_service_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_kwil_apisvc_service_proto_goTypes = []interface{}{
-	(*ConnectRequest)(nil),          // 0: apisvc.ConnectRequest
-	(*ConnectResponse)(nil),         // 1: apisvc.ConnectResponse
-	(*DeploySchemaRequest)(nil),     // 2: apisvc.DeploySchemaRequest
-	(*DropSchemaRequest)(nil),       // 3: apisvc.DropSchemaRequest
-	(*GetMetadataRequest)(nil),      // 4: apisvc.GetMetadataRequest
-	(*ListDatabasesRequest)(nil),    // 5: apisvc.ListDatabasesRequest
-	(*WriteRequest)(nil),            // 6: apisvc.WriteRequest
-	(*ReadRequest)(nil),             // 7: apisvc.ReadRequest
-	(*GetBalanceRequest)(nil),       // 8: apisvc.GetBalanceRequest
-	(*WithdrawalRequest)(nil),       // 9: apisvc.WithdrawalRequest
-	(*entity.EstimateRequest)(nil),  // 10: pricing.EstimateRequest
-	(*DeploySchemaResponse)(nil),    // 11: apisvc.DeploySchemaResponse
-	(*DropSchemaResponse)(nil),      // 12: apisvc.DropSchemaResponse
-	(*GetMetadataResponse)(nil),     // 13: apisvc.GetMetadataResponse
-	(*ListDatabasesResponse)(nil),   // 14: apisvc.ListDatabasesResponse
-	(*WriteResponse)(nil),           // 15: apisvc.WriteResponse
-	(*ReadResponse)(nil),            // 16: apisvc.ReadResponse
-	(*GetBalanceResponse)(nil),      // 17: apisvc.GetBalanceResponse
-	(*WithdrawalResponse)(nil),      // 18: apisvc.WithdrawalResponse
-	(*entity.EstimateResponse)(nil), // 19: pricing.EstimateResponse
+	(*ConnectRequest)(nil),             // 0: apisvc.ConnectRequest
+	(*ConnectResponse)(nil),            // 1: apisvc.ConnectResponse
+	(*DeploySchemaRequest)(nil),        // 2: apisvc.DeploySchemaRequest
+	(*DropSchemaRequest)(nil),          // 3: apisvc.DropSchemaRequest
+	(*GetMetadataRequest)(nil),         // 4: apisvc.GetMetadataRequest
+	(*ListDatabasesRequest)(nil),       // 5: apisvc.ListDatabasesRequest
+	(*WriteRequest)(nil),               // 6: apisvc.WriteRequest
+	(*ReadRequest)(nil),                // 7: apisvc.ReadRequest
+	(*GetBalanceRequest)(nil),          // 8: apisvc.GetBalanceRequest
+	(*WithdrawalRequest)(nil),          // 9: apisvc.WithdrawalRequest
+	(*pricingpb.EstimateRequest)(nil),  // 10: pricing.EstimateRequest
+	(*DeploySchemaResponse)(nil),       // 11: apisvc.DeploySchemaResponse
+	(*DropSchemaResponse)(nil),         // 12: apisvc.DropSchemaResponse
+	(*GetMetadataResponse)(nil),        // 13: apisvc.GetMetadataResponse
+	(*ListDatabasesResponse)(nil),      // 14: apisvc.ListDatabasesResponse
+	(*WriteResponse)(nil),              // 15: apisvc.WriteResponse
+	(*ReadResponse)(nil),               // 16: apisvc.ReadResponse
+	(*GetBalanceResponse)(nil),         // 17: apisvc.GetBalanceResponse
+	(*WithdrawalResponse)(nil),         // 18: apisvc.WithdrawalResponse
+	(*pricingpb.EstimateResponse)(nil), // 19: pricing.EstimateResponse
 }
 var file_kwil_apisvc_service_proto_depIdxs = []int32{
 	0,  // 0: apisvc.KwilService.Connect:input_type -> apisvc.ConnectRequest

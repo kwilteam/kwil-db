@@ -1,8 +1,6 @@
 syntax = "proto3";
 package pricing;
-option go_package = "kwil/x/pricing/entity";
-
-//import "google/api/annotations.proto";
+option go_package = "kwil/x/proto/pricingpb";
 
 message EstimateRequest {
     string caller = 1;

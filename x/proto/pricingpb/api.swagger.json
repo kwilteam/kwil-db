@@ -1,0 +1,159 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "kwil/pricingsvc/pricing.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "PricingService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v0/pricing/estimate": {
+      "post": {
+        "operationId": "PricingService_EstimateCost",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pricingEstimateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pricingEstimateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "PricingService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "pricingCRUDInput": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateDeleteRequest": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateDeployRequest": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateQueryRequest": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "crud": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/pricingCRUDInput"
+          }
+        }
+      }
+    },
+    "pricingEstimateRequest": {
+      "type": "object",
+      "properties": {
+        "caller": {
+          "type": "string"
+        },
+        "deploy": {
+          "$ref": "#/definitions/pricingEstimateDeployRequest"
+        },
+        "delete": {
+          "$ref": "#/definitions/pricingEstimateDeleteRequest"
+        },
+        "query": {
+          "$ref": "#/definitions/pricingEstimateQueryRequest"
+        }
+      }
+    },
+    "pricingEstimateResponse": {
+      "type": "object",
+      "properties": {
+        "price": {
+          "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

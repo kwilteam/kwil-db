@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS wallets (
 
 CREATE TABLE IF NOT EXISTS databases (
     id INTEGER PRIMARY KEY,
-    db_owner TEXT REFERENCES wallets (wallet) ON DELETE CASCADE,
+    db_owner TEXT NOT NULL REFERENCES wallets (wallet) ON DELETE CASCADE,
     db_name TEXT NOT NULL,
     unique (db_owner, db_name)
 );

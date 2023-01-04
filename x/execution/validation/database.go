@@ -14,7 +14,7 @@ func ValidateDatabase(db *dto.Database) error {
 	}
 
 	// check owner name (this is sort of redundant, but it's here for consistency)
-	err = CheckName(db.Owner, execution.MAX_OWNER_NAME_LENGTH)
+	err = CheckAddress(db.Owner)
 	if err != nil {
 		return fmt.Errorf(`invalid owner name: %w`, err)
 	}

@@ -28,5 +28,5 @@ func (c *attributes) ConvertAttribute(s string) (AttributeType, error) {
 	case `max_length`:
 		return MAX_LENGTH, nil
 	}
-	return INVALID_ATTRIBUTE, fmt.Errorf(`unknown attribute: "%s"`, s)
+	return INVALID_ATTRIBUTE_TYPE, fmt.Errorf(`unknown attribute: "%s"`, s)
 }

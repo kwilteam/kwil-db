@@ -4,11 +4,11 @@ import (
 	"context"
 	deposits "kwil/x/deposits/service"
 	"kwil/x/logx"
-	"kwil/x/proto/depositsvc"
+	"kwil/x/proto/depositpb"
 )
 
 type Service struct {
-	depositsvc.UnimplementedKwilServiceServer
+	depositpb.UnimplementedDepositServiceServer
 
 	log     logx.Logger
 	service deposits.DepositsService

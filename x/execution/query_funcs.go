@@ -18,5 +18,5 @@ func (q *queries) ConvertQueryType(s string) (QueryType, error) {
 	case "delete":
 		return DELETE, nil
 	}
-	return INVALID_QUERY, fmt.Errorf("unknown query type")
+	return INVALID_QUERY_TYPE, fmt.Errorf("unknown query type")
 }

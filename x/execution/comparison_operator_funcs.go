@@ -22,5 +22,5 @@ func (c *comparsionOperators) ConvertComparisonOperator(s string) (ComparisonOpe
 	case "<=":
 		return LESS_THAN_OR_EQUAL, nil
 	}
-	return INVALID_COMPARISON_OPERATOR, fmt.Errorf("unknown comparison operator type")
+	return INVALID_COMPARISON_OPERATOR_TYPE, fmt.Errorf("unknown comparison operator type")
 }
