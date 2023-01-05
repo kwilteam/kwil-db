@@ -2,39 +2,52 @@ package service
 
 import (
 	"context"
-	"kwil/x/deposits/chain"
+	"crypto/ecdsa"
+	"fmt"
+	chainClient "kwil/x/chain/client"
+	"kwil/x/contracts/escrow"
 	"kwil/x/deposits/dto"
 	"kwil/x/deposits/repository"
+	chainsync "kwil/x/deposits/service/chain-sync"
 	"kwil/x/logx"
 	"kwil/x/sqlx/sqlclient"
 )
 
 type DepositsService interface {
-	Spend(ctx context.Context, spend dto.Spend) error
-	GetBalancesAndSpent(ctx context.Context, wallet string) (*dto.Balance, error)
-	Deposit(ctx context.Context, deposit dto.Deposit) error
+	Sync(ctx context.Context) error
 	startWithdrawal(ctx context.Context, withdrawal dto.StartWithdrawal) error
-}
-
-type chainWriter interface {
-	ReturnFunds(ctx context.Context, params *chain.ReturnFundsParams) (*chain.ReturnFundsResponse, error)
 }
 
 // in the future we can make things like expirationPeriod and chunkSize configurable, but these values are good enough for now
 type depositsService struct {
 	dao              *repository.Queries
 	db               *sqlclient.DB
+	chain            chainsync.Chain
 	log              logx.SugaredLogger
 	expirationPeriod int64
-	chainWriter      chainWriter
 }
 
-func NewService(db *sqlclient.DB) DepositsService {
+func NewService(config dto.Config, db *sqlclient.DB, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey) (DepositsService, error) {
+
+	// create the escrow contract
+	escrowContract, err := escrow.New(chainClient, privateKey, config.EscrowAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create escrow contract: %w", err)
+	}
+
+	reposit := repository.New(db)
+
+	// create the chain
+	chainSynchronizer, err := chainsync.New(chainClient, escrowContract, reposit, db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create chain synchronizer: %w", err)
+	}
+
 	return &depositsService{
-		dao:              repository.New(db),
+		dao:              reposit,
 		db:               db,
+		chain:            chainSynchronizer,
 		expirationPeriod: 100,
 		log:              logx.New().Named("deposits-service").Sugar(),
-		chainWriter:      nil,
-	}
+	}, nil
 }

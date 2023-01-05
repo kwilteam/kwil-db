@@ -1,4 +1,5 @@
 db-settings: "./db-settings.yaml"
-deposit-settings: "./deposit-config.yaml"
-manager-settings: "./manager-config.yaml"
-chain-client-settings: "./chain-client-settings.yml"
+deposit-settings: "./config/deposit-config.yaml"
+manager-settings: "./config/manager.yaml"
+chain-client: "./config/chain-client.yaml"
+deposits: "./config/deposits.yaml"

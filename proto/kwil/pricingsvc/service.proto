@@ -1,0 +1,16 @@
+syntax = "proto3";
+package pricingsvc;
+option go_package = "kwil/x/proto/pricingpb";
+
+import "google/api/annotations.proto";
+
+import "kwil/pricingsvc/pricing.proto";
+
+service PricingService {
+    rpc EstimateCost(pricing.EstimateRequest) returns (pricing.EstimateResponse) {
+        option (google.api.http) = {
+          post: "/api/v0/pricing/estimate"
+          body: "*"
+        };
+      }
+}

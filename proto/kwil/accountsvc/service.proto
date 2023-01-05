@@ -1,0 +1,24 @@
+syntax = "proto3";
+package accountsvc;
+option go_package = "kwil/x/proto/accountspb";
+
+import "google/api/annotations.proto";
+
+service AccountService {
+    rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {
+        option (google.api.http) = {
+            get: "/api/v0/{wallet}/account"
+        };
+    }
+}
+
+message GetAccountRequest {
+    string address = 1;
+}
+
+message GetAccountResponse {
+    string address = 1;
+    string balance = 2;
+    string spent = 3;
+    int64 nonce = 4;
+}

@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS wallets (
 
 CREATE TABLE IF NOT EXISTS deposits (
 	id SERIAL PRIMARY KEY,
-	tx_hash VARCHAR(64) NOT NULL UNIQUE,
+	tx_hash VARCHAR(66) NOT NULL UNIQUE,
 	wallet VARCHAR(44) NOT NULL,
 	amount NUMERIC(78) NOT NULL,
 	height BIGINT NOT NULL
@@ -28,4 +28,11 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 CREATE INDEX IF NOT EXISTS expiration ON withdrawals(expiry);
 
 -- the height table is meant to be a key value store for the current height
-CREATE TABLE IF NOT EXISTS height (height BIGINT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS chains (
+	id INTEGER PRIMARY KEY,
+	chain VARCHAR(20) NOT NULL UNIQUE,
+	height BIGINT NOT NULL
+);
+
+-- chain ID's do matter, so we make an integer instead of serial.
+-- for example, ETHis 1, GOERLI is 2, etc.

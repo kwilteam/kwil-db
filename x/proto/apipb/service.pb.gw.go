@@ -11,7 +11,7 @@ package apipb
 import (
 	"context"
 	"io"
-	"kwil/x/pricing/entity"
+	"kwil/x/proto/pricingpb"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -397,7 +397,7 @@ func local_request_KwilService_ReturnFunds_0(ctx context.Context, marshaler runt
 }
 
 func request_KwilService_EstimateCost_0(ctx context.Context, marshaler runtime.Marshaler, client KwilServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq entity.EstimateRequest
+	var protoReq pricingpb.EstimateRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)
@@ -414,7 +414,7 @@ func request_KwilService_EstimateCost_0(ctx context.Context, marshaler runtime.M
 }
 
 func local_request_KwilService_EstimateCost_0(ctx context.Context, marshaler runtime.Marshaler, server KwilServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq entity.EstimateRequest
+	var protoReq pricingpb.EstimateRequest
 	var metadata runtime.ServerMetadata
 
 	newReader, berr := utilities.IOReaderFactory(req.Body)

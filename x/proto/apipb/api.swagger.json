@@ -830,6 +830,9 @@
         },
         "query": {
           "$ref": "#/definitions/pricingEstimateQueryRequest"
+        },
+        "withdraw": {
+          "$ref": "#/definitions/pricingEstimateWithdrawRequest"
         }
       }
     },
@@ -837,6 +840,17 @@
       "type": "object",
       "properties": {
         "price": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateWithdrawRequest": {
+      "type": "object",
+      "properties": {
+        "caller": {
+          "type": "string"
+        },
+        "amount": {
           "type": "string"
         }
       }

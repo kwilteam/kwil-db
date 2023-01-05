@@ -1,38 +1,11 @@
 syntax = "proto3";
 package pricing;
-option go_package = "kwil/x/pricing/entity";
+option go_package = "kwil/x/proto/pricingpb";
 
-//import "google/api/annotations.proto";
+import "kwil/txsvc/tx.proto";
 
 message EstimateRequest {
-    string caller = 1;
-    oneof request {
-        EstimateDeployRequest deploy = 2;
-        EstimateDeleteRequest delete = 3;
-        EstimateQueryRequest query = 4;
-    }
-}
-
-message CRUDInput {
-    string name = 1;
-    string value = 2;
-}
-
-message EstimateDeployRequest {
-    string database = 1;
-    string owner = 2;
-}
-
-message EstimateDeleteRequest {
-    string database = 1;
-    string owner = 2;
-}
-
-message EstimateQueryRequest {
-    string database = 1;
-    string owner = 2;
-    string query = 3;
-    repeated CRUDInput crud = 4;
+    txsvc.Tx tx = 1;
 }
 
 message EstimateResponse {

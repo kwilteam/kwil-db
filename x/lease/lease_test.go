@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	_ "github.com/lib/pq"
 	"kwil/x/cfgx"
 	"os"
 	"strings"
 	"sync"
 	"testing"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func Test_Lease(t *testing.T) {

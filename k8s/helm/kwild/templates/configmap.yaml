@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kwild.fullname" . }}
+  labels:
+    {{- include "kwild.labels" . | nindent 4 }}
+data:
+  {{- if and (not .Values.postgresql.enabled) (.Values.global.postgres.enabled )}}
+  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host .Values.global.postgres.port .Values.global.kwild.database }}
+  {{- else -}}
+  {{- $pgHost := printf "%s-postgresql" .Release.Name -}}
+  {{- $pgPort := int .Values.postgresql.primary.service.ports.postgresql -}}
+  {{/* TODO: should use Secret */}}
+  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgresql.auth.username .Values.global.postgresql.auth.password $pgHost $pgPort .Values.global.kwild.database }}
+  {{- end }}

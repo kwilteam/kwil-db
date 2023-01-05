@@ -1,0 +1,13 @@
+package transactions
+
+type PayloadType int32
+
+const (
+	INVALID_PAYLOAD_TYPE PayloadType = iota
+	DEPLOY_DATABASE
+	MODIFY_DATABASE
+	DROP_DATABASE
+	EXECUTE_QUERY
+	WITHDRAW
+	END_PAYLOAD_TYPE
+)

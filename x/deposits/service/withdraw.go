@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"kwil/x/deposits/dto"
 	"kwil/x/deposits/repository"
-	"kwil/x/math/big"
+	"kwil/x/utils/big"
 	"math/rand"
 	"time"
 )
@@ -42,7 +42,7 @@ func (s *depositsService) startWithdrawal(ctx context.Context, withdrawal dto.St
 	}
 
 	// get the current block height
-	blockHeight, err := qtx.GetHeight(ctx)
+	blockHeight, err := qtx.GetHeight(ctx, int32(s.chain.ChainCode()))
 	if err != nil {
 		return err
 	}

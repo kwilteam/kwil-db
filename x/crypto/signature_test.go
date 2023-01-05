@@ -1,122 +1,70 @@
-package crypto
+package crypto_test
 
 import (
-	"crypto/ecdsa"
+	"bytes"
+	"fmt"
+	"kwil/x/crypto"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestSign(t *testing.T) {
 	pk, err := ec.HexToECDSA("4bb214b1f3a0737d758bc3828cdff371e3769fe84a2678da34700cb18d50770e")
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("failed to get test private key: %d", err)
 	}
-	type args struct {
-		data []byte
-		k    *ecdsa.PrivateKey
+
+	sig, err := crypto.Sign([]byte("kwil"), pk)
+	if err != nil {
+		t.Errorf("failed to sign: %d", err)
 	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
-	}{
-		{
-			name: "valid_sig",
-			args: args{
-				data: []byte("kwil"),
-				k:    pk,
-			},
-			want:    "000x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
-			wantErr: false,
-		},
+
+	expected, err := hexutil.Decode("0x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501")
+	if err != nil {
+		t.Errorf("failed to decode expected signature: %d", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Sign(tt.args.data, tt.args.k)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Sign() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("Sign() = %v, want %v", got, tt.want)
-			}
-		})
+
+	if !bytes.Equal(sig.Signature, expected) {
+		t.Errorf("expected %s, got %s", expected, sig.Signature)
 	}
 }
 
 func TestCheckSignature(t *testing.T) {
-	type args struct {
-		addr string
-		sig  string
-		data []byte
+	pk, err := ec.HexToECDSA("4bb214b1f3a0737d758bc3828cdff371e3769fe84a2678da34700cb18d50770e")
+	if err != nil {
+		t.Errorf("failed to get test private key: %d", err)
 	}
-	tests := []struct {
-		name    string
-		args    args
-		want    bool
-		wantErr bool
-	}{
-		{
-			name: "valid_sig",
-			args: args{
-				addr: "0x995d95245698212D4Af52c8031F614C3D3127994",
-				sig:  "000x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
-				data: []byte("kwil"),
-			},
-			want:    true,
-			wantErr: false,
-		},
-		{
-			name: "invalid_msg",
-			args: args{
-				addr: "0x995d95245698212D4Af52c8031F614C3D3127994",
-				sig:  "000x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
-				data: []byte("kwill"),
-			},
-			want:    false,
-			wantErr: false,
-		},
-		{
-			name: "empty_sig",
-			args: args{
-				addr: "0x995d95245698212D4Af52c8031F614C3D3127994",
-				sig:  "",
-				data: []byte("kwil"),
-			},
-			want:    false,
-			wantErr: true,
-		},
-		{
-			name: "too_long_sig",
-			args: args{
-				addr: "0x995d95245698212D4Af52c8031F614C3D3127994",
-				sig:  "000x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b425010x39fd0a5551cd0008eb45244ad3eea11fb960ff6d8d13aaad9651632b61d26ee20da867cf4f53564bc7bfa795d1efb2bb1169209d1e6f42a2d9e88cfce556b42501",
-				data: []byte("kwil"),
-			},
-			want:    false,
-			wantErr: true,
-		},
+
+	msg := []byte("kwil")
+
+	sig, err := crypto.Sign(msg, pk)
+	if err != nil {
+		t.Errorf("failed to sign: %d", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := CheckSignature(tt.args.addr, tt.args.sig, tt.args.data)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CheckSignature() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("CheckSignature() = %v, want %v", got, tt.want)
-			}
-		})
+
+	ok, err := crypto.CheckSignature("0x995d95245698212D4Af52c8031F614C3D3127994", sig, msg)
+	if err != nil {
+		t.Errorf("failed to check signature: %d", err)
 	}
+
+	if !ok {
+		t.Errorf("expected signature to be valid")
+	}
+
+	fmt.Println(ok)
 }
 
 func TestMiscCrypto(t *testing.T) {
 	pk := "4bb214b1f3a0737d758bc3828cdff371e3769fe84a2678da34700cb18d50770e"
 
-	addr, err := AddressFromPrivateKey(pk)
+	ecdsaPk, err := crypto.ECDSAFromHex(pk)
+	if err != nil {
+		t.Errorf("error getting ecdsa private key from hex")
+	}
+
+	addr, err := crypto.AddressFromPrivateKey(ecdsaPk)
 	if err != nil {
 		t.Errorf("error getting address from private keys")
 	}

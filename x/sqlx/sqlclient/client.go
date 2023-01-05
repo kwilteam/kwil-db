@@ -7,6 +7,8 @@ import (
 	"kwil/x"
 	"kwil/x/utils"
 	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type DB struct {
@@ -63,6 +65,14 @@ func (db *DB) ExecTx(query string) error {
 	return tx.Commit()
 }
 
+func (db *DB) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	stmt, err := db.DB.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	return stmt, nil
+}
+
 func (db *DB) Close() error {
 	return db.DB.Close()
 }
@@ -88,7 +98,7 @@ func open(conn string, deadline x.Deadline) (*DB, error) {
 }
 
 func tryOpen(conn string) (*DB, error) {
-	db, err := sql.Open("postgres", conn)
+	db, err := sql.Open("pgx", conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

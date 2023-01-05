@@ -8,8 +8,8 @@ services:
     environment:
       PG_DATABASE_URL: "postgres://$PG_USER:$PG_PASSWORD@$PG_ENDPOINT:$PG_PORT/$PG_DB?sslmode=$PG_SSL_MODE"
       WITH_GATEWAY: true
-      GRPC_CONTAINER_ENDPOINT: kwild:50051
-      KWIL_GRAPHQL_ENDPOINT: http://graphql-engine:8080
+      GRPC_ENDPOINT: localhost:50051
+      GRAPHQL_ENDPOINT: http://graphql-engine:8080
       ## uncomment next 2 lines if HASURA_GRAPHQL_ADMIN_SECRET is set in Hasura container
       #HASURA_GRAPHQL_ADMIN_SECRET: secretkeyhasura
       #HASURA_GRAPHQL_UNAUTHORIZED_ROLE: anonymous

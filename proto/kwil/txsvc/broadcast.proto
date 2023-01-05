@@ -1,0 +1,14 @@
+syntax = "proto3";
+package txsvc;
+option go_package = "kwil/x/proto/txpb";
+
+import "kwil/txsvc/tx.proto";
+
+message BroadcastRequest {
+    Tx tx = 1;
+}
+
+message BroadcastResponse {
+    bytes hash = 1;
+    string fee = 2;
+}

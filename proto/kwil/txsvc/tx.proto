@@ -1,0 +1,34 @@
+syntax = "proto3";
+package txsvc;
+option go_package = "kwil/x/proto/txpb";
+
+message Tx {
+    bytes hash = 1;
+    PayloadType payload_type = 2;
+    bytes payload = 3;
+    int64 nonce = 4;
+    Signature signature = 5;
+    string fee = 6;
+    string Sender = 7;
+}
+
+message Signature {
+    bytes signature_bytes = 1;
+    SignatureType signature_type = 2;
+}
+
+enum PayloadType {
+    INVALID_PAYLOAD_TYPE = 0;
+    DEPLOY_DATABASE = 1;
+    MODIFY_DATABASE = 2;
+    DELETE_DATABASE = 3;
+    EXECUTE_QUERY = 4;
+    WITHDRAW = 5;
+}
+
+enum SignatureType {
+    INVALID_SINATURE_TYPE = 0;
+    PK_SECP256K1_UNCOMPRESSED = 1;
+	ACCOUNT_SECP256K1_UNCOMPRESSED = 2;
+	END_SIGNATURE_TYPE = 3;
+}

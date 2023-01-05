@@ -162,7 +162,7 @@ func AppendByteArrLength(b []byte, a []byte) []byte {
 }
 
 // BigInt2Bytes This function converts a big int to bytes.  The result will always be a byte slice of length 16.
-func BigInt2Bytes(h *big.Int) []byte {
+func BigIntToBytes(h *big.Int) []byte {
 	b := make([]byte, 16)
 	k := h.FillBytes(b)
 	return k
@@ -215,4 +215,27 @@ func IsRunningInContainer() bool {
 		return false
 	}
 	return true
+}
+
+// joinBytes is a helper function to join multiple byte slices into one
+func JoinBytes(s ...[]byte) []byte {
+	n := 0
+	for _, v := range s {
+		n += len(v)
+	}
+
+	b, i := make([]byte, n), 0
+	for _, v := range s {
+		i += copy(b[i:], v)
+	}
+	return b
+}
+
+// JoinBytesSize joins multiple byte slices into one with a specific size known beforehand
+func JoinBytesSize(size int, s ...[]byte) []byte {
+	b, i := make([]byte, size), 0
+	for _, v := range s {
+		i += copy(b[i:], v)
+	}
+	return b
 }

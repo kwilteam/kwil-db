@@ -18,7 +18,7 @@ tasks:
 
   build:api:
     desc: Builds the API
-    deps: [build:api:pb]
+    deps: [build:api:pb, build:pricing:pb, build:deposit:pb, build:accounts:pb, build:tx:pb]
     cmds:
       - go build -o ./.build/kwild ./cmd/kwild
     generates:
@@ -44,36 +44,66 @@ tasks:
     desc: Compiles the protobuf for the Pricing Service
     cmds:
       - |
-        mkdir -p x/pricing
+        mkdir -p x/proto
         protoc -I proto \
         --go_out=. --go_opt module=kwil \
         --go-grpc_out=. --go-grpc_opt module=kwil \
+        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=x/proto/pricingpb/api \
         proto/kwil/pricingsvc/*.proto
     sources:
       - proto/kwil/pricingsvc/*.proto
     generates:
-      - x/pricing/entity/*
+      - x/proto/pricingpb/*
 
-  build:schema:pb:
-    desc: Compiles the protobuf for the Schema Service
+  build:deposit:pb:
+    desc: Compiles the protobuf for the deposit service
     cmds:
       - |
         mkdir -p x/proto
-        protoc -I proto -I proto/kwil \
+        protoc -I proto \
         --go_out=. --go_opt module=kwil \
         --go-grpc_out=. --go-grpc_opt module=kwil \
-        proto/kwil/schemasvc/*.proto
+        proto/kwil/depositsvc/*.proto
     sources:
-      - proto/kwil/schemasvc/*.proto
+      - proto/kwil/depositsvc/*.proto
     generates:
-      - x/proto/schemapb/*
+      - x/proto/depositpb/*
+
+  build:accounts:pb:
+    desc: Compiles the protobuf for Accounts
+    cmds:
+      - |
+        mkdir -p x/proto
+        protoc -I proto \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        proto/kwil/accountsvc/*.proto
+    sources:
+      - proto/kwil/accountsvc/*.proto
+    generates:
+      - x/proto/accountspb/*
+  
+  build:tx:pb:
+    desc: Compiles the protobuf for Txsvc
+    cmds:
+      - |
+        mkdir -p x/proto
+        protoc -I proto \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        proto/kwil/txsvc/*.proto
+    sources:
+      - proto/kwil/txsvc/*.proto
+    generates:
+      - x/proto/txpb/*
 
   build:api-gateway:
     desc: Builds the API Gateway
     cmds:
-      - go build -o ./.build/kwild-gateway ./cmd/kwild-gateway
+      - go build -o ./.build/kwil-gateway ./cmd/kwil-gateway
     generates:
-      - .build/kwild-gateway
+      - .build/kwil-gateway
 
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs

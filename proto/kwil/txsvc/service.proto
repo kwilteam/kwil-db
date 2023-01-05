@@ -1,0 +1,15 @@
+syntax = "proto3";
+package txsvc;
+option go_package = "kwil/x/proto/txpb";
+
+import "google/api/annotations.proto";
+
+import "kwil/txsvc/broadcast.proto";
+
+service TxService {
+  rpc Broadcast(BroadcastRequest) returns (BroadcastResponse) {
+    option (google.api.http) = {
+      get: "/api/v0/broadcast"
+    };
+  }
+}

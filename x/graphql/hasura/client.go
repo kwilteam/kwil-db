@@ -10,37 +10,37 @@ import (
 	"strings"
 )
 
-type Client struct {
+type client struct {
 	endpoint string
 }
 
-func NewClient(endpoint string) *Client {
-	return &Client{
+func NewClient(endpoint string) *client {
+	return &client{
 		endpoint: endpoint,
 	}
 }
 
-func (c *Client) metadataUrl() string {
+func (c *client) metadataUrl() string {
 	s, _ := url.JoinPath(c.endpoint, "v1/metadata")
 	return s
 }
 
-func (c *Client) graphqlUrl() string {
+func (c *client) graphqlUrl() string {
 	s, _ := url.JoinPath(c.endpoint, "v1/graphql")
 	return s
 }
 
-func (c *Client) queryUrl() string {
+func (c *client) queryUrl() string {
 	s, _ := url.JoinPath(c.endpoint, "v2/query")
 	return s
 }
 
-func (c *Client) explainUrl() string {
+func (c *client) explainUrl() string {
 	s, _ := url.JoinPath(c.endpoint, "v1/graphql/explain")
 	return s
 }
 
-func (c *Client) call(req *http.Request) ([]byte, error) {
+func (c *client) call(req *http.Request) ([]byte, error) {
 	req.Header.Set("Content-Type", "application/json")
 	// uncomment if Hasura admin secret is enabled
 	// req.Header.Set("X-Hasura-Role", "admin")
@@ -70,20 +70,20 @@ func (c *Client) call(req *http.Request) ([]byte, error) {
 }
 
 // TrackTable call Hasura API to expose a table under 'source.schema'.
-func (c *Client) TrackTable(source, schema, table string) error {
+func (c *client) TrackTable(source, schema, table string) error {
 	// no space is allowed in schema
 	if strings.Contains(table, " ") {
-		return fmt.Errorf("invalid table name: space is not allowed, '%s'", table)
+		return fmt.Errorf("track table failed: invalid table name, '%s'", table)
 	}
 	trackTableParams := newHasuraPgTrackTableParams(source, schema, table)
 	jsonBody, err := json.Marshal(trackTableParams)
 	if err != nil {
-		return err
+		return fmt.Errorf("track table failed: %s", err.Error())
 	}
 	bodyReader := bytes.NewReader(jsonBody)
 	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
 	if err != nil {
-		return err
+		return fmt.Errorf("track table failed: %s", err.Error())
 	}
 
 	_, err = c.call(req)
@@ -91,17 +91,17 @@ func (c *Client) TrackTable(source, schema, table string) error {
 }
 
 // UntrackTable call Hasura API to un-expose a able under 'source.schema'.
-func (c *Client) UntrackTable(source, schema, table string) error {
+func (c *client) UntrackTable(source, schema, table string) error {
 	untrackTableParams := newHasuraPgUntrackTableParams(source, schema, table)
 	jsonBody, err := json.Marshal(untrackTableParams)
 	if err != nil {
-		return err
+		return fmt.Errorf("untrack table failed: %s", err.Error())
 	}
 	bodyReader := bytes.NewReader(jsonBody)
 
 	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
 	if err != nil {
-		return err
+		return fmt.Errorf("untrack table failed: %s", err.Error())
 	}
 
 	_, err = c.call(req)
@@ -109,7 +109,7 @@ func (c *Client) UntrackTable(source, schema, table string) error {
 }
 
 // UpdateTable first untrack table from 'source.schema', then track it again.
-func (c *Client) UpdateTable(source, schema, table string) error {
+func (c *client) UpdateTable(source, schema, table string) error {
 	// if table is already tracked, need to untrack and then track
 	if err := c.UntrackTable(source, schema, table); err != nil {
 		return err
@@ -123,7 +123,7 @@ func (c *Client) UpdateTable(source, schema, table string) error {
 
 // AddDefaultSourceAndSchema add 'default' source and 'public' schema
 // from db url configured in ENV.
-func (c *Client) AddDefaultSourceAndSchema() error {
+func (c *client) AddDefaultSourceAndSchema() error {
 	addSource := fmt.Sprintf(
 		`{"type":"pg_add_source",
 	 	  "args":{"name":"default",
@@ -148,7 +148,7 @@ func (c *Client) AddDefaultSourceAndSchema() error {
 }
 
 // AddSchema add schema to default source 'default'.
-func (c *Client) AddSchema(schema string) error {
+func (c *client) AddSchema(schema string) error {
 	addSchemaBody := fmt.Sprintf(`{"type":"run_sql",
 			           "args":{"source":"default",
 				               "sql":"create schema %s;",
@@ -166,7 +166,7 @@ func (c *Client) AddSchema(schema string) error {
 
 // DeleteSchema delete schema to default source 'default'.
 // Set cascade to true to delete all dependent tables.
-func (c *Client) DeleteSchema(schema string, cascade bool) error {
+func (c *client) DeleteSchema(schema string, cascade bool) error {
 	cascadeValue := ""
 	if cascade {
 		cascadeValue = "cascade"
@@ -188,7 +188,7 @@ func (c *Client) DeleteSchema(schema string, cascade bool) error {
 
 // HasInitialized return true if there is a source and a schema configured,
 // otherwise return false.
-func (c *Client) HasInitialized() (bool, error) {
+func (c *client) HasInitialized() (bool, error) {
 	body := `{"type":"export_metadata","version":2,"args":{}}`
 	bodyReader := bytes.NewReader([]byte(body))
 	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
@@ -215,7 +215,7 @@ func (c *Client) HasInitialized() (bool, error) {
 
 // ExplainQuery return compiled sql from query.
 // Right now only support one query.
-func (c *Client) ExplainQuery(query string) (string, error) {
+func (c *client) ExplainQuery(query string) (string, error) {
 	body := queryToExplain(query)
 	bodyReader := bytes.NewReader([]byte(body))
 	req, err := http.NewRequest(http.MethodPost, c.explainUrl(), bodyReader)

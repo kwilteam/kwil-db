@@ -1,0 +1,26 @@
+# NodePort: map containers port to localhost
+service:
+  type: NodePort
+  # comment nodePorts to enable multi instances on local machine
+  nodePorts:
+    kwild: 32101
+    kgw: 32102
+
+hasura:
+  service:
+    type: NodePort
+    # comment nodePorts to enable multi instances on local machine
+    nodePorts:
+      hasura: 32100
+
+kwild:
+  service:
+    type: NodePort
+    nodePorts:
+      kwild: 32101
+  postgresql:
+    enabled: false
+
+global:
+  postgres:
+    enabled: true # to use an exising database

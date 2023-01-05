@@ -51,15 +51,15 @@ func (k *keyring) GetDefaultAccount() (*account, error) {
 	return k.GetAccount("kwil_main")
 }
 
-func (a *account) Sign(data []byte) (string, error) {
+func (a *account) Sign(data []byte) (Signature, error) {
 	pKey, err := a.GetPrivateKey()
 	if err != nil {
-		return "", err
+		return Signature{}, err
 	}
 
 	sig, err := Sign(data, pKey)
 	if err != nil {
-		return "", err
+		return Signature{}, err
 	}
 
 	// overwrite pk

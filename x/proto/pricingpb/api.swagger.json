@@ -1,0 +1,160 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "kwil/pricingsvc/pricing.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "PricingService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v0/pricing/estimate": {
+      "post": {
+        "operationId": "PricingService_EstimateCost",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pricingEstimateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pricingEstimateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "PricingService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "pricingEstimateRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/txsvcTx"
+        }
+      }
+    },
+    "pricingEstimateResponse": {
+      "type": "object",
+      "properties": {
+        "price": {
+          "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "txsvcPayloadType": {
+      "type": "string",
+      "enum": [
+        "INVALID_PAYLOAD_TYPE",
+        "DEPLOY_DATABASE",
+        "MODIFY_DATABASE",
+        "DELETE_DATABASE",
+        "EXECUTE_QUERY",
+        "WITHDRAW"
+      ],
+      "default": "INVALID_PAYLOAD_TYPE"
+    },
+    "txsvcSignature": {
+      "type": "object",
+      "properties": {
+        "signatureBytes": {
+          "type": "string",
+          "format": "byte"
+        },
+        "signatureType": {
+          "$ref": "#/definitions/txsvcSignatureType"
+        }
+      }
+    },
+    "txsvcSignatureType": {
+      "type": "string",
+      "enum": [
+        "INVALID_SINATURE_TYPE",
+        "PK_SECP256K1_UNCOMPRESSED",
+        "ACCOUNT_SECP256K1_UNCOMPRESSED",
+        "END_SIGNATURE_TYPE"
+      ],
+      "default": "INVALID_SINATURE_TYPE"
+    },
+    "txsvcTx": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        },
+        "payloadType": {
+          "$ref": "#/definitions/txsvcPayloadType"
+        },
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
+        },
+        "signature": {
+          "$ref": "#/definitions/txsvcSignature"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "Sender": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

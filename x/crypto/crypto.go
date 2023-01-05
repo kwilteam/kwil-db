@@ -38,7 +38,7 @@ func Sha384(data []byte) []byte { // I wrapped this in a function so that we kno
 	return h.Sum(nil)
 }
 
-func Sha384Str(data []byte) string {
+func Sha384Hex(data []byte) string {
 	return hex.EncodeToString(Sha384(data))
 }
 
@@ -48,7 +48,7 @@ func Sha224(data []byte) []byte {
 	return h.Sum(nil)
 }
 
-func Sha224Str(data []byte) string {
+func Sha224Hex(data []byte) string {
 	return hex.EncodeToString(Sha224(data))
 }
 
@@ -58,6 +58,6 @@ func Sha256(data []byte) []byte {
 	return h.Sum(nil)
 }
 
-func Sha256Str(data []byte) string {
+func Sha256Hex(data []byte) string {
 	return hex.EncodeToString(Sha256(data))
 }

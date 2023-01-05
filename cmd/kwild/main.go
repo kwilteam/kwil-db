@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/async"
-	"kwil/x/sqlx/cache"
 	"kwil/x/sqlx/env"
-	"kwil/x/sqlx/manager"
 	"kwil/x/sqlx/sqlclient"
 	"net"
 	"net/http"
@@ -16,14 +14,10 @@ import (
 	"time"
 
 	"kwil/x/cfgx"
-	"kwil/x/crypto"
-	deposits "kwil/x/deposits_old"
-	"kwil/x/grpcx"
 	"kwil/x/logx"
-	"kwil/x/proto/apipb"
-	"kwil/x/service/apisvc"
 
-	kg "kwil/cmd/kwild-gateway/server"
+	kg "kwil/cmd/kwil-gateway/server"
+	deposits "kwil/x/deposits/app"
 
 	"github.com/oklog/run"
 )
@@ -32,46 +26,32 @@ func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dc := cfgx.GetConfig().Select("deposit-settings")
-
-	kr, err := crypto.NewKeyring(dc)
-	if err != nil {
-		return fmt.Errorf("failed to create keyring: %w", err)
-	}
-
-	acc, err := kr.GetDefaultAccount()
-	if err != nil {
-		return fmt.Errorf("failed to get default account: %w", err)
-	}
-
 	client, err := sqlclient.Open(env.GetDbConnectionString(), 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to open sql client: %w", err)
 	}
 
-	d, err := deposits.New(ctx, dc, logger, acc, client)
+	cfg := cfgx.GetConfig()
+	chainClient, err := buildChainClient(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to initialize new deposits: %w", err)
+		return fmt.Errorf("failed to build chain client: %w", err)
 	}
 
-	mngrCfg := cfgx.GetConfig().Select("manager-settings")
-	cache := cache.New()
-	mngr, err := manager.New(ctx, client, mngrCfg, cache)
+	deposits, err := buildDeposits(cfg, client, chainClient, "274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988")
 	if err != nil {
-		return fmt.Errorf("failed to initialize new manager: %w", err)
-	}
-	err = mngr.SyncCache(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to sync cache: %w", err)
+		return fmt.Errorf("failed to build deposits: %w", err)
 	}
 
-	apiService := apisvc.NewService(mngr)
-	httpHandler := apisvc.NewHandler(logger)
+	httpHandler := NewHandler(logger)
+	// TODO:
+	//hasuraManager := hasura.NewClient(viper.GetString(hasura.GraphqlEndpointName))
+	//apiService := apisvc.NewService(mngr, hasuraManager)
+	//httpHandler := apisvc.NewHandler(logger)
 
-	return serve(ctx, logger, d, httpHandler, apiService)
+	return serve(ctx, logger, deposits, httpHandler)
 }
 
-func serve(ctx context.Context, logger logx.Logger, d deposits.Deposits, httpHandler http.Handler, apiService apipb.KwilServiceServer) error {
+func serve(ctx context.Context, logger logx.Logger, d *deposits.Service, httpHandler http.Handler) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -80,15 +60,28 @@ func serve(ctx context.Context, logger logx.Logger, d deposits.Deposits, httpHan
 	}
 
 	g.Add(func() error {
-		return d.Listen(ctx)
-	}, func(error) {
-		_ = d.Close()
+		err = d.Sync(ctx)
+		if err != nil {
+			return err
+		}
+		logger.Info("deposits synced")
+
+		<-ctx.Done() // if any rungroup actor returns, the whole group stops, so we wait for ctx.Done() to return
+		return nil
+	}, func(err error) {
+		if err != nil {
+			logger.Sugar().Errorf("deposits failed to sync: %d", err)
+		}
 	})
 
 	g.Add(func() error {
-		grpcServer := grpcx.NewServer(logger)
-		apipb.RegisterKwilServiceServer(grpcServer, apiService)
-		return grpcServer.Serve(listener)
+		/*
+			grpcServer := grpcx.NewServer(logger)
+			apipb.RegisterKwilServiceServer(grpcServer, apiService)
+			depositsvc.RegisterKwilServiceServer(grpcServer, d)
+			return grpcServer.Serve(listener)
+		*/
+		return nil
 	}, func(error) {
 		_ = listener.Close()
 	})
