@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hasura.fullname" . }}
+  labels:
+    {{- include "hasura.labels" . | nindent 4 }}
+data:
+  {{- with .Values.hasura }}
+  HASURA_METADATA_DB: {{ .database }}
+  HASURA_GRAPHQL_ENABLE_CONSOLE: {{ .enableConsole | quote }}
+  HASURA_GRAPHQL_DEV_MODE: {{ .devMode | quote }}
+  HASURA_GRAPHQL_ENABLED_LOG_TYPES: {{ .logTypes }}
+  {{- end }}
+  {{/* TODO: should use Secret */}}
+  {{- if and (not .Values.postgresql.enabled) (.Values.global.postgres.enabled )}}
+  HASURA_GRAPHQL_METADATA_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host .Values.global.postgres.port .Values.hasura.database }}
+  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host .Values.global.postgres.port .Values.global.kwild.database }}
+  {{- else -}}
+  {{- $pgHost := printf "%s-postgresql" .Release.Name -}}
+  {{- $pgPort := int .Values.postgresql.primary.service.ports.postgresql -}}
+  HASURA_GRAPHQL_METADATA_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" $.Values.global.postgresql.auth.username $.Values.global.postgresql.auth.password $pgHost $pgPort .Values.hasura.database }}
+  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgresql.auth.username .Values.global.postgresql.auth.password $pgHost $pgPort .Values.global.kwild.database }}
+  {{- end }}

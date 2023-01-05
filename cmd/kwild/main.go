@@ -16,7 +16,7 @@ import (
 	"kwil/x/cfgx"
 	"kwil/x/logx"
 
-	kg "kwil/cmd/kwild-gateway/server"
+	kg "kwil/cmd/kwil-gateway/server"
 	deposits "kwil/x/deposits/app"
 
 	"github.com/oklog/run"

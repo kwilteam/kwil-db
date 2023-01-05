@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"kwil/x/graphql/hasura"
 	"kwil/x/graphql/misc"
@@ -22,7 +23,7 @@ type graphqlReq struct {
 }
 
 type RProxy struct {
-	logger logx.SugaredLogger
+	logger logx.Logger
 	proxy  *httputil.ReverseProxy
 }
 
@@ -34,12 +35,14 @@ func NewRProxy() *RProxy {
 
 	u := ru.JoinPath("v1")
 
+	logger := logx.New()
+	logger.Info("graphql endpoint configured", zap.String("endpoint", viper.GetString(hasura.GraphqlEndpointName)))
 	go hasura.Initialize()
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
 
 	return &RProxy{
-		logger: logx.New().Sugar(),
+		logger: logger,
 		proxy:  proxy,
 	}
 }
@@ -48,27 +51,27 @@ func (g *RProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			g.logger.Errorf("parse request failed: %s", err.Error())
+			g.logger.Error("parse request failed", zap.Error(err))
 			if e := misc.JsonError(w, fmt.Errorf("parse request failed"), http.StatusInternalServerError); e != nil {
-				g.logger.Errorf("write response failed: %s", e.Error())
+				g.logger.Error("write response failed", zap.Error(e))
 			}
 			return
 		}
 
 		var body graphqlReq
 		if err := json.Unmarshal(bodyBytes, &body); err != nil {
-			g.logger.Errorf("parse request failed: %s", err.Error())
+			g.logger.Error("parse request failed", zap.Error(err))
 			if e := misc.JsonError(w, fmt.Errorf("parse request failed"), http.StatusBadRequest); e != nil {
-				g.logger.Errorf("write response failed: %s", e.Error())
+				g.logger.Error("write response failed", zap.Error(e))
 			}
 			return
 		}
 
 		if misc.IsMutation(body.Query) {
 			err := gqlerror.Errorf("Only query is allowed")
-			g.logger.Errorf("bad request: %s", err.Error())
+			g.logger.Error("bad request: %s", zap.Error(err))
 			if e := misc.JsonError(w, err, http.StatusBadRequest); e != nil {
-				g.logger.Errorf("write reponse failed: %s", e.Error())
+				g.logger.Error("write response failed", zap.Error(e))
 			}
 			return
 		}

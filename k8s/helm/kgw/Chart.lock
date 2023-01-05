@@ -1,0 +1,9 @@
+dependencies:
+- name: hasura
+  repository: file://../hasura
+  version: 0.1.0
+- name: kwild
+  repository: file://../kwild
+  version: 0.1.0
+digest: sha256:3570ddd66180d0a8f9c9227134725ee00964ab4b393c9c69fbcacf2cefe03d77
+generated: "2023-01-04T17:12:55.440061-06:00"

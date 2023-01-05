@@ -2,8 +2,12 @@ package auth
 
 import (
 	"encoding/json"
+	"github.com/spf13/viper"
 	"io"
 )
+
+const HealthCheckApiKeyValueName = "healthcheck-key"
+const HealthCheckApiKeyValueEnv = "HEALTHCHECK_KEY"
 
 type keyJson struct {
 	Keys []string `json:"keys"`
@@ -22,6 +26,10 @@ func NewKeyManager(r io.Reader) (*KeyManager, error) {
 }
 
 func (k *KeyManager) IsAllowed(t *token) bool {
+	if t.ApiKey == viper.GetString(HealthCheckApiKeyValueName) {
+		return true
+	}
+
 	_, ok := k.keys[t.ApiKey]
 	return ok
 }

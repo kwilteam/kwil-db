@@ -49,6 +49,7 @@ func (g *GWServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
+	g.logger.Info("grpc endpoint configured", zap.String("endpoint", viper.GetString(GrpcEndpointName)))
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	return apipb.RegisterKwilServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointName), opts)
 }
@@ -75,12 +76,13 @@ func (g *GWServer) SetupHttpSvc(ctx context.Context) error {
 		return err
 	}
 
-	// won't check dependent services
-	err = g.mux.HandlePath(http.MethodGet, "/monitor/readyz", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+	err = g.mux.HandlePath(http.MethodGet, "/readyz", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+		// TODO: check dependency?
 		w.WriteHeader(http.StatusOK)
 	})
 
-	err = g.mux.HandlePath(http.MethodGet, "/monitor/healthz", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+	err = g.mux.HandlePath(http.MethodGet, "/healthz", func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+		// won't check dependent services
 		w.WriteHeader(http.StatusOK)
 	})
 

@@ -8,7 +8,7 @@
 **/finished_logs/
 **/.kwal/
 cmd/kwil-cosmos/cmd/kwild/kwild
-cmd/kwil-cosmos/cmd/kwild/kwild.exe
+cmd/kwil-cosmos/cmd/kwild/exe
 keys/cosmos
 keys/ethereum.pem
 .kwilbadger/
@@ -27,4 +27,6 @@ cmd/cmd
 _ignore
 
 # helm charts deps
-k8s/helm/kwil/charts/hasura/charts/
+k8s/helm/hasura/charts/
+k8s/helm/kwild/charts/
+k8s/helm/kgw/charts/
