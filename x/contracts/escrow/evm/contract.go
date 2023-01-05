@@ -3,7 +3,6 @@ package evm
 import (
 	"crypto/ecdsa"
 	"kwil/abi"
-	"kwil/x/contracts/escrow/dto"
 	"kwil/x/crypto"
 	"math/big"
 
@@ -19,7 +18,7 @@ type contract struct {
 	nodeAddress string
 }
 
-func New(client *ethclient.Client, chainId *big.Int, privateKey, contractAddress string) (dto.EscrowContract, error) {
+func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKey, contractAddress string) (*contract, error) {
 
 	ctr, err := abi.NewEscrow(common.HexToAddress(contractAddress), client)
 	if err != nil {
@@ -37,17 +36,15 @@ func New(client *ethclient.Client, chainId *big.Int, privateKey, contractAddress
 		return nil, err
 	}
 
-	// get hex private key
-	pKeyHex, err := crypto.ECDSAFromHex(privateKey)
-	if err != nil {
-		return nil, err
-	}
-
 	return &contract{
 		ctr:         ctr,
 		token:       tokAddr.Hex(),
 		cid:         chainId,
-		key:         pKeyHex,
+		key:         privateKey,
 		nodeAddress: nodeAddress,
 	}, nil
+}
+
+func (c *contract) TokenAddress() string {
+	return c.token
 }

@@ -3,18 +3,18 @@ package escrowtasks
 import (
 	"context"
 	"fmt"
-	"kwil/x/contracts/escrow/dto"
+	"kwil/x/contracts/escrow"
 	"kwil/x/deposits/repository"
 	"kwil/x/deposits/service/tasks"
 )
 
 type task struct {
-	contract dto.EscrowContract
+	contract escrow.EscrowContract
 	dao      *repository.Queries // this will be used and set for each task
 	queries  *repository.Queries // this will be set once on initialization
 }
 
-func New(dao *repository.Queries, contract dto.EscrowContract) tasks.Runnable {
+func New(dao *repository.Queries, contract escrow.EscrowContract) tasks.Runnable {
 	return &task{
 		contract: contract,
 		dao:      nil,

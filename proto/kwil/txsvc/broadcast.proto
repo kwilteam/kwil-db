@@ -1,6 +1,6 @@
 syntax = "proto3";
-package transactionsvc;
-option go_package = "kwil/x/proto/transactionpb";
+package txsvc;
+option go_package = "kwil/x/proto/txpb";
 
 import "kwil/txsvc/tx.proto";
 
@@ -9,6 +9,6 @@ message BroadcastRequest {
 }
 
 message BroadcastResponse {
-    string hash = 1;
+    bytes hash = 1;
     string fee = 2;
 }

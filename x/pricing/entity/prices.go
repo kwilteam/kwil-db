@@ -14,11 +14,11 @@ const (
 
 func EstimatePrice(p pricing.PricingRequestType) string {
 	switch p {
-	case pricing.Deploy:
+	case pricing.DEPLOY:
 		return CREATE_PRICE
-	case pricing.Delete:
+	case pricing.DROP:
 		return DROP_PRICE
-	case pricing.Query:
+	case pricing.QUERY:
 		return QUERY_PRICE
 	}
 	return "0"
@@ -26,11 +26,11 @@ func EstimatePrice(p pricing.PricingRequestType) string {
 
 func GetPrice(p pricing.PricingRequestType) string {
 	switch p {
-	case pricing.Deploy:
+	case pricing.DEPLOY:
 		return CREATE_PRICE
-	case pricing.Delete:
+	case pricing.DROP:
 		return DROP_PRICE
-	case pricing.Query:
+	case pricing.QUERY:
 		return QUERY_PRICE
 	}
 	return "0"

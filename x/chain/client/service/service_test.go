@@ -42,9 +42,12 @@ func (m *MockChainProvider) SubscribeNewHead(ctx context.Context, blocks chan<- 
 func Test_Service(t *testing.T) {
 	// the test will start at height 100
 
-	client := newMockChainClient()
+	client, err := newMockChainClient()
+	if err != nil {
+		t.Errorf("failed to create mock client: %v", err)
+	}
 	blocks := make(chan int64)
-	err := client.Listen(context.Background(), blocks)
+	err = client.Listen(context.Background(), blocks)
 	if err != nil {
 		t.Errorf("failed to listen to blocks: %v", err)
 	}

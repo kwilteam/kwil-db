@@ -15,7 +15,7 @@ type AccountsService interface {
 
 	// Spend deducts the amount from the account's balance,
 	// adds the amount to the account's spent, and increments the account's nonce.
-	Spend(ctx context.Context, spend dto.Spend) error
+	Spend(ctx context.Context, spend *dto.Spend) error
 
 	// IncreaseBalance increases the account's balance by the given amount.
 	// It does not modify the account's nonce or spent.

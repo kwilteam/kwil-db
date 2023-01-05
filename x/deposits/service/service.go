@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
-	ccDTO "kwil/x/chain/client/dto"
+	chainClient "kwil/x/chain/client"
 	"kwil/x/contracts/escrow"
 	"kwil/x/deposits/dto"
 	"kwil/x/deposits/repository"
@@ -26,7 +27,7 @@ type depositsService struct {
 	expirationPeriod int64
 }
 
-func NewService(config dto.Config, db *sqlclient.DB, chainClient ccDTO.ChainClient, privateKey string) (DepositsService, error) {
+func NewService(config dto.Config, db *sqlclient.DB, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey) (DepositsService, error) {
 
 	// create the escrow contract
 	escrowContract, err := escrow.New(chainClient, privateKey, config.EscrowAddress)

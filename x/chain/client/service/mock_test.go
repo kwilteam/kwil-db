@@ -4,9 +4,11 @@ package service_test
 import (
 	"context"
 	"kwil/x/chain"
+	"kwil/x/chain/client"
 	"kwil/x/chain/client/dto"
 	"kwil/x/chain/client/service"
-	provider "kwil/x/chain/provider/dto"
+	"kwil/x/chain/provider"
+	providerDto "kwil/x/chain/provider/dto"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -16,7 +18,7 @@ type MockChainProvider struct {
 	chainCode chain.ChainCode
 }
 
-func (m *MockChainProvider) HeaderByNumber(ctx context.Context, number *big.Int) (*provider.Header, error) {
+func (m *MockChainProvider) HeaderByNumber(ctx context.Context, number *big.Int) (*providerDto.Header, error) {
 	var num int64
 	if number == nil {
 		num = STARTING_BLOCK
@@ -24,7 +26,7 @@ func (m *MockChainProvider) HeaderByNumber(ctx context.Context, number *big.Int)
 		num = number.Int64()
 	}
 
-	return &provider.Header{
+	return &providerDto.Header{
 		Height: num,
 		Hash:   "hash",
 	}, nil
@@ -34,15 +36,20 @@ func (m *MockChainProvider) ChainCode() chain.ChainCode {
 	return m.chainCode
 }
 
+func (m *MockChainProvider) Endpoint() string {
+	return "endpoint"
+}
+
 func newMockChainProvider() provider.ChainProvider {
 	return &MockChainProvider{
 		chainCode: CHAIN_CODE,
 	}
 }
 
-func newMockChainClient() dto.ChainClient {
-
-	return service.NewChainClientExplicit(newMockChainProvider(), &dto.Config{
+func newMockChainClient() (client.ChainClient, error) {
+	prov := newMockChainProvider()
+	return service.NewChainClientExplicit(&dto.Config{
+		Endpoint:              prov.Endpoint(),
 		ChainCode:             2,
 		ReconnectionInterval:  10,
 		RequiredConfirmations: REQUIRED_CONFIRMATIONS,

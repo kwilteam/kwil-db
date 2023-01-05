@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	chains "kwil/x/chain"
-	chainClientDTO "kwil/x/chain/client/dto"
+	chainClient "kwil/x/chain/client"
+	"kwil/x/contracts/escrow"
 	escrowDTO "kwil/x/contracts/escrow/dto"
 	"kwil/x/deposits/repository"
 	"kwil/x/logx"
@@ -26,10 +27,10 @@ type Chain interface {
 }
 
 type chain struct {
-	db             *sqlclient.DB              // for creating new txs
-	dao            *repository.Queries        // for interacting with the db
-	chainClient    chainClientDTO.ChainClient // for getting blocks
-	escrowContract escrowDTO.EscrowContract   // for returning funds
+	db             *sqlclient.DB           // for creating new txs
+	dao            *repository.Queries     // for interacting with the db
+	chainClient    chainClient.ChainClient // for getting blocks
+	escrowContract escrow.EscrowContract   // for returning funds
 	log            logx.SugaredLogger
 	tasks          tasks.TaskRunner
 	chunkSize      int64
@@ -37,7 +38,7 @@ type chain struct {
 	height         int64 // the height of the last block we processed
 }
 
-func New(client chainClientDTO.ChainClient, escrow escrowDTO.EscrowContract, dao *repository.Queries, db *sqlclient.DB) (Chain, error) {
+func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao *repository.Queries, db *sqlclient.DB) (Chain, error) {
 	escrowTasks := escrowtasks.New(dao, escrow)
 	chunkSizeEnv := os.Getenv("deposit_chunk_size")
 	if chunkSizeEnv == "" {

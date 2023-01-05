@@ -18,7 +18,9 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
+	github.com/lib/pq v1.10.7
 	github.com/manifoldco/promptui v0.9.0
+	github.com/mitchellh/copystructure v1.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/oklog/run v1.1.0
 	github.com/spf13/cobra v1.6.1
@@ -39,8 +41,6 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.3.1 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
-	github.com/lib/pq v1.10.7 // indirect
-	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	go.uber.org/multierr v1.6.0 // indirect

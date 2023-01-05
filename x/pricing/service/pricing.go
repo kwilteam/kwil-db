@@ -1,16 +1,17 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"kwil/x/pricing"
 	"kwil/x/pricing/entity"
-	"kwil/x/proto/pricingpb"
-	"math/big"
+	"kwil/x/transactions"
+	txDto "kwil/x/transactions/dto"
 )
 
 type PricingService interface {
-	EstimatePrice(request *pricingpb.EstimateRequest) (*pricingpb.EstimateResponse, error)
-	GetPrice(requestType pricing.PricingRequestType) (*big.Int, error)
+	EstimatePrice(ctx context.Context, tx *txDto.Transaction) (string, error)
+	GetPrice(tx *txDto.Transaction) (string, error)
 }
 
 type pricingService struct {
@@ -20,30 +21,28 @@ func NewService() *pricingService {
 	return &pricingService{}
 }
 
-func (p *pricingService) EstimatePrice(request *pricingpb.EstimateRequest) (*pricingpb.EstimateResponse, error) {
+// for estimating a price before signing a tx
+func (p *pricingService) EstimatePrice(ctx context.Context, tx *txDto.Transaction) (string, error) {
 	// for now, we will just determine the request type and return a fixed price
 
-	req := request.GetRequest()
-	var price string
-	switch req.(type) {
-	case *pricingpb.EstimateRequest_Deploy:
-		price = entity.EstimatePrice(pricing.Deploy)
-	case *pricingpb.EstimateRequest_Delete:
-		price = entity.EstimatePrice(pricing.Delete)
-	case *pricingpb.EstimateRequest_Query:
-		price = entity.EstimatePrice(pricing.Query)
-	}
-
-	return &pricingpb.EstimateResponse{
-		Price: price,
-	}, nil
+	// just a passthrough for now until we implement the pricing service
+	return p.GetPrice(tx)
 }
 
-func (p *pricingService) GetPrice(requestType pricing.PricingRequestType) (*big.Int, error) {
-	bi, ok := new(big.Int).SetString(entity.GetPrice(requestType), 10)
-	if !ok {
-		return nil, fmt.Errorf("could not convert price to big.Int")
+// for getting a tx price at execution time
+func (p *pricingService) GetPrice(tx *txDto.Transaction) (string, error) {
+	var price string
+
+	switch tx.PayloadType {
+	case transactions.DEPLOY_DATABASE:
+		price = entity.EstimatePrice(pricing.DEPLOY)
+	case transactions.DROP_DATABASE:
+		price = entity.EstimatePrice(pricing.DROP)
+	case transactions.EXECUTE_QUERY:
+		price = entity.EstimatePrice(pricing.QUERY)
+	default:
+		return "", fmt.Errorf("invalid payload type")
 	}
 
-	return bi, nil
+	return price, nil
 }

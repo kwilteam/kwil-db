@@ -3,14 +3,13 @@ package main
 import (
 	"fmt"
 	"kwil/x/cfgx"
-	"kwil/x/chain"
+	chainClient "kwil/x/chain/client"
 	ccDTO "kwil/x/chain/client/dto"
 	ccService "kwil/x/chain/client/service"
-	cp "kwil/x/chain/provider"
 )
 
 // Builds the chain client from the meta config
-func buildChainClient(cfg cfgx.Config) (ccDTO.ChainClient, error) {
+func buildChainClient(cfg cfgx.Config) (chainClient.ChainClient, error) {
 	config := cfg.Select("chain-client") // config specifically for chain client
 	providerEndpoint := config.GetString("provider-endpoint", "")
 	if providerEndpoint == "" {
@@ -24,11 +23,6 @@ func buildChainClient(cfg cfgx.Config) (ccDTO.ChainClient, error) {
 		return nil, fmt.Errorf("invalid chain-code: %d", chainCode)
 	}
 
-	provider, err := cp.New(providerEndpoint, chain.ChainCode(chainCode))
-	if err != nil {
-		return nil, fmt.Errorf("error creating chain provider: %d", err)
-	}
-
 	requiredConfirmations, err := cfg.GetInt64("required-confirmations", 12)
 	if err != nil {
 		return nil, fmt.Errorf("error getting required confirmations from config: %d", err)
@@ -39,9 +33,10 @@ func buildChainClient(cfg cfgx.Config) (ccDTO.ChainClient, error) {
 		return nil, fmt.Errorf("error getting reconnectiong-interval from config: %d", err)
 	}
 
-	return ccService.NewChainClientExplicit(provider, &ccDTO.Config{
+	return ccService.NewChainClientExplicit(&ccDTO.Config{
+		Endpoint:              providerEndpoint,
 		ChainCode:             chainCode,
 		ReconnectionInterval:  reconnectionInterval,
 		RequiredConfirmations: requiredConfirmations,
-	}), nil
+	})
 }

@@ -1,4 +1,4 @@
-package dto
+package client
 
 import (
 	"context"

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"kwil/x/deposits/dto"
 	"kwil/x/deposits/repository"
-	"kwil/x/math/big"
+	"kwil/x/utils/big"
 	"math/rand"
 	"time"
 )

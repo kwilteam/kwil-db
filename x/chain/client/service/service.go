@@ -3,8 +3,9 @@ package service
 import (
 	"kwil/x/cfgx"
 	"kwil/x/chain"
+	"kwil/x/chain/client"
 	"kwil/x/chain/client/dto"
-	provider "kwil/x/chain/provider/dto"
+	"kwil/x/chain/provider"
 	"kwil/x/logx"
 	"time"
 )
@@ -19,20 +20,25 @@ type chainClient struct {
 	lastBlock             int64
 }
 
-func NewChainClient(cfg cfgx.Config, prov provider.ChainProvider) dto.ChainClient {
+func NewChainClient(cfg cfgx.Config, prov provider.ChainProvider) (client.ChainClient, error) {
 
 	chainCode := cfg.Int64("chain-code", 0)
 	recInterval := cfg.Int64("reconnection-interval", 30)
 	reqConfs := cfg.Int64("required-confirmations", 12)
 
-	return NewChainClientExplicit(prov, &dto.Config{
+	return NewChainClientExplicit(&dto.Config{
+		Endpoint:              prov.Endpoint(),
 		ChainCode:             chainCode,
 		ReconnectionInterval:  recInterval,
 		RequiredConfirmations: reqConfs,
 	})
 }
 
-func NewChainClientExplicit(prov provider.ChainProvider, conf *dto.Config) dto.ChainClient {
+func NewChainClientExplicit(conf *dto.Config) (client.ChainClient, error) {
+	prov, err := provider.New(conf.Endpoint, chain.ChainCode(conf.ChainCode))
+	if err != nil {
+		return nil, err
+	}
 
 	return &chainClient{
 		provider:              prov,
@@ -41,5 +47,5 @@ func NewChainClientExplicit(prov provider.ChainProvider, conf *dto.Config) dto.C
 		requiredConfirmations: conf.RequiredConfirmations,
 		chainCode:             chain.ChainCode(conf.ChainCode),
 		lastBlock:             0,
-	}
+	}, nil
 }

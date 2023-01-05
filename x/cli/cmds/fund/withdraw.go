@@ -2,14 +2,8 @@ package fund
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"math/big"
 
-	"kwil/x/cli/chain"
 	"kwil/x/cli/util"
-	"kwil/x/crypto"
-	"kwil/x/proto/apipb"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -27,69 +21,69 @@ func withdrawCmd() *cobra.Command {
 			// send request
 
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client := apipb.NewKwilServiceClient(cc)
-				c, err := chain.NewClientV(viper.GetViper())
-				if err != nil {
-					return fmt.Errorf("error creating chain client: %w", err)
-				}
+				/*client := apipb.NewKwilServiceClient(cc)
+								c, err := chain.NewClientV(viper.GetViper())
+								if err != nil {
+									return fmt.Errorf("error creating chain client: %w", err)
+								}
 
-				// get balance
-				balance, err := c.GetDepositBalance()
-				if err != nil {
-					return fmt.Errorf("error getting deposit balance: %w", err)
-				}
+								// get balance
+								balance, err := c.GetDepositBalance()
+								if err != nil {
+									return fmt.Errorf("error getting deposit balance: %w", err)
+								}
 
-				amount, ok := new(big.Int).SetString(args[0], 10)
-				if !ok {
-					return errors.New("could not convert amount to big int")
-				}
+								amount, ok := new(big.Int).SetString(args[0], 10)
+								if !ok {
+									return errors.New("could not convert amount to big int")
+								}
 
-				if balance.Cmp(amount) < 0 {
-					return fmt.Errorf("insufficient funds: %s of %s", amount, balance)
-				}
+								if balance.Cmp(amount) < 0 {
+									return fmt.Errorf("insufficient funds: %s of %s", amount, balance)
+								}
 
-				addr := c.Address.String()
+								addr := c.Address.String()
 
-				// now we will send a request to "/api/v0/wallets/withdraw"
-				n := util.GenerateNonce(10)
+								// now we will send a request to "/api/v0/wallets/withdraw"
+								n := util.GenerateNonce(10)
 
-				// generate id
-				id := crypto.Sha384Str([]byte(amount.String() + n + addr))
+								// generate id
+								id := crypto.Sha384Str([]byte(amount.String() + n + addr))
 
-				// sign it
-				sig, err := crypto.Sign([]byte(id), c.PrivateKey)
-				if err != nil {
-					return fmt.Errorf("error signing request: %w", err)
-				}
+								// sign it
+								sig, err := crypto.Sign([]byte(id), c.PrivateKey)
+								if err != nil {
+									return fmt.Errorf("error signing request: %w", err)
+								}
 
-				fmt.Println("THIS IS NOT DONE ThIS DOES NOT WORK YET")
+								fmt.Println("THIS IS NOT DONE ThIS DOES NOT WORK YET")
 
-				wdr := apipb.WithdrawalRequest{
-					Tx: &apipb.Tx{
-						Id:        id,
-						Payload:   []byte{},
-						Fee:       amount.String(),
-						Nonce:     n,
-						Sender:    addr,
-						Signature: sig,
-					},
-				}
-				res, err := client.ReturnFunds(ctx, &wdr)
-				if err != nil {
-					fmt.Printf("%+v", &wdr)
-					return fmt.Errorf("error sending request: %w", err)
-				}
+								wdr := apipb.WithdrawalRequest{
+									Tx: &apipb.Tx{
+										Id:        id,
+										Payload:   []byte{},
+										Fee:       amount.String(),
+										Nonce:     n,
+										Sender:    addr,
+										Signature: sig,
+									},
+								}
+								res, err := client.ReturnFunds(ctx, &wdr)
+								if err != nil {
+									fmt.Printf("%+v", &wdr)
+									return fmt.Errorf("error sending request: %w", err)
+								}
 
-				fmt.Printf(`Withdrawal request sent.
-				
-	Amount Requested: %s
-	Amount Returned:  %s
-	Fee:              %s
-	Correlation ID:   %s
-	Tx Hash:          %s
+								fmt.Printf(`Withdrawal request sent.
 
-`, amount, res.Amount, res.Fee, res.CorrelationId, res.Txid)
+					Amount Requested: %s
+					Amount Returned:  %s
+					Fee:              %s
+					Correlation ID:   %s
+					Tx Hash:          %s
 
+				`, amount, res.Amount, res.Fee, res.CorrelationId, res.Txid)
+				*/
 				return nil
 			})
 		},

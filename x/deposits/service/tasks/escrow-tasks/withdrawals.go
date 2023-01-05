@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"kwil/x/deposits/repository"
 	"kwil/x/deposits/service/tasks"
-	bigutil "kwil/x/math/big"
+	bigutil "kwil/x/utils/big"
 	"math/big"
 )
 

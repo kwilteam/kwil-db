@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AccountServiceClient interface {
-	GetBalance(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*GetAccountResponse, error)
+	GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*GetAccountResponse, error)
 }
 
 type accountServiceClient struct {
@@ -33,9 +33,9 @@ func NewAccountServiceClient(cc grpc.ClientConnInterface) AccountServiceClient {
 	return &accountServiceClient{cc}
 }
 
-func (c *accountServiceClient) GetBalance(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*GetAccountResponse, error) {
+func (c *accountServiceClient) GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*GetAccountResponse, error) {
 	out := new(GetAccountResponse)
-	err := c.cc.Invoke(ctx, "/accountsvc.AccountService/GetBalance", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/accountsvc.AccountService/GetAccount", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (c *accountServiceClient) GetBalance(ctx context.Context, in *GetAccountReq
 // All implementations must embed UnimplementedAccountServiceServer
 // for forward compatibility
 type AccountServiceServer interface {
-	GetBalance(context.Context, *GetAccountRequest) (*GetAccountResponse, error)
+	GetAccount(context.Context, *GetAccountRequest) (*GetAccountResponse, error)
 	mustEmbedUnimplementedAccountServiceServer()
 }
 
@@ -54,8 +54,8 @@ type AccountServiceServer interface {
 type UnimplementedAccountServiceServer struct {
 }
 
-func (UnimplementedAccountServiceServer) GetBalance(context.Context, *GetAccountRequest) (*GetAccountResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
+func (UnimplementedAccountServiceServer) GetAccount(context.Context, *GetAccountRequest) (*GetAccountResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAccount not implemented")
 }
 func (UnimplementedAccountServiceServer) mustEmbedUnimplementedAccountServiceServer() {}
 
@@ -70,20 +70,20 @@ func RegisterAccountServiceServer(s grpc.ServiceRegistrar, srv AccountServiceSer
 	s.RegisterService(&AccountService_ServiceDesc, srv)
 }
 
-func _AccountService_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _AccountService_GetAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetAccountRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AccountServiceServer).GetBalance(ctx, in)
+		return srv.(AccountServiceServer).GetAccount(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/accountsvc.AccountService/GetBalance",
+		FullMethod: "/accountsvc.AccountService/GetAccount",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AccountServiceServer).GetBalance(ctx, req.(*GetAccountRequest))
+		return srv.(AccountServiceServer).GetAccount(ctx, req.(*GetAccountRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -96,8 +96,8 @@ var AccountService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*AccountServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetBalance",
-			Handler:    _AccountService_GetBalance_Handler,
+			MethodName: "GetAccount",
+			Handler:    _AccountService_GetAccount_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"kwil/x/execution/dto"
 	"kwil/x/execution/repository"
-	"kwil/x/execution/utils"
 )
 
-func (s *executionService) DropDatabase(ctx context.Context, owner, name string) error {
+func (s *executionService) DropDatabase(ctx context.Context, database *dto.DatabaseIdentifier) error {
 	// create tx
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -18,15 +18,15 @@ func (s *executionService) DropDatabase(ctx context.Context, owner, name string)
 
 	// drop the database from the databases table
 	err = dao.DropDatabase(ctx, &repository.DropDatabaseParams{
-		DbName:  name,
-		DbOwner: owner,
+		DbName:  database.Name,
+		DbOwner: database.Owner,
 	})
 	if err != nil {
 		return fmt.Errorf("error dropping database from database table: %d", err)
 	}
 
 	// drop the postgres schema
-	dbid := utils.GenerateSchemaName(owner, name)
+	dbid := dto.GenerateSchemaName(database.Owner, database.Name)
 	_, err = tx.ExecContext(ctx, "DROP SCHEMA $1", dbid)
 	if err != nil {
 		return fmt.Errorf("error dropping schema %s. error: %d", dbid, err)

@@ -5,6 +5,10 @@ import (
 	"math/big"
 )
 
+var (
+	Big0 = big.NewInt(0)
+)
+
 // contains some utility functions for big.Int that I use in various places
 
 type bigFunctionPicker interface {

@@ -162,7 +162,7 @@ func AppendByteArrLength(b []byte, a []byte) []byte {
 }
 
 // BigInt2Bytes This function converts a big int to bytes.  The result will always be a byte slice of length 16.
-func BigInt2Bytes(h *big.Int) []byte {
+func BigIntToBytes(h *big.Int) []byte {
 	b := make([]byte, 16)
 	k := h.FillBytes(b)
 	return k

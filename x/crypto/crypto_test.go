@@ -1,7 +1,8 @@
-package crypto
+package crypto_test
 
 import (
 	"encoding/hex"
+	"kwil/x/crypto"
 	"reflect"
 	"testing"
 )
@@ -35,7 +36,7 @@ func TestSha384(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Sha384(tt.args.data); !reflect.DeepEqual(got, tt.want) {
+			if got := crypto.Sha384(tt.args.data); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Sha384() = %v, want %v", got, tt.want)
 			}
 		})
@@ -62,7 +63,7 @@ func TestSha384Str(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Sha384Str(tt.args.data); got != tt.want {
+			if got := crypto.Sha384Hex(tt.args.data); got != tt.want {
 				t.Errorf("Sha384Str() = %v, want %v", got, tt.want)
 			}
 		})
@@ -71,7 +72,7 @@ func TestSha384Str(t *testing.T) {
 
 func Test_Sha256(t *testing.T) {
 	res := "0c9e4969977f81d845cb959915b563a09a857e8d16911ce5a2780f38a5985410"
-	hash := Sha256Str([]byte("kwil"))
+	hash := crypto.Sha256Hex([]byte("kwil"))
 	if hash != res {
 		t.Errorf("Error with Sha256")
 	}
@@ -79,7 +80,7 @@ func Test_Sha256(t *testing.T) {
 
 func Test_Sha224(t *testing.T) {
 	res := "9651608f63f583b7684c3c856d3ef1e3c9d70e2c05b4fa0080989c4d"
-	hash := Sha224Str([]byte("kwil"))
+	hash := crypto.Sha224Hex([]byte("kwil"))
 	if hash != res {
 		t.Errorf("Error with Sha224")
 	}

@@ -1,9 +1,4 @@
-package dto
-
-import (
-	"encoding/json"
-	"fmt"
-)
+package transactions
 
 type PayloadType int32
 
@@ -16,12 +11,3 @@ const (
 	WITHDRAW
 	END_PAYLOAD_TYPE
 )
-
-func DecodePayload[T any](tx *Transaction) (T, error) {
-	var p T
-	err := json.Unmarshal(tx.Payload, &p)
-	if err != nil {
-		return p, fmt.Errorf("failed to unmarshal payload: %w", err)
-	}
-	return p, nil
-}

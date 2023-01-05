@@ -1,14 +1,24 @@
 package escrow
 
 import (
+	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"kwil/x/chain"
-	ccDTO "kwil/x/chain/client/dto"
+	chainClient "kwil/x/chain/client"
 	"kwil/x/contracts/escrow/dto"
+
 	"kwil/x/contracts/escrow/evm"
 )
 
-func New(chainClient ccDTO.ChainClient, privateKey, address string) (dto.EscrowContract, error) {
+type EscrowContract interface {
+	GetDeposits(ctx context.Context, start, end int64) ([]*dto.DepositEvent, error)
+	GetWithdrawals(ctx context.Context, start, end int64) ([]*dto.WithdrawalConfirmationEvent, error)
+	ReturnFunds(ctx context.Context, params *dto.ReturnFundsParams) (*dto.ReturnFundsResponse, error)
+	TokenAddress() string
+}
+
+func New(chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, address string) (EscrowContract, error) {
 	switch chainClient.ChainCode() {
 	case chain.ETHEREUM, chain.GOERLI:
 		ethClient, err := chainClient.AsEthClient()

@@ -6,7 +6,7 @@ import (
 	"kwil/x/execution/dto"
 )
 
-func (s *executionService) Execute(ctx context.Context, body *dto.ExecutionBody) error {
+func (s *executionService) ExecuteQuery(ctx context.Context, body *dto.ExecutionBody) error {
 	db, ok := s.databases[body.Database]
 	if !ok {
 		return fmt.Errorf("database %s not found", body.Database)

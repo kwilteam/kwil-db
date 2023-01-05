@@ -50,73 +50,11 @@
     }
   },
   "definitions": {
-    "pricingCRUDInput": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      }
-    },
-    "pricingEstimateDeleteRequest": {
-      "type": "object",
-      "properties": {
-        "database": {
-          "type": "string"
-        },
-        "owner": {
-          "type": "string"
-        }
-      }
-    },
-    "pricingEstimateDeployRequest": {
-      "type": "object",
-      "properties": {
-        "database": {
-          "type": "string"
-        },
-        "owner": {
-          "type": "string"
-        }
-      }
-    },
-    "pricingEstimateQueryRequest": {
-      "type": "object",
-      "properties": {
-        "database": {
-          "type": "string"
-        },
-        "owner": {
-          "type": "string"
-        },
-        "query": {
-          "type": "string"
-        },
-        "crud": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/pricingCRUDInput"
-          }
-        }
-      }
-    },
     "pricingEstimateRequest": {
       "type": "object",
       "properties": {
-        "caller": {
-          "type": "string"
-        },
-        "deploy": {
-          "$ref": "#/definitions/pricingEstimateDeployRequest"
-        },
-        "delete": {
-          "$ref": "#/definitions/pricingEstimateDeleteRequest"
-        },
-        "query": {
-          "$ref": "#/definitions/pricingEstimateQueryRequest"
+        "tx": {
+          "$ref": "#/definitions/txsvcTx"
         }
       }
     },
@@ -152,6 +90,69 @@
           "items": {
             "$ref": "#/definitions/protobufAny"
           }
+        }
+      }
+    },
+    "txsvcPayloadType": {
+      "type": "string",
+      "enum": [
+        "INVALID_PAYLOAD_TYPE",
+        "DEPLOY_DATABASE",
+        "MODIFY_DATABASE",
+        "DELETE_DATABASE",
+        "EXECUTE_QUERY",
+        "WITHDRAW"
+      ],
+      "default": "INVALID_PAYLOAD_TYPE"
+    },
+    "txsvcSignature": {
+      "type": "object",
+      "properties": {
+        "signatureBytes": {
+          "type": "string",
+          "format": "byte"
+        },
+        "signatureType": {
+          "$ref": "#/definitions/txsvcSignatureType"
+        }
+      }
+    },
+    "txsvcSignatureType": {
+      "type": "string",
+      "enum": [
+        "INVALID_SINATURE_TYPE",
+        "PK_SECP256K1_UNCOMPRESSED",
+        "ACCOUNT_SECP256K1_UNCOMPRESSED",
+        "END_SIGNATURE_TYPE"
+      ],
+      "default": "INVALID_SINATURE_TYPE"
+    },
+    "txsvcTx": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        },
+        "payloadType": {
+          "$ref": "#/definitions/txsvcPayloadType"
+        },
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
+        },
+        "signature": {
+          "$ref": "#/definitions/txsvcSignature"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "Sender": {
+          "type": "string"
         }
       }
     }

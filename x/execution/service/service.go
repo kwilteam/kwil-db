@@ -10,6 +10,8 @@ import (
 
 type ExecutionService interface {
 	DeployDatabase(ctx context.Context, database *dto.Database) error
+	DropDatabase(ctx context.Context, database *dto.DatabaseIdentifier) error
+	ExecuteQuery(ctx context.Context, query *dto.ExecutionBody) error
 }
 
 type executionService struct {

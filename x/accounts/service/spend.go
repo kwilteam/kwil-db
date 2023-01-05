@@ -7,7 +7,7 @@ import (
 	"kwil/x/accounts/repository"
 )
 
-func (s *accountsService) Spend(ctx context.Context, spend dto.Spend) error {
+func (s *accountsService) Spend(ctx context.Context, spend *dto.Spend) error {
 	err := s.dao.Spend(ctx, &repository.SpendParams{
 		AccountAddress: spend.Address,
 		Balance:        spend.Amount,

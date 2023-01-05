@@ -28,6 +28,6 @@ func generateName(schema, table, column, typ string) string {
 	sb.WriteByte('_')
 	sb.WriteString(typ)
 
-	hash := crypto.Sha256Str([]byte(sb.String()))
+	hash := crypto.Sha256Hex([]byte(sb.String()))
 	return hash[:63]
 }
