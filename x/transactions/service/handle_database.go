@@ -6,7 +6,7 @@ import (
 	accountDto "kwil/x/accounts/dto"
 	execDto "kwil/x/execution/dto"
 	"kwil/x/transactions/dto"
-	"kwil/x/transactions/utils"
+	"kwil/x/utils/serialize"
 )
 
 func (s *service) DeployDatabase(ctx context.Context, tx *dto.Transaction) (*dto.Response, error) {
@@ -34,7 +34,7 @@ func (s *service) DeployDatabase(ctx context.Context, tx *dto.Transaction) (*dto
 		return nil, fmt.Errorf("failed to spend fee: %w", err)
 	}
 
-	db, err := utils.DecodePayload[*execDto.Database](tx)
+	db, err := serialize.Deserialize[*execDto.Database](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode payload of type Database: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *service) DropDatabase(ctx context.Context, tx *dto.Transaction) (*dto.R
 		return nil, fmt.Errorf("failed to spend fee: %w", err)
 	}
 
-	db, err := utils.DecodePayload[*execDto.DatabaseIdentifier](tx)
+	db, err := serialize.Deserialize[*execDto.DatabaseIdentifier](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode payload of type DatabaseIdentifier: %w", err)
 	}

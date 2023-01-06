@@ -2,8 +2,8 @@ package evm
 
 import (
 	"context"
-	"kwil/abi"
 	"kwil/x/contracts/escrow/dto"
+	"kwil/x/contracts/escrow/evm/abi"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

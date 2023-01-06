@@ -2,7 +2,7 @@ package evm
 
 import (
 	"crypto/ecdsa"
-	"kwil/abi"
+	"kwil/x/contracts/escrow/evm/abi"
 	"kwil/x/crypto"
 	"math/big"
 
@@ -11,10 +11,11 @@ import (
 )
 
 type contract struct {
+	client      *ethclient.Client
 	ctr         *abi.Escrow
 	token       string
-	cid         *big.Int
-	key         *ecdsa.PrivateKey
+	chainId     *big.Int
+	privateKey  *ecdsa.PrivateKey
 	nodeAddress string
 }
 
@@ -37,10 +38,11 @@ func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKe
 	}
 
 	return &contract{
+		client:      client,
 		ctr:         ctr,
 		token:       tokAddr.Hex(),
-		cid:         chainId,
-		key:         privateKey,
+		chainId:     chainId,
+		privateKey:  privateKey,
 		nodeAddress: nodeAddress,
 	}, nil
 }

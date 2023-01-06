@@ -20,3 +20,13 @@ func (c ChainCode) ToChainId() *big.Int {
 	}
 	return big.NewInt(0)
 }
+
+func (c ChainCode) String() string {
+	switch c {
+	case ETHEREUM:
+		return "Ethereum"
+	case GOERLI:
+		return "Goerli"
+	}
+	return "Unknown"
+}

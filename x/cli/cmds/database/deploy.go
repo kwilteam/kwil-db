@@ -72,7 +72,7 @@ func deployCmd() *cobra.Command {
 					return err
 				}
 
-				display.PrintResponse(res)
+				display.PrintTxResponse(res)
 
 				return nil
 			})

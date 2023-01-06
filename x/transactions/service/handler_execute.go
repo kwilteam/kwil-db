@@ -6,7 +6,7 @@ import (
 	accountDto "kwil/x/accounts/dto"
 	execDto "kwil/x/execution/dto"
 	"kwil/x/transactions/dto"
-	"kwil/x/transactions/utils"
+	"kwil/x/utils/serialize"
 )
 
 func (s *service) ExecuteQuery(ctx context.Context, tx *dto.Transaction) (*dto.Response, error) {
@@ -34,7 +34,7 @@ func (s *service) ExecuteQuery(ctx context.Context, tx *dto.Transaction) (*dto.R
 		return nil, fmt.Errorf("failed to spend fee: %w", err)
 	}
 
-	payload, err := utils.DecodePayload[*execDto.ExecutionBody](tx)
+	payload, err := serialize.Deserialize[*execDto.ExecutionBody](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode payload of type ExecutionBody: %w", err)
 	}

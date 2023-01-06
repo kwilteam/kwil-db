@@ -51,7 +51,7 @@ func dropCmd() *cobra.Command {
 					return err
 				}
 
-				display.PrintResponse(res)
+				display.PrintTxResponse(res)
 
 				return nil
 			})

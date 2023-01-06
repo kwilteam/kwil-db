@@ -11,7 +11,7 @@ import (
 )
 
 // BuildTransaction creates the correct nonce, fee, and signs a transaction
-func (c *Client) BuildTransaction(ctx context.Context, payloadType transactions.PayloadType, data any, privateKey *ecdsa.PrivateKey) (*txDto.Transaction, error) {
+func (c *client) BuildTransaction(ctx context.Context, payloadType transactions.PayloadType, data any, privateKey *ecdsa.PrivateKey) (*txDto.Transaction, error) {
 	// get address from private key
 	address, err := crypto.AddressFromPrivateKey(privateKey)
 	if err != nil {

@@ -4,19 +4,20 @@ import (
 	"context"
 	"kwil/x/contracts/escrow/dto"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	kwilCommon "kwil/x/contracts/common/evm"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // ReturnFunds calls the returnDeposit function
 func (c *contract) ReturnFunds(ctx context.Context, params *dto.ReturnFundsParams) (*dto.ReturnFundsResponse, error) {
 
-	txOpts, err := bind.NewKeyedTransactorWithChainID(c.key, c.cid)
+	auth, err := kwilCommon.PrepareTxAuth(ctx, c.client, c.chainId, c.privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := c.ctr.ReturnDeposit(txOpts, common.HexToAddress(params.Recipient), params.Amount, params.Fee, params.CorrelationId)
+	res, err := c.ctr.ReturnDeposit(auth, common.HexToAddress(params.Recipient), params.Amount, params.Fee, params.CorrelationId)
 	if err != nil {
 		return nil, err
 	}

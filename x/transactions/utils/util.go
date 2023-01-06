@@ -1,22 +1,11 @@
 package utils
 
 import (
-	"encoding/json"
-	"fmt"
 	"kwil/x/crypto"
 	"kwil/x/proto/txpb"
 	"kwil/x/transactions"
 	"kwil/x/transactions/dto"
 )
-
-func DecodePayload[T any](tx *dto.Transaction) (T, error) {
-	var p T
-	err := json.Unmarshal(tx.Payload, &p)
-	if err != nil {
-		return p, fmt.Errorf("failed to unmarshal payload: %w", err)
-	}
-	return p, nil
-}
 
 // an interface for tx's sent over GRPC
 type TxMsg interface {
