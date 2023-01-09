@@ -3,12 +3,13 @@ package executables
 import (
 	"fmt"
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
 	"kwil/x/execution/sql-builder/dml"
+	"kwil/x/types/databases"
+	execTypes "kwil/x/types/execution"
 )
 
-func GenerateExecutables(db *dto.Database) (map[string]*dto.Executable, error) {
-	execs := make(map[string]*dto.Executable)
+func GenerateExecutables(db *databases.Database) (map[string]*execTypes.Executable, error) {
+	execs := make(map[string]*execTypes.Executable)
 	for _, q := range db.SQLQueries {
 		e, err := GenerateExecutable(db, q)
 		if err != nil {
@@ -21,7 +22,7 @@ func GenerateExecutables(db *dto.Database) (map[string]*dto.Executable, error) {
 	return execs, nil
 }
 
-func GenerateExecutable(db *dto.Database, q *dto.SQLQuery) (*dto.Executable, error) {
+func GenerateExecutable(db *databases.Database, q *databases.SQLQuery) (*execTypes.Executable, error) {
 	statement, err := generateStatement(db, q)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate statement: %w", err)
@@ -32,7 +33,7 @@ func GenerateExecutable(db *dto.Database, q *dto.SQLQuery) (*dto.Executable, err
 		return nil, fmt.Errorf("failed to build args: %w", err)
 	}
 
-	return &dto.Executable{
+	return &execTypes.Executable{
 		Name:       q.Name,
 		Statement:  statement,
 		Args:       args,
@@ -40,7 +41,7 @@ func GenerateExecutable(db *dto.Database, q *dto.SQLQuery) (*dto.Executable, err
 	}, nil
 }
 
-func generateStatement(db *dto.Database, q *dto.SQLQuery) (string, error) {
+func generateStatement(db *databases.Database, q *databases.SQLQuery) (string, error) {
 	switch q.Type {
 	case execution.SELECT:
 		return "", fmt.Errorf("SELECT is not supported yet")
@@ -64,8 +65,8 @@ type arger interface {
 }
 
 // buildsArgs will build all args and determine their position
-func buildArgs(db *dto.Database, q *dto.SQLQuery) ([]*dto.Arg, error) {
-	args := []*dto.Arg{}
+func buildArgs(db *databases.Database, q *databases.SQLQuery) ([]*execTypes.Arg, error) {
+	args := []*execTypes.Arg{}
 	var pos uint8 = 0
 	for _, param := range q.Params {
 		arg, err := buildArg(db, q, pos, param)
@@ -89,7 +90,7 @@ func buildArgs(db *dto.Database, q *dto.SQLQuery) ([]*dto.Arg, error) {
 }
 
 // buildArg will build an arg from a param or where clause
-func buildArg(db *dto.Database, q *dto.SQLQuery, position uint8, param arger) (*dto.Arg, error) {
+func buildArg(db *databases.Database, q *databases.SQLQuery, position uint8, param arger) (*execTypes.Arg, error) {
 	tbl := db.GetTable(q.Table)
 	if tbl == nil {
 		return nil, fmt.Errorf(`table "%s" does not exist`, q.Table)
@@ -100,7 +101,7 @@ func buildArg(db *dto.Database, q *dto.SQLQuery, position uint8, param arger) (*
 		return nil, fmt.Errorf(`column "%s" does not exist on table "%s"`, param.GetColumn(), q.Table)
 	}
 
-	return &dto.Arg{
+	return &execTypes.Arg{
 		Position: position,
 		Static:   param.GetStatic(),
 		Value:    param.GetValue(),
@@ -111,11 +112,11 @@ func buildArg(db *dto.Database, q *dto.SQLQuery, position uint8, param arger) (*
 }
 
 // build inputs will identify the non-static args and build the user inputs
-func buildInputs(args []*dto.Arg) []*dto.UserInput {
-	inputs := []*dto.UserInput{}
+func buildInputs(args []*execTypes.Arg) []*execTypes.UserInput {
+	inputs := []*execTypes.UserInput{}
 	for _, arg := range args {
 		if !arg.Static {
-			inputs = append(inputs, &dto.UserInput{
+			inputs = append(inputs, &execTypes.UserInput{
 				Name:  arg.Name,
 				Value: "",
 			})

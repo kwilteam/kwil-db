@@ -22,13 +22,13 @@ func BindKwilFlags(fs *pflag.FlagSet) {
 }
 
 func BindChainFlags(fs *pflag.FlagSet) {
-	fs.String("chain-id", "", "chain id")
+	fs.String("chain-code", "", "chain code")
 	fs.String("private-key", "", "private key")
 	fs.String("funding-pool", "", "funding pool")
 	fs.String("node-address", "", "node address")
 	fs.String("eth-provider", "", "eth provider")
 
-	viper.BindPFlag("chain-id", fs.Lookup("chain-id"))
+	viper.BindPFlag("chain-code", fs.Lookup("chain-code"))
 	viper.BindPFlag("private-key", fs.Lookup("private-key"))
 	viper.BindPFlag("funding-pool", fs.Lookup("funding-pool"))
 	viper.BindPFlag("node-address", fs.Lookup("node-address"))

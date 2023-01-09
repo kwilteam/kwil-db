@@ -3,11 +3,11 @@ package schemabuilder
 import (
 	"fmt"
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
 	ddlb "kwil/x/execution/sql-builder/ddl"
+	"kwil/x/types/databases"
 )
 
-func GenerateTableDDL(t *dto.Table, schemaName string) ([]string, error) {
+func GenerateTableDDL(t *databases.Table, schemaName string) ([]string, error) {
 	tbl := ddlb.NewTableBuilder().Schema(schemaName).Name(t.Name)
 	for _, col := range t.Columns {
 		cb := ddlb.NewColumnBuilder()

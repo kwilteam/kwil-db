@@ -38,6 +38,9 @@ func deployCmd() *cobra.Command {
 					return err
 				}
 
+				cx := viper.GetString("chain-code")
+				fmt.Printf("Chain code: %s", cx)
+
 				// read in the file
 				file, err := os.ReadFile(args[0])
 				if err != nil {
@@ -72,7 +75,7 @@ func deployCmd() *cobra.Command {
 					return err
 				}
 
-				display.PrintResponse(res)
+				display.PrintTxResponse(res)
 
 				return nil
 			})

@@ -2,13 +2,13 @@ package dml
 
 import (
 	"fmt"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 )
 
-func BuildUpdate(schemaName, table string, params []*dto.Parameter, whereClauses []*dto.WhereClause) (string, error) {
+func BuildUpdate(schemaName, table string, params []*databases.Parameter, whereClauses []*databases.WhereClause) (string, error) {
 	tblName := makeTableName(schemaName, table)
 
 	// converting parameters to goqu records

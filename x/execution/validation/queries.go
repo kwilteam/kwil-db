@@ -3,10 +3,10 @@ package validation
 import (
 	"fmt"
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
 )
 
-func validateSQLQueries(d *dto.Database) error {
+func validateSQLQueries(d *databases.Database) error {
 	// check amount of queries
 	if len(d.SQLQueries) > execution.MAX_QUERY_COUNT {
 		return fmt.Errorf(`database must have at most %d queries`, execution.MAX_QUERY_COUNT)
@@ -30,7 +30,7 @@ func validateSQLQueries(d *dto.Database) error {
 	return nil
 }
 
-func ValidateSQLQuery(q *dto.SQLQuery, db *dto.Database) error {
+func ValidateSQLQuery(q *databases.SQLQuery, db *databases.Database) error {
 	// validate type
 	if !q.Type.IsValid() {
 		return fmt.Errorf(`unknown query type: %d`, q.Type.Int())
@@ -99,7 +99,7 @@ func ValidateSQLQuery(q *dto.SQLQuery, db *dto.Database) error {
 
 // Checks that the query type is valid and that the query has an
 // acceptable parameters and where clauses.
-func validateQueryType(q *dto.SQLQuery) error {
+func validateQueryType(q *databases.SQLQuery) error {
 	// check if query has too many params or where clauses
 	if len(q.Params) > execution.MAX_PARAM_PER_QUERY || len(q.Where) > execution.MAX_WHERE_PER_QUERY {
 		return fmt.Errorf(`query "%s" cannot have more than %d parameters or %d where clauses`, q.Name, execution.MAX_PARAM_PER_QUERY, execution.MAX_WHERE_PER_QUERY)
@@ -132,7 +132,7 @@ func validateQueryType(q *dto.SQLQuery) error {
 	return nil
 }
 
-func ValidateInput(input dto.Input, table *dto.Table) error {
+func ValidateInput(input databases.Input, table *databases.Table) error {
 	// check if column exists
 	col := table.GetColumn(input.GetColumn())
 	if col == nil {

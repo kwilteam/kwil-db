@@ -2,14 +2,15 @@ package clean
 
 import (
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
+	execTypes "kwil/x/types/execution"
 	"strings"
 )
 
 // Clean cleans the database.
 // Currently, that just entails lowercasing all the strings (besides default values), but
 // in the future, it could do more.
-func CleanDatabase(db *dto.Database) {
+func CleanDatabase(db *databases.Database) {
 	db.Name = strings.ToLower(db.Name)
 	db.Owner = strings.ToLower(db.Owner)
 	for _, tbl := range db.Tables {
@@ -27,7 +28,7 @@ func CleanDatabase(db *dto.Database) {
 }
 
 // Clean cleans the table.
-func CleanTable(tbl *dto.Table) {
+func CleanTable(tbl *databases.Table) {
 	tbl.Name = strings.ToLower(tbl.Name)
 	for _, col := range tbl.Columns {
 		CleanColumn(col)
@@ -35,7 +36,7 @@ func CleanTable(tbl *dto.Table) {
 }
 
 // Clean cleans the column.
-func CleanColumn(col *dto.Column) {
+func CleanColumn(col *databases.Column) {
 	col.Name = strings.ToLower(col.Name)
 	if col.Type > execution.END_DATA_TYPE || col.Type < execution.INVALID_DATA_TYPE { // this should get caught by validation, but just in case
 		col.Type = execution.INVALID_DATA_TYPE
@@ -46,14 +47,14 @@ func CleanColumn(col *dto.Column) {
 }
 
 // Clean cleans the attribute.
-func CleanAttribute(attr *dto.Attribute) {
+func CleanAttribute(attr *databases.Attribute) {
 	if attr.Type > execution.END_ATTRIBUTE_TYPE || attr.Type < execution.INVALID_ATTRIBUTE_TYPE { // this should get caught by validation, but just in case
 		attr.Type = execution.INVALID_ATTRIBUTE_TYPE
 	}
 }
 
 // Clean cleans the role.
-func CleanRole(role *dto.Role) {
+func CleanRole(role *databases.Role) {
 	role.Name = strings.ToLower(role.Name)
 	for i, val := range role.Permissions {
 		role.Permissions[i] = strings.ToLower(val)
@@ -61,7 +62,7 @@ func CleanRole(role *dto.Role) {
 }
 
 // Clean cleans the SQL query.
-func CleanSQLQuery(qry *dto.SQLQuery) {
+func CleanSQLQuery(qry *databases.SQLQuery) {
 	qry.Name = strings.ToLower(qry.Name)
 	if qry.Type > execution.END_QUERY_TYPE || qry.Type < execution.INVALID_QUERY_TYPE { // this should get caught by validation, but just in case
 		qry.Type = execution.INVALID_QUERY_TYPE
@@ -77,7 +78,7 @@ func CleanSQLQuery(qry *dto.SQLQuery) {
 }
 
 // Clean cleans the param.
-func CleanParam(param *dto.Parameter) {
+func CleanParam(param *databases.Parameter) {
 	param.Name = strings.ToLower(param.Name)
 	param.Column = strings.ToLower(param.Column)
 	if param.Modifier > execution.END_MODIFIER_TYPE || param.Modifier < execution.INVALID_MODIFIER_TYPE { // this should get caught by validation, but just in case
@@ -86,7 +87,7 @@ func CleanParam(param *dto.Parameter) {
 }
 
 // Clean cleans the where predicate.
-func CleanWheres(where *dto.WhereClause) {
+func CleanWheres(where *databases.WhereClause) {
 	where.Name = strings.ToLower(where.Name)
 	where.Column = strings.ToLower(where.Column)
 	if where.Modifier > execution.END_MODIFIER_TYPE || where.Modifier < execution.INVALID_MODIFIER_TYPE { // this should get caught by validation, but just in case
@@ -99,7 +100,7 @@ func CleanWheres(where *dto.WhereClause) {
 }
 
 // Clean cleans the index.
-func CleanIndex(i *dto.Index) {
+func CleanIndex(i *databases.Index) {
 	i.Name = strings.ToLower(i.Name)
 	i.Table = strings.ToLower(i.Table)
 	if i.Using > execution.END_INDEX_TYPE || i.Using < execution.INVALID_INDEX_TYPE { // this should get caught by validation, but just in case
@@ -110,7 +111,7 @@ func CleanIndex(i *dto.Index) {
 	}
 }
 
-func CleanExecutionBody(body *dto.ExecutionBody) {
+func CleanExecutionBody(body *execTypes.ExecutionBody) {
 	body.Database = strings.ToLower(body.Database)
 	body.Query = strings.ToLower(body.Query)
 	body.Caller = strings.ToLower(body.Caller)

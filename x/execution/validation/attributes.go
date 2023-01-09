@@ -3,11 +3,11 @@ package validation
 import (
 	"fmt"
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
 	"reflect"
 )
 
-func ValidateAttribute(a *dto.Attribute, c *dto.Column) error {
+func ValidateAttribute(a *databases.Attribute, c *databases.Column) error {
 
 	// check if attribute is valid
 	if !a.Type.IsValid() {

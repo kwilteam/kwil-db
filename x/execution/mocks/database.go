@@ -2,19 +2,19 @@ package mocks
 
 import (
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
 )
 
 var (
 	// database
-	Db1 = dto.Database{
+	Db1 = databases.Database{
 		Name:  "db1",
 		Owner: "0xabc",
-		Tables: []*dto.Table{
+		Tables: []*databases.Table{
 			&Table1,
 			&Table2,
 		},
-		SQLQueries: []*dto.SQLQuery{
+		SQLQueries: []*databases.SQLQuery{
 			&Insert1,
 			&Insert2,
 			&Update1,
@@ -22,31 +22,31 @@ var (
 			&Delete1,
 			&Delete2,
 		},
-		Roles: []*dto.Role{
+		Roles: []*databases.Role{
 			&Role1,
 			&Role2,
 		},
-		Indexes: []*dto.Index{
+		Indexes: []*databases.Index{
 			&Index1,
 		},
 	}
 
 	// tables
-	Table1 = dto.Table{
+	Table1 = databases.Table{
 		Name:    "table1",
-		Columns: []*dto.Column{&Column1, &Column2},
+		Columns: []*databases.Column{&Column1, &Column2},
 	}
 
-	Table2 = dto.Table{
+	Table2 = databases.Table{
 		Name:    "table2",
-		Columns: []*dto.Column{&Column1, &Column3},
+		Columns: []*databases.Column{&Column1, &Column3},
 	}
 
 	// columns
-	Column1 = dto.Column{
+	Column1 = databases.Column{
 		Name: "col1",
 		Type: execution.STRING,
-		Attributes: []*dto.Attribute{
+		Attributes: []*databases.Attribute{
 			{
 				Type:  execution.PRIMARY_KEY,
 				Value: nil,
@@ -54,10 +54,10 @@ var (
 		},
 	}
 
-	Column2 = dto.Column{
+	Column2 = databases.Column{
 		Name: "col2",
 		Type: execution.INT32,
-		Attributes: []*dto.Attribute{
+		Attributes: []*databases.Attribute{
 			{
 				Type:  execution.MIN,
 				Value: 0,
@@ -65,7 +65,7 @@ var (
 		},
 	}
 
-	Column3 = dto.Column{
+	Column3 = databases.Column{
 		Name: "col3",
 		Type: execution.BOOLEAN,
 	}
@@ -73,75 +73,75 @@ var (
 	// sql queries
 
 	// insert
-	Insert1 = dto.SQLQuery{
+	Insert1 = databases.SQLQuery{
 		Name:  "insert1",
 		Type:  execution.INSERT,
 		Table: "table1",
-		Params: []*dto.Parameter{
+		Params: []*databases.Parameter{
 			&Parameter1,
 			&Parameter2,
 		},
 	}
 
-	Insert2 = dto.SQLQuery{
+	Insert2 = databases.SQLQuery{
 		Name:  "insert2",
 		Type:  execution.INSERT,
 		Table: "table2",
-		Params: []*dto.Parameter{
+		Params: []*databases.Parameter{
 			&Parameter1,
 			&Parameter3,
 		},
 	}
 
 	// update
-	Update1 = dto.SQLQuery{
+	Update1 = databases.SQLQuery{
 		Name:  "update1",
 		Type:  execution.UPDATE,
 		Table: "table1",
-		Params: []*dto.Parameter{
+		Params: []*databases.Parameter{
 			&Parameter1,
 			&Parameter2,
 		},
-		Where: []*dto.WhereClause{
+		Where: []*databases.WhereClause{
 			&WhereClause2,
 		},
 	}
 
-	Update2 = dto.SQLQuery{
+	Update2 = databases.SQLQuery{
 		Name:  "update2",
 		Type:  execution.UPDATE,
 		Table: "table2",
-		Params: []*dto.Parameter{
+		Params: []*databases.Parameter{
 			&Parameter1,
 			&Parameter3,
 		},
-		Where: []*dto.WhereClause{
+		Where: []*databases.WhereClause{
 			&WhereClause1,
 		},
 	}
 
 	// delete
-	Delete1 = dto.SQLQuery{
+	Delete1 = databases.SQLQuery{
 		Name:  "delete1",
 		Type:  execution.DELETE,
 		Table: "table1",
-		Where: []*dto.WhereClause{
+		Where: []*databases.WhereClause{
 			&WhereClause2,
 		},
 	}
 
-	Delete2 = dto.SQLQuery{
+	Delete2 = databases.SQLQuery{
 		Name:  "delete2",
 		Type:  execution.DELETE,
 		Table: "table2",
-		Where: []*dto.WhereClause{
+		Where: []*databases.WhereClause{
 			&WhereClause1,
 		},
 	}
 
 	// parameters
 
-	Parameter1 = dto.Parameter{
+	Parameter1 = databases.Parameter{
 		Name:     "param1",
 		Column:   "col1",
 		Static:   true,
@@ -149,25 +149,25 @@ var (
 		Modifier: execution.CALLER,
 	}
 
-	Parameter2 = dto.Parameter{
+	Parameter2 = databases.Parameter{
 		Name:   "param2",
 		Column: "col2",
 	}
 
-	Parameter3 = dto.Parameter{
+	Parameter3 = databases.Parameter{
 		Name:   "param3",
 		Column: "col3",
 		Static: false,
 	}
 
-	WhereClause1 = dto.WhereClause{
+	WhereClause1 = databases.WhereClause{
 		Name:     "where1",
 		Column:   "col3",
 		Static:   false,
 		Operator: execution.EQUAL,
 	}
 
-	WhereClause2 = dto.WhereClause{
+	WhereClause2 = databases.WhereClause{
 		Name:     "where2",
 		Column:   "col1",
 		Static:   true,
@@ -177,7 +177,7 @@ var (
 	}
 
 	// roles
-	Role1 = dto.Role{
+	Role1 = databases.Role{
 		Name:    "role1",
 		Default: true,
 		Permissions: []string{
@@ -187,7 +187,7 @@ var (
 		},
 	}
 
-	Role2 = dto.Role{
+	Role2 = databases.Role{
 		Name: "role2",
 		Permissions: []string{
 			"insert1",
@@ -200,7 +200,7 @@ var (
 	}
 
 	// indexes
-	Index1 = dto.Index{
+	Index1 = databases.Index{
 		Name:    "my_index",
 		Table:   "table1",
 		Columns: []string{"col1", "col2"},

@@ -1,12 +1,13 @@
 package server
 
 import (
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"kwil/x/gateway"
 	"kwil/x/gateway/middleware/auth"
 	"kwil/x/gateway/middleware/cors"
 	"kwil/x/graphql/hasura"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 const (

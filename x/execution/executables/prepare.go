@@ -3,11 +3,11 @@ package executables
 import (
 	"fmt"
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
+	execTypes "kwil/x/types/execution"
 )
 
 // prepare prepares execution of a query.  It does not check access control rights.
-func (d *executableInterface) Prepare(query string, caller string, inputs []*dto.UserInput) ([]any, error) {
+func (d *executableInterface) Prepare(query string, caller string, inputs []*execTypes.UserInput) ([]any, error) {
 	// get the executable
 	executable := d.Executables[query]
 	if executable == nil {
@@ -15,7 +15,7 @@ func (d *executableInterface) Prepare(query string, caller string, inputs []*dto
 	}
 
 	// convert user inputs to a map for easier lookup
-	inputMap := make(map[string]*dto.UserInput)
+	inputMap := make(map[string]*execTypes.UserInput)
 	for _, input := range inputs {
 		inputMap[input.Name] = input
 	}
@@ -54,7 +54,7 @@ func (d *executableInterface) Prepare(query string, caller string, inputs []*dto
 
 // determineDefault will determine the default value for an arg.
 // for example, if there is a caller modifier, it will return the caller.
-func determineDefault(arg *dto.Arg, caller string) (any, error) {
+func determineDefault(arg *execTypes.Arg, caller string) (any, error) {
 	switch arg.Modifier {
 	case execution.NO_MODIFIER:
 		return arg.Value, nil

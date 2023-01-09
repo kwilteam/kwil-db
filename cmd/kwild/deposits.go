@@ -2,17 +2,17 @@ package main
 
 import (
 	"fmt"
+	"kwil/kwil/repository"
 	"kwil/x/cfgx"
 	chainClient "kwil/x/chain/client"
 	"kwil/x/crypto"
-	app "kwil/x/deposits/app"
-	"kwil/x/deposits/dto"
-	deposits "kwil/x/deposits/service"
+	"kwil/x/deposits"
 	"kwil/x/sqlx/sqlclient"
+	depositTypes "kwil/x/types/deposits"
 	"os"
 )
 
-func buildDeposits(cfg cfgx.Config, db *sqlclient.DB, cc chainClient.ChainClient, privateKey string) (*app.Service, error) {
+func buildDeposits(cfg cfgx.Config, db *sqlclient.DB, queries *repository.Queries, cc chainClient.ChainClient, privateKey string) (deposits.Depositer, error) {
 	config := cfg.Select("deposits")
 	escrowAddr := config.GetString("escrow-address", "")
 	if escrowAddr == "" {
@@ -32,12 +32,7 @@ func buildDeposits(cfg cfgx.Config, db *sqlclient.DB, cc chainClient.ChainClient
 		return nil, fmt.Errorf("error converting private key to ecdsa: %d", err)
 	}
 
-	svc, err := deposits.NewService(dto.Config{
+	return deposits.NewDepositer(depositTypes.Config{
 		EscrowAddress: escrowAddr,
-	}, db, cc, pk)
-	if err != nil {
-		return nil, fmt.Errorf("error creating deposit service: %d", err)
-	}
-
-	return app.NewService(svc), nil
+	}, db, queries, cc, pk)
 }

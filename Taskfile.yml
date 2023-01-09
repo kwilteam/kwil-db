@@ -97,6 +97,15 @@ tasks:
       - proto/kwil/txsvc/*.proto
     generates:
       - x/proto/txpb/*
+  
+  build:sql:
+    desc: Generates the SQL repository
+    cmds:
+      - sqlc generate
+    sources:
+      - kwil/sql/*.sql
+    generates:
+      - kwil/repository
 
   build:health:pb:
     desc: Compiles the protobuf for the health service
