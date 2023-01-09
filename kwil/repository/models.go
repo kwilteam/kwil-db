@@ -38,7 +38,7 @@ type Column struct {
 
 type Database struct {
 	ID      int32
-	DbOwner string
+	DbOwner int32
 	DbName  string
 }
 
@@ -72,27 +72,20 @@ type Role struct {
 	DbID      sql.NullInt32
 }
 
+type RoleAccount struct {
+	RoleID    sql.NullInt32
+	AccountID sql.NullInt32
+}
+
 type RoleQuery struct {
 	RoleID  sql.NullInt32
 	QueryID sql.NullInt32
-}
-
-type RoleWallet struct {
-	RoleID   sql.NullInt32
-	WalletID sql.NullInt32
 }
 
 type Table struct {
 	ID        int32
 	DbID      sql.NullInt32
 	TableName string
-}
-
-type Wallet struct {
-	ID      int32
-	Wallet  string
-	Balance string
-	Spent   string
 }
 
 type Withdrawal struct {

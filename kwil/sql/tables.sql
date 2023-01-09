@@ -10,4 +10,4 @@ SELECT
 FROM
     tables
 WHERE
-    db_id = (SELECT id FROM databases WHERE db_name = $1 AND db_owner = $2);
+    db_id = (SELECT id FROM databases WHERE db_name = $1 AND db_owner = (SELECT id FROM accounts WHERE account_address = $2));

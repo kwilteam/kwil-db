@@ -15,9 +15,9 @@ VALUES
         $3
     );
 
--- name: RoleApplyWallet :exec
+-- name: RoleApplyAccount :exec
 INSERT INTO
-    role_wallets (role_id, wallet_id)
+    role_accounts (role_id, account_id)
 VALUES
     (
         (
@@ -32,9 +32,9 @@ VALUES
             SELECT
                 id
             FROM
-                wallets
+                accounts
             WHERE
-                wallet = $2
+                account_address = $2
         )
     );
 

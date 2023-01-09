@@ -87,11 +87,11 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.newWithdrawalStmt, err = db.PrepareContext(ctx, newWithdrawal); err != nil {
 		return nil, fmt.Errorf("error preparing query NewWithdrawal: %w", err)
 	}
+	if q.roleApplyAccountStmt, err = db.PrepareContext(ctx, roleApplyAccount); err != nil {
+		return nil, fmt.Errorf("error preparing query RoleApplyAccount: %w", err)
+	}
 	if q.roleApplyQueryStmt, err = db.PrepareContext(ctx, roleApplyQuery); err != nil {
 		return nil, fmt.Errorf("error preparing query RoleApplyQuery: %w", err)
-	}
-	if q.roleApplyWalletStmt, err = db.PrepareContext(ctx, roleApplyWallet); err != nil {
-		return nil, fmt.Errorf("error preparing query RoleApplyWallet: %w", err)
 	}
 	if q.setHeightStmt, err = db.PrepareContext(ctx, setHeight); err != nil {
 		return nil, fmt.Errorf("error preparing query SetHeight: %w", err)
@@ -215,14 +215,14 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing newWithdrawalStmt: %w", cerr)
 		}
 	}
+	if q.roleApplyAccountStmt != nil {
+		if cerr := q.roleApplyAccountStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing roleApplyAccountStmt: %w", cerr)
+		}
+	}
 	if q.roleApplyQueryStmt != nil {
 		if cerr := q.roleApplyQueryStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing roleApplyQueryStmt: %w", cerr)
-		}
-	}
-	if q.roleApplyWalletStmt != nil {
-		if cerr := q.roleApplyWalletStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing roleApplyWalletStmt: %w", cerr)
 		}
 	}
 	if q.setHeightStmt != nil {
@@ -305,8 +305,8 @@ type Queries struct {
 	increaseBalanceStmt        *sql.Stmt
 	listTablesStmt             *sql.Stmt
 	newWithdrawalStmt          *sql.Stmt
+	roleApplyAccountStmt       *sql.Stmt
 	roleApplyQueryStmt         *sql.Stmt
-	roleApplyWalletStmt        *sql.Stmt
 	setHeightStmt              *sql.Stmt
 	spendStmt                  *sql.Stmt
 	updateAccountStmt          *sql.Stmt
@@ -338,8 +338,8 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		increaseBalanceStmt:        q.increaseBalanceStmt,
 		listTablesStmt:             q.listTablesStmt,
 		newWithdrawalStmt:          q.newWithdrawalStmt,
+		roleApplyAccountStmt:       q.roleApplyAccountStmt,
 		roleApplyQueryStmt:         q.roleApplyQueryStmt,
-		roleApplyWalletStmt:        q.roleApplyWalletStmt,
 		setHeightStmt:              q.setHeightStmt,
 		spendStmt:                  q.spendStmt,
 		updateAccountStmt:          q.updateAccountStmt,

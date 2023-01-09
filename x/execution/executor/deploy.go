@@ -126,8 +126,8 @@ func (d *dbCreator) Store(ctx context.Context) error {
 // creates the database in the database table
 func (d *dbCreator) storeDatabase(ctx context.Context) error {
 	return d.dao.CreateDatabase(ctx, &repository.CreateDatabaseParams{
-		DbName:  d.database.Name,
-		DbOwner: d.database.Owner,
+		DbName:         d.database.Name,
+		AccountAddress: d.database.Owner,
 	})
 }
 

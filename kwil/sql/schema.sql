@@ -38,17 +38,9 @@ CREATE TABLE IF NOT EXISTS chains (
 -- chain ID's do matter, so we make an integer instead of serial.
 -- for example, ETHis 1, GOERLI is 2, etc.
 
--- tables for schemas:
-CREATE TABLE IF NOT EXISTS wallets (
-	id SERIAL PRIMARY KEY,
-	wallet VARCHAR(44) NOT NULL UNIQUE,
-	balance NUMERIC(78) DEFAULT '0' NOT NULL,
-	spent NUMERIC(78) DEFAULT '0' NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS databases (
     id INTEGER PRIMARY KEY,
-    db_owner TEXT NOT NULL REFERENCES wallets (wallet) ON DELETE CASCADE,
+    db_owner INTEGER NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
     db_name TEXT NOT NULL,
     unique (db_owner, db_name)
 );
@@ -93,11 +85,11 @@ CREATE TABLE IF NOT EXISTS roles (
     unique (role_name)
 );
 
--- join table for many-to-many relationship between roles and wallets
-CREATE TABLE IF NOT EXISTS role_wallets (
+-- join table for many-to-many relationship between roles and accounts
+CREATE TABLE IF NOT EXISTS role_accounts (
     role_id INTEGER REFERENCES roles (id) ON DELETE CASCADE,
-    wallet_id INTEGER REFERENCES wallets (id) ON DELETE CASCADE,
-    unique (role_id, wallet_id)
+    account_id INTEGER REFERENCES accounts (id) ON DELETE CASCADE,
+    unique (role_id, account_id)
 );
 
 CREATE TABLE IF NOT EXISTS queries (

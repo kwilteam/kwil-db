@@ -38,6 +38,40 @@ func (q *Queries) CreateRole(ctx context.Context, arg *CreateRoleParams) error {
 	return err
 }
 
+const roleApplyAccount = `-- name: RoleApplyAccount :exec
+INSERT INTO
+    role_accounts (role_id, account_id)
+VALUES
+    (
+        (
+            SELECT
+                id
+            FROM
+                roles
+            WHERE
+                role_name = $1
+        ),
+        (
+            SELECT
+                id
+            FROM
+                accounts
+            WHERE
+                account_address = $2
+        )
+    )
+`
+
+type RoleApplyAccountParams struct {
+	RoleName       string
+	AccountAddress string
+}
+
+func (q *Queries) RoleApplyAccount(ctx context.Context, arg *RoleApplyAccountParams) error {
+	_, err := q.exec(ctx, q.roleApplyAccountStmt, roleApplyAccount, arg.RoleName, arg.AccountAddress)
+	return err
+}
+
 const roleApplyQuery = `-- name: RoleApplyQuery :exec
 INSERT INTO
     role_queries (role_id, query_id)
@@ -69,39 +103,5 @@ type RoleApplyQueryParams struct {
 
 func (q *Queries) RoleApplyQuery(ctx context.Context, arg *RoleApplyQueryParams) error {
 	_, err := q.exec(ctx, q.roleApplyQueryStmt, roleApplyQuery, arg.RoleName, arg.QueryName)
-	return err
-}
-
-const roleApplyWallet = `-- name: RoleApplyWallet :exec
-INSERT INTO
-    role_wallets (role_id, wallet_id)
-VALUES
-    (
-        (
-            SELECT
-                id
-            FROM
-                roles
-            WHERE
-                role_name = $1
-        ),
-        (
-            SELECT
-                id
-            FROM
-                wallets
-            WHERE
-                wallet = $2
-        )
-    )
-`
-
-type RoleApplyWalletParams struct {
-	RoleName string
-	Wallet   string
-}
-
-func (q *Queries) RoleApplyWallet(ctx context.Context, arg *RoleApplyWalletParams) error {
-	_, err := q.exec(ctx, q.roleApplyWalletStmt, roleApplyWallet, arg.RoleName, arg.Wallet)
 	return err
 }

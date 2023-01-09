@@ -32,16 +32,16 @@ SELECT
 FROM
     tables
 WHERE
-    db_id = (SELECT id FROM databases WHERE db_name = $1 AND db_owner = $2)
+    db_id = (SELECT id FROM databases WHERE db_name = $1 AND db_owner = (SELECT id FROM accounts WHERE account_address = $2))
 `
 
 type ListTablesParams struct {
-	DbName  string
-	DbOwner string
+	DbName         string
+	AccountAddress string
 }
 
 func (q *Queries) ListTables(ctx context.Context, arg *ListTablesParams) ([]string, error) {
-	rows, err := q.query(ctx, q.listTablesStmt, listTables, arg.DbName, arg.DbOwner)
+	rows, err := q.query(ctx, q.listTablesStmt, listTables, arg.DbName, arg.AccountAddress)
 	if err != nil {
 		return nil, err
 	}

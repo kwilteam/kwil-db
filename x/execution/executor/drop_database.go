@@ -21,8 +21,8 @@ func (s *executor) DropDatabase(ctx context.Context, database *databases.Databas
 
 	// untrack tables
 	tables, err := dao.ListTables(ctx, &repository.ListTablesParams{
-		DbName:  database.Name,
-		DbOwner: database.Owner,
+		DbName:         database.Name,
+		AccountAddress: database.Owner,
 	})
 	if err != nil {
 		return fmt.Errorf("error listing tables: %d", err)
@@ -40,8 +40,8 @@ func (s *executor) DropDatabase(ctx context.Context, database *databases.Databas
 
 	// drop the database from the databases table
 	err = dao.DropDatabase(ctx, &repository.DropDatabaseParams{
-		DbName:  database.Name,
-		DbOwner: database.Owner,
+		DbName:         database.Name,
+		AccountAddress: database.Owner,
 	})
 	if err != nil {
 		return fmt.Errorf("error dropping database from database table: %d", err)

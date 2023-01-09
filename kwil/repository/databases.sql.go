@@ -13,16 +13,16 @@ const createDatabase = `-- name: CreateDatabase :exec
 INSERT INTO
     databases (db_name, db_owner)
 VALUES
-    ($1, $2)
+    ($1, (SELECT id FROM accounts WHERE account_address = $2))
 `
 
 type CreateDatabaseParams struct {
-	DbName  string
-	DbOwner string
+	DbName         string
+	AccountAddress string
 }
 
 func (q *Queries) CreateDatabase(ctx context.Context, arg *CreateDatabaseParams) error {
-	_, err := q.exec(ctx, q.createDatabaseStmt, createDatabase, arg.DbName, arg.DbOwner)
+	_, err := q.exec(ctx, q.createDatabaseStmt, createDatabase, arg.DbName, arg.AccountAddress)
 	return err
 }
 
@@ -31,15 +31,15 @@ DELETE FROM
     databases
 WHERE
     db_name = $1
-    AND db_owner = $2
+    AND db_owner = (SELECT id FROM accounts WHERE account_address = $2)
 `
 
 type DropDatabaseParams struct {
-	DbName  string
-	DbOwner string
+	DbName         string
+	AccountAddress string
 }
 
 func (q *Queries) DropDatabase(ctx context.Context, arg *DropDatabaseParams) error {
-	_, err := q.exec(ctx, q.dropDatabaseStmt, dropDatabase, arg.DbName, arg.DbOwner)
+	_, err := q.exec(ctx, q.dropDatabaseStmt, dropDatabase, arg.DbName, arg.AccountAddress)
 	return err
 }
