@@ -7,8 +7,8 @@ import (
 	"kwil/x/cli/client"
 	"kwil/x/cli/cmds/display"
 	"kwil/x/cli/util"
-	execDto "kwil/x/execution/dto"
 	"kwil/x/transactions"
+	"kwil/x/types/databases"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -35,7 +35,7 @@ func dropCmd() *cobra.Command {
 					return fmt.Errorf("deploy requires one argument: database name")
 				}
 
-				data := &execDto.DatabaseIdentifier{
+				data := &databases.DatabaseIdentifier{
 					Name:  args[0],
 					Owner: c.Address.String(),
 				}

@@ -24,6 +24,7 @@ func NewCmdConnect() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				client := apipb.NewKwilServiceClient(cc)
+
 				res, err := client.Connect(ctx, &apipb.ConnectRequest{})
 				if err != nil {
 					return err

@@ -3,10 +3,10 @@ package validation
 import (
 	"fmt"
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
 )
 
-func validateTables(d *dto.Database) error {
+func validateTables(d *databases.Database) error {
 	// check amount
 	if len(d.Tables) > execution.MAX_TABLE_COUNT {
 		return fmt.Errorf(`database must have at most %d tables`, execution.MAX_TABLE_COUNT)
@@ -29,7 +29,7 @@ func validateTables(d *dto.Database) error {
 	return nil
 }
 
-func ValidateTable(table *dto.Table) error {
+func ValidateTable(table *databases.Table) error {
 	// check name and name length
 	err := CheckName(table.Name, execution.MAX_TABLE_NAME_LENGTH)
 	if err != nil {

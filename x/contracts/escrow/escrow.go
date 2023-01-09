@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"kwil/x/chain"
 	chainClient "kwil/x/chain/client"
-	"kwil/x/contracts/escrow/dto"
+	escrowTypes "kwil/x/types/contracts/escrow"
 
 	"kwil/x/contracts/escrow/evm"
 )
 
 type EscrowContract interface {
-	GetDeposits(ctx context.Context, start, end int64) ([]*dto.DepositEvent, error)
-	GetWithdrawals(ctx context.Context, start, end int64) ([]*dto.WithdrawalConfirmationEvent, error)
-	ReturnFunds(ctx context.Context, params *dto.ReturnFundsParams) (*dto.ReturnFundsResponse, error)
+	GetDeposits(ctx context.Context, start, end int64) ([]*escrowTypes.DepositEvent, error)
+	GetWithdrawals(ctx context.Context, start, end int64) ([]*escrowTypes.WithdrawalConfirmationEvent, error)
+	ReturnFunds(ctx context.Context, params *escrowTypes.ReturnFundsParams) (*escrowTypes.ReturnFundsResponse, error)
 	TokenAddress() string
 }
 

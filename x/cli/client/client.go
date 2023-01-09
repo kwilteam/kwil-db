@@ -2,22 +2,26 @@ package client
 
 import (
 	"context"
-	accountsDto "kwil/x/accounts/dto"
+	"crypto/ecdsa"
+	"kwil/x/transactions"
+	accountTypes "kwil/x/types/accounts"
 
 	"kwil/x/proto/accountspb"
 	"kwil/x/proto/pricingpb"
 	"kwil/x/proto/txpb"
-	txDto "kwil/x/transactions/dto"
 	txUtils "kwil/x/transactions/utils"
+	txTypes "kwil/x/types/transactions"
 
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
 type Client interface {
-	GetAccount(ctx context.Context, address string) (*accountsDto.Account, error)
-	EstimatePrice(ctx context.Context, tx *txDto.Transaction) (string, error)
-	Broadcast(ctx context.Context, tx *txDto.Transaction) (*txDto.Response, error)
+	UnconnectedClient
+	GetAccount(ctx context.Context, address string) (*accountTypes.Account, error)
+	EstimatePrice(ctx context.Context, tx *txTypes.Transaction) (string, error)
+	Broadcast(ctx context.Context, tx *txTypes.Transaction) (*txTypes.Response, error)
+	BuildTransaction(ctx context.Context, payloadType transactions.PayloadType, data interface{}, privateKey *ecdsa.PrivateKey) (*txTypes.Transaction, error)
 }
 
 type client struct {
@@ -25,7 +29,7 @@ type client struct {
 	txs      txpb.TxServiceClient
 	pricing  pricingpb.PricingServiceClient
 
-	UnconnectedClient *UnconnectedClient
+	UnconnectedClient UnconnectedClient
 }
 
 func NewClient(cc *grpc.ClientConn, v *viper.Viper) (Client, error) {
@@ -43,7 +47,7 @@ func NewClient(cc *grpc.ClientConn, v *viper.Viper) (Client, error) {
 	}, nil
 }
 
-func (c *client) GetAccount(ctx context.Context, address string) (*accountsDto.Account, error) {
+func (c *client) GetAccount(ctx context.Context, address string) (*accountTypes.Account, error) {
 	acc, err := c.accounts.GetAccount(ctx, &accountspb.GetAccountRequest{
 		Address: address,
 	})
@@ -51,7 +55,7 @@ func (c *client) GetAccount(ctx context.Context, address string) (*accountsDto.A
 		return nil, err
 	}
 
-	return &accountsDto.Account{
+	return &accountTypes.Account{
 		Address: acc.Address,
 		Balance: acc.Balance,
 		Spent:   acc.Spent,
@@ -59,7 +63,7 @@ func (c *client) GetAccount(ctx context.Context, address string) (*accountsDto.A
 	}, nil
 }
 
-func (c *client) EstimatePrice(ctx context.Context, tx *txDto.Transaction) (string, error) {
+func (c *client) EstimatePrice(ctx context.Context, tx *txTypes.Transaction) (string, error) {
 	// estimate cost
 	fee, err := c.pricing.EstimateCost(ctx, &pricingpb.EstimateRequest{
 		Tx: txUtils.TxToMsg(tx),
@@ -71,7 +75,7 @@ func (c *client) EstimatePrice(ctx context.Context, tx *txDto.Transaction) (stri
 	return fee.Price, nil
 }
 
-func (c *client) Broadcast(ctx context.Context, tx *txDto.Transaction) (*txDto.Response, error) {
+func (c *client) Broadcast(ctx context.Context, tx *txTypes.Transaction) (*txTypes.Response, error) {
 	// broadcast
 	broadcast, err := c.txs.Broadcast(ctx, &txpb.BroadcastRequest{
 		Tx: txUtils.TxToMsg(tx),
@@ -80,7 +84,7 @@ func (c *client) Broadcast(ctx context.Context, tx *txDto.Transaction) (*txDto.R
 		return nil, err
 	}
 
-	return &txDto.Response{
+	return &txTypes.Response{
 		Hash: broadcast.Hash,
 		Fee:  broadcast.Fee,
 	}, nil

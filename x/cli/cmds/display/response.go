@@ -2,10 +2,10 @@ package display
 
 import (
 	"fmt"
-	txDto "kwil/x/transactions/dto"
+	txTypes "kwil/x/types/transactions"
 )
 
-func PrintTxResponse(res *txDto.Response) {
+func PrintTxResponse(res *txTypes.Response) {
 	fmt.Println("Response:")
 	fmt.Println("  Hash:", res.Hash)
 	fmt.Println("  Fee:", res.Fee)

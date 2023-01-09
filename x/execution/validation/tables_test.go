@@ -2,16 +2,16 @@ package validation_test
 
 import (
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
 	"kwil/x/execution/validation"
+	"kwil/x/types/databases"
 	"testing"
 )
 
-func testTables(t *testing.T, db *dto.Database) {
+func testTables(t *testing.T, db *databases.Database) {
 	oldTables := mustCopy(db.Tables)
 	// testing tables
 	// test no tables
-	db.Tables = []*dto.Table{}
+	db.Tables = []*databases.Table{}
 	err := validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for no tables")
@@ -27,7 +27,7 @@ func testTables(t *testing.T, db *dto.Database) {
 	db.Tables = mustCopy(oldTables)
 
 	// test table with no columns
-	db.Tables[0].Columns = []*dto.Column{}
+	db.Tables[0].Columns = []*databases.Column{}
 	err = validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for no table columns")

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"kwil/x/crypto"
 	"kwil/x/transactions"
-	txDto "kwil/x/transactions/dto"
+	txTypes "kwil/x/types/transactions"
 	"kwil/x/utils/serialize"
 )
 
 // BuildTransaction creates the correct nonce, fee, and signs a transaction
-func (c *client) BuildTransaction(ctx context.Context, payloadType transactions.PayloadType, data any, privateKey *ecdsa.PrivateKey) (*txDto.Transaction, error) {
+func (c *client) BuildTransaction(ctx context.Context, payloadType transactions.PayloadType, data any, privateKey *ecdsa.PrivateKey) (*txTypes.Transaction, error) {
 	// get address from private key
 	address, err := crypto.AddressFromPrivateKey(privateKey)
 	if err != nil {
@@ -31,7 +31,7 @@ func (c *client) BuildTransaction(ctx context.Context, payloadType transactions.
 	}
 
 	// build transaction
-	tx := txDto.NewTx(payloadType, bts, account.Nonce+1)
+	tx := txTypes.NewTx(payloadType, bts, account.Nonce+1)
 
 	// estimate price
 	price, err := c.EstimatePrice(ctx, tx)

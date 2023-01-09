@@ -4,7 +4,7 @@ import (
 	"kwil/x/crypto"
 	"kwil/x/proto/txpb"
 	"kwil/x/transactions"
-	"kwil/x/transactions/dto"
+	txTypes "kwil/x/types/transactions"
 )
 
 // an interface for tx's sent over GRPC
@@ -18,10 +18,10 @@ type TxMsg interface {
 	GetSender() string
 }
 
-func TxFromMsg(txmsg TxMsg) *dto.Transaction {
+func TxFromMsg(txmsg TxMsg) *txTypes.Transaction {
 	sig := txmsg.GetSignature()
 
-	return &dto.Transaction{
+	return &txTypes.Transaction{
 		PayloadType: transactions.PayloadType(txmsg.GetPayloadType()),
 		Hash:        txmsg.GetHash(),
 		Payload:     txmsg.GetPayload(),
@@ -35,7 +35,7 @@ func TxFromMsg(txmsg TxMsg) *dto.Transaction {
 	}
 }
 
-func TxToMsg(tx *dto.Transaction) *txpb.Tx {
+func TxToMsg(tx *txTypes.Transaction) *txpb.Tx {
 	return &txpb.Tx{
 		Hash:        tx.Hash,
 		PayloadType: txpb.PayloadType(tx.PayloadType),

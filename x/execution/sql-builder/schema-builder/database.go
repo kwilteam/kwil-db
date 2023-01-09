@@ -3,11 +3,11 @@
 package schemabuilder
 
 import (
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
 	"strings"
 )
 
-func GenerateDDL(db *dto.Database) (string, error) {
+func GenerateDDL(db *databases.Database) (string, error) {
 	schemaName := db.GetSchemaName()
 
 	stmts := []string{}

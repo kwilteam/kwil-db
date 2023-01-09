@@ -10,38 +10,52 @@ import (
 	"kwil/x/contracts/escrow"
 	"kwil/x/contracts/token"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/spf13/viper"
 )
 
-type UnconnectedClient struct {
-	ChainCode        chain.ChainCode
-	PrivateKey       *ecdsa.PrivateKey
-	Address          *common.Address
-	TokenAddress     *common.Address
-	PoolAddress      *common.Address
-	ValidatorAddress *common.Address
-	Escrow           escrow.EscrowContract
-	Token            token.TokenContract
-	ChainClient      chainClient.ChainClient
+// an unconnected client is a client that is not made to connect to a kwil server, and only
+// contains config and blockchain information
+
+type UnconnectedClient interface {
+	ChainCode() chain.ChainCode
+	PrivateKey() *ecdsa.PrivateKey
+	Address() string
+	TokenAddress() string
+	PoolAddress() string
+	ValidatorAddress() string
+	Escrow() escrow.EscrowContract
+	Token() token.TokenContract
+	ChainClient() chainClient.ChainClient
 }
 
-func NewUnconnectedClient(v *viper.Viper) (*UnconnectedClient, error) {
+type unconnectedClient struct {
+	chainCode        chain.ChainCode
+	privateKey       *ecdsa.PrivateKey
+	address          string
+	tokenAddress     string
+	poolAddress      string
+	validatorAddress string
+	escrow           escrow.EscrowContract
+	token            token.TokenContract
+	chainClient      chainClient.ChainClient
+}
+
+func NewUnconnectedClient(v *viper.Viper) (UnconnectedClient, error) {
 	chainCode := v.GetInt64("chain-code")
-	fundingPool := common.HexToAddress(v.GetString("funding-pool"))
-	nodeAddress := common.HexToAddress(v.GetString("node-address"))
+	fundingPool := v.GetString("funding-pool")
+	nodeAddress := v.GetString("node-address")
 	ethProvider := v.GetString("eth-provider")
 
 	privateKey, err := crypto.HexToECDSA(v.GetString("private-key"))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing private key: %v", err)
 	}
-	address := crypto.PubkeyToAddress(privateKey.PublicKey)
+	address := crypto.PubkeyToAddress(privateKey.PublicKey).Hex()
 
 	chnClient, err := chainClientService.NewChainClientExplicit(&chainClientDto.Config{
 		ChainCode:             chainCode,
-		Endpoint:              ethProvider,
+		Endpoint:              "wss://" + ethProvider,
 		ReconnectionInterval:  30,
 		RequiredConfirmations: 12,
 	})
@@ -50,29 +64,29 @@ func NewUnconnectedClient(v *viper.Viper) (*UnconnectedClient, error) {
 	}
 
 	// escrow
-	escrowCtr, err := escrow.New(chnClient, privateKey, fundingPool.Hex())
+	escrowCtr, err := escrow.New(chnClient, privateKey, fundingPool)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create escrow contract: %v", err)
 	}
 
 	// erc20 address
-	tokenAddress := common.HexToAddress(escrowCtr.TokenAddress())
+	tokenAddress := escrowCtr.TokenAddress()
 
 	// erc20
-	erc20Ctr, err := token.New(chnClient, privateKey, tokenAddress.Hex())
+	erc20Ctr, err := token.New(chnClient, privateKey, tokenAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create erc20 contract: %v", err)
 	}
 
-	return &UnconnectedClient{
-		ChainCode:        chnClient.ChainCode(),
-		PrivateKey:       privateKey,
-		Address:          &address,
-		PoolAddress:      &fundingPool,
-		ValidatorAddress: &nodeAddress,
-		ChainClient:      chnClient,
-		Escrow:           escrowCtr,
-		Token:            erc20Ctr,
-		TokenAddress:     &tokenAddress,
+	return &unconnectedClient{
+		chainCode:        chnClient.ChainCode(),
+		privateKey:       privateKey,
+		address:          address,
+		poolAddress:      fundingPool,
+		validatorAddress: nodeAddress,
+		chainClient:      chnClient,
+		escrow:           escrowCtr,
+		token:            erc20Ctr,
+		tokenAddress:     tokenAddress,
 	}, nil
 }

@@ -2,11 +2,11 @@ package utils
 
 import (
 	"encoding/json"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
 )
 
-func DBFromJson(bts []byte) (*dto.Database, error) {
-	var db dto.Database
+func DBFromJson(bts []byte) (*databases.Database, error) {
+	var db databases.Database
 	err := json.Unmarshal(bts, &db)
 	if err != nil {
 		return nil, err
@@ -14,6 +14,6 @@ func DBFromJson(bts []byte) (*dto.Database, error) {
 	return &db, nil
 }
 
-func DBToJson(db *dto.Database) ([]byte, error) {
+func DBToJson(db *databases.Database) ([]byte, error) {
 	return json.Marshal(db)
 }

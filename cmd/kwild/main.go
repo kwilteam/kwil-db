@@ -3,11 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
+	"kwil/kwil/repository"
+	"kwil/kwil/svc/accountsvc"
+	"kwil/kwil/svc/pricingsvc"
+	"kwil/kwil/svc/txsvc"
 	"kwil/x/async"
+	"kwil/x/deposits"
+	"kwil/x/execution/executor"
+	"kwil/x/graphql/hasura"
+	"kwil/x/grpcx"
+	"kwil/x/proto/accountspb"
+	"kwil/x/proto/pricingpb"
+	"kwil/x/proto/txpb"
 	"kwil/x/sqlx/env"
 	"kwil/x/sqlx/sqlclient"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,15 +27,17 @@ import (
 	"kwil/x/logx"
 
 	kg "kwil/cmd/kwil-gateway/server"
-	deposits "kwil/x/deposits/app"
 
 	"github.com/oklog/run"
+	"github.com/spf13/viper"
 )
 
 func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	sntr := env.GetDbConnectionString()
+	fmt.Println(sntr)
 	client, err := sqlclient.Open(env.GetDbConnectionString(), 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to open sql client: %w", err)
@@ -37,21 +49,38 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to build chain client: %w", err)
 	}
 
-	deposits, err := buildDeposits(cfg, client, chainClient, "274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988")
+	// build repository prepared statement
+	queries, err := repository.Prepare(ctx, client)
+	if err != nil {
+		return fmt.Errorf("failed to prepare repository: %w", err)
+	}
+
+	deposits, err := buildDeposits(cfg, client, queries, chainClient, "274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988")
 	if err != nil {
 		return fmt.Errorf("failed to build deposits: %w", err)
 	}
 
-	httpHandler := NewHandler(logger)
-	// TODO:
-	//hasuraManager := hasura.NewClient(viper.GetString(hasura.GraphqlEndpointName))
-	//apiService := apisvc.NewService(mngr, hasuraManager)
-	//httpHandler := apisvc.NewHandler(logger)
+	hasuraManager := hasura.NewClient(viper.GetString(hasura.GraphqlEndpointName))
 
-	return serve(ctx, logger, deposits, httpHandler)
+	// build executor
+	exec, err := executor.NewExecutor(client, queries, hasuraManager)
+	if err != nil {
+		return fmt.Errorf("failed to build executor: %w", err)
+	}
+
+	// build account service
+	accountService := accountsvc.NewService(queries)
+
+	// pricing service
+	pricingService := pricingsvc.NewService()
+
+	// tx service
+	txService := txsvc.NewService(queries, exec)
+
+	return serve(ctx, logger, txService, accountService, pricingService, deposits)
 }
 
-func serve(ctx context.Context, logger logx.Logger, d *deposits.Service, httpHandler http.Handler) error {
+func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accountSvc *accountsvc.Service, pricingSvc *pricingsvc.Service, depsts deposits.Depositer) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -60,13 +89,15 @@ func serve(ctx context.Context, logger logx.Logger, d *deposits.Service, httpHan
 	}
 
 	g.Add(func() error {
-		err = d.Sync(ctx)
+		/*err = depsts.Start(ctx)
 		if err != nil {
 			return err
 		}
 		logger.Info("deposits synced")
+		*/
 
 		<-ctx.Done() // if any rungroup actor returns, the whole group stops, so we wait for ctx.Done() to return
+
 		return nil
 	}, func(err error) {
 		if err != nil {
@@ -75,27 +106,15 @@ func serve(ctx context.Context, logger logx.Logger, d *deposits.Service, httpHan
 	})
 
 	g.Add(func() error {
-		/*
-			grpcServer := grpcx.NewServer(logger)
-			apipb.RegisterKwilServiceServer(grpcServer, apiService)
-			depositsvc.RegisterKwilServiceServer(grpcServer, d)
-			return grpcServer.Serve(listener)
-		*/
-		return nil
+
+		grpcServer := grpcx.NewServer(logger)
+		txpb.RegisterTxServiceServer(grpcServer, txSvc)
+		accountspb.RegisterAccountServiceServer(grpcServer, accountSvc)
+		pricingpb.RegisterPricingServiceServer(grpcServer, pricingSvc)
+		return grpcServer.Serve(listener)
+
 	}, func(error) {
 		_ = listener.Close()
-	})
-
-	httpServer := http.Server{
-		Addr:    ":8081",
-		Handler: httpHandler,
-	}
-	g.Add(func() error {
-		return httpServer.ListenAndServe()
-	}, func(error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = httpServer.Shutdown(ctx)
 	})
 
 	cancelInterrupt := make(chan struct{})

@@ -1,0 +1,13 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: kwil/sql/
+    schema: "kwil/sql/schema.sql"
+    strict_function_checks: true
+    gen:
+      go:
+        package: repository
+        out: kwil/repository
+        emit_prepared_queries: true
+        emit_result_struct_pointers: true
+        emit_params_struct_pointers: true

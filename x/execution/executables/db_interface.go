@@ -2,7 +2,8 @@ package executables
 
 import (
 	"fmt"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
+	execTypes "kwil/x/types/execution"
 )
 
 // ExecutablesInterface is an in-memory interface that makes retrieval and preparation of executables for applications easy.
@@ -11,19 +12,19 @@ import (
 
 type ExecutablesInterface interface {
 	CanExecute(wallet string, query string) bool
-	Prepare(query string, caller string, inputs []*dto.UserInput) ([]any, error)
-	ListExecutables() []*dto.Executable
+	Prepare(query string, caller string, inputs []*execTypes.UserInput) ([]any, error)
+	ListExecutables() []*execTypes.Executable
 }
 
 // fulfills ExecutableInterface
 type executableInterface struct {
 	Owner        string
-	Executables  map[string]*dto.Executable
+	Executables  map[string]*execTypes.Executable
 	Access       map[string]map[string]struct{} // maps a role name to an executable
 	DefaultRoles []string
 }
 
-func FromDatabase(db *dto.Database) (ExecutablesInterface, error) {
+func FromDatabase(db *databases.Database) (ExecutablesInterface, error) {
 	execs, err := GenerateExecutables(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate executables: %w", err)

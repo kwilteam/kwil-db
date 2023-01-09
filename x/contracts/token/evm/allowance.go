@@ -3,7 +3,7 @@ package evm
 import (
 	"context"
 	kwilCommon "kwil/x/contracts/common/evm"
-	"kwil/x/contracts/token/dto"
+	"kwil/x/types/contracts/token"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,7 +13,7 @@ func (c *contract) Allowance(owner, spender string) (*big.Int, error) {
 	return c.ctr.Allowance(nil, common.HexToAddress(owner), common.HexToAddress(spender))
 }
 
-func (c *contract) Approve(ctx context.Context, spender string, amount *big.Int) (*dto.ApproveResponse, error) {
+func (c *contract) Approve(ctx context.Context, spender string, amount *big.Int) (*token.ApproveResponse, error) {
 	auth, err := kwilCommon.PrepareTxAuth(ctx, c.client, c.chainId, c.privateKey)
 	if err != nil {
 		return nil, err
@@ -25,7 +25,7 @@ func (c *contract) Approve(ctx context.Context, spender string, amount *big.Int)
 		return nil, err
 	}
 
-	return &dto.ApproveResponse{
+	return &token.ApproveResponse{
 		TxHash: tx.Hash().String(),
 	}, nil
 }

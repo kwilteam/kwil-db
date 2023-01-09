@@ -1,9 +1,9 @@
 package dml_test
 
 import (
-	"kwil/x/execution/dto"
 	"kwil/x/execution/mocks"
 	"kwil/x/execution/sql-builder/dml"
+	"kwil/x/types/databases"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,11 +21,11 @@ func Test_DML(t *testing.T) {
 	}
 
 	// test create update
-	var params []*dto.Parameter
+	var params []*databases.Parameter
 	params = append(params, &mocks.Parameter1)
 	params = append(params, &mocks.Parameter2)
 
-	var wheres []*dto.WhereClause
+	var wheres []*databases.WhereClause
 	wheres = append(wheres, &mocks.WhereClause1)
 	wheres = append(wheres, &mocks.WhereClause2)
 	stmt, err = dml.BuildUpdate("kwil", "test", params, wheres)

@@ -3,10 +3,10 @@ package validation
 import (
 	"fmt"
 	"kwil/x/execution"
-	"kwil/x/execution/dto"
+	"kwil/x/types/databases"
 )
 
-func validateRoles(d *dto.Database) error {
+func validateRoles(d *databases.Database) error {
 	// check amount of roles
 	if len(d.Roles) > execution.MAX_ROLE_COUNT {
 		return fmt.Errorf(`database must have at most %d roles`, execution.MAX_ROLE_COUNT)
@@ -30,7 +30,7 @@ func validateRoles(d *dto.Database) error {
 	return nil
 }
 
-func ValidateRole(role *dto.Role, db *dto.Database) error {
+func ValidateRole(role *databases.Role, db *databases.Database) error {
 	// check if role name is valid
 	err := CheckName(role.Name, execution.MAX_ROLE_NAME_LENGTH)
 	if err != nil {

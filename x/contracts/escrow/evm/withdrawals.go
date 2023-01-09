@@ -2,14 +2,14 @@ package evm
 
 import (
 	"context"
-	"kwil/x/contracts/escrow/dto"
 	"kwil/x/contracts/escrow/evm/abi"
+	"kwil/x/types/contracts/escrow"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func (c *contract) GetWithdrawals(ctx context.Context, from, to int64) ([]*dto.WithdrawalConfirmationEvent, error) {
+func (c *contract) GetWithdrawals(ctx context.Context, from, to int64) ([]*escrow.WithdrawalConfirmationEvent, error) {
 	end := uint64(to)
 	queryOpts := &bind.FilterOpts{Context: ctx, Start: uint64(from), End: &end}
 
@@ -23,14 +23,14 @@ func (c *contract) GetWithdrawals(ctx context.Context, from, to int64) ([]*dto.W
 	return convertWithdrawals(edi, c.token), nil
 }
 
-func convertWithdrawals(edi *abi.EscrowWithdrawalIterator, token string) []*dto.WithdrawalConfirmationEvent {
-	var withdrawals []*dto.WithdrawalConfirmationEvent
+func convertWithdrawals(edi *abi.EscrowWithdrawalIterator, token string) []*escrow.WithdrawalConfirmationEvent {
+	var withdrawals []*escrow.WithdrawalConfirmationEvent
 	for {
 
 		if !edi.Next() {
 			break
 		} else {
-			withdrawals = append(withdrawals, &dto.WithdrawalConfirmationEvent{
+			withdrawals = append(withdrawals, &escrow.WithdrawalConfirmationEvent{
 				Caller:   edi.Event.Caller.Hex(),   // this is the node address / this machine
 				Receiver: edi.Event.Receiver.Hex(), // this is the wallet that we returned the funds to
 				Amount:   edi.Event.Amount.String(),

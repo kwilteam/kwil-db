@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"kwil/x/chain"
 	chainClient "kwil/x/chain/client"
-	"kwil/x/contracts/token/dto"
 	"kwil/x/contracts/token/evm"
+	tokenTypes "kwil/x/types/contracts/token"
 	"math/big"
 )
 
@@ -29,9 +29,9 @@ type TokenContract interface {
 	Decimals() uint8
 
 	// transfers the given amount of tokens to the given address
-	Transfer(ctx context.Context, to string, amount *big.Int) (*dto.TransferResponse, error)
+	Transfer(ctx context.Context, to string, amount *big.Int) (*tokenTypes.TransferResponse, error)
 	// approves the given amount of tokens to the given address
-	Approve(ctx context.Context, spender string, amount *big.Int) (*dto.ApproveResponse, error)
+	Approve(ctx context.Context, spender string, amount *big.Int) (*tokenTypes.ApproveResponse, error)
 }
 
 func New(chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, address string) (TokenContract, error) {

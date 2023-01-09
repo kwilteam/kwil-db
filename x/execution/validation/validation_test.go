@@ -1,9 +1,9 @@
 package validation_test
 
 import (
-	"kwil/x/execution/dto"
 	"kwil/x/execution/mocks"
 	"kwil/x/execution/validation"
+	"kwil/x/types/databases"
 	"testing"
 
 	"github.com/mitchellh/copystructure"
@@ -27,7 +27,7 @@ func Test_Validation(t *testing.T) {
 
 }
 
-func testNames(t *testing.T, db *dto.Database) {
+func testNames(t *testing.T, db *databases.Database) {
 	// testing names.  The same name check is used for all names, so we only need to test one
 	// test no name
 	db.Name = ""

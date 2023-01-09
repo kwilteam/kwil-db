@@ -2,7 +2,7 @@ package evm
 
 import (
 	"context"
-	"kwil/x/contracts/escrow/dto"
+	"kwil/x/types/contracts/escrow"
 
 	kwilCommon "kwil/x/contracts/common/evm"
 
@@ -10,7 +10,7 @@ import (
 )
 
 // ReturnFunds calls the returnDeposit function
-func (c *contract) ReturnFunds(ctx context.Context, params *dto.ReturnFundsParams) (*dto.ReturnFundsResponse, error) {
+func (c *contract) ReturnFunds(ctx context.Context, params *escrow.ReturnFundsParams) (*escrow.ReturnFundsResponse, error) {
 
 	auth, err := kwilCommon.PrepareTxAuth(ctx, c.client, c.chainId, c.privateKey)
 	if err != nil {
@@ -22,7 +22,7 @@ func (c *contract) ReturnFunds(ctx context.Context, params *dto.ReturnFundsParam
 		return nil, err
 	}
 
-	return &dto.ReturnFundsResponse{
+	return &escrow.ReturnFundsResponse{
 		TxHash: res.Hash().String(),
 	}, nil
 }
