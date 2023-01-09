@@ -18,7 +18,7 @@ tasks:
 
   build:api:
     desc: Builds the API
-    deps: [build:api:pb, build:pricing:pb, build:deposit:pb, build:accounts:pb, build:tx:pb]
+    deps: [build:api:pb, build:pricing:pb, build:deposit:pb, build:accounts:pb, build:tx:pb, build:health:pb]
     cmds:
       - go build -o ./.build/kwild ./cmd/kwild
     generates:
@@ -97,6 +97,20 @@ tasks:
       - proto/kwil/txsvc/*.proto
     generates:
       - x/proto/txpb/*
+
+  build:health:pb:
+    desc: Compiles the protobuf for the health service
+    cmds:
+      - |
+        mkdir -p x/proto
+        protoc -I proto \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        proto/kwil/healthsvc/*.proto
+    sources:
+      - proto/kwil/depositsvc/*.proto
+    generates:
+      - x/proto/healthpb/*
 
   build:api-gateway:
     desc: Builds the API Gateway

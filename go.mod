@@ -5,6 +5,7 @@ go 1.19
 require (
 	cirello.io/pglock v1.10.0
 	github.com/99designs/keyring v1.1.6
+	github.com/alexliesenfeld/health v0.6.0
 	github.com/cstockton/go-conv v1.0.0
 	github.com/doug-martin/goqu/v9 v9.18.0
 	github.com/ethereum/go-ethereum v1.10.21
