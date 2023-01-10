@@ -83,9 +83,6 @@ tolerations: []
 
 affinity: {}
 
-configMapMnt:
-  keys.json: "/app/keys.json"
-
 containerPorts:
   kwild: 50051
 

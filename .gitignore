@@ -29,4 +29,4 @@ _ignore
 # helm charts deps
 k8s/helm/hasura/charts/
 k8s/helm/kwild/charts/
-k8s/helm/kgw/charts/
+k8s/helm/kwil/charts/

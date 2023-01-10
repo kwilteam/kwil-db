@@ -1,6 +1,6 @@
 apiVersion: v2
-name: kgw
-description: A Helm chart for Kubernetes
+name: kwil
+description: A Helm chart for Kwil.
 
 # A chart can be either an 'application' or a 'library' chart.
 #

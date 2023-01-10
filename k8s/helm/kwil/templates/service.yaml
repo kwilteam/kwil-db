@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "kgw.fullname" . }}
+  name: {{ include "kwil.fullname" . }}
   labels:
-    {{- include "kgw.labels" . | nindent 4 }}
+    {{- include "kwil.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   {{- if and (eq .Values.service.type "LoadBalancer") (not (empty .Values.service.loadBalancerIP)) }}
@@ -13,12 +13,12 @@ spec:
   clusterIP: {{ .Values.service.clusterIP }}
   {{- end }}
   ports:
-    - port: {{ .Values.service.ports.kgw }}
-      targetPort: tcp-kgw
+    - port: {{ .Values.service.ports.kwil }}
+      targetPort: tcp-kwil
       protocol: TCP
-      name: tcp-kgw
-      {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePorts.kgw)) }}
-      nodePort: {{ .Values.service.nodePorts.kgw }}
+      name: tcp-kwil
+      {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePorts.kwil)) }}
+      nodePort: {{ .Values.service.nodePorts.kwil }}
       {{- end }}
   selector:
-    {{- include "kgw.selectorLabels" . | nindent 4 }}
+    {{- include "kwil.selectorLabels" . | nindent 4 }}

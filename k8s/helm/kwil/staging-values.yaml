@@ -4,7 +4,7 @@ service:
   # comment nodePorts to enable multi instances on local machine
   nodePorts:
     kwild: 32101
-    kgw: 32102
+    kwil: 32102
 
 hasura:
   service:
@@ -19,9 +19,8 @@ kwild:
     nodePorts:
       kwild: 32101
   postgresql:
-    primary:
-      service:
-        type: NodePort
-        # comment nodePorts to enable multi instances on local machine
-        nodePorts:
-          postgresql: 32103
+    enabled: false
+
+global:
+  postgres:
+    enabled: true # to use an exising database

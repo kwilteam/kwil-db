@@ -1,4 +1,4 @@
-# Default values for kgw.
+# Default values for kwil.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -39,7 +39,7 @@ securityContext: {}
 service:
   type: ClusterIP
   ports:
-    kgw: 8082
+    kwil: 8082
   nodePorts: {}
 
 ingress:
@@ -87,9 +87,9 @@ configMapMnt:
   keys.json: "/app/keys.json"
 
 containerPorts:
-  kgw: 8082
+  kwil: 8082
 
-kgw:
+kwil:
   cors: ""
   healthcheckKey: "this should be rotated every deployment"
 

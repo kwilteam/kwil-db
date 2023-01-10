@@ -130,6 +130,41 @@ tasks:
       - abigen --abi ./abi/escrow.json --pkg abi --type Escrow --out ./abi/escrow.go
       - abigen --abi ./abi/erc20.json --pkg abi --type Erc20 --out ./abi/erc20.go
 
+  ############################ k8s ############################
+  k8s:kwil:
+    desc: Build and deploy kwil services to local k8s cluster
+    cmds:
+      - docker build . -t kwild:latest -f docker/kwild.dockerfile
+      - docker build . -t kwil-gateway:latest -f docker/kwil-gateway.dockerfile
+      - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml
+
+  k8s:kwil:install:
+    desc: Deploy kwil services to local k8s cluster
+    cmds:
+      - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml
+
+  k8s:kwil:uninstall:
+    desc: Deploy kwil services to local k8s cluster
+    cmds:
+      - helm uninstall kwil
+
+  k8s:kwild:
+    desc: Build and deploy kwild to local k8s cluster
+    cmds:
+      - docker build . -t kwild:latest -f docker/kwild.dockerfile
+      - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml
+
+  k8s:kwild:install:
+    desc: Deploy kwild to local k8s cluster
+    cmds:
+      - helm install kwild k8s/helm/kwild -f k8s/helm/kwild/dev-values.yaml
+
+  k8s:kwild:uninstall:
+    desc: Deploy kwild to local k8s cluster
+    cmds:
+      - helm uninstall kwild
+  ############################ k8s ############################
+
   cli:
     desc: Runs the CLI
     cmds:
