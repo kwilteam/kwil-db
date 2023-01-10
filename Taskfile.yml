@@ -12,13 +12,9 @@ tasks:
   build:cli:
     desc: Builds the CLI
     cmds:
-<<<<<<< HEAD
-      - go build -o ./.build/kwil ./cmd/kwil-cli
-=======
       - go build -o ./.build/kwil-cli ./cmd/kwil-cli
->>>>>>> origin/feature/k8s-healthcheck
     generates:
-      - .build/kwil
+      - .build/kwil-cli
 
   build:api:
     desc: Builds the API
