@@ -12,6 +12,7 @@ import (
 	"kwil/x/execution/validation"
 	"kwil/x/transactions"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -25,24 +26,26 @@ func deployCmd() *cobra.Command {
 		Long:  "Deploy a database",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				if len(args) != 0 {
+					return fmt.Errorf("deploy command does not take any arguments")
+				}
+
+				filePath, err := cmd.Flags().GetString("path")
+				if err != nil {
+					return fmt.Errorf("must specify a path path with the --path flag")
+				}
+
 				client, err := client.NewClient(cc, viper.GetViper())
 				if err != nil {
-					return err
-				}
-				// should be one arg
-				if len(args) != 1 {
-					return fmt.Errorf("deploy requires one argument: path")
+					return fmt.Errorf("failed to create client: %w", err)
 				}
 				c, err := chain.NewClientV(viper.GetViper())
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to create chain client: %w", err)
 				}
 
-				cx := viper.GetString("chain-code")
-				fmt.Printf("Chain code: %s", cx)
-
 				// read in the file
-				file, err := os.ReadFile(args[0])
+				file, err := os.ReadFile(filePath)
 				if err != nil {
 					return fmt.Errorf("failed to read file: %w", err)
 				}
@@ -60,8 +63,8 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("error on database: %w", err)
 				}
 
-				if db.Owner != c.Address.String() {
-					return fmt.Errorf("database owner must be the same as the current account")
+				if !strings.EqualFold(db.Owner, c.Address.String()) {
+					return fmt.Errorf("database owner must be the same as the current account.  Owner: %s, Account: %s", db.Owner, c.Address.String())
 				}
 
 				// build tx

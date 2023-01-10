@@ -3,7 +3,7 @@
 //   sqlc v1.16.0
 // source: balance.sql
 
-package repository
+package gen
 
 import (
 	"context"

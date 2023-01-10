@@ -3,8 +3,8 @@ package escrowtasks
 import (
 	"context"
 	"fmt"
-	"kwil/kwil/repository"
 	"kwil/x/deposits/tasks"
+	"kwil/x/types/accounts"
 	bigutil "kwil/x/utils/big"
 	"math/big"
 )
@@ -14,7 +14,7 @@ func (c *task) syncWithdrawals(ctx context.Context, chunk *tasks.Chunk) error {
 
 	withdrawals, err := c.contract.GetWithdrawals(ctx, chunk.Start, chunk.Finish)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get withdrawals from chain: %w", err)
 	}
 	// for the withdrawals, we will simply decrease the balance by the total amount.
 	for _, withdrawal := range withdrawals {
@@ -45,8 +45,8 @@ func (c *task) syncWithdrawals(ctx context.Context, chunk *tasks.Chunk) error {
 		}
 
 		// now that we have the new balance and spent, we can update the wallet.
-		err = c.dao.UpdateAccount(ctx, &repository.UpdateAccountParams{
-			ID:      wallet.ID,
+		err = c.dao.UpdateAccount(ctx, &accounts.Account{
+			Address: wallet.Address,
 			Balance: newBalance.String(),
 			Spent:   newSpent.String(),
 		})

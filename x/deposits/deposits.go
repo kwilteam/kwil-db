@@ -15,19 +15,18 @@ import (
 
 type Depositer interface {
 	Start(ctx context.Context) error
-	startWithdrawal(ctx context.Context, withdrawal deposits.StartWithdrawal) error
 }
 
 // in the future we can make things like expirationPeriod and chunkSize configurable, but these values are good enough for now
 type depositer struct {
-	dao              *repository.Queries
+	dao              repository.Queries
 	db               *sqlclient.DB
 	chain            chainsync.Chain
 	log              logx.SugaredLogger
 	expirationPeriod int64
 }
 
-func NewDepositer(config deposits.Config, db *sqlclient.DB, queries *repository.Queries, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey) (Depositer, error) {
+func NewDepositer(config deposits.Config, db *sqlclient.DB, queries repository.Queries, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey) (Depositer, error) {
 
 	// create the escrow contract
 	escrowContract, err := escrow.New(chainClient, privateKey, config.EscrowAddress)

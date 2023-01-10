@@ -3,11 +3,12 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	"kwil/kwil/repository"
 	"kwil/x/proto/txpb"
+	accountTypes "kwil/x/types/accounts"
 	"kwil/x/types/databases"
 	"kwil/x/types/transactions"
 	"kwil/x/utils/serialize"
+	"strings"
 )
 
 func (s *Service) handleDeployDatabase(ctx context.Context, tx *transactions.Transaction) (*txpb.BroadcastResponse, error) {
@@ -26,10 +27,10 @@ func (s *Service) handleDeployDatabase(ctx context.Context, tx *transactions.Tra
 	}
 
 	// try to spend the fee
-	err = s.dao.Spend(ctx, &repository.SpendParams{
-		AccountAddress: tx.Sender,
-		Balance:        price,
-		Nonce:          tx.Nonce,
+	err = s.dao.Spend(ctx, &accountTypes.Spend{
+		Address: tx.Sender,
+		Amount:  price,
+		Nonce:   tx.Nonce,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to spend fee: %w", err)
@@ -38,6 +39,11 @@ func (s *Service) handleDeployDatabase(ctx context.Context, tx *transactions.Tra
 	db, err := serialize.Deserialize[*databases.Database](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode payload of type Database: %w", err)
+	}
+
+	// check ownership
+	if !strings.EqualFold(db.Owner, tx.Sender) {
+		return nil, fmt.Errorf("database owner is not the same as the sender")
 	}
 
 	err = s.executor.DeployDatabase(ctx, db)
@@ -67,10 +73,10 @@ func (s *Service) handleDropDatabase(ctx context.Context, tx *transactions.Trans
 	}
 
 	// try to spend the fee
-	err = s.dao.Spend(ctx, &repository.SpendParams{
-		AccountAddress: tx.Sender,
-		Balance:        price,
-		Nonce:          tx.Nonce,
+	err = s.dao.Spend(ctx, &accountTypes.Spend{
+		Address: tx.Sender,
+		Amount:  price,
+		Nonce:   tx.Nonce,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to spend fee: %w", err)

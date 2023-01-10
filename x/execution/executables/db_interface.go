@@ -25,7 +25,7 @@ type executableInterface struct {
 }
 
 func FromDatabase(db *databases.Database) (ExecutablesInterface, error) {
-	execs, err := GenerateExecutables(db)
+	execs, err := generateExecutables(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate executables: %w", err)
 	}
@@ -33,7 +33,7 @@ func FromDatabase(db *databases.Database) (ExecutablesInterface, error) {
 	return &executableInterface{
 		Owner:        db.Owner,
 		Executables:  execs,
-		Access:       GenerateAccessParameters(db),
+		Access:       generateAccessParameters(db),
 		DefaultRoles: db.GetDefaultRoles(),
 	}, nil
 }

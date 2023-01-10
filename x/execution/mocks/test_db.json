@@ -1,0 +1,170 @@
+{
+    "owner": "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",
+    "name": "mydb",
+    "tables": [
+        {
+            "name": "users",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": 2,
+                    "attributes": [
+                        {
+                            "type": 1
+                        }
+                    ]
+                },
+                {
+                    "name": "name",
+                    "type": 1
+                },
+                {
+                    "name": "age",
+                    "type": 2
+                },
+                {
+                    "name": "wallet",
+                    "type": 1
+                }
+            ]
+        },
+        {
+            "name": "posts",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": 2,
+                    "attributes": [
+                        {
+                            "type": 1
+                        }
+                    ]
+                },
+                {
+                    "name": "title",
+                    "type": 1
+                },
+                {
+                    "name": "body",
+                    "type": 1
+                },
+                {
+                    "name": "user_id",
+                    "type": 2,
+                    "attributes": [
+                        {
+                            "type": 6,
+                            "value": 100
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "roles": [
+        {
+            "name": "bennanmode",
+            "permissions": [
+                "create_user",
+                "update_user",
+                "delete_user"
+            ]
+        },
+        {
+            "name": "randalmode",
+            "default": true,
+            "permissions": [
+                "create_user",
+                "update_user"
+            ]
+        }
+    ],
+    "sql_queries": [
+        {
+            "name": "create_user",
+            "type": 1,
+            "table": "users",
+            "parameters": [
+                {
+                    "name": "id",
+                    "column": "id"
+                },
+                {
+                    "name": "name",
+                    "column": "name"
+                },
+                {
+                    "name": "age",
+                    "column": "age"
+                },
+                {
+                    "name": "wallet",
+                    "column": "wallet",
+                    "static": true,
+                    "value": "",
+                    "modifier": 1
+                }
+            ]
+        },
+        {
+            "name": "update_user",
+            "type": 2,
+            "table": "users",
+            "parameters": [
+                {
+                    "name": "name",
+                    "column": "name"
+                },
+                {
+                    "name": "age",
+                    "column": "age"
+                }
+            ],
+            "where": [
+                {
+                    "name": "wallet",
+                    "column": "wallet",
+                    "static": true,
+                    "operator": 1,
+                    "value": "",
+                    "modifier": 1
+                },
+                {
+                    "name": "where_name",
+                    "column": "name",
+                    "operator": 1
+                }
+            ]
+        },
+        {
+            "name": "delete_user",
+            "type": 3,
+            "table": "users",
+            "where": [
+                {
+                    "name": "wallet",
+                    "column": "wallet",
+                    "static": true,
+                    "operator": 1,
+                    "value": "",
+                    "modifier": 1
+                },
+                {
+                    "name": "name",
+                    "column": "name",
+                    "operator": 1
+                }
+            ]
+        }
+    ],
+    "indexes": [
+        {
+            "name": "user_wallet_index",
+            "table": "users",
+            "columns": [
+                "wallet"
+            ],
+            "using": 1
+        }
+    ]
+}

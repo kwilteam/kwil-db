@@ -8,8 +8,6 @@ import (
 	"kwil/x/execution/clean"
 	"kwil/x/execution/executables"
 	schemabuilder "kwil/x/execution/sql-builder/schema-builder"
-	"kwil/x/graphql/hasura"
-	"kwil/x/sqlx/sqlclient"
 	"kwil/x/types/databases"
 
 	"github.com/cstockton/go-conv"
@@ -20,7 +18,7 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 
 	// check if database exists
 	if s.databaseExists(schemaName) {
-		return fmt.Errorf(`database "%s" already exists`, database.GetSchemaName())
+		return fmt.Errorf(`database id "%s" already exists`, database.GetSchemaName())
 	}
 
 	// clean database
@@ -38,13 +36,16 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 		return err
 	}
 
-	for _, table := range database.Tables {
-		// track tables
-		err = s.hasura.TrackTable(hasura.DefaultSource, schemaName, table.Name)
-		if err != nil {
-			return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
+	/*
+
+		for _, table := range database.Tables {
+			// track tables
+			err = s.hasura.TrackTable(hasura.DefaultSource, schemaName, table.Name)
+			if err != nil {
+				return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
+			}
 		}
-	}
+	*/
 
 	// manages the creation of the database
 	creator, err := s.newDbCreator(ctx, database, tx)
@@ -78,8 +79,7 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 
 type dbCreator struct {
 	database *databases.Database
-	db       *sqlclient.DB
-	dao      *repository.Queries
+	dao      repository.Queries
 	tx       *sql.Tx
 }
 
@@ -100,22 +100,30 @@ func (d *dbCreator) Store(ctx context.Context) error {
 		return err
 	}
 
-	err = d.storeTables(ctx)
+	dbid, err := d.dao.GetDatabaseId(ctx, &databases.DatabaseIdentifier{
+		Name:  d.database.Name,
+		Owner: d.database.Owner,
+	})
+	if err != nil {
+		return fmt.Errorf("error getting database id: %w", err)
+	}
+
+	err = d.storeTables(ctx, dbid)
 	if err != nil {
 		return err
 	}
 
-	err = d.storeQueries(ctx)
+	err = d.storeQueries(ctx, dbid)
 	if err != nil {
 		return err
 	}
 
-	err = d.storeRoles(ctx)
+	err = d.storeRoles(ctx, dbid)
 	if err != nil {
 		return err
 	}
 
-	err = d.storeIndexes(ctx)
+	err = d.storeIndexes(ctx, dbid)
 	if err != nil {
 		return err
 	}
@@ -125,32 +133,38 @@ func (d *dbCreator) Store(ctx context.Context) error {
 
 // creates the database in the database table
 func (d *dbCreator) storeDatabase(ctx context.Context) error {
-	return d.dao.CreateDatabase(ctx, &repository.CreateDatabaseParams{
-		DbName:         d.database.Name,
-		AccountAddress: d.database.Owner,
+	return d.dao.CreateDatabase(ctx, &databases.DatabaseIdentifier{
+		Name:  d.database.Name,
+		Owner: d.database.Owner,
 	})
 }
 
 // stores tables, columns, and attributes
-func (d *dbCreator) storeTables(ctx context.Context) error {
+func (d *dbCreator) storeTables(ctx context.Context, dbid int32) error {
 	for _, table := range d.database.Tables {
-		err := d.dao.CreateTable(ctx, &repository.CreateTableParams{
-			TableName: table.Name,
-			DbName:    d.database.Name,
-		})
+		err := d.dao.CreateTable(ctx, dbid, table.Name)
 		if err != nil {
 			return fmt.Errorf("error storing table: %w", err)
 		}
 
+		tableId, err := d.dao.GetTableId(ctx, dbid, table.Name)
+		if err != nil {
+			return fmt.Errorf("error getting table id: %w", err)
+		}
+
 		// create columns
 		for _, column := range table.Columns {
-			err := d.dao.CreateColumn(ctx, &repository.CreateColumnParams{
-				ColumnName: column.Name,
-				TableName:  table.Name,
-				ColumnType: int32(column.Type),
-			})
+			err := d.dao.CreateColumn(ctx, tableId, column.Name, int32(column.Type))
 			if err != nil {
 				return fmt.Errorf("error storing column: %w", err)
+			}
+
+			var columnId int32
+			if len(column.Attributes) > 0 {
+				columnId, err = d.dao.GetColumnId(ctx, tableId, column.Name)
+				if err != nil {
+					return fmt.Errorf("error getting column id: %w", err)
+				}
 			}
 
 			// create attributes
@@ -160,11 +174,7 @@ func (d *dbCreator) storeTables(ctx context.Context) error {
 					return fmt.Errorf("error converting attribute value to string: %w", err)
 				}
 
-				err = d.dao.CreateAttribute(ctx, &repository.CreateAttributeParams{
-					ColumnName:     column.Name,
-					AttributeType:  int32(attribute.Type),
-					AttributeValue: []byte(stringValue),
-				})
+				err = d.dao.CreateAttribute(ctx, columnId, int32(attribute.Type), []byte(stringValue))
 				if err != nil {
 					return fmt.Errorf("error storing attribute: %w", err)
 				}
@@ -176,18 +186,14 @@ func (d *dbCreator) storeTables(ctx context.Context) error {
 
 // stores queries.
 // we don't have to do anything with the modifiers since they just get included in the query BLOB
-func (d *dbCreator) storeQueries(ctx context.Context) error {
+func (d *dbCreator) storeQueries(ctx context.Context, dbid int32) error {
 	for _, query := range d.database.SQLQueries {
 		bts, err := query.EncodeGOB()
 		if err != nil {
 			return fmt.Errorf("error serializing query: %w", err)
 		}
 
-		err = d.dao.CreateQuery(ctx, &repository.CreateQueryParams{
-			QueryName: query.Name,
-			Query:     bts,
-			TableName: query.Table,
-		})
+		err = d.dao.CreateQuery(ctx, query.Name, dbid, bts)
 		if err != nil {
 			return fmt.Errorf("error storing query: %w", err)
 		}
@@ -197,23 +203,16 @@ func (d *dbCreator) storeQueries(ctx context.Context) error {
 }
 
 // stores roles. must be called after createQueries
-func (d *dbCreator) storeRoles(ctx context.Context) error {
+func (d *dbCreator) storeRoles(ctx context.Context, dbid int32) error {
 	for _, role := range d.database.Roles {
-		err := d.dao.CreateRole(ctx, &repository.CreateRoleParams{
-			RoleName:  role.Name,
-			DbName:    d.database.Name,
-			IsDefault: role.Default,
-		})
+		err := d.dao.CreateRole(ctx, dbid, role.Name, role.Default)
 		if err != nil {
 			return fmt.Errorf("error storing role: %w", err)
 		}
 
 		// create role permissions
 		for _, permission := range role.Permissions {
-			err = d.dao.RoleApplyQuery(ctx, &repository.RoleApplyQueryParams{
-				RoleName:  role.Name,
-				QueryName: permission,
-			})
+			err = d.dao.ApplyPermissionToRole(ctx, dbid, role.Name, permission)
 			if err != nil {
 				return fmt.Errorf("error applying query to role: %w", err)
 			}
@@ -224,14 +223,15 @@ func (d *dbCreator) storeRoles(ctx context.Context) error {
 }
 
 // stores indexes. must be called after createTables
-func (d *dbCreator) storeIndexes(ctx context.Context) error {
+func (d *dbCreator) storeIndexes(ctx context.Context, dbid int32) error {
 	for _, index := range d.database.Indexes {
-		err := d.dao.CreateIndex(ctx, &repository.CreateIndexParams{
-			IndexName: index.Name,
-			TableName: index.Table,
-			IndexType: int32(index.Using),
-			Columns:   index.Columns,
-		})
+		// get table id
+		tableId, err := d.dao.GetTableId(ctx, dbid, index.Table)
+		if err != nil {
+			return fmt.Errorf("error getting table id: %w", err)
+		}
+
+		err = d.dao.CreateIndex(ctx, tableId, index.Name, int32(index.Using), index.Columns)
 		if err != nil {
 			return fmt.Errorf("error storing index: %w", err)
 		}
@@ -241,7 +241,8 @@ func (d *dbCreator) storeIndexes(ctx context.Context) error {
 
 // buildDatatabase builds the database from the database table.  The schema name is the sha224 hash prepended with an x
 func (d *dbCreator) buildDatabase(ctx context.Context) error {
-	_, err := d.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+d.database.Name)
+	// create schema
+	_, err := d.tx.ExecContext(ctx, "CREATE SCHEMA "+d.database.GetSchemaName())
 	if err != nil {
 		return fmt.Errorf("error creating database schema: %w", err)
 	}
@@ -253,7 +254,7 @@ func (d *dbCreator) buildDatabase(ctx context.Context) error {
 	}
 
 	// execute ddl
-	_, err = d.db.ExecContext(ctx, ddl)
+	_, err = d.tx.ExecContext(ctx, ddl)
 	if err != nil {
 		return fmt.Errorf("error executing ddl: %w", err)
 	}

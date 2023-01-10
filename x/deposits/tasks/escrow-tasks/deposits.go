@@ -2,9 +2,8 @@ package escrowtasks
 
 import (
 	"context"
-	"kwil/kwil/repository"
+	"fmt"
 	"kwil/x/sqlx/errors"
-	"strings"
 
 	"kwil/x/deposits/tasks"
 )
@@ -12,7 +11,7 @@ import (
 func (c *task) syncDeposits(ctx context.Context, chunk *tasks.Chunk) error {
 	deposits, err := c.contract.GetDeposits(ctx, chunk.Start, chunk.Finish)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get deposits from chain: %w", err)
 	}
 
 	for _, deposit := range deposits {
@@ -20,9 +19,9 @@ func (c *task) syncDeposits(ctx context.Context, chunk *tasks.Chunk) error {
 		// normally we could just check for a unique constraint violation,
 		// but since we are doing this in a tx, an error will cancel
 		// the whole tx
-		id, err := c.dao.GetDepositByTx(ctx, deposit.TxHash)
+		id, err := c.dao.GetDepositIdByTx(ctx, deposit.TxHash)
 		if err != nil && !errors.IsNoRowsInResult(err) {
-			return err
+			return fmt.Errorf("failed to get deposit by tx: %w", err)
 
 		}
 
@@ -31,16 +30,16 @@ func (c *task) syncDeposits(ctx context.Context, chunk *tasks.Chunk) error {
 			continue
 		}
 
-		err = c.dao.Deposit(ctx, &repository.DepositParams{
-			AccountAddress: strings.ToLower(deposit.Caller),
-			Amount:         deposit.Amount,
-			TxHash:         strings.ToLower(deposit.TxHash),
-			Height:         deposit.Height,
-		})
+		err = c.dao.Deposit(ctx, deposit)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to deposit: %w", err)
 		}
 	}
 
-	return c.dao.CommitDeposits(ctx, chunk.Finish)
+	err = c.dao.CommitDeposits(ctx, chunk.Finish)
+	if err != nil {
+		return fmt.Errorf("failed to commit deposits: %w", err)
+	}
+
+	return nil
 }

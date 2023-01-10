@@ -3,7 +3,7 @@
 //   sqlc v1.16.0
 // source: account.sql
 
-package repository
+package gen
 
 import (
 	"context"
@@ -40,34 +40,6 @@ func (q *Queries) GetAccount(ctx context.Context, accountAddress string) (*GetAc
 	return &i, err
 }
 
-const updateAccount = `-- name: UpdateAccount :exec
-UPDATE
-    accounts
-SET
-    balance = $1,
-    spent = $2,
-    nonce = $3
-WHERE
-    id = $4
-`
-
-type UpdateAccountParams struct {
-	Balance string
-	Spent   string
-	Nonce   int64
-	ID      int32
-}
-
-func (q *Queries) UpdateAccount(ctx context.Context, arg *UpdateAccountParams) error {
-	_, err := q.exec(ctx, q.updateAccountStmt, updateAccount,
-		arg.Balance,
-		arg.Spent,
-		arg.Nonce,
-		arg.ID,
-	)
-	return err
-}
-
 const updateAccountByAddress = `-- name: UpdateAccountByAddress :exec
 UPDATE
     accounts
@@ -92,6 +64,34 @@ func (q *Queries) UpdateAccountByAddress(ctx context.Context, arg *UpdateAccount
 		arg.Spent,
 		arg.Nonce,
 		arg.AccountAddress,
+	)
+	return err
+}
+
+const updateAccountById = `-- name: UpdateAccountById :exec
+UPDATE
+    accounts
+SET
+    balance = $1,
+    spent = $2,
+    nonce = $3
+WHERE
+    id = $4
+`
+
+type UpdateAccountByIdParams struct {
+	Balance string
+	Spent   string
+	Nonce   int64
+	ID      int32
+}
+
+func (q *Queries) UpdateAccountById(ctx context.Context, arg *UpdateAccountByIdParams) error {
+	_, err := q.exec(ctx, q.updateAccountByIdStmt, updateAccountById,
+		arg.Balance,
+		arg.Spent,
+		arg.Nonce,
+		arg.ID,
 	)
 	return err
 }

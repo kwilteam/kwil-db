@@ -8,11 +8,11 @@ import (
 
 type heightTask struct {
 	chainCode chain.ChainCode
-	dao       *repository.Queries
-	queries   *repository.Queries
+	dao       repository.Queries
+	queries   repository.Queries
 }
 
-func NewHeightTask(dao *repository.Queries, chainCode chain.ChainCode) Runnable {
+func NewHeightTask(dao repository.Queries, chainCode chain.ChainCode) Runnable {
 	return &heightTask{
 		chainCode: chainCode,
 		dao:       nil,
@@ -23,10 +23,7 @@ func NewHeightTask(dao *repository.Queries, chainCode chain.ChainCode) Runnable 
 func (t *heightTask) Run(ctx context.Context, chunk *Chunk) error {
 	t.dao = t.queries.WithTx(chunk.Tx)
 
-	err := t.dao.SetHeight(ctx, &repository.SetHeightParams{
-		Height: chunk.Finish,
-		ID:     int32(t.chainCode),
-	})
+	err := t.dao.SetHeight(ctx, int32(t.chainCode), chunk.Finish)
 	if err != nil {
 		return err
 	}

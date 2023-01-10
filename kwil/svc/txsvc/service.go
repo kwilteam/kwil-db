@@ -10,13 +10,13 @@ import (
 type Service struct {
 	txpb.UnimplementedTxServiceServer
 
-	dao *repository.Queries
+	dao repository.Queries
 
 	executor executor.Executor
 	pricing  pricer.Pricer
 }
 
-func NewService(queries *repository.Queries, exec executor.Executor) *Service {
+func NewService(queries repository.Queries, exec executor.Executor) *Service {
 	return &Service{
 		dao:      queries,
 		executor: exec,

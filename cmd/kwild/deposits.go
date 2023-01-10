@@ -12,7 +12,7 @@ import (
 	"os"
 )
 
-func buildDeposits(cfg cfgx.Config, db *sqlclient.DB, queries *repository.Queries, cc chainClient.ChainClient, privateKey string) (deposits.Depositer, error) {
+func buildDeposits(cfg cfgx.Config, db *sqlclient.DB, queries repository.Queries, cc chainClient.ChainClient, privateKey string) (deposits.Depositer, error) {
 	config := cfg.Select("deposits")
 	escrowAddr := config.GetString("escrow-address", "")
 	if escrowAddr == "" {

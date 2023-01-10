@@ -6,8 +6,8 @@ sql:
     strict_function_checks: true
     gen:
       go:
-        package: repository
-        out: kwil/repository
+        package: gen
+        out: kwil/repository/gen
         emit_prepared_queries: true
         emit_result_struct_pointers: true
         emit_params_struct_pointers: true

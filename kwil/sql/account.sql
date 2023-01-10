@@ -9,7 +9,7 @@ FROM
 WHERE
     account_address = $1;
 
--- name: UpdateAccount :exec
+-- name: UpdateAccountById :exec
 UPDATE
     accounts
 SET

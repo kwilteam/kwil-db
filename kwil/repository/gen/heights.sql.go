@@ -3,7 +3,7 @@
 //   sqlc v1.16.0
 // source: heights.sql
 
-package repository
+package gen
 
 import (
 	"context"
@@ -15,11 +15,11 @@ SELECT
 FROM
     chains
 WHERE
-    id = $1
+    code = $1
 `
 
-func (q *Queries) GetHeight(ctx context.Context, id int32) (int64, error) {
-	row := q.queryRow(ctx, q.getHeightStmt, getHeight, id)
+func (q *Queries) GetHeight(ctx context.Context, code int32) (int64, error) {
+	row := q.queryRow(ctx, q.getHeightStmt, getHeight, code)
 	var height int64
 	err := row.Scan(&height)
 	return height, err
@@ -31,11 +31,11 @@ SELECT
 FROM
     chains
 WHERE
-    chain = $1
+    code = $1
 `
 
-func (q *Queries) GetHeightByName(ctx context.Context, chain string) (int64, error) {
-	row := q.queryRow(ctx, q.getHeightByNameStmt, getHeightByName, chain)
+func (q *Queries) GetHeightByName(ctx context.Context, code int32) (int64, error) {
+	row := q.queryRow(ctx, q.getHeightByNameStmt, getHeightByName, code)
 	var height int64
 	err := row.Scan(&height)
 	return height, err
@@ -47,15 +47,15 @@ UPDATE
 SET
     height = $1
 WHERE
-    id = $2
+    code = $2
 `
 
 type SetHeightParams struct {
 	Height int64
-	ID     int32
+	Code   int32
 }
 
 func (q *Queries) SetHeight(ctx context.Context, arg *SetHeightParams) error {
-	_, err := q.exec(ctx, q.setHeightStmt, setHeight, arg.Height, arg.ID)
+	_, err := q.exec(ctx, q.setHeightStmt, setHeight, arg.Height, arg.Code)
 	return err
 }

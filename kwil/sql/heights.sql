@@ -4,7 +4,7 @@ UPDATE
 SET
     height = $1
 WHERE
-    id = $2;
+    code = $2;
 
 -- name: GetHeight :one
 SELECT
@@ -12,7 +12,7 @@ SELECT
 FROM
     chains
 WHERE
-    id = $1;
+    code = $1;
 
 -- name: GetHeightByName :one
 SELECT
@@ -20,4 +20,4 @@ SELECT
 FROM
     chains
 WHERE
-    chain = $1;
+    code = $1;

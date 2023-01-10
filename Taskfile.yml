@@ -12,7 +12,7 @@ tasks:
   build:cli:
     desc: Builds the CLI
     cmds:
-      - go build -o ./.build/kwil ./cmd/kwil
+      - go build -o ./.build/kwil ./cmd/kwil-cli
     generates:
       - .build/kwil
 
@@ -105,7 +105,7 @@ tasks:
     sources:
       - kwil/sql/*.sql
     generates:
-      - kwil/repository
+      - kwil/repository/gen
 
   build:api-gateway:
     desc: Builds the API Gateway

@@ -3,18 +3,17 @@ package deposits
 import (
 	"context"
 	"crypto/md5"
-	"database/sql"
 	"encoding/binary"
 	"fmt"
-	"kwil/kwil/repository"
 	"kwil/x/types/deposits"
+	depositTypes "kwil/x/types/deposits"
 	"kwil/x/utils/big"
 	"math/rand"
 	"time"
 )
 
 // StartWithdrawal begins the withdrawal process.  It will alter a user's balance and assign a correlation ID, which will be used to track the withdrawal on-chain.
-func (s *depositer) startWithdrawal(ctx context.Context, withdrawal deposits.StartWithdrawal) error {
+func (s *depositer) startWithdrawal(ctx context.Context, withdrawal deposits.WithdrawalRequest) error {
 	// start a transaction
 	tx, err := s.db.BeginTx(ctx)
 	if err != nil {
@@ -25,7 +24,7 @@ func (s *depositer) startWithdrawal(ctx context.Context, withdrawal deposits.Sta
 	qtx := s.dao.WithTx(tx)
 
 	// will start by getting the account balance
-	account, err := qtx.GetAccount(ctx, withdrawal.Wallet)
+	account, err := qtx.GetAccount(ctx, withdrawal.Address)
 	if err != nil {
 		return err
 	}
@@ -48,17 +47,17 @@ func (s *depositer) startWithdrawal(ctx context.Context, withdrawal deposits.Sta
 	}
 
 	// generate a correlation id
-	correlationId, err := generateCid(16, withdrawal.Wallet)
+	correlationId, err := generateCid(16, withdrawal.Address)
 	if err != nil {
 		return err
 	}
 
-	err = qtx.NewWithdrawal(ctx, &repository.NewWithdrawalParams{
-		CorrelationID: correlationId,
-		AccountID:     account.ID,
+	err = qtx.NewWithdrawal(ctx, &depositTypes.StartWithdrawal{
+		CorrelationId: correlationId,
+		Address:       account.Address,
 		Amount:        withdrawal.Amount,
 		Fee:           account.Spent,
-		Expiry:        blockHeight + s.expirationPeriod,
+		Expiration:    blockHeight + s.expirationPeriod,
 	})
 
 	if err != nil {
@@ -66,14 +65,6 @@ func (s *depositer) startWithdrawal(ctx context.Context, withdrawal deposits.Sta
 	}
 
 	return tx.Commit()
-}
-
-// addTxHashToWithdrawal adds a transaction hash to a withdrawal. This primarily occurs after the withdrawal has been submitted to the blockchain.
-func (s *depositer) addTxHashToWithdrawal(ctx context.Context, txHash string, correlationId string) error {
-	return s.dao.AddTxHash(ctx, &repository.AddTxHashParams{
-		TxHash:        sql.NullString{String: txHash, Valid: true},
-		CorrelationID: correlationId,
-	})
 }
 
 // confirmWithdrawal confirms a withdrawal.  This is called after the withdrawal has been mined and finalized on the blockchain.
@@ -103,7 +94,7 @@ func generateCid(l uint8, str string) (string, error) {
 	rand.Seed(time.Now().UnixNano())
 	result := make([]byte, l)
 	for i := uint8(0); i < l; i++ {
-		result[i] = deposits.CidCharacters[rand.Intn(len(deposits.CidCharacters))]
+		result[i] = depositTypes.CorrelationIdCharacters[rand.Intn(len(deposits.CorrelationIdCharacters))]
 	}
 	return string(result), nil
 }

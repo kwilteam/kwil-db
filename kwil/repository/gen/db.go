@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.16.0
 
-package repository
+package gen
 
 import (
 	"context"
@@ -24,8 +24,11 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
-	if q.addTxHashStmt, err = db.PrepareContext(ctx, addTxHash); err != nil {
-		return nil, fmt.Errorf("error preparing query AddTxHash: %w", err)
+	if q.addTxHashToWithdrawalStmt, err = db.PrepareContext(ctx, addTxHashToWithdrawal); err != nil {
+		return nil, fmt.Errorf("error preparing query AddTxHashToWithdrawal: %w", err)
+	}
+	if q.applyPermissionToRoleStmt, err = db.PrepareContext(ctx, applyPermissionToRole); err != nil {
+		return nil, fmt.Errorf("error preparing query ApplyPermissionToRole: %w", err)
 	}
 	if q.commitDepositsStmt, err = db.PrepareContext(ctx, commitDeposits); err != nil {
 		return nil, fmt.Errorf("error preparing query CommitDeposits: %w", err)
@@ -69,8 +72,20 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAccountStmt, err = db.PrepareContext(ctx, getAccount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAccount: %w", err)
 	}
-	if q.getDepositByTxStmt, err = db.PrepareContext(ctx, getDepositByTx); err != nil {
-		return nil, fmt.Errorf("error preparing query GetDepositByTx: %w", err)
+	if q.getAttributesStmt, err = db.PrepareContext(ctx, getAttributes); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAttributes: %w", err)
+	}
+	if q.getColumnIdStmt, err = db.PrepareContext(ctx, getColumnId); err != nil {
+		return nil, fmt.Errorf("error preparing query GetColumnId: %w", err)
+	}
+	if q.getColumnsStmt, err = db.PrepareContext(ctx, getColumns); err != nil {
+		return nil, fmt.Errorf("error preparing query GetColumns: %w", err)
+	}
+	if q.getDatabaseIdStmt, err = db.PrepareContext(ctx, getDatabaseId); err != nil {
+		return nil, fmt.Errorf("error preparing query GetDatabaseId: %w", err)
+	}
+	if q.getDepositIdByTxStmt, err = db.PrepareContext(ctx, getDepositIdByTx); err != nil {
+		return nil, fmt.Errorf("error preparing query GetDepositIdByTx: %w", err)
 	}
 	if q.getHeightStmt, err = db.PrepareContext(ctx, getHeight); err != nil {
 		return nil, fmt.Errorf("error preparing query GetHeight: %w", err)
@@ -78,8 +93,26 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getHeightByNameStmt, err = db.PrepareContext(ctx, getHeightByName); err != nil {
 		return nil, fmt.Errorf("error preparing query GetHeightByName: %w", err)
 	}
+	if q.getIndexesStmt, err = db.PrepareContext(ctx, getIndexes); err != nil {
+		return nil, fmt.Errorf("error preparing query GetIndexes: %w", err)
+	}
+	if q.getQueriesStmt, err = db.PrepareContext(ctx, getQueries); err != nil {
+		return nil, fmt.Errorf("error preparing query GetQueries: %w", err)
+	}
+	if q.getRolePermissionsStmt, err = db.PrepareContext(ctx, getRolePermissions); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRolePermissions: %w", err)
+	}
+	if q.getRolesStmt, err = db.PrepareContext(ctx, getRoles); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRoles: %w", err)
+	}
+	if q.getTableIdStmt, err = db.PrepareContext(ctx, getTableId); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTableId: %w", err)
+	}
 	if q.increaseBalanceStmt, err = db.PrepareContext(ctx, increaseBalance); err != nil {
 		return nil, fmt.Errorf("error preparing query IncreaseBalance: %w", err)
+	}
+	if q.listDatabasesStmt, err = db.PrepareContext(ctx, listDatabases); err != nil {
+		return nil, fmt.Errorf("error preparing query ListDatabases: %w", err)
 	}
 	if q.listTablesStmt, err = db.PrepareContext(ctx, listTables); err != nil {
 		return nil, fmt.Errorf("error preparing query ListTables: %w", err)
@@ -87,32 +120,31 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.newWithdrawalStmt, err = db.PrepareContext(ctx, newWithdrawal); err != nil {
 		return nil, fmt.Errorf("error preparing query NewWithdrawal: %w", err)
 	}
-	if q.roleApplyAccountStmt, err = db.PrepareContext(ctx, roleApplyAccount); err != nil {
-		return nil, fmt.Errorf("error preparing query RoleApplyAccount: %w", err)
-	}
-	if q.roleApplyQueryStmt, err = db.PrepareContext(ctx, roleApplyQuery); err != nil {
-		return nil, fmt.Errorf("error preparing query RoleApplyQuery: %w", err)
-	}
 	if q.setHeightStmt, err = db.PrepareContext(ctx, setHeight); err != nil {
 		return nil, fmt.Errorf("error preparing query SetHeight: %w", err)
 	}
 	if q.spendStmt, err = db.PrepareContext(ctx, spend); err != nil {
 		return nil, fmt.Errorf("error preparing query Spend: %w", err)
 	}
-	if q.updateAccountStmt, err = db.PrepareContext(ctx, updateAccount); err != nil {
-		return nil, fmt.Errorf("error preparing query UpdateAccount: %w", err)
-	}
 	if q.updateAccountByAddressStmt, err = db.PrepareContext(ctx, updateAccountByAddress); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateAccountByAddress: %w", err)
+	}
+	if q.updateAccountByIdStmt, err = db.PrepareContext(ctx, updateAccountById); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateAccountById: %w", err)
 	}
 	return &q, nil
 }
 
 func (q *Queries) Close() error {
 	var err error
-	if q.addTxHashStmt != nil {
-		if cerr := q.addTxHashStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing addTxHashStmt: %w", cerr)
+	if q.addTxHashToWithdrawalStmt != nil {
+		if cerr := q.addTxHashToWithdrawalStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing addTxHashToWithdrawalStmt: %w", cerr)
+		}
+	}
+	if q.applyPermissionToRoleStmt != nil {
+		if cerr := q.applyPermissionToRoleStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing applyPermissionToRoleStmt: %w", cerr)
 		}
 	}
 	if q.commitDepositsStmt != nil {
@@ -185,9 +217,29 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAccountStmt: %w", cerr)
 		}
 	}
-	if q.getDepositByTxStmt != nil {
-		if cerr := q.getDepositByTxStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getDepositByTxStmt: %w", cerr)
+	if q.getAttributesStmt != nil {
+		if cerr := q.getAttributesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAttributesStmt: %w", cerr)
+		}
+	}
+	if q.getColumnIdStmt != nil {
+		if cerr := q.getColumnIdStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getColumnIdStmt: %w", cerr)
+		}
+	}
+	if q.getColumnsStmt != nil {
+		if cerr := q.getColumnsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getColumnsStmt: %w", cerr)
+		}
+	}
+	if q.getDatabaseIdStmt != nil {
+		if cerr := q.getDatabaseIdStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getDatabaseIdStmt: %w", cerr)
+		}
+	}
+	if q.getDepositIdByTxStmt != nil {
+		if cerr := q.getDepositIdByTxStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getDepositIdByTxStmt: %w", cerr)
 		}
 	}
 	if q.getHeightStmt != nil {
@@ -200,9 +252,39 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getHeightByNameStmt: %w", cerr)
 		}
 	}
+	if q.getIndexesStmt != nil {
+		if cerr := q.getIndexesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getIndexesStmt: %w", cerr)
+		}
+	}
+	if q.getQueriesStmt != nil {
+		if cerr := q.getQueriesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getQueriesStmt: %w", cerr)
+		}
+	}
+	if q.getRolePermissionsStmt != nil {
+		if cerr := q.getRolePermissionsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRolePermissionsStmt: %w", cerr)
+		}
+	}
+	if q.getRolesStmt != nil {
+		if cerr := q.getRolesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRolesStmt: %w", cerr)
+		}
+	}
+	if q.getTableIdStmt != nil {
+		if cerr := q.getTableIdStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTableIdStmt: %w", cerr)
+		}
+	}
 	if q.increaseBalanceStmt != nil {
 		if cerr := q.increaseBalanceStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing increaseBalanceStmt: %w", cerr)
+		}
+	}
+	if q.listDatabasesStmt != nil {
+		if cerr := q.listDatabasesStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listDatabasesStmt: %w", cerr)
 		}
 	}
 	if q.listTablesStmt != nil {
@@ -215,16 +297,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing newWithdrawalStmt: %w", cerr)
 		}
 	}
-	if q.roleApplyAccountStmt != nil {
-		if cerr := q.roleApplyAccountStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing roleApplyAccountStmt: %w", cerr)
-		}
-	}
-	if q.roleApplyQueryStmt != nil {
-		if cerr := q.roleApplyQueryStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing roleApplyQueryStmt: %w", cerr)
-		}
-	}
 	if q.setHeightStmt != nil {
 		if cerr := q.setHeightStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing setHeightStmt: %w", cerr)
@@ -235,14 +307,14 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing spendStmt: %w", cerr)
 		}
 	}
-	if q.updateAccountStmt != nil {
-		if cerr := q.updateAccountStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing updateAccountStmt: %w", cerr)
-		}
-	}
 	if q.updateAccountByAddressStmt != nil {
 		if cerr := q.updateAccountByAddressStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing updateAccountByAddressStmt: %w", cerr)
+		}
+	}
+	if q.updateAccountByIdStmt != nil {
+		if cerr := q.updateAccountByIdStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateAccountByIdStmt: %w", cerr)
 		}
 	}
 	return err
@@ -284,7 +356,8 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 type Queries struct {
 	db                         DBTX
 	tx                         *sql.Tx
-	addTxHashStmt              *sql.Stmt
+	addTxHashToWithdrawalStmt  *sql.Stmt
+	applyPermissionToRoleStmt  *sql.Stmt
 	commitDepositsStmt         *sql.Stmt
 	confirmWithdrawalStmt      *sql.Stmt
 	createAttributeStmt        *sql.Stmt
@@ -299,25 +372,34 @@ type Queries struct {
 	dropDatabaseStmt           *sql.Stmt
 	expireWithdrawalsStmt      *sql.Stmt
 	getAccountStmt             *sql.Stmt
-	getDepositByTxStmt         *sql.Stmt
+	getAttributesStmt          *sql.Stmt
+	getColumnIdStmt            *sql.Stmt
+	getColumnsStmt             *sql.Stmt
+	getDatabaseIdStmt          *sql.Stmt
+	getDepositIdByTxStmt       *sql.Stmt
 	getHeightStmt              *sql.Stmt
 	getHeightByNameStmt        *sql.Stmt
+	getIndexesStmt             *sql.Stmt
+	getQueriesStmt             *sql.Stmt
+	getRolePermissionsStmt     *sql.Stmt
+	getRolesStmt               *sql.Stmt
+	getTableIdStmt             *sql.Stmt
 	increaseBalanceStmt        *sql.Stmt
+	listDatabasesStmt          *sql.Stmt
 	listTablesStmt             *sql.Stmt
 	newWithdrawalStmt          *sql.Stmt
-	roleApplyAccountStmt       *sql.Stmt
-	roleApplyQueryStmt         *sql.Stmt
 	setHeightStmt              *sql.Stmt
 	spendStmt                  *sql.Stmt
-	updateAccountStmt          *sql.Stmt
 	updateAccountByAddressStmt *sql.Stmt
+	updateAccountByIdStmt      *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
 		db:                         tx,
 		tx:                         tx,
-		addTxHashStmt:              q.addTxHashStmt,
+		addTxHashToWithdrawalStmt:  q.addTxHashToWithdrawalStmt,
+		applyPermissionToRoleStmt:  q.applyPermissionToRoleStmt,
 		commitDepositsStmt:         q.commitDepositsStmt,
 		confirmWithdrawalStmt:      q.confirmWithdrawalStmt,
 		createAttributeStmt:        q.createAttributeStmt,
@@ -332,17 +414,25 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		dropDatabaseStmt:           q.dropDatabaseStmt,
 		expireWithdrawalsStmt:      q.expireWithdrawalsStmt,
 		getAccountStmt:             q.getAccountStmt,
-		getDepositByTxStmt:         q.getDepositByTxStmt,
+		getAttributesStmt:          q.getAttributesStmt,
+		getColumnIdStmt:            q.getColumnIdStmt,
+		getColumnsStmt:             q.getColumnsStmt,
+		getDatabaseIdStmt:          q.getDatabaseIdStmt,
+		getDepositIdByTxStmt:       q.getDepositIdByTxStmt,
 		getHeightStmt:              q.getHeightStmt,
 		getHeightByNameStmt:        q.getHeightByNameStmt,
+		getIndexesStmt:             q.getIndexesStmt,
+		getQueriesStmt:             q.getQueriesStmt,
+		getRolePermissionsStmt:     q.getRolePermissionsStmt,
+		getRolesStmt:               q.getRolesStmt,
+		getTableIdStmt:             q.getTableIdStmt,
 		increaseBalanceStmt:        q.increaseBalanceStmt,
+		listDatabasesStmt:          q.listDatabasesStmt,
 		listTablesStmt:             q.listTablesStmt,
 		newWithdrawalStmt:          q.newWithdrawalStmt,
-		roleApplyAccountStmt:       q.roleApplyAccountStmt,
-		roleApplyQueryStmt:         q.roleApplyQueryStmt,
 		setHeightStmt:              q.setHeightStmt,
 		spendStmt:                  q.spendStmt,
-		updateAccountStmt:          q.updateAccountStmt,
 		updateAccountByAddressStmt: q.updateAccountByAddressStmt,
+		updateAccountByIdStmt:      q.updateAccountByIdStmt,
 	}
 }

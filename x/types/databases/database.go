@@ -66,6 +66,13 @@ func (d *Database) GetDefaultRoles() []string {
 	return roles
 }
 
+func (d *Database) GetIdentifier() *DatabaseIdentifier {
+	return &DatabaseIdentifier{
+		Owner: d.Owner,
+		Name:  d.Name,
+	}
+}
+
 type DatabaseIdentifier struct {
 	Owner string `json:"owner"`
 	Name  string `json:"name"`

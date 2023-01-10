@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.16.0
 
-package repository
+package gen
 
 import (
 	"database/sql"
@@ -18,20 +18,19 @@ type Account struct {
 
 type Attribute struct {
 	ID             int32
-	ColumnID       sql.NullInt32
+	ColumnID       int32
 	AttributeType  int32
 	AttributeValue []byte
 }
 
 type Chain struct {
-	ID     int32
-	Chain  string
+	Code   int32
 	Height int64
 }
 
 type Column struct {
 	ID         int32
-	TableID    sql.NullInt32
+	TableID    int32
 	ColumnName string
 	ColumnType int32
 }
@@ -62,14 +61,14 @@ type Query struct {
 	ID        int32
 	QueryName string
 	Query     []byte
-	TableID   sql.NullInt32
+	DbID      int32
 }
 
 type Role struct {
 	ID        int32
 	IsDefault bool
 	RoleName  string
-	DbID      sql.NullInt32
+	DbID      int32
 }
 
 type RoleAccount struct {
@@ -78,13 +77,13 @@ type RoleAccount struct {
 }
 
 type RoleQuery struct {
-	RoleID  sql.NullInt32
-	QueryID sql.NullInt32
+	RoleID  int32
+	QueryID int32
 }
 
 type Table struct {
 	ID        int32
-	DbID      sql.NullInt32
+	DbID      int32
 	TableName string
 }
 

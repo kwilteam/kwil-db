@@ -3,14 +3,14 @@
 //   sqlc v1.16.0
 // source: withdrawal.sql
 
-package repository
+package gen
 
 import (
 	"context"
 	"database/sql"
 )
 
-const addTxHash = `-- name: AddTxHash :exec
+const addTxHashToWithdrawal = `-- name: AddTxHashToWithdrawal :exec
 UPDATE
     withdrawals
 SET
@@ -19,13 +19,13 @@ WHERE
     correlation_id = $2
 `
 
-type AddTxHashParams struct {
+type AddTxHashToWithdrawalParams struct {
 	TxHash        sql.NullString
 	CorrelationID string
 }
 
-func (q *Queries) AddTxHash(ctx context.Context, arg *AddTxHashParams) error {
-	_, err := q.exec(ctx, q.addTxHashStmt, addTxHash, arg.TxHash, arg.CorrelationID)
+func (q *Queries) AddTxHashToWithdrawal(ctx context.Context, arg *AddTxHashToWithdrawalParams) error {
+	_, err := q.exec(ctx, q.addTxHashToWithdrawalStmt, addTxHashToWithdrawal, arg.TxHash, arg.CorrelationID)
 	return err
 }
 
@@ -63,21 +63,21 @@ const newWithdrawal = `-- name: NewWithdrawal :exec
 INSERT INTO
     withdrawals (correlation_id, account_id, amount, fee, expiry)
 VALUES
-    ($1, $2, $3, $4, $5)
+    ($1, (SELECT id FROM accounts WHERE account_address = $2), $3, $4, $5)
 `
 
 type NewWithdrawalParams struct {
-	CorrelationID string
-	AccountID     int32
-	Amount        string
-	Fee           string
-	Expiry        int64
+	CorrelationID  string
+	AccountAddress string
+	Amount         string
+	Fee            string
+	Expiry         int64
 }
 
 func (q *Queries) NewWithdrawal(ctx context.Context, arg *NewWithdrawalParams) error {
 	_, err := q.exec(ctx, q.newWithdrawalStmt, newWithdrawal,
 		arg.CorrelationID,
-		arg.AccountID,
+		arg.AccountAddress,
 		arg.Amount,
 		arg.Fee,
 		arg.Expiry,

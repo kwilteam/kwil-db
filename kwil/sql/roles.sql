@@ -4,41 +4,11 @@ INSERT INTO
 VALUES
     (
         $1,
-        (
-            SELECT
-                id
-            FROM
-                databases
-            WHERE
-                db_name = $2
-        ),
+        $2,
         $3
     );
 
--- name: RoleApplyAccount :exec
-INSERT INTO
-    role_accounts (role_id, account_id)
-VALUES
-    (
-        (
-            SELECT
-                id
-            FROM
-                roles
-            WHERE
-                role_name = $1
-        ),
-        (
-            SELECT
-                id
-            FROM
-                accounts
-            WHERE
-                account_address = $2
-        )
-    );
-
--- name: RoleApplyQuery :exec
+-- name: ApplyPermissionToRole :exec
 INSERT INTO
     role_queries (role_id, query_id)
 VALUES
@@ -47,16 +17,37 @@ VALUES
             SELECT
                 id
             FROM
-                roles
+                roles r
             WHERE
-                role_name = $1
+                r.role_name = $2
+                AND r.db_id = $1
         ),
         (
             SELECT
                 id
             FROM
-                queries
+                queries q
             WHERE
-                query_name = $2
+                q.query_name = $3
+                AND q.db_id = $1
         )
     );
+
+-- name: GetRoles :many
+SELECT
+    role_name,
+    id,
+    is_default
+FROM
+    roles
+WHERE
+    db_id = $1;
+
+-- name: GetRolePermissions :many
+SELECT
+    query_name
+FROM
+    queries
+    JOIN role_queries ON queries.id = role_queries.query_id
+WHERE
+    role_queries.role_id = $1;

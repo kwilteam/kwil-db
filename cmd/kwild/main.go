@@ -36,8 +36,6 @@ func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sntr := env.GetDbConnectionString()
-	fmt.Println(sntr)
 	client, err := sqlclient.Open(env.GetDbConnectionString(), 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to open sql client: %w", err)
@@ -52,7 +50,7 @@ func execute(logger logx.Logger) error {
 	// build repository prepared statement
 	queries, err := repository.Prepare(ctx, client)
 	if err != nil {
-		return fmt.Errorf("failed to prepare repository: %w", err)
+		return fmt.Errorf("failed to prepare queries: %w", err)
 	}
 
 	deposits, err := buildDeposits(cfg, client, queries, chainClient, "274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988")
@@ -63,7 +61,7 @@ func execute(logger logx.Logger) error {
 	hasuraManager := hasura.NewClient(viper.GetString(hasura.GraphqlEndpointName))
 
 	// build executor
-	exec, err := executor.NewExecutor(client, queries, hasuraManager)
+	exec, err := executor.NewExecutor(ctx, client, queries, hasuraManager)
 	if err != nil {
 		return fmt.Errorf("failed to build executor: %w", err)
 	}
@@ -89,12 +87,11 @@ func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accoun
 	}
 
 	g.Add(func() error {
-		/*err = depsts.Start(ctx)
+		err = depsts.Start(ctx)
 		if err != nil {
 			return err
 		}
 		logger.Info("deposits synced")
-		*/
 
 		<-ctx.Done() // if any rungroup actor returns, the whole group stops, so we wait for ctx.Done() to return
 

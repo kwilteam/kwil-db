@@ -3,8 +3,6 @@ package executor
 import (
 	"context"
 	"fmt"
-	"kwil/kwil/repository"
-	"kwil/x/graphql/hasura"
 	"kwil/x/types/databases"
 )
 
@@ -19,29 +17,36 @@ func (s *executor) DropDatabase(ctx context.Context, database *databases.Databas
 	defer tx.Commit()
 	dao := s.dao.WithTx(tx)
 
-	// untrack tables
-	tables, err := dao.ListTables(ctx, &repository.ListTablesParams{
-		DbName:         database.Name,
-		AccountAddress: database.Owner,
-	})
-	if err != nil {
-		return fmt.Errorf("error listing tables: %d", err)
-	}
-	if len(tables) == 0 {
-		return fmt.Errorf("database does not have any tables")
-	}
-
-	for _, table := range tables {
-		err = s.hasura.UntrackTable(hasura.DefaultSource, schemaName, table)
+	/*
+		dbid, err := dao.GetDatabaseId(ctx, &databases.DatabaseIdentifier{
+			Name:  database.Name,
+			Owner: database.Owner,
+		})
 		if err != nil {
-			return fmt.Errorf("error untracking table %s: %w", table, err)
+			return fmt.Errorf("error getting database id: %w", err)
 		}
-	}
+
+		// untrack tables
+		tables, err := dao.ListTables(ctx, dbid)
+		if err != nil {
+			return fmt.Errorf("error listing tables: %d", err)
+		}
+		if len(tables) == 0 {
+			return fmt.Errorf("database does not have any tables")
+		}
+
+		for _, table := range tables {
+			err = s.hasura.UntrackTable(hasura.DefaultSource, schemaName, table.TableName)
+			if err != nil {
+				return fmt.Errorf("error untracking table %s: %w", table.TableName, err)
+			}
+		}
+	*/
 
 	// drop the database from the databases table
-	err = dao.DropDatabase(ctx, &repository.DropDatabaseParams{
-		DbName:         database.Name,
-		AccountAddress: database.Owner,
+	err = dao.DropDatabase(ctx, &databases.DatabaseIdentifier{
+		Name:  database.Name,
+		Owner: database.Owner,
 	})
 	if err != nil {
 		return fmt.Errorf("error dropping database from database table: %d", err)

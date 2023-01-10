@@ -1,15 +1,17 @@
 -- name: CreateQuery :exec
 INSERT INTO
-    queries (query_name, query, table_id) VALUES
+    queries (query_name, query, db_id) VALUES
     (
         $1,
         $2,
-        (
-            SELECT
-                id
-            FROM
-                tables
-            WHERE
-                table_name = $3
-        )
+        $3
     );
+
+-- name: GetQueries :many
+SELECT
+    query,
+    id
+FROM
+    queries
+WHERE
+    db_id = $1;

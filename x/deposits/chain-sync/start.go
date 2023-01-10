@@ -1,6 +1,9 @@
 package chainsync
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 func (c *chain) Start(ctx context.Context) error {
 	c.mu.Lock()
@@ -8,7 +11,7 @@ func (c *chain) Start(ctx context.Context) error {
 
 	err := c.sync(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("error syncing chain: %w", err)
 	}
 
 	return c.listen(ctx)

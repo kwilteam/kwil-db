@@ -13,14 +13,13 @@ WITH deleted_deposits AS (
 INSERT INTO accounts (account_address, balance)
 SELECT deleted_deposits.account_address, deleted_deposits.amount
 FROM deleted_deposits
-ON CONFLICT (account_address) DO UPDATE SET balance = accounts.balance + (
+ON CONFLICT (account_address) WHERE (account_address is NOT NULL) DO UPDATE SET balance = accounts.balance + (
     SELECT deleted_deposits.amount
     FROM deleted_deposits
     WHERE accounts.account_address = deleted_deposits.account_address
 );
 
-
--- name: GetDepositByTx :one
+-- name: GetDepositIdByTx :one
 SELECT id
 FROM deposits
 WHERE tx_hash = $1;

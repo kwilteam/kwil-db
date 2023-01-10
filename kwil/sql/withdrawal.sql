@@ -2,9 +2,9 @@
 INSERT INTO
     withdrawals (correlation_id, account_id, amount, fee, expiry)
 VALUES
-    ($1, $2, $3, $4, $5);
+    ($1, (SELECT id FROM accounts WHERE account_address = $2), $3, $4, $5);
 
--- name: AddTxHash :exec
+-- name: AddTxHashToWithdrawal :exec
 UPDATE
     withdrawals
 SET

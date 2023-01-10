@@ -3,8 +3,8 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	"kwil/kwil/repository"
 	"kwil/x/proto/txpb"
+	accountTypes "kwil/x/types/accounts"
 	"kwil/x/types/execution"
 	"kwil/x/types/transactions"
 	"kwil/x/utils/serialize"
@@ -26,10 +26,10 @@ func (s *Service) handleExecution(ctx context.Context, tx *transactions.Transact
 	}
 
 	// try to spend the fee
-	err = s.dao.Spend(ctx, &repository.SpendParams{
-		AccountAddress: tx.Sender,
-		Balance:        price,
-		Nonce:          tx.Nonce,
+	err = s.dao.Spend(ctx, &accountTypes.Spend{
+		Address: tx.Sender,
+		Amount:  price,
+		Nonce:   tx.Nonce,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to spend fee: %w", err)

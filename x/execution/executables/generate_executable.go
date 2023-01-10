@@ -8,10 +8,10 @@ import (
 	execTypes "kwil/x/types/execution"
 )
 
-func GenerateExecutables(db *databases.Database) (map[string]*execTypes.Executable, error) {
+func generateExecutables(db *databases.Database) (map[string]*execTypes.Executable, error) {
 	execs := make(map[string]*execTypes.Executable)
 	for _, q := range db.SQLQueries {
-		e, err := GenerateExecutable(db, q)
+		e, err := generateExecutable(db, q)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate executable: %w", err)
 		}
@@ -22,7 +22,7 @@ func GenerateExecutables(db *databases.Database) (map[string]*execTypes.Executab
 	return execs, nil
 }
 
-func GenerateExecutable(db *databases.Database, q *databases.SQLQuery) (*execTypes.Executable, error) {
+func generateExecutable(db *databases.Database, q *databases.SQLQuery) (*execTypes.Executable, error) {
 	statement, err := generateStatement(db, q)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate statement: %w", err)

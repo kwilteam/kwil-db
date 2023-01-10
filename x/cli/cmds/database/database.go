@@ -14,9 +14,13 @@ func NewCmdDatabase() *cobra.Command {
 		Long:    "",
 	}
 
+	deploy := deployCmd()
+	deploy.Flags().StringP("path", "p", "", "Path to the database definition file")
+	deploy.MarkFlagRequired("path")
+
 	cmd.AddCommand(
 		viewDatabaseCmd(),
-		deployCmd(),
+		deploy,
 		dropCmd(),
 	)
 

@@ -3,7 +3,7 @@
 //   sqlc v1.16.0
 // source: deposit.sql
 
-package repository
+package gen
 
 import (
 	"context"
@@ -18,7 +18,7 @@ WITH deleted_deposits AS (
 INSERT INTO accounts (account_address, balance)
 SELECT deleted_deposits.account_address, deleted_deposits.amount
 FROM deleted_deposits
-ON CONFLICT (account_address) DO UPDATE SET balance = accounts.balance + (
+ON CONFLICT (account_address) WHERE (account_address is NOT NULL) DO UPDATE SET balance = accounts.balance + (
     SELECT deleted_deposits.amount
     FROM deleted_deposits
     WHERE accounts.account_address = deleted_deposits.account_address
@@ -54,14 +54,14 @@ func (q *Queries) Deposit(ctx context.Context, arg *DepositParams) error {
 	return err
 }
 
-const getDepositByTx = `-- name: GetDepositByTx :one
+const getDepositIdByTx = `-- name: GetDepositIdByTx :one
 SELECT id
 FROM deposits
 WHERE tx_hash = $1
 `
 
-func (q *Queries) GetDepositByTx(ctx context.Context, txHash string) (int32, error) {
-	row := q.queryRow(ctx, q.getDepositByTxStmt, getDepositByTx, txHash)
+func (q *Queries) GetDepositIdByTx(ctx context.Context, txHash string) (int32, error) {
+	row := q.queryRow(ctx, q.getDepositIdByTxStmt, getDepositIdByTx, txHash)
 	var id int32
 	err := row.Scan(&id)
 	return id, err

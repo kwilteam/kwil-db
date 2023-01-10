@@ -10,13 +10,13 @@ func (c *chain) sync(ctx context.Context) error {
 	// get the last synced height
 	lastSynced, err := c.dao.GetHeight(ctx, int32(c.chainClient.ChainCode()))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get last synced height: %w", err)
 	}
 
 	// get the latest confirmed block
 	latest, err := c.chainClient.GetLatestBlock(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get latest block: %w", err)
 	}
 
 	// split into chunks of n blocks
