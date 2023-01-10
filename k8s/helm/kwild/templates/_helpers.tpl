@@ -60,3 +60,21 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+container probes
+*/}}
+{{- define "kwild.probes" -}}
+livenessProbe:
+  grpc:
+    port: {{ .Values.containerPorts.kwild }}
+  initialDelaySeconds: 15
+  timeoutSeconds: 1
+  periodSeconds: 15
+readinessProbe:
+  grpc:
+    port: {{ .Values.containerPorts.kwild }}
+  initialDelaySeconds: 5
+  timeoutSeconds: 1
+  periodSeconds: 15
+{{- end }}

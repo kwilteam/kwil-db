@@ -12,7 +12,11 @@ tasks:
   build:cli:
     desc: Builds the CLI
     cmds:
+<<<<<<< HEAD
       - go build -o ./.build/kwil ./cmd/kwil-cli
+=======
+      - go build -o ./.build/kwil-cli ./cmd/kwil-cli
+>>>>>>> origin/feature/k8s-healthcheck
     generates:
       - .build/kwil
 
@@ -106,6 +110,16 @@ tasks:
       - kwil/sql/*.sql
     generates:
       - kwil/repository/gen
+
+  build:docker:kwil-gateway:
+    desc: Build the docker image for kwil-gateway
+    cmds:
+      - docker build . -t kwil-gateway:latest -f docker/kwil-gateway.dockerfile
+
+  build:docker:kwild:
+    desc: Build the docker image for the kwild
+    cmds:
+      - docker build . -t kwild:latest -f docker/kwild.dockerfile
 
   build:api-gateway:
     desc: Builds the API Gateway

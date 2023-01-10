@@ -40,14 +40,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "kwild.fullname" . }}
-          # livenessProbe:
-          #   httpGet:
-          #     path: /
-          #     port: http
-          # readinessProbe:
-          #   httpGet:
-          #     path: /
-          #     port: http
+          {{- include "kwild.probes" . | nindent 10 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

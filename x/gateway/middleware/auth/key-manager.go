@@ -26,7 +26,8 @@ func NewKeyManager(r io.Reader) (*KeyManager, error) {
 }
 
 func (k *KeyManager) IsAllowed(t *token) bool {
-	if t.ApiKey == viper.GetString(HealthCheckApiKeyValueName) {
+	healthCheckKey := viper.GetString(HealthCheckApiKeyValueName)
+	if healthCheckKey != "" && t.ApiKey == healthCheckKey {
 		return true
 	}
 

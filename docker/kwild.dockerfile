@@ -18,8 +18,7 @@ COPY *.yml ./dist
 COPY ./keys/ ./dist/keys/
 COPY ./abi/ ./dist/abi/
 COPY meta-config.yaml ./dist/meta-config.yaml
-COPY manager-config.yaml ./dist/manager-config.yaml
-COPY deposit-config.yaml ./dist/deposit-config.yaml
+COPY ./config/ ./dist/config/
 
 FROM scratch
 WORKDIR /app
