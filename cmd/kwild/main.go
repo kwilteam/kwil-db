@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"kwil/kwil/repository"
 	"kwil/kwil/svc/accountsvc"
+	"kwil/kwil/svc/healthsvc"
 	"kwil/kwil/svc/pricingsvc"
 	"kwil/kwil/svc/txsvc"
 	"kwil/x/async"
@@ -12,6 +14,8 @@ import (
 	"kwil/x/execution/executor"
 	"kwil/x/graphql/hasura"
 	"kwil/x/grpcx"
+	"kwil/x/healthcheck"
+	simple_checker "kwil/x/healthcheck/simple-checker"
 	"kwil/x/proto/accountspb"
 	"kwil/x/proto/pricingpb"
 	"kwil/x/proto/txpb"
@@ -36,8 +40,6 @@ func execute(logger logx.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sntr := env.GetDbConnectionString()
-	fmt.Println(sntr)
 	client, err := sqlclient.Open(env.GetDbConnectionString(), 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to open sql client: %w", err)
@@ -77,10 +79,22 @@ func execute(logger logx.Logger) error {
 	// tx service
 	txService := txsvc.NewService(queries, exec)
 
-	return serve(ctx, logger, txService, accountService, pricingService, deposits)
+	// health service
+	registrar := healthcheck.NewRegistrar()
+	registrar.RegisterAsyncCheck(10*time.Second, 15*time.Second, healthcheck.Check{
+		Name: "dummy",
+		Check: func(ctx context.Context) error {
+			// error make this check fail, nil will make it succeed
+			return nil
+		},
+	})
+	ck := registrar.BuildChecker(simple_checker.New())
+	healthService := healthsvc.NewServer(ck)
+
+	return serve(ctx, logger, txService, accountService, pricingService, healthService, deposits)
 }
 
-func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accountSvc *accountsvc.Service, pricingSvc *pricingsvc.Service, depsts deposits.Depositer) error {
+func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accountSvc *accountsvc.Service, pricingSvc *pricingsvc.Service, healthSvc *healthsvc.Server, depsts deposits.Depositer) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")
@@ -88,31 +102,29 @@ func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accoun
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 
+	//g.Add(func() error {
+	//	err = depsts.Start(ctx)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	logger.Info("deposits synced")
+	//
+	//	<-ctx.Done() // if any rungroup actor returns, the whole group stops, so we wait for ctx.Done() to return
+	//
+	//	return nil
+	//}, func(err error) {
+	//	if err != nil {
+	//		logger.Sugar().Errorf("deposits failed to sync: %d", err)
+	//	}
+	//})
+
 	g.Add(func() error {
-		/*err = depsts.Start(ctx)
-		if err != nil {
-			return err
-		}
-		logger.Info("deposits synced")
-		*/
-
-		<-ctx.Done() // if any rungroup actor returns, the whole group stops, so we wait for ctx.Done() to return
-
-		return nil
-	}, func(err error) {
-		if err != nil {
-			logger.Sugar().Errorf("deposits failed to sync: %d", err)
-		}
-	})
-
-	g.Add(func() error {
-
 		grpcServer := grpcx.NewServer(logger)
 		txpb.RegisterTxServiceServer(grpcServer, txSvc)
 		accountspb.RegisterAccountServiceServer(grpcServer, accountSvc)
 		pricingpb.RegisterPricingServiceServer(grpcServer, pricingSvc)
+		grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
 		return grpcServer.Serve(listener)
-
 	}, func(error) {
 		_ = listener.Close()
 	})

@@ -4,15 +4,15 @@ import (
 	"context"
 	"github.com/alexliesenfeld/health"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"kwil/x/healthcheck"
 	"kwil/x/logx"
-	"kwil/x/proto/healthpb"
 )
 
 var statusMap = map[string]string{
-	string(health.StatusUp):      healthpb.HealthCheckResponse_SERVING.String(),
-	string(health.StatusDown):    healthpb.HealthCheckResponse_NOT_SERVING.String(),
-	string(health.StatusUnknown): healthpb.HealthCheckResponse_UNKNOWN.String(),
+	string(health.StatusUp):      grpc_health_v1.HealthCheckResponse_SERVING.String(),
+	string(health.StatusDown):    grpc_health_v1.HealthCheckResponse_NOT_SERVING.String(),
+	string(health.StatusUnknown): grpc_health_v1.HealthCheckResponse_UNKNOWN.String(),
 }
 
 type SimpleChecker struct {

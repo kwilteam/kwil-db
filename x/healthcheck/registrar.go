@@ -35,6 +35,7 @@ func NewRegistrar() *registrar {
 
 func (r *registrar) RegisterAsyncCheck(refreshPeriod time.Duration, initialDelay time.Duration, check Check) {
 	r.logger.Debug("Registering async check", zap.String("name", check.Name))
+	r.logger.Info("Registering async check", zap.String("name", check.Name))
 
 	check.UpdateInterval = refreshPeriod
 	check.InitialDelay = initialDelay

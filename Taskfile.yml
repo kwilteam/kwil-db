@@ -12,13 +12,13 @@ tasks:
   build:cli:
     desc: Builds the CLI
     cmds:
-      - go build -o ./.build/kwil ./cmd/kwil
+      - go build -o ./.build/kwil-cli ./cmd/kwil-cli
     generates:
       - .build/kwil
 
   build:api:
     desc: Builds the API
-    deps: [build:api:pb, build:pricing:pb, build:deposit:pb, build:accounts:pb, build:tx:pb, build:health:pb]
+    deps: [build:api:pb, build:pricing:pb, build:deposit:pb, build:accounts:pb, build:tx:pb]
     cmds:
       - go build -o ./.build/kwild ./cmd/kwild
     generates:
@@ -106,20 +106,6 @@ tasks:
       - kwil/sql/*.sql
     generates:
       - kwil/repository
-
-  build:health:pb:
-    desc: Compiles the protobuf for the health service
-    cmds:
-      - |
-        mkdir -p x/proto
-        protoc -I proto \
-        --go_out=. --go_opt module=kwil \
-        --go-grpc_out=. --go-grpc_opt module=kwil \
-        proto/kwil/healthsvc/*.proto
-    sources:
-      - proto/kwil/depositsvc/*.proto
-    generates:
-      - x/proto/healthpb/*
 
   build:docker:kwil-gateway:
     desc: Build the docker image for kwil-gateway
