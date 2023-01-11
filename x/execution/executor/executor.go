@@ -15,7 +15,8 @@ type Executor interface {
 	DeployDatabase(ctx context.Context, database *databases.Database) error
 	DropDatabase(ctx context.Context, database *databases.DatabaseIdentifier) error
 	ExecuteQuery(ctx context.Context, query *execTypes.ExecutionBody) error
-	GetExecutables(ctx context.Context, database *databases.DatabaseIdentifier) ([]*execTypes.Executable, error)
+	GetExecutables(id string) ([]*execTypes.Executable, error)
+	GetDBIdentifier(id string) (*databases.DatabaseIdentifier, error)
 }
 
 type executor struct {

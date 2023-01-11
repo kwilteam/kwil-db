@@ -22,6 +22,12 @@ service TxService {
       };
   }
 
+  rpc GetSchemaById(GetSchemaByIdRequest) returns (GetSchemaResponse) {
+      option (google.api.http) = {
+          get: "/api/v0/{id}/schema"
+      };
+  }
+
   rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
       option (google.api.http) = {
           get: "/api/v0/{owner}/databases"
@@ -31,6 +37,12 @@ service TxService {
   rpc GetExecutables(GetExecutablesRequest) returns (GetExecutablesResponse) {
       option (google.api.http) = {
           get: "/api/v0/{owner}/{database}/executables"
+      };
+  }
+
+  rpc GetExecutablesById(GetExecutablesByIdRequest) returns (GetExecutablesResponse) {
+      option (google.api.http) = {
+          get: "/api/v0/{id}/executables"
       };
   }
 }

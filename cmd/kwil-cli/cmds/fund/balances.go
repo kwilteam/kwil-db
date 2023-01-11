@@ -3,8 +3,8 @@ package fund
 import (
 	"context"
 	"fmt"
-	"kwil/x/cli/client"
-	"kwil/x/cli/util"
+	"kwil/cmd/kwil-cli/util"
+	"kwil/kwil/client"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"

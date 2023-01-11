@@ -2,8 +2,7 @@ package fund
 
 import (
 	"context"
-
-	"kwil/x/cli/util"
+	"kwil/cmd/kwil-cli/util"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

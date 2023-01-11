@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"kwil/x/cli/client"
+	"kwil/kwil/client"
 	"kwil/x/crypto"
 
 	"github.com/spf13/cobra"

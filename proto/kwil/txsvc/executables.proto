@@ -12,3 +12,7 @@ message GetExecutablesRequest {
 message GetExecutablesResponse {
     repeated common.Executable executables = 1;
 }
+
+message GetExecutablesByIdRequest {
+    string id = 1;
+}

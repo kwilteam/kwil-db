@@ -11,10 +11,24 @@ import (
 )
 
 func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*txpb.GetSchemaResponse, error) {
-	db, err := s.dao.GetDatabase(ctx, &databases.DatabaseIdentifier{
-		Name:  req.Database,
+	return s.retrieveDatabaseSchema(ctx, &databases.DatabaseIdentifier{
 		Owner: req.Owner,
+		Name:  req.Database,
 	})
+}
+
+func (s *Service) GetSchemaById(ctx context.Context, req *txpb.GetSchemaByIdRequest) (*txpb.GetSchemaResponse, error) {
+	dbIdentifier, err := s.executor.GetDBIdentifier(req.Id)
+	if err != nil {
+		s.log.Sugar().Warnf("failed to get database identifier", err)
+		return nil, fmt.Errorf("failed to get database identifier")
+	}
+
+	return s.retrieveDatabaseSchema(ctx, dbIdentifier)
+}
+
+func (s *Service) retrieveDatabaseSchema(ctx context.Context, database *databases.DatabaseIdentifier) (*txpb.GetSchemaResponse, error) {
+	db, err := s.dao.GetDatabase(ctx, database)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to get database", err)
 		return nil, fmt.Errorf("failed to get database")
@@ -44,10 +58,16 @@ func (s *Service) ListDatabases(ctx context.Context, req *txpb.ListDatabasesRequ
 }
 
 func (s *Service) GetExecutables(ctx context.Context, req *txpb.GetExecutablesRequest) (*txpb.GetExecutablesResponse, error) {
-	execs, err := s.executor.GetExecutables(ctx, &databases.DatabaseIdentifier{
-		Name:  req.Database,
-		Owner: req.Owner,
-	})
+	id := databases.GenerateSchemaName(req.Owner, req.Database)
+	return s.retrieveExecutables(id)
+}
+
+func (s *Service) GetExecutablesById(ctx context.Context, req *txpb.GetExecutablesByIdRequest) (*txpb.GetExecutablesResponse, error) {
+	return s.retrieveExecutables(req.Id)
+}
+
+func (s *Service) retrieveExecutables(id string) (*txpb.GetExecutablesResponse, error) {
+	execs, err := s.executor.GetExecutables(id)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to get executables", err)
 		return nil, fmt.Errorf("failed to get executables")
@@ -61,10 +81,6 @@ func (s *Service) GetExecutables(ctx context.Context, req *txpb.GetExecutablesRe
 			return nil, fmt.Errorf("failed to convert executables")
 		}
 		convertedExecutables[i] = converted
-	}
-	if err != nil {
-		s.log.Sugar().Warnf("failed to convert executables", err)
-		return nil, fmt.Errorf("failed to convert executables")
 	}
 
 	return &txpb.GetExecutablesResponse{

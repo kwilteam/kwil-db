@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"kwil/x/cli/client"
-	"kwil/x/cli/util"
+	"kwil/cmd/kwil-cli/util"
+	"kwil/kwil/client"
 	"kwil/x/types/contracts/escrow"
 	"math/big"
 

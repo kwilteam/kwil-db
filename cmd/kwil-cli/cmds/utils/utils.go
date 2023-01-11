@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"kwil/x/cli/util"
+	"kwil/cmd/kwil-cli/util"
 
 	"github.com/spf13/cobra"
 )

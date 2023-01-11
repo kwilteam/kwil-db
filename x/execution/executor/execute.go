@@ -33,11 +33,18 @@ func (s *executor) ExecuteQuery(ctx context.Context, body *execTypes.ExecutionBo
 	return nil
 }
 
-func (s *executor) GetExecutables(ctx context.Context, database *databases.DatabaseIdentifier) ([]*execTypes.Executable, error) {
-	schemaName := databases.GenerateSchemaName(database.Owner, database.Name)
-	execInterface, ok := s.databases[schemaName]
+func (s *executor) GetExecutables(id string) ([]*execTypes.Executable, error) {
+	execInterface, ok := s.databases[id]
 	if !ok {
-		return nil, fmt.Errorf("database id %s not found", schemaName)
+		return nil, fmt.Errorf("database id %s not found", id)
 	}
 	return execInterface.ListExecutables(), nil
+}
+
+func (s *executor) GetDBIdentifier(id string) (*databases.DatabaseIdentifier, error) {
+	db, ok := s.databases[id]
+	if !ok {
+		return nil, fmt.Errorf("database id %s not found", id)
+	}
+	return db.GetIdentifier(), nil
 }

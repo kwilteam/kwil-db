@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"kwil/x/cli/util"
+	"kwil/cmd/kwil-cli/util"
 	"kwil/x/types/databases"
 
-	"kwil/x/cli/client"
+	"kwil/kwil/client"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

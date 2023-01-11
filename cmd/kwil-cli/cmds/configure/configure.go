@@ -2,9 +2,8 @@ package configure
 
 import (
 	"fmt"
+	"kwil/cmd/kwil-cli/util"
 	"strings"
-
-	"kwil/x/cli/util"
 
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"

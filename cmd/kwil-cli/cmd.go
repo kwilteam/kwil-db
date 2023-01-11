@@ -1,15 +1,14 @@
-package cli
+package main
 
 import (
 	"fmt"
+	"kwil/cmd/kwil-cli/cmds/configure"
+	"kwil/cmd/kwil-cli/cmds/connect"
+	"kwil/cmd/kwil-cli/cmds/database"
+	"kwil/cmd/kwil-cli/cmds/fund"
+	"kwil/cmd/kwil-cli/cmds/utils"
 	"os"
 	"path/filepath"
-
-	"kwil/x/cli/cmds/configure"
-	"kwil/x/cli/cmds/connect"
-	"kwil/x/cli/cmds/database"
-	"kwil/x/cli/cmds/fund"
-	"kwil/x/cli/cmds/utils"
 
 	"github.com/manifoldco/promptui"
 	"github.com/mitchellh/go-homedir"

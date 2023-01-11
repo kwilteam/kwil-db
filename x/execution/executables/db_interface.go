@@ -14,11 +14,13 @@ type ExecutablesInterface interface {
 	CanExecute(wallet string, query string) bool
 	Prepare(query string, caller string, inputs []*execTypes.UserInput) ([]any, error)
 	ListExecutables() []*execTypes.Executable
+	GetIdentifier() *databases.DatabaseIdentifier
 }
 
 // fulfills ExecutableInterface
 type executableInterface struct {
 	Owner        string
+	Name         string
 	Executables  map[string]*execTypes.Executable
 	Access       map[string]map[string]struct{} // maps a role name to an executable
 	DefaultRoles []string
@@ -32,8 +34,16 @@ func FromDatabase(db *databases.Database) (ExecutablesInterface, error) {
 
 	return &executableInterface{
 		Owner:        db.Owner,
+		Name:         db.Name,
 		Executables:  execs,
 		Access:       generateAccessParameters(db),
 		DefaultRoles: db.GetDefaultRoles(),
 	}, nil
+}
+
+func (e *executableInterface) GetIdentifier() *databases.DatabaseIdentifier {
+	return &databases.DatabaseIdentifier{
+		Owner: e.Owner,
+		Name:  e.Name,
+	}
 }

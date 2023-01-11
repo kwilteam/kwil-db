@@ -3,9 +3,9 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/x/cli/client"
-	"kwil/x/cli/util"
-	"kwil/x/cli/util/display"
+	"kwil/cmd/kwil-cli/util"
+	"kwil/cmd/kwil-cli/util/display"
+	"kwil/kwil/client"
 	"kwil/x/transactions"
 	"kwil/x/types/databases"
 

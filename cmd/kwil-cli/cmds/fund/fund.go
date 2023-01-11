@@ -1,8 +1,9 @@
 package fund
 
 import (
+	"kwil/cmd/kwil-cli/util"
+
 	"github.com/spf13/cobra"
-	"kwil/x/cli/util"
 )
 
 func NewCmdFund() *cobra.Command {

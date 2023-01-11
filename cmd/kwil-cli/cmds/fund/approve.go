@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"kwil/x/cli/client"
-	"kwil/x/cli/util"
-	"kwil/x/cli/util/display"
+	"kwil/cmd/kwil-cli/util"
+	"kwil/cmd/kwil-cli/util/display"
+	"kwil/kwil/client"
 	"math/big"
 
 	"github.com/manifoldco/promptui"

@@ -24,8 +24,10 @@ const _ = grpc.SupportPackageIsVersion7
 type TxServiceClient interface {
 	Broadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error)
 	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
+	GetSchemaById(ctx context.Context, in *GetSchemaByIdRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
 	GetExecutables(ctx context.Context, in *GetExecutablesRequest, opts ...grpc.CallOption) (*GetExecutablesResponse, error)
+	GetExecutablesById(ctx context.Context, in *GetExecutablesByIdRequest, opts ...grpc.CallOption) (*GetExecutablesResponse, error)
 }
 
 type txServiceClient struct {
@@ -54,6 +56,15 @@ func (c *txServiceClient) GetSchema(ctx context.Context, in *GetSchemaRequest, o
 	return out, nil
 }
 
+func (c *txServiceClient) GetSchemaById(ctx context.Context, in *GetSchemaByIdRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error) {
+	out := new(GetSchemaResponse)
+	err := c.cc.Invoke(ctx, "/txsvc.TxService/GetSchemaById", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *txServiceClient) ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error) {
 	out := new(ListDatabasesResponse)
 	err := c.cc.Invoke(ctx, "/txsvc.TxService/ListDatabases", in, out, opts...)
@@ -72,14 +83,25 @@ func (c *txServiceClient) GetExecutables(ctx context.Context, in *GetExecutables
 	return out, nil
 }
 
+func (c *txServiceClient) GetExecutablesById(ctx context.Context, in *GetExecutablesByIdRequest, opts ...grpc.CallOption) (*GetExecutablesResponse, error) {
+	out := new(GetExecutablesResponse)
+	err := c.cc.Invoke(ctx, "/txsvc.TxService/GetExecutablesById", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TxServiceServer is the server API for TxService service.
 // All implementations must embed UnimplementedTxServiceServer
 // for forward compatibility
 type TxServiceServer interface {
 	Broadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error)
 	GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error)
+	GetSchemaById(context.Context, *GetSchemaByIdRequest) (*GetSchemaResponse, error)
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
 	GetExecutables(context.Context, *GetExecutablesRequest) (*GetExecutablesResponse, error)
+	GetExecutablesById(context.Context, *GetExecutablesByIdRequest) (*GetExecutablesResponse, error)
 	mustEmbedUnimplementedTxServiceServer()
 }
 
@@ -93,11 +115,17 @@ func (UnimplementedTxServiceServer) Broadcast(context.Context, *BroadcastRequest
 func (UnimplementedTxServiceServer) GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchema not implemented")
 }
+func (UnimplementedTxServiceServer) GetSchemaById(context.Context, *GetSchemaByIdRequest) (*GetSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSchemaById not implemented")
+}
 func (UnimplementedTxServiceServer) ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListDatabases not implemented")
 }
 func (UnimplementedTxServiceServer) GetExecutables(context.Context, *GetExecutablesRequest) (*GetExecutablesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetExecutables not implemented")
+}
+func (UnimplementedTxServiceServer) GetExecutablesById(context.Context, *GetExecutablesByIdRequest) (*GetExecutablesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetExecutablesById not implemented")
 }
 func (UnimplementedTxServiceServer) mustEmbedUnimplementedTxServiceServer() {}
 
@@ -148,6 +176,24 @@ func _TxService_GetSchema_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TxService_GetSchemaById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSchemaByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).GetSchemaById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/txsvc.TxService/GetSchemaById",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).GetSchemaById(ctx, req.(*GetSchemaByIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TxService_ListDatabases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListDatabasesRequest)
 	if err := dec(in); err != nil {
@@ -184,6 +230,24 @@ func _TxService_GetExecutables_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TxService_GetExecutablesById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetExecutablesByIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).GetExecutablesById(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/txsvc.TxService/GetExecutablesById",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).GetExecutablesById(ctx, req.(*GetExecutablesByIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TxService_ServiceDesc is the grpc.ServiceDesc for TxService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -200,12 +264,20 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TxService_GetSchema_Handler,
 		},
 		{
+			MethodName: "GetSchemaById",
+			Handler:    _TxService_GetSchemaById_Handler,
+		},
+		{
 			MethodName: "ListDatabases",
 			Handler:    _TxService_ListDatabases_Handler,
 		},
 		{
 			MethodName: "GetExecutables",
 			Handler:    _TxService_GetExecutables_Handler,
+		},
+		{
+			MethodName: "GetExecutablesById",
+			Handler:    _TxService_GetExecutablesById_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
