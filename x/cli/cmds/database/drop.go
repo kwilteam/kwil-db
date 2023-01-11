@@ -3,10 +3,9 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/x/cli/chain"
 	"kwil/x/cli/client"
-	"kwil/x/cli/cmds/display"
 	"kwil/x/cli/util"
+	"kwil/x/cli/util/display"
 	"kwil/x/transactions"
 	"kwil/x/types/databases"
 
@@ -26,10 +25,6 @@ func dropCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				c, err := chain.NewClientV(viper.GetViper())
-				if err != nil {
-					return err
-				}
 				// should be one arg
 				if len(args) != 1 {
 					return fmt.Errorf("deploy requires one argument: database name")
@@ -37,11 +32,11 @@ func dropCmd() *cobra.Command {
 
 				data := &databases.DatabaseIdentifier{
 					Name:  args[0],
-					Owner: c.Address.String(),
+					Owner: client.Config.Address,
 				}
 
 				// build tx
-				tx, err := client.BuildTransaction(ctx, transactions.DROP_DATABASE, data, c.PrivateKey)
+				tx, err := client.BuildTransaction(ctx, transactions.DROP_DATABASE, data, client.Config.PrivateKey)
 				if err != nil {
 					return err
 				}

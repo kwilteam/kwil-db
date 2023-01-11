@@ -15,6 +15,7 @@ type EscrowContract interface {
 	GetDeposits(ctx context.Context, start, end int64) ([]*escrowTypes.DepositEvent, error)
 	GetWithdrawals(ctx context.Context, start, end int64) ([]*escrowTypes.WithdrawalConfirmationEvent, error)
 	ReturnFunds(ctx context.Context, params *escrowTypes.ReturnFundsParams) (*escrowTypes.ReturnFundsResponse, error)
+	Deposit(ctx context.Context, params *escrowTypes.DepositParams) (*escrowTypes.DepositResponse, error)
 	TokenAddress() string
 }
 

@@ -1,13 +1,15 @@
 package fund
 
 import (
+	"context"
 	"fmt"
-
-	"kwil/x/cli/chain"
+	"kwil/x/cli/client"
+	"kwil/x/cli/util"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 func balancesCmd() *cobra.Command {
@@ -17,48 +19,37 @@ func balancesCmd() *cobra.Command {
 		Long:  `"balances" returns your allowance and balance for your currently configured funding pool.`,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := chain.NewClientV(viper.GetViper())
-			if err != nil {
-				return err
-			}
+			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				client, err := client.NewClient(cc, viper.GetViper())
+				if err != nil {
+					return err
+				}
 
-			allowance, err := c.GetAllowance()
-			if err != nil {
-				return fmt.Errorf("error getting allowance: %w", err)
-			}
+				allowance, err := client.Token.Allowance(client.Config.Address, client.Config.PoolAddress)
+				if err != nil {
+					return fmt.Errorf("error getting allowance: %w", err)
+				}
 
-			// convert allowance to float
-			af, err := c.ConvertToDecimal(allowance)
-			if err != nil {
-				return fmt.Errorf("error converting allowance to decimal: %w", err)
-			}
+				sym := client.Token.Symbol()
 
-			sym, err := c.GetTokenSymbol()
-			if err != nil {
-				return fmt.Errorf("error getting symbol: %w", err)
-			}
+				// get balance
+				balance, err := client.Token.BalanceOf(client.Config.Address)
+				if err != nil {
+					return fmt.Errorf("error getting deposit balance: %w", err)
+				}
 
-			// get balance
-			balance, err := c.GetDepositBalance()
-			if err != nil {
-				return fmt.Errorf("error getting deposit balance: %w", err)
-			}
+				color.Set(color.Bold)
+				cmd.Printf("Pool: %s\n", client.Config.PoolAddress)
+				color.Unset()
+				color.Set(color.FgGreen)
+				cmd.Printf("Allowance: %s %s\n", allowance, sym)
+				cmd.Printf("Balance: %s %s\n", balance, sym)
+				color.Unset()
 
-			// convert balance to float
-			bf, err := c.ConvertToDecimal(balance)
-			if err != nil {
-				return fmt.Errorf("error converting balance to decimal: %w", err)
-			}
+				return nil
 
-			color.Set(color.Bold)
-			cmd.Printf("Pool: %s\n", c.GetPoolAddress())
-			color.Unset()
-			color.Set(color.FgGreen)
-			cmd.Printf("Allowance: %s (%s %s)\n", allowance, af.String(), sym)
-			cmd.Printf("Balance: %s (%s %s)\n", balance, bf.String(), sym)
-			color.Unset()
+			})
 
-			return nil
 		},
 	}
 

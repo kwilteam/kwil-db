@@ -2,6 +2,7 @@ package evm
 
 import (
 	"context"
+	kwilCommon "kwil/x/contracts/common/evm"
 	"kwil/x/contracts/escrow/evm/abi"
 	"kwil/x/types/contracts/escrow"
 
@@ -41,4 +42,21 @@ func convertDeposits(edi *abi.EscrowDepositIterator, token string) []*escrow.Dep
 	}
 
 	return deposits
+}
+
+func (c *contract) Deposit(ctx context.Context, params *escrow.DepositParams) (*escrow.DepositResponse, error) {
+
+	auth, err := kwilCommon.PrepareTxAuth(ctx, c.client, c.chainId, c.privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.ctr.Deposit(auth, common.HexToAddress(params.Validator), params.Amount)
+	if err != nil {
+		return nil, err
+	}
+
+	return &escrow.DepositResponse{
+		TxHash: res.Hash().String(),
+	}, nil
 }

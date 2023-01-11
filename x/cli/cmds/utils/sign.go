@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"kwil/x/cli/chain"
+	"kwil/x/cli/client"
 	"kwil/x/crypto"
 
 	"github.com/spf13/cobra"
@@ -21,13 +21,13 @@ func signCmd() *cobra.Command {
 			}
 
 			// get private key
-			c, err := chain.NewClientV(viper.GetViper())
+			config, err := client.NewClientConfig(viper.GetViper())
 			if err != nil {
-				return fmt.Errorf("error getting config: %w", err)
+				return fmt.Errorf("error getting client config: %w", err)
 			}
 
 			// generate signature
-			sig, err := crypto.Sign([]byte(args[0]), c.PrivateKey)
+			sig, err := crypto.Sign([]byte(args[0]), config.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("error generating signature: %w", err)
 			}

@@ -3,10 +3,9 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/x/cli/chain"
 	"kwil/x/cli/client"
-	"kwil/x/cli/cmds/display"
 	"kwil/x/cli/util"
+	"kwil/x/cli/util/display"
 	"kwil/x/execution/clean"
 	execUtils "kwil/x/execution/utils"
 	"kwil/x/execution/validation"
@@ -39,10 +38,6 @@ func deployCmd() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("failed to create client: %w", err)
 				}
-				c, err := chain.NewClientV(viper.GetViper())
-				if err != nil {
-					return fmt.Errorf("failed to create chain client: %w", err)
-				}
 
 				// read in the file
 				file, err := os.ReadFile(filePath)
@@ -63,12 +58,12 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("error on database: %w", err)
 				}
 
-				if !strings.EqualFold(db.Owner, c.Address.String()) {
-					return fmt.Errorf("database owner must be the same as the current account.  Owner: %s, Account: %s", db.Owner, c.Address.String())
+				if !strings.EqualFold(db.Owner, client.Config.Address) {
+					return fmt.Errorf("database owner must be the same as the current account.  Owner: %s, Account: %s", db.Owner, client.Config.Address)
 				}
 
 				// build tx
-				tx, err := client.BuildTransaction(ctx, transactions.DEPLOY_DATABASE, db, c.PrivateKey)
+				tx, err := client.BuildTransaction(ctx, transactions.DEPLOY_DATABASE, db, client.Config.PrivateKey)
 				if err != nil {
 					return err
 				}

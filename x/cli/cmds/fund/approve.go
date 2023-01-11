@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"kwil/x/cli/client"
-	"kwil/x/cli/cmds/display"
 	"kwil/x/cli/util"
+	"kwil/x/cli/util/display"
 	"math/big"
 
 	"github.com/manifoldco/promptui"
@@ -23,9 +23,9 @@ func approveCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				c, err := client.NewClient(cc, viper.GetViper())
+				client, err := client.NewClient(cc, viper.GetViper())
 				if err != nil {
-					return fmt.Errorf("could not create client: %w", err)
+					return err
 				}
 
 				amount, ok := new(big.Int).SetString(args[0], 10)
@@ -34,7 +34,7 @@ func approveCmd() *cobra.Command {
 				}
 
 				// get balance
-				balance, err := c.Token.BalanceOf(c.Config.Address)
+				balance, err := client.Token.BalanceOf(client.Config.Address)
 				if err != nil {
 					return fmt.Errorf("could not get balance: %w", err)
 				}
@@ -62,14 +62,14 @@ func approveCmd() *cobra.Command {
 				}
 
 				// approve
-				response, err := c.Token.Approve(ctx, c.Config.PoolAddress, amount)
+				response, err := client.Token.Approve(ctx, client.Config.PoolAddress, amount)
 				if err != nil {
 					return err
 				}
 
 				display.PrintClientChainResponse(&display.ClientChainResponse{
 					Tx:    response.TxHash,
-					Chain: c.ChainClient.ChainCode().String(),
+					Chain: client.ChainClient.ChainCode().String(),
 				})
 
 				return nil
