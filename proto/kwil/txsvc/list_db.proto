@@ -1,0 +1,11 @@
+syntax = "proto3";
+package txsvc;
+option go_package = "kwil/x/proto/txpb";
+
+message ListDatabasesRequest {
+	string owner = 1;
+}
+
+message ListDatabasesResponse {
+	repeated string databases = 1;
+}

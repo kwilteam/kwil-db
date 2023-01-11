@@ -27,3 +27,11 @@ SELECT
 FROM
     databases
     JOIN accounts ON db_owner = accounts.id;
+
+-- name: ListDatabasesByOwner :many
+SELECT
+    db_name
+FROM
+    databases
+WHERE
+    db_owner = (SELECT id FROM accounts WHERE account_address = $1);

@@ -2,10 +2,10 @@ syntax = "proto3";
 package txsvc;
 option go_package = "kwil/x/proto/txpb";
 
-import "kwil/txsvc/tx.proto";
+import "kwil/common/tx.proto";
 
 message BroadcastRequest {
-    Tx tx = 1;
+    common.Tx tx = 1;
 }
 
 message BroadcastResponse {

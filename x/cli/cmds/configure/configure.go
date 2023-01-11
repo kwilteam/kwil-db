@@ -1,17 +1,14 @@
 package configure
 
 import (
-	"context"
+	"fmt"
 	"strings"
 
 	"kwil/x/cli/util"
-	"kwil/x/proto/apipb"
 
-	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 )
 
 func NewCmdConfigure() *cobra.Command {
@@ -65,27 +62,30 @@ func NewCmdConfigure() *cobra.Command {
 				return err
 			}
 
-			if doConnect == "yes" {
-				err := util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-					client := apipb.NewKwilServiceClient(cc)
-					res, err := client.Connect(ctx, &apipb.ConnectRequest{})
+			fmt.Println("doConnect", doConnect)
+			/*
+				if doConnect == "yes" {
+					err := util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+						client := apipb.NewKwilServiceClient(cc)
+						res, err := client.Connect(ctx, &apipb.ConnectRequest{})
+						if err != nil {
+							return err
+						}
+						v.Set("node-address", res.Address)
+						util.PrintlnCheckF("Successfully connected to %s", color.YellowString(endpoint))
+						util.PrintlnCheckF("Node address is %s", color.YellowString(res.Address))
+						return nil
+					})
+
 					if err != nil {
 						return err
 					}
-					v.Set("node-address", res.Address)
-					util.PrintlnCheckF("Successfully connected to %s", color.YellowString(endpoint))
-					util.PrintlnCheckF("Node address is %s", color.YellowString(res.Address))
-					return nil
-				})
 
-				if err != nil {
-					return err
+					if err := v.WriteConfig(); err != nil {
+						return err
+					}
 				}
-
-				if err := v.WriteConfig(); err != nil {
-					return err
-				}
-			}
+			*/
 
 			chainPrompt := promptui.Select{
 				Label: "Select Chain",

@@ -2,12 +2,12 @@ syntax = "proto3";
 package pricing;
 option go_package = "kwil/x/proto/pricingpb";
 
-import "kwil/txsvc/tx.proto";
+import "kwil/common/tx.proto";
 
 message EstimateRequest {
-    txsvc.Tx tx = 1;
+    common.Tx tx = 1;
 }
 
 message EstimateResponse {
-    string price = 1;
+    string cost = 1;
 }

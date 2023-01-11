@@ -1,91 +1,81 @@
 package client
 
 import (
-	"context"
-	"crypto/ecdsa"
-	"kwil/x/transactions"
-	accountTypes "kwil/x/types/accounts"
-
-	"kwil/x/proto/accountspb"
-	"kwil/x/proto/pricingpb"
-	"kwil/x/proto/txpb"
-	txUtils "kwil/x/transactions/utils"
-	txTypes "kwil/x/types/transactions"
+	"fmt"
+	chainClient "kwil/x/chain/client"
+	chainClientDto "kwil/x/chain/client/dto"
+	chainClientService "kwil/x/chain/client/service"
+	"kwil/x/contracts/escrow"
+	"kwil/x/contracts/token"
+	"kwil/x/grpcx/clients/accountsclient"
+	"kwil/x/grpcx/clients/pricingclient"
+	"kwil/x/grpcx/clients/txclient"
 
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
-type Client interface {
-	UnconnectedClient
-	GetAccount(ctx context.Context, address string) (*accountTypes.Account, error)
-	EstimatePrice(ctx context.Context, tx *txTypes.Transaction) (string, error)
-	Broadcast(ctx context.Context, tx *txTypes.Transaction) (*txTypes.Response, error)
-	BuildTransaction(ctx context.Context, payloadType transactions.PayloadType, data interface{}, privateKey *ecdsa.PrivateKey) (*txTypes.Transaction, error)
+type Client struct {
+
+	// GRPC clients
+	Accounts accountsclient.AccountsClient
+	Txs      txclient.TxClient
+	Pricing  pricingclient.PricingClient
+
+	// Blockchain clients / contracts / interfaces
+	Escrow      escrow.EscrowContract
+	Token       token.TokenContract
+	ChainClient chainClient.ChainClient
+
+	EscrowedTokenAddress string
+
+	Config *ClientConfig
 }
 
-type client struct {
-	accounts accountspb.AccountServiceClient
-	txs      txpb.TxServiceClient
-	pricing  pricingpb.PricingServiceClient
-
-	UnconnectedClient UnconnectedClient
-}
-
-func NewClient(cc *grpc.ClientConn, v *viper.Viper) (Client, error) {
-	unconndClient, err := NewUnconnectedClient(v)
+func NewClient(cc *grpc.ClientConn, v *viper.Viper) (*Client, error) {
+	conf, err := NewClientConfig(v)
 	if err != nil {
 		return nil, err
 	}
 
-	return &client{
-		accounts: accountspb.NewAccountServiceClient(cc),
-		txs:      txpb.NewTxServiceClient(cc),
-		pricing:  pricingpb.NewPricingServiceClient(cc),
+	fundingPool := v.GetString("funding-pool")
+	ethProvider := v.GetString("eth-provider")
 
-		UnconnectedClient: unconndClient,
-	}, nil
-}
-
-func (c *client) GetAccount(ctx context.Context, address string) (*accountTypes.Account, error) {
-	acc, err := c.accounts.GetAccount(ctx, &accountspb.GetAccountRequest{
-		Address: address,
+	chnClient, err := chainClientService.NewChainClientExplicit(&chainClientDto.Config{
+		ChainCode:             int64(conf.ChainCode),
+		Endpoint:              "wss://" + ethProvider,
+		ReconnectionInterval:  30,
+		RequiredConfirmations: 12,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create chain client: %v", err)
 	}
 
-	return &accountTypes.Account{
-		Address: acc.Address,
-		Balance: acc.Balance,
-		Spent:   acc.Spent,
-		Nonce:   acc.Nonce,
-	}, nil
-}
-
-func (c *client) EstimatePrice(ctx context.Context, tx *txTypes.Transaction) (string, error) {
-	// estimate cost
-	fee, err := c.pricing.EstimateCost(ctx, &pricingpb.EstimateRequest{
-		Tx: txUtils.TxToMsg(tx),
-	})
+	// escrow
+	escrowCtr, err := escrow.New(chnClient, conf.PrivateKey, fundingPool)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to create escrow contract: %v", err)
 	}
 
-	return fee.Price, nil
-}
+	// erc20 address
+	tokenAddress := escrowCtr.TokenAddress()
 
-func (c *client) Broadcast(ctx context.Context, tx *txTypes.Transaction) (*txTypes.Response, error) {
-	// broadcast
-	broadcast, err := c.txs.Broadcast(ctx, &txpb.BroadcastRequest{
-		Tx: txUtils.TxToMsg(tx),
-	})
+	// erc20
+	erc20Ctr, err := token.New(chnClient, conf.PrivateKey, tokenAddress)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create erc20 contract: %v", err)
 	}
 
-	return &txTypes.Response{
-		Hash: broadcast.Hash,
-		Fee:  broadcast.Fee,
+	return &Client{
+		Accounts: accountsclient.New(cc),
+		Txs:      txclient.New(cc),
+		Pricing:  pricingclient.New(cc),
+
+		Escrow:               escrowCtr,
+		Token:                erc20Ctr,
+		ChainClient:          chnClient,
+		EscrowedTokenAddress: tokenAddress,
+
+		Config: conf,
 	}, nil
 }

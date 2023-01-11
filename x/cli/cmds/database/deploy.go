@@ -73,7 +73,7 @@ func deployCmd() *cobra.Command {
 					return err
 				}
 
-				res, err := client.Broadcast(ctx, tx)
+				res, err := client.Txs.Broadcast(ctx, tx)
 				if err != nil {
 					return err
 				}

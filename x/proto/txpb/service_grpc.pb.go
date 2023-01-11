@@ -23,6 +23,9 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TxServiceClient interface {
 	Broadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error)
+	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
+	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
+	GetExecutables(ctx context.Context, in *GetExecutablesRequest, opts ...grpc.CallOption) (*GetExecutablesResponse, error)
 }
 
 type txServiceClient struct {
@@ -42,11 +45,41 @@ func (c *txServiceClient) Broadcast(ctx context.Context, in *BroadcastRequest, o
 	return out, nil
 }
 
+func (c *txServiceClient) GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error) {
+	out := new(GetSchemaResponse)
+	err := c.cc.Invoke(ctx, "/txsvc.TxService/GetSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *txServiceClient) ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error) {
+	out := new(ListDatabasesResponse)
+	err := c.cc.Invoke(ctx, "/txsvc.TxService/ListDatabases", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *txServiceClient) GetExecutables(ctx context.Context, in *GetExecutablesRequest, opts ...grpc.CallOption) (*GetExecutablesResponse, error) {
+	out := new(GetExecutablesResponse)
+	err := c.cc.Invoke(ctx, "/txsvc.TxService/GetExecutables", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TxServiceServer is the server API for TxService service.
 // All implementations must embed UnimplementedTxServiceServer
 // for forward compatibility
 type TxServiceServer interface {
 	Broadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error)
+	GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error)
+	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
+	GetExecutables(context.Context, *GetExecutablesRequest) (*GetExecutablesResponse, error)
 	mustEmbedUnimplementedTxServiceServer()
 }
 
@@ -56,6 +89,15 @@ type UnimplementedTxServiceServer struct {
 
 func (UnimplementedTxServiceServer) Broadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Broadcast not implemented")
+}
+func (UnimplementedTxServiceServer) GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSchema not implemented")
+}
+func (UnimplementedTxServiceServer) ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDatabases not implemented")
+}
+func (UnimplementedTxServiceServer) GetExecutables(context.Context, *GetExecutablesRequest) (*GetExecutablesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetExecutables not implemented")
 }
 func (UnimplementedTxServiceServer) mustEmbedUnimplementedTxServiceServer() {}
 
@@ -88,6 +130,60 @@ func _TxService_Broadcast_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TxService_GetSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).GetSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/txsvc.TxService/GetSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).GetSchema(ctx, req.(*GetSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TxService_ListDatabases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDatabasesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).ListDatabases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/txsvc.TxService/ListDatabases",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).ListDatabases(ctx, req.(*ListDatabasesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TxService_GetExecutables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetExecutablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).GetExecutables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/txsvc.TxService/GetExecutables",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).GetExecutables(ctx, req.(*GetExecutablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TxService_ServiceDesc is the grpc.ServiceDesc for TxService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -98,6 +194,18 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Broadcast",
 			Handler:    _TxService_Broadcast_Handler,
+		},
+		{
+			MethodName: "GetSchema",
+			Handler:    _TxService_GetSchema_Handler,
+		},
+		{
+			MethodName: "ListDatabases",
+			Handler:    _TxService_ListDatabases_Handler,
+		},
+		{
+			MethodName: "GetExecutables",
+			Handler:    _TxService_GetExecutables_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

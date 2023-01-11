@@ -1,6 +1,6 @@
 syntax = "proto3";
-package txsvc;
-option go_package = "kwil/x/proto/txpb";
+package common;
+option go_package = "kwil/x/proto/commonpb";
 
 message Tx {
     bytes hash = 1;

@@ -49,14 +49,14 @@ func (q *queries) Spend(ctx context.Context, spend *accountTypes.Spend) error {
 	acc, err := q.gen.GetAccount(ctx, addr)
 	if err != nil {
 		if errors.IsNoRowsInResult(err) {
-			return fmt.Errorf("address not registered on server %s", addr)
+			return accountTypes.ErrAccountNotRegistered
 		}
 		return fmt.Errorf("error getting account for address %s: %d", addr, err)
 	}
 
 	// check the nonce
 	if acc.Nonce+1 != spend.Nonce {
-		return fmt.Errorf("invalid nonce for address %s.  expected: %d. received: %d", addr, acc.Nonce+1, spend.Nonce)
+		return accountTypes.ErrInvalidNonce
 	}
 
 	remaining, err := bigutil.BigStr(acc.Balance).Sub(spend.Amount)
@@ -64,7 +64,7 @@ func (q *queries) Spend(ctx context.Context, spend *accountTypes.Spend) error {
 		return fmt.Errorf("error subtracting amount from balance: %d", err)
 	}
 	if remaining.Sign() < 0 {
-		return fmt.Errorf("insufficient funds to spend for address %s", addr)
+		return accountTypes.ErrInsufficientFunds
 	}
 
 	// calculate the new spent

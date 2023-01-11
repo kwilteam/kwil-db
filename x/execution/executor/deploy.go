@@ -242,7 +242,7 @@ func (d *dbCreator) storeIndexes(ctx context.Context, dbid int32) error {
 // buildDatatabase builds the database from the database table.  The schema name is the sha224 hash prepended with an x
 func (d *dbCreator) buildDatabase(ctx context.Context) error {
 	// create schema
-	_, err := d.tx.ExecContext(ctx, "CREATE SCHEMA "+d.database.GetSchemaName())
+	err := d.dao.CreateSchema(ctx, d.database.GetSchemaName())
 	if err != nil {
 		return fmt.Errorf("error creating database schema: %w", err)
 	}

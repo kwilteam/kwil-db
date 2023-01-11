@@ -114,6 +114,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.listDatabasesStmt, err = db.PrepareContext(ctx, listDatabases); err != nil {
 		return nil, fmt.Errorf("error preparing query ListDatabases: %w", err)
 	}
+	if q.listDatabasesByOwnerStmt, err = db.PrepareContext(ctx, listDatabasesByOwner); err != nil {
+		return nil, fmt.Errorf("error preparing query ListDatabasesByOwner: %w", err)
+	}
 	if q.listTablesStmt, err = db.PrepareContext(ctx, listTables); err != nil {
 		return nil, fmt.Errorf("error preparing query ListTables: %w", err)
 	}
@@ -287,6 +290,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing listDatabasesStmt: %w", cerr)
 		}
 	}
+	if q.listDatabasesByOwnerStmt != nil {
+		if cerr := q.listDatabasesByOwnerStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing listDatabasesByOwnerStmt: %w", cerr)
+		}
+	}
 	if q.listTablesStmt != nil {
 		if cerr := q.listTablesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing listTablesStmt: %w", cerr)
@@ -386,6 +394,7 @@ type Queries struct {
 	getTableIdStmt             *sql.Stmt
 	increaseBalanceStmt        *sql.Stmt
 	listDatabasesStmt          *sql.Stmt
+	listDatabasesByOwnerStmt   *sql.Stmt
 	listTablesStmt             *sql.Stmt
 	newWithdrawalStmt          *sql.Stmt
 	setHeightStmt              *sql.Stmt
@@ -428,6 +437,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getTableIdStmt:             q.getTableIdStmt,
 		increaseBalanceStmt:        q.increaseBalanceStmt,
 		listDatabasesStmt:          q.listDatabasesStmt,
+		listDatabasesByOwnerStmt:   q.listDatabasesByOwnerStmt,
 		listTablesStmt:             q.listTablesStmt,
 		newWithdrawalStmt:          q.newWithdrawalStmt,
 		setHeightStmt:              q.setHeightStmt,

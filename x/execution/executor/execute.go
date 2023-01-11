@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
 )
 
@@ -30,4 +31,13 @@ func (s *executor) ExecuteQuery(ctx context.Context, body *execTypes.ExecutionBo
 	}
 
 	return nil
+}
+
+func (s *executor) GetExecutables(ctx context.Context, database *databases.DatabaseIdentifier) ([]*execTypes.Executable, error) {
+	schemaName := databases.GenerateSchemaName(database.Owner, database.Name)
+	execInterface, ok := s.databases[schemaName]
+	if !ok {
+		return nil, fmt.Errorf("database id %s not found", schemaName)
+	}
+	return execInterface.ListExecutables(), nil
 }

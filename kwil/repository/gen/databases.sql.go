@@ -102,3 +102,35 @@ func (q *Queries) ListDatabases(ctx context.Context) ([]*ListDatabasesRow, error
 	}
 	return items, nil
 }
+
+const listDatabasesByOwner = `-- name: ListDatabasesByOwner :many
+SELECT
+    db_name
+FROM
+    databases
+WHERE
+    db_owner = (SELECT id FROM accounts WHERE account_address = $1)
+`
+
+func (q *Queries) ListDatabasesByOwner(ctx context.Context, accountAddress string) ([]string, error) {
+	rows, err := q.query(ctx, q.listDatabasesByOwnerStmt, listDatabasesByOwner, accountAddress)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var db_name string
+		if err := rows.Scan(&db_name); err != nil {
+			return nil, err
+		}
+		items = append(items, db_name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

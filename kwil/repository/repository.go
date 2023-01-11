@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	dbretriever "kwil/kwil/repository/db_retriever"
 	"kwil/kwil/repository/gen"
+	"kwil/kwil/repository/schema"
 	"kwil/x/sqlx/sqlclient"
 )
 
@@ -13,24 +14,24 @@ type Queries interface {
 	dbretriever.DatabaseRetriever
 	ChainSyncer
 	Accounter
+	schema.SchemaManager
 	WithTx(tx *sql.Tx) Queries
 }
 
 type queries struct {
 	db          *sqlclient.DB
 	gen         *gen.Queries
-	dbRetriever dbretriever.DatabaseRetriever
+	dbRetriever dbretriever.DatabaseRetrieverTxer
+	schema      schema.SchemaManager
 }
 
 func New(db *sqlclient.DB) Queries {
 	qrs := gen.New(db)
-
-	dbRet := dbretriever.New(qrs)
-
 	return &queries{
 		db:          db,
 		gen:         qrs,
-		dbRetriever: dbRet,
+		dbRetriever: dbretriever.New(qrs),
+		schema:      schema.New(db),
 	}
 }
 
@@ -46,12 +47,15 @@ func Prepare(ctx context.Context, db *sqlclient.DB) (Queries, error) {
 		db:          db,
 		gen:         prep,
 		dbRetriever: dbRet,
+		schema:      schema.New(db),
 	}, nil
 }
 
 func (q *queries) WithTx(tx *sql.Tx) Queries {
 	return &queries{
-		db:  q.db,
-		gen: q.gen.WithTx(tx),
+		db:          q.db,
+		gen:         q.gen.WithTx(tx),
+		dbRetriever: q.dbRetriever.WithTx(tx),
+		schema:      q.schema,
 	}
 }

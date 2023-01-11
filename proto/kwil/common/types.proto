@@ -1,0 +1,50 @@
+syntax = "proto3";
+package common;
+option go_package = "kwil/x/proto/commonpb";
+
+enum DataType {
+	INVALID_TYPE = 0;
+	STRING = 1;
+	INT32 = 2;
+	INT64 = 3;
+	BOOLEAN = 4;
+}
+
+enum AttributeType {
+	INVALID_ATTRIBUTE = 0;
+	PRIMARY_KEY = 1;
+	UNIQUE = 2;
+	NOT_NULL = 3;
+	DEFAULT = 4;
+	MIN = 5;
+	MAX = 6;
+	MIN_LENGTH = 7;
+	MAX_LENGTH = 8;
+}
+
+enum IndexType {
+    INVALID_INDEX = 0;
+    BTREE = 1;
+}
+
+enum ModifierType {
+	NO_MODIFIER = 0;
+	CALLER = 1;
+}
+
+enum ComparisonOperator {
+    OPERATOR_INVALID = 0;
+    OPERATOR_EQUAL = 1;
+    OPERATOR_NOT_EQUAL = 2;
+    OPERATOR_GREATER_THAN = 3;
+    OPERATOR_GREATER_THAN_OR_EQUAL = 4;
+    OPERATOR_LESS_THAN = 5;
+    OPERATOR_LESS_THAN_OR_EQUAL = 6;
+}
+
+enum QueryType {
+	QUERY_INVALID = 0;
+	QUERY_INSERT = 1;
+	QUERY_UPDATE = 2;
+	QUERY_DELETE = 3;
+}

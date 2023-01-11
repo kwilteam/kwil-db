@@ -16,7 +16,7 @@ type Transaction struct {
 	Fee         string                   `json:"fee"`
 	Nonce       int64                    `json:"nonce"`
 	Signature   crypto.Signature         `json:"signature"`
-	Sender      string                   `json:"from"`
+	Sender      string                   `json:"sender"`
 }
 
 func NewTx(txType transactions.PayloadType, data []byte, nonce int64) *Transaction {

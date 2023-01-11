@@ -71,3 +71,7 @@ func (q *dbRetriever) ListDatabases(ctx context.Context) ([]*databases.DatabaseI
 
 	return dbs, nil
 }
+
+func (q *dbRetriever) ListDatabasesByOwner(ctx context.Context, owner string) ([]string, error) {
+	return q.gen.ListDatabasesByOwner(ctx, owner)
+}

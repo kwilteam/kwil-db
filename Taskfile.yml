@@ -18,7 +18,7 @@ tasks:
 
   build:api:
     desc: Builds the API
-    deps: [build:api:pb, build:pricing:pb, build:deposit:pb, build:accounts:pb, build:tx:pb]
+    deps: [build:api:pb, build:pricing:pb, build:accounts:pb, build:tx:pb, build:common:pb]
     cmds:
       - go build -o ./.build/kwild ./cmd/kwild
     generates:
@@ -56,20 +56,6 @@ tasks:
     generates:
       - x/proto/pricingpb/*
 
-  build:deposit:pb:
-    desc: Compiles the protobuf for the deposit service
-    cmds:
-      - |
-        mkdir -p x/proto
-        protoc -I proto \
-        --go_out=. --go_opt module=kwil \
-        --go-grpc_out=. --go-grpc_opt module=kwil \
-        proto/kwil/depositsvc/*.proto
-    sources:
-      - proto/kwil/depositsvc/*.proto
-    generates:
-      - x/proto/depositpb/*
-
   build:accounts:pb:
     desc: Compiles the protobuf for Accounts
     cmds:
@@ -97,6 +83,21 @@ tasks:
       - proto/kwil/txsvc/*.proto
     generates:
       - x/proto/txpb/*
+
+  build:common:pb:
+    desc: Compiles common protobufs
+    cmds:
+      - |
+        mkdir -p x/proto
+        protoc -I proto \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        proto/kwil/common/*.proto
+    sources:
+      - proto/kwil/common/*.proto
+    generates:
+      - x/proto/commonpb/*
+
   
   build:sql:
     desc: Generates the SQL repository

@@ -20,8 +20,8 @@ const (
 )
 
 type Signature struct {
-	Signature []byte
-	Type      SignatureType
+	Signature []byte        `json:"signature_bytes"`
+	Type      SignatureType `json:"signature_type"`
 }
 
 func Sign(data []byte, k *ecdsa.PrivateKey) (Signature, error) {

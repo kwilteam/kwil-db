@@ -11,7 +11,7 @@ import (
 )
 
 // BuildTransaction creates the correct nonce, fee, and signs a transaction
-func (c *client) BuildTransaction(ctx context.Context, payloadType transactions.PayloadType, data any, privateKey *ecdsa.PrivateKey) (*txTypes.Transaction, error) {
+func (c *Client) BuildTransaction(ctx context.Context, payloadType transactions.PayloadType, data any, privateKey *ecdsa.PrivateKey) (*txTypes.Transaction, error) {
 	// get address from private key
 	address, err := crypto.AddressFromPrivateKey(privateKey)
 	if err != nil {
@@ -19,7 +19,7 @@ func (c *client) BuildTransaction(ctx context.Context, payloadType transactions.
 	}
 
 	// get nonce from address
-	account, err := c.GetAccount(ctx, address)
+	account, err := c.Accounts.GetAccount(ctx, address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account: %w", err)
 	}
@@ -34,7 +34,7 @@ func (c *client) BuildTransaction(ctx context.Context, payloadType transactions.
 	tx := txTypes.NewTx(payloadType, bts, account.Nonce+1)
 
 	// estimate price
-	price, err := c.EstimatePrice(ctx, tx)
+	price, err := c.Pricing.EstimateCost(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}

@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"kwil/x/cli/util"
-	"kwil/x/proto/apipb"
+	"kwil/x/types/databases"
+
+	"kwil/x/cli/client"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -19,18 +21,15 @@ func viewDatabaseCmd() *cobra.Command {
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return util.ConnectKwil(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client := apipb.NewKwilServiceClient(cc)
-				// should be two args
-				if len(args) != 2 {
-					return fmt.Errorf("view requires two arguments: owner and name")
+				c, err := client.NewClient(cc, viper.GetViper())
+				if err != nil {
+					return fmt.Errorf("error creating client: %w", err)
 				}
 
-				resp, err := client.GetMetadata(ctx, &apipb.GetMetadataRequest{
-					Owner:    args[0],
-					Database: args[1],
+				meta, err := c.Txs.GetSchema(ctx, &databases.DatabaseIdentifier{
+					Owner: args[0],
+					Name:  args[1],
 				})
-
-				meta := resp.GetDatabase()
 
 				if err != nil {
 					return err
@@ -62,7 +61,7 @@ func viewDatabaseCmd() *cobra.Command {
 
 				// print queries
 				fmt.Println("Queries:")
-				for _, q := range meta.Queries {
+				for _, q := range meta.SQLQueries {
 					fmt.Printf("  %s\n", q.Name)
 				}
 

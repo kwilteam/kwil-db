@@ -5,11 +5,32 @@ option go_package = "kwil/x/proto/txpb";
 import "google/api/annotations.proto";
 
 import "kwil/txsvc/broadcast.proto";
+import "kwil/txsvc/executables.proto";
+import "kwil/txsvc/list_db.proto";
+import "kwil/txsvc/schema.proto";
 
 service TxService {
   rpc Broadcast(BroadcastRequest) returns (BroadcastResponse) {
     option (google.api.http) = {
       get: "/api/v0/broadcast"
     };
+  }
+  
+  rpc GetSchema(GetSchemaRequest) returns (GetSchemaResponse) {
+      option (google.api.http) = {
+          get: "/api/v0/{owner}/{database}/schema"
+      };
+  }
+
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
+      option (google.api.http) = {
+          get: "/api/v0/{owner}/databases"
+      };
+  }
+
+  rpc GetExecutables(GetExecutablesRequest) returns (GetExecutablesResponse) {
+      option (google.api.http) = {
+          get: "/api/v0/{owner}/{database}/executables"
+      };
   }
 }
