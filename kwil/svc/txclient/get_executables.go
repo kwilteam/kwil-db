@@ -19,8 +19,23 @@ func (c *client) GetExecutables(ctx context.Context, db *databases.DatabaseIdent
 		return nil, fmt.Errorf("failed to get executables: %w", err)
 	}
 
-	convertedExecs := make([]*execution.Executable, len(res.Executables))
-	for _, exec := range res.Executables {
+	return convertExecutables(res.Executables)
+}
+
+func (c *client) GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error) {
+	res, err := c.txs.GetExecutablesById(ctx, &txpb.GetExecutablesByIdRequest{
+		Id: id,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get executable: %w", err)
+	}
+
+	return convertExecutables(res.Executables)
+}
+
+func convertExecutables(execs []*commonpb.Executable) ([]*execution.Executable, error) {
+	convertedExecs := make([]*execution.Executable, len(execs))
+	for _, exec := range execs {
 		convExec, err := serialize.Convert[commonpb.Executable, execution.Executable](exec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert executable: %w", err)

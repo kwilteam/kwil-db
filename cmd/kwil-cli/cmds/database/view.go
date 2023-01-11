@@ -42,9 +42,12 @@ func viewDatabaseCmd() *cobra.Command {
 					fmt.Printf("    Columns:\n")
 					for _, c := range t.Columns {
 						fmt.Printf("    %s\n", c.Name)
-						fmt.Printf("      Type: %s\n", c.Type)
+						fmt.Printf("      Type: %s\n", c.Type.String())
 						for _, a := range c.Attributes {
-							fmt.Printf("      %s\n", a)
+							fmt.Printf("      %s\n", a.Type.String())
+							if a.Value != nil {
+								fmt.Printf("        %s\n", a.Value)
+							}
 						}
 					}
 				}

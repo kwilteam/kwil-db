@@ -2,14 +2,14 @@ package client
 
 import (
 	"fmt"
+	"kwil/kwil/svc/accountsclient"
+	"kwil/kwil/svc/pricingclient"
+	"kwil/kwil/svc/txclient"
 	chainClient "kwil/x/chain/client"
 	chainClientDto "kwil/x/chain/client/dto"
 	chainClientService "kwil/x/chain/client/service"
 	"kwil/x/contracts/escrow"
 	"kwil/x/contracts/token"
-	"kwil/x/grpcx/clients/accountsclient"
-	"kwil/x/grpcx/clients/pricingclient"
-	"kwil/x/grpcx/clients/txclient"
 
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"

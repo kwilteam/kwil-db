@@ -40,23 +40,41 @@ func executeCmd() *cobra.Command {
 				}
 
 				// we will check if the user specified the database id or the database name and owner
-				isDbId := false
-				var dbName string
-				var dbOwner string
+				var executables []*execution.Executable
 
 				// get the database id
 				dbId, err := cmd.Flags().GetString("database-id")
 				if err == nil {
-					isDbId = true
+					// if we get no error, it means the user specified the database id
+					executables, err = client.Txs.GetExecutablesById(ctx, dbId)
+					if err != nil {
+						return fmt.Errorf("failed to get executables: %w", err)
+					}
 				} else {
+					// if we get an error, it means the user did not specify the database id
+					// get the database name and owner
+					dbName, err := cmd.Flags().GetString("database-name")
+					if err != nil {
+						return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
+					}
 
+					dbOwner, err := cmd.Flags().GetString("database-owner")
+					if err != nil {
+						return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
+					}
+
+					// get the executables
+					executables, err = client.Txs.GetExecutables(ctx, &databases.DatabaseIdentifier{
+						Owner: dbOwner,
+						Name:  dbName,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to get executables: %w", err)
+					}
 				}
 
-				// get the database name and owner
-				dbName, err := cmd.Flags().GetString("database-name")
-				if err != nil {
-					return fmt.Errorf("must specify a database name with the --database-name flag")
-				}
+
+
 			})
 		},
 	}
