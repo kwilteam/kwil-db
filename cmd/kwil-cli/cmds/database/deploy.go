@@ -79,5 +79,8 @@ func deployCmd() *cobra.Command {
 			})
 		},
 	}
+
+	cmd.Flags().StringP("path", "p", "", "Path to the database definition file")
+	cmd.MarkFlagRequired("path")
 	return cmd
 }

@@ -26,9 +26,22 @@ func viewDatabaseCmd() *cobra.Command {
 					return fmt.Errorf("error creating client: %w", err)
 				}
 
+				dbName, err := cmd.Flags().GetString("name")
+				if err != nil {
+					return fmt.Errorf("error getting name flag: %w", err)
+				}
+
+				dbOwner, err := cmd.Flags().GetString("owner")
+				if err != nil {
+					return fmt.Errorf("error getting owner flag: %w", err)
+				}
+				if dbOwner == "NULL" {
+					dbOwner = c.Config.Address
+				}
+
 				meta, err := c.Txs.GetSchema(ctx, &databases.DatabaseIdentifier{
-					Owner: args[0],
-					Name:  args[1],
+					Owner: dbOwner,
+					Name:  dbName,
 				})
 
 				if err != nil {
@@ -45,7 +58,7 @@ func viewDatabaseCmd() *cobra.Command {
 						fmt.Printf("      Type: %s\n", c.Type.String())
 						for _, a := range c.Attributes {
 							fmt.Printf("      %s\n", a.Type.String())
-							if a.Value != nil {
+							if a.Value != nil && a.Value != "" {
 								fmt.Printf("        %s\n", a.Value)
 							}
 						}
@@ -85,6 +98,9 @@ func viewDatabaseCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringP("name", "n", "", "The name of the database to view")
+	cmd.MarkFlagRequired("name")
+	cmd.Flags().StringP("owner", "o", "NULL", "The owner of the database to view")
 	return cmd
 }
 

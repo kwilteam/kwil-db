@@ -8,7 +8,7 @@ message Database {
 	string name = 1;
 	string owner = 2;
 	repeated Table tables = 3;
-	repeated Query queries = 4;
+	repeated Query sql_queries = 4;
 	repeated Role roles = 5;
 	repeated Index indexes = 6;
 }

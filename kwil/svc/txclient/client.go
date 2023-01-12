@@ -15,7 +15,6 @@ type TxClient interface {
 	GetSchema(ctx context.Context, db *databases.DatabaseIdentifier) (*databases.Database, error)
 	GetSchemaById(ctx context.Context, id string) (*databases.Database, error)
 	ListDatabases(ctx context.Context, address string) ([]string, error)
-	GetExecutables(ctx context.Context, db *databases.DatabaseIdentifier) ([]*execution.Executable, error)
 	GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error)
 }
 

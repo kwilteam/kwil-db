@@ -19,13 +19,13 @@ func (s *executor) ExecuteQuery(ctx context.Context, body *execTypes.ExecutionBo
 	}
 
 	// prepare query
-	args, err := db.Prepare(body.Query, body.Caller, body.Inputs)
+	stmt, args, err := db.Prepare(body.Query, body.Caller, body.Inputs)
 	if err != nil {
 		return fmt.Errorf("failed to prepare query: %w", err)
 	}
 
 	// execute query
-	_, err = s.db.ExecContext(ctx, body.Query, args...)
+	_, err = s.db.ExecContext(ctx, stmt, args...)
 	if err != nil {
 		return fmt.Errorf("failed to execute query: %w", err)
 	}

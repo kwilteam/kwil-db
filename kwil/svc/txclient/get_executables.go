@@ -5,24 +5,12 @@ import (
 	"fmt"
 	"kwil/x/proto/commonpb"
 	"kwil/x/proto/txpb"
-	"kwil/x/types/databases"
 	"kwil/x/types/execution"
 	"kwil/x/utils/serialize"
 )
 
-func (c *client) GetExecutables(ctx context.Context, db *databases.DatabaseIdentifier) ([]*execution.Executable, error) {
-	res, err := c.txs.GetExecutables(ctx, &txpb.GetExecutablesRequest{
-		Owner:    db.Owner,
-		Database: db.Name,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get executables: %w", err)
-	}
-
-	return convertExecutables(res.Executables)
-}
-
 func (c *client) GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error) {
+	fmt.Println("id: ", id)
 	res, err := c.txs.GetExecutablesById(ctx, &txpb.GetExecutablesByIdRequest{
 		Id: id,
 	})
@@ -35,13 +23,13 @@ func (c *client) GetExecutablesById(ctx context.Context, id string) ([]*executio
 
 func convertExecutables(execs []*commonpb.Executable) ([]*execution.Executable, error) {
 	convertedExecs := make([]*execution.Executable, len(execs))
-	for _, exec := range execs {
+	for i, exec := range execs {
 		convExec, err := serialize.Convert[commonpb.Executable, execution.Executable](exec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert executable: %w", err)
 		}
 
-		convertedExecs = append(convertedExecs, convExec)
+		convertedExecs[i] = convExec
 	}
 
 	return convertedExecs, nil

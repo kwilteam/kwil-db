@@ -12,7 +12,7 @@ import (
 
 type ExecutablesInterface interface {
 	CanExecute(wallet string, query string) bool
-	Prepare(query string, caller string, inputs []*execTypes.UserInput) ([]any, error)
+	Prepare(query string, caller string, inputs []*execTypes.UserInput) (string, []any, error)
 	ListExecutables() []*execTypes.Executable
 	GetIdentifier() *databases.DatabaseIdentifier
 }

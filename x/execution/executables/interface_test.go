@@ -31,7 +31,7 @@ func Test_DBInterface(t *testing.T) {
 
 	// try to prepare insert1
 	wallet := "0xbennan"
-	params, err := intfc.Prepare("insert1", wallet, mocks.Insert1Inputs)
+	_, params, err := intfc.Prepare("insert1", wallet, mocks.Insert1Inputs)
 	if err != nil {
 		t.Errorf("failed to prepare insert1: %v", err)
 	}
@@ -46,7 +46,7 @@ func Test_DBInterface(t *testing.T) {
 
 	// try to prepare insert2
 	wallet = "0xabc"
-	params, err = intfc.Prepare("insert2", wallet, mocks.Insert2Inputs)
+	_, params, err = intfc.Prepare("insert2", wallet, mocks.Insert2Inputs)
 	if err != nil {
 		t.Errorf("failed to prepare insert2: %v", err)
 	}
@@ -61,7 +61,7 @@ func Test_DBInterface(t *testing.T) {
 
 	// try to prepare update1
 	wallet = "0xbennan"
-	params, err = intfc.Prepare("update1", wallet, mocks.Update1Inputs)
+	_, params, err = intfc.Prepare("update1", wallet, mocks.Update1Inputs)
 	if err != nil {
 		t.Errorf("failed to prepare update1: %v", err)
 	}
@@ -76,7 +76,7 @@ func Test_DBInterface(t *testing.T) {
 
 	// try to prepare update2
 	wallet = "0xabc"
-	params, err = intfc.Prepare("update2", wallet, mocks.Update2Inputs)
+	_, params, err = intfc.Prepare("update2", wallet, mocks.Update2Inputs)
 	if err != nil {
 		t.Errorf("failed to prepare update2: %v", err)
 	}
@@ -90,7 +90,7 @@ func Test_DBInterface(t *testing.T) {
 
 	// try to prepare delete1
 	wallet = "0xbennan"
-	params, err = intfc.Prepare("delete1", wallet, mocks.Delete1Inputs)
+	_, params, err = intfc.Prepare("delete1", wallet, mocks.Delete1Inputs)
 	if err != nil {
 		t.Errorf("failed to prepare delete1: %v", err)
 	}
@@ -101,7 +101,7 @@ func Test_DBInterface(t *testing.T) {
 
 	// try to prepare delete2
 	wallet = "0xabc"
-	params, err = intfc.Prepare("delete2", wallet, mocks.Delete2Inputs)
+	_, params, err = intfc.Prepare("delete2", wallet, mocks.Delete2Inputs)
 	if err != nil {
 		t.Errorf("failed to prepare delete2: %v", err)
 	}

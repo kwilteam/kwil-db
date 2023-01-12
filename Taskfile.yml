@@ -12,9 +12,9 @@ tasks:
   build:cli:
     desc: Builds the CLI
     cmds:
-      - go build -o ./.build/kwil-cli ./cmd/kwil-cli
+      - go build -o ./.build/kwil ./cmd/kwil-cli
     generates:
-      - .build/kwil-cli
+      - .build/kwil
 
   build:api:
     desc: Builds the API

@@ -7,11 +7,11 @@ import (
 )
 
 // prepare prepares execution of a query.  It does not check access control rights.
-func (d *executableInterface) Prepare(query string, caller string, inputs []*execTypes.UserInput) ([]any, error) {
+func (d *executableInterface) Prepare(query string, caller string, inputs []*execTypes.UserInput) (string, []any, error) {
 	// get the executable
 	executable := d.Executables[query]
 	if executable == nil {
-		return nil, fmt.Errorf(`query "%s" does not exist`, query)
+		return "", nil, fmt.Errorf(`query "%s" does not exist`, query)
 	}
 
 	// convert user inputs to a map for easier lookup
@@ -27,7 +27,7 @@ func (d *executableInterface) Prepare(query string, caller string, inputs []*exe
 		if arg.Static {
 			defVal, err := determineDefault(arg, caller)
 			if err != nil {
-				return nil, fmt.Errorf(`invalid default for arg "%s": %w`, arg.Name, err)
+				return "", nil, fmt.Errorf(`invalid default for arg "%s": %w`, arg.Name, err)
 			}
 
 			returns[arg.Position] = defVal
@@ -37,19 +37,19 @@ func (d *executableInterface) Prepare(query string, caller string, inputs []*exe
 		// if not static, the arg must contain a corresponding user input
 		input, ok := inputMap[arg.Name]
 		if !ok {
-			return nil, fmt.Errorf(`missing user input for arg "%s"`, arg.Name)
+			return "", nil, fmt.Errorf(`missing user input for arg "%s"`, arg.Name)
 		}
 
-		// check that the user input value is convertible to the arg type
-		err := execution.DataTypes.CompareAnyToKwilType(input.Value, arg.Type)
+		// try to convert value to the arg type
+		value, err := execution.DataTypes.ConvertAny(input.Value, arg.Type)
 		if err != nil {
-			return nil, fmt.Errorf(`invalid user input type for arg "%s": %w`, arg.Name, err)
+			return "", nil, fmt.Errorf(`invalid user input for arg "%s": %w`, arg.Name, err)
 		}
 
-		returns[arg.Position] = input.Value
+		returns[arg.Position] = value
 	}
 
-	return returns, nil
+	return executable.Statement, returns, nil
 }
 
 // determineDefault will determine the default value for an arg.
