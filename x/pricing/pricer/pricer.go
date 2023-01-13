@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/pricing"
-	"kwil/x/transactions"
 	txTypes "kwil/x/types/transactions"
 )
 
@@ -32,11 +31,11 @@ func (p *pricer) GetPrice(tx *txTypes.Transaction) (string, error) {
 	var price string
 
 	switch tx.PayloadType {
-	case transactions.DEPLOY_DATABASE:
+	case txTypes.DEPLOY_DATABASE:
 		price = GetPrice(pricing.DEPLOY)
-	case transactions.DROP_DATABASE:
+	case txTypes.DROP_DATABASE:
 		price = GetPrice(pricing.DROP)
-	case transactions.EXECUTE_QUERY:
+	case txTypes.EXECUTE_QUERY:
 		price = GetPrice(pricing.QUERY)
 	default:
 		return "", fmt.Errorf("invalid payload type")

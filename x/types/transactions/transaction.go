@@ -6,20 +6,19 @@ import (
 	"encoding/binary"
 	"fmt"
 	"kwil/x/crypto"
-	"kwil/x/transactions"
 )
 
 type Transaction struct {
-	Hash        []byte                   `json:"hash"`
-	PayloadType transactions.PayloadType `json:"payload_type"`
-	Payload     []byte                   `json:"payload"`
-	Fee         string                   `json:"fee"`
-	Nonce       int64                    `json:"nonce"`
-	Signature   crypto.Signature         `json:"signature"`
-	Sender      string                   `json:"sender"`
+	Hash        []byte           `json:"hash"`
+	PayloadType PayloadType      `json:"payload_type"`
+	Payload     []byte           `json:"payload"`
+	Fee         string           `json:"fee"`
+	Nonce       int64            `json:"nonce"`
+	Signature   crypto.Signature `json:"signature"`
+	Sender      string           `json:"sender"`
 }
 
-func NewTx(txType transactions.PayloadType, data []byte, nonce int64) *Transaction {
+func NewTx(txType PayloadType, data []byte, nonce int64) *Transaction {
 	return &Transaction{
 		PayloadType: txType,
 		Payload:     data,
@@ -34,7 +33,7 @@ func (t *Transaction) Verify() error {
 	}
 
 	// verify valid payload type
-	if t.PayloadType <= transactions.INVALID_PAYLOAD_TYPE || t.PayloadType >= transactions.END_PAYLOAD_TYPE {
+	if t.PayloadType <= INVALID_PAYLOAD_TYPE || t.PayloadType >= END_PAYLOAD_TYPE {
 		return fmt.Errorf("invalid payload type")
 	}
 

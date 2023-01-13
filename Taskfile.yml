@@ -10,14 +10,14 @@ tasks:
     deps: [build:cli, build:api, build:api-gateway]
 
   build:cli:
-    desc: Builds the CLI
+    desc: Builds the kwil-cli
     cmds:
       - go build -o ./.build/kwil-cli ./cmd/kwil-cli
     generates:
       - .build/kwil-cli
 
-  build:api:
-    desc: Builds the API
+  build:kwild:
+    desc: Builds the kwild
     deps: [build:api:pb, build:pricing:pb, build:accounts:pb, build:tx:pb, build:common:pb]
     cmds:
       - go build -o ./.build/kwild ./cmd/kwild
@@ -69,7 +69,7 @@ tasks:
       - proto/kwil/accountsvc/*.proto
     generates:
       - x/proto/accountspb/*
-  
+
   build:tx:pb:
     desc: Compiles the protobuf for Txsvc
     cmds:
@@ -98,7 +98,7 @@ tasks:
     generates:
       - x/proto/commonpb/*
 
-  
+
   build:sql:
     desc: Generates the SQL repository
     cmds:
@@ -134,9 +134,10 @@ tasks:
   ############################ k8s ############################
   k8s:kwil:
     desc: Build and deploy kwil services to local k8s cluster
+    deps:
+      - build:docker:kwild
+      - build:docker:kwil-gateway
     cmds:
-      - docker build . -t kwild:latest -f docker/kwild.dockerfile
-      - docker build . -t kwil-gateway:latest -f docker/kwil-gateway.dockerfile
       - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml
 
   k8s:kwil:install:
@@ -151,6 +152,8 @@ tasks:
 
   k8s:kwild:
     desc: Build and deploy kwild to local k8s cluster
+    deps:
+      - build:docker:kwild
     cmds:
       - docker build . -t kwild:latest -f docker/kwild.dockerfile
       - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml

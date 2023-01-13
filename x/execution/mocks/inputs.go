@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	// it is important this corresponds to the queries in database.go
+	// it is important this corresponds to the queries in kwild.go
 
 	// Insert1 and Insert2 (have 1 non-static)
 	Insert1Inputs = []*execTypes.UserInput{&Param2Input}

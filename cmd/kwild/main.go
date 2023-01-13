@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"kwil/kwil/repository"
 	"kwil/kwil/svc/accountsvc"
 	"kwil/kwil/svc/healthsvc"
@@ -125,6 +126,7 @@ func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accoun
 		accountspb.RegisterAccountServiceServer(grpcServer, accountSvc)
 		pricingpb.RegisterPricingServiceServer(grpcServer, pricingSvc)
 		grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
+		logger.Info("grpc server started", zap.String("address", listener.Addr().String()))
 		return grpcServer.Serve(listener)
 	}, func(error) {
 		_ = listener.Close()

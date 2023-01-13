@@ -1,6 +1,7 @@
 package service
 
 import (
+	client2 "kwil/kwil/client"
 	"kwil/x/cfgx"
 	"kwil/x/chain"
 	"kwil/x/chain/client"
@@ -22,7 +23,7 @@ type chainClient struct {
 
 func NewChainClient(cfg cfgx.Config, prov provider.ChainProvider) (client.ChainClient, error) {
 
-	chainCode := cfg.Int64("chain-code", 0)
+	chainCode := cfg.Int64(client2.ChainCodeFlag, 0)
 	recInterval := cfg.Int64("reconnection-interval", 30)
 	reqConfs := cfg.Int64("required-confirmations", 12)
 
