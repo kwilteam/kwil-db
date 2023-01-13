@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS roles (
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
     role_name TEXT NOT NULL,
     db_id INTEGER NOT NULL REFERENCES databases (id) ON DELETE CASCADE,
-    unique (role_name)
+    unique (role_name, db_id)
 );
 
 -- join table for many-to-many relationship between roles and accounts
