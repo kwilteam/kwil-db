@@ -18,7 +18,7 @@ service TxService {
   
   rpc GetSchema(GetSchemaRequest) returns (GetSchemaResponse) {
       option (google.api.http) = {
-          get: "/api/v0/{owner}/{database}/schema"
+          get: "/api/v0/{owner}/{name}/schema"
       };
   }
 
@@ -36,7 +36,7 @@ service TxService {
 
   rpc GetExecutables(GetExecutablesRequest) returns (GetExecutablesResponse) {
       option (google.api.http) = {
-          get: "/api/v0/{owner}/{database}/executables"
+          get: "/api/v0/{owner}/{name}/executables"
       };
   }
 

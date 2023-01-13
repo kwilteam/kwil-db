@@ -16,9 +16,9 @@ func (c *client) GetAccount(ctx context.Context, address string) (accounts.Accou
 	}
 
 	return accounts.Account{
-		Address: res.Address,
-		Nonce:   res.Nonce,
-		Balance: res.Balance,
-		Spent:   res.Spent,
+		Address: res.Account.Address,
+		Nonce:   res.Account.Nonce,
+		Balance: res.Account.Balance,
+		Spent:   res.Account.Spent,
 	}, nil
 }

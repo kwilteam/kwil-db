@@ -5,21 +5,24 @@ import (
 	"fmt"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
+	"strings"
 )
 
-func (s *executor) ExecuteQuery(ctx context.Context, body *execTypes.ExecutionBody) error {
+func (s *executor) ExecuteQuery(ctx context.Context, body *execTypes.ExecutionBody, caller string) error {
+	caller = strings.ToLower(caller)
+
 	db, ok := s.databases[body.Database]
 	if !ok {
 		return fmt.Errorf("database %s not found", body.Database)
 	}
 
 	// check if user can execute
-	if !db.CanExecute(body.Caller, body.Query) {
-		return fmt.Errorf("user %s cannot execute %s", body.Caller, body.Query)
+	if !db.CanExecute(caller, body.Query) {
+		return fmt.Errorf("user %s cannot execute %s", caller, body.Query)
 	}
 
 	// prepare query
-	stmt, args, err := db.Prepare(body.Query, body.Caller, body.Inputs)
+	stmt, args, err := db.Prepare(body.Query, caller, body.Inputs)
 	if err != nil {
 		return fmt.Errorf("failed to prepare query: %w", err)
 	}

@@ -114,5 +114,4 @@ func CleanIndex(i *databases.Index) {
 func CleanExecutionBody(body *execTypes.ExecutionBody) {
 	body.Database = strings.ToLower(body.Database)
 	body.Query = strings.ToLower(body.Query)
-	body.Caller = strings.ToLower(body.Caller)
 }

@@ -81,8 +81,6 @@ func executeCmd() *cobra.Command {
 					return fmt.Errorf("failed to get executables: %w", err)
 				}
 
-				fmt.Println(len(executables))
-
 				// get the query from the executables
 				var query *execution.Executable
 				for _, executable := range executables {
@@ -118,7 +116,6 @@ func executeCmd() *cobra.Command {
 				body := &execution.ExecutionBody{
 					Database: dbId,
 					Query:    query.Name,
-					Caller:   client.Config.Address,
 					Inputs:   userIns,
 				}
 

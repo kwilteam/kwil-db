@@ -8,7 +8,7 @@ message Database {
 	string name = 1;
 	string owner = 2;
 	repeated Table tables = 3;
-	repeated Query sql_queries = 4;
+	repeated SQLQuery sql_queries = 4;
 	repeated Role roles = 5;
 	repeated Index indexes = 6;
 }
@@ -29,7 +29,7 @@ message Attribute {
 	string value = 2;
 }
 
-message Query {
+message SQLQuery {
 	string name = 1;
 	QueryType type = 2;
 	string table = 3;

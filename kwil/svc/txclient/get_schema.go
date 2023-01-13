@@ -11,8 +11,8 @@ import (
 
 func (c *client) GetSchema(ctx context.Context, db *databases.DatabaseIdentifier) (*databases.Database, error) {
 	res, err := c.txs.GetSchema(ctx, &txpb.GetSchemaRequest{
-		Owner:    db.Owner,
-		Database: db.Name,
+		Owner: db.Owner,
+		Name:  db.Name,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema: %w", err)

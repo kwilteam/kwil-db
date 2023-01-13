@@ -5,7 +5,7 @@ option go_package = "kwil/x/proto/txpb";
 import "kwil/common/executable.proto";
 
 message GetExecutablesRequest {
-    string database = 1;
+    string name = 1;
     string owner = 2;
 }
 

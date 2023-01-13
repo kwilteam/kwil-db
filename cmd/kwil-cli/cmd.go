@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"kwil/cmd/kwil-cli/cmds/configure"
-	"kwil/cmd/kwil-cli/cmds/connect"
 	"kwil/cmd/kwil-cli/cmds/database"
 	"kwil/cmd/kwil-cli/cmds/fund"
 	"kwil/cmd/kwil-cli/cmds/utils"
@@ -26,7 +25,6 @@ func Execute() error {
 	cobra.OnInitialize(initConfig)
 
 	cmd.AddCommand(
-		connect.NewCmdConnect(),
 		fund.NewCmdFund(),
 		configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
