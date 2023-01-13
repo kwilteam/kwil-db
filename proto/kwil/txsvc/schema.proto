@@ -6,7 +6,7 @@ import "kwil/common/database.proto";
 
 message GetSchemaRequest {
 	string owner = 1;
-	string database = 2;
+	string name = 2;
 }
 
 message GetSchemaResponse {

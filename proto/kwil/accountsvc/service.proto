@@ -3,6 +3,7 @@ package accountsvc;
 option go_package = "kwil/x/proto/accountspb";
 
 import "google/api/annotations.proto";
+import "kwil/common/account.proto";
 
 service AccountService {
     rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {
@@ -17,8 +18,5 @@ message GetAccountRequest {
 }
 
 message GetAccountResponse {
-    string address = 1;
-    string balance = 2;
-    string spent = 3;
-    int64 nonce = 4;
+    common.Account account = 1;
 }

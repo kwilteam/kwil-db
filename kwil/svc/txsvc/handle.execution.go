@@ -42,7 +42,7 @@ func (s *Service) handleExecution(ctx context.Context, tx *transactions.Transact
 	}
 
 	// execute
-	err = s.executor.ExecuteQuery(ctx, payload)
+	err = s.executor.ExecuteQuery(ctx, payload, tx.Sender)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}

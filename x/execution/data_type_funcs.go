@@ -125,3 +125,18 @@ func (c *dataTypes) StringToAnyGolangType(s string, kt DataType) (any, error) {
 		return nil, fmt.Errorf(`unknown type: "%s"`, s)
 	}
 }
+
+func (c *dataTypes) ConvertAny(v any, t DataType) (any, error) {
+	switch t {
+	case STRING:
+		return conv.String(v)
+	case INT32:
+		return conv.Int32(v)
+	case INT64:
+		return conv.Int64(v)
+	case BOOLEAN:
+		return conv.Bool(v)
+	default:
+		return nil, fmt.Errorf(`unknown type: "%s"`, t.String())
+	}
+}

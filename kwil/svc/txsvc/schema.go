@@ -13,7 +13,7 @@ import (
 func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*txpb.GetSchemaResponse, error) {
 	return s.retrieveDatabaseSchema(ctx, &databases.DatabaseIdentifier{
 		Owner: req.Owner,
-		Name:  req.Database,
+		Name:  req.Name,
 	})
 }
 
@@ -58,7 +58,7 @@ func (s *Service) ListDatabases(ctx context.Context, req *txpb.ListDatabasesRequ
 }
 
 func (s *Service) GetExecutables(ctx context.Context, req *txpb.GetExecutablesRequest) (*txpb.GetExecutablesResponse, error) {
-	id := databases.GenerateSchemaName(req.Owner, req.Database)
+	id := databases.GenerateSchemaName(req.Owner, req.Name)
 	return s.retrieveExecutables(id)
 }
 
