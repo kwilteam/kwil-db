@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/types/databases"
+
+	"go.uber.org/zap"
 )
 
 func (s *executor) DropDatabase(ctx context.Context, database *databases.DatabaseIdentifier) error {
@@ -19,7 +21,7 @@ func (s *executor) DropDatabase(ctx context.Context, database *databases.Databas
 
 	err = s.Untrack(ctx, database.Name, database.Owner)
 	if err != nil {
-		return fmt.Errorf("error untracking database: %d", err)
+		s.log.Error("error untracking database", zap.String("database", database.Name), zap.String("error", err.Error()))
 	}
 
 	// drop the database from the databases table

@@ -1,0 +1,14 @@
+syntax = "proto3";
+package txsvc;
+option go_package = "kwil/x/proto/txpb";
+
+import "kwil/common/database.proto";
+
+message ValidateSchemaRequest {
+    common.Database schema = 1;
+}
+
+message ValidateSchemaResponse {
+    bool valid = 1;
+    string error = 2;
+}

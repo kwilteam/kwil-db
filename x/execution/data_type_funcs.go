@@ -62,7 +62,7 @@ func (c *dataTypes) GolangToKwilType(k reflect.Kind) (DataType, error) {
 // Takes the `any` golang type and converts it to a Kwil Type
 func (c *dataTypes) AnyToKwilType(val any) (DataType, error) {
 	if val == nil {
-		return INVALID_DATA_TYPE, fmt.Errorf(`cannot convert nil to Kwil Type`)
+		val = ""
 	}
 
 	valType := reflect.TypeOf(val).Kind()

@@ -22,9 +22,9 @@ func GenerateTableDDL(t *databases.Table, schemaName string) ([]string, error) {
 
 		// generate attribute alter statements
 		for _, attr := range col.Attributes {
-			if attr.Value == nil {
+			/*if attr.Value == nil {
 				continue
-			}
+			}*/
 
 			column.WithAttribute(attr.Type, attr.Value)
 		}
