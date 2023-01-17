@@ -13,26 +13,12 @@ var (
 		Short:   "manage databases",
 		Long:    "Database is a command that contains subcommands for interacting with databases",
 	}
-	deployCmd = &cobra.Command{
-		Use:   "deploy",
-		Short: "Deploy a database",
-		RunE:  cmdDeploy,
-	}
-	dropCmd = &cobra.Command{
-		Use:   "drop",
-		Short: "Drops a database",
-		RunE:  cmdDrop,
-	}
 )
 
 func NewCmdDatabase() *cobra.Command {
-	deployCmd.Flags().StringP("path", "p", "", "Path to the database definition file")
-	deployCmd.MarkFlagRequired("path")
-	rootCmd.AddCommand(deployCmd)
-
-	rootCmd.AddCommand(dropCmd)
-
 	rootCmd.AddCommand(
+		deployCmd(),
+		dropCmd(),
 		viewDatabaseCmd(),
 		executeCmd(),
 		listCmd(),
