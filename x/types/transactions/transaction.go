@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"kwil/x/crypto"
 )
@@ -29,7 +30,7 @@ func NewTx(txType PayloadType, data []byte, nonce int64) *Transaction {
 
 func (t *Transaction) Verify() error {
 	if !bytes.Equal(t.Hash, t.generateHash()) {
-		return fmt.Errorf("invalid hash")
+		return fmt.Errorf("invalid hash. received %s, expected %s", hex.EncodeToString(t.Hash), hex.EncodeToString(t.generateHash()))
 	}
 
 	// verify valid payload type

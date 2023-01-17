@@ -52,7 +52,7 @@ func testTables(t *testing.T, db *databases.Database) {
 
 	// try adding a boolean to a min attribute
 	db.Tables[0].Columns[0].Attributes[0].Type = execution.MIN
-	db.Tables[0].Columns[0].Attributes[0].Value = true
+	db.Tables[0].Columns[0].Attributes[0].Value = "true"
 	err = validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for invalid attribute value")

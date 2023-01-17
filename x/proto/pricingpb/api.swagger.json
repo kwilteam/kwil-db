@@ -108,7 +108,7 @@
         "fee": {
           "type": "string"
         },
-        "Sender": {
+        "sender": {
           "type": "string"
         }
       }

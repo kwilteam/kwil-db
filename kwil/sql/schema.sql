@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS tables (
     id SERIAL PRIMARY KEY,
     db_id INTEGER NOT NULL NOT NULL REFERENCES databases (id) ON DELETE CASCADE,
     table_name TEXT NOT NULL,
-    unique (db_id, table_name)
+    unique (table_name, db_id)
 );
 
 CREATE TABLE IF NOT EXISTS columns (
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS columns (
     table_id INTEGER NOT NULL REFERENCES tables (id) ON DELETE CASCADE,
     column_name TEXT NOT NULL,
     column_type INTEGER NOT NULL,
-    unique (table_id, column_name)
+    unique (column_name, table_id)
 );
 
 CREATE TABLE IF NOT EXISTS attributes (
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS queries (
     query_name TEXT NOT NULL,
     query BYTEA NOT NULL,
     db_id INTEGER NOT NULL REFERENCES databases (id) ON DELETE CASCADE, 
-    unique (query_name)
+    unique (query_name, db_id)
 );
 
 -- join table for many-to-many relationship between roles and queries

@@ -2,6 +2,8 @@ package execution
 
 import (
 	"fmt"
+
+	"github.com/cstockton/go-conv"
 )
 
 type attributes struct{}
@@ -29,4 +31,28 @@ func (c *attributes) ConvertAttribute(s string) (AttributeType, error) {
 		return MAX_LENGTH, nil
 	}
 	return INVALID_ATTRIBUTE_TYPE, fmt.Errorf(`unknown attribute: "%s"`, s)
+}
+
+// converts the passed type to the required type for the specified attribute
+func (c *attributes) ConvertAnyToValidAttributeType(v any, attribute AttributeType) (any, error) {
+	switch attribute {
+	case PRIMARY_KEY:
+		return nil, nil
+	case UNIQUE:
+		return nil, nil
+	case NOT_NULL:
+		return nil, nil
+	case DEFAULT:
+		return v, nil
+	case MIN:
+		return conv.Int64(v)
+	case MAX:
+		return conv.Int64(v)
+	case MIN_LENGTH:
+		return conv.Int64(v)
+	case MAX_LENGTH:
+		return conv.Int64(v)
+	}
+
+	return nil, fmt.Errorf(`unknown attribute: "%s"`, attribute.String())
 }

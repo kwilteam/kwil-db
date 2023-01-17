@@ -11,10 +11,13 @@ import (
 )
 
 func (c *Client) DeployDatabase(ctx context.Context, db *databases.Database) (*transactions.Response, error) {
-	clean.CleanDatabase(db)
+	err := clean.CleanDatabase(db)
+	if err != nil {
+		return nil, fmt.Errorf("error on database: %w", err)
+	}
 
 	// validate the database
-	err := validation.ValidateDatabase(db)
+	err = validation.ValidateDatabase(db)
 	if err != nil {
 		return nil, fmt.Errorf("error on database: %w", err)
 	}

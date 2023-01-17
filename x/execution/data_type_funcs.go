@@ -127,6 +127,10 @@ func (c *dataTypes) StringToAnyGolangType(s string, kt DataType) (any, error) {
 }
 
 func (c *dataTypes) ConvertAny(v any, t DataType) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+
 	switch t {
 	case STRING:
 		return conv.String(v)

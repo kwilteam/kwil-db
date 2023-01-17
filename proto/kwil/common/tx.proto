@@ -9,7 +9,7 @@ message Tx {
     int64 nonce = 4;
     Signature signature = 5;
     string fee = 6;
-    string Sender = 7;
+    string sender = 7;
 }
 
 message Signature {

@@ -1,6 +1,7 @@
 package clean
 
 import (
+	"fmt"
 	"kwil/x/execution"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
@@ -10,11 +11,14 @@ import (
 // Clean cleans the database.
 // Currently, that just entails lowercasing all the strings (besides default values), but
 // in the future, it could do more.
-func CleanDatabase(db *databases.Database) {
+func CleanDatabase(db *databases.Database) error {
 	db.Name = strings.ToLower(db.Name)
 	db.Owner = strings.ToLower(db.Owner)
 	for _, tbl := range db.Tables {
-		CleanTable(tbl)
+		err := CleanTable(tbl)
+		if err != nil {
+			return err
+		}
 	}
 	for _, qry := range db.SQLQueries {
 		CleanSQLQuery(qry)
@@ -25,25 +29,37 @@ func CleanDatabase(db *databases.Database) {
 	for _, index := range db.Indexes {
 		CleanIndex(index)
 	}
+
+	return nil
 }
 
 // Clean cleans the table.
-func CleanTable(tbl *databases.Table) {
+func CleanTable(tbl *databases.Table) error {
 	tbl.Name = strings.ToLower(tbl.Name)
 	for _, col := range tbl.Columns {
-		CleanColumn(col)
+		err := CleanColumn(col)
+		if err != nil {
+			return fmt.Errorf("error in table %s: %w", tbl.Name, err)
+		}
 	}
+
+	return nil
 }
 
 // Clean cleans the column.
-func CleanColumn(col *databases.Column) {
+func CleanColumn(col *databases.Column) error {
 	col.Name = strings.ToLower(col.Name)
 	if col.Type > execution.END_DATA_TYPE || col.Type < execution.INVALID_DATA_TYPE { // this should get caught by validation, but just in case
 		col.Type = execution.INVALID_DATA_TYPE
 	}
 	for i := range col.Attributes {
 		CleanAttribute(col.Attributes[i])
+		err := AssertAttributeType(col.Attributes[i], col.Type)
+		if err != nil {
+			return fmt.Errorf("error in column %s: %w", col.Name, err)
+		}
 	}
+	return nil
 }
 
 // Clean cleans the attribute.

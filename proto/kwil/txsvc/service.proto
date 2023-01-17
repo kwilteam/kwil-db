@@ -12,7 +12,8 @@ import "kwil/txsvc/schema.proto";
 service TxService {
   rpc Broadcast(BroadcastRequest) returns (BroadcastResponse) {
     option (google.api.http) = {
-      get: "/api/v0/broadcast"
+        post: "/api/v0/broadcast",
+        body: "*"
     };
   }
   

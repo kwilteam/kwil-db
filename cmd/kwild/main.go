@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"kwil/kwil/repository"
 	"kwil/kwil/svc/accountsvc"
 	"kwil/kwil/svc/healthsvc"
@@ -26,6 +25,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"go.uber.org/zap"
 
 	"google.golang.org/grpc/health/grpc_health_v1"
 

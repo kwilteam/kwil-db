@@ -1,11 +1,12 @@
 package grpcx
 
 import (
+	"kwil/x/logx"
+
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"kwil/x/logx"
 )
 
 func NewServer(logger logx.Logger) *grpc.Server {
@@ -17,6 +18,7 @@ func NewServer(logger logx.Logger) *grpc.Server {
 		)),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			grpc_zap.UnaryServerInterceptor(l),
+			BodyLoggerInterceptor(l),
 		)),
 	)
 }

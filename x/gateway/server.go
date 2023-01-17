@@ -2,16 +2,21 @@ package gateway
 
 import (
 	"context"
+	"fmt"
+	"kwil/x/gateway/middleware"
+	"kwil/x/graphql"
+	"kwil/x/logx"
+	"kwil/x/proto/accountspb"
+	"kwil/x/proto/apipb"
+	"kwil/x/proto/pricingpb"
+	"kwil/x/proto/txpb"
+	"net/http"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"kwil/x/gateway/middleware"
-	"kwil/x/graphql"
-	"kwil/x/logx"
-	"kwil/x/proto/apipb"
-	"net/http"
 )
 
 type GWServer struct {
@@ -51,7 +56,20 @@ func (g *GWServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
 	g.logger.Info("grpc endpoint configured", zap.String("endpoint", viper.GetString(GrpcEndpointName)))
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	return apipb.RegisterKwilServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointName), opts)
+	err := txpb.RegisterTxServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointName), opts)
+	if err != nil {
+		return fmt.Errorf("failed to register tx service handler: %w", err)
+	}
+	err = accountspb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointName), opts)
+	if err != nil {
+		return fmt.Errorf("failed to register account service handler: %w", err)
+	}
+	err = pricingpb.RegisterPricingServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointName), opts)
+	if err != nil {
+		return fmt.Errorf("failed to register pricing service handler: %w", err)
+	}
+
+	return nil
 }
 
 func (g *GWServer) SetupHttpSvc(ctx context.Context) error {

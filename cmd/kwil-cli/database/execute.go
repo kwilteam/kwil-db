@@ -16,6 +16,31 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	ExecuteCmdLong = `Execute executes a query against the specified database.  The query name is
+	specified as the first argument, and the query a arguments are specified after.
+	In order to specify an argument, you first need to specify the argument name.
+	You then specify the argument type.
+
+	For example, if I have a query name "create_user" that takes two arguments: name and age.
+	I would specify the query as follows:
+
+	create_user name satoshi age 32
+
+	You specify the database to execute this against with the --database-name flag, and
+	the owner with the --database-owner flag.
+
+	You can also specify the database by passing the database id with the --database-id flag.
+
+	For example:
+
+	create_user name satoshi age 32 --database-name mydb --database-owner 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D
+
+	OR
+
+	create_user name satoshi age 32 --database-id x1234`
+)
+
 func executeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "execute",

@@ -8,7 +8,7 @@ import "kwil/common/account.proto";
 service AccountService {
     rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {
         option (google.api.http) = {
-            get: "/api/v0/{wallet}/account"
+            get: "/api/v0/{address}/account"
         };
     }
 }

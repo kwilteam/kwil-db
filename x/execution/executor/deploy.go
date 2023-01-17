@@ -22,10 +22,13 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 	}
 
 	// clean database
-	clean.CleanDatabase(database)
+	err := clean.CleanDatabase(database)
+	if err != nil {
+		return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
+	}
 
 	// validate database
-	err := s.ValidateDatabase(database)
+	err = s.ValidateDatabase(database)
 	if err != nil {
 		return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
 	}
@@ -256,6 +259,10 @@ func (d *dbCreator) buildDatabase(ctx context.Context) error {
 	// execute ddl
 	_, err = d.tx.ExecContext(ctx, ddl)
 	if err != nil {
+		err2 := d.dao.DropSchema(ctx, d.database.GetSchemaName())
+		if err2 != nil {
+			return fmt.Errorf("error dropping schema on deployment failure: drop schema error: %w.  deployment error: %w", err2, err)
+		}
 		return fmt.Errorf("error executing ddl: %w", err)
 	}
 

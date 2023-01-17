@@ -17,7 +17,11 @@ func Test_GenerateDDL(t *testing.T) {
 	}
 
 	// validate
-	clean.CleanDatabase(&mocks.Db1)
+	err = clean.CleanDatabase(&mocks.Db1)
+	if err != nil {
+		t.Errorf("failed to clean database: %v", err)
+	}
+
 	err = validation.ValidateDatabase(&mocks.Db1)
 	if err != nil {
 		t.Errorf("failed to validate database: %v", err)

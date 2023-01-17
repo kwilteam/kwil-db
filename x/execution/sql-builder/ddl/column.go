@@ -24,7 +24,7 @@ type typePicker interface {
 
 type ColumnBuilder interface {
 	builder
-	WithAttribute(execution.AttributeType, ...any) ColumnBuilder
+	WithAttribute(execution.AttributeType, any) ColumnBuilder
 	BuildAttributes(schema string, table string) ([]string, error)
 	GetName() string
 }
@@ -50,7 +50,7 @@ func (b *Column) GetName() string {
 }
 
 // Attributes
-func (c *Column) WithAttribute(attr execution.AttributeType, value ...any) ColumnBuilder {
+func (c *Column) WithAttribute(attr execution.AttributeType, value any) ColumnBuilder {
 	c.attributes[attr] = value
 	return c
 }
