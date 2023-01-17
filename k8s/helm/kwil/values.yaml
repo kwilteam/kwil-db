@@ -93,17 +93,6 @@ kwil:
   cors: ""
   healthcheckKey: "this should be rotated every deployment"
 
-hasura:
-  # overwrite postgresql setting
-  postgresql:
-    enabled: false # for dependency
-
-kwild:
-  # overwrite postgresql setting
-  # default use kwild's postgres
-  postgresql:
-    enabled: true # for dependency
-
 # overwrite postgresql global setting
 global:
   kwild:

@@ -86,6 +86,11 @@ affinity: {}
 containerPorts:
   kwild: 50051
 
+hasura:
+  # overwrite postgresql setting
+  postgresql:
+    enabled: false # for dependency
+
 # overwrite postgresql setting
 postgresql:
   enabled: true # for dependency
@@ -105,7 +110,7 @@ postgresql:
           set -u
           #########
           set -x
-          POSTGRES_USER=${POSTGRESQL_USERNAME} 
+          POSTGRES_USER=${POSTGRESQL_USERNAME}
           POSTGRES_PASSWORD=${POSTGRESQL_PASSWORD}
           ########
           function create_user_and_database() {
@@ -124,8 +129,8 @@ postgresql:
             echo "  Setting up master database '$database'"
             #########
             PGPASSWORD=${POSTGRES_PASSWORD} psql -v ON_ERROR_STOP=1 --username $POSTGRES_USER -d "$database" -w <<-EOSQL
-          
-          
+
+
             CREATE TABLE IF NOT EXISTS accounts (
                 id serial PRIMARY KEY,
                 account_address text NOT NULL UNIQUE,
@@ -223,7 +228,7 @@ postgresql:
                 id SERIAL PRIMARY KEY,
                 query_name TEXT NOT NULL,
                 query BYTEA NOT NULL,
-                db_id INTEGER NOT NULL REFERENCES databases (id) ON DELETE CASCADE, 
+                db_id INTEGER NOT NULL REFERENCES databases (id) ON DELETE CASCADE,
                 unique (query_name, db_id)
             );
 

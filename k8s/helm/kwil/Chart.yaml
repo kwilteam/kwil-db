@@ -24,9 +24,6 @@ version: 0.1.0
 appVersion: "1.16.0"
 
 dependencies:
-  - name: hasura
-    version: ~0.1.0
-    repository: "file://../hasura"
   - name: kwild
     version: ~0.1.0
     repository: "file://../kwild"

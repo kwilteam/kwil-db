@@ -19,7 +19,6 @@ helm repo add bitnami https://charts.bitnami.com/bitnami
 helm dependency update k8s/helm/hasura
 helm dependency update k8s/helm/kwild
 helm dependency update k8s/helm/kwil
-
 ```
 
 ## local dev
@@ -42,32 +41,32 @@ Modify `kwil/dev-values.yaml` to overwrite default values for easier local devel
 
 ## chart development
 
-Any sub-chart changes, need to call `helm dep update PARENT-CHART`.
+⚠️ Any sub-chart changes, need to call `helm dep update PARENT-CHART`.
 
 ## charts dependencies
 
 ```
-                     +--------------+
-                     |              |
-        +------------+      kwil    +-----------+
-        |            |      (gw)    |           |
-        |            --------+------+           |
-        |                                       |
-        |                                       |
-        |                                       |
-        |                                       |
-        v                                       v
-+-------+------+                       +--------+------+
-|              |                       |               |
-|     kwild    |                       |     hasura    |
-|     (grpc)   |                       |    (graphql)  |
-+-------+------+                       +--------+------+        
-        |                                       |
-        |                                       |
-        v                                       |
-+-------+------+                                |
-|              |                                |
-|  PostgreSQL  |<- - - - - - - - - - - - - - - -+        
+              +--------------+
+              |              |
+              +      kwil    +
+              |      (gw)    |
+              +-------+------+
+                      |
+        +-------------+-   -   -   -+
+        |                           |
+        |                           |
+        v                           v
++-------+------+           +--------+------+
+|              |           |               |
+|     kwild    +----------->     hasura    |
+|     (grpc)   |           |    (graphql)  |
++-------+------+           +--------+------+
+        |                           |
+        |                           |
+        v                           |
++-------+------+                    |
+|              |                    |
+|  PostgreSQL  |<- - - - - - - - - -+
 | (local/aws)  |
 +--------------+
 ```
@@ -76,4 +75,4 @@ Every chart could be deployed alone with its own dependency, eg. if you deploy `
 
 When deploy `kwil` locally, only one postgres instance will be created and shared between `kwild` and `hasura`.
 
-When deploy `kwil` with an existing postgres(local or cloud), you need to overwrite default values, take a look at `kwil/staging-values.yaml` for reference.  
+When deploy `kwil` with an existing postgres(local or cloud), you need to overwrite default values, take a look at `kwil/staging-values.yaml` for reference.

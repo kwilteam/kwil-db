@@ -5,6 +5,8 @@ metadata:
   labels:
     {{- include "kwild.labels" . | nindent 4 }}
 data:
+  {{- $graphqlHost := printf "%s-hasura" .Release.Name }}
+  GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) | quote }}
   {{- if and (not .Values.postgresql.enabled) (.Values.global.postgres.enabled )}}
   PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host .Values.global.postgres.port .Values.global.kwild.database }}
   {{- else -}}

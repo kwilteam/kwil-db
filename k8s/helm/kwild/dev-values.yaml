@@ -5,6 +5,12 @@ service:
   nodePorts:
     kwild: 32101
 
+hasura:
+  service:
+    type: NodePort
+    # comment nodePorts to enable multi instances on local machine
+    nodePorts:
+      hasura: 32100
 
 postgresql:
   primary:

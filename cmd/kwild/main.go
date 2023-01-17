@@ -155,6 +155,11 @@ func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accoun
 func main() {
 	logger := logx.New()
 
+	viper.BindEnv(hasura.GraphqlEndpointName, hasura.EndpointEnv)
+	// TODO: use cobra
+	//cmd.PersistentFlags().String(hasura.GraphqlEndpointName, defaultGraphqlEndpoint, "GraphQl server endpoint")
+	//viper.BindPFlag(hasura.GraphqlEndpointName, cmd.PersistentFlags().Lookup(hasura.GraphqlEndpointName))
+
 	stop := func(err error) {
 		logger.Sugar().Error(err)
 		os.Exit(1)
