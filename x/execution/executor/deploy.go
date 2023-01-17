@@ -36,30 +36,21 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 	// tx to be used to store database
 	tx, err := s.db.BeginTx(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf(`error creating transaction when deploying database "%s": %w`, database.GetSchemaName(), err)
 	}
 
-	/*
-
-		for _, table := range database.Tables {
-			// track tables
-			err = s.hasura.TrackTable(hasura.DefaultSource, schemaName, table.Name)
-			if err != nil {
-				return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
-			}
-		}
-	*/
+	err = s.Track(database)
+	if err != nil {
+		return fmt.Errorf(`error tracking database "%s": %w`, database.GetSchemaName(), err)
+	}
 
 	// manages the creation of the database
-	creator, err := s.newDbCreator(ctx, database, tx)
-	if err != nil {
-		return err
-	}
+	creator := s.newDbCreator(ctx, database, tx)
 
 	// store database
 	err = creator.Store(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf(`error storing database "%s": %w`, database.GetSchemaName(), err)
 	}
 
 	// commit tx
@@ -87,13 +78,13 @@ type dbCreator struct {
 }
 
 // newDbCreator creates a new dbCreator for storing the given database
-func (s *executor) newDbCreator(ctx context.Context, db *databases.Database, tx *sql.Tx) (*dbCreator, error) {
+func (s *executor) newDbCreator(ctx context.Context, db *databases.Database, tx *sql.Tx) *dbCreator {
 	dao := s.dao.WithTx(tx)
 	return &dbCreator{
 		database: db,
 		dao:      dao,
 		tx:       tx,
-	}, nil
+	}
 }
 
 // Store calls all of the internal store methods in the required order

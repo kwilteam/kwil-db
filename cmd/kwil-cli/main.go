@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/manifoldco/promptui"
-	"github.com/spf13/cobra"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/configure"
 	"kwil/cmd/kwil-cli/connect"
@@ -11,6 +9,9 @@ import (
 	"kwil/cmd/kwil-cli/fund"
 	"kwil/cmd/kwil-cli/utils"
 	"os"
+
+	"github.com/manifoldco/promptui"
+	"github.com/spf13/cobra"
 )
 
 func Execute() error {
@@ -29,6 +30,8 @@ func Execute() error {
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),
 	)
+
+	common.BindKwilEnv(cmd)
 
 	if err := cmd.Execute(); err != nil {
 		if err == promptui.ErrInterrupt {
