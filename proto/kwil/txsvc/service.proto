@@ -8,6 +8,7 @@ import "kwil/txsvc/broadcast.proto";
 import "kwil/txsvc/executables.proto";
 import "kwil/txsvc/list_db.proto";
 import "kwil/txsvc/schema.proto";
+import "kwil/txsvc/validate.proto";
 
 service TxService {
   rpc Broadcast(BroadcastRequest) returns (BroadcastResponse) {
@@ -44,6 +45,13 @@ service TxService {
   rpc GetExecutablesById(GetExecutablesByIdRequest) returns (GetExecutablesResponse) {
       option (google.api.http) = {
           get: "/api/v0/{id}/executables"
+      };
+  }
+
+  rpc ValidateSchema(ValidateSchemaRequest) returns (ValidateSchemaResponse) {
+      option (google.api.http) = {
+          post: "/api/v0/schema/validate",
+          body: "*"
       };
   }
 }

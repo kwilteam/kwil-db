@@ -11,6 +11,7 @@ import (
 	"kwil/x/types/databases"
 
 	"github.com/cstockton/go-conv"
+	"go.uber.org/zap"
 )
 
 func (s *executor) DeployDatabase(ctx context.Context, database *databases.Database) error {
@@ -39,11 +40,6 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 		return fmt.Errorf(`error creating transaction when deploying database "%s": %w`, database.GetSchemaName(), err)
 	}
 
-	err = s.Track(database)
-	if err != nil {
-		return fmt.Errorf(`error tracking database "%s": %w`, database.GetSchemaName(), err)
-	}
-
 	// manages the creation of the database
 	creator := s.newDbCreator(ctx, database, tx)
 
@@ -57,6 +53,11 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
+	}
+
+	err = s.Track(database)
+	if err != nil {
+		s.log.Error("error tracking database", zap.String("database", database.GetSchemaName()), zap.Error(err))
 	}
 
 	// we add the database after tx commit since this only gets emptied when a DB is deleted or when the server is restarted

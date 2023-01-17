@@ -28,6 +28,7 @@ type TxServiceClient interface {
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
 	GetExecutables(ctx context.Context, in *GetExecutablesRequest, opts ...grpc.CallOption) (*GetExecutablesResponse, error)
 	GetExecutablesById(ctx context.Context, in *GetExecutablesByIdRequest, opts ...grpc.CallOption) (*GetExecutablesResponse, error)
+	ValidateSchema(ctx context.Context, in *ValidateSchemaRequest, opts ...grpc.CallOption) (*ValidateSchemaResponse, error)
 }
 
 type txServiceClient struct {
@@ -92,6 +93,15 @@ func (c *txServiceClient) GetExecutablesById(ctx context.Context, in *GetExecuta
 	return out, nil
 }
 
+func (c *txServiceClient) ValidateSchema(ctx context.Context, in *ValidateSchemaRequest, opts ...grpc.CallOption) (*ValidateSchemaResponse, error) {
+	out := new(ValidateSchemaResponse)
+	err := c.cc.Invoke(ctx, "/txsvc.TxService/ValidateSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TxServiceServer is the server API for TxService service.
 // All implementations must embed UnimplementedTxServiceServer
 // for forward compatibility
@@ -102,6 +112,7 @@ type TxServiceServer interface {
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
 	GetExecutables(context.Context, *GetExecutablesRequest) (*GetExecutablesResponse, error)
 	GetExecutablesById(context.Context, *GetExecutablesByIdRequest) (*GetExecutablesResponse, error)
+	ValidateSchema(context.Context, *ValidateSchemaRequest) (*ValidateSchemaResponse, error)
 	mustEmbedUnimplementedTxServiceServer()
 }
 
@@ -126,6 +137,9 @@ func (UnimplementedTxServiceServer) GetExecutables(context.Context, *GetExecutab
 }
 func (UnimplementedTxServiceServer) GetExecutablesById(context.Context, *GetExecutablesByIdRequest) (*GetExecutablesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetExecutablesById not implemented")
+}
+func (UnimplementedTxServiceServer) ValidateSchema(context.Context, *ValidateSchemaRequest) (*ValidateSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateSchema not implemented")
 }
 func (UnimplementedTxServiceServer) mustEmbedUnimplementedTxServiceServer() {}
 
@@ -248,6 +262,24 @@ func _TxService_GetExecutablesById_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TxService_ValidateSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).ValidateSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/txsvc.TxService/ValidateSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).ValidateSchema(ctx, req.(*ValidateSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TxService_ServiceDesc is the grpc.ServiceDesc for TxService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -278,6 +310,10 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetExecutablesById",
 			Handler:    _TxService_GetExecutablesById_Handler,
+		},
+		{
+			MethodName: "ValidateSchema",
+			Handler:    _TxService_ValidateSchema_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

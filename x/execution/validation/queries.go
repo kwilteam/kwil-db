@@ -147,14 +147,14 @@ func ValidateInput(input databases.Input, table *databases.Table) error {
 	if input.GetStatic() {
 
 		// check if value is set
-		if input.GetValue() == nil {
+		if input.GetValue() == nil && input.GetModifier() != execution.CALLER {
 			return fmt.Errorf(`value must be set for non-fillable parameter on column "%s"`, input.GetColumn())
 		}
 
 		err := execution.DataTypes.CompareAnyToKwilType(input.GetValue(), col.Type)
 		// check if value type matches column type
 		if err != nil {
-			return fmt.Errorf(`value type "%s" does not match column type "%s" for parameter on column "%s"`, input.GetValue(), col.Type.String(), input.GetColumn())
+			return fmt.Errorf(`value "%s" must be column type "%s" for parameter on column "%s"`, fmt.Sprint(input.GetValue()), col.Type.String(), input.GetColumn())
 		}
 	} else { // not static: users can fill in the value
 		if input.GetValue() != nil {

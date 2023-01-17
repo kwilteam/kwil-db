@@ -6,6 +6,7 @@ import (
 	"kwil/kwil/repository"
 	"kwil/x/execution/executables"
 	"kwil/x/graphql/manager"
+	"kwil/x/logx"
 	"kwil/x/sqlx/sqlclient"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
@@ -24,6 +25,7 @@ type executor struct {
 	databases map[string]executables.ExecutablesInterface
 	dao       repository.Queries
 	db        *sqlclient.DB
+	log       logx.Logger
 }
 
 func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queries, mngr manager.Client) (Executor, error) {
@@ -32,6 +34,7 @@ func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queri
 		dao:       queries,
 		db:        db,
 		databases: make(map[string]executables.ExecutablesInterface),
+		log:       logx.New().Named(`executor`),
 	}
 
 	err := exec.loadExecutables(ctx)

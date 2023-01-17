@@ -48,6 +48,38 @@
         ]
       }
     },
+    "/api/v0/schema/validate": {
+      "post": {
+        "operationId": "TxService_ValidateSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txsvcValidateSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txsvcValidateSchemaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v0/{id}/executables": {
       "get": {
         "operationId": "TxService_GetExecutablesById",
@@ -655,6 +687,25 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "txsvcValidateSchemaRequest": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/definitions/commonDatabase"
+        }
+      }
+    },
+    "txsvcValidateSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "valid": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
         }
       }
     }
