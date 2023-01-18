@@ -1,12 +1,10 @@
 image:
   repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild-gateway
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
   tag: latest
 
 kwild:
   image:
     repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild
     pullPolicy: IfNotPresent
-    # Overrides the image tag whose default is the chart appVersion.
     tag: latest
