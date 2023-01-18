@@ -10,7 +10,6 @@ import (
 	schemabuilder "kwil/x/execution/sql-builder/schema-builder"
 	"kwil/x/types/databases"
 
-	"github.com/cstockton/go-conv"
 	"go.uber.org/zap"
 )
 
@@ -164,12 +163,7 @@ func (d *dbCreator) storeTables(ctx context.Context, dbid int32) error {
 
 			// create attributes
 			for _, attribute := range column.Attributes {
-				stringValue, err := conv.String(attribute.Value)
-				if err != nil {
-					return fmt.Errorf("error converting attribute value to string: %w", err)
-				}
-
-				err = d.dao.CreateAttribute(ctx, columnId, int32(attribute.Type), []byte(stringValue))
+				err = d.dao.CreateAttribute(ctx, columnId, int32(attribute.Type), attribute.Value)
 				if err != nil {
 					return fmt.Errorf("error storing attribute: %w", err)
 				}

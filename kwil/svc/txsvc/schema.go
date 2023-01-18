@@ -34,6 +34,8 @@ func (s *Service) retrieveDatabaseSchema(ctx context.Context, database *database
 		return nil, fmt.Errorf("failed to get database")
 	}
 
+	//db.Tables[1].Columns[3].Attributes = []*databases.Attribute{}
+
 	convDb, err := serialize.Convert[databases.Database, commonpb.Database](db)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to convert database", err)
