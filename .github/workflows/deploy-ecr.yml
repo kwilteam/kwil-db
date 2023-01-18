@@ -49,7 +49,7 @@ jobs:
         DOCKER_BUILDKIT: 1
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.AWS_KWILD_ECR }}
-        IMAGE_HASH_TAG: ${{ github.short-sha }}
+        IMAGE_HASH_TAG: ${{ github.sha }}
         IMAGE_TAG: kdlatest
       run: |
         # Build a docker container and push it to ECR
@@ -63,7 +63,7 @@ jobs:
         DOCKER_BUILDKIT: 1
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.AWS_KWILD_ECR }}
-        IMAGE_HASH_TAG: ${{ github.short-sha }}
+        IMAGE_HASH_TAG: ${{ github.sha }}
         IMAGE_TAG: kglatest
       run: |
         # Build a docker container and push it to ECR
