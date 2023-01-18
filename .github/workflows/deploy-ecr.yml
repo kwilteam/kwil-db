@@ -49,8 +49,8 @@ jobs:
         DOCKER_BUILDKIT: 1
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.AWS_KWILD_ECR }}
-        IMAGE_HASH_TAG: ${{ github.sha }}
-        IMAGE_TAG: kwild-latest
+        IMAGE_HASH_TAG: ${{ github.short-sha }}
+        IMAGE_TAG: kdlatest
       run: |
         # Build a docker container and push it to ECR
         docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:kd$IMAGE_HASH_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
@@ -63,8 +63,8 @@ jobs:
         DOCKER_BUILDKIT: 1
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         ECR_REPOSITORY: ${{ secrets.AWS_KWILD_ECR }}
-        IMAGE_HASH_TAG: ${{ github.sha }}
-        IMAGE_TAG: kwil-gateway-latest
+        IMAGE_HASH_TAG: ${{ github.short-sha }}
+        IMAGE_TAG: kglatest
       run: |
         # Build a docker container and push it to ECR
         docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:kg$IMAGE_HASH_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
