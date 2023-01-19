@@ -68,7 +68,7 @@ jobs:
         #docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY1:kd$IMAGE_HASH_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_TAG .
         docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_SHORT_HASH_TAG .
         echo "Pushing images to ECR..."
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY1 --all-tags
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_TAG --all-tags
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY1 --all-tags" >> $GITHUB_OUTPUT
 
     - name: Build(KG), tag, and push docker image to Amazon ECR (used with ECS Fargate)
@@ -83,7 +83,7 @@ jobs:
         IMAGE_TAG: latest
       run: |
         # Build a docker container and push it to ECR
-        docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_SHORT_HASH_TAG .
+        docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_SHORT_HASH_TAG .
         echo "Pushing images to ECR..."
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY2 --all-tags
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_TAG --all-tags
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY2 --all-tags" >> $GITHUB_OUTPUT
