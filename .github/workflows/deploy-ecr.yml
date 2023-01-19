@@ -47,29 +47,29 @@ jobs:
     - name: Build kwild, tag, and push docker image to Amazon ECR (used with ECS Fargate)
       env:
         DOCKER_BUILDKIT: 1
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: ${{ secrets.AWS_KWILD_ECR }}
+        ECR_REGISTRY1: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY1: ${{ secrets.AWS_KWILD_ECR }}
         IMAGE_HASH_TAG: ${{ github.sha }}
-        IMAGE_TAG: kdlatest
+        IMAGE_TAG: latest
       run: |
         # Build a docker container and push it to ECR
-        #docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:kd$IMAGE_HASH_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        #docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY1/$ECR_REPOSITORY1:kd$IMAGE_HASH_TAG -t $ECR_REGISTRY1/$ECR_REPOSITORY1:$IMAGE_TAG .
+        docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY1/$ECR_REPOSITORY1:$IMAGE_TAG .
         echo "Pushing image to ECR..."
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY --all-tags
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY --all-tags" >> $GITHUB_OUTPUT
+        docker push $ECR_REGISTRY1/$ECR_REPOSITORY1 --all-tags
+        echo "image=$ECR_REGISTRY1/$ECR_REPOSITORY1 --all-tags" >> $GITHUB_OUTPUT
 
     - name: Build kwil-gateway, tag, and push docker image to Amazon ECR (used with ECS Fargate)
       env:
         DOCKER_BUILDKIT: 1
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: ${{ secrets.AWS_KWILD_ECR }}
+        ECR_REGISTRY2: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY2: ${{ secrets.AWS_KWIL_GATEWAY_ECR }}
         IMAGE_HASH_TAG: ${{ github.sha }}
-        IMAGE_TAG: kglatest
+        IMAGE_TAG: latest
       run: |
         # Build a docker container and push it to ECR
-        #docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:kg$IMAGE_HASH_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-        docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        #docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY2/$ECR_REPOSITORY2:kg$IMAGE_HASH_TAG -t $ECR_REGISTRY2/$ECR_REPOSITORY2:$IMAGE_TAG .
+        docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY2/$ECR_REPOSITORY2:$IMAGE_TAG .
         echo "Pushing image to ECR..."
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY --all-tags
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY --all-tags" >> $GITHUB_OUTPUT
+        docker push $ECR_REGISTRY2/$ECR_REPOSITORY2 --all-tags
+        echo "image=$ECR_REGISTRY2/$ECR_REPOSITORY2 --all-tags" >> $GITHUB_OUTPUT
