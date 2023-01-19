@@ -3,6 +3,7 @@ package clean
 import (
 	"fmt"
 	"kwil/x/execution"
+	datatypes "kwil/x/types/data_types"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
 	"strings"
@@ -49,8 +50,8 @@ func CleanTable(tbl *databases.Table) error {
 // Clean cleans the column.
 func CleanColumn(col *databases.Column) error {
 	col.Name = strings.ToLower(col.Name)
-	if col.Type > execution.END_DATA_TYPE || col.Type < execution.INVALID_DATA_TYPE { // this should get caught by validation, but just in case
-		col.Type = execution.INVALID_DATA_TYPE
+	if col.Type > datatypes.END_DATA_TYPE || col.Type < datatypes.INVALID_DATA_TYPE { // this should get caught by validation, but just in case
+		col.Type = datatypes.INVALID_DATA_TYPE
 	}
 	for i := range col.Attributes {
 		CleanAttribute(col.Attributes[i])

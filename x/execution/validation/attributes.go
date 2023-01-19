@@ -3,11 +3,21 @@ package validation
 import (
 	"fmt"
 	"kwil/x/execution"
+	datatypes "kwil/x/types/data_types"
 	"kwil/x/types/databases"
+	"kwil/x/utils/serialize"
 	"reflect"
 )
 
 func ValidateAttribute(a *databases.Attribute, c *databases.Column) error {
+	value := a.Value.Value
+	if a.Value.Serialized {
+		var err error
+		value, err = serialize.TryUnmarshalType(a.Value.Value)
+		if err != nil {
+			return fmt.Errorf(`failed to unmarshal attribute value: %w`, err)
+		}
+	}
 
 	// check if attribute is valid
 	if !a.Type.IsValid() {
@@ -15,7 +25,7 @@ func ValidateAttribute(a *databases.Attribute, c *databases.Column) error {
 	}
 
 	// check if attribute value is valid: e.g. if it is a MIN or MAX attribute, the value must be an int
-	err := correctAttributeValueType(a.Value, a.Type, c.Type)
+	err := correctAttributeValueType(value, a.Type, c.Type)
 	if err != nil {
 		return fmt.Errorf(`invalid attribute value: %w`, err)
 	}
@@ -31,7 +41,7 @@ func ValidateAttribute(a *databases.Attribute, c *databases.Column) error {
 
 // CorrectAttributeType checks that the attribute value type is correct
 // if incorrect, returns an error
-func correctAttributeValueType(val any, attr execution.AttributeType, colType execution.DataType) error {
+func correctAttributeValueType(val any, attr execution.AttributeType, colType datatypes.DataType) error {
 	if val == nil {
 		return nil
 	}
@@ -46,7 +56,7 @@ func correctAttributeValueType(val any, attr execution.AttributeType, colType ex
 	case execution.NOT_NULL:
 		return nil
 	case execution.DEFAULT:
-		valTypeEnum, err := execution.DataTypes.GolangToKwilType(valType)
+		valTypeEnum, err := datatypes.Utils.GolangToKwilType(valType)
 		if err != nil {
 			return err
 		}
@@ -84,7 +94,7 @@ func correctAttributeValueType(val any, attr execution.AttributeType, colType ex
 }
 
 // checks if an attribute can be on a column type (for example, we can't have a MIN attribute on a boolean column)
-func attributeCanBeOnColumnType(attr execution.AttributeType, colType execution.DataType) error {
+func attributeCanBeOnColumnType(attr execution.AttributeType, colType datatypes.DataType) error {
 	switch attr {
 	case execution.PRIMARY_KEY:
 		return nil
@@ -105,12 +115,12 @@ func attributeCanBeOnColumnType(attr execution.AttributeType, colType execution.
 		}
 		return nil
 	case execution.MIN_LENGTH:
-		if colType != execution.STRING {
+		if colType != datatypes.STRING {
 			return fmt.Errorf(`min_length attribute cannot be on column type "%s"`, colType.String())
 		}
 		return nil
 	case execution.MAX_LENGTH:
-		if colType != execution.STRING {
+		if colType != datatypes.STRING {
 			return fmt.Errorf(`max_length attribute cannot be on column type "%s"`, colType.String())
 		}
 		return nil

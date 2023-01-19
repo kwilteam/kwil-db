@@ -1,6 +1,9 @@
 package execution
 
-import "kwil/x/execution"
+import (
+	"kwil/x/execution"
+	datatypes "kwil/x/types/data_types"
+)
 
 type Executable struct {
 	Name      string `json:"name" yaml:"name"`
@@ -24,7 +27,7 @@ type Arg struct {
 	Value any `json:"value" yaml:"value"`
 
 	// the type of the arg
-	Type execution.DataType `json:"type" yaml:"type"`
+	Type datatypes.DataType `json:"type" yaml:"type"`
 
 	// the modifier of the arg
 	Modifier execution.ModifierType `json:"modifier" yaml:"modifier"`

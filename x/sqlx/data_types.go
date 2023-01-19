@@ -73,9 +73,9 @@ func (c *conversion) GolangToKwilType(k reflect.Kind) (DataType, error) {
 	switch k {
 	case reflect.String:
 		return STRING, nil
-	case reflect.Int32 | reflect.Float32:
+	case reflect.Int32, reflect.Float32:
 		return INT32, nil
-	case reflect.Int64 | reflect.Float64:
+	case reflect.Int64, reflect.Float64:
 		return INT64, nil
 	case reflect.Bool:
 		return BOOLEAN, nil

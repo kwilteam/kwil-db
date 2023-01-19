@@ -7,6 +7,8 @@ import (
 	"kwil/x/proto/txpb"
 	transactionTypes "kwil/x/types/transactions"
 	"kwil/x/utils/serialize"
+
+	"github.com/golang/protobuf/proto"
 )
 
 // Broadcast handles broadcasted transactions
@@ -16,6 +18,8 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
+
+	proto.Marshal()
 
 	err = tx.Verify() // verify verifies the hash and signature
 	if err != nil {

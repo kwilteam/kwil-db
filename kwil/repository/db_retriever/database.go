@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+// GetDatabase returns a database object for the given database identifier
+// The database should be cleaned after it is retrieved
 func (q *dbRetriever) GetDatabase(ctx context.Context, dbIdent *databases.DatabaseIdentifier) (*databases.Database, error) {
 	db := &databases.Database{
 		Name:  strings.ToLower(dbIdent.Name),

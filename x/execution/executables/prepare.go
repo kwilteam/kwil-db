@@ -3,6 +3,7 @@ package executables
 import (
 	"fmt"
 	"kwil/x/execution"
+	datatypes "kwil/x/types/data_types"
 	execTypes "kwil/x/types/execution"
 )
 
@@ -41,7 +42,7 @@ func (d *executableInterface) Prepare(query string, caller string, inputs []*exe
 		}
 
 		// try to convert value to the arg type
-		value, err := execution.DataTypes.ConvertAny(input.Value, arg.Type)
+		value, err := datatypes.Utils.ConvertAny(input.Value, arg.Type)
 		if err != nil {
 			return "", nil, fmt.Errorf(`invalid user input for arg "%s": %w`, arg.Name, err)
 		}

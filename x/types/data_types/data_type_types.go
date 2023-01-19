@@ -1,10 +1,11 @@
-package execution
+package datatypes
 
 type DataType int
 
 // Data Types
 const (
 	INVALID_DATA_TYPE DataType = iota
+	NULL
 	STRING
 	INT32
 	INT64

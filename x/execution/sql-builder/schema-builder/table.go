@@ -2,8 +2,8 @@ package schemabuilder
 
 import (
 	"fmt"
-	"kwil/x/execution"
 	ddlb "kwil/x/execution/sql-builder/ddl"
+	datatypes "kwil/x/types/data_types"
 	"kwil/x/types/databases"
 )
 
@@ -13,7 +13,7 @@ func GenerateTableDDL(t *databases.Table, schemaName string) ([]string, error) {
 		cb := ddlb.NewColumnBuilder()
 
 		// convert column type to Postgres type
-		pgtype, err := execution.DataTypes.KwilToPgType(col.Type)
+		pgtype, err := datatypes.Utils.KwilToPgType(col.Type)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert kwil type to postgres type: %w", err)
 		}

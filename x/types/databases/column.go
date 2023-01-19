@@ -1,9 +1,11 @@
 package databases
 
-import "kwil/x/execution"
+import (
+	datatypes "kwil/x/types/data_types"
+)
 
 type Column struct {
 	Name       string             `json:"name"`
-	Type       execution.DataType `json:"type"`
+	Type       datatypes.DataType `json:"type"`
 	Attributes []*Attribute       `json:"attributes,omitempty"`
 }

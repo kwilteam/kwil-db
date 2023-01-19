@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"kwil/x/execution"
+	datatypes "kwil/x/types/data_types"
 	"kwil/x/types/databases"
 )
 
@@ -45,7 +46,7 @@ var (
 	// columns
 	Column1 = databases.Column{
 		Name: "col1",
-		Type: execution.STRING,
+		Type: datatypes.STRING,
 		Attributes: []*databases.Attribute{
 			{
 				Type:  execution.PRIMARY_KEY,
@@ -56,18 +57,18 @@ var (
 
 	Column2 = databases.Column{
 		Name: "col2",
-		Type: execution.INT32,
+		Type: datatypes.INT32,
 		Attributes: []*databases.Attribute{
 			{
 				Type:  execution.MIN,
-				Value: 0,
+				Value: &databases.AttributeValue{Serialized: false, Value: int32(0)},
 			},
 		},
 	}
 
 	Column3 = databases.Column{
 		Name: "col3",
-		Type: execution.BOOLEAN,
+		Type: datatypes.BOOLEAN,
 	}
 
 	// sql queries

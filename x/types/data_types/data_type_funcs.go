@@ -1,4 +1,4 @@
-package execution
+package datatypes
 
 import (
 	"fmt"
@@ -10,10 +10,13 @@ import (
 
 type dataTypes struct{}
 
-var DataTypes = &dataTypes{}
+var Utils = &dataTypes{}
 
+// CheckType checks if a string is a valid Kwil Type
 func (v *dataTypes) CheckType(s string) error {
 	switch s {
+	case `null`:
+		return nil
 	case `string`:
 		return nil
 	case `int32`:
@@ -31,6 +34,8 @@ func (v *dataTypes) StringToKwilType(s string) (DataType, error) {
 	s = strings.ToLower(s)
 
 	switch s {
+	case `null`:
+		return NULL, nil
 	case `string`:
 		return STRING, nil
 	case `int32`:
@@ -45,12 +50,15 @@ func (v *dataTypes) StringToKwilType(s string) (DataType, error) {
 
 // Golang to Kwil Type converts a reflect.Kind to a Kwil Type
 func (c *dataTypes) GolangToKwilType(k reflect.Kind) (DataType, error) {
+
 	switch k {
+	case reflect.Invalid:
+		return NULL, nil
 	case reflect.String:
 		return STRING, nil
-	case reflect.Int32 | reflect.Float32:
+	case reflect.Int32, reflect.Float32:
 		return INT32, nil
-	case reflect.Int64 | reflect.Float64:
+	case reflect.Int, reflect.Int64, reflect.Float64:
 		return INT64, nil
 	case reflect.Bool:
 		return BOOLEAN, nil
@@ -62,7 +70,7 @@ func (c *dataTypes) GolangToKwilType(k reflect.Kind) (DataType, error) {
 // Takes the `any` golang type and converts it to a Kwil Type
 func (c *dataTypes) AnyToKwilType(val any) (DataType, error) {
 	if val == nil {
-		val = ""
+		return NULL, nil
 	}
 
 	valType := reflect.TypeOf(val).Kind()
@@ -71,11 +79,11 @@ func (c *dataTypes) AnyToKwilType(val any) (DataType, error) {
 
 // CompareKwilStringToAny compares a Kwil Type to an `any` golang type
 func (v *dataTypes) CompareAnyToKwilString(a any, val string) error {
-	kwilType, err := DataTypes.StringToKwilType(val)
+	kwilType, err := Utils.StringToKwilType(val)
 	if err != nil {
 		return err
 	}
-	anyType, err := DataTypes.AnyToKwilType(a)
+	anyType, err := Utils.AnyToKwilType(a)
 	if err != nil {
 		return err
 	}
@@ -91,6 +99,8 @@ func (c *dataTypes) CompareAnyToKwilType(a any, val DataType) error {
 
 func (c *dataTypes) KwilToPgType(k DataType) (string, error) {
 	switch k {
+	case NULL:
+		return "", fmt.Errorf(`null type not supported`)
 	case STRING:
 		return `text`, nil
 	case INT32:
@@ -104,7 +114,7 @@ func (c *dataTypes) KwilToPgType(k DataType) (string, error) {
 }
 
 func (c *dataTypes) KwilStringToPgType(s string) (string, error) {
-	kwilType, err := DataTypes.StringToKwilType(s)
+	kwilType, err := Utils.StringToKwilType(s)
 	if err != nil {
 		return ``, err
 	}
@@ -113,6 +123,8 @@ func (c *dataTypes) KwilStringToPgType(s string) (string, error) {
 
 func (c *dataTypes) StringToAnyGolangType(s string, kt DataType) (any, error) {
 	switch kt {
+	case NULL:
+		return nil, nil
 	case STRING:
 		return s, nil
 	case INT32:
@@ -132,6 +144,8 @@ func (c *dataTypes) ConvertAny(v any, t DataType) (any, error) {
 	}
 
 	switch t {
+	case NULL:
+		return nil, nil
 	case STRING:
 		return conv.String(v)
 	case INT32:

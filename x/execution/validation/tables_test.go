@@ -3,6 +3,7 @@ package validation_test
 import (
 	"kwil/x/execution"
 	"kwil/x/execution/validation"
+	datatypes "kwil/x/types/data_types"
 	"kwil/x/types/databases"
 	"testing"
 )
@@ -35,7 +36,7 @@ func testTables(t *testing.T, db *databases.Database) {
 	db.Tables = mustCopy(oldTables)
 
 	// test column with invalid type
-	db.Tables[0].Columns[0].Type = execution.DataType(-1)
+	db.Tables[0].Columns[0].Type = datatypes.DataType(-1)
 	err = validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for invalid column type")
@@ -52,7 +53,7 @@ func testTables(t *testing.T, db *databases.Database) {
 
 	// try adding a boolean to a min attribute
 	db.Tables[0].Columns[0].Attributes[0].Type = execution.MIN
-	db.Tables[0].Columns[0].Attributes[0].Value = "true"
+	db.Tables[0].Columns[0].Attributes[0].Value = &databases.AttributeValue{Serialized: false, Value: true}
 	err = validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for invalid attribute value")
@@ -61,7 +62,7 @@ func testTables(t *testing.T, db *databases.Database) {
 
 	// try with min length
 	db.Tables[0].Columns[0].Attributes[0].Type = execution.MIN
-	db.Tables[0].Columns[0].Attributes[0].Value = true
+	db.Tables[0].Columns[0].Attributes[0].Value = &databases.AttributeValue{Serialized: false, Value: true}
 	err = validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for invalid attribute value")

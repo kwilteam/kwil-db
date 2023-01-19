@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/execution"
+	datatypes "kwil/x/types/data_types"
 	"kwil/x/types/databases"
-	"kwil/x/utils/serialize"
 )
 
 func (q *dbRetriever) GetColumns(ctx context.Context, tableID int32) ([]*databases.Column, error) {
@@ -23,7 +23,7 @@ func (q *dbRetriever) GetColumns(ctx context.Context, tableID int32) ([]*databas
 
 		columns[i] = &databases.Column{
 			Name:       col.ColumnName,
-			Type:       execution.DataType(col.ColumnType),
+			Type:       datatypes.DataType(col.ColumnType),
 			Attributes: attributes,
 		}
 	}
@@ -39,14 +39,10 @@ func (q *dbRetriever) GetAttributes(ctx context.Context, columnID int32) ([]*dat
 
 	attributes := make([]*databases.Attribute, len(attrs))
 	for i, attr := range attrs {
-		val, err := serialize.UnmarshalType(attr.AttributeValue)
-		if err != nil {
-			return nil, fmt.Errorf(`error unmarshaling attribute value: %w`, err)
-		}
 
 		attributes[i] = &databases.Attribute{
 			Type:  execution.AttributeType(attr.AttributeType),
-			Value: val,
+			Value: attr.AttributeValue,
 		}
 	}
 
