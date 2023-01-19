@@ -55,8 +55,8 @@ jobs:
       run: |
         # Build a docker container and push it to ECR
         #docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY1:kd$IMAGE_HASH_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_TAG .
-        docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY1:$CI_PIPELINE_IID .
-        docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY2:$CI_PIPELINE_IID .
+        docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_TAG .
+        docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_TAG .
         echo "Pushing images to ECR..."
         docker push $ECR_REGISTRY/$ECR_REPOSITORY1 --all-tags
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY1 --all-tags" >> $GITHUB_OUTPUT
