@@ -53,7 +53,7 @@ jobs:
       run: echo "val=$(git describe)" >> $GITHUB_OUTPUT
 
 
-    - name: Build, tag, and push docker image to Amazon ECR (used with ECS Fargate)
+    - name: Build(KD), tag, and push docker image to Amazon ECR (used with ECS Fargate)
       env:
         DOCKER_BUILDKIT: 1
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -67,9 +67,23 @@ jobs:
         # Build a docker container and push it to ECR
         #docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY1:kd$IMAGE_HASH_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_TAG .
         docker build -f ./docker/kwild.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_VERSION .
+        echo "Pushing images to ECR..."
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY1 --all-tags
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY1 --all-tags" >> $GITHUB_OUTPUT
+
+    - name: Build(KG), tag, and push docker image to Amazon ECR (used with ECS Fargate)
+      env:
+        DOCKER_BUILDKIT: 1
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY1: ${{ secrets.AWS_KWILD_ECR }}
+        ECR_REPOSITORY2: ${{ secrets.AWS_KWIL_GATEWAY_ECR }}
+        IMAGE_HASH_TAG: ${{ github.sha }}
+        IMAGE_SHORT_HASH_TAG: ${{ steps.vars.outputs.sha_short }}
+        IMAGE_VERSION: ${{ steps.vers.version.val}}
+        IMAGE_TAG: latest
+      run: |
+        # Build a docker container and push it to ECR
         docker build -f ./docker/kwil-gateway.dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_VERSION .
         echo "Pushing images to ECR..."
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY1:$IMAGE_TAG --all-tags
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY1 --all-tags" >> $GITHUB_OUTPUT
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY2:$IMAGE_TAG --all-tags
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY2 --all-tags
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY2 --all-tags" >> $GITHUB_OUTPUT
