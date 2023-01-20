@@ -92,21 +92,23 @@ hasura:
   enableConsole: true
   devMode: true
   logTypes: startup, http-log, webhook-log, websocket-log, query-log
-  # overwrite postgresql setting
-  postgresql:
-    enabled: true # for dependency
-    primary:
-      service:
-        ports:
-          postgresql: 5432
-      persistence:
-        # by default disable persistent volume
-        enabled: false
-      initdb:
-        scripts:
-          initdb.sh: |
-            #!/bin/bash
-            echo "put init script here"
+
+
+# overwrite postgresql setting
+postgresql:
+  enabled: true # for dependency
+  primary:
+    service:
+      ports:
+        postgresql: 5432
+    persistence:
+      # by default disable persistent volume
+      enabled: false
+    initdb:
+      scripts:
+        initdb.sh: |
+          #!/bin/bash
+          echo "put init script here"
 
 # overwrite postgresql global setting
 global:

@@ -12,13 +12,13 @@ kwild:
     nodePorts:
       kwild: 32101
   hasura:
+    postgresql:
+      enabled: false
     service:
       type: NodePort
       # comment nodePorts to enable multi instances on local machine
       nodePorts:
         hasura: 32100
-  postgresql:
-    enabled: false
 
 global:
   postgres:
