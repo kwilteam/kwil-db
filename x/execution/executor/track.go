@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"kwil/x/graphql/hasura"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
 // Track tracks the database in hasura and the database table in the database.
-func (s *executor) Track(db *databases.Database) error {
+func (s *executor) Track(db *databases.Database[anytype.KwilAny]) error {
 	schemaName := db.GetSchemaName()
 	for _, table := range db.Tables {
 		// track tables

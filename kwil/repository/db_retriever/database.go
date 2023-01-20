@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"kwil/kwil/repository/gen"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"strings"
 )
 
 // GetDatabase returns a database object for the given database identifier
 // The database should be cleaned after it is retrieved
-func (q *dbRetriever) GetDatabase(ctx context.Context, dbIdent *databases.DatabaseIdentifier) (*databases.Database, error) {
-	db := &databases.Database{
+func (q *dbRetriever) GetDatabase(ctx context.Context, dbIdent *databases.DatabaseIdentifier) (*databases.Database[anytype.KwilAny], error) {
+	db := &databases.Database[anytype.KwilAny]{
 		Name:  strings.ToLower(dbIdent.Name),
 		Owner: strings.ToLower(dbIdent.Owner),
 	}

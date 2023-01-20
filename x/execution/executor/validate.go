@@ -2,10 +2,11 @@ package executor
 
 import (
 	"kwil/x/execution/validation"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
-func (s *executor) ValidateDatabase(db *databases.Database) error {
+func (s *executor) ValidateDatabase(db *databases.Database[anytype.KwilAny]) error {
 	return validation.ValidateDatabase(db)
 }
 

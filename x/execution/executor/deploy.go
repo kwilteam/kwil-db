@@ -8,12 +8,13 @@ import (
 	"kwil/x/execution/clean"
 	"kwil/x/execution/executables"
 	schemabuilder "kwil/x/execution/sql-builder/schema-builder"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 
 	"go.uber.org/zap"
 )
 
-func (s *executor) DeployDatabase(ctx context.Context, database *databases.Database) error {
+func (s *executor) DeployDatabase(ctx context.Context, database *databases.Database[anytype.KwilAny]) error {
 	schemaName := database.GetSchemaName()
 
 	// check if database exists
@@ -72,13 +73,13 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 }
 
 type dbCreator struct {
-	database *databases.Database
+	database *databases.Database[anytype.KwilAny]
 	dao      repository.Queries
 	tx       *sql.Tx
 }
 
 // newDbCreator creates a new dbCreator for storing the given database
-func (s *executor) newDbCreator(ctx context.Context, db *databases.Database, tx *sql.Tx) *dbCreator {
+func (s *executor) newDbCreator(ctx context.Context, db *databases.Database[anytype.KwilAny], tx *sql.Tx) *dbCreator {
 	dao := s.dao.WithTx(tx)
 	return &dbCreator{
 		database: db,

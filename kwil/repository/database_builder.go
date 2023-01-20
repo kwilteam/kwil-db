@@ -2,10 +2,9 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"kwil/kwil/repository/gen"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
-	"kwil/x/utils/serialize"
 	"strings"
 )
 
@@ -17,7 +16,7 @@ type DatabaseBuilder interface {
 	GetTableId(ctx context.Context, dbId int32, table string) (int32, error)
 	CreateColumn(ctx context.Context, tableId int32, columnName string, columnType int32) error
 	GetColumnId(ctx context.Context, tableId int32, columnName string) (int32, error)
-	CreateAttribute(ctx context.Context, columnId int32, attributeType int32, attributeValue any) error
+	CreateAttribute(ctx context.Context, columnId int32, attributeType int32, attributeValue anytype.KwilAny) error
 	CreateQuery(ctx context.Context, queryName string, tableId int32, queryData []byte) error
 	CreateRole(ctx context.Context, dbId int32, roleName string, isDefault bool) error
 	ApplyPermissionToRole(ctx context.Context, dbId int32, roleName string, queryName string) error
@@ -74,17 +73,13 @@ func (q *queries) GetColumnId(ctx context.Context, tableId int32, columnName str
 	})
 }
 
-func (q *queries) CreateAttribute(ctx context.Context, columnId int32, attributeType int32, attributeValue any) error {
+func (q *queries) CreateAttribute(ctx context.Context, columnId int32, attributeType int32, value anytype.KwilAny) error {
 	// marshal attribute value
-	bts, err := serialize.MarshalType(attributeValue)
-	if err != nil {
-		return fmt.Errorf("failed to marshal attribute value: %w", err)
-	}
 
 	return q.gen.CreateAttribute(ctx, &gen.CreateAttributeParams{
 		ColumnID:       columnId,
 		AttributeType:  attributeType,
-		AttributeValue: bts,
+		AttributeValue: value.Bytes(),
 	})
 }
 

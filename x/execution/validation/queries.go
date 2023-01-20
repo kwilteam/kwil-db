@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"kwil/x/execution"
 	datatypes "kwil/x/types/data_types"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
-func validateSQLQueries(d *databases.Database) error {
+func validateSQLQueries(d *databases.Database[anytype.KwilAny]) error {
 	// check amount of queries
 	if len(d.SQLQueries) > execution.MAX_QUERY_COUNT {
 		return fmt.Errorf(`database must have at most %d queries`, execution.MAX_QUERY_COUNT)
@@ -31,7 +32,7 @@ func validateSQLQueries(d *databases.Database) error {
 	return nil
 }
 
-func ValidateSQLQuery(q *databases.SQLQuery, db *databases.Database) error {
+func ValidateSQLQuery(q *databases.SQLQuery, db *databases.Database[anytype.KwilAny]) error {
 	// validate type
 	if !q.Type.IsValid() {
 		return fmt.Errorf(`unknown query type: %d`, q.Type.Int())
@@ -133,7 +134,7 @@ func validateQueryType(q *databases.SQLQuery) error {
 	return nil
 }
 
-func ValidateInput(input databases.Input, table *databases.Table) error {
+func ValidateInput(input databases.Input, table *databases.Table[anytype.KwilAny]) error {
 	// check if column exists
 	col := table.GetColumn(input.GetColumn())
 	if col == nil {

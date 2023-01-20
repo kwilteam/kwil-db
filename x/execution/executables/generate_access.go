@@ -1,8 +1,11 @@
 package executables
 
-import "kwil/x/types/databases"
+import (
+	anytype "kwil/x/types/data_types/any_type"
+	"kwil/x/types/databases"
+)
 
-func generateAccessParameters(db *databases.Database) map[string]map[string]struct{} {
+func generateAccessParameters(db *databases.Database[anytype.KwilAny]) map[string]map[string]struct{} {
 	access := make(map[string]map[string]struct{})
 	for _, role := range db.Roles {
 		access[role.Name] = make(map[string]struct{})

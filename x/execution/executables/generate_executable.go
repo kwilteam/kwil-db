@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"kwil/x/execution"
 	"kwil/x/execution/sql-builder/dml"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
 )
 
-func generateExecutables(db *databases.Database) (map[string]*execTypes.Executable, error) {
+func generateExecutables(db *databases.Database[anytype.KwilAny]) (map[string]*execTypes.Executable, error) {
 	execs := make(map[string]*execTypes.Executable)
 	for _, q := range db.SQLQueries {
 		e, err := generateExecutable(db, q)
@@ -22,7 +23,7 @@ func generateExecutables(db *databases.Database) (map[string]*execTypes.Executab
 	return execs, nil
 }
 
-func generateExecutable(db *databases.Database, q *databases.SQLQuery) (*execTypes.Executable, error) {
+func generateExecutable(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery) (*execTypes.Executable, error) {
 	statement, err := generateStatement(db, q)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate statement: %w", err)
@@ -41,7 +42,7 @@ func generateExecutable(db *databases.Database, q *databases.SQLQuery) (*execTyp
 	}, nil
 }
 
-func generateStatement(db *databases.Database, q *databases.SQLQuery) (string, error) {
+func generateStatement(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery) (string, error) {
 	switch q.Type {
 	case execution.SELECT:
 		return "", fmt.Errorf("SELECT is not supported yet")
@@ -65,7 +66,7 @@ type arger interface {
 }
 
 // buildsArgs will build all args and determine their position
-func buildArgs(db *databases.Database, q *databases.SQLQuery) ([]*execTypes.Arg, error) {
+func buildArgs(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery) ([]*execTypes.Arg, error) {
 	args := []*execTypes.Arg{}
 	var pos uint8 = 0
 	for _, param := range q.Params {
@@ -90,7 +91,7 @@ func buildArgs(db *databases.Database, q *databases.SQLQuery) ([]*execTypes.Arg,
 }
 
 // buildArg will build an arg from a param or where clause
-func buildArg(db *databases.Database, q *databases.SQLQuery, position uint8, param arger) (*execTypes.Arg, error) {
+func buildArg(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery, position uint8, param arger) (*execTypes.Arg, error) {
 	tbl := db.GetTable(q.Table)
 	if tbl == nil {
 		return nil, fmt.Errorf(`table "%s" does not exist`, q.Table)

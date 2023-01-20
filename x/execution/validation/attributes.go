@@ -4,28 +4,19 @@ import (
 	"fmt"
 	"kwil/x/execution"
 	datatypes "kwil/x/types/data_types"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
-	"kwil/x/utils/serialize"
 	"reflect"
 )
 
-func ValidateAttribute(a *databases.Attribute, c *databases.Column) error {
-	value := a.Value.Value
-	if a.Value.Serialized {
-		var err error
-		value, err = serialize.TryUnmarshalType(a.Value.Value)
-		if err != nil {
-			return fmt.Errorf(`failed to unmarshal attribute value: %w`, err)
-		}
-	}
-
+func ValidateAttribute(a *databases.Attribute[anytype.KwilAny], c *databases.Column[anytype.KwilAny]) error {
 	// check if attribute is valid
 	if !a.Type.IsValid() {
 		return fmt.Errorf(`unknown attribute type: %d`, a.Type.Int())
 	}
 
 	// check if attribute value is valid: e.g. if it is a MIN or MAX attribute, the value must be an int
-	err := correctAttributeValueType(value, a.Type, c.Type)
+	err := correctAttributeValueType(a.Value, a.Type, c.Type)
 	if err != nil {
 		return fmt.Errorf(`invalid attribute value: %w`, err)
 	}

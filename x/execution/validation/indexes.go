@@ -3,11 +3,12 @@ package validation
 import (
 	"fmt"
 	"kwil/x/execution"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"sort"
 )
 
-func validateIndexes(d *databases.Database) error {
+func validateIndexes(d *databases.Database[anytype.KwilAny]) error {
 	// check amount of indexes
 	if len(d.Indexes) > execution.MAX_INDEX_COUNT {
 		return fmt.Errorf(`database must have at most %d indexes`, execution.MAX_INDEX_COUNT)
@@ -45,7 +46,7 @@ func validateIndexes(d *databases.Database) error {
 	return nil
 }
 
-func ValidateIndex(index *databases.Index, db *databases.Database) error {
+func ValidateIndex(index *databases.Index, db *databases.Database[anytype.KwilAny]) error {
 	// check if index name is valid
 	err := CheckName(index.Name, execution.MAX_INDEX_NAME_LENGTH)
 	if err != nil {

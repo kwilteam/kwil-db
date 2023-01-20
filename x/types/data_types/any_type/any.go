@@ -2,112 +2,99 @@ package anytype
 
 import (
 	"fmt"
-	"kwil/x/logx"
 	datatypes "kwil/x/types/data_types"
 )
 
-// The custom Any type is used to store a value of any type.
-// It includes methods to serialize and unserialize the value back to its original type.
-type Any struct {
-	Serialized bool               `json:"serialized"`
-	Value      any                `json:"value"`
-	Type       datatypes.DataType `json:"type"`
+// The custom KwilAny type is used to store an untyped value of any data type supported by Kwil.
+// It includes methods to serialize and deserialize the value back to its original type.
+type KwilAny struct {
+	value    any
+	bytes    []byte
+	dataType datatypes.DataType
 }
 
-// New creates a corresponding Any type for the given value.
-func New(v any) (*Any, error) {
+// New creates a corresponding value type for the given value.
+func New(v any) (KwilAny, error) {
 	dataType, err := datatypes.Utils.AnyToKwilType(v)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get kwil type from any: %w", err)
+		return KwilAny{}, fmt.Errorf("failed to get kwil type from value: %w", err)
 	}
 
-	return &Any{
-		Serialized: false,
-		Value:      v,
-		Type:       dataType,
+	// marshal the value
+	var bts []byte
+	if v != nil {
+		var err error
+		bts, err = marshal(v, dataType)
+		if err != nil {
+			return KwilAny{}, fmt.Errorf("failed to marshal value: %w", err)
+		}
+	}
+
+	return KwilAny{
+		value:    v,
+		bytes:    bts,
+		dataType: dataType,
 	}, nil
 }
 
-// NewFromSerial creates a corresponding Any type for the given serialized value.
-func NewFromSerial(v []byte) (*Any, error) {
-	if len(v) == 0 {
+// NewMust is like New but panics if an error occurs.
+func NewMust(v any) KwilAny {
+	a, err := New(v)
+	if err != nil {
+		panic(err)
+	}
+	return a
+}
+
+// NewFromSerial creates a corresponding value type for the given serialized value.
+func NewFromSerial(b []byte) (KwilAny, error) {
+	if len(b) == 0 {
 		return New(nil)
 	}
 
-	dataType := datatypes.DataType(v[0])
+	dataType := datatypes.DataType(b[0])
 	if dataType <= datatypes.INVALID_DATA_TYPE || dataType >= datatypes.END_DATA_TYPE {
-		return nil, fmt.Errorf("serialized value starts with invalid data type identifier: %v", dataType)
+		return KwilAny{}, fmt.Errorf("serialized value starts with invalid data type identifier: %v", dataType)
 	}
 
-	return &Any{
-		Serialized: true,
-		Value:      v[1:],
-		Type:       dataType,
+	// try to unmarshal the value
+	value, err := tryUnmarshal(b[1:], dataType)
+	if err != nil {
+		return KwilAny{}, fmt.Errorf("failed to unmarshal serialized value: %w", err)
+	}
+
+	return KwilAny{
+		value:    value,
+		dataType: dataType,
+		bytes:    b,
 	}, nil
 }
 
-// Unserialize unserializes the value if it is serialized.
-// It will return the unserialized value.
-func (a *Any) Unserialize() (any, error) {
-	value, err := a.GetUnserialized()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get unserialized value: %w", err)
-	}
-
-	a.Value = value
-	a.Serialized = false
-
-	return value, nil
+// Bytes returns the serialized value.
+func (a *KwilAny) Bytes() []byte {
+	return a.bytes
 }
 
-// Serialize serializes the value if it is not serialized.
-// It will return the serialized value.
-func (a *Any) Serialize() ([]byte, error) {
-	value, err := a.GetSerialized()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get serialized value: %w", err)
-	}
-
-	a.Value = value
-	a.Serialized = true
-
-	return value, nil
+// Value returns the native value.
+func (a *KwilAny) Value() any {
+	return a.value
 }
 
-// GetSerialized copies the serialized value.
-// It does NOT change the state of the Any type.
-func (a *Any) GetSerialized() ([]byte, error) {
-	if a.Value == nil {
-		return nil, nil
-	}
-
-	if a.Serialized {
-		val, ok := a.Value.([]byte)
-		if !ok {
-			logx.New().Error("serialized value is not a byte slice.  this should never happen")
-			return nil, fmt.Errorf("serialized value is not a byte slice")
-		}
-		return val, nil
-	}
-
-	return marshal(a.Value, a.Type)
+// GetType returns the native data type of the value.
+func (a *KwilAny) Type() datatypes.DataType {
+	return a.dataType
 }
 
-// GetUnserialized copies the unserialized value.
-// It does NOT change the state of the Any type.
-func (a *Any) GetUnserialized() (any, error) {
-	if a.Value == nil {
-		return nil, nil
+// Copy returns a copy of the struct.
+func (a *KwilAny) Copy() KwilAny {
+	return KwilAny{
+		bytes:    a.bytes,
+		value:    a.value,
+		dataType: a.dataType,
 	}
+}
 
-	if !a.Serialized {
-		return a.Value, nil
-	}
-
-	bts, ok := a.Value.([]byte)
-	if !ok {
-		logx.New().Error("serialized value is not a byte slice")
-	}
-
-	return tryUnmarshal(bts, a.Type)
+// String returns the value deserialized and converted to a string.
+func (a *KwilAny) String() string {
+	return fmt.Sprintf("%v", a.value)
 }

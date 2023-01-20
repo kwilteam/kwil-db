@@ -3,15 +3,16 @@ package mocks
 import (
 	"kwil/x/execution"
 	datatypes "kwil/x/types/data_types"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
 var (
 	// database
-	Db1 = databases.Database{
+	Db1 = databases.Database[anytype.KwilAny]{
 		Name:  "db1",
 		Owner: "0xabc",
-		Tables: []*databases.Table{
+		Tables: []*databases.Table[anytype.KwilAny]{
 			&Table1,
 			&Table2,
 		},
@@ -33,40 +34,40 @@ var (
 	}
 
 	// tables
-	Table1 = databases.Table{
+	Table1 = databases.Table[anytype.KwilAny]{
 		Name:    "table1",
-		Columns: []*databases.Column{&Column1, &Column2},
+		Columns: []*databases.Column[anytype.KwilAny]{&Column1, &Column2},
 	}
 
-	Table2 = databases.Table{
+	Table2 = databases.Table[anytype.KwilAny]{
 		Name:    "table2",
-		Columns: []*databases.Column{&Column1, &Column3},
+		Columns: []*databases.Column[anytype.KwilAny]{&Column1, &Column3},
 	}
 
 	// columns
-	Column1 = databases.Column{
+	Column1 = databases.Column[anytype.KwilAny]{
 		Name: "col1",
 		Type: datatypes.STRING,
-		Attributes: []*databases.Attribute{
+		Attributes: []*databases.Attribute[anytype.KwilAny]{
 			{
 				Type:  execution.PRIMARY_KEY,
-				Value: nil,
+				Value: anytype.NewMust(nil),
 			},
 		},
 	}
 
-	Column2 = databases.Column{
+	Column2 = databases.Column[anytype.KwilAny]{
 		Name: "col2",
 		Type: datatypes.INT32,
-		Attributes: []*databases.Attribute{
+		Attributes: []*databases.Attribute[anytype.KwilAny]{
 			{
 				Type:  execution.MIN,
-				Value: &databases.AttributeValue{Serialized: false, Value: int32(0)},
+				Value: anytype.NewMust(1),
 			},
 		},
 	}
 
-	Column3 = databases.Column{
+	Column3 = databases.Column[anytype.KwilAny]{
 		Name: "col3",
 		Type: datatypes.BOOLEAN,
 	}

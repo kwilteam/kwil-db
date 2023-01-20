@@ -36,7 +36,7 @@ func (s *Service) handleDeployDatabase(ctx context.Context, tx *transactions.Tra
 		return nil, fmt.Errorf("failed to spend fee: %w", err)
 	}
 
-	db, err := serialize.Deserialize[*databases.Database](tx.Payload)
+	db, err := serialize.Deserialize[*databases.Database[[]byte]](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode payload of type Database: %w", err)
 	}

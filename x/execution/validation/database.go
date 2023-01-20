@@ -3,10 +3,11 @@ package validation
 import (
 	"fmt"
 	"kwil/x/execution"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
-func ValidateDatabase(db *databases.Database) error {
+func ValidateDatabase(db *databases.Database[anytype.KwilAny]) error {
 	// check if database name is valid
 	err := CheckName(db.Name, execution.MAX_DB_NAME_LENGTH)
 	if err != nil {

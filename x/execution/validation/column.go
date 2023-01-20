@@ -3,10 +3,11 @@ package validation
 import (
 	"fmt"
 	"kwil/x/execution"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
-func ValidateColumn(c *databases.Column) error {
+func ValidateColumn(c *databases.Column[anytype.KwilAny]) error {
 	// check if column name is valid
 	err := CheckName(c.Name, execution.MAX_COLUMN_NAME_LENGTH)
 	if err != nil {

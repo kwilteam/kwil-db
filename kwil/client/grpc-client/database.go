@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"kwil/x/execution/clean"
 	"kwil/x/execution/validation"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"kwil/x/types/transactions"
 	"strings"
 )
 
-func (c *Client) DeployDatabase(ctx context.Context, db *databases.Database) (*transactions.Response, error) {
+func (c *Client) DeployDatabase(ctx context.Context, db *databases.Database[anytype.KwilAny]) (*transactions.Response, error) {
 	err := clean.CleanDatabase(db)
 	if err != nil {
 		return nil, fmt.Errorf("error on database: %w", err)

@@ -2,25 +2,34 @@ package databases
 
 import (
 	"kwil/x/crypto"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/utils"
 	"strings"
 )
 
-type Database struct {
-	Owner      string      `json:"owner"`
-	Name       string      `json:"name"`
-	Tables     []*Table    `json:"tables"`
+// the AnyValue is used to specify what the "any" type of value stored is.
+// for example, attributes can hold an "any" type, but sometimes we need this as a string,
+// and sometimes we need it as an anytype.KwilAny, which allows us to convert it to
+// a Kwil native type.
+type AnyValue interface {
+	anytype.KwilAny | []byte
+}
+
+type Database[T AnyValue] struct {
+	Owner      string      `json:"owner" clean:"lower"`
+	Name       string      `json:"name" clean:"lower"`
+	Tables     []*Table[T] `json:"tables"`
 	Roles      []*Role     `json:"roles"`
 	SQLQueries []*SQLQuery `json:"sql_queries"`
 	Indexes    []*Index    `json:"indexes"`
 }
 
 // hashes the lower-cased name and owner and prepends an x
-func (d *Database) GetSchemaName() string {
+func (d *Database[T]) GetSchemaName() string {
 	return GenerateSchemaName(d.Owner, d.Name)
 }
 
-func (d *Database) GetQuery(q string) *SQLQuery {
+func (d *Database[T]) GetQuery(q string) *SQLQuery {
 	for _, qry := range d.SQLQueries {
 		if qry.Name == q {
 			return qry
@@ -29,7 +38,7 @@ func (d *Database) GetQuery(q string) *SQLQuery {
 	return nil
 }
 
-func (d *Database) GetTable(t string) *Table {
+func (d *Database[T]) GetTable(t string) *Table[T] {
 	for _, tbl := range d.Tables {
 		if tbl.Name == t {
 			return tbl
@@ -38,7 +47,7 @@ func (d *Database) GetTable(t string) *Table {
 	return nil
 }
 
-func (d *Database) GetRole(r string) *Role {
+func (d *Database[T]) GetRole(r string) *Role {
 	for _, role := range d.Roles {
 		if role.Name == r {
 			return role
@@ -47,7 +56,7 @@ func (d *Database) GetRole(r string) *Role {
 	return nil
 }
 
-func (d *Database) GetIndex(i string) *Index {
+func (d *Database[T]) GetIndex(i string) *Index {
 	for _, idx := range d.Indexes {
 		if idx.Name == i {
 			return idx
@@ -56,7 +65,7 @@ func (d *Database) GetIndex(i string) *Index {
 	return nil
 }
 
-func (d *Database) GetDefaultRoles() []string {
+func (d *Database[T]) GetDefaultRoles() []string {
 	var roles []string
 	for _, role := range d.Roles {
 		if role.Default {
@@ -66,7 +75,7 @@ func (d *Database) GetDefaultRoles() []string {
 	return roles
 }
 
-func (d *Database) GetIdentifier() *DatabaseIdentifier {
+func (d *Database[T]) GetIdentifier() *DatabaseIdentifier {
 	return &DatabaseIdentifier{
 		Owner: d.Owner,
 		Name:  d.Name,

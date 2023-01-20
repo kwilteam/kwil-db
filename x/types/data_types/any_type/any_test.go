@@ -14,8 +14,8 @@ func Test_Any(t *testing.T) {
 		t.Errorf("failed to create null any: %v", err)
 	}
 
-	if null.Type != datatypes.NULL {
-		t.Errorf("expected %v, got %v", datatypes.NULL, null.Type)
+	if null.Type() != datatypes.NULL {
+		t.Errorf("expected %d, got %d", datatypes.NULL, null.Type())
 	}
 
 	// test bool
@@ -24,12 +24,14 @@ func Test_Any(t *testing.T) {
 		t.Errorf("failed to create bool any: %v", err)
 	}
 
-	if bool1.Type != datatypes.BOOLEAN {
-		t.Errorf("expected %v, got %v", datatypes.BOOLEAN, bool1.Type)
+	if bool1.Type() != datatypes.BOOLEAN {
+		t.Errorf("expected %d, got %d", datatypes.BOOLEAN, bool1.Type())
 	}
 
-	if bool1.Value.(bool) != true {
-		t.Errorf("expected %v, got %v", true, bool1.Value.(bool))
+	val := bool1.Value()
+
+	if val != true {
+		t.Errorf("expected %v, got %v", true, val)
 	}
 
 	// test int32
@@ -38,12 +40,14 @@ func Test_Any(t *testing.T) {
 		t.Errorf("failed to create int any: %v", err)
 	}
 
-	if int1.Type != datatypes.INT32 {
-		t.Errorf("expected %v, got %v", datatypes.INT32, int1.Type)
+	if int1.Type() != datatypes.INT32 {
+		t.Errorf("expected %d, got %d", datatypes.INT32, int1.Type())
 	}
 
-	if int1.Value.(int32) != 100 {
-		t.Errorf("expected %v, got %v", 100, int1.Value.(int32))
+	val = int1.Value()
+
+	if val.(int32) != 100 {
+		t.Errorf("expected %v, got %v", 100, val)
 	}
 
 	// test int64
@@ -52,19 +56,18 @@ func Test_Any(t *testing.T) {
 		t.Errorf("failed to create int any: %v", err)
 	}
 
-	if int2.Type != datatypes.INT64 {
-		t.Errorf("expected %v, got %v", datatypes.INT64, int2.Type)
+	if int2.Type() != datatypes.INT64 {
+		t.Errorf("expected %d, got %d", datatypes.INT64, int2.Type())
 	}
 
-	if int2.Value.(int64) != 100 {
-		t.Errorf("expected %v, got %v", 100, int2.Value.(int64))
+	val = int2.Value()
+
+	if val.(int64) != 100 {
+		t.Errorf("expected %v, got %v", 100, val)
 	}
 
 	// get int64 bytes
-	bts, err := int2.GetSerialized()
-	if err != nil {
-		t.Errorf("failed to get serialized value: %v", err)
-	}
+	bts := int2.Bytes()
 
 	// try to create a new any from the bytes
 	int3, err := anytype.NewFromSerial(bts)
@@ -72,31 +75,26 @@ func Test_Any(t *testing.T) {
 		t.Errorf("failed to create new any from serial: %v", err)
 	}
 
-	if int3.Type != datatypes.INT64 {
-		t.Errorf("expected %v, got %v", datatypes.INT64, int3.Type)
+	if int3.Type() != datatypes.INT64 {
+		t.Errorf("expected %d, got %d", datatypes.INT64, int3.Type())
 	}
 
-	val, err := int3.Unserialize()
-	if err != nil {
-		t.Errorf("failed to get unserialized value: %v", err)
-	}
+	val = int3.Value()
 
 	if val.(int64) != 100 {
 		t.Errorf("expected %v, got %v", 100, val.(int64))
 	}
 
-	if int3.Value.(int64) != 100 {
-		t.Errorf("expected %v, got %v", 100, int3.Value.(int64))
+	val = int3.Value()
+
+	if val.(int64) != 100 {
+		t.Errorf("expected %v, got %v", 100, val)
 	}
 
 	// re-serialize
-	bts2, err := int3.Serialize()
-	if err != nil {
-		t.Errorf("failed to get serialized value: %v", err)
-	}
+	bts2 := int3.Bytes()
 
 	if !bytes.Equal(bts, bts2) {
 		t.Errorf("expected %v, got %v", bts, bts2)
 	}
-
 }

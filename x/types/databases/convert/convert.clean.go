@@ -1,77 +1,103 @@
-package clean
+package convert
 
 import (
 	"fmt"
 	"kwil/x/execution"
 	datatypes "kwil/x/types/data_types"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
-	execTypes "kwil/x/types/execution"
 	"strings"
 )
 
-// Clean cleans the database.
-// Currently, that just entails lowercasing all the strings (besides default values), but
-// in the future, it could do more.
-func CleanDatabase(db *databases.Database[any]) error {
+type clean struct{}
+
+// clean database lowercases necessary fields and converts the database to a
+// kwilAny database.
+func (c clean) CleanDatabase(db *databases.Database[[]byte]) (*databases.Database[anytype.KwilAny], error) {
 	db.Name = strings.ToLower(db.Name)
 	db.Owner = strings.ToLower(db.Owner)
-	for _, tbl := range db.Tables {
-		err := CleanTable(tbl)
+	tables := make([]*databases.Table[anytype.KwilAny], len(db.Tables))
+	for i, tbl := range db.Tables {
+		var err error
+		table, err := c.CleanTable(tbl)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("error cleaning table %s: %w", tbl.Name, err)
 		}
+
+		tables[i] = table
 	}
 	for _, qry := range db.SQLQueries {
-		CleanSQLQuery(qry)
+		c.CleanSQLQuery(qry)
 	}
 	for _, role := range db.Roles {
-		CleanRole(role)
+		c.CleanRole(role)
 	}
 	for _, index := range db.Indexes {
-		CleanIndex(index)
+		c.CleanIndex(index)
 	}
 
-	return nil
+	return &databases.Database[anytype.KwilAny]{
+		Name:       db.Name,
+		Owner:      db.Owner,
+		Tables:     tables,
+		SQLQueries: db.SQLQueries,
+		Roles:      db.Roles,
+		Indexes:    db.Indexes,
+	}, nil
 }
 
 // Clean cleans the table.
-func CleanTable(tbl *databases.Table[any]) error {
+func (c clean) CleanTable(tbl *databases.Table[[]byte]) (*databases.Table[anytype.KwilAny], error) {
 	tbl.Name = strings.ToLower(tbl.Name)
-	for _, col := range tbl.Columns {
-		err := CleanColumn(col)
+	cols := make([]*databases.Column[anytype.KwilAny], len(tbl.Columns))
+
+	for i, col := range tbl.Columns {
+		var err error
+		cols[i], err = c.CleanColumn(col)
 		if err != nil {
-			return fmt.Errorf("error in table %s: %w", tbl.Name, err)
+			return nil, fmt.Errorf("error in table %s: %w", tbl.Name, err)
 		}
 	}
 
-	return nil
+	return &databases.Table[anytype.KwilAny]{
+		Name:    tbl.Name,
+		Columns: cols,
+	}, nil
 }
 
 // Clean cleans the column.
-func CleanColumn(col *databases.Column[any]) error {
+func (c clean) CleanColumn(col *databases.Column[[]byte]) (*databases.Column[anytype.KwilAny], error) {
 	col.Name = strings.ToLower(col.Name)
 	if col.Type > datatypes.END_DATA_TYPE || col.Type < datatypes.INVALID_DATA_TYPE { // this should get caught by validation, but just in case
 		col.Type = datatypes.INVALID_DATA_TYPE
 	}
-	for i := range col.Attributes {
-		CleanAttribute(col.Attributes[i])
-		err := AssertAttributeType(col.Attributes[i], col.Type)
+	attributes := make([]*databases.Attribute[anytype.KwilAny], len(col.Attributes))
+	for i, attr := range col.Attributes {
+		if attr.Type > execution.END_ATTRIBUTE_TYPE || attr.Type < execution.INVALID_ATTRIBUTE_TYPE { // this should get caught by validation, but just in case
+			attr.Type = execution.INVALID_ATTRIBUTE_TYPE
+		}
+
+		// convert the attribute to a kwilAny attribute
+		anyAttr, err := anytype.NewFromSerial(attr.Value)
 		if err != nil {
-			return fmt.Errorf("error in column %s: %w", col.Name, err)
+			return nil, fmt.Errorf("error converting attribute %s: %w", attr.Type.String(), err)
+		}
+
+		attributes[i] = &databases.Attribute[anytype.KwilAny]{
+			Type:  attr.Type,
+			Value: anyAttr,
 		}
 	}
-	return nil
-}
 
-// Clean cleans the attribute.
-func CleanAttribute(attr *databases.Attribute[any]) {
-	if attr.Type > execution.END_ATTRIBUTE_TYPE || attr.Type < execution.INVALID_ATTRIBUTE_TYPE { // this should get caught by validation, but just in case
-		attr.Type = execution.INVALID_ATTRIBUTE_TYPE
-	}
+	return &databases.Column[anytype.KwilAny]{
+		Name:       col.Name,
+		Type:       col.Type,
+		Attributes: attributes,
+	}, nil
 }
 
 // Clean cleans the role.
-func CleanRole(role *databases.Role) {
+func (c clean) CleanRole(role *databases.Role) {
 	role.Name = strings.ToLower(role.Name)
 	for i, val := range role.Permissions {
 		role.Permissions[i] = strings.ToLower(val)
@@ -79,7 +105,7 @@ func CleanRole(role *databases.Role) {
 }
 
 // Clean cleans the SQL query.
-func CleanSQLQuery(qry *databases.SQLQuery) {
+func (c clean) CleanSQLQuery(qry *databases.SQLQuery) {
 	qry.Name = strings.ToLower(qry.Name)
 	if qry.Type > execution.END_QUERY_TYPE || qry.Type < execution.INVALID_QUERY_TYPE { // this should get caught by validation, but just in case
 		qry.Type = execution.INVALID_QUERY_TYPE
@@ -87,15 +113,15 @@ func CleanSQLQuery(qry *databases.SQLQuery) {
 
 	qry.Table = strings.ToLower(qry.Table)
 	for _, param := range qry.Params {
-		CleanParam(param)
+		c.CleanParam(param)
 	}
 	for _, where := range qry.Where {
-		CleanWheres(where)
+		c.CleanWheres(where)
 	}
 }
 
 // Clean cleans the param.
-func CleanParam(param *databases.Parameter) {
+func (c clean) CleanParam(param *databases.Parameter) {
 	param.Name = strings.ToLower(param.Name)
 	param.Column = strings.ToLower(param.Column)
 	if param.Modifier > execution.END_MODIFIER_TYPE || param.Modifier < execution.INVALID_MODIFIER_TYPE { // this should get caught by validation, but just in case
@@ -104,7 +130,7 @@ func CleanParam(param *databases.Parameter) {
 }
 
 // Clean cleans the where predicate.
-func CleanWheres(where *databases.WhereClause) {
+func (c clean) CleanWheres(where *databases.WhereClause) {
 	where.Name = strings.ToLower(where.Name)
 	where.Column = strings.ToLower(where.Column)
 	if where.Modifier > execution.END_MODIFIER_TYPE || where.Modifier < execution.INVALID_MODIFIER_TYPE { // this should get caught by validation, but just in case
@@ -117,7 +143,7 @@ func CleanWheres(where *databases.WhereClause) {
 }
 
 // Clean cleans the index.
-func CleanIndex(i *databases.Index) {
+func (c clean) CleanIndex(i *databases.Index) {
 	i.Name = strings.ToLower(i.Name)
 	i.Table = strings.ToLower(i.Table)
 	if i.Using > execution.END_INDEX_TYPE || i.Using < execution.INVALID_INDEX_TYPE { // this should get caught by validation, but just in case
@@ -126,9 +152,4 @@ func CleanIndex(i *databases.Index) {
 	for j, column := range i.Columns {
 		i.Columns[j] = strings.ToLower(column)
 	}
-}
-
-func CleanExecutionBody(body *execTypes.ExecutionBody) {
-	body.Database = strings.ToLower(body.Database)
-	body.Query = strings.ToLower(body.Query)
 }

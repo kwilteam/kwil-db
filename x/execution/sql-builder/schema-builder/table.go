@@ -4,10 +4,11 @@ import (
 	"fmt"
 	ddlb "kwil/x/execution/sql-builder/ddl"
 	datatypes "kwil/x/types/data_types"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
-func GenerateTableDDL(t *databases.Table, schemaName string) ([]string, error) {
+func GenerateTableDDL(t *databases.Table[anytype.KwilAny], schemaName string) ([]string, error) {
 	tbl := ddlb.NewTableBuilder().Schema(schemaName).Name(t.Name)
 	for _, col := range t.Columns {
 		cb := ddlb.NewColumnBuilder()
@@ -26,7 +27,7 @@ func GenerateTableDDL(t *databases.Table, schemaName string) ([]string, error) {
 				continue
 			}*/
 
-			column.WithAttribute(attr.Type, attr.Value)
+			column.WithAttribute(attr.Type, attr.Value.Value())
 		}
 
 		tbl.AddColumn(column)

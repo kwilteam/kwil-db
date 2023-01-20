@@ -4,15 +4,16 @@ import (
 	"kwil/x/execution"
 	"kwil/x/execution/validation"
 	datatypes "kwil/x/types/data_types"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"testing"
 )
 
-func testTables(t *testing.T, db *databases.Database) {
+func testTables(t *testing.T, db *databases.Database[anytype.KwilAny]) {
 	oldTables := mustCopy(db.Tables)
 	// testing tables
 	// test no tables
-	db.Tables = []*databases.Table{}
+	db.Tables = []*databases.Table[anytype.KwilAny]{}
 	err := validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for no tables")
@@ -28,7 +29,7 @@ func testTables(t *testing.T, db *databases.Database) {
 	db.Tables = mustCopy(oldTables)
 
 	// test table with no columns
-	db.Tables[0].Columns = []*databases.Column{}
+	db.Tables[0].Columns = []*databases.Column[anytype.KwilAny]{}
 	err = validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for no table columns")
@@ -53,7 +54,11 @@ func testTables(t *testing.T, db *databases.Database) {
 
 	// try adding a boolean to a min attribute
 	db.Tables[0].Columns[0].Attributes[0].Type = execution.MIN
-	db.Tables[0].Columns[0].Attributes[0].Value = &databases.AttributeValue{Serialized: false, Value: true}
+	db.Tables[0].Columns[0].Attributes[0].Value, err = anytype.New(true)
+	if err != nil {
+		t.Errorf("failed to create new anytype: %v", err)
+	}
+
 	err = validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for invalid attribute value")
@@ -62,7 +67,10 @@ func testTables(t *testing.T, db *databases.Database) {
 
 	// try with min length
 	db.Tables[0].Columns[0].Attributes[0].Type = execution.MIN
-	db.Tables[0].Columns[0].Attributes[0].Value = &databases.AttributeValue{Serialized: false, Value: true}
+	db.Tables[0].Columns[0].Attributes[0].Value, err = anytype.New(1)
+	if err != nil {
+		t.Errorf("failed to create new anytype: %v", err)
+	}
 	err = validation.ValidateDatabase(db)
 	if err == nil {
 		t.Errorf("expected error for invalid attribute value")

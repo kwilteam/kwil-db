@@ -2,6 +2,7 @@ package executables
 
 import (
 	"fmt"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
 )
@@ -26,7 +27,7 @@ type executableInterface struct {
 	DefaultRoles []string
 }
 
-func FromDatabase(db *databases.Database) (ExecutablesInterface, error) {
+func FromDatabase(db *databases.Database[anytype.KwilAny]) (ExecutablesInterface, error) {
 	execs, err := generateExecutables(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate executables: %w", err)

@@ -3,6 +3,7 @@ package validation_test
 import (
 	"kwil/x/execution/mocks"
 	"kwil/x/execution/validation"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"testing"
 
@@ -27,7 +28,7 @@ func Test_Validation(t *testing.T) {
 
 }
 
-func testNames(t *testing.T, db *databases.Database) {
+func testNames(t *testing.T, db *databases.Database[anytype.KwilAny]) {
 	// testing names.  The same name check is used for all names, so we only need to test one
 	// test no name
 	db.Name = ""

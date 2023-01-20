@@ -2,11 +2,14 @@ package utils
 
 import (
 	"encoding/json"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
-func DBFromJson(bts []byte) (*databases.Database, error) {
-	var db databases.Database
+// TODO: delete
+
+func DBFromJson(bts []byte) (*databases.Database[anytype.KwilAny], error) {
+	var db databases.Database[anytype.KwilAny]
 	err := json.Unmarshal(bts, &db)
 	if err != nil {
 		return nil, err
@@ -14,6 +17,6 @@ func DBFromJson(bts []byte) (*databases.Database, error) {
 	return &db, nil
 }
 
-func DBToJson(db *databases.Database) ([]byte, error) {
+func DBToJson(db *databases.Database[anytype.KwilAny]) ([]byte, error) {
 	return json.Marshal(db)
 }
