@@ -11,15 +11,17 @@ import (
 
 const commitDeposits = `-- name: CommitDeposits :exec
 WITH deleted_deposits AS (
-    DELETE FROM deposits
+    SELECT account_address, SUM(amount) as total_amount
+    FROM deposits
     WHERE height <= $1
-    RETURNING id, tx_hash, account_address, amount, height
+    GROUP BY account_address
 )
 INSERT INTO accounts (account_address, balance)
-SELECT deleted_deposits.account_address, deleted_deposits.amount
+SELECT deleted_deposits.account_address, deleted_deposits.total_amount
 FROM deleted_deposits
-ON CONFLICT (account_address) WHERE (account_address is NOT NULL) DO UPDATE SET balance = accounts.balance + (
-    SELECT deleted_deposits.amount
+ON CONFLICT (account_address) WHERE (account_address is NOT NULL) DO UPDATE
+SET balance = accounts.balance + (
+    SELECT SUM(deleted_deposits.total_amount)
     FROM deleted_deposits
     WHERE accounts.account_address = deleted_deposits.account_address
 )
@@ -54,6 +56,40 @@ func (q *Queries) Deposit(ctx context.Context, arg *DepositParams) error {
 	return err
 }
 
+const getAccountDeposits = `-- name: GetAccountDeposits :many
+SELECT account_address, SUM(amount) as total_amount
+FROM deposits
+GROUP BY account_address
+`
+
+type GetAccountDepositsRow struct {
+	AccountAddress string
+	TotalAmount    int64
+}
+
+func (q *Queries) GetAccountDeposits(ctx context.Context) ([]*GetAccountDepositsRow, error) {
+	rows, err := q.query(ctx, q.getAccountDepositsStmt, getAccountDeposits)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetAccountDepositsRow
+	for rows.Next() {
+		var i GetAccountDepositsRow
+		if err := rows.Scan(&i.AccountAddress, &i.TotalAmount); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getDepositIdByTx = `-- name: GetDepositIdByTx :one
 SELECT id
 FROM deposits
@@ -65,4 +101,26 @@ func (q *Queries) GetDepositIdByTx(ctx context.Context, txHash string) (int32, e
 	var id int32
 	err := row.Scan(&id)
 	return id, err
+}
+
+const oldCommit = `-- name: OldCommit :exec
+WITH deleted_deposits AS (
+    DELETE FROM deposits
+    WHERE height <= $1
+    RETURNING id, tx_hash, account_address, amount, height
+)
+INSERT INTO accounts (account_address, balance)
+SELECT deleted_deposits.account_address, deleted_deposits.amount
+FROM deleted_deposits
+ON CONFLICT (account_address) WHERE (account_address is NOT NULL) DO UPDATE
+SET balance = accounts.balance + (
+    SELECT SUM(deleted_deposits.amount)
+    FROM deleted_deposits
+    WHERE accounts.account_address = deleted_deposits.account_address
+)
+`
+
+func (q *Queries) OldCommit(ctx context.Context, height int64) error {
+	_, err := q.exec(ctx, q.oldCommitStmt, oldCommit, height)
+	return err
 }
