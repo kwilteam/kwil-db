@@ -88,7 +88,11 @@ containerPorts:
 
 hasura:
   postgresql:
+<<<<<<< HEAD
     enabled: true # for dependency
+=======
+    enable: true
+>>>>>>> daac2b8 (new helm chart for staging)
     primary:
       service:
         ports:

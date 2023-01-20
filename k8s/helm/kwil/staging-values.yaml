@@ -20,6 +20,19 @@ kwild:
       nodePorts:
         hasura: 32100
 
+
 global:
   postgres:
     enabled: true # to use an exising database
+    host: "kwildb.c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
+    port: 5432
+    database: "kwil"
+    username: "postgres"
+    password: "postgres"    
+
+#Location of image in AWS ECR 
+
+image:
+  repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwil-gateway
+  pullPolicy: IfNotPresent
+  tag: latest

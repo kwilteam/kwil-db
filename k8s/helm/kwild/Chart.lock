@@ -3,4 +3,8 @@ dependencies:
   repository: file://../hasura
   version: 0.1.0
 digest: sha256:6451f4d2ed83644919488d52b14d0ec14865577084a8426c4f53c1f0ad11ce1e
+<<<<<<< HEAD
 generated: "2023-01-20T14:24:25.501665-06:00"
+=======
+generated: "2023-01-20T14:08:58.738533-06:00"
+>>>>>>> daac2b8 (new helm chart for staging)
