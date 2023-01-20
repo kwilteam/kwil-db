@@ -19,6 +19,10 @@ kwild:
       # comment nodePorts to enable multi instances on local machine
       nodePorts:
         hasura: 32100
+  image:
+    repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild
+    pullPolicy: IfNotPresent
+    tag: latest  
 
 
 global:
