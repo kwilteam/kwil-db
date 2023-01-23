@@ -1,0 +1,12 @@
+#Location of image in AWS ECR 
+
+image:
+  repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild-gateway
+  pullPolicy: IfNotPresent
+  tag: latest
+
+kwild:
+  image:
+    repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild
+    pullPolicy: IfNotPresent
+    tag: latest
