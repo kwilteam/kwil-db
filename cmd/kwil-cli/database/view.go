@@ -3,7 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/kwil/client/grpc-client"
+	grpc_client "kwil/kwil/client/grpc-client"
 
 	"kwil/cmd/kwil-cli/common"
 	"kwil/x/types/databases"
@@ -57,7 +57,7 @@ func viewDatabaseCmd() *cobra.Command {
 						fmt.Printf("      Type: %s\n", c.Type.String())
 						for _, a := range c.Attributes {
 							fmt.Printf("      %s\n", a.Type.String())
-							if a.Value != nil && a.Value != "" {
+							if a.Value != nil {
 								fmt.Printf("        %s\n", a.Value)
 							}
 						}

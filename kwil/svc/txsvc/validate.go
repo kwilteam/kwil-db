@@ -3,11 +3,12 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	"kwil/x/execution/clean"
-	"kwil/x/execution/validation"
+	"kwil/x/execution/validator"
 	"kwil/x/proto/commonpb"
 	"kwil/x/proto/txpb"
 	"kwil/x/types/databases"
+	"kwil/x/types/databases/clean"
+	"kwil/x/types/databases/convert"
 	"kwil/x/utils/serialize"
 )
 
@@ -17,23 +18,25 @@ func (s *Service) ValidateSchema(ctx context.Context, req *txpb.ValidateSchemaRe
 	}
 
 	// convert the database
-	db, err := serialize.Convert[commonpb.Database, databases.Database](req.Schema)
+	db, err := serialize.Convert[commonpb.Database, databases.Database[[]byte]](req.Schema)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to convert database", err)
 		return nil, fmt.Errorf("failed to convert request body")
 	}
 
 	// clean the database
-	err = clean.CleanDatabase(db)
+	clean.Clean(db)
+
+	// convert
+	anyDB, err := convert.Bytes.DatabaseToKwilAny(db)
 	if err != nil {
-		s.log.Sugar().Warnf("failed to clean database", err)
-		// we want to return this error message to the user
-		res.Error = fmt.Errorf("error cleaning database: %w", err).Error()
-		return res, nil
+		s.log.Sugar().Warnf("failed to convert database to bytes", err)
+		return nil, fmt.Errorf("failed to convert database to bytes")
 	}
 
 	// validate the database
-	err = validation.ValidateDatabase(db)
+	vdr := validator.Validator{}
+	err = vdr.Validate(anyDB)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to validate database", err)
 		// we want to return this error message to the user

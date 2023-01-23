@@ -3,8 +3,8 @@ package databases
 import "kwil/x/execution"
 
 type Index struct {
-	Name    string              `json:"name" yaml:"name"`
-	Table   string              `json:"table" yaml:"table"`
-	Columns []string            `json:"columns" yaml:"columns"`
-	Using   execution.IndexType `json:"using" yaml:"using"`
+	Name    string              `json:"name" clean:"lower"`
+	Table   string              `json:"table" clean:"lower"`
+	Columns []string            `json:"columns" clean:"lower"`
+	Using   execution.IndexType `json:"using" clean:"is_enum,index_type"`
 }

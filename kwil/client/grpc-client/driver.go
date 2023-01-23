@@ -3,7 +3,6 @@ package grpc_client
 import (
 	"context"
 	"fmt"
-	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"kwil/x/types/transactions"
 
@@ -22,7 +21,7 @@ type Driver struct {
 	client   *Client
 }
 
-func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[anytype.KwilAny]) (*transactions.Response, error) {
+func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*transactions.Response, error) {
 	client, err := d.getClient()
 
 	if err != nil {

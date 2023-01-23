@@ -16,13 +16,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	anytype "kwil/x/types/data_types/any_type"
-
 	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/assert"
 )
 
-func loadDatabase(path string) (*databases.Database[anytype.KwilAny], error) {
+func loadDatabase(path string) (*databases.Database[[]byte], error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -34,7 +32,7 @@ func loadDatabase(path string) (*databases.Database[anytype.KwilAny], error) {
 		return nil, err
 	}
 
-	var db databases.Database[anytype.KwilAny]
+	var db databases.Database[[]byte]
 	if err := json.Unmarshal(data, &db); err != nil {
 		return nil, err
 	}
@@ -51,7 +49,7 @@ func TestKwilDatabase(t *testing.T) {
 
 	type testCase struct {
 		name    string
-		args    *databases.Database[anytype.KwilAny]
+		args    *databases.Database[[]byte]
 		wantErr bool
 		want    *transactions.Response
 	}

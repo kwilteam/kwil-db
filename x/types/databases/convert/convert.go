@@ -1,9 +1,6 @@
 package convert
 
-type convert struct {
-	Clean clean
-}
-
-var Convert = convert{
-	Clean: clean{},
-}
+var (
+	KwilAny = kwilAnyConversion{}
+	Bytes   = bytesConversion{}
+)

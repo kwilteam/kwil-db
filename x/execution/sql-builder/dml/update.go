@@ -2,13 +2,14 @@ package dml
 
 import (
 	"fmt"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 )
 
-func BuildUpdate(schemaName, table string, params []*databases.Parameter, whereClauses []*databases.WhereClause) (string, error) {
+func BuildUpdate(schemaName, table string, params []*databases.Parameter[anytype.KwilAny], whereClauses []*databases.WhereClause[anytype.KwilAny]) (string, error) {
 	tblName := makeTableName(schemaName, table)
 
 	// converting parameters to goqu records

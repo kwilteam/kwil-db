@@ -1,29 +1,29 @@
-package validation
+package validator
 
 import (
 	"fmt"
 	"kwil/x/execution"
-	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"sort"
 )
 
-func validateIndexes(d *databases.Database[anytype.KwilAny]) error {
-	// check amount of indexes
-	if len(d.Indexes) > execution.MAX_INDEX_COUNT {
-		return fmt.Errorf(`database must have at most %d indexes`, execution.MAX_INDEX_COUNT)
+func (v *Validator) validateIndexes() error {
+	// check if there are too many indexes
+	err := v.validateIndexCount()
+	if err != nil {
+		return fmt.Errorf(`invalid index count: %w`, err)
 	}
 
 	// check unique index names and validate indexes
-	indexes := make(map[string]struct{})
+	indexNames := make(map[string]struct{})
 	// indexes must also check unique columns and type
 	indexColAndType := make(map[string]struct{})
-	for _, index := range d.Indexes {
+	for _, index := range v.db.Indexes {
 		// check if index name is unique
-		if _, ok := indexes[index.Name]; ok {
+		if _, ok := indexNames[index.Name]; ok {
 			return fmt.Errorf(`duplicate index name "%s"`, index.Name)
 		}
-		indexes[index.Name] = struct{}{}
+		indexNames[index.Name] = struct{}{}
 
 		// check if index columns and type are unique
 		// first sort columns
@@ -37,7 +37,7 @@ func validateIndexes(d *databases.Database[anytype.KwilAny]) error {
 		}
 		indexColAndType[key] = struct{}{}
 
-		err := ValidateIndex(index, d)
+		err := v.validateIndex(index)
 		if err != nil {
 			return fmt.Errorf(`error on index "%s": %w`, index.Name, err)
 		}
@@ -46,7 +46,15 @@ func validateIndexes(d *databases.Database[anytype.KwilAny]) error {
 	return nil
 }
 
-func ValidateIndex(index *databases.Index, db *databases.Database[anytype.KwilAny]) error {
+func (v *Validator) validateIndexCount() error {
+	if len(v.db.Indexes) > execution.MAX_INDEX_COUNT {
+		return fmt.Errorf(`too many indexes: %v > %v`, len(v.db.Indexes), execution.MAX_INDEX_COUNT)
+	}
+
+	return nil
+}
+
+func (v *Validator) validateIndex(index *databases.Index) error {
 	// check if index name is valid
 	err := CheckName(index.Name, execution.MAX_INDEX_NAME_LENGTH)
 	if err != nil {
@@ -59,7 +67,7 @@ func ValidateIndex(index *databases.Index, db *databases.Database[anytype.KwilAn
 	}
 
 	// check if index table is valid
-	table := db.GetTable(index.Table)
+	table := v.db.GetTable(index.Table)
 	if table == nil {
 		return fmt.Errorf(`table "%s" does not exist`, index.Table)
 	}

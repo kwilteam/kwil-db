@@ -16,7 +16,7 @@ var (
 			&Table1,
 			&Table2,
 		},
-		SQLQueries: []*databases.SQLQuery{
+		SQLQueries: []*databases.SQLQuery[anytype.KwilAny]{
 			&Insert1,
 			&Insert2,
 			&Update1,
@@ -75,106 +75,106 @@ var (
 	// sql queries
 
 	// insert
-	Insert1 = databases.SQLQuery{
+	Insert1 = databases.SQLQuery[anytype.KwilAny]{
 		Name:  "insert1",
 		Type:  execution.INSERT,
 		Table: "table1",
-		Params: []*databases.Parameter{
+		Params: []*databases.Parameter[anytype.KwilAny]{
 			&Parameter1,
 			&Parameter2,
 		},
 	}
 
-	Insert2 = databases.SQLQuery{
+	Insert2 = databases.SQLQuery[anytype.KwilAny]{
 		Name:  "insert2",
 		Type:  execution.INSERT,
 		Table: "table2",
-		Params: []*databases.Parameter{
+		Params: []*databases.Parameter[anytype.KwilAny]{
 			&Parameter1,
 			&Parameter3,
 		},
 	}
 
 	// update
-	Update1 = databases.SQLQuery{
+	Update1 = databases.SQLQuery[anytype.KwilAny]{
 		Name:  "update1",
 		Type:  execution.UPDATE,
 		Table: "table1",
-		Params: []*databases.Parameter{
+		Params: []*databases.Parameter[anytype.KwilAny]{
 			&Parameter1,
 			&Parameter2,
 		},
-		Where: []*databases.WhereClause{
+		Where: []*databases.WhereClause[anytype.KwilAny]{
 			&WhereClause2,
 		},
 	}
 
-	Update2 = databases.SQLQuery{
+	Update2 = databases.SQLQuery[anytype.KwilAny]{
 		Name:  "update2",
 		Type:  execution.UPDATE,
 		Table: "table2",
-		Params: []*databases.Parameter{
+		Params: []*databases.Parameter[anytype.KwilAny]{
 			&Parameter1,
 			&Parameter3,
 		},
-		Where: []*databases.WhereClause{
+		Where: []*databases.WhereClause[anytype.KwilAny]{
 			&WhereClause1,
 		},
 	}
 
 	// delete
-	Delete1 = databases.SQLQuery{
+	Delete1 = databases.SQLQuery[anytype.KwilAny]{
 		Name:  "delete1",
 		Type:  execution.DELETE,
 		Table: "table1",
-		Where: []*databases.WhereClause{
+		Where: []*databases.WhereClause[anytype.KwilAny]{
 			&WhereClause2,
 		},
 	}
 
-	Delete2 = databases.SQLQuery{
+	Delete2 = databases.SQLQuery[anytype.KwilAny]{
 		Name:  "delete2",
 		Type:  execution.DELETE,
 		Table: "table2",
-		Where: []*databases.WhereClause{
+		Where: []*databases.WhereClause[anytype.KwilAny]{
 			&WhereClause1,
 		},
 	}
 
 	// parameters
 
-	Parameter1 = databases.Parameter{
+	Parameter1 = databases.Parameter[anytype.KwilAny]{
 		Name:     "param1",
 		Column:   "col1",
 		Static:   true,
-		Value:    "",
+		Value:    anytype.NewMust(""),
 		Modifier: execution.CALLER,
 	}
 
-	Parameter2 = databases.Parameter{
+	Parameter2 = databases.Parameter[anytype.KwilAny]{
 		Name:   "param2",
 		Column: "col2",
 	}
 
-	Parameter3 = databases.Parameter{
+	Parameter3 = databases.Parameter[anytype.KwilAny]{
 		Name:   "param3",
 		Column: "col3",
 		Static: false,
 	}
 
-	WhereClause1 = databases.WhereClause{
+	WhereClause1 = databases.WhereClause[anytype.KwilAny]{
 		Name:     "where1",
 		Column:   "col3",
 		Static:   false,
 		Operator: execution.EQUAL,
 	}
 
-	WhereClause2 = databases.WhereClause{
+	WhereClause2 = databases.WhereClause[anytype.KwilAny]{
 		Name:     "where2",
 		Column:   "col1",
 		Static:   true,
 		Operator: execution.EQUAL,
-		Value:    "",
+		Value:    anytype.NewMust(""),
 		Modifier: execution.CALLER,
 	}
 

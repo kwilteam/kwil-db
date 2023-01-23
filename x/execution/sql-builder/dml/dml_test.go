@@ -1,9 +1,10 @@
 package dml_test
 
 import (
-	"kwil/x/execution/mocks"
 	"kwil/x/execution/sql-builder/dml"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
+	"kwil/x/types/databases/mocks"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,11 +22,11 @@ func Test_DML(t *testing.T) {
 	}
 
 	// test create update
-	var params []*databases.Parameter
+	var params []*databases.Parameter[anytype.KwilAny]
 	params = append(params, &mocks.Parameter1)
 	params = append(params, &mocks.Parameter2)
 
-	var wheres []*databases.WhereClause
+	var wheres []*databases.WhereClause[anytype.KwilAny]
 	wheres = append(wheres, &mocks.WhereClause1)
 	wheres = append(wheres, &mocks.WhereClause2)
 	stmt, err = dml.BuildUpdate("kwil", "test", params, wheres)

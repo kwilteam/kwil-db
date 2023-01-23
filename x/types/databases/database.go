@@ -16,12 +16,12 @@ type AnyValue interface {
 }
 
 type Database[T AnyValue] struct {
-	Owner      string      `json:"owner" clean:"lower"`
-	Name       string      `json:"name" clean:"lower"`
-	Tables     []*Table[T] `json:"tables"`
-	Roles      []*Role     `json:"roles"`
-	SQLQueries []*SQLQuery `json:"sql_queries"`
-	Indexes    []*Index    `json:"indexes"`
+	Owner      string         `json:"owner" clean:"lower"`
+	Name       string         `json:"name" clean:"lower"`
+	Tables     []*Table[T]    `json:"tables"`
+	Roles      []*Role        `json:"roles"`
+	SQLQueries []*SQLQuery[T] `json:"sql_queries"`
+	Indexes    []*Index       `json:"indexes"`
 }
 
 // hashes the lower-cased name and owner and prepends an x
@@ -29,7 +29,7 @@ func (d *Database[T]) GetSchemaName() string {
 	return GenerateSchemaName(d.Owner, d.Name)
 }
 
-func (d *Database[T]) GetQuery(q string) *SQLQuery {
+func (d *Database[T]) GetQuery(q string) *SQLQuery[T] {
 	for _, qry := range d.SQLQueries {
 		if qry.Name == q {
 			return qry

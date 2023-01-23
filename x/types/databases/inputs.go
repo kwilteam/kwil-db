@@ -2,67 +2,67 @@ package databases
 
 import "kwil/x/execution"
 
-type Input interface {
+type Input[T AnyValue] interface {
 	GetName() string
 	GetColumn() string
 	GetStatic() bool
-	GetValue() any
+	GetValue() *T
 	GetModifier() execution.ModifierType
 }
 
-type Parameter struct {
-	Name     string                 `json:"name"`
-	Column   string                 `json:"column"`
+type Parameter[T AnyValue] struct {
+	Name     string                 `json:"name" clean:"lower"`
+	Column   string                 `json:"column" clean:"lower"`
 	Static   bool                   `json:"static"`
-	Value    any                    `json:"value,omitempty"`
-	Modifier execution.ModifierType `json:"modifier,omitempty"`
+	Value    T                      `json:"value,omitempty" traverse:"shallow"`
+	Modifier execution.ModifierType `json:"modifier,omitempty" clean:"is_enum,modifier_type"`
 }
 
-func (p *Parameter) GetName() string {
+func (p *Parameter[T]) GetName() string {
 	return p.Name
 }
 
-func (p *Parameter) GetColumn() string {
+func (p *Parameter[T]) GetColumn() string {
 	return p.Column
 }
 
-func (p *Parameter) GetStatic() bool {
+func (p *Parameter[T]) GetStatic() bool {
 	return p.Static
 }
 
-func (p *Parameter) GetValue() any {
-	return p.Value
+func (p *Parameter[T]) GetValue() *T {
+	return &p.Value
 }
 
-func (p *Parameter) GetModifier() execution.ModifierType {
+func (p *Parameter[T]) GetModifier() execution.ModifierType {
 	return p.Modifier
 }
 
-type WhereClause struct {
-	Name     string                           `json:"name"`
-	Column   string                           `json:"column"`
+type WhereClause[T AnyValue] struct {
+	Name     string                           `json:"name" clean:"lower"`
+	Column   string                           `json:"column" clean:"lower"`
 	Static   bool                             `json:"static"`
-	Operator execution.ComparisonOperatorType `json:"operator,omitempty"`
-	Value    any                              `json:"value,omitempty"`
-	Modifier execution.ModifierType           `json:"modifier,omitempty"`
+	Operator execution.ComparisonOperatorType `json:"operator,omitempty" clean:"is_enum,comparison_operator_type"`
+	Value    T                                `json:"value,omitempty" traverse:"shallow"`
+	Modifier execution.ModifierType           `json:"modifier,omitempty" clean:"is_enum,modifier_type"`
 }
 
-func (w *WhereClause) GetName() string {
+func (w *WhereClause[T]) GetName() string {
 	return w.Name
 }
 
-func (w *WhereClause) GetColumn() string {
+func (w *WhereClause[T]) GetColumn() string {
 	return w.Column
 }
 
-func (w *WhereClause) GetStatic() bool {
+func (w *WhereClause[T]) GetStatic() bool {
 	return w.Static
 }
 
-func (w *WhereClause) GetValue() any {
-	return w.Value
+func (w *WhereClause[T]) GetValue() *T {
+	return &w.Value
 }
 
-func (w *WhereClause) GetModifier() execution.ModifierType {
+func (w *WhereClause[T]) GetModifier() execution.ModifierType {
 	return w.Modifier
 }

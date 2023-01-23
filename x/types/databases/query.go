@@ -6,22 +6,22 @@ import (
 	"kwil/x/execution"
 )
 
-type SQLQuery struct {
-	Name   string              `json:"name"`
-	Type   execution.QueryType `json:"type"`
-	Table  string              `json:"table"`
-	Params []*Parameter        `json:"parameters,omitempty"`
-	Where  []*WhereClause      `json:"where,omitempty"`
+type SQLQuery[T AnyValue] struct {
+	Name   string              `json:"name" clean:"lower"`
+	Type   execution.QueryType `json:"type" clean:"is_enum,query_type"`
+	Table  string              `json:"table" clean:"lower"`
+	Params []*Parameter[T]     `json:"parameters,omitempty" clean:"struct"`
+	Where  []*WhereClause[T]   `json:"where,omitempty" clean:"struct"`
 }
 
-func (s *SQLQuery) EncodeGOB() ([]byte, error) {
+func (s *SQLQuery[T]) EncodeGOB() ([]byte, error) {
 	buf := bytes.NewBuffer([]byte{})
 	err := gob.NewEncoder(buf).Encode(s)
 	return buf.Bytes(), err
 }
 
-func (s *SQLQuery) DecodeGOB(b []byte) error {
-	var qry SQLQuery
+func (s *SQLQuery[T]) DecodeGOB(b []byte) error {
+	var qry SQLQuery[T]
 	buf := bytes.NewBuffer(b)
 	err := gob.NewDecoder(buf).Decode(&qry)
 	if err != nil {
@@ -32,7 +32,7 @@ func (s *SQLQuery) DecodeGOB(b []byte) error {
 }
 
 // thanks for nothing generics
-func (s *SQLQuery) ListParamColumns() []string {
+func (s *SQLQuery[T]) ListParamColumns() []string {
 	var cols []string
 	for _, p := range s.Params {
 		cols = append(cols, p.Column)
@@ -40,7 +40,7 @@ func (s *SQLQuery) ListParamColumns() []string {
 	return cols
 }
 
-func (s *SQLQuery) ListParamColumnsAsAny() []any {
+func (s *SQLQuery[T]) ListParamColumnsAsAny() []any {
 	var cols []interface{}
 	for _, p := range s.Params {
 		cols = append(cols, p.Column)
@@ -48,7 +48,7 @@ func (s *SQLQuery) ListParamColumnsAsAny() []any {
 	return cols
 }
 
-func (s *SQLQuery) ListWhereColumns() []string {
+func (s *SQLQuery[T]) ListWhereColumns() []string {
 	var cols []string
 	for _, w := range s.Where {
 		cols = append(cols, w.Column)
@@ -56,7 +56,7 @@ func (s *SQLQuery) ListWhereColumns() []string {
 	return cols
 }
 
-func (s *SQLQuery) ListWhereColumnsAsAny() []any {
+func (s *SQLQuery[T]) ListWhereColumnsAsAny() []any {
 	var cols []interface{}
 	for _, w := range s.Where {
 		cols = append(cols, w.Column)

@@ -6,6 +6,7 @@ import (
 	"kwil/x/proto/txpb"
 	accountTypes "kwil/x/types/accounts"
 	"kwil/x/types/databases"
+	"kwil/x/types/databases/convert"
 	"kwil/x/types/transactions"
 	"kwil/x/utils/serialize"
 	"strings"
@@ -46,7 +47,12 @@ func (s *Service) handleDeployDatabase(ctx context.Context, tx *transactions.Tra
 		return nil, fmt.Errorf("database owner is not the same as the sender")
 	}
 
-	err = s.executor.DeployDatabase(ctx, db)
+	anyTypeDB, err := convert.Bytes.DatabaseToKwilAny(db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert database to any type: %w", err)
+	}
+
+	err = s.executor.DeployDatabase(ctx, anyTypeDB)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deploy database: %w", err)
 	}

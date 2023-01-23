@@ -23,7 +23,7 @@ func generateExecutables(db *databases.Database[anytype.KwilAny]) (map[string]*e
 	return execs, nil
 }
 
-func generateExecutable(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery) (*execTypes.Executable, error) {
+func generateExecutable(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery[anytype.KwilAny]) (*execTypes.Executable, error) {
 	statement, err := generateStatement(db, q)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate statement: %w", err)
@@ -42,7 +42,7 @@ func generateExecutable(db *databases.Database[anytype.KwilAny], q *databases.SQ
 	}, nil
 }
 
-func generateStatement(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery) (string, error) {
+func generateStatement(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery[anytype.KwilAny]) (string, error) {
 	switch q.Type {
 	case execution.SELECT:
 		return "", fmt.Errorf("SELECT is not supported yet")
@@ -62,11 +62,11 @@ type arger interface {
 	GetColumn() string
 	GetModifier() execution.ModifierType
 	GetStatic() bool
-	GetValue() any
+	GetValue() *anytype.KwilAny
 }
 
 // buildsArgs will build all args and determine their position
-func buildArgs(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery) ([]*execTypes.Arg, error) {
+func buildArgs(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery[anytype.KwilAny]) ([]*execTypes.Arg, error) {
 	args := []*execTypes.Arg{}
 	var pos uint8 = 0
 	for _, param := range q.Params {
@@ -91,7 +91,7 @@ func buildArgs(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery) (
 }
 
 // buildArg will build an arg from a param or where clause
-func buildArg(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery, position uint8, param arger) (*execTypes.Arg, error) {
+func buildArg(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery[anytype.KwilAny], position uint8, param arger) (*execTypes.Arg, error) {
 	tbl := db.GetTable(q.Table)
 	if tbl == nil {
 		return nil, fmt.Errorf(`table "%s" does not exist`, q.Table)
@@ -105,7 +105,7 @@ func buildArg(db *databases.Database[anytype.KwilAny], q *databases.SQLQuery, po
 	return &execTypes.Arg{
 		Position: position,
 		Static:   param.GetStatic(),
-		Value:    param.GetValue(),
+		Value:    param.GetValue().Value(), // this should maybe be the bytes instead?
 		Type:     col.Type,
 		Name:     param.GetName(),
 		Modifier: param.GetModifier(),

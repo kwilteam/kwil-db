@@ -3,7 +3,7 @@ package executables_test
 import (
 	"fmt"
 	"kwil/x/execution/executables"
-	"kwil/x/execution/mocks"
+	"kwil/x/types/databases/mocks"
 	"testing"
 )
 

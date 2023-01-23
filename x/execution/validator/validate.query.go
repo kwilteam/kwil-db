@@ -1,51 +1,43 @@
-package validation
+package validator
 
 import (
 	"fmt"
 	"kwil/x/execution"
-	datatypes "kwil/x/types/data_types"
 	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )
 
-func validateSQLQueries(d *databases.Database[anytype.KwilAny]) error {
-	// check amount of queries
-	if len(d.SQLQueries) > execution.MAX_QUERY_COUNT {
-		return fmt.Errorf(`database must have at most %d queries`, execution.MAX_QUERY_COUNT)
-	}
-
-	// check unique query names and validate queries
-	queries := make(map[string]struct{})
-	for _, query := range d.SQLQueries {
-		// check if query name is unique
-		if _, ok := queries[query.Name]; ok {
-			return fmt.Errorf(`duplicate query name "%s"`, query.Name)
+func (v *Validator) validateQueries() error {
+	queryNames := make(map[string]struct{})
+	for _, q := range v.db.SQLQueries {
+		// validate query name is unique
+		if _, ok := queryNames[q.Name]; ok {
+			return fmt.Errorf(`duplicate query name "%s"`, q.Name)
 		}
-		queries[query.Name] = struct{}{}
+		queryNames[q.Name] = struct{}{}
 
-		err := ValidateSQLQuery(query, d)
+		err := v.validateQuery(q)
 		if err != nil {
-			return fmt.Errorf(`error on query "%s": %w`, query.Name, err)
+			return fmt.Errorf(`error on query %v: %w`, q.Name, err)
 		}
 	}
 
 	return nil
 }
 
-func ValidateSQLQuery(q *databases.SQLQuery, db *databases.Database[anytype.KwilAny]) error {
-	// validate type
+func (v *Validator) validateQuery(q *databases.SQLQuery[anytype.KwilAny]) error {
 	if !q.Type.IsValid() {
-		return fmt.Errorf(`unknown query type: %d`, q.Type.Int())
+		return fmt.Errorf(`invalid query type`)
 	}
 
 	// check if query name is valid
-	err := CheckName(q.Name, execution.MAX_QUERY_NAME_LENGTH)
+	err := CheckName(q.Name, databases.MAX_QUERY_NAME_LENGTH)
 	if err != nil {
 		return fmt.Errorf(`invalid name for query: %w`, err)
 	}
 
 	// check if table exists
-	table := db.GetTable(q.Table)
+	table := v.db.GetTable(q.Table)
 	if table == nil {
 		return fmt.Errorf(`table "%s" does not exist`, q.Table)
 	}
@@ -72,7 +64,7 @@ func ValidateSQLQuery(q *databases.SQLQuery, db *databases.Database[anytype.Kwil
 		paramColumns[param.Column] = struct{}{}
 
 		// check if parameter is valid
-		err := ValidateInput(param, table)
+		err := validateInput(param, table)
 		if err != nil {
 			return fmt.Errorf(`invalid parameter for query "%s": %w`, q.Name, err)
 		}
@@ -90,7 +82,7 @@ func ValidateSQLQuery(q *databases.SQLQuery, db *databases.Database[anytype.Kwil
 		}
 
 		// check if where is valid
-		err := ValidateInput(where, table)
+		err := validateInput(where, table)
 		if err != nil {
 			return fmt.Errorf(`invalid where for query "%s": %w`, q.Name, err)
 		}
@@ -101,7 +93,7 @@ func ValidateSQLQuery(q *databases.SQLQuery, db *databases.Database[anytype.Kwil
 
 // Checks that the query type is valid and that the query has an
 // acceptable parameters and where clauses.
-func validateQueryType(q *databases.SQLQuery) error {
+func validateQueryType(q *databases.SQLQuery[anytype.KwilAny]) error {
 	// check if query has too many params or where clauses
 	if len(q.Params) > execution.MAX_PARAM_PER_QUERY || len(q.Where) > execution.MAX_WHERE_PER_QUERY {
 		return fmt.Errorf(`query "%s" cannot have more than %d parameters or %d where clauses`, q.Name, execution.MAX_PARAM_PER_QUERY, execution.MAX_WHERE_PER_QUERY)
@@ -134,7 +126,7 @@ func validateQueryType(q *databases.SQLQuery) error {
 	return nil
 }
 
-func ValidateInput(input databases.Input, table *databases.Table[anytype.KwilAny]) error {
+func validateInput(input databases.Input[anytype.KwilAny], table *databases.Table[anytype.KwilAny]) error {
 	// check if column exists
 	col := table.GetColumn(input.GetColumn())
 	if col == nil {
@@ -149,17 +141,17 @@ func ValidateInput(input databases.Input, table *databases.Table[anytype.KwilAny
 	if input.GetStatic() {
 
 		// check if value is set
-		if input.GetValue() == nil && input.GetModifier() != execution.CALLER {
+		if input.GetValue().Value() == nil && input.GetModifier() != execution.CALLER {
 			return fmt.Errorf(`value must be set for non-fillable parameter on column "%s"`, input.GetColumn())
 		}
 
-		err := datatypes.Utils.CompareAnyToKwilType(input.GetValue(), col.Type)
 		// check if value type matches column type
-		if err != nil {
-			return fmt.Errorf(`value "%s" must be column type "%s" for parameter on column "%s"`, fmt.Sprint(input.GetValue()), col.Type.String(), input.GetColumn())
+		if col.Type != input.GetValue().Type() {
+			return fmt.Errorf(`value "%s" must be of type "%s" for parameter on column "%s"`, fmt.Sprint(input.GetValue()), col.Type.String(), input.GetColumn())
 		}
+
 	} else { // not static: users can fill in the value
-		if input.GetValue() != nil {
+		if input.GetValue().Bytes() != nil {
 			return fmt.Errorf(`value must not be set for fillable parameter on column "%s"`, input.GetColumn())
 		}
 

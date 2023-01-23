@@ -2,11 +2,12 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
 	grpc_client "kwil/kwil/client/grpc-client"
-	execUtils "kwil/x/execution/utils"
+	"kwil/x/types/databases"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -35,9 +36,10 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to read file: %w", err)
 				}
 
-				db, err := execUtils.DBFromJson(file)
+				var db databases.Database[[]byte]
+				err = json.Unmarshal(file, &db)
 				if err != nil {
-					return fmt.Errorf("failed to parse database: %w", err)
+					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
 				client, err := grpc_client.NewClient(cc, viper.GetViper())
@@ -45,7 +47,7 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to create client: %w", err)
 				}
 
-				res, err := client.DeployDatabase(cmd.Context(), db)
+				res, err := client.DeployDatabase(cmd.Context(), &db)
 				if err != nil {
 					return err
 				}

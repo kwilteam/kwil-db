@@ -40,10 +40,9 @@ func (q *dbRetriever) GetAttributes(ctx context.Context, columnID int32) ([]*dat
 
 	attributes := make([]*databases.Attribute[anytype.KwilAny], len(attrs))
 	for i, attr := range attrs {
-
 		value, err := anytype.NewFromSerial(attr.AttributeValue)
 		if err != nil {
-			return nil, fmt.Errorf(`error converting attribute value to anytype: %w`, err)
+			return nil, fmt.Errorf(`error getting value for attribute %d: %w`, attr.AttributeType, err)
 		}
 
 		attributes[i] = &databases.Attribute[anytype.KwilAny]{

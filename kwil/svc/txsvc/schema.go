@@ -6,6 +6,7 @@ import (
 	"kwil/x/proto/commonpb"
 	"kwil/x/proto/txpb"
 	"kwil/x/types/databases"
+	"kwil/x/types/databases/convert"
 	"kwil/x/types/execution"
 	"kwil/x/utils/serialize"
 )
@@ -34,9 +35,13 @@ func (s *Service) retrieveDatabaseSchema(ctx context.Context, database *database
 		return nil, fmt.Errorf("failed to get database")
 	}
 
-	//db.Tables[1].Columns[3].Attributes = []*databases.Attribute{}
+	byteDB, err := convert.KwilAny.DatabaseToBytes(db)
+	if err != nil {
+		s.log.Sugar().Warnf("failed to convert database to bytes", err)
+		return nil, fmt.Errorf("failed to return database metadata")
+	}
 
-	convDb, err := serialize.Convert[databases.Database[[]byte], commonpb.Database](db)
+	convDb, err := serialize.Convert[databases.Database[[]byte], commonpb.Database](byteDB)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to convert database", err)
 		return nil, fmt.Errorf("failed to return database metadata")

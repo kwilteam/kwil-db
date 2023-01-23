@@ -2,12 +2,13 @@ package dml
 
 import (
 	"fmt"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 
 	"github.com/doug-martin/goqu/v9"
 )
 
-func BuildDelete(schemaName, table string, wheres []*databases.WhereClause) (string, error) {
+func BuildDelete(schemaName, table string, wheres []*databases.WhereClause[anytype.KwilAny]) (string, error) {
 	tblName := makeTableName(schemaName, table)
 
 	// converting the where clauses to goqu expressions

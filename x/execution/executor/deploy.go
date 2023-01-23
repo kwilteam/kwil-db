@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"kwil/kwil/repository"
-	"kwil/x/execution/clean"
 	"kwil/x/execution/executables"
 	schemabuilder "kwil/x/execution/sql-builder/schema-builder"
 	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
+	"kwil/x/types/databases/clean"
 
 	"go.uber.org/zap"
 )
@@ -23,13 +23,10 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 	}
 
 	// clean database
-	err := clean.CleanDatabase(database)
-	if err != nil {
-		return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
-	}
+	clean.Clean(database)
 
 	// validate database
-	err = s.ValidateDatabase(database)
+	err := s.ValidateDatabase(database)
 	if err != nil {
 		return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
 	}

@@ -93,10 +93,6 @@ func (v *dataTypes) CompareAnyToKwilString(a any, val string) error {
 	return nil
 }
 
-func (c *dataTypes) CompareAnyToKwilType(a any, val DataType) error {
-	return c.CompareAnyToKwilString(a, val.String())
-}
-
 func (c *dataTypes) KwilToPgType(k DataType) (string, error) {
 	switch k {
 	case NULL:

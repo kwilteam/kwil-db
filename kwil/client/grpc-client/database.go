@@ -3,22 +3,25 @@ package grpc_client
 import (
 	"context"
 	"fmt"
-	"kwil/x/execution/clean"
-	"kwil/x/execution/validation"
-	anytype "kwil/x/types/data_types/any_type"
+	"kwil/x/execution/validator"
 	"kwil/x/types/databases"
+	"kwil/x/types/databases/clean"
+	"kwil/x/types/databases/convert"
 	"kwil/x/types/transactions"
 	"strings"
 )
 
-func (c *Client) DeployDatabase(ctx context.Context, db *databases.Database[anytype.KwilAny]) (*transactions.Response, error) {
-	err := clean.CleanDatabase(db)
+func (c *Client) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*transactions.Response, error) {
+	clean.Clean(db)
+
+	anyTypeDB, err := convert.Bytes.DatabaseToKwilAny(db)
 	if err != nil {
-		return nil, fmt.Errorf("error on database: %w", err)
+		return nil, err
 	}
 
 	// validate the database
-	err = validation.ValidateDatabase(db)
+	vdr := validator.Validator{}
+	err = vdr.Validate(anyTypeDB)
 	if err != nil {
 		return nil, fmt.Errorf("error on database: %w", err)
 	}
