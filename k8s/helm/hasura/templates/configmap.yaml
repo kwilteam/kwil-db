@@ -13,8 +13,8 @@ data:
   {{- end }}
   {{/* TODO: should use Secret */}}
   {{- if and (not .Values.postgresql.enabled) (.Values.global.postgres.enabled )}}
-  HASURA_GRAPHQL_METADATA_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host .Values.global.postgres.port .Values.hasura.database }}
-  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host .Values.global.postgres.port .Values.global.kwild.database }}
+  HASURA_GRAPHQL_METADATA_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host (int .Values.global.postgres.port) .Values.hasura.database }}
+  PG_DATABASE_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host (int .Values.global.postgres.port) .Values.global.kwild.database }}
   {{- else -}}
   {{- $pgHost := printf "%s-postgresql" .Release.Name -}}
   {{- $pgPort := int .Values.postgresql.primary.service.ports.postgresql -}}
