@@ -52,23 +52,32 @@ Modify `kwil/dev-values.yaml` to overwrite default values for easier local devel
               |      (gw)    |
               +-------+------+
                       |
-        +-------------+-   -   -   -+
-        |                           |
-        |                           |
-        v                           v
-+-------+------+           +--------+------+
-|              |           |               |
-|     kwild    +----------->     hasura    |
-|     (grpc)   |           |    (graphql)  |
-+-------+------+           +--------+------+
-        |                           |
-        |                           |
-        v                           |
-+-------+------+                    |
-|              |                    |
-|  PostgreSQL  |<- - - - - - - - - -+
-| (local/aws)  |
-+--------------+
+                      |
+                      |
+                      v
+              +-------+------+
+              |              |
+              |     kwild    +
+              |     (grpc)   |
+              +-------+------+
+                      |
+                      |
+                      |
+                      v
+              +-------+------+
+              |              |
+              |     hasura   +
+              |              |
+              +-------+------+
+                      |
+                      |
+                      |
+                      v
+              +-------+------+
+              |              |
+              |  PostgreSQL  |
+              | (local/aws)  |
+              +--------------+
 ```
 
 Every chart could be deployed alone with its own dependency, eg. if you deploy `kwild` or `hasura`, there will be a postgres instance.
