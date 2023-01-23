@@ -1,6 +1,7 @@
 package anytype
 
 import (
+	b64 "encoding/base64"
 	"fmt"
 	datatypes "kwil/x/types/data_types"
 )
@@ -92,6 +93,10 @@ func (a *KwilAny) Copy() KwilAny {
 		value:    a.value,
 		dataType: a.dataType,
 	}
+}
+
+func (a *KwilAny) Base64() string {
+	return b64.StdEncoding.EncodeToString(a.bytes)
 }
 
 // String returns the value deserialized and converted to a string.

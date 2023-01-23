@@ -29,7 +29,7 @@ func (v *Validator) validateColumns(columns []*databases.Column[anytype.KwilAny]
 		// validate column
 		err := v.validateColumn(col)
 		if err != nil {
-			return fmt.Errorf(`error on column %v: %w`, col.Name, err)
+			return fmt.Errorf(`error on column "%v": %w`, col.Name, err)
 		}
 	}
 

@@ -30,7 +30,7 @@ func (v *Validator) validateAttributes(col *databases.Column[anytype.KwilAny]) e
 		// validate attribute
 		err := v.validateAttribute(col, attr)
 		if err != nil {
-			return fmt.Errorf(`error on attribute %v: %w`, attr.Type, err)
+			return fmt.Errorf(`error on attribute %s: %w`, attr.Type.String(), err)
 		}
 	}
 
@@ -97,9 +97,9 @@ func (v *Validator) validateAttributeValueType(col *databases.Column[anytype.Kwi
 }
 
 func (v *Validator) validateColumnCanContainAttributeType(col *databases.Column[anytype.KwilAny], attrType execution.AttributeType) error {
-	err := execution.Attributes.ValidateAttributeValueType(col.Type, attrType)
+	err := execution.Attributes.DataTypeCanHaveAttribute(attrType, col.Type)
 	if err != nil {
-		return fmt.Errorf(`column of type %s cannot contain attributew %s: %w`, col.Type.String(), attrType.String(), err)
+		return fmt.Errorf(`column of type %s cannot contain attribute %s: %w`, col.Type.String(), attrType.String(), err)
 	}
 
 	return nil

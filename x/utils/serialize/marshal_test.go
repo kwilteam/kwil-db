@@ -5,58 +5,6 @@ import (
 	"testing"
 )
 
-<<<<<<< HEAD
-=======
-func Test_Marshal(t *testing.T) {
-	intVal := 100
-	intValBytes, err := serialize.MarshalType(intVal)
-	if err != nil {
-		t.Errorf("failed to marshal int: %v", err)
-	}
-
-	val, err := serialize.UnmarshalType(intValBytes)
-	if err != nil {
-		t.Errorf("failed to unmarshal int: %v", err)
-	}
-
-	if val.(int) != intVal {
-		t.Errorf("expected %v, got %v", intVal, val)
-	}
-
-	// test string
-	strVal := "hello world"
-	strValBytes, err := serialize.MarshalType(strVal)
-	if err != nil {
-		t.Errorf("failed to marshal string: %v", err)
-	}
-
-	val, err = serialize.UnmarshalType(strValBytes)
-	if err != nil {
-		t.Errorf("failed to unmarshal string: %v", err)
-	}
-
-	if val.(string) != strVal {
-		t.Errorf("expected %v, got %v", strVal, val)
-	}
-
-	// test bool
-	boolVal := true
-	boolValBytes, err := serialize.MarshalType(boolVal)
-	if err != nil {
-		t.Errorf("failed to marshal bool: %v", err)
-	}
-
-	val, err = serialize.UnmarshalType(boolValBytes)
-	if err != nil {
-		t.Errorf("failed to unmarshal bool: %v", err)
-	}
-
-	if val.(bool) != boolVal {
-		t.Errorf("expected %v, got %v", boolVal, val)
-	}
-}
-
->>>>>>> dev
 func Test_Serialize(t *testing.T) {
 	struct1 := TestStruct{
 		Val1: 100,

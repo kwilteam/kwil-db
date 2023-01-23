@@ -10,6 +10,7 @@ import (
 	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"kwil/x/types/databases/clean"
+	"kwil/x/types/databases/convert"
 
 	"go.uber.org/zap"
 )
@@ -175,7 +176,8 @@ func (d *dbCreator) storeTables(ctx context.Context, dbid int32) error {
 // we don't have to do anything with the modifiers since they just get included in the query BLOB
 func (d *dbCreator) storeQueries(ctx context.Context, dbid int32) error {
 	for _, query := range d.database.SQLQueries {
-		bts, err := query.EncodeGOB()
+		// convert query from kwilany to bytes and encode it with gob
+		bts, err := convert.KwilAny.SQLQueryToBytes(query).EncodeGOB()
 		if err != nil {
 			return fmt.Errorf("error serializing query: %w", err)
 		}

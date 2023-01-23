@@ -74,6 +74,7 @@ func (b *bytesConversion) ColumnToKwilAny(c *databases.Column[[]byte]) (*databas
 
 	return &databases.Column[anytype.KwilAny]{
 		Name:       c.Name,
+		Type:       c.Type,
 		Attributes: attributes,
 	}, nil
 }
@@ -103,9 +104,12 @@ func (b *bytesConversion) SQLQueryToKwilAny(q *databases.SQLQuery[[]byte]) (*dat
 			panic(err)
 		}
 		wheres[i] = &databases.WhereClause[anytype.KwilAny]{
+			Name:     w.Name,
 			Column:   w.Column,
+			Static:   w.Static,
 			Operator: w.Operator,
 			Value:    where,
+			Modifier: w.Modifier,
 		}
 	}
 

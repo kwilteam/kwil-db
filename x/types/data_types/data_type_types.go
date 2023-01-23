@@ -38,3 +38,8 @@ func (d *DataType) IsNumeric() bool {
 func (d *DataType) IsValid() bool {
 	return *d > INVALID_DATA_TYPE && *d < END_DATA_TYPE
 }
+
+// will check if the data type is a text type
+func (d *DataType) IsText() bool {
+	return *d == STRING
+}
