@@ -25,6 +25,7 @@ cmd/cmd
 .DS_Store
 **/**/node_modules
 _ignore
+.env
 
 # helm charts deps
 k8s/helm/hasura/charts/
