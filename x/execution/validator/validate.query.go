@@ -146,7 +146,7 @@ func validateInput(input databases.Input[anytype.KwilAny], table *databases.Tabl
 		}
 
 		// check if value type matches column type
-		if col.Type != input.GetValue().Type() {
+		if col.Type != input.GetValue().Type() && input.GetModifier() != execution.CALLER {
 			return fmt.Errorf(`value "%s" must be of type "%s" for parameter on column "%s"`, fmt.Sprint(input.GetValue()), col.Type.String(), input.GetColumn())
 		}
 

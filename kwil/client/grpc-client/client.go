@@ -38,7 +38,7 @@ func NewClient(cc *grpc.ClientConn, v *viper.Viper) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	fundingPool := v.GetString(client.FundingPoolFlag)
 	ethProvider := v.GetString(client.EthProviderFlag)
 

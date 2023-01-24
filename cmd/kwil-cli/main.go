@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/configure"
-	"kwil/cmd/kwil-cli/connect"
 	"kwil/cmd/kwil-cli/database"
 	"kwil/cmd/kwil-cli/fund"
 	"kwil/cmd/kwil-cli/utils"
@@ -14,24 +13,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func init() {
+	cobra.OnInitialize(common.LoadConfig)
+}
+
 func Execute() error {
-	cmd := &cobra.Command{
+
+	var cmd = &cobra.Command{
 		Use:   "kwil",
 		Short: "A kwil command line interface",
 		Long:  "",
 	}
 
 	cobra.OnInitialize(common.LoadConfig)
+	common.LoadConfig()
 
 	cmd.AddCommand(
-		connect.NewCmdConnect(),
 		fund.NewCmdFund(),
 		configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),
 	)
 
-	common.BindKwilEnv(cmd)
+	common.BindGlobalFlags(cmd.PersistentFlags())
+	common.BindGlobalEnv(cmd.PersistentFlags())
 
 	if err := cmd.Execute(); err != nil {
 		if err == promptui.ErrInterrupt {

@@ -44,7 +44,7 @@ func deployCmd() *cobra.Command {
 
 				client, err := grpc_client.NewClient(cc, viper.GetViper())
 				if err != nil {
-					return fmt.Errorf("failed to create client: %w", err)
+					return fmt.Errorf("failed to create grpc client: %w", err)
 				}
 
 				res, err := client.DeployDatabase(cmd.Context(), &db)

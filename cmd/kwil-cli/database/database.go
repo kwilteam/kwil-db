@@ -1,8 +1,6 @@
 package database
 
 import (
-	"kwil/cmd/kwil-cli/common"
-
 	"github.com/spf13/cobra"
 )
 
@@ -23,11 +21,6 @@ func NewCmdDatabase() *cobra.Command {
 		executeCmd(),
 		listCmd(),
 	)
-
-	common.BindKwilFlags(rootCmd)
-	common.BindKwilEnv(rootCmd)
-	common.BindChainFlags(rootCmd)
-	common.BindChainEnv(rootCmd)
 
 	return rootCmd
 }

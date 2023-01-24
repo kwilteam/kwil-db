@@ -2,26 +2,26 @@ package client
 
 const (
 	ApiKeyFlag = "api-key"
-	ApiKeyEnv  = "KWIL_API_KEY"
+	ApiKeyEnv  = "api-key"
 
 	ChainCodeFlag = "chain-code"
-	ChainCodeEnv  = "KWIL_CHAIN_CODE"
+	ChainCodeEnv  = "chain-code"
 
 	DialTimeoutFlag = "dial-timeout"
-	DialTimeoutEnv  = "KWIL_DIAL_TIMEOUT"
+	DialTimeoutEnv  = "dial-timeout"
 
 	EndpointFlag = "endpoint"
-	EndpointEnv  = "KWIL_ENDPOINT"
+	EndpointEnv  = "endpoint"
 
 	EthProviderFlag = "eth-provider"
-	EthProviderEnv  = "KWIL_ETH_PROVIDER"
+	EthProviderEnv  = "eth-provider"
 
 	FundingPoolFlag = "funding-pool"
-	FundingPoolEnv  = "KWIL_FUNDING_POOL"
+	FundingPoolEnv  = "funding-pool"
 
 	NodeAddressFlag = "node-address"
-	NodeAddressEnv  = "KWIL_NODE_ADDRESS"
+	NodeAddressEnv  = "node-address"
 
 	PrivateKeyFlag = "private-key"
-	PrivateKeyEnv  = "KWIL_PRIVATE_KEY"
+	PrivateKeyEnv  = "private-key"
 )

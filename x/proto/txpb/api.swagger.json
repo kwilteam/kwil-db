@@ -48,6 +48,36 @@
         ]
       }
     },
+    "/api/v0/ping": {
+      "get": {
+        "operationId": "TxService_Ping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txsvcPongResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "message",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v0/schema/validate": {
       "post": {
         "operationId": "TxService_ValidateSchema",
@@ -275,7 +305,8 @@
           "$ref": "#/definitions/commonAttributeType"
         },
         "value": {
-          "type": "string"
+          "type": "string",
+          "format": "byte"
         }
       }
     },
@@ -328,6 +359,7 @@
       "type": "string",
       "enum": [
         "INVALID_TYPE",
+        "NULL",
         "STRING",
         "INT32",
         "INT64",
@@ -687,6 +719,14 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "txsvcPongResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
         }
       }
     },

@@ -21,6 +21,14 @@ func New(v any) (KwilAny, error) {
 		return KwilAny{}, fmt.Errorf("failed to get kwil type from value: %w", err)
 	}
 
+	return new(v, dataType)
+}
+
+func NewExplicit(v any, dataType datatypes.DataType) (KwilAny, error) {
+	return new(v, dataType)
+}
+
+func new(v any, dataType datatypes.DataType) (KwilAny, error) {
 	// marshal the value
 	var bts []byte
 	if v != nil {
@@ -102,4 +110,11 @@ func (a *KwilAny) Base64() string {
 // String returns the value deserialized and converted to a string.
 func (a *KwilAny) String() string {
 	return fmt.Sprintf("%v", a.value)
+}
+
+func (a *KwilAny) Print() {
+	fmt.Println("Value:   ", a.value)
+	fmt.Println("Bytes:   ", a.bytes)
+	fmt.Println("Type:    ", a.dataType.String())
+	fmt.Println("Encoded: ", a.Base64())
 }

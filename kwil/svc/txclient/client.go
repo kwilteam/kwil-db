@@ -16,6 +16,7 @@ type TxClient interface {
 	GetSchemaById(ctx context.Context, id string) (*databases.Database[[]byte], error)
 	ListDatabases(ctx context.Context, address string) ([]string, error)
 	GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error)
+	Ping(ctx context.Context) (string, error)
 }
 
 type client struct {
