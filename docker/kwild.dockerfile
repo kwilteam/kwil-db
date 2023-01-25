@@ -9,12 +9,14 @@ RUN mkdir /root/.ssh && echo "StrictHostKeyChecking no " > /root/.ssh/config
 
 ## COPY ./ksl/go.mod ./ksl/go.sum ./ksl/
 COPY go.mod go.sum ./
-RUN --mount=type=ssh,id=kwil go mod download
+## --mount will work with docker buildkit(testcontainers)
+##RUN --mount=type=ssh,id=kwil  \
+RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o ./dist/kwild ./cmd/kwild
-COPY *.json ./dist
-COPY *.yaml ./dist
-COPY *.yml ./dist
+COPY *.json ./dist/
+COPY *.yaml ./dist/
+COPY *.yml ./dist/
 COPY ./keys/ ./dist/keys/
 COPY ./abi/ ./dist/abi/
 COPY meta-config.yaml ./dist/meta-config.yaml

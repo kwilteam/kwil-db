@@ -46,8 +46,6 @@ func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName 
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
 
-	fmt.Printf("schema: %+v\n", schema)
-
 	if strings.ToLower(schema.Owner) == strings.ToLower(owner) && schema.Name == dbName {
 		return nil
 	} else {

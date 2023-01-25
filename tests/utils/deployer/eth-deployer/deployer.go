@@ -146,9 +146,9 @@ func (d *EthDeployer) FundAccount(ctx context.Context, account string, amount in
 	}
 
 	// transfer erc20 token to account
-	cAuth := d.getCallAuth(ctx, d.Account.Hex())
-	decimals, err := d.deployedErc20.Decimals(cAuth)
-	fmt.Println("token decimals = ", decimals)
+	//cAuth := d.getCallAuth(ctx, d.Account.Hex())
+	//decimals, err := d.deployedErc20.Decimals(cAuth)
+	//fmt.Println("token decimals = ", decimals)
 	realAmount := new(big.Int).Mul(big.NewInt(amount), big.NewInt(1000000000000000000))
 
 	auth, err := d.getAccountAuth(ctx)
@@ -160,11 +160,11 @@ func (d *EthDeployer) FundAccount(ctx context.Context, account string, amount in
 		return err
 	}
 
-	balance, err := d.deployedErc20.BalanceOf(cAuth, common.HexToAddress(account))
-	if err != nil {
-		return err
-	}
-	fmt.Printf("account(%s) balance = %d\n", account, balance)
+	//balance, err := d.deployedErc20.BalanceOf(cAuth, common.HexToAddress(account))
+	//if err != nil {
+	//	return err
+	//}
+	//fmt.Printf("account(%s) balance = %d\n", account, balance)
 	return err
 }
 

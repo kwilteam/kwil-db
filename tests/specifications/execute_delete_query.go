@@ -9,13 +9,17 @@ import (
 )
 
 func ExecuteDBDeleteSpecification(t *testing.T, ctx context.Context, execute ExecuteQueryDsl) {
+	t.Logf("Executing delete query specification")
 	//Given a valid database schema
 	db := SchemaLoader.Load(t)
 
-	queryName := "delete_from_table1"
-	tableName := "test_table1"
+	queryName := "delete_user"
+	tableName := "users"
 	inputId := "1111"
-	queryInputs := []string{queryName, "id", inputId}
+	inputName := "test_user"
+	//inputAge := "33"
+	//inputWallet := "guesswhothisis"
+	queryInputs := []string{queryName, "name", inputName}
 	dbId := databases.GenerateSchemaName(db.Owner, db.Name)
 	qualifiedTableName := fmt.Sprintf("%s.%s", dbId, tableName)
 

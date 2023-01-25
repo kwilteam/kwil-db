@@ -15,6 +15,7 @@ type DatabaseDeployDsl interface {
 }
 
 func DatabaseDeploySpecification(t *testing.T, ctx context.Context, deploy DatabaseDeployDsl) {
+	t.Logf("Executing database deploy specification")
 	//Given a valid database schema
 	db := SchemaLoader.Load(t)
 

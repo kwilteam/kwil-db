@@ -15,6 +15,7 @@ type ApproveTokenDsl interface {
 }
 
 func ApproveTokenSpecification(t *testing.T, ctx context.Context, approve ApproveTokenDsl) {
+	t.Logf("Executing ApproveTokenSpecification")
 	//@yaiba TODO: make this into args?
 	//Given a user and a validator address, and an amount
 	//decimals := 18

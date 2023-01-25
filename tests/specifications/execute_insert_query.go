@@ -17,15 +17,17 @@ type ExecuteQueryDsl interface {
 }
 
 func ExecuteDBInsertSpecification(t *testing.T, ctx context.Context, execute ExecuteQueryDsl) {
+	t.Logf("Executing insert query specification")
 	//Given a valid database schema
 	db := SchemaLoader.Load(t)
 
-	queryName := "insert_into_table1"
-	tableName := "test_table1"
+	queryName := "create_user"
+	tableName := "users"
 	inputId := "1111"
-	inputName := "name22"
+	inputName := "test_user"
 	inputAge := "22"
-	queryInputs := []string{queryName, "id", inputId, "name", inputName, "age", inputAge, "authenticate_user", "true"}
+	inputWallet := "guesswhothisis"
+	queryInputs := []string{queryName, "id", inputId, "name", inputName, "age", inputAge, "wallet", inputWallet}
 	dbId := databases.GenerateSchemaName(db.Owner, db.Name)
 	qulifiedTableName := fmt.Sprintf("%s.%s", dbId, tableName)
 
