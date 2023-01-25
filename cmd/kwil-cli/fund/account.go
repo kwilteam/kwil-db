@@ -7,7 +7,6 @@ import (
 	grpc_client "kwil/kwil/client/grpc-client"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -17,8 +16,8 @@ func getAccountCmd() *cobra.Command {
 		Short: "Gets account balance, spent, and nonce information",
 		Long:  ``,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client, err := grpc_client.NewClient(cc, viper.GetViper())
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				client, err := grpc_client.NewClient(cc)
 				if err != nil {
 					return fmt.Errorf("error creating client: %w", err)
 				}
@@ -30,7 +29,7 @@ func getAccountCmd() *cobra.Command {
 				}
 
 				if account == "" {
-					account = client.Config.Address
+					account = client.Chain.GetConfig().Account
 				}
 
 				acc, err := client.Accounts.GetAccount(ctx, account)

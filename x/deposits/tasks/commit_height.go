@@ -3,16 +3,16 @@ package tasks
 import (
 	"context"
 	"kwil/kwil/repository"
-	"kwil/x/chain"
+	"kwil/x/chain/types"
 )
 
 type heightTask struct {
-	chainCode chain.ChainCode
+	chainCode types.ChainCode
 	dao       repository.Queries
 	queries   repository.Queries
 }
 
-func NewHeightTask(dao repository.Queries, chainCode chain.ChainCode) Runnable {
+func NewHeightTask(dao repository.Queries, chainCode types.ChainCode) Runnable {
 	return &heightTask{
 		chainCode: chainCode,
 		dao:       nil,

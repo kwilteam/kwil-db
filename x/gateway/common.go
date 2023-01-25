@@ -1,9 +1,9 @@
 package gateway
 
 const (
-	GrpcEndpointName = "grpc-endpoint"
+	GrpcEndpointFlag = "grpc-endpoint"
 	GrpcEndpointEnv  = "GRPC_ENDPOINT"
 
-	ListenAddressName = "gateway-addr"
+	ListenAddressFlag = "gateway-addr"
 	ListenAddressEnv  = "GATEWAY_ADDR"
 )

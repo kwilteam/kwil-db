@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -13,12 +14,22 @@ func LoadConfig() {
 	configFile := GetConfigFile()
 	_, err := os.Stat(configFile)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+		// TODO: create init function
+		log.Fatal(err)
+	}
+
+	LoadConfigFromPath(configFile)
+}
+
+func LoadConfigFromPath(path string) {
+	_, err := os.Stat(path)
+	if err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		file, err := os.Create(configFile)
+		file, err := os.Create(path)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -26,7 +37,7 @@ func LoadConfig() {
 		file.Close()
 	}
 
-	viper.SetConfigFile(configFile)
+	viper.SetConfigFile(path)
 
 	viper.AutomaticEnv()
 

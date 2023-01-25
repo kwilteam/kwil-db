@@ -4,11 +4,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/x/chain"
 	chainClient "kwil/x/chain/client"
-	escrowTypes "kwil/x/types/contracts/escrow"
-
+	"kwil/x/chain/types"
 	"kwil/x/contracts/escrow/evm"
+	escrowTypes "kwil/x/types/contracts/escrow"
 )
 
 type EscrowContract interface {
@@ -16,12 +15,13 @@ type EscrowContract interface {
 	GetWithdrawals(ctx context.Context, start, end int64) ([]*escrowTypes.WithdrawalConfirmationEvent, error)
 	ReturnFunds(ctx context.Context, params *escrowTypes.ReturnFundsParams) (*escrowTypes.ReturnFundsResponse, error)
 	Deposit(ctx context.Context, params *escrowTypes.DepositParams) (*escrowTypes.DepositResponse, error)
+	Balance(ctx context.Context, params *escrowTypes.DepositBalanceParams) (*escrowTypes.DepositBalanceResponse, error)
 	TokenAddress() string
 }
 
 func New(chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, address string) (EscrowContract, error) {
 	switch chainClient.ChainCode() {
-	case chain.ETHEREUM, chain.GOERLI:
+	case types.ETHEREUM, types.GOERLI:
 		ethClient, err := chainClient.AsEthClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get ethclient from chain client: %d", err)

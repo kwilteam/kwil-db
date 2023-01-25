@@ -28,7 +28,7 @@ type RProxy struct {
 }
 
 func NewRProxy() *RProxy {
-	ru, err := url.Parse(viper.GetString(hasura.GraphqlEndpointName))
+	ru, err := url.Parse(viper.GetString(hasura.GraphqlEndpointFlag))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func NewRProxy() *RProxy {
 	u := ru.JoinPath("v1")
 
 	logger := logx.New()
-	logger.Info("graphql endpoint configured", zap.String("endpoint", viper.GetString(hasura.GraphqlEndpointName)))
+	logger.Info("graphql endpoint configured", zap.String("endpoint", viper.GetString(hasura.GraphqlEndpointFlag)))
 	go hasura.Initialize()
 
 	proxy := httputil.NewSingleHostReverseProxy(u)

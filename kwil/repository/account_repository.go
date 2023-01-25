@@ -8,6 +8,7 @@ import (
 	accountTypes "kwil/x/types/accounts"
 	bigutil "kwil/x/utils/big"
 	"strings"
+	"time"
 )
 
 type Accounter interface {
@@ -64,6 +65,7 @@ func (q *queries) Spend(ctx context.Context, spend *accountTypes.Spend) error {
 		return fmt.Errorf("error subtracting amount from balance: %d", err)
 	}
 	if remaining.Sign() < 0 {
+		time.Sleep(60 * time.Second)
 		return accountTypes.ErrInsufficientFunds
 	}
 

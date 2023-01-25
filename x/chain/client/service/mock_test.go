@@ -3,19 +3,19 @@ package service_test
 // this package is to contain the mock implementations
 import (
 	"context"
-	"kwil/x/chain"
 	"kwil/x/chain/client"
 	"kwil/x/chain/client/dto"
 	"kwil/x/chain/client/service"
 	"kwil/x/chain/provider"
 	providerDto "kwil/x/chain/provider/dto"
+	"kwil/x/chain/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 type MockChainProvider struct {
-	chainCode chain.ChainCode
+	chainCode types.ChainCode
 }
 
 func (m *MockChainProvider) HeaderByNumber(ctx context.Context, number *big.Int) (*providerDto.Header, error) {
@@ -32,7 +32,7 @@ func (m *MockChainProvider) HeaderByNumber(ctx context.Context, number *big.Int)
 	}, nil
 }
 
-func (m *MockChainProvider) ChainCode() chain.ChainCode {
+func (m *MockChainProvider) ChainCode() types.ChainCode {
 	return m.chainCode
 }
 

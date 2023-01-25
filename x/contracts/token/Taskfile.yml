@@ -4,4 +4,4 @@ tasks:
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs
     cmds:
-      - abigen --abi ./evm/abi/erc20.json --pkg abi --type Erc20 --out ./evm/abi/erc20.go
+      - abigen --abi ./evm/abi/erc20.json --bin ./evm/abi/erc20.bin --pkg abi --type Erc20 --out ./evm/abi/erc20.go

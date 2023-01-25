@@ -5,7 +5,6 @@ import (
 	"kwil/cmd/kwil-cli/common"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -19,7 +18,7 @@ func withdrawCmd() *cobra.Command {
 
 			// send request
 
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				/*client := apipb.NewKwilServiceClient(cc)
 								c, err := chain.NewClientV(viper.GetViper())
 								if err != nil {

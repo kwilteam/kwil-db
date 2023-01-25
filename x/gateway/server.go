@@ -54,17 +54,17 @@ func (g *GWServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
-	g.logger.Info("grpc endpoint configured", zap.String("endpoint", viper.GetString(GrpcEndpointName)))
+	g.logger.Info("grpc endpoint configured", zap.String("endpoint", viper.GetString(GrpcEndpointFlag)))
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	err := txpb.RegisterTxServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointName), opts)
+	err := txpb.RegisterTxServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointFlag), opts)
 	if err != nil {
 		return fmt.Errorf("failed to register tx service handler: %w", err)
 	}
-	err = accountspb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointName), opts)
+	err = accountspb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointFlag), opts)
 	if err != nil {
 		return fmt.Errorf("failed to register account service handler: %w", err)
 	}
-	err = pricingpb.RegisterPricingServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointName), opts)
+	err = pricingpb.RegisterPricingServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointFlag), opts)
 	if err != nil {
 		return fmt.Errorf("failed to register pricing service handler: %w", err)
 	}

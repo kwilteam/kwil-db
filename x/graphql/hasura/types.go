@@ -1,13 +1,13 @@
 package hasura
 
 const (
-	AdminSecretName     = "hasuraadminsecret"
+	AdminSecretFlag     = "hasura-admin-secret"
 	AdminSecretEnv      = "HASURA_GRAPHQL_ADMIN_SECRET"
 	UnauthorizedRole    = "HASURA_GRAPHQL_UNAUTHORIZED_ROLE"
 	DefaultSource       = "default"
 	DefaultSchema       = "public"
-	EndpointEnv         = "GRAPHQL_ENDPOINT"
-	GraphqlEndpointName = "graphql-endpoint"
+	GraphqlEndpointEnv  = "GRAPHQL_ENDPOINT"
+	GraphqlEndpointFlag = "graphql-endpoint"
 )
 
 type ErrorResp struct {

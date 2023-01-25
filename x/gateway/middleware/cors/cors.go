@@ -8,7 +8,7 @@ import (
 const (
 	AllowMethods    = "GET, POST, PATCH, DELETE"
 	AllowHeaders    = "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType, X-Api-Key"
-	GatewayCorsName = "gateway-cors"
+	GatewayCorsFlag = "gateway-cors"
 	GatewayCorsEnv  = "GATEWAY_CORS"
 )
 

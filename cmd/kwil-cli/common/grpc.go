@@ -13,14 +13,14 @@ import (
 
 type RoundTripper func(context.Context, *grpc.ClientConn) error
 
-func DialGrpc(ctx context.Context, v *viper.Viper, fn RoundTripper) (err error) {
-	endpoint := v.GetString("endpoint")
+func DialGrpc(ctx context.Context, fn RoundTripper) (err error) {
+	endpoint := viper.GetString("endpoint")
 	if endpoint == "" {
 		return errors.New("endpoint not set: use `kwil configure` to set a default endpoint or pass the --endpoint flag")
 	}
 
-	apiKey := v.GetString("api-key")
-	timeout := v.GetDuration("timeout")
+	apiKey := viper.GetString("api-key")
+	timeout := viper.GetDuration("timeout")
 
 	clientContext := ctx
 	if apiKey != "" {

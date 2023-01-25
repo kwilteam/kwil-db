@@ -11,7 +11,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -20,7 +19,7 @@ func deployCmd() *cobra.Command {
 		Use:   "deploy",
 		Short: "Deploy databases",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				if len(args) != 0 {
 					return fmt.Errorf("deploy command does not take any arguments")
 				}
@@ -42,9 +41,9 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
-				client, err := grpc_client.NewClient(cc, viper.GetViper())
+				client, err := grpc_client.NewClient(cc)
 				if err != nil {
-					return fmt.Errorf("failed to create grpc client: %w", err)
+					return fmt.Errorf("failed to create client: %w", err)
 				}
 
 				res, err := client.DeployDatabase(cmd.Context(), &db)

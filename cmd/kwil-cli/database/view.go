@@ -9,7 +9,6 @@ import (
 	"kwil/x/types/databases"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -19,8 +18,8 @@ func viewDatabaseCmd() *cobra.Command {
 		Short: "View is used to view the details of a database.  It requires a database owner and a name",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				c, err := grpc_client.NewClient(cc, viper.GetViper())
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				c, err := grpc_client.NewClient(cc)
 				if err != nil {
 					return fmt.Errorf("error creating client: %w", err)
 				}
@@ -35,7 +34,7 @@ func viewDatabaseCmd() *cobra.Command {
 					return fmt.Errorf("error getting owner flag: %w", err)
 				}
 				if dbOwner == "NULL" {
-					dbOwner = c.Config.Address
+					dbOwner = c.Chain.GetConfig().Account
 				}
 
 				meta, err := c.Txs.GetSchema(ctx, &databases.DatabaseIdentifier{

@@ -7,7 +7,6 @@ import (
 	grpc_client "kwil/kwil/client/grpc-client"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -17,8 +16,8 @@ func pingCmd() *cobra.Command {
 		Short: "Ping is used to ping the kwil provider endpoint",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client, err := grpc_client.NewClient(cc, viper.GetViper())
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				client, err := grpc_client.NewClient(cc)
 				if err != nil {
 					return fmt.Errorf("error creating client: %w", err)
 				}

@@ -134,7 +134,7 @@ tasks:
     cmds:
       - docker build . -t kwild:latest -f docker/kwild.dockerfile
 
-  build:api-gateway:
+  build:gateway:
     desc: Builds the API Gateway
     cmds:
       - go build -o ./.build/kwil-gateway ./cmd/kwil-gateway

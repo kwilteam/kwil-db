@@ -3,19 +3,19 @@ package provider
 import (
 	"context"
 	"fmt"
-	"kwil/x/chain"
 	"kwil/x/chain/provider/dto"
 	"kwil/x/chain/provider/evm"
+	"kwil/x/chain/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-func New(endpoint string, chainCode chain.ChainCode) (ChainProvider, error) {
+func New(endpoint string, chainCode types.ChainCode) (ChainProvider, error) {
 	switch chainCode {
-	case chain.ETHEREUM:
+	case types.ETHEREUM:
 		return evm.New(endpoint, chainCode)
-	case chain.GOERLI:
+	case types.GOERLI:
 		return evm.New(endpoint, chainCode)
 	default:
 		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainCode))
@@ -25,7 +25,7 @@ func New(endpoint string, chainCode chain.ChainCode) (ChainProvider, error) {
 type ChainProvider interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*dto.Header, error)
 	SubscribeNewHead(ctx context.Context, ch chan<- dto.Header) (dto.Subscription, error)
-	ChainCode() chain.ChainCode
+	ChainCode() types.ChainCode
 	AsEthClient() (*ethclient.Client, error)
 	Endpoint() string
 }
