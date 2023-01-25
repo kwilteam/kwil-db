@@ -30,6 +30,7 @@ type TxServiceClient interface {
 	GetExecutablesById(ctx context.Context, in *GetExecutablesByIdRequest, opts ...grpc.CallOption) (*GetExecutablesResponse, error)
 	ValidateSchema(ctx context.Context, in *ValidateSchemaRequest, opts ...grpc.CallOption) (*ValidateSchemaResponse, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PongResponse, error)
+	GetAddress(ctx context.Context, in *GetAddressRequest, opts ...grpc.CallOption) (*GetAddressResponse, error)
 }
 
 type txServiceClient struct {
@@ -112,6 +113,15 @@ func (c *txServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grp
 	return out, nil
 }
 
+func (c *txServiceClient) GetAddress(ctx context.Context, in *GetAddressRequest, opts ...grpc.CallOption) (*GetAddressResponse, error) {
+	out := new(GetAddressResponse)
+	err := c.cc.Invoke(ctx, "/txsvc.TxService/GetAddress", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TxServiceServer is the server API for TxService service.
 // All implementations must embed UnimplementedTxServiceServer
 // for forward compatibility
@@ -124,6 +134,7 @@ type TxServiceServer interface {
 	GetExecutablesById(context.Context, *GetExecutablesByIdRequest) (*GetExecutablesResponse, error)
 	ValidateSchema(context.Context, *ValidateSchemaRequest) (*ValidateSchemaResponse, error)
 	Ping(context.Context, *PingRequest) (*PongResponse, error)
+	GetAddress(context.Context, *GetAddressRequest) (*GetAddressResponse, error)
 	mustEmbedUnimplementedTxServiceServer()
 }
 
@@ -154,6 +165,9 @@ func (UnimplementedTxServiceServer) ValidateSchema(context.Context, *ValidateSch
 }
 func (UnimplementedTxServiceServer) Ping(context.Context, *PingRequest) (*PongResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (UnimplementedTxServiceServer) GetAddress(context.Context, *GetAddressRequest) (*GetAddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAddress not implemented")
 }
 func (UnimplementedTxServiceServer) mustEmbedUnimplementedTxServiceServer() {}
 
@@ -312,6 +326,24 @@ func _TxService_Ping_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TxService_GetAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).GetAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/txsvc.TxService/GetAddress",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).GetAddress(ctx, req.(*GetAddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TxService_ServiceDesc is the grpc.ServiceDesc for TxService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -350,6 +382,10 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _TxService_Ping_Handler,
+		},
+		{
+			MethodName: "GetAddress",
+			Handler:    _TxService_GetAddress_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

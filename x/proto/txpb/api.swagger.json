@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/txsvc/broadcast.proto",
+    "title": "kwil/txsvc/address.proto",
     "version": "version not set"
   },
   "tags": [
@@ -16,6 +16,28 @@
     "application/json"
   ],
   "paths": {
+    "/api/v0/address": {
+      "get": {
+        "operationId": "TxService_GetAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txsvcGetAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v0/broadcast": {
       "post": {
         "operationId": "TxService_Broadcast",
@@ -688,6 +710,14 @@
           "format": "byte"
         },
         "fee": {
+          "type": "string"
+        }
+      }
+    },
+    "txsvcGetAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
           "type": "string"
         }
       }
