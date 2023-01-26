@@ -51,7 +51,7 @@ func (c *Client) DropDatabase(ctx context.Context, owner string, dbName string) 
 func (c *Client) ExecuteDatabase(ctx context.Context, owner string, dbName string, queryName string, queryInputs []string) (*transactions.Response, error) {
 	// create the dbid.  we will need this for the execution body
 	dbId := databases.GenerateSchemaName(owner, dbName)
-
+	fmt.Println(1)
 	executables, err := c.Txs.GetExecutablesById(ctx, dbId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get executables: %w", err)
@@ -73,7 +73,7 @@ func (c *Client) ExecuteDatabase(ctx context.Context, owner string, dbName strin
 	userIns := make([]*execution.UserInput, 0)
 	for _, input := range query.UserInputs {
 		found := false
-		for i := 1; i < len(queryInputs); i += 2 {
+		for i := 0; i < len(queryInputs); i += 2 {
 			if queryInputs[i] == input.Name {
 				found = true
 				userIns = append(userIns, &execution.UserInput{
@@ -84,7 +84,7 @@ func (c *Client) ExecuteDatabase(ctx context.Context, owner string, dbName strin
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("input %s not provided", input.Name)
+			return nil, fmt.Errorf(`input "%s" not provided`, input.Name)
 		}
 	}
 

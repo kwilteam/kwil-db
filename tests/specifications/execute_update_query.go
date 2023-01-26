@@ -3,9 +3,10 @@ package specifications
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"kwil/x/types/databases"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func ExecuteDBUpdateSpecification(t *testing.T, ctx context.Context, execute ExecuteQueryDsl) {
@@ -19,7 +20,7 @@ func ExecuteDBUpdateSpecification(t *testing.T, ctx context.Context, execute Exe
 	inputName := "test_user"
 	inputAge := "33"
 	//inputWallet := "guesswhothisis"
-	queryInputs := []string{queryName, "name", inputName, "age", inputAge, "where_name", inputName}
+	queryInputs := []string{"name", inputName, "age", inputAge, "where_name", inputName}
 	dbId := databases.GenerateSchemaName(db.Owner, db.Name)
 	qualifiedTableName := fmt.Sprintf("%s.%s", dbId, tableName)
 
