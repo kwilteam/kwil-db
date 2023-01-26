@@ -8,6 +8,7 @@ import (
 	"kwil/tests/utils/deployer"
 	"kwil/x/chain/types"
 	"kwil/x/types/databases"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,8 @@ const (
 	DeployerPrivateKeyName = "deployer-pk"
 	UserPrivateKeyName     = "user-pk"
 )
+
+var buildKwilOnce sync.Once
 
 func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account string) {
 	for {
@@ -55,6 +58,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 	// and different database_schema.json
 	remoteKwildAddr := ""
 	providerEndpoint := ""
+	chainSyncWaitTime := 10 * time.Second
 
 	t.Run("should approve token", func(t *testing.T) {
 		ctx := context.Background()
@@ -110,11 +114,10 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		specifications.DepositFundSpecification(t, ctx, chainDriver)
 
 		// When user deployed database
-		dbFiles := map[string]string{
-			"../../scripts/pg-init-scripts/initdb.sh": "/docker-entrypoint-initdb.d/initdb.sh"}
-		driver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, dbFiles, kwildEnvs)
 
-		time.Sleep(3 * time.Second) // chain sync
+		driver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, kwildEnvs)
+
+		time.Sleep(chainSyncWaitTime) // chain sync
 		specifications.DatabaseDeploySpecification(t, ctx, driver)
 
 		// Then user should be able to drop database
@@ -145,11 +148,9 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		specifications.DepositFundSpecification(t, ctx, chainDriver)
 
 		// When user deployed database
-		dbFiles := map[string]string{
-			"../../scripts/pg-init-scripts/initdb.sh": "/docker-entrypoint-initdb.d/initdb.sh"}
-		driver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, dbFiles, kwild_envs)
+		driver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, kwild_envs)
 
-		time.Sleep(3 * time.Second) // chain sync
+		time.Sleep(chainSyncWaitTime) // chain sync
 		specifications.DatabaseDeploySpecification(t, ctx, driver)
 
 		// Then user should be able to execute database

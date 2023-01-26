@@ -3,12 +3,13 @@ package executor
 import (
 	"context"
 	"fmt"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
 	"strings"
 )
 
-func (s *executor) ExecuteQuery(ctx context.Context, body *execTypes.ExecutionBody, caller string) error {
+func (s *executor) ExecuteQuery(ctx context.Context, body *execTypes.ExecutionBody[anytype.KwilAny], caller string) error {
 	caller = strings.ToLower(caller)
 
 	db, ok := s.databases[body.Database]

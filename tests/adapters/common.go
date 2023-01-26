@@ -68,7 +68,7 @@ func (c *TContainer) UnexposedEndpoint(ctx context.Context) (string, error) {
 func WithDockerFile(cmd string) func(req *testcontainers.ContainerRequest) {
 	return func(req *testcontainers.ContainerRequest) {
 		req.FromDockerfile = testcontainers.FromDockerfile{
-			Context:       "../../../",
+			Context:       "../../",
 			Dockerfile:    fmt.Sprintf("./docker/%s.dockerfile", cmd),
 			PrintBuildLog: true,
 		}

@@ -16,6 +16,7 @@ type DepositFundDsl interface {
 }
 
 func DepositFundSpecification(t *testing.T, ctx context.Context, deposit DepositFundDsl) {
+	t.Logf("Executing DepositFundSpecification")
 	//Given a user and a validator address, and an amount
 	amount := new(big.Int).Mul(big.NewInt(100), big.NewInt(1000000000000000000))
 	cfg, err := fund.NewConfig()

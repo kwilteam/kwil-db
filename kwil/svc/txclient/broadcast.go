@@ -18,7 +18,7 @@ func (c *client) Broadcast(ctx context.Context, tx *transactions.Transaction) (*
 
 	res, err := c.txs.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
 	if err != nil {
-		return nil, fmt.Errorf("failed to broadcast transaction: %w", err)
+		return nil, fmt.Errorf("TxServiceClient failed to broadcast transaction: %w", err)
 	}
 
 	// convert response to transaction

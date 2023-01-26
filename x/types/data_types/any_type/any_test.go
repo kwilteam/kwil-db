@@ -2,7 +2,6 @@ package anytype_test
 
 import (
 	"bytes"
-	"fmt"
 	datatypes "kwil/x/types/data_types"
 	anytype "kwil/x/types/data_types/any_type"
 	"testing"
@@ -107,15 +106,4 @@ func Test_Any(t *testing.T) {
 	if !bytes.Equal(bts, bts2) {
 		t.Errorf("expected %v, got %v", bts, bts2)
 	}
-}
-
-func Test_Encode(t *testing.T) {
-	val, err := anytype.New(nil)
-	if err != nil {
-		t.Errorf("failed to create int any: %v", err)
-	}
-
-	fmt.Println(val.Base64())
-
-	panic("")
 }

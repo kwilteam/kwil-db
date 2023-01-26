@@ -22,6 +22,6 @@ func BuildDelete(schemaName, table string, wheres []*databases.WhereClause[anyty
 		whereArray = append(whereArray, exp)
 	}
 
-	stmt, _, err := goqu.Dialect("postgres").Delete(tblName).Where(whereArray...).ToSQL()
+	stmt, _, err := goqu.Dialect("postgres").Delete(tblName).Prepared(true).Where(whereArray...).ToSQL()
 	return stmt, err
 }

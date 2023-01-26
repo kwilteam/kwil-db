@@ -3,6 +3,7 @@ package grpc_client
 import (
 	"context"
 	"fmt"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"kwil/x/types/databases/clean"
 	"kwil/x/types/execution"
@@ -48,7 +49,7 @@ func (c *Client) DropDatabase(ctx context.Context, owner string, dbName string) 
 	return c.Txs.Broadcast(ctx, tx)
 }
 
-func (c *Client) ExecuteDatabase(ctx context.Context, owner string, dbName string, queryName string, queryInputs []string) (*transactions.Response, error) {
+func (c *Client) ExecuteDatabase(ctx context.Context, owner string, dbName string, queryName string, queryInputs []anytype.KwilAny) (*transactions.Response, error) {
 	// create the dbid.  we will need this for the execution body
 	dbId := databases.GenerateSchemaName(owner, dbName)
 
@@ -70,26 +71,26 @@ func (c *Client) ExecuteDatabase(ctx context.Context, owner string, dbName strin
 	}
 
 	// check that each input is provided
-	userIns := make([]*execution.UserInput, 0)
+	userIns := make([]*execution.UserInput[[]byte], 0)
 	for _, input := range query.UserInputs {
 		found := false
-		for i := 1; i < len(queryInputs); i += 2 {
-			if queryInputs[i] == input.Name {
+		for i := 0; i < len(queryInputs); i += 2 {
+			if queryInputs[i].Value() == input.Name {
 				found = true
-				userIns = append(userIns, &execution.UserInput{
+				userIns = append(userIns, &execution.UserInput[[]byte]{
 					Name:  input.Name,
-					Value: queryInputs[i+1],
+					Value: queryInputs[i+1].Bytes(),
 				})
 				break
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("input %s not provided", input.Name)
+			return nil, fmt.Errorf(`input "%s" not provided`, input.Name)
 		}
 	}
 
 	// create the execution body
-	body := &execution.ExecutionBody{
+	body := &execution.ExecutionBody[[]byte]{
 		Database: dbId,
 		Query:    query.Name,
 		Inputs:   userIns,

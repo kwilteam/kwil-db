@@ -1,7 +1,9 @@
 package execution
 
-type ExecutionBody struct {
-	Database string       `json:"database" yaml:"database"` // the id
-	Query    string       `json:"query" yaml:"query"`       // the name of the query
-	Inputs   []*UserInput `json:"inputs" yaml:"inputs"`     // the inputs to the query
+import anytype "kwil/x/types/data_types/any_type"
+
+type ExecutionBody[T anytype.AnyValue] struct {
+	Database string          `json:"database" yaml:"database" clean:"lower"` // the id
+	Query    string          `json:"query" yaml:"query" clean:"lower"`       // the name of the query
+	Inputs   []*UserInput[T] `json:"inputs" yaml:"inputs"`                   // the inputs to the query
 }

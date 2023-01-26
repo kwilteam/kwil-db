@@ -1,6 +1,8 @@
 package databases
 
-type Table[T AnyValue] struct {
+import anytype "kwil/x/types/data_types/any_type"
+
+type Table[T anytype.AnyValue] struct {
 	Name    string       `json:"name" clean:"lower"`
 	Columns []*Column[T] `json:"columns"`
 }

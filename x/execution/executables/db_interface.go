@@ -13,7 +13,7 @@ import (
 
 type ExecutablesInterface interface {
 	CanExecute(wallet string, query string) bool
-	Prepare(query string, caller string, inputs []*execTypes.UserInput) (string, []any, error)
+	Prepare(query string, caller string, inputs []*execTypes.UserInput[anytype.KwilAny]) (string, []any, error)
 	ListExecutables() []*execTypes.Executable
 	GetIdentifier() *databases.DatabaseIdentifier
 }
@@ -47,4 +47,8 @@ func (e *executableInterface) GetIdentifier() *databases.DatabaseIdentifier {
 		Owner: e.Owner,
 		Name:  e.Name,
 	}
+}
+
+func (e *executableInterface) getDbId() string {
+	return databases.GenerateSchemaName(e.Owner, e.Name)
 }

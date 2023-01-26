@@ -6,6 +6,14 @@ import (
 	datatypes "kwil/x/types/data_types"
 )
 
+// the AnyValue is used to specify what the "any" type of value stored is.
+// for example, attributes can hold an "any" type, but sometimes we need this as a string,
+// and sometimes we need it as an anytype.KwilAny, which allows us to convert it to
+// a Kwil native type.
+type AnyValue interface {
+	KwilAny | []byte
+}
+
 // The custom KwilAny type is used to store an untyped value of any data type supported by Kwil.
 // It includes methods to serialize and deserialize the value back to its original type.
 type KwilAny struct {

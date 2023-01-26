@@ -3,14 +3,21 @@ package execution
 import (
 	"kwil/x/execution"
 	datatypes "kwil/x/types/data_types"
+	anytype "kwil/x/types/data_types/any_type"
+	"kwil/x/types/databases"
 )
 
 type Executable struct {
 	Name      string `json:"name" yaml:"name"`
 	Statement string `json:"statement" yaml:"statement"`
+	Table     string
+	Type      execution.QueryType
 
-	UserInputs []*UserInput `json:"user_inputs" yaml:"user_inputs"`
-	Args       []*Arg       `json:"args" yaml:"args"`
+	Parameters []*databases.Parameter[anytype.KwilAny]   `json:"parameters" yaml:"parameters"`
+	Where      []*databases.WhereClause[anytype.KwilAny] `json:"where" yaml:"where"`
+
+	UserInputs []*UserInput[[]byte] `json:"user_inputs" yaml:"user_inputs"`
+	Args       []*Arg               `json:"args" yaml:"args"`
 }
 
 type Arg struct {
@@ -34,11 +41,11 @@ type Arg struct {
 }
 
 // This is what the user has to send back in order to execute
-type UserInput struct {
+type UserInput[T anytype.AnyValue] struct {
 	// Position is the position of the input relative to the rest of the inputs
 	// for example, if there are 3 2 params and 1 default, and 1 where and 1 default where, the user-inputted WHERE will be position 3
-	Name string `json:"name" yaml:"name"` // Name is the name of the input
+	Name string `json:"name" yaml:"name" clean:"lower"` // Name is the name of the input
 
 	// Value is the value of the input
-	Value any `json:"value" yaml:"value"` // Value is the value of the input
+	Value T `json:"value" yaml:"value"` // Value is the value of the input
 }

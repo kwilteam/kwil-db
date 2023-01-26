@@ -3,12 +3,13 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
 	grpc_client "kwil/kwil/client/grpc-client"
-	"kwil/x/types/databases"
+	anytype "kwil/x/types/data_types/any_type"
+
+	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -74,27 +75,32 @@ func executeCmd() *cobra.Command {
 					return fmt.Errorf("invalid number of arguments")
 				}
 
-				// get the database id
-				dbId, err := cmd.Flags().GetString("db_id")
-				var dbName, dbOwner string
-				if err != nil || dbId == "" {
-					// if we get an error, it means the user did not specify the database id
-					// get the database name and owner
-					dbName, err := cmd.Flags().GetString("db_name")
-					if err != nil {
-						return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
-					}
-
-					dbOwner, err := cmd.Flags().GetString("db_owner")
-					if err != nil {
-						return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
-					}
-
-					// create the dbid.  we will need this for the execution body
-					dbId = databases.GenerateSchemaName(dbOwner, dbName)
+				// if we get an error, it means the user did not specify the database id
+				// get the database name and owner
+				dbName, err := cmd.Flags().GetString("db_name")
+				if err != nil {
+					return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
 				}
 
-				res, err := client.ExecuteDatabase(ctx, dbOwner, dbName, args[0], args[1:])
+				dbOwner, err := cmd.Flags().GetString("db_owner")
+				if err != nil {
+					return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
+				}
+
+				inputs := make([]anytype.KwilAny, 0)
+				for i := 1; i < len(args); i++ {
+					in, err := anytype.New(args[i])
+					if err != nil {
+						return fmt.Errorf("error creating kwil any type with executable inputs: %w", err)
+					}
+
+					inputs = append(inputs, in)
+				}
+
+				res, err := client.ExecuteDatabase(ctx, dbOwner, dbName, args[0], inputs)
+				if err != nil {
+					return fmt.Errorf("error executing database: %w", err)
+				}
 
 				// print the response
 				display.PrintTxResponse(res)

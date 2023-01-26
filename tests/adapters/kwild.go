@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	grpc_client "kwil/kwil/client/grpc-client"
+	"sync"
 	"testing"
 	"time"
 )
@@ -16,6 +17,8 @@ const (
 	kwildDatabase = "kwil"
 	kwildImage    = "kwild:latest"
 )
+
+var buildKwildOnce sync.Once
 
 // kwildContainer represents the kwild container type used in the module
 type kwildContainer struct {
@@ -51,13 +54,15 @@ func setupKwild(ctx context.Context, opts ...containerOption) (*kwildContainer, 
 	}}, nil
 }
 
-func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, dbFiles map[string]string, envs map[string]string) *grpc_client.Driver {
+func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[string]string) *grpc_client.Driver {
 	t.Helper()
 
 	if addr != "" {
 		return &grpc_client.Driver{Addr: addr}
 	}
 
+	dbFiles := map[string]string{
+		"../../scripts/pg-init-scripts/initdb.sh": "/docker-entrypoint-initdb.d/initdb.sh"}
 	dc := StartDBDockerService(t, ctx, dbFiles)
 	unexposedEndpoint, err := dc.UnexposedEndpoint(ctx)
 	assert.NoError(t, err)

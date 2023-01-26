@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/gob"
 	"kwil/x/execution"
+	anytype "kwil/x/types/data_types/any_type"
 )
 
-type SQLQuery[T AnyValue] struct {
+type SQLQuery[T anytype.AnyValue] struct {
 	Name   string              `json:"name" clean:"lower"`
 	Type   execution.QueryType `json:"type" clean:"is_enum,query_type"`
 	Table  string              `json:"table" clean:"lower"`

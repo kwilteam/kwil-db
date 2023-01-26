@@ -4,28 +4,32 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"kwil/x/types/databases"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type ExecuteQueryDsl interface {
 	// ExecuteQuery executes QUERY to a database
 	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key
-	ExecuteQuery(ctx context.Context, owner string, dbName string, queryName string, queryInputs []string) error
+	ExecuteQuery(ctx context.Context, owner string, dbName string, queryName string, queryInputs []any) error
 	QueryDatabase(ctx context.Context, rawSql string, args ...interface{}) (*sql.Row, error)
 }
 
 func ExecuteDBInsertSpecification(t *testing.T, ctx context.Context, execute ExecuteQueryDsl) {
+	t.Logf("Executing insert query specification")
 	//Given a valid database schema
 	db := SchemaLoader.Load(t)
 
-	queryName := "insert_into_table1"
-	tableName := "test_table1"
+	queryName := "create_user"
+	tableName := "users"
 	inputId := "1111"
-	inputName := "name22"
+	inputName := "test_user"
 	inputAge := "22"
-	queryInputs := []string{queryName, "id", inputId, "name", inputName, "age", inputAge, "authenticate_user", "true"}
+	//inputWallet := "guesswhothisis"
+	queryInputs := []any{"id", inputId, "name", inputName, "age", inputAge}
+
 	dbId := databases.GenerateSchemaName(db.Owner, db.Name)
 	qulifiedTableName := fmt.Sprintf("%s.%s", dbId, tableName)
 

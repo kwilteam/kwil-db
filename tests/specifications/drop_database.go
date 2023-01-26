@@ -13,6 +13,7 @@ type DatabaseDropDsl interface {
 }
 
 func DatabaseDropSpecification(t *testing.T, ctx context.Context, drop DatabaseDropDsl) {
+	t.Logf("Executing database drop specification")
 	//Given a valid database schema
 	db := SchemaLoader.Load(t)
 

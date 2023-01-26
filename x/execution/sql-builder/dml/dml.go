@@ -17,7 +17,7 @@ func makeTableName(schemaName, table string) string {
 }
 
 func operatorToGoquExpression(op execution.ComparisonOperatorType, column string) (exp.Expression, error) {
-	i := false // Goqu doesn't always like empty interfaces{} when preparing statements but does fine with bools
+	i := int8(1) // Goqu doesn't always like empty interfaces{} when preparing statements but does fine with bools
 	switch op {
 	case execution.EQUAL:
 		return goqu.C(column).Eq(i), nil

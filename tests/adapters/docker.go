@@ -65,7 +65,6 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 
 	container, err := setupKwild(ctx,
 		//WithDockerFile("kwild"),
-		//PrintBuildLog: true,
 		WithNetwork(kwilTestNetworkName),
 		WithPort(KwildPort),
 		WithEnv(envs),

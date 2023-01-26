@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 
 	"kwil/x/sqlx/sqlclient"
@@ -46,8 +47,6 @@ func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName 
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
 
-	fmt.Printf("schema: %+v\n", schema)
-
 	if strings.ToLower(schema.Owner) == strings.ToLower(owner) && schema.Name == dbName {
 		return nil
 	} else {
@@ -55,13 +54,21 @@ func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName 
 	}
 }
 
-func (d *Driver) ExecuteQuery(ctx context.Context, owner string, dbName string, queryName string, queryInputs []string) error {
+func (d *Driver) ExecuteQuery(ctx context.Context, owner string, dbName string, queryName string, queryInputs []any) error {
 	client, err := d.getClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	_, err = client.ExecuteDatabase(ctx, owner, dbName, queryName, queryInputs)
+	ins := make([]anytype.KwilAny, len(queryInputs))
+	for i := 0; i < len(queryInputs); i++ {
+		ins[i], err = anytype.New(queryInputs[i])
+		if err != nil {
+			return fmt.Errorf("failed to create query input: %w", err)
+		}
+	}
+
+	_, err = client.ExecuteDatabase(ctx, owner, dbName, queryName, ins)
 	return err
 }
 

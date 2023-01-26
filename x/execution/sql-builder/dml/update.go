@@ -6,14 +6,13 @@ import (
 	"kwil/x/types/databases"
 
 	"github.com/doug-martin/goqu/v9"
-	"github.com/doug-martin/goqu/v9/exp"
 )
 
 func BuildUpdate(schemaName, table string, params []*databases.Parameter[anytype.KwilAny], whereClauses []*databases.WhereClause[anytype.KwilAny]) (string, error) {
 	tblName := makeTableName(schemaName, table)
 
 	// converting parameters to goqu records
-	rec := make(exp.Record)
+	rec := make(goqu.Record)
 	for _, param := range params {
 		rec[param.Column] = false // any value will do, but it can't be a struct{}{}
 	}

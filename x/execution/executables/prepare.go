@@ -3,12 +3,85 @@ package executables
 import (
 	"fmt"
 	"kwil/x/execution"
-	datatypes "kwil/x/types/data_types"
+	anytype "kwil/x/types/data_types/any_type"
 	execTypes "kwil/x/types/execution"
+	"strings"
 )
 
+func (d *executableInterface) Prepare(query, caller string, inputs []*execTypes.UserInput[anytype.KwilAny]) (string, []any, error) {
+	// get the executable
+	executable, ok := d.Executables[query]
+	if !ok {
+		return "", nil, fmt.Errorf(`query "%s" does not exist`, query)
+	}
+
+	// convert user inputs to a map for easier lookup
+	inputMap := make(map[string]*execTypes.UserInput[anytype.KwilAny])
+	for _, input := range inputs {
+		inputMap[input.Name] = input
+	}
+
+	rows := make([]*row, len(executable.Parameters))
+	for i, param := range executable.Parameters {
+		var val any
+		if param.Static {
+			val = param.Value
+			if param.Modifier == execution.CALLER {
+				val = strings.ToLower(caller)
+			}
+		} else {
+			input, ok := inputMap[param.Name]
+			if !ok {
+				return "", nil, fmt.Errorf(`required parameter "%s" was not provided`, param.Name)
+			}
+			val = input.Value.Value()
+		}
+		rows[i] = &row{
+			column: param.Column,
+			value:  val,
+		}
+	}
+
+	// now the wheres
+	wheres := make([]*where, len(executable.Where))
+	for i, whereClause := range executable.Where {
+		var val any
+		// this is the same as the process above.  shit needs to get refactored
+		if whereClause.Static {
+			val = whereClause.Value
+			if whereClause.Modifier == execution.CALLER {
+				val = strings.ToLower(caller)
+			}
+		} else {
+			input, ok := inputMap[whereClause.Name]
+			if !ok {
+				return "", nil, fmt.Errorf(`required parameter "%s" was not provided`, whereClause.Name)
+			}
+			val = input.Value.Value()
+		}
+
+		wheres[i] = &where{
+			column:   whereClause.Column,
+			value:    val,
+			operator: whereClause.Operator,
+		}
+	}
+
+	switch executable.Type {
+	default:
+		return "", nil, fmt.Errorf(`invalid executable type "%d"`, executable.Type)
+	case execution.INSERT:
+		return d.prepareInsert(executable, rows)
+	case execution.UPDATE:
+		return d.prepareUpdate(executable, rows, wheres)
+	case execution.DELETE:
+		return d.prepareDelete(executable, wheres)
+	}
+}
+
+/*
 // prepare prepares execution of a query.  It does not check access control rights.
-func (d *executableInterface) Prepare(query string, caller string, inputs []*execTypes.UserInput) (string, []any, error) {
+func (d *executableInterface) Prepare(query string, caller string, inputs []*execTypes.UserInput[anytype.KwilAny]) (string, []any, error) {
 	// get the executable
 	executable := d.Executables[query]
 	if executable == nil {
@@ -16,7 +89,7 @@ func (d *executableInterface) Prepare(query string, caller string, inputs []*exe
 	}
 
 	// convert user inputs to a map for easier lookup
-	inputMap := make(map[string]*execTypes.UserInput)
+	inputMap := make(map[string]*execTypes.UserInput[anytype.KwilAny])
 	for _, input := range inputs {
 		inputMap[input.Name] = input
 	}
@@ -41,17 +114,12 @@ func (d *executableInterface) Prepare(query string, caller string, inputs []*exe
 			return "", nil, fmt.Errorf(`missing user input for arg "%s"`, arg.Name)
 		}
 
-		// try to convert value to the arg type
-		value, err := datatypes.Utils.ConvertAny(input.Value, arg.Type)
-		if err != nil {
-			return "", nil, fmt.Errorf(`invalid user input for arg "%s": %w`, arg.Name, err)
-		}
-
-		returns[arg.Position] = value
+		returns[arg.Position] = input.Value.Value()
 	}
 
 	return executable.Statement, returns, nil
 }
+
 
 // determineDefault will determine the default value for an arg.
 // for example, if there is a caller modifier, it will return the caller.
@@ -65,3 +133,4 @@ func determineDefault(arg *execTypes.Arg, caller string) (any, error) {
 		return nil, fmt.Errorf(`invalid modifier "%s"`, arg.Modifier.String())
 	}
 }
+*/

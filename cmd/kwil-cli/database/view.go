@@ -5,11 +5,9 @@ import (
 	"fmt"
 	grpc_client "kwil/kwil/client/grpc-client"
 
-	"kwil/cmd/kwil-cli/common"
-	"kwil/x/types/databases"
-
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"kwil/cmd/kwil-cli/common"
 )
 
 func viewDatabaseCmd() *cobra.Command {
@@ -37,11 +35,7 @@ func viewDatabaseCmd() *cobra.Command {
 					dbOwner = c.Chain.GetConfig().Account
 				}
 
-				meta, err := c.Txs.GetSchema(ctx, &databases.DatabaseIdentifier{
-					Owner: dbOwner,
-					Name:  dbName,
-				})
-
+				meta, err := c.GetDatabaseSchema(ctx, dbOwner, dbName)
 				if err != nil {
 					return err
 				}

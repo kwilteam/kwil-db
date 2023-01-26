@@ -1,8 +1,11 @@
 package databases
 
-import "kwil/x/execution"
+import (
+	"kwil/x/execution"
+	anytype "kwil/x/types/data_types/any_type"
+)
 
-type Input[T AnyValue] interface {
+type Input[T anytype.AnyValue] interface {
 	GetName() string
 	GetColumn() string
 	GetStatic() bool
@@ -10,7 +13,7 @@ type Input[T AnyValue] interface {
 	GetModifier() execution.ModifierType
 }
 
-type Parameter[T AnyValue] struct {
+type Parameter[T anytype.AnyValue] struct {
 	Name     string                 `json:"name" clean:"lower"`
 	Column   string                 `json:"column" clean:"lower"`
 	Static   bool                   `json:"static"`
@@ -38,7 +41,7 @@ func (p *Parameter[T]) GetModifier() execution.ModifierType {
 	return p.Modifier
 }
 
-type WhereClause[T AnyValue] struct {
+type WhereClause[T anytype.AnyValue] struct {
 	Name     string                           `json:"name" clean:"lower"`
 	Column   string                           `json:"column" clean:"lower"`
 	Static   bool                             `json:"static"`

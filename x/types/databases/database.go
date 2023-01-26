@@ -7,15 +7,7 @@ import (
 	"strings"
 )
 
-// the AnyValue is used to specify what the "any" type of value stored is.
-// for example, attributes can hold an "any" type, but sometimes we need this as a string,
-// and sometimes we need it as an anytype.KwilAny, which allows us to convert it to
-// a Kwil native type.
-type AnyValue interface {
-	anytype.KwilAny | []byte
-}
-
-type Database[T AnyValue] struct {
+type Database[T anytype.AnyValue] struct {
 	Owner      string         `json:"owner" clean:"lower"`
 	Name       string         `json:"name" clean:"lower"`
 	Tables     []*Table[T]    `json:"tables"`

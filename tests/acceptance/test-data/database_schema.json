@@ -1,13 +1,13 @@
 {
-    "owner": "0xc89d42189f0450c2b2c3c61f58ec5d628176a1e7",
+    "owner": "0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D",
     "name": "test",
     "tables": [
         {
-            "name": "test_table1",
+            "name": "users",
             "columns": [
                 {
                     "name": "id",
-                    "type": 2,
+                    "type": 3,
                     "attributes": [
                         {
                             "type": 1
@@ -16,34 +16,24 @@
                 },
                 {
                     "name": "name",
-                    "type": 1
+                    "type": 2
                 },
                 {
                     "name": "age",
-                    "type": 3,
-                    "attributes": [
-                        {
-                            "type": 5,
-                            "value": "AxIAAAA="
-                        }
-                    ]
-                },
-                {
-                    "name": "authenticate_user",
-                    "type": 4
+                    "type": 3
                 },
                 {
                     "name": "wallet",
-                    "type": 1
+                    "type": 2
                 }
             ]
         },
         {
-            "name": "test_table2",
+            "name": "posts",
             "columns": [
                 {
-                    "name": "pk_test",
-                    "type": 2,
+                    "name": "id",
+                    "type": 3,
                     "attributes": [
                         {
                             "type": 1
@@ -51,59 +41,19 @@
                     ]
                 },
                 {
-                    "name": "unique_test",
-                    "type": 1,
-                    "attributes": [
-                        {
-                            "type": 2
-                        }
-                    ]
+                    "name": "title",
+                    "type": 2
                 },
                 {
-                    "name": "not_null_test",
-                    "type": 1,
-                    "attributes": [
-                        {
-                            "type": 3
-                        }
-                    ]
+                    "name": "body",
+                    "type": 2
                 },
                 {
-                    "name": "min_test",
-                    "type": 3,
-                    "attributes": [
-                        {
-                            "type": 5,
-                            "value": "A0UAAAA="
-                        }
-                    ]
-                },
-                {
-                    "name": "max_test",
+                    "name": "user_id",
                     "type": 3,
                     "attributes": [
                         {
                             "type": 6,
-                            "value": "A6QBAAA="
-                        }
-                    ]
-                },
-                {
-                    "name": "min_length_test",
-                    "type": 1,
-                    "attributes": [
-                        {
-                            "type": 7,
-                            "value": "AwUAAAA="
-                        }
-                    ]
-                },
-                {
-                    "name": "max_length_test",
-                    "type": 1,
-                    "attributes": [
-                        {
-                            "type": 8,
                             "value": "A2QAAAA="
                         }
                     ]
@@ -113,139 +63,96 @@
     ],
     "roles": [
         {
-            "name": "mastermode",
-            "default": true,
+            "name": "bennanmode",
             "permissions": [
-                "insert_into_table1",
-                "update_table1",
-                "delete_from_table1",
-                "insert_table2"
+                "create_user",
+                "update_user",
+                "delete_user"
             ]
         },
         {
-            "name": "childmode",
+            "name": "randalmode",
             "default": true,
             "permissions": [
-                "insert_into_table1",
-                "update_table1",
-                "insert_table2"
-            ]
-        },
-        {
-            "name": "extraMode",
-            "permissions": [
-                "insert_into_table1",
-                "update_table1",
-                "insert_table2"
+                "create_user",
+                "update_user"
             ]
         }
     ],
     "sql_queries": [
         {
-            "name": "insert_into_table1",
+            "name": "create_user",
             "type": 1,
-            "table": "test_table1",
+            "table": "users",
             "parameters": [
                 {
-                    "column": "id",
-                    "name": "id"
+                    "name": "id",
+                    "column": "id"
                 },
                 {
-                    "column": "name",
-                    "name": "name"
+                    "name": "name",
+                    "column": "name"
                 },
                 {
-                    "column": "age",
-                    "name" : "age"
+                    "name": "age",
+                    "column": "age"
                 },
                 {
-                    "column": "authenticate_user",
-                    "name" : "authenticate_user"
+                    "name": "wallet",
+                    "column": "wallet",
+                    "static": true,
+                    "value": "",
+                    "modifier": 1
                 }
             ]
         },
         {
-            "name": "update_table1",
+            "name": "update_user",
             "type": 2,
-            "table": "test_table1",
+            "table": "users",
             "parameters": [
                 {
-                    "column": "name",
-                    "name": "name"
+                    "name": "name",
+                    "column": "name"
                 },
                 {
-                    "column": "age",
-                    "name" : "age"
+                    "name": "age",
+                    "column": "age"
                 }
             ],
             "where": [
                 {
-                    "column": "wallet",
                     "name": "wallet",
+                    "column": "wallet",
                     "static": true,
                     "operator": 1,
                     "value": "",
                     "modifier": 1
                 },
                 {
-                    "column": "id",
-                    "name": "id",
+                    "name": "where_name",
+                    "column": "name",
                     "operator": 1
                 }
             ]
         },
         {
-            "name": "delete_from_table1",
+            "name": "delete_user",
             "type": 3,
-            "table": "test_table1",
+            "table": "users",
             "where": [
                 {
-                    "column": "wallet",
                     "name": "wallet",
+                    "column": "wallet",
                     "static": true,
                     "operator": 1,
                     "value": "",
                     "modifier": 1
                 },
                 {
-                    "column": "id",
-                    "name": "id",
+                    "name": "name",
+                    "column": "name",
                     "operator": 1
-                }
-            ]
-        },
-        {
-            "name": "insert_table2",
-            "type": 1,
-            "table": "test_table2",
-            "parameters": [
-                {
-                    "column": "pk_test",
-                    "name": "pk_test"
-                },
-                {
-                    "column": "unique_test",
-                    "name": "unique_test"
-                },
-                {
-                    "column": "not_null_test",
-                    "name": "not_null_test"
-                },
-                {
-                    "column": "min_test",
-                    "name": "min_test"
-                },
-                {
-                    "column": "max_test",
-                    "name": "max_test"
-                },
-                {
-                    "column": "min_length_test",
-                    "name": "min_length_test"
-                },
-                {
-                    "column": "max_length_test",
-                    "name": "max_length_test"
                 }
             ]
         }
@@ -253,25 +160,9 @@
     "indexes": [
         {
             "name": "user_wallet_index",
-            "table": "test_table1",
+            "table": "users",
             "columns": [
                 "wallet"
-            ],
-            "using": 1
-        },
-        {
-            "name": "id_index",
-            "table": "test_table1",
-            "columns": [
-                "id"
-            ],
-            "using": 1
-        },
-        {
-            "name": "pk_index",
-            "table": "test_table2",
-            "columns": [
-                "pk_test"
             ],
             "using": 1
         }
