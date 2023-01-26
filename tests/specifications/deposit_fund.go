@@ -13,17 +13,17 @@ import (
 type DepositFundDsl interface {
 	DepositFund(ctx context.Context, from *ecdsa.PrivateKey, to string, amount *big.Int) error
 	GetDepositBalance(ctx context.Context, from string, to string) (*big.Int, error)
+	GetFundConfig() *fund.Config
 }
 
 func DepositFundSpecification(t *testing.T, ctx context.Context, deposit DepositFundDsl) {
 	t.Logf("Executing DepositFundSpecification")
 	//Given a user and a validator address, and an amount
 	amount := new(big.Int).Mul(big.NewInt(100), big.NewInt(1000000000000000000))
-	cfg, err := fund.NewConfig()
-	assert.NoError(t, err)
+	cfg := deposit.GetFundConfig()
 
 	//When i deposit fund from user to validator
-	err = deposit.DepositFund(ctx, cfg.PrivateKey, cfg.ValidatorAddress, amount)
+	err := deposit.DepositFund(ctx, cfg.PrivateKey, cfg.ValidatorAddress, amount)
 
 	//Then i expect success
 	assert.NoError(t, err)

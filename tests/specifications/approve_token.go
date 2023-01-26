@@ -12,6 +12,7 @@ import (
 type ApproveTokenDsl interface {
 	ApproveToken(ctx context.Context, from *ecdsa.PrivateKey, spender string, amount *big.Int) error
 	GetAllowance(ctx context.Context, from string, spender string) (*big.Int, error)
+	GetFundConfig() *fund.Config
 }
 
 func ApproveTokenSpecification(t *testing.T, ctx context.Context, approve ApproveTokenDsl) {
@@ -20,11 +21,10 @@ func ApproveTokenSpecification(t *testing.T, ctx context.Context, approve Approv
 	//Given a user and a validator address, and an amount
 	//decimals := 18
 	amount := new(big.Int).Mul(big.NewInt(100), big.NewInt(1000000000000000000))
-	chainCfg, err := fund.NewConfig()
-	assert.NoError(t, err, "failed to create chain config")
+	chainCfg := approve.GetFundConfig()
 
 	//When i approve validator to spend my tokens
-	err = approve.ApproveToken(ctx, chainCfg.PrivateKey, chainCfg.PoolAddress, amount)
+	err := approve.ApproveToken(ctx, chainCfg.PrivateKey, chainCfg.PoolAddress, amount)
 
 	//Then i expect success
 	assert.NoError(t, err)

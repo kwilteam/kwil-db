@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"kwil/x/fund"
 	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 
@@ -20,9 +21,10 @@ import (
 type Driver struct {
 	Addr string
 
-	connOnce sync.Once
-	conn     *grpc.ClientConn
-	client   *Client
+	connOnce   sync.Once
+	conn       *grpc.ClientConn
+	client     *Client
+	fundConfig *fund.Config
 }
 
 func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) error {
@@ -99,6 +101,14 @@ func (d *Driver) Close() error {
 	return nil
 }
 
+func (d *Driver) GetFundConfig() *fund.Config {
+	return d.fundConfig
+}
+
+func (d *Driver) SetFundConfig(cfg *fund.Config) {
+	d.fundConfig = cfg
+}
+
 func (d *Driver) getClient() (*Client, error) {
 	var err error
 	d.connOnce.Do(func() {
@@ -107,7 +117,7 @@ func (d *Driver) getClient() (*Client, error) {
 		if err != nil {
 			return
 		}
-		d.client, err = NewClient(d.conn)
+		d.client, err = NewClient(d.conn, d.fundConfig)
 	})
 	return d.client, err
 }

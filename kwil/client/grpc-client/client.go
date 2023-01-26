@@ -19,10 +19,13 @@ type Client struct {
 	Chain fund.IFund
 }
 
-func NewClient(cc *grpc.ClientConn) (*Client, error) {
-	chainCfg, err := fund.NewConfig()
-	if err != nil {
-		return nil, err
+func NewClient(cc *grpc.ClientConn, chainCfg *fund.Config) (*Client, error) {
+	var err error
+	if chainCfg == nil {
+		chainCfg, err = fund.NewConfig()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	chainClient, err := ethereum.NewClient(chainCfg)

@@ -14,7 +14,6 @@ import (
 type Config struct {
 	ChainCode             int64
 	PrivateKey            *ecdsa.PrivateKey
-	Account               string
 	TokenAddress          string
 	PoolAddress           string
 	ValidatorAddress      string
@@ -37,12 +36,9 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("error parsing private key: %v", err)
 	}
 
-	address := crypto.PubkeyToAddress(privateKey.PublicKey).Hex()
-
 	return &Config{
 		ChainCode:             chainCode,
 		PrivateKey:            privateKey,
-		Account:               address,
 		PoolAddress:           fundingPool,
 		ValidatorAddress:      validatorAddress,
 		Provider:              ethProvider,

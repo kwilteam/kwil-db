@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/spf13/viper"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	grpc_client "kwil/kwil/client/grpc-client"
 	"sync"
@@ -65,9 +65,9 @@ func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[stri
 		"../../scripts/pg-init-scripts/initdb.sh": "/docker-entrypoint-initdb.d/initdb.sh"}
 	dc := StartDBDockerService(t, ctx, dbFiles)
 	unexposedEndpoint, err := dc.UnexposedEndpoint(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	exposedEndpoint, err := dc.ExposedEndpoint(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	unexposedPgUrl := fmt.Sprintf(
 		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, unexposedEndpoint, kwildDatabase)
@@ -76,12 +76,12 @@ func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[stri
 
 	envs["PG_DATABASE_URL"] = unexposedPgUrl
 
-	// for cli
+	// for specification verify
 	viper.Set("PG_DATABASE_URL", exposedPgUrl)
 
 	kc := StartKwildDockerService(t, ctx, envs)
 	endpoint, err := kc.ExposedEndpoint(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	t.Logf("create grpc driver to %s", endpoint)
 	return &grpc_client.Driver{Addr: endpoint}
 }

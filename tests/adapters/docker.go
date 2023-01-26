@@ -4,36 +4,37 @@ import (
 	"context"
 	"fmt"
 	"github.com/docker/go-connections/nat"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"testing"
 	"time"
 )
 
-func StartGanacheDockerService(t *testing.T, ctx context.Context) *ganacheContainer {
-	t.Helper()
+func StartGanacheDockerService(t *testing.T, ctx context.Context, chainId string) *ganacheContainer {
+	//t.Helper()
 
 	container, err := setupGanache(ctx,
+		chainId,
 		WithNetwork(kwilTestNetworkName),
 		WithPort(GanachePort),
 		WithWaitStrategy(
 			wait.ForLog("RPC Listening on 0.0.0.0:8545")))
 
-	assert.NoError(t, err, "Could not start ganache container")
+	require.NoError(t, err, "Could not start ganache container")
 
 	t.Cleanup(func() {
-		assert.NoError(t, container.Terminate(ctx), "Could not stop ganache container")
+		require.NoError(t, container.Terminate(ctx), "Could not stop ganache container")
 	})
 
 	err = container.ShowPortInfo(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return container
 }
 
 func StartDBDockerService(t *testing.T, ctx context.Context, files map[string]string) *postgresContainer {
-	t.Helper()
+	//t.Helper()
 
 	//dbURL := func(host string, port nat.Port) string {
 	//	return fmt.Sprintf("postgres://%:%s@%s:%s/%s?sslmode=disable", pgUser, pgPassword, host, port.Port(), kwildDatabase)
@@ -48,20 +49,20 @@ func StartDBDockerService(t *testing.T, ctx context.Context, files map[string]st
 			wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(time.Second*20)))
 	//wait.ForSQL(nat.Port(PgPort), "pgx", dbURL).WithStartupTimeout(time.Second*30)))
 
-	assert.NoError(t, err, "Could not start postgres container")
+	require.NoError(t, err, "Could not start postgres container")
 
 	t.Cleanup(func() {
-		assert.NoError(t, container.Terminate(ctx), "Could not stop postgres container")
+		require.NoError(t, container.Terminate(ctx), "Could not stop postgres container")
 	})
 
 	err = container.ShowPortInfo(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	return container
 }
 
 func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]string) *kwildContainer {
-	t.Helper()
+	//t.Helper()
 
 	container, err := setupKwild(ctx,
 		//WithDockerFile("kwild"),
@@ -72,19 +73,19 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 		WithWaitStrategy(wait.ForLog("grpc server started"),
 			wait.ForLog("deposits synced")))
 
-	assert.NoError(t, err, "Could not start kwild container")
+	require.NoError(t, err, "Could not start kwild container")
 
 	t.Cleanup(func() {
-		assert.NoError(t, container.Terminate(ctx), "Could not stop kwild container")
+		require.NoError(t, container.Terminate(ctx), "Could not stop kwild container")
 	})
 
 	err = container.ShowPortInfo(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	return container
 }
 
 func StartDockerServer(t *testing.T, port string, cmd string) testcontainers.Container {
-	t.Helper()
+	//t.Helper()
 
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
@@ -97,9 +98,9 @@ func StartDockerServer(t *testing.T, port string, cmd string) testcontainers.Con
 		Started:          true,
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	t.Cleanup(func() {
-		assert.NoError(t, container.Terminate(ctx))
+		require.NoError(t, container.Terminate(ctx))
 	})
 
 	return container

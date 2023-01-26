@@ -2,23 +2,21 @@ package acceptance_test
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"kwil/tests/adapters"
 	"kwil/tests/specifications"
 	"kwil/tests/utils/deployer"
 	"kwil/x/chain/types"
 	"kwil/x/types/databases"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-)
-
-const (
-	DeployerPrivateKeyName = "deployer-pk"
-	UserPrivateKeyName     = "user-pk"
 )
 
 var buildKwilOnce sync.Once
@@ -29,7 +27,7 @@ func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account s
 		case <-ctx.Done():
 			return
 		default:
-			time.Sleep(5 * time.Second)
+			time.Sleep(3 * time.Second)
 			// to mine new blocks
 			err := deployer.FundAccount(ctx, account, 1)
 			if err != nil {
@@ -44,43 +42,76 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		t.Skip()
 	}
 
-	// test user
-	userAddr := adapters.UserAccount
-	viper.Set(types.PrivateKeyFlag, adapters.UserAccountPK)
-	// test deployer
-	viper.Set(DeployerPrivateKeyName, adapters.DeployerAccountPK)
-	// database schema
-	dbSchemaPath := "./test-data/database_schema.json"
+	var (
+		// test user
+		userAddr string
+		userPK   string
+		// test deployer
+		deployerPK string
+		// database schema file
+		dbSchemaPath string
+		// remote kwild endpoint
+		remoteKwildAddr string
+		// remote blockchain endpoint
+		providerEndpoint string
+		// blochchain block produce interval
+		chainSyncWaitTime time.Duration
+		_chainCode        types.ChainCode
+		fundAmount        int64
+	)
 
-	// config
-	// set blow test against a real grpc server
-	// and a different private key for the user,
-	// and different database_schema.json
-	remoteKwildAddr := ""
-	providerEndpoint := ""
-	chainSyncWaitTime := 10 * time.Second
+	localEnv := func() {
+		userPK = adapters.UserAccountPK
+		// test deployer
+		deployerPK = adapters.DeployerAccountPK
+		// database schema
+		dbSchemaPath = "./test-data/database_schema.json"
+		remoteKwildAddr = ""
+		providerEndpoint = ""
+		chainSyncWaitTime = 3 * time.Second
+		_chainCode = types.GOERLI
+		fundAmount = 200
 
-	t.Run("should approve token", func(t *testing.T) {
-		ctx := context.Background()
-		// setup
-		chainDriver, deployer, _ := adapters.GetChainDriverAndDeployer(t, ctx, providerEndpoint, viper.GetString(DeployerPrivateKeyName))
+		viper.Set(types.PrivateKeyFlag, adapters.UserAccountPK)
+		viper.Set(types.ReconnectionIntervalFlag, 30)
+		viper.Set(types.RequiredConfirmationsFlag, 1)
+	}
 
-		// Given user is funded
-		err := deployer.FundAccount(ctx, userAddr, 200)
-		assert.NoError(t, err, "failed to fund user account")
+	remoteEnv := func() {
+		// depends on the remote environment, change respectively
+		userPK = os.Getenv("TEST_USER_PK")
+		deployerPK = os.Getenv("TEST_DEPLOYER_PK")
+		dbSchemaPath = "./test-data/database_schema.json"
+		remoteKwildAddr = os.Getenv("TEST_KWILD_ADDR")
+		providerEndpoint = os.Getenv("TEST_PROVIDER")
+		chainSyncWaitTime = 15 * time.Second
+		_chainCode = types.GOERLI
+		fundAmount = 10
 
-		// and user has approved funding_pool to spend his funds
-		specifications.ApproveTokenSpecification(t, ctx, chainDriver)
-	})
+		viper.Set(types.PrivateKeyFlag, adapters.UserAccountPK)
+	}
+
+	remote := flag.Bool("remote", false, "run tests against remote environment")
+
+	if *remote {
+		remoteEnv()
+	} else {
+		localEnv()
+	}
+
+	userPrivateKey, err := crypto.HexToECDSA(userPK)
+	if err != nil {
+		t.Fatal(fmt.Errorf("invalid user private key: %s", err))
+	}
+	userAddr = crypto.PubkeyToAddress(userPrivateKey.PublicKey).Hex()
 
 	t.Run("should deposit fund", func(t *testing.T) {
 		ctx := context.Background()
 		// setup
-		chainDriver, deployer, _ := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, viper.GetString(DeployerPrivateKeyName))
+		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(t, ctx, providerEndpoint, deployerPK, _chainCode, userPK)
 
 		// Given user is funded with escrow token
-		err := deployer.FundAccount(ctx, userAddr, 200)
+		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
 		assert.NoError(t, err, "failed to fund user account")
 
 		// and user has approved funding_pool to spend his token
@@ -90,7 +121,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		specifications.DepositFundSpecification(t, ctx, chainDriver)
 	})
 
-	t.Run("should drop and drop database", func(t *testing.T) {
+	t.Run("should deploy and drop database", func(t *testing.T) {
 		ctx := context.Background()
 		// setup
 		specifications.SetSchemaLoader(
@@ -99,29 +130,28 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Modifier: func(db *databases.Database[[]byte]) {
 					db.Owner = userAddr
 				}})
-		chainDriver, deployer, kwildEnvs := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, viper.GetString(DeployerPrivateKeyName))
+		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(t, ctx, providerEndpoint, deployerPK, _chainCode, userPK)
 
 		// Given user is funded
-		err := deployer.FundAccount(ctx, userAddr, 200)
+		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
 		assert.NoError(t, err, "failed to fund user account")
-		go keepMiningBlocks(ctx, deployer, userAddr)
+		if !*remote {
+			go keepMiningBlocks(ctx, chainDeployer, userAddr)
+		}
 
-		// and user has approved funding_pool to spend his funds
+		// and user pledged fund to validator
 		specifications.ApproveTokenSpecification(t, ctx, chainDriver)
-
-		// and user is registered to a validator
 		specifications.DepositFundSpecification(t, ctx, chainDriver)
 
 		// When user deployed database
-
-		driver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, kwildEnvs)
-
-		time.Sleep(chainSyncWaitTime) // chain sync
-		specifications.DatabaseDeploySpecification(t, ctx, driver)
+		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, chainEnvs)
+		grpcDriver.SetFundConfig(userFundConfig)
+		// chain sync, wait kwild to register user
+		time.Sleep(chainSyncWaitTime)
+		specifications.DatabaseDeploySpecification(t, ctx, grpcDriver)
 
 		// Then user should be able to drop database
-		specifications.DatabaseDropSpecification(t, ctx, driver)
+		specifications.DatabaseDropSpecification(t, ctx, grpcDriver)
 	})
 
 	t.Run("should execute database", func(t *testing.T) {
@@ -133,33 +163,32 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Modifier: func(db *databases.Database[[]byte]) {
 					db.Owner = userAddr
 				}})
-		chainDriver, deployer, kwild_envs := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, viper.GetString(DeployerPrivateKeyName))
+		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(t, ctx, providerEndpoint, deployerPK, _chainCode, userPK)
 
 		// Given user is funded
-		err := deployer.FundAccount(ctx, userAddr, 200)
+		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
 		assert.NoError(t, err, "failed to fund user account")
-		go keepMiningBlocks(ctx, deployer, userAddr)
+		if !*remote {
+			go keepMiningBlocks(ctx, chainDeployer, userAddr)
+		}
 
-		// and user has approved funding_pool to spend his funds
+		// and user pledged fund to validator
 		specifications.ApproveTokenSpecification(t, ctx, chainDriver)
-
-		// and user is registered to a validator
 		specifications.DepositFundSpecification(t, ctx, chainDriver)
 
 		// When user deployed database
-		driver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, kwild_envs)
-
-		time.Sleep(chainSyncWaitTime) // chain sync
-		specifications.DatabaseDeploySpecification(t, ctx, driver)
+		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, chainEnvs)
+		grpcDriver.SetFundConfig(userFundConfig)
+		// chain sync, wait kwild to register user
+		time.Sleep(chainSyncWaitTime)
+		specifications.DatabaseDeploySpecification(t, ctx, grpcDriver)
 
 		// Then user should be able to execute database
-		// TODO: separate cases?
-		specifications.ExecuteDBInsertSpecification(t, ctx, driver)
-		specifications.ExecuteDBUpdateSpecification(t, ctx, driver)
-		specifications.ExecuteDBDeleteSpecification(t, ctx, driver)
+		specifications.ExecuteDBInsertSpecification(t, ctx, grpcDriver)
+		specifications.ExecuteDBUpdateSpecification(t, ctx, grpcDriver)
+		specifications.ExecuteDBDeleteSpecification(t, ctx, grpcDriver)
 
 		// and user should be able to drop database
-		specifications.DatabaseDropSpecification(t, ctx, driver)
+		specifications.DatabaseDropSpecification(t, ctx, grpcDriver)
 	})
 }

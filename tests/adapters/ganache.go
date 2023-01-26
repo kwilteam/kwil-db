@@ -3,8 +3,9 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/spf13/viper"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"kwil/tests/utils/deployer"
 	"kwil/tests/utils/deployer/eth-deployer"
@@ -50,7 +51,7 @@ func (c *ganacheContainer) UnexposedEndpoint(ctx context.Context) (string, error
 }
 
 // setupGanache creates an instance of the ganache container type
-func setupGanache(ctx context.Context, opts ...containerOption) (*ganacheContainer, error) {
+func setupGanache(ctx context.Context, chainId string, opts ...containerOption) (*ganacheContainer, error) {
 	req := testcontainers.ContainerRequest{
 		Name:         fmt.Sprintf("ganache-%d", time.Now().Unix()),
 		Image:        "trufflesuite/ganache:v7.7.3",
@@ -60,7 +61,7 @@ func setupGanache(ctx context.Context, opts ...containerOption) (*ganacheContain
 		ExposedPorts: []string{},
 		Cmd: []string{`--wallet.hdPath`, WalletHDPath,
 			`--wallet.mnemonic`, WalletMnemonic,
-			`--chain.chainId`, types.GOERLI.ToChainId().String()},
+			`--chain.chainId`, chainId},
 	}
 
 	for _, opt := range opts {
@@ -81,59 +82,68 @@ func setupGanache(ctx context.Context, opts ...containerOption) (*ganacheContain
 	}}, nil
 }
 
-func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoint string, deployerPrivateKey string) (*ethFund.Driver, deployer.Deployer, map[string]string) {
-	t.Helper()
+func getChainEndpoint(t *testing.T, ctx context.Context, _chainCode types.ChainCode) (exposedEndpoint string, unexposedEndpoint string) {
+	// create ganache(pretend to be Goerli testnet) container
+	var err error
+	ganacheDocker := StartGanacheDockerService(t, ctx, _chainCode.ToChainId().String())
+	exposedEndpoint, err = ganacheDocker.ExposedEndpoint(ctx)
+	require.NoError(t, err, "failed to get exposed endpoint")
+	unexposedEndpoint, err = ganacheDocker.UnexposedEndpoint(ctx)
+	require.NoError(t, err, "failed to get unexposed endpoint")
+	return exposedEndpoint, unexposedEndpoint
+}
 
+func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoint string, deployerPrivateKey string, _chainCode types.ChainCode, userPrivateKey string) (*ethFund.Driver, deployer.Deployer, *fund.Config, map[string]string) {
 	if providerEndpoint != "" {
-		deployer := eth_deployer.NewEthDeployer(providerEndpoint, deployerPrivateKey)
+		t.Logf("create chain driver to %s", providerEndpoint)
+		chainDriver := &ethFund.Driver{Addr: providerEndpoint}
+		fundConfig, err := fund.NewConfig()
+		require.NoError(t, err)
+		chainDriver.SetFundConfig(fundConfig)
 
-		// use default chain config for kwild
-		kwildEnvs := map[string]string{}
-
-		return &ethFund.Driver{Addr: providerEndpoint}, deployer, kwildEnvs
+		t.Logf("create chain deployer to %s", providerEndpoint)
+		chainDeployer := eth_deployer.NewEthDeployer(providerEndpoint, deployerPrivateKey)
+		chainEnvs := map[string]string{}
+		return chainDriver, chainDeployer, nil, chainEnvs
 	}
 
-	// create ganache container
-	ganacheDocker := StartGanacheDockerService(t, ctx)
+	exposedEndpoint, unexposedEndpoint := getChainEndpoint(t, ctx, _chainCode)
 
-	// ganache is mimicing testnet
-	viper.Set(types.ChainCodeFlag, int64(types.GOERLI))
-
-	exposedProviderEndpoint, err := ganacheDocker.ExposedEndpoint(ctx)
-	assert.NoError(t, err, "failed to get endpoint")
-	unexposedProviderEndpoint, err := ganacheDocker.UnexposedEndpoint(ctx)
-	assert.NoError(t, err, "failed to get endpoint")
-
-	deployer := eth_deployer.NewEthDeployer(exposedProviderEndpoint, deployerPrivateKey)
-	viper.Set(fund.ValidatorAddressFlag, deployer.Account.String())
-
-	// deploy smart contracts
-	tokenAddress, err := deployer.DeployToken(ctx)
-	assert.NoError(t, err, "failed to deploy token")
-
-	escrowAddress, err := deployer.DeployEscrow(ctx, tokenAddress.String())
-	assert.NoError(t, err, "failed to deploy escrow")
-
-	// TODO: make kwil client init from configuration, not from flags
-	// set viper vars, for creating chain client
-	// maybe set this to .env???
-	viper.Set(fund.TokenAddressFlag, tokenAddress.String())
-	viper.Set(fund.FundingPoolFlag, escrowAddress.String())
-	viper.Set(types.EthProviderFlag, exposedProviderEndpoint)
-	viper.Set(types.ReconnectionIntervalFlag, 30)
-	viper.Set(types.RequiredConfirmationsFlag, 1)
+	t.Logf("create chain driver to %s", exposedEndpoint)
+	chainDriver := &ethFund.Driver{Addr: exposedEndpoint}
+	t.Logf("create chain deployer to %s", exposedEndpoint)
+	chainDeployer := eth_deployer.NewEthDeployer(exposedEndpoint, deployerPrivateKey)
+	tokenAddress, err := chainDeployer.DeployToken(ctx)
+	require.NoError(t, err, "failed to deploy token")
+	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
+	require.NoError(t, err, "failed to deploy escrow")
 
 	// to be used by kwild container
-	kwildEnvs := map[string]string{
-		"DEPOSITS_PROVIDER_ENDPOINT": unexposedProviderEndpoint, //kwild will call using docker network
+	chainEnvs := map[string]string{
+		"DEPOSITS_PROVIDER_ENDPOINT": unexposedEndpoint, //kwild will call using docker network
 		"DEPOSITS_CONTRACT_ADDRESS":  escrowAddress.String(),
 		"DEPOSITS_WALLET_KEY":        deployerPrivateKey,
-		"DEPOSITS_CHAIN":             "Goerli",
-		"CHAIN_CODE":                 fmt.Sprintf("%d", types.GOERLI),
+		"DEPOSITS_CHAIN":             _chainCode.String(),
+		"CHAIN_CODE":                 fmt.Sprintf("%d", _chainCode),
 		"DEPOSITS_ENABLED":           "false",
 		"REQUIRED_CONFIRMATIONS":     "1",
 	}
 
-	t.Logf("create chain driver to %s", exposedProviderEndpoint)
-	return &ethFund.Driver{Addr: exposedProviderEndpoint}, deployer, kwildEnvs
+	userPK, err := crypto.HexToECDSA(viper.GetString(types.PrivateKeyFlag))
+	require.NoError(t, err)
+
+	fundConfig := &fund.Config{
+		ChainCode:             int64(_chainCode),
+		PrivateKey:            userPK,
+		TokenAddress:          tokenAddress.String(),
+		PoolAddress:           escrowAddress.String(),
+		ValidatorAddress:      chainDeployer.Account.String(),
+		Provider:              exposedEndpoint,
+		ReConnectionInterval:  30,
+		RequiredConfirmations: 1,
+	}
+
+	chainDriver.SetFundConfig(fundConfig)
+
+	return chainDriver, chainDeployer, fundConfig, chainEnvs
 }

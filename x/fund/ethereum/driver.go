@@ -13,8 +13,9 @@ import (
 type Driver struct {
 	Addr string
 
-	connOnce sync.Once
-	Chain    fund.IFund
+	connOnce   sync.Once
+	Fund       fund.IFund
+	fundConfig *fund.Config
 }
 
 func (d *Driver) DepositFund(ctx context.Context, from *ecdsa.PrivateKey, to string, amount *big.Int) error {
@@ -57,27 +58,19 @@ func (d *Driver) GetAllowance(ctx context.Context, from string, spender string) 
 	return client.GetAllowance(ctx, from, spender)
 }
 
-func (d *Driver) GetConfig() *fund.Config {
-	return d.Chain.GetConfig()
+func (d *Driver) GetFundConfig() *fund.Config {
+	return d.fundConfig
+}
+
+func (d *Driver) SetFundConfig(cfg *fund.Config) {
+	d.fundConfig = cfg
 }
 
 func (d *Driver) GetClient() (fund.IFund, error) {
 	var err error
 	d.connOnce.Do(func() {
-		chainCfg, err := fund.NewConfig()
-		if err != nil {
-			err = fmt.Errorf("failed to create chain config: %w", err)
-			return
-		}
-
-		chainClient, err := NewClient(chainCfg)
-		if err != nil {
-			err = fmt.Errorf("failed to create chain client: %w", err)
-			return
-		}
-
-		d.Chain = chainClient
+		d.Fund, err = NewClient(d.fundConfig)
 	})
 
-	return d.Chain, err
+	return d.Fund, err
 }

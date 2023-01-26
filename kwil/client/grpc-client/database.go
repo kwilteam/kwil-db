@@ -14,8 +14,8 @@ import (
 func (c *Client) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*transactions.Response, error) {
 	clean.Clean(db)
 
-	if !strings.EqualFold(db.Owner, c.Chain.GetConfig().Account) {
-		return nil, fmt.Errorf("database owner must be the same as the current account.  Owner: %s, Account: %s", db.Owner, c.Chain.GetConfig().Account)
+	if !strings.EqualFold(db.Owner, c.Chain.GetConfig().GetAccount()) {
+		return nil, fmt.Errorf("database owner must be the same as the current account.  Owner: %s, Account: %s", db.Owner, c.Chain.GetConfig().GetAccount())
 	}
 
 	// build tx

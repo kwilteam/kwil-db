@@ -49,6 +49,10 @@ func NewEthDeployer(provider string, _privateKey string) *EthDeployer {
 	}
 }
 
+func (d *EthDeployer) GetPrivateKey() *ecdsa.PrivateKey {
+	return d.privateKey
+}
+
 func (d *EthDeployer) getClient() (*ethclient.Client, error) {
 	var err error
 	d.connOnce.Do(func() {
