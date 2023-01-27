@@ -3,49 +3,54 @@ package common;
 option go_package = "kwil/x/proto/commonpb";
 
 enum DataType {
-	INVALID_TYPE = 0;
-	NULL = 1;
-	STRING = 2;
-	INT32 = 3;
-	INT64 = 4;
-	BOOLEAN = 5;
+	BEGIN_DATA_TYPES = 0; // the first enum must be 0 in Proto3.  INVALID_TYPE is a valid Kwil enum, so I make this 0
+	INVALID_TYPE = 100;
+	STRING = 101;
+	INT32 = 102;
+	INT64 = 103;
+	BOOLEAN = 104;
 }
 
 enum AttributeType {
-	INVALID_ATTRIBUTE = 0;
-	PRIMARY_KEY = 1;
-	UNIQUE = 2;
-	NOT_NULL = 3;
-	DEFAULT = 4;
-	MIN = 5;
-	MAX = 6;
-	MIN_LENGTH = 7;
-	MAX_LENGTH = 8;
+	BEGIN_ATTRIBUTE_TYPES = 0;
+	INVALID_ATTRIBUTE = 100;
+	PRIMARY_KEY = 101;
+	UNIQUE = 102;
+	NOT_NULL = 103;
+	DEFAULT = 104;
+	MIN = 105;
+	MAX = 106;
+	MIN_LENGTH = 107;
+	MAX_LENGTH = 108;
 }
 
 enum IndexType {
-    INVALID_INDEX = 0;
-    BTREE = 1;
+	BEGIN_INDEX_TYPES = 0;
+    INVALID_INDEX = 100;
+    BTREE = 101;
 }
 
 enum ModifierType {
-	NO_MODIFIER = 0;
-	CALLER = 1;
+	NO_MODIFIER = 0; // since modifier can be left blank, the NO_MODIFIER value is 0
+	INVALID_MODIFIER = 100;
+	CALLER = 101;
 }
 
 enum ComparisonOperator {
-    OPERATOR_INVALID = 0;
-    OPERATOR_EQUAL = 1;
-    OPERATOR_NOT_EQUAL = 2;
-    OPERATOR_GREATER_THAN = 3;
-    OPERATOR_GREATER_THAN_OR_EQUAL = 4;
-    OPERATOR_LESS_THAN = 5;
-    OPERATOR_LESS_THAN_OR_EQUAL = 6;
+	BEGIN_OPERATOR_TYPES = 0;
+    OPERATOR_INVALID = 100;
+    OPERATOR_EQUAL = 101;
+    OPERATOR_NOT_EQUAL = 102;
+    OPERATOR_GREATER_THAN = 103;
+    OPERATOR_GREATER_THAN_OR_EQUAL = 104;
+    OPERATOR_LESS_THAN = 105;
+    OPERATOR_LESS_THAN_OR_EQUAL = 106;
 }
 
 enum QueryType {
-	QUERY_INVALID = 0;
-	QUERY_INSERT = 1;
-	QUERY_UPDATE = 2;
-	QUERY_DELETE = 3;
+	BEGIN_QUERY_TYPES= 0;
+	QUERY_INVALID = 100;
+	QUERY_INSERT = 101;
+	QUERY_UPDATE = 102;
+	QUERY_DELETE = 103;
 }
