@@ -66,7 +66,7 @@ func (v *Validator) validateQuery(q *databases.SQLQuery[anytype.KwilAny]) error 
 		// check if parameter is valid
 		err := validateInput(param, table)
 		if err != nil {
-			return fmt.Errorf(`invalid parameter for query "%s": %w`, q.Name, err)
+			return fmt.Errorf(`invalid parameter for param "%s": %w`, param.Name, err)
 		}
 	}
 	for _, where := range q.Where {
@@ -84,7 +84,7 @@ func (v *Validator) validateQuery(q *databases.SQLQuery[anytype.KwilAny]) error 
 		// check if where is valid
 		err := validateInput(where, table)
 		if err != nil {
-			return fmt.Errorf(`invalid where for query "%s": %w`, q.Name, err)
+			return fmt.Errorf(`invalid where for where_clause "%s": %w`, where.Name, err)
 		}
 	}
 

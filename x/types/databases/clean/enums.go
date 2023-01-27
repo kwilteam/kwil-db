@@ -36,7 +36,7 @@ func cleanEnum(val reflect.Value, tags []string) {
 	case EnumQueryType:
 		inEnumRange(val, int64(execution.INVALID_QUERY_TYPE), int64(execution.END_QUERY_TYPE))
 	case EnumModifier:
-		inEnumRange(val, int64(execution.INVALID_MODIFIER_TYPE), int64(execution.END_MODIFIER_TYPE))
+		inEnumRange(val, int64(execution.NO_MODIFIER), int64(execution.END_MODIFIER_TYPE))
 	case EnumComparisonOperator:
 		inEnumRange(val, int64(execution.INVALID_COMPARISON_OPERATOR_TYPE), int64(execution.END_COMPARISON_OPERATOR_TYPE))
 	case EnumIndexType:

@@ -7,71 +7,71 @@
             "columns": [
                 {
                     "name": "id",
-                    "type": 3,
+                    "type": 103,
                     "attributes": [
                         {
-                            "type": 1
+                            "type": 101
                         },
                         {
-                            "type": 2
+                            "type": 102
                         },
                         {
-                            "type": 3
+                            "type": 103
                         }
                     ]
                 },
                 {
                     "name": "name",
-                    "type": 2,
+                    "type": 102,
                     "attributes": [
                         {
-                            "type": 2
+                            "type": 102
                         },
                         {
-                            "type": 3
+                            "type": 103
                         },
                         {
-                            "type": 7,
-                            "value": "BAQAAAAAAAAA"
+                            "type": 107,
+                            "value": "ZwAAAAA="
                         },
                         {
-                            "type": 8,
-                            "value": "BDwAAAAAAAAA"
+                            "type": 108,
+                            "value": "Z+gDAAA="
                         }
                     ]
                 },
                 {
                     "name": "age",
-                    "type": 3,
+                    "type": 103,
                     "attributes": [
                         {
-                            "type": 5,
-                            "value": "AxIAAAA="
+                            "type": 105,
+                            "value": "ZwAAAAA="
                         },
                         {
-                            "type": 6,
-                            "value": "A2QAAAA="
+                            "type": 106,
+                            "value": "Z+gDAAA="
                         },
                         {
-                            "type": 3
+                            "type": 103
                         }
                     ]
                 },
                 {
                     "name": "wallet",
-                    "type": 2,
+                    "type": 102,
                     "attributes": [
                         {
-                            "type": 2
+                            "type": 102
                         },
                         {
-                            "type": 3
+                            "type": 103
                         }
                     ]
                 },
                 {
                     "name": "boolean",
-                    "type": 5
+                    "type": 105
                 }
             ]
         },
@@ -80,65 +80,65 @@
             "columns": [
                 {
                     "name": "id",
-                    "type": 3,
+                    "type": 103,
                     "attributes": [
                         {
-                            "type": 1
+                            "type": 101
                         },
                         {
-                            "type": 2
+                            "type": 102
                         },
                         {
-                            "type": 3
+                            "type": 103
                         }
                     ]
                 },
                 {
                     "name": "title",
-                    "type": 2,
+                    "type": 102,
                     "attributes": [
                         {
-                            "type": 3
+                            "type": 103
                         },
                         {
-                            "type": 4,
-                            "value": "Am5ldw=="
+                            "type": 104,
+                            "value": "ZnNhdG9zaGk="
                         },
                         {
-                            "type": 7,
-                            "value": "BAQAAAAAAAAA"
+                            "type": 107,
+                            "value": "ZwAAAAA="
                         },
                         {
-                            "type": 8,
-                            "value": "BDwAAAAAAAAA"
+                            "type": 108,
+                            "value": "Z+gDAAA="
                         }
                     ]
                 },
                 {
                     "name": "body",
-                    "type": 2,
+                    "type": 102,
                     "attributes": [
                         {
-                            "type": 2
+                            "type": 102
                         },
                         {
-                            "type": 3
+                            "type": 103
                         }
                     ]
                 },
                 {
                     "name": "user_id",
-                    "type": 4,
+                    "type": 104,
                     "attributes": [
                         {
-                            "type": 2
+                            "type": 102
                         },
                         {
-                            "type": 3
+                            "type": 103
                         },
                         {
-                            "type": 6,
-                            "value": "BADodkgXAAAA"
+                            "type": 106,
+                            "value": "aOgDAAAAAAAA"
                         }
                     ]
                 }
@@ -171,7 +171,7 @@
     "sql_queries": [
         {
             "name": "create_user",
-            "type": 1,
+            "type": 101,
             "table": "users",
             "parameters": [
                 {
@@ -191,7 +191,7 @@
                     "column": "wallet",
                     "static": true,
                     "value": "",
-                    "modifier": 1
+                    "modifier": 101
                 },
                 {
                     "name": "boolean",
@@ -201,7 +201,7 @@
         },
         {
             "name": "update_user",
-            "type": 2,
+            "type": 102,
             "table": "users",
             "parameters": [
                 {
@@ -218,40 +218,40 @@
                     "name": "wallet",
                     "column": "wallet",
                     "static": true,
-                    "operator": 1,
+                    "operator": 101,
                     "value": "",
-                    "modifier": 1
+                    "modifier": 101
                 },
                 {
                     "name": "where_name",
                     "column": "name",
-                    "operator": 1
+                    "operator": 101
                 }
             ]
         },
         {
             "name": "delete_user",
-            "type": 3,
+            "type": 103,
             "table": "users",
             "where": [
                 {
                     "name": "wallet",
                     "column": "wallet",
                     "static": true,
-                    "operator": 1,
+                    "operator": 101,
                     "value": "",
-                    "modifier": 1
+                    "modifier": 101
                 },
                 {
                     "name": "name",
                     "column": "name",
-                    "operator": 1
+                    "operator": 101
                 }
             ]
         },
         {
             "name": "create_post",
-            "type": 1,
+            "type": 101,
             "table": "posts",
             "parameters": [
                 {
@@ -274,7 +274,7 @@
         },
         {
             "name": "update_post",
-            "type": 2,
+            "type": 102,
             "table": "posts",
             "parameters": [
                 {
@@ -290,34 +290,34 @@
                 {
                     "name": "id",
                     "column": "id",
-                    "operator": 1
+                    "operator": 101
                 },
                 {
                     "name": "user_id",
                     "column": "user_id",
-                    "operator": 1
+                    "operator": 101
                 }
             ]
         },
         {
             "name": "delete_post",
-            "type": 3,
+            "type": 103,
             "table": "posts",
             "where": [
                 {
                     "name": "id",
                     "column": "id",
-                    "operator": 1
+                    "operator": 101
                 },
                 {
                     "name": "title",
                     "column": "title",
-                    "operator": 1
+                    "operator": 101
                 },
                 {
                     "name": "user_id",
                     "column": "user_id",
-                    "operator": 1
+                    "operator": 101
                 }
             ]
         }
@@ -329,7 +329,7 @@
             "columns": [
                 "wallet"
             ],
-            "using": 1
+            "using": 101
         }
     ]
 }
