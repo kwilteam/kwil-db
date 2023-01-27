@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"kwil/kwil/repository/gen"
 	escrowTypes "kwil/x/types/contracts/escrow"
 	depositTypes "kwil/x/types/deposits"
@@ -45,7 +46,17 @@ func (q *queries) Deposit(ctx context.Context, deposit *escrowTypes.DepositEvent
 }
 
 func (q *queries) CommitDeposits(ctx context.Context, finish int64) error {
-	return q.gen.CommitDeposits(ctx, finish)
+	err := q.gen.CommitDeposits(ctx, finish)
+	if err != nil {
+		return fmt.Errorf("failed to commit deposits: %w", err)
+	}
+
+	err = q.gen.DeleteDeposits(ctx, finish)
+	if err != nil {
+		return fmt.Errorf("failed to delete deposits: %w", err)
+	}
+
+	return nil
 }
 
 func (q *queries) ConfirmWithdrawal(ctx context.Context, correlationId string) error {
@@ -67,4 +78,8 @@ func (q *queries) AddTxHashToWithdrawal(ctx context.Context, txHash string, corr
 		CorrelationID: correlationId,
 		TxHash:        sql.NullString{Valid: true, String: strings.ToLower(txHash)},
 	})
+}
+
+func (q *queries) DeleteDeposits(ctx context.Context, finish int64) error {
+	return q.gen.DeleteDeposits(ctx, finish)
 }

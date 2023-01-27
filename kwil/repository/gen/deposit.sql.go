@@ -32,6 +32,16 @@ func (q *Queries) CommitDeposits(ctx context.Context, height int64) error {
 	return err
 }
 
+const deleteDeposits = `-- name: DeleteDeposits :exec
+DELETE FROM deposits
+WHERE height <= $1
+`
+
+func (q *Queries) DeleteDeposits(ctx context.Context, height int64) error {
+	_, err := q.exec(ctx, q.deleteDepositsStmt, deleteDeposits, height)
+	return err
+}
+
 const deposit = `-- name: Deposit :exec
 INSERT INTO
     deposits (tx_hash, account_address, amount, height)

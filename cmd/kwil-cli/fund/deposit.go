@@ -42,6 +42,11 @@ func depositCmd() *cobra.Command {
 				// TODO add tokenName back
 				//tokenName := client.Chain.Token.Symbol()
 
+				validatorAddress, err := client.Txs.GetValidatorAddress(ctx)
+				if err != nil {
+					return err
+				}
+
 				fmt.Printf("You will be depositing $%s into funding pool %s\n", amount, client.Chain.GetConfig().PoolAddress)
 				pr := promptui.Select{
 					Label: "Continue?",
@@ -57,7 +62,7 @@ func depositCmd() *cobra.Command {
 					return errors.New("transaction cancelled")
 				}
 
-				txRes, err := client.DepositFund(ctx, client.Chain.GetConfig().PrivateKey, client.Chain.GetConfig().ValidatorAddress, amount)
+				txRes, err := client.DepositFund(ctx, client.Chain.GetConfig().PrivateKey, validatorAddress, amount)
 				if err != nil {
 					return err
 				}
