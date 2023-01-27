@@ -59,6 +59,7 @@ func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[stri
 
 	if addr != "" {
 		viper.Set("PG_DATABASE_URL", dbUrl)
+		t.Logf("create grpc driver to %s", addr)
 		return &grpc_client.Driver{Addr: addr}
 	}
 
