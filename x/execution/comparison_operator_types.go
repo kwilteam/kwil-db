@@ -3,7 +3,7 @@ package execution
 type ComparisonOperatorType int
 
 const (
-	INVALID_COMPARISON_OPERATOR_TYPE ComparisonOperatorType = iota
+	INVALID_COMPARISON_OPERATOR_TYPE ComparisonOperatorType = iota + 100
 	EQUAL
 	NOT_EQUAL
 	GREATER_THAN

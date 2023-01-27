@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
-	"kwil/kwil/client/grpc-client"
+	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/x/fund"
 	"math/big"
 
 	"github.com/manifoldco/promptui"
@@ -23,7 +24,12 @@ func approveCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				// @yaiba TODO: no need to dial grpc here, just use the chain client
-				client, err := grpc_client.NewClient(cc)
+				conf, err := fund.NewConfig()
+				if err != nil {
+					return fmt.Errorf("error getting client config: %w", err)
+				}
+
+				client, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}

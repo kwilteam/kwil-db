@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
-	"kwil/kwil/client/grpc-client"
+	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/x/fund"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -20,18 +21,23 @@ func balancesCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
 				// @yaiba TODO: no need to dial grpc here, just use the chain client
-				client, err := grpc_client.NewClient(cc)
+				conf, err := fund.NewConfig()
+				if err != nil {
+					return fmt.Errorf("error getting client config: %w", err)
+				}
+
+				client, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}
 
-				allowance, err := client.Chain.GetAllowance(ctx, client.Chain.GetConfig().Account, client.Chain.GetConfig().PoolAddress)
+				allowance, err := client.Chain.GetAllowance(ctx, client.Chain.GetConfig().GetAccount(), client.Chain.GetConfig().PoolAddress)
 				if err != nil {
 					return fmt.Errorf("error getting allowance: %w", err)
 				}
 
 				// get balance
-				balance, err := client.Chain.GetBalance(ctx, client.Chain.GetConfig().Account)
+				balance, err := client.Chain.GetBalance(ctx, client.Chain.GetConfig().GetAccount())
 				if err != nil {
 					return fmt.Errorf("error getting deposit balance: %w", err)
 				}

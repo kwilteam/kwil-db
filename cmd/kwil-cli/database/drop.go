@@ -3,11 +3,13 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
 	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/x/fund"
+
+	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 )
 
 func dropCmd() *cobra.Command {
@@ -16,7 +18,12 @@ func dropCmd() *cobra.Command {
 		Short: "Drops a database",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client, err := grpc_client.NewClient(cc)
+				conf, err := fund.NewConfig()
+				if err != nil {
+					return fmt.Errorf("error getting client config: %w", err)
+				}
+
+				client, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -25,7 +32,7 @@ func dropCmd() *cobra.Command {
 					return fmt.Errorf("deploy requires one argument: database name")
 				}
 
-				res, err := client.DropDatabase(ctx, client.Chain.GetConfig().Account, args[0])
+				res, err := client.DropDatabase(ctx, client.Chain.GetConfig().GetAccount(), args[0])
 				if err != nil {
 					return err
 				}

@@ -4,7 +4,7 @@ type DataType int
 
 // Data Types
 const (
-	INVALID_DATA_TYPE DataType = iota
+	INVALID_DATA_TYPE DataType = iota + 100
 	NULL
 	STRING
 	INT32

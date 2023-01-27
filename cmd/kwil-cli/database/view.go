@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/x/fund"
+
+	"kwil/cmd/kwil-cli/common"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
-	"kwil/cmd/kwil-cli/common"
 )
 
 func viewDatabaseCmd() *cobra.Command {
@@ -17,7 +19,12 @@ func viewDatabaseCmd() *cobra.Command {
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				c, err := grpc_client.NewClient(cc)
+				conf, err := fund.NewConfig()
+				if err != nil {
+					return fmt.Errorf("error getting client config: %w", err)
+				}
+
+				c, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return fmt.Errorf("error creating client: %w", err)
 				}
@@ -32,7 +39,7 @@ func viewDatabaseCmd() *cobra.Command {
 					return fmt.Errorf("error getting owner flag: %w", err)
 				}
 				if dbOwner == "NULL" {
-					dbOwner = c.Chain.GetConfig().Account
+					dbOwner = c.Chain.GetConfig().GetAccount()
 				}
 
 				meta, err := c.GetDatabaseSchema(ctx, dbOwner, dbName)

@@ -6,21 +6,17 @@ import (
 
 	chain "kwil/x/chain/types"
 
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
-
-func BindConfigFlags(cmd *cobra.Command) {
-	//fs := cmd.PersistentFlags()
-
-	//fs.String(client.ConfigFileFlag, "", "config file (default is $HOME/.kwil/config/cli.toml)")
-}
 
 func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.Duration(client.DialTimeoutFlag, 5*time.Second, "timeout for requests")
 	fs.String(client.EndpointFlag, "", "the endpoint of the Kwil node")
 	fs.String(client.ApiKeyFlag, "", "your api key")
+
+	// TODO: this was missing, not sure the best place for this to live?
+	fs.String("funding-pool", "", "the address of the funding pool")
 
 	chain.BindChainFlags(fs)
 
@@ -36,6 +32,9 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 
 	viper.BindEnv(client.ApiKeyFlag, client.ApiKeyEnv)
 	viper.BindPFlag(client.ApiKeyFlag, fs.Lookup(client.ApiKeyFlag))
+
+	viper.BindEnv("funding-pool", "KWIL_FUNDING_POOL")
+	viper.BindPFlag("funding-pool", fs.Lookup("funding-pool"))
 
 	chain.BindChainEnv()
 }

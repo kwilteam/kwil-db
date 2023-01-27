@@ -3,7 +3,7 @@ package transactions
 type PayloadType int32
 
 const (
-	INVALID_PAYLOAD_TYPE PayloadType = iota
+	INVALID_PAYLOAD_TYPE PayloadType = iota + 100
 	DEPLOY_DATABASE
 	MODIFY_DATABASE
 	DROP_DATABASE
