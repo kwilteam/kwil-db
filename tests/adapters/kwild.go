@@ -54,10 +54,11 @@ func setupKwild(ctx context.Context, opts ...containerOption) (*kwildContainer, 
 	}}, nil
 }
 
-func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[string]string) *grpc_client.Driver {
+func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[string]string, dbUrl string) *grpc_client.Driver {
 	t.Helper()
 
 	if addr != "" {
+		viper.Set("PG_DATABASE_URL", dbUrl)
 		return &grpc_client.Driver{Addr: addr}
 	}
 

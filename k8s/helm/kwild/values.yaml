@@ -234,7 +234,7 @@ hasura:
 
               INSERT INTO chains (code, height) VALUES (1, 0), (2, 0) ON CONFLICT DO NOTHING;
 
-              EOSQL
+            EOSQL
             }
             create_user_and_database "kwil"
             setup_master_db "kwil"

@@ -11,11 +11,10 @@ hasura:
     # comment nodePorts to enable multi instances on local machine
     nodePorts:
       hasura: 32100
-
-postgresql:
-  primary:
-    service:
-      type: NodePort
-      # comment nodePorts to enable multi instances on local machine
-      nodePorts:
-        postgresql: 32103
+  postgresql:
+    primary:
+      service:
+        type: NodePort
+        # comment nodePorts to enable multi instances on local machine
+        nodePorts:
+          postgresql: 32103

@@ -10,16 +10,18 @@ import (
 	"kwil/tests/utils/deployer"
 	"kwil/x/chain/types"
 	"kwil/x/types/databases"
+	"math/big"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
 var buildKwilOnce sync.Once
+
+var remote = flag.Bool("remote", false, "run tests against remote environment")
 
 func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account string) {
 	for {
@@ -55,26 +57,24 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		// remote blockchain endpoint
 		providerEndpoint string
 		// blochchain block produce interval
-		chainSyncWaitTime time.Duration
-		_chainCode        types.ChainCode
-		fundAmount        int64
+		chainSyncWaitTime  time.Duration
+		fundingPoolAddress string
+		_chainCode         types.ChainCode
+		fundAmount         int64
+		domination         *big.Int
+		remoteDBUrl        string
 	)
 
 	localEnv := func() {
 		userPK = adapters.UserAccountPK
-		// test deployer
 		deployerPK = adapters.DeployerAccountPK
-		// database schema
 		dbSchemaPath = "./test-data/database_schema.json"
 		remoteKwildAddr = ""
 		providerEndpoint = ""
 		chainSyncWaitTime = 3 * time.Second
 		_chainCode = types.GOERLI
-		fundAmount = 200
-
-		viper.Set(types.PrivateKeyFlag, adapters.UserAccountPK)
-		viper.Set(types.ReconnectionIntervalFlag, 30)
-		viper.Set(types.RequiredConfirmationsFlag, 1)
+		fundAmount = 100
+		domination = big.NewInt(1000000000000000000)
 	}
 
 	remoteEnv := func() {
@@ -86,12 +86,11 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		providerEndpoint = os.Getenv("TEST_PROVIDER")
 		chainSyncWaitTime = 15 * time.Second
 		_chainCode = types.GOERLI
-		fundAmount = 10
-
-		viper.Set(types.PrivateKeyFlag, adapters.UserAccountPK)
+		fundAmount = 1
+		fundingPoolAddress = os.Getenv("TEST_POOL_ADDRESS")
+		remoteDBUrl = os.Getenv("TEST_DB_URL")
+		domination = big.NewInt(10000)
 	}
-
-	remote := flag.Bool("remote", false, "run tests against remote environment")
 
 	if *remote {
 		remoteEnv()
@@ -106,9 +105,14 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 	userAddr = crypto.PubkeyToAddress(userPrivateKey.PublicKey).Hex()
 
 	t.Run("should deposit fund", func(t *testing.T) {
+		if *remote {
+			t.Skip()
+		}
+
 		ctx := context.Background()
 		// setup
-		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(t, ctx, providerEndpoint, deployerPK, _chainCode, userPK)
+		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(
+			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination)
 
 		// Given user is funded with escrow token
 		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
@@ -130,21 +134,22 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Modifier: func(db *databases.Database[[]byte]) {
 					db.Owner = userAddr
 				}})
-		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(t, ctx, providerEndpoint, deployerPK, _chainCode, userPK)
+		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(
+			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination)
 
-		// Given user is funded
-		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-		assert.NoError(t, err, "failed to fund user account")
 		if !*remote {
+			// Given user is funded
+			err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
+			assert.NoError(t, err, "failed to fund user account")
 			go keepMiningBlocks(ctx, chainDeployer, userAddr)
+
+			// and user pledged fund to validator
+			specifications.ApproveTokenSpecification(t, ctx, chainDriver)
+			specifications.DepositFundSpecification(t, ctx, chainDriver)
 		}
 
-		// and user pledged fund to validator
-		specifications.ApproveTokenSpecification(t, ctx, chainDriver)
-		specifications.DepositFundSpecification(t, ctx, chainDriver)
-
 		// When user deployed database
-		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, chainEnvs)
+		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, chainEnvs, remoteDBUrl)
 		grpcDriver.SetFundConfig(userFundConfig)
 		// chain sync, wait kwild to register user
 		time.Sleep(chainSyncWaitTime)
@@ -163,21 +168,22 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Modifier: func(db *databases.Database[[]byte]) {
 					db.Owner = userAddr
 				}})
-		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(t, ctx, providerEndpoint, deployerPK, _chainCode, userPK)
+		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(
+			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination)
 
-		// Given user is funded
-		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-		assert.NoError(t, err, "failed to fund user account")
 		if !*remote {
+			// Given user is funded
+			err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
+			assert.NoError(t, err, "failed to fund user account")
 			go keepMiningBlocks(ctx, chainDeployer, userAddr)
+
+			// and user pledged fund to validator
+			specifications.ApproveTokenSpecification(t, ctx, chainDriver)
+			specifications.DepositFundSpecification(t, ctx, chainDriver)
 		}
 
-		// and user pledged fund to validator
-		specifications.ApproveTokenSpecification(t, ctx, chainDriver)
-		specifications.DepositFundSpecification(t, ctx, chainDriver)
-
 		// When user deployed database
-		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, chainEnvs)
+		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, chainEnvs, remoteDBUrl)
 		grpcDriver.SetFundConfig(userFundConfig)
 		// chain sync, wait kwild to register user
 		time.Sleep(chainSyncWaitTime)

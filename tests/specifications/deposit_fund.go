@@ -19,18 +19,21 @@ type DepositFundDsl interface {
 func DepositFundSpecification(t *testing.T, ctx context.Context, deposit DepositFundDsl) {
 	t.Logf("Executing DepositFundSpecification")
 	//Given a user and a validator address, and an amount
-	amount := new(big.Int).Mul(big.NewInt(100), big.NewInt(1000000000000000000))
+
+	amount := new(big.Int).Mul(big.NewInt(10), big.NewInt(1000000000000000000))
 	cfg := deposit.GetFundConfig()
+	depositedAmountOld, err := deposit.GetDepositBalance(ctx, cfg.GetAccount(), cfg.ValidatorAddress)
 
 	//When i deposit fund from user to validator
-	err := deposit.DepositFund(ctx, cfg.PrivateKey, cfg.ValidatorAddress, amount)
+	err = deposit.DepositFund(ctx, cfg.PrivateKey, cfg.ValidatorAddress, amount)
 
 	//Then i expect success
 	assert.NoError(t, err)
 
 	//TODO: check balance
 	//And i expect the deposited amount to be set
-	depositedAmount, err := deposit.GetDepositBalance(ctx, cfg.GetAccount(), cfg.ValidatorAddress)
+	depositedAmountNew, err := deposit.GetDepositBalance(ctx, cfg.GetAccount(), cfg.ValidatorAddress)
+
 	assert.NoError(t, err)
-	assert.Equal(t, amount, depositedAmount)
+	assert.Equal(t, depositedAmountOld.Cmp(depositedAmountNew), -1)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	escrow "kwil/x/contracts/escrow/evm/abi"
 	token "kwil/x/contracts/token/evm/abi"
+	"kwil/x/fund"
 	"math/big"
 	"sync"
 )
@@ -35,18 +36,52 @@ type EthDeployer struct {
 
 	deployedEscrow *escrow.Escrow
 	deployedErc20  *token.Erc20
+
+	Chain fund.IFund
+
+	domination *big.Int
 }
 
-func NewEthDeployer(provider string, _privateKey string) *EthDeployer {
+func NewEthDeployer(provider string, _privateKey string, domination *big.Int) *EthDeployer {
 	privateKey, publicKey := getKeys(_privateKey)
 
-	return &EthDeployer{
+	d := &EthDeployer{
 		Provider:   provider,
 		PriKey:     _privateKey,
 		privateKey: privateKey,
 		publicKey:  publicKey,
 		Account:    crypto.PubkeyToAddress(*publicKey),
+		domination: domination,
 	}
+
+	return d
+}
+
+func (d *EthDeployer) UpdateContract(ctx context.Context, poolAddress string) error {
+	client, err := d.getClient()
+	if err != nil {
+		return err
+	}
+
+	escrowCtl, err := escrow.NewEscrow(common.HexToAddress(poolAddress), client)
+	if err != nil {
+		return fmt.Errorf("failed to create escrow contract: %v", err)
+	}
+
+	cAuth := d.getCallAuth(ctx, d.Account.Hex())
+	tokenAddress, err := escrowCtl.EscrowToken(cAuth)
+	if err != nil {
+		return err
+	}
+
+	tokenCtl, err := token.NewErc20(tokenAddress, client)
+	if err != nil {
+		return fmt.Errorf("failed to create erc20 contract: %v", err)
+	}
+
+	d.deployedEscrow = escrowCtl
+	d.deployedErc20 = tokenCtl
+	return nil
 }
 
 func (d *EthDeployer) GetPrivateKey() *ecdsa.PrivateKey {
@@ -153,7 +188,7 @@ func (d *EthDeployer) FundAccount(ctx context.Context, account string, amount in
 	//cAuth := d.getCallAuth(ctx, d.Account.Hex())
 	//decimals, err := d.deployedErc20.Decimals(cAuth)
 	//fmt.Println("token decimals = ", decimals)
-	realAmount := new(big.Int).Mul(big.NewInt(amount), big.NewInt(1000000000000000000))
+	realAmount := new(big.Int).Mul(big.NewInt(amount), d.domination)
 
 	auth, err := d.getAccountAuth(ctx)
 	if err != nil {

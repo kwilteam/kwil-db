@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"kwil/tests/utils/deployer"
@@ -12,6 +11,7 @@ import (
 	"kwil/x/chain/types"
 	"kwil/x/fund"
 	ethFund "kwil/x/fund/ethereum"
+	"math/big"
 	"testing"
 	"time"
 )
@@ -93,18 +93,29 @@ func getChainEndpoint(t *testing.T, ctx context.Context, _chainCode types.ChainC
 	return exposedEndpoint, unexposedEndpoint
 }
 
-func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoint string, deployerPrivateKey string, _chainCode types.ChainCode, userPrivateKey string) (*ethFund.Driver, deployer.Deployer, *fund.Config, map[string]string) {
+func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoint string, deployerPrivateKey string, _chainCode types.ChainCode, userPrivateKey string, fundingPoolAddress string, domination *big.Int) (*ethFund.Driver, deployer.Deployer, *fund.Config, map[string]string) {
+	userPK, err := crypto.HexToECDSA(userPrivateKey)
+	require.NoError(t, err)
+
 	if providerEndpoint != "" {
+		userFundConfig := &fund.Config{
+			ChainCode:             int64(_chainCode),
+			PrivateKey:            userPK,
+			PoolAddress:           fundingPoolAddress,
+			Provider:              providerEndpoint,
+			ReConnectionInterval:  30,
+			RequiredConfirmations: 10,
+		}
 		t.Logf("create chain driver to %s", providerEndpoint)
 		chainDriver := &ethFund.Driver{Addr: providerEndpoint}
-		fundConfig, err := fund.NewConfig()
-		require.NoError(t, err)
-		chainDriver.SetFundConfig(fundConfig)
+		chainDriver.SetFundConfig(userFundConfig)
 
 		t.Logf("create chain deployer to %s", providerEndpoint)
-		chainDeployer := eth_deployer.NewEthDeployer(providerEndpoint, deployerPrivateKey)
+		chainDeployer := eth_deployer.NewEthDeployer(providerEndpoint, deployerPrivateKey, domination)
+		chainDeployer.UpdateContract(ctx, fundingPoolAddress)
 		chainEnvs := map[string]string{}
-		return chainDriver, chainDeployer, nil, chainEnvs
+
+		return chainDriver, chainDeployer, userFundConfig, chainEnvs
 	}
 
 	exposedEndpoint, unexposedEndpoint := getChainEndpoint(t, ctx, _chainCode)
@@ -112,7 +123,7 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoi
 	t.Logf("create chain driver to %s", exposedEndpoint)
 	chainDriver := &ethFund.Driver{Addr: exposedEndpoint}
 	t.Logf("create chain deployer to %s", exposedEndpoint)
-	chainDeployer := eth_deployer.NewEthDeployer(exposedEndpoint, deployerPrivateKey)
+	chainDeployer := eth_deployer.NewEthDeployer(exposedEndpoint, deployerPrivateKey, domination)
 	tokenAddress, err := chainDeployer.DeployToken(ctx)
 	require.NoError(t, err, "failed to deploy token")
 	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
@@ -129,10 +140,7 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoi
 		"REQUIRED_CONFIRMATIONS":     "1",
 	}
 
-	userPK, err := crypto.HexToECDSA(viper.GetString(types.PrivateKeyFlag))
-	require.NoError(t, err)
-
-	fundConfig := &fund.Config{
+	userFundConfig := &fund.Config{
 		ChainCode:             int64(_chainCode),
 		PrivateKey:            userPK,
 		TokenAddress:          tokenAddress.String(),
@@ -143,7 +151,7 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoi
 		RequiredConfirmations: 1,
 	}
 
-	chainDriver.SetFundConfig(fundConfig)
+	chainDriver.SetFundConfig(userFundConfig)
 
-	return chainDriver, chainDeployer, fundConfig, chainEnvs
+	return chainDriver, chainDeployer, userFundConfig, chainEnvs
 }
