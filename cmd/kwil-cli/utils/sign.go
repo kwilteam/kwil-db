@@ -2,11 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"kwil/kwil/client/grpc-client"
 	"kwil/x/crypto"
+	"kwil/x/fund"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func signCmd() *cobra.Command {
@@ -21,7 +20,7 @@ func signCmd() *cobra.Command {
 			}
 
 			// get private key
-			config, err := grpc_client.NewClientConfig(viper.GetViper())
+			config, err := fund.NewConfig()
 			if err != nil {
 				return fmt.Errorf("error getting client config: %w", err)
 			}

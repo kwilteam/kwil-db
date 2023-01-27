@@ -6,13 +6,10 @@ import (
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
 	grpc_client "kwil/kwil/client/grpc-client"
-	"kwil/x/types/databases"
-	"kwil/x/types/execution"
-	"kwil/x/types/transactions"
-	"strings"
+	"kwil/x/fund"
+	anytype "kwil/x/types/data_types/any_type"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -68,8 +65,13 @@ func executeCmd() *cobra.Command {
 
 		create_user name satoshi age 32 --database-id x1234`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client, err := grpc_client.NewClient(cc, viper.GetViper())
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				conf, err := fund.NewConfig()
+				if err != nil {
+					return fmt.Errorf("error getting client config: %w", err)
+				}
+
+				client, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -79,81 +81,31 @@ func executeCmd() *cobra.Command {
 					return fmt.Errorf("invalid number of arguments")
 				}
 
-				// we will check if the user specified the database id or the database name and owner
-				var executables []*execution.Executable
+				// if we get an error, it means the user did not specify the database id
+				// get the database name and owner
+				dbName, err := cmd.Flags().GetString("db_name")
+				if err != nil {
+					return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
+				}
 
-				// get the database id
-				dbId, err := cmd.Flags().GetString("db_id")
-				if err != nil || dbId == "" {
-					// if we get an error, it means the user did not specify the database id
-					// get the database name and owner
-					dbName, err := cmd.Flags().GetString("db_name")
+				dbOwner, err := cmd.Flags().GetString("db_owner")
+				if err != nil {
+					return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
+				}
+
+				inputs := make([]anytype.KwilAny, 0)
+				for i := 1; i < len(args); i++ {
+					in, err := anytype.New(args[i])
 					if err != nil {
-						return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
+						return fmt.Errorf("error creating kwil any type with executable inputs: %w", err)
 					}
 
-					dbOwner, err := cmd.Flags().GetString("db_owner")
-					if err != nil {
-						return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
-					}
-
-					// create the dbid.  we will need this for the execution body
-					dbId = databases.GenerateSchemaName(dbOwner, dbName)
+					inputs = append(inputs, in)
 				}
 
-				executables, err = client.Txs.GetExecutablesById(ctx, dbId)
+				res, err := client.ExecuteDatabase(ctx, dbOwner, dbName, args[0], inputs)
 				if err != nil {
-					return fmt.Errorf("failed to get executables: %w", err)
-				}
-
-				// get the query from the executables
-				var query *execution.Executable
-				for _, executable := range executables {
-					if strings.EqualFold(executable.Name, args[0]) {
-						query = executable
-						break
-					}
-				}
-				if query == nil {
-					return fmt.Errorf("query %s not found", args[0])
-				}
-
-				// check that each input is provided
-				userIns := make([]*execution.UserInput, 0)
-				for _, input := range query.UserInputs {
-					found := false
-					for i := 1; i < len(args); i += 2 {
-						if args[i] == input.Name {
-							found = true
-							userIns = append(userIns, &execution.UserInput{
-								Name:  input.Name,
-								Value: args[i+1],
-							})
-							break
-						}
-					}
-					if !found {
-						return fmt.Errorf("input %s not provided", input.Name)
-					}
-				}
-
-				// create the execution body
-				body := &execution.ExecutionBody{
-					Database: dbId,
-					Query:    query.Name,
-					Inputs:   userIns,
-				}
-
-				// buildtx
-				tx, err := client.BuildTransaction(ctx, transactions.EXECUTE_QUERY, body, client.Config.PrivateKey)
-				if err != nil {
-					return fmt.Errorf("failed to build transaction: %w", err)
-				}
-
-				// broadcast
-				res, err := client.Txs.Broadcast(ctx, tx)
-				if err != nil {
-					return fmt.Errorf("failed to broadcast transaction: %w", err)
+					return fmt.Errorf("error executing database: %w", err)
 				}
 
 				// print the response

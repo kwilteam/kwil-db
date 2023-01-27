@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
 	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/x/fund"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -20,8 +20,13 @@ func listCmd() *cobra.Command {
 A wallet can be specified with the --owner flag, otherwise the default wallet is used.
 		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client, err := grpc_client.NewClient(cc, viper.GetViper())
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				conf, err := fund.NewConfig()
+				if err != nil {
+					return fmt.Errorf("error getting client config: %w", err)
+				}
+
+				client, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -33,7 +38,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 					address = passedAddress
 				} else {
 					// if not, use the default
-					address = client.Config.Address
+					address = client.Chain.GetConfig().GetAccount()
 				}
 
 				if address == "" {

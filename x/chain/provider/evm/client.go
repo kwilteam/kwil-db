@@ -2,7 +2,7 @@ package evm
 
 import (
 	"fmt"
-	"kwil/x/chain"
+	"kwil/x/chain/types"
 
 	ethereumclient "github.com/ethereum/go-ethereum/ethclient"
 )
@@ -10,11 +10,11 @@ import (
 // client fulfills the dto.ChainProvider interface
 type ethClient struct {
 	ethclient *ethereumclient.Client
-	chainCode chain.ChainCode
+	chainCode types.ChainCode
 	endpoint  string
 }
 
-func New(endpoint string, chainCode chain.ChainCode) (*ethClient, error) {
+func New(endpoint string, chainCode types.ChainCode) (*ethClient, error) {
 	client, err := ethereumclient.Dial(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to ethereum node: %v", err)
@@ -27,7 +27,7 @@ func New(endpoint string, chainCode chain.ChainCode) (*ethClient, error) {
 	}, nil
 }
 
-func (c *ethClient) ChainCode() chain.ChainCode {
+func (c *ethClient) ChainCode() types.ChainCode {
 	return c.chainCode
 }
 

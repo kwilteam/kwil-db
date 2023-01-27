@@ -134,7 +134,7 @@ tasks:
     cmds:
       - docker build . -t kwild:latest -f docker/kwild.dockerfile
 
-  build:api-gateway:
+  build:gateway:
     desc: Builds the API Gateway
     cmds:
       - go build -o ./.build/kwil-gateway ./cmd/kwil-gateway
@@ -148,9 +148,18 @@ tasks:
       - abigen --abi ./abi/erc20.json --pkg abi --type Erc20 --out ./abi/erc20.go
 
   ############################ k8s ############################
+  k8s:helm:update:
+    desc: Update the helm charts
+    cmds:
+      - rm -rf k8s/helm/kwild/charts
+      - rm -rf k8s/helm/kwil/charts
+      - helm dependency update k8s/helm/kwild
+      - helm dependency update k8s/helm/kwil
+
   k8s:kwil:
     desc: Build and deploy kwil services to local k8s cluster
     deps:
+      - k8s:helm:update
       - build:docker:kwild
       - build:docker:kwil-gateway
     cmds:
@@ -158,6 +167,8 @@ tasks:
 
   k8s:kwil:install:
     desc: Deploy kwil services to local k8s cluster
+    deps:
+      - k8s:helm:update
     cmds:
       - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml
 
@@ -169,6 +180,7 @@ tasks:
   k8s:kwild:
     desc: Build and deploy kwild to local k8s cluster
     deps:
+      - k8s:helm:update
       - build:docker:kwild
     cmds:
       - docker build . -t kwild:latest -f docker/kwild.dockerfile
@@ -176,6 +188,8 @@ tasks:
 
   k8s:kwild:install:
     desc: Deploy kwild to local k8s cluster
+    deps:
+      - k8s:helm:update
     cmds:
       - helm install kwild k8s/helm/kwild -f k8s/helm/kwild/dev-values.yaml
 

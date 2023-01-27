@@ -5,15 +5,17 @@ import (
 	"database/sql"
 	"fmt"
 	"kwil/kwil/repository"
-	"kwil/x/execution/clean"
 	"kwil/x/execution/executables"
 	schemabuilder "kwil/x/execution/sql-builder/schema-builder"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
+	"kwil/x/types/databases/clean"
+	"kwil/x/types/databases/convert"
 
 	"go.uber.org/zap"
 )
 
-func (s *executor) DeployDatabase(ctx context.Context, database *databases.Database) error {
+func (s *executor) DeployDatabase(ctx context.Context, database *databases.Database[anytype.KwilAny]) error {
 	schemaName := database.GetSchemaName()
 
 	// check if database exists
@@ -22,13 +24,10 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 	}
 
 	// clean database
-	err := clean.CleanDatabase(database)
-	if err != nil {
-		return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
-	}
+	clean.Clean(database)
 
 	// validate database
-	err = s.ValidateDatabase(database)
+	err := s.ValidateDatabase(database)
 	if err != nil {
 		return fmt.Errorf(`error on database "%s": %w`, database.GetSchemaName(), err)
 	}
@@ -72,13 +71,13 @@ func (s *executor) DeployDatabase(ctx context.Context, database *databases.Datab
 }
 
 type dbCreator struct {
-	database *databases.Database
+	database *databases.Database[anytype.KwilAny]
 	dao      repository.Queries
 	tx       *sql.Tx
 }
 
 // newDbCreator creates a new dbCreator for storing the given database
-func (s *executor) newDbCreator(ctx context.Context, db *databases.Database, tx *sql.Tx) *dbCreator {
+func (s *executor) newDbCreator(ctx context.Context, db *databases.Database[anytype.KwilAny], tx *sql.Tx) *dbCreator {
 	dao := s.dao.WithTx(tx)
 	return &dbCreator{
 		database: db,
@@ -177,7 +176,8 @@ func (d *dbCreator) storeTables(ctx context.Context, dbid int32) error {
 // we don't have to do anything with the modifiers since they just get included in the query BLOB
 func (d *dbCreator) storeQueries(ctx context.Context, dbid int32) error {
 	for _, query := range d.database.SQLQueries {
-		bts, err := query.EncodeGOB()
+		// convert query from kwilany to bytes and encode it with gob
+		bts, err := convert.KwilAny.SQLQueryToBytes(query).EncodeGOB()
 		if err != nil {
 			return fmt.Errorf("error serializing query: %w", err)
 		}

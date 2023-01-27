@@ -38,7 +38,7 @@ func (p *pricer) GetPrice(tx *txTypes.Transaction) (string, error) {
 	case txTypes.EXECUTE_QUERY:
 		price = GetPrice(pricing.QUERY)
 	default:
-		return "", fmt.Errorf("invalid payload type")
+		return "", fmt.Errorf("invalid payload type.  received: %d", tx.PayloadType)
 	}
 
 	return price, nil

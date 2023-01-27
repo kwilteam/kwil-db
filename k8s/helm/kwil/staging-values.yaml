@@ -7,6 +7,9 @@ service:
     kwil: 32102
 
 kwild:
+  hasura:
+    postgresql:
+      enabled: false
   service:
     type: NodePort
     nodePorts:

@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"kwil/cmd/kwil-cli/common"
-
 	"github.com/spf13/cobra"
 )
 
@@ -15,11 +13,10 @@ func NewCmdUtils() *cobra.Command {
 	}
 
 	cmd.AddCommand(
+		encodeCmd(),
 		signCmd(),
+		pingCmd(),
 	)
-
-	common.BindKwilFlags(cmd)
-	common.BindKwilEnv(cmd)
 
 	return cmd
 }

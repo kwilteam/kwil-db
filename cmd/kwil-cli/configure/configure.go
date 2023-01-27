@@ -1,12 +1,8 @@
 package configure
 
 import (
-	"fmt"
 	"kwil/cmd/kwil-cli/common"
-	"kwil/kwil/client"
-	"strings"
 
-	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -25,124 +21,87 @@ func NewCmdConfigure() *cobra.Command {
 				return err
 			}
 
-			endpointPrompt := common.Prompter{
-				Label:   "Endpoint",
-				Default: v.GetString("endpoint"),
+			runner := &configPrompter{
+				Viper: v,
 			}
 
-			apiKeyPrompt := common.Prompter{
+			// defining the prompts to be run
+
+			// endpoint
+			runner.AddPrompt(&common.Prompter{
+				Label:   "Endpoint",
+				Default: v.GetString("endpoint"),
+			}, "endpoint")
+
+			// api key
+			runner.AddPrompt(&common.Prompter{
 				Label:       "API Key",
 				Default:     v.GetString("api-key"),
 				MaskDefault: true,
 				//ShowLast:    4, // took this out because it causes a new line to be printed on each keystroke.
-				HideEntered: true,
-			}
+			}, "api-key")
 
-			endpoint, err := endpointPrompt.Run()
-			if err != nil {
-				return err
-			}
+			// chain code
+			runner.AddPrompt(&common.Prompter{
+				Label:   "Chain Code",
+				Default: v.GetString("chain-code"),
+			}, "chain-code")
 
-			apiKey, err := apiKeyPrompt.Run()
-			if err != nil {
-				return err
-			}
-			// TODO: the connect prompt does not use the endpoint if it was just set.  not sure why but should be fixed
-			v.Set("endpoint", endpoint)
-			v.Set("api-key", apiKey)
-
-			connectPrompt := promptui.Select{
-				Label:        "Connect",
-				Items:        []string{"yes", "no"},
-				HideSelected: true,
-			}
-
-			_, doConnect, err := connectPrompt.Run()
-			if err != nil {
-				return err
-			}
-
-			fmt.Println("doConnect", doConnect)
-			/*
-				if doConnect == "yes" {
-					err := common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-						client := apipb.NewKwilServiceClient(cc)
-						res, err := client.Connect(ctx, &apipb.ConnectRequest{})
-						if err != nil {
-							return err
-						}
-						v.Set("node-address", res.Address)
-						common.PrintlnCheckF("Successfully connected to %s", color.YellowString(endpoint))
-						common.PrintlnCheckF("Node address is %s", color.YellowString(res.Address))
-						return nil
-					})
-
-					if err != nil {
-						return err
-					}
-
-					if err := v.WriteConfig(); err != nil {
-						return err
-					}
-				}
-			*/
-
-			chainPrompt := promptui.Select{
-				Label: "Select Chain",
-				Items: []string{"Ethereum", "Goerli"},
-			}
-
-			_, chain, err := chainPrompt.Run()
-			if err != nil {
-				return err
-			}
-
-			switch strings.ToLower(chain) {
-			case "ethereum":
-				v.Set("chain-id", 1)
-			case "goerli":
-				v.Set("chain-id", 5)
-			}
-
-			ethProviderPrompt := common.Prompter{
+			// eth provider
+			runner.AddPrompt(&common.Prompter{
 				Label:   "Ethereum Provider Endpoint",
 				Default: v.GetString("eth-provider"),
-			}
+			}, "eth-provider")
 
-			ethProvider, err := ethProviderPrompt.Run()
-			if err != nil {
-				return err
-			}
-
-			v.Set("eth-provider", ethProvider)
-
-			fundingPoolAddressPrompt := common.Prompter{
+			// funding pool address
+			runner.AddPrompt(&common.Prompter{
 				Label:   "Funding Pool Address",
 				Default: v.GetString("funding-pool"),
-			}
+			}, "funding-pool")
 
-			fundingPoolAddress, err := fundingPoolAddressPrompt.Run()
-			if err != nil {
+			// private key
+			runner.AddPrompt(&common.Prompter{
+				Label:       "Private Key",
+				Default:     v.GetString("private-key"),
+				MaskDefault: true,
+			}, "private-key")
+
+			// run the prompts
+			if err := runner.Run(); err != nil {
 				return err
 			}
-
-			v.Set("funding-pool", fundingPoolAddress)
-
-			privateKeyPrompt := common.Prompter{
-				Label:   "Private Key",
-				Default: v.GetString(client.PrivateKeyFlag),
-			}
-
-			privateKey, err := privateKeyPrompt.Run()
-			if err != nil {
-				return err
-			}
-
-			v.Set(client.PrivateKeyFlag, privateKey)
 
 			return v.WriteConfig()
 		},
 	}
 
 	return cmd
+}
+
+type configPrompt struct {
+	prompt   *common.Prompter
+	viperKey string
+}
+
+type configPrompter struct {
+	prompts []*configPrompt
+	Viper   *viper.Viper
+}
+
+func (c *configPrompter) AddPrompt(prompt *common.Prompter, viperKey string) {
+	c.prompts = append(c.prompts, &configPrompt{
+		prompt:   prompt,
+		viperKey: viperKey,
+	})
+}
+
+func (c *configPrompter) Run() error {
+	for _, p := range c.prompts {
+		res, err := p.prompt.Run()
+		if err != nil {
+			return err
+		}
+		c.Viper.Set(p.viperKey, res)
+	}
+	return nil
 }

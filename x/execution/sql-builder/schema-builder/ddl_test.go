@@ -1,10 +1,10 @@
 package schemabuilder_test
 
 import (
-	"kwil/x/execution/clean"
-	"kwil/x/execution/mocks"
 	schemabuilder "kwil/x/execution/sql-builder/schema-builder"
-	"kwil/x/execution/validation"
+	"kwil/x/execution/validator"
+	"kwil/x/types/databases/clean"
+	"kwil/x/types/databases/mocks"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,12 +17,9 @@ func Test_GenerateDDL(t *testing.T) {
 	}
 
 	// validate
-	err = clean.CleanDatabase(&mocks.Db1)
-	if err != nil {
-		t.Errorf("failed to clean database: %v", err)
-	}
-
-	err = validation.ValidateDatabase(&mocks.Db1)
+	clean.Clean(&mocks.Db1)
+	vldtr := validator.Validator{}
+	err = vldtr.Validate(&mocks.Db1)
 	if err != nil {
 		t.Errorf("failed to validate database: %v", err)
 	}

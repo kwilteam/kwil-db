@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
-	"kwil/kwil/client/grpc-client"
-	"kwil/x/types/contracts/escrow"
+	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/x/fund"
 	"math/big"
 
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -22,13 +21,14 @@ func depositCmd() *cobra.Command {
 		Long:  `Deposit funds into the funding pool.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client, err := grpc_client.NewClient(cc, viper.GetViper())
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				// @yaiba TODO: no need to dial grpc here, just use the chain client
+				conf, err := fund.NewConfig()
 				if err != nil {
-					return err
+					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				allowance, err := client.Token.Allowance(client.Config.Address, client.Config.PoolAddress)
+				client, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -39,23 +39,10 @@ func depositCmd() *cobra.Command {
 					return fmt.Errorf("error converting %s to big int", args[0])
 				}
 
-				// check if allowance >= amount
-				if allowance.Cmp(amount) < 0 {
-					return fmt.Errorf("not enough tokens to deposit %s (allowance %s)", amount.String(), allowance.String())
-				}
+				// TODO add tokenName back
+				//tokenName := client.Chain.Token.Symbol()
 
-				balance, err := client.Token.BalanceOf(client.Config.Address)
-				if err != nil {
-					return err
-				}
-
-				if balance.Cmp(amount) < 0 {
-					return fmt.Errorf("not enough tokens to deposit %s (balance %s)", amount.String(), balance.String())
-				}
-
-				tokenName := client.Token.Symbol()
-
-				fmt.Printf("You will be depositing $%s %s into funding pool %s\n", amount, tokenName, client.Config.PoolAddress)
+				fmt.Printf("You will be depositing $%s into funding pool %s\n", amount, client.Chain.GetConfig().PoolAddress)
 				pr := promptui.Select{
 					Label: "Continue?",
 					Items: []string{"yes", "no"},
@@ -70,21 +57,14 @@ func depositCmd() *cobra.Command {
 					return errors.New("transaction cancelled")
 				}
 
-				// now deposit
-				// get the validator address
-				depoistRes, err := client.Escrow.Deposit(ctx, &escrow.DepositParams{
-					Validator: client.Config.ValidatorAddress,
-					Amount:    amount,
-				})
+				txRes, err := client.DepositFund(ctx, client.Chain.GetConfig().PrivateKey, client.Chain.GetConfig().ValidatorAddress, amount)
 				if err != nil {
 					return err
 				}
 
-				fmt.Printf("Deposit transaction sent. Tx hash: %s", depoistRes.TxHash)
-
+				fmt.Printf("Deposit transaction sent. Tx hash: %s", txRes.TxHash)
 				return nil
 			})
-
 		},
 	}
 

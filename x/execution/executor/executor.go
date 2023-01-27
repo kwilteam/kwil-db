@@ -8,14 +8,15 @@ import (
 	"kwil/x/graphql/manager"
 	"kwil/x/logx"
 	"kwil/x/sqlx/sqlclient"
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
 )
 
 type Executor interface {
-	DeployDatabase(ctx context.Context, database *databases.Database) error
+	DeployDatabase(ctx context.Context, database *databases.Database[anytype.KwilAny]) error
 	DropDatabase(ctx context.Context, database *databases.DatabaseIdentifier) error
-	ExecuteQuery(ctx context.Context, query *execTypes.ExecutionBody, caller string) error
+	ExecuteQuery(ctx context.Context, query *execTypes.ExecutionBody[anytype.KwilAny], caller string) error
 	GetExecutables(id string) ([]*execTypes.Executable, error)
 	GetDBIdentifier(id string) (*databases.DatabaseIdentifier, error)
 }

@@ -3,8 +3,8 @@ package service_test
 import (
 	"context"
 	"fmt"
-	"kwil/x/chain"
 	provider "kwil/x/chain/provider/dto"
+	"kwil/x/chain/types"
 	"testing"
 	"time"
 )
@@ -16,7 +16,7 @@ var (
 const (
 	REQUIRED_CONFIRMATIONS = 10
 	STARTING_BLOCK         = 100
-	CHAIN_CODE             = chain.GOERLI
+	CHAIN_CODE             = types.GOERLI
 )
 
 func (m *MockChainProvider) SubscribeNewHead(ctx context.Context, blocks chan<- provider.Header) (provider.Subscription, error) {

@@ -10,7 +10,6 @@ import (
 )
 
 func (c *client) GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error) {
-	fmt.Println("id: ", id)
 	res, err := c.txs.GetExecutablesById(ctx, &txpb.GetExecutablesByIdRequest{
 		Id: id,
 	})

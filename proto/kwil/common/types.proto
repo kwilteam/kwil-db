@@ -4,10 +4,11 @@ option go_package = "kwil/x/proto/commonpb";
 
 enum DataType {
 	INVALID_TYPE = 0;
-	STRING = 1;
-	INT32 = 2;
-	INT64 = 3;
-	BOOLEAN = 4;
+	NULL = 1;
+	STRING = 2;
+	INT32 = 3;
+	INT64 = 4;
+	BOOLEAN = 5;
 }
 
 enum AttributeType {

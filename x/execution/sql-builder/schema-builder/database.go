@@ -3,11 +3,12 @@
 package schemabuilder
 
 import (
+	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	"strings"
 )
 
-func GenerateDDL(db *databases.Database) (string, error) {
+func GenerateDDL(db *databases.Database[anytype.KwilAny]) (string, error) {
 	schemaName := db.GetSchemaName()
 
 	stmts := []string{}

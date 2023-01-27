@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	_ = viper.BindEnv(AdminSecretName, AdminSecretEnv)
+	_ = viper.BindEnv(AdminSecretFlag, AdminSecretEnv)
 }
 
 func Test_trackTable(t *testing.T) {

@@ -93,7 +93,6 @@ hasura:
   devMode: true
   logTypes: startup, http-log, webhook-log, websocket-log, query-log
 
-
 # overwrite postgresql setting
 postgresql:
   enabled: true # for dependency

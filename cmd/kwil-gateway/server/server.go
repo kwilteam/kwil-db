@@ -12,12 +12,12 @@ import (
 
 func Start() error {
 	cmd := &cobra.Command{
-		Use:   "api-gateway",
-		Short: "http gateway to kwil service",
+		Use:   "kwil-gateway",
+		Short: "gateway to kwil service",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mux := runtime.NewServeMux()
-			addr := viper.GetString(gateway.ListenAddressName)
+			addr := viper.GetString(gateway.ListenAddressFlag)
 			gw := gateway.NewGWServer(mux, addr)
 
 			if err := gw.SetupGrpcSvc(cmd.Context()); err != nil {
@@ -38,7 +38,7 @@ func Start() error {
 			}
 			f.Close()
 
-			_cors := viper.GetString(cors.GatewayCorsName)
+			_cors := viper.GetString(cors.GatewayCorsFlag)
 			gw.AddMiddlewares(
 				// from innermost middleware
 				auth.MAuth(keyManager),
@@ -49,6 +49,6 @@ func Start() error {
 		},
 	}
 
-	CliSetup(cmd)
+	BindGatewayFlags(cmd)
 	return cmd.Execute()
 }

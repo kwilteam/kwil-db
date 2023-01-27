@@ -9,7 +9,7 @@ import (
 	"kwil/x/utils/serialize"
 )
 
-func (c *client) GetSchema(ctx context.Context, db *databases.DatabaseIdentifier) (*databases.Database, error) {
+func (c *client) GetSchema(ctx context.Context, db *databases.DatabaseIdentifier) (*databases.Database[[]byte], error) {
 	res, err := c.txs.GetSchema(ctx, &txpb.GetSchemaRequest{
 		Owner: db.Owner,
 		Name:  db.Name,
@@ -21,7 +21,7 @@ func (c *client) GetSchema(ctx context.Context, db *databases.DatabaseIdentifier
 	return convertDatabase(res.Database)
 }
 
-func (c *client) GetSchemaById(ctx context.Context, id string) (*databases.Database, error) {
+func (c *client) GetSchemaById(ctx context.Context, id string) (*databases.Database[[]byte], error) {
 	res, err := c.txs.GetSchemaById(ctx, &txpb.GetSchemaByIdRequest{
 		Id: id,
 	})
@@ -32,10 +32,10 @@ func (c *client) GetSchemaById(ctx context.Context, id string) (*databases.Datab
 	return convertDatabase(res.Database)
 }
 
-func convertDatabase(db *commonpb.Database) (*databases.Database, error) {
+func convertDatabase(db *commonpb.Database) (*databases.Database[[]byte], error) {
 	// convert tables
 	// convert response to database
-	dbRes, err := serialize.Convert[commonpb.Database, databases.Database](db)
+	dbRes, err := serialize.Convert[commonpb.Database, databases.Database[[]byte]](db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert response: %w", err)
 	}

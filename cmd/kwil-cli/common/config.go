@@ -2,26 +2,34 @@ package common
 
 import (
 	"fmt"
-	"github.com/mitchellh/go-homedir"
-	"github.com/spf13/viper"
+	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/mitchellh/go-homedir"
+	"github.com/spf13/viper"
 )
 
 func LoadConfig() {
-	home, err := homedir.Dir()
+	configFile := GetConfigFile()
+	_, err := os.Stat(configFile)
 	if err != nil {
-		return
+		// TODO: create init function
+		log.Fatal(err)
 	}
-	configFile := filepath.Join(home, ".kwil/config/cli.toml")
-	_, err = os.Stat(configFile)
+
+	LoadConfigFromPath(configFile)
+}
+
+func LoadConfigFromPath(path string) {
+	_, err := os.Stat(path)
 	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(configFile), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		file, err := os.Create(configFile)
+		file, err := os.Create(path)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -29,6 +37,21 @@ func LoadConfig() {
 		file.Close()
 	}
 
-	viper.SetConfigFile(configFile)
-	_ = viper.ReadInConfig()
+	viper.SetConfigFile(path)
+
+	viper.AutomaticEnv()
+
+	err = viper.ReadInConfig()
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func GetConfigFile() string {
+	home, err := homedir.Dir()
+	if err != nil {
+		return ""
+	}
+	configFile := filepath.Join(home, ".kwil/config/cli.toml")
+	return configFile
 }

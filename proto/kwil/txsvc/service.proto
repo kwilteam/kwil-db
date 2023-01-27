@@ -9,6 +9,8 @@ import "kwil/txsvc/executables.proto";
 import "kwil/txsvc/list_db.proto";
 import "kwil/txsvc/schema.proto";
 import "kwil/txsvc/validate.proto";
+import "kwil/txsvc/ping.proto";
+import "kwil/txsvc/address.proto";
 
 service TxService {
   rpc Broadcast(BroadcastRequest) returns (BroadcastResponse) {
@@ -54,4 +56,16 @@ service TxService {
           body: "*"
       };
   }
+
+  rpc Ping(PingRequest) returns (PongResponse) {
+      option (google.api.http) = {
+          get: "/api/v0/ping"
+      };
+    }
+
+    rpc GetAddress(GetAddressRequest) returns (GetAddressResponse) {
+      option (google.api.http) = {
+          get: "/api/v0/address"
+      };
+    }
 }

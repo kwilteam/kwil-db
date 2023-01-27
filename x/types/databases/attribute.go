@@ -1,8 +1,11 @@
 package databases
 
-import "kwil/x/execution"
+import (
+	"kwil/x/execution"
+	anytype "kwil/x/types/data_types/any_type"
+)
 
-type Attribute struct {
-	Type  execution.AttributeType `json:"type"`
-	Value any                     `json:"value,omitempty"`
+type Attribute[T anytype.AnyValue] struct {
+	Type  execution.AttributeType `json:"type" clean:"is_enum,attribute_type"`
+	Value T                       `json:"value,omitempty"`
 }

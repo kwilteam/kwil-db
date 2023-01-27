@@ -5,8 +5,10 @@ import (
 	"kwil/x/types/databases"
 )
 
-func DBFromJson(bts []byte) (*databases.Database, error) {
-	var db databases.Database
+// TODO: delete
+
+func DBFromJson(bts []byte) (*databases.Database[[]byte], error) {
+	var db databases.Database[[]byte]
 	err := json.Unmarshal(bts, &db)
 	if err != nil {
 		return nil, err
@@ -14,6 +16,6 @@ func DBFromJson(bts []byte) (*databases.Database, error) {
 	return &db, nil
 }
 
-func DBToJson(db *databases.Database) ([]byte, error) {
+func DBToJson(db *databases.Database[[]byte]) ([]byte, error) {
 	return json.Marshal(db)
 }

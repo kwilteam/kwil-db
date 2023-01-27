@@ -3,7 +3,7 @@ package execution
 type IndexType int
 
 const (
-	INVALID_INDEX_TYPE IndexType = iota
+	INVALID_INDEX_TYPE IndexType = iota + 100
 	BTREE
 	END_INDEX_TYPE
 )

@@ -4,8 +4,8 @@ type ModifierType int
 
 // Modifiers
 const (
-	INVALID_MODIFIER_TYPE ModifierType = iota - 1 // we start at -1 since modifiers are optional
-	NO_MODIFIER
+	NO_MODIFIER           ModifierType = 0
+	INVALID_MODIFIER_TYPE ModifierType = iota + 99
 	CALLER
 	END_MODIFIER_TYPE
 )
@@ -23,5 +23,8 @@ func (m ModifierType) Int() int {
 }
 
 func (m ModifierType) IsValid() bool {
+	if m == NO_MODIFIER {
+		return true
+	}
 	return m > INVALID_MODIFIER_TYPE && m < END_MODIFIER_TYPE
 }

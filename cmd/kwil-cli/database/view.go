@@ -3,13 +3,12 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/kwil/client/grpc-client"
+	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/x/fund"
 
 	"kwil/cmd/kwil-cli/common"
-	"kwil/x/types/databases"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -19,8 +18,13 @@ func viewDatabaseCmd() *cobra.Command {
 		Short: "View is used to view the details of a database.  It requires a database owner and a name",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				c, err := grpc_client.NewClient(cc, viper.GetViper())
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				conf, err := fund.NewConfig()
+				if err != nil {
+					return fmt.Errorf("error getting client config: %w", err)
+				}
+
+				c, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return fmt.Errorf("error creating client: %w", err)
 				}
@@ -35,14 +39,10 @@ func viewDatabaseCmd() *cobra.Command {
 					return fmt.Errorf("error getting owner flag: %w", err)
 				}
 				if dbOwner == "NULL" {
-					dbOwner = c.Config.Address
+					dbOwner = c.Chain.GetConfig().GetAccount()
 				}
 
-				meta, err := c.Txs.GetSchema(ctx, &databases.DatabaseIdentifier{
-					Owner: dbOwner,
-					Name:  dbName,
-				})
-
+				meta, err := c.GetDatabaseSchema(ctx, dbOwner, dbName)
 				if err != nil {
 					return err
 				}
@@ -57,7 +57,7 @@ func viewDatabaseCmd() *cobra.Command {
 						fmt.Printf("      Type: %s\n", c.Type.String())
 						for _, a := range c.Attributes {
 							fmt.Printf("      %s\n", a.Type.String())
-							if a.Value != nil && a.Value != "" {
+							if a.Value != nil {
 								fmt.Printf("        %s\n", a.Value)
 							}
 						}

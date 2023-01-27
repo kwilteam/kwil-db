@@ -56,7 +56,7 @@ func TestAuth_ServeHTTP(t *testing.T) {
 				r: func() *http.Request {
 					req := httptest.NewRequest(http.MethodGet, "/", nil)
 					req.Header.Set(ApiKeyHeader, healthcheckKey)
-					viper.Set(HealthCheckApiKeyValueName, healthcheckKey)
+					viper.Set(HealthCheckApiKeyValueFlag, healthcheckKey)
 					return req
 				}(),
 			},

@@ -1,0 +1,11 @@
+syntax = "proto3";
+package txsvc;
+option go_package = "kwil/x/proto/txpb";
+
+message PingRequest {
+    string message = 1;
+}
+
+message PongResponse {
+    string message = 1;
+}

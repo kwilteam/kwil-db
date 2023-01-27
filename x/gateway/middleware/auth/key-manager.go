@@ -6,7 +6,7 @@ import (
 	"io"
 )
 
-const HealthCheckApiKeyValueName = "healthcheck-key"
+const HealthCheckApiKeyValueFlag = "healthcheck-key"
 const HealthCheckApiKeyValueEnv = "HEALTHCHECK_KEY"
 
 type keyJson struct {
@@ -26,7 +26,7 @@ func NewKeyManager(r io.Reader) (*KeyManager, error) {
 }
 
 func (k *KeyManager) IsAllowed(t *token) bool {
-	healthCheckKey := viper.GetString(HealthCheckApiKeyValueName)
+	healthCheckKey := viper.GetString(HealthCheckApiKeyValueFlag)
 	if healthCheckKey != "" && t.ApiKey == healthCheckKey {
 		return true
 	}

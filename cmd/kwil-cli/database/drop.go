@@ -6,11 +6,9 @@ import (
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
 	grpc_client "kwil/kwil/client/grpc-client"
-	"kwil/x/types/databases"
-	"kwil/x/types/transactions"
+	"kwil/x/fund"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -19,8 +17,13 @@ func dropCmd() *cobra.Command {
 		Use:   "drop",
 		Short: "Drops a database",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), viper.GetViper(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				client, err := grpc_client.NewClient(cc, viper.GetViper())
+			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
+				conf, err := fund.NewConfig()
+				if err != nil {
+					return fmt.Errorf("error getting client config: %w", err)
+				}
+
+				client, err := grpc_client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -29,18 +32,7 @@ func dropCmd() *cobra.Command {
 					return fmt.Errorf("deploy requires one argument: database name")
 				}
 
-				data := &databases.DatabaseIdentifier{
-					Name:  args[0],
-					Owner: client.Config.Address,
-				}
-
-				// build tx
-				tx, err := client.BuildTransaction(ctx, transactions.DROP_DATABASE, data, client.Config.PrivateKey)
-				if err != nil {
-					return err
-				}
-
-				res, err := client.Txs.Broadcast(ctx, tx)
+				res, err := client.DropDatabase(ctx, client.Chain.GetConfig().GetAccount(), args[0])
 				if err != nil {
 					return err
 				}

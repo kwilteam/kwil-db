@@ -6,7 +6,7 @@ type QueryType int
 
 // Queries
 const (
-	INVALID_QUERY_TYPE QueryType = iota
+	INVALID_QUERY_TYPE QueryType = iota + 100
 	INSERT
 	UPDATE
 	DELETE

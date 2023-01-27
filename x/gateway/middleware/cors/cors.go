@@ -3,28 +3,29 @@ package cors
 import (
 	"kwil/x/gateway/middleware"
 	"net/http"
-	"regexp"
-	"strings"
 )
 
 const (
 	AllowMethods    = "GET, POST, PATCH, DELETE"
 	AllowHeaders    = "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType, X-Api-Key"
-	GatewayCorsName = "gateway-cors"
+	GatewayCorsFlag = "gateway-cors"
 	GatewayCorsEnv  = "GATEWAY_CORS"
 )
 
 func allowedOrigin(cors, origin string) bool {
-	if cors == "*" {
-		return true
-	}
-	// allow multiple origins
-	for _, s := range strings.Split(cors, ",") {
-		if matched, _ := regexp.MatchString(s, origin); matched {
+	return true
+	/*
+		if cors == "*" {
 			return true
 		}
-	}
-	return false
+		// allow multiple origins
+		for _, s := range strings.Split(cors, ",") {
+			if matched, _ := regexp.MatchString(s, origin); matched {
+				return true
+			}
+		}
+		return false
+	*/
 }
 
 func MCors(cors string) *middleware.NamedMiddleware {

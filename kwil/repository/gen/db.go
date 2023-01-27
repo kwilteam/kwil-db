@@ -72,9 +72,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getAccountStmt, err = db.PrepareContext(ctx, getAccount); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAccount: %w", err)
 	}
-	if q.getAccountDepositsStmt, err = db.PrepareContext(ctx, getAccountDeposits); err != nil {
-		return nil, fmt.Errorf("error preparing query GetAccountDeposits: %w", err)
-	}
 	if q.getAttributesStmt, err = db.PrepareContext(ctx, getAttributes); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAttributes: %w", err)
 	}
@@ -125,9 +122,6 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.newWithdrawalStmt, err = db.PrepareContext(ctx, newWithdrawal); err != nil {
 		return nil, fmt.Errorf("error preparing query NewWithdrawal: %w", err)
-	}
-	if q.oldCommitStmt, err = db.PrepareContext(ctx, oldCommit); err != nil {
-		return nil, fmt.Errorf("error preparing query OldCommit: %w", err)
 	}
 	if q.setHeightStmt, err = db.PrepareContext(ctx, setHeight); err != nil {
 		return nil, fmt.Errorf("error preparing query SetHeight: %w", err)
@@ -226,11 +220,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getAccountStmt: %w", cerr)
 		}
 	}
-	if q.getAccountDepositsStmt != nil {
-		if cerr := q.getAccountDepositsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getAccountDepositsStmt: %w", cerr)
-		}
-	}
 	if q.getAttributesStmt != nil {
 		if cerr := q.getAttributesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAttributesStmt: %w", cerr)
@@ -316,11 +305,6 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing newWithdrawalStmt: %w", cerr)
 		}
 	}
-	if q.oldCommitStmt != nil {
-		if cerr := q.oldCommitStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing oldCommitStmt: %w", cerr)
-		}
-	}
 	if q.setHeightStmt != nil {
 		if cerr := q.setHeightStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing setHeightStmt: %w", cerr)
@@ -396,7 +380,6 @@ type Queries struct {
 	dropDatabaseStmt           *sql.Stmt
 	expireWithdrawalsStmt      *sql.Stmt
 	getAccountStmt             *sql.Stmt
-	getAccountDepositsStmt     *sql.Stmt
 	getAttributesStmt          *sql.Stmt
 	getColumnIdStmt            *sql.Stmt
 	getColumnsStmt             *sql.Stmt
@@ -414,7 +397,6 @@ type Queries struct {
 	listDatabasesByOwnerStmt   *sql.Stmt
 	listTablesStmt             *sql.Stmt
 	newWithdrawalStmt          *sql.Stmt
-	oldCommitStmt              *sql.Stmt
 	setHeightStmt              *sql.Stmt
 	spendStmt                  *sql.Stmt
 	updateAccountByAddressStmt *sql.Stmt
@@ -441,7 +423,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		dropDatabaseStmt:           q.dropDatabaseStmt,
 		expireWithdrawalsStmt:      q.expireWithdrawalsStmt,
 		getAccountStmt:             q.getAccountStmt,
-		getAccountDepositsStmt:     q.getAccountDepositsStmt,
 		getAttributesStmt:          q.getAttributesStmt,
 		getColumnIdStmt:            q.getColumnIdStmt,
 		getColumnsStmt:             q.getColumnsStmt,
@@ -459,7 +440,6 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		listDatabasesByOwnerStmt:   q.listDatabasesByOwnerStmt,
 		listTablesStmt:             q.listTablesStmt,
 		newWithdrawalStmt:          q.newWithdrawalStmt,
-		oldCommitStmt:              q.oldCommitStmt,
 		setHeightStmt:              q.setHeightStmt,
 		spendStmt:                  q.spendStmt,
 		updateAccountByAddressStmt: q.updateAccountByAddressStmt,

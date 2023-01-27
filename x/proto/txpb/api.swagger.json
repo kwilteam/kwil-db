@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/txsvc/broadcast.proto",
+    "title": "kwil/txsvc/address.proto",
     "version": "version not set"
   },
   "tags": [
@@ -16,6 +16,28 @@
     "application/json"
   ],
   "paths": {
+    "/api/v0/address": {
+      "get": {
+        "operationId": "TxService_GetAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txsvcGetAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v0/broadcast": {
       "post": {
         "operationId": "TxService_Broadcast",
@@ -41,6 +63,36 @@
             "schema": {
               "$ref": "#/definitions/txsvcBroadcastRequest"
             }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v0/ping": {
+      "get": {
+        "operationId": "TxService_Ping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txsvcPongResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "message",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -275,7 +327,8 @@
           "$ref": "#/definitions/commonAttributeType"
         },
         "value": {
-          "type": "string"
+          "type": "string",
+          "format": "byte"
         }
       }
     },
@@ -328,6 +381,7 @@
       "type": "string",
       "enum": [
         "INVALID_TYPE",
+        "NULL",
         "STRING",
         "INT32",
         "INT64",
@@ -660,6 +714,14 @@
         }
       }
     },
+    "txsvcGetAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        }
+      }
+    },
     "txsvcGetExecutablesResponse": {
       "type": "object",
       "properties": {
@@ -687,6 +749,14 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "txsvcPongResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
         }
       }
     },

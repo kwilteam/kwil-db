@@ -3,11 +3,16 @@ package display
 import (
 	"fmt"
 	txTypes "kwil/x/types/transactions"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func PrintTxResponse(res *txTypes.Response) {
+	if res.Hash != nil {
+		fmt.Println("Success!")
+	}
 	fmt.Println("Response:")
-	fmt.Println("  Hash:", res.Hash)
+	fmt.Println("  Hash:", hexutil.Encode(res.Hash))
 	fmt.Println("  Fee:", res.Fee)
 }
 

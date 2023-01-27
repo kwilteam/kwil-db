@@ -4,7 +4,7 @@ type AttributeType int
 
 // Attributes
 const (
-	INVALID_ATTRIBUTE_TYPE AttributeType = iota
+	INVALID_ATTRIBUTE_TYPE AttributeType = iota + 100
 	PRIMARY_KEY
 	UNIQUE
 	NOT_NULL
