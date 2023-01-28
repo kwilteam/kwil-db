@@ -223,7 +223,7 @@ func (x *Arg) GetType() DataType {
 	if x != nil {
 		return x.Type
 	}
-	return DataType_INVALID_TYPE
+	return DataType_BEGIN_DATA_TYPES
 }
 
 func (x *Arg) GetModifier() ModifierType {
