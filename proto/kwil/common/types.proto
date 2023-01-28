@@ -5,10 +5,11 @@ option go_package = "kwil/x/proto/commonpb";
 enum DataType {
 	BEGIN_DATA_TYPES = 0; // the first enum must be 0 in Proto3.  INVALID_TYPE is a valid Kwil enum, so I make this 0
 	INVALID_TYPE = 100;
-	STRING = 101;
-	INT32 = 102;
-	INT64 = 103;
-	BOOLEAN = 104;
+	NULL = 101;
+	STRING = 102;
+	INT32 = 103;
+	INT64 = 104;
+	BOOLEAN = 105;
 }
 
 enum AttributeType {

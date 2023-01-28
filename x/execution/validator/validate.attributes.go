@@ -30,7 +30,7 @@ func (v *Validator) validateAttributes(col *databases.Column[anytype.KwilAny]) e
 		// validate attribute
 		err := v.validateAttribute(col, attr)
 		if err != nil {
-			return fmt.Errorf(`error on attribute %s: %w`, attr.Type.String(), err)
+			return fmt.Errorf(`error on attribute %d: %w`, attr.Type, err)
 		}
 	}
 
