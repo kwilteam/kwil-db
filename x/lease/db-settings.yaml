@@ -1,5 +1,0 @@
-host: $PG_ENDPOINT
-port: $PG_PORT
-user: $PG_USER
-password: $PG_PASSWORD
-database: $PG_DB
