@@ -3,8 +3,8 @@ package pricingclient
 import (
 	"context"
 	"fmt"
-	"kwil/x/proto/commonpb"
-	"kwil/x/proto/pricingpb"
+	commonpb "kwil/api/protobuf/common/v0/gen/go"
+	pb "kwil/api/protobuf/pricing/v0/gen/go"
 	"kwil/x/types/transactions"
 	"kwil/x/utils/serialize"
 )
@@ -16,7 +16,7 @@ func (c *client) EstimateCost(ctx context.Context, tx *transactions.Transaction)
 		return "", fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
-	res, err := c.pricing.EstimateCost(ctx, &pricingpb.EstimateRequest{
+	res, err := c.pricing.EstimateCost(ctx, &pb.EstimateRequest{
 		Tx: pbTx,
 	})
 	if err != nil {

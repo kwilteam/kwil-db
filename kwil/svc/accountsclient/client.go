@@ -2,7 +2,7 @@ package accountsclient
 
 import (
 	"context"
-	"kwil/x/proto/accountspb"
+	pb "kwil/api/protobuf/account/v0/gen/go"
 	"kwil/x/types/accounts"
 
 	"google.golang.org/grpc"
@@ -13,11 +13,11 @@ type AccountsClient interface {
 }
 
 type client struct {
-	accounts accountspb.AccountServiceClient
+	accounts pb.AccountServiceClient
 }
 
 func New(cc *grpc.ClientConn) AccountsClient {
 	return &client{
-		accounts: accountspb.NewAccountServiceClient(cc),
+		accounts: pb.NewAccountServiceClient(cc),
 	}
 }

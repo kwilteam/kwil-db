@@ -3,8 +3,8 @@ package txclient
 import (
 	"context"
 	"fmt"
-	"kwil/x/proto/commonpb"
-	"kwil/x/proto/txpb"
+	commonpb "kwil/api/protobuf/common/v0/gen/go"
+	txpb "kwil/api/protobuf/tx/v0/gen/go"
 	"kwil/x/types/transactions"
 	"kwil/x/utils/serialize"
 )

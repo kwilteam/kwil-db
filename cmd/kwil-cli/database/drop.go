@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
-	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/pkg/grpc/client"
 	"kwil/x/fund"
 
 	"github.com/spf13/cobra"
@@ -23,7 +23,7 @@ func dropCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := grpc_client.NewClient(cc, conf)
+				client, err := client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}

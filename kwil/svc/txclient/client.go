@@ -2,7 +2,7 @@ package txclient
 
 import (
 	"context"
-	"kwil/x/proto/txpb"
+	txpb "kwil/api/protobuf/tx/v0/gen/go"
 	"kwil/x/types/databases"
 	"kwil/x/types/execution"
 	"kwil/x/types/transactions"

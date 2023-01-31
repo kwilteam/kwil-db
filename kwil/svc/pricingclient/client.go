@@ -2,7 +2,7 @@ package pricingclient
 
 import (
 	"context"
-	"kwil/x/proto/pricingpb"
+	pb "kwil/api/protobuf/pricing/v0/gen/go"
 	"kwil/x/types/transactions"
 
 	"google.golang.org/grpc"
@@ -13,11 +13,11 @@ type PricingClient interface {
 }
 
 type client struct {
-	pricing pricingpb.PricingServiceClient
+	pricing pb.PricingServiceClient
 }
 
 func New(cc *grpc.ClientConn) PricingClient {
 	return &client{
-		pricing: pricingpb.NewPricingServiceClient(cc),
+		pricing: pb.NewPricingServiceClient(cc),
 	}
 }

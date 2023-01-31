@@ -7,22 +7,23 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	accountpb "kwil/api/protobuf/account/v0/gen/go"
+	pricingpb "kwil/api/protobuf/pricing/v0/gen/go"
+	txpb "kwil/api/protobuf/tx/v0/gen/go"
+
+	"kwil/internal/controller/grpc/v0/accountsvc"
+	"kwil/internal/controller/grpc/v0/healthsvc"
+	"kwil/internal/controller/grpc/v0/pricingsvc"
+	"kwil/internal/controller/grpc/v0/txsvc"
 	"kwil/kwil/repository"
-	"kwil/kwil/svc/accountsvc"
-	"kwil/kwil/svc/healthsvc"
-	"kwil/kwil/svc/pricingsvc"
-	"kwil/kwil/svc/txsvc"
+	"kwil/pkg/grpc/server"
 	"kwil/x/cfgx"
 	"kwil/x/deposits"
 	"kwil/x/execution/executor"
 	"kwil/x/graphql/hasura"
-	"kwil/x/grpcx"
 	"kwil/x/healthcheck"
 	simple_checker "kwil/x/healthcheck/simple-checker"
 	"kwil/x/logx"
-	"kwil/x/proto/accountspb"
-	"kwil/x/proto/pricingpb"
-	"kwil/x/proto/txpb"
 	"kwil/x/sqlx/env"
 	"kwil/x/sqlx/sqlclient"
 	"net"
@@ -114,15 +115,15 @@ func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accoun
 	})
 
 	g.Add(func() error {
-		grpcServer := grpcx.NewServer(logger)
+		grpcServer := server.New(logger)
 		txpb.RegisterTxServiceServer(grpcServer, txSvc)
-		accountspb.RegisterAccountServiceServer(grpcServer, accountSvc)
+		accountpb.RegisterAccountServiceServer(grpcServer, accountSvc)
 		pricingpb.RegisterPricingServiceServer(grpcServer, pricingSvc)
 		grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
 		logger.Info("grpc server started", zap.String("address", listener.Addr().String()))
-		return grpcServer.Serve(listener)
+		return grpcServer.Serve(ctx, "0.0.0.0:50051")
 	}, func(error) {
-		_ = listener.Close()
+		logger.Error("grpc server stopped", zap.Error(err))
 	})
 
 	cancelInterrupt := make(chan struct{})

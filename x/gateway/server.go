@@ -3,13 +3,13 @@ package gateway
 import (
 	"context"
 	"fmt"
+	txpb "kwil/api/protobuf/tx/v0/gen/go"
+	"kwil/api/protobuf/v0/pb/accountspb"
+	"kwil/api/protobuf/v0/pb/pricingpb"
 	"kwil/x/gateway/middleware"
 	"kwil/x/graphql"
 	"kwil/x/logx"
-	"kwil/x/proto/accountspb"
 	"kwil/x/proto/apipb"
-	"kwil/x/proto/pricingpb"
-	"kwil/x/proto/txpb"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"

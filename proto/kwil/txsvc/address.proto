@@ -1,9 +1,0 @@
-syntax = "proto3";
-package txsvc;
-option go_package = "kwil/x/proto/txpb";
-
-message GetAddressRequest {}
-
-message GetAddressResponse {
-    string address = 1;
-}

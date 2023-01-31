@@ -1,7 +1,7 @@
 package common
 
 import (
-	"kwil/kwil/client"
+	"kwil/pkg/grpc"
 	"time"
 
 	chain "kwil/x/chain/types"
@@ -11,9 +11,9 @@ import (
 )
 
 func BindGlobalFlags(fs *pflag.FlagSet) {
-	fs.Duration(client.DialTimeoutFlag, 5*time.Second, "timeout for requests")
-	fs.String(client.EndpointFlag, "", "the endpoint of the Kwil node")
-	fs.String(client.ApiKeyFlag, "", "your api key")
+	fs.Duration(grpc.DialTimeoutFlag, 5*time.Second, "timeout for requests")
+	fs.String(grpc.EndpointFlag, "", "the endpoint of the Kwil node")
+	fs.String(grpc.ApiKeyFlag, "", "your api key")
 
 	// TODO: this was missing, not sure the best place for this to live?
 	fs.String("funding-pool", "", "the address of the funding pool")
@@ -24,14 +24,14 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 
 // BindGlobalEnv binds the global flags to the environment variables.
 func BindGlobalEnv(fs *pflag.FlagSet) {
-	viper.BindEnv(client.DialTimeoutFlag, client.DialTimeoutEnv)
-	viper.BindPFlag(client.DialTimeoutFlag, fs.Lookup(client.DialTimeoutFlag))
+	viper.BindEnv(grpc.DialTimeoutFlag, grpc.DialTimeoutEnv)
+	viper.BindPFlag(grpc.DialTimeoutFlag, fs.Lookup(grpc.DialTimeoutFlag))
 
-	viper.BindEnv(client.EndpointFlag, client.EndpointEnv)
-	viper.BindPFlag(client.EndpointFlag, fs.Lookup(client.EndpointFlag))
+	viper.BindEnv(grpc.EndpointFlag, grpc.EndpointEnv)
+	viper.BindPFlag(grpc.EndpointFlag, fs.Lookup(grpc.EndpointFlag))
 
-	viper.BindEnv(client.ApiKeyFlag, client.ApiKeyEnv)
-	viper.BindPFlag(client.ApiKeyFlag, fs.Lookup(client.ApiKeyFlag))
+	viper.BindEnv(grpc.ApiKeyFlag, grpc.ApiKeyEnv)
+	viper.BindPFlag(grpc.ApiKeyFlag, fs.Lookup(grpc.ApiKeyFlag))
 
 	viper.BindEnv("funding-pool", "KWIL_FUNDING_POOL")
 	viper.BindPFlag("funding-pool", fs.Lookup("funding-pool"))

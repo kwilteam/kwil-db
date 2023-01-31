@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/pkg/grpc/client"
 	"sync"
 	"testing"
 	"time"
@@ -54,13 +54,13 @@ func setupKwild(ctx context.Context, opts ...containerOption) (*kwildContainer, 
 	}}, nil
 }
 
-func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[string]string, dbUrl string) *grpc_client.Driver {
+func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[string]string, dbUrl string) *client.Driver {
 	t.Helper()
 
 	if addr != "" {
 		viper.Set("PG_DATABASE_URL", dbUrl)
 		t.Logf("create grpc driver to %s", addr)
-		return &grpc_client.Driver{Addr: addr}
+		return &client.Driver{Addr: addr}
 	}
 
 	dbFiles := map[string]string{
@@ -85,5 +85,5 @@ func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[stri
 	endpoint, err := kc.ExposedEndpoint(ctx)
 	require.NoError(t, err)
 	t.Logf("create grpc driver to %s", endpoint)
-	return &grpc_client.Driver{Addr: endpoint}
+	return &client.Driver{Addr: endpoint}
 }

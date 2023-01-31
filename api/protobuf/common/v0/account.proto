@@ -1,0 +1,10 @@
+syntax = "proto3";
+package common.v0;
+option go_package = "kwil/api/protobuf/common/v0/gen/go";
+
+message Account {
+    string address = 1;
+    string balance = 2;
+    string spent = 3;
+    int64 nonce = 4;
+}

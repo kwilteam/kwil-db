@@ -3,7 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
-	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/pkg/grpc/client"
 	"kwil/x/fund"
 
 	"kwil/cmd/kwil-cli/common"
@@ -24,7 +24,7 @@ func viewDatabaseCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				c, err := grpc_client.NewClient(cc, conf)
+				c, err := client.NewClient(cc, conf)
 				if err != nil {
 					return fmt.Errorf("error creating client: %w", err)
 				}

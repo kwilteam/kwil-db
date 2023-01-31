@@ -1,0 +1,160 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "pricing/v0/service.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "PricingService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v0/pricing/estimate": {
+      "post": {
+        "operationId": "PricingService_EstimateCost",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v0EstimateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v0EstimateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "PricingService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v0EstimateRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/v0Tx"
+        }
+      }
+    },
+    "v0EstimateResponse": {
+      "type": "object",
+      "properties": {
+        "cost": {
+          "type": "string"
+        }
+      }
+    },
+    "v0PayloadType": {
+      "type": "string",
+      "enum": [
+        "INVALID_PAYLOAD_TYPE",
+        "DEPLOY_DATABASE",
+        "MODIFY_DATABASE",
+        "DELETE_DATABASE",
+        "EXECUTE_QUERY",
+        "WITHDRAW"
+      ],
+      "default": "INVALID_PAYLOAD_TYPE"
+    },
+    "v0Signature": {
+      "type": "object",
+      "properties": {
+        "signatureBytes": {
+          "type": "string",
+          "format": "byte"
+        },
+        "signatureType": {
+          "$ref": "#/definitions/v0SignatureType"
+        }
+      }
+    },
+    "v0SignatureType": {
+      "type": "string",
+      "enum": [
+        "INVALID_SINATURE_TYPE",
+        "PK_SECP256K1_UNCOMPRESSED",
+        "ACCOUNT_SECP256K1_UNCOMPRESSED",
+        "END_SIGNATURE_TYPE"
+      ],
+      "default": "INVALID_SINATURE_TYPE"
+    },
+    "v0Tx": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        },
+        "payloadType": {
+          "$ref": "#/definitions/v0PayloadType"
+        },
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
+        },
+        "signature": {
+          "$ref": "#/definitions/v0Signature"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "sender": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

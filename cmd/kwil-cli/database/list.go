@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
-	grpc_client "kwil/kwil/client/grpc-client"
+	"kwil/pkg/grpc/client"
 	"kwil/x/fund"
 	"strings"
 
@@ -26,7 +26,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := grpc_client.NewClient(cc, conf)
+				client, err := client.NewClient(cc, conf)
 				if err != nil {
 					return err
 				}

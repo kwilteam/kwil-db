@@ -1,0 +1,69 @@
+syntax = "proto3";
+package common.v0;
+option go_package = "kwil/api/protobuf/common/v0/gen/go";
+
+import "common/v0/types.proto";
+
+message Database {
+	string name = 1;
+	string owner = 2;
+	repeated Table tables = 3;
+	repeated SQLQuery sql_queries = 4;
+	repeated Role roles = 5;
+	repeated Index indexes = 6;
+}
+
+message Table {
+	string name = 1;
+	repeated Column columns = 2;
+}
+
+message Column {
+	string name = 1;
+	DataType type = 2;
+	repeated Attribute attributes = 3;
+}
+
+message Attribute {
+	AttributeType type = 1;
+	bytes value = 2;
+}
+
+message SQLQuery {
+	string name = 1;
+	QueryType type = 2;
+	string table = 3;
+	repeated Parameter parameters = 4;
+	repeated WhereClause where = 5;
+}
+
+message Parameter {
+	string name = 1;
+	string column = 2;
+	bool static = 3;
+	string value = 4;
+	ModifierType modifier = 5;
+}
+
+message WhereClause {
+	string name = 1;
+	string column = 2;
+	bool static = 3;
+	string value = 4;
+	ModifierType modifier = 5;
+	ComparisonOperator operator = 6;
+}
+
+message Role {
+	string name = 1;
+	bool default = 2;
+	repeated string permissions = 3;
+}
+
+
+message Index {
+	string name = 1;
+	string table = 2;
+	repeated string columns = 3;
+	IndexType using = 4;
+}
