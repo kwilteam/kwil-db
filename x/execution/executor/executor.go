@@ -3,11 +3,11 @@ package executor
 import (
 	"context"
 	"fmt"
+	"kwil/internal/pkg/graphql/manager"
 	"kwil/kwil/repository"
+	"kwil/pkg/logger"
+	"kwil/pkg/sql/sqlclient"
 	"kwil/x/execution/executables"
-	"kwil/x/graphql/manager"
-	"kwil/x/logx"
-	"kwil/x/sqlx/sqlclient"
 	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 	execTypes "kwil/x/types/execution"
@@ -26,7 +26,7 @@ type executor struct {
 	databases map[string]executables.ExecutablesInterface
 	dao       repository.Queries
 	db        *sqlclient.DB
-	log       logx.Logger
+	log       logger.Logger
 }
 
 func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queries, mngr manager.Client) (Executor, error) {
@@ -35,7 +35,7 @@ func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queri
 		dao:       queries,
 		db:        db,
 		databases: make(map[string]executables.ExecutablesInterface),
-		log:       logx.New().Named(`executor`),
+		log:       logger.New().Named(`executor`),
 	}
 
 	err := exec.loadExecutables(ctx)

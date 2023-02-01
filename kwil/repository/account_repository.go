@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/kwil/repository/gen"
-	"kwil/x/sqlx/errors"
+	"kwil/pkg/sql/errors"
 	accountTypes "kwil/x/types/accounts"
 	bigutil "kwil/x/utils/big"
 	"strings"

@@ -3,7 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
-	"kwil/x/graphql/hasura"
+	"kwil/internal/pkg/graphql/hasura"
 	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
 )

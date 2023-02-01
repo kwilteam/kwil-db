@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"kwil/kwil/repository"
-	chainClient "kwil/x/chain/client"
-	chains "kwil/x/chain/types"
+	chainClient "kwil/pkg/chain/client"
+	chains "kwil/pkg/chain/types"
+	"kwil/pkg/logger"
+	"kwil/pkg/sql/sqlclient"
 	"kwil/x/contracts/escrow"
-	"kwil/x/logx"
-	"kwil/x/sqlx/sqlclient"
 	escrowTypes "kwil/x/types/contracts/escrow"
 	"os"
 	"sync"
@@ -31,7 +31,7 @@ type chain struct {
 	dao            repository.Queries      // for interacting with the db
 	chainClient    chainClient.ChainClient // for getting blocks
 	escrowContract escrow.EscrowContract   // for returning funds
-	log            logx.SugaredLogger
+	log            logger.SugaredLogger
 	tasks          tasks.TaskRunner
 	chunkSize      int64
 	mu             *sync.Mutex
@@ -61,7 +61,7 @@ func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repos
 		dao:            dao,
 		chainClient:    client,
 		escrowContract: escrow,
-		log:            logx.New().Named("deposit-chain-client").Sugar(),
+		log:            logger.New().Named("deposit-chain-client").Sugar(),
 		chunkSize:      chunkSize,
 		mu:             &sync.Mutex{},
 		height:         0,

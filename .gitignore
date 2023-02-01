@@ -28,6 +28,6 @@ _ignore
 .env
 
 # helm charts deps
-k8s/helm/hasura/charts/
-k8s/helm/kwild/charts/
-k8s/helm/kwil/charts/
+deployments/helm/hasura/charts/
+deployments/helm/kwild/charts/
+deployments/helm/kwil/charts/

@@ -3,12 +3,11 @@ package fund
 import (
 	"context"
 	"fmt"
-	"kwil/cmd/kwil-cli/common"
-	"kwil/pkg/grpc/client"
-	"kwil/x/fund"
-
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"kwil/cmd/kwil-cli/common"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/fund"
 )
 
 func getAccountCmd() *cobra.Command {
@@ -23,7 +22,7 @@ func getAccountCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := client.NewClient(cc, conf)
+				client, err := kcli.New(cc, conf)
 				if err != nil {
 					return fmt.Errorf("error creating client: %w", err)
 				}
@@ -35,7 +34,7 @@ func getAccountCmd() *cobra.Command {
 				}
 
 				if account == "" {
-					account = client.Chain.GetConfig().GetAccount()
+					account = client.Fund.GetConfig().GetAccountAddress()
 				}
 
 				acc, err := client.Accounts.GetAccount(ctx, account)

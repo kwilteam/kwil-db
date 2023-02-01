@@ -1,10 +1,9 @@
 package common
 
 import (
+	chain "kwil/pkg/chain/types"
 	"kwil/pkg/grpc"
 	"time"
-
-	chain "kwil/x/chain/types"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"

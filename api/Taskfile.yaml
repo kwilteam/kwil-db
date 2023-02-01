@@ -1,0 +1,83 @@
+version: '3'
+
+tasks:
+  compile:pricing:
+    desc: Compiles the protobuf for the Pricing Service
+    deps:
+      - compile:common
+    cmds:
+      - |
+        protoc -I api/protobuf \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/pricing/v0/api \
+        api/protobuf/pricing/v0/*.proto
+    sources:
+      - api/protobuf/pricing/v0/*.proto
+    generates:
+      - api/protobuf/pricing/v0/gen/go/*
+      - api/openapi-spec/pricing/v0/*
+
+  compile:account:
+    desc: Compiles the protobuf for Account service
+    deps:
+      - compile:common
+    cmds:
+      - |
+        protoc -I api/protobuf \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/account/v0/api \
+        api/protobuf/account/v0/*.proto
+    sources:
+      - api/protobuf/account/v0/*.proto
+    generates:
+      - api/protobuf/account/v0/gen/go/*
+      - api/openapi-spec/account/v0/*
+
+
+  compile:tx:
+    desc: Compiles the protobuf for Tx service
+    deps:
+      - compile:common
+    cmds:
+      - |
+        protoc -I api/protobuf \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/tx/v0/api \
+        api/protobuf/tx/v0/*.proto
+    sources:
+      - api/protobuf/tx/v0/*.proto
+    generates:
+      - api/protobuf/tx/v0/gen/go/*
+      - api/openapi-spec/tx/v0/*
+
+  compile:common:
+    desc: Compiles common protobufs
+    cmds:
+      - |
+        protoc -I api/protobuf \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        api/protobuf/common/v0/*.proto
+    sources:
+      - api/protobuf/common/v0/*.proto
+    generates:
+      - api/protobuf/common/v0/gen/go/*
+
+
+  compile:tspb:
+    desc: Compiles protobufs to typescript
+    cmds:
+      - |
+        mkdir -p x/proto
+        protoc -I proto \
+        --grpc-gateway-ts_out=. proto/kwil/txsvc/*.proto
+    sources:
+      - proto/kwil/txsvc/*.proto
+    generates:
+      - ts/*

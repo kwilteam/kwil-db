@@ -2,10 +2,10 @@ package server
 
 import (
 	"fmt"
+	chainClient "kwil/pkg/chain/client"
+	ccDTO "kwil/pkg/chain/client/dto"
+	ccService "kwil/pkg/chain/client/service"
 	"kwil/x/cfgx"
-	chainClient "kwil/x/chain/client"
-	ccDTO "kwil/x/chain/client/dto"
-	ccService "kwil/x/chain/client/service"
 )
 
 // Builds the chain client from the meta config

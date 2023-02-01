@@ -3,13 +3,12 @@ package fund
 import (
 	"context"
 	"fmt"
-	"kwil/cmd/kwil-cli/common"
-	"kwil/pkg/grpc/client"
-	"kwil/x/fund"
-
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"kwil/cmd/kwil-cli/common"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/fund"
 )
 
 func balancesCmd() *cobra.Command {
@@ -26,24 +25,24 @@ func balancesCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := client.NewClient(cc, conf)
+				client, err := kcli.New(cc, conf)
 				if err != nil {
 					return err
 				}
 
-				allowance, err := client.Chain.GetAllowance(ctx, client.Chain.GetConfig().GetAccount(), client.Chain.GetConfig().PoolAddress)
+				allowance, err := client.Fund.GetAllowance(ctx, client.Fund.GetConfig().GetAccountAddress(), client.Fund.GetConfig().PoolAddress)
 				if err != nil {
 					return fmt.Errorf("error getting allowance: %w", err)
 				}
 
 				// get balance
-				balance, err := client.Chain.GetBalance(ctx, client.Chain.GetConfig().GetAccount())
+				balance, err := client.Fund.GetBalance(ctx, client.Fund.GetConfig().GetAccountAddress())
 				if err != nil {
 					return fmt.Errorf("error getting deposit balance: %w", err)
 				}
 
 				color.Set(color.Bold)
-				cmd.Printf("Pool: %s\n", client.Chain.GetConfig().PoolAddress)
+				cmd.Printf("Pool: %s\n", client.Fund.GetConfig().PoolAddress)
 				color.Unset()
 				color.Set(color.FgGreen)
 				cmd.Printf("Allowance: %s\n", allowance)

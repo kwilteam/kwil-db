@@ -5,11 +5,11 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"kwil/kwil/repository"
-	chainClient "kwil/x/chain/client"
+	chainClient "kwil/pkg/chain/client"
+	"kwil/pkg/logger"
+	"kwil/pkg/sql/sqlclient"
 	"kwil/x/contracts/escrow"
 	chainsync "kwil/x/deposits/chain-sync"
-	"kwil/x/logx"
-	"kwil/x/sqlx/sqlclient"
 	"kwil/x/types/deposits"
 )
 
@@ -22,7 +22,7 @@ type depositer struct {
 	dao              repository.Queries
 	db               *sqlclient.DB
 	chain            chainsync.Chain
-	log              logx.SugaredLogger
+	log              logger.SugaredLogger
 	expirationPeriod int64
 }
 
@@ -45,6 +45,6 @@ func NewDepositer(config deposits.Config, db *sqlclient.DB, queries repository.Q
 		db:               db,
 		chain:            chainSynchronizer,
 		expirationPeriod: 100,
-		log:              logx.New().Named("deposits-service").Sugar(),
+		log:              logger.New().Named("deposits-service").Sugar(),
 	}, nil
 }

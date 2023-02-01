@@ -3,7 +3,7 @@ package tasks
 import (
 	"context"
 	"kwil/kwil/repository"
-	"kwil/x/chain/types"
+	"kwil/pkg/chain/types"
 )
 
 type heightTask struct {

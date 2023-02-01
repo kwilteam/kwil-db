@@ -1,13 +1,12 @@
 package server
 
 import (
-	"kwil/x/gateway"
-	"kwil/x/gateway/middleware/auth"
-	"kwil/x/gateway/middleware/cors"
-	"kwil/x/graphql/hasura"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"kwil/internal/pkg/gateway"
+	"kwil/internal/pkg/gateway/middleware/auth"
+	"kwil/internal/pkg/gateway/middleware/cors"
+	"kwil/internal/pkg/graphql/hasura"
 )
 
 const (

@@ -4,9 +4,9 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"kwil/x/gateway"
-	"kwil/x/gateway/middleware/auth"
-	"kwil/x/gateway/middleware/cors"
+	gateway2 "kwil/internal/pkg/gateway"
+	auth2 "kwil/internal/pkg/gateway/middleware/auth"
+	"kwil/internal/pkg/gateway/middleware/cors"
 	"os"
 )
 
@@ -17,8 +17,8 @@ func Start() error {
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mux := runtime.NewServeMux()
-			addr := viper.GetString(gateway.ListenAddressFlag)
-			gw := gateway.NewGWServer(mux, addr)
+			addr := viper.GetString(gateway2.ListenAddressFlag)
+			gw := gateway2.NewGWServer(mux, addr)
 
 			if err := gw.SetupGrpcSvc(cmd.Context()); err != nil {
 				return err
@@ -32,7 +32,7 @@ func Start() error {
 				return err
 			}
 
-			keyManager, err := auth.NewKeyManager(f)
+			keyManager, err := auth2.NewKeyManager(f)
 			if err != nil {
 				return err
 			}
@@ -41,7 +41,7 @@ func Start() error {
 			_cors := viper.GetString(cors.GatewayCorsFlag)
 			gw.AddMiddlewares(
 				// from innermost middleware
-				auth.MAuth(keyManager),
+				auth2.MAuth(keyManager),
 				cors.MCors(_cors),
 			)
 

@@ -3,7 +3,7 @@ package healthsvc
 import (
 	"context"
 	"google.golang.org/grpc/health/grpc_health_v1"
-	"kwil/x/healthcheck"
+	"kwil/internal/pkg/healthcheck"
 )
 
 type Server struct {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	chainClient "kwil/x/chain/client"
-	"kwil/x/chain/types"
+	chainClient "kwil/pkg/chain/client"
+	"kwil/pkg/chain/types"
 	"kwil/x/contracts/escrow/evm"
 	escrowTypes "kwil/x/types/contracts/escrow"
 )

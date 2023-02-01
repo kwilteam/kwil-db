@@ -2,10 +2,9 @@ package utils
 
 import (
 	"fmt"
-	"kwil/x/crypto"
-	"kwil/x/fund"
-
 	"github.com/spf13/cobra"
+	"kwil/pkg/fund"
+	"kwil/x/crypto"
 )
 
 func signCmd() *cobra.Command {

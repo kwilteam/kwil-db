@@ -2,7 +2,7 @@ package pricingsvc
 
 import (
 	pb "kwil/api/protobuf/pricing/v0/gen/go"
-	"kwil/x/pricing/pricer"
+	"kwil/pkg/pricing/pricer"
 )
 
 type Service struct {

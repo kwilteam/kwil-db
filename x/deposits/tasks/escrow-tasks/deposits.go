@@ -3,8 +3,7 @@ package escrowtasks
 import (
 	"context"
 	"fmt"
-	"kwil/x/sqlx/errors"
-
+	"kwil/pkg/sql/errors"
 	"kwil/x/deposits/tasks"
 )
 

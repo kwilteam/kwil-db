@@ -6,7 +6,7 @@ import (
 	dbretriever "kwil/kwil/repository/db_retriever"
 	"kwil/kwil/repository/gen"
 	"kwil/kwil/repository/schema"
-	"kwil/x/sqlx/sqlclient"
+	"kwil/pkg/sql/sqlclient"
 )
 
 type Queries interface {

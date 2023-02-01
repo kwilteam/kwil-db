@@ -5,7 +5,7 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/common/v0/gen/go"
 	"kwil/api/protobuf/v0/pb/accountspb"
-	"kwil/x/sqlx/errors"
+	"kwil/pkg/sql/errors"
 	"strings"
 )
 

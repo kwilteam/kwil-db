@@ -3,13 +3,12 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/cmd/kwil-cli/common"
-	"kwil/cmd/kwil-cli/common/display"
-	"kwil/pkg/grpc/client"
-	"kwil/x/fund"
-
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"kwil/cmd/kwil-cli/common"
+	"kwil/cmd/kwil-cli/common/display"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/fund"
 )
 
 func dropCmd() *cobra.Command {
@@ -23,7 +22,7 @@ func dropCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := client.NewClient(cc, conf)
+				client, err := kcli.New(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -32,7 +31,7 @@ func dropCmd() *cobra.Command {
 					return fmt.Errorf("deploy requires one argument: database name")
 				}
 
-				res, err := client.DropDatabase(ctx, client.Chain.GetConfig().GetAccount(), args[0])
+				res, err := client.DropDatabase(ctx, client.Fund.GetConfig().GetAccountAddress(), args[0])
 				if err != nil {
 					return err
 				}

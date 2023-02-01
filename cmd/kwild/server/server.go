@@ -10,6 +10,11 @@ import (
 	accountpb "kwil/api/protobuf/account/v0/gen/go"
 	pricingpb "kwil/api/protobuf/pricing/v0/gen/go"
 	txpb "kwil/api/protobuf/tx/v0/gen/go"
+	hasura2 "kwil/internal/pkg/graphql/hasura"
+	"kwil/internal/pkg/healthcheck"
+	"kwil/internal/pkg/healthcheck/simple-checker"
+	"kwil/pkg/logger"
+	"kwil/pkg/sql/sqlclient"
 
 	"kwil/internal/controller/grpc/v0/accountsvc"
 	"kwil/internal/controller/grpc/v0/healthsvc"
@@ -20,12 +25,7 @@ import (
 	"kwil/x/cfgx"
 	"kwil/x/deposits"
 	"kwil/x/execution/executor"
-	"kwil/x/graphql/hasura"
-	"kwil/x/healthcheck"
-	simple_checker "kwil/x/healthcheck/simple-checker"
-	"kwil/x/logx"
 	"kwil/x/sqlx/env"
-	"kwil/x/sqlx/sqlclient"
 	"net"
 	"os"
 	"os/signal"
@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-func execute(logger logx.Logger) error {
+func execute(logger logger.Logger) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -59,7 +59,7 @@ func execute(logger logx.Logger) error {
 		return fmt.Errorf("failed to build deposits: %w", err)
 	}
 
-	hasuraManager := hasura.NewClient(viper.GetString(hasura.GraphqlEndpointFlag))
+	hasuraManager := hasura2.NewClient(viper.GetString(hasura2.GraphqlEndpointFlag))
 
 	// build executor
 	exec, err := executor.NewExecutor(ctx, client, queries, hasuraManager)
@@ -91,7 +91,7 @@ func execute(logger logx.Logger) error {
 	return serve(ctx, logger, txService, accountService, pricingService, healthService, deposits)
 }
 
-func serve(ctx context.Context, logger logx.Logger, txSvc *txsvc.Service, accountSvc *accountsvc.Service, pricingSvc *pricingsvc.Service, healthSvc *healthsvc.Server, depsts deposits.Depositer) error {
+func serve(ctx context.Context, logger logger.Logger, txSvc *txsvc.Service, accountSvc *accountsvc.Service, pricingSvc *pricingsvc.Service, healthSvc *healthsvc.Server, depsts deposits.Depositer) error {
 	var g run.Group
 
 	listener, err := net.Listen("tcp", "0.0.0.0:50051")

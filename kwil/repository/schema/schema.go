@@ -3,8 +3,8 @@ package schema
 import (
 	"context"
 	"database/sql"
-	"kwil/x/sqlx/errors"
-	"kwil/x/sqlx/sqlclient"
+	"kwil/pkg/sql/errors"
+	"kwil/pkg/sql/sqlclient"
 	"strings"
 )
 

@@ -1,5 +1,11 @@
 version: "3"
 
+includes:
+  docker:
+    taskfile: ./build/package/docker/Taskfile.yaml
+    dir: ./build/package/docker
+  pb: ./api/
+
 tasks:
   default:
     cmds:
@@ -12,98 +18,17 @@ tasks:
   build:cli:
     desc: Builds the kwil-cli
     cmds:
-      - go build -o ./.build/kwil ./cmd/kwil-cli
+      - go build -o .build/kwil ./cmd/kwil-cli
     generates:
       - .build/kwil
 
   build:kwild:
     desc: Builds the kwild
-    deps: [build:pricing:pb, build:accounts:pb, build:tx:pb]
+    deps: [pb:compile:pricing, pb:compile:accounts, pb:compile:tx]
     cmds:
-      - go build -o ./.build/kwild ./cmd/kwild
+      - go build -o .build/kwild ./cmd/kwild
     generates:
       - .build/kwild
-
-  build:pricing:pb:
-    desc: Compiles the protobuf for the Pricing Service
-    deps:
-      - build:common:pb
-    cmds:
-      - |
-        protoc -I api/protobuf \
-        --go_out=. --go_opt module=kwil \
-        --go-grpc_out=. --go-grpc_opt module=kwil \
-        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/pricing/v0/api \
-        api/protobuf/pricing/v0/*.proto
-    sources:
-      - api/protobuf/pricing/v0/*.proto
-    generates:
-      - api/protobuf/pricing/v0/gen/go/*
-      - api/openapi-spec/pricing/v0/*
-
-  build:account:pb:
-    desc: Compiles the protobuf for Account service
-    deps:
-      - build:common:pb
-    cmds:
-      - |
-        protoc -I api/protobuf \
-        --go_out=. --go_opt module=kwil \
-        --go-grpc_out=. --go-grpc_opt module=kwil \
-        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/account/v0/api \
-        api/protobuf/account/v0/*.proto
-    sources:
-      - api/protobuf/account/v0/*.proto
-    generates:
-      - api/protobuf/account/v0/gen/go/*
-      - api/openapi-spec/account/v0/*
-
-  build:tx:pb:
-    desc: Compiles the protobuf for Tx service
-    deps:
-      - build:common:pb
-    cmds:
-      - |
-        protoc -I api/protobuf \
-        --go_out=. --go_opt module=kwil \
-        --go-grpc_out=. --go-grpc_opt module=kwil \
-        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/tx/v0/api \
-        api/protobuf/tx/v0/*.proto
-    sources:
-      - api/protobuf/tx/v0/*.proto
-    generates:
-      - api/protobuf/tx/v0/gen/go/*
-      - api/openapi-spec/tx/v0/*
-
-  build:common:pb:
-    desc: Compiles common protobufs
-    cmds:
-      - |
-        protoc -I api/protobuf \
-        --go_out=. --go_opt module=kwil \
-        --go-grpc_out=. --go-grpc_opt module=kwil \
-        api/protobuf/common/v0/*.proto
-    sources:
-      - api/protobuf/common/v0/*.proto
-    generates:
-      - api/protobuf/common/v0/gen/go/*
-
-
-  build:tspb:
-    desc: Compiles protobufs to typescript
-    cmds:
-      - |
-        mkdir -p x/proto
-        protoc -I proto \
-        --grpc-gateway-ts_out=. proto/kwil/txsvc/*.proto
-    sources:
-      - proto/kwil/txsvc/*.proto
-    generates:
-      - ts/*
-
 
   build:sql:
     desc: Generates the SQL repository
@@ -114,20 +39,11 @@ tasks:
     generates:
       - kwil/repository/gen
 
-  build:docker:kwil-gateway:
-    desc: Build the docker image for kwil-gateway
-    cmds:
-      - docker build . -t kwil-gateway:latest -f docker/kwil-gateway.dockerfile
-
-  build:docker:kwild:
-    desc: Build the docker image for the kwild
-    cmds:
-      - docker build . -t kwild:latest -f docker/kwild.dockerfile
 
   build:gateway:
     desc: Builds the API Gateway
     cmds:
-      - go build -o ./.build/kwil-gateway ./cmd/kwil-gateway
+      - go build -o .build/kwil-gateway ./cmd/kwil-gateway
     generates:
       - .build/kwil-gateway
 
@@ -137,30 +53,32 @@ tasks:
       - abigen --abi ./abi/escrow.json --pkg abi --type Escrow --out ./abi/escrow.go
       - abigen --abi ./abi/erc20.json --pkg abi --type Erc20 --out ./abi/erc20.go
 
-  ############################ k8s ############################
+  #  ************ k8s ************
+  # have dependencies on docker:kwild and docker:kwil-gateway, can't put this section in deployments/helm/Taskfile.yaml
   k8s:helm:update:
     desc: Update the helm charts
+    internal: true
     cmds:
-      - rm -rf k8s/helm/kwild/charts
-      - rm -rf k8s/helm/kwil/charts
-      - helm dependency update k8s/helm/kwild
-      - helm dependency update k8s/helm/kwil
+      - rm -rf deployments/helm/kwild/charts
+      - rm -rf deployments/helm/kwil/charts
+      - helm dependency update deployments/helm/kwild
+      - helm dependency update deployments/helm/kwil
 
   k8s:kwil:
     desc: Build and deploy kwil services to local k8s cluster
     deps:
       - k8s:helm:update
-      - build:docker:kwild
-      - build:docker:kwil-gateway
+      - docker:kwild
+      - docker:kwil-gateway
     cmds:
-      - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml
+      - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/dev-values.yaml
 
   k8s:kwil:install:
     desc: Deploy kwil services to local k8s cluster
     deps:
       - k8s:helm:update
     cmds:
-      - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml
+      - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/dev-values.yaml
 
   k8s:kwil:uninstall:
     desc: Deploy kwil services to local k8s cluster
@@ -171,23 +89,22 @@ tasks:
     desc: Build and deploy kwild to local k8s cluster
     deps:
       - k8s:helm:update
-      - build:docker:kwild
+      - docker:kwild
     cmds:
-      - docker build . -t kwild:latest -f docker/kwild.dockerfile
-      - helm install kwil k8s/helm/kwil -f k8s/helm/kwil/dev-values.yaml
+      - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/dev-values.yaml
 
   k8s:kwild:install:
     desc: Deploy kwild to local k8s cluster
     deps:
       - k8s:helm:update
     cmds:
-      - helm install kwild k8s/helm/kwild -f k8s/helm/kwild/dev-values.yaml
+      - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/dev-values.yaml
 
   k8s:kwild:uninstall:
     desc: Deploy kwild to local k8s cluster
     cmds:
       - helm uninstall kwild
-  ############################ k8s ############################
+  #  ************ k8s ************
 
   cli:
     desc: Runs the CLI

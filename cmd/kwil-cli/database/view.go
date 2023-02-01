@@ -3,13 +3,11 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/grpc/client"
-	"kwil/x/fund"
-
-	"kwil/cmd/kwil-cli/common"
-
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"kwil/cmd/kwil-cli/common"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/fund"
 )
 
 func viewDatabaseCmd() *cobra.Command {
@@ -24,7 +22,7 @@ func viewDatabaseCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				c, err := client.NewClient(cc, conf)
+				c, err := kcli.New(cc, conf)
 				if err != nil {
 					return fmt.Errorf("error creating client: %w", err)
 				}
@@ -39,7 +37,7 @@ func viewDatabaseCmd() *cobra.Command {
 					return fmt.Errorf("error getting owner flag: %w", err)
 				}
 				if dbOwner == "NULL" {
-					dbOwner = c.Chain.GetConfig().GetAccount()
+					dbOwner = c.Fund.GetConfig().GetAccountAddress()
 				}
 
 				meta, err := c.GetDatabaseSchema(ctx, dbOwner, dbName)

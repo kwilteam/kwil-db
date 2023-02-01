@@ -23,6 +23,6 @@ type ClientChainResponse struct {
 
 func PrintClientChainResponse(res *ClientChainResponse) {
 	fmt.Println("Response:")
-	fmt.Println("  Chain:", res.Chain)
+	fmt.Println("  Fund:", res.Chain)
 	fmt.Println("  Tx:", res.Tx)
 }

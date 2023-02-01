@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
-	"kwil/pkg/grpc/client"
-	"kwil/x/fund"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/fund"
 	"kwil/x/types/databases"
 	"os"
 
@@ -47,7 +47,7 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := client.NewClient(cc, conf)
+				client, err := kcli.New(cc, conf)
 				if err != nil {
 					return fmt.Errorf("failed to create client: %w", err)
 				}

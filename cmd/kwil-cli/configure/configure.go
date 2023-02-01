@@ -43,7 +43,7 @@ func NewCmdConfigure() *cobra.Command {
 
 			// chain code
 			runner.AddPrompt(&common.Prompter{
-				Label:   "Chain Code",
+				Label:   "Fund Code",
 				Default: v.GetString("chain-code"),
 			}, "chain-code")
 

@@ -1,7 +1,7 @@
 package chainsync
 
 import (
-	chains "kwil/x/chain/types"
+	chains "kwil/pkg/chain/types"
 )
 
 func (c *chain) ChainCode() chains.ChainCode {

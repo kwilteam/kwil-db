@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
-	"kwil/pkg/grpc/client"
-	"kwil/x/fund"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/fund"
 	"math/big"
 
 	"github.com/manifoldco/promptui"
@@ -28,7 +28,7 @@ func depositCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := client.NewClient(cc, conf)
+				client, err := kcli.New(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -42,7 +42,7 @@ func depositCmd() *cobra.Command {
 				// TODO add tokenName back
 				//tokenName := client.Chain.Token.Symbol()
 
-				fmt.Printf("You will be depositing $%s into funding pool %s\n", amount, client.Chain.GetConfig().PoolAddress)
+				fmt.Printf("You will be depositing $%s into funding pool %s\n", amount, client.Fund.GetConfig().PoolAddress)
 				pr := promptui.Select{
 					Label: "Continue?",
 					Items: []string{"yes", "no"},
@@ -57,7 +57,7 @@ func depositCmd() *cobra.Command {
 					return errors.New("transaction cancelled")
 				}
 
-				txRes, err := client.DepositFund(ctx, client.Chain.GetConfig().PrivateKey, client.Chain.GetConfig().ValidatorAddress, amount)
+				txRes, err := client.DepositFund(ctx, client.Fund.GetConfig().PrivateKey, client.Fund.GetConfig().ValidatorAddress, amount)
 				if err != nil {
 					return err
 				}

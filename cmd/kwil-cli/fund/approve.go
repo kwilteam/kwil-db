@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
-	"kwil/pkg/grpc/client"
-	"kwil/x/fund"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/fund"
 	"math/big"
 
 	"github.com/manifoldco/promptui"
@@ -29,7 +29,7 @@ func approveCmd() *cobra.Command {
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := client.NewClient(cc, conf)
+				client, err := kcli.New(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -56,14 +56,14 @@ func approveCmd() *cobra.Command {
 					return errors.New("transaction cancelled")
 				}
 
-				response, err := client.Chain.ApproveToken(ctx, client.Chain.GetConfig().PrivateKey, client.Chain.GetConfig().PoolAddress, amount)
+				response, err := client.Fund.ApproveToken(ctx, client.Fund.GetConfig().PrivateKey, client.Fund.GetConfig().PoolAddress, amount)
 				if err != nil {
 					return err
 				}
 
 				display.PrintClientChainResponse(&display.ClientChainResponse{
 					Tx:    response.TxHash,
-					Chain: string(client.Chain.GetConfig().ChainCode),
+					Chain: string(client.Fund.GetConfig().ChainCode),
 				})
 
 				return nil

@@ -3,9 +3,9 @@ package server
 import (
 	kg "kwil/cmd/kwil-gateway/server"
 	"kwil/cmd/kwild/common"
+	"kwil/pkg/chain/types"
+	"kwil/pkg/logger"
 	"kwil/x/async"
-	"kwil/x/chain/types"
-	"kwil/x/logx"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -17,7 +17,7 @@ func Start() error {
 		Short: "kwil grpc server",
 		Long:  "",
 		Run: func(cmd *cobra.Command, args []string) {
-			logger := logx.New()
+			logger := logger.New()
 
 			stop := func(err error) {
 				logger.Sugar().Error(err)

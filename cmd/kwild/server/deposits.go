@@ -3,11 +3,11 @@ package server
 import (
 	"fmt"
 	"kwil/kwil/repository"
+	chainClient "kwil/pkg/chain/client"
+	"kwil/pkg/sql/sqlclient"
 	"kwil/x/cfgx"
-	chainClient "kwil/x/chain/client"
 	"kwil/x/crypto"
 	"kwil/x/deposits"
-	"kwil/x/sqlx/sqlclient"
 	depositTypes "kwil/x/types/deposits"
 	"os"
 )

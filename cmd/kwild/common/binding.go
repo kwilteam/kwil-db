@@ -3,7 +3,7 @@ package common
 import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"kwil/x/graphql/hasura"
+	"kwil/internal/pkg/graphql/hasura"
 )
 
 const (

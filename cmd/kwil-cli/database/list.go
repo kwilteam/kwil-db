@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
-	"kwil/pkg/grpc/client"
-	"kwil/x/fund"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/fund"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -26,7 +26,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 					return fmt.Errorf("error getting client config: %w", err)
 				}
 
-				client, err := client.NewClient(cc, conf)
+				client, err := kcli.New(cc, conf)
 				if err != nil {
 					return err
 				}
@@ -38,7 +38,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 					address = passedAddress
 				} else {
 					// if not, use the default
-					address = client.Chain.GetConfig().GetAccount()
+					address = client.Fund.GetConfig().GetAccountAddress()
 				}
 
 				if address == "" {
