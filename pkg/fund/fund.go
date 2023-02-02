@@ -13,4 +13,5 @@ type IFund interface {
 	GetAllowance(ctx context.Context, from string, spender string) (*big.Int, error)
 	DepositFund(ctx context.Context, to string, amount *big.Int) (*escrow.DepositResponse, error)
 	GetDepositBalance(ctx context.Context, validator string, wallet string) (*big.Int, error)
+	Close() error
 }

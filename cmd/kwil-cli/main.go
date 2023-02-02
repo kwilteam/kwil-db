@@ -1,13 +1,12 @@
 package main
 
 import (
-	"kwil/cmd/kwil-cli/root"
+	"kwil/internal/app/kcli"
 	"os"
 )
 
 func main() {
-	if err := root.Execute(); err != nil {
-		//fmt.Println(err)
+	if err := kcli.Execute(); err != nil {
 		os.Exit(-1)
 	}
 }

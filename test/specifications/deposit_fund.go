@@ -25,7 +25,7 @@ func DepositFundSpecification(t *testing.T, ctx context.Context, deposit Deposit
 	depositedAmountOld, err := deposit.GetDepositBalance(ctx, cfg.GetAccountAddress(), cfg.ValidatorAddress)
 
 	//When i deposit fund from user to validator
-	err = deposit.DepositFund(ctx, cfg.PrivateKey, cfg.ValidatorAddress, amount)
+	err = deposit.DepositFund(ctx, cfg.Wallet, cfg.ValidatorAddress, amount)
 
 	//Then i expect success
 	assert.NoError(t, err)

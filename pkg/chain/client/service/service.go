@@ -34,3 +34,7 @@ func NewChainClientExplicit(conf *dto.Config) (client.ChainClient, error) {
 		lastBlock:             0,
 	}, nil
 }
+
+func (c *chainClient) Close() error {
+	return c.provider.Close()
+}

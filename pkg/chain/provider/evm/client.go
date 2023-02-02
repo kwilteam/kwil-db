@@ -40,3 +40,8 @@ func (c *ethClient) AsEthClient() (*ethereumclient.Client, error) {
 func (c *ethClient) Endpoint() string {
 	return c.endpoint
 }
+
+func (c *ethClient) Close() error {
+	c.ethclient.Close()
+	return nil
+}

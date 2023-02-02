@@ -12,4 +12,5 @@ type ChainClient interface {
 	GetLatestBlock(ctx context.Context) (*provider.Header, error)
 	ChainCode() types.ChainCode
 	AsEthClient() (*ethclient.Client, error)
+	Close() error
 }

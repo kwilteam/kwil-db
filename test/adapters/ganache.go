@@ -99,12 +99,12 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoi
 
 	if providerEndpoint != "" {
 		userFundConfig := &fund.Config{
-			ChainCode:            int64(_chainCode),
-			PrivateKey:           userPK,
-			PoolAddress:          fundingPoolAddress,
-			Provider:             providerEndpoint,
-			ReConnectionInterval: 30,
-			RequiredConfirmation: 10,
+			ChainCode:         int64(_chainCode),
+			Wallet:            userPK,
+			PoolAddress:       fundingPoolAddress,
+			Provider:          providerEndpoint,
+			ReConnectInterval: 30,
+			BlockConfirmation: 10,
 		}
 		t.Logf("create chain driver to %s", providerEndpoint)
 		chainDriver := &ethFund.Driver{Addr: providerEndpoint}
@@ -141,14 +141,14 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoi
 	}
 
 	userFundConfig := &fund.Config{
-		ChainCode:            int64(_chainCode),
-		PrivateKey:           userPK,
-		TokenAddress:         tokenAddress.String(),
-		PoolAddress:          escrowAddress.String(),
-		ValidatorAddress:     chainDeployer.Account.String(),
-		Provider:             exposedEndpoint,
-		ReConnectionInterval: 30,
-		RequiredConfirmation: 1,
+		ChainCode:         int64(_chainCode),
+		Wallet:            userPK,
+		TokenAddress:      tokenAddress.String(),
+		PoolAddress:       escrowAddress.String(),
+		ValidatorAddress:  chainDeployer.Account.String(),
+		Provider:          exposedEndpoint,
+		ReConnectInterval: 30,
+		BlockConfirmation: 1,
 	}
 
 	chainDriver.SetFundConfig(userFundConfig)

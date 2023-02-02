@@ -12,14 +12,14 @@ import (
 // contains config and blockchain information
 
 type Config struct {
-	ChainCode            int64             `mapstructure:"chain_code"`
-	PrivateKey           *ecdsa.PrivateKey `mapstructure:"private_key"`
-	TokenAddress         string            `mapstructure:"token_address"`
-	PoolAddress          string            `mapstructure:"pool_address"`
-	ValidatorAddress     string            `mapstructure:"validator_address"`
-	Provider             string            `mapstructure:"provider"`
-	ReConnectionInterval int64             `mapstructure:"reconnection_interval"`
-	RequiredConfirmation int64             `mapstructure:"required_confirmation"`
+	ChainCode         int64             `mapstructure:"chain_code"`
+	Wallet            *ecdsa.PrivateKey `mapstructure:"wallet"`
+	TokenAddress      string            `mapstructure:"token_address"`
+	PoolAddress       string            `mapstructure:"pool_address"`
+	ValidatorAddress  string            `mapstructure:"validator_address"`
+	Provider          string            `mapstructure:"provider"`
+	ReConnectInterval int64             `mapstructure:"reconnect_interval"`
+	BlockConfirmation int64             `mapstructure:"block_confirmation"`
 }
 
 func NewConfig() (*Config, error) {
@@ -37,17 +37,17 @@ func NewConfig() (*Config, error) {
 	}
 
 	return &Config{
-		ChainCode:            chainCode,
-		PrivateKey:           privateKey,
-		PoolAddress:          fundingPool,
-		ValidatorAddress:     validatorAddress,
-		Provider:             ethProvider,
-		TokenAddress:         tokenAddress,
-		ReConnectionInterval: reconnectionInterval,
-		RequiredConfirmation: requiredConfirmations,
+		ChainCode:         chainCode,
+		Wallet:            privateKey,
+		PoolAddress:       fundingPool,
+		ValidatorAddress:  validatorAddress,
+		Provider:          ethProvider,
+		TokenAddress:      tokenAddress,
+		ReConnectInterval: reconnectionInterval,
+		BlockConfirmation: requiredConfirmations,
 	}, nil
 }
 
 func (c *Config) GetAccountAddress() string {
-	return ec.PubkeyToAddress(c.PrivateKey.PublicKey).Hex()
+	return ec.PubkeyToAddress(c.Wallet.PublicKey).Hex()
 }

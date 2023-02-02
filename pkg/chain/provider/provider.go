@@ -28,4 +28,5 @@ type ChainProvider interface {
 	ChainCode() types.ChainCode
 	AsEthClient() (*ethclient.Client, error)
 	Endpoint() string
+	Close() error
 }

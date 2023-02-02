@@ -24,7 +24,7 @@ func ApproveTokenSpecification(t *testing.T, ctx context.Context, approve Approv
 	chainCfg := approve.GetFundConfig()
 
 	//When i approve validator to spend my tokens
-	err := approve.ApproveToken(ctx, chainCfg.PrivateKey, chainCfg.PoolAddress, amount)
+	err := approve.ApproveToken(ctx, chainCfg.Wallet, chainCfg.PoolAddress, amount)
 
 	//Then i expect success
 	assert.NoError(t, err)

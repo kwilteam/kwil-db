@@ -24,15 +24,15 @@ func NewClient(cfg *fund.Config) (*Client, error) {
 	chnClient, err := chainClientService.NewChainClientExplicit(&chainClientDto.Config{
 		ChainCode:             int64(cfg.ChainCode),
 		Endpoint:              cfg.Provider,
-		ReconnectionInterval:  cfg.ReConnectionInterval,
-		RequiredConfirmations: cfg.RequiredConfirmation,
+		ReconnectionInterval:  cfg.ReConnectInterval,
+		RequiredConfirmations: cfg.BlockConfirmation,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chain client: %v", err)
 	}
 
 	// escrow
-	escrowCtr, err := escrow.New(chnClient, cfg.PrivateKey, cfg.PoolAddress)
+	escrowCtr, err := escrow.New(chnClient, cfg.Wallet, cfg.PoolAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create escrow contract: %v", err)
 	}
@@ -41,7 +41,7 @@ func NewClient(cfg *fund.Config) (*Client, error) {
 	tokenAddress := escrowCtr.TokenAddress()
 
 	// erc20
-	erc20Ctr, err := token.New(chnClient, cfg.PrivateKey, tokenAddress)
+	erc20Ctr, err := token.New(chnClient, cfg.Wallet, tokenAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create erc20 contract: %v", err)
 	}
@@ -52,4 +52,8 @@ func NewClient(cfg *fund.Config) (*Client, error) {
 		ChainClient: chnClient,
 		Config:      cfg,
 	}, nil
+}
+
+func (c *Client) Close() error {
+	return c.ChainClient.Close()
 }
