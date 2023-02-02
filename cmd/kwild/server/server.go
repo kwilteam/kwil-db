@@ -67,7 +67,7 @@ func execute(logger logger.Logger) error {
 		return fmt.Errorf("failed to build executor: %w", err)
 	}
 
-	// build account service
+	// build info service
 	accountService := accountsvc.NewService(queries)
 
 	// pricing service

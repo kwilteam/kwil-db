@@ -55,7 +55,7 @@ func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName 
 	}
 }
 
-func (d *Driver) ExecuteQuery(ctx context.Context, owner string, dbName string, queryName string, queryInputs []any) error {
+func (d *Driver) ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []any) error {
 	client, err := d.getClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -69,17 +69,17 @@ func (d *Driver) ExecuteQuery(ctx context.Context, owner string, dbName string, 
 		}
 	}
 
-	_, err = client.ExecuteDatabase(ctx, owner, dbName, queryName, ins)
+	_, err = client.ExecuteDatabase(ctx, dbName, queryName, ins)
 	return err
 }
 
-func (d *Driver) DropDatabase(ctx context.Context, owner string, dbName string) error {
+func (d *Driver) DropDatabase(ctx context.Context, dbName string) error {
 	client, err := d.getClient()
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	_, err = client.DropDatabase(ctx, owner, dbName)
+	_, err = client.DropDatabase(ctx, dbName)
 	return err
 }
 

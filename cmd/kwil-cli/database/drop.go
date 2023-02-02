@@ -1,45 +1,33 @@
 package database
 
 import (
-	"context"
-	"fmt"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/cmd/kwil-cli/common/display"
 	"kwil/internal/app/kcli"
-	"kwil/pkg/fund"
 )
 
 func dropCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "drop",
+		Use:   "drop db_name",
 		Short: "Drops a database",
+		Long:  "Drops a database",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				conf, err := fund.NewConfig()
-				if err != nil {
-					return fmt.Errorf("error getting client config: %w", err)
-				}
+			ctx := cmd.Context()
+			clt, err := kcli.New(ctx, common.AppConfig)
+			if err != nil {
+				return err
+			}
 
-				client, err := kcli.New(cc, conf)
-				if err != nil {
-					return err
-				}
-				// should be one arg
-				if len(args) != 1 {
-					return fmt.Errorf("deploy requires one argument: database name")
-				}
+			res, err := clt.DropDatabase(ctx, args[0])
+			if err != nil {
+				return err
+			}
 
-				res, err := client.DropDatabase(ctx, client.Fund.GetConfig().GetAccountAddress(), args[0])
-				if err != nil {
-					return err
-				}
+			display.PrintTxResponse(res)
 
-				display.PrintTxResponse(res)
-
-				return nil
-			})
+			return nil
 		},
 	}
 	return cmd

@@ -1,12 +1,13 @@
 package kcli
 
 import (
-	fund2 "kwil/pkg/fund"
+	"kwil/pkg/fund"
+	"kwil/pkg/grpc/client"
 )
 
 type Config struct {
-	// GRPC client config
-	Endpoint string `json:"endpoint" yaml:"endpoint" toml:"endpoint" mapstructure:"endpoint"`
+	// Kwil config
+	Kwil client.GrpcConfig `json:"kwil" yaml:"kwil" toml:"kwil" mapstructure:"kwil"`
 	// Fund config
-	Fund *fund2.Config `json:"fund" yaml:"fund" toml:"fund" mapstructure:"fund"`
+	Fund fund.Config `json:"fund" yaml:"fund" toml:"fund" mapstructure:"fund" env`
 }

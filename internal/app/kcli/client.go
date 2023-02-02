@@ -8,7 +8,7 @@ import (
 )
 
 type KwilClient struct {
-	cfg *Config
+	Config *Config
 	// GRPC clients
 	Client *grpcClt.Client
 
@@ -17,19 +17,19 @@ type KwilClient struct {
 
 func New(ctx context.Context, cfg *Config) (*KwilClient, error) {
 	//var err error
-	//if cfg.Fund == nil {
-	//	cfg.Fund, err = fund2.NewConfig()
+	//if Config.Fund == nil {
+	//	Config.Fund, err = fund2.NewConfig()
 	//	if err != nil {
 	//		return nil, err
 	//	}
 	//}
 
-	chainClient, err := ethereum.NewClient(cfg.Fund)
+	chainClient, err := ethereum.NewClient(&cfg.Fund)
 	if err != nil {
 		return nil, err
 	}
 
-	kc, err := grpcClt.New(ctx, &grpcClt.Config{Endpoint: cfg.Endpoint})
+	kc, err := grpcClt.New(ctx, &cfg.Kwil)
 	if err != nil {
 		return nil, err
 	}
@@ -40,8 +40,8 @@ func New(ctx context.Context, cfg *Config) (*KwilClient, error) {
 	}, nil
 }
 
-//func NewConfig() (*Config, error) {
-//	return &Config{
+//func NewConfig() (*GrpcConfig, error) {
+//	return &GrpcConfig{
 //		Endpoint: "localhost:50051",
 //		Fund:     fund2.NewConfig(),
 //	}, nil

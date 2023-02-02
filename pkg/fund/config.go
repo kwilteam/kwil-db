@@ -12,14 +12,14 @@ import (
 // contains config and blockchain information
 
 type Config struct {
-	ChainCode             int64
-	PrivateKey            *ecdsa.PrivateKey
-	TokenAddress          string
-	PoolAddress           string
-	ValidatorAddress      string
-	Provider              string
-	ReConnectionInterval  int64
-	RequiredConfirmations int64
+	ChainCode            int64             `mapstructure:"chain_code"`
+	PrivateKey           *ecdsa.PrivateKey `mapstructure:"private_key"`
+	TokenAddress         string            `mapstructure:"token_address"`
+	PoolAddress          string            `mapstructure:"pool_address"`
+	ValidatorAddress     string            `mapstructure:"validator_address"`
+	Provider             string            `mapstructure:"provider"`
+	ReConnectionInterval int64             `mapstructure:"reconnection_interval"`
+	RequiredConfirmation int64             `mapstructure:"required_confirmation"`
 }
 
 func NewConfig() (*Config, error) {
@@ -37,14 +37,14 @@ func NewConfig() (*Config, error) {
 	}
 
 	return &Config{
-		ChainCode:             chainCode,
-		PrivateKey:            privateKey,
-		PoolAddress:           fundingPool,
-		ValidatorAddress:      validatorAddress,
-		Provider:              ethProvider,
-		TokenAddress:          tokenAddress,
-		ReConnectionInterval:  reconnectionInterval,
-		RequiredConfirmations: requiredConfirmations,
+		ChainCode:            chainCode,
+		PrivateKey:           privateKey,
+		PoolAddress:          fundingPool,
+		ValidatorAddress:     validatorAddress,
+		Provider:             ethProvider,
+		TokenAddress:         tokenAddress,
+		ReConnectionInterval: reconnectionInterval,
+		RequiredConfirmation: requiredConfirmations,
 	}, nil
 }
 

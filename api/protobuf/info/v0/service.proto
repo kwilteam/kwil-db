@@ -1,0 +1,42 @@
+syntax = "proto3";
+package account.v0;
+option go_package = "kwil/api/protobuf/info/v0/gen/go";
+
+import "google/api/annotations.proto";
+
+service InfoService {
+    rpc GetInfo(GetInfoRequest) returns (GetInfoResponse) {
+        option (google.api.http) = {
+            get: "/api/v0/info"
+        };
+    }
+
+    rpc GetAccount(GetAccountRequest) returns (GetAccountResponse) {
+      option (google.api.http) = {
+        get: "/api/v0/{address}/info"
+      };
+    }
+}
+
+message Account {
+  string address = 1;
+  string balance = 2;
+  string spent = 3;
+  int64 nonce = 4;
+}
+
+message GetAccountRequest {
+  string address = 1;
+}
+
+message GetAccountResponse {
+  Account account = 1;
+}
+
+
+message GetInfoRequest {}
+
+message GetInfoResponse {
+  string validator_account = 1;
+  string funding_pool = 2;
+}

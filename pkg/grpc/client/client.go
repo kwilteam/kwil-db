@@ -3,9 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	accountpb "kwil/api/protobuf/account/v0/gen/go"
+	infopb "kwil/api/protobuf/info/v0/gen/go"
 	pricingpb "kwil/api/protobuf/pricing/v0/gen/go"
 	txpb "kwil/api/protobuf/tx/v0/gen/go"
 	"kwil/internal/pkg/transport"
@@ -27,24 +26,8 @@ type GrpcClient interface {
 	Close() error
 }
 
-type Config struct {
-	Endpoint string `mapstructure:"endpoint"`
-}
-
-func (c *Config) toConfig() (*clientConfig, error) {
-	return &clientConfig{
-		Endpoint: c.Endpoint,
-	}, nil
-}
-
-type clientConfig struct {
-	Endpoint string
-	// TODO: use logger
-	Log *zap.Logger
-}
-
 type Client struct {
-	accountClt accountpb.AccountServiceClient
+	infoClt    infopb.InfoServiceClient
 	txClt      txpb.TxServiceClient
 	pricingClt pricingpb.PricingServiceClient
 
@@ -52,7 +35,7 @@ type Client struct {
 	Config *clientConfig
 }
 
-func New(ctx context.Context, cfg *Config) (*Client, error) {
+func New(ctx context.Context, cfg *GrpcConfig) (*Client, error) {
 	clientCfg, err := cfg.toConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client config: %w", err)
@@ -63,7 +46,7 @@ func New(ctx context.Context, cfg *Config) (*Client, error) {
 		return nil, fmt.Errorf("failed to dial server %s: %w", cfg.Endpoint, err)
 	}
 	return &Client{
-		accountClt: accountpb.NewAccountServiceClient(conn),
+		infoClt:    infopb.NewInfoServiceClient(conn),
 		txClt:      txpb.NewTxServiceClient(conn),
 		pricingClt: pricingpb.NewPricingServiceClient(conn),
 		Config:     clientCfg,

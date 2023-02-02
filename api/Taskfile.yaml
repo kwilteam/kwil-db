@@ -19,8 +19,8 @@ tasks:
       - api/protobuf/pricing/v0/gen/go/*
       - api/openapi-spec/pricing/v0/*
 
-  compile:account:
-    desc: Compiles the protobuf for Account service
+  compile:info:
+    desc: Compiles the protobuf for Info service
     deps:
       - compile:common
     cmds:
@@ -29,13 +29,13 @@ tasks:
         --go_out=. --go_opt module=kwil \
         --go-grpc_out=. --go-grpc_opt module=kwil \
         --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/account/v0/api \
-        api/protobuf/account/v0/*.proto
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/info/v0/api \
+        api/protobuf/info/v0/*.proto
     sources:
-      - api/protobuf/account/v0/*.proto
+      - api/protobuf/info/v0/*.proto
     generates:
-      - api/protobuf/account/v0/gen/go/*
-      - api/openapi-spec/account/v0/*
+      - api/protobuf/info/v0/gen/go/*
+      - api/openapi-spec/info/v0/*
 
 
   compile:tx:

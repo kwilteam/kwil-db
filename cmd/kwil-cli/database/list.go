@@ -1,15 +1,12 @@
 package database
 
 import (
-	"context"
 	"fmt"
 	"kwil/cmd/kwil-cli/common"
 	"kwil/internal/app/kcli"
-	"kwil/pkg/fund"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 )
 
 func listCmd() *cobra.Command {
@@ -17,45 +14,39 @@ func listCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List databases",
 		Long: `List lists the databases owned by a wallet.
-A wallet can be specified with the --owner flag, otherwise the default wallet is used.
-		`,
+A wallet can be specified with the --owner flag, otherwise the default wallet is used.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				conf, err := fund.NewConfig()
-				if err != nil {
-					return fmt.Errorf("error getting client config: %w", err)
-				}
+			ctx := cmd.Context()
+			clt, err := kcli.New(ctx, common.AppConfig)
+			if err != nil {
+				return err
+			}
 
-				client, err := kcli.New(cc, conf)
-				if err != nil {
-					return err
-				}
+			var address string
+			// see if they passed an address
+			passedAddress, err := cmd.Flags().GetString("owner")
+			if err == nil && passedAddress != "NULL" {
+				address = passedAddress
+			} else {
+				// if not, use the default
+				address = clt.Config.Fund.GetAccountAddress()
+			}
 
-				var address string
-				// see if they passed an address
-				passedAddress, err := cmd.Flags().GetString("owner")
-				if err == nil && passedAddress != "NULL" {
-					address = passedAddress
-				} else {
-					// if not, use the default
-					address = client.Fund.GetConfig().GetAccountAddress()
-				}
+			if address == "" {
+				return fmt.Errorf("no address provided")
+			}
 
-				if address == "" {
-					return fmt.Errorf("no address provided")
-				}
+			dbs, err := clt.Client.ListDatabases(ctx, strings.ToLower(address))
+			if err != nil {
+				return fmt.Errorf("failed to list databases: %w", err)
+			}
 
-				dbs, err := client.Txs.ListDatabases(ctx, strings.ToLower(address))
-				if err != nil {
-					return fmt.Errorf("failed to list databases: %w", err)
-				}
+			for _, db := range dbs {
+				fmt.Println(db)
+			}
 
-				for _, db := range dbs {
-					fmt.Println(db)
-				}
-
-				return nil
-			})
+			return nil
 		},
 	}
 

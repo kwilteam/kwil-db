@@ -25,7 +25,7 @@ func NewClient(cfg *fund.Config) (*Client, error) {
 		ChainCode:             int64(cfg.ChainCode),
 		Endpoint:              cfg.Provider,
 		ReconnectionInterval:  cfg.ReConnectionInterval,
-		RequiredConfirmations: cfg.RequiredConfirmations,
+		RequiredConfirmations: cfg.RequiredConfirmation,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chain client: %v", err)

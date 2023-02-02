@@ -22,7 +22,7 @@ func (s *Service) GetAccount(ctx context.Context, req *accountspb.GetAccountRequ
 				},
 			}, nil
 		}
-		return nil, fmt.Errorf("error getting account for address %s: %d", req.Address, err)
+		return nil, fmt.Errorf("error getting info for address %s: %d", req.Address, err)
 	}
 	return &accountspb.GetAccountResponse{
 		Account: &commonpb.Account{

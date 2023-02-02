@@ -18,14 +18,8 @@ func (c *KwilClient) GetDatabaseSchema(ctx context.Context, owner string, dbName
 func (c *KwilClient) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*transactions.Response, error) {
 	clean.Clean(db)
 
-	// get nonce from address
-	account, err := c.Client.GetAccount(ctx, c.cfg.Fund.GetAccountAddress())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get account: %w", err)
-	}
-
 	// build tx
-	tx, err := c.buildTx(ctx, account, transactions.DEPLOY_DATABASE, db)
+	tx, err := c.buildTx(ctx, db.Owner, transactions.DEPLOY_DATABASE, db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction, type %s, err: %w", transactions.DEPLOY_DATABASE, err)
 	}
@@ -33,20 +27,15 @@ func (c *KwilClient) DeployDatabase(ctx context.Context, db *databases.Database[
 	return c.Client.Broadcast(ctx, tx)
 }
 
-func (c *KwilClient) DropDatabase(ctx context.Context, owner string, dbName string) (*transactions.Response, error) {
+func (c *KwilClient) DropDatabase(ctx context.Context, dbName string) (*transactions.Response, error) {
+	owner := c.Config.Fund.GetAccountAddress()
 	data := &databases.DatabaseIdentifier{
 		Name:  dbName,
 		Owner: owner,
 	}
 
-	// get nonce from address
-	account, err := c.Client.GetAccount(ctx, c.cfg.Fund.GetAccountAddress())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get account: %w", err)
-	}
-
 	// build tx
-	tx, err := c.buildTx(ctx, account, transactions.DROP_DATABASE, data)
+	tx, err := c.buildTx(ctx, owner, transactions.DROP_DATABASE, data)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +43,8 @@ func (c *KwilClient) DropDatabase(ctx context.Context, owner string, dbName stri
 	return c.Client.Broadcast(ctx, tx)
 }
 
-func (c *KwilClient) ExecuteDatabase(ctx context.Context, owner string, dbName string, queryName string, queryInputs []anytype.KwilAny) (*transactions.Response, error) {
+func (c *KwilClient) ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []anytype.KwilAny) (*transactions.Response, error) {
+	owner := c.Config.Fund.GetAccountAddress()
 	// create the dbid.  we will need this for the execution body
 	dbId := databases.GenerateSchemaName(owner, dbName)
 
@@ -101,13 +91,8 @@ func (c *KwilClient) ExecuteDatabase(ctx context.Context, owner string, dbName s
 		Inputs:   userIns,
 	}
 
-	// get nonce from address
-	account, err := c.Client.GetAccount(ctx, c.cfg.Fund.GetAccountAddress())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get account: %w", err)
-	}
 	// buildtx
-	tx, err := c.buildTx(ctx, account, transactions.EXECUTE_QUERY, body)
+	tx, err := c.buildTx(ctx, owner, transactions.EXECUTE_QUERY, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction: %w", err)
 	}

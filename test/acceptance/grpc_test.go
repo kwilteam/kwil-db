@@ -33,7 +33,7 @@ func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account s
 			// to mine new blocks
 			err := deployer.FundAccount(ctx, account, 1)
 			if err != nil {
-				fmt.Println("funded user account failed", err)
+				fmt.Println("funded user info failed", err)
 			}
 		}
 	}
@@ -116,7 +116,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 
 		// Given user is funded with escrow token
 		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-		assert.NoError(t, err, "failed to fund user account")
+		assert.NoError(t, err, "failed to fund user info")
 
 		// and user has approved funding_pool to spend his token
 		specifications.ApproveTokenSpecification(t, ctx, chainDriver)
@@ -140,7 +140,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		if !*remote {
 			// Given user is funded
 			err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-			assert.NoError(t, err, "failed to fund user account")
+			assert.NoError(t, err, "failed to fund user info")
 			go keepMiningBlocks(ctx, chainDeployer, userAddr)
 
 			// and user pledged fund to validator
@@ -174,7 +174,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		if !*remote {
 			// Given user is funded
 			err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-			assert.NoError(t, err, "failed to fund user account")
+			assert.NoError(t, err, "failed to fund user info")
 			go keepMiningBlocks(ctx, chainDeployer, userAddr)
 
 			// and user pledged fund to validator

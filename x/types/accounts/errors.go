@@ -3,7 +3,7 @@ package accounts
 import "errors"
 
 var (
-	ErrAccountNotRegistered = errors.New("account not registered")
+	ErrAccountNotRegistered = errors.New("info not registered")
 	ErrInsufficientFunds    = errors.New("insufficient funds")
 	ErrInvalidNonce         = errors.New("invalid nonce")
 )

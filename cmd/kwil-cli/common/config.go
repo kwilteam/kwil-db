@@ -2,56 +2,61 @@ package common
 
 import (
 	"fmt"
-	"log"
+	"github.com/spf13/cobra"
+	"kwil/internal/app/kcli"
+	"kwil/pkg/utils"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
 
+const (
+	// DefaultConfigPath is the default path to the config file
+	EnvPrefix         = "KCLI"
+	DefaultConfigName = "config"
+	DefaultConfigDir  = ".kwil_cli"
+	DefaultConfigType = "toml"
+)
+
+var ConfigFile string
+var AppConfig *kcli.Config
+
 func LoadConfig() {
-	configFile := GetConfigFile()
-	_, err := os.Stat(configFile)
-	if err != nil {
-		// TODO: create init function
-		log.Fatal(err)
+	if ConfigFile != "" {
+		viper.SetConfigFile(ConfigFile)
+		fmt.Fprintln(os.Stdout, "Using config file:", viper.ConfigFileUsed())
+	} else {
+		home, err := os.UserHomeDir()
+		cobra.CheckErr(err)
+
+		viper.AddConfigPath(filepath.Join(home, DefaultConfigDir))
+		viper.SetConfigName(DefaultConfigName)
+		viper.SetConfigType(DefaultConfigType)
+		viper.SafeWriteConfig()
 	}
 
-	LoadConfigFromPath(configFile)
-}
-
-func LoadConfigFromPath(path string) {
-	_, err := os.Stat(path)
-	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		file, err := os.Create(path)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		file.Close()
-	}
-
-	viper.SetConfigFile(path)
-
+	// PREFIX_A_B will be mapped to a.b
+	replacer := strings.NewReplacer(".", "_")
+	viper.SetEnvKeyReplacer(replacer)
+	viper.SetEnvPrefix(EnvPrefix)
+	viper.AllowEmptyEnv(true)
 	viper.AutomaticEnv()
+	//viper.Debug()
 
-	err = viper.ReadInConfig()
-	if err != nil {
-		fmt.Println(err)
-	}
-}
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Config file not found; ignore error if desired
+			fmt.Fprintln(os.Stdout, "Config file not found:", viper.ConfigFileUsed())
 
-func GetConfigFile() string {
-	home, err := homedir.Dir()
-	if err != nil {
-		return ""
+		} else {
+			// Config file was found but another error was produced
+			fmt.Fprintln(os.Stderr, "Error loading config file :", err)
+		}
 	}
-	configFile := filepath.Join(home, ".kwil/config/cli.toml")
-	return configFile
+
+	if err := viper.Unmarshal(&AppConfig, viper.DecodeHook(utils.StringPrivateKeyHookFunc())); err != nil {
+		fmt.Fprintln(os.Stderr, "Error unmarshaling config file:", err)
+	}
 }

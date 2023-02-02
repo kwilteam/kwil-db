@@ -45,13 +45,13 @@ func (q *queries) GetAccount(ctx context.Context, address string) (*accountTypes
 
 func (q *queries) Spend(ctx context.Context, spend *accountTypes.Spend) error {
 	addr := strings.ToLower(spend.Address)
-	// get the account
+	// get the info
 	acc, err := q.gen.GetAccount(ctx, addr)
 	if err != nil {
 		if errors.IsNoRowsInResult(err) {
 			return accountTypes.ErrAccountNotRegistered
 		}
-		return fmt.Errorf("error getting account for address %s: %d", addr, err)
+		return fmt.Errorf("error getting info for address %s: %d", addr, err)
 	}
 
 	// check the nonce
@@ -73,7 +73,7 @@ func (q *queries) Spend(ctx context.Context, spend *accountTypes.Spend) error {
 		return fmt.Errorf("error adding amount to spent: %d", err)
 	}
 
-	// update the account
+	// update the info
 	return q.gen.UpdateAccountById(ctx, &gen.UpdateAccountByIdParams{
 		ID:      acc.ID,
 		Spent:   newSpent.String(),

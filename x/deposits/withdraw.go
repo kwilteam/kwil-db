@@ -23,7 +23,7 @@ func (s *depositer) startWithdrawal(ctx context.Context, withdrawal deposits.Wit
 
 	qtx := s.dao.WithTx(tx)
 
-	// will start by getting the account balance
+	// will start by getting the info balance
 	account, err := qtx.GetAccount(ctx, withdrawal.Address)
 	if err != nil {
 		return err

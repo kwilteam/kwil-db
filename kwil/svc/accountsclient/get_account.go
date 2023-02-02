@@ -12,7 +12,7 @@ func (c *client) GetAccount(ctx context.Context, address string) (accounts.Accou
 		Address: address,
 	})
 	if err != nil {
-		return accounts.Account{}, fmt.Errorf("failed to get account: %w", err)
+		return accounts.Account{}, fmt.Errorf("failed to get info: %w", err)
 	}
 
 	return accounts.Account{
