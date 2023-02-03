@@ -12,6 +12,11 @@ func StringPrivateKeyHookFunc() mapstructure.DecodeHookFuncType {
 	return func(f, t reflect.Type, data interface{}) (interface{}, error) {
 		if f.Kind() == reflect.String && t == reflect.TypeOf(&ecdsa.PrivateKey{}) {
 
+			d := data.(string)
+			if d == "" {
+				return nil, nil
+			}
+
 			privateKey, err := ec.HexToECDSA(data.(string))
 			if err != nil {
 				return nil, fmt.Errorf("error parsing private key: %v", err)

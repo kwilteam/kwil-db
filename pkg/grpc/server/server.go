@@ -12,10 +12,11 @@ import (
 
 type Server struct {
 	server *grpc.Server
+	logger logger.Logger
 }
 
-func New(logger *zap.Logger, opts ...Option) *Server {
-	l := logger.WithOptions(zap.WithCaller(false))
+func New(logger logger.Logger, opts ...Option) *Server {
+	l := logger.Named("grpc_server").WithOptions(zap.WithCaller(false))
 
 	server := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
@@ -57,7 +58,7 @@ func (s *Server) Serve(ctx context.Context, addr string) error {
 }
 
 func (s *Server) Stop() {
-	s.server.Stop()
+	s.server.GracefulStop()
 }
 
 // BodyLoggerInterceptor returns a new unary server interceptor that logs the

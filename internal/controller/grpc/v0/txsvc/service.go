@@ -19,9 +19,9 @@ type Service struct {
 	pricing  pricer.Pricer
 }
 
-func NewService(queries repository.Queries, exec executor.Executor) *Service {
+func NewService(queries repository.Queries, exec executor.Executor, logger logger.Logger) *Service {
 	return &Service{
-		log:      logger.New().Named("txsvc"),
+		log:      logger.Named("txsvc"),
 		dao:      queries,
 		executor: exec,
 		pricing:  pricer.NewPricer(),

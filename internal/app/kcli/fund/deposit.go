@@ -3,7 +3,7 @@ package fund
 import (
 	"errors"
 	"fmt"
-	"kwil/internal/app/kcli/common"
+	"kwil/internal/app/kcli/config"
 	"kwil/pkg/kwil-client"
 	"math/big"
 
@@ -26,7 +26,7 @@ func depositCmd() *cobra.Command {
 				return fmt.Errorf("error converting %s to big int", args[0])
 			}
 
-			clt, err := kwil_client.New(ctx, common.AppConfig)
+			clt, err := kwil_client.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}

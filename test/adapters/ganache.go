@@ -103,7 +103,7 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoi
 			Wallet:            userPK,
 			PoolAddress:       fundingPoolAddress,
 			Provider:          providerEndpoint,
-			ReConnectInterval: 30,
+			ReconnectInterval: 30,
 			BlockConfirmation: 10,
 		}
 		t.Logf("create chain driver to %s", providerEndpoint)
@@ -147,7 +147,7 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoi
 		PoolAddress:       escrowAddress.String(),
 		ValidatorAddress:  chainDeployer.Account.String(),
 		Provider:          exposedEndpoint,
-		ReConnectInterval: 30,
+		ReconnectInterval: 30,
 		BlockConfirmation: 1,
 	}
 

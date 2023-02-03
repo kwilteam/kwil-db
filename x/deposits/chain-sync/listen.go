@@ -1,6 +1,9 @@
 package chainsync
 
-import "context"
+import (
+	"context"
+	"go.uber.org/zap"
+)
 
 // Listen will listen for new block and update the persistent block number
 func (c *chain) listen(ctx context.Context) error {
@@ -17,8 +20,10 @@ func (c *chain) listen(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
+				c.log.Warn("stopping chain listener", zap.Error(ctx.Err()))
 				return
 			case block := <-blocks:
+				c.log.Debug("new block ", zap.Int64("height", block))
 				c.processChunk(ctx, c.height+1, block)
 			}
 		}

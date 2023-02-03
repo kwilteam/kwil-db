@@ -3,7 +3,7 @@ package kwil_client
 import (
 	"context"
 	"fmt"
-	fund2 "kwil/pkg/fund"
+	"kwil/pkg/fund"
 	"kwil/pkg/fund/ethereum"
 	grpcClt "kwil/pkg/grpc/client"
 )
@@ -13,7 +13,7 @@ type Client struct {
 	// GRPC clients
 	Kwil *grpcClt.Client
 
-	Fund fund2.IFund
+	Fund fund.IFund
 }
 
 func New(ctx context.Context, cfg *Config) (*Client, error) {

@@ -31,14 +31,14 @@ type chain struct {
 	dao            repository.Queries      // for interacting with the db
 	chainClient    chainClient.ChainClient // for getting blocks
 	escrowContract escrow.EscrowContract   // for returning funds
-	log            logger.SugaredLogger
+	log            logger.Logger
 	tasks          tasks.TaskRunner
 	chunkSize      int64
 	mu             *sync.Mutex
 	height         int64 // the height of the last block we processed
 }
 
-func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repository.Queries, db *sqlclient.DB) (Chain, error) {
+func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repository.Queries, db *sqlclient.DB, logger logger.Logger) (Chain, error) {
 	escrowTasks := escrowtasks.New(dao, escrow)
 	chunkSizeEnv := os.Getenv("deposit_chunk_size")
 	if chunkSizeEnv == "" {
@@ -61,7 +61,7 @@ func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repos
 		dao:            dao,
 		chainClient:    client,
 		escrowContract: escrow,
-		log:            logger.New().Named("deposit-chain-client").Sugar(),
+		log:            logger.Named("deposit.chain"),
 		chunkSize:      chunkSize,
 		mu:             &sync.Mutex{},
 		height:         0,

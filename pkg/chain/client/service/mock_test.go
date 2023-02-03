@@ -49,10 +49,10 @@ func newMockChainProvider() provider.ChainProvider {
 func newMockChainClient() (client.ChainClient, error) {
 	prov := newMockChainProvider()
 	return service.NewChainClientExplicit(&dto.Config{
-		Endpoint:              prov.Endpoint(),
-		ChainCode:             2,
-		ReconnectionInterval:  10,
-		RequiredConfirmations: REQUIRED_CONFIRMATIONS,
+		Endpoint:          prov.Endpoint(),
+		ChainCode:         2,
+		ReconnectInterval: 10,
+		BlockConfirmation: REQUIRED_CONFIRMATIONS,
 	})
 
 	/*

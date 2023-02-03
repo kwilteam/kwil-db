@@ -3,8 +3,8 @@ package database
 import (
 	"encoding/json"
 	"fmt"
-	"kwil/internal/app/kcli/common"
 	"kwil/internal/app/kcli/common/display"
+	"kwil/internal/app/kcli/config"
 	"kwil/pkg/kwil-client"
 	"kwil/x/types/databases"
 	"os"
@@ -36,7 +36,7 @@ func deployCmd() *cobra.Command {
 			}
 
 			ctx := cmd.Context()
-			clt, err := kwil_client.New(ctx, common.AppConfig)
+			clt, err := kwil_client.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}

@@ -3,7 +3,7 @@ package utils
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"kwil/pkg/fund"
+	"kwil/internal/app/kcli/config"
 	"kwil/x/crypto"
 )
 
@@ -12,20 +12,10 @@ func signCmd() *cobra.Command {
 		Use:   "sign",
 		Short: "Sign is used to generate a signature for a given message.",
 		Long:  "",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// check there is 1 arg
-			if len(args) != 1 {
-				return fmt.Errorf("sign requires one argument: message")
-			}
-
-			// get private key
-			config, err := fund.NewConfig()
-			if err != nil {
-				return fmt.Errorf("error getting client config: %w", err)
-			}
-
 			// generate signature
-			sig, err := crypto.Sign([]byte(args[0]), config.Wallet)
+			sig, err := crypto.Sign([]byte(args[0]), config.AppConfig.Fund.Wallet)
 			if err != nil {
 				return fmt.Errorf("error generating signature: %w", err)
 			}

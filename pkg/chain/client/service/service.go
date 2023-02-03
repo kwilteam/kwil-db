@@ -12,24 +12,24 @@ import (
 // ChainClient implements the ChainClient interface
 type chainClient struct {
 	provider              provider.ChainProvider
-	log                   logger.SugaredLogger
+	log                   logger.Logger
 	reconnectInterval     time.Duration
 	requiredConfirmations int64
 	chainCode             types.ChainCode
 	lastBlock             int64
 }
 
-func NewChainClientExplicit(conf *dto.Config) (client.ChainClient, error) {
-	prov, err := provider.New(conf.Endpoint, types.ChainCode(conf.ChainCode))
+func NewChainClientExplicit(conf *dto.Config, logger logger.Logger) (client.ChainClient, error) {
+	prov, err := provider.New(conf.RpcUrl, types.ChainCode(conf.ChainCode))
 	if err != nil {
 		return nil, err
 	}
 
 	return &chainClient{
 		provider:              prov,
-		log:                   logger.New().Named("chain-client").Sugar(),
-		reconnectInterval:     time.Duration(conf.ReconnectionInterval) * time.Second,
-		requiredConfirmations: conf.RequiredConfirmations,
+		log:                   logger.Named("chain_client"),
+		reconnectInterval:     time.Duration(conf.ReconnectInterval) * time.Second,
+		requiredConfirmations: conf.BlockConfirmation,
 		chainCode:             types.ChainCode(conf.ChainCode),
 		lastBlock:             0,
 	}, nil

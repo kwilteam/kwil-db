@@ -3,7 +3,7 @@ package init
 import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"kwil/internal/app/kcli/common"
+	"kwil/internal/app/kcli/config"
 	"kwil/pkg/kwil-client"
 )
 
@@ -16,7 +16,7 @@ func NewCmdInit() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			clt, err := kwil_client.New(ctx, common.AppConfig)
+			clt, err := kwil_client.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}

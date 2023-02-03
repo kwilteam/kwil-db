@@ -29,8 +29,8 @@ type registrar struct {
 	logger logger.Logger
 }
 
-func NewRegistrar() *registrar {
-	return &registrar{logger: logger.New()}
+func NewRegistrar(logger logger.Logger) *registrar {
+	return &registrar{logger: logger.Named("healthcheck.registrar")}
 }
 
 func (r *registrar) RegisterAsyncCheck(refreshPeriod time.Duration, initialDelay time.Duration, check Check) {

@@ -1,20 +1,19 @@
-package accountsvc
+package infosvc
 
 import (
 	"context"
 	"fmt"
-	commonpb "kwil/api/protobuf/common/v0/gen/go"
-	"kwil/api/protobuf/v0/pb/accountspb"
+	infopb "kwil/api/protobuf/info/v0/gen/go"
 	"kwil/pkg/sql/errors"
 	"strings"
 )
 
-func (s *Service) GetAccount(ctx context.Context, req *accountspb.GetAccountRequest) (*accountspb.GetAccountResponse, error) {
+func (s *Service) GetAccount(ctx context.Context, req *infopb.GetAccountRequest) (*infopb.GetAccountResponse, error) {
 	acc, err := s.dao.GetAccount(ctx, strings.ToLower(req.Address))
 	if err != nil {
 		if errors.IsNoRowsInResult(err) {
-			return &accountspb.GetAccountResponse{
-				Account: &commonpb.Account{
+			return &infopb.GetAccountResponse{
+				Account: &infopb.Account{
 					Address: req.Address,
 					Nonce:   0,
 					Balance: "0",
@@ -24,8 +23,8 @@ func (s *Service) GetAccount(ctx context.Context, req *accountspb.GetAccountRequ
 		}
 		return nil, fmt.Errorf("error getting info for address %s: %d", req.Address, err)
 	}
-	return &accountspb.GetAccountResponse{
-		Account: &commonpb.Account{
+	return &infopb.GetAccountResponse{
+		Account: &infopb.Account{
 			Address: req.Address,
 			Nonce:   acc.Nonce,
 			Balance: acc.Balance,

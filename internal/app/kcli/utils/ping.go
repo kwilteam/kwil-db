@@ -1,12 +1,9 @@
 package utils
 
 import (
-	"context"
 	"fmt"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-	"kwil/internal/app/kcli/common"
-	"kwil/pkg/fund"
+	"kwil/internal/app/kcli/config"
 	"kwil/pkg/kwil-client"
 )
 
@@ -16,26 +13,18 @@ func pingCmd() *cobra.Command {
 		Short: "Ping is used to ping the kwil provider endpoint",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialGrpc(cmd.Context(), func(ctx context.Context, cc *grpc.ClientConn) error {
-				conf, err := fund.NewConfig()
-				if err != nil {
-					return fmt.Errorf("error getting client config: %w", err)
-				}
+			ctx := cmd.Context()
+			clt, err := kwil_client.New(ctx, config.AppConfig)
+			if err != nil {
+				return err
+			}
 
-				client, err := kwil_client.New(cc, conf)
-				if err != nil {
-					return fmt.Errorf("error creating client: %w", err)
-				}
-
-				res, err := client.Txs.Ping(ctx)
-				if err != nil {
-					return fmt.Errorf("error pinging: %w", err)
-				}
-
-				fmt.Println(res)
-
-				return nil
-			})
+			res, err := clt.Kwil.Ping(ctx)
+			if err != nil {
+				return fmt.Errorf("error pinging: %w", err)
+			}
+			fmt.Println(res)
+			return nil
 		},
 	}
 

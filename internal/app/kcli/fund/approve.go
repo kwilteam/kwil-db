@@ -3,8 +3,8 @@ package fund
 import (
 	"errors"
 	"fmt"
-	"kwil/internal/app/kcli/common"
 	"kwil/internal/app/kcli/common/display"
+	"kwil/internal/app/kcli/config"
 	"kwil/pkg/kwil-client"
 	"math/big"
 
@@ -43,7 +43,7 @@ func approveCmd() *cobra.Command {
 				return errors.New("transaction cancelled")
 			}
 
-			clt, err := kwil_client.New(ctx, common.AppConfig)
+			clt, err := kwil_client.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}
@@ -55,7 +55,7 @@ func approveCmd() *cobra.Command {
 
 			display.PrintClientChainResponse(&display.ClientChainResponse{
 				Tx:    response.TxHash,
-				Chain: string(clt.Config.Fund.ChainCode),
+				Chain: string(clt.Config.Fund.Chain.ChainCode),
 			})
 
 			return nil

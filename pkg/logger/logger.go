@@ -11,11 +11,15 @@ type SugaredLogger = *zap.SugaredLogger
 type Logger = *zap.Logger
 type Field = zap.Field
 
-var ErrField = zap.Error
+type Config struct {
+	Level string `mapstructure:"level"`
+	// OutputPaths is a list of URLs or file paths to write logging output to.
+	OutputPaths []string `mapstructure:"output_paths"`
+}
 
-func New() Logger {
+func New(config Config) Logger {
+	// @yaiba TODO: make those only for error level?
 	fields := make([]zap.Field, 0, 10)
-
 	if info, ok := debug.ReadBuildInfo(); ok {
 		fields = append(fields, zap.String("goversion", info.GoVersion))
 		if info.Main.Version != "" {
@@ -38,6 +42,15 @@ func New() Logger {
 		}
 	}
 
-	logger := zap.Must(zap.NewProductionConfig().Build(zap.Fields(fields...)))
+	// poor man's config
+	cfg := zap.NewProductionConfig()
+	level, err := zap.ParseAtomicLevel(config.Level)
+	if err != nil {
+		panic(err)
+	}
+	cfg.Level = level
+	cfg.OutputPaths = config.OutputPaths
+
+	logger := zap.Must(cfg.Build(zap.Fields(fields...)))
 	return logger
 }

@@ -1,0 +1,104 @@
+package config
+
+import (
+	"fmt"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"kwil/pkg/kwil-client"
+	"kwil/pkg/utils"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/viper"
+)
+
+const (
+	EnvPrefix         = "KCLI"
+	DefaultConfigName = "config"
+	DefaultConfigDir  = ".kwil_cli"
+	DefaultConfigType = "yaml"
+)
+
+var ConfigFile string
+var AppConfig *kwil_client.Config
+
+// BindGlobalFlags binds the global flags to the command.
+func BindGlobalFlags(fs *pflag.FlagSet) {
+	fs.String("node.endpoint", "", "the endpoint of the Kwil node")
+
+	fs.String("fund.wallet", "", "you wallet private key")
+	fs.String("fund.token_address", "", "the address of the funding pool token")
+	fs.String("fund.pool_address", "", "the address of the funding pool")
+	fs.String("fund.validator_address", "", "the address of the validator")
+	fs.String("fund.chain_code", "", "the chain code of the funding pool chain")
+	fs.String("fund.rpc_url", "", "the provider url of the funding pool chain")
+	fs.Int64("fund.reconnect_interval", 0, "the reconnect interval of the funding pool")
+	fs.Int64("fund.block_confirmation", 0, "the block confirmation of the funding pool")
+}
+
+// BindGlobalEnv binds the global flags to the environment variables.
+func BindGlobalEnv(fs *pflag.FlagSet) {
+	// node.endpoint maps to PREFIX_NODE_ENDPOINT
+	viper.SetEnvPrefix(EnvPrefix)
+
+	viper.BindEnv("node.endpoint")
+	viper.BindPFlag("node.endpoint", fs.Lookup("node.endpoint")) //flag override env
+
+	viper.BindEnv("fund.wallet")
+	viper.BindPFlag("fund.wallet", fs.Lookup("fund.wallet"))
+	viper.BindEnv("fund.token_address")
+	viper.BindPFlag("fund.token_address", fs.Lookup("fund.token_address"))
+	viper.BindEnv("fund.pool_address")
+	viper.BindPFlag("fund.pool_address", fs.Lookup("fund.pool_address"))
+	viper.BindEnv("fund.validator_address")
+	viper.BindPFlag("fund.validator_address", fs.Lookup("fund.validator_address"))
+	viper.BindEnv("fund.chain_code")
+	viper.BindPFlag("fund.chain_code", fs.Lookup("fund.chain_code"))
+	viper.BindEnv("fund.rpc_url")
+	viper.BindPFlag("fund.rpc_url", fs.Lookup("fund.rpc_url"))
+	viper.BindEnv("fund.reconnect_interval")
+	viper.BindPFlag("fund.reconnect_interval", fs.Lookup("fund.reconnect_interval"))
+	viper.BindEnv("fund.block_confirmation")
+	viper.BindPFlag("fund.block_confirmation", fs.Lookup("fund.block_confirmation"))
+}
+
+func LoadConfig() {
+	if ConfigFile != "" {
+		viper.SetConfigFile(ConfigFile)
+		fmt.Fprintln(os.Stdout, "Using config file:", viper.ConfigFileUsed())
+	} else {
+		home, err := os.UserHomeDir()
+		cobra.CheckErr(err)
+
+		viper.AddConfigPath(filepath.Join(home, DefaultConfigDir))
+		viper.SetConfigName(DefaultConfigName)
+		viper.SetConfigType(DefaultConfigType)
+
+		viper.SafeWriteConfig()
+	}
+
+	// PREFIX_A_B will be mapped to a.b
+	replacer := strings.NewReplacer(".", "_")
+	viper.SetEnvKeyReplacer(replacer)
+	viper.SetEnvPrefix(EnvPrefix)
+
+	//viper.AllowEmptyEnv(true)
+	viper.AutomaticEnv()
+	//viper.Debug()
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Config file not found; ignore error if desired
+			fmt.Fprintln(os.Stdout, "Config file not found:", viper.ConfigFileUsed())
+
+		} else {
+			// Config file was found but another error was produced
+			fmt.Fprintln(os.Stderr, "Error loading config file :", err)
+		}
+	}
+
+	if err := viper.Unmarshal(&AppConfig, viper.DecodeHook(utils.StringPrivateKeyHookFunc())); err != nil {
+		fmt.Fprintln(os.Stderr, "Error unmarshaling config file:", err)
+	}
+}

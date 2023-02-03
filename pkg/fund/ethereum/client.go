@@ -3,7 +3,6 @@ package ethereum
 import (
 	"fmt"
 	chainClient "kwil/pkg/chain/client"
-	chainClientDto "kwil/pkg/chain/client/dto"
 	chainClientService "kwil/pkg/chain/client/service"
 	"kwil/pkg/fund"
 	"kwil/x/contracts/escrow"
@@ -21,12 +20,7 @@ type Client struct {
 }
 
 func NewClient(cfg *fund.Config) (*Client, error) {
-	chnClient, err := chainClientService.NewChainClientExplicit(&chainClientDto.Config{
-		ChainCode:             int64(cfg.ChainCode),
-		Endpoint:              cfg.Provider,
-		ReconnectionInterval:  cfg.ReConnectInterval,
-		RequiredConfirmations: cfg.BlockConfirmation,
-	})
+	chnClient, err := chainClientService.NewChainClientExplicit(&cfg.Chain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chain client: %v", err)
 	}

@@ -29,13 +29,13 @@ type executor struct {
 	log       logger.Logger
 }
 
-func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queries, mngr manager.Client) (Executor, error) {
+func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queries, mngr manager.Client, logger logger.Logger) (Executor, error) {
 	exec := &executor{
 		hasura:    mngr,
 		dao:       queries,
 		db:        db,
 		databases: make(map[string]executables.ExecutablesInterface),
-		log:       logger.New().Named(`executor`),
+		log:       logger.Named(`executor`),
 	}
 
 	err := exec.loadExecutables(ctx)

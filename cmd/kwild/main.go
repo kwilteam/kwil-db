@@ -1,14 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"kwil/cmd/kwild/server"
+	"kwil/internal/app/kwild"
 	"os"
 )
 
 func main() {
-	if err := server.Start(); err != nil {
-		fmt.Println(err)
+	if err := kwild.Execute(); err != nil {
 		os.Exit(-1)
 	}
 }

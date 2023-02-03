@@ -2,8 +2,8 @@ package database
 
 import (
 	"fmt"
-	"kwil/internal/app/kcli/common"
 	"kwil/internal/app/kcli/common/display"
+	"kwil/internal/app/kcli/config"
 	"kwil/pkg/kwil-client"
 	anytype "kwil/x/types/data_types/any_type"
 
@@ -70,7 +70,7 @@ create_user name satoshi age 32 --database-id x1234`,
 		}),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := kwil_client.New(ctx, common.AppConfig)
+			clt, err := kwil_client.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}

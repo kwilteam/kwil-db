@@ -20,8 +20,8 @@ type SimpleChecker struct {
 	logger logger.Logger
 }
 
-func New() *SimpleChecker {
-	return &SimpleChecker{logger: logger.New()}
+func New(logger logger.Logger) *SimpleChecker {
+	return &SimpleChecker{logger: logger.Named("healthcheck.simple-checker")}
 }
 
 func (c *SimpleChecker) Start() {

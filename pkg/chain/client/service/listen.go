@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"go.uber.org/zap"
 	"kwil/pkg/chain/provider/dto"
 	"time"
 
@@ -32,22 +33,26 @@ func (c *chainClient) Listen(ctx context.Context, blocks chan<- int64) error {
 				return
 			case err := <-sub.Err():
 				if err != nil {
-					c.log.Errorf("subscription error: %v", err)
+					c.log.Error("subscription error", zap.Error(err))
 					sub = c.resubscribe(ctx, sub, internalChan)
 				}
 			case <-time.After(c.reconnectInterval):
-				c.log.Errorf("subscription timeout")
+				c.log.Sugar().Error("subscription timeout")
 				sub = c.resubscribe(ctx, sub, internalChan)
 			case block := <-internalChan:
 				height := block.Height - c.requiredConfirmations
 
 				if height <= c.lastBlock {
-					c.log.Warnf("received block %d that is less than or equal to the latest block %d", height, c.lastBlock)
+					c.log.Warn("received block that is less than or equal to the latest block",
+						zap.Int64("block", height),
+						zap.Int64("latest", c.lastBlock))
 					continue
 				}
 
 				if height > c.lastBlock+1 {
-					c.log.Warnf("received block %d that is greater than the latest block %d by more than 1", height, c.lastBlock)
+					c.log.Warn("received block that is greater than the latest block by more than 1",
+						zap.Int64("block", height),
+						zap.Int64("latest", c.lastBlock))
 					for i := c.lastBlock + 1; i < height; i++ {
 						clientChan <- i
 					}
