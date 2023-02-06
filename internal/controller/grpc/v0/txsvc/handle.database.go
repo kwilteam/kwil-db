@@ -3,7 +3,7 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	txpb "kwil/api/protobuf/tx/v0/gen/go"
+	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
 	accountTypes "kwil/x/types/accounts"
 	"kwil/x/types/databases"
 	"kwil/x/types/databases/convert"

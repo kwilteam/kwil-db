@@ -6,7 +6,7 @@ import (
 	"kwil/kwil/repository"
 	chainClient "kwil/pkg/chain/client"
 	chains "kwil/pkg/chain/types"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
 	"kwil/x/contracts/escrow"
 	escrowTypes "kwil/x/types/contracts/escrow"
@@ -31,14 +31,14 @@ type chain struct {
 	dao            repository.Queries      // for interacting with the db
 	chainClient    chainClient.ChainClient // for getting blocks
 	escrowContract escrow.EscrowContract   // for returning funds
-	log            logger.Logger
+	log            log.Logger
 	tasks          tasks.TaskRunner
 	chunkSize      int64
 	mu             *sync.Mutex
 	height         int64 // the height of the last block we processed
 }
 
-func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repository.Queries, db *sqlclient.DB, logger logger.Logger) (Chain, error) {
+func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repository.Queries, db *sqlclient.DB, logger log.Logger) (Chain, error) {
 	escrowTasks := escrowtasks.New(dao, escrow)
 	chunkSizeEnv := os.Getenv("deposit_chunk_size")
 	if chunkSizeEnv == "" {

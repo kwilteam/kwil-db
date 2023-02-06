@@ -6,16 +6,16 @@ import (
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"net"
 )
 
 type Server struct {
 	server *grpc.Server
-	logger logger.Logger
+	logger log.Logger
 }
 
-func New(logger logger.Logger, opts ...Option) *Server {
+func New(logger log.Logger, opts ...Option) *Server {
 	l := logger.Named("grpc_server").WithOptions(zap.WithCaller(false))
 
 	server := grpc.NewServer(
@@ -63,7 +63,7 @@ func (s *Server) Stop() {
 
 // BodyLoggerInterceptor returns a new unary server interceptor that logs the
 // request body.
-func BodyLoggerInterceptor(logger logger.Logger) grpc.UnaryServerInterceptor {
+func BodyLoggerInterceptor(logger log.Logger) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		logger.Debug("request body", zap.Any("body", req))
 		return handler(ctx, req)

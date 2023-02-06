@@ -5,7 +5,7 @@ import (
 	chainClient "kwil/pkg/chain/client"
 	chainClientService "kwil/pkg/chain/client/service"
 	"kwil/pkg/fund"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/x/contracts/escrow"
 	"kwil/x/contracts/token"
 )
@@ -20,7 +20,7 @@ type Client struct {
 	Config *fund.Config
 }
 
-func NewClient(cfg *fund.Config, logger logger.Logger) (*Client, error) {
+func NewClient(cfg *fund.Config, logger log.Logger) (*Client, error) {
 	chnClient, err := chainClientService.NewChainClientExplicit(&cfg.Chain, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chain client: %v", err)

@@ -7,7 +7,7 @@ import (
 	"kwil/kwil/repository"
 	chainClient "kwil/pkg/chain/client"
 	"kwil/pkg/fund"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
 	"kwil/x/contracts/escrow"
 	chainsync "kwil/x/deposits/chain-sync"
@@ -22,11 +22,11 @@ type depositer struct {
 	dao              repository.Queries
 	db               *sqlclient.DB
 	chain            chainsync.Chain
-	log              logger.Logger
+	log              log.Logger
 	expirationPeriod int64
 }
 
-func NewDepositer(config *fund.Config, db *sqlclient.DB, queries repository.Queries, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, logger logger.Logger) (Depositer, error) {
+func NewDepositer(config *fund.Config, db *sqlclient.DB, queries repository.Queries, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, logger log.Logger) (Depositer, error) {
 
 	// create the escrow contract
 	escrowContract, err := escrow.New(chainClient, privateKey, config.PoolAddress)

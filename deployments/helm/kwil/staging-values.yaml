@@ -10,20 +10,13 @@ kwild:
   hasura:
     postgresql:
       enabled: false
-  service:
-    type: NodePort
-    nodePorts:
-      kwild: 32101
-  hasura:
-    postgresql:
-      enabled: false
     service:
       type: NodePort
       # comment nodePorts to enable multi instances on local machine
       nodePorts:
         hasura: 32100
   image:
-    repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild
+    repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwil
     pullPolicy: IfNotPresent
     tag: latest
 

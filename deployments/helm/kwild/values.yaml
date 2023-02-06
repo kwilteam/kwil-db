@@ -1,4 +1,4 @@
-# Default values for kwil.
+# Default values for kwild.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -253,6 +253,11 @@ kwild:
       - "stdout"
   server:
     addr: ":50051"
+  probes:
+    liveInitialDelaySeconds: 5
+    readyInitialDelaySeconds: 4
+    timeoutSeconds: 1
+    periodSeconds: 15
 
 # overwrite postgresql global setting
 global:

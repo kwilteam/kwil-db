@@ -3,7 +3,6 @@ service:
   type: NodePort
   # comment nodePorts to enable multi instances on local machine
   nodePorts:
-    kwild: 32101
     kwil: 32102
 
 kwild:
@@ -24,3 +23,12 @@ kwild:
           # comment nodePorts to enable multi instances on local machine
           nodePorts:
             postgresql: 32103
+  kwild:
+    fund:
+      wallet: 274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988
+      rpcUrl: wss://eth-goerli.g.alchemy.com/v2/EWzzySthmriEQjXMSlxCEkR9mqun8ijJ
+      chainCode: 2
+      blockConfirmation: 10
+      poolAddress: 0xb0a194286A901FeAEA39D2b765247BEd64aD4F41
+    log:
+      level: debug

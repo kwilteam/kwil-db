@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"kwil/internal/pkg/graphql/manager"
 	"kwil/kwil/repository"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
 	"kwil/x/execution/executables"
 	anytype "kwil/x/types/data_types/any_type"
@@ -26,10 +26,10 @@ type executor struct {
 	databases map[string]executables.ExecutablesInterface
 	dao       repository.Queries
 	db        *sqlclient.DB
-	log       logger.Logger
+	log       log.Logger
 }
 
-func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queries, mngr manager.Client, logger logger.Logger) (Executor, error) {
+func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queries, mngr manager.Client, logger log.Logger) (Executor, error) {
 	exec := &executor{
 		hasura:    mngr,
 		dao:       queries,

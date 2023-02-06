@@ -15,7 +15,7 @@ import (
 	simple_checker "kwil/internal/pkg/healthcheck/simple-checker"
 	"kwil/kwil/repository"
 	"kwil/pkg/chain/client/service"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
 	"kwil/x/deposits"
 	"kwil/x/execution/executor"
@@ -34,11 +34,9 @@ var RootCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("++++++ %+v\n", cfg)
-
-		// build logger
-		//logger, err := logger.NewLogger(cfg.logger)
-		logger := logger.New(cfg.Log)
+		// build log
+		//log, err := log.NewLogger(cfg.log)
+		logger := log.New(cfg.Log)
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()

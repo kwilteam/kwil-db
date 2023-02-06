@@ -10,7 +10,7 @@ import (
 	"kwil/pkg/chain/types"
 	"kwil/pkg/fund"
 	ethFund "kwil/pkg/fund/ethereum"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/test/utils/deployer"
 	"kwil/test/utils/deployer/eth-deployer"
 	"math/big"
@@ -96,7 +96,7 @@ func getChainEndpoint(t *testing.T, ctx context.Context, _chainCode types.ChainC
 }
 
 func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, rpcUrl string, deployerPrivateKey string,
-	_chainCode types.ChainCode, userPrivateKey string, fundingPoolAddress string, domination *big.Int, logger logger.Logger) (*ethFund.Driver, deployer.Deployer, *fund.Config, map[string]string) {
+	_chainCode types.ChainCode, userPrivateKey string, fundingPoolAddress string, domination *big.Int, logger log.Logger) (*ethFund.Driver, deployer.Deployer, *fund.Config, map[string]string) {
 	userPK, err := crypto.HexToECDSA(userPrivateKey)
 	require.NoError(t, err)
 
@@ -134,14 +134,14 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, rpcUrl string,
 	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
 	require.NoError(t, err, "failed to deploy escrow")
 
-	// to be used by kwild container
+	// to be used by kwil container
 	chainEnvs := map[string]string{
-		"KWIL_FUND_RPC_URL":            unexposedRpc, //kwild will call using docker network
-		"KWIL_FUND_POOL_ADDRESS":       escrowAddress.String(),
-		"KWIL_FUND_WALLET":             deployerPrivateKey,
-		"KWIL_FUND_CHAIN_CODE":         fmt.Sprintf("%d", _chainCode),
-		"KWIL_FUND_BLOCK_CONFIRMATION": "1",
-		"KWIL_FUND_RECONNECT_INTERVAL": "30",
+		"KWILD_FUND_RPC_URL":            unexposedRpc, //kwil will call using docker network
+		"KWILD_FUND_POOL_ADDRESS":       escrowAddress.String(),
+		"KWILD_FUND_WALLET":             deployerPrivateKey,
+		"KWILD_FUND_CHAIN_CODE":         fmt.Sprintf("%d", _chainCode),
+		"KWILD_FUND_BLOCK_CONFIRMATION": "1",
+		"KWILD_FUND_RECONNECT_INTERVAL": "30",
 	}
 
 	userFundConfig := &fund.Config{

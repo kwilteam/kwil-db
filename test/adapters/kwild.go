@@ -75,9 +75,9 @@ func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, cfg *kwil_cli
 	exposedPgUrl := fmt.Sprintf(
 		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, exposedEndpoint, kwildDatabase)
 
-	envs["KWIL_DB_URL"] = unexposedPgUrl
-	envs["KWIL_LOG_LEVEL"] = "info"
-	envs["KWIL_SERVER_ADDR"] = ":50051"
+	envs["KWILD_DB_URL"] = unexposedPgUrl
+	envs["KWILD_LOG_LEVEL"] = "info"
+	envs["KWILD_SERVER_ADDR"] = ":50051"
 
 	// for specification verify
 	kc := StartKwildDockerService(t, ctx, envs)

@@ -14,9 +14,9 @@ spec:
   {{- end }}
   ports:
     - port: {{ .Values.service.ports.kwild }}
-      targetPort: tcp-kwild
+      targetPort: tcp-kwil
       protocol: TCP
-      name: tcp-kwild
+      name: tcp-kwil
       {{- if and (or (eq .Values.service.type "NodePort") (eq .Values.service.type "LoadBalancer")) (not (empty .Values.service.nodePorts.kwild)) }}
       nodePort: {{ .Values.service.nodePorts.kwild }}
       {{- end }}

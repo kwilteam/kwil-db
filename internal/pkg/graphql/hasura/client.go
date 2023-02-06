@@ -49,7 +49,7 @@ func (c *client) call(req *http.Request) ([]byte, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return []byte{}, fmt.Errorf("call Hasura failed: %s", err.Error())
+		return []byte{}, fmt.Errorf("call Graphql failed: %s", err.Error())
 	}
 	defer resp.Body.Close()
 
@@ -61,7 +61,7 @@ func (c *client) call(req *http.Request) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		var hasuraErr ErrorResp
 		if err := json.Unmarshal(bodyBytes, &hasuraErr); err != nil {
-			return []byte{}, fmt.Errorf("parse Hasura response failed: %s", err.Error())
+			return []byte{}, fmt.Errorf("parse Graphql response failed: %s", err.Error())
 		}
 		return bodyBytes, fmt.Errorf("code: %s, error: %s", hasuraErr.Code, hasuraErr.Error)
 	}

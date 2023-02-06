@@ -2,32 +2,28 @@ package auth
 
 import (
 	"encoding/json"
-	"github.com/spf13/viper"
 	"io"
 )
-
-const HealthCheckApiKeyValueFlag = "healthcheck-key"
-const HealthCheckApiKeyValueEnv = "HEALTHCHECK_KEY"
 
 type keyJson struct {
 	Keys []string `json:"keys"`
 }
 
 type KeyManager struct {
-	keys map[string]struct{}
+	keys  map[string]struct{}
+	hcKey string
 }
 
-func NewKeyManager(r io.Reader) (*KeyManager, error) {
+func NewKeyManager(r io.Reader, healthcheckKey string) (*KeyManager, error) {
 	keys, err := loadKeys(r)
 	if err != nil {
 		return nil, err
 	}
-	return &KeyManager{keys: keys}, nil
+	return &KeyManager{keys: keys, hcKey: healthcheckKey}, nil
 }
 
 func (k *KeyManager) IsAllowed(t *token) bool {
-	healthCheckKey := viper.GetString(HealthCheckApiKeyValueFlag)
-	if healthCheckKey != "" && t.ApiKey == healthCheckKey {
+	if k.hcKey != "" && t.ApiKey == k.hcKey {
 		return true
 	}
 

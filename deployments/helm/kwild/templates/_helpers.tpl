@@ -62,13 +62,49 @@ Create the name of the service config to use
 {{- end }}
 
 {{/*
+initContainers for hasura depencency
+*/}}
+{{- define "kwild.initContainers.hasura" -}}
+- name: init-wait-hasura-service
+  image: busybox:1.35.0
+  command:
+    - sh
+    - -c
+    - |
+      {{- $service := printf "%s-hasura" .Release.Name }}
+      echo try resolve dns name "{{ $service }}"
+      until nslookup {{ $service }}.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local
+      do
+        echo waiting for {{ $service }}
+        sleep 2
+      done
+- name: init-wait-hasura
+  image: busybox:1.35.0
+  envFrom:
+  - configMapRef:
+      name: {{ include "kwild.fullname" . }}
+  command:
+    - sh
+    - -c
+    - |
+      {{- $host := printf "%s-hasura" .Release.Name }}
+      {{- $port := .Values.hasura.service.ports.hasura }}
+      echo scan {{ $host }}:{{ $port }}
+      for i in $(seq 1 300);
+      do
+        nc -zvw1 {{ $host}} {{ $port }} && exit 0 || sleep 3
+      done
+      exit 1
+{{- end }}
+
+{{/*
 container probes
 */}}
 {{- define "kwild.probes" -}}
 livenessProbe:
   grpc:
     port: {{ .Values.containerPorts.kwild }}
-  initialDelaySeconds: 15
+  initialDelaySeconds: {{ .Values.kwild.probes.healthInitialDelaySeconds }}
   timeoutSeconds: 1
   periodSeconds: 15
 readinessProbe:

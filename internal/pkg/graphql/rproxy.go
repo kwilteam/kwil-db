@@ -4,18 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/vektah/gqlparser/gqlerror"
 	"go.uber.org/zap"
 	"io"
-	hasura2 "kwil/internal/pkg/graphql/hasura"
+	"kwil/internal/pkg/graphql/hasura"
 	"kwil/internal/pkg/graphql/misc"
-	"kwil/pkg/logger"
-	"log"
+	"kwil/pkg/log"
+	log2 "log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-
-	"github.com/spf13/viper"
-	"github.com/vektah/gqlparser/gqlerror"
 )
 
 type graphqlReq struct {
@@ -23,21 +21,20 @@ type graphqlReq struct {
 }
 
 type RProxy struct {
-	logger logger.Logger
+	logger log.Logger
 	proxy  *httputil.ReverseProxy
 }
 
-func NewRProxy() *RProxy {
-	ru, err := url.Parse(viper.GetString(hasura2.GraphqlEndpointFlag))
+func NewRProxy(cfg Config, logger log.Logger) *RProxy {
+	ru, err := url.Parse(cfg.Endpoint)
 	if err != nil {
-		log.Fatal(err)
+		log2.Fatal(err)
 	}
 
 	u := ru.JoinPath("v1")
 
-	logger := logger.New()
-	logger.Info("graphql endpoint configured", zap.String("endpoint", viper.GetString(hasura2.GraphqlEndpointFlag)))
-	go hasura2.Initialize()
+	logger.Info("graphql endpoint configured", zap.String("endpoint", u.String()))
+	go hasura.Initialize(cfg.Endpoint, logger)
 
 	proxy := httputil.NewSingleHostReverseProxy(u)
 

@@ -1,9 +1,9 @@
 package txsvc
 
 import (
-	txpb "kwil/api/protobuf/tx/v0/gen/go"
+	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
 	"kwil/kwil/repository"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/pkg/pricing/pricer"
 	"kwil/x/execution/executor"
 )
@@ -11,7 +11,7 @@ import (
 type Service struct {
 	txpb.UnimplementedTxServiceServer
 
-	log logger.Logger
+	log log.Logger
 
 	dao repository.Queries
 
@@ -19,7 +19,7 @@ type Service struct {
 	pricing  pricer.Pricer
 }
 
-func NewService(queries repository.Queries, exec executor.Executor, logger logger.Logger) *Service {
+func NewService(queries repository.Queries, exec executor.Executor, logger log.Logger) *Service {
 	return &Service{
 		log:      logger.Named("txsvc"),
 		dao:      queries,

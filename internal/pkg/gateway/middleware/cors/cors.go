@@ -6,20 +6,18 @@ import (
 )
 
 const (
-	AllowMethods    = "GET, POST, PATCH, DELETE"
-	AllowHeaders    = "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType, X-Api-Key"
-	GatewayCorsFlag = "gateway-cors"
-	GatewayCorsEnv  = "GATEWAY_CORS"
+	AllowMethods = "GET, POST, PATCH, DELETE"
+	AllowHeaders = "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType, X-Api-Key"
 )
 
-func allowedOrigin(cors, origin string) bool {
+func allowedOrigin(cors []string, origin string) bool {
 	return true
 	/*
-		if cors == "*" {
+		if len(cors) == 1 && cors[0] == "*" {
 			return true
 		}
 		// allow multiple origins
-		for _, s := range strings.Split(cors, ",") {
+		for _, s := range cors {
 			if matched, _ := regexp.MatchString(s, origin); matched {
 				return true
 			}
@@ -28,7 +26,7 @@ func allowedOrigin(cors, origin string) bool {
 	*/
 }
 
-func MCors(cors string) *middleware.NamedMiddleware {
+func MCors(cors []string) *middleware.NamedMiddleware {
 	return &middleware.NamedMiddleware{
 		Name: "cors",
 		Middleware: func(h http.Handler) http.Handler {

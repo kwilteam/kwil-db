@@ -1,16 +1,16 @@
 package configsvc
 
 import (
-	pb "kwil/api/protobuf/config/v0/gen/go"
-	"kwil/pkg/logger"
+	pb "kwil/api/protobuf/kwil/config/v0/gen/go"
+	"kwil/pkg/log"
 )
 
 type Service struct {
 	pb.UnimplementedConfigServiceServer
-	log logger.Logger
+	log log.Logger
 }
 
-func NewService(logger logger.Logger) *Service {
+func NewService(logger log.Logger) *Service {
 	return &Service{
 		log: logger.Named("configsvc"),
 	}

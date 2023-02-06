@@ -65,7 +65,7 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 	//t.Helper()
 
 	container, err := setupKwild(ctx,
-		//WithDockerFile("kwild"),
+		//WithDockerFile("kwil"),
 		WithNetwork(kwilTestNetworkName),
 		WithPort(KwildPort),
 		WithEnv(envs),
@@ -73,10 +73,10 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 		WithWaitStrategy(wait.ForLog("grpc server started"),
 			wait.ForLog("deposits synced")))
 
-	require.NoError(t, err, "Could not start kwild container")
+	require.NoError(t, err, "Could not start kwil container")
 
 	t.Cleanup(func() {
-		require.NoError(t, container.Terminate(ctx), "Could not stop kwild container")
+		require.NoError(t, container.Terminate(ctx), "Could not stop kwil container")
 	})
 
 	err = container.ShowPortInfo(ctx)

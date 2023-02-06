@@ -3,7 +3,7 @@ package healthcheck
 import (
 	"context"
 	"go.uber.org/zap"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"time"
 )
 
@@ -26,10 +26,10 @@ type Registrar interface {
 
 type registrar struct {
 	Checks []Check
-	logger logger.Logger
+	logger log.Logger
 }
 
-func NewRegistrar(logger logger.Logger) *registrar {
+func NewRegistrar(logger log.Logger) *registrar {
 	return &registrar{logger: logger.Named("healthcheck.registrar")}
 }
 

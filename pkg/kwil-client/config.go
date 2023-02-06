@@ -3,7 +3,7 @@ package kwil_client
 import (
 	"kwil/pkg/fund"
 	"kwil/pkg/grpc/client"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 )
 
 type Config struct {
@@ -14,5 +14,5 @@ type Config struct {
 	// @yaiba TODO: a better name, maybe SettlementChain?
 	Fund fund.Config `mapstructure:"fund"`
 
-	Log logger.Config `mapstructure:"log"`
+	Log log.Config `mapstructure:"log"`
 }

@@ -129,7 +129,7 @@ func (d *EthDeployer) DeployEscrow(ctx context.Context, tokenAddr string) (commo
 
 	d.deployedEscrow = instance
 
-	fmt.Println("deployedEscrow=", deployedAddr.Hex())
+	fmt.Println("deployedEscrow =", deployedAddr.Hex())
 
 	//cAuth := d.getCallAuth(client, d.Account.Hex())
 	//tokenAddress, err := instance.EscrowToken(cAuth)
@@ -160,7 +160,7 @@ func (d *EthDeployer) DeployToken(ctx context.Context) (common.Address, error) {
 
 	d.deployedErc20 = instance
 
-	fmt.Println("deployedErc20=", deployedAddr.Hex())
+	fmt.Println("deployedErc20 =", deployedAddr.Hex())
 	cAuth := d.getCallAuth(ctx, d.Account.Hex())
 	balance, err := instance.BalanceOf(cAuth, d.Account)
 	if err != nil {

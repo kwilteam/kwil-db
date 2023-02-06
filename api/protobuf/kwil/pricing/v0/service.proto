@@ -1,0 +1,23 @@
+syntax = "proto3";
+package pricing.v0;
+option go_package = "kwil/api/protobuf/kwil/pricing/v0/gen/go";
+
+import "google/api/annotations.proto";
+import "kwil/common/v0/tx.proto";
+
+service PricingService {
+    rpc EstimateCost(EstimateRequest) returns (EstimateResponse) {
+        option (google.api.http) = {
+          post: "/api/v0/pricing/estimate"
+          body: "*"
+        };
+      }
+}
+
+message EstimateRequest {
+  common.v0.Tx tx = 1;
+}
+
+message EstimateResponse {
+  string cost = 1;
+}

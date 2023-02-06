@@ -27,14 +27,16 @@ spec:
       serviceAccountName: {{ include "kwild.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- include "kwild.initContainers.hasura" . | nindent 8 }}
       containers:
-        - name: kwild
+        - name: kwil
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: tcp-kwild
+            - name: tcp-kwil
               containerPort: {{ .Values.containerPorts.kwild }}
               protocol: TCP
           envFrom:

@@ -1,9 +1,0 @@
-syntax = "proto3";
-package tx.v0;
-option go_package = "kwil/api/protobuf/tx/v0/gen/go";
-
-message GetAddressRequest {}
-
-message GetAddressResponse {
-    string address = 1;
-}

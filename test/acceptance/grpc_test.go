@@ -9,21 +9,18 @@ import (
 	"kwil/pkg/chain/types"
 	"kwil/pkg/grpc/client"
 	kwil_client "kwil/pkg/kwil-client"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/test/adapters"
 	"kwil/test/specifications"
 	"kwil/test/utils/deployer"
 	"kwil/x/types/databases"
 	"math/big"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
-
-var buildKwilOnce sync.Once
 
 var remote = flag.Bool("remote", false, "run tests against remote environment")
 
@@ -56,7 +53,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		deployerPK string
 		// database schema file
 		dbSchemaPath string
-		// remote kwild endpoint
+		// remote kwil endpoint
 		remoteKwildAddr string
 		// remote blockchain endpoint
 		providerEndpoint string
@@ -98,7 +95,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		domination = big.NewInt(10000)
 	}
 
-	tLogger := logger.New(logger.Config{
+	tLogger := log.New(log.Config{
 		Level:       "debug",
 		OutputPaths: []string{"stdout"},
 	})
@@ -111,7 +108,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 
 	userPrivateKey, err := crypto.HexToECDSA(userPK)
 	if err != nil {
-		t.Fatal(fmt.Errorf("invalid user private key: %s", err))
+		t.Fatal(fmt.Errorf("invalid user private key: %w", err))
 	}
 	userAddr = crypto.PubkeyToAddress(userPrivateKey.PublicKey).Hex()
 
@@ -165,13 +162,13 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Endpoint: remoteKwildAddr,
 			},
 			Fund: *userFundConfig,
-			Log: logger.Config{
+			Log: log.Config{
 				Level:       "info",
 				OutputPaths: []string{"stdout"},
 			},
 		}
 		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, cltConfig, chainEnvs, remoteDBUrl)
-		// chain sync, wait kwild to register user
+		// chain sync, wait kwil to register user
 		time.Sleep(chainSyncWaitTime)
 		specifications.DatabaseDeploySpecification(t, ctx, grpcDriver)
 
@@ -210,7 +207,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 			Fund: *userFundConfig,
 		}
 		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, cltConfig, chainEnvs, remoteDBUrl)
-		// chain sync, wait kwild to register user
+		// chain sync, wait kwil to register user
 		time.Sleep(chainSyncWaitTime)
 		specifications.DatabaseDeploySpecification(t, ctx, grpcDriver)
 

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	accountpb "kwil/api/protobuf/account/v0/gen/go"
-	pricingpb "kwil/api/protobuf/pricing/v0/gen/go"
-	txpb "kwil/api/protobuf/tx/v0/gen/go"
+	accountpb "kwil/api/protobuf/kwil/account/v0/gen/go"
+	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
+	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
 	"kwil/internal/pkg/transport"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/x/types/accounts"
 	"kwil/x/types/databases"
 	"kwil/x/types/execution"
@@ -37,12 +37,12 @@ type Client struct {
 	txClt      txpb.TxServiceClient
 	pricingClt pricingpb.PricingServiceClient
 
-	log  logger.Logger
+	log  log.Logger
 	conn *grpc.ClientConn
 	cfg  *Config
 }
 
-func NewClient(ctx context.Context, cfg *Config, log logger.Logger, conn grpc.ClientConnInterface, infoClt accountpb.AccountServiceClient, txClt txpb.TxServiceClient, pricingClt pricingpb.PricingServiceClient) GrpcClient {
+func NewClient(ctx context.Context, cfg *Config, log log.Logger, conn grpc.ClientConnInterface, infoClt accountpb.AccountServiceClient, txClt txpb.TxServiceClient, pricingClt pricingpb.PricingServiceClient) GrpcClient {
 	return &Client{
 		infoClt:    infoClt,
 		txClt:      txClt,
@@ -53,7 +53,7 @@ func NewClient(ctx context.Context, cfg *Config, log logger.Logger, conn grpc.Cl
 	}
 }
 
-func New(ctx context.Context, cfg *Config, log logger.Logger) (*Client, error) {
+func New(ctx context.Context, cfg *Config, log log.Logger) (*Client, error) {
 	log.Debug("dail grpc server", zap.String("endpoint", cfg.Endpoint))
 	conn, err := transport.Dial(ctx, cfg.Endpoint)
 	if err != nil {

@@ -1,4 +1,4 @@
-#Location of image in AWS ECR 
+#Location of image in AWS ECR
 
 image:
   repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwil-gateway

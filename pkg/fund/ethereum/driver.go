@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/pkg/fund"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"math/big"
 	"sync"
 )
@@ -13,13 +13,13 @@ import (
 type Driver struct {
 	RpcUrl string
 
-	logger     logger.Logger
+	logger     log.Logger
 	connOnce   sync.Once
 	Fund       fund.IFund
 	fundConfig *fund.Config
 }
 
-func New(rpcUrl string, logger logger.Logger) *Driver {
+func New(rpcUrl string, logger log.Logger) *Driver {
 	return &Driver{
 		logger: logger,
 		RpcUrl: rpcUrl,

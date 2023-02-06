@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"github.com/spf13/viper"
 	"io"
 	http2 "kwil/internal/pkg/test/http"
 	"net/http"
@@ -19,9 +18,9 @@ func TestAuth_ServeHTTP(t *testing.T) {
 		r *http.Request
 	}
 
-	km, _ := NewKeyManager(strings.NewReader(`{"keys": ["keya"]}`))
-	testData := "dummy served"
 	healthcheckKey := "healthcheckkey"
+	km, _ := NewKeyManager(strings.NewReader(`{"keys": ["keya"]}`), healthcheckKey)
+	testData := "dummy served"
 
 	tests := []struct {
 		name    string
@@ -56,7 +55,6 @@ func TestAuth_ServeHTTP(t *testing.T) {
 				r: func() *http.Request {
 					req := httptest.NewRequest(http.MethodGet, "/", nil)
 					req.Header.Set(ApiKeyHeader, healthcheckKey)
-					viper.Set(HealthCheckApiKeyValueFlag, healthcheckKey)
 					return req
 				}(),
 			},

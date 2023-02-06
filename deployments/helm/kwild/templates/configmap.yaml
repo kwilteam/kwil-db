@@ -5,20 +5,20 @@ metadata:
   labels:
     {{- include "kwild.labels" . | nindent 4 }}
 data:
-  KWIL_FUND_CHAIN_CODE: {{ .Values.kwild.fund.chainCode | quote }}
-  KWIL_FUND_BLOCK_CONFIRMATION: {{ .Values.kwild.fund.blockConfirmation | quote }}
-  KWIL_FUND_RECONNECT_INTERVAL: {{ .Values.kwild.fund.reconnectInterval | quote}}
-  KWIL_FUND_POOL_ADDRESS: {{ .Values.kwild.fund.poolAddress | quote }}
-  KWIL_FUND_RPC_URL: {{ .Values.kwild.fund.rpcUrl | quote }}
-  KWIL_FUND_WALLET: {{ .Values.kwild.fund.wallet | quote }}
-  KWIL_LOG_LEVEL: {{ .Values.kwild.log.level | quote }}
-  KWIL_LOG_OUTPUT_PATHS: {{ .Values.kwild.log.outputPaths | join "," | quote }}
+  KWILD_FUND_CHAIN_CODE: {{ .Values.kwild.fund.chainCode | quote }}
+  KWILD_FUND_BLOCK_CONFIRMATION: {{ .Values.kwild.fund.blockConfirmation | quote }}
+  KWILD_FUND_RECONNECT_INTERVAL: {{ .Values.kwild.fund.reconnectInterval | quote}}
+  KWILD_FUND_POOL_ADDRESS: {{ .Values.kwild.fund.poolAddress | quote }}
+  KWILD_FUND_RPC_URL: {{ .Values.kwild.fund.rpcUrl | quote }}
+  KWILD_FUND_WALLET: {{ .Values.kwild.fund.wallet | quote }}
+  KWILD_LOG_LEVEL: {{ .Values.kwild.log.level | quote }}
+  KWILD_LOG_OUTPUT_PATHS: {{ .Values.kwild.log.outputPaths | join "," | quote }}
   {{- $graphqlHost := printf "%s-hasura" .Release.Name }}
-  KWIL_GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) | quote }}
+  KWILD_GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) | quote }}
   {{- if and (not .Values.hasura.postgresql.enabled) (.Values.global.postgres.enabled) }}
-  KWIL_DB_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host (int .Values.global.postgres.port) .Values.global.kwild.database }}
+  KWILD_DB_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host (int .Values.global.postgres.port) .Values.global.kwild.database }}
   {{- else -}}
   {{- $pgHost := printf "%s-postgresql" .Release.Name -}}
   {{- $pgPort := int .Values.hasura.postgresql.primary.service.ports.postgresql }}
-  KWIL_DB_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgresql.auth.username .Values.global.postgresql.auth.password $pgHost $pgPort .Values.global.kwild.database }}
+  KWILD_DB_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgresql.auth.username .Values.global.postgresql.auth.password $pgHost $pgPort .Values.global.kwild.database }}
   {{- end }}

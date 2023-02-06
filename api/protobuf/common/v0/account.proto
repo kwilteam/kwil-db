@@ -1,4 +1,0 @@
-syntax = "proto3";
-package common.v0;
-option go_package = "kwil/api/protobuf/common/v0/gen/go";
-

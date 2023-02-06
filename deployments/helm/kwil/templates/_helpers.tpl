@@ -70,6 +70,42 @@ configMap volume
 {{- end }}
 
 {{/*
+initContainers for kwild depencency
+*/}}
+{{- define "kwil.initContainers.kwild" -}}
+- name: init-wait-kwild-service
+  image: busybox:1.35.0
+  command:
+    - sh
+    - -c
+    - |
+      {{- $service := printf "%s-kwild" .Release.Name }}
+      echo try resolve dns name "{{ $service }}"
+      until nslookup {{ $service }}.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local
+      do
+        echo waiting for {{ $service }}
+        sleep 2
+      done
+- name: init-wait-kwild
+  image: busybox:1.35.0
+  envFrom:
+  - configMapRef:
+      name: {{ include "kwil.fullname" . }}
+  command:
+    - sh
+    - -c
+    - |
+      {{- $host := printf "%s-kwild" .Release.Name }}
+      {{- $port := .Values.kwild.service.ports.kwild }}
+      echo scan {{ $host }}:{{ $port }}
+      for i in $(seq 1 300);
+      do
+        nc -zvw1 {{ $host}} {{ $port }} && exit 0 || sleep 3
+      done
+      exit 1
+{{- end }}
+
+{{/*
 container probes
 */}}
 {{- define "kwil.probes" -}}
@@ -79,7 +115,7 @@ livenessProbe:
     port: {{ .Values.containerPorts.kwil }}
     httpHeaders:
     - name: X-Api-Key
-      value: {{ .Values.kwil.healthcheckKey | sha256sum }}
+      value: {{ .Values.kwil.server.healthcheckKey | sha256sum }}
   initialDelaySeconds: 15
   timeoutSeconds: 1
   periodSeconds: 15
@@ -89,7 +125,7 @@ readinessProbe:
     port: {{ .Values.containerPorts.kwil }}
     httpHeaders:
     - name: X-Api-Key
-      value: {{ .Values.kwil.healthcheckKey | sha256sum }}
+      value: {{ .Values.kwil.server.healthcheckKey | sha256sum }}
   initialDelaySeconds: 5
   timeoutSeconds: 1
   periodSeconds: 15

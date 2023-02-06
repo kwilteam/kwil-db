@@ -11,13 +11,13 @@ tasks:
         --go_out=. --go_opt module=kwil \
         --go-grpc_out=. --go-grpc_opt module=kwil \
         --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/account/v0/api \
-        api/protobuf/account/v0/*.proto
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/api/v0/api \
+        api/protobuf/kwil/account/v0/*.proto
     sources:
-      - api/protobuf/account/v0/*.proto
+      - api/protobuf/kwil/account/v0/*.proto
     generates:
-      - api/protobuf/account/v0/gen/go/*
-      - api/openapi-spec/account/v0/*
+      - api/protobuf/kwil/account/v0/gen/go/*
+      - api/openapi-spec/api/v0/*
 
   compile:pricing:
     desc: Compiles the protobuf for the Pricing Service
@@ -29,13 +29,13 @@ tasks:
         --go_out=. --go_opt module=kwil \
         --go-grpc_out=. --go-grpc_opt module=kwil \
         --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/pricing/v0/api \
-        api/protobuf/pricing/v0/*.proto
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/api/v0/api \
+        api/protobuf/kwil/pricing/v0/*.proto
     sources:
-      - api/protobuf/pricing/v0/*.proto
+      - api/protobuf/kwil/pricing/v0/*.proto
     generates:
-      - api/protobuf/pricing/v0/gen/go/*
-      - api/openapi-spec/pricing/v0/*
+      - api/protobuf/kwil/pricing/v0/gen/go/*
+      - api/openapi-spec/api/v0/*
 
   compile:config:
     desc: Compiles the protobuf for Config service
@@ -47,13 +47,13 @@ tasks:
         --go_out=. --go_opt module=kwil \
         --go-grpc_out=. --go-grpc_opt module=kwil \
         --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/config/v0/api \
-        api/protobuf/config/v0/*.proto
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/api/v0/api \
+        api/protobuf/kwil/config/v0/*.proto
     sources:
-      - api/protobuf/config/v0/*.proto
+      - api/protobuf/kwil/config/v0/*.proto
     generates:
-      - api/protobuf/config/v0/gen/go/*
-      - api/openapi-spec/config/v0/*
+      - api/protobuf/kwil/config/v0/gen/go/*
+      - api/openapi-spec/api/v0/*
 
 
   compile:tx:
@@ -66,13 +66,13 @@ tasks:
         --go_out=. --go_opt module=kwil \
         --go-grpc_out=. --go-grpc_opt module=kwil \
         --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/tx/v0/api \
-        api/protobuf/tx/v0/*.proto
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/api/v0/api \
+        api/protobuf/kwil/tx/v0/*.proto
     sources:
-      - api/protobuf/tx/v0/*.proto
+      - api/protobuf/kwil/tx/v0/*.proto
     generates:
-      - api/protobuf/tx/v0/gen/go/*
-      - api/openapi-spec/tx/v0/*
+      - api/protobuf/kwil/tx/v0/gen/go/*
+      - api/openapi-spec/api/v0/*
 
   compile:common:
     desc: Compiles common protobufs
@@ -81,11 +81,11 @@ tasks:
         protoc -I api/protobuf \
         --go_out=. --go_opt module=kwil \
         --go-grpc_out=. --go-grpc_opt module=kwil \
-        api/protobuf/common/v0/*.proto
+        api/protobuf/kwil/common/v0/*.proto
     sources:
-      - api/protobuf/common/v0/*.proto
+      - api/protobuf/kwil/common/v0/*.proto
     generates:
-      - api/protobuf/common/v0/gen/go/*
+      - api/protobuf/kwil/common/v0/gen/go/*
 
 
   compile:tspb:

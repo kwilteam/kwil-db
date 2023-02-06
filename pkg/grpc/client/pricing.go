@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
-	commonpb "kwil/api/protobuf/common/v0/gen/go"
-	pb "kwil/api/protobuf/pricing/v0/gen/go"
+	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
+	pb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
 	"kwil/x/types/transactions"
 	"kwil/x/utils/serialize"
 )

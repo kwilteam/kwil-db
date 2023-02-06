@@ -1,0 +1,14 @@
+syntax = "proto3";
+package tx.v0;
+option go_package = "kwil/api/protobuf/kwil/tx/v0/gen/go";
+
+import "kwil/common/v0/tx.proto";
+
+message BroadcastRequest {
+    common.v0.Tx tx = 1;
+}
+
+message BroadcastResponse {
+    bytes hash = 1;
+    string fee = 2;
+}

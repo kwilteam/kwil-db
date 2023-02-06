@@ -92,7 +92,11 @@ hasura:
   enableConsole: true
   devMode: true
   logTypes: startup, http-log, webhook-log, websocket-log, query-log
-
+  probes:
+    liveInitialDelaySeconds: 4
+    readyInitialDelaySeconds: 3
+    timeoutSeconds: 1
+    periodSeconds: 15
 # overwrite postgresql setting
 postgresql:
   enabled: true # for dependency

@@ -1,19 +1,19 @@
 package accountsvc
 
 import (
-	pb "kwil/api/protobuf/account/v0/gen/go"
+	pb "kwil/api/protobuf/kwil/account/v0/gen/go"
 	"kwil/kwil/repository"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 )
 
 type Service struct {
 	pb.UnimplementedAccountServiceServer
 
 	dao repository.Queries
-	log logger.Logger
+	log log.Logger
 }
 
-func NewService(queries repository.Queries, logger logger.Logger) *Service {
+func NewService(queries repository.Queries, logger log.Logger) *Service {
 	return &Service{
 		log: logger.Named("accountsvc"),
 		dao: queries,

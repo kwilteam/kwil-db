@@ -37,8 +37,8 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.Int64("fund.block_confirmation", 0, "the block confirmation of the funding pool")
 
 	// log flags
-	fs.String("log.level", "", "the level of the Kwil logger")
-	fs.StringSlice("log.output_paths", []string{}, "the output path of the logger (default: ['stdout']), use comma to separate multiple output paths")
+	fs.String("log.level", "", "the level of the Kwil log")
+	fs.StringSlice("log.output_paths", []string{}, "the output path of the log (default: ['stdout']), use comma to separate multiple output paths")
 }
 
 // BindGlobalEnv binds the global flags to the environment variables.

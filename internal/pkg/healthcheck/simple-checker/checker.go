@@ -6,7 +6,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	healthcheck2 "kwil/internal/pkg/healthcheck"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 )
 
 var statusMap = map[string]string{
@@ -17,10 +17,10 @@ var statusMap = map[string]string{
 
 type SimpleChecker struct {
 	Ck     health.Checker
-	logger logger.Logger
+	logger log.Logger
 }
 
-func New(logger logger.Logger) *SimpleChecker {
+func New(logger log.Logger) *SimpleChecker {
 	return &SimpleChecker{logger: logger.Named("healthcheck.simple-checker")}
 }
 

@@ -1,7 +1,7 @@
 package pricingsvc
 
 import (
-	pb "kwil/api/protobuf/pricing/v0/gen/go"
+	pb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
 	"kwil/pkg/pricing/pricer"
 )
 

@@ -3,8 +3,8 @@ on:
     branches: [ 'test/*' ]
   workflow_dispatch:
     branches: [ 'test/*' ]
-    
-name: kwild-aws-push
+
+name: kwil-aws-push
 
 jobs:
   deploy:

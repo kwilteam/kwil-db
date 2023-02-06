@@ -5,21 +5,21 @@ import (
 	"kwil/pkg/chain/client/dto"
 	"kwil/pkg/chain/provider"
 	"kwil/pkg/chain/types"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"time"
 )
 
 // ChainClient implements the ChainClient interface
 type chainClient struct {
 	provider              provider.ChainProvider
-	log                   logger.Logger
+	log                   log.Logger
 	reconnectInterval     time.Duration
 	requiredConfirmations int64
 	chainCode             types.ChainCode
 	lastBlock             int64
 }
 
-func NewChainClientExplicit(conf *dto.Config, logger logger.Logger) (client.ChainClient, error) {
+func NewChainClientExplicit(conf *dto.Config, logger log.Logger) (client.ChainClient, error) {
 	prov, err := provider.New(conf.RpcUrl, types.ChainCode(conf.ChainCode))
 	if err != nil {
 		return nil, err

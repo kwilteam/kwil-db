@@ -90,8 +90,22 @@ containerPorts:
   kwil: 8082
 
 kwil:
-  cors: ""
-  healthcheckKey: "this should be rotated every deployment"
+  server:
+    addr: ":8082"
+    cors: "*"
+    healthcheckKey: "this should be rotated every deployment"
+    keyFile: "/app/keys.json"
+  log:
+    level: "info"
+    outputPaths:
+      - "stdout"
+  graphql:
+    endpoint: ""
+  probes:
+    liveInitialDelaySeconds: 6
+    readyInitialDelaySeconds: 5
+    timeoutSeconds: 1
+    periodSeconds: 15
 
 # overwrite postgresql global setting
 global:

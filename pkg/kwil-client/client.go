@@ -6,7 +6,7 @@ import (
 	"kwil/pkg/fund"
 	"kwil/pkg/fund/ethereum"
 	grpcClt "kwil/pkg/grpc/client"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 )
 
 type Client struct {
@@ -18,7 +18,7 @@ type Client struct {
 }
 
 func New(ctx context.Context, cfg *Config) (*Client, error) {
-	log := logger.New(cfg.Log)
+	log := log.New(cfg.Log)
 	chainClient, err := ethereum.NewClient(&cfg.Fund, log)
 	if err != nil {
 		return nil, err

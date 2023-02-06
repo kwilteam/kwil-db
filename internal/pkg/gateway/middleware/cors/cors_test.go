@@ -14,7 +14,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 	}
 	type args struct {
 		r    *http.Request
-		cors string
+		cors []string
 	}
 
 	testData := "dummy served"
@@ -38,7 +38,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 					req.Header.Set("Origin", testOrigin)
 					return req
 				}(),
-				cors: "*",
+				cors: []string{"*"},
 			},
 			wantHeader: map[string]string{
 				"Access-Control-Allow-Origin":  testOrigin,
@@ -57,7 +57,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 					req.Header.Set("Origin", testOrigin)
 					return req
 				}(),
-				cors: testOrigins,
+				cors: []string{testOrigins},
 			},
 			wantHeader: map[string]string{
 				"Access-Control-Allow-Origin":  testOrigin,
@@ -76,7 +76,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 					req.Header.Set("Origin", testOrigin)
 					return req
 				}(),
-				cors: "",
+				cors: []string{""},
 			},
 			wantHeader: map[string]string{},
 		},
@@ -90,7 +90,7 @@ func TestCors_ServeHTTP(t *testing.T) {
 					req := httptest.NewRequest(http.MethodGet, "/", nil)
 					return req
 				}(),
-				cors: "",
+				cors: []string{""},
 			},
 			wantBody: testData,
 		},
@@ -128,11 +128,11 @@ func TestCors_ServeHTTP(t *testing.T) {
 
 func Test_allowedOrigin(t *testing.T) {
 	type args struct {
-		cors   string
+		cors   []string
 		origin string
 	}
-	testOrigin := "http://bar.example"
-	testOrigins := "http://foo.example,http://bar.example"
+	testOrigin1 := "http://bar.example"
+	testOrigin2 := "http://foo.example"
 	tests := []struct {
 		name string
 		args args
@@ -141,31 +141,31 @@ func Test_allowedOrigin(t *testing.T) {
 		{
 			name: "*",
 			args: args{
-				cors:   "*",
-				origin: testOrigin,
+				cors:   []string{"*"},
+				origin: testOrigin1,
 			},
 			want: true,
 		},
 		{
 			name: "allowed with one origin",
 			args: args{
-				cors:   testOrigin,
-				origin: testOrigin,
+				cors:   []string{testOrigin1},
+				origin: testOrigin1,
 			},
 			want: true,
 		},
 		{
 			name: "allowed with multi origins",
 			args: args{
-				cors:   testOrigins,
-				origin: testOrigin,
+				cors:   []string{testOrigin1, testOrigin2},
+				origin: testOrigin1,
 			},
 			want: true,
 		},
 		{
 			name: "not allowed with one origin",
 			args: args{
-				cors:   testOrigin,
+				cors:   []string{testOrigin1},
 				origin: "http://baz.example",
 			},
 			want: false,
@@ -173,7 +173,7 @@ func Test_allowedOrigin(t *testing.T) {
 		{
 			name: "not allowed with multi origins",
 			args: args{
-				cors:   testOrigins,
+				cors:   []string{testOrigin1, testOrigin2},
 				origin: "http://baz.example",
 			},
 			want: false,

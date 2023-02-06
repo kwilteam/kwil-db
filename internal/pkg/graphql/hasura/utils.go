@@ -2,10 +2,10 @@ package hasura
 
 import (
 	"fmt"
+	"go.uber.org/zap"
+	"kwil/pkg/log"
 	"strings"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 func snakeCase(name string) string {
@@ -33,17 +33,18 @@ func queryToExplain(query string) string {
 }
 
 // Initialize ensure Hasura is initialized, add default source('default') and schema
-func Initialize() {
+func Initialize(endpoint string, logger log.Logger) {
 	for {
 		time.Sleep(3 * time.Second)
-		client := NewClient(viper.GetString(GraphqlEndpointFlag))
+		client := NewClient(endpoint)
 		err := client.AddDefaultSourceAndSchema()
+		logger.Debug("try to initialize Hasura", zap.Error(err))
 		if err != nil && strings.Contains(err.Error(), "connection refused") {
-			fmt.Println("wait for Hasura running...")
+			logger.Warn("wait for Graphql running...")
 			continue
 		}
 		// ignore other error
-		fmt.Println("Hasura initialized")
+		logger.Info("Graphql initialized")
 		break
 	}
 }

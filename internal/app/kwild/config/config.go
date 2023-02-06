@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"kwil/pkg/fund"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/pkg/utils"
 	"os"
 	"path/filepath"
@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	EnvPrefix         = "KWIL"
+	EnvPrefix         = "KWILd"
 	DefaultConfigDir  = ".kwild"
 	DefaultConfigName = "config"
 	DefaultConfigType = "yaml"
@@ -46,16 +46,15 @@ type ServerConfig struct {
 	Addr string `mapstructure:"addr"`
 }
 
-type Config struct {
+type AppConfig struct {
 	Server  ServerConfig   `mapstructure:"server"`
-	Log     logger.Config  `mapstructure:"log"`
+	Log     log.Config     `mapstructure:"log"`
 	Fund    fund.Config    `mapstructure:"fund"`
 	Db      PostgresConfig `mapstructure:"db"`
 	Graphql GraphqlConfig  `mapstructure:"graphql"`
 }
 
 var ConfigFile string
-var AppConfig Config
 
 // BindGlobalFlags binds the global flags to the command.
 func BindGlobalFlags(fs *pflag.FlagSet) {
@@ -63,8 +62,8 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String("server.addr", "", "the address of the Kwil server")
 
 	// log flags
-	fs.String("log.level", "", "the level of the Kwil logger (default: config)")
-	fs.StringSlice("log.output_paths", []string{}, "the output path of the Kwil logger (default: ['stdout']), use comma to separate multiple output paths")
+	fs.String("log.level", "", "the level of the Kwil log (default: config)")
+	fs.StringSlice("log.output_paths", []string{}, "the output path of the Kwil log (default: ['stdout']), use comma to separate multiple output paths")
 
 	// db flags
 	fs.String("db.host", "", "the host of the postgres database")
@@ -149,7 +148,7 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	viper.SetDefault("fund.block_confirmation", 12)
 }
 
-func LoadConfig() (cfg *Config, err error) {
+func LoadConfig() (cfg *AppConfig, err error) {
 	if ConfigFile != "" {
 		viper.SetConfigFile(ConfigFile)
 		fmt.Fprintln(os.Stdout, "using config file:", viper.ConfigFileUsed())

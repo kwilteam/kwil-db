@@ -7,7 +7,11 @@ metadata:
 data:
   {{- $grpcHost := include "kwild.fullname" .Subcharts.kwild }}
   {{ $graphqlHost := printf "%s-hasura" .Release.Name -}}
-  GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.kwild.hasura.service.ports.hasura) | quote }}
-  GRPC_ENDPOINT: {{ printf "%s:%d" $grpcHost (int .Values.kwild.service.ports.kwild) | quote }}
-  GATEWAY_CORS: {{ .Values.kwil.cors | quote | default "" }}
-  HEALTHCHECK_KEY: {{ .Values.kwil.healthcheckKey | sha256sum }}
+  KWILGW_GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.kwild.hasura.service.ports.hasura) | quote }}
+  KWILGW_KWILD_ENDPOINT: {{ printf "%s:%d" $grpcHost (int .Values.kwild.service.ports.kwild) | quote }}
+  KWILGW_LOG_LEVEL: {{ .Values.kwil.log.level | quote }}
+  KWILGW_LOG_OUTPUT_PATHS: {{ .Values.kwil.log.outputPaths | join "," | quote }}
+  KWILGW_SERVER_ADDR: {{ .Values.kwil.server.addr | quote }}
+  KWILGW_SERVER_CORS: {{ .Values.kwil.server.cors | quote }}
+  KWILGW_SERVER_HEALTHCHECK_KEY: {{ .Values.kwil.server.healthcheckKey | sha256sum }}
+  KWILGW_SERVER_KEY_FILE: {{ .Values.kwil.server.keyFile | quote }}

@@ -15,7 +15,7 @@ func (s *executor) Track(db *databases.Database[anytype.KwilAny]) error {
 		// track tables
 		err := s.hasura.TrackTable(hasura.DefaultSource, schemaName, table.Name)
 		if err != nil {
-			return fmt.Errorf(`error tracking tables in Hasura on database "%s": %w`, db.GetSchemaName(), err)
+			return fmt.Errorf(`error tracking tables in Graphql on database "%s": %w`, db.GetSchemaName(), err)
 		}
 	}
 

@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	pb "kwil/api/protobuf/account/v0/gen/go"
+	pb "kwil/api/protobuf/kwil/account/v0/gen/go"
 	"kwil/x/types/accounts"
 )
 

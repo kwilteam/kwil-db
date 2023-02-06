@@ -6,16 +6,16 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/health/grpc_health_v1"
-	accountpb "kwil/api/protobuf/account/v0/gen/go"
-	pricingpb "kwil/api/protobuf/pricing/v0/gen/go"
-	txpb "kwil/api/protobuf/tx/v0/gen/go"
+	accountpb "kwil/api/protobuf/kwil/account/v0/gen/go"
+	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
+	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
 	"kwil/internal/app/kwild/config"
 	"kwil/internal/controller/grpc/v0/accountsvc"
 	"kwil/internal/controller/grpc/v0/healthsvc"
 	"kwil/internal/controller/grpc/v0/pricingsvc"
 	"kwil/internal/controller/grpc/v0/txsvc"
 	"kwil/pkg/grpc/server"
-	"kwil/pkg/logger"
+	"kwil/pkg/log"
 	"kwil/x/deposits"
 	"os"
 	"os/signal"
@@ -24,7 +24,7 @@ import (
 
 type Server struct {
 	cfg        config.ServerConfig
-	logger     logger.Logger
+	logger     log.Logger
 	txSvc      *txsvc.Service
 	accountSvc *accountsvc.Service
 	pricingSvc *pricingsvc.Service
@@ -33,7 +33,7 @@ type Server struct {
 }
 
 func New(cfg config.ServerConfig, txSvc *txsvc.Service, accSvc *accountsvc.Service, prcSvc *pricingsvc.Service,
-	healthSvc *healthsvc.Server, depositer deposits.Depositer, logger logger.Logger) *Server {
+	healthSvc *healthsvc.Server, depositer deposits.Depositer, logger log.Logger) *Server {
 	return &Server{
 		cfg:        cfg,
 		logger:     logger,
@@ -106,6 +106,6 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 //func (s *Server) Stop() error {
-//	s.logger.Info("stopping server")
+//	s.log.Info("stopping server")
 //	return nil
 //}
