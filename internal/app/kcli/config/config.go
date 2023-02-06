@@ -17,7 +17,7 @@ const (
 	EnvPrefix         = "KCLI"
 	DefaultConfigName = "config"
 	DefaultConfigDir  = ".kwil_cli"
-	DefaultConfigType = "yaml"
+	DefaultConfigType = "toml"
 )
 
 var ConfigFile string
@@ -35,6 +35,10 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String("fund.rpc_url", "", "the provider url of the funding pool chain")
 	fs.Int64("fund.reconnect_interval", 0, "the reconnect interval of the funding pool")
 	fs.Int64("fund.block_confirmation", 0, "the block confirmation of the funding pool")
+
+	// log flags
+	fs.String("log.level", "", "the level of the Kwil logger")
+	fs.StringSlice("log.output_paths", []string{}, "the output path of the logger (default: ['stdout']), use comma to separate multiple output paths")
 }
 
 // BindGlobalEnv binds the global flags to the environment variables.
@@ -61,6 +65,14 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	viper.BindPFlag("fund.reconnect_interval", fs.Lookup("fund.reconnect_interval"))
 	viper.BindEnv("fund.block_confirmation")
 	viper.BindPFlag("fund.block_confirmation", fs.Lookup("fund.block_confirmation"))
+
+	// log key & env
+	viper.BindEnv("log.level")
+	viper.BindPFlag("log.level", fs.Lookup("log.level"))
+	viper.SetDefault("log.level", "info")
+	viper.BindEnv("log.output_paths")
+	viper.BindPFlag("log.output_paths", fs.Lookup("log.output_paths"))
+	viper.SetDefault("log.output_paths", []string{"stdout"})
 }
 
 func LoadConfig() {
@@ -89,11 +101,11 @@ func LoadConfig() {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found; ignore error if desired
-			fmt.Fprintln(os.Stdout, "Config file not found:", viper.ConfigFileUsed())
+			// cfg file not found; ignore error if desired
+			fmt.Fprintln(os.Stdout, "cfg file not found:", viper.ConfigFileUsed())
 
 		} else {
-			// Config file was found but another error was produced
+			// cfg file was found but another error was produced
 			fmt.Fprintln(os.Stderr, "Error loading config file :", err)
 		}
 	}

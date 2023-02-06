@@ -52,7 +52,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create the name of the service info to use
+Create the name of the service config to use
 */}}
 {{- define "hasura.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}

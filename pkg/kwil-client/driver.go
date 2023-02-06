@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"kwil/pkg/fund"
 	"kwil/pkg/sql/sqlclient"
 	anytype "kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
@@ -13,22 +12,30 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
 // Driver is a driver for the grpc client for integration tests
 type Driver struct {
-	Addr string
+	cfg *Config
 
-	connOnce   sync.Once
-	conn       *grpc.ClientConn
-	client     *Client
-	fundConfig *fund.Config
+	connOnce sync.Once
+	conn     *grpc.ClientConn
+	client   *Client
+
+	// TODO remove this, use graphql
+	dbUrl string
+}
+
+func NewDriver(cfg *Config, dbUrl string) *Driver {
+	return &Driver{
+		cfg:   cfg,
+		dbUrl: dbUrl,
+	}
 }
 
 func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) error {
-	client, err := d.getClient()
+	client, err := d.getClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -38,7 +45,7 @@ func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[[]by
 }
 
 func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
-	client, err := d.getClient()
+	client, err := d.getClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -56,7 +63,7 @@ func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName 
 }
 
 func (d *Driver) ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []any) error {
-	client, err := d.getClient()
+	client, err := d.getClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -74,7 +81,7 @@ func (d *Driver) ExecuteQuery(ctx context.Context, dbName string, queryName stri
 }
 
 func (d *Driver) DropDatabase(ctx context.Context, dbName string) error {
-	client, err := d.getClient()
+	client, err := d.getClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
@@ -84,7 +91,7 @@ func (d *Driver) DropDatabase(ctx context.Context, dbName string) error {
 }
 
 func (d *Driver) QueryDatabase(ctx context.Context, _sql string, args ...interface{}) (*sql.Row, error) {
-	client, err := sqlclient.Open(viper.GetString("PG_DATABASE_URL"), 3*time.Second)
+	client, err := sqlclient.Open(d.dbUrl, 3*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sql client: %w", err)
 	}
@@ -100,24 +107,13 @@ func (d *Driver) Close() error {
 	return nil
 }
 
-func (d *Driver) GetFundConfig() *fund.Config {
-	return d.fundConfig
-}
-
-func (d *Driver) SetFundConfig(cfg *fund.Config) {
-	d.fundConfig = cfg
-}
-
-func (d *Driver) getClient() (*Client, error) {
+func (d *Driver) getClient(ctx context.Context) (*Client, error) {
 	var err error
 	d.connOnce.Do(func() {
-		d.conn, err = grpc.Dial(d.Addr, grpc.WithInsecure())
-		//d.conn, err = grpc.Dial(d.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		d.client, err = New(ctx, d.cfg)
 		if err != nil {
 			return
 		}
-		//d.client, err = New(d.conn, d.fundConfig)
-		d.client, err = New(context.Background(), nil)
 	})
 	return d.client, err
 }

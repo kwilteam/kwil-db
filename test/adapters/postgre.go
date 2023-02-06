@@ -95,7 +95,7 @@ func (c *postgresContainer) test(ctx context.Context) error {
 		if err != nil {
 			break
 		}
-		fmt.Println("got info ", accountAddress)
+		fmt.Println("got config ", accountAddress)
 	}
 
 	return nil

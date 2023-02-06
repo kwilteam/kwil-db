@@ -3,7 +3,6 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"kwil/pkg/kwil-client"
@@ -54,13 +53,13 @@ func setupKwild(ctx context.Context, opts ...containerOption) (*kwildContainer, 
 	}}, nil
 }
 
-func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[string]string, dbUrl string) *kwil_client.Driver {
+func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, cfg *kwil_client.Config, envs map[string]string, dbUrl string) *kwil_client.Driver {
 	t.Helper()
 
 	if addr != "" {
-		viper.Set("PG_DATABASE_URL", dbUrl)
 		t.Logf("create grpc driver to %s", addr)
-		return &kwil_client.Driver{Addr: addr}
+		cfg.Node.Endpoint = addr
+		return kwil_client.NewDriver(cfg, dbUrl)
 	}
 
 	dbFiles := map[string]string{
@@ -76,14 +75,15 @@ func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, envs map[stri
 	exposedPgUrl := fmt.Sprintf(
 		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, exposedEndpoint, kwildDatabase)
 
-	envs["PG_DATABASE_URL"] = unexposedPgUrl
+	envs["KWIL_DB_URL"] = unexposedPgUrl
+	envs["KWIL_LOG_LEVEL"] = "info"
+	envs["KWIL_SERVER_ADDR"] = ":50051"
 
 	// for specification verify
-	viper.Set("PG_DATABASE_URL", exposedPgUrl)
-
 	kc := StartKwildDockerService(t, ctx, envs)
 	endpoint, err := kc.ExposedEndpoint(ctx)
 	require.NoError(t, err)
 	t.Logf("create grpc driver to %s", endpoint)
-	return &kwil_client.Driver{Addr: endpoint}
+	cfg.Node.Endpoint = endpoint
+	return kwil_client.NewDriver(cfg, exposedPgUrl)
 }

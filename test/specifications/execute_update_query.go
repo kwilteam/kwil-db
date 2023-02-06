@@ -29,7 +29,7 @@ func ExecuteDBUpdateSpecification(t *testing.T, ctx context.Context, execute Exe
 	userQueryInput := []any{"name", userQ.Name, "age", userQ.Age, "where_name", userQ.Name}
 
 	//When i execute query to database
-	err := execute.ExecuteQuery(ctx, db.Owner, db.Name, userQueryName, userQueryInput)
+	err := execute.ExecuteQuery(ctx, db.Name, userQueryName, userQueryInput)
 	assert.NoError(t, err)
 
 	rawSql := fmt.Sprintf("SELECT id, name, age, wallet, boolean FROM %s WHERE id = $1", qualifiedUserTableName)

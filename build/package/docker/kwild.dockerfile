@@ -7,20 +7,12 @@ RUN echo -e "[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/" >> /r
 RUN cat /root/.gitconfig
 RUN mkdir /root/.ssh && echo "StrictHostKeyChecking no " > /root/.ssh/config
 
-## COPY ./ksl/go.mod ./ksl/go.sum ./ksl/
 COPY go.mod go.sum ./
 ## --mount will work with docker buildkit(testcontainers)
 ##RUN --mount=type=ssh,id=kwil  \
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o ./dist/kwild ./cmd/kwild
-COPY *.json ./dist/
-COPY *.yaml ./dist/
-COPY *.yml ./dist/
-COPY ./keys/ ./dist/keys/
-COPY ./abi/ ./dist/abi/
-COPY meta-config.yaml ./dist/meta-config.yaml
-COPY ./config/ ./dist/config/
 
 FROM scratch
 WORKDIR /app

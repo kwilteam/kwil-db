@@ -2,7 +2,6 @@ package specifications
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"github.com/stretchr/testify/assert"
 	"kwil/pkg/fund"
 	"math/big"
@@ -10,7 +9,7 @@ import (
 )
 
 type ApproveTokenDsl interface {
-	ApproveToken(ctx context.Context, from *ecdsa.PrivateKey, spender string, amount *big.Int) error
+	ApproveToken(ctx context.Context, spender string, amount *big.Int) error
 	GetAllowance(ctx context.Context, from string, spender string) (*big.Int, error)
 	GetFundConfig() *fund.Config
 }
@@ -24,7 +23,7 @@ func ApproveTokenSpecification(t *testing.T, ctx context.Context, approve Approv
 	chainCfg := approve.GetFundConfig()
 
 	//When i approve validator to spend my tokens
-	err := approve.ApproveToken(ctx, chainCfg.Wallet, chainCfg.PoolAddress, amount)
+	err := approve.ApproveToken(ctx, chainCfg.PoolAddress, amount)
 
 	//Then i expect success
 	assert.NoError(t, err)

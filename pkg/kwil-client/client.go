@@ -6,6 +6,7 @@ import (
 	"kwil/pkg/fund"
 	"kwil/pkg/fund/ethereum"
 	grpcClt "kwil/pkg/grpc/client"
+	"kwil/pkg/logger"
 )
 
 type Client struct {
@@ -17,36 +18,23 @@ type Client struct {
 }
 
 func New(ctx context.Context, cfg *Config) (*Client, error) {
-	//var err error
-	//if Config.Fund == nil {
-	//	Config.Fund, err = fund2.NewConfig()
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//}
-
-	chainClient, err := ethereum.NewClient(&cfg.Fund)
+	log := logger.New(cfg.Log)
+	chainClient, err := ethereum.NewClient(&cfg.Fund, log)
 	if err != nil {
 		return nil, err
 	}
 
-	kc, err := grpcClt.New(ctx, &cfg.Node)
+	kc, err := grpcClt.New(ctx, &cfg.Node, log)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		Kwil: kc,
-		Fund: chainClient,
+		Kwil:   kc,
+		Fund:   chainClient,
+		Config: cfg,
 	}, nil
 }
-
-//func NewConfig() (*GrpcConfig, error) {
-//	return &GrpcConfig{
-//		Endpoint: "localhost:50051",
-//		Fund:     fund2.NewConfig(),
-//	}, nil
-//}
 
 func (c *Client) Close() error {
 	// err will overwrite the previous error

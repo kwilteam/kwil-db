@@ -18,7 +18,7 @@ func (c *Client) buildTx(ctx context.Context, account string, payloadType transa
 	// get nonce from address
 	acc, err := c.Kwil.GetAccount(ctx, account)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get account info: %w", err)
+		return nil, fmt.Errorf("failed to get account config: %w", err)
 	}
 
 	// build transaction

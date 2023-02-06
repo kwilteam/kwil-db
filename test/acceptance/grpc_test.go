@@ -5,7 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/spf13/viper"
 	"kwil/pkg/chain/types"
+	"kwil/pkg/grpc/client"
+	kwil_client "kwil/pkg/kwil-client"
+	"kwil/pkg/logger"
 	"kwil/test/adapters"
 	"kwil/test/specifications"
 	"kwil/test/utils/deployer"
@@ -33,7 +37,7 @@ func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account s
 			// to mine new blocks
 			err := deployer.FundAccount(ctx, account, 1)
 			if err != nil {
-				fmt.Println("funded user info failed", err)
+				fmt.Println("funded user account failed", err)
 			}
 		}
 	}
@@ -65,6 +69,8 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		remoteDBUrl        string
 	)
 
+	viper.SetDefault("log.level", "config")
+
 	localEnv := func() {
 		userPK = adapters.UserAccountPK
 		deployerPK = adapters.DeployerAccountPK
@@ -92,6 +98,11 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		domination = big.NewInt(10000)
 	}
 
+	tLogger := logger.New(logger.Config{
+		Level:       "debug",
+		OutputPaths: []string{"stdout"},
+	})
+
 	if *remote {
 		remoteEnv()
 	} else {
@@ -112,11 +123,11 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		ctx := context.Background()
 		// setup
 		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination)
+			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination, tLogger)
 
 		// Given user is funded with escrow token
 		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-		assert.NoError(t, err, "failed to fund user info")
+		assert.NoError(t, err, "failed to fund user config")
 
 		// and user has approved funding_pool to spend his token
 		specifications.ApproveTokenSpecification(t, ctx, chainDriver)
@@ -135,12 +146,12 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 					db.Owner = userAddr
 				}})
 		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination)
+			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination, tLogger)
 
 		if !*remote {
 			// Given user is funded
 			err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-			assert.NoError(t, err, "failed to fund user info")
+			assert.NoError(t, err, "failed to fund user config")
 			go keepMiningBlocks(ctx, chainDeployer, userAddr)
 
 			// and user pledged fund to validator
@@ -149,8 +160,17 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		}
 
 		// When user deployed database
-		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, chainEnvs, remoteDBUrl)
-		grpcDriver.SetFundConfig(userFundConfig)
+		cltConfig := &kwil_client.Config{
+			Node: client.Config{
+				Endpoint: remoteKwildAddr,
+			},
+			Fund: *userFundConfig,
+			Log: logger.Config{
+				Level:       "info",
+				OutputPaths: []string{"stdout"},
+			},
+		}
+		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, cltConfig, chainEnvs, remoteDBUrl)
 		// chain sync, wait kwild to register user
 		time.Sleep(chainSyncWaitTime)
 		specifications.DatabaseDeploySpecification(t, ctx, grpcDriver)
@@ -169,12 +189,12 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 					db.Owner = userAddr
 				}})
 		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination)
+			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination, tLogger)
 
 		if !*remote {
 			// Given user is funded
 			err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-			assert.NoError(t, err, "failed to fund user info")
+			assert.NoError(t, err, "failed to fund user config")
 			go keepMiningBlocks(ctx, chainDeployer, userAddr)
 
 			// and user pledged fund to validator
@@ -183,8 +203,13 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		}
 
 		// When user deployed database
-		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, chainEnvs, remoteDBUrl)
-		grpcDriver.SetFundConfig(userFundConfig)
+		cltConfig := &kwil_client.Config{
+			Node: client.Config{
+				Endpoint: remoteKwildAddr,
+			},
+			Fund: *userFundConfig,
+		}
+		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, cltConfig, chainEnvs, remoteDBUrl)
 		// chain sync, wait kwild to register user
 		time.Sleep(chainSyncWaitTime)
 		specifications.DatabaseDeploySpecification(t, ctx, grpcDriver)

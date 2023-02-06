@@ -2,7 +2,6 @@ package specifications
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"github.com/stretchr/testify/assert"
 	"kwil/pkg/fund"
 	"math/big"
@@ -11,7 +10,7 @@ import (
 
 // DepositFundDsl is dsl for deposit fund specification
 type DepositFundDsl interface {
-	DepositFund(ctx context.Context, from *ecdsa.PrivateKey, to string, amount *big.Int) error
+	DepositFund(ctx context.Context, to string, amount *big.Int) error
 	GetDepositBalance(ctx context.Context, from string, to string) (*big.Int, error)
 	GetFundConfig() *fund.Config
 }
@@ -25,7 +24,7 @@ func DepositFundSpecification(t *testing.T, ctx context.Context, deposit Deposit
 	depositedAmountOld, err := deposit.GetDepositBalance(ctx, cfg.GetAccountAddress(), cfg.ValidatorAddress)
 
 	//When i deposit fund from user to validator
-	err = deposit.DepositFund(ctx, cfg.Wallet, cfg.ValidatorAddress, amount)
+	err = deposit.DepositFund(ctx, cfg.ValidatorAddress, amount)
 
 	//Then i expect success
 	assert.NoError(t, err)

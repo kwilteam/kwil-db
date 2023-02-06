@@ -3,18 +3,27 @@ package ethereum
 import (
 	"context"
 	"fmt"
-	fund2 "kwil/pkg/fund"
+	"kwil/pkg/fund"
+	"kwil/pkg/logger"
 	"math/big"
 	"sync"
 )
 
 // Driver is a driver for the chain client for integration tests
 type Driver struct {
-	Addr string
+	RpcUrl string
 
+	logger     logger.Logger
 	connOnce   sync.Once
-	Fund       fund2.IFund
-	fundConfig *fund2.Config
+	Fund       fund.IFund
+	fundConfig *fund.Config
+}
+
+func New(rpcUrl string, logger logger.Logger) *Driver {
+	return &Driver{
+		logger: logger,
+		RpcUrl: rpcUrl,
+	}
 }
 
 func (d *Driver) DepositFund(ctx context.Context, to string, amount *big.Int) error {
@@ -57,18 +66,18 @@ func (d *Driver) GetAllowance(ctx context.Context, from string, spender string) 
 	return client.GetAllowance(ctx, from, spender)
 }
 
-func (d *Driver) GetFundConfig() *fund2.Config {
+func (d *Driver) GetFundConfig() *fund.Config {
 	return d.fundConfig
 }
 
-func (d *Driver) SetFundConfig(cfg *fund2.Config) {
+func (d *Driver) SetFundConfig(cfg *fund.Config) {
 	d.fundConfig = cfg
 }
 
-func (d *Driver) GetClient() (fund2.IFund, error) {
+func (d *Driver) GetClient() (fund.IFund, error) {
 	var err error
 	d.connOnce.Do(func() {
-		d.Fund, err = NewClient(d.fundConfig)
+		d.Fund, err = NewClient(d.fundConfig, d.logger)
 	})
 
 	return d.Fund, err

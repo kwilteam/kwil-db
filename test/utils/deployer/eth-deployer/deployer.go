@@ -178,13 +178,13 @@ func (d *EthDeployer) DeployToken(ctx context.Context) (common.Address, error) {
 }
 
 func (d *EthDeployer) FundAccount(ctx context.Context, account string, amount int64) error {
-	// transfer eth to info
+	// transfer eth to config
 	_, err := d.getClient()
 	if err != nil {
 		return err
 	}
 
-	// transfer erc20 token to info
+	// transfer erc20 token to config
 	//cAuth := d.getCallAuth(ctx, d.Account.Hex())
 	//decimals, err := d.deployedErc20.Decimals(cAuth)
 	//fmt.Println("token decimals = ", decimals)
@@ -199,11 +199,11 @@ func (d *EthDeployer) FundAccount(ctx context.Context, account string, amount in
 		return err
 	}
 
-	//balance, err := d.deployedErc20.BalanceOf(cAuth, common.HexToAddress(info))
+	//balance, err := d.deployedErc20.BalanceOf(cAuth, common.HexToAddress(config))
 	//if err != nil {
 	//	return err
 	//}
-	//fmt.Printf("info(%s) balance = %d\n", info, balance)
+	//fmt.Printf("config(%s) balance = %d\n", config, balance)
 	return err
 }
 
@@ -230,7 +230,7 @@ func (d *EthDeployer) getAccountAuth(ctx context.Context) (*bind.TransactOpts, e
 		}
 	})
 
-	//fetch the last use nonce of info
+	//fetch the last use nonce of config
 	nonce, err := d.ethClient.PendingNonceAt(ctx, d.Account)
 	if err != nil {
 		return d.auth, err

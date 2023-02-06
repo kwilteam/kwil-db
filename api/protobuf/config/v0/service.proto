@@ -1,0 +1,22 @@
+syntax = "proto3";
+package config.v0;
+option go_package = "kwil/api/protobuf/config/v0/gen/go";
+
+import "google/api/annotations.proto";
+
+service ConfigService {
+    rpc GetFundingPool(GetFundingPoolRequest) returns (GetFundingPoolResponse) {
+        option (google.api.http) = {
+            get: "/api/v0/config/fundingpool"
+        };
+    }
+
+}
+
+message GetFundingPoolRequest {}
+
+message GetFundingPoolResponse {
+  string chain_code = 1;
+  string validator_account = 2;
+  string pool_address = 3;
+}

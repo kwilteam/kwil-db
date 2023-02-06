@@ -8,7 +8,7 @@ import (
 
 // DatabaseDropDsl is dsl for database drop specification
 type DatabaseDropDsl interface {
-	DropDatabase(ctx context.Context, owner string, dbName string) error
+	DropDatabase(ctx context.Context, dbName string) error
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 
@@ -18,7 +18,7 @@ func DatabaseDropSpecification(t *testing.T, ctx context.Context, drop DatabaseD
 	db := SchemaLoader.Load(t)
 
 	//When i drop the database
-	err := drop.DropDatabase(ctx, db.Owner, db.Name)
+	err := drop.DropDatabase(ctx, db.Name)
 
 	//Then i expect success
 	assert.NoError(t, err)

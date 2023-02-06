@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	// @yaiba TODO: make this configurable
 	// DefaultDialTimeout is the default dial timeout.
 	DefaultDialTimeout = 3 * time.Second
 	// DefaultRequestTimeout is the default request timeout.

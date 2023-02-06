@@ -63,8 +63,8 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String("server.addr", "", "the address of the Kwil server")
 
 	// log flags
-	fs.String("log.level", "", "the level of the Kwil logger")
-	fs.String("log.output", "", "the output of the Kwil logger")
+	fs.String("log.level", "", "the level of the Kwil logger (default: config)")
+	fs.StringSlice("log.output_paths", []string{}, "the output path of the Kwil logger (default: ['stdout']), use comma to separate multiple output paths")
 
 	// db flags
 	fs.String("db.host", "", "the host of the postgres database")
@@ -97,12 +97,15 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	// server key & env
 	viper.BindEnv("server.addr")
 	viper.BindPFlag("server.addr", fs.Lookup("server.addr"))
+	viper.SetDefault("server.addr", "0.0.0.0:50051")
 
 	// log key & env
 	viper.BindEnv("log.level")
 	viper.BindPFlag("log.level", fs.Lookup("log.level"))
-	viper.BindEnv("log.output")
-	viper.BindPFlag("log.output", fs.Lookup("log.output"))
+	viper.SetDefault("log.level", "info")
+	viper.BindEnv("log.output_paths")
+	viper.BindPFlag("log.output_paths", fs.Lookup("log.output_paths"))
+	viper.SetDefault("log.output_paths", []string{"stdout"})
 
 	// db key & env
 	viper.BindEnv("db.host")
@@ -117,6 +120,7 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	viper.BindPFlag("db.database", fs.Lookup("db.database"))
 	viper.BindEnv("db.sslmode")
 	viper.BindPFlag("db.sslmode", fs.Lookup("db.sslmode"))
+	viper.SetDefault("db.sslmode", "disable")
 	viper.BindEnv("db.url")
 	viper.BindPFlag("db.url", fs.Lookup("db.url"))
 
@@ -139,8 +143,10 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	viper.BindPFlag("fund.rpc_url", fs.Lookup("fund.rpc_url"))
 	viper.BindEnv("fund.reconnect_interval")
 	viper.BindPFlag("fund.reconnect_interval", fs.Lookup("fund.reconnect_interval"))
+	viper.SetDefault("fund.reconnect_interval", 30)
 	viper.BindEnv("fund.block_confirmation")
 	viper.BindPFlag("fund.block_confirmation", fs.Lookup("fund.block_confirmation"))
+	viper.SetDefault("fund.block_confirmation", 12)
 }
 
 func LoadConfig() (cfg *Config, err error) {
@@ -171,10 +177,10 @@ func LoadConfig() (cfg *Config, err error) {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found; ignore error if desired
-			fmt.Fprintln(os.Stdout, "config file not found:", viper.ConfigFileUsed())
+			// cfg file not found; ignore error if desired
+			fmt.Fprintln(os.Stdout, "config file not found")
 		} else {
-			// Config file was found but another error was produced
+			// cfg file was found but another error was produced
 			return nil, fmt.Errorf("rrror loading config file: %s", err)
 		}
 	}

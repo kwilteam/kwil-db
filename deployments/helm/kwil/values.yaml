@@ -15,11 +15,11 @@ nameOverride: ""
 fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service info should be created
+  # Specifies whether a service config should be created
   create: false
-  # Annotations to add to the service info
+  # Annotations to add to the service config
   annotations: {}
-  # The name of the service info to use.
+  # The name of the service config to use.
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 

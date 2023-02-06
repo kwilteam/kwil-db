@@ -51,7 +51,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create the name of the service info to use
+Create the name of the service config to use
 */}}
 {{- define "kwil.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}

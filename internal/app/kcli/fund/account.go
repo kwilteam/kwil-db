@@ -9,7 +9,7 @@ import (
 
 func getAccountCmd() *cobra.Command {
 	var cmd = &cobra.Command{
-		Use:   "info",
+		Use:   "config",
 		Short: "Get balance, spent, and nonce information",
 		Long:  ``,
 		Args:  cobra.NoArgs,
@@ -20,7 +20,7 @@ func getAccountCmd() *cobra.Command {
 				return err
 			}
 
-			// check if info is set
+			// check if config is set
 			account, err := cmd.Flags().GetString("account")
 			if err != nil {
 				return fmt.Errorf("error getting account flag: %w", err)
@@ -32,7 +32,7 @@ func getAccountCmd() *cobra.Command {
 
 			acc, err := clt.Kwil.GetAccount(ctx, account)
 			if err != nil {
-				return fmt.Errorf("error getting account info: %w", err)
+				return fmt.Errorf("error getting account config: %w", err)
 			}
 			fmt.Println("Address: ", acc.Address)
 			fmt.Println("Balance: ", acc.Balance)

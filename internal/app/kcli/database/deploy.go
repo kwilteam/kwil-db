@@ -41,10 +41,11 @@ func deployCmd() *cobra.Command {
 				return err
 			}
 
-			res, err := clt.DeployDatabase(cmd.Context(), &db)
+			res, err := clt.DeployDatabase(ctx, &db)
 			if err != nil {
 				return err
 			}
+			fmt.Printf("Deployed database: %+v\n", res)
 
 			display.PrintTxResponse(res)
 			return nil

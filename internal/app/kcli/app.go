@@ -6,7 +6,6 @@ import (
 	"kwil/internal/app/kcli/config"
 	"kwil/internal/app/kcli/database"
 	"kwil/internal/app/kcli/fund"
-	initCli "kwil/internal/app/kcli/init"
 	"kwil/internal/app/kcli/utils"
 	"path/filepath"
 )
@@ -23,7 +22,7 @@ func Execute() error {
 		//	configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),
-		initCli.NewCmdInit(),
+		//initCli.NewCmdInit(),
 	)
 
 	rootCmd.SilenceUsage = true

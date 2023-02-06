@@ -29,7 +29,7 @@ type postTable struct {
 type ExecuteQueryDsl interface {
 	// ExecuteQuery executes QUERY to a database
 	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key
-	ExecuteQuery(ctx context.Context, owner string, dbName string, queryName string, queryInputs []any) error
+	ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []any) error
 	QueryDatabase(ctx context.Context, rawSql string, args ...interface{}) (*sql.Row, error)
 }
 
@@ -53,7 +53,7 @@ func ExecuteDBInsertSpecification(t *testing.T, ctx context.Context, execute Exe
 
 	// TODO test insert post table
 	//When i execute query to database
-	err := execute.ExecuteQuery(ctx, db.Owner, db.Name, userQueryName, userQueryInput)
+	err := execute.ExecuteQuery(ctx, db.Name, userQueryName, userQueryInput)
 	assert.NoError(t, err)
 
 	rawSql := fmt.Sprintf("SELECT id, name, age, wallet, boolean FROM %s WHERE id = $1", qualifiedUserTableName)

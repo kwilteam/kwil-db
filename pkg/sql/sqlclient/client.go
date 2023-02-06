@@ -103,8 +103,6 @@ func open(conn string, deadline x.Deadline) (*DB, error) {
 }
 
 func tryOpen(conn string) (*DB, error) {
-	fmt.Println("trying to connect to database")
-	fmt.Println("========", conn)
 	db, err := sql.Open("pgx", conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

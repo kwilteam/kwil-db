@@ -15,7 +15,7 @@ func (c *reqTimeoutConn) Read(b []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	return c.Read(b)
+	return c.conn.Read(b)
 }
 
 func (c *reqTimeoutConn) Write(b []byte) (n int, err error) {
@@ -23,7 +23,7 @@ func (c *reqTimeoutConn) Write(b []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	return c.Write(b)
+	return c.conn.Write(b)
 }
 
 func (c *reqTimeoutConn) Close() error {

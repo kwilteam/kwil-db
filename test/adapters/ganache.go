@@ -6,9 +6,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"kwil/pkg/chain/client/dto"
 	"kwil/pkg/chain/types"
 	"kwil/pkg/fund"
 	ethFund "kwil/pkg/fund/ethereum"
+	"kwil/pkg/logger"
 	"kwil/test/utils/deployer"
 	"kwil/test/utils/deployer/eth-deployer"
 	"math/big"
@@ -93,37 +95,40 @@ func getChainEndpoint(t *testing.T, ctx context.Context, _chainCode types.ChainC
 	return exposedEndpoint, unexposedEndpoint
 }
 
-func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoint string, deployerPrivateKey string, _chainCode types.ChainCode, userPrivateKey string, fundingPoolAddress string, domination *big.Int) (*ethFund.Driver, deployer.Deployer, *fund.Config, map[string]string) {
+func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, rpcUrl string, deployerPrivateKey string,
+	_chainCode types.ChainCode, userPrivateKey string, fundingPoolAddress string, domination *big.Int, logger logger.Logger) (*ethFund.Driver, deployer.Deployer, *fund.Config, map[string]string) {
 	userPK, err := crypto.HexToECDSA(userPrivateKey)
 	require.NoError(t, err)
 
-	if providerEndpoint != "" {
-		userFundConfig := &fund.Config{
-			ChainCode:         int64(_chainCode),
-			Wallet:            userPK,
-			PoolAddress:       fundingPoolAddress,
-			Provider:          providerEndpoint,
-			ReconnectInterval: 30,
-			BlockConfirmation: 10,
+	if rpcUrl != "" {
+		userFundConfig := fund.Config{
+			Chain: dto.Config{
+				ChainCode:         int64(_chainCode),
+				RpcUrl:            rpcUrl,
+				BlockConfirmation: 10,
+				ReconnectInterval: 30,
+			},
+			Wallet:      userPK,
+			PoolAddress: fundingPoolAddress,
 		}
-		t.Logf("create chain driver to %s", providerEndpoint)
-		chainDriver := &ethFund.Driver{Addr: providerEndpoint}
-		chainDriver.SetFundConfig(userFundConfig)
+		t.Logf("create chain driver to %s", rpcUrl)
+		chainDriver := ethFund.New(rpcUrl, logger)
+		chainDriver.SetFundConfig(&userFundConfig)
 
-		t.Logf("create chain deployer to %s", providerEndpoint)
-		chainDeployer := eth_deployer.NewEthDeployer(providerEndpoint, deployerPrivateKey, domination)
+		t.Logf("create chain deployer to %s", rpcUrl)
+		chainDeployer := eth_deployer.NewEthDeployer(rpcUrl, deployerPrivateKey, domination)
 		chainDeployer.UpdateContract(ctx, fundingPoolAddress)
 		chainEnvs := map[string]string{}
 
-		return chainDriver, chainDeployer, userFundConfig, chainEnvs
+		return chainDriver, chainDeployer, &userFundConfig, chainEnvs
 	}
 
-	exposedEndpoint, unexposedEndpoint := getChainEndpoint(t, ctx, _chainCode)
+	exposedRpc, unexposedRpc := getChainEndpoint(t, ctx, _chainCode)
 
-	t.Logf("create chain driver to %s", exposedEndpoint)
-	chainDriver := &ethFund.Driver{Addr: exposedEndpoint}
-	t.Logf("create chain deployer to %s", exposedEndpoint)
-	chainDeployer := eth_deployer.NewEthDeployer(exposedEndpoint, deployerPrivateKey, domination)
+	t.Logf("create chain driver to %s", exposedRpc)
+	chainDriver := ethFund.New(exposedRpc, logger)
+	t.Logf("create chain deployer to %s", exposedRpc)
+	chainDeployer := eth_deployer.NewEthDeployer(exposedRpc, deployerPrivateKey, domination)
 	tokenAddress, err := chainDeployer.DeployToken(ctx)
 	require.NoError(t, err, "failed to deploy token")
 	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
@@ -131,24 +136,25 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, providerEndpoi
 
 	// to be used by kwild container
 	chainEnvs := map[string]string{
-		"DEPOSITS_PROVIDER_ENDPOINT": unexposedEndpoint, //kwild will call using docker network
-		"DEPOSITS_CONTRACT_ADDRESS":  escrowAddress.String(),
-		"DEPOSITS_WALLET_KEY":        deployerPrivateKey,
-		"DEPOSITS_CHAIN":             _chainCode.String(),
-		"CHAIN_CODE":                 fmt.Sprintf("%d", _chainCode),
-		"DEPOSITS_ENABLED":           "false",
-		"REQUIRED_CONFIRMATIONS":     "1",
+		"KWIL_FUND_RPC_URL":            unexposedRpc, //kwild will call using docker network
+		"KWIL_FUND_POOL_ADDRESS":       escrowAddress.String(),
+		"KWIL_FUND_WALLET":             deployerPrivateKey,
+		"KWIL_FUND_CHAIN_CODE":         fmt.Sprintf("%d", _chainCode),
+		"KWIL_FUND_BLOCK_CONFIRMATION": "1",
+		"KWIL_FUND_RECONNECT_INTERVAL": "30",
 	}
 
 	userFundConfig := &fund.Config{
-		ChainCode:         int64(_chainCode),
-		Wallet:            userPK,
-		TokenAddress:      tokenAddress.String(),
-		PoolAddress:       escrowAddress.String(),
-		ValidatorAddress:  chainDeployer.Account.String(),
-		Provider:          exposedEndpoint,
-		ReconnectInterval: 30,
-		BlockConfirmation: 1,
+		Wallet:           userPK,
+		TokenAddress:     tokenAddress.String(),
+		PoolAddress:      escrowAddress.String(),
+		ValidatorAddress: chainDeployer.Account.String(),
+		Chain: dto.Config{
+			ChainCode:         int64(_chainCode),
+			RpcUrl:            exposedRpc,
+			BlockConfirmation: 10,
+			ReconnectInterval: 30,
+		},
 	}
 
 	chainDriver.SetFundConfig(userFundConfig)

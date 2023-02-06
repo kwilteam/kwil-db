@@ -2,7 +2,6 @@ package kwil_client
 
 import (
 	"context"
-	"kwil/pkg/grpc/client"
 	"kwil/x/types/contracts/escrow"
 	"kwil/x/types/data_types/any_type"
 	"kwil/x/types/databases"
@@ -16,5 +15,4 @@ type KClient interface {
 	DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*transactions.Response, error)
 	DropDatabase(ctx context.Context, dbName string) (*transactions.Response, error)
 	ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []anytype.KwilAny) (*transactions.Response, error)
-	GetNodeInfo(ctx context.Context) (client.NodeInfo, error)
 }

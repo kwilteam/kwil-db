@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 	"kwil/internal/app/kwild/config"
 	"kwil/internal/app/kwild/server"
+	"kwil/internal/controller/grpc/v0/accountsvc"
 	"kwil/internal/controller/grpc/v0/healthsvc"
-	"kwil/internal/controller/grpc/v0/infosvc"
 	"kwil/internal/controller/grpc/v0/pricingsvc"
 	"kwil/internal/controller/grpc/v0/txsvc"
 	"kwil/internal/pkg/graphql/hasura"
@@ -37,7 +37,7 @@ var RootCmd = &cobra.Command{
 		fmt.Printf("++++++ %+v\n", cfg)
 
 		// build logger
-		//logger, err := logger.NewLogger(cfg.Logger)
+		//logger, err := logger.NewLogger(cfg.logger)
 		logger := logger.New(cfg.Log)
 
 		ctx, cancel := context.WithCancel(ctx)
@@ -72,8 +72,8 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to build executor: %w", err)
 		}
 
-		// build info service
-		accountService := infosvc.NewService(queries, logger)
+		// build config service
+		accountService := accountsvc.NewService(queries, logger)
 
 		// pricing service
 		pricingService := pricingsvc.NewService()

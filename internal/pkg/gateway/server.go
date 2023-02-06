@@ -62,7 +62,7 @@ func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
 	}
 	err = accountspb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointFlag), opts)
 	if err != nil {
-		return fmt.Errorf("failed to register info service handler: %w", err)
+		return fmt.Errorf("failed to register config service handler: %w", err)
 	}
 	err = pricingpb.RegisterPricingServiceHandlerFromEndpoint(ctx, g.mux, viper.GetString(GrpcEndpointFlag), opts)
 	if err != nil {

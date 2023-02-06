@@ -1,9 +1,8 @@
 version: "3"
 
 includes:
-  docker:
-    taskfile: ./build/package/docker/Taskfile.yaml
-    dir: ./build/package/docker
+  #note: actual execute directory is the root of the project
+  docker: ./build/package/docker
   pb: ./api/
 
 tasks:
@@ -24,7 +23,7 @@ tasks:
 
   build:kwild:
     desc: Builds the kwild
-    deps: [pb:compile:pricing, pb:compile:info, pb:compile:tx]
+    deps: [pb:compile:pricing, pb:compile:config, pb:compile:tx]
     cmds:
       - go build -o .build/kwild ./cmd/kwild
     generates:

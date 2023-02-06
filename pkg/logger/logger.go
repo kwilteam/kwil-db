@@ -48,8 +48,17 @@ func New(config Config) Logger {
 	if err != nil {
 		panic(err)
 	}
-	cfg.Level = level
-	cfg.OutputPaths = config.OutputPaths
+
+	if config.Level != "" {
+		cfg.Level = level
+	} else {
+		cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	}
+	if len(config.OutputPaths) > 0 {
+		cfg.OutputPaths = config.OutputPaths
+	} else {
+		cfg.OutputPaths = []string{"stdout"}
+	}
 
 	logger := zap.Must(cfg.Build(zap.Fields(fields...)))
 	return logger
