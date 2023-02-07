@@ -2,11 +2,11 @@ package ethereum
 
 import (
 	"context"
-	"kwil/pkg/types/contracts/token"
+	"kwil/pkg/contracts/token/types"
 	"math/big"
 )
 
-func (c *Client) ApproveToken(ctx context.Context, spender string, amount *big.Int) (*token.ApproveResponse, error) {
+func (c *Client) ApproveToken(ctx context.Context, spender string, amount *big.Int) (*types.ApproveResponse, error) {
 	return c.Token.Approve(ctx, spender, amount)
 }
 

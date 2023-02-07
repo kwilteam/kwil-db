@@ -3,8 +3,7 @@ package dbretriever
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/execution"
-	"kwil/pkg/types/databases"
+	"kwil/pkg/databases"
 )
 
 func (q *dbRetriever) GetIndexes(ctx context.Context, dbid int32) ([]*databases.Index, error) {
@@ -25,7 +24,7 @@ func (q *dbRetriever) GetIndexes(ctx context.Context, dbid int32) ([]*databases.
 				Name:    index.IndexName,
 				Table:   table.TableName,
 				Columns: index.Columns,
-				Using:   execution.IndexType(index.IndexType),
+				Using:   databases.IndexType(index.IndexType),
 			})
 		}
 	}

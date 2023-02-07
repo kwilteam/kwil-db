@@ -1,10 +1,9 @@
 package execution
 
 import (
-	execution2 "kwil/pkg/execution"
+	execution2 "kwil/pkg/databases"
 	"kwil/pkg/types/data_types"
 	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/databases"
 )
 
 type Executable struct {
@@ -13,8 +12,8 @@ type Executable struct {
 	Table     string
 	Type      execution2.QueryType
 
-	Parameters []*databases.Parameter[anytype.KwilAny]   `json:"parameters" yaml:"parameters"`
-	Where      []*databases.WhereClause[anytype.KwilAny] `json:"where" yaml:"where"`
+	Parameters []*execution2.Parameter[anytype.KwilAny]   `json:"parameters" yaml:"parameters"`
+	Where      []*execution2.WhereClause[anytype.KwilAny] `json:"where" yaml:"where"`
 
 	UserInputs []*UserInput[[]byte] `json:"user_inputs" yaml:"user_inputs"`
 	Args       []*Arg               `json:"args" yaml:"args"`

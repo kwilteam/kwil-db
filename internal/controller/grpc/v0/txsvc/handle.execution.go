@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
+	"kwil/pkg/databases/clean"
 	accountTypes "kwil/pkg/types/accounts"
-	"kwil/pkg/types/databases/clean"
 	"kwil/pkg/types/execution"
 	"kwil/pkg/types/execution/convert"
 	"kwil/pkg/types/transactions"
@@ -47,7 +47,7 @@ func (s *Service) handleExecution(ctx context.Context, tx *transactions.Transact
 
 	convExecutionBody, err := convert.Bytes.BodyToKwilAny(executionBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert execution body to kwil any: %w", err)
+		return nil, fmt.Errorf("failed to convert databases body to kwil any: %w", err)
 	}
 
 	// execute

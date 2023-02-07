@@ -77,22 +77,6 @@ func (c *dataTypes) AnyToKwilType(val any) (DataType, error) {
 	return c.GolangToKwilType(valType)
 }
 
-// CompareKwilStringToAny compares a Kwil Type to an `any` golang type
-func (v *dataTypes) CompareAnyToKwilString(a any, val string) error {
-	kwilType, err := Utils.StringToKwilType(val)
-	if err != nil {
-		return err
-	}
-	anyType, err := Utils.AnyToKwilType(a)
-	if err != nil {
-		return err
-	}
-	if kwilType != anyType {
-		return fmt.Errorf(`type mismatch: "%s" != "%s"`, val, a)
-	}
-	return nil
-}
-
 func (c *dataTypes) KwilToPgType(k DataType) (string, error) {
 	switch k {
 	case NULL:
@@ -107,14 +91,6 @@ func (c *dataTypes) KwilToPgType(k DataType) (string, error) {
 		return `boolean`, nil
 	}
 	return ``, fmt.Errorf(`unknown type: "%s"`, k.String())
-}
-
-func (c *dataTypes) KwilStringToPgType(s string) (string, error) {
-	kwilType, err := Utils.StringToKwilType(s)
-	if err != nil {
-		return ``, err
-	}
-	return c.KwilToPgType(kwilType)
 }
 
 func (c *dataTypes) StringToAnyGolangType(s string, kt DataType) (any, error) {

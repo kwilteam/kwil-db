@@ -3,9 +3,9 @@ package kwil_client
 import (
 	"context"
 	"fmt"
+	"kwil/pkg/databases"
+	"kwil/pkg/databases/clean"
 	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/databases"
-	"kwil/pkg/types/databases/clean"
 	execution2 "kwil/pkg/types/execution"
 	transactions2 "kwil/pkg/types/transactions"
 	"strings"
@@ -45,7 +45,7 @@ func (c *Client) DropDatabase(ctx context.Context, dbName string) (*transactions
 
 func (c *Client) ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []anytype.KwilAny) (*transactions2.Response, error) {
 	owner := c.Config.Fund.GetAccountAddress()
-	// create the dbid.  we will need this for the execution body
+	// create the dbid.  we will need this for the databases body
 	dbId := databases.GenerateSchemaName(owner, dbName)
 
 	executables, err := c.Kwil.GetExecutablesById(ctx, dbId)
@@ -84,7 +84,7 @@ func (c *Client) ExecuteDatabase(ctx context.Context, dbName string, queryName s
 		}
 	}
 
-	// create the execution body
+	// create the databases body
 	body := &execution2.ExecutionBody[[]byte]{
 		Database: dbId,
 		Query:    query.Name,

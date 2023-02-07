@@ -9,9 +9,9 @@ import (
 	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
 	"kwil/internal/pkg/transport"
+	"kwil/pkg/databases"
 	"kwil/pkg/log"
 	"kwil/pkg/types/accounts"
-	"kwil/pkg/types/databases"
 	"kwil/pkg/types/execution"
 	transactions2 "kwil/pkg/types/transactions"
 )

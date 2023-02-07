@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go.uber.org/zap"
-	"kwil/pkg/types/databases"
+	"kwil/pkg/databases"
 )
 
 func (s *executor) DropDatabase(ctx context.Context, database *databases.DatabaseIdentifier) error {

@@ -3,8 +3,8 @@ package dbretriever
 import (
 	"context"
 	"kwil/internal/repository/gen"
+	"kwil/pkg/databases"
 	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/databases"
 )
 
 func (q *dbRetriever) ListTables(ctx context.Context, dbid int32) ([]*gen.ListTablesRow, error) {

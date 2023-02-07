@@ -40,6 +40,10 @@ func (m *MockChainProvider) Endpoint() string {
 	return "endpoint"
 }
 
+func (m *MockChainProvider) Close() error {
+	return nil
+}
+
 func newMockChainProvider() provider.ChainProvider {
 	return &MockChainProvider{
 		chainCode: CHAIN_CODE,
@@ -49,11 +53,11 @@ func newMockChainProvider() provider.ChainProvider {
 func newMockChainClient() (client.ChainClient, error) {
 	prov := newMockChainProvider()
 	return service.NewChainClientExplicit(&dto.Config{
-		Endpoint:          prov.Endpoint(),
+		RpcUrl:            prov.Endpoint(),
 		ChainCode:         2,
 		ReconnectInterval: 10,
 		BlockConfirmation: REQUIRED_CONFIRMATIONS,
-	})
+	}, nil)
 
 	/*
 		return &chainClient{

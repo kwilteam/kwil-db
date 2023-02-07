@@ -3,7 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/execution/executables"
+	"kwil/pkg/databases/executables"
 )
 
 // load executables will load all the executables from every database

@@ -26,7 +26,7 @@ func (p *pricer) EstimatePrice(ctx context.Context, tx *transactions.Transaction
 	return p.GetPrice(tx)
 }
 
-// for getting a tx price at execution time
+// for getting a tx price at databases time
 func (p *pricer) GetPrice(tx *transactions.Transaction) (string, error) {
 	var price string
 

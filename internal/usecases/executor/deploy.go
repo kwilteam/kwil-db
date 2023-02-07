@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"kwil/internal/repository"
-	"kwil/pkg/execution/executables"
-	"kwil/pkg/execution/sql-builder/schema-builder"
+	"kwil/pkg/databases"
+	"kwil/pkg/databases/clean"
+	"kwil/pkg/databases/convert"
+	"kwil/pkg/databases/executables"
+	"kwil/pkg/databases/sql-builder/schema-builder"
 	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/databases"
-	"kwil/pkg/types/databases/clean"
-	"kwil/pkg/types/databases/convert"
 )
 
 func (s *executor) DeployDatabase(ctx context.Context, database *databases.Database[anytype.KwilAny]) error {

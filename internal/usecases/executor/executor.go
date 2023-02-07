@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"kwil/internal/pkg/graphql/manager"
 	"kwil/internal/repository"
-	"kwil/pkg/execution/executables"
+	"kwil/pkg/databases"
+	"kwil/pkg/databases/executables"
 	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
 	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/databases"
 	"kwil/pkg/types/execution"
 )
 

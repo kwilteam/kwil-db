@@ -5,10 +5,10 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/pkg/execution/validator"
-	"kwil/pkg/types/databases"
-	"kwil/pkg/types/databases/clean"
-	"kwil/pkg/types/databases/convert"
+	"kwil/pkg/databases"
+	"kwil/pkg/databases/clean"
+	"kwil/pkg/databases/convert"
+	"kwil/pkg/databases/validator"
 	"kwil/pkg/utils/serialize"
 )
 

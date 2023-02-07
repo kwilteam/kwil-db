@@ -6,10 +6,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	kwilCommon "kwil/pkg/contracts/common/evm"
 	"kwil/pkg/contracts/escrow/evm/abi"
-	escrow2 "kwil/pkg/types/contracts/escrow"
+	"kwil/pkg/contracts/escrow/types"
 )
 
-func (c *contract) GetDeposits(ctx context.Context, from, to int64) ([]*escrow2.DepositEvent, error) {
+func (c *contract) GetDeposits(ctx context.Context, from, to int64) ([]*types.DepositEvent, error) {
 	end := uint64(to)
 	queryOpts := &bind.FilterOpts{Context: ctx, Start: uint64(from), End: &end}
 
@@ -23,14 +23,14 @@ func (c *contract) GetDeposits(ctx context.Context, from, to int64) ([]*escrow2.
 	return convertDeposits(edi, c.token), nil
 }
 
-func convertDeposits(edi *abi.EscrowDepositIterator, token string) []*escrow2.DepositEvent {
-	var deposits []*escrow2.DepositEvent
+func convertDeposits(edi *abi.EscrowDepositIterator, token string) []*types.DepositEvent {
+	var deposits []*types.DepositEvent
 	for {
 
 		if !edi.Next() {
 			break
 		} else {
-			deposits = append(deposits, &escrow2.DepositEvent{
+			deposits = append(deposits, &types.DepositEvent{
 				Caller: edi.Event.Caller.Hex(),
 				Target: edi.Event.Target.Hex(),
 				Amount: edi.Event.Amount.String(),
@@ -43,7 +43,7 @@ func convertDeposits(edi *abi.EscrowDepositIterator, token string) []*escrow2.De
 	return deposits
 }
 
-func (c *contract) Deposit(ctx context.Context, params *escrow2.DepositParams) (*escrow2.DepositResponse, error) {
+func (c *contract) Deposit(ctx context.Context, params *types.DepositParams) (*types.DepositResponse, error) {
 
 	auth, err := kwilCommon.PrepareTxAuth(ctx, c.client, c.chainId, c.privateKey)
 	if err != nil {
@@ -55,7 +55,7 @@ func (c *contract) Deposit(ctx context.Context, params *escrow2.DepositParams) (
 		return nil, err
 	}
 
-	return &escrow2.DepositResponse{
+	return &types.DepositResponse{
 		TxHash: res.Hash().String(),
 	}, nil
 }

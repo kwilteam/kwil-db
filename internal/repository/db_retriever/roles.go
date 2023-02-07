@@ -3,7 +3,7 @@ package dbretriever
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/types/databases"
+	"kwil/pkg/databases"
 )
 
 func (q *dbRetriever) GetRoles(ctx context.Context, dbid int32) ([]*databases.Role, error) {

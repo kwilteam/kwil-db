@@ -3,7 +3,9 @@ package anytype
 import (
 	b64 "encoding/base64"
 	"fmt"
-	datatypes2 "kwil/pkg/types/data_types"
+	datatypes "kwil/pkg/types/data_types"
+
+	"github.com/cstockton/go-conv"
 )
 
 // the AnyValue is used to specify what the "any" type of value stored is.
@@ -19,12 +21,12 @@ type AnyValue interface {
 type KwilAny struct {
 	value    any
 	bytes    []byte
-	dataType datatypes2.DataType
+	dataType datatypes.DataType
 }
 
 // New creates a corresponding value type for the given value.
 func New(v any) (KwilAny, error) {
-	dataType, err := datatypes2.Utils.AnyToKwilType(v)
+	dataType, err := datatypes.Utils.AnyToKwilType(v)
 	if err != nil {
 		return KwilAny{}, fmt.Errorf("failed to get kwil type from value: %w", err)
 	}
@@ -32,11 +34,11 @@ func New(v any) (KwilAny, error) {
 	return new(v, dataType)
 }
 
-func NewExplicit(v any, dataType datatypes2.DataType) (KwilAny, error) {
+func NewExplicit(v any, dataType datatypes.DataType) (KwilAny, error) {
 	return new(v, dataType)
 }
 
-func new(v any, dataType datatypes2.DataType) (KwilAny, error) {
+func new(v any, dataType datatypes.DataType) (KwilAny, error) {
 	// marshal the value
 	var bts []byte
 	if v != nil {
@@ -69,8 +71,8 @@ func NewFromSerial(b []byte) (KwilAny, error) {
 		return New(nil)
 	}
 
-	dataType := datatypes2.DataType(b[0])
-	if dataType <= datatypes2.INVALID_DATA_TYPE || dataType >= datatypes2.END_DATA_TYPE {
+	dataType := datatypes.DataType(b[0])
+	if dataType <= datatypes.INVALID_DATA_TYPE || dataType >= datatypes.END_DATA_TYPE {
 		return KwilAny{}, fmt.Errorf("serialized value starts with invalid data type identifier: %v", dataType)
 	}
 
@@ -98,7 +100,7 @@ func (a *KwilAny) Value() any {
 }
 
 // GetType returns the native data type of the value.
-func (a *KwilAny) Type() datatypes2.DataType {
+func (a *KwilAny) Type() datatypes.DataType {
 	return a.dataType
 }
 
@@ -120,9 +122,46 @@ func (a *KwilAny) String() string {
 	return fmt.Sprintf("%v", a.value)
 }
 
+// IsEmpty returns true if the value is nil.  For example, if there is a string value
+// of "", this will return false.  0 is also nil for int types.
+func (a *KwilAny) IsEmpty() bool {
+	switch a.dataType {
+	case datatypes.STRING:
+		return a.value == nil || a.value.(string) == ""
+	case datatypes.INT32:
+		return a.value == nil || a.value.(int32) == 0
+	case datatypes.INT64:
+		return a.value == nil || a.value.(int64) == 0
+	case datatypes.BOOLEAN:
+		return a.value == nil || !a.value.(bool)
+	}
+
+	return a.value == nil
+}
+
 func (a *KwilAny) Print() {
 	fmt.Println("Value:   ", a.value)
 	fmt.Println("Bytes:   ", a.bytes)
 	fmt.Println("Type:    ", a.dataType.String())
 	fmt.Println("Encoded: ", a.Base64())
+}
+
+func (a *KwilAny) AsInt() (int, error) {
+	return conv.Int(a.value)
+}
+
+func (a *KwilAny) AsInt32() (int32, error) {
+	return conv.Int32(a.value)
+}
+
+func (a *KwilAny) AsInt64() (int64, error) {
+	return conv.Int64(a.value)
+}
+
+func (a *KwilAny) AsString() (string, error) {
+	return conv.String(a.value)
+}
+
+func (a *KwilAny) AsBool() (bool, error) {
+	return conv.Bool(a.value)
 }

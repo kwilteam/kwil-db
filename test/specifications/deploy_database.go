@@ -2,7 +2,7 @@ package specifications
 
 import (
 	"context"
-	"kwil/pkg/types/databases"
+	"kwil/pkg/databases"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

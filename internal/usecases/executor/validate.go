@@ -1,9 +1,9 @@
 package executor
 
 import (
-	"kwil/pkg/execution/validator"
+	"kwil/pkg/databases"
+	"kwil/pkg/databases/validator"
 	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/databases"
 )
 
 func (s *executor) ValidateDatabase(db *databases.Database[anytype.KwilAny]) error {

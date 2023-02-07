@@ -3,9 +3,9 @@ package dbretriever
 import (
 	"context"
 	"fmt"
+	"kwil/pkg/databases"
+	"kwil/pkg/databases/convert"
 	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/databases"
-	"kwil/pkg/types/databases/convert"
 )
 
 func (q *dbRetriever) GetQueries(ctx context.Context, dbid int32) ([]*databases.SQLQuery[anytype.KwilAny], error) {

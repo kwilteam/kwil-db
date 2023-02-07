@@ -4,10 +4,10 @@ import (
 	"context"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"kwil/pkg/types/contracts/escrow"
+	"kwil/pkg/contracts/escrow/types"
 )
 
-func (c *contract) Balance(ctx context.Context, params *escrow.DepositBalanceParams) (*escrow.DepositBalanceResponse, error) {
+func (c *contract) Balance(ctx context.Context, params *types.DepositBalanceParams) (*types.DepositBalanceResponse, error) {
 	cAuth := &bind.CallOpts{
 		Pending: true,
 		From:    common.HexToAddress(params.Validator),
@@ -18,5 +18,5 @@ func (c *contract) Balance(ctx context.Context, params *escrow.DepositBalancePar
 		return nil, err
 	}
 
-	return &escrow.DepositBalanceResponse{Balance: balance}, nil
+	return &types.DepositBalanceResponse{Balance: balance}, nil
 }

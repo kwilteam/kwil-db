@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"kwil/internal/pkg/graphql/hasura"
+	"kwil/pkg/databases"
 	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/databases"
 )
 
 // Track tracks the database in hasura and the database table in the database.

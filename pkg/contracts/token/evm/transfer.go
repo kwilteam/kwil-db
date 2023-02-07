@@ -3,13 +3,13 @@ package evm
 import (
 	"context"
 	kwilCommon "kwil/pkg/contracts/common/evm"
-	"kwil/pkg/types/contracts/token"
+	"kwil/pkg/contracts/token/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func (c *contract) Transfer(ctx context.Context, to string, amount *big.Int) (*token.TransferResponse, error) {
+func (c *contract) Transfer(ctx context.Context, to string, amount *big.Int) (*types.TransferResponse, error) {
 	auth, err := kwilCommon.PrepareTxAuth(ctx, c.client, c.chainId, c.privateKey)
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func (c *contract) Transfer(ctx context.Context, to string, amount *big.Int) (*t
 		return nil, err
 	}
 
-	return &token.TransferResponse{
+	return &types.TransferResponse{
 		TxHash: tx.Hash().String(),
 	}, nil
 }

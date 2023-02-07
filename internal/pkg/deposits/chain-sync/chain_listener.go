@@ -9,9 +9,9 @@ import (
 	chainClient "kwil/pkg/chain/client"
 	chains "kwil/pkg/chain/types"
 	"kwil/pkg/contracts/escrow"
+	"kwil/pkg/contracts/escrow/types"
 	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
-	escrowTypes "kwil/pkg/types/contracts/escrow"
 	"os"
 	"sync"
 
@@ -21,7 +21,7 @@ import (
 type Chain interface {
 	RegisterTask(task tasks2.Runnable)
 	Start(ctx context.Context) error
-	ReturnFunds(ctx context.Context, params *escrowTypes.ReturnFundsParams) (*escrowTypes.ReturnFundsResponse, error)
+	ReturnFunds(ctx context.Context, params *types.ReturnFundsParams) (*types.ReturnFundsResponse, error)
 	ChainCode() chains.ChainCode
 }
 
@@ -30,9 +30,9 @@ type chain struct {
 	dao            repository.Queries      // for interacting with the db
 	chainClient    chainClient.ChainClient // for getting blocks
 	escrowContract escrow.EscrowContract   // for returning funds
-	log       log.Logger
-	tasks     tasks2.TaskRunner
-	chunkSize int64
+	log            log.Logger
+	tasks          tasks2.TaskRunner
+	chunkSize      int64
 	mu             *sync.Mutex
 	height         int64 // the height of the last block we processed
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/pkg/types/databases"
+	"kwil/pkg/databases"
 	"kwil/pkg/utils/serialize"
 )
 

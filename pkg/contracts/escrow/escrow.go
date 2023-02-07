@@ -7,15 +7,15 @@ import (
 	chainClient "kwil/pkg/chain/client"
 	"kwil/pkg/chain/types"
 	"kwil/pkg/contracts/escrow/evm"
-	"kwil/pkg/types/contracts/escrow"
+	types2 "kwil/pkg/contracts/escrow/types"
 )
 
 type EscrowContract interface {
-	GetDeposits(ctx context.Context, start, end int64) ([]*escrow.DepositEvent, error)
-	GetWithdrawals(ctx context.Context, start, end int64) ([]*escrow.WithdrawalConfirmationEvent, error)
-	ReturnFunds(ctx context.Context, params *escrow.ReturnFundsParams) (*escrow.ReturnFundsResponse, error)
-	Deposit(ctx context.Context, params *escrow.DepositParams) (*escrow.DepositResponse, error)
-	Balance(ctx context.Context, params *escrow.DepositBalanceParams) (*escrow.DepositBalanceResponse, error)
+	GetDeposits(ctx context.Context, start, end int64) ([]*types2.DepositEvent, error)
+	GetWithdrawals(ctx context.Context, start, end int64) ([]*types2.WithdrawalConfirmationEvent, error)
+	ReturnFunds(ctx context.Context, params *types2.ReturnFundsParams) (*types2.ReturnFundsResponse, error)
+	Deposit(ctx context.Context, params *types2.DepositParams) (*types2.DepositResponse, error)
+	Balance(ctx context.Context, params *types2.DepositBalanceParams) (*types2.DepositBalanceResponse, error)
 	TokenAddress() string
 }
 

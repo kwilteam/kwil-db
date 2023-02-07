@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"kwil/api/protobuf/kwil/common/v0/gen/go"
 	_go2 "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/pkg/types/databases"
-	"kwil/pkg/types/databases/convert"
+	"kwil/pkg/databases"
+	"kwil/pkg/databases/convert"
 	"kwil/pkg/types/execution"
 	"kwil/pkg/utils/serialize"
 )

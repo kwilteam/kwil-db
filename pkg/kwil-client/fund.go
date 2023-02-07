@@ -2,10 +2,10 @@ package kwil_client
 
 import (
 	"context"
-	"kwil/pkg/types/contracts/escrow"
+	"kwil/pkg/contracts/escrow/types"
 	"math/big"
 )
 
-func (c *Client) DepositFund(ctx context.Context, to string, amount *big.Int) (*escrow.DepositResponse, error) {
+func (c *Client) DepositFund(ctx context.Context, to string, amount *big.Int) (*types.DepositResponse, error) {
 	return c.Fund.DepositFund(ctx, to, amount)
 }

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"kwil/internal/app/kcli/common/display"
 	"kwil/internal/app/kcli/config"
+	"kwil/pkg/databases"
 	"kwil/pkg/kwil-client"
-	"kwil/pkg/types/databases"
 	"os"
 
 	"github.com/spf13/cobra"
