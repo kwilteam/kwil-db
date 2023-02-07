@@ -5,8 +5,8 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/x/types/execution"
-	"kwil/x/utils/serialize"
+	"kwil/pkg/types/execution"
+	"kwil/pkg/utils/serialize"
 )
 
 func (c *Client) GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error) {

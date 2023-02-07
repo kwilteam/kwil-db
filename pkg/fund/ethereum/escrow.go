@@ -3,12 +3,12 @@ package ethereum
 import (
 	"context"
 	"fmt"
-	"kwil/x/types/contracts/escrow"
+	escrow2 "kwil/pkg/types/contracts/escrow"
 	"math/big"
 )
 
 // DepositFund deposits funds to the escrow contract
-func (c *Client) DepositFund(ctx context.Context, to string, amount *big.Int) (*escrow.DepositResponse, error) {
+func (c *Client) DepositFund(ctx context.Context, to string, amount *big.Int) (*escrow2.DepositResponse, error) {
 	account := c.Config.GetAccountAddress()
 	allowance, err := c.Token.Allowance(account, c.Config.PoolAddress)
 	if err != nil {
@@ -29,7 +29,7 @@ func (c *Client) DepositFund(ctx context.Context, to string, amount *big.Int) (*
 		return nil, fmt.Errorf("not enough tokens to deposit %s (balance %s)", amount.String(), balance.String())
 	}
 
-	depoistRes, err := c.Escrow.Deposit(ctx, &escrow.DepositParams{
+	depoistRes, err := c.Escrow.Deposit(ctx, &escrow2.DepositParams{
 		Validator: to,
 		Amount:    amount,
 	})
@@ -41,7 +41,7 @@ func (c *Client) DepositFund(ctx context.Context, to string, amount *big.Int) (*
 }
 
 func (c *Client) GetDepositBalance(ctx context.Context, validator string, wallet string) (*big.Int, error) {
-	balanceRes, err := c.Escrow.Balance(ctx, &escrow.DepositBalanceParams{
+	balanceRes, err := c.Escrow.Balance(ctx, &escrow2.DepositBalanceParams{
 		Validator: validator,
 		Address:   wallet,
 	})

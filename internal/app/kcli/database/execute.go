@@ -2,12 +2,11 @@ package database
 
 import (
 	"fmt"
+	"github.com/spf13/cobra"
 	"kwil/internal/app/kcli/common/display"
 	"kwil/internal/app/kcli/config"
 	"kwil/pkg/kwil-client"
-	anytype "kwil/x/types/data_types/any_type"
-
-	"github.com/spf13/cobra"
+	"kwil/pkg/types/data_types/any_type"
 )
 
 const (

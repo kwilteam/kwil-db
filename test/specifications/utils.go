@@ -1,8 +1,8 @@
 package specifications
 
 import (
-	"kwil/x/execution/utils"
-	"kwil/x/types/databases"
+	"kwil/pkg/execution/utils"
+	"kwil/pkg/types/databases"
 	"os"
 	"testing"
 

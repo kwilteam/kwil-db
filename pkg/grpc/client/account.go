@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	pb "kwil/api/protobuf/kwil/account/v0/gen/go"
-	"kwil/x/types/accounts"
+	"kwil/pkg/types/accounts"
 )
 
 func (c *Client) GetAccount(ctx context.Context, address string) (accounts.Account, error) {

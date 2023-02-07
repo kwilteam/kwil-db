@@ -2,10 +2,10 @@ package txsvc
 
 import (
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/kwil/repository"
+	"kwil/internal/repository"
+	"kwil/internal/usecases/executor"
 	"kwil/pkg/log"
 	"kwil/pkg/pricing/pricer"
-	"kwil/x/execution/executor"
 )
 
 type Service struct {

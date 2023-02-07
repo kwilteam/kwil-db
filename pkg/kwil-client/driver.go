@@ -5,9 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"kwil/pkg/sql/sqlclient"
-	anytype "kwil/x/types/data_types/any_type"
-	"kwil/x/types/databases"
-
+	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/types/databases"
 	"strings"
 	"sync"
 	"time"

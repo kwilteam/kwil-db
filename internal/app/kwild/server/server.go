@@ -14,9 +14,9 @@ import (
 	"kwil/internal/controller/grpc/v0/healthsvc"
 	"kwil/internal/controller/grpc/v0/pricingsvc"
 	"kwil/internal/controller/grpc/v0/txsvc"
+	"kwil/internal/pkg/deposits"
 	"kwil/pkg/grpc/server"
 	"kwil/pkg/log"
-	"kwil/x/deposits"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,8 +28,8 @@ type Server struct {
 	txSvc      *txsvc.Service
 	accountSvc *accountsvc.Service
 	pricingSvc *pricingsvc.Service
-	healthSvc  *healthsvc.Server
-	depositer  deposits.Depositer
+	healthSvc *healthsvc.Server
+	depositer deposits.Depositer
 }
 
 func New(cfg config.ServerConfig, txSvc *txsvc.Service, accSvc *accountsvc.Service, prcSvc *pricingsvc.Service,

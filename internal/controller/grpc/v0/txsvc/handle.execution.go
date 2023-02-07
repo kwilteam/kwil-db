@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	accountTypes "kwil/x/types/accounts"
-	"kwil/x/types/databases/clean"
-	"kwil/x/types/execution"
-	"kwil/x/types/execution/convert"
-	"kwil/x/types/transactions"
-	"kwil/x/utils/serialize"
+	accountTypes "kwil/pkg/types/accounts"
+	"kwil/pkg/types/databases/clean"
+	"kwil/pkg/types/execution"
+	"kwil/pkg/types/execution/convert"
+	"kwil/pkg/types/transactions"
+	"kwil/pkg/utils/serialize"
 )
 
 func (s *Service) handleExecution(ctx context.Context, tx *transactions.Transaction) (*txpb.BroadcastResponse, error) {

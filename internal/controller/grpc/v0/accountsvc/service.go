@@ -2,7 +2,7 @@ package accountsvc
 
 import (
 	pb "kwil/api/protobuf/kwil/account/v0/gen/go"
-	"kwil/kwil/repository"
+	"kwil/internal/repository"
 	"kwil/pkg/log"
 )
 

@@ -1,0 +1,69 @@
+package chainsync
+
+import (
+	"context"
+	"fmt"
+	tasks2 "kwil/internal/pkg/deposits/tasks"
+	"kwil/internal/pkg/deposits/tasks/escrow-tasks"
+	"kwil/internal/repository"
+	chainClient "kwil/pkg/chain/client"
+	chains "kwil/pkg/chain/types"
+	"kwil/pkg/contracts/escrow"
+	"kwil/pkg/log"
+	"kwil/pkg/sql/sqlclient"
+	escrowTypes "kwil/pkg/types/contracts/escrow"
+	"os"
+	"sync"
+
+	"github.com/cstockton/go-conv"
+)
+
+type Chain interface {
+	RegisterTask(task tasks2.Runnable)
+	Start(ctx context.Context) error
+	ReturnFunds(ctx context.Context, params *escrowTypes.ReturnFundsParams) (*escrowTypes.ReturnFundsResponse, error)
+	ChainCode() chains.ChainCode
+}
+
+type chain struct {
+	db             *sqlclient.DB           // for creating new txs
+	dao            repository.Queries      // for interacting with the db
+	chainClient    chainClient.ChainClient // for getting blocks
+	escrowContract escrow.EscrowContract   // for returning funds
+	log       log.Logger
+	tasks     tasks2.TaskRunner
+	chunkSize int64
+	mu             *sync.Mutex
+	height         int64 // the height of the last block we processed
+}
+
+func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repository.Queries, db *sqlclient.DB, logger log.Logger) (Chain, error) {
+	escrowTasks := escrowtasks.New(dao, escrow)
+	chunkSizeEnv := os.Getenv("deposit_chunk_size")
+	if chunkSizeEnv == "" {
+		chunkSizeEnv = "100000"
+	}
+	chunkSize, err := conv.Int64(chunkSizeEnv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert chunk size to int64: %w", err)
+	}
+
+	// create the task runner with escrow tasks
+	commitHeightTask := tasks2.NewHeightTask(dao, client.ChainCode())
+	taskRunner := tasks2.New(escrowTasks)
+
+	// set the final task to be commit height
+	taskRunner.SetFinal(commitHeightTask)
+
+	return &chain{
+		db:             db,
+		dao:            dao,
+		chainClient:    client,
+		escrowContract: escrow,
+		log:            logger.Named("deposit.chain"),
+		chunkSize:      chunkSize,
+		mu:             &sync.Mutex{},
+		height:         0,
+		tasks:          taskRunner,
+	}, nil
+}

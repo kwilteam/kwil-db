@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"kwil/internal/app/kcli/config"
-	"kwil/x/crypto"
+	"kwil/pkg/crypto"
 )
 
 func signCmd() *cobra.Command {

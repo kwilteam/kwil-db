@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"kwil/api/protobuf/kwil/common/v0/gen/go"
 	_go2 "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/x/types/databases"
-	"kwil/x/types/databases/convert"
-	"kwil/x/types/execution"
-	"kwil/x/utils/serialize"
+	"kwil/pkg/types/databases"
+	"kwil/pkg/types/databases/convert"
+	"kwil/pkg/types/execution"
+	"kwil/pkg/utils/serialize"
 )
 
 func (s *Service) GetSchema(ctx context.Context, req *_go2.GetSchemaRequest) (*_go2.GetSchemaResponse, error) {

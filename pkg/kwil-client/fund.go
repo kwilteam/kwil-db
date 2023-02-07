@@ -2,7 +2,7 @@ package kwil_client
 
 import (
 	"context"
-	"kwil/x/types/contracts/escrow"
+	"kwil/pkg/types/contracts/escrow"
 	"math/big"
 )
 

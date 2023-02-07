@@ -4,10 +4,10 @@ import (
 	"fmt"
 	chainClient "kwil/pkg/chain/client"
 	chainClientService "kwil/pkg/chain/client/service"
+	"kwil/pkg/contracts/escrow"
+	"kwil/pkg/contracts/token"
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
-	"kwil/x/contracts/escrow"
-	"kwil/x/contracts/token"
 )
 
 type Client struct {

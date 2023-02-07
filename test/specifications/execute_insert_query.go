@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"kwil/x/types/databases"
+	"kwil/pkg/types/databases"
 	"strings"
 	"testing"
 

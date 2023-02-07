@@ -5,8 +5,8 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
 	pb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
-	"kwil/x/types/transactions"
-	"kwil/x/utils/serialize"
+	"kwil/pkg/types/transactions"
+	"kwil/pkg/utils/serialize"
 )
 
 func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction) (string, error) {

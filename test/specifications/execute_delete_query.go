@@ -3,7 +3,7 @@ package specifications
 import (
 	"context"
 	"fmt"
-	"kwil/x/types/databases"
+	"kwil/pkg/types/databases"
 	"strings"
 	"testing"
 

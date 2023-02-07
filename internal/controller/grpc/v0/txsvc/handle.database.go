@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	accountTypes "kwil/x/types/accounts"
-	"kwil/x/types/databases"
-	"kwil/x/types/databases/convert"
-	"kwil/x/types/transactions"
-	"kwil/x/utils/serialize"
+	accountTypes "kwil/pkg/types/accounts"
+	"kwil/pkg/types/databases"
+	"kwil/pkg/types/databases/convert"
+	"kwil/pkg/types/transactions"
+	"kwil/pkg/utils/serialize"
 	"strings"
 )
 

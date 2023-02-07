@@ -5,11 +5,11 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/x/execution/validator"
-	"kwil/x/types/databases"
-	"kwil/x/types/databases/clean"
-	"kwil/x/types/databases/convert"
-	"kwil/x/utils/serialize"
+	"kwil/pkg/execution/validator"
+	"kwil/pkg/types/databases"
+	"kwil/pkg/types/databases/clean"
+	"kwil/pkg/types/databases/convert"
+	"kwil/pkg/utils/serialize"
 )
 
 func (s *Service) ValidateSchema(ctx context.Context, req *txpb.ValidateSchemaRequest) (*txpb.ValidateSchemaResponse, error) {

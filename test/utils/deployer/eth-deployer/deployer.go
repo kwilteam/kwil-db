@@ -8,9 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	escrow "kwil/pkg/contracts/escrow/evm/abi"
+	token "kwil/pkg/contracts/token/evm/abi"
 	"kwil/pkg/fund"
-	escrow "kwil/x/contracts/escrow/evm/abi"
-	token "kwil/x/contracts/token/evm/abi"
 	"math/big"
 	"sync"
 )

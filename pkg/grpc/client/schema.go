@@ -5,8 +5,8 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/x/types/databases"
-	"kwil/x/utils/serialize"
+	"kwil/pkg/types/databases"
+	"kwil/pkg/utils/serialize"
 )
 
 func (c *Client) GetSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error) {

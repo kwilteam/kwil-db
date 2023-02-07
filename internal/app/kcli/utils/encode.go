@@ -2,10 +2,9 @@ package utils
 
 import (
 	"fmt"
-	datatypes "kwil/x/types/data_types"
-	anytype "kwil/x/types/data_types/any_type"
-
 	"github.com/spf13/cobra"
+	"kwil/pkg/types/data_types"
+	"kwil/pkg/types/data_types/any_type"
 )
 
 func encodeCmd() *cobra.Command {

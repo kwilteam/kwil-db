@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"kwil/x"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -22,7 +21,7 @@ type DB struct {
 }
 
 func Open(conn string, duration time.Duration) (*DB, error) {
-	return open(conn, *x.NewDeadline(duration))
+	return open(conn, *NewDeadline(duration))
 }
 
 func (db *DB) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
@@ -83,7 +82,7 @@ func (db *DB) Close() error {
 	return db.DB.Close()
 }
 
-func open(conn string, deadline x.Deadline) (*DB, error) {
+func open(conn string, deadline Deadline) (*DB, error) {
 	var outerErr error
 	for {
 		c, err := tryOpen(conn)

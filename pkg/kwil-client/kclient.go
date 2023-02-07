@@ -2,10 +2,10 @@ package kwil_client
 
 import (
 	"context"
-	"kwil/x/types/contracts/escrow"
-	"kwil/x/types/data_types/any_type"
-	"kwil/x/types/databases"
-	"kwil/x/types/transactions"
+	"kwil/pkg/types/contracts/escrow"
+	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/types/databases"
+	"kwil/pkg/types/transactions"
 	"math/big"
 )
 
