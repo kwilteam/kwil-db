@@ -84,7 +84,7 @@ func setupGanache(ctx context.Context, chainId string, opts ...containerOption) 
 	}}, nil
 }
 
-func getChainEndpoint(t *testing.T, ctx context.Context, _chainCode types.ChainCode) (exposedEndpoint string, unexposedEndpoint string) {
+func getChainEndpoint(ctx context.Context, t *testing.T, _chainCode types.ChainCode) (exposedEndpoint string, unexposedEndpoint string) {
 	// create ganache(pretend to be Goerli testnet) container
 	var err error
 	ganacheDocker := StartGanacheDockerService(t, ctx, _chainCode.ToChainId().String())
@@ -117,18 +117,20 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, rpcUrl string,
 
 		t.Logf("create chain deployer to %s", rpcUrl)
 		chainDeployer := eth_deployer.NewEthDeployer(rpcUrl, deployerPrivateKey, domination)
-		chainDeployer.UpdateContract(ctx, fundingPoolAddress)
+		if err := chainDeployer.UpdateContract(ctx, fundingPoolAddress); err != nil {
+			t.Fatalf("failed to update contract: %v", err)
+		}
 		chainEnvs := map[string]string{}
 
 		return chainDriver, chainDeployer, &userFundConfig, chainEnvs
 	}
 
-	exposedRpc, unexposedRpc := getChainEndpoint(t, ctx, _chainCode)
+	exposedRPC, unexposedRPC := getChainEndpoint(ctx, t, _chainCode)
 
-	t.Logf("create chain driver to %s", exposedRpc)
-	chainDriver := ethFund.New(exposedRpc, logger)
-	t.Logf("create chain deployer to %s", exposedRpc)
-	chainDeployer := eth_deployer.NewEthDeployer(exposedRpc, deployerPrivateKey, domination)
+	t.Logf("create chain driver to %s", exposedRPC)
+	chainDriver := ethFund.New(exposedRPC, logger)
+	t.Logf("create chain deployer to %s", exposedRPC)
+	chainDeployer := eth_deployer.NewEthDeployer(exposedRPC, deployerPrivateKey, domination)
 	tokenAddress, err := chainDeployer.DeployToken(ctx)
 	require.NoError(t, err, "failed to deploy token")
 	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
@@ -136,7 +138,7 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, rpcUrl string,
 
 	// to be used by kwil container
 	chainEnvs := map[string]string{
-		"KWILD_FUND_RPC_URL":            unexposedRpc, //kwil will call using docker network
+		"KWILD_FUND_RPC_URL":            unexposedRPC, // kwil will call using docker network
 		"KWILD_FUND_POOL_ADDRESS":       escrowAddress.String(),
 		"KWILD_FUND_WALLET":             deployerPrivateKey,
 		"KWILD_FUND_CHAIN_CODE":         fmt.Sprintf("%d", _chainCode),
@@ -151,7 +153,7 @@ func GetChainDriverAndDeployer(t *testing.T, ctx context.Context, rpcUrl string,
 		ValidatorAddress: chainDeployer.Account.String(),
 		Chain: dto.Config{
 			ChainCode:         int64(_chainCode),
-			RpcUrl:            exposedRpc,
+			RpcUrl:            exposedRPC,
 			BlockConfirmation: 10,
 			ReconnectInterval: 30,
 		},

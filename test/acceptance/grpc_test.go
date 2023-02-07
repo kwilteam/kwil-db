@@ -127,10 +127,10 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		assert.NoError(t, err, "failed to fund user config")
 
 		// and user has approved funding_pool to spend his token
-		specifications.ApproveTokenSpecification(t, ctx, chainDriver)
+		specifications.ApproveTokenSpecification(ctx, t, chainDriver)
 
 		// should be able to deposit fund
-		specifications.DepositFundSpecification(t, ctx, chainDriver)
+		specifications.DepositFundSpecification(ctx, t, chainDriver)
 	})
 
 	t.Run("should deploy and drop database", func(t *testing.T) {
@@ -152,8 +152,8 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 			go keepMiningBlocks(ctx, chainDeployer, userAddr)
 
 			// and user pledged fund to validator
-			specifications.ApproveTokenSpecification(t, ctx, chainDriver)
-			specifications.DepositFundSpecification(t, ctx, chainDriver)
+			specifications.ApproveTokenSpecification(ctx, t, chainDriver)
+			specifications.DepositFundSpecification(ctx, t, chainDriver)
 		}
 
 		// When user deployed database
@@ -170,10 +170,10 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, cltConfig, chainEnvs, remoteDBUrl)
 		// chain sync, wait kwil to register user
 		time.Sleep(chainSyncWaitTime)
-		specifications.DatabaseDeploySpecification(t, ctx, grpcDriver)
+		specifications.DatabaseDeploySpecification(ctx, t, grpcDriver)
 
 		// Then user should be able to drop database
-		specifications.DatabaseDropSpecification(t, ctx, grpcDriver)
+		specifications.DatabaseDropSpecification(ctx, t, grpcDriver)
 	})
 
 	t.Run("should execute database", func(t *testing.T) {
@@ -195,8 +195,8 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 			go keepMiningBlocks(ctx, chainDeployer, userAddr)
 
 			// and user pledged fund to validator
-			specifications.ApproveTokenSpecification(t, ctx, chainDriver)
-			specifications.DepositFundSpecification(t, ctx, chainDriver)
+			specifications.ApproveTokenSpecification(ctx, t, chainDriver)
+			specifications.DepositFundSpecification(ctx, t, chainDriver)
 		}
 
 		// When user deployed database
@@ -209,14 +209,14 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, cltConfig, chainEnvs, remoteDBUrl)
 		// chain sync, wait kwil to register user
 		time.Sleep(chainSyncWaitTime)
-		specifications.DatabaseDeploySpecification(t, ctx, grpcDriver)
+		specifications.DatabaseDeploySpecification(ctx, t, grpcDriver)
 
 		// Then user should be able to execute database
-		specifications.ExecuteDBInsertSpecification(t, ctx, grpcDriver)
-		specifications.ExecuteDBUpdateSpecification(t, ctx, grpcDriver)
-		specifications.ExecuteDBDeleteSpecification(t, ctx, grpcDriver)
+		specifications.ExecuteDBInsertSpecification(ctx, t, grpcDriver)
+		specifications.ExecuteDBUpdateSpecification(ctx, t, grpcDriver)
+		specifications.ExecuteDBDeleteSpecification(ctx, t, grpcDriver)
 
 		// and user should be able to drop database
-		specifications.DatabaseDropSpecification(t, ctx, grpcDriver)
+		specifications.DatabaseDropSpecification(ctx, t, grpcDriver)
 	})
 }

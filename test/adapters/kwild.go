@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"kwil/pkg/kwil-client"
-	"sync"
 	"testing"
 	"time"
 )
@@ -16,8 +15,6 @@ const (
 	kwildDatabase = "kwil"
 	kwildImage    = "kwild:latest"
 )
-
-var buildKwildOnce sync.Once
 
 // kwildContainer represents the kwild container type used in the module
 type kwildContainer struct {

@@ -1,16 +1,11 @@
 package crypto
 
 import (
-	"crypto/ecdsa"
 	c256 "crypto/sha256"
 	c512 "crypto/sha512"
 
 	"encoding/hex"
 )
-
-type PrivateKey struct {
-	key *ecdsa.PrivateKey
-}
 
 // Sha384 returns the sha384 hash of the data.
 func Sha384(data []byte) []byte { // I wrapped this in a function so that we know it is standard

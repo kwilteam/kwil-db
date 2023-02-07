@@ -30,6 +30,7 @@ func New(logger log.Logger, opts ...Option) *Server {
 
 	s := &Server{
 		server: server,
+		logger: l,
 	}
 
 	for _, opt := range opts {

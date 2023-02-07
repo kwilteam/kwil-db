@@ -12,18 +12,18 @@ type DatabaseDropDsl interface {
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 
-func DatabaseDropSpecification(t *testing.T, ctx context.Context, drop DatabaseDropDsl) {
+func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseDropDsl) {
 	t.Logf("Executing database drop specification")
-	//Given a valid database schema
+	// Given a valid database schema
 	db := SchemaLoader.Load(t)
 
-	//When i drop the database
+	// When i drop the database
 	err := drop.DropDatabase(ctx, db.Name)
 
-	//Then i expect success
+	// Then i expect success
 	assert.NoError(t, err)
 
-	//And i expect database should exist
+	// And i expect database should exist
 	err = drop.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.Error(t, err)
 }

@@ -20,22 +20,22 @@ func NewClient(endpoint string) *client {
 	}
 }
 
-func (c *client) metadataUrl() string {
+func (c *client) metadataURL() string {
 	s, _ := url.JoinPath(c.endpoint, "v1/metadata")
 	return s
 }
 
-func (c *client) graphqlUrl() string {
+func (c *client) graphqlURL() string {
 	s, _ := url.JoinPath(c.endpoint, "v1/graphql")
 	return s
 }
 
-func (c *client) queryUrl() string {
+func (c *client) queryURL() string {
 	s, _ := url.JoinPath(c.endpoint, "v2/query")
 	return s
 }
 
-func (c *client) explainUrl() string {
+func (c *client) explainURL() string {
 	s, _ := url.JoinPath(c.endpoint, "v1/graphql/explain")
 	return s
 }
@@ -81,7 +81,7 @@ func (c *client) TrackTable(source, schema, table string) error {
 		return fmt.Errorf("track table failed: %s", err.Error())
 	}
 	bodyReader := bytes.NewReader(jsonBody)
-	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.metadataURL(), bodyReader)
 	if err != nil {
 		return fmt.Errorf("track table failed: %s", err.Error())
 	}
@@ -99,7 +99,7 @@ func (c *client) UntrackTable(source, schema, table string) error {
 	}
 	bodyReader := bytes.NewReader(jsonBody)
 
-	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.metadataURL(), bodyReader)
 	if err != nil {
 		return fmt.Errorf("untrack table failed: %s", err.Error())
 	}
@@ -138,7 +138,7 @@ func (c *client) AddDefaultSourceAndSchema() error {
 		"PG_DATABASE_URL")
 	addSourceBody := []byte(addSource)
 	bodyReader := bytes.NewReader(addSourceBody)
-	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.metadataURL(), bodyReader)
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func (c *client) AddSchema(schema string) error {
 						       "cascade":false,
 						       "read_only":false}}`, schema)
 	bodyReader := bytes.NewReader([]byte(addSchemaBody))
-	req, err := http.NewRequest(http.MethodPost, c.queryUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.queryURL(), bodyReader)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func (c *client) DeleteSchema(schema string, cascade bool) error {
 						       "cascade":true,
 						       "read_only":false}}`, schema, cascadeValue)
 	bodyReader := bytes.NewReader([]byte(addSchemaBody))
-	req, err := http.NewRequest(http.MethodPost, c.queryUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.queryURL(), bodyReader)
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (c *client) DeleteSchema(schema string, cascade bool) error {
 func (c *client) HasInitialized() (bool, error) {
 	body := `{"type":"export_metadata","version":2,"args":{}}`
 	bodyReader := bytes.NewReader([]byte(body))
-	req, err := http.NewRequest(http.MethodPost, c.metadataUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.metadataURL(), bodyReader)
 	if err != nil {
 		return false, err
 	}
@@ -218,7 +218,7 @@ func (c *client) HasInitialized() (bool, error) {
 func (c *client) ExplainQuery(query string) (string, error) {
 	body := queryToExplain(query)
 	bodyReader := bytes.NewReader([]byte(body))
-	req, err := http.NewRequest(http.MethodPost, c.explainUrl(), bodyReader)
+	req, err := http.NewRequest(http.MethodPost, c.explainURL(), bodyReader)
 	if err != nil {
 		return "", err
 	}
