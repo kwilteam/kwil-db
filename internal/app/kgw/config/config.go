@@ -45,7 +45,7 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String("server.addr", "", "the address of the Kwil-gateway server")
 	fs.StringSlice("server.cors", []string{}, "the cors of the Kwil-gateway server, use comma to separate multiple cors")
 	fs.String("server.healthcheck_key", "", "the health check api key of the Kwil-gateway server")
-	fs.String("server.key_file", "", "the api key file of the Kwil-gateway server")
+	fs.String("server.key_file", "", "the api key file of the Kwil-gateway server(default: $HOME/.kwilgw/keys.json)")
 
 	// log flags
 	fs.String("log.level", "", "the level of the log (default: config)")
@@ -62,6 +62,10 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 func BindGlobalEnv(fs *pflag.FlagSet) {
 	// node.endpoint maps to PREFIX_NODE_ENDPOINT
 	viper.SetEnvPrefix(EnvPrefix)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
 
 	// server key & env
 	viper.BindEnv("server.addr")
@@ -75,7 +79,7 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	viper.SetDefault("server.healthcheck_key", "kwil-gateway-health-check-key")
 	viper.BindEnv("server.key_file")
 	viper.BindPFlag("server.key_file", fs.Lookup("server.key_file"))
-	viper.SetDefault("server.key_file", "./keys.json")
+	viper.SetDefault("server.key_file", filepath.Join(home, DefaultConfigDir, "keys.json"))
 
 	// log key & env
 	viper.BindEnv("log.level")
@@ -93,7 +97,7 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	// kwil key & env
 	viper.BindEnv("kwild.endpoint")
 	viper.BindPFlag("kwild.endpoint", fs.Lookup("kwild.endpoint"))
-	viper.SetDefault("kwild.endpoint", "http://localhost:50051")
+	viper.SetDefault("kwild.endpoint", "localhost:50051")
 }
 
 func LoadConfig() (cfg *AppConfig, err error) {

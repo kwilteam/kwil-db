@@ -2,14 +2,17 @@ package acceptance_test
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"flag"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/spf13/viper"
+	"kwil/pkg/chain/client/dto"
 	"kwil/pkg/chain/types"
 	"kwil/pkg/databases"
+	"kwil/pkg/fund"
 	"kwil/pkg/grpc/client"
-	kwil_client "kwil/pkg/kwil-client"
+	kwil_client "kwil/pkg/kclient"
 	"kwil/pkg/log"
 	"kwil/test/adapters"
 	"kwil/test/specifications"
@@ -47,33 +50,35 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 
 	var (
 		// test user
-		userAddr string
-		userPK   string
+		userAddr  string
+		userPKStr string
+		userPK    *ecdsa.PrivateKey
 		// test deployer
-		deployerPK string
+		deployerPKStr string
 		// database schema file
 		dbSchemaPath string
 		// remote kwil endpoint
 		remoteKwildAddr string
 		// remote blockchain endpoint
-		providerEndpoint string
+		remoteRpcUrl string
 		// blochchain block produce interval
 		chainSyncWaitTime  time.Duration
 		fundingPoolAddress string
 		_chainCode         types.ChainCode
 		fundAmount         int64
 		domination         *big.Int
-		remoteDBUrl        string
+		remoteGraphqlAddr  string
+		remoteAPIKey       string
 	)
 
 	viper.SetDefault("log.level", "config")
 
 	localEnv := func() {
-		userPK = adapters.UserAccountPK
-		deployerPK = adapters.DeployerAccountPK
+		userPKStr = adapters.UserAccountPK
+		deployerPKStr = adapters.DeployerAccountPK
 		dbSchemaPath = "./test-data/database_schema.json"
 		remoteKwildAddr = ""
-		providerEndpoint = ""
+		remoteRpcUrl = ""
 		chainSyncWaitTime = 3 * time.Second
 		_chainCode = types.GOERLI
 		fundAmount = 100
@@ -82,17 +87,18 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 
 	remoteEnv := func() {
 		// depends on the remote environment, change respectively
-		userPK = os.Getenv("TEST_USER_PK")
-		deployerPK = os.Getenv("TEST_DEPLOYER_PK")
+		userPKStr = os.Getenv("TEST_USER_PK")
+		deployerPKStr = os.Getenv("TEST_DEPLOYER_PK")
 		dbSchemaPath = "./test-data/database_schema.json"
 		remoteKwildAddr = os.Getenv("TEST_KWILD_ADDR")
-		providerEndpoint = os.Getenv("TEST_PROVIDER")
+		remoteRpcUrl = os.Getenv("TEST_PROVIDER")
 		chainSyncWaitTime = 15 * time.Second
 		_chainCode = types.GOERLI
 		fundAmount = 1
 		fundingPoolAddress = os.Getenv("TEST_POOL_ADDRESS")
-		remoteDBUrl = os.Getenv("TEST_DB_URL")
+		remoteGraphqlAddr = os.Getenv("TEST_GRAPHQL_ADDR")
 		domination = big.NewInt(10000)
+		remoteAPIKey = os.Getenv("TEST_KGW_API_KEY")
 	}
 
 	tLogger := log.New(log.Config{
@@ -106,11 +112,22 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		localEnv()
 	}
 
-	userPrivateKey, err := crypto.HexToECDSA(userPK)
+	userPK, err := crypto.HexToECDSA(userPKStr)
 	if err != nil {
 		t.Fatal(fmt.Errorf("invalid user private key: %w", err))
 	}
-	userAddr = crypto.PubkeyToAddress(userPrivateKey.PublicKey).Hex()
+	userAddr = crypto.PubkeyToAddress(userPK.PublicKey).Hex()
+
+	fundCfg := fund.Config{
+		Chain: dto.Config{
+			ChainCode:         int64(_chainCode),
+			RpcUrl:            remoteRpcUrl,
+			BlockConfirmation: 10,
+			ReconnectInterval: 30,
+		},
+		Wallet:      userPK,
+		PoolAddress: fundingPoolAddress,
+	}
 
 	t.Run("should deposit fund", func(t *testing.T) {
 		if *remote {
@@ -119,8 +136,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 
 		ctx := context.Background()
 		// setup
-		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination, tLogger)
+		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(ctx, t, remoteRpcUrl, deployerPKStr, _chainCode, domination, &fundCfg, tLogger)
 
 		// Given user is funded with escrow token
 		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
@@ -134,6 +150,10 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 	})
 
 	t.Run("should deploy and drop database", func(t *testing.T) {
+		if *remote {
+			t.Skip()
+		}
+
 		ctx := context.Background()
 		// setup
 		specifications.SetSchemaLoader(
@@ -142,8 +162,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Modifier: func(db *databases.Database[[]byte]) {
 					db.Owner = userAddr
 				}})
-		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination, tLogger)
+		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(ctx, t, remoteRpcUrl, deployerPKStr, _chainCode, domination, &fundCfg, tLogger)
 
 		if !*remote {
 			// Given user is funded
@@ -167,7 +186,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				OutputPaths: []string{"stdout"},
 			},
 		}
-		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, cltConfig, chainEnvs, remoteDBUrl)
+		grpcDriver := adapters.GetKwildDriver(ctx, t, remoteKwildAddr, cltConfig, chainEnvs)
 		// chain sync, wait kwil to register user
 		time.Sleep(chainSyncWaitTime)
 		specifications.DatabaseDeploySpecification(ctx, t, grpcDriver)
@@ -185,8 +204,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Modifier: func(db *databases.Database[[]byte]) {
 					db.Owner = userAddr
 				}})
-		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(
-			t, ctx, providerEndpoint, deployerPK, _chainCode, userPK, fundingPoolAddress, domination, tLogger)
+		chainDriver, chainDeployer, userFundConfig, fundEnvs := adapters.GetChainDriverAndDeployer(ctx, t, remoteRpcUrl, deployerPKStr, _chainCode, domination, &fundCfg, tLogger)
 
 		if !*remote {
 			// Given user is funded
@@ -206,7 +224,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 			},
 			Fund: *userFundConfig,
 		}
-		grpcDriver := adapters.GetGrpcDriver(t, ctx, remoteKwildAddr, cltConfig, chainEnvs, remoteDBUrl)
+		grpcDriver := adapters.GetKgwDriver(ctx, t, remoteKwildAddr, remoteGraphqlAddr, remoteAPIKey, cltConfig, fundEnvs)
 		// chain sync, wait kwil to register user
 		time.Sleep(chainSyncWaitTime)
 		specifications.DatabaseDeploySpecification(ctx, t, grpcDriver)

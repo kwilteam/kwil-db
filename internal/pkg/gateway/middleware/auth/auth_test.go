@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"go.uber.org/zap"
 	"io"
 	http2 "kwil/internal/pkg/test/http"
 	"net/http"
@@ -21,6 +22,7 @@ func TestAuth_ServeHTTP(t *testing.T) {
 	healthcheckKey := "healthcheckkey"
 	km, _ := NewKeyManager(strings.NewReader(`{"keys": ["keya"]}`), healthcheckKey)
 	testData := "dummy served"
+	logger, _ := zap.NewDevelopment()
 
 	tests := []struct {
 		name    string
@@ -96,7 +98,7 @@ func TestAuth_ServeHTTP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			a := MAuth(tt.fields.m)
+			a := MAuth(tt.fields.m, logger)
 			a.Middleware(tt.fields.h).ServeHTTP(w, tt.args.r)
 
 			res := w.Result()

@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kwil-client"
+	"kwil/pkg/kclient"
 )
 
 func viewDatabaseCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "view",
-		Short: "View is used to view the details of a database.  It requires a database owner and a name",
+		Short: "View is used to view the details of a database.  It requires a database name",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := kwil_client.New(ctx, config.AppConfig)
+			clt, err := kclient.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}
@@ -24,15 +24,7 @@ func viewDatabaseCmd() *cobra.Command {
 				return fmt.Errorf("error getting name flag: %w", err)
 			}
 
-			dbOwner, err := cmd.Flags().GetString("owner")
-			if err != nil {
-				return fmt.Errorf("error getting owner flag: %w", err)
-			}
-			if dbOwner == "NULL" {
-				dbOwner = clt.Config.Fund.GetAccountAddress()
-			}
-
-			meta, err := clt.GetDatabaseSchema(ctx, dbOwner, dbName)
+			meta, err := clt.GetDatabaseSchema(ctx, dbName)
 			if err != nil {
 				return err
 			}
@@ -87,6 +79,5 @@ func viewDatabaseCmd() *cobra.Command {
 
 	cmd.Flags().StringP("name", "n", "", "The name of the database to view")
 	cmd.MarkFlagRequired("name")
-	cmd.Flags().StringP("owner", "o", "NULL", "The owner of the database to view")
 	return cmd
 }

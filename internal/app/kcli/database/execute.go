@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 	"kwil/internal/app/kcli/common/display"
 	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kwil-client"
+	"kwil/pkg/kclient"
 	"kwil/pkg/types/data_types/any_type"
 )
 
@@ -69,7 +69,7 @@ create_user name satoshi age 32 --database-id x1234`,
 		}),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := kwil_client.New(ctx, config.AppConfig)
+			clt, err := kclient.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"kwil/internal/app/kcli/common/display"
 	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kwil-client"
+	"kwil/pkg/kclient"
 	"math/big"
 
 	"github.com/manifoldco/promptui"
@@ -43,7 +43,7 @@ func approveCmd() *cobra.Command {
 				return errors.New("transaction cancelled")
 			}
 
-			clt, err := kwil_client.New(ctx, config.AppConfig)
+			clt, err := kclient.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}

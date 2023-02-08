@@ -1,7 +1,7 @@
-package kwil_gateway
+package kgw
 
 import (
-	"kwil/internal/app/kwil-gateway/cmd"
+	"kwil/internal/app/kgw/cmd"
 )
 
 func Execute() error {

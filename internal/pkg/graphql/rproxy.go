@@ -32,12 +32,9 @@ func NewRProxy(cfg Config, logger log.Logger) *RProxy {
 	}
 
 	u := ru.JoinPath("v1")
-
 	logger.Info("graphql endpoint configured", zap.String("endpoint", u.String()))
 	go hasura.Initialize(cfg.Endpoint, logger)
-
 	proxy := httputil.NewSingleHostReverseProxy(u)
-
 	return &RProxy{
 		logger: logger,
 		proxy:  proxy,
@@ -46,9 +43,10 @@ func NewRProxy(cfg Config, logger log.Logger) *RProxy {
 
 func (g *RProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// payload schema: {"query": "query myQuery { ... }"}
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			g.logger.Error("parse request failed", zap.Error(err))
+			g.logger.Error("read request failed", zap.Error(err))
 			if e := misc.JsonError(w, fmt.Errorf("parse request failed"), http.StatusInternalServerError); e != nil {
 				g.logger.Error("write response failed", zap.Error(e))
 			}
@@ -57,12 +55,14 @@ func (g *RProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
 
 		var body graphqlReq
 		if err := json.Unmarshal(bodyBytes, &body); err != nil {
-			g.logger.Error("parse request failed", zap.Error(err))
+			g.logger.Error("parse request failed, invalid payload", zap.Error(err))
 			if e := misc.JsonError(w, fmt.Errorf("parse request failed"), http.StatusBadRequest); e != nil {
 				g.logger.Error("write response failed", zap.Error(e))
 			}
 			return
 		}
+
+		g.logger.Debug("graphql query", zap.String("query", body.Query))
 
 		if misc.IsMutation(body.Query) {
 			err := gqlerror.Errorf("Only query is allowed")

@@ -62,7 +62,8 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to build deposits: %w", err)
 		}
 
-		hasuraManager := hasura.NewClient(cfg.Graphql.Endpoint)
+		hasuraManager := hasura.NewClient(cfg.Graphql.Endpoint, logger)
+		go hasura.Initialize(cfg.Graphql.Endpoint, logger)
 
 		// build executor
 		exec, err := executor.NewExecutor(ctx, client, queries, hasuraManager, logger)
@@ -81,7 +82,7 @@ var RootCmd = &cobra.Command{
 
 		// health service
 		registrar := healthcheck.NewRegistrar(logger)
-		registrar.RegisterAsyncCheck(10*time.Second, 15*time.Second, healthcheck.Check{
+		registrar.RegisterAsyncCheck(10*time.Second, 3*time.Second, healthcheck.Check{
 			Name: "dummy",
 			Check: func(ctx context.Context) error {
 				// error make this check fail, nil will make it succeed

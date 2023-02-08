@@ -6,7 +6,7 @@ import (
 	accountpb "kwil/api/protobuf/kwil/account/v0/gen/go"
 	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
-	"kwil/internal/app/kwil-gateway/config"
+	"kwil/internal/app/kgw/config"
 	"kwil/internal/controller/http/v0/health"
 	"kwil/internal/pkg/gateway/middleware"
 	"kwil/internal/pkg/graphql"
@@ -38,13 +38,13 @@ func NewGWServer(mux *runtime.ServeMux, cfg config.AppConfig, logger log.Logger)
 func (g *GWServer) AddMiddlewares(ms ...*middleware.NamedMiddleware) {
 	for _, m := range ms {
 		g.middlewares = append(g.middlewares, m)
-		g.logger.Info("apply middleware", zap.String("name", m.Name))
+		g.logger.Info("apply middleware", zap.String("middleware", m.Name))
 		g.h = m.Middleware(g.h)
 	}
 }
 
 func (g *GWServer) Serve() error {
-	g.logger.Info("gateway started", zap.String("address", g.cfg.Server.Addr))
+	g.logger.Info("kwil gateway started", zap.String("address", g.cfg.Server.Addr))
 	return http.ListenAndServe(g.cfg.Server.Addr, g)
 }
 
@@ -93,6 +93,9 @@ func (g *GWServer) SetupHttpSvc(ctx context.Context) error {
 
 	// @yaiba TODO: https://grpc-ecosystem.github.io/grpc-gateway/docs/operations/health_check/
 	err = g.mux.HandlePath(http.MethodGet, "/readyz", health.GWReadyzHandler)
+	if err != nil {
+		return err
+	}
 	err = g.mux.HandlePath(http.MethodGet, "/healthz", health.GWHealthzHandler)
 	return err
 }

@@ -2,16 +2,20 @@ package adapters
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"github.com/docker/go-connections/nat"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
+	"path"
+	"runtime"
+	"testing"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const (
+	PgImage    = "postgres:15-alpine"
 	PgPort     = "5432"
 	pgUser     = "postgres"
 	pgPassword = "postgres"
@@ -35,11 +39,19 @@ func WithInitialDatabase(user string, password string) func(req *testcontainers.
 
 // setupPostgres creates an instance of the postgres container type
 func setupPostgres(ctx context.Context, opts ...containerOption) (*postgresContainer, error) {
+	_, currentFilePath, _, _ := runtime.Caller(1)
+
 	req := testcontainers.ContainerRequest{
-		Name:         fmt.Sprintf("postgres-%d", time.Now().Unix()),
-		Image:        "postgres:15-alpine",
-		Env:          map[string]string{},
-		Files:        []testcontainers.ContainerFile{},
+		Name:  fmt.Sprintf("postgres-%d", time.Now().Unix()),
+		Image: PgImage,
+		Env:   map[string]string{},
+		Files: []testcontainers.ContainerFile{
+			{
+				HostFilePath:      path.Join(path.Dir(currentFilePath), "../../scripts/pg-init-scripts/initdb.sh"),
+				ContainerFilePath: "/docker-entrypoint-initdb.d/initdb.sh",
+				FileMode:          0644,
+			},
+		},
 		Networks:     []string{"test-network"},
 		ExposedPorts: []string{}}
 
@@ -61,42 +73,24 @@ func setupPostgres(ctx context.Context, opts ...containerOption) (*postgresConta
 	}}, nil
 }
 
-func (c *postgresContainer) test(ctx context.Context) error {
-	host, err := c.Host(ctx)
-	if err != nil {
-		return err
-	}
-	portC, err := c.MappedPort(context.Background(), nat.Port(c.ContainerPort))
-	if err != nil {
-		return err
-	}
+func StartDBDockerService(t *testing.T, ctx context.Context) *postgresContainer {
+	//t.Helper()
 
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, portC.Port(), pgUser, pgPassword, kwildDatabase)
+	container, err := setupPostgres(ctx,
+		WithNetwork(kwilTestNetworkName),
+		WithExposedPort(PgPort),
+		WithInitialDatabase(pgUser, pgPassword),
+		WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(time.Second*20)))
 
-	// perform assertions
-	db, err := sql.Open("pgx", connStr)
-	if err != nil {
-		return err
-	}
-	if db == nil {
-		return err
-	}
-	defer db.Close()
+	require.NoError(t, err, "Could not start postgres container")
 
-	r, err := db.Query("select account_address from accounts")
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-	for r.Next() {
-		var accountAddress string
-		err = r.Scan(&accountAddress)
-		if err != nil {
-			break
-		}
-		fmt.Println("got config ", accountAddress)
-	}
+	t.Cleanup(func() {
+		require.NoError(t, container.Terminate(ctx), "Could not stop postgres container")
+	})
 
-	return nil
+	err = container.ShowPortInfo(ctx)
+	require.NoError(t, err)
+
+	return container
 }

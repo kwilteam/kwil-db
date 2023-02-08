@@ -36,7 +36,7 @@ func queryToExplain(query string) string {
 func Initialize(endpoint string, logger log.Logger) {
 	for {
 		time.Sleep(3 * time.Second)
-		client := NewClient(endpoint)
+		client := NewClient(endpoint, logger)
 		err := client.AddDefaultSourceAndSchema()
 		logger.Debug("try to initialize Hasura", zap.Error(err))
 		if err != nil && strings.Contains(err.Error(), "connection refused") {
@@ -44,7 +44,7 @@ func Initialize(endpoint string, logger log.Logger) {
 			continue
 		}
 		// ignore other error
-		logger.Info("Graphql initialized")
+		logger.Info("graphql initialized")
 		break
 	}
 }

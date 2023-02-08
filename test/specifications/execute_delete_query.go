@@ -2,6 +2,7 @@ package specifications
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"kwil/pkg/databases"
 	"strings"
@@ -19,26 +20,30 @@ func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute Exe
 	userQueryName := "delete_user"
 	userTableName := "users"
 	userQ := userTable{
-		ID:     "1111",
-		Name:   "test_user",
-		Age:    "33",
-		Wallet: strings.ToLower(db.Owner),
-		Bool:   "true",
+		ID:       1111,
+		UserName: "test_user",
+		Age:      33,
+		Wallet:   strings.ToLower(db.Owner),
+		Degen:    true,
 	}
-	qualifiedUserTableName := fmt.Sprintf("%s.%s", dbID, userTableName)
-	userQueryInput := []any{"name", userQ.Name}
+	qualifiedUserTableName := fmt.Sprintf("%s_%s", dbID, userTableName)
+	userQueryInput := []any{"username", userQ.UserName}
 
 	// When i execute query to database
 	err := execute.ExecuteQuery(ctx, db.Name, userQueryName, userQueryInput)
 	assert.NoError(t, err)
 
-	rawSQL := fmt.Sprintf("SELECT id, name, age, wallet, boolean FROM %s WHERE id = $1", qualifiedUserTableName)
-
 	// Then i expect row to be deleted
-	res, err := execute.QueryDatabase(ctx, rawSQL, userQ.ID)
+	query := fmt.Sprintf(`query MyQuery { %s (where: {id: {_eq: %d}}) {id username age wallet degen}}`,
+		qualifiedUserTableName, userQ.ID)
+	resByte, err := execute.QueryDatabase(ctx, query)
 	assert.NoError(t, err)
 
-	var user userTable
-	err = res.Scan(&user.ID, &user.Name, &user.Age, &user.Wallet, &user.Bool)
-	assert.Error(t, err)
+	var resp hasuraResp
+	err = json.Unmarshal(resByte, &resp)
+	assert.NoError(t, err)
+
+	data := resp["data"]
+	res := data[qualifiedUserTableName]
+	assert.Equal(t, 0, len(res))
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"kwil/pkg/kwil-client"
+	"kwil/pkg/kclient"
 	"kwil/pkg/utils"
 	"os"
 	"path/filepath"
@@ -21,7 +21,7 @@ const (
 )
 
 var ConfigFile string
-var AppConfig *kwil_client.Config
+var AppConfig *kclient.Config
 
 // BindGlobalFlags binds the global flags to the command.
 func BindGlobalFlags(fs *pflag.FlagSet) {

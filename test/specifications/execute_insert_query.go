@@ -2,28 +2,30 @@ package specifications
 
 import (
 	"context"
-	"database/sql"
+	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"kwil/pkg/databases"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 type userTable struct {
-	ID     string
-	Name   string
-	Age    string
-	Wallet string
-	Bool   string
+	ID       int32  `json:"id"`
+	UserName string `json:"username"`
+	Age      int32  `json:"age"`
+	Wallet   string `json:"wallet"`
+	Degen    bool   `json:"degen"`
 }
+
+type hasuraTable map[string][]userTable
+type hasuraResp map[string]hasuraTable
 
 type ExecuteQueryDsl interface {
 	// ExecuteQuery executes QUERY to a database
 	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key
 	ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []any) error
-	QueryDatabase(ctx context.Context, rawSQL string, args ...interface{}) (*sql.Row, error)
+	QueryDatabase(ctx context.Context, query string) ([]byte, error)
 }
 
 func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
@@ -35,34 +37,31 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	userQueryName := "create_user"
 	userTableName := "users"
 	userQ := userTable{
-		ID:     "1111",
-		Name:   "test_user",
-		Age:    "22",
-		Wallet: strings.ToLower(db.Owner),
-		Bool:   "true",
+		ID:       1111,
+		UserName: "test_user",
+		Age:      22,
+		Wallet:   strings.ToLower(db.Owner),
+		Degen:    true,
 	}
-	qualifiedUserTableName := fmt.Sprintf("%s.%s", dbID, userTableName)
-	userQueryInput := []any{"id", userQ.ID, "name", userQ.Name, "age", userQ.Age, "boolean", userQ.Bool}
+	qualifiedUserTableName := fmt.Sprintf("%s_%s", dbID, userTableName)
+	userQueryInput := []any{"id", userQ.ID, "username", userQ.UserName, "age", userQ.Age, "degen", userQ.Degen}
 
 	// TODO test insert post table
 	// When i execute query to database
 	err := execute.ExecuteQuery(ctx, db.Name, userQueryName, userQueryInput)
 	assert.NoError(t, err)
 
-	rawSQL := fmt.Sprintf("SELECT id, name, age, wallet, boolean FROM %s WHERE id = $1", qualifiedUserTableName)
-
 	// Then i expect row to be inserted
-	res, err := execute.QueryDatabase(ctx, rawSQL, userQ.ID)
+	query := fmt.Sprintf(`query MyQuery { %s (where: {id: {_eq: %d}}) {id username age wallet degen}}`,
+		qualifiedUserTableName, userQ.ID)
+	resByte, err := execute.QueryDatabase(ctx, query)
 	assert.NoError(t, err)
 
-	var user userTable
-	err = res.Scan(&user.ID, &user.Name, &user.Age, &user.Wallet, &user.Bool)
+	var resp hasuraResp
+	err = json.Unmarshal(resByte, &resp)
 	assert.NoError(t, err)
 
-	assert.Equal(t, userQ.ID, user.ID)
-	assert.Equal(t, userQ.Name, user.Name)
-	assert.Equal(t, userQ.Age, user.Age)
-	assert.Equal(t, userQ.Wallet, user.Wallet)
-	assert.Equal(t, userQ.Bool, user.Bool)
-	assert.EqualValues(t, userQ, user)
+	data := resp["data"]
+	res := data[qualifiedUserTableName][0]
+	assert.EqualValues(t, userQ, res)
 }

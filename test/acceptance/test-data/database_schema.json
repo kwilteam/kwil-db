@@ -21,7 +21,7 @@
                     ]
                 },
                 {
-                    "name": "name",
+                    "name": "username",
                     "type": 102,
                     "attributes": [
                         {
@@ -70,7 +70,7 @@
                     ]
                 },
                 {
-                    "name": "boolean",
+                    "name": "degen",
                     "type": 105
                 }
             ]
@@ -179,8 +179,8 @@
                     "column": "id"
                 },
                 {
-                    "name": "name",
-                    "column": "name"
+                    "name": "username",
+                    "column": "username"
                 },
                 {
                     "name": "age",
@@ -194,8 +194,8 @@
                     "modifier": 101
                 },
                 {
-                    "name": "boolean",
-                    "column": "boolean"
+                    "name": "degen",
+                    "column": "degen"
                 }
             ]
         },
@@ -205,8 +205,8 @@
             "table": "users",
             "parameters": [
                 {
-                    "name": "name",
-                    "column": "name"
+                    "name": "username",
+                    "column": "username"
                 },
                 {
                     "name": "age",
@@ -223,8 +223,8 @@
                     "modifier": 101
                 },
                 {
-                    "name": "where_name",
-                    "column": "name",
+                    "name": "where_username",
+                    "column": "username",
                     "operator": 101
                 }
             ]
@@ -243,8 +243,8 @@
                     "modifier": 101
                 },
                 {
-                    "name": "name",
-                    "column": "name",
+                    "name": "username",
+                    "column": "username",
                     "operator": 101
                 }
             ]

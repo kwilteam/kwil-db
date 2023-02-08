@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
-	"kwil/internal/app/kwil-gateway/config"
-	"kwil/internal/app/kwil-gateway/server"
+	"kwil/internal/app/kgw/config"
+	"kwil/internal/app/kgw/server"
 	"kwil/internal/pkg/gateway/middleware/auth"
 	"kwil/internal/pkg/gateway/middleware/cors"
 	"kwil/pkg/log"
@@ -45,7 +45,7 @@ var RootCmd = &cobra.Command{
 
 		gw.AddMiddlewares(
 			// from innermost middleware
-			auth.MAuth(keyManager),
+			auth.MAuth(keyManager, logger),
 			cors.MCors(cfg.Server.Cors),
 		)
 

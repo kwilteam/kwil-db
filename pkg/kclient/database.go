@@ -1,4 +1,4 @@
-package kwil_client
+package kclient
 
 import (
 	"context"
@@ -11,7 +11,8 @@ import (
 	"strings"
 )
 
-func (c *Client) GetDatabaseSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error) {
+func (c *Client) GetDatabaseSchema(ctx context.Context, dbName string) (*databases.Database[[]byte], error) {
+	owner := c.Config.Fund.GetAccountAddress()
 	return c.Kwil.GetSchema(ctx, owner, dbName)
 }
 
