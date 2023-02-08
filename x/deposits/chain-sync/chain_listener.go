@@ -31,7 +31,7 @@ type chain struct {
 	dao            repository.Queries      // for interacting with the db
 	chainClient    chainClient.ChainClient // for getting blocks
 	escrowContract escrow.EscrowContract   // for returning funds
-	log            logx.SugaredLogger
+	log            logx.Logger
 	tasks          tasks.TaskRunner
 	chunkSize      int64
 	mu             *sync.Mutex
@@ -61,7 +61,7 @@ func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repos
 		dao:            dao,
 		chainClient:    client,
 		escrowContract: escrow,
-		log:            logx.New().Named("deposit-chain-client").Sugar(),
+		log:            logx.New().Named("deposit-chain-client"),
 		chunkSize:      chunkSize,
 		mu:             &sync.Mutex{},
 		height:         0,

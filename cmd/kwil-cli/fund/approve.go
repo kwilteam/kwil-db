@@ -63,7 +63,7 @@ func approveCmd() *cobra.Command {
 
 				display.PrintClientChainResponse(&display.ClientChainResponse{
 					Tx:    response.TxHash,
-					Chain: string(client.Chain.GetConfig().ChainCode),
+					Chain: fmt.Sprint(client.Chain.GetConfig().ChainCode),
 				})
 
 				return nil

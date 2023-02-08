@@ -1,6 +1,11 @@
 package chainsync
 
-import "context"
+import (
+	"context"
+	"fmt"
+
+	"go.uber.org/zap"
+)
 
 // Listen will listen for new block and update the persistent block number
 func (c *chain) listen(ctx context.Context) error {
@@ -20,6 +25,8 @@ func (c *chain) listen(ctx context.Context) error {
 				return
 			case block := <-blocks:
 				c.processChunk(ctx, c.height+1, block)
+				c.log.Debug("processed chunk", zap.Int64("height", c.height))
+				fmt.Println(block)
 			}
 		}
 

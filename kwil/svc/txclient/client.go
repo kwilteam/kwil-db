@@ -17,6 +17,7 @@ type TxClient interface {
 	ListDatabases(ctx context.Context, address string) ([]string, error)
 	GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error)
 	Ping(ctx context.Context) (string, error)
+	GetValidatorAddress(ctx context.Context) (string, error)
 }
 
 type client struct {
