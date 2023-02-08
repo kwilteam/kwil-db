@@ -54,13 +54,15 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		userPKStr string
 		userPK    *ecdsa.PrivateKey
 		// test deployer
+		deployerAddr  string
 		deployerPKStr string
+		deployerPK    *ecdsa.PrivateKey
 		// database schema file
 		dbSchemaPath string
 		// remote kwil endpoint
 		remoteKwildAddr string
 		// remote blockchain endpoint
-		remoteRpcUrl string
+		remoteRPCURL string
 		// blochchain block produce interval
 		chainSyncWaitTime  time.Duration
 		fundingPoolAddress string
@@ -78,7 +80,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		deployerPKStr = adapters.DeployerAccountPK
 		dbSchemaPath = "./test-data/database_schema.json"
 		remoteKwildAddr = ""
-		remoteRpcUrl = ""
+		remoteRPCURL = ""
 		chainSyncWaitTime = 3 * time.Second
 		_chainCode = types.GOERLI
 		fundAmount = 100
@@ -91,7 +93,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		deployerPKStr = os.Getenv("TEST_DEPLOYER_PK")
 		dbSchemaPath = "./test-data/database_schema.json"
 		remoteKwildAddr = os.Getenv("TEST_KWILD_ADDR")
-		remoteRpcUrl = os.Getenv("TEST_PROVIDER")
+		remoteRPCURL = os.Getenv("TEST_PROVIDER")
 		chainSyncWaitTime = 15 * time.Second
 		_chainCode = types.GOERLI
 		fundAmount = 1
@@ -116,12 +118,17 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 	if err != nil {
 		t.Fatal(fmt.Errorf("invalid user private key: %w", err))
 	}
+	deployerPK, err = crypto.HexToECDSA(deployerPKStr)
+	if err != nil {
+		t.Fatal(fmt.Errorf("invalid deployer private key: %w", err))
+	}
 	userAddr = crypto.PubkeyToAddress(userPK.PublicKey).Hex()
+	deployerAddr = crypto.PubkeyToAddress(deployerPK.PublicKey).Hex()
 
 	fundCfg := fund.Config{
 		Chain: dto.Config{
 			ChainCode:         int64(_chainCode),
-			RpcUrl:            remoteRpcUrl,
+			RpcUrl:            remoteRPCURL,
 			BlockConfirmation: 10,
 			ReconnectInterval: 30,
 		},
@@ -136,7 +143,8 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 
 		ctx := context.Background()
 		// setup
-		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(ctx, t, remoteRpcUrl, deployerPKStr, _chainCode, domination, &fundCfg, tLogger)
+		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(ctx, t, remoteRPCURL,
+			deployerPKStr, deployerAddr, _chainCode, domination, &fundCfg, tLogger)
 
 		// Given user is funded with escrow token
 		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
@@ -162,7 +170,8 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Modifier: func(db *databases.Database[[]byte]) {
 					db.Owner = userAddr
 				}})
-		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(ctx, t, remoteRpcUrl, deployerPKStr, _chainCode, domination, &fundCfg, tLogger)
+		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(ctx, t, remoteRPCURL,
+			deployerPKStr, deployerAddr, _chainCode, domination, &fundCfg, tLogger)
 
 		if !*remote {
 			// Given user is funded
@@ -204,7 +213,8 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 				Modifier: func(db *databases.Database[[]byte]) {
 					db.Owner = userAddr
 				}})
-		chainDriver, chainDeployer, userFundConfig, fundEnvs := adapters.GetChainDriverAndDeployer(ctx, t, remoteRpcUrl, deployerPKStr, _chainCode, domination, &fundCfg, tLogger)
+		chainDriver, chainDeployer, userFundConfig, fundEnvs := adapters.GetChainDriverAndDeployer(ctx, t, remoteRPCURL,
+			deployerPKStr, deployerAddr, _chainCode, domination, &fundCfg, tLogger)
 
 		if !*remote {
 			// Given user is funded

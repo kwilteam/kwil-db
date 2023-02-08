@@ -116,12 +116,12 @@ func getChainEndpoint(ctx context.Context, t *testing.T, _chainCode types.ChainC
 	return exposedEndpoint, unexposedEndpoint
 }
 
-func GetChainDriverAndDeployer(ctx context.Context, t *testing.T, remoteRPCURL string, deployerPKStr string,
+func GetChainDriverAndDeployer(ctx context.Context, t *testing.T, remoteRPCURL string, deployerPKStr string, deployerAddr string,
 	_chainCode types.ChainCode, domination *big.Int, fundCfg *fund.Config, logger log.Logger) (
 	*ethFund.Driver, deployer.Deployer, *fund.Config, map[string]string) {
 	if remoteRPCURL != "" {
 		t.Logf("create chain driver to %s", remoteRPCURL)
-		chainDriver := ethFund.New(remoteRPCURL, logger)
+		chainDriver := ethFund.New(remoteRPCURL, deployerAddr, logger)
 		chainDriver.SetFundConfig(fundCfg)
 
 		t.Logf("create chain deployer to %s", remoteRPCURL)
@@ -137,7 +137,7 @@ func GetChainDriverAndDeployer(ctx context.Context, t *testing.T, remoteRPCURL s
 	exposedRPC, unexposedRPC := getChainEndpoint(ctx, t, _chainCode)
 
 	t.Logf("create chain driver to %s", exposedRPC)
-	chainDriver := ethFund.New(exposedRPC, logger)
+	chainDriver := ethFund.New(exposedRPC, deployerAddr, logger)
 	t.Logf("create chain deployer to %s", exposedRPC)
 	chainDeployer := eth_deployer.NewEthDeployer(exposedRPC, deployerPKStr, domination)
 	tokenAddress, err := chainDeployer.DeployToken(ctx)
@@ -156,13 +156,12 @@ func GetChainDriverAndDeployer(ctx context.Context, t *testing.T, remoteRPCURL s
 	}
 
 	userFundConfig := &fund.Config{
-		Wallet:           fundCfg.Wallet,
-		PoolAddress:      escrowAddress.String(),
-		ValidatorAddress: chainDeployer.Account.String(),
+		Wallet:      fundCfg.Wallet,
+		PoolAddress: escrowAddress.String(),
 		Chain: dto.Config{
 			ChainCode:         int64(_chainCode),
 			RpcUrl:            exposedRPC,
-			BlockConfirmation: 10,
+			BlockConfirmation: 1,
 			ReconnectInterval: 30,
 		},
 	}
