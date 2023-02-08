@@ -3,26 +3,26 @@ package validator
 import (
 	"fmt"
 	"kwil/pkg/databases"
-	anytype "kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 // validation errorCodes are annotated with errorCode number. i.e. "errorCode 1"
 
 // a validator validates a database
 type Validator struct {
-	db *databases.Database[anytype.KwilAny]
+	db *databases.Database[*spec.KwilAny]
 }
 
-func New(db *databases.Database[anytype.KwilAny]) *Validator {
+func New(db *databases.Database[*spec.KwilAny]) *Validator {
 	return &Validator{db: db}
 }
 
 // Validate validates a database
-func (v *Validator) Validate(db *databases.Database[anytype.KwilAny]) error {
+func (v *Validator) Validate(db *databases.Database[*spec.KwilAny]) error {
 	v.db = db
 
 	// errorCode 0
-	err := CheckName(db.Name, databases.MAX_DB_NAME_LENGTH)
+	err := CheckName(db.Name, MAX_DB_NAME_LENGTH)
 	if err != nil {
 		return violation(errorCode0, err)
 	}

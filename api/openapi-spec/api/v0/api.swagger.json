@@ -1,12 +1,21 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/config/v0/service.proto",
+    "title": "kwil/common/v0/account.proto",
     "version": "version not set"
   },
   "tags": [
     {
+      "name": "AccountService"
+    },
+    {
+      "name": "PricingService"
+    },
+    {
       "name": "ConfigService"
+    },
+    {
+      "name": "TxService"
     }
   ],
   "consumes": [
@@ -16,6 +25,60 @@
     "application/json"
   ],
   "paths": {
+    "/api/v0/address": {
+      "get": {
+        "operationId": "TxService_GetAddress",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txGetAddressResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v0/broadcast": {
+      "post": {
+        "operationId": "TxService_Broadcast",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txBroadcastResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txBroadcastRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v0/config/fundingpool": {
       "get": {
         "operationId": "ConfigService_GetFundingPool",
@@ -23,7 +86,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0GetFundingPoolResponse"
+              "$ref": "#/definitions/configGetFundingPoolResponse"
             }
           },
           "default": {
@@ -37,9 +100,592 @@
           "ConfigService"
         ]
       }
+    },
+    "/api/v0/ping": {
+      "get": {
+        "operationId": "TxService_Ping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txPongResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "message",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v0/pricing/estimate": {
+      "post": {
+        "operationId": "PricingService_EstimateCost",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pricingEstimateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pricingEstimateRequest"
+            }
+          }
+        ],
+        "tags": [
+          "PricingService"
+        ]
+      }
+    },
+    "/api/v0/schema/validate": {
+      "post": {
+        "operationId": "TxService_ValidateSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txValidateSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txValidateSchemaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v0/{address}/account": {
+      "get": {
+        "operationId": "AccountService_GetAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/accountsGetAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AccountService"
+        ]
+      }
+    },
+    "/api/v0/{id}/queries": {
+      "get": {
+        "operationId": "TxService_GetQueries",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txGetQueriesRequest"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v0/{id}/schema": {
+      "get": {
+        "operationId": "TxService_GetSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txGetSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v0/{owner}/databases": {
+      "get": {
+        "operationId": "TxService_ListDatabases",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txListDatabasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
     }
   },
   "definitions": {
+    "accountsGetAccountResponse": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/commonAccount"
+        }
+      }
+    },
+    "commonAccount": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "balance": {
+          "type": "string"
+        },
+        "spent": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "commonAttribute": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/commonAttributeType"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "commonAttributeType": {
+      "type": "string",
+      "enum": [
+        "INVALID_ATTRIBUTE",
+        "PRIMARY_KEY",
+        "UNIQUE",
+        "NOT_NULL",
+        "DEFAULT",
+        "MIN",
+        "MAX",
+        "MIN_LENGTH",
+        "MAX_LENGTH"
+      ],
+      "default": "INVALID_ATTRIBUTE"
+    },
+    "commonColumn": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/commonDataType"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonAttribute"
+          }
+        }
+      }
+    },
+    "commonComparisonOperator": {
+      "type": "string",
+      "enum": [
+        "OPERATOR_INVALID",
+        "OPERATOR_EQUAL",
+        "OPERATOR_NOT_EQUAL",
+        "OPERATOR_GREATER_THAN",
+        "OPERATOR_GREATER_THAN_OR_EQUAL",
+        "OPERATOR_LESS_THAN",
+        "OPERATOR_LESS_THAN_OR_EQUAL"
+      ],
+      "default": "OPERATOR_INVALID"
+    },
+    "commonDataType": {
+      "type": "string",
+      "enum": [
+        "INVALID_TYPE",
+        "NULL",
+        "STRING",
+        "INT32",
+        "INT64",
+        "BOOLEAN"
+      ],
+      "default": "INVALID_TYPE"
+    },
+    "commonDatabase": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonTable"
+          }
+        },
+        "sqlQueries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonSQLQuery"
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonRole"
+          }
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonIndex"
+          }
+        }
+      }
+    },
+    "commonIndex": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "using": {
+          "$ref": "#/definitions/commonIndexType"
+        }
+      }
+    },
+    "commonIndexType": {
+      "type": "string",
+      "enum": [
+        "INVALID_INDEX",
+        "BTREE"
+      ],
+      "default": "INVALID_INDEX"
+    },
+    "commonModifierType": {
+      "type": "string",
+      "enum": [
+        "NO_MODIFIER",
+        "CALLER"
+      ],
+      "default": "NO_MODIFIER"
+    },
+    "commonParameter": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "column": {
+          "type": "string"
+        },
+        "static": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        },
+        "modifier": {
+          "$ref": "#/definitions/commonModifierType"
+        }
+      }
+    },
+    "commonPayloadType": {
+      "type": "string",
+      "enum": [
+        "INVALID_PAYLOAD_TYPE",
+        "DEPLOY_DATABASE",
+        "MODIFY_DATABASE",
+        "DELETE_DATABASE",
+        "EXECUTE_QUERY",
+        "WITHDRAW"
+      ],
+      "default": "INVALID_PAYLOAD_TYPE"
+    },
+    "commonQueryType": {
+      "type": "string",
+      "enum": [
+        "QUERY_INVALID",
+        "QUERY_INSERT",
+        "QUERY_UPDATE",
+        "QUERY_DELETE"
+      ],
+      "default": "QUERY_INVALID"
+    },
+    "commonRole": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "boolean"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "commonSQLQuery": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/commonQueryType"
+        },
+        "table": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonParameter"
+          }
+        },
+        "where": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonWhereClause"
+          }
+        }
+      }
+    },
+    "commonSignature": {
+      "type": "object",
+      "properties": {
+        "signatureBytes": {
+          "type": "string",
+          "format": "byte"
+        },
+        "signatureType": {
+          "$ref": "#/definitions/commonSignatureType"
+        }
+      }
+    },
+    "commonSignatureType": {
+      "type": "string",
+      "enum": [
+        "INVALID_SINATURE_TYPE",
+        "PK_SECP256K1_UNCOMPRESSED",
+        "ACCOUNT_SECP256K1_UNCOMPRESSED",
+        "END_SIGNATURE_TYPE"
+      ],
+      "default": "INVALID_SINATURE_TYPE"
+    },
+    "commonTable": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonColumn"
+          }
+        }
+      }
+    },
+    "commonTx": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        },
+        "payloadType": {
+          "$ref": "#/definitions/commonPayloadType"
+        },
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
+        },
+        "signature": {
+          "$ref": "#/definitions/commonSignature"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "sender": {
+          "type": "string"
+        }
+      }
+    },
+    "commonWhereClause": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "column": {
+          "type": "string"
+        },
+        "static": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        },
+        "modifier": {
+          "$ref": "#/definitions/commonModifierType"
+        },
+        "operator": {
+          "$ref": "#/definitions/commonComparisonOperator"
+        }
+      }
+    },
+    "configGetFundingPoolResponse": {
+      "type": "object",
+      "properties": {
+        "chainCode": {
+          "type": "string"
+        },
+        "validatorAccount": {
+          "type": "string"
+        },
+        "poolAddress": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/commonTx"
+        }
+      }
+    },
+    "pricingEstimateResponse": {
+      "type": "object",
+      "properties": {
+        "cost": {
+          "type": "string"
+        }
+      }
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -67,16 +713,84 @@
         }
       }
     },
-    "v0GetFundingPoolResponse": {
+    "txBroadcastRequest": {
       "type": "object",
       "properties": {
-        "chainCode": {
-          "type": "string"
+        "tx": {
+          "$ref": "#/definitions/commonTx"
+        }
+      }
+    },
+    "txBroadcastResponse": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte"
         },
-        "validatorAccount": {
+        "fee": {
           "type": "string"
+        }
+      }
+    },
+    "txGetAddressResponse": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        }
+      }
+    },
+    "txGetQueriesRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      }
+    },
+    "txGetSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "$ref": "#/definitions/commonDatabase"
+        }
+      }
+    },
+    "txListDatabasesResponse": {
+      "type": "object",
+      "properties": {
+        "databases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "txPongResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "txValidateSchemaRequest": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/definitions/commonDatabase"
+        }
+      }
+    },
+    "txValidateSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "valid": {
+          "type": "boolean"
         },
-        "poolAddress": {
+        "error": {
           "type": "string"
         }
       }

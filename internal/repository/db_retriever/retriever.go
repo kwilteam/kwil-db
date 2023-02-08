@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	gen2 "kwil/internal/repository/gen"
 	"kwil/pkg/databases"
-	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 type DatabaseRetriever interface {
 	// GetDatabase returns a database by name and owner
-	GetDatabase(ctx context.Context, database *databases.DatabaseIdentifier) (*databases.Database[anytype.KwilAny], error)
+	GetDatabase(ctx context.Context, database *databases.DatabaseIdentifier) (*databases.Database[*spec.KwilAny], error)
 
 	// ListDatabases returns a list of all databases
 	ListDatabases(ctx context.Context) ([]*databases.DatabaseIdentifier, error)

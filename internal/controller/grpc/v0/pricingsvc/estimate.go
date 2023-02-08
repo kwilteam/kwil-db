@@ -5,7 +5,7 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
 	pb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
-	"kwil/pkg/types/transactions"
+	"kwil/pkg/crypto/transactions"
 	"kwil/pkg/utils/serialize"
 )
 

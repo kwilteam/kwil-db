@@ -31,7 +31,7 @@ func (v *Validator) validateRoles() error {
 }
 
 func validateRoleCount(roles []*databases.Role) error {
-	if len(roles) > databases.MAX_ROLE_COUNT {
+	if len(roles) > MAX_ROLE_COUNT {
 		return violation(errorCode1301, fmt.Errorf(`invalid role count: %d`, len(roles)))
 	}
 
@@ -40,7 +40,7 @@ func validateRoleCount(roles []*databases.Role) error {
 
 func (v *Validator) ValidateRole(role *databases.Role) error {
 	// validate role name
-	if err := CheckName(role.Name, databases.MAX_ROLE_NAME_LENGTH); err != nil {
+	if err := CheckName(role.Name, MAX_ROLE_NAME_LENGTH); err != nil {
 		return violation(errorCode1400, err)
 	}
 

@@ -5,14 +5,28 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"fmt"
-	depositTypes "kwil/pkg/types/deposits"
 	"kwil/pkg/utils/big"
 	"math/rand"
 	"time"
 )
 
+const CorrelationIdCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+type WithdrawalRequest struct {
+	Address string `json:"address"`
+	Amount  string `json:"amount"`
+}
+
+type StartWithdrawal struct {
+	CorrelationId string `json:"correlationId"`
+	Address       string `json:"address"`
+	Amount        string `json:"amount"`
+	Fee           string `json:"fee"`
+	Expiration    int64  `json:"expiration"`
+}
+
 // StartWithdrawal begins the withdrawal process.  It will alter a user's balance and assign a correlation ID, which will be used to track the withdrawal on-chain.
-func (s *depositer) startWithdrawal(ctx context.Context, withdrawal depositTypes.WithdrawalRequest) error {
+func (s *depositer) startWithdrawal(ctx context.Context, withdrawal WithdrawalRequest) error {
 	// start a transaction
 	tx, err := s.db.BeginTx(ctx)
 	if err != nil {
@@ -51,7 +65,7 @@ func (s *depositer) startWithdrawal(ctx context.Context, withdrawal depositTypes
 		return err
 	}
 
-	err = qtx.NewWithdrawal(ctx, &depositTypes.StartWithdrawal{
+	err = qtx.NewWithdrawal(ctx, &StartWithdrawal{
 		CorrelationId: correlationId,
 		Address:       account.Address,
 		Amount:        withdrawal.Amount,
@@ -93,7 +107,7 @@ func generateCid(l uint8, str string) (string, error) {
 	rand.Seed(time.Now().UnixNano())
 	result := make([]byte, l)
 	for i := uint8(0); i < l; i++ {
-		result[i] = depositTypes.CorrelationIdCharacters[rand.Intn(len(depositTypes.CorrelationIdCharacters))]
+		result[i] = CorrelationIdCharacters[rand.Intn(len(CorrelationIdCharacters))]
 	}
 	return string(result), nil
 }

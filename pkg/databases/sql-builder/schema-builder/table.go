@@ -3,18 +3,17 @@ package schemabuilder
 import (
 	"fmt"
 	"kwil/pkg/databases"
-	"kwil/pkg/databases/sql-builder/ddl"
-	"kwil/pkg/types/data_types"
-	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
+	ddlbuilder "kwil/pkg/databases/sql-builder/ddl"
 )
 
-func GenerateTableDDL(t *databases.Table[anytype.KwilAny], schemaName string) ([]string, error) {
+func GenerateTableDDL(t *databases.Table[*spec.KwilAny], schemaName string) ([]string, error) {
 	tbl := ddlbuilder.NewTableBuilder().Schema(schemaName).Name(t.Name)
 	for _, col := range t.Columns {
 		cb := ddlbuilder.NewColumnBuilder()
 
 		// convert column type to Postgres type
-		pgtype, err := datatypes.Utils.KwilToPgType(col.Type)
+		pgtype, err := spec.DataTypeConversions.KwilToPgType(col.Type)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert kwil type to postgres type: %w", err)
 		}

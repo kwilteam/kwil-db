@@ -3,8 +3,7 @@ package validator
 import (
 	"fmt"
 	"kwil/pkg/databases"
-	datatypes "kwil/pkg/types/data_types"
-	anytype "kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 /*
@@ -17,16 +16,16 @@ import (
 
 // validateAttributes validates all attributes in an array
 // 500 range
-func (v *Validator) validateAttributes(col *databases.Column[anytype.KwilAny]) error {
-	if len(col.Attributes) > databases.MAX_ATTRIBUTES_PER_COLUMN {
-		return violation(errorCode501, fmt.Errorf("too many attributes: %v > %v", len(col.Attributes), databases.MAX_ATTRIBUTES_PER_COLUMN))
+func (v *Validator) validateAttributes(col *databases.Column[*spec.KwilAny]) error {
+	if len(col.Attributes) > MAX_ATTRIBUTES_PER_COLUMN {
+		return violation(errorCode501, fmt.Errorf("too many attributes: %v > %v", len(col.Attributes), MAX_ATTRIBUTES_PER_COLUMN))
 	}
 
 	if containsUniqueAndDefaultAttributes(col.Attributes) {
 		return violation(errorCode502, fmt.Errorf("column %q contains both UNIQUE and DEFAULT attributes", col.Name))
 	}
 
-	attributeNames := make(map[databases.AttributeType]struct{})
+	attributeNames := make(map[spec.AttributeType]struct{})
 	for _, attr := range col.Attributes {
 		if _, ok := attributeNames[attr.Type]; ok {
 			return violation(errorCode500, fmt.Errorf("duplicate attribute type %v", attr.Type))
@@ -41,13 +40,13 @@ func (v *Validator) validateAttributes(col *databases.Column[anytype.KwilAny]) e
 	return nil
 }
 
-func containsUniqueAndDefaultAttributes(attributes []*databases.Attribute[anytype.KwilAny]) bool {
+func containsUniqueAndDefaultAttributes(attributes []*databases.Attribute[*spec.KwilAny]) bool {
 	var hasUnique, hasDefault bool
 	for _, attr := range attributes {
-		if attr.Type == databases.UNIQUE {
+		if attr.Type == spec.UNIQUE {
 			hasUnique = true
 		}
-		if attr.Type == databases.DEFAULT {
+		if attr.Type == spec.DEFAULT {
 			hasDefault = true
 		}
 	}
@@ -63,7 +62,7 @@ func containsUniqueAndDefaultAttributes(attributes []*databases.Attribute[anytyp
 */
 
 // ValidateAttribute validates a single attribute
-func (v *Validator) ValidateAttribute(col *databases.Column[anytype.KwilAny], attr *databases.Attribute[anytype.KwilAny]) error {
+func (v *Validator) ValidateAttribute(col *databases.Column[*spec.KwilAny], attr *databases.Attribute[*spec.KwilAny]) error {
 	if !attr.Type.IsValid() {
 		return violation(errorCode600, fmt.Errorf("unknown attribute type: %v", attr.Type))
 	}
@@ -72,7 +71,7 @@ func (v *Validator) ValidateAttribute(col *databases.Column[anytype.KwilAny], at
 		return violation(errorCode601, fmt.Errorf("invalid attribute value type: %w", err))
 	}
 
-	if attr.Type == databases.DEFAULT && col.Type != attr.Value.Type() {
+	if attr.Type == spec.DEFAULT && col.Type != attr.Value.Type() {
 		return violation(errorCode602, fmt.Errorf("invalid default value type, default value must be same as column type: %s != %s", col.Type.String(), attr.Value.String()))
 	}
 
@@ -83,35 +82,35 @@ func (v *Validator) ValidateAttribute(col *databases.Column[anytype.KwilAny], at
 	return nil
 }
 
-func dataTypeCanHaveAttribute(attr databases.AttributeType, col datatypes.DataType) error {
+func dataTypeCanHaveAttribute(attr spec.AttributeType, col spec.DataType) error {
 	switch attr {
-	case databases.PRIMARY_KEY:
+	case spec.PRIMARY_KEY:
 		return nil
-	case databases.UNIQUE:
+	case spec.UNIQUE:
 		// can be applied to any type
 		return nil
-	case databases.NOT_NULL:
+	case spec.NOT_NULL:
 		// can be applied to any type
 		return nil
-	case databases.DEFAULT:
+	case spec.DEFAULT:
 		// can be applied to any type
 		return nil
-	case databases.MIN:
+	case spec.MIN:
 		if !col.IsNumeric() {
 			return fmt.Errorf(`min attribute can only be applied to numeric types. received: "%s"`, col.String())
 		}
 		return nil
-	case databases.MAX:
+	case spec.MAX:
 		if !col.IsNumeric() {
 			return fmt.Errorf(`max attribute can only be applied to numeric types. received: "%s"`, col.String())
 		}
 		return nil
-	case databases.MIN_LENGTH:
+	case spec.MIN_LENGTH:
 		if !col.IsText() {
 			return fmt.Errorf(`min_length attribute can only be applied to string types. received: "%s"`, col.String())
 		}
 		return nil
-	case databases.MAX_LENGTH:
+	case spec.MAX_LENGTH:
 		if !col.IsText() {
 			return fmt.Errorf(`max_length attribute can only be applied to string types. received: "%s"`, col.String())
 		}
@@ -121,39 +120,39 @@ func dataTypeCanHaveAttribute(attr databases.AttributeType, col datatypes.DataTy
 	return fmt.Errorf(`unknown attribute: "%s"`, attr.String())
 }
 
-func validateAttributeValueType(val datatypes.DataType, attr databases.AttributeType) error {
+func validateAttributeValueType(val spec.DataType, attr spec.AttributeType) error {
 	switch attr {
-	case databases.PRIMARY_KEY:
+	case spec.PRIMARY_KEY:
 		// takes no value
 		return nil
-	case databases.UNIQUE:
+	case spec.UNIQUE:
 		// takes no value
 		return nil
-	case databases.NOT_NULL:
+	case spec.NOT_NULL:
 		// takes no value
 		return nil
-	case databases.DEFAULT:
+	case spec.DEFAULT:
 		// can be anything
 		return nil
-	case databases.MIN:
+	case spec.MIN:
 		// must int
 		if !val.IsNumeric() {
 			return fmt.Errorf(`min attribute must be an int. received: "%s"`, val.String())
 		}
 		return nil
-	case databases.MAX:
+	case spec.MAX:
 		// must int
 		if !val.IsNumeric() {
 			return fmt.Errorf(`max attribute must be an int. received: "%s"`, val.String())
 		}
 		return nil
-	case databases.MIN_LENGTH:
+	case spec.MIN_LENGTH:
 		// must int
 		if !val.IsNumeric() {
 			return fmt.Errorf(`min_length attribute must be an int. received: "%s"`, val.String())
 		}
 		return nil
-	case databases.MAX_LENGTH:
+	case spec.MAX_LENGTH:
 		// must int
 		if !val.IsNumeric() {
 			return fmt.Errorf(`max_length attribute must be an int. received: "%s"`, val.String())

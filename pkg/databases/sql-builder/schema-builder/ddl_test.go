@@ -3,7 +3,7 @@ package schemabuilder_test
 import (
 	"kwil/pkg/databases/clean"
 	"kwil/pkg/databases/mocks"
-	"kwil/pkg/databases/sql-builder/schema-builder"
+	schemabuilder "kwil/pkg/databases/sql-builder/schema-builder"
 	"kwil/pkg/databases/validator"
 	"testing"
 

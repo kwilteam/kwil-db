@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/internal/pkg/deposits/tasks"
-	"kwil/pkg/types/accounts"
+	"kwil/pkg/fund/accounts"
 	bigutil "kwil/pkg/utils/big"
 	"math/big"
 )

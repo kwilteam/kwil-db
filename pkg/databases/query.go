@@ -3,12 +3,12 @@ package databases
 import (
 	"bytes"
 	"encoding/gob"
-	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
-type SQLQuery[T anytype.AnyValue] struct {
+type SQLQuery[T spec.AnyValue] struct {
 	Name   string            `json:"name" clean:"lower"`
-	Type   QueryType         `json:"type" clean:"is_enum,query_type"`
+	Type   spec.QueryType    `json:"type" clean:"is_enum,query_type"`
 	Table  string            `json:"table" clean:"lower"`
 	Params []*Parameter[T]   `json:"parameters,omitempty" clean:"struct"`
 	Where  []*WhereClause[T] `json:"where,omitempty" clean:"struct"`

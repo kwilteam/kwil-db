@@ -3,17 +3,18 @@ package client
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	accountpb "kwil/api/protobuf/kwil/account/v0/gen/go"
 	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
 	"kwil/internal/pkg/transport"
+	"kwil/pkg/crypto/transactions"
 	"kwil/pkg/databases"
+	"kwil/pkg/fund/accounts"
 	"kwil/pkg/log"
-	"kwil/pkg/types/accounts"
 	"kwil/pkg/types/execution"
-	transactions2 "kwil/pkg/types/transactions"
+
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 type GrpcClient interface {
@@ -21,8 +22,8 @@ type GrpcClient interface {
 	GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error)
 	GetSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error)
 	GetSchemaById(ctx context.Context, id string) (*databases.Database[[]byte], error)
-	EstimateCost(ctx context.Context, tx *transactions2.Transaction) (string, error)
-	Broadcast(ctx context.Context, tx *transactions2.Transaction) (*transactions2.Response, error)
+	EstimateCost(ctx context.Context, tx *transactions.Transaction) (string, error)
+	Broadcast(ctx context.Context, tx *transactions.Transaction) (*transactions.Response, error)
 	Ping(ctx context.Context) (string, error)
 	GetAccount(ctx context.Context, address string) (accounts.Account, error)
 	Close() error

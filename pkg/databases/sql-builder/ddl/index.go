@@ -1,7 +1,7 @@
 package ddlbuilder
 
 import (
-	"kwil/pkg/databases"
+	"kwil/pkg/databases/spec"
 	"strings"
 )
 
@@ -10,7 +10,7 @@ type index struct {
 	schema  string
 	table   string
 	columns []string
-	using   databases.IndexType
+	using   spec.IndexType
 }
 
 type indexBuilder struct {
@@ -36,7 +36,7 @@ type indexColumnPicker interface {
 }
 
 type indexUsingPicker interface {
-	Using(using databases.IndexType) builder
+	Using(using spec.IndexType) builder
 }
 
 type indexSchemaPicker interface {
@@ -64,7 +64,7 @@ func (b *indexBuilder) Columns(columns ...string) indexUsingPicker {
 	return b
 }
 
-func (b *indexBuilder) Using(using databases.IndexType) builder {
+func (b *indexBuilder) Using(using spec.IndexType) builder {
 	b.index.using = using
 	return b.index
 }

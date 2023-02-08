@@ -3,9 +3,8 @@ package validator_test
 import (
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/mocks"
+	"kwil/pkg/databases/spec"
 	"kwil/pkg/databases/validator"
-	datatypes "kwil/pkg/types/data_types"
-	anytype "kwil/pkg/types/data_types/any_type"
 	"testing"
 
 	"github.com/mitchellh/copystructure"
@@ -28,12 +27,12 @@ func Test_Validate(t *testing.T) {
 
 }
 
-func testNames(t *testing.T, db databases.Database[anytype.KwilAny]) {
+func testNames(t *testing.T, db databases.Database[*spec.KwilAny]) {
 	v := validator.Validator{}
 
-	table := &databases.Table[anytype.KwilAny]{
+	table := &databases.Table[*spec.KwilAny]{
 		Name: "SELECT",
-		Columns: []*databases.Column[anytype.KwilAny]{
+		Columns: []*databases.Column[*spec.KwilAny]{
 			&mocks.Column1, // just need something to pass validation
 		},
 	}
@@ -59,12 +58,12 @@ func testNames(t *testing.T, db databases.Database[anytype.KwilAny]) {
 
 }
 
-func testMaxCounts(t *testing.T, db databases.Database[anytype.KwilAny]) {
+func testMaxCounts(t *testing.T, db databases.Database[*spec.KwilAny]) {
 	v := validator.Validator{}
 
 	// testing table count
-	for i := 0; i < databases.MAX_TABLE_COUNT+1; i++ {
-		db.Tables = append(db.Tables, &databases.Table[anytype.KwilAny]{})
+	for i := 0; i < validator.MAX_TABLE_COUNT+1; i++ {
+		db.Tables = append(db.Tables, &databases.Table[*spec.KwilAny]{})
 	}
 
 	err := v.Validate(&db)
@@ -77,13 +76,13 @@ func testAttributes(t *testing.T) {
 	v := validator.Validator{}
 
 	// testing min attribute on boolean column
-	col := &databases.Column[anytype.KwilAny]{
+	col := &databases.Column[*spec.KwilAny]{
 		Name: "test",
-		Type: datatypes.BOOLEAN,
-		Attributes: []*databases.Attribute[anytype.KwilAny]{
+		Type: spec.BOOLEAN,
+		Attributes: []*databases.Attribute[*spec.KwilAny]{
 			{
-				Type:  databases.MIN,
-				Value: anytype.NewMust(4),
+				Type:  spec.MIN,
+				Value: spec.NewMust(4),
 			},
 		},
 	}
@@ -93,17 +92,17 @@ func testAttributes(t *testing.T) {
 	}
 
 	// testing that I can't have default and unique
-	col2 := &databases.Column[anytype.KwilAny]{
+	col2 := &databases.Column[*spec.KwilAny]{
 		Name: "test",
-		Type: datatypes.STRING,
-		Attributes: []*databases.Attribute[anytype.KwilAny]{
+		Type: spec.STRING,
+		Attributes: []*databases.Attribute[*spec.KwilAny]{
 			{
-				Type:  databases.DEFAULT,
-				Value: anytype.NewMust("test"),
+				Type:  spec.DEFAULT,
+				Value: spec.NewMust("test"),
 			},
 			{
-				Type:  databases.UNIQUE,
-				Value: anytype.NewMust(nil),
+				Type:  spec.UNIQUE,
+				Value: spec.NewMust(nil),
 			},
 		},
 	}
@@ -113,15 +112,15 @@ func testAttributes(t *testing.T) {
 	}
 }
 
-func testQueries(t *testing.T, db databases.Database[anytype.KwilAny]) {
+func testQueries(t *testing.T, db databases.Database[*spec.KwilAny]) {
 	v := validator.New(&db)
 
 	// testing that insert with no params is invalid
-	q := &databases.SQLQuery[anytype.KwilAny]{
+	q := &databases.SQLQuery[*spec.KwilAny]{
 		Name:   "test",
-		Type:   databases.INSERT,
+		Type:   spec.INSERT,
 		Table:  "table1",
-		Params: []*databases.Parameter[anytype.KwilAny]{},
+		Params: []*databases.Parameter[*spec.KwilAny]{},
 	}
 
 	if err := v.ValidateQuery(q); err == nil {
@@ -129,12 +128,12 @@ func testQueries(t *testing.T, db databases.Database[anytype.KwilAny]) {
 	}
 
 	// testing that delete with no wheres
-	q = &databases.SQLQuery[anytype.KwilAny]{
+	q = &databases.SQLQuery[*spec.KwilAny]{
 		Name:   "test",
-		Type:   databases.DELETE,
+		Type:   spec.DELETE,
 		Table:  "table1",
-		Params: []*databases.Parameter[anytype.KwilAny]{},
-		Where:  []*databases.WhereClause[anytype.KwilAny]{},
+		Params: []*databases.Parameter[*spec.KwilAny]{},
+		Where:  []*databases.WhereClause[*spec.KwilAny]{},
 	}
 
 	if err := v.ValidateQuery(q); err == nil {
@@ -142,24 +141,24 @@ func testQueries(t *testing.T, db databases.Database[anytype.KwilAny]) {
 	}
 
 	// test that a insert that does not cover a table with not null columns is invalid
-	table := &databases.Table[anytype.KwilAny]{
+	table := &databases.Table[*spec.KwilAny]{
 		Name: "thetable",
-		Columns: []*databases.Column[anytype.KwilAny]{
+		Columns: []*databases.Column[*spec.KwilAny]{
 			{
 				Name: "col1",
-				Type: datatypes.STRING,
-				Attributes: []*databases.Attribute[anytype.KwilAny]{
+				Type: spec.STRING,
+				Attributes: []*databases.Attribute[*spec.KwilAny]{
 					{
-						Type:  databases.NOT_NULL,
-						Value: anytype.NewMust(nil),
+						Type:  spec.NOT_NULL,
+						Value: spec.NewMust(nil),
 					},
 					{
-						Type:  databases.MIN_LENGTH,
-						Value: anytype.NewMust(45),
+						Type:  spec.MIN_LENGTH,
+						Value: spec.NewMust(45),
 					},
 					{
-						Type:  databases.MAX_LENGTH,
-						Value: anytype.NewMust(45),
+						Type:  spec.MAX_LENGTH,
+						Value: spec.NewMust(45),
 					},
 				},
 			},
@@ -168,11 +167,11 @@ func testQueries(t *testing.T, db databases.Database[anytype.KwilAny]) {
 
 	db.Tables = append(db.Tables, table)
 
-	q = &databases.SQLQuery[anytype.KwilAny]{
+	q = &databases.SQLQuery[*spec.KwilAny]{
 		Name:   "test",
-		Type:   databases.INSERT,
+		Type:   spec.INSERT,
 		Table:  "thetable",
-		Params: []*databases.Parameter[anytype.KwilAny]{},
+		Params: []*databases.Parameter[*spec.KwilAny]{},
 	}
 
 	if err := v.ValidateQuery(q); err == nil {
@@ -180,17 +179,17 @@ func testQueries(t *testing.T, db databases.Database[anytype.KwilAny]) {
 	}
 
 	// test that an insert with modifier CALLER will fail since the table's min length is 45 and max length is 45
-	q = &databases.SQLQuery[anytype.KwilAny]{
+	q = &databases.SQLQuery[*spec.KwilAny]{
 		Name:  "test",
-		Type:  databases.INSERT,
+		Type:  spec.INSERT,
 		Table: "thetable",
-		Params: []*databases.Parameter[anytype.KwilAny]{
+		Params: []*databases.Parameter[*spec.KwilAny]{
 			{
 				Name:     "col1",
 				Column:   "col1",
 				Static:   true,
-				Value:    anytype.NewMust(nil),
-				Modifier: databases.CALLER,
+				Value:    spec.NewMust(nil),
+				Modifier: spec.CALLER,
 			},
 		},
 	}

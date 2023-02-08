@@ -3,9 +3,9 @@ package kwil_client
 import (
 	"context"
 	"kwil/pkg/contracts/escrow/types"
+	"kwil/pkg/crypto/transactions"
 	"kwil/pkg/databases"
-	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/transactions"
+	"kwil/pkg/databases/spec"
 	"math/big"
 )
 
@@ -14,5 +14,5 @@ type KClient interface {
 	GetDatabaseSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error)
 	DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*transactions.Response, error)
 	DropDatabase(ctx context.Context, dbName string) (*transactions.Response, error)
-	ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []anytype.KwilAny) (*transactions.Response, error)
+	ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []spec.KwilAny) (*transactions.Response, error)
 }

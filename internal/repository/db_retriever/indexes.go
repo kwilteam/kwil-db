@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kwil/pkg/databases"
+	"kwil/pkg/databases/spec"
 )
 
 func (q *dbRetriever) GetIndexes(ctx context.Context, dbid int32) ([]*databases.Index, error) {
@@ -24,7 +25,7 @@ func (q *dbRetriever) GetIndexes(ctx context.Context, dbid int32) ([]*databases.
 				Name:    index.IndexName,
 				Table:   table.TableName,
 				Columns: index.Columns,
-				Using:   databases.IndexType(index.IndexType),
+				Using:   spec.IndexType(index.IndexType),
 			})
 		}
 	}

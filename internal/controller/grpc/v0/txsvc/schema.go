@@ -3,7 +3,7 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	"kwil/api/protobuf/kwil/common/v0/gen/go"
+	_go "kwil/api/protobuf/kwil/common/v0/gen/go"
 	_go2 "kwil/api/protobuf/kwil/tx/v0/gen/go"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/convert"
@@ -74,7 +74,7 @@ func (s *Service) GetExecutablesById(ctx context.Context, req *_go2.GetExecutabl
 }
 
 func (s *Service) retrieveExecutables(id string) (*_go2.GetExecutablesResponse, error) {
-	execs, err := s.executor.GetExecutables(id)
+	execs, err := s.executor.GetQueries(id)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to get executables", err)
 		return nil, fmt.Errorf("failed to get executables")

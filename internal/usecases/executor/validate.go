@@ -2,11 +2,11 @@ package executor
 
 import (
 	"kwil/pkg/databases"
+	"kwil/pkg/databases/spec"
 	"kwil/pkg/databases/validator"
-	"kwil/pkg/types/data_types/any_type"
 )
 
-func (s *executor) ValidateDatabase(db *databases.Database[anytype.KwilAny]) error {
+func (s *executor) ValidateDatabase(db *databases.Database[*spec.KwilAny]) error {
 	vld := validator.Validator{}
 	return vld.Validate(db)
 }

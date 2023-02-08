@@ -3,9 +3,9 @@ package repository
 import (
 	"context"
 	"database/sql"
+	depositTypes "kwil/internal/pkg/deposits"
 	gen2 "kwil/internal/repository/gen"
 	escrowTypes "kwil/pkg/contracts/escrow/types"
-	depositTypes "kwil/pkg/types/deposits"
 	"strings"
 )
 
