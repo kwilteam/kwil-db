@@ -40,6 +40,8 @@ tasks:
 
   build:gateway:
     desc: Builds the API Gateway
+    deps:
+      - pb:gen:openapi
     cmds:
       - go build -o .build/kwil-gateway ./cmd/kwil-gateway
     generates:

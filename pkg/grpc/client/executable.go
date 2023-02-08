@@ -9,7 +9,7 @@ import (
 	"kwil/pkg/utils/serialize"
 )
 
-func (c *Client) GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error) {
+func (c *Gr) GetExecutablesById(ctx context.Context, id string) ([]*execution.Executable, error) {
 	res, err := c.txClt.GetExecutablesById(ctx, &txpb.GetExecutablesByIdRequest{
 		Id: id,
 	})

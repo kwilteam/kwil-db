@@ -5,13 +5,13 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
 	"kwil/api/protobuf/kwil/tx/v0/gen/go"
-	transactions2 "kwil/pkg/types/transactions"
+	txs "kwil/pkg/types/transactions"
 	"kwil/pkg/utils/serialize"
 )
 
-func (c *Client) Broadcast(ctx context.Context, tx *transactions2.Transaction) (*transactions2.Response, error) {
+func (c *Gr) Broadcast(ctx context.Context, tx *txs.Transaction) (*txs.Response, error) {
 	// convert transaction to proto
-	pbTx, err := serialize.Convert[transactions2.Transaction, commonpb.Tx](tx)
+	pbTx, err := serialize.Convert[txs.Transaction, commonpb.Tx](tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
@@ -22,7 +22,7 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions2.Transaction) (
 	}
 
 	// convert response to transaction
-	txRes, err := serialize.Convert[_go.BroadcastResponse, transactions2.Response](res)
+	txRes, err := serialize.Convert[_go.BroadcastResponse, txs.Response](res)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert response: %w", err)
 	}
@@ -30,7 +30,7 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions2.Transaction) (
 	return txRes, nil
 }
 
-func (c *Client) Ping(ctx context.Context) (string, error) {
+func (c *Gr) Ping(ctx context.Context) (string, error) {
 	res, err := c.txClt.Ping(ctx, &_go.PingRequest{})
 	if err != nil {
 		return "", fmt.Errorf("failed to ping: %w", err)

@@ -20,6 +20,9 @@ var RootCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg, err := config.LoadConfig()
+		if err != nil {
+			return err
+		}
 
 		logger := log.New(cfg.Log)
 
@@ -28,7 +31,7 @@ var RootCmd = &cobra.Command{
 		if err := gw.SetupGrpcSvc(ctx); err != nil {
 			return err
 		}
-		if err := gw.SetupHttpSvc(ctx); err != nil {
+		if err := gw.SetupHTTPSvc(ctx); err != nil {
 			return err
 		}
 

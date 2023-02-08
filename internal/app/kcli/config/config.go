@@ -28,17 +28,17 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String("node.endpoint", "", "the endpoint of the Kwil node")
 
 	fs.String("fund.wallet", "", "you wallet private key")
-	fs.String("fund.token_address", "", "the address of the funding pool token")
 	fs.String("fund.pool_address", "", "the address of the funding pool")
-	fs.String("fund.validator_address", "", "the address of the validator")
 	fs.String("fund.chain_code", "", "the chain code of the funding pool chain")
 	fs.String("fund.rpc_url", "", "the provider url of the funding pool chain")
-	fs.Int64("fund.reconnect_interval", 0, "the reconnect interval of the funding pool")
-	fs.Int64("fund.block_confirmation", 0, "the block confirmation of the funding pool")
+	// cli does not need to set these flags
+	//fs.Int64("fund.reconnect_interval", 0, "the reconnect interval of the funding pool")
+	//fs.Int64("fund.block_confirmation", 0, "the block confirmation of the funding pool")
 
 	// log flags
 	fs.String("log.level", "", "the level of the Kwil log")
-	fs.StringSlice("log.output_paths", []string{}, "the output path of the log (default: ['stdout']), use comma to separate multiple output paths")
+	// ignore the log.output_paths flag
+	//fs.StringSlice("log.output_paths", []string{}, "the output path of the log (default: ['stdout']), use comma to separate multiple output paths")
 }
 
 // BindGlobalEnv binds the global flags to the environment variables.
@@ -51,20 +51,16 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 
 	viper.BindEnv("fund.wallet")
 	viper.BindPFlag("fund.wallet", fs.Lookup("fund.wallet"))
-	viper.BindEnv("fund.token_address")
-	viper.BindPFlag("fund.token_address", fs.Lookup("fund.token_address"))
 	viper.BindEnv("fund.pool_address")
 	viper.BindPFlag("fund.pool_address", fs.Lookup("fund.pool_address"))
-	viper.BindEnv("fund.validator_address")
-	viper.BindPFlag("fund.validator_address", fs.Lookup("fund.validator_address"))
 	viper.BindEnv("fund.chain_code")
 	viper.BindPFlag("fund.chain_code", fs.Lookup("fund.chain_code"))
 	viper.BindEnv("fund.rpc_url")
 	viper.BindPFlag("fund.rpc_url", fs.Lookup("fund.rpc_url"))
-	viper.BindEnv("fund.reconnect_interval")
-	viper.BindPFlag("fund.reconnect_interval", fs.Lookup("fund.reconnect_interval"))
-	viper.BindEnv("fund.block_confirmation")
-	viper.BindPFlag("fund.block_confirmation", fs.Lookup("fund.block_confirmation"))
+	//viper.BindEnv("fund.reconnect_interval")
+	//viper.BindPFlag("fund.reconnect_interval", fs.Lookup("fund.reconnect_interval"))
+	//viper.BindEnv("fund.block_confirmation")
+	//viper.BindPFlag("fund.block_confirmation", fs.Lookup("fund.block_confirmation"))
 
 	// log key & env
 	viper.BindEnv("log.level")
@@ -94,16 +90,12 @@ func LoadConfig() {
 	replacer := strings.NewReplacer(".", "_")
 	viper.SetEnvKeyReplacer(replacer)
 	viper.SetEnvPrefix(EnvPrefix)
-
-	//viper.AllowEmptyEnv(true)
 	viper.AutomaticEnv()
 	//viper.Debug()
-
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// cfg file not found; ignore error if desired
 			fmt.Fprintln(os.Stdout, "cfg file not found:", viper.ConfigFileUsed())
-
 		} else {
 			// cfg file was found but another error was produced
 			fmt.Fprintln(os.Stderr, "Error loading config file :", err)

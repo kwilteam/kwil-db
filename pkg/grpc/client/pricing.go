@@ -9,7 +9,7 @@ import (
 	"kwil/pkg/utils/serialize"
 )
 
-func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction) (string, error) {
+func (c *Gr) EstimateCost(ctx context.Context, tx *transactions.Transaction) (string, error) {
 	// convert transaction to proto
 	pbTx, err := serialize.Convert[transactions.Transaction, commonpb.Tx](tx)
 	if err != nil {

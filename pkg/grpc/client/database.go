@@ -6,7 +6,7 @@ import (
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
 )
 
-func (c *Client) ListDatabases(ctx context.Context, address string) ([]string, error) {
+func (c *Gr) ListDatabases(ctx context.Context, address string) ([]string, error) {
 	res, err := c.txClt.ListDatabases(ctx, &txpb.ListDatabasesRequest{
 		Owner: address,
 	})

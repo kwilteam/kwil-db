@@ -9,7 +9,7 @@ import (
 	"kwil/pkg/utils/serialize"
 )
 
-func (c *Client) GetSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error) {
+func (c *Gr) GetSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error) {
 	res, err := c.txClt.GetSchema(ctx, &txpb.GetSchemaRequest{
 		Owner: owner,
 		Name:  dbName,
@@ -21,7 +21,7 @@ func (c *Client) GetSchema(ctx context.Context, owner string, dbName string) (*d
 	return convertDatabase(res.Database)
 }
 
-func (c *Client) GetSchemaById(ctx context.Context, id string) (*databases.Database[[]byte], error) {
+func (c *Gr) GetSchemaById(ctx context.Context, id string) (*databases.Database[[]byte], error) {
 	res, err := c.txClt.GetSchemaById(ctx, &txpb.GetSchemaByIdRequest{
 		Id: id,
 	})

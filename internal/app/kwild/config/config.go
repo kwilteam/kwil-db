@@ -50,7 +50,7 @@ type AppConfig struct {
 	Server  ServerConfig   `mapstructure:"server"`
 	Log     log.Config     `mapstructure:"log"`
 	Fund    fund.Config    `mapstructure:"fund"`
-	Db      PostgresConfig `mapstructure:"db"`
+	DB      PostgresConfig `mapstructure:"db"`
 	Graphql GraphqlConfig  `mapstructure:"graphql"`
 }
 

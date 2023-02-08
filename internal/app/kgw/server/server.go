@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	accountpb "kwil/api/protobuf/kwil/account/v0/gen/go"
+	cfgpb "kwil/api/protobuf/kwil/configuration/v0/gen/go"
 	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
 	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
 	"kwil/internal/app/kgw/config"
+	"kwil/internal/controller/http/v0/graphql"
 	"kwil/internal/controller/http/v0/health"
+	"kwil/internal/controller/http/v0/swagger"
 	"kwil/internal/pkg/gateway/middleware"
-	"kwil/internal/pkg/graphql"
 	"kwil/pkg/log"
 	"net/http"
 
@@ -68,25 +70,28 @@ func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to register pricing service handler: %w", err)
 	}
+	err = cfgpb.RegisterConfigServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
+	if err != nil {
+		return fmt.Errorf("failed to register config service handler: %w", err)
+	}
 
 	return nil
 }
 
-func (g *GWServer) SetupHttpSvc(ctx context.Context) error {
-	// @yaiba TODO: implement swagger api
-	//err := g.mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONHandler)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//err = g.mux.HandlePath(http.MethodGet, "/swagger/ui", swagger.GWSwaggerUIHandler)
-	//
-	//if err != nil {
-	//	return err
-	//}
+func (g *GWServer) SetupHTTPSvc(ctx context.Context) error {
+	err := g.mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONHandler)
+	if err != nil {
+		return err
+	}
 
-	graphqlRProxy := graphql.NewRProxy(g.cfg.Graphql, g.logger.Named("rproxy"))
-	err := g.mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
+	err = g.mux.HandlePath(http.MethodGet, "/swagger/ui", swagger.GWSwaggerUIHandler)
+
+	if err != nil {
+		return err
+	}
+
+	graphqlRProxy := graphql.NewRProxy(g.cfg.Graphql.Endpoint, g.logger.Named("rproxy"))
+	err = g.mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
 	if err != nil {
 		return err
 	}

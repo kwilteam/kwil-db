@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"kwil/internal/pkg/graphql"
 	"kwil/pkg/log"
 	"kwil/pkg/utils"
 	"os"
@@ -19,6 +18,10 @@ const (
 	DefaultConfigType = "yaml"
 )
 
+type GraphqlConfig struct {
+	Endpoint string `mapstructure:"endpoint"`
+}
+
 type KwildConfig struct {
 	Endpoint string `mapstructure:"endpoint"`
 }
@@ -31,10 +34,10 @@ type ServerConfig struct {
 }
 
 type AppConfig struct {
-	Server  ServerConfig   `mapstructure:"server"`
-	Log     log.Config     `mapstructure:"log"`
-	Graphql graphql.Config `mapstructure:"graphql"`
-	Kwild   KwildConfig    `mapstructure:"kwild"`
+	Server  ServerConfig  `mapstructure:"server"`
+	Log     log.Config    `mapstructure:"log"`
+	Graphql GraphqlConfig `mapstructure:"graphql"`
+	Kwild   KwildConfig   `mapstructure:"kwild"`
 }
 
 var ConfigFile string

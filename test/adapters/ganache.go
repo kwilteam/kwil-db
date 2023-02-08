@@ -157,7 +157,6 @@ func GetChainDriverAndDeployer(ctx context.Context, t *testing.T, remoteRPCURL s
 
 	userFundConfig := &fund.Config{
 		Wallet:           fundCfg.Wallet,
-		TokenAddress:     tokenAddress.String(),
 		PoolAddress:      escrowAddress.String(),
 		ValidatorAddress: chainDeployer.Account.String(),
 		Chain: dto.Config{

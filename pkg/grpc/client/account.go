@@ -7,7 +7,7 @@ import (
 	"kwil/pkg/types/accounts"
 )
 
-func (c *Client) GetAccount(ctx context.Context, address string) (accounts.Account, error) {
+func (c *Gr) GetAccount(ctx context.Context, address string) (accounts.Account, error) {
 	res, err := c.infoClt.GetAccount(ctx, &pb.GetAccountRequest{
 		Address: address,
 	})

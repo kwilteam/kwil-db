@@ -25,15 +25,15 @@ type RProxy struct {
 	proxy  *httputil.ReverseProxy
 }
 
-func NewRProxy(cfg Config, logger log.Logger) *RProxy {
-	ru, err := url.Parse(cfg.Endpoint)
+func NewRProxy(backendEndpoint string, logger log.Logger) *RProxy {
+	ru, err := url.Parse(backendEndpoint)
 	if err != nil {
 		log2.Fatal(err)
 	}
 
 	u := ru.JoinPath("v1")
 	logger.Info("graphql endpoint configured", zap.String("endpoint", u.String()))
-	go hasura.Initialize(cfg.Endpoint, logger)
+	go hasura.Initialize(backendEndpoint, logger)
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	return &RProxy{
 		logger: logger,

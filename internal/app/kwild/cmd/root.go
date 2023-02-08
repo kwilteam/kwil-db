@@ -7,6 +7,7 @@ import (
 	"kwil/internal/app/kwild/config"
 	"kwil/internal/app/kwild/server"
 	"kwil/internal/controller/grpc/v0/accountsvc"
+	"kwil/internal/controller/grpc/v0/configsvc"
 	"kwil/internal/controller/grpc/v0/healthsvc"
 	"kwil/internal/controller/grpc/v0/pricingsvc"
 	"kwil/internal/controller/grpc/v0/txsvc"
@@ -41,7 +42,7 @@ var RootCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		client, err := sqlclient.Open(cfg.Db.DbUrl(), 60*time.Second)
+		client, err := sqlclient.Open(cfg.DB.DbUrl(), 60*time.Second)
 		if err != nil {
 			return fmt.Errorf("failed to open sql client: %w", err)
 		}
@@ -72,10 +73,10 @@ var RootCmd = &cobra.Command{
 		}
 
 		// build config service
-		accountService := accountsvc.NewService(queries, logger)
+		accSvc := accountsvc.NewService(queries, logger)
 
 		// pricing service
-		pricingService := pricingsvc.NewService()
+		prcSvc := pricingsvc.NewService()
 
 		// tx service
 		txService := txsvc.NewService(queries, exec, logger)
@@ -92,8 +93,10 @@ var RootCmd = &cobra.Command{
 		ck := registrar.BuildChecker(simple_checker.New(logger))
 		healthService := healthsvc.NewServer(ck)
 
+		// configuration service
+		cfgService := configsvc.NewService(&cfg.Fund, logger)
 		// build server
-		svr := server.New(cfg.Server, txService, accountService, pricingService, healthService, dps, logger)
+		svr := server.New(cfg.Server, txService, accSvc, cfgService, healthService, prcSvc, dps, logger)
 		return svr.Start(ctx)
 	}}
 

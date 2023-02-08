@@ -1,4 +1,4 @@
-package manager
+package graphql
 
 type Client interface {
 	TrackTable(source, schema, table string) error
