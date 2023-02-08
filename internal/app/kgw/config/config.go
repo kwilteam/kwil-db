@@ -18,6 +18,21 @@ const (
 	DefaultConfigType = "yaml"
 )
 
+// viper keys
+const (
+	ServerAddrKey           = "server.addr"
+	ServerCorsKey           = "server.cors"
+	ServerHealthcheckKeyKey = "server.healthcheck_key"
+	ServerKeyFileKey        = "server.key_file"
+
+	LogLevelKey       = "log.level"
+	LogOutputPathsKey = "log.output_paths"
+
+	GraphqlEndpointKey = "graphql.endpoint"
+
+	KwildEndpointKey = "kwild.endpoint"
+)
+
 type GraphqlConfig struct {
 	Endpoint string `mapstructure:"endpoint"`
 }
@@ -45,20 +60,20 @@ var ConfigFile string
 // BindGlobalFlags binds the global flags to the command.
 func BindGlobalFlags(fs *pflag.FlagSet) {
 	// server flags
-	fs.String("server.addr", "", "the address of the Kwil-gateway server")
-	fs.StringSlice("server.cors", []string{}, "the cors of the Kwil-gateway server, use comma to separate multiple cors")
-	fs.String("server.healthcheck_key", "", "the health check api key of the Kwil-gateway server")
-	fs.String("server.key_file", "", "the api key file of the Kwil-gateway server(default: $HOME/.kwilgw/keys.json)")
+	fs.String(ServerAddrKey, "", "the address of the Kwil-gateway server")
+	fs.StringSlice(ServerCorsKey, []string{}, "the cors of the Kwil-gateway server, use comma to separate multiple cors")
+	fs.String(ServerHealthcheckKeyKey, "", "the health check api key of the Kwil-gateway server")
+	fs.String(ServerKeyFileKey, "", "the api key file of the Kwil-gateway server(default: $HOME/.kwilgw/keys.json)")
 
 	// log flags
-	fs.String("log.level", "", "the level of the log (default: config)")
-	fs.StringSlice("log.output_paths", []string{}, "the output path of the log (default: ['stdout']), use comma to separate multiple output paths")
+	fs.String(LogLevelKey, "", "the level of the log (default: config)")
+	fs.StringSlice(LogOutputPathsKey, []string{}, "the output path of the log (default: ['stdout']), use comma to separate multiple output paths")
 
 	// hasura flags
-	fs.String("graphql.endpoint", "", "the endpoint of the Graphql server")
+	fs.String("GraphqlEndpointKey", "", "the endpoint of the Graphql server")
 
 	// kwil flags
-	fs.String("kwild.endpoint", "", "the endpoint of the Kwild server")
+	fs.String(KwildEndpointKey, "", "the endpoint of the Kwild server")
 }
 
 // BindGlobalEnv binds the global flags to the environment variables.
@@ -71,36 +86,36 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	}
 
 	// server key & env
-	viper.BindEnv("server.addr")
-	viper.BindPFlag("server.addr", fs.Lookup("server.addr"))
-	viper.SetDefault("server.addr", "0.0.0.0:8082")
-	viper.BindEnv("server.cors")
-	viper.BindPFlag("server.cors", fs.Lookup("server.cors"))
-	viper.SetDefault("server.cors", []string{"*"})
-	viper.BindEnv("server.healthcheck_key")
-	viper.BindPFlag("server.healthcheck_key", fs.Lookup("server.healthcheck_key"))
-	viper.SetDefault("server.healthcheck_key", "kwil-gateway-health-check-key")
-	viper.BindEnv("server.key_file")
-	viper.BindPFlag("server.key_file", fs.Lookup("server.key_file"))
-	viper.SetDefault("server.key_file", filepath.Join(home, DefaultConfigDir, "keys.json"))
+	viper.BindEnv(ServerAddrKey)
+	viper.BindPFlag(ServerAddrKey, fs.Lookup(ServerAddrKey))
+	viper.SetDefault(ServerAddrKey, "0.0.0.0:8082")
+	viper.BindEnv(ServerCorsKey)
+	viper.BindPFlag(ServerCorsKey, fs.Lookup(ServerCorsKey))
+	viper.SetDefault(ServerCorsKey, []string{"*"})
+	viper.BindEnv(ServerHealthcheckKeyKey)
+	viper.BindPFlag(ServerHealthcheckKeyKey, fs.Lookup(ServerHealthcheckKeyKey))
+	viper.SetDefault(ServerHealthcheckKeyKey, "kwil-gateway-health-check-key")
+	viper.BindEnv(ServerKeyFileKey)
+	viper.BindPFlag(ServerKeyFileKey, fs.Lookup(ServerKeyFileKey))
+	viper.SetDefault(ServerKeyFileKey, filepath.Join(home, DefaultConfigDir, "keys.json"))
 
 	// log key & env
-	viper.BindEnv("log.level")
-	viper.BindPFlag("log.level", fs.Lookup("log.level"))
-	viper.SetDefault("log.level", "info")
-	viper.BindEnv("log.output_paths")
-	viper.BindPFlag("log.output_paths", fs.Lookup("log.output_paths"))
-	viper.SetDefault("log.output_paths", []string{"stdout"})
+	viper.BindEnv(LogLevelKey)
+	viper.BindPFlag(LogLevelKey, fs.Lookup(LogLevelKey))
+	viper.SetDefault(LogLevelKey, "info")
+	viper.BindEnv(LogOutputPathsKey)
+	viper.BindPFlag(LogOutputPathsKey, fs.Lookup(LogOutputPathsKey))
+	viper.SetDefault(LogOutputPathsKey, []string{"stdout"})
 
 	// hasura key & env
-	viper.BindEnv("graphql.endpoint")
-	viper.BindPFlag("graphql.endpoint", fs.Lookup("graphql.endpoint"))
-	viper.SetDefault("graphql.endpoint", "http://localhost:8080")
+	viper.BindEnv(GraphqlEndpointKey)
+	viper.BindPFlag(GraphqlEndpointKey, fs.Lookup(GraphqlEndpointKey))
+	viper.SetDefault(GraphqlEndpointKey, "http://localhost:8080")
 
 	// kwil key & env
-	viper.BindEnv("kwild.endpoint")
-	viper.BindPFlag("kwild.endpoint", fs.Lookup("kwild.endpoint"))
-	viper.SetDefault("kwild.endpoint", "localhost:50051")
+	viper.BindEnv(KwildEndpointKey)
+	viper.BindPFlag(KwildEndpointKey, fs.Lookup(KwildEndpointKey))
+	viper.SetDefault(KwildEndpointKey, "localhost:50051")
 }
 
 func LoadConfig() (cfg *AppConfig, err error) {

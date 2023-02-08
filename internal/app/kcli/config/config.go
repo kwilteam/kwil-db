@@ -20,25 +20,40 @@ const (
 	DefaultConfigType = "toml"
 )
 
+// viper keys
+const (
+	NodeEndpointKey = "node.endpoint"
+
+	FundWalletKey            = "fund.wallet"
+	FundPoolAddressKey       = "fund.pool_address"
+	FundChainCodeKey         = "fund.chain_code"
+	FundRPCURLKey            = "fund.rpc_url"
+	FundReconnectIntervalKey = "fund.reconnect_interval"
+	FundBlockConfirmationKey = "fund.block_confirmation"
+
+	LogLevelKey       = "log.level"
+	LogOutputPathsKey = "log.output_paths"
+)
+
 var ConfigFile string
 var AppConfig *kclient.Config
 
 // BindGlobalFlags binds the global flags to the command.
 func BindGlobalFlags(fs *pflag.FlagSet) {
-	fs.String("node.endpoint", "", "the endpoint of the Kwil node")
+	fs.String(NodeEndpointKey, "", "the endpoint of the Kwil node")
 
-	fs.String("fund.wallet", "", "you wallet private key")
-	fs.String("fund.pool_address", "", "the address of the funding pool")
-	fs.String("fund.chain_code", "", "the chain code of the funding pool chain")
-	fs.String("fund.rpc_url", "", "the provider url of the funding pool chain")
+	fs.String(FundWalletKey, "", "you wallet private key")
+	fs.String(FundPoolAddressKey, "", "the address of the funding pool")
+	fs.String(FundChainCodeKey, "", "the chain code of the funding pool chain")
+	fs.String(FundRPCURLKey, "", "the provider url of the funding pool chain")
 	// cli does not need to set these flags
-	//fs.Int64("fund.reconnect_interval", 0, "the reconnect interval of the funding pool")
-	//fs.Int64("fund.block_confirmation", 0, "the block confirmation of the funding pool")
+	// fs.Int64(FundReconnectIntervalKey, 0, "the reconnect interval of the funding pool")
+	// fs.Int64(FundBlockConfirmationKey, 0, "the block confirmation of the funding pool")
 
 	// log flags
-	fs.String("log.level", "", "the level of the Kwil log")
+	fs.String(LogLevelKey, "", "the level of the Kwil log")
 	// ignore the log.output_paths flag
-	//fs.StringSlice("log.output_paths", []string{}, "the output path of the log (default: ['stdout']), use comma to separate multiple output paths")
+	// fs.StringSlice(LogOutputPathsKey, []string{}, "the output path of the log (default: ['stdout']), use comma to separate multiple output paths")
 }
 
 // BindGlobalEnv binds the global flags to the environment variables.
@@ -46,29 +61,29 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	// node.endpoint maps to PREFIX_NODE_ENDPOINT
 	viper.SetEnvPrefix(EnvPrefix)
 
-	viper.BindEnv("node.endpoint")
-	viper.BindPFlag("node.endpoint", fs.Lookup("node.endpoint")) //flag override env
+	viper.BindEnv(NodeEndpointKey)
+	viper.BindPFlag(NodeEndpointKey, fs.Lookup(NodeEndpointKey)) //flag override env
 
-	viper.BindEnv("fund.wallet")
-	viper.BindPFlag("fund.wallet", fs.Lookup("fund.wallet"))
-	viper.BindEnv("fund.pool_address")
-	viper.BindPFlag("fund.pool_address", fs.Lookup("fund.pool_address"))
-	viper.BindEnv("fund.chain_code")
-	viper.BindPFlag("fund.chain_code", fs.Lookup("fund.chain_code"))
-	viper.BindEnv("fund.rpc_url")
-	viper.BindPFlag("fund.rpc_url", fs.Lookup("fund.rpc_url"))
-	//viper.BindEnv("fund.reconnect_interval")
-	//viper.BindPFlag("fund.reconnect_interval", fs.Lookup("fund.reconnect_interval"))
-	//viper.BindEnv("fund.block_confirmation")
-	//viper.BindPFlag("fund.block_confirmation", fs.Lookup("fund.block_confirmation"))
+	viper.BindEnv(FundWalletKey)
+	viper.BindPFlag(FundWalletKey, fs.Lookup(FundWalletKey))
+	viper.BindEnv(FundPoolAddressKey)
+	viper.BindPFlag(FundPoolAddressKey, fs.Lookup(FundPoolAddressKey))
+	viper.BindEnv(FundChainCodeKey)
+	viper.BindPFlag(FundChainCodeKey, fs.Lookup(FundChainCodeKey))
+	viper.BindEnv(FundRPCURLKey)
+	viper.BindPFlag(FundRPCURLKey, fs.Lookup(FundRPCURLKey))
+	// viper.BindEnv(FundReconnectIntervalKey)
+	// viper.BindPFlag(FundReconnectIntervalKey, fs.Lookup(FundReconnectIntervalKey))
+	// viper.BindEnv("fund.block_confirmation")
+	// viper.BindPFlag(FundBlockConfirmationKey, fs.Lookup(FundBlockConfirmationKey))
 
 	// log key & env
-	viper.BindEnv("log.level")
-	viper.BindPFlag("log.level", fs.Lookup("log.level"))
-	viper.SetDefault("log.level", "info")
-	viper.BindEnv("log.output_paths")
-	viper.BindPFlag("log.output_paths", fs.Lookup("log.output_paths"))
-	viper.SetDefault("log.output_paths", []string{"stdout"})
+	viper.BindEnv(LogLevelKey)
+	viper.BindPFlag(LogLevelKey, fs.Lookup(LogLevelKey))
+	viper.SetDefault(LogLevelKey, "info")
+	viper.BindEnv(LogOutputPathsKey)
+	viper.BindPFlag(LogOutputPathsKey, fs.Lookup(LogOutputPathsKey))
+	viper.SetDefault(LogOutputPathsKey, []string{"stdout"})
 }
 
 func LoadConfig() {
@@ -91,7 +106,7 @@ func LoadConfig() {
 	viper.SetEnvKeyReplacer(replacer)
 	viper.SetEnvPrefix(EnvPrefix)
 	viper.AutomaticEnv()
-	//viper.Debug()
+	// viper.Debug()
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// cfg file not found; ignore error if desired
