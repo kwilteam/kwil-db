@@ -3,7 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
-	gen2 "kwil/internal/repository/gen"
+	"fmt"
+	"kwil/internal/repository/gen"
 	escrowTypes "kwil/pkg/contracts/escrow/types"
 	depositTypes "kwil/pkg/types/deposits"
 	"strings"
@@ -21,7 +22,7 @@ type ChainSyncer interface {
 }
 
 func (q *queries) SetHeight(ctx context.Context, chain int32, height int64) error {
-	return q.gen.SetHeight(ctx, &gen2.SetHeightParams{
+	return q.gen.SetHeight(ctx, &gen.SetHeightParams{
 		Code:   chain,
 		Height: height,
 	})
@@ -36,7 +37,7 @@ func (q *queries) GetDepositIdByTx(ctx context.Context, txHash string) (int32, e
 }
 
 func (q *queries) Deposit(ctx context.Context, deposit *escrowTypes.DepositEvent) error {
-	return q.gen.Deposit(ctx, &gen2.DepositParams{
+	return q.gen.Deposit(ctx, &gen.DepositParams{
 		Amount:         deposit.Amount,
 		TxHash:         strings.ToLower(deposit.TxHash),
 		Height:         deposit.Height,
@@ -45,7 +46,17 @@ func (q *queries) Deposit(ctx context.Context, deposit *escrowTypes.DepositEvent
 }
 
 func (q *queries) CommitDeposits(ctx context.Context, finish int64) error {
-	return q.gen.CommitDeposits(ctx, finish)
+	err := q.gen.CommitDeposits(ctx, finish)
+	if err != nil {
+		return fmt.Errorf("failed to commit deposits: %w", err)
+	}
+
+	err = q.gen.DeleteDeposits(ctx, finish)
+	if err != nil {
+		return fmt.Errorf("failed to delete deposits: %w", err)
+	}
+
+	return nil
 }
 
 func (q *queries) ConfirmWithdrawal(ctx context.Context, correlationId string) error {
@@ -53,7 +64,7 @@ func (q *queries) ConfirmWithdrawal(ctx context.Context, correlationId string) e
 }
 
 func (q *queries) NewWithdrawal(ctx context.Context, withdrawal *depositTypes.StartWithdrawal) error {
-	return q.gen.NewWithdrawal(ctx, &gen2.NewWithdrawalParams{
+	return q.gen.NewWithdrawal(ctx, &gen.NewWithdrawalParams{
 		CorrelationID:  withdrawal.CorrelationId,
 		Amount:         withdrawal.Amount,
 		AccountAddress: strings.ToLower(withdrawal.Address),
@@ -63,8 +74,12 @@ func (q *queries) NewWithdrawal(ctx context.Context, withdrawal *depositTypes.St
 }
 
 func (q *queries) AddTxHashToWithdrawal(ctx context.Context, txHash string, correlationId string) error {
-	return q.gen.AddTxHashToWithdrawal(ctx, &gen2.AddTxHashToWithdrawalParams{
+	return q.gen.AddTxHashToWithdrawal(ctx, &gen.AddTxHashToWithdrawalParams{
 		CorrelationID: correlationId,
 		TxHash:        sql.NullString{Valid: true, String: strings.ToLower(txHash)},
 	})
+}
+
+func (q *queries) DeleteDeposits(ctx context.Context, finish int64) error {
+	return q.gen.DeleteDeposits(ctx, finish)
 }

@@ -2,6 +2,7 @@ package chainsync
 
 import (
 	"context"
+	"fmt"
 	"go.uber.org/zap"
 )
 
@@ -25,6 +26,8 @@ func (c *chain) listen(ctx context.Context) error {
 			case block := <-blocks:
 				c.log.Debug("new block ", zap.Int64("height", block))
 				c.processChunk(ctx, c.height+1, block)
+				c.log.Debug("processed chunk", zap.Int64("height", c.height))
+				fmt.Println(block)
 			}
 		}
 

@@ -12,7 +12,7 @@ import (
 	"kwil/pkg/databases"
 	"kwil/pkg/fund"
 	"kwil/pkg/grpc/client"
-	kwil_client "kwil/pkg/kclient"
+	kwilClient "kwil/pkg/kclient"
 	"kwil/pkg/log"
 	"kwil/test/adapters"
 	"kwil/test/specifications"
@@ -185,7 +185,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		}
 
 		// When user deployed database
-		cltConfig := &kwil_client.Config{
+		cltConfig := &kwilClient.Config{
 			Node: client.Config{
 				Endpoint: remoteKwildAddr,
 			},
@@ -228,7 +228,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		}
 
 		// When user deployed database
-		cltConfig := &kwil_client.Config{
+		cltConfig := &kwilClient.Config{
 			Node: client.Config{
 				Endpoint: remoteKwildAddr,
 			},

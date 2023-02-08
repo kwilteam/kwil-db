@@ -31,12 +31,13 @@ func MCors(cors []string) *middleware.NamedMiddleware {
 		Name: "cors",
 		Middleware: func(h http.Handler) http.Handler {
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if allowedOrigin(cors, r.Header.Get("Origin")) {
+					w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+					w.Header().Set("Access-Control-Allow-Methods", AllowMethods)
+					w.Header().Set("Access-Control-Allow-Headers", AllowHeaders)
+				}
+
 				if r.Method == "OPTIONS" {
-					if allowedOrigin(cors, r.Header.Get("Origin")) {
-						w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
-						w.Header().Set("Access-Control-Allow-Methods", AllowMethods)
-						w.Header().Set("Access-Control-Allow-Headers", AllowHeaders)
-					}
 					return
 				}
 

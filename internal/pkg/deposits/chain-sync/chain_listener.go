@@ -3,7 +3,7 @@ package chainsync
 import (
 	"context"
 	"fmt"
-	tasks2 "kwil/internal/pkg/deposits/tasks"
+	task "kwil/internal/pkg/deposits/tasks"
 	"kwil/internal/pkg/deposits/tasks/escrow-tasks"
 	"kwil/internal/repository"
 	chainClient "kwil/pkg/chain/client"
@@ -19,7 +19,7 @@ import (
 )
 
 type Chain interface {
-	RegisterTask(task tasks2.Runnable)
+	RegisterTask(task task.Runnable)
 	Start(ctx context.Context) error
 	ReturnFunds(ctx context.Context, params *types.ReturnFundsParams) (*types.ReturnFundsResponse, error)
 	ChainCode() chains.ChainCode
@@ -31,7 +31,7 @@ type chain struct {
 	chainClient    chainClient.ChainClient // for getting blocks
 	escrowContract escrow.EscrowContract   // for returning funds
 	log            log.Logger
-	tasks          tasks2.TaskRunner
+	tasks          task.TaskRunner
 	chunkSize      int64
 	mu             *sync.Mutex
 	height         int64 // the height of the last block we processed
@@ -49,8 +49,8 @@ func New(client chainClient.ChainClient, escrow escrow.EscrowContract, dao repos
 	}
 
 	// create the task runner with escrow tasks
-	commitHeightTask := tasks2.NewHeightTask(dao, client.ChainCode())
-	taskRunner := tasks2.New(escrowTasks)
+	commitHeightTask := task.NewHeightTask(dao, client.ChainCode())
+	taskRunner := task.New(escrowTasks)
 
 	// set the final task to be commit height
 	taskRunner.SetFinal(commitHeightTask)

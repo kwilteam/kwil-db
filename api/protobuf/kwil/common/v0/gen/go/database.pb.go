@@ -215,7 +215,7 @@ func (x *Column) GetType() DataType {
 	if x != nil {
 		return x.Type
 	}
-	return DataType_INVALID_TYPE
+	return DataType_BEGIN_DATA_TYPES
 }
 
 func (x *Column) GetAttributes() []*Attribute {
@@ -270,7 +270,7 @@ func (x *Attribute) GetType() AttributeType {
 	if x != nil {
 		return x.Type
 	}
-	return AttributeType_INVALID_ATTRIBUTE
+	return AttributeType_BEGIN_ATTRIBUTE_TYPES
 }
 
 func (x *Attribute) GetValue() []byte {
@@ -335,7 +335,7 @@ func (x *SQLQuery) GetType() QueryType {
 	if x != nil {
 		return x.Type
 	}
-	return QueryType_QUERY_INVALID
+	return QueryType_BEGIN_QUERY_TYPES
 }
 
 func (x *SQLQuery) GetTable() string {
@@ -522,7 +522,7 @@ func (x *WhereClause) GetOperator() ComparisonOperator {
 	if x != nil {
 		return x.Operator
 	}
-	return ComparisonOperator_OPERATOR_INVALID
+	return ComparisonOperator_BEGIN_OPERATOR_TYPES
 }
 
 type Role struct {
@@ -656,7 +656,7 @@ func (x *Index) GetUsing() IndexType {
 	if x != nil {
 		return x.Using
 	}
-	return IndexType_INVALID_INDEX
+	return IndexType_BEGIN_INDEX_TYPES
 }
 
 var File_kwil_common_v0_database_proto protoreflect.FileDescriptor

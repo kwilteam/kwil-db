@@ -18,12 +18,13 @@ message Signature {
 }
 
 enum PayloadType {
-    INVALID_PAYLOAD_TYPE = 0;
-    DEPLOY_DATABASE = 1;
-    MODIFY_DATABASE = 2;
-    DELETE_DATABASE = 3;
-    EXECUTE_QUERY = 4;
-    WITHDRAW = 5;
+    BEGIN_PAYLOAD_TYPES = 0;
+    INVALID_PAYLOAD_TYPE = 100;
+    DEPLOY_DATABASE = 101;
+    MODIFY_DATABASE = 102;
+    DELETE_DATABASE = 103;
+    EXECUTE_QUERY = 104;
+    WITHDRAW = 105;
 }
 
 enum SignatureType {

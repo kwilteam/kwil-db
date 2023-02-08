@@ -61,6 +61,7 @@ tasks:
     cmds:
       - rm -rf deployments/helm/kwild/charts
       - rm -rf deployments/helm/kwil/charts
+      - helm dependency update deployments/helm/hasura
       - helm dependency update deployments/helm/kwild
       - helm dependency update deployments/helm/kwil
 

@@ -97,6 +97,7 @@ hasura:
     readyInitialDelaySeconds: 3
     timeoutSeconds: 1
     periodSeconds: 15
+
 # overwrite postgresql setting
 postgresql:
   enabled: true # for dependency

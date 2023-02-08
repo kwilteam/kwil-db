@@ -495,6 +495,7 @@
     "v0AttributeType": {
       "type": "string",
       "enum": [
+        "BEGIN_ATTRIBUTE_TYPES",
         "INVALID_ATTRIBUTE",
         "PRIMARY_KEY",
         "UNIQUE",
@@ -505,7 +506,7 @@
         "MIN_LENGTH",
         "MAX_LENGTH"
       ],
-      "default": "INVALID_ATTRIBUTE"
+      "default": "BEGIN_ATTRIBUTE_TYPES"
     },
     "v0BroadcastRequest": {
       "type": "object",
@@ -547,6 +548,7 @@
     "v0ComparisonOperator": {
       "type": "string",
       "enum": [
+        "BEGIN_OPERATOR_TYPES",
         "OPERATOR_INVALID",
         "OPERATOR_EQUAL",
         "OPERATOR_NOT_EQUAL",
@@ -555,11 +557,12 @@
         "OPERATOR_LESS_THAN",
         "OPERATOR_LESS_THAN_OR_EQUAL"
       ],
-      "default": "OPERATOR_INVALID"
+      "default": "BEGIN_OPERATOR_TYPES"
     },
     "v0DataType": {
       "type": "string",
       "enum": [
+        "BEGIN_DATA_TYPES",
         "INVALID_TYPE",
         "NULL",
         "STRING",
@@ -567,7 +570,7 @@
         "INT64",
         "BOOLEAN"
       ],
-      "default": "INVALID_TYPE"
+      "default": "BEGIN_DATA_TYPES"
     },
     "v0Database": {
       "type": "object",
@@ -730,10 +733,11 @@
     "v0IndexType": {
       "type": "string",
       "enum": [
+        "BEGIN_INDEX_TYPES",
         "INVALID_INDEX",
         "BTREE"
       ],
-      "default": "INVALID_INDEX"
+      "default": "BEGIN_INDEX_TYPES"
     },
     "v0ListDatabasesResponse": {
       "type": "object",
@@ -750,6 +754,7 @@
       "type": "string",
       "enum": [
         "NO_MODIFIER",
+        "INVALID_MODIFIER",
         "CALLER"
       ],
       "default": "NO_MODIFIER"
@@ -777,6 +782,7 @@
     "v0PayloadType": {
       "type": "string",
       "enum": [
+        "BEGIN_PAYLOAD_TYPES",
         "INVALID_PAYLOAD_TYPE",
         "DEPLOY_DATABASE",
         "MODIFY_DATABASE",
@@ -784,7 +790,7 @@
         "EXECUTE_QUERY",
         "WITHDRAW"
       ],
-      "default": "INVALID_PAYLOAD_TYPE"
+      "default": "BEGIN_PAYLOAD_TYPES"
     },
     "v0PongResponse": {
       "type": "object",
@@ -797,12 +803,13 @@
     "v0QueryType": {
       "type": "string",
       "enum": [
+        "BEGIN_QUERY_TYPES",
         "QUERY_INVALID",
         "QUERY_INSERT",
         "QUERY_UPDATE",
         "QUERY_DELETE"
       ],
-      "default": "QUERY_INVALID"
+      "default": "BEGIN_QUERY_TYPES"
     },
     "v0Role": {
       "type": "object",
