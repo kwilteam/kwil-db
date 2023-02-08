@@ -1,0 +1,35 @@
+syntax = "proto3";
+package configuration.v0;
+option go_package = "kwil/api/protobuf/kwil/configuration/v0/gen/go";
+
+import "google/api/annotations.proto";
+
+service ConfigService {
+    rpc GetAll(GetCfgRequest) returns (GetCfgResponse) {
+        option (google.api.http) = {
+            get: "/api/v0/config"
+        };
+    }
+
+    rpc GetFunding(GetFundingCfgRequest) returns (GetFundingCfgResponse) {
+        option (google.api.http) = {
+            get: "/api/v0/config/funding"
+        };
+    }
+}
+
+message GetCfgRequest {}
+
+message GetCfgResponse {
+  GetFundingCfgResponse funding = 1;
+}
+
+message GetFundingCfgRequest {}
+
+message GetFundingCfgResponse {
+  int64 chain_code = 1;
+  string validator_account = 2;
+  string pool_address = 3;
+  string token_address = 4;
+  string token_name = 5;
+}

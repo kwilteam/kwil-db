@@ -1,0 +1,24 @@
+package client
+
+import (
+	"context"
+	"fmt"
+	pb "kwil/api/protobuf/kwil/account/v0/gen/go"
+	"kwil/pkg/types/accounts"
+)
+
+func (c *Gr) GetAccount(ctx context.Context, address string) (accounts.Account, error) {
+	res, err := c.infoClt.GetAccount(ctx, &pb.GetAccountRequest{
+		Address: address,
+	})
+	if err != nil {
+		return accounts.Account{}, fmt.Errorf("failed to get config: %w", err)
+	}
+
+	return accounts.Account{
+		Address: res.Account.Address,
+		Nonce:   res.Account.Nonce,
+		Balance: res.Account.Balance,
+		Spent:   res.Account.Spent,
+	}, nil
+}

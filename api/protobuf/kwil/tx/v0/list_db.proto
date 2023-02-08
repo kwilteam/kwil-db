@@ -1,0 +1,11 @@
+syntax = "proto3";
+package tx.v0;
+option go_package = "kwil/api/protobuf/kwil/tx/v0/gen/go";
+
+message ListDatabasesRequest {
+	string owner = 1;
+}
+
+message ListDatabasesResponse {
+	repeated string databases = 1;
+}

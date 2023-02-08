@@ -3,7 +3,7 @@
 .github/
 .vscode/
 .wal/
-docker/
+build/package/docker/
 .gitattributes
 .gitignore
 .DS_Store

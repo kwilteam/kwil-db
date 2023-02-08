@@ -1,0 +1,38 @@
+# NodePort: map containers port to localhost
+service:
+  type: NodePort
+  # comment nodePorts to enable multi instances on local machine
+  nodePorts:
+    kwild: 32101
+    kwil: 32102
+
+kwild:
+  hasura:
+    postgresql:
+      enabled: false
+    service:
+      type: NodePort
+      # comment nodePorts to enable multi instances on local machine
+      nodePorts:
+        hasura: 32100
+  image:
+    repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild
+    pullPolicy: IfNotPresent
+    tag: latest
+
+
+global:
+  postgres:
+    enabled: true # to use an exising database
+    host: "kwildb.c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
+    port: 5432
+    database: "postgres"
+    username: "postgres"
+    password: "postgres"
+
+#Location of image in AWS ECR
+
+image:
+  repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwil-gateway
+  pullPolicy: IfNotPresent
+  tag: latest

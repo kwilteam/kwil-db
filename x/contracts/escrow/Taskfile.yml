@@ -1,7 +1,0 @@
-version: "3"
-
-tasks:
-  build:abi:
-    desc: Builds Golang bindings for EVM contract ABIs
-    cmds:
-      - abigen --abi ./evm/abi/escrow.json --bin ./evm/abi/escrow.bin --pkg abi --type Escrow --out ./evm/abi/escrow.go
