@@ -1,4 +1,4 @@
-package transactions
+package accounts
 
 type PayloadType int32
 

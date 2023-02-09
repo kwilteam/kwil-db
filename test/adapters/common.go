@@ -15,7 +15,8 @@ import (
 
 const (
 	kwilTestNetworkName = "kwil-test-network"
-	startupTimeout      = 1 * time.Minute
+	startupTimeout      = 15 * time.Second
+	waitTimeout         = 15 * time.Second
 )
 
 type containerOption func(req *testcontainers.ContainerRequest)
@@ -77,11 +78,11 @@ func WithDockerFile(cmd string) func(req *testcontainers.ContainerRequest) {
 
 func WithWaitStrategy(strategies ...wait.Strategy) func(req *testcontainers.ContainerRequest) {
 	return func(req *testcontainers.ContainerRequest) {
-		req.WaitingFor = wait.ForAll(strategies...).WithDeadline(1 * time.Minute)
+		req.WaitingFor = wait.ForAll(strategies...).WithDeadline(waitTimeout)
 	}
 }
 
-func WithPort(port string) func(req *testcontainers.ContainerRequest) {
+func WithExposedPort(port string) func(req *testcontainers.ContainerRequest) {
 	return func(req *testcontainers.ContainerRequest) {
 		if req.ExposedPorts == nil {
 			req.ExposedPorts = []string{}

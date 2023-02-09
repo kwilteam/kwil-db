@@ -1,8 +1,8 @@
 package specifications
 
 import (
+	"encoding/json"
 	"kwil/pkg/databases"
-	"kwil/pkg/databases/utils"
 	"os"
 	"testing"
 
@@ -27,14 +27,15 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T) *databases.Database[[]byte
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := utils.DBFromJson(d)
+	var db databases.Database[[]byte]
+	err = json.Unmarshal(d, &db)
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
 	}
 
-	l.Modifier(db)
+	l.Modifier(&db)
 
-	return db
+	return &db
 }
 
 type CliDatabaseSchemaLoader struct {
@@ -51,11 +52,12 @@ func (l *CliDatabaseSchemaLoader) Load(t *testing.T) *databases.Database[[]byte]
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := utils.DBFromJson(d)
+	var db databases.Database[[]byte]
+	err = json.Unmarshal(d, &db)
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
 	}
 
-	l.Modifier(db)
-	return db
+	l.Modifier(&db)
+	return &db
 }

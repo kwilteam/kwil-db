@@ -5,14 +5,14 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/common/v0"
 	txpb "kwil/api/protobuf/tx/v0"
-	transactions2 "kwil/pkg/crypto/transactions"
+	"kwil/pkg/accounts"
 	"kwil/pkg/utils/serialize"
 )
 
 // Broadcast handles broadcasted transactions
 func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*txpb.BroadcastResponse, error) {
 	// convert the transaction
-	tx, err := serialize.Convert[commonpb.Tx, transactions2.Transaction](req.Tx)
+	tx, err := serialize.Convert[commonpb.Tx, accounts.Transaction](req.Tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
@@ -24,15 +24,15 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 
 	// handle the transaction according to its type
 	switch tx.PayloadType {
-	case transactions2.DEPLOY_DATABASE:
+	case accounts.DEPLOY_DATABASE:
 		return s.handleDeployDatabase(ctx, tx)
-	case transactions2.MODIFY_DATABASE:
+	case accounts.MODIFY_DATABASE:
 		return nil, fmt.Errorf("not implemented")
-	case transactions2.DROP_DATABASE:
+	case accounts.DROP_DATABASE:
 		return s.handleDropDatabase(ctx, tx)
-	case transactions2.EXECUTE_QUERY:
+	case accounts.EXECUTE_QUERY:
 		return s.handleExecution(ctx, tx)
-	case transactions2.WITHDRAW:
+	case accounts.WITHDRAW:
 		return nil, fmt.Errorf("not implemented")
 	default:
 		return nil, fmt.Errorf("invalid payload type")

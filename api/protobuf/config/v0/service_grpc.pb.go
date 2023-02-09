@@ -22,7 +22,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ConfigServiceClient interface {
-	GetFundingPool(ctx context.Context, in *GetFundingPoolRequest, opts ...grpc.CallOption) (*GetFundingPoolResponse, error)
+	GetAll(ctx context.Context, in *GetCfgRequest, opts ...grpc.CallOption) (*GetCfgResponse, error)
+	GetFunding(ctx context.Context, in *GetFundingCfgRequest, opts ...grpc.CallOption) (*GetFundingCfgResponse, error)
 }
 
 type configServiceClient struct {
@@ -33,9 +34,18 @@ func NewConfigServiceClient(cc grpc.ClientConnInterface) ConfigServiceClient {
 	return &configServiceClient{cc}
 }
 
-func (c *configServiceClient) GetFundingPool(ctx context.Context, in *GetFundingPoolRequest, opts ...grpc.CallOption) (*GetFundingPoolResponse, error) {
-	out := new(GetFundingPoolResponse)
-	err := c.cc.Invoke(ctx, "/config.ConfigService/GetFundingPool", in, out, opts...)
+func (c *configServiceClient) GetAll(ctx context.Context, in *GetCfgRequest, opts ...grpc.CallOption) (*GetCfgResponse, error) {
+	out := new(GetCfgResponse)
+	err := c.cc.Invoke(ctx, "/config.ConfigService/GetAll", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *configServiceClient) GetFunding(ctx context.Context, in *GetFundingCfgRequest, opts ...grpc.CallOption) (*GetFundingCfgResponse, error) {
+	out := new(GetFundingCfgResponse)
+	err := c.cc.Invoke(ctx, "/config.ConfigService/GetFunding", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +56,8 @@ func (c *configServiceClient) GetFundingPool(ctx context.Context, in *GetFunding
 // All implementations must embed UnimplementedConfigServiceServer
 // for forward compatibility
 type ConfigServiceServer interface {
-	GetFundingPool(context.Context, *GetFundingPoolRequest) (*GetFundingPoolResponse, error)
+	GetAll(context.Context, *GetCfgRequest) (*GetCfgResponse, error)
+	GetFunding(context.Context, *GetFundingCfgRequest) (*GetFundingCfgResponse, error)
 	mustEmbedUnimplementedConfigServiceServer()
 }
 
@@ -54,8 +65,11 @@ type ConfigServiceServer interface {
 type UnimplementedConfigServiceServer struct {
 }
 
-func (UnimplementedConfigServiceServer) GetFundingPool(context.Context, *GetFundingPoolRequest) (*GetFundingPoolResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetFundingPool not implemented")
+func (UnimplementedConfigServiceServer) GetAll(context.Context, *GetCfgRequest) (*GetCfgResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAll not implemented")
+}
+func (UnimplementedConfigServiceServer) GetFunding(context.Context, *GetFundingCfgRequest) (*GetFundingCfgResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFunding not implemented")
 }
 func (UnimplementedConfigServiceServer) mustEmbedUnimplementedConfigServiceServer() {}
 
@@ -70,20 +84,38 @@ func RegisterConfigServiceServer(s grpc.ServiceRegistrar, srv ConfigServiceServe
 	s.RegisterService(&ConfigService_ServiceDesc, srv)
 }
 
-func _ConfigService_GetFundingPool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetFundingPoolRequest)
+func _ConfigService_GetAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCfgRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ConfigServiceServer).GetFundingPool(ctx, in)
+		return srv.(ConfigServiceServer).GetAll(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/config.ConfigService/GetFundingPool",
+		FullMethod: "/config.ConfigService/GetAll",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ConfigServiceServer).GetFundingPool(ctx, req.(*GetFundingPoolRequest))
+		return srv.(ConfigServiceServer).GetAll(ctx, req.(*GetCfgRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConfigService_GetFunding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFundingCfgRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConfigServiceServer).GetFunding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/config.ConfigService/GetFunding",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConfigServiceServer).GetFunding(ctx, req.(*GetFundingCfgRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -96,8 +128,12 @@ var ConfigService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ConfigServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetFundingPool",
-			Handler:    _ConfigService_GetFundingPool_Handler,
+			MethodName: "GetAll",
+			Handler:    _ConfigService_GetAll_Handler,
+		},
+		{
+			MethodName: "GetFunding",
+			Handler:    _ConfigService_GetFunding_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

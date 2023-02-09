@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"kwil/internal/app/kwil-gateway"
+	"kwil/internal/app/kgw"
 	"os"
 )
 
 func main() {
-	if err := kwil_gateway.Execute(); err != nil {
+	if err := kgw.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(-1)
 	}

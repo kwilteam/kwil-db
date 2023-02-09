@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
-	"kwil/internal/app/kwil-gateway/config"
-	"kwil/internal/app/kwil-gateway/server"
+	"kwil/internal/app/kgw/config"
+	"kwil/internal/app/kgw/server"
 	"kwil/internal/pkg/gateway/middleware/auth"
 	"kwil/internal/pkg/gateway/middleware/cors"
 	"kwil/pkg/log"
@@ -20,6 +20,9 @@ var RootCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg, err := config.LoadConfig()
+		if err != nil {
+			return err
+		}
 
 		logger := log.New(cfg.Log)
 
@@ -28,7 +31,7 @@ var RootCmd = &cobra.Command{
 		if err := gw.SetupGrpcSvc(ctx); err != nil {
 			return err
 		}
-		if err := gw.SetupHttpSvc(ctx); err != nil {
+		if err := gw.SetupHTTPSvc(ctx); err != nil {
 			return err
 		}
 
@@ -45,7 +48,7 @@ var RootCmd = &cobra.Command{
 
 		gw.AddMiddlewares(
 			// from innermost middleware
-			auth.MAuth(keyManager),
+			auth.MAuth(keyManager, logger),
 			cors.MCors(cfg.Server.Cors),
 		)
 

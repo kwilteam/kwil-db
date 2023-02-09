@@ -1,4 +1,4 @@
-package kwil_client
+package kclient
 
 import (
 	"kwil/pkg/fund"

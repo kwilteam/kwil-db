@@ -5,13 +5,13 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/common/v0"
 	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/pkg/crypto/transactions"
+	"kwil/pkg/accounts"
 	"kwil/pkg/utils/serialize"
 )
 
-func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) (*transactions.Response, error) {
+func (c *Client) Broadcast(ctx context.Context, tx *accounts.Transaction) (*accounts.Response, error) {
 	// convert transaction to proto
-	pbTx, err := serialize.Convert[transactions.Transaction, commonpb.Tx](tx)
+	pbTx, err := serialize.Convert[accounts.Transaction, commonpb.Tx](tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
@@ -22,7 +22,7 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) (*
 	}
 
 	// convert response to transaction
-	txRes, err := serialize.Convert[txpb.BroadcastResponse, transactions.Response](res)
+	txRes, err := serialize.Convert[txpb.BroadcastResponse, accounts.Response](res)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert response: %w", err)
 	}

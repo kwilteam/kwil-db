@@ -5,7 +5,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kwil-client"
+	"kwil/pkg/kclient"
 )
 
 func balancesCmd() *cobra.Command {
@@ -17,7 +17,7 @@ func balancesCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			clt, err := kwil_client.New(ctx, config.AppConfig)
+			clt, err := kclient.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}

@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	accountspb "kwil/api/protobuf/accounts/v0"
-	"kwil/pkg/fund/accounts"
+	"kwil/pkg/accounts"
 )
 
 func (c *Client) GetAccount(ctx context.Context, address string) (accounts.Account, error) {
-	res, err := c.infoClt.GetAccount(ctx, &accountspb.GetAccountRequest{
+	res, err := c.accountClt.GetAccount(ctx, &accountspb.GetAccountRequest{
 		Address: address,
 	})
 	if err != nil {

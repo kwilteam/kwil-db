@@ -16,7 +16,7 @@ kwild:
       nodePorts:
         hasura: 32100
   image:
-    repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwil
+    repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild
     pullPolicy: IfNotPresent
     tag: latest
 

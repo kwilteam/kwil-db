@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kwil-client"
+	"kwil/pkg/kclient"
 	"math/big"
 
 	"github.com/manifoldco/promptui"
@@ -26,13 +26,17 @@ func depositCmd() *cobra.Command {
 				return fmt.Errorf("error converting %s to big int", args[0])
 			}
 
-			clt, err := kwil_client.New(ctx, config.AppConfig)
+			clt, err := kclient.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}
 
 			// TODO add tokenName back
-			//tokenName := client.Chain.Token.Symbol()
+			//svcCfg, err := clt.GetServiceConfig(ctx)
+			//if err != nil {
+			//	return err
+			//}
+			//tokenName := svcCfg.TokenName
 
 			fmt.Printf("You will be depositing $%s into funding pool %s\n", amount, clt.Config.Fund.PoolAddress)
 			pr := promptui.Select{
@@ -49,7 +53,7 @@ func depositCmd() *cobra.Command {
 				return errors.New("transaction cancelled")
 			}
 
-			txRes, err := clt.DepositFund(ctx, clt.Config.Fund.ValidatorAddress, amount)
+			txRes, err := clt.DepositFund(ctx, amount)
 			if err != nil {
 				return err
 			}

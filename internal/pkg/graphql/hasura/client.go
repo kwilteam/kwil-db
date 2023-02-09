@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
+	"kwil/pkg/log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,21 +14,18 @@ import (
 
 type client struct {
 	endpoint string
+	logger   log.Logger
 }
 
-func NewClient(endpoint string) *client {
+func NewClient(endpoint string, logger log.Logger) *client {
 	return &client{
 		endpoint: endpoint,
+		logger:   logger.Named("hasura"),
 	}
 }
 
 func (c *client) metadataURL() string {
 	s, _ := url.JoinPath(c.endpoint, "v1/metadata")
-	return s
-}
-
-func (c *client) graphqlURL() string {
-	s, _ := url.JoinPath(c.endpoint, "v1/graphql")
 	return s
 }
 
@@ -71,6 +70,9 @@ func (c *client) call(req *http.Request) ([]byte, error) {
 
 // TrackTable call Hasura API to expose a table under 'source.schema'.
 func (c *client) TrackTable(source, schema, table string) error {
+	fields := zap.Fields(zap.String("source", source), zap.String("schema", schema), zap.String("table", table))
+	logger := c.logger.WithOptions(fields)
+	logger.Info("track table")
 	// no space is allowed in schema
 	if strings.Contains(table, " ") {
 		return fmt.Errorf("track table failed: invalid table name, '%s'", table)
@@ -78,12 +80,14 @@ func (c *client) TrackTable(source, schema, table string) error {
 	trackTableParams := newHasuraPgTrackTableParams(source, schema, table)
 	jsonBody, err := json.Marshal(trackTableParams)
 	if err != nil {
-		return fmt.Errorf("track table failed: %s", err.Error())
+		logger.Error("track table failed", zap.Error(err))
+		return fmt.Errorf("track table failed: %w", err)
 	}
 	bodyReader := bytes.NewReader(jsonBody)
 	req, err := http.NewRequest(http.MethodPost, c.metadataURL(), bodyReader)
 	if err != nil {
-		return fmt.Errorf("track table failed: %s", err.Error())
+		logger.Error("track table failed", zap.Error(err))
+		return fmt.Errorf("track table failed: %w", err)
 	}
 
 	_, err = c.call(req)
@@ -92,15 +96,20 @@ func (c *client) TrackTable(source, schema, table string) error {
 
 // UntrackTable call Hasura API to un-expose a able under 'source.schema'.
 func (c *client) UntrackTable(source, schema, table string) error {
+	fields := zap.Fields(zap.String("source", source), zap.String("schema", schema), zap.String("table", table))
+	logger := c.logger.WithOptions(fields)
+	logger.Info("untrack table")
 	untrackTableParams := newHasuraPgUntrackTableParams(source, schema, table)
 	jsonBody, err := json.Marshal(untrackTableParams)
 	if err != nil {
+		logger.Error("untrack table failed", zap.Error(err))
 		return fmt.Errorf("untrack table failed: %s", err.Error())
 	}
 	bodyReader := bytes.NewReader(jsonBody)
 
 	req, err := http.NewRequest(http.MethodPost, c.metadataURL(), bodyReader)
 	if err != nil {
+		logger.Error("untrack table failed", zap.Error(err))
 		return fmt.Errorf("untrack table failed: %s", err.Error())
 	}
 
@@ -110,6 +119,9 @@ func (c *client) UntrackTable(source, schema, table string) error {
 
 // UpdateTable first untrack table from 'source.schema', then track it again.
 func (c *client) UpdateTable(source, schema, table string) error {
+	fields := zap.Fields(zap.String("source", source), zap.String("schema", schema), zap.String("table", table))
+	logger := c.logger.WithOptions(fields)
+	logger.Info("update table")
 	// if table is already tracked, need to untrack and then track
 	if err := c.UntrackTable(source, schema, table); err != nil {
 		return err
@@ -124,22 +136,24 @@ func (c *client) UpdateTable(source, schema, table string) error {
 // AddDefaultSourceAndSchema add 'default' source and 'public' schema
 // from db url configured in ENV.
 func (c *client) AddDefaultSourceAndSchema() error {
+	c.logger.Info("add default source and schema")
+	// PG_DATABASE_URL is configured in Hasura container
 	addSource := fmt.Sprintf(
 		`{"type":"pg_add_source",
-	 	  "args":{"name":"default",
-		  "configuration":{"connection_info":{"database_url":{"from_env":"%s"},
+				 "args":
+				   {"name":"default",
+		  			"configuration":{"connection_info":{"database_url":{"from_env":"%s"},
 						                      "use_prepared_statements":false,
 						       				  "isolation_level":"read-committed"},
-						   "read_replicas":null,
-						   "extensions_schema":"public"},
-		  "replace_configuration":false,
-		  "customization":{}}}`,
-		// configured in Hasura container
-		"PG_DATABASE_URL")
+							  	    "read_replicas":null,
+						   			"extensions_schema":"public"},
+		  		 "replace_configuration":false,
+		         "customization":{}}}`, "PG_DATABASE_URL")
 	addSourceBody := []byte(addSource)
 	bodyReader := bytes.NewReader(addSourceBody)
 	req, err := http.NewRequest(http.MethodPost, c.metadataURL(), bodyReader)
 	if err != nil {
+		c.logger.Error("add default source failed", zap.Error(err))
 		return err
 	}
 
@@ -216,6 +230,7 @@ func (c *client) HasInitialized() (bool, error) {
 // ExplainQuery return compiled sql from query.
 // Right now only support one query.
 func (c *client) ExplainQuery(query string) (string, error) {
+	c.logger.Debug("explain query", zap.String("query", query))
 	body := queryToExplain(query)
 	bodyReader := bytes.NewReader([]byte(body))
 	req, err := http.NewRequest(http.MethodPost, c.explainURL(), bodyReader)

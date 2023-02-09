@@ -114,6 +114,7 @@ func Test_PrepareUpdate(t *testing.T) {
 }
 
 func Test_PrepareDelete(t *testing.T) {
+	// TODO: test for caller modifier
 	dbi, err := executables.FromDatabase(&mocks.Db1)
 	if err != nil {
 		t.Error(err)

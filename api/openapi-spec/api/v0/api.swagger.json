@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/common/v0/account.proto",
+    "title": "kwil/account/v0/service.proto",
     "version": "version not set"
   },
   "tags": [
@@ -9,10 +9,10 @@
       "name": "AccountService"
     },
     {
-      "name": "PricingService"
+      "name": "ConfigService"
     },
     {
-      "name": "ConfigService"
+      "name": "PricingService"
     },
     {
       "name": "TxService"
@@ -79,14 +79,36 @@
         ]
       }
     },
-    "/api/v0/config/fundingpool": {
+    "/api/v0/config": {
       "get": {
-        "operationId": "ConfigService_GetFundingPool",
+        "operationId": "ConfigService_GetAll",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/configGetFundingPoolResponse"
+              "$ref": "#/definitions/configGetCfgResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/api/v0/config/funding": {
+      "get": {
+        "operationId": "ConfigService_GetFunding",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/configGetFundingCfgResponse"
             }
           },
           "default": {
@@ -681,16 +703,31 @@
         }
       }
     },
-    "configGetFundingPoolResponse": {
+    "configGetCfgResponse": {
+      "type": "object",
+      "properties": {
+        "funding": {
+          "$ref": "#/definitions/configGetFundingCfgResponse"
+        }
+      }
+    },
+    "configGetFundingCfgResponse": {
       "type": "object",
       "properties": {
         "chainCode": {
-          "type": "string"
+          "type": "string",
+          "format": "int64"
         },
         "validatorAccount": {
           "type": "string"
         },
         "poolAddress": {
+          "type": "string"
+        },
+        "tokenAddress": {
+          "type": "string"
+        },
+        "tokenName": {
           "type": "string"
         }
       }

@@ -5,13 +5,13 @@ import (
 	"fmt"
 	commonpb "kwil/api/protobuf/common/v0"
 	pricingpb "kwil/api/protobuf/pricing/v0"
-	"kwil/pkg/crypto/transactions"
+	"kwil/pkg/accounts"
 	"kwil/pkg/utils/serialize"
 )
 
-func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction) (string, error) {
+func (c *Client) EstimateCost(ctx context.Context, tx *accounts.Transaction) (string, error) {
 	// convert transaction to proto
-	pbTx, err := serialize.Convert[transactions.Transaction, commonpb.Tx](tx)
+	pbTx, err := serialize.Convert[accounts.Transaction, commonpb.Tx](tx)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert transaction: %w", err)
 	}

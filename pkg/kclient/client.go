@@ -1,4 +1,4 @@
-package kwil_client
+package kclient
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 type Client struct {
 	Config *Config
 	// GRPC clients
-	Kwil *grpcClt.Client
+	Kwil grpcClt.GrpcClient
 
 	Fund fund.IFund
 }

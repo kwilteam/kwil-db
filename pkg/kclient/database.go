@@ -1,9 +1,9 @@
-package kwil_client
+package kclient
 
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/crypto/transactions"
+	"kwil/pkg/accounts"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/clean"
 	"kwil/pkg/databases/executables"
@@ -11,7 +11,8 @@ import (
 	"strings"
 )
 
-func (c *Client) GetDatabaseSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error) {
+func (c *Client) GetDatabaseSchema(ctx context.Context, dbName string) (*databases.Database[[]byte], error) {
+	owner := c.Config.Fund.GetAccountAddress()
 	id := databases.GenerateSchemaName(owner, dbName)
 	return c.GetDatabaseSchemaById(ctx, id)
 }
@@ -20,19 +21,19 @@ func (c *Client) GetDatabaseSchemaById(ctx context.Context, id string) (*databas
 	return c.Kwil.GetSchema(ctx, id)
 }
 
-func (c *Client) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*transactions.Response, error) {
+func (c *Client) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*accounts.Response, error) {
 	clean.Clean(db)
 
 	// build tx
-	tx, err := c.buildTx(ctx, db.Owner, transactions.DEPLOY_DATABASE, db)
+	tx, err := c.buildTx(ctx, db.Owner, accounts.DEPLOY_DATABASE, db)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build transaction, type %d, err: %w", transactions.DEPLOY_DATABASE, err)
+		return nil, fmt.Errorf("failed to build transaction, type %d, err: %w", accounts.DEPLOY_DATABASE, err)
 	}
 
 	return c.Kwil.Broadcast(ctx, tx)
 }
 
-func (c *Client) DropDatabase(ctx context.Context, dbName string) (*transactions.Response, error) {
+func (c *Client) DropDatabase(ctx context.Context, dbName string) (*accounts.Response, error) {
 	owner := c.Config.Fund.GetAccountAddress()
 	data := &databases.DatabaseIdentifier{
 		Name:  dbName,
@@ -40,7 +41,7 @@ func (c *Client) DropDatabase(ctx context.Context, dbName string) (*transactions
 	}
 
 	// build tx
-	tx, err := c.buildTx(ctx, owner, transactions.DROP_DATABASE, data)
+	tx, err := c.buildTx(ctx, owner, accounts.DROP_DATABASE, data)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +49,7 @@ func (c *Client) DropDatabase(ctx context.Context, dbName string) (*transactions
 	return c.Kwil.Broadcast(ctx, tx)
 }
 
-func (c *Client) ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []*spec.KwilAny) (*transactions.Response, error) {
+func (c *Client) ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []*spec.KwilAny) (*accounts.Response, error) {
 	owner := c.Config.Fund.GetAccountAddress()
 	// create the dbid.  we will need this for the databases body
 	dbId := databases.GenerateSchemaName(owner, dbName)
@@ -98,7 +99,7 @@ func (c *Client) ExecuteDatabase(ctx context.Context, dbName string, queryName s
 	}
 
 	// buildtx
-	tx, err := c.buildTx(ctx, owner, transactions.EXECUTE_QUERY, body)
+	tx, err := c.buildTx(ctx, owner, accounts.EXECUTE_QUERY, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction: %w", err)
 	}

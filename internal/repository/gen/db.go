@@ -60,6 +60,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.decreaseBalanceStmt, err = db.PrepareContext(ctx, decreaseBalance); err != nil {
 		return nil, fmt.Errorf("error preparing query DecreaseBalance: %w", err)
 	}
+	if q.deleteDepositsStmt, err = db.PrepareContext(ctx, deleteDeposits); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteDeposits: %w", err)
+	}
 	if q.depositStmt, err = db.PrepareContext(ctx, deposit); err != nil {
 		return nil, fmt.Errorf("error preparing query Deposit: %w", err)
 	}
@@ -198,6 +201,11 @@ func (q *Queries) Close() error {
 	if q.decreaseBalanceStmt != nil {
 		if cerr := q.decreaseBalanceStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing decreaseBalanceStmt: %w", cerr)
+		}
+	}
+	if q.deleteDepositsStmt != nil {
+		if cerr := q.deleteDepositsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteDepositsStmt: %w", cerr)
 		}
 	}
 	if q.depositStmt != nil {
@@ -376,6 +384,7 @@ type Queries struct {
 	createRoleStmt             *sql.Stmt
 	createTableStmt            *sql.Stmt
 	decreaseBalanceStmt        *sql.Stmt
+	deleteDepositsStmt         *sql.Stmt
 	depositStmt                *sql.Stmt
 	dropDatabaseStmt           *sql.Stmt
 	expireWithdrawalsStmt      *sql.Stmt
@@ -419,6 +428,7 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		createRoleStmt:             q.createRoleStmt,
 		createTableStmt:            q.createTableStmt,
 		decreaseBalanceStmt:        q.decreaseBalanceStmt,
+		deleteDepositsStmt:         q.deleteDepositsStmt,
 		depositStmt:                q.depositStmt,
 		dropDatabaseStmt:           q.dropDatabaseStmt,
 		expireWithdrawalsStmt:      q.expireWithdrawalsStmt,

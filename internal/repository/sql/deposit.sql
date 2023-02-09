@@ -21,6 +21,10 @@ SET balance = accounts.balance + (
     WHERE accounts.account_address = deleted_deposits.account_address
 );
 
+-- name: DeleteDeposits :exec
+DELETE FROM deposits
+WHERE height <= $1;
+
 -- name: GetDepositIdByTx :one
 SELECT id
 FROM deposits

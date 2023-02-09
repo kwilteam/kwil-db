@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"kwil/pkg/kwil-client"
+	"github.com/testcontainers/testcontainers-go/wait"
+	"kwil/internal/app/kwild"
+	"kwil/pkg/kclient"
 	"testing"
 	"time"
 )
@@ -50,29 +52,46 @@ func setupKwild(ctx context.Context, opts ...containerOption) (*kwildContainer, 
 	}}, nil
 }
 
-func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, cfg *kwil_client.Config, envs map[string]string, dbUrl string) *kwil_client.Driver {
+func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]string) *kwildContainer {
+	//t.Helper()
+
+	container, err := setupKwild(ctx,
+		//WithDockerFile("kwil"),
+		WithNetwork(kwilTestNetworkName),
+		WithExposedPort(KwildPort),
+		WithEnv(envs),
+		// ForListeningPort requires image has /bin/sh
+		WithWaitStrategy(wait.ForLog("grpc server started"), wait.ForLog("deposits synced")),
+	)
+
+	require.NoError(t, err, "Could not start kwil container")
+
+	t.Cleanup(func() {
+		require.NoError(t, container.Terminate(ctx), "Could not stop kwil container")
+	})
+
+	err = container.ShowPortInfo(ctx)
+	require.NoError(t, err)
+	return container
+}
+
+func GetKwildDriver(ctx context.Context, t *testing.T, addr string, cfg *kclient.Config, envs map[string]string) *kwild.Driver {
 	t.Helper()
 
 	if addr != "" {
 		t.Logf("create grpc driver to %s", addr)
 		cfg.Node.Endpoint = addr
-		return kwil_client.NewDriver(cfg, dbUrl)
+		return kwild.NewDriver(cfg)
 	}
 
-	dbFiles := map[string]string{
-		"../../scripts/pg-init-scripts/initdb.sh": "/docker-entrypoint-initdb.d/initdb.sh"}
-	dc := StartDBDockerService(t, ctx, dbFiles)
+	dc := StartDBDockerService(t, ctx)
 	unexposedEndpoint, err := dc.UnexposedEndpoint(ctx)
 	require.NoError(t, err)
-	exposedEndpoint, err := dc.ExposedEndpoint(ctx)
-	require.NoError(t, err)
 
-	unexposedPgUrl := fmt.Sprintf(
+	unexposedPgURL := fmt.Sprintf(
 		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, unexposedEndpoint, kwildDatabase)
-	exposedPgUrl := fmt.Sprintf(
-		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, exposedEndpoint, kwildDatabase)
 
-	envs["KWILD_DB_URL"] = unexposedPgUrl
+	envs["KWILD_DB_URL"] = unexposedPgURL
 	envs["KWILD_LOG_LEVEL"] = "info"
 	envs["KWILD_SERVER_ADDR"] = ":50051"
 
@@ -82,5 +101,5 @@ func GetGrpcDriver(t *testing.T, ctx context.Context, addr string, cfg *kwil_cli
 	require.NoError(t, err)
 	t.Logf("create grpc driver to %s", endpoint)
 	cfg.Node.Endpoint = endpoint
-	return kwil_client.NewDriver(cfg, exposedPgUrl)
+	return kwild.NewDriver(cfg)
 }

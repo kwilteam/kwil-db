@@ -1,14 +1,14 @@
-package kwil_client
+package kclient
 
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/crypto/transactions"
+	"kwil/pkg/accounts"
 	"kwil/pkg/utils/serialize"
 )
 
 // buildTx creates the correct nonce, fee, and signs a transaction
-func (c *Client) buildTx(ctx context.Context, account string, payloadType transactions.PayloadType, data any) (*transactions.Transaction, error) {
+func (c *Client) buildTx(ctx context.Context, account string, payloadType accounts.PayloadType, data any) (*accounts.Transaction, error) {
 	// serialize data
 	bts, err := serialize.Serialize(data)
 	if err != nil {
@@ -22,7 +22,7 @@ func (c *Client) buildTx(ctx context.Context, account string, payloadType transa
 	}
 
 	// build transaction
-	tx := transactions.NewTx(payloadType, bts, acc.Nonce+1)
+	tx := accounts.NewTx(payloadType, bts, acc.Nonce+1)
 
 	// estimate price
 	price, err := c.Kwil.EstimateCost(ctx, tx)

@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	accountspb "kwil/api/protobuf/accounts/v0"
+	cfgpb "kwil/api/protobuf/config/v0"
 	pricingpb "kwil/api/protobuf/pricing/v0"
 	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/internal/app/kwil-gateway/config"
+	"kwil/internal/app/kgw/config"
+	"kwil/internal/controller/http/v0/graphql"
 	"kwil/internal/controller/http/v0/health"
+	"kwil/internal/controller/http/v0/swagger"
 	"kwil/internal/pkg/gateway/middleware"
-	"kwil/internal/pkg/graphql"
 	"kwil/pkg/log"
 	"net/http"
 
@@ -38,13 +40,13 @@ func NewGWServer(mux *runtime.ServeMux, cfg config.AppConfig, logger log.Logger)
 func (g *GWServer) AddMiddlewares(ms ...*middleware.NamedMiddleware) {
 	for _, m := range ms {
 		g.middlewares = append(g.middlewares, m)
-		g.logger.Info("apply middleware", zap.String("name", m.Name))
+		g.logger.Info("apply middleware", zap.String("middleware", m.Name))
 		g.h = m.Middleware(g.h)
 	}
 }
 
 func (g *GWServer) Serve() error {
-	g.logger.Info("gateway started", zap.String("address", g.cfg.Server.Addr))
+	g.logger.Info("kwil gateway started", zap.String("address", g.cfg.Server.Addr))
 	return http.ListenAndServe(g.cfg.Server.Addr, g)
 }
 
@@ -68,25 +70,28 @@ func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to register pricing service handler: %w", err)
 	}
+	err = cfgpb.RegisterConfigServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
+	if err != nil {
+		return fmt.Errorf("failed to register config service handler: %w", err)
+	}
 
 	return nil
 }
 
-func (g *GWServer) SetupHttpSvc(ctx context.Context) error {
-	// @yaiba TODO: implement swagger api
-	//err := g.mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONHandler)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//err = g.mux.HandlePath(http.MethodGet, "/swagger/ui", swagger.GWSwaggerUIHandler)
-	//
-	//if err != nil {
-	//	return err
-	//}
+func (g *GWServer) SetupHTTPSvc(ctx context.Context) error {
+	err := g.mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONHandler)
+	if err != nil {
+		return err
+	}
 
-	graphqlRProxy := graphql.NewRProxy(g.cfg.Graphql, g.logger.Named("rproxy"))
-	err := g.mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
+	err = g.mux.HandlePath(http.MethodGet, "/swagger/ui", swagger.GWSwaggerUIHandler)
+
+	if err != nil {
+		return err
+	}
+
+	graphqlRProxy := graphql.NewRProxy(g.cfg.Graphql.Endpoint, g.logger.Named("rproxy"))
+	err = g.mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
 	if err != nil {
 		return err
 	}
@@ -96,7 +101,6 @@ func (g *GWServer) SetupHttpSvc(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
 	err = g.mux.HandlePath(http.MethodGet, "/healthz", health.GWHealthzHandler)
 	return err
 }

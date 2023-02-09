@@ -43,9 +43,9 @@ func (p *preparer) prepareInput(param paramOrWhere) (*spec.KwilAny, error) {
 		return nil, fmt.Errorf(`column "%s" could not be found in the DBI.  this is a server issue`, param.GetColumn())
 	}
 
-	// validate the data type
-	if column.Type != val.Type() {
-		return nil, fmt.Errorf(`parameter "%s" is of type "%d" but should be of type "%d"`, param.GetName(), val.Type(), column.Type)
+	// apply any modifiers
+	if err := p.applyModifier(val, param.GetModifier()); err != nil {
+		return nil, fmt.Errorf(`failed to apply modifier to parameter "%s": %w`, param.GetName(), err)
 	}
 
 	// apply any attributes
@@ -53,9 +53,11 @@ func (p *preparer) prepareInput(param paramOrWhere) (*spec.KwilAny, error) {
 		return nil, fmt.Errorf(`failed to apply attributes to parameter "%s": %w`, param.GetName(), err)
 	}
 
-	// apply any modifiers
-	if err := p.applyModifier(val, param.GetModifier()); err != nil {
-		return nil, fmt.Errorf(`failed to apply modifier to parameter "%s": %w`, param.GetName(), err)
+	// validate the data type.  This must come last in case of caller modifier
+	if column.Type != val.Type() {
+		t1 := val.Type()
+		t2 := column.Type
+		return nil, fmt.Errorf(`parameter "%s" is of type "%s" but should be of type "%s"`, param.GetName(), t1.String(), t2.String())
 	}
 
 	return val, nil

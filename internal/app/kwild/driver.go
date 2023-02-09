@@ -1,35 +1,29 @@
-package kwil_client
+package kwild
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/spec"
-	"kwil/pkg/sql/sqlclient"
+	"kwil/pkg/kclient"
 	"strings"
 	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 )
 
 // Driver is a driver for the grpc client for integration tests
 type Driver struct {
-	cfg *Config
+	cfg *kclient.Config
 
 	connOnce sync.Once
 	conn     *grpc.ClientConn
-	client   *Client
-
-	// TODO remove this, use graphql
-	dbUrl string
+	client   *kclient.Client
 }
 
-func NewDriver(cfg *Config, dbUrl string) *Driver {
+func NewDriver(cfg *kclient.Config) *Driver {
 	return &Driver{
-		cfg:   cfg,
-		dbUrl: dbUrl,
+		cfg: cfg,
 	}
 }
 
@@ -43,18 +37,18 @@ func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[[]by
 	return err
 }
 
-func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
+func (d *Driver) DatabaseShouldExists(ctx context.Context, dbName string) error {
 	client, err := d.getClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	schema, err := client.GetDatabaseSchema(ctx, owner, dbName)
+	schema, err := client.GetDatabaseSchema(ctx, dbName)
 	if err != nil {
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
 
-	if strings.EqualFold(schema.Owner, owner) && schema.Name == dbName {
+	if strings.ToLower(schema.Owner) == strings.ToLower(d.cfg.Fund.GetAccountAddress()) && schema.Name == dbName {
 		return nil
 	} else {
 		return fmt.Errorf("database does not exist")
@@ -89,16 +83,6 @@ func (d *Driver) DropDatabase(ctx context.Context, dbName string) error {
 	return err
 }
 
-func (d *Driver) QueryDatabase(ctx context.Context, _sql string, args ...interface{}) (*sql.Row, error) {
-	client, err := sqlclient.Open(d.dbUrl, 3*time.Second)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open sql client: %w", err)
-	}
-	defer client.Close()
-
-	return client.QueryRow(ctx, _sql, args...), nil
-}
-
 func (d *Driver) Close() error {
 	if d.conn != nil {
 		return d.conn.Close()
@@ -106,10 +90,10 @@ func (d *Driver) Close() error {
 	return nil
 }
 
-func (d *Driver) getClient(ctx context.Context) (*Client, error) {
+func (d *Driver) getClient(ctx context.Context) (*kclient.Client, error) {
 	var err error
 	d.connOnce.Do(func() {
-		d.client, err = New(ctx, d.cfg)
+		d.client, err = kclient.New(ctx, d.cfg)
 		if err != nil {
 			return
 		}

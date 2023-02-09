@@ -1,4 +1,4 @@
-package transactions
+package accounts
 
 type Response struct {
 	Hash []byte `json:"hash"`

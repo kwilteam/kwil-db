@@ -3,7 +3,7 @@ package display
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	txTypes "kwil/pkg/crypto/transactions"
+	txTypes "kwil/pkg/accounts"
 )
 
 func PrintTxResponse(res *txTypes.Response) {

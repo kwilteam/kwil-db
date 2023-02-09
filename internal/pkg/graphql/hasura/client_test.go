@@ -1,6 +1,7 @@
 package hasura
 
 import (
+	"go.uber.org/zap"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,14 +28,11 @@ func Test_trackTable(t *testing.T) {
 		}
 		tracked = !tracked
 		_, _ = w.Write(jsonBody)
-
 	}))
 	defer backendServer.Close()
-
 	url := backendServer.URL
-
-	h := NewClient(url)
-
+	logger, _ := zap.NewDevelopment()
+	h := NewClient(url, logger)
 	err := h.TrackTable(DefaultSource, DefaultSchema, "table1")
 	if err != nil {
 		t.Errorf("trackTable() should success, err=%v", err)

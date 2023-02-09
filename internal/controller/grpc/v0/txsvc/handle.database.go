@@ -3,17 +3,15 @@ package txsvc
 import (
 	"context"
 	"fmt"
-
 	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/pkg/crypto/transactions"
+	accountTypes "kwil/pkg/accounts"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/convert"
-	accountTypes "kwil/pkg/fund/accounts"
 	"kwil/pkg/utils/serialize"
 	"strings"
 )
 
-func (s *Service) handleDeployDatabase(ctx context.Context, tx *transactions.Transaction) (*txpb.BroadcastResponse, error) {
+func (s *Service) handleDeployDatabase(ctx context.Context, tx *accountTypes.Transaction) (*txpb.BroadcastResponse, error) {
 	// get the fee
 	price, err := s.pricing.GetPrice(tx)
 	if err != nil {
@@ -64,7 +62,7 @@ func (s *Service) handleDeployDatabase(ctx context.Context, tx *transactions.Tra
 	}, nil
 }
 
-func (s *Service) handleDropDatabase(ctx context.Context, tx *transactions.Transaction) (*txpb.BroadcastResponse, error) {
+func (s *Service) handleDropDatabase(ctx context.Context, tx *accountTypes.Transaction) (*txpb.BroadcastResponse, error) {
 	// get the fee
 	price, err := s.pricing.GetPrice(tx)
 	if err != nil {

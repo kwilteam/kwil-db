@@ -6,7 +6,7 @@ import (
 	"kwil/internal/app/kcli/common/display"
 	"kwil/internal/app/kcli/config"
 	"kwil/pkg/databases"
-	"kwil/pkg/kwil-client"
+	"kwil/pkg/kclient"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -36,7 +36,7 @@ func deployCmd() *cobra.Command {
 			}
 
 			ctx := cmd.Context()
-			clt, err := kwil_client.New(ctx, config.AppConfig)
+			clt, err := kclient.New(ctx, config.AppConfig)
 			if err != nil {
 				return err
 			}

@@ -13,7 +13,7 @@ func (c *contract) Balance(ctx context.Context, params *types.DepositBalancePara
 		From:    common.HexToAddress(params.Validator),
 		Context: ctx,
 	}
-	balance, err := c.ctr.Balance(cAuth, common.HexToAddress(params.Validator), common.HexToAddress(params.Address))
+	balance, err := c.ctr.Balance(cAuth, common.HexToAddress(params.Address), common.HexToAddress(params.Validator))
 	if err != nil {
 		return nil, err
 	}

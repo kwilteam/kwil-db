@@ -40,10 +40,10 @@ func (c *Client) DepositFund(ctx context.Context, to string, amount *big.Int) (*
 	return depoistRes, nil
 }
 
-func (c *Client) GetDepositBalance(ctx context.Context, validator string, wallet string) (*big.Int, error) {
+func (c *Client) GetDepositBalance(ctx context.Context, validator string) (*big.Int, error) {
 	balanceRes, err := c.Escrow.Balance(ctx, &types.DepositBalanceParams{
 		Validator: validator,
-		Address:   wallet,
+		Address:   c.Config.GetAccountAddress(),
 	})
 	if err != nil {
 		return nil, err

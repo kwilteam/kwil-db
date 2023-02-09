@@ -4,19 +4,19 @@ import (
 	"context"
 	"fmt"
 	"kwil/internal/repository/gen"
-	accounts2 "kwil/pkg/fund/accounts"
+	"kwil/pkg/accounts"
 	"kwil/pkg/sql/errors"
 	bigutil "kwil/pkg/utils/numbers/big"
 	"strings"
 )
 
 type Accounter interface {
-	UpdateAccount(ctx context.Context, account *accounts2.Account) error
-	GetAccount(ctx context.Context, address string) (*accounts2.Account, error)
-	Spend(ctx context.Context, spend *accounts2.Spend) error
+	UpdateAccount(ctx context.Context, account *accounts.Account) error
+	GetAccount(ctx context.Context, address string) (*accounts.Account, error)
+	Spend(ctx context.Context, spend *accounts.Spend) error
 }
 
-func (q *queries) UpdateAccount(ctx context.Context, account *accounts2.Account) error {
+func (q *queries) UpdateAccount(ctx context.Context, account *accounts.Account) error {
 	return q.gen.UpdateAccountByAddress(ctx, &gen.UpdateAccountByAddressParams{
 		AccountAddress: strings.ToLower(account.Address),
 		Spent:          account.Spent,
@@ -25,17 +25,17 @@ func (q *queries) UpdateAccount(ctx context.Context, account *accounts2.Account)
 	})
 }
 
-func (q *queries) GetAccount(ctx context.Context, address string) (*accounts2.Account, error) {
+func (q *queries) GetAccount(ctx context.Context, address string) (*accounts.Account, error) {
 	addr := strings.ToLower(address)
 	acc, err := q.gen.GetAccount(ctx, addr)
 	if err != nil {
 		if errors.IsNoRowsInResult(err) {
-			return accounts2.EmptyAccount(addr), nil
+			return accounts.EmptyAccount(addr), nil
 		}
 		return nil, err
 	}
 
-	return &accounts2.Account{
+	return &accounts.Account{
 		Address: addr,
 		Nonce:   acc.Nonce,
 		Balance: acc.Balance,
@@ -43,20 +43,20 @@ func (q *queries) GetAccount(ctx context.Context, address string) (*accounts2.Ac
 	}, nil
 }
 
-func (q *queries) Spend(ctx context.Context, spend *accounts2.Spend) error {
+func (q *queries) Spend(ctx context.Context, spend *accounts.Spend) error {
 	addr := strings.ToLower(spend.Address)
 	// get the config
 	acc, err := q.gen.GetAccount(ctx, addr)
 	if err != nil {
 		if errors.IsNoRowsInResult(err) {
-			return accounts2.ErrAccountNotRegistered
+			return accounts.ErrAccountNotRegistered
 		}
 		return fmt.Errorf("error getting config for address %s: %d", addr, err)
 	}
 
 	// check the nonce
 	if acc.Nonce+1 != spend.Nonce {
-		return accounts2.ErrInvalidNonce
+		return accounts.ErrInvalidNonce
 	}
 
 	remaining, err := bigutil.BigStr(acc.Balance).Sub(spend.Amount)
@@ -64,7 +64,7 @@ func (q *queries) Spend(ctx context.Context, spend *accounts2.Spend) error {
 		return fmt.Errorf("error subtracting amount from balance: %d", err)
 	}
 	if remaining.Sign() < 0 {
-		return accounts2.ErrInsufficientFunds
+		return accounts.ErrInsufficientFunds
 	}
 
 	// calculate the new spent
