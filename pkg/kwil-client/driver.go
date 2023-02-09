@@ -54,7 +54,7 @@ func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName 
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
 
-	if strings.ToLower(schema.Owner) == strings.ToLower(owner) && schema.Name == dbName {
+	if strings.EqualFold(schema.Owner, owner) && schema.Name == dbName {
 		return nil
 	} else {
 		return fmt.Errorf("database does not exist")
@@ -67,7 +67,7 @@ func (d *Driver) ExecuteQuery(ctx context.Context, dbName string, queryName stri
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	ins := make([]spec.KwilAny, len(queryInputs))
+	ins := make([]*spec.KwilAny, len(queryInputs))
 	for i := 0; i < len(queryInputs); i++ {
 		ins[i], err = spec.New(queryInputs[i])
 		if err != nil {

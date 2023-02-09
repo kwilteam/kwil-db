@@ -232,7 +232,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/txGetQueriesRequest"
+              "$ref": "#/definitions/txGetQueriesResponse"
             }
           },
           "default": {
@@ -340,6 +340,17 @@
         "nonce": {
           "type": "string",
           "format": "int64"
+        }
+      }
+    },
+    "commonArg": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/commonDataType"
         }
       }
     },
@@ -514,6 +525,20 @@
         "WITHDRAW"
       ],
       "default": "INVALID_PAYLOAD_TYPE"
+    },
+    "commonQuerySignature": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonArg"
+          }
+        }
+      }
     },
     "commonQueryType": {
       "type": "string",
@@ -741,11 +766,14 @@
         }
       }
     },
-    "txGetQueriesRequest": {
+    "txGetQueriesResponse": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string"
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonQuerySignature"
+          }
         }
       }
     },

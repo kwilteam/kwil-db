@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"kwil/internal/pkg/config"
 	"kwil/pkg/kwil-client"
-	"kwil/pkg/utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,7 +110,7 @@ func LoadConfig() {
 		}
 	}
 
-	if err := viper.Unmarshal(&AppConfig, viper.DecodeHook(utils.StringPrivateKeyHookFunc())); err != nil {
+	if err := viper.Unmarshal(&AppConfig, viper.DecodeHook(config.StringPrivateKeyHookFunc())); err != nil {
 		fmt.Fprintln(os.Stderr, "Error unmarshaling config file:", err)
 	}
 }

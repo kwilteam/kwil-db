@@ -1,4 +1,4 @@
-package numbers
+package bytes
 
 import "encoding/binary"
 

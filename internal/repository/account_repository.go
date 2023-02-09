@@ -6,7 +6,7 @@ import (
 	"kwil/internal/repository/gen"
 	accounts2 "kwil/pkg/fund/accounts"
 	"kwil/pkg/sql/errors"
-	bigutil "kwil/pkg/utils/big"
+	bigutil "kwil/pkg/utils/numbers/big"
 	"strings"
 )
 

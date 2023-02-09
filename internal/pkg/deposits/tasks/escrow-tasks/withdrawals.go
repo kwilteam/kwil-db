@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"kwil/internal/pkg/deposits/tasks"
 	"kwil/pkg/fund/accounts"
-	bigutil "kwil/pkg/utils/big"
+	bigutil "kwil/pkg/utils/numbers/big"
 	"math/big"
 )
 

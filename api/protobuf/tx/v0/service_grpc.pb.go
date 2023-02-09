@@ -25,7 +25,7 @@ type TxServiceClient interface {
 	Broadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error)
 	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
-	GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesRequest, error)
+	GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesResponse, error)
 	ValidateSchema(ctx context.Context, in *ValidateSchemaRequest, opts ...grpc.CallOption) (*ValidateSchemaResponse, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PongResponse, error)
 	GetAddress(ctx context.Context, in *GetAddressRequest, opts ...grpc.CallOption) (*GetAddressResponse, error)
@@ -66,8 +66,8 @@ func (c *txServiceClient) ListDatabases(ctx context.Context, in *ListDatabasesRe
 	return out, nil
 }
 
-func (c *txServiceClient) GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesRequest, error) {
-	out := new(GetQueriesRequest)
+func (c *txServiceClient) GetQueries(ctx context.Context, in *GetQueriesRequest, opts ...grpc.CallOption) (*GetQueriesResponse, error) {
+	out := new(GetQueriesResponse)
 	err := c.cc.Invoke(ctx, "/tx.TxService/GetQueries", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ type TxServiceServer interface {
 	Broadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error)
 	GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error)
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
-	GetQueries(context.Context, *GetQueriesRequest) (*GetQueriesRequest, error)
+	GetQueries(context.Context, *GetQueriesRequest) (*GetQueriesResponse, error)
 	ValidateSchema(context.Context, *ValidateSchemaRequest) (*ValidateSchemaResponse, error)
 	Ping(context.Context, *PingRequest) (*PongResponse, error)
 	GetAddress(context.Context, *GetAddressRequest) (*GetAddressResponse, error)
@@ -129,7 +129,7 @@ func (UnimplementedTxServiceServer) GetSchema(context.Context, *GetSchemaRequest
 func (UnimplementedTxServiceServer) ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListDatabases not implemented")
 }
-func (UnimplementedTxServiceServer) GetQueries(context.Context, *GetQueriesRequest) (*GetQueriesRequest, error) {
+func (UnimplementedTxServiceServer) GetQueries(context.Context, *GetQueriesRequest) (*GetQueriesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetQueries not implemented")
 }
 func (UnimplementedTxServiceServer) ValidateSchema(context.Context, *ValidateSchemaRequest) (*ValidateSchemaResponse, error) {

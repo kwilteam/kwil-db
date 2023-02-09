@@ -1,12 +1,12 @@
 package pricingsvc
 
 import (
-	pb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
+	pricingpb "kwil/api/protobuf/pricing/v0"
 	"kwil/pkg/pricing/pricer"
 )
 
 type Service struct {
-	pb.UnimplementedPricingServiceServer
+	pricingpb.UnimplementedPricingServiceServer
 
 	pricer pricer.Pricer
 }

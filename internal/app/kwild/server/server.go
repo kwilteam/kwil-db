@@ -3,12 +3,9 @@ package server
 import (
 	"context"
 	"errors"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/health/grpc_health_v1"
-	accountpb "kwil/api/protobuf/kwil/account/v0/gen/go"
-	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
-	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
+	accountspb "kwil/api/protobuf/accounts/v0"
+	pricingpb "kwil/api/protobuf/pricing/v0"
+	txpb "kwil/api/protobuf/tx/v0"
 	"kwil/internal/app/kwild/config"
 	"kwil/internal/controller/grpc/v0/accountsvc"
 	"kwil/internal/controller/grpc/v0/healthsvc"
@@ -20,6 +17,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type Server struct {
@@ -28,8 +29,8 @@ type Server struct {
 	txSvc      *txsvc.Service
 	accountSvc *accountsvc.Service
 	pricingSvc *pricingsvc.Service
-	healthSvc *healthsvc.Server
-	depositer deposits.Depositer
+	healthSvc  *healthsvc.Server
+	depositer  deposits.Depositer
 }
 
 func New(cfg config.ServerConfig, txSvc *txsvc.Service, accSvc *accountsvc.Service, prcSvc *pricingsvc.Service,
@@ -64,7 +65,7 @@ func (s *Server) Start(ctx context.Context) error {
 	g.Go(func() error {
 		grpcServer := server.New(s.logger)
 		txpb.RegisterTxServiceServer(grpcServer, s.txSvc)
-		accountpb.RegisterAccountServiceServer(grpcServer, s.accountSvc)
+		accountspb.RegisterAccountServiceServer(grpcServer, s.accountSvc)
 		pricingpb.RegisterPricingServiceServer(grpcServer, s.pricingSvc)
 		grpc_health_v1.RegisterHealthServer(grpcServer, s.healthSvc)
 

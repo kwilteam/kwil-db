@@ -3,7 +3,8 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
+
+	txpb "kwil/api/protobuf/tx/v0"
 	"kwil/pkg/crypto/transactions"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/convert"

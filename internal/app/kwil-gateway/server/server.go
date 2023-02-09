@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
-	accountpb "kwil/api/protobuf/kwil/account/v0/gen/go"
-	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
-	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
+	accountspb "kwil/api/protobuf/accounts/v0"
+	pricingpb "kwil/api/protobuf/pricing/v0"
+	txpb "kwil/api/protobuf/tx/v0"
 	"kwil/internal/app/kwil-gateway/config"
 	"kwil/internal/controller/http/v0/health"
 	"kwil/internal/pkg/gateway/middleware"
@@ -60,7 +60,7 @@ func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to register tx service handler: %w", err)
 	}
-	err = accountpb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
+	err = accountspb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
 	if err != nil {
 		return fmt.Errorf("failed to register config service handler: %w", err)
 	}
@@ -93,6 +93,10 @@ func (g *GWServer) SetupHttpSvc(ctx context.Context) error {
 
 	// @yaiba TODO: https://grpc-ecosystem.github.io/grpc-gateway/docs/operations/health_check/
 	err = g.mux.HandlePath(http.MethodGet, "/readyz", health.GWReadyzHandler)
+	if err != nil {
+		return err
+	}
+
 	err = g.mux.HandlePath(http.MethodGet, "/healthz", health.GWHealthzHandler)
 	return err
 }
