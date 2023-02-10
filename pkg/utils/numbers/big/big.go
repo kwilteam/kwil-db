@@ -33,11 +33,11 @@ type bigStr struct {
 func (b *bigStr) Add(bigint string) (*big.Int, error) {
 	aa, ok := new(big.Int).SetString(b.str, 10)
 	if !ok {
-		return nil, fmt.Errorf("could not convert %s to big.Int", b.str)
+		return nil, fmt.Errorf(errConversionFailed, b.str)
 	}
 	bb, ok := new(big.Int).SetString(bigint, 10)
 	if !ok {
-		return nil, fmt.Errorf("could not convert %s to big.Int", bigint)
+		return nil, fmt.Errorf(errConversionFailed, bigint)
 	}
 	return aa.Add(aa, bb), nil
 }
@@ -45,11 +45,11 @@ func (b *bigStr) Add(bigint string) (*big.Int, error) {
 func (b *bigStr) Sub(bigint string) (*big.Int, error) {
 	aa, ok := new(big.Int).SetString(b.str, 10)
 	if !ok {
-		return nil, fmt.Errorf("could not convert %s to big.Int", b.str)
+		return nil, fmt.Errorf(errConversionFailed, b.str)
 	}
 	bb, ok := new(big.Int).SetString(bigint, 10)
 	if !ok {
-		return nil, fmt.Errorf("could not convert %s to big.Int", bigint)
+		return nil, fmt.Errorf(errConversionFailed, bigint)
 	}
 	return aa.Sub(aa, bb), nil
 }
@@ -58,11 +58,11 @@ func (b *bigStr) Compare(bigint string) (int, error) {
 	// convert to big.Int
 	ai, ok := new(big.Int).SetString(b.str, 10)
 	if !ok {
-		return 0, fmt.Errorf("failed to convert %s to big.Int", b.str)
+		return 0, fmt.Errorf(errConversionFailed, b.str)
 	}
 	bi, ok := new(big.Int).SetString(bigint, 10)
 	if !ok {
-		return 0, fmt.Errorf("failed to convert %s to big.Int", bigint)
+		return 0, fmt.Errorf(errConversionFailed, bigint)
 	}
 
 	// compare
@@ -72,7 +72,7 @@ func (b *bigStr) Compare(bigint string) (int, error) {
 func (b *bigStr) AsBigInt() (*big.Int, error) {
 	ai, ok := new(big.Int).SetString(b.str, 10)
 	if !ok {
-		return nil, fmt.Errorf("failed to convert %s to big.Int", b.str)
+		return nil, fmt.Errorf(errConversionFailed, b.str)
 	}
 	return ai, nil
 }
