@@ -3,12 +3,12 @@ package client
 import (
 	"context"
 	"fmt"
-	pb "kwil/api/protobuf/kwil/account/v0/gen/go"
-	"kwil/pkg/types/accounts"
+	accountspb "kwil/api/protobuf/accounts/v0"
+	"kwil/pkg/accounts"
 )
 
-func (c *Gr) GetAccount(ctx context.Context, address string) (accounts.Account, error) {
-	res, err := c.infoClt.GetAccount(ctx, &pb.GetAccountRequest{
+func (c *Client) GetAccount(ctx context.Context, address string) (accounts.Account, error) {
+	res, err := c.accountClt.GetAccount(ctx, &accountspb.GetAccountRequest{
 		Address: address,
 	})
 	if err != nil {

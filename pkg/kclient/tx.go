@@ -3,12 +3,12 @@ package kclient
 import (
 	"context"
 	"fmt"
-	transactions2 "kwil/pkg/types/transactions"
+	"kwil/pkg/accounts"
 	"kwil/pkg/utils/serialize"
 )
 
 // buildTx creates the correct nonce, fee, and signs a transaction
-func (c *Client) buildTx(ctx context.Context, account string, payloadType transactions2.PayloadType, data any) (*transactions2.Transaction, error) {
+func (c *Client) buildTx(ctx context.Context, account string, payloadType accounts.PayloadType, data any) (*accounts.Transaction, error) {
 	// serialize data
 	bts, err := serialize.Serialize(data)
 	if err != nil {
@@ -22,7 +22,7 @@ func (c *Client) buildTx(ctx context.Context, account string, payloadType transa
 	}
 
 	// build transaction
-	tx := transactions2.NewTx(payloadType, bts, acc.Nonce+1)
+	tx := accounts.NewTx(payloadType, bts, acc.Nonce+1)
 
 	// estimate price
 	price, err := c.Kwil.EstimateCost(ctx, tx)

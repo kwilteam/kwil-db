@@ -3,22 +3,16 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	"kwil/api/protobuf/kwil/common/v0/gen/go"
-	_go2 "kwil/api/protobuf/kwil/tx/v0/gen/go"
+	commonpb "kwil/api/protobuf/common/v0"
+	txpb "kwil/api/protobuf/tx/v0"
+
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/convert"
-	"kwil/pkg/types/execution"
+	"kwil/pkg/databases/executables"
 	"kwil/pkg/utils/serialize"
 )
 
-func (s *Service) GetSchema(ctx context.Context, req *_go2.GetSchemaRequest) (*_go2.GetSchemaResponse, error) {
-	return s.retrieveDatabaseSchema(ctx, &databases.DatabaseIdentifier{
-		Owner: req.Owner,
-		Name:  req.Name,
-	})
-}
-
-func (s *Service) GetSchemaById(ctx context.Context, req *_go2.GetSchemaByIdRequest) (*_go2.GetSchemaResponse, error) {
+func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*txpb.GetSchemaResponse, error) {
 	dbIdentifier, err := s.executor.GetDBIdentifier(req.Id)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to get database identifier", err)
@@ -28,7 +22,7 @@ func (s *Service) GetSchemaById(ctx context.Context, req *_go2.GetSchemaByIdRequ
 	return s.retrieveDatabaseSchema(ctx, dbIdentifier)
 }
 
-func (s *Service) retrieveDatabaseSchema(ctx context.Context, database *databases.DatabaseIdentifier) (*_go2.GetSchemaResponse, error) {
+func (s *Service) retrieveDatabaseSchema(ctx context.Context, database *databases.DatabaseIdentifier) (*txpb.GetSchemaResponse, error) {
 	db, err := s.dao.GetDatabase(ctx, database)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to get database", err)
@@ -41,48 +35,39 @@ func (s *Service) retrieveDatabaseSchema(ctx context.Context, database *database
 		return nil, fmt.Errorf("failed to return database metadata")
 	}
 
-	convDb, err := serialize.Convert[databases.Database[[]byte], _go.Database](byteDB)
+	convDb, err := serialize.Convert[databases.Database[[]byte], commonpb.Database](byteDB)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to convert database", err)
 		return nil, fmt.Errorf("failed to return database metadata")
 	}
 
-	return &_go2.GetSchemaResponse{
+	return &txpb.GetSchemaResponse{
 		Database: convDb,
 	}, nil
 }
 
-func (s *Service) ListDatabases(ctx context.Context, req *_go2.ListDatabasesRequest) (*_go2.ListDatabasesResponse, error) {
+func (s *Service) ListDatabases(ctx context.Context, req *txpb.ListDatabasesRequest) (*txpb.ListDatabasesResponse, error) {
 	dbs, err := s.dao.ListDatabasesByOwner(ctx, req.Owner)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to list databases", err)
 		return nil, fmt.Errorf("failed to list databases")
 	}
 
-	return &_go2.ListDatabasesResponse{
+	return &txpb.ListDatabasesResponse{
 		Databases: dbs,
 	}, nil
 }
 
-func (s *Service) GetExecutables(ctx context.Context, req *_go2.GetExecutablesRequest) (*_go2.GetExecutablesResponse, error) {
-	id := databases.GenerateSchemaName(req.Owner, req.Name)
-	return s.retrieveExecutables(id)
-}
-
-func (s *Service) GetExecutablesById(ctx context.Context, req *_go2.GetExecutablesByIdRequest) (*_go2.GetExecutablesResponse, error) {
-	return s.retrieveExecutables(req.Id)
-}
-
-func (s *Service) retrieveExecutables(id string) (*_go2.GetExecutablesResponse, error) {
-	execs, err := s.executor.GetExecutables(id)
+func (s *Service) GetQueries(ctx context.Context, req *txpb.GetQueriesRequest) (*txpb.GetQueriesResponse, error) {
+	execs, err := s.executor.GetQueries(req.Id)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to get executables", err)
 		return nil, fmt.Errorf("failed to get executables")
 	}
 
-	convertedExecutables := make([]*_go.Executable, len(execs))
+	convertedExecutables := make([]*commonpb.QuerySignature, len(execs))
 	for i, e := range execs {
-		converted, err := serialize.Convert[execution.Executable, _go.Executable](e)
+		converted, err := serialize.Convert[executables.QuerySignature, commonpb.QuerySignature](e)
 		if err != nil {
 			s.log.Sugar().Warnf("failed to convert executables", err)
 			return nil, fmt.Errorf("failed to convert executables")
@@ -90,7 +75,7 @@ func (s *Service) retrieveExecutables(id string) (*_go2.GetExecutablesResponse, 
 		convertedExecutables[i] = converted
 	}
 
-	return &_go2.GetExecutablesResponse{
-		Executables: convertedExecutables,
+	return &txpb.GetQueriesResponse{
+		Queries: convertedExecutables,
 	}, nil
 }

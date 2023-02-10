@@ -3,20 +3,20 @@ package client
 import (
 	"context"
 	"fmt"
-	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
-	pb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
-	"kwil/pkg/types/transactions"
+	commonpb "kwil/api/protobuf/common/v0"
+	pricingpb "kwil/api/protobuf/pricing/v0"
+	"kwil/pkg/accounts"
 	"kwil/pkg/utils/serialize"
 )
 
-func (c *Gr) EstimateCost(ctx context.Context, tx *transactions.Transaction) (string, error) {
+func (c *Client) EstimateCost(ctx context.Context, tx *accounts.Transaction) (string, error) {
 	// convert transaction to proto
-	pbTx, err := serialize.Convert[transactions.Transaction, commonpb.Tx](tx)
+	pbTx, err := serialize.Convert[accounts.Transaction, commonpb.Tx](tx)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
-	res, err := c.pricingClt.EstimateCost(ctx, &pb.EstimateRequest{
+	res, err := c.pricingClt.EstimateCost(ctx, &pricingpb.EstimateRequest{
 		Tx: pbTx,
 	})
 	if err != nil {

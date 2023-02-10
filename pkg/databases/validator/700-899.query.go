@@ -3,7 +3,7 @@ package validator
 import (
 	"fmt"
 	"kwil/pkg/databases"
-	anytype "kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 /*
@@ -15,8 +15,8 @@ import (
 */
 
 func (v *Validator) validateQueries() error {
-	if len(v.db.SQLQueries) > databases.MAX_QUERY_COUNT {
-		return violation(errorCode701, fmt.Errorf(`database has too many queries: %v > %v`, len(v.db.SQLQueries), databases.MAX_QUERY_COUNT))
+	if len(v.db.SQLQueries) > MAX_QUERY_COUNT {
+		return violation(errorCode701, fmt.Errorf(`database has too many queries: %v > %v`, len(v.db.SQLQueries), MAX_QUERY_COUNT))
 	}
 
 	queryNames := make(map[string]struct{})
@@ -43,8 +43,8 @@ func (v *Validator) validateQueries() error {
 ###################################################################################################
 */
 
-func (v *Validator) ValidateQuery(q *databases.SQLQuery[anytype.KwilAny]) error {
-	if err := CheckName(q.Name, databases.MAX_QUERY_NAME_LENGTH); err != nil {
+func (v *Validator) ValidateQuery(q *databases.SQLQuery[*spec.KwilAny]) error {
+	if err := CheckName(q.Name, MAX_QUERY_NAME_LENGTH); err != nil {
 		return violation(errorCode800, err)
 	}
 
@@ -61,23 +61,23 @@ func (v *Validator) ValidateQuery(q *databases.SQLQuery[anytype.KwilAny]) error 
 		return violation(errorCode802, fmt.Errorf(`table "%s" does not exist`, q.Table))
 	}
 
-	if q.Type == databases.INSERT || q.Type == databases.UPDATE {
+	if q.Type == spec.INSERT || q.Type == spec.UPDATE {
 		if len(q.Params) == 0 {
 			return violation(errorCode803, fmt.Errorf(`query "%s" must have at least one parameter`, q.Name))
 		}
 	}
 
-	if q.Type == databases.UPDATE || q.Type == databases.DELETE {
+	if q.Type == spec.UPDATE || q.Type == spec.DELETE {
 		if len(q.Where) == 0 {
 			return violation(errorCode804, fmt.Errorf(`query "%s" must have at least one where clause`, q.Name))
 		}
 	}
 
-	if q.Type == databases.INSERT && len(q.Where) > 0 {
+	if q.Type == spec.INSERT && len(q.Where) > 0 {
 		return violation(errorCode805, fmt.Errorf(`insert query "%s" cannot have where clauses`, q.Name))
 	}
 
-	if q.Type == databases.DELETE && len(q.Params) > 0 {
+	if q.Type == spec.DELETE && len(q.Params) > 0 {
 		return violation(errorCode806, fmt.Errorf(`delete query "%s" cannot have parameters`, q.Name))
 	}
 
@@ -89,13 +89,13 @@ func (v *Validator) ValidateQuery(q *databases.SQLQuery[anytype.KwilAny]) error 
 }
 
 // allNotNullHaveParamForInsert checks that all non-static columns have a parameter for insert queries
-func allNotNullHaveParamForInsert(q *databases.SQLQuery[anytype.KwilAny], table *databases.Table[anytype.KwilAny]) bool {
-	if q.Type != databases.INSERT {
+func allNotNullHaveParamForInsert(q *databases.SQLQuery[*spec.KwilAny], table *databases.Table[*spec.KwilAny]) bool {
+	if q.Type != spec.INSERT {
 		return true
 	}
 
 	for _, c := range table.Columns {
-		if c.GetAttribute(databases.NOT_NULL) == nil {
+		if c.GetAttribute(spec.NOT_NULL) == nil {
 			continue
 		}
 

@@ -3,7 +3,7 @@ package validator
 import (
 	"fmt"
 	"kwil/pkg/databases"
-	anytype "kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 /*
@@ -48,8 +48,8 @@ func (v *Validator) validateTableCount() error {
 	}
 
 	// errorCode 102
-	if len(v.db.Tables) > databases.MAX_TABLE_COUNT {
-		return violation(errorCode102, fmt.Errorf(`database has too many tables: %v > %v`, len(v.db.Tables), databases.MAX_TABLE_COUNT))
+	if len(v.db.Tables) > MAX_TABLE_COUNT {
+		return violation(errorCode102, fmt.Errorf(`database has too many tables: %v > %v`, len(v.db.Tables), MAX_TABLE_COUNT))
 	}
 
 	return nil
@@ -63,7 +63,7 @@ func (v *Validator) validateTableCount() error {
 ###################################################################################################
 */
 
-func (v *Validator) ValidateTable(tbl *databases.Table[anytype.KwilAny]) error {
+func (v *Validator) ValidateTable(tbl *databases.Table[*spec.KwilAny]) error {
 	if err := CheckName(tbl.Name, MAX_TABLE_NAME_LENGTH); err != nil {
 		return violation(errorCode200, err)
 	}

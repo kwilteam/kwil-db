@@ -1,7 +1,7 @@
 package txsvc
 
 import (
-	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
+	txpb "kwil/api/protobuf/tx/v0"
 	"kwil/internal/repository"
 	"kwil/internal/usecases/executor"
 	"kwil/pkg/log"

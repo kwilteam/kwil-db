@@ -2,7 +2,7 @@ package ddlbuilder
 
 import (
 	"fmt"
-	"kwil/pkg/databases"
+	"kwil/pkg/databases/spec"
 	"strings"
 
 	conv "github.com/cstockton/go-conv"
@@ -11,7 +11,7 @@ import (
 type Column struct {
 	name       string
 	typ        string
-	attributes map[databases.AttributeType]any
+	attributes map[spec.AttributeType]any
 }
 
 type namePicker interface {
@@ -24,14 +24,14 @@ type typePicker interface {
 
 type ColumnBuilder interface {
 	builder
-	WithAttribute(databases.AttributeType, any) ColumnBuilder
+	WithAttribute(spec.AttributeType, any) ColumnBuilder
 	BuildAttributes(schema string, table string) ([]string, error)
 	GetName() string
 }
 
 func NewColumnBuilder() namePicker {
 	return &Column{
-		attributes: make(map[databases.AttributeType]any),
+		attributes: make(map[spec.AttributeType]any),
 	}
 }
 
@@ -50,7 +50,7 @@ func (b *Column) GetName() string {
 }
 
 // Attributes
-func (c *Column) WithAttribute(attr databases.AttributeType, value any) ColumnBuilder {
+func (c *Column) WithAttribute(attr spec.AttributeType, value any) ColumnBuilder {
 	c.attributes[attr] = value
 	return c
 }
@@ -81,36 +81,36 @@ func (c *Column) BuildAttributes(schema, table string) ([]string, error) {
 
 		var res string
 		switch attr {
-		case databases.PRIMARY_KEY:
+		case spec.PRIMARY_KEY:
 			res = ap.PrimaryKey(c.name).Build()
-		case databases.UNIQUE:
+		case spec.UNIQUE:
 			res = ap.Unique(c.name).Build()
-		case databases.NOT_NULL:
+		case spec.NOT_NULL:
 			res = ap.NotNull(c.name).Build()
-		case databases.DEFAULT:
+		case spec.DEFAULT:
 			res = ap.Default(c.name, value).Build()
-		case databases.MIN:
+		case spec.MIN:
 			val, err := conv.Int(value)
 			if err != nil {
 				return attributes, fmt.Errorf("min attribute value must be an integer")
 			}
 
 			res = ap.Min(c.name, val).Build()
-		case databases.MAX:
+		case spec.MAX:
 			val, err := conv.Int(value)
 			if err != nil {
 				return attributes, fmt.Errorf("max attribute value must be an integer")
 			}
 
 			res = ap.Max(c.name, val).Build()
-		case databases.MIN_LENGTH:
+		case spec.MIN_LENGTH:
 			val, err := conv.Int(value)
 			if err != nil {
 				return attributes, fmt.Errorf("min_length attribute value must be an integer")
 			}
 
 			res = ap.MinLength(c.name, val).Build()
-		case databases.MAX_LENGTH:
+		case spec.MAX_LENGTH:
 			val, err := conv.Int(value)
 			if err != nil {
 				return attributes, fmt.Errorf("max_length attribute value must be an integer")

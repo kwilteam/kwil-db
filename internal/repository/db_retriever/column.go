@@ -4,26 +4,25 @@ import (
 	"context"
 	"fmt"
 	"kwil/pkg/databases"
-	"kwil/pkg/types/data_types"
-	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
-func (q *dbRetriever) GetColumns(ctx context.Context, tableID int32) ([]*databases.Column[anytype.KwilAny], error) {
+func (q *dbRetriever) GetColumns(ctx context.Context, tableID int32) ([]*databases.Column[*spec.KwilAny], error) {
 	cols, err := q.gen.GetColumns(ctx, tableID)
 	if err != nil {
 		return nil, fmt.Errorf(`error getting columns for table %d: %w`, tableID, err)
 	}
 
-	columns := make([]*databases.Column[anytype.KwilAny], len(cols))
+	columns := make([]*databases.Column[*spec.KwilAny], len(cols))
 	for i, col := range cols {
 		attributes, err := q.GetAttributes(ctx, col.ID)
 		if err != nil {
 			return nil, fmt.Errorf(`error getting attributes for column %s: %w`, col.ColumnName, err)
 		}
 
-		columns[i] = &databases.Column[anytype.KwilAny]{
+		columns[i] = &databases.Column[*spec.KwilAny]{
 			Name:       col.ColumnName,
-			Type:       datatypes.DataType(col.ColumnType),
+			Type:       spec.DataType(col.ColumnType),
 			Attributes: attributes,
 		}
 	}
@@ -31,21 +30,21 @@ func (q *dbRetriever) GetColumns(ctx context.Context, tableID int32) ([]*databas
 	return columns, nil
 }
 
-func (q *dbRetriever) GetAttributes(ctx context.Context, columnID int32) ([]*databases.Attribute[anytype.KwilAny], error) {
+func (q *dbRetriever) GetAttributes(ctx context.Context, columnID int32) ([]*databases.Attribute[*spec.KwilAny], error) {
 	attrs, err := q.gen.GetAttributes(ctx, columnID)
 	if err != nil {
 		return nil, fmt.Errorf(`error getting attributes for column %d: %w`, columnID, err)
 	}
 
-	attributes := make([]*databases.Attribute[anytype.KwilAny], len(attrs))
+	attributes := make([]*databases.Attribute[*spec.KwilAny], len(attrs))
 	for i, attr := range attrs {
-		value, err := anytype.NewFromSerial(attr.AttributeValue)
+		value, err := spec.NewFromSerial(attr.AttributeValue)
 		if err != nil {
 			return nil, fmt.Errorf(`error getting value for attribute %d: %w`, attr.AttributeType, err)
 		}
 
-		attributes[i] = &databases.Attribute[anytype.KwilAny]{
-			Type:  databases.AttributeType(attr.AttributeType),
+		attributes[i] = &databases.Attribute[*spec.KwilAny]{
+			Type:  spec.AttributeType(attr.AttributeType),
 			Value: value,
 		}
 	}

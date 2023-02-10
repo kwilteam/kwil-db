@@ -1,13 +1,13 @@
 package accountsvc
 
 import (
-	pb "kwil/api/protobuf/kwil/account/v0/gen/go"
+	accountspb "kwil/api/protobuf/accounts/v0"
 	"kwil/internal/repository"
 	"kwil/pkg/log"
 )
 
 type Service struct {
-	pb.UnimplementedAccountServiceServer
+	accountspb.UnimplementedAccountServiceServer
 
 	dao repository.Queries
 	log log.Logger

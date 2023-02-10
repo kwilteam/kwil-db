@@ -6,9 +6,9 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	chainClient "kwil/pkg/chain/client"
-	"kwil/pkg/chain/types"
+	chainTypes "kwil/pkg/chain/types"
 	"kwil/pkg/contracts/token/evm"
-	types2 "kwil/pkg/contracts/token/types"
+	types "kwil/pkg/contracts/token/types"
 	"math/big"
 )
 
@@ -29,14 +29,14 @@ type TokenContract interface {
 	Decimals() uint8
 
 	// transfers the given amount of tokens to the given address
-	Transfer(ctx context.Context, to string, amount *big.Int) (*types2.TransferResponse, error)
+	Transfer(ctx context.Context, to string, amount *big.Int) (*types.TransferResponse, error)
 	// approves the given amount of tokens to the given address
-	Approve(ctx context.Context, spender string, amount *big.Int) (*types2.ApproveResponse, error)
+	Approve(ctx context.Context, spender string, amount *big.Int) (*types.ApproveResponse, error)
 }
 
 func New(chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, address string) (TokenContract, error) {
 	switch chainClient.ChainCode() {
-	case types.ETHEREUM, types.GOERLI:
+	case chainTypes.ETHEREUM, chainTypes.GOERLI:
 		ethClient, err := chainClient.AsEthClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get ethclient from chain client: %d", err)

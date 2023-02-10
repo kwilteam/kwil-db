@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"kwil/internal/repository/db_retriever"
+	dbretriever "kwil/internal/repository/db_retriever"
 	"kwil/internal/repository/gen"
 	"kwil/internal/repository/schema"
 	"kwil/pkg/sql/sqlclient"

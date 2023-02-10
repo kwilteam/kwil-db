@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"kwil/internal/pkg/graphql/hasura"
 	"kwil/pkg/databases"
-	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 // Track tracks the database in hasura and the database table in the database.
-func (s *executor) Track(db *databases.Database[anytype.KwilAny]) error {
+func (s *executor) Track(db *databases.Database[*spec.KwilAny]) error {
 	schemaName := db.GetSchemaName()
 	for _, table := range db.Tables {
 		// track tables

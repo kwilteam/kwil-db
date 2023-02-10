@@ -2,13 +2,14 @@ package config
 
 import (
 	"fmt"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
+	"kwil/internal/pkg/config"
 	"kwil/pkg/log"
-	"kwil/pkg/utils"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -154,7 +155,7 @@ func LoadConfig() (cfg *AppConfig, err error) {
 		}
 	}
 
-	if err = viper.Unmarshal(&cfg, viper.DecodeHook(utils.StringPrivateKeyHookFunc())); err != nil {
+	if err = viper.Unmarshal(&cfg, viper.DecodeHook(config.StringPrivateKeyHookFunc())); err != nil {
 		fmt.Fprintln(os.Stderr, "error unmarshal config file:", err)
 	}
 	return cfg, nil

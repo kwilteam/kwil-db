@@ -3,12 +3,13 @@ package kwild
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc"
 	"kwil/pkg/databases"
+	"kwil/pkg/databases/spec"
 	"kwil/pkg/kclient"
-	"kwil/pkg/types/data_types/any_type"
 	"strings"
 	"sync"
+
+	"google.golang.org/grpc"
 )
 
 // Driver is a driver for the grpc client for integration tests
@@ -60,9 +61,9 @@ func (d *Driver) ExecuteQuery(ctx context.Context, dbName string, queryName stri
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	ins := make([]anytype.KwilAny, len(queryInputs))
+	ins := make([]*spec.KwilAny, len(queryInputs))
 	for i := 0; i < len(queryInputs); i++ {
-		ins[i], err = anytype.New(queryInputs[i])
+		ins[i], err = spec.New(queryInputs[i])
 		if err != nil {
 			return fmt.Errorf("failed to create query input: %w", err)
 		}

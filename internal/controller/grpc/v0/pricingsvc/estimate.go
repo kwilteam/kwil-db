@@ -3,14 +3,14 @@ package pricingsvc
 import (
 	"context"
 	"fmt"
-	commonpb "kwil/api/protobuf/kwil/common/v0/gen/go"
-	pb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
-	"kwil/pkg/types/transactions"
+	commonpb "kwil/api/protobuf/common/v0"
+	pricingpb "kwil/api/protobuf/pricing/v0"
+	"kwil/pkg/accounts"
 	"kwil/pkg/utils/serialize"
 )
 
-func (s *Service) EstimateCost(ctx context.Context, req *pb.EstimateRequest) (*pb.EstimateResponse, error) {
-	tx, err := serialize.Convert[commonpb.Tx, transactions.Transaction](req.Tx)
+func (s *Service) EstimateCost(ctx context.Context, req *pricingpb.EstimateRequest) (*pricingpb.EstimateResponse, error) {
+	tx, err := serialize.Convert[commonpb.Tx, accounts.Transaction](req.Tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
@@ -20,7 +20,7 @@ func (s *Service) EstimateCost(ctx context.Context, req *pb.EstimateRequest) (*p
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}
 
-	return &pb.EstimateResponse{
+	return &pricingpb.EstimateResponse{
 		Cost: price,
 	}, nil
 }

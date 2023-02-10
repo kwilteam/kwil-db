@@ -2,36 +2,12 @@ package database
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"kwil/internal/app/kcli/common/display"
 	"kwil/internal/app/kcli/config"
+	"kwil/pkg/databases/spec"
 	"kwil/pkg/kclient"
-	"kwil/pkg/types/data_types/any_type"
-)
 
-const (
-	ExecuteCmdLong = `Execute executes a query against the specified database.  The query name is
-	specified as the first argument, and the query a arguments are specified after.
-	In order to specify an argument, you first need to specify the argument name.
-	You then specify the argument type.
-
-	For example, if I have a query name "create_user" that takes two arguments: name and age.
-	I would specify the query as follows:
-
-	create_user name satoshi age 32
-
-	You specify the database to execute this against with the --database-name flag, and
-	the owner with the --database-owner flag.
-
-	You can also specify the database by passing the database id with the --database-id flag.
-
-	For example:
-
-	create_user name satoshi age 32 --database-name mydb --database-owner 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D
-
-	OR
-
-	create_user name satoshi age 32 --database-id x1234`
+	"github.com/spf13/cobra"
 )
 
 func executeCmd() *cobra.Command {
@@ -81,9 +57,9 @@ create_user name satoshi age 32 --database-id x1234`,
 				return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
 			}
 
-			inputs := make([]anytype.KwilAny, 0)
+			inputs := make([]*spec.KwilAny, 0)
 			for i := 1; i < len(args); i++ {
-				in, err := anytype.New(args[i])
+				in, err := spec.New(args[i])
 				if err != nil {
 					return fmt.Errorf("error creating kwil any type with executable inputs: %w", err)
 				}

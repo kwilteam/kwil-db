@@ -4,7 +4,7 @@ import (
 	"context"
 	gen2 "kwil/internal/repository/gen"
 	"kwil/pkg/databases"
-	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 	"strings"
 )
 
@@ -16,7 +16,7 @@ type DatabaseBuilder interface {
 	GetTableId(ctx context.Context, dbId int32, table string) (int32, error)
 	CreateColumn(ctx context.Context, tableId int32, columnName string, columnType int32) error
 	GetColumnId(ctx context.Context, tableId int32, columnName string) (int32, error)
-	CreateAttribute(ctx context.Context, columnId int32, attributeType int32, attributeValue anytype.KwilAny) error
+	CreateAttribute(ctx context.Context, columnId int32, attributeType int32, attributeValue *spec.KwilAny) error
 	CreateQuery(ctx context.Context, queryName string, tableId int32, queryData []byte) error
 	CreateRole(ctx context.Context, dbId int32, roleName string, isDefault bool) error
 	ApplyPermissionToRole(ctx context.Context, dbId int32, roleName string, queryName string) error
@@ -73,7 +73,7 @@ func (q *queries) GetColumnId(ctx context.Context, tableId int32, columnName str
 	})
 }
 
-func (q *queries) CreateAttribute(ctx context.Context, columnId int32, attributeType int32, value anytype.KwilAny) error {
+func (q *queries) CreateAttribute(ctx context.Context, columnId int32, attributeType int32, value *spec.KwilAny) error {
 	// marshal attribute value
 
 	return q.gen.CreateAttribute(ctx, &gen2.CreateAttributeParams{

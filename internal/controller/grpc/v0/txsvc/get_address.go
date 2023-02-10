@@ -2,7 +2,8 @@ package txsvc
 
 import (
 	"context"
-	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
+
+	txpb "kwil/api/protobuf/tx/v0"
 )
 
 func (s *Service) GetAddress(ctx context.Context, req *txpb.GetAddressRequest) (*txpb.GetAddressResponse, error) {

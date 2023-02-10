@@ -7,23 +7,22 @@ import (
 	"kwil/internal/repository"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/executables"
+	"kwil/pkg/databases/spec"
 	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
-	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/execution"
 )
 
 type Executor interface {
-	DeployDatabase(ctx context.Context, database *databases.Database[anytype.KwilAny]) error
+	DeployDatabase(ctx context.Context, database *databases.Database[*spec.KwilAny]) error
 	DropDatabase(ctx context.Context, database *databases.DatabaseIdentifier) error
-	ExecuteQuery(ctx context.Context, query *execution.ExecutionBody[anytype.KwilAny], caller string) error
-	GetExecutables(id string) ([]*execution.Executable, error)
+	ExecuteQuery(ctx context.Context, query *executables.ExecutionBody, caller string) error
+	GetQueries(id string) ([]*executables.QuerySignature, error)
 	GetDBIdentifier(id string) (*databases.DatabaseIdentifier, error)
 }
 
 type executor struct {
 	hasura    graphql.Client
-	databases map[string]executables.ExecutablesInterface
+	databases map[string]*executables.DatabaseInterface
 	dao       repository.Queries
 	db        *sqlclient.DB
 	log       log.Logger
@@ -34,7 +33,7 @@ func NewExecutor(ctx context.Context, db *sqlclient.DB, queries repository.Queri
 		hasura:    mngr,
 		dao:       queries,
 		db:        db,
-		databases: make(map[string]executables.ExecutablesInterface),
+		databases: make(map[string]*executables.DatabaseInterface),
 		log:       logger.Named(`executor`),
 	}
 

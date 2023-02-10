@@ -2,7 +2,7 @@ package configsvc
 
 import (
 	"context"
-	pb "kwil/api/protobuf/kwil/configuration/v0/gen/go"
+	pb "kwil/api/protobuf/config/v0"
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
 )

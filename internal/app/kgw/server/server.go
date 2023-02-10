@@ -3,10 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
-	accountpb "kwil/api/protobuf/kwil/account/v0/gen/go"
-	cfgpb "kwil/api/protobuf/kwil/configuration/v0/gen/go"
-	pricingpb "kwil/api/protobuf/kwil/pricing/v0/gen/go"
-	txpb "kwil/api/protobuf/kwil/tx/v0/gen/go"
+	accountspb "kwil/api/protobuf/accounts/v0"
+	cfgpb "kwil/api/protobuf/config/v0"
+	pricingpb "kwil/api/protobuf/pricing/v0"
+	txpb "kwil/api/protobuf/tx/v0"
 	"kwil/internal/app/kgw/config"
 	"kwil/internal/controller/http/v0/graphql"
 	"kwil/internal/controller/http/v0/health"
@@ -62,7 +62,7 @@ func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to register tx service handler: %w", err)
 	}
-	err = accountpb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
+	err = accountspb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
 	if err != nil {
 		return fmt.Errorf("failed to register config service handler: %w", err)
 	}

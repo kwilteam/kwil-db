@@ -2,12 +2,11 @@ package databases
 
 import (
 	"kwil/pkg/crypto"
-	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/utils"
+	"kwil/pkg/databases/spec"
 	"strings"
 )
 
-type Database[T anytype.AnyValue] struct {
+type Database[T spec.AnyValue] struct {
 	Owner      string         `json:"owner" clean:"lower"`
 	Name       string         `json:"name" clean:"lower"`
 	Tables     []*Table[T]    `json:"tables"`
@@ -84,5 +83,19 @@ func (d *DatabaseIdentifier) GetSchemaName() string {
 }
 
 func GenerateSchemaName(owner, name string) string {
-	return "x" + crypto.Sha224Hex(utils.JoinBytes([]byte(strings.ToLower(name)), []byte(strings.ToLower(owner))))
+	return "x" + crypto.Sha224Hex(joinBytes([]byte(strings.ToLower(name)), []byte(strings.ToLower(owner))))
+}
+
+// joinBytes is a helper function to join multiple byte slices into one
+func joinBytes(s ...[]byte) []byte {
+	n := 0
+	for _, v := range s {
+		n += len(v)
+	}
+
+	b, i := make([]byte, n), 0
+	for _, v := range s {
+		i += copy(b[i:], v)
+	}
+	return b
 }

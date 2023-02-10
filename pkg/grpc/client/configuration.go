@@ -3,11 +3,11 @@ package client
 import (
 	"context"
 	"fmt"
-	pb "kwil/api/protobuf/kwil/configuration/v0/gen/go"
+	cfgpb "kwil/api/protobuf/config/v0"
 )
 
-func (c *Gr) GetServiceConfig(ctx context.Context) (SvcConfig, error) {
-	resp, err := c.cfgClt.GetAll(ctx, &pb.GetCfgRequest{})
+func (c *Client) GetServiceConfig(ctx context.Context) (SvcConfig, error) {
+	resp, err := c.cfgClt.GetAll(ctx, &cfgpb.GetCfgRequest{})
 	if err != nil {
 		return SvcConfig{}, fmt.Errorf("failed to get service config: %w", err)
 	}
@@ -21,8 +21,8 @@ func (c *Gr) GetServiceConfig(ctx context.Context) (SvcConfig, error) {
 	}, nil
 }
 
-func (c *Gr) GetFundingServiceConfig(ctx context.Context) (SvcFundingConfig, error) {
-	resp, err := c.cfgClt.GetFunding(ctx, &pb.GetFundingCfgRequest{})
+func (c *Client) GetFundingServiceConfig(ctx context.Context) (SvcFundingConfig, error) {
+	resp, err := c.cfgClt.GetFunding(ctx, &cfgpb.GetFundingCfgRequest{})
 	if err != nil {
 		return SvcFundingConfig{}, fmt.Errorf("failed to get funding service config: %w", err)
 	}

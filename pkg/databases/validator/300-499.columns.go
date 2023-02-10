@@ -3,7 +3,7 @@ package validator
 import (
 	"fmt"
 	"kwil/pkg/databases"
-	anytype "kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 /*
@@ -15,9 +15,9 @@ import (
 */
 
 // validateColumns validates all columns in an array
-func (v *Validator) validateColumns(columns []*databases.Column[anytype.KwilAny]) error {
-	if len(columns) > databases.MAX_COLUMNS_PER_TABLE {
-		return violation(errorCode301, fmt.Errorf(`too many columns: %v > %v`, len(columns), databases.MAX_COLUMNS_PER_TABLE))
+func (v *Validator) validateColumns(columns []*databases.Column[*spec.KwilAny]) error {
+	if len(columns) > MAX_COLUMNS_PER_TABLE {
+		return violation(errorCode301, fmt.Errorf(`too many columns: %v > %v`, len(columns), MAX_COLUMNS_PER_TABLE))
 	}
 
 	columnNames := make(map[string]struct{})
@@ -43,7 +43,7 @@ func (v *Validator) validateColumns(columns []*databases.Column[anytype.KwilAny]
 */
 
 // ValidateColumn validates a single column
-func (v *Validator) ValidateColumn(col *databases.Column[anytype.KwilAny]) error {
+func (v *Validator) ValidateColumn(col *databases.Column[*spec.KwilAny]) error {
 	if err := CheckName(col.Name, MAX_COLUMN_NAME_LENGTH); err != nil {
 		return violation(errorCode400, err)
 	}

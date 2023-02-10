@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	"kwil/pkg/databases"
-	"kwil/pkg/types/data_types/any_type"
-	"kwil/pkg/types/execution"
+	"kwil/pkg/databases/executables"
 	"strings"
 )
 
-func (s *executor) ExecuteQuery(ctx context.Context, body *execution.ExecutionBody[anytype.KwilAny], caller string) error {
+func (s *executor) ExecuteQuery(ctx context.Context, body *executables.ExecutionBody, caller string) error {
 	caller = strings.ToLower(caller)
 
 	db, ok := s.databases[body.Database]
@@ -37,12 +36,12 @@ func (s *executor) ExecuteQuery(ctx context.Context, body *execution.ExecutionBo
 	return nil
 }
 
-func (s *executor) GetExecutables(id string) ([]*execution.Executable, error) {
+func (s *executor) GetQueries(id string) ([]*executables.QuerySignature, error) {
 	execInterface, ok := s.databases[id]
 	if !ok {
 		return nil, fmt.Errorf("database id %s not found", id)
 	}
-	return execInterface.ListExecutables(), nil
+	return execInterface.ListQueries()
 }
 
 func (s *executor) GetDBIdentifier(id string) (*databases.DatabaseIdentifier, error) {
@@ -50,5 +49,8 @@ func (s *executor) GetDBIdentifier(id string) (*databases.DatabaseIdentifier, er
 	if !ok {
 		return nil, fmt.Errorf("database id %s not found", id)
 	}
-	return db.GetIdentifier(), nil
+	return &databases.DatabaseIdentifier{
+		Owner: db.Owner,
+		Name:  db.Name,
+	}, nil
 }

@@ -3,8 +3,7 @@ package validator
 import (
 	"fmt"
 	"kwil/pkg/databases"
-	datatypes "kwil/pkg/types/data_types"
-	anytype "kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 /*
@@ -16,7 +15,7 @@ import (
 */
 
 // validateInputs validates both parameters and where clauses
-func (v *Validator) validateInputs(params []*databases.Parameter[anytype.KwilAny], where []*databases.WhereClause[anytype.KwilAny], table *databases.Table[anytype.KwilAny]) error {
+func (v *Validator) validateInputs(params []*databases.Parameter[*spec.KwilAny], where []*databases.WhereClause[*spec.KwilAny], table *databases.Table[*spec.KwilAny]) error {
 	if len(params) > MAX_PARAM_PER_QUERY {
 		return violation(errorCode902, fmt.Errorf(`too many parameters: %v > %v`, len(params), MAX_PARAM_PER_QUERY))
 	}
@@ -70,11 +69,11 @@ func (v *Validator) validateInputs(params []*databases.Parameter[anytype.KwilAny
 // both validateParam and validateWhere use the validateInput function, but validateWhere needs
 // additional checks for the operator
 
-func (v *Validator) validateParam(p *databases.Parameter[anytype.KwilAny], table *databases.Table[anytype.KwilAny]) error {
+func (v *Validator) validateParam(p *databases.Parameter[*spec.KwilAny], table *databases.Table[*spec.KwilAny]) error {
 	return v.validateInput(p, table)
 }
 
-func (v *Validator) validateWhere(where *databases.WhereClause[anytype.KwilAny], table *databases.Table[anytype.KwilAny]) error {
+func (v *Validator) validateWhere(where *databases.WhereClause[*spec.KwilAny], table *databases.Table[*spec.KwilAny]) error {
 	if !where.Operator.IsValid() {
 		return violation(errorCode1008, fmt.Errorf(`unknown operator: %d`, where.Operator.Int()))
 	}
@@ -91,7 +90,7 @@ func (v *Validator) validateWhere(where *databases.WhereClause[anytype.KwilAny],
 	return v.validateInput(where, table)
 }
 
-func (v *Validator) validateInput(input databases.Input[anytype.KwilAny], table *databases.Table[anytype.KwilAny]) error {
+func (v *Validator) validateInput(input databases.Input[*spec.KwilAny], table *databases.Table[*spec.KwilAny]) error {
 	if err := CheckName(input.GetName(), MAX_INPUT_NAME_LENGTH); err != nil {
 		return violation(errorCode1000, fmt.Errorf(`invalid input name: %w`, err))
 	}
@@ -121,7 +120,7 @@ func (v *Validator) validateInput(input databases.Input[anytype.KwilAny], table 
 			return violation(errorCode1002, fmt.Errorf(`value must not be set for non-static parameter / where-clause on column "%s"`, input.GetColumn()))
 		}
 
-		if input.GetModifier() == databases.CALLER {
+		if input.GetModifier() == spec.CALLER {
 			return violation(errorCode1004, fmt.Errorf(`modifier CALLER can not be on non-static parameter / where-clause "%s"`, input.GetColumn()))
 		}
 	}
@@ -130,8 +129,8 @@ func (v *Validator) validateInput(input databases.Input[anytype.KwilAny], table 
 }
 
 // provides validations if the modifier is caller
-func (v *Validator) validateCallerModifier(input databases.Input[anytype.KwilAny], col *databases.Column[anytype.KwilAny]) error {
-	if input.GetModifier() != databases.CALLER {
+func (v *Validator) validateCallerModifier(input databases.Input[*spec.KwilAny], col *databases.Column[*spec.KwilAny]) error {
+	if input.GetModifier() != spec.CALLER {
 		return nil
 	}
 
@@ -143,11 +142,11 @@ func (v *Validator) validateCallerModifier(input databases.Input[anytype.KwilAny
 		return violation(errorCode1004, fmt.Errorf(`parameter must be static for caller modifier on column "%s"`, input.GetColumn()))
 	}
 
-	if col.Type != datatypes.STRING {
+	if col.Type != spec.STRING {
 		return violation(errorCode1005, fmt.Errorf(`column type must be string for caller modifier on column "%s"`, input.GetColumn()))
 	}
 
-	min := col.GetAttribute(databases.MIN_LENGTH)
+	min := col.GetAttribute(spec.MIN_LENGTH)
 	if min != nil {
 		minVal, err := min.Value.AsInt()
 		if err != nil {
@@ -160,7 +159,7 @@ func (v *Validator) validateCallerModifier(input databases.Input[anytype.KwilAny
 		}
 	}
 
-	max := col.GetAttribute(databases.MAX_LENGTH)
+	max := col.GetAttribute(spec.MAX_LENGTH)
 	if max != nil {
 		maxVal, err := max.Value.AsInt()
 		if err != nil {
@@ -176,18 +175,18 @@ func (v *Validator) validateCallerModifier(input databases.Input[anytype.KwilAny
 	return nil
 }
 
-func operatorCanBeOnColumnType(operator databases.ComparisonOperatorType, colType datatypes.DataType) bool {
+func operatorCanBeOnColumnType(operator spec.ComparisonOperatorType, colType spec.DataType) bool {
 	if colType.IsNumeric() {
 		// currently all operators work here but this might change in the future
-		return operator == databases.EQUAL || operator == databases.NOT_EQUAL || operator == databases.GREATER_THAN || operator == databases.GREATER_THAN_OR_EQUAL || operator == databases.LESS_THAN || operator == databases.LESS_THAN_OR_EQUAL
+		return operator == spec.EQUAL || operator == spec.NOT_EQUAL || operator == spec.GREATER_THAN || operator == spec.GREATER_THAN_OR_EQUAL || operator == spec.LESS_THAN || operator == spec.LESS_THAN_OR_EQUAL
 	}
 
 	if colType.IsText() {
-		return operator == databases.EQUAL || operator == databases.NOT_EQUAL
+		return operator == spec.EQUAL || operator == spec.NOT_EQUAL
 	}
 
-	if colType == datatypes.BOOLEAN {
-		return operator == databases.EQUAL || operator == databases.NOT_EQUAL
+	if colType == spec.BOOLEAN {
+		return operator == spec.EQUAL || operator == spec.NOT_EQUAL
 	}
 
 	return false

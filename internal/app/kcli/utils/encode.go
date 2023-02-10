@@ -2,9 +2,9 @@ package utils
 
 import (
 	"fmt"
+	"kwil/pkg/databases/spec"
+
 	"github.com/spf13/cobra"
-	"kwil/pkg/types/data_types"
-	"kwil/pkg/types/data_types/any_type"
 )
 
 func encodeCmd() *cobra.Command {
@@ -22,7 +22,7 @@ The output is printed to stdout.`,
 			}
 
 			// convert type
-			typ, err := datatypes.Utils.StringToKwilType(t)
+			typ, err := spec.DataTypeConversions.StringToKwilType(t)
 			if err != nil {
 				fmt.Printf("type must be one of: %v",
 					[]string{"null", "string", "int32", "int64", "boolean"})
@@ -36,7 +36,7 @@ The output is printed to stdout.`,
 			}
 
 			// encode
-			val, err := anytype.NewExplicit(i, typ)
+			val, err := spec.NewExplicit(i, typ)
 			if err != nil {
 				return fmt.Errorf("error encoding input: %w", err)
 			}

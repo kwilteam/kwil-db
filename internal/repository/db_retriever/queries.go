@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/convert"
-	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
-func (q *dbRetriever) GetQueries(ctx context.Context, dbid int32) ([]*databases.SQLQuery[anytype.KwilAny], error) {
+func (q *dbRetriever) GetQueries(ctx context.Context, dbid int32) ([]*databases.SQLQuery[*spec.KwilAny], error) {
 	queryList, err := q.gen.GetQueries(ctx, dbid)
 	if err != nil {
 		return nil, fmt.Errorf(`error getting queries for dbid %d: %w`, dbid, err)
 	}
 
-	queries := make([]*databases.SQLQuery[anytype.KwilAny], len(queryList))
+	queries := make([]*databases.SQLQuery[*spec.KwilAny], len(queryList))
 	for i, query := range queryList {
 		var q databases.SQLQuery[[]byte]
 		err = q.DecodeGOB(query.Query)

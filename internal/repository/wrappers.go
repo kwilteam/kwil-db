@@ -4,12 +4,12 @@ import (
 	"context"
 	"kwil/internal/repository/gen"
 	"kwil/pkg/databases"
-	"kwil/pkg/types/data_types/any_type"
+	"kwil/pkg/databases/spec"
 )
 
 // wrapping db retriever
 
-func (q *queries) GetDatabase(ctx context.Context, id *databases.DatabaseIdentifier) (*databases.Database[anytype.KwilAny], error) {
+func (q *queries) GetDatabase(ctx context.Context, id *databases.DatabaseIdentifier) (*databases.Database[*spec.KwilAny], error) {
 	return q.dbRetriever.GetDatabase(ctx, id)
 }
 

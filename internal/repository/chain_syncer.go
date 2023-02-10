@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	depositTypes "kwil/internal/pkg/deposits/types"
 	"kwil/internal/repository/gen"
 	escrowTypes "kwil/pkg/contracts/escrow/types"
-	depositTypes "kwil/pkg/types/deposits"
 	"strings"
 )
 

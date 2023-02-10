@@ -32,7 +32,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0GetAddressResponse"
+              "$ref": "#/definitions/txGetAddressResponse"
             }
           },
           "default": {
@@ -54,7 +54,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0BroadcastResponse"
+              "$ref": "#/definitions/txBroadcastResponse"
             }
           },
           "default": {
@@ -70,7 +70,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v0BroadcastRequest"
+              "$ref": "#/definitions/txBroadcastRequest"
             }
           }
         ],
@@ -86,7 +86,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0GetCfgResponse"
+              "$ref": "#/definitions/configGetCfgResponse"
             }
           },
           "default": {
@@ -108,7 +108,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0GetFundingCfgResponse"
+              "$ref": "#/definitions/configGetFundingCfgResponse"
             }
           },
           "default": {
@@ -130,7 +130,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0PongResponse"
+              "$ref": "#/definitions/txPongResponse"
             }
           },
           "default": {
@@ -160,7 +160,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0EstimateResponse"
+              "$ref": "#/definitions/pricingEstimateResponse"
             }
           },
           "default": {
@@ -176,7 +176,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v0EstimateRequest"
+              "$ref": "#/definitions/pricingEstimateRequest"
             }
           }
         ],
@@ -192,7 +192,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0ValidateSchemaResponse"
+              "$ref": "#/definitions/txValidateSchemaResponse"
             }
           },
           "default": {
@@ -208,7 +208,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v0ValidateSchemaRequest"
+              "$ref": "#/definitions/txValidateSchemaRequest"
             }
           }
         ],
@@ -224,7 +224,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0GetAccountResponse"
+              "$ref": "#/definitions/accountsGetAccountResponse"
             }
           },
           "default": {
@@ -247,14 +247,14 @@
         ]
       }
     },
-    "/api/v0/{id}/executables": {
+    "/api/v0/{id}/queries": {
       "get": {
-        "operationId": "TxService_GetExecutablesById",
+        "operationId": "TxService_GetQueries",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0GetExecutablesResponse"
+              "$ref": "#/definitions/txGetQueriesResponse"
             }
           },
           "default": {
@@ -279,12 +279,12 @@
     },
     "/api/v0/{id}/schema": {
       "get": {
-        "operationId": "TxService_GetSchemaById",
+        "operationId": "TxService_GetSchema",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0GetSchemaResponse"
+              "$ref": "#/definitions/txGetSchemaResponse"
             }
           },
           "default": {
@@ -314,7 +314,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v0ListDatabasesResponse"
+              "$ref": "#/definitions/txListDatabasesResponse"
             }
           },
           "default": {
@@ -327,78 +327,6 @@
         "parameters": [
           {
             "name": "owner",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
-    "/api/v0/{owner}/{name}/executables": {
-      "get": {
-        "operationId": "TxService_GetExecutables",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v0GetExecutablesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "owner",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
-    "/api/v0/{owner}/{name}/schema": {
-      "get": {
-        "operationId": "TxService_GetSchema",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v0GetSchemaResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "owner",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "name",
             "in": "path",
             "required": true,
             "type": "string"
@@ -411,6 +339,415 @@
     }
   },
   "definitions": {
+    "accountsGetAccountResponse": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/commonAccount"
+        }
+      }
+    },
+    "commonAccount": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "balance": {
+          "type": "string"
+        },
+        "spent": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "commonArg": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/commonDataType"
+        }
+      }
+    },
+    "commonAttribute": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/commonAttributeType"
+        },
+        "value": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "commonAttributeType": {
+      "type": "string",
+      "enum": [
+        "INVALID_ATTRIBUTE",
+        "PRIMARY_KEY",
+        "UNIQUE",
+        "NOT_NULL",
+        "DEFAULT",
+        "MIN",
+        "MAX",
+        "MIN_LENGTH",
+        "MAX_LENGTH"
+      ],
+      "default": "INVALID_ATTRIBUTE"
+    },
+    "commonColumn": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/commonDataType"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonAttribute"
+          }
+        }
+      }
+    },
+    "commonComparisonOperator": {
+      "type": "string",
+      "enum": [
+        "OPERATOR_INVALID",
+        "OPERATOR_EQUAL",
+        "OPERATOR_NOT_EQUAL",
+        "OPERATOR_GREATER_THAN",
+        "OPERATOR_GREATER_THAN_OR_EQUAL",
+        "OPERATOR_LESS_THAN",
+        "OPERATOR_LESS_THAN_OR_EQUAL"
+      ],
+      "default": "OPERATOR_INVALID"
+    },
+    "commonDataType": {
+      "type": "string",
+      "enum": [
+        "INVALID_TYPE",
+        "NULL",
+        "STRING",
+        "INT32",
+        "INT64",
+        "BOOLEAN"
+      ],
+      "default": "INVALID_TYPE"
+    },
+    "commonDatabase": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonTable"
+          }
+        },
+        "sqlQueries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonSQLQuery"
+          }
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonRole"
+          }
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonIndex"
+          }
+        }
+      }
+    },
+    "commonIndex": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "using": {
+          "$ref": "#/definitions/commonIndexType"
+        }
+      }
+    },
+    "commonIndexType": {
+      "type": "string",
+      "enum": [
+        "INVALID_INDEX",
+        "BTREE"
+      ],
+      "default": "INVALID_INDEX"
+    },
+    "commonModifierType": {
+      "type": "string",
+      "enum": [
+        "NO_MODIFIER",
+        "CALLER"
+      ],
+      "default": "NO_MODIFIER"
+    },
+    "commonParameter": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "column": {
+          "type": "string"
+        },
+        "static": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        },
+        "modifier": {
+          "$ref": "#/definitions/commonModifierType"
+        }
+      }
+    },
+    "commonPayloadType": {
+      "type": "string",
+      "enum": [
+        "INVALID_PAYLOAD_TYPE",
+        "DEPLOY_DATABASE",
+        "MODIFY_DATABASE",
+        "DELETE_DATABASE",
+        "EXECUTE_QUERY",
+        "WITHDRAW"
+      ],
+      "default": "INVALID_PAYLOAD_TYPE"
+    },
+    "commonQuerySignature": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonArg"
+          }
+        }
+      }
+    },
+    "commonQueryType": {
+      "type": "string",
+      "enum": [
+        "QUERY_INVALID",
+        "QUERY_INSERT",
+        "QUERY_UPDATE",
+        "QUERY_DELETE"
+      ],
+      "default": "QUERY_INVALID"
+    },
+    "commonRole": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "boolean"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "commonSQLQuery": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/commonQueryType"
+        },
+        "table": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonParameter"
+          }
+        },
+        "where": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonWhereClause"
+          }
+        }
+      }
+    },
+    "commonSignature": {
+      "type": "object",
+      "properties": {
+        "signatureBytes": {
+          "type": "string",
+          "format": "byte"
+        },
+        "signatureType": {
+          "$ref": "#/definitions/commonSignatureType"
+        }
+      }
+    },
+    "commonSignatureType": {
+      "type": "string",
+      "enum": [
+        "INVALID_SINATURE_TYPE",
+        "PK_SECP256K1_UNCOMPRESSED",
+        "ACCOUNT_SECP256K1_UNCOMPRESSED",
+        "END_SIGNATURE_TYPE"
+      ],
+      "default": "INVALID_SINATURE_TYPE"
+    },
+    "commonTable": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/commonColumn"
+          }
+        }
+      }
+    },
+    "commonTx": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        },
+        "payloadType": {
+          "$ref": "#/definitions/commonPayloadType"
+        },
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
+        },
+        "signature": {
+          "$ref": "#/definitions/commonSignature"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "sender": {
+          "type": "string"
+        }
+      }
+    },
+    "commonWhereClause": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "column": {
+          "type": "string"
+        },
+        "static": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        },
+        "modifier": {
+          "$ref": "#/definitions/commonModifierType"
+        },
+        "operator": {
+          "$ref": "#/definitions/commonComparisonOperator"
+        }
+      }
+    },
+    "configGetCfgResponse": {
+      "type": "object",
+      "properties": {
+        "funding": {
+          "$ref": "#/definitions/configGetFundingCfgResponse"
+        }
+      }
+    },
+    "configGetFundingCfgResponse": {
+      "type": "object",
+      "properties": {
+        "chainCode": {
+          "type": "string",
+          "format": "int64"
+        },
+        "validatorAccount": {
+          "type": "string"
+        },
+        "poolAddress": {
+          "type": "string"
+        },
+        "tokenAddress": {
+          "type": "string"
+        },
+        "tokenName": {
+          "type": "string"
+        }
+      }
+    },
+    "pricingEstimateRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/commonTx"
+        }
+      }
+    },
+    "pricingEstimateResponse": {
+      "type": "object",
+      "properties": {
+        "cost": {
+          "type": "string"
+        }
+      }
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -438,85 +775,15 @@
         }
       }
     },
-    "v0Account": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string"
-        },
-        "balance": {
-          "type": "string"
-        },
-        "spent": {
-          "type": "string"
-        },
-        "nonce": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
-    "v0Arg": {
-      "type": "object",
-      "properties": {
-        "position": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "static": {
-          "type": "boolean"
-        },
-        "name": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        },
-        "type": {
-          "$ref": "#/definitions/v0DataType"
-        },
-        "modifier": {
-          "$ref": "#/definitions/v0ModifierType"
-        }
-      }
-    },
-    "v0Attribute": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "$ref": "#/definitions/v0AttributeType"
-        },
-        "value": {
-          "type": "string",
-          "format": "byte"
-        }
-      }
-    },
-    "v0AttributeType": {
-      "type": "string",
-      "enum": [
-        "BEGIN_ATTRIBUTE_TYPES",
-        "INVALID_ATTRIBUTE",
-        "PRIMARY_KEY",
-        "UNIQUE",
-        "NOT_NULL",
-        "DEFAULT",
-        "MIN",
-        "MAX",
-        "MIN_LENGTH",
-        "MAX_LENGTH"
-      ],
-      "default": "BEGIN_ATTRIBUTE_TYPES"
-    },
-    "v0BroadcastRequest": {
+    "txBroadcastRequest": {
       "type": "object",
       "properties": {
         "tx": {
-          "$ref": "#/definitions/v0Tx"
+          "$ref": "#/definitions/commonTx"
         }
       }
     },
-    "v0BroadcastResponse": {
+    "txBroadcastResponse": {
       "type": "object",
       "properties": {
         "hash": {
@@ -528,133 +795,7 @@
         }
       }
     },
-    "v0Column": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "$ref": "#/definitions/v0DataType"
-        },
-        "attributes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0Attribute"
-          }
-        }
-      }
-    },
-    "v0ComparisonOperator": {
-      "type": "string",
-      "enum": [
-        "BEGIN_OPERATOR_TYPES",
-        "OPERATOR_INVALID",
-        "OPERATOR_EQUAL",
-        "OPERATOR_NOT_EQUAL",
-        "OPERATOR_GREATER_THAN",
-        "OPERATOR_GREATER_THAN_OR_EQUAL",
-        "OPERATOR_LESS_THAN",
-        "OPERATOR_LESS_THAN_OR_EQUAL"
-      ],
-      "default": "BEGIN_OPERATOR_TYPES"
-    },
-    "v0DataType": {
-      "type": "string",
-      "enum": [
-        "BEGIN_DATA_TYPES",
-        "INVALID_TYPE",
-        "NULL",
-        "STRING",
-        "INT32",
-        "INT64",
-        "BOOLEAN"
-      ],
-      "default": "BEGIN_DATA_TYPES"
-    },
-    "v0Database": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "owner": {
-          "type": "string"
-        },
-        "tables": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0Table"
-          }
-        },
-        "sqlQueries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0SQLQuery"
-          }
-        },
-        "roles": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0Role"
-          }
-        },
-        "indexes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0Index"
-          }
-        }
-      }
-    },
-    "v0EstimateRequest": {
-      "type": "object",
-      "properties": {
-        "tx": {
-          "$ref": "#/definitions/v0Tx"
-        }
-      }
-    },
-    "v0EstimateResponse": {
-      "type": "object",
-      "properties": {
-        "cost": {
-          "type": "string"
-        }
-      }
-    },
-    "v0Executable": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "statement": {
-          "type": "string"
-        },
-        "userInputs": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0UserInput"
-          }
-        },
-        "args": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0Arg"
-          }
-        }
-      }
-    },
-    "v0GetAccountResponse": {
-      "type": "object",
-      "properties": {
-        "account": {
-          "$ref": "#/definitions/v0Account"
-        }
-      }
-    },
-    "v0GetAddressResponse": {
+    "txGetAddressResponse": {
       "type": "object",
       "properties": {
         "address": {
@@ -662,84 +803,26 @@
         }
       }
     },
-    "v0GetCfgResponse": {
+    "txGetQueriesResponse": {
       "type": "object",
       "properties": {
-        "funding": {
-          "$ref": "#/definitions/v0GetFundingCfgResponse"
-        }
-      }
-    },
-    "v0GetExecutablesResponse": {
-      "type": "object",
-      "properties": {
-        "executables": {
+        "queries": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/v0Executable"
+            "$ref": "#/definitions/commonQuerySignature"
           }
         }
       }
     },
-    "v0GetFundingCfgResponse": {
-      "type": "object",
-      "properties": {
-        "chainCode": {
-          "type": "string",
-          "format": "int64"
-        },
-        "validatorAccount": {
-          "type": "string"
-        },
-        "poolAddress": {
-          "type": "string"
-        },
-        "tokenAddress": {
-          "type": "string"
-        },
-        "tokenName": {
-          "type": "string"
-        }
-      }
-    },
-    "v0GetSchemaResponse": {
+    "txGetSchemaResponse": {
       "type": "object",
       "properties": {
         "database": {
-          "$ref": "#/definitions/v0Database"
+          "$ref": "#/definitions/commonDatabase"
         }
       }
     },
-    "v0Index": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "table": {
-          "type": "string"
-        },
-        "columns": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "using": {
-          "$ref": "#/definitions/v0IndexType"
-        }
-      }
-    },
-    "v0IndexType": {
-      "type": "string",
-      "enum": [
-        "BEGIN_INDEX_TYPES",
-        "INVALID_INDEX",
-        "BTREE"
-      ],
-      "default": "BEGIN_INDEX_TYPES"
-    },
-    "v0ListDatabasesResponse": {
+    "txListDatabasesResponse": {
       "type": "object",
       "properties": {
         "databases": {
@@ -750,49 +833,7 @@
         }
       }
     },
-    "v0ModifierType": {
-      "type": "string",
-      "enum": [
-        "NO_MODIFIER",
-        "INVALID_MODIFIER",
-        "CALLER"
-      ],
-      "default": "NO_MODIFIER"
-    },
-    "v0Parameter": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "column": {
-          "type": "string"
-        },
-        "static": {
-          "type": "boolean"
-        },
-        "value": {
-          "type": "string"
-        },
-        "modifier": {
-          "$ref": "#/definitions/v0ModifierType"
-        }
-      }
-    },
-    "v0PayloadType": {
-      "type": "string",
-      "enum": [
-        "BEGIN_PAYLOAD_TYPES",
-        "INVALID_PAYLOAD_TYPE",
-        "DEPLOY_DATABASE",
-        "MODIFY_DATABASE",
-        "DELETE_DATABASE",
-        "EXECUTE_QUERY",
-        "WITHDRAW"
-      ],
-      "default": "BEGIN_PAYLOAD_TYPES"
-    },
-    "v0PongResponse": {
+    "txPongResponse": {
       "type": "object",
       "properties": {
         "message": {
@@ -800,145 +841,15 @@
         }
       }
     },
-    "v0QueryType": {
-      "type": "string",
-      "enum": [
-        "BEGIN_QUERY_TYPES",
-        "QUERY_INVALID",
-        "QUERY_INSERT",
-        "QUERY_UPDATE",
-        "QUERY_DELETE"
-      ],
-      "default": "BEGIN_QUERY_TYPES"
-    },
-    "v0Role": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "default": {
-          "type": "boolean"
-        },
-        "permissions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "v0SQLQuery": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "$ref": "#/definitions/v0QueryType"
-        },
-        "table": {
-          "type": "string"
-        },
-        "parameters": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0Parameter"
-          }
-        },
-        "where": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0WhereClause"
-          }
-        }
-      }
-    },
-    "v0Signature": {
-      "type": "object",
-      "properties": {
-        "signatureBytes": {
-          "type": "string",
-          "format": "byte"
-        },
-        "signatureType": {
-          "$ref": "#/definitions/v0SignatureType"
-        }
-      }
-    },
-    "v0SignatureType": {
-      "type": "string",
-      "enum": [
-        "INVALID_SINATURE_TYPE",
-        "PK_SECP256K1_UNCOMPRESSED",
-        "ACCOUNT_SECP256K1_UNCOMPRESSED",
-        "END_SIGNATURE_TYPE"
-      ],
-      "default": "INVALID_SINATURE_TYPE"
-    },
-    "v0Table": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "columns": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v0Column"
-          }
-        }
-      }
-    },
-    "v0Tx": {
-      "type": "object",
-      "properties": {
-        "hash": {
-          "type": "string",
-          "format": "byte"
-        },
-        "payloadType": {
-          "$ref": "#/definitions/v0PayloadType"
-        },
-        "payload": {
-          "type": "string",
-          "format": "byte"
-        },
-        "nonce": {
-          "type": "string",
-          "format": "int64"
-        },
-        "signature": {
-          "$ref": "#/definitions/v0Signature"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "sender": {
-          "type": "string"
-        }
-      }
-    },
-    "v0UserInput": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      }
-    },
-    "v0ValidateSchemaRequest": {
+    "txValidateSchemaRequest": {
       "type": "object",
       "properties": {
         "schema": {
-          "$ref": "#/definitions/v0Database"
+          "$ref": "#/definitions/commonDatabase"
         }
       }
     },
-    "v0ValidateSchemaResponse": {
+    "txValidateSchemaResponse": {
       "type": "object",
       "properties": {
         "valid": {
@@ -946,29 +857,6 @@
         },
         "error": {
           "type": "string"
-        }
-      }
-    },
-    "v0WhereClause": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "column": {
-          "type": "string"
-        },
-        "static": {
-          "type": "boolean"
-        },
-        "value": {
-          "type": "string"
-        },
-        "modifier": {
-          "$ref": "#/definitions/v0ModifierType"
-        },
-        "operator": {
-          "$ref": "#/definitions/v0ComparisonOperator"
         }
       }
     }

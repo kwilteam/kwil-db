@@ -124,3 +124,9 @@ tasks:
   brew-install:
     cmds:
       - brew install {{.PACKAGE}}
+
+  update:submodules:
+    desc: Updates git submodules
+    cmds:
+      - |
+        git submodule update --remote

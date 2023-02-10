@@ -2,7 +2,7 @@ package ddlbuilder_test
 
 import (
 	"fmt"
-	"kwil/pkg/databases"
+	"kwil/pkg/databases/spec"
 	"kwil/pkg/databases/sql-builder/ddl"
 	"testing"
 )
@@ -10,10 +10,10 @@ import (
 func Test_BuildTable(t *testing.T) {
 
 	cb := ddlbuilder.NewColumnBuilder()
-	col1 := cb.Name("id").Type("INT8").WithAttribute(databases.PRIMARY_KEY, true)
+	col1 := cb.Name("id").Type("INT8").WithAttribute(spec.PRIMARY_KEY, true)
 
 	cb = ddlbuilder.NewColumnBuilder()
-	col2 := cb.Name("name").Type("TEXT").WithAttribute(databases.UNIQUE, true)
+	col2 := cb.Name("name").Type("TEXT").WithAttribute(spec.UNIQUE, true)
 
 	tb := ddlbuilder.NewTableBuilder()
 	strs, err := tb.Schema("kwil").Name("test").AddColumn(col1).AddColumn(col2).Build()

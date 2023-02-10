@@ -26,6 +26,7 @@ cmd/cmd
 **/**/node_modules
 _ignore
 .env
+proto
 
 # helm charts deps
 deployments/helm/hasura/charts/

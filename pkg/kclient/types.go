@@ -2,11 +2,11 @@ package kclient
 
 import (
 	"context"
+	txs "kwil/pkg/accounts"
 	"kwil/pkg/contracts/escrow/types"
 	"kwil/pkg/databases"
+	"kwil/pkg/databases/spec"
 	gclient "kwil/pkg/grpc/client"
-	"kwil/pkg/types/data_types/any_type"
-	txs "kwil/pkg/types/transactions"
 	"math/big"
 )
 
@@ -17,6 +17,6 @@ type KClient interface {
 	GetDatabaseSchema(ctx context.Context, dbName string) (*databases.Database[[]byte], error)
 	DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) (*txs.Response, error)
 	DropDatabase(ctx context.Context, dbName string) (*txs.Response, error)
-	ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []anytype.KwilAny) (*txs.Response, error)
+	ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []*spec.KwilAny) (*txs.Response, error)
 	GetServiceConfig(ctx context.Context) (gclient.SvcConfig, error)
 }
