@@ -126,14 +126,14 @@ livenessProbe:
   httpGet:
     path: /healthz
     port: {{ .Values.containerPorts.hasura }}
-  initialDelaySeconds: {{ .Values.hasura.probes.liveInitialDelaySeconds }}
-  timeoutSeconds: {{ .Values.hasura.probes.timeoutSeconds }}
-  periodSeconds: {{ .Values.hasura.probes.periodSeconds }}
+  initialDelaySeconds: {{ .Values.hasuraApp.probes.liveInitialDelaySeconds }}
+  timeoutSeconds: {{ .Values.hasuraApp.probes.timeoutSeconds }}
+  periodSeconds: {{ .Values.hasuraApp.probes.periodSeconds }}
 readinessProbe:
   httpGet:
     path: /healthz
     port: {{ .Values.containerPorts.hasura }}
-  initialDelaySeconds: {{ .Values.hasura.probes.readyInitialDelaySeconds }}
-  timeoutSeconds: {{ .Values.hasura.probes.timeoutSeconds }}
-  periodSeconds: {{ .Values.hasura.probes.periodSeconds }}
+  initialDelaySeconds: {{ .Values.hasuraApp.probes.readyInitialDelaySeconds }}
+  timeoutSeconds: {{ .Values.hasuraApp.probes.timeoutSeconds }}
+  periodSeconds: {{ .Values.hasuraApp.probes.periodSeconds }}
 {{- end }}

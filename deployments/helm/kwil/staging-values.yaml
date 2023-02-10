@@ -19,7 +19,15 @@ kwild:
     repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild
     pullPolicy: IfNotPresent
     tag: latest
-
+  kwildApp:
+    fund:
+      wallet: 274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988
+      rpcUrl: wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41
+      chainCode: 2
+      blockConfirmation: 10
+      poolAddress: 0xb0a194286A901FeAEA39D2b765247BEd64aD4F41
+    log:
+      level: debug
 
 global:
   postgres:

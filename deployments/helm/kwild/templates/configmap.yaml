@@ -5,14 +5,14 @@ metadata:
   labels:
     {{- include "kwild.labels" . | nindent 4 }}
 data:
-  KWILD_FUND_CHAIN_CODE: {{ .Values.kwild.fund.chainCode | quote }}
-  KWILD_FUND_BLOCK_CONFIRMATION: {{ .Values.kwild.fund.blockConfirmation | quote }}
-  KWILD_FUND_RECONNECT_INTERVAL: {{ .Values.kwild.fund.reconnectInterval | quote}}
-  KWILD_FUND_POOL_ADDRESS: {{ .Values.kwild.fund.poolAddress | quote }}
-  KWILD_FUND_RPC_URL: {{ .Values.kwild.fund.rpcUrl | quote }}
-  KWILD_FUND_WALLET: {{ .Values.kwild.fund.wallet | quote }}
-  KWILD_LOG_LEVEL: {{ .Values.kwild.log.level | quote }}
-  KWILD_LOG_OUTPUT_PATHS: {{ .Values.kwild.log.outputPaths | join "," | quote }}
+  KWILD_FUND_CHAIN_CODE: {{ .Values.kwildApp.fund.chainCode | quote }}
+  KWILD_FUND_BLOCK_CONFIRMATION: {{ .Values.kwildApp.fund.blockConfirmation | quote }}
+  KWILD_FUND_RECONNECT_INTERVAL: {{ .Values.kwildApp.fund.reconnectInterval | quote}}
+  KWILD_FUND_POOL_ADDRESS: {{ .Values.kwildApp.fund.poolAddress | quote }}
+  KWILD_FUND_RPC_URL: {{ .Values.kwildApp.fund.rpcUrl | quote }}
+  KWILD_FUND_WALLET: {{ .Values.kwildApp.fund.wallet | quote }}
+  KWILD_LOG_LEVEL: {{ .Values.kwildApp.log.level | quote }}
+  KWILD_LOG_OUTPUT_PATHS: {{ .Values.kwildApp.log.outputPaths | join "," | quote }}
   {{- $graphqlHost := printf "%s-hasura" .Release.Name }}
   KWILD_GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) | quote }}
   {{- if and (not .Values.hasura.postgresql.enabled) (.Values.global.postgres.enabled) }}

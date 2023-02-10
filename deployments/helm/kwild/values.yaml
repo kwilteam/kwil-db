@@ -239,7 +239,7 @@ hasura:
             create_user_and_database "kwil"
             setup_master_db "kwil"
 
-kwild:
+kwildApp:
   fund:
     blockConfirmation: 12
     reconnectInterval: 30

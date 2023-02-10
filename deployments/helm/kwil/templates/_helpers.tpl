@@ -115,7 +115,7 @@ livenessProbe:
     port: {{ .Values.containerPorts.kwil }}
     httpHeaders:
     - name: X-Api-Key
-      value: {{ .Values.kwil.server.healthcheckKey | sha256sum }}
+      value: {{ .Values.kwilApp.server.healthcheckKey | sha256sum }}
   initialDelaySeconds: 15
   timeoutSeconds: 1
   periodSeconds: 15
@@ -125,7 +125,7 @@ readinessProbe:
     port: {{ .Values.containerPorts.kwil }}
     httpHeaders:
     - name: X-Api-Key
-      value: {{ .Values.kwil.server.healthcheckKey | sha256sum }}
+      value: {{ .Values.kwilApp.server.healthcheckKey | sha256sum }}
   initialDelaySeconds: 5
   timeoutSeconds: 1
   periodSeconds: 15
