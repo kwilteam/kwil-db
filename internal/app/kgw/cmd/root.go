@@ -2,15 +2,15 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/spf13/cobra"
 	"kwil/internal/app/kgw/config"
 	"kwil/internal/app/kgw/server"
-	"kwil/internal/pkg/gateway/middleware/auth"
 	"kwil/internal/pkg/gateway/middleware/cors"
 	"kwil/pkg/log"
 	"os"
 	"path/filepath"
+
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/spf13/cobra"
 )
 
 var RootCmd = &cobra.Command{
@@ -40,15 +40,15 @@ var RootCmd = &cobra.Command{
 			return err
 		}
 
-		keyManager, err := auth.NewKeyManager(f, cfg.Server.HealthcheckKey)
+		/*keyManager, err := auth.NewKeyManager(f, cfg.Server.HealthcheckKey)
 		if err != nil {
 			return err
-		}
+		}*/
 		f.Close()
 
 		gw.AddMiddlewares(
 			// from innermost middleware
-			auth.MAuth(keyManager, logger),
+			//auth.MAuth(keyManager, logger),
 			cors.MCors(cfg.Server.Cors),
 		)
 
