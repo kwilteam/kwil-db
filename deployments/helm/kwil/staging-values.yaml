@@ -32,7 +32,7 @@ kwild:
 global:
   postgres:
     enabled: true # to use an exising database
-    host: "kwildb.c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
+    host: "aurora-us-east-1.cluster-c4ahv6gbelvd.us-east-1.rds.amazonaws.com" #"kwildb.c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
     port: 5432
     database: "postgres"
     username: "postgres"
