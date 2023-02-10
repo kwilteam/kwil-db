@@ -23,7 +23,7 @@ tasks:
 
   build:kwild:
     desc: Builds the kwil
-    deps: [pb:compile:pricing, pb:compile:config, pb:compile:tx]
+    deps: [pb:compile:all]
     cmds:
       - go build -o .build/kwild ./cmd/kwild
     generates:

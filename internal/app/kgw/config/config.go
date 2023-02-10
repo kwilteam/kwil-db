@@ -46,7 +46,6 @@ type ServerConfig struct {
 	Addr           string   `mapstructure:"addr"`
 	Cors           []string `mapstructure:"cors"`
 	HealthcheckKey string   `mapstructure:"healthcheck_key"`
-	KeyFile        string   `mapstructure:"key_file"`
 }
 
 type AppConfig struct {
@@ -81,10 +80,6 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 func BindGlobalEnv(fs *pflag.FlagSet) {
 	// node.endpoint maps to PREFIX_NODE_ENDPOINT
 	viper.SetEnvPrefix(EnvPrefix)
-	home, err := os.UserHomeDir()
-	if err != nil {
-		panic(err)
-	}
 
 	// server key & env
 	viper.BindEnv(ServerAddrKey)
@@ -96,9 +91,6 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 	viper.BindEnv(ServerHealthcheckKeyKey)
 	viper.BindPFlag(ServerHealthcheckKeyKey, fs.Lookup(ServerHealthcheckKeyKey))
 	viper.SetDefault(ServerHealthcheckKeyKey, "kwil-gateway-health-check-key")
-	viper.BindEnv(ServerKeyFileKey)
-	viper.BindPFlag(ServerKeyFileKey, fs.Lookup(ServerKeyFileKey))
-	viper.SetDefault(ServerKeyFileKey, filepath.Join(home, DefaultConfigDir, "keys.json"))
 
 	// log key & env
 	viper.BindEnv(LogLevelKey)
