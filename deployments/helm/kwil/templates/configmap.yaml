@@ -9,9 +9,9 @@ data:
   {{ $graphqlHost := printf "%s-hasura" .Release.Name -}}
   KWILGW_GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.kwild.hasura.service.ports.hasura) | quote }}
   KWILGW_KWILD_ENDPOINT: {{ printf "%s:%d" $grpcHost (int .Values.kwild.service.ports.kwild) | quote }}
-  KWILGW_LOG_LEVEL: {{ .Values.kwil.log.level | quote }}
-  KWILGW_LOG_OUTPUT_PATHS: {{ .Values.kwil.log.outputPaths | join "," | quote }}
-  KWILGW_SERVER_ADDR: {{ .Values.kwil.server.addr | quote }}
-  KWILGW_SERVER_CORS: {{ .Values.kwil.server.cors | quote }}
-  KWILGW_SERVER_HEALTHCHECK_KEY: {{ .Values.kwil.server.healthcheckKey | sha256sum }}
-  KWILGW_SERVER_KEY_FILE: {{ .Values.kwil.server.keyFile | quote }}
+  KWILGW_LOG_LEVEL: {{ .Values.kwilApp.log.level | quote }}
+  KWILGW_LOG_OUTPUT_PATHS: {{ .Values.kwilApp.log.outputPaths | join "," | quote }}
+  KWILGW_SERVER_ADDR: {{ .Values.kwilApp.server.addr | quote }}
+  KWILGW_SERVER_CORS: {{ .Values.kwilApp.server.cors | quote }}
+  KWILGW_SERVER_HEALTHCHECK_KEY: {{ .Values.kwilApp.server.healthcheckKey | sha256sum }}
+  KWILGW_SERVER_KEY_FILE: {{ .Values.kwilApp.server.keyFile | quote }}

@@ -11,7 +11,7 @@ import (
 // DatabaseDeployDsl is dsl for database deployment specification
 type DatabaseDeployDsl interface {
 	DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) error
-	DatabaseShouldExists(ctx context.Context, dbName string) error
+	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 
 func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
@@ -26,6 +26,6 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 	assert.NoError(t, err)
 
 	// And i expect database should exist
-	err = deploy.DatabaseShouldExists(ctx, db.Name)
+	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.NoError(t, err)
 }

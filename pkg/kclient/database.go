@@ -11,8 +11,7 @@ import (
 	"strings"
 )
 
-func (c *Client) GetDatabaseSchema(ctx context.Context, dbName string) (*databases.Database[[]byte], error) {
-	owner := c.Config.Fund.GetAccountAddress()
+func (c *Client) GetDatabaseSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error) {
 	id := databases.GenerateSchemaName(owner, dbName)
 	return c.GetDatabaseSchemaById(ctx, id)
 }

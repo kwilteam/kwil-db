@@ -89,7 +89,7 @@ configMapMnt:
 containerPorts:
   kwil: 8082
 
-kwil:
+kwilApp:
   server:
     addr: ":8082"
     cors: "*"

@@ -104,7 +104,7 @@ container probes
 livenessProbe:
   grpc:
     port: {{ .Values.containerPorts.kwild }}
-  initialDelaySeconds: {{ .Values.kwild.probes.healthInitialDelaySeconds }}
+  initialDelaySeconds: {{ .Values.kwildApp.probes.healthInitialDelaySeconds }}
   timeoutSeconds: 1
   periodSeconds: 15
 readinessProbe:
