@@ -31,8 +31,8 @@ func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[[]by
 	return d.grpcClt.DeployDatabase(ctx, db)
 }
 
-func (d *Driver) DatabaseShouldExists(ctx context.Context, dbName string) error {
-	return d.grpcClt.DatabaseShouldExists(ctx, dbName)
+func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
+	return d.grpcClt.DatabaseShouldExists(ctx, owner, dbName)
 }
 
 func (d *Driver) ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []any) error {

@@ -37,18 +37,18 @@ func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[[]by
 	return err
 }
 
-func (d *Driver) DatabaseShouldExists(ctx context.Context, dbName string) error {
+func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
 	client, err := d.getClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	schema, err := client.GetDatabaseSchema(ctx, dbName)
+	schema, err := client.GetDatabaseSchema(ctx, owner, dbName)
 	if err != nil {
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
 
-	if strings.ToLower(schema.Owner) == strings.ToLower(d.cfg.Fund.GetAccountAddress()) && schema.Name == dbName {
+	if strings.EqualFold(schema.Owner, d.cfg.Fund.GetAccountAddress()) && strings.EqualFold(schema.Name, dbName) {
 		return nil
 	} else {
 		return fmt.Errorf("database does not exist")

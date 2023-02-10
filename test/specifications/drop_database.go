@@ -9,7 +9,7 @@ import (
 // DatabaseDropDsl is dsl for database drop specification
 type DatabaseDropDsl interface {
 	DropDatabase(ctx context.Context, dbName string) error
-	DatabaseShouldExists(ctx context.Context, dbName string) error
+	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 
 func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseDropDsl) {
@@ -24,6 +24,6 @@ func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseD
 	assert.NoError(t, err)
 
 	// And i expect database should exist
-	err = drop.DatabaseShouldExists(ctx, db.Name)
+	err = drop.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.Error(t, err)
 }
