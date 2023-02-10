@@ -87,7 +87,7 @@ affinity: {}
 containerPorts:
   hasura: 8080
 
-hasura:
+hasuraApp:
   database: postgres
   enableConsole: true
   devMode: true
