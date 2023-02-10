@@ -24,7 +24,12 @@ func viewDatabaseCmd() *cobra.Command {
 				return fmt.Errorf("error getting name flag: %w", err)
 			}
 
-			meta, err := clt.GetDatabaseSchema(ctx, dbName)
+			owner, err := cmd.Flags().GetString("owner")
+			if err != nil {
+				owner = config.AppConfig.Fund.GetAccountAddress()
+			}
+
+			meta, err := clt.GetDatabaseSchema(ctx, owner, dbName)
 			if err != nil {
 				return err
 			}
@@ -78,6 +83,7 @@ func viewDatabaseCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringP("name", "n", "", "The name of the database to view")
+	cmd.Flags().StringP("owner", "o", "", "The owner of the database to view(optional, defaults to the your account)")
 	cmd.MarkFlagRequired("name")
 	return cmd
 }
