@@ -6,7 +6,6 @@ import (
 	"kwil/internal/app/kgw/server"
 	"kwil/internal/pkg/gateway/middleware/cors"
 	"kwil/pkg/log"
-	"os"
 	"path/filepath"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -34,17 +33,6 @@ var RootCmd = &cobra.Command{
 		if err := gw.SetupHTTPSvc(ctx); err != nil {
 			return err
 		}
-
-		f, err := os.Open(cfg.Server.KeyFile)
-		if err != nil {
-			return err
-		}
-
-		/*keyManager, err := auth.NewKeyManager(f, cfg.Server.HealthcheckKey)
-		if err != nil {
-			return err
-		}*/
-		f.Close()
 
 		gw.AddMiddlewares(
 			// from innermost middleware
