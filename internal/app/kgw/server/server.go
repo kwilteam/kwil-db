@@ -46,8 +46,8 @@ func (g *GWServer) AddMiddlewares(ms ...*middleware.NamedMiddleware) {
 }
 
 func (g *GWServer) Serve() error {
-	g.logger.Info("kwil gateway started", zap.String("address", g.cfg.Server.Addr))
-	return http.ListenAndServe(g.cfg.Server.Addr, g)
+	g.logger.Info("kwil gateway started", zap.String("address", g.cfg.Server.ListenAddr))
+	return http.ListenAndServe(g.cfg.Server.ListenAddr, g)
 }
 
 func (g *GWServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +55,7 @@ func (g *GWServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
-	endpoint := g.cfg.Kwild.Endpoint
+	endpoint := g.cfg.Kwild.Addr
 	g.logger.Info("grpc endpoint configured", zap.String("endpoint", endpoint))
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	err := txpb.RegisterTxServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
@@ -90,7 +90,7 @@ func (g *GWServer) SetupHTTPSvc(ctx context.Context) error {
 		return err
 	}
 
-	graphqlRProxy := graphql.NewRProxy(g.cfg.Graphql.Endpoint, g.logger.Named("rproxy"))
+	graphqlRProxy := graphql.NewRProxy(g.cfg.Graphql.Addr, g.logger.Named("rproxy"))
 	err = g.mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
 	if err != nil {
 		return err

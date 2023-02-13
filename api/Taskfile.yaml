@@ -1,25 +1,12 @@
 version: '3'
 
 tasks:
-  gen:openapi:
-    desc: Generates the OpenAPI spec
-    cmds:
-      - |
-        protoc -I api/protobuf \
-        --go_out=. --go_opt module=kwil \
-        --go-grpc_out=. --go-grpc_opt module=kwil \
-        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
-        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/api/v0/api \
-        api/protobuf/kwil/*/v0/*.proto
-    sources:
-      - api/protobuf/kwil/*/v0/*.proto
-    generates:
-      - api/protobuf/kwil/*/v0/gen/go/*
-      - api/openapi-spec/api/v0/*
-
   ## Compile all protobufs
   compile:all:
     desc: Compiles all protobufs
+    preconditions:
+      - sh: a="libprotoc 3.21.12";b=`protoc --version`;test "$a" = "$b"
+        msg: "Protobuf compiler version is not 3.21.12, please install the correct version"
     cmds:
       - |
         protoc -I ./proto \

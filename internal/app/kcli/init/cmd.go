@@ -20,7 +20,6 @@ package init
 //			}
 //
 //			viper.Set("fund.pool_address", nodeInfo.FundingPool)
-//			viper.Set("fund.validator_address", nodeInfo.ValidatorAccount)
 //			return viper.WriteConfig()
 //		},
 //	}

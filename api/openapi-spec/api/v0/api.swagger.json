@@ -123,6 +123,28 @@
         ]
       }
     },
+    "/api/v0/config/gateway": {
+      "get": {
+        "operationId": "ConfigService_GetGateway",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/configGetGatewayCfgResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
     "/api/v0/ping": {
       "get": {
         "operationId": "TxService_Ping",
@@ -708,6 +730,9 @@
       "properties": {
         "funding": {
           "$ref": "#/definitions/configGetFundingCfgResponse"
+        },
+        "gateway": {
+          "$ref": "#/definitions/configGetGatewayCfgResponse"
         }
       }
     },
@@ -722,6 +747,14 @@
           "type": "string"
         },
         "pool_address": {
+          "type": "string"
+        }
+      }
+    },
+    "configGetGatewayCfgResponse": {
+      "type": "object",
+      "properties": {
+        "graphql_url": {
           "type": "string"
         }
       }

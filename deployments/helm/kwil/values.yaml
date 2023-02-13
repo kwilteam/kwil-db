@@ -91,7 +91,7 @@ containerPorts:
 
 kwilApp:
   server:
-    addr: ":8082"
+    listenAddr: ":8082"
     cors: "*"
     healthcheckKey: "this should be rotated every deployment"
     keyFile: "/app/keys.json"

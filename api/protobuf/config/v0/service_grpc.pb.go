@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type ConfigServiceClient interface {
 	GetAll(ctx context.Context, in *GetCfgRequest, opts ...grpc.CallOption) (*GetCfgResponse, error)
 	GetFunding(ctx context.Context, in *GetFundingCfgRequest, opts ...grpc.CallOption) (*GetFundingCfgResponse, error)
+	GetGateway(ctx context.Context, in *GetGatewayCfgRequest, opts ...grpc.CallOption) (*GetGatewayCfgResponse, error)
 }
 
 type configServiceClient struct {
@@ -52,12 +53,22 @@ func (c *configServiceClient) GetFunding(ctx context.Context, in *GetFundingCfgR
 	return out, nil
 }
 
+func (c *configServiceClient) GetGateway(ctx context.Context, in *GetGatewayCfgRequest, opts ...grpc.CallOption) (*GetGatewayCfgResponse, error) {
+	out := new(GetGatewayCfgResponse)
+	err := c.cc.Invoke(ctx, "/config.ConfigService/GetGateway", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ConfigServiceServer is the server API for ConfigService service.
 // All implementations must embed UnimplementedConfigServiceServer
 // for forward compatibility
 type ConfigServiceServer interface {
 	GetAll(context.Context, *GetCfgRequest) (*GetCfgResponse, error)
 	GetFunding(context.Context, *GetFundingCfgRequest) (*GetFundingCfgResponse, error)
+	GetGateway(context.Context, *GetGatewayCfgRequest) (*GetGatewayCfgResponse, error)
 	mustEmbedUnimplementedConfigServiceServer()
 }
 
@@ -70,6 +81,9 @@ func (UnimplementedConfigServiceServer) GetAll(context.Context, *GetCfgRequest) 
 }
 func (UnimplementedConfigServiceServer) GetFunding(context.Context, *GetFundingCfgRequest) (*GetFundingCfgResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFunding not implemented")
+}
+func (UnimplementedConfigServiceServer) GetGateway(context.Context, *GetGatewayCfgRequest) (*GetGatewayCfgResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGateway not implemented")
 }
 func (UnimplementedConfigServiceServer) mustEmbedUnimplementedConfigServiceServer() {}
 
@@ -120,6 +134,24 @@ func _ConfigService_GetFunding_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConfigService_GetGateway_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGatewayCfgRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConfigServiceServer).GetGateway(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/config.ConfigService/GetGateway",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConfigServiceServer).GetGateway(ctx, req.(*GetGatewayCfgRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ConfigService_ServiceDesc is the grpc.ServiceDesc for ConfigService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -134,6 +166,10 @@ var ConfigService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetFunding",
 			Handler:    _ConfigService_GetFunding_Handler,
+		},
+		{
+			MethodName: "GetGateway",
+			Handler:    _ConfigService_GetGateway_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

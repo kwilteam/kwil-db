@@ -92,7 +92,7 @@ func GetKgwDriver(ctx context.Context, t *testing.T, kwildAddr string, graphqlAd
 
 	if kwildAddr != "" {
 		t.Logf("create kgw driver to %s", kwildAddr)
-		cfg.Node.Endpoint = kwildAddr
+		cfg.Node.Addr = kwildAddr
 		return kgw.NewDriver(cfg, graphqlAddr, apiKey)
 	}
 
@@ -140,7 +140,7 @@ func GetKgwDriver(ctx context.Context, t *testing.T, kwildAddr string, graphqlAd
 	kgwEndpoint, err := kgwc.ExposedEndpoint(ctx)
 	require.NoError(t, err)
 
-	cfg.Node.Endpoint = exposedkwildEndpoint
+	cfg.Node.Addr = exposedkwildEndpoint
 	// from test-data/keys.json
 	testAPIKey := "testkwilkey"
 	t.Logf("create kgw driver to %s", kgwEndpoint)

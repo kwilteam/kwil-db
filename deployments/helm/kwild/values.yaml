@@ -252,7 +252,9 @@ kwildApp:
     outputPaths:
       - "stdout"
   server:
-    addr: ":50051"
+    listenAddr: ":50051"
+  gateway:
+    addr: "localhost:32102"
   probes:
     liveInitialDelaySeconds: 5
     readyInitialDelaySeconds: 4

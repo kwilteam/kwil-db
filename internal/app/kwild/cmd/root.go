@@ -63,8 +63,8 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to build deposits: %w", err)
 		}
 
-		hasuraManager := hasura.NewClient(cfg.Graphql.Endpoint, logger)
-		go hasura.Initialize(cfg.Graphql.Endpoint, logger)
+		hasuraManager := hasura.NewClient(cfg.Graphql.Addr, logger)
+		go hasura.Initialize(cfg.Graphql.Addr, logger)
 
 		// build executor
 		exec, err := executor.NewExecutor(ctx, client, queries, hasuraManager, logger)
@@ -94,7 +94,7 @@ var RootCmd = &cobra.Command{
 		healthService := healthsvc.NewServer(ck)
 
 		// configuration service
-		cfgService := configsvc.NewService(&cfg.Fund, logger)
+		cfgService := configsvc.NewService(cfg, logger)
 		// build server
 		svr := server.New(cfg.Server, txService, accSvc, cfgService, healthService, prcSvc, dps, logger)
 		return svr.Start(ctx)

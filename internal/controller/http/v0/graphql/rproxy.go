@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 )
 
 type graphqlReq struct {
@@ -25,15 +26,19 @@ type RProxy struct {
 	proxy  *httputil.ReverseProxy
 }
 
-func NewRProxy(backendEndpoint string, logger log.Logger) *RProxy {
-	ru, err := url.Parse(backendEndpoint)
+func NewRProxy(backendAddr string, logger log.Logger) *RProxy {
+	if !strings.Contains(backendAddr, "http://") {
+		backendAddr = fmt.Sprintf("http://%s", backendAddr)
+	}
+
+	ru, err := url.Parse(backendAddr)
 	if err != nil {
 		log2.Fatal(err)
 	}
 
 	u := ru.JoinPath("v1")
-	logger.Info("graphql endpoint configured", zap.String("endpoint", u.String()))
-	go hasura.Initialize(backendEndpoint, logger)
+	logger.Info("graphql backend base url configured", zap.String("url", u.String()))
+	go hasura.Initialize(backendAddr, logger)
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	return &RProxy{
 		logger: logger,

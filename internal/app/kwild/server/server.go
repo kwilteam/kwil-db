@@ -80,9 +80,9 @@ func (s *Server) Start(ctx context.Context) error {
 			s.logger.Info("grpc server stopped")
 		}()
 
-		return grpcServer.Serve(ctx, s.cfg.Addr)
+		return grpcServer.Serve(ctx, s.cfg.ListenAddr)
 	})
-	s.logger.Info("grpc server started", zap.String("address", s.cfg.Addr))
+	s.logger.Info("grpc server started", zap.String("address", s.cfg.ListenAddr))
 
 	g.Go(func() error {
 		c := make(chan os.Signal, 1)

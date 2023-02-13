@@ -40,8 +40,7 @@ tasks:
 
   build:gateway:
     desc: Builds the API Gateway
-    deps:
-      - pb:gen:openapi
+    deps: [ pb:compile:all ]
     cmds:
       - go build -o .build/kwil-gateway ./cmd/kwil-gateway
     generates:
@@ -70,7 +69,7 @@ tasks:
     deps:
       - k8s:helm:update
       - docker:kwild
-      - docker:kwil-gateway
+      - docker:gateway
     cmds:
       - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/dev-values.yaml
 

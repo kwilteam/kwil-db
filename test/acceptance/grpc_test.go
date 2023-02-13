@@ -188,7 +188,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		// When user deployed database
 		cltConfig := &kwilClient.Config{
 			Node: client.Config{
-				Endpoint: remoteKwildAddr,
+				Addr: remoteKwildAddr,
 			},
 			Fund: *userFundConfig,
 			Log: log.Config{
@@ -231,7 +231,7 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		// When user deployed database
 		cltConfig := &kwilClient.Config{
 			Node: client.Config{
-				Endpoint: remoteKwildAddr,
+				Addr: remoteKwildAddr,
 			},
 			Fund: *userFundConfig,
 		}

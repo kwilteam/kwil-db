@@ -15,7 +15,7 @@ import (
 )
 
 type Config struct {
-	Endpoint string `mapstructure:"endpoint"`
+	Addr string `mapstructure:"addr"`
 }
 
 type Client struct {
@@ -45,10 +45,10 @@ func NewClient(ctx context.Context, cfg *Config, log log.Logger, conn grpc.Clien
 }
 
 func New(ctx context.Context, cfg *Config, log log.Logger) (*Client, error) {
-	log.Debug("dail grpc server", zap.String("endpoint", cfg.Endpoint))
-	conn, err := transport.Dial(ctx, cfg.Endpoint)
+	log.Debug("dail grpc server", zap.String("addr", cfg.Addr))
+	conn, err := transport.Dial(ctx, cfg.Addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial server %s: %w", cfg.Endpoint, err)
+		return nil, fmt.Errorf("failed to dial server %s: %w", cfg.Addr, err)
 	}
 	return &Client{
 		accountClt: accountspb.NewAccountServiceClient(conn),
