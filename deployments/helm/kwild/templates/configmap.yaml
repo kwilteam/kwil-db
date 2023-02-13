@@ -13,6 +13,7 @@ data:
   KWILD_FUND_WALLET: {{ .Values.kwildApp.fund.wallet | quote }}
   KWILD_LOG_LEVEL: {{ .Values.kwildApp.log.level | quote }}
   KWILD_LOG_OUTPUT_PATHS: {{ .Values.kwildApp.log.outputPaths | join "," | quote }}
+  KWILD_GATEWAY_ADDR: {{ .Values.kwildApp.gateway.addr | quote }}
   {{- $graphqlHost := printf "%s-hasura" .Release.Name }}
   KWILD_GRAPHQL_ADDR: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) | quote }}
   {{- if and (not .Values.hasura.postgresql.enabled) (.Values.global.postgres.enabled) }}

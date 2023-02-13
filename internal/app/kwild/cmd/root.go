@@ -94,7 +94,7 @@ var RootCmd = &cobra.Command{
 		healthService := healthsvc.NewServer(ck)
 
 		// configuration service
-		cfgService := configsvc.NewService(&cfg.Fund, logger)
+		cfgService := configsvc.NewService(cfg, logger)
 		// build server
 		svr := server.New(cfg.Server, txService, accSvc, cfgService, healthService, prcSvc, dps, logger)
 		return svr.Start(ctx)

@@ -9,12 +9,17 @@ import (
 
 type SvcConfig struct {
 	Funding SvcFundingConfig
+	Gateway SvcGatewayConfig
 }
 
 type SvcFundingConfig struct {
-	ChainCode        int64
-	PoolAddress      string
-	ValidatorAccount string
+	ChainCode       int64
+	PoolAddress     string
+	ProviderAddress string
+}
+
+type SvcGatewayConfig struct {
+	GraphqlUrl string
 }
 
 type GrpcClient interface {

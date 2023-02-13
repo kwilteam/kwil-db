@@ -64,7 +64,7 @@ var defaultConfig = map[string]interface{}{
 		"output_paths": []string{"stdout"},
 	},
 	"graphql": map[string]interface{}{
-		"addr": "http://localhost:8080",
+		"addr": "localhost:8080",
 	},
 	"kwild": map[string]interface{}{
 		"addr": "localhost:50051",

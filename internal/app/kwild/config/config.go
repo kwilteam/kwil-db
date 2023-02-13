@@ -8,6 +8,7 @@ import (
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
 	"os"
+	"strings"
 )
 
 const (
@@ -40,7 +41,21 @@ const (
 	FundRPCURLKey            = "fund.rpc_url"
 	FundReconnectIntervalKey = "fund.reconnect_interval"
 	FundBlockConfirmationKey = "fund.block_confirmation"
+
+	GatewayAddrKey = "gateway.addr"
 )
+
+type GatewayConfig struct {
+	Addr string `mapstructure:"addr"`
+}
+
+func (c *GatewayConfig) GetGraphqlUrl() string {
+	graphqlUrl := c.Addr + "/graphql"
+	if !strings.Contains(graphqlUrl, "http") {
+		graphqlUrl = "http://" + graphqlUrl
+	}
+	return graphqlUrl
+}
 
 type GraphqlConfig struct {
 	Addr string `mapstructure:"addr"`
@@ -75,6 +90,7 @@ type AppConfig struct {
 	Fund    fund.Config    `mapstructure:"fund"`
 	DB      PostgresConfig `mapstructure:"db"`
 	Graphql GraphqlConfig  `mapstructure:"graphql"`
+	Gateway GatewayConfig  `mapstructure:"gateway"`
 }
 
 var ConfigFile string
@@ -92,11 +108,14 @@ var defaultConfig = map[string]interface{}{
 		"listen_addr": "0.0.0.0:50051",
 	},
 	"graphql": map[string]interface{}{
-		"addr": "localhost:8082",
+		"addr": "localhost:8080",
 	},
 	"fund": map[string]interface{}{
 		"reconnect_interval": 30,
 		"block_confirmation": 12,
+	},
+	"gateway": map[string]interface{}{
+		"addr": "localhost:8082",
 	},
 }
 
@@ -128,6 +147,9 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String(FundRPCURLKey, "", "the provider url of the funding pool chain")
 	fs.Int64(FundReconnectIntervalKey, 0, "the reconnect interval of the funding pool")
 	fs.Int64(FundBlockConfirmationKey, 0, "the block confirmation of the funding pool")
+
+	// gateway flags
+	fs.String(GatewayAddrKey, "", "the address of the Kwil gateway server")
 }
 
 // BindGlobalEnv binds the global flags to the environment variables.
@@ -150,6 +172,7 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 		FundRPCURLKey,
 		FundWalletKey,
 		GraphqlAddr,
+		GatewayAddrKey,
 		LogLevelKey,
 		LogOutputPathsKey,
 		ServerListenAddrKey,
@@ -159,7 +182,6 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 		viper.BindEnv(v)
 		viper.BindPFlag(v, fs.Lookup(v))
 	}
-
 }
 
 func LoadConfig() (cfg *AppConfig, err error) {

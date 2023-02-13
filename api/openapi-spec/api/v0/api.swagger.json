@@ -123,6 +123,28 @@
         ]
       }
     },
+    "/api/v0/config/gateway": {
+      "get": {
+        "operationId": "ConfigService_GetGateway",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/configGetGatewayCfgResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
     "/api/v0/ping": {
       "get": {
         "operationId": "TxService_Ping",
@@ -460,7 +482,7 @@
             "$ref": "#/definitions/commonTable"
           }
         },
-        "sqlQueries": {
+        "sql_queries": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/commonSQLQuery"
@@ -618,11 +640,11 @@
     "commonSignature": {
       "type": "object",
       "properties": {
-        "signatureBytes": {
+        "signature_bytes": {
           "type": "string",
           "format": "byte"
         },
-        "signatureType": {
+        "signature_type": {
           "$ref": "#/definitions/commonSignatureType"
         }
       }
@@ -658,7 +680,7 @@
           "type": "string",
           "format": "byte"
         },
-        "payloadType": {
+        "payload_type": {
           "$ref": "#/definitions/commonPayloadType"
         },
         "payload": {
@@ -708,26 +730,31 @@
       "properties": {
         "funding": {
           "$ref": "#/definitions/configGetFundingCfgResponse"
+        },
+        "gateway": {
+          "$ref": "#/definitions/configGetGatewayCfgResponse"
         }
       }
     },
     "configGetFundingCfgResponse": {
       "type": "object",
       "properties": {
-        "chainCode": {
+        "chain_code": {
           "type": "string",
           "format": "int64"
         },
-        "validatorAccount": {
+        "provider_address": {
           "type": "string"
         },
-        "poolAddress": {
+        "pool_address": {
           "type": "string"
-        },
-        "tokenAddress": {
-          "type": "string"
-        },
-        "tokenName": {
+        }
+      }
+    },
+    "configGetGatewayCfgResponse": {
+      "type": "object",
+      "properties": {
+        "graphql_url": {
           "type": "string"
         }
       }

@@ -28,6 +28,9 @@ kwild:
       poolAddress: 0xb0a194286A901FeAEA39D2b765247BEd64aD4F41
     log:
       level: debug
+    gateway:
+      # TODO: change to staging domain
+      addr: "staging.gateway.kwil.com"
 
 global:
   postgres:

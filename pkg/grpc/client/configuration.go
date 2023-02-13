@@ -14,9 +14,12 @@ func (c *Client) GetServiceConfig(ctx context.Context) (SvcConfig, error) {
 
 	return SvcConfig{
 		Funding: SvcFundingConfig{
-			ChainCode:        resp.Funding.ChainCode,
-			PoolAddress:      resp.Funding.PoolAddress,
-			ValidatorAccount: resp.Funding.ValidatorAccount,
+			ChainCode:       resp.Funding.GetChainCode(),
+			PoolAddress:     resp.Funding.GetPoolAddress(),
+			ProviderAddress: resp.Funding.GetProviderAddress(),
+		},
+		Gateway: SvcGatewayConfig{
+			GraphqlUrl: resp.Gateway.GetGraphqlUrl(),
 		},
 	}, nil
 }
@@ -28,8 +31,19 @@ func (c *Client) GetFundingServiceConfig(ctx context.Context) (SvcFundingConfig,
 	}
 
 	return SvcFundingConfig{
-		ChainCode:        resp.ChainCode,
-		PoolAddress:      resp.PoolAddress,
-		ValidatorAccount: resp.ValidatorAccount,
+		ChainCode:       resp.GetChainCode(),
+		PoolAddress:     resp.GetPoolAddress(),
+		ProviderAddress: resp.GetProviderAddress(),
+	}, nil
+}
+
+func (c *Client) GetGatewayServiceConfig(ctx context.Context) (SvcGatewayConfig, error) {
+	resp, err := c.cfgClt.GetGateway(ctx, &cfgpb.GetGatewayCfgRequest{})
+	if err != nil {
+		return SvcGatewayConfig{}, fmt.Errorf("failed to get gateway service config: %w", err)
+	}
+
+	return SvcGatewayConfig{
+		GraphqlUrl: resp.GetGraphqlUrl(),
 	}, nil
 }
