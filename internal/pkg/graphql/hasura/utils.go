@@ -33,10 +33,10 @@ func queryToExplain(query string) string {
 }
 
 // Initialize ensure Hasura is initialized, add default source('default') and schema
-func Initialize(endpoint string, logger log.Logger) {
+func Initialize(addr string, logger log.Logger) {
 	for {
 		time.Sleep(3 * time.Second)
-		client := NewClient(endpoint, logger)
+		client := NewClient(addr, logger)
 		err := client.AddDefaultSourceAndSchema()
 		logger.Debug("try to initialize Hasura", zap.Error(err))
 		if err != nil && strings.Contains(err.Error(), "connection refused") {

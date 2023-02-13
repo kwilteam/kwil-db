@@ -14,7 +14,7 @@ data:
   KWILD_LOG_LEVEL: {{ .Values.kwildApp.log.level | quote }}
   KWILD_LOG_OUTPUT_PATHS: {{ .Values.kwildApp.log.outputPaths | join "," | quote }}
   {{- $graphqlHost := printf "%s-hasura" .Release.Name }}
-  KWILD_GRAPHQL_ENDPOINT: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) | quote }}
+  KWILD_GRAPHQL_ADDR: {{ printf "http://%s:%d" $graphqlHost (int .Values.hasura.service.ports.hasura) | quote }}
   {{- if and (not .Values.hasura.postgresql.enabled) (.Values.global.postgres.enabled) }}
   KWILD_DB_URL: {{ printf "postgres://%s:%s@%s:%d/%s?sslmode=disable" .Values.global.postgres.username .Values.global.postgres.password .Values.global.postgres.host (int .Values.global.postgres.port) .Values.global.kwild.database }}
   {{- else -}}

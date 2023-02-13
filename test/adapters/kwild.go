@@ -80,7 +80,7 @@ func GetKwildDriver(ctx context.Context, t *testing.T, addr string, cfg *kclient
 
 	if addr != "" {
 		t.Logf("create grpc driver to %s", addr)
-		cfg.Node.Endpoint = addr
+		cfg.Node.Addr = addr
 		return kwild.NewDriver(cfg)
 	}
 
@@ -100,6 +100,6 @@ func GetKwildDriver(ctx context.Context, t *testing.T, addr string, cfg *kclient
 	endpoint, err := kc.ExposedEndpoint(ctx)
 	require.NoError(t, err)
 	t.Logf("create grpc driver to %s", endpoint)
-	cfg.Node.Endpoint = endpoint
+	cfg.Node.Addr = endpoint
 	return kwild.NewDriver(cfg)
 }

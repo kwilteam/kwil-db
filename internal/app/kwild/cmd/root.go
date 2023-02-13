@@ -63,8 +63,8 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to build deposits: %w", err)
 		}
 
-		hasuraManager := hasura.NewClient(cfg.Graphql.Endpoint, logger)
-		go hasura.Initialize(cfg.Graphql.Endpoint, logger)
+		hasuraManager := hasura.NewClient(cfg.Graphql.Addr, logger)
+		go hasura.Initialize(cfg.Graphql.Addr, logger)
 
 		// build executor
 		exec, err := executor.NewExecutor(ctx, client, queries, hasuraManager, logger)

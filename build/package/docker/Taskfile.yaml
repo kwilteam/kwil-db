@@ -1,7 +1,7 @@
 version: '3'
 
 tasks:
-  kwil-gateway:
+  gateway:
     desc: Build the docker image for kwil-gateway
     cmds:
       - docker build . -t kwil-gateway:latest -f ./build/package/docker/kwil-gateway.dockerfile

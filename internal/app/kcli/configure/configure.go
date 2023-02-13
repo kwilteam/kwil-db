@@ -26,8 +26,8 @@ func NewCmdConfigure() *cobra.Command {
 
 			// endpoint
 			runner.AddPrompt(&common.Prompter{
-				Label:   "Endpoint",
-				Default: config.AppConfig.Node.Endpoint,
+				Label:   "ListenAddr",
+				Default: config.AppConfig.Node.Addr,
 			}, "endpoint")
 
 			// private key
