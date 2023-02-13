@@ -4,6 +4,9 @@ tasks:
   ## Compile all protobufs
   compile:all:
     desc: Compiles all protobufs
+    preconditions:
+      - sh: a="libprotoc 3.21.12";b=`protoc --version`;test "$a" = "$b"
+        msg: "Protobuf compiler version is not 3.21.12, please install the correct version"
     cmds:
       - |
         protoc -I ./proto \
