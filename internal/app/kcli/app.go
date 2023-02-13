@@ -2,12 +2,14 @@ package kcli
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"kwil/internal/app/kcli/config"
+	"kwil/internal/app/kcli/configure"
 	"kwil/internal/app/kcli/database"
 	"kwil/internal/app/kcli/fund"
 	"kwil/internal/app/kcli/utils"
 	"path/filepath"
+
+	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
@@ -19,7 +21,7 @@ var rootCmd = &cobra.Command{
 func Execute() error {
 	rootCmd.AddCommand(
 		fund.NewCmdFund(),
-		//	configure.NewCmdConfigure(),
+		configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),
 		//initCli.NewCmdInit(),

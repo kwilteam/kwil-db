@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"kwil/internal/app/kcli/common"
 	"kwil/internal/app/kcli/config"
+	"os"
+	"os/user"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -17,6 +20,19 @@ func NewCmdConfigure() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			usr, err := user.Current()
+			if err != nil {
+				return fmt.Errorf("unexpected error: %w", err)
+			}
+			path := filepath.Join(usr.HomeDir, config.DefaultConfigDir)
+
+			err = createDirIfNotExists(path)
+			if err != nil {
+				return fmt.Errorf("failed to create config directory: %w", err)
+			}
+
+			config.LoadConfig()
+
 			fmt.Println("=======", viper.ConfigFileUsed())
 			fmt.Println("-------", config.AppConfig.Fund.Wallet)
 
@@ -73,6 +89,16 @@ func (c *configPrompter) Run() error {
 			return err
 		}
 		c.Viper.Set(p.viperKey, res)
+	}
+	return nil
+}
+
+func createDirIfNotExists(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		err = os.MkdirAll(path, 0755)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
