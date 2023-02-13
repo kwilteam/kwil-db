@@ -5,8 +5,6 @@ import (
 	"crypto/ecdsa"
 	"flag"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/spf13/viper"
 	"kwil/pkg/chain/client/dto"
 	"kwil/pkg/chain/types"
 	"kwil/pkg/databases"
@@ -21,6 +19,9 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/spf13/viper"
 
 	"github.com/stretchr/testify/assert"
 )

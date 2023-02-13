@@ -19,11 +19,7 @@ func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*t
 		return nil, fmt.Errorf("failed to get database identifier")
 	}
 
-	return s.retrieveDatabaseSchema(ctx, dbIdentifier)
-}
-
-func (s *Service) retrieveDatabaseSchema(ctx context.Context, database *databases.DatabaseIdentifier) (*txpb.GetSchemaResponse, error) {
-	db, err := s.dao.GetDatabase(ctx, database)
+	db, err := s.dao.GetDatabase(ctx, dbIdentifier)
 	if err != nil {
 		s.log.Sugar().Warnf("failed to get database", err)
 		return nil, fmt.Errorf("failed to get database")
