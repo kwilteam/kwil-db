@@ -24,17 +24,17 @@ func NewService(cfg *fund.Config, logger log.Logger) *Service {
 func (s *Service) GetAll(context.Context, *pb.GetCfgRequest) (*pb.GetCfgResponse, error) {
 	return &pb.GetCfgResponse{
 		Funding: &pb.GetFundingCfgResponse{
-			ChainCode:        s.fundCfg.Chain.ChainCode,
-			PoolAddress:      s.fundCfg.PoolAddress,
-			ValidatorAccount: s.fundCfg.GetAccountAddress(),
+			ChainCode:       s.fundCfg.Chain.ChainCode,
+			PoolAddress:     s.fundCfg.PoolAddress,
+			ProviderAddress: s.fundCfg.GetAccountAddress(),
 		}}, nil
 }
 
 func (s *Service) GetFunding(context.Context, *pb.GetFundingCfgRequest) (*pb.GetFundingCfgResponse, error) {
 	return &pb.GetFundingCfgResponse{
-		ChainCode:        s.fundCfg.Chain.ChainCode,
-		PoolAddress:      s.fundCfg.PoolAddress,
-		ValidatorAccount: s.fundCfg.GetAccountAddress(),
+		ChainCode:       s.fundCfg.Chain.ChainCode,
+		PoolAddress:     s.fundCfg.PoolAddress,
+		ProviderAddress: s.fundCfg.GetAccountAddress(),
 		// @yaiba TODO: get token address and name
 		//TokenAddress: "",
 		//TokenName:    "",

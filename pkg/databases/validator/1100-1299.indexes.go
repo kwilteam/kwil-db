@@ -64,8 +64,6 @@ func (v *Validator) ValidateIndex(index *databases.Index) error {
 		return violation(errorCode1201, fmt.Errorf(`index name "%s" is a reserved word`, index.Name))
 	}
 
-	// TODO: check for reserved index names error code 1201
-
 	// check if index type is valid
 	if !index.Using.IsValid() {
 		return violation(errorCode1202, fmt.Errorf(`invalid index type "%d"`, index.Using.Int()))

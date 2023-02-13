@@ -460,7 +460,7 @@
             "$ref": "#/definitions/commonTable"
           }
         },
-        "sqlQueries": {
+        "sql_queries": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/commonSQLQuery"
@@ -618,11 +618,11 @@
     "commonSignature": {
       "type": "object",
       "properties": {
-        "signatureBytes": {
+        "signature_bytes": {
           "type": "string",
           "format": "byte"
         },
-        "signatureType": {
+        "signature_type": {
           "$ref": "#/definitions/commonSignatureType"
         }
       }
@@ -658,7 +658,7 @@
           "type": "string",
           "format": "byte"
         },
-        "payloadType": {
+        "payload_type": {
           "$ref": "#/definitions/commonPayloadType"
         },
         "payload": {
@@ -714,20 +714,14 @@
     "configGetFundingCfgResponse": {
       "type": "object",
       "properties": {
-        "chainCode": {
+        "chain_code": {
           "type": "string",
           "format": "int64"
         },
-        "validatorAccount": {
+        "provider_address": {
           "type": "string"
         },
-        "poolAddress": {
-          "type": "string"
-        },
-        "tokenAddress": {
-          "type": "string"
-        },
-        "tokenName": {
+        "pool_address": {
           "type": "string"
         }
       }
