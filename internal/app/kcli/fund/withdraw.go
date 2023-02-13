@@ -1,9 +1,6 @@
 package fund
 
-import (
-	"github.com/spf13/cobra"
-)
-
+/*
 func withdrawCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "withdraw",
@@ -76,7 +73,6 @@ func withdrawCmd() *cobra.Command {
 			Tx Hash:          %s
 
 		`, amount, res.Amount, res.Fee, res.CorrelationId, res.Txid)
-		*/
 		//return nil
 		//})
 		//},
@@ -84,3 +80,4 @@ func withdrawCmd() *cobra.Command {
 
 	return cmd
 }
+*/
