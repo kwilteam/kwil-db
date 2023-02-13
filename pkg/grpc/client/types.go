@@ -12,9 +12,9 @@ type SvcConfig struct {
 }
 
 type SvcFundingConfig struct {
-	ChainCode        int64
-	PoolAddress      string
-	ValidatorAccount string
+	ChainCode       int64
+	PoolAddress     string
+	ProviderAddress string
 }
 
 type GrpcClient interface {

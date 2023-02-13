@@ -460,7 +460,7 @@
             "$ref": "#/definitions/commonTable"
           }
         },
-        "sqlQueries": {
+        "sql_queries": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/commonSQLQuery"
@@ -718,16 +718,10 @@
           "type": "string",
           "format": "int64"
         },
-        "validatorAccount": {
+        "providerAddress": {
           "type": "string"
         },
         "poolAddress": {
-          "type": "string"
-        },
-        "tokenAddress": {
-          "type": "string"
-        },
-        "tokenName": {
           "type": "string"
         }
       }

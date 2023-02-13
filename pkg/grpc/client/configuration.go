@@ -14,9 +14,9 @@ func (c *Client) GetServiceConfig(ctx context.Context) (SvcConfig, error) {
 
 	return SvcConfig{
 		Funding: SvcFundingConfig{
-			ChainCode:        resp.Funding.ChainCode,
-			PoolAddress:      resp.Funding.PoolAddress,
-			ValidatorAccount: resp.Funding.ValidatorAccount,
+			ChainCode:       resp.Funding.ChainCode,
+			PoolAddress:     resp.Funding.PoolAddress,
+			ProviderAddress: resp.Funding.ProviderAddress,
 		},
 	}, nil
 }
@@ -28,8 +28,8 @@ func (c *Client) GetFundingServiceConfig(ctx context.Context) (SvcFundingConfig,
 	}
 
 	return SvcFundingConfig{
-		ChainCode:        resp.ChainCode,
-		PoolAddress:      resp.PoolAddress,
-		ValidatorAccount: resp.ValidatorAccount,
+		ChainCode:       resp.ChainCode,
+		PoolAddress:     resp.PoolAddress,
+		ProviderAddress: resp.ProviderAddress,
 	}, nil
 }
