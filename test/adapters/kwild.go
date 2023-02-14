@@ -93,7 +93,8 @@ func GetKwildDriver(ctx context.Context, t *testing.T, addr string, cfg *kclient
 
 	envs["KWILD_DB_URL"] = unexposedPgURL
 	envs["KWILD_LOG_LEVEL"] = "info"
-	envs["KWILD_SERVER_ADDR"] = ":50051"
+	envs["KWILD_SERVER_LISTEN_ADDR"] = ":50051"
+	envs["KWILD_GATEWAY_ADDR"] = "localhost:8080"
 
 	// for specification verify
 	kc := StartKwildDockerService(t, ctx, envs)
