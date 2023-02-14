@@ -1,0 +1,59 @@
+name: kwil-pr-test
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: PRTest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: '3.x'
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19.0' # The Go version to download (if necessary) and use.
+
+      # Install all the dependencies
+      - name: Install dependencies
+        run: |
+          go version
+          go get -u golang.org/x/lint/golint
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2
+          go install google.golang.org/protobuf/cmd/protoc-gen-go
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
+
+      - name: Install Task
+        uses: arduino/setup-task@v1
+
+      - name: Compile Protobufs
+        run: |
+          task pb:compile:all
+
+      - name: Build local docker images
+        env:
+          DOCKER_BUILDKIT: 1
+        run: |
+          task docker:kwild
+          task docker:gateway
+
+      - name: Run acceptance test
+        run: |
+          go test ./test/acceptance/ -v
