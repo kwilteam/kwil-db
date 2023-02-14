@@ -10,7 +10,6 @@ import (
 	"kwil/internal/pkg/transport"
 	"kwil/pkg/log"
 
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -24,7 +23,6 @@ type Client struct {
 	pricingClt pricingpb.PricingServiceClient
 	cfgClt     cfgpb.ConfigServiceClient
 
-	log  log.Logger
 	conn *grpc.ClientConn
 	cfg  *Config
 }
@@ -40,12 +38,10 @@ func NewClient(ctx context.Context, cfg *Config, log log.Logger, conn grpc.Clien
 		cfgClt:     cfgClt,
 		conn:       conn.(*grpc.ClientConn),
 		cfg:        cfg,
-		log:        log,
 	}
 }
 
-func New(ctx context.Context, cfg *Config, log log.Logger) (*Client, error) {
-	log.Debug("dail grpc server", zap.String("addr", cfg.Addr))
+func New(ctx context.Context, cfg *Config) (*Client, error) {
 	conn, err := transport.Dial(ctx, cfg.Addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial server %s: %w", cfg.Addr, err)
@@ -57,7 +53,6 @@ func New(ctx context.Context, cfg *Config, log log.Logger) (*Client, error) {
 		cfgClt:     cfgpb.NewConfigServiceClient(conn),
 		cfg:        cfg,
 		conn:       conn,
-		log:        log,
 	}, nil
 }
 

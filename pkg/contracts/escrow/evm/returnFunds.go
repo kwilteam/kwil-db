@@ -2,15 +2,17 @@ package evm
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/common"
+	"crypto/ecdsa"
 	kwilCommon "kwil/pkg/contracts/common/evm"
 	"kwil/pkg/contracts/escrow/types"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // ReturnFunds calls the returnDeposit function
-func (c *contract) ReturnFunds(ctx context.Context, params *types.ReturnFundsParams) (*types.ReturnFundsResponse, error) {
+func (c *contract) ReturnFunds(ctx context.Context, params *types.ReturnFundsParams, privateKey *ecdsa.PrivateKey) (*types.ReturnFundsResponse, error) {
 
-	auth, err := kwilCommon.PrepareTxAuth(ctx, c.client, c.chainId, c.privateKey)
+	auth, err := kwilCommon.PrepareTxAuth(ctx, c.client, c.chainId, privateKey)
 	if err != nil {
 		return nil, err
 	}

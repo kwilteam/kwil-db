@@ -29,12 +29,12 @@ type TokenContract interface {
 	Decimals() uint8
 
 	// transfers the given amount of tokens to the given address
-	Transfer(ctx context.Context, to string, amount *big.Int) (*types.TransferResponse, error)
+	Transfer(ctx context.Context, to string, amount *big.Int, privateKey *ecdsa.PrivateKey) (*types.TransferResponse, error)
 	// approves the given amount of tokens to the given address
-	Approve(ctx context.Context, spender string, amount *big.Int) (*types.ApproveResponse, error)
+	Approve(ctx context.Context, spender string, amount *big.Int, privateKey *ecdsa.PrivateKey) (*types.ApproveResponse, error)
 }
 
-func New(chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, address string) (TokenContract, error) {
+func New(chainClient chainClient.ChainClient, address string) (TokenContract, error) {
 	switch chainClient.ChainCode() {
 	case chainTypes.ETHEREUM, chainTypes.GOERLI:
 		ethClient, err := chainClient.AsEthClient()
@@ -42,7 +42,7 @@ func New(chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, addr
 			return nil, fmt.Errorf("failed to get ethclient from chain client: %d", err)
 		}
 
-		return evm.New(ethClient, chainClient.ChainCode().ToChainId(), privateKey, address)
+		return evm.New(ethClient, chainClient.ChainCode().ToChainId(), address)
 	default:
 		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainClient.ChainCode()))
 	}

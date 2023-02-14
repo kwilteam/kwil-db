@@ -1,7 +1,6 @@
 package evm
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"kwil/pkg/contracts/token/evm/abi"
 	"math/big"
@@ -19,10 +18,9 @@ type contract struct {
 	decimals    uint8
 	totalSupply *big.Int
 	chainId     *big.Int
-	privateKey  *ecdsa.PrivateKey
 }
 
-func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKey, contractAddress string) (*contract, error) {
+func New(client *ethclient.Client, chainId *big.Int, contractAddress string) (*contract, error) {
 
 	ctr, err := abi.NewErc20(common.HexToAddress(contractAddress), client)
 	if err != nil {
@@ -58,6 +56,5 @@ func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKe
 		totalSupply: totalSupply,
 		address:     contractAddress,
 		chainId:     chainId,
-		privateKey:  privateKey,
 	}, nil
 }

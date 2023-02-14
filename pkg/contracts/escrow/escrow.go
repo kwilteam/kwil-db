@@ -11,15 +11,15 @@ import (
 )
 
 type EscrowContract interface {
-	GetDeposits(ctx context.Context, start, end int64) ([]*types.DepositEvent, error)
-	GetWithdrawals(ctx context.Context, start, end int64) ([]*types.WithdrawalConfirmationEvent, error)
-	ReturnFunds(ctx context.Context, params *types.ReturnFundsParams) (*types.ReturnFundsResponse, error)
-	Deposit(ctx context.Context, params *types.DepositParams) (*types.DepositResponse, error)
+	GetDeposits(ctx context.Context, start, end int64, providerAddress string) ([]*types.DepositEvent, error)
+	GetWithdrawals(ctx context.Context, start, end int64, providerAddress string) ([]*types.WithdrawalConfirmationEvent, error)
+	ReturnFunds(ctx context.Context, params *types.ReturnFundsParams, privateKey *ecdsa.PrivateKey) (*types.ReturnFundsResponse, error)
+	Deposit(ctx context.Context, params *types.DepositParams, privateKey *ecdsa.PrivateKey) (*types.DepositResponse, error)
 	Balance(ctx context.Context, params *types.DepositBalanceParams) (*types.DepositBalanceResponse, error)
 	TokenAddress() string
 }
 
-func New(chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, address string) (EscrowContract, error) {
+func New(chainClient chainClient.ChainClient, contractAddress string) (EscrowContract, error) {
 	switch chainClient.ChainCode() {
 	case chainTypes.ETHEREUM, chainTypes.GOERLI:
 		ethClient, err := chainClient.AsEthClient()
@@ -27,7 +27,7 @@ func New(chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, addr
 			return nil, fmt.Errorf("failed to get ethclient from chain client: %d", err)
 		}
 
-		return evm.New(ethClient, chainClient.ChainCode().ToChainId(), privateKey, address)
+		return evm.New(ethClient, chainClient.ChainCode().ToChainId(), contractAddress)
 	default:
 		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainClient.ChainCode()))
 	}

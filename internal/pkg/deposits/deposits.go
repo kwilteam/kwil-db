@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/internal/pkg/deposits/chain-sync"
+	chainsync "kwil/internal/pkg/deposits/chain-sync"
 	"kwil/internal/repository"
 	chainClient "kwil/pkg/chain/client"
 	"kwil/pkg/contracts/escrow"
+	"kwil/pkg/crypto"
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
@@ -20,22 +21,27 @@ type Depositer interface {
 // in the future we can make things like expirationPeriod and chunkSize configurable, but these values are good enough for now
 type depositer struct {
 	dao              repository.Queries
-	db    *sqlclient.DB
-	chain chainsync.Chain
-	log   log.Logger
+	db               *sqlclient.DB
+	chain            chainsync.Chain
+	log              log.Logger
 	expirationPeriod int64
 }
 
 func NewDepositer(config *fund.Config, db *sqlclient.DB, queries repository.Queries, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, logger log.Logger) (Depositer, error) {
 
 	// create the escrow contract
-	escrowContract, err := escrow.New(chainClient, privateKey, config.PoolAddress)
+	escrowContract, err := escrow.New(chainClient, config.PoolAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create escrow contract: %w", err)
 	}
 
+	providerAddress, err := crypto.AddressFromPrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public key from private key: %w", err)
+	}
+
 	// create the chain
-	chainSynchronizer, err := chainsync.New(chainClient, escrowContract, queries, db, logger)
+	chainSynchronizer, err := chainsync.New(chainClient, escrowContract, queries, db, logger, providerAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chain synchronizer: %w", err)
 	}

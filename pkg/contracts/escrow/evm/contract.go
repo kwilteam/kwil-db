@@ -1,9 +1,7 @@
 package evm
 
 import (
-	"crypto/ecdsa"
 	"kwil/pkg/contracts/escrow/evm/abi"
-	"kwil/pkg/crypto"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,15 +9,14 @@ import (
 )
 
 type contract struct {
-	client      *ethclient.Client
-	ctr         *abi.Escrow
-	token       string
-	chainId     *big.Int
-	privateKey  *ecdsa.PrivateKey
-	nodeAddress string
+	client  *ethclient.Client
+	ctr     *abi.Escrow
+	token   string
+	chainId *big.Int
+	//providerAddress string
 }
 
-func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKey, contractAddress string) (*contract, error) {
+func New(client *ethclient.Client, chainId *big.Int, contractAddress string) (*contract, error) {
 
 	ctr, err := abi.NewEscrow(common.HexToAddress(contractAddress), client)
 	if err != nil {
@@ -31,19 +28,11 @@ func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKe
 		return nil, err
 	}
 
-	// private key to address
-	nodeAddress, err := crypto.AddressFromPrivateKey(privateKey)
-	if err != nil {
-		return nil, err
-	}
-
 	return &contract{
-		client:      client,
-		ctr:         ctr,
-		token:       tokAddr.Hex(),
-		chainId:     chainId,
-		privateKey:  privateKey,
-		nodeAddress: nodeAddress,
+		client:  client,
+		ctr:     ctr,
+		token:   tokAddr.Hex(),
+		chainId: chainId,
 	}, nil
 }
 

@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/cobra"
 	"kwil/internal/app/kwild/config"
 	"kwil/internal/app/kwild/server"
 	"kwil/internal/controller/grpc/v0/accountsvc"
@@ -22,6 +21,8 @@ import (
 	"kwil/pkg/sql/sqlclient"
 	"path/filepath"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 var RootCmd = &cobra.Command{

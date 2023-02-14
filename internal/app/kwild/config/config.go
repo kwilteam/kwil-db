@@ -2,13 +2,14 @@ package config
 
 import (
 	"fmt"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"kwil/internal/pkg/config"
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
 	"os"
 	"strings"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 const (

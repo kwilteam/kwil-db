@@ -7,7 +7,7 @@ import (
 )
 
 func (c *Client) ApproveToken(ctx context.Context, spender string, amount *big.Int) (*types.ApproveResponse, error) {
-	return c.Token.Approve(ctx, spender, amount)
+	return c.Token.Approve(ctx, spender, amount, c.Config.Wallet)
 }
 
 func (c *Client) GetAllowance(ctx context.Context, from string, spender string) (*big.Int, error) {

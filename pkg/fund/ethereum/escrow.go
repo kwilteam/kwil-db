@@ -32,7 +32,7 @@ func (c *Client) DepositFund(ctx context.Context, to string, amount *big.Int) (*
 	depoistRes, err := c.Escrow.Deposit(ctx, &types.DepositParams{
 		Validator: to,
 		Amount:    amount,
-	})
+	}, c.Config.Wallet)
 	if err != nil {
 		return nil, err
 	}

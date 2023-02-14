@@ -27,7 +27,7 @@ func NewClient(cfg *fund.Config, logger log.Logger) (*Client, error) {
 	}
 
 	// escrow
-	escrowCtr, err := escrow.New(chnClient, cfg.Wallet, cfg.PoolAddress)
+	escrowCtr, err := escrow.New(chnClient, cfg.PoolAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create escrow contract: %v", err)
 	}
@@ -36,7 +36,7 @@ func NewClient(cfg *fund.Config, logger log.Logger) (*Client, error) {
 	tokenAddress := escrowCtr.TokenAddress()
 
 	// erc20
-	erc20Ctr, err := token.New(chnClient, cfg.Wallet, tokenAddress)
+	erc20Ctr, err := token.New(chnClient, tokenAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create erc20 contract: %v", err)
 	}

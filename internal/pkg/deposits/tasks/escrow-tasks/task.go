@@ -12,13 +12,16 @@ type task struct {
 	contract escrow.EscrowContract
 	dao      repository.Queries // this will be used and set for each task
 	queries  repository.Queries // this will be set once on initialization
+
+	providerAddress string
 }
 
-func New(dao repository.Queries, contract escrow.EscrowContract) tasks.Runnable {
+func New(dao repository.Queries, contract escrow.EscrowContract, providerAddress string) tasks.Runnable {
 	return &task{
-		contract: contract,
-		dao:      nil,
-		queries:  dao,
+		contract:        contract,
+		dao:             nil,
+		queries:         dao,
+		providerAddress: providerAddress,
 	}
 }
 
