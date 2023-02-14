@@ -2,13 +2,13 @@ package config
 
 import (
 	"fmt"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"kwil/internal/pkg/config"
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
 	"os"
-	"strings"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -51,9 +51,6 @@ type GatewayConfig struct {
 
 func (c *GatewayConfig) GetGraphqlUrl() string {
 	graphqlUrl := c.Addr + "/graphql"
-	if !strings.Contains(graphqlUrl, "http") {
-		graphqlUrl = "http://" + graphqlUrl
-	}
 	return graphqlUrl
 }
 
