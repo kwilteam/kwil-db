@@ -118,7 +118,10 @@ func GetKgwDriver(ctx context.Context, t *testing.T, kwildAddr string, graphqlAd
 	require.NoError(t, err)
 
 	// kwild container
-	fundEnvs["KWILD_GRAPHQL_ENDPOINT"] = unexposedHasuraEndpoint
+	fundEnvs["KWILD_GRAPHQL_ADDR"] = unexposedHasuraEndpoint
+	// @yaiba can't get addr here, because the gw container is not ready yet
+	// need a hacky way to get the addr
+	fundEnvs["KWILD_GATEWAY_ADDR"] = ""
 	fundEnvs["KWILD_DB_URL"] = unexposedPgURL
 	fundEnvs["KWILD_LOG_LEVEL"] = "info"
 	kc := StartKwildDockerService(t, ctx, fundEnvs)
@@ -129,11 +132,10 @@ func GetKgwDriver(ctx context.Context, t *testing.T, kwildAddr string, graphqlAd
 
 	// kgw container
 	kgwEnvs := map[string]string{
-		"KWILGW_KWILD_ENDPOINT":   unexposedKwildEndpoint,
-		"KWILGW_GRAPHQL_ENDPOINT": unexposedHasuraEndpoint,
-		"KWILGW_LOG_LEVEL":        "info",
-		"KWILGW_SERVER_KEY_FILE":  "/app/keys.json",
-		"KWILGW_SERVER_ADDR":      ":8082",
+		"KWILGW_KWILD_ADDR":         unexposedKwildEndpoint,
+		"KWILGW_GRAPHQL_ADDR":       unexposedHasuraEndpoint,
+		"KWILGW_LOG_LEVEL":          "info",
+		"KWILGW_SERVER_LISTEN_ADDR": ":8082",
 	}
 
 	kgwc := StartKgwDockerService(ctx, t, kgwEnvs)
