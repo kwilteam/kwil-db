@@ -26,9 +26,7 @@ Check `task list` to see all available tasks.
 ```
 2. Build the binary:
 ```
-  task build:cli
-  task build:kwild
-  task build:gateway
+  task build
 ```
 
 ## Kubernetes deployment
