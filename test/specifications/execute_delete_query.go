@@ -15,7 +15,7 @@ func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing delete query specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := databases.GenerateSchemaName(db.Owner, db.Name)
+	dbID := databases.GenerateSchemaId(db.Owner, db.Name)
 
 	userQueryName := "delete_user"
 	userTableName := "users"

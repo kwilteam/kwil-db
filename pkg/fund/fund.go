@@ -2,8 +2,8 @@ package fund
 
 import (
 	"context"
-	"kwil/pkg/contracts/escrow/types"
-	types2 "kwil/pkg/contracts/token/types"
+	"kwil/pkg/chain/contracts/escrow/types"
+	types2 "kwil/pkg/chain/contracts/token/types"
 	"math/big"
 )
 

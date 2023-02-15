@@ -3,9 +3,9 @@ package ethereum
 import (
 	"fmt"
 	chainClient "kwil/pkg/chain/client"
-	chainClientService "kwil/pkg/chain/client/service"
-	"kwil/pkg/contracts/escrow"
-	"kwil/pkg/contracts/token"
+	ccs "kwil/pkg/chain/client/service"
+	"kwil/pkg/chain/contracts/escrow"
+	"kwil/pkg/chain/contracts/token"
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
 )
@@ -21,13 +21,17 @@ type Client struct {
 }
 
 func NewClient(cfg *fund.Config, logger log.Logger) (*Client, error) {
-	chnClient, err := chainClientService.NewChainClientExplicit(&cfg.Chain, logger)
+	chnClient, err := ccs.NewChainClient(cfg.Chain.RpcUrl,
+		ccs.WithLogger(logger),
+		ccs.WithChainCode(int64(cfg.Chain.ChainCode)),
+		ccs.WithRequiredConfirmations(cfg.Chain.BlockConfirmation),
+		ccs.WithReconnectInterval(cfg.Chain.ReconnectInterval),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chain client: %v", err)
 	}
 
-	// escrow
-	escrowCtr, err := escrow.New(chnClient, cfg.Wallet, cfg.PoolAddress)
+	escrowCtr, err := chnClient.Contracts().Escrow(cfg.PoolAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create escrow contract: %v", err)
 	}
@@ -36,7 +40,7 @@ func NewClient(cfg *fund.Config, logger log.Logger) (*Client, error) {
 	tokenAddress := escrowCtr.TokenAddress()
 
 	// erc20
-	erc20Ctr, err := token.New(chnClient, cfg.Wallet, tokenAddress)
+	erc20Ctr, err := chnClient.Contracts().Token(tokenAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create erc20 contract: %v", err)
 	}

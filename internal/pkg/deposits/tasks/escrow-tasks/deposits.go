@@ -8,7 +8,7 @@ import (
 )
 
 func (c *task) syncDeposits(ctx context.Context, chunk *tasks.Chunk) error {
-	deposits, err := c.contract.GetDeposits(ctx, chunk.Start, chunk.Finish)
+	deposits, err := c.contract.GetDeposits(ctx, chunk.Start, chunk.Finish, c.providerAddress)
 	if err != nil {
 		return fmt.Errorf("failed to get deposits from chain: %w", err)
 	}

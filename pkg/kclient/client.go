@@ -24,7 +24,7 @@ func New(ctx context.Context, cfg *Config) (*Client, error) {
 		return nil, err
 	}
 
-	kc, err := grpcClt.New(ctx, &cfg.Node, log)
+	kc, err := grpcClt.New(ctx, &cfg.Node)
 	if err != nil {
 		return nil, err
 	}

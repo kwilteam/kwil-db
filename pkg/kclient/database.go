@@ -12,7 +12,7 @@ import (
 )
 
 func (c *Client) GetDatabaseSchema(ctx context.Context, owner string, dbName string) (*databases.Database[[]byte], error) {
-	id := databases.GenerateSchemaName(owner, dbName)
+	id := databases.GenerateSchemaId(owner, dbName)
 	return c.GetDatabaseSchemaById(ctx, id)
 }
 
@@ -51,7 +51,7 @@ func (c *Client) DropDatabase(ctx context.Context, dbName string) (*accounts.Res
 func (c *Client) ExecuteDatabase(ctx context.Context, dbName string, queryName string, queryInputs []*spec.KwilAny) (*accounts.Response, error) {
 	owner := c.Config.Fund.GetAccountAddress()
 	// create the dbid.  we will need this for the databases body
-	dbId := databases.GenerateSchemaName(owner, dbName)
+	dbId := databases.GenerateSchemaId(owner, dbName)
 
 	qrs, err := c.Kwil.GetQueries(ctx, dbId)
 	if err != nil {

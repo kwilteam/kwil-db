@@ -42,7 +42,7 @@ func (s *executor) Untrack(ctx context.Context, name, owner string) error {
 		return fmt.Errorf("database does not have any tables")
 	}
 
-	schemaName := databases.GenerateSchemaName(owner, name)
+	schemaName := databases.GenerateSchemaId(owner, name)
 
 	for _, table := range tables {
 		err = s.hasura.UntrackTable(hasura.DefaultSource, schemaName, table.TableName)

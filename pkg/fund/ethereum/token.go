@@ -2,12 +2,12 @@ package ethereum
 
 import (
 	"context"
-	"kwil/pkg/contracts/token/types"
+	"kwil/pkg/chain/contracts/token/types"
 	"math/big"
 )
 
 func (c *Client) ApproveToken(ctx context.Context, spender string, amount *big.Int) (*types.ApproveResponse, error) {
-	return c.Token.Approve(ctx, spender, amount)
+	return c.Token.Approve(ctx, spender, amount, c.Config.Wallet)
 }
 
 func (c *Client) GetAllowance(ctx context.Context, from string, spender string) (*big.Int, error) {

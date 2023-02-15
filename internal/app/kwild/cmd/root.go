@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/spf13/cobra"
 	"kwil/internal/app/kwild/config"
 	"kwil/internal/app/kwild/server"
 	"kwil/internal/controller/grpc/v0/accountsvc"
@@ -22,6 +21,8 @@ import (
 	"kwil/pkg/sql/sqlclient"
 	"path/filepath"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 var RootCmd = &cobra.Command{
@@ -47,7 +48,13 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to open sql client: %w", err)
 		}
 
-		chainClient, err := service.NewChainClientExplicit(&cfg.Fund.Chain, logger)
+		//&cfg.Fund.Chain, logger
+		chainClient, err := service.NewChainClient(cfg.Fund.Chain.RpcUrl,
+			service.WithChainCode(cfg.Fund.Chain.ChainCode),
+			service.WithLogger(logger),
+			service.WithReconnectInterval(cfg.Fund.Chain.ReconnectInterval),
+			service.WithRequiredConfirmations(cfg.Fund.Chain.BlockConfirmation),
+		)
 		if err != nil {
 			return fmt.Errorf("failed to build chain client: %w", err)
 		}

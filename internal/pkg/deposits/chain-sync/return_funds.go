@@ -2,9 +2,11 @@ package chainsync
 
 import (
 	"context"
-	escrowTypes "kwil/pkg/contracts/escrow/types"
+	"fmt"
+	escrowTypes "kwil/pkg/chain/contracts/escrow/types"
 )
 
 func (c *chain) ReturnFunds(ctx context.Context, params *escrowTypes.ReturnFundsParams) (*escrowTypes.ReturnFundsResponse, error) {
-	return c.escrowContract.ReturnFunds(ctx, params)
+	fmt.Println("IMPLEMENT ME")
+	return nil, nil
 }

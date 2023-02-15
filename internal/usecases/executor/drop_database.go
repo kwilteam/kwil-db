@@ -3,12 +3,13 @@ package executor
 import (
 	"context"
 	"fmt"
-	"go.uber.org/zap"
 	"kwil/pkg/databases"
+
+	"go.uber.org/zap"
 )
 
 func (s *executor) DropDatabase(ctx context.Context, database *databases.DatabaseIdentifier) error {
-	schemaName := databases.GenerateSchemaName(database.Owner, database.Name)
+	schemaName := databases.GenerateSchemaId(database.Owner, database.Name)
 
 	// create tx
 	tx, err := s.db.Begin()

@@ -1,9 +1,13 @@
 package evm
 
 import (
+	"context"
 	"fmt"
-	ethereumclient "github.com/ethereum/go-ethereum/ethclient"
 	"kwil/pkg/chain/types"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+	ethereumclient "github.com/ethereum/go-ethereum/ethclient"
 )
 
 // client fulfills the dto.ChainProvider interface
@@ -44,4 +48,12 @@ func (c *ethClient) Endpoint() string {
 func (c *ethClient) Close() error {
 	c.ethclient.Close()
 	return nil
+}
+
+func (c *ethClient) GetAccountNonce(ctx context.Context, address string) (uint64, error) {
+	return c.ethclient.PendingNonceAt(ctx, common.HexToAddress(address))
+}
+
+func (c *ethClient) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	return c.ethclient.SuggestGasPrice(ctx)
 }

@@ -3,7 +3,7 @@ package kclient
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/contracts/escrow/types"
+	"kwil/pkg/chain/contracts/escrow/types"
 	"math/big"
 )
 

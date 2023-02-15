@@ -4,15 +4,15 @@ import (
 	"context"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"kwil/pkg/contracts/escrow/evm/abi"
-	"kwil/pkg/contracts/escrow/types"
+	"kwil/pkg/chain/contracts/escrow/evm/abi"
+	"kwil/pkg/chain/contracts/escrow/types"
 )
 
-func (c *contract) GetWithdrawals(ctx context.Context, from, to int64) ([]*types.WithdrawalConfirmationEvent, error) {
+func (c *contract) GetWithdrawals(ctx context.Context, from, to int64, providerAddress string) ([]*types.WithdrawalConfirmationEvent, error) {
 	end := uint64(to)
 	queryOpts := &bind.FilterOpts{Context: ctx, Start: uint64(from), End: &end}
 
-	address := common.HexToAddress(c.nodeAddress)
+	address := common.HexToAddress(providerAddress)
 
 	edi, err := c.ctr.FilterWithdrawal(queryOpts, []common.Address{address})
 	if err != nil {

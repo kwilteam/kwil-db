@@ -1,17 +1,16 @@
 package evm
 
 import (
-	"crypto/ecdsa"
 	"fmt"
-	"kwil/pkg/contracts/token/evm/abi"
+	"kwil/pkg/chain/contracts/token/evm/abi"
+	"kwil/pkg/chain/provider"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 type contract struct {
-	client      *ethclient.Client
+	client      provider.ChainProvider
 	ctr         *abi.Erc20
 	tokenName   string
 	tokenSymbol string
@@ -19,10 +18,13 @@ type contract struct {
 	decimals    uint8
 	totalSupply *big.Int
 	chainId     *big.Int
-	privateKey  *ecdsa.PrivateKey
 }
 
-func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKey, contractAddress string) (*contract, error) {
+func New(provider provider.ChainProvider, chainId *big.Int, contractAddress string) (*contract, error) {
+	client, err := provider.AsEthClient()
+	if err != nil {
+		return nil, err
+	}
 
 	ctr, err := abi.NewErc20(common.HexToAddress(contractAddress), client)
 	if err != nil {
@@ -50,7 +52,7 @@ func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKe
 	}
 
 	return &contract{
-		client:      client,
+		client:      provider,
 		ctr:         ctr,
 		tokenName:   tokenName,
 		tokenSymbol: tokenSymbol,
@@ -58,6 +60,5 @@ func New(client *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKe
 		totalSupply: totalSupply,
 		address:     contractAddress,
 		chainId:     chainId,
-		privateKey:  privateKey,
 	}, nil
 }

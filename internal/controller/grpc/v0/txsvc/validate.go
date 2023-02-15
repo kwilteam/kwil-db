@@ -45,7 +45,7 @@ func (s *Service) ValidateSchema(ctx context.Context, req *txpb.ValidateSchemaRe
 	}
 
 	// generate id
-	id := databases.GenerateSchemaName(db.Owner, db.Name)
+	id := databases.GenerateSchemaId(db.Owner, db.Name)
 
 	// check if the database already exists
 	// this can be done by checking if the database id already exists in the executor

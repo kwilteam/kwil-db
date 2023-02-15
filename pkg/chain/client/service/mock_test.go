@@ -9,9 +9,16 @@ import (
 	"kwil/pkg/chain/provider"
 	providerDto "kwil/pkg/chain/provider/dto"
 	"kwil/pkg/chain/types"
+	"kwil/pkg/log"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethclient"
+)
+
+const (
+	REQUIRED_CONFIRMATIONS = 10
+	STARTING_BLOCK         = 100
+	CHAIN_CODE             = types.GOERLI
 )
 
 type MockChainProvider struct {
@@ -44,6 +51,14 @@ func (m *MockChainProvider) Close() error {
 	return nil
 }
 
+func (m *MockChainProvider) GetAccountNonce(ctx context.Context, address string) (uint64, error) {
+	return 0, nil
+}
+
+func (m *MockChainProvider) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	return nil, nil
+}
+
 func newMockChainProvider() provider.ChainProvider {
 	return &MockChainProvider{
 		chainCode: CHAIN_CODE,
@@ -52,12 +67,15 @@ func newMockChainProvider() provider.ChainProvider {
 
 func newMockChainClient() (client.ChainClient, error) {
 	prov := newMockChainProvider()
-	return service.NewChainClientExplicit(&dto.Config{
-		RpcUrl:            prov.Endpoint(),
-		ChainCode:         2,
-		ReconnectInterval: 10,
+	return service.NewChainClientWithProvider(prov, &dto.Config{
+		ChainCode:         int64(CHAIN_CODE),
+		ReconnectInterval: 30,
 		BlockConfirmation: REQUIRED_CONFIRMATIONS,
-	}, nil)
+		RpcUrl:            "endpoint",
+	}, log.New(log.Config{
+		Level:       "debug",
+		OutputPaths: []string{"stdout"},
+	}))
 
 	/*
 		return &chainClient{

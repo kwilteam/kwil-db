@@ -3,7 +3,7 @@ package kclient
 import (
 	"context"
 	txs "kwil/pkg/accounts"
-	"kwil/pkg/contracts/escrow/types"
+	"kwil/pkg/chain/contracts/escrow/types"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/spec"
 	gclient "kwil/pkg/grpc/client"

@@ -12,7 +12,7 @@ import (
 // syncWithdrawals will sync all withdrawals for the chunk to the database
 func (c *task) syncWithdrawals(ctx context.Context, chunk *tasks.Chunk) error {
 
-	withdrawals, err := c.contract.GetWithdrawals(ctx, chunk.Start, chunk.Finish)
+	withdrawals, err := c.contract.GetWithdrawals(ctx, chunk.Start, chunk.Finish, c.providerAddress)
 	if err != nil {
 		return fmt.Errorf("failed to get withdrawals from chain: %w", err)
 	}

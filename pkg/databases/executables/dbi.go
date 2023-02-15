@@ -44,7 +44,7 @@ func FromDatabase(db *databases.Database[*spec.KwilAny]) (*DatabaseInterface, er
 }
 
 func (e *DatabaseInterface) GetDbId() string {
-	return databases.GenerateSchemaName(e.Owner, e.Name)
+	return databases.GenerateSchemaId(e.Owner, e.Name)
 }
 
 func (e *DatabaseInterface) ListQueries() ([]*QuerySignature, error) {

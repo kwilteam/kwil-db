@@ -2,11 +2,12 @@ package config
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func LoadConfig(defaultConfig map[string]interface{}, configFile, envPrefix, defaultConfigDir, defaultConfigName, defaultConfigType string) {

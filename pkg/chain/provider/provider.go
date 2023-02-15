@@ -13,9 +13,7 @@ import (
 
 func New(endpoint string, chainCode types.ChainCode) (ChainProvider, error) {
 	switch chainCode {
-	case types.ETHEREUM:
-		return evm.New(endpoint, chainCode)
-	case types.GOERLI:
+	case types.ETHEREUM, types.GOERLI:
 		return evm.New(endpoint, chainCode)
 	default:
 		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainCode))
@@ -29,4 +27,6 @@ type ChainProvider interface {
 	AsEthClient() (*ethclient.Client, error)
 	Endpoint() string
 	Close() error
+	GetAccountNonce(ctx context.Context, address string) (uint64, error)
+	SuggestGasPrice(ctx context.Context) (*big.Int, error)
 }
