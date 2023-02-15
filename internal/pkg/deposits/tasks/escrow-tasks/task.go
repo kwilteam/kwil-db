@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"kwil/internal/pkg/deposits/tasks"
 	"kwil/internal/repository"
-	"kwil/pkg/contracts/escrow"
+	"kwil/pkg/chain/contracts/escrow"
 )
 
 type task struct {

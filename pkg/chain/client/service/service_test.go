@@ -4,19 +4,12 @@ import (
 	"context"
 	"fmt"
 	"kwil/pkg/chain/provider/dto"
-	"kwil/pkg/chain/types"
 	"testing"
 	"time"
 )
 
 var (
 	RECEIVED_BLOCKS = []int64{101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 120, 112, 40, 121, 300, -1, -420, 4, 12, 2000}
-)
-
-const (
-	REQUIRED_CONFIRMATIONS = 10
-	STARTING_BLOCK         = 100
-	CHAIN_CODE             = types.GOERLI
 )
 
 func (m *MockChainProvider) SubscribeNewHead(ctx context.Context, blocks chan<- dto.Header) (dto.Subscription, error) {

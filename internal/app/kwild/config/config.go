@@ -6,7 +6,6 @@ import (
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
 	"os"
-	"strings"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -52,9 +51,6 @@ type GatewayConfig struct {
 
 func (c *GatewayConfig) GetGraphqlUrl() string {
 	graphqlUrl := c.Addr + "/graphql"
-	if !strings.Contains(graphqlUrl, "http") {
-		graphqlUrl = "http://" + graphqlUrl
-	}
 	return graphqlUrl
 }
 

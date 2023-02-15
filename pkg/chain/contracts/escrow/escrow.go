@@ -4,10 +4,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	chainClient "kwil/pkg/chain/client"
+	"kwil/pkg/chain/contracts/escrow/evm"
+	"kwil/pkg/chain/contracts/escrow/types"
+	"kwil/pkg/chain/provider"
 	chainTypes "kwil/pkg/chain/types"
-	"kwil/pkg/contracts/escrow/evm"
-	types "kwil/pkg/contracts/escrow/types"
 )
 
 type EscrowContract interface {
@@ -19,16 +19,12 @@ type EscrowContract interface {
 	TokenAddress() string
 }
 
-func New(chainClient chainClient.ChainClient, contractAddress string) (EscrowContract, error) {
-	switch chainClient.ChainCode() {
+func New(chainProvider provider.ChainProvider, contractAddress string) (EscrowContract, error) {
+	switch chainProvider.ChainCode() {
 	case chainTypes.ETHEREUM, chainTypes.GOERLI:
-		ethClient, err := chainClient.AsEthClient()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get ethclient from chain client: %d", err)
-		}
 
-		return evm.New(ethClient, chainClient.ChainCode().ToChainId(), contractAddress)
+		return evm.New(chainProvider, contractAddress)
 	default:
-		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainClient.ChainCode()))
+		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainProvider.ChainCode()))
 	}
 }

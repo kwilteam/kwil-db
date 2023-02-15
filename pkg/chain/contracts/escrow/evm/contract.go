@@ -1,24 +1,29 @@
 package evm
 
 import (
-	"kwil/pkg/contracts/escrow/evm/abi"
+	"kwil/pkg/chain/contracts/escrow/evm/abi"
+	"kwil/pkg/chain/provider"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 type contract struct {
-	client  *ethclient.Client
+	client  provider.ChainProvider
 	ctr     *abi.Escrow
 	token   string
 	chainId *big.Int
 	//providerAddress string
 }
 
-func New(client *ethclient.Client, chainId *big.Int, contractAddress string) (*contract, error) {
+func New(provider provider.ChainProvider, contractAddress string) (*contract, error) {
 
-	ctr, err := abi.NewEscrow(common.HexToAddress(contractAddress), client)
+	ethClient, err := provider.AsEthClient()
+	if err != nil {
+		return nil, err
+	}
+
+	ctr, err := abi.NewEscrow(common.HexToAddress(contractAddress), ethClient)
 	if err != nil {
 		return nil, err
 	}
@@ -29,10 +34,10 @@ func New(client *ethclient.Client, chainId *big.Int, contractAddress string) (*c
 	}
 
 	return &contract{
-		client:  client,
+		client:  provider,
 		ctr:     ctr,
 		token:   tokAddr.Hex(),
-		chainId: chainId,
+		chainId: provider.ChainCode().ToChainId(),
 	}, nil
 }
 

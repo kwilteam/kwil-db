@@ -17,7 +17,7 @@ type Database[T spec.AnyValue] struct {
 
 // hashes the lower-cased name and owner and prepends an x
 func (d *Database[T]) GetSchemaName() string {
-	return GenerateSchemaName(d.Owner, d.Name)
+	return GenerateSchemaId(d.Owner, d.Name)
 }
 
 func (d *Database[T]) GetQuery(q string) *SQLQuery[T] {
@@ -79,10 +79,10 @@ type DatabaseIdentifier struct {
 }
 
 func (d *DatabaseIdentifier) GetSchemaName() string {
-	return GenerateSchemaName(d.Owner, d.Name)
+	return GenerateSchemaId(d.Owner, d.Name)
 }
 
-func GenerateSchemaName(owner, name string) string {
+func GenerateSchemaId(owner, name string) string {
 	return "x" + crypto.Sha224Hex(joinBytes([]byte(strings.ToLower(name)), []byte(strings.ToLower(owner))))
 }
 

@@ -3,7 +3,7 @@ package chainsync
 import (
 	"context"
 	"fmt"
-	escrowTypes "kwil/pkg/contracts/escrow/types"
+	escrowTypes "kwil/pkg/chain/contracts/escrow/types"
 )
 
 func (c *chain) ReturnFunds(ctx context.Context, params *escrowTypes.ReturnFundsParams) (*escrowTypes.ReturnFundsResponse, error) {

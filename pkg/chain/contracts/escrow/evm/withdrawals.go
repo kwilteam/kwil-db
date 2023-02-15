@@ -2,11 +2,10 @@ package evm
 
 import (
 	"context"
-	"kwil/pkg/contracts/escrow/evm/abi"
-	"kwil/pkg/contracts/escrow/types"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"kwil/pkg/chain/contracts/escrow/evm/abi"
+	"kwil/pkg/chain/contracts/escrow/types"
 )
 
 func (c *contract) GetWithdrawals(ctx context.Context, from, to int64, providerAddress string) ([]*types.WithdrawalConfirmationEvent, error) {

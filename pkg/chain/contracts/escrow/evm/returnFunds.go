@@ -3,10 +3,9 @@ package evm
 import (
 	"context"
 	"crypto/ecdsa"
-	kwilCommon "kwil/pkg/contracts/common/evm"
-	"kwil/pkg/contracts/escrow/types"
-
 	"github.com/ethereum/go-ethereum/common"
+	kwilCommon "kwil/pkg/chain/contracts/common/evm"
+	"kwil/pkg/chain/contracts/escrow/types"
 )
 
 // ReturnFunds calls the returnDeposit function

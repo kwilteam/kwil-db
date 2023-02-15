@@ -15,7 +15,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing update query specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := databases.GenerateSchemaName(db.Owner, db.Name)
+	dbID := databases.GenerateSchemaId(db.Owner, db.Name)
 
 	userQueryName := "update_user"
 	userTableName := "users"

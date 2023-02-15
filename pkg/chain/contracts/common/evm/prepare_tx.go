@@ -3,18 +3,18 @@ package evm
 import (
 	"context"
 	"crypto/ecdsa"
+	"kwil/pkg/chain/provider"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ec "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
-func PrepareTxAuth(ctx context.Context, c *ethclient.Client, chainId *big.Int, privateKey *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
+func PrepareTxAuth(ctx context.Context, c provider.ChainProvider, chainId *big.Int, privateKey *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
 	addr := ec.PubkeyToAddress(privateKey.PublicKey)
 
 	// get pending nonce
-	nonce, err := c.PendingNonceAt(ctx, addr)
+	nonce, err := c.GetAccountNonce(ctx, addr.Hex())
 	if err != nil {
 		return nil, err
 	}

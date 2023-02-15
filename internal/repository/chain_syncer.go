@@ -6,7 +6,7 @@ import (
 	"fmt"
 	depositTypes "kwil/internal/pkg/deposits/types"
 	"kwil/internal/repository/gen"
-	escrowTypes "kwil/pkg/contracts/escrow/types"
+	escrowTypes "kwil/pkg/chain/contracts/escrow/types"
 	"strings"
 )
 

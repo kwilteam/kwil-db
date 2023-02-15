@@ -25,7 +25,7 @@ func Test_DBI(t *testing.T) {
 	canExecute = dbi.CanExecute("0xbennan", mocks.Insert2.Name)
 	assert.False(t, canExecute)
 
-	id := databases.GenerateSchemaName(mocks.Db1.Owner, mocks.Db1.Name)
+	id := databases.GenerateSchemaId(mocks.Db1.Owner, mocks.Db1.Name)
 
 	// check that the dbi has the correct identifier
 	assert.Equal(t, id, dbi.GetDbId())

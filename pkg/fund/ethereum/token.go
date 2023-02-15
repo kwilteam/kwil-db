@@ -2,7 +2,7 @@ package ethereum
 
 import (
 	"context"
-	"kwil/pkg/contracts/token/types"
+	"kwil/pkg/chain/contracts/token/types"
 	"math/big"
 )
 

@@ -48,7 +48,13 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to open sql client: %w", err)
 		}
 
-		chainClient, err := service.NewChainClientExplicit(&cfg.Fund.Chain, logger)
+		//&cfg.Fund.Chain, logger
+		chainClient, err := service.NewChainClient(cfg.Fund.Chain.RpcUrl,
+			service.WithChainCode(cfg.Fund.Chain.ChainCode),
+			service.WithLogger(logger),
+			service.WithReconnectInterval(cfg.Fund.Chain.ReconnectInterval),
+			service.WithRequiredConfirmations(cfg.Fund.Chain.BlockConfirmation),
+		)
 		if err != nil {
 			return fmt.Errorf("failed to build chain client: %w", err)
 		}

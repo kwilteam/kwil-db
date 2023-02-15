@@ -2,15 +2,15 @@ package evm
 
 import (
 	"fmt"
-	"kwil/pkg/contracts/token/evm/abi"
+	"kwil/pkg/chain/contracts/token/evm/abi"
+	"kwil/pkg/chain/provider"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 type contract struct {
-	client      *ethclient.Client
+	client      provider.ChainProvider
 	ctr         *abi.Erc20
 	tokenName   string
 	tokenSymbol string
@@ -20,7 +20,11 @@ type contract struct {
 	chainId     *big.Int
 }
 
-func New(client *ethclient.Client, chainId *big.Int, contractAddress string) (*contract, error) {
+func New(provider provider.ChainProvider, chainId *big.Int, contractAddress string) (*contract, error) {
+	client, err := provider.AsEthClient()
+	if err != nil {
+		return nil, err
+	}
 
 	ctr, err := abi.NewErc20(common.HexToAddress(contractAddress), client)
 	if err != nil {
@@ -48,7 +52,7 @@ func New(client *ethclient.Client, chainId *big.Int, contractAddress string) (*c
 	}
 
 	return &contract{
-		client:      client,
+		client:      provider,
 		ctr:         ctr,
 		tokenName:   tokenName,
 		tokenSymbol: tokenSymbol,

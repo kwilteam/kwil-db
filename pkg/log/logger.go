@@ -63,3 +63,9 @@ func New(config Config) Logger {
 	logger := zap.Must(cfg.Build(zap.Fields(fields...)))
 	return logger
 }
+
+// NoOp is a logger that does nothing.
+// It is useful for testing, or for user packages where we want to turn off logging.
+func NewNoOp() Logger {
+	return zap.NewNop()
+}

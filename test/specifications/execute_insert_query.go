@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"kwil/pkg/databases"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type userTable struct {
@@ -32,7 +33,7 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing insert query specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := databases.GenerateSchemaName(db.Owner, db.Name)
+	dbID := databases.GenerateSchemaId(db.Owner, db.Name)
 
 	userQueryName := "create_user"
 	userTableName := "users"
