@@ -11,9 +11,9 @@ import (
 
 func dropCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "drop db_name",
+		Use:   "drop",
 		Short: "Drops a database",
-		Long:  "Drops a database",
+		Long:  "Drops a database.  Requires 1 argument: the name of the database to drop",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
