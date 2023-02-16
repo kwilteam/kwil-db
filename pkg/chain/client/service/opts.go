@@ -20,7 +20,7 @@ func WithRequiredConfirmations(confirmations int64) ChainClientOpts {
 	}
 }
 
-func WithChainCode(chainCode int64) ChainClientOpts {
+func WithChainCode(chainCode types.ChainCode) ChainClientOpts {
 	return func(c *chainClient) {
 		c.chainCode = types.ChainCode(chainCode)
 	}

@@ -29,7 +29,7 @@ type GrpcClient interface {
 	EstimateCost(ctx context.Context, tx *accounts.Transaction) (string, error)
 	Broadcast(ctx context.Context, tx *accounts.Transaction) (*accounts.Response, error)
 	Ping(ctx context.Context) (string, error)
-	GetAccount(ctx context.Context, address string) (accounts.Account, error)
+	GetAccount(ctx context.Context, address string) (*accounts.Account, error)
 	Close() error
 	GetServiceConfig(ctx context.Context) (SvcConfig, error)
 	GetFundingServiceConfig(ctx context.Context) (SvcFundingConfig, error)

@@ -17,6 +17,7 @@ import (
 	"kwil/internal/repository"
 	"kwil/internal/usecases/executor"
 	"kwil/pkg/chain/client/service"
+	chainTypes "kwil/pkg/chain/types"
 	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
 	"path/filepath"
@@ -50,7 +51,7 @@ var RootCmd = &cobra.Command{
 
 		//&cfg.Fund.Chain, logger
 		chainClient, err := service.NewChainClient(cfg.Fund.Chain.RpcUrl,
-			service.WithChainCode(cfg.Fund.Chain.ChainCode),
+			service.WithChainCode(chainTypes.ChainCode(cfg.Fund.Chain.ChainCode)),
 			service.WithLogger(logger),
 			service.WithReconnectInterval(cfg.Fund.Chain.ReconnectInterval),
 			service.WithRequiredConfirmations(cfg.Fund.Chain.BlockConfirmation),

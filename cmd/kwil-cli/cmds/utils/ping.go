@@ -2,9 +2,10 @@ package utils
 
 import (
 	"fmt"
+	"kwil/cmd/kwil-cli/config"
+	"kwil/pkg/client"
+
 	"github.com/spf13/cobra"
-	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kclient"
 )
 
 func pingCmd() *cobra.Command {
@@ -14,12 +15,14 @@ func pingCmd() *cobra.Command {
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := kclient.New(ctx, config.AppConfig)
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
+				client.WithoutServiceConfig(),
+			)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create client: %w", err)
 			}
 
-			res, err := clt.Kwil.Ping(ctx)
+			res, err := clt.Ping(ctx)
 			if err != nil {
 				return fmt.Errorf("error pinging: %w", err)
 			}

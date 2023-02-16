@@ -2,9 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"kwil/internal/app/kcli/config"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/crypto"
+
+	"github.com/spf13/cobra"
 )
 
 func signCmd() *cobra.Command {
@@ -14,8 +15,13 @@ func signCmd() *cobra.Command {
 		Long:  "",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			pk, err := config.GetEcdsaPrivateKey()
+			if err != nil {
+				return fmt.Errorf("error getting private key: %w", err)
+			}
+
 			// generate signature
-			sig, err := crypto.Sign([]byte(args[0]), config.AppConfig.Fund.Wallet)
+			sig, err := crypto.Sign([]byte(args[0]), pk)
 			if err != nil {
 				return fmt.Errorf("error generating signature: %w", err)
 			}

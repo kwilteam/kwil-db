@@ -2,35 +2,33 @@ package fund
 
 import (
 	"fmt"
+	"kwil/cmd/kwil-cli/config"
+	"kwil/pkg/client"
+
 	"github.com/spf13/cobra"
-	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kclient"
 )
 
 func getAccountCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "config",
 		Short: "Get balance, spent, and nonce information",
-		Long:  ``,
-		Args:  cobra.NoArgs,
+		Long: `Gets the balance, spent, and nonce information for a given account address.
+If no address is provided, it will use the address of the user's wallet.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := kclient.New(ctx, config.AppConfig)
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create client: %w", err)
 			}
 
 			// check if config is set
-			account, err := cmd.Flags().GetString("account")
+			address, err := getSelectedAddress(cmd)
 			if err != nil {
-				return fmt.Errorf("error getting account flag: %w", err)
+				return fmt.Errorf("error getting selected address: %w", err)
 			}
 
-			if account == "" {
-				account = clt.Config.Fund.GetAccountAddress()
-			}
-
-			acc, err := clt.Kwil.GetAccount(ctx, account)
+			acc, err := clt.GetAccount(ctx, address)
 			if err != nil {
 				return fmt.Errorf("error getting account config: %w", err)
 			}

@@ -10,9 +10,9 @@ import (
 
 type dbi map[string]*executables.QuerySignature
 
-// getQuerySignature returns the query signature for the given query name
+// GetQuerySignature returns the query signature for the given query name
 // it will download the dbi if it has not already been downloaded
-func (c *client) getQuerySignature(ctx context.Context, dbid, queryName string) (*executables.QuerySignature, error) {
+func (c *KwilClient) GetQuerySignature(ctx context.Context, dbid, queryName string) (*executables.QuerySignature, error) {
 	db, err := c.selectDB(ctx, dbid)
 	if err != nil {
 		return nil, err
@@ -29,7 +29,7 @@ func (c *client) getQuerySignature(ctx context.Context, dbid, queryName string) 
 // selectDB returns the dbi for the given id
 // if the dbi has already been retrieved, it is returned
 // otherwise, it is retrieved from the server and stored
-func (c *client) selectDB(ctx context.Context, id string) (dbi, error) {
+func (c *KwilClient) selectDB(ctx context.Context, id string) (dbi, error) {
 	var db dbi
 	db, ok := c.dbis[id]
 	if ok {
@@ -51,6 +51,6 @@ func (c *client) selectDB(ctx context.Context, id string) (dbi, error) {
 }
 
 // retrieveDBI retrieves the dbi for the given id from the server
-func (c *client) retrieveDBI(ctx context.Context, id string) ([]*executables.QuerySignature, error) {
+func (c *KwilClient) retrieveDBI(ctx context.Context, id string) ([]*executables.QuerySignature, error) {
 	return c.grpc.GetQueries(ctx, id)
 }

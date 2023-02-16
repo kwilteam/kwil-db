@@ -3,9 +3,9 @@ package fund
 import (
 	"errors"
 	"fmt"
-	"kwil/internal/app/kcli/common/display"
-	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kclient"
+	"kwil/cmd/kwil-cli/cmds/common/display"
+	"kwil/cmd/kwil-cli/config"
+	"kwil/pkg/client"
 	"math/big"
 
 	"github.com/manifoldco/promptui"
@@ -20,6 +20,12 @@ func approveCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
+				client.WithChainRpcUrl(config.Config.ClientChain.Provider),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to create client: %w", err)
+			}
 
 			amount, ok := new(big.Int).SetString(args[0], 10)
 			if !ok {
@@ -43,19 +49,24 @@ func approveCmd() *cobra.Command {
 				return errors.New("transaction cancelled")
 			}
 
-			clt, err := kclient.New(ctx, config.AppConfig)
+			tokenCtr, err := clt.TokenContract(ctx)
 			if err != nil {
 				return err
 			}
 
-			response, err := clt.Fund.ApproveToken(ctx, clt.Config.Fund.PoolAddress, amount)
+			pk, err := config.GetEcdsaPrivateKey()
+			if err != nil {
+				return err
+			}
+
+			response, err := tokenCtr.Approve(ctx, clt.EscrowContractAddress, amount, pk)
 			if err != nil {
 				return err
 			}
 
 			display.PrintClientChainResponse(&display.ClientChainResponse{
 				Tx:    response.TxHash,
-				Chain: fmt.Sprint(clt.Config.Fund.Chain.ChainCode),
+				Chain: clt.ChainCode.String(),
 			})
 
 			return nil

@@ -3,10 +3,10 @@ package database
 import (
 	"encoding/json"
 	"fmt"
-	"kwil/internal/app/kcli/common/display"
-	"kwil/internal/app/kcli/config"
+	"kwil/cmd/kwil-cli/cmds/common/display"
+	"kwil/cmd/kwil-cli/config"
+	"kwil/pkg/client"
 	"kwil/pkg/databases"
-	"kwil/pkg/kclient"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -36,16 +36,22 @@ func deployCmd() *cobra.Command {
 			}
 
 			ctx := cmd.Context()
-			clt, err := kclient.New(ctx, config.AppConfig)
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
+				client.WithoutServiceConfig(),
+			)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create client: %w", err)
 			}
 
-			res, err := clt.DeployDatabase(ctx, &db)
+			ecdsaKey, err := config.GetEcdsaPrivateKey()
+			if err != nil {
+				return fmt.Errorf("failed to get ecdsa key: %w", err)
+			}
+
+			res, err := clt.DeployDatabase(ctx, &db, ecdsaKey)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("Deployed database: %+v\n", res)
 
 			display.PrintTxResponse(res)
 			return nil

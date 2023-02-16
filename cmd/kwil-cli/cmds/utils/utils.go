@@ -16,6 +16,7 @@ func NewCmdUtils() *cobra.Command {
 		encodeCmd(),
 		signCmd(),
 		pingCmd(),
+		printConfigCmd(),
 	)
 
 	return cmd

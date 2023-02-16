@@ -48,6 +48,10 @@ func AddressFromPrivateKey(key *ecdsa.PrivateKey) (string, error) {
 	return caddr.Hex(), nil
 }
 
+func IsValidAddress(addr string) bool {
+	return common.IsHexAddress(addr)
+}
+
 func HexFromECDSAPrivateKey(key *ecdsa.PrivateKey) string {
 	return hexutil.Encode(ec.FromECDSA(key))
 }

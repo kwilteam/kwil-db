@@ -6,6 +6,7 @@ import (
 	ccs "kwil/pkg/chain/client/service"
 	"kwil/pkg/chain/contracts/escrow"
 	"kwil/pkg/chain/contracts/token"
+	chainTypes "kwil/pkg/chain/types"
 	"kwil/pkg/fund"
 	"kwil/pkg/log"
 )
@@ -23,7 +24,7 @@ type Client struct {
 func NewClient(cfg *fund.Config, logger log.Logger) (*Client, error) {
 	chnClient, err := ccs.NewChainClient(cfg.Chain.RpcUrl,
 		ccs.WithLogger(logger),
-		ccs.WithChainCode(int64(cfg.Chain.ChainCode)),
+		ccs.WithChainCode(chainTypes.ChainCode(cfg.Chain.ChainCode)),
 		ccs.WithRequiredConfirmations(cfg.Chain.BlockConfirmation),
 		ccs.WithReconnectInterval(cfg.Chain.ReconnectInterval),
 	)

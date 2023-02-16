@@ -10,14 +10,14 @@ import (
 	"kwil/pkg/databases/spec"
 )
 
-func (c *client) ExecuteDatabase(ctx context.Context, dbOwner, dbName string, queryName string, queryInputs map[string]*spec.KwilAny, privateKey *ecdsa.PrivateKey) (*accounts.Response, error) {
+func (c *KwilClient) ExecuteDatabase(ctx context.Context, dbOwner, dbName string, queryName string, queryInputs map[string]*spec.KwilAny, privateKey *ecdsa.PrivateKey) (*accounts.Response, error) {
 	dbid := databases.GenerateSchemaId(dbOwner, dbName)
 
 	return c.ExecuteDatabaseById(ctx, dbid, queryName, queryInputs, privateKey)
 }
 
-func (c *client) ExecuteDatabaseById(ctx context.Context, dbid string, queryName string, queryInputs map[string]*spec.KwilAny, privateKey *ecdsa.PrivateKey) (*accounts.Response, error) {
-	qrs, err := c.getQuerySignature(ctx, dbid, queryName)
+func (c *KwilClient) ExecuteDatabaseById(ctx context.Context, dbid string, queryName string, queryInputs map[string]*spec.KwilAny, privateKey *ecdsa.PrivateKey) (*accounts.Response, error) {
+	qrs, err := c.GetQuerySignature(ctx, dbid, queryName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get query signature: %w", err)
 	}

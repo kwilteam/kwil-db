@@ -2,15 +2,11 @@ package client
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
-	"kwil/pkg/accounts"
 	cc "kwil/pkg/chain/client"
-	escrowContracts "kwil/pkg/chain/contracts/escrow"
-	tokenContracts "kwil/pkg/chain/contracts/token"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/spec"
+	chainTypes "kwil/pkg/chain/types"
 	grpc "kwil/pkg/grpc/client"
+	"strings"
 )
 
 const (
@@ -25,37 +21,18 @@ const (
 	DefaultChainCode = 2
 )
 
-type client struct {
-	endpoint              string
+type KwilClient struct {
 	grpc                  *grpc.Client
 	chainClient           cc.ChainClient
 	dbis                  map[string]dbi // maps the db name to its queries
 	usingServiceCfg       bool
 	chainRpcUrl           *string
-	providerAddress       string
-	escrowContractAddress string
-	chainCode             int64
+	ProviderAddress       string
+	EscrowContractAddress string
+	ChainCode             chainTypes.ChainCode
 }
 
-type KwilClient interface {
-	GetSchema(ctx context.Context, owner, name string) (*databases.Database[*spec.KwilAny], error)
-	GetSchemaById(ctx context.Context, id string) (*databases.Database[*spec.KwilAny], error)
-
-	DeployDatabase(ctx context.Context, db *databases.Database[[]byte], privateKey *ecdsa.PrivateKey) (*accounts.Response, error)
-	DropDatabase(ctx context.Context, dbName string, privateKey *ecdsa.PrivateKey) (*accounts.Response, error)
-
-	ExecuteDatabase(ctx context.Context, dbOwner, dbName string, queryName string, queryInputs map[string]*spec.KwilAny, privateKey *ecdsa.PrivateKey) (*accounts.Response, error)
-	ExecuteDatabaseById(ctx context.Context, id string, queryName string, queryInputs map[string]*spec.KwilAny, privateKey *ecdsa.PrivateKey) (*accounts.Response, error)
-
-	GetServiceConfig(ctx context.Context) (grpc.SvcConfig, error)
-	// SetChainRpcUrl sets the chain rpc url for the kwil client
-	SetChainRpcUrl(url string)
-
-	EscrowContract(ctx context.Context) (escrowContracts.EscrowContract, error)
-	TokenContract(ctx context.Context, address string) (tokenContracts.TokenContract, error)
-}
-
-func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (KwilClient, error) {
+func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (*KwilClient, error) {
 	/*
 		c := &Client{
 			endpoint: rpcUrl,
@@ -67,14 +44,13 @@ func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (KwilClient, 
 		grpcClient, err := grpc.New(ctx, &grpc.Config{
 			Addr: rpcUrl,
 		})*/
-	c := &client{
-		endpoint:              rpcUrl,
+	c := &KwilClient{
 		dbis:                  make(map[string]dbi),
 		usingServiceCfg:       true,
 		chainRpcUrl:           nil,
-		providerAddress:       DefaultProviderAddress,
-		escrowContractAddress: DefaultEscrowAddress,
-		chainCode:             DefaultChainCode,
+		ProviderAddress:       DefaultProviderAddress,
+		EscrowContractAddress: DefaultEscrowAddress,
+		ChainCode:             DefaultChainCode,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -98,9 +74,9 @@ func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (KwilClient, 
 		return nil, fmt.Errorf("failed to get service config from kwil provider: %w", err)
 	}
 
-	c.chainCode = cfg.Funding.ChainCode
-	c.providerAddress = cfg.Funding.ProviderAddress
-	c.escrowContractAddress = cfg.Funding.PoolAddress
+	c.ChainCode = chainTypes.ChainCode(cfg.Funding.ChainCode)
+	c.ProviderAddress = cfg.Funding.ProviderAddress
+	c.EscrowContractAddress = cfg.Funding.PoolAddress
 
 	// reapply opts since service config may have changed them if they were specified
 	for _, opt := range opts {
@@ -110,10 +86,18 @@ func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (KwilClient, 
 	return c, nil
 }
 
-func (c *client) GetServiceConfig(ctx context.Context) (grpc.SvcConfig, error) {
+func (c *KwilClient) GetServiceConfig(ctx context.Context) (grpc.SvcConfig, error) {
 	return c.grpc.GetServiceConfig(ctx)
 }
 
-func (c *client) SetChainRpcUrl(url string) {
+func (c *KwilClient) SetChainRpcUrl(url string) {
 	c.chainRpcUrl = &url
+}
+
+func (c *KwilClient) ListDatabases(ctx context.Context, owner string) ([]string, error) {
+	return c.grpc.ListDatabases(ctx, strings.ToLower(owner))
+}
+
+func (c *KwilClient) Ping(ctx context.Context) (string, error) {
+	return c.grpc.Ping(ctx)
 }

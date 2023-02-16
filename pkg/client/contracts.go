@@ -8,7 +8,7 @@ import (
 	tokenContracts "kwil/pkg/chain/contracts/token"
 )
 
-func (c *client) EscrowContract(ctx context.Context) (escrowContracts.EscrowContract, error) {
+func (c *KwilClient) EscrowContract(ctx context.Context) (escrowContracts.EscrowContract, error) {
 	if c.chainClient == nil {
 		err := c.initChainClient(ctx)
 		if err != nil {
@@ -16,28 +16,35 @@ func (c *client) EscrowContract(ctx context.Context) (escrowContracts.EscrowCont
 		}
 	}
 
-	return c.chainClient.Contracts().Escrow(c.escrowContractAddress)
+	return c.chainClient.Contracts().Escrow(c.EscrowContractAddress)
 }
 
-func (c *client) TokenContract(ctx context.Context, address string) (tokenContracts.TokenContract, error) {
+func (c *KwilClient) TokenContract(ctx context.Context) (tokenContracts.TokenContract, error) {
 	if c.chainClient == nil {
 		err := c.initChainClient(ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	escrow, err := c.EscrowContract(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	address := escrow.TokenAddress()
 
 	return c.chainClient.Contracts().Token(address)
 }
 
-func (c *client) initChainClient(ctx context.Context) error {
+func (c *KwilClient) initChainClient(ctx context.Context) error {
 	if c.chainRpcUrl == nil {
 		return fmt.Errorf("chain rpc url is not set")
 	}
 
 	var err error
 	c.chainClient, err = ccs.NewChainClient(*c.chainRpcUrl,
-		ccs.WithChainCode(c.chainCode),
+		ccs.WithChainCode(c.ChainCode),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create chain client: %w", err)
