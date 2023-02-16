@@ -29,8 +29,11 @@ _ignore
 proto
 api/protobuf
 api/openapi-spec/v0/api.swagger.json
+.goreleaser.yaml
 
 # helm charts deps
 deployments/helm/hasura/charts/
 deployments/helm/kwild/charts/
 deployments/helm/kwil/charts/
+
+dist/
