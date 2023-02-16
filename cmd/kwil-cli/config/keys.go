@@ -10,7 +10,7 @@ const (
 // viper keys
 const (
 	KwilProviderRpcUrlKey = "node.rpc_url"
-	KwilProviderFlag      = "endpoint"
+	KwilProviderFlag      = "provider"
 
 	WalletPrivateKeyKey = "wallet.private_key"
 	PrivateKeyFlag      = "private-key"
