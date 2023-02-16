@@ -55,7 +55,6 @@ func LoadConfig() {
 	fillConfigStruct()
 }
 
-// TODO: I know we should use unmarshalling but the yaml package is giving me the most fucking unhelpful error
 func fillConfigStruct() {
 	Config.Node.KwilProviderRpcUrl = viper.GetString(KwilProviderRpcUrlKey)
 	Config.Wallet.PrivateKey = viper.GetString(WalletPrivateKeyKey)

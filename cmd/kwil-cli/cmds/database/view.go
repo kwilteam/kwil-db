@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// TODO: @brennan: make the way this prints out the metadata more readable
 func viewDatabaseCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "view",
