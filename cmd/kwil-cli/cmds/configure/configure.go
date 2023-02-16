@@ -3,7 +3,7 @@ package configure
 import (
 	"fmt"
 	"kwil/cmd/kwil-cli/cmds/common"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/crypto"
 	"strings"
 
@@ -19,7 +19,7 @@ func NewCmdConfigure() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conf.LoadConfig()
+			config.LoadConfig()
 
 			runner := &configPrompter{
 				Viper: viper.GetViper(),
@@ -28,20 +28,20 @@ func NewCmdConfigure() *cobra.Command {
 			// endpoint
 			runner.AddPrompt(&common.Prompter{
 				Label:   "Kwil RPC URL",
-				Default: viper.GetString(conf.KwilProviderRpcUrlKey),
-			}, conf.KwilProviderRpcUrlKey, removeProtocol)
+				Default: viper.GetString(config.KwilProviderRpcUrlKey),
+			}, config.KwilProviderRpcUrlKey, removeProtocol)
 
 			// private key
 			runner.AddPrompt(&common.Prompter{
 				Label:   "Private Key",
-				Default: viper.GetString(conf.WalletPrivateKeyKey),
-			}, conf.WalletPrivateKeyKey, isValidPrivateKey)
+				Default: viper.GetString(config.WalletPrivateKeyKey),
+			}, config.WalletPrivateKeyKey, isValidPrivateKey)
 
 			// eth provider
 			runner.AddPrompt(&common.Prompter{
 				Label:   "Ethereum RPC URL",
-				Default: viper.GetString(conf.ClientChainProviderRpcUrlKey),
-			}, conf.ClientChainProviderRpcUrlKey, containsProtocol)
+				Default: viper.GetString(config.ClientChainProviderRpcUrlKey),
+			}, config.ClientChainProviderRpcUrlKey, containsProtocol)
 
 			// run the prompts
 			if err := runner.Run(); err != nil {

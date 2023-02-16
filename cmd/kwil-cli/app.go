@@ -5,7 +5,7 @@ import (
 	"kwil/cmd/kwil-cli/cmds/database"
 	"kwil/cmd/kwil-cli/cmds/fund"
 	"kwil/cmd/kwil-cli/cmds/utils"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 
 	"github.com/spf13/cobra"
 )
@@ -31,8 +31,8 @@ func Execute() error {
 }
 
 func init() {
-	cobra.OnInitialize(conf.LoadConfig)
+	cobra.OnInitialize(config.LoadConfig)
 
-	conf.BindGlobalFlags(rootCmd.PersistentFlags())
-	conf.BindGlobalEnv(rootCmd.PersistentFlags())
+	config.BindGlobalFlags(rootCmd.PersistentFlags())
+	config.BindGlobalEnv(rootCmd.PersistentFlags())
 }

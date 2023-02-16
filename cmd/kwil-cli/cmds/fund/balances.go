@@ -2,7 +2,7 @@ package fund
 
 import (
 	"fmt"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
 
 	"github.com/fatih/color"
@@ -17,8 +17,8 @@ func balancesCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := client.New(ctx, conf.Config.Node.KwilProviderRpcUrl,
-				client.WithChainRpcUrl(conf.Config.ClientChain.Provider),
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
+				client.WithChainRpcUrl(config.Config.ClientChain.Provider),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create client: %w", err)

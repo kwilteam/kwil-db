@@ -2,7 +2,7 @@ package fund
 
 import (
 	"fmt"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
 
 	"github.com/spf13/cobra"
@@ -17,7 +17,7 @@ If no address is provided, it will use the address of the user's wallet.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := client.New(ctx, conf.Config.Node.KwilProviderRpcUrl)
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl)
 			if err != nil {
 				return fmt.Errorf("failed to create client: %w", err)
 			}

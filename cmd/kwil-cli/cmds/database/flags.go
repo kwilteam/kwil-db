@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/crypto"
 	"kwil/pkg/databases"
 
@@ -37,7 +37,7 @@ func getSelectedOwner(cmd *cobra.Command) (string, error) {
 		}
 	} else {
 		var err error
-		address, err = conf.GetWalletAddress()
+		address, err = config.GetWalletAddress()
 		if err != nil {
 			return address, fmt.Errorf("failed to get address from private key: %w", err)
 		}

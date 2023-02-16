@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
 
 	"github.com/spf13/cobra"
@@ -15,7 +15,7 @@ func viewDatabaseCmd() *cobra.Command {
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := client.New(ctx, conf.Config.Node.KwilProviderRpcUrl,
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
 				client.WithoutServiceConfig(),
 			)
 			if err != nil {

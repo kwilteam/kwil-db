@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/crypto"
 
 	"github.com/spf13/cobra"
@@ -15,7 +15,7 @@ func signCmd() *cobra.Command {
 		Long:  "",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pk, err := conf.GetEcdsaPrivateKey()
+			pk, err := config.GetEcdsaPrivateKey()
 			if err != nil {
 				return fmt.Errorf("error getting private key: %w", err)
 			}

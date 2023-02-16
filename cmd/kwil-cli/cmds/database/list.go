@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
 	"strings"
 
@@ -19,7 +19,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			clt, err := client.New(ctx, conf.Config.Node.KwilProviderRpcUrl,
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
 				client.WithoutServiceConfig(),
 			)
 			if err != nil {

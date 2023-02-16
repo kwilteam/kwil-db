@@ -1,7 +1,7 @@
 package fund
 
 import (
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 
 	"github.com/spf13/cobra"
 )
@@ -17,5 +17,5 @@ func getSelectedAddress(cmd *cobra.Command) (string, error) {
 		return cmd.Flags().GetString(addressFlag)
 	}
 
-	return conf.GetWalletAddress()
+	return config.GetWalletAddress()
 }

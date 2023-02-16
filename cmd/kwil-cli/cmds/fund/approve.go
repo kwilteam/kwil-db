@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"kwil/cmd/kwil-cli/cmds/common/display"
-	"kwil/cmd/kwil-cli/conf"
+	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
 	"math/big"
 
@@ -20,8 +20,8 @@ func approveCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := client.New(ctx, conf.Config.Node.KwilProviderRpcUrl,
-				client.WithChainRpcUrl(conf.Config.ClientChain.Provider),
+			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
+				client.WithChainRpcUrl(config.Config.ClientChain.Provider),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create client: %w", err)
@@ -54,7 +54,7 @@ func approveCmd() *cobra.Command {
 				return err
 			}
 
-			pk, err := conf.GetEcdsaPrivateKey()
+			pk, err := config.GetEcdsaPrivateKey()
 			if err != nil {
 				return err
 			}
