@@ -57,7 +57,7 @@ func balancesCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringP("account", "a", "", "Account address to get information for")
+	cmd.Flags().StringP(addressFlag, "a", "", "Account address to get information for")
 
 	return cmd
 }

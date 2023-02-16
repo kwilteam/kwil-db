@@ -9,11 +9,12 @@ import (
 )
 
 // TODO: @brennan: make the way this prints out the metadata more readable
-func viewDatabaseCmd() *cobra.Command {
+func readSchemaCmd() *cobra.Command {
 	var cmd = &cobra.Command{
-		Use:   "view",
-		Short: "View is used to view the details of a database.  It requires a database name",
+		Use:   "read-schema",
+		Short: "Read schema is used to view the details of a database.  It requires a database name",
 		Long:  "",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
@@ -23,17 +24,12 @@ func viewDatabaseCmd() *cobra.Command {
 				return err
 			}
 
-			dbName, err := cmd.Flags().GetString("name")
+			dbid, err := getSelectedDbid(cmd)
 			if err != nil {
-				return fmt.Errorf("error getting name flag: %w", err)
+				return fmt.Errorf("you must specify either a database name with the --name, or a database id with the --dbid flag")
 			}
 
-			owner, err := getSelectedOwner(cmd)
-			if err != nil {
-				return err
-			}
-
-			meta, err := clt.GetSchema(ctx, owner, dbName)
+			meta, err := clt.GetSchemaById(ctx, dbid)
 			if err != nil {
 				return err
 			}
@@ -88,6 +84,6 @@ func viewDatabaseCmd() *cobra.Command {
 
 	cmd.Flags().StringP(nameFlag, "n", "", "The name of the database to view")
 	cmd.Flags().StringP(ownerFlag, "o", "", "The owner of the database to view(optional, defaults to the your account)")
-	cmd.MarkFlagRequired("name")
+	cmd.Flags().StringP(dbidFlag, "i", "", "The database id of the database to view(optional, defaults to the your account)")
 	return cmd
 }

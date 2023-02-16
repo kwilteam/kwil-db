@@ -10,7 +10,7 @@ import (
 
 func getAccountCmd() *cobra.Command {
 	var cmd = &cobra.Command{
-		Use:   "config",
+		Use:   "get-account",
 		Short: "Get balance, spent, and nonce information",
 		Long: `Gets the balance, spent, and nonce information for a given account address.
 If no address is provided, it will use the address of the user's wallet.`,
@@ -42,7 +42,7 @@ If no address is provided, it will use the address of the user's wallet.`,
 		},
 	}
 
-	cmd.Flags().StringP("account", "a", "", "Account address to get information for")
+	cmd.Flags().StringP(addressFlag, "a", "", "Account address to get information for")
 
 	return cmd
 }

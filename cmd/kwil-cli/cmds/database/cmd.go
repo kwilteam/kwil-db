@@ -17,7 +17,7 @@ func NewCmdDatabase() *cobra.Command {
 	rootCmd.AddCommand(
 		deployCmd(),
 		dropCmd(),
-		viewDatabaseCmd(),
+		readSchemaCmd(),
 		executeCmd(),
 		listCmd(),
 	)
