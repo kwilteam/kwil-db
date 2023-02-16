@@ -2,7 +2,6 @@ version: "3"
 
 includes:
   #note: actual execute directory is the root of the project
-  docker: ./build/package/docker
   pb: ./api/
 
 tasks:
@@ -10,9 +9,17 @@ tasks:
     cmds:
       - task: build
 
+  deps:
+    desc: Install tools required to build this app
+    cmds:
+      - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
+
   build:
     desc: Builds the project
-    deps: [build:cli, build:api, build:api-gateway]
+    cmds:
+      - task: build:cli
+      - task: build:kwild
+      - task: build:gateway
 
   build:cli:
     desc: Builds the kwil-cli
@@ -22,12 +29,12 @@ tasks:
       - .build/kwil-cli
 
   build:kwild:
-    desc: Builds the kwil
+    desc: Builds the kwil grpc server
     deps: [pb:compile:all]
     cmds:
       - go build -o .build/kwild ./cmd/kwild
     generates:
-      - .build/kwil
+      - .build/kwild
 
   build:sql:
     desc: Generates the SQL repository
@@ -49,28 +56,56 @@ tasks:
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs
     cmds:
-      - abigen --abi ./abi/escrow.json --pkg abi --type Escrow --out ./abi/escrow.go
-      - abigen --abi ./abi/erc20.json --pkg abi --type Erc20 --out ./abi/erc20.go
+      - abigen --abi ./pkg/chain/contracts/escrow/evm/abi/escrow.json --bin ./pkg/chain/contracts/escrow/evm/abi/escrow.bin --pkg abi --type Escrow --out ./pkg/chain/contracts/escrow/evm/abi/escrow.go
+      - abigen --abi ./pkg/chain/contracts/token/evm/abi/erc20.json --bin ./pkg/chain/contracts/token/evm/abi/erc20.bin --pkg abi --type Erc20 --out ./pkg/chain/contracts/token/evm/abi/erc20.go
+    sources:
+      - pkg/chain/contracts/*/evm/abi/*.json
+      - pkg/chain/contracts/*/evm/abi/*.bin
+    generates:
+      - pkg/chain/contracts/*/evm/abi/*.go
+
+  # ************ docker ************
+  docker:gateway:
+    desc: Build the docker image for kwil-gateway
+    deps: [pb:compile:all]
+    env:
+      DOCKER_BUILDKIT: 1
+    cmds:
+      - docker build . -t kwil-gateway:latest -f ./build/package/docker/kwil-gateway.dockerfile
+
+  docker:kwild:
+    desc: Build the docker image for the kwild
+    deps: [ pb:compile:all ]
+    env:
+      DOCKER_BUILDKIT: 1
+    cmds:
+      - docker build . -t kwild:latest -f ./build/package/docker/kwild.dockerfile
 
   #  ************ k8s ************
   # have dependencies on docker:kwild and docker:kwil, can't put this section in deployments/helm/Taskfile.yaml
   k8s:helm:update:
     desc: Update the helm charts
-    internal: true
     cmds:
       - rm -rf deployments/helm/kwild/charts
       - rm -rf deployments/helm/kwil/charts
       - helm dependency update deployments/helm/hasura
       - helm dependency update deployments/helm/kwild
       - helm dependency update deployments/helm/kwil
+    sources:
+      - deployments/helm/**/*.yaml
+      - deployments/helm/**/*.tpl
+    generates:
+      - deployments/helm/hasura/charts/*.tgz
+      - deployments/helm/kwild/charts/*.tgz
+      - deployments/helm/kwil/charts/*.tgz
 
   k8s:kwil:
     desc: Build and deploy kwil services to local k8s cluster
-    deps:
-      - k8s:helm:update
-      - docker:kwild
-      - docker:gateway
     cmds:
+      - task: k8s:helm:update
+      - task: pb:compile:all
+      - task: docker:kwild
+      - task: docker:gateway
       - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/dev-values.yaml
 
   k8s:kwil:install:
@@ -87,10 +122,10 @@ tasks:
 
   k8s:kwild:
     desc: Build and deploy kwil to local k8s cluster
-    deps:
-      - k8s:helm:update
-      - docker:kwild
     cmds:
+      - task: k8s:helm:update
+      - task: pb:compile:all
+      - task: docker:kwild
       - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/dev-values.yaml
 
   k8s:kwild:install:
@@ -104,28 +139,3 @@ tasks:
     desc: Undeploy kwild to local k8s cluster
     cmds:
       - helm uninstall kwild
-  #  ************ k8s ************
-
-  cli:
-    desc: Runs the CLI
-    cmds:
-      - go run ./cmd/kwil {{.CLI_ARGS}}
-
-  deps:
-    desc: Install tools required to build this app
-    cmds:
-      - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
-
-  go-install:
-    cmds:
-      - go install {{.REPO}}
-
-  brew-install:
-    cmds:
-      - brew install {{.PACKAGE}}
-
-  update:submodules:
-    desc: Updates git submodules
-    cmds:
-      - |
-        git submodule update --remote
