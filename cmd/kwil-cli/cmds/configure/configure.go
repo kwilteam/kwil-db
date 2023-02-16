@@ -29,7 +29,7 @@ func NewCmdConfigure() *cobra.Command {
 			runner.AddPrompt(&common.Prompter{
 				Label:   "Kwil RPC URL",
 				Default: viper.GetString(config.KwilProviderRpcUrlKey),
-			}, config.KwilProviderRpcUrlKey, removeProtocol)
+			}, config.KwilProviderRpcUrlKey)
 
 			// private key
 			runner.AddPrompt(&common.Prompter{
@@ -53,16 +53,6 @@ func NewCmdConfigure() *cobra.Command {
 	}
 
 	return cmd
-}
-
-// removeProtocol should remove the http:// or https:// from the url
-func removeProtocol(url *string) error {
-	*url = strings.Replace(*url, "http://", "", 1)
-	*url = strings.Replace(*url, "https://", "", 1)
-	*url = strings.Replace(*url, "ws://", "", 1)
-	*url = strings.Replace(*url, "wss://", "", 1)
-
-	return nil
 }
 
 // containsProtocol should check if the url contains http:// or https://

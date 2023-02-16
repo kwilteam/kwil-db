@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -56,7 +57,13 @@ func LoadConfig() {
 }
 
 func fillConfigStruct() {
-	Config.Node.KwilProviderRpcUrl = viper.GetString(KwilProviderRpcUrlKey)
+	rpc := viper.GetString(KwilProviderRpcUrlKey)
+	err := removeProtocol(&rpc)
+	if err != nil {
+		panic(err)
+	}
+
+	Config.Node.KwilProviderRpcUrl = rpc
 	Config.Wallet.PrivateKey = viper.GetString(WalletPrivateKeyKey)
 	Config.ClientChain.Provider = viper.GetString(ClientChainProviderRpcUrlKey)
 }
@@ -109,4 +116,14 @@ func GetWalletAddress() (string, error) {
 	}
 
 	return crypto.AddressFromPrivateKey(ecdsaKey)
+}
+
+// removeProtocol should remove the http:// or https:// from the url
+func removeProtocol(url *string) error {
+	*url = strings.Replace(*url, "http://", "", 1)
+	*url = strings.Replace(*url, "https://", "", 1)
+	*url = strings.Replace(*url, "ws://", "", 1)
+	*url = strings.Replace(*url, "wss://", "", 1)
+
+	return nil
 }

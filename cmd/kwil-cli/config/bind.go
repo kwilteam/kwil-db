@@ -24,14 +24,4 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 
 	viper.BindEnv(ClientChainProviderRpcUrlKey)
 	viper.BindPFlag(ClientChainProviderRpcUrlKey, fs.Lookup(ChainProviderFlag))
-
-	envs := []string{
-		KwilProviderRpcUrlKey,
-		WalletPrivateKeyKey,
-	}
-
-	for _, v := range envs {
-		viper.BindEnv(v)
-		viper.BindPFlag(v, fs.Lookup(v))
-	}
 }
