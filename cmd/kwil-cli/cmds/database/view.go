@@ -2,9 +2,10 @@ package database
 
 import (
 	"fmt"
+	"kwil/cmd/kwil-cli/conf"
+	"kwil/pkg/client"
+
 	"github.com/spf13/cobra"
-	"kwil/internal/app/kcli/config"
-	"kwil/pkg/kclient"
 )
 
 func viewDatabaseCmd() *cobra.Command {
@@ -14,7 +15,9 @@ func viewDatabaseCmd() *cobra.Command {
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := kclient.New(ctx, config.AppConfig)
+			clt, err := client.New(ctx, conf.Config.Node.KwilProviderRpcUrl,
+				client.WithoutServiceConfig(),
+			)
 			if err != nil {
 				return err
 			}
@@ -24,12 +27,12 @@ func viewDatabaseCmd() *cobra.Command {
 				return fmt.Errorf("error getting name flag: %w", err)
 			}
 
-			owner, err := cmd.Flags().GetString("owner")
+			owner, err := getSelectedOwner(cmd)
 			if err != nil {
-				owner = config.AppConfig.Fund.GetAccountAddress()
+				return err
 			}
 
-			meta, err := clt.GetDatabaseSchema(ctx, owner, dbName)
+			meta, err := clt.GetSchema(ctx, owner, dbName)
 			if err != nil {
 				return err
 			}
@@ -44,8 +47,8 @@ func viewDatabaseCmd() *cobra.Command {
 					fmt.Printf("      Type: %s\n", c.Type.String())
 					for _, a := range c.Attributes {
 						fmt.Printf("      %s\n", a.Type.String())
-						if a.Value != nil {
-							fmt.Printf("        %s\n", a.Value)
+						if !a.Value.IsEmpty() {
+							fmt.Printf("        %s\n", a.Value.String())
 						}
 					}
 				}
@@ -82,8 +85,8 @@ func viewDatabaseCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringP("name", "n", "", "The name of the database to view")
-	cmd.Flags().StringP("owner", "o", "", "The owner of the database to view(optional, defaults to the your account)")
+	cmd.Flags().StringP(nameFlag, "n", "", "The name of the database to view")
+	cmd.Flags().StringP(ownerFlag, "o", "", "The owner of the database to view(optional, defaults to the your account)")
 	cmd.MarkFlagRequired("name")
 	return cmd
 }

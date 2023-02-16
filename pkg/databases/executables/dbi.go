@@ -68,3 +68,25 @@ func (e *DatabaseInterface) Prepare(query string, caller string, inputs []*UserI
 
 	return exec.prepare(inputs, caller)
 }
+
+// ConvertInputs takes a map of inputs passed as strings and tries to convert them to the correct type.
+// If successful, it returns a map of the inputs converted to the correct type.
+// If not, or if an input is missing, it returns an error.
+func (q *QuerySignature) ConvertInputs(inputs map[string]string) (map[string]*spec.KwilAny, error) {
+	args := make(map[string]*spec.KwilAny)
+	for _, arg := range q.Args {
+		val, ok := inputs[arg.Name]
+		if !ok {
+			return nil, fmt.Errorf("missing input %s", arg.Name)
+		}
+
+		kwilAny, err := spec.NewExplicit(val, arg.Type)
+		if err != nil {
+			return nil, fmt.Errorf("error creating kwil any type with executable inputs: %w", err)
+		}
+
+		args[arg.Name] = kwilAny
+	}
+
+	return args, nil
+}

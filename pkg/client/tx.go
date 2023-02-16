@@ -10,7 +10,7 @@ import (
 )
 
 // buildTx creates the correct nonce, fee, and signs a transaction
-func (c *client) buildTx(ctx context.Context, payloadType accounts.PayloadType, data any, privateKey *ecdsa.PrivateKey) (*accounts.Transaction, error) {
+func (c *KwilClient) buildTx(ctx context.Context, payloadType accounts.PayloadType, data any, privateKey *ecdsa.PrivateKey) (*accounts.Transaction, error) {
 	// serialize data
 	bts, err := serialize.Serialize(data)
 	if err != nil {

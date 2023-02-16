@@ -12,11 +12,11 @@ import (
 	"kwil/pkg/databases/spec"
 )
 
-func (c *client) GetSchema(ctx context.Context, owner, name string) (*databases.Database[*spec.KwilAny], error) {
+func (c *KwilClient) GetSchema(ctx context.Context, owner, name string) (*databases.Database[*spec.KwilAny], error) {
 	return c.GetSchemaById(ctx, databases.GenerateSchemaId(owner, name))
 }
 
-func (c *client) GetSchemaById(ctx context.Context, id string) (*databases.Database[*spec.KwilAny], error) {
+func (c *KwilClient) GetSchemaById(ctx context.Context, id string) (*databases.Database[*spec.KwilAny], error) {
 	byteDB, err := c.grpc.GetSchema(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema from provider: %w", err)
@@ -25,7 +25,7 @@ func (c *client) GetSchemaById(ctx context.Context, id string) (*databases.Datab
 	return convert.Bytes.DatabaseToKwilAny(byteDB)
 }
 
-func (c *client) DeployDatabase(ctx context.Context, db *databases.Database[[]byte], privateKey *ecdsa.PrivateKey) (*accounts.Response, error) {
+func (c *KwilClient) DeployDatabase(ctx context.Context, db *databases.Database[[]byte], privateKey *ecdsa.PrivateKey) (*accounts.Response, error) {
 	clean.Clean(db)
 
 	// build tx
@@ -37,7 +37,7 @@ func (c *client) DeployDatabase(ctx context.Context, db *databases.Database[[]by
 	return c.grpc.Broadcast(ctx, tx)
 }
 
-func (c *client) DropDatabase(ctx context.Context, dbName string, privateKey *ecdsa.PrivateKey) (*accounts.Response, error) {
+func (c *KwilClient) DropDatabase(ctx context.Context, dbName string, privateKey *ecdsa.PrivateKey) (*accounts.Response, error) {
 	owner, err := crypto.AddressFromPrivateKey(privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)

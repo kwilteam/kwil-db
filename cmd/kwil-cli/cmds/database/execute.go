@@ -2,15 +2,19 @@ package database
 
 import (
 	"fmt"
-	"kwil/internal/app/kcli/common/display"
-	"kwil/internal/app/kcli/config"
+	"kwil/cmd/kwil-cli/cmds/common/display"
+	"kwil/cmd/kwil-cli/conf"
+	"kwil/pkg/client"
+	"kwil/pkg/databases/executables"
 	"kwil/pkg/databases/spec"
-	"kwil/pkg/kclient"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 func executeCmd() *cobra.Command {
+	var queryName string
+
 	cmd := &cobra.Command{
 		Use:   "execute [query field value [field value]...]",
 		Short: "Execute a query",
@@ -45,29 +49,38 @@ create_user name satoshi age 32 --database-id x1234`,
 		}),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := kclient.New(ctx, config.AppConfig)
+			clt, err := client.New(ctx, conf.Config.Node.KwilProviderRpcUrl,
+				client.WithoutServiceConfig(),
+			)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create client: %w", err)
 			}
 
 			// if we get an error, it means the user did not specify the database id
 			// get the database name and owner
-			dbName, err := cmd.Flags().GetString("db_name")
+			dbId, err := getSelectedDbid(cmd)
 			if err != nil {
-				return fmt.Errorf("either database id or database name and owner must be specified: %w", err)
+				return fmt.Errorf("target database not properly specified: %w", err)
 			}
 
-			inputs := make([]*spec.KwilAny, 0)
-			for i := 1; i < len(args); i++ {
-				in, err := spec.New(args[i])
-				if err != nil {
-					return fmt.Errorf("error creating kwil any type with executable inputs: %w", err)
-				}
+			lowerName := strings.ToLower(queryName)
 
-				inputs = append(inputs, in)
+			qry, err := clt.GetQuerySignature(ctx, dbId, lowerName)
+			if err != nil {
+				return fmt.Errorf("error getting query signature: %w", err)
 			}
 
-			res, err := clt.ExecuteDatabase(ctx, dbName, args[0], inputs)
+			inputs, err := getInputs(qry, args)
+			if err != nil {
+				return fmt.Errorf("error getting inputs: %w", err)
+			}
+
+			ecdsaPk, err := conf.GetEcdsaPrivateKey()
+			if err != nil {
+				return fmt.Errorf("failed to get ecdsa key: %w", err)
+			}
+
+			res, err := clt.ExecuteDatabaseById(ctx, dbId, lowerName, inputs, ecdsaPk)
 			if err != nil {
 				return fmt.Errorf("error executing database: %w", err)
 			}
@@ -79,6 +92,25 @@ create_user name satoshi age 32 --database-id x1234`,
 		},
 	}
 
-	cmd.Flags().StringP("db_name", "n", "", "the database name")
+	cmd.Flags().StringP(nameFlag, "n", "", "the database name")
+	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
+	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
+
+	cmd.Flags().StringVarP(&queryName, queryNameFlag, "q", "", "the query name (required)")
+
+	cmd.MarkFlagRequired(queryNameFlag)
 	return cmd
+}
+
+func getInputs(executable *executables.QuerySignature, args []string) (map[string]*spec.KwilAny, error) {
+	if len(args) < 2 || len(args)%2 != 0 {
+		return nil, fmt.Errorf("invalid number of arguments")
+	}
+
+	stringInputs := make(map[string]string) // maps the arg name to the arg value
+	for i := 0; i < len(args); i = i + 2 {
+		stringInputs[strings.ToLower(args[i])] = args[i+1]
+	}
+
+	return executable.ConvertInputs(stringInputs)
 }

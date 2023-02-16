@@ -2,8 +2,9 @@ package display
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	txTypes "kwil/pkg/accounts"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func PrintTxResponse(res *txTypes.Response) {
@@ -22,6 +23,6 @@ type ClientChainResponse struct {
 
 func PrintClientChainResponse(res *ClientChainResponse) {
 	fmt.Println("Response:")
-	fmt.Println("  Fund:", res.Chain)
+	fmt.Println("  Chain:", res.Chain)
 	fmt.Println("  Tx:", res.Tx)
 }
