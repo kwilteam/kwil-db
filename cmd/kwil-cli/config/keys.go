@@ -16,7 +16,7 @@ const (
 	PrivateKeyFlag      = "private-key"
 
 	ClientChainProviderRpcUrlKey = "chain.rpc_url"
-	ChainProviderFlag            = "chain-provider"
+	ChainProviderFlag            = "client-chain-provider"
 )
 
 var ConfigFile string

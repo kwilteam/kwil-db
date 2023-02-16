@@ -39,7 +39,7 @@ func NewCmdConfigure() *cobra.Command {
 
 			// eth provider
 			runner.AddPrompt(&common.Prompter{
-				Label:   "Ethereum RPC URL",
+				Label:   "Client Chain RPC URL",
 				Default: viper.GetString(config.ClientChainProviderRpcUrlKey),
 			}, config.ClientChainProviderRpcUrlKey, containsProtocol)
 
