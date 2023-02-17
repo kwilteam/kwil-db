@@ -1,9 +1,11 @@
 package config
 
 import (
+	"crypto/ecdsa"
 	"fmt"
+	ec "github.com/ethereum/go-ethereum/crypto"
 	"kwil/internal/pkg/config"
-	"kwil/pkg/fund"
+	"kwil/pkg/chain/client/dto"
 	"kwil/pkg/log"
 	"os"
 
@@ -39,11 +41,22 @@ const (
 	FundPoolAddressKey       = "fund.pool_address"
 	FundChainCodeKey         = "fund.chain_code"
 	FundRPCURLKey            = "fund.rpc_url"
+	FundPublicRPCURLKey      = "fund.public_rpc_url"
 	FundReconnectIntervalKey = "fund.reconnect_interval"
 	FundBlockConfirmationKey = "fund.block_confirmation"
 
 	GatewayAddrKey = "gateway.addr"
 )
+
+type FundConfig struct {
+	Wallet      *ecdsa.PrivateKey `mapstructure:"wallet"`
+	PoolAddress string            `mapstructure:"pool_address"`
+	Chain       dto.Config        `mapstructure:",squash"`
+}
+
+func (c *FundConfig) GetAccountAddress() string {
+	return ec.PubkeyToAddress(c.Wallet.PublicKey).Hex()
+}
 
 type GatewayConfig struct {
 	Addr string `mapstructure:"addr"`
@@ -84,7 +97,7 @@ type ServerConfig struct {
 type AppConfig struct {
 	Server  ServerConfig   `mapstructure:"server"`
 	Log     log.Config     `mapstructure:"log"`
-	Fund    fund.Config    `mapstructure:"fund"`
+	Fund    FundConfig     `mapstructure:"fund"`
 	DB      PostgresConfig `mapstructure:"db"`
 	Graphql GraphqlConfig  `mapstructure:"graphql"`
 	Gateway GatewayConfig  `mapstructure:"gateway"`
@@ -141,7 +154,8 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String(FundWalletKey, "", "your wallet private key")
 	fs.String(FundPoolAddressKey, "", "the address of the funding pool")
 	fs.String(FundChainCodeKey, "", "the chain code of the funding pool chain")
-	fs.String(FundRPCURLKey, "", "the provider url of the funding pool chain")
+	fs.String(FundRPCURLKey, "", "the provider rpc url of the funding pool chain")
+	fs.String(FundPublicRPCURLKey, "", "public provider rpc url of the funding pool chain for user onboarding")
 	fs.Int64(FundReconnectIntervalKey, 0, "the reconnect interval of the funding pool")
 	fs.Int64(FundBlockConfirmationKey, 0, "the block confirmation of the funding pool")
 
@@ -167,6 +181,7 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 		FundPoolAddressKey,
 		FundReconnectIntervalKey,
 		FundRPCURLKey,
+		FundPublicRPCURLKey,
 		FundWalletKey,
 		GraphqlAddr,
 		GatewayAddrKey,

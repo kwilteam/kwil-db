@@ -2,10 +2,9 @@ package specifications
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"kwil/pkg/databases"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 // DatabaseDeployDsl is dsl for database deployment specification

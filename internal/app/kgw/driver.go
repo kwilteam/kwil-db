@@ -7,47 +7,28 @@ import (
 	"fmt"
 	"io"
 	"kwil/internal/app/kwild"
-	"kwil/pkg/databases"
-	"kwil/pkg/kclient"
 	"net/http"
 )
 
-// Driver is a driver for the gw client for integration tests
-type Driver struct {
-	grpcClt   *kwild.Driver
-	graphAddr string
-	apiKey    string
+// KgwDriver is a driver for the gw client for integration tests
+type KgwDriver struct {
+	kwild.KwildDriver
+
+	gatewayAddr string // to ignore the gatewayAddr returned by the config.service
 }
 
-func NewDriver(cfg *kclient.Config, graphqlAddr string, apiKey string) *Driver {
-	return &Driver{
-		grpcClt:   kwild.NewDriver(cfg),
-		graphAddr: graphqlAddr,
-		apiKey:    apiKey,
+func NewKgwDriver(gatewayAddr string, kwildDriver *kwild.KwildDriver) *KgwDriver {
+	return &KgwDriver{
+		KwildDriver: *kwildDriver,
+		gatewayAddr: gatewayAddr,
 	}
 }
 
-func (d *Driver) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) error {
-	return d.grpcClt.DeployDatabase(ctx, db)
-}
-
-func (d *Driver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
-	return d.grpcClt.DatabaseShouldExists(ctx, owner, dbName)
-}
-
-func (d *Driver) ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []any) error {
-	return d.grpcClt.ExecuteQuery(ctx, dbName, queryName, queryInputs)
-}
-
-func (d *Driver) DropDatabase(ctx context.Context, dbName string) error {
-	return d.grpcClt.DropDatabase(ctx, dbName)
-}
-
-func (d *Driver) QueryDatabase(ctx context.Context, query string) ([]byte, error) {
+func (d *KgwDriver) QueryDatabase(ctx context.Context, query string) ([]byte, error) {
 	payload := fmt.Sprintf(`{"query":"%s"}`, query)
 	bodyReader := bytes.NewReader([]byte(payload))
 	// @yaiba TODO: better url composition
-	url := fmt.Sprintf("http://%s/graphql", d.graphAddr)
+	url := fmt.Sprintf("http://%s/graphql", d.gatewayAddr)
 	req, err := http.NewRequest(http.MethodPost, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("create graphql query request failed: %w", err)
@@ -56,9 +37,8 @@ func (d *Driver) QueryDatabase(ctx context.Context, query string) ([]byte, error
 	return d.callGraphql(ctx, req)
 }
 
-func (d *Driver) callGraphql(ctx context.Context, req *http.Request) ([]byte, error) {
+func (d *KgwDriver) callGraphql(ctx context.Context, req *http.Request) ([]byte, error) {
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Api-Key", d.apiKey)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {

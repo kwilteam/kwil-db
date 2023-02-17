@@ -25,7 +25,7 @@ type hasuraResp map[string]hasuraTable
 type ExecuteQueryDsl interface {
 	// ExecuteQuery executes QUERY to a database
 	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key
-	ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []any) error
+	ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []string) error
 	QueryDatabase(ctx context.Context, query string) ([]byte, error)
 }
 
@@ -44,8 +44,9 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 		Wallet:   strings.ToLower(db.Owner),
 		Degen:    true,
 	}
+
 	qualifiedUserTableName := fmt.Sprintf("%s_%s", dbID, userTableName)
-	userQueryInput := []any{"id", userQ.ID, "username", userQ.UserName, "age", userQ.Age, "degen", userQ.Degen}
+	userQueryInput := []string{"id", fmt.Sprintf("%d", userQ.ID), "username", userQ.UserName, "age", fmt.Sprintf("%d", userQ.Age), "degen", "true"}
 
 	// TODO test insert post table
 	// When i execute query to database

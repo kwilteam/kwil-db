@@ -44,6 +44,7 @@ func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (*KwilClient,
 		grpcClient, err := grpc.New(ctx, &grpc.Config{
 			Addr: rpcUrl,
 		})*/
+	// @yaiba TODO: option allow only chain interaction, no grpc interaction, avoid grpc connection
 	c := &KwilClient{
 		dbis:                  make(map[string]dbi),
 		usingServiceCfg:       true,
@@ -57,9 +58,7 @@ func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (*KwilClient,
 	}
 
 	var err error
-	c.grpc, err = grpc.New(ctx, &grpc.Config{
-		Addr: rpcUrl,
-	})
+	c.grpc, err = grpc.New(ctx, rpcUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create grpc client: %w", err)
 	}
@@ -77,6 +76,7 @@ func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (*KwilClient,
 	c.ChainCode = chainTypes.ChainCode(cfg.Funding.ChainCode)
 	c.ProviderAddress = cfg.Funding.ProviderAddress
 	c.EscrowContractAddress = cfg.Funding.PoolAddress
+	c.chainRpcUrl = &cfg.Funding.RpcUrl
 
 	// reapply opts since service config may have changed them if they were specified
 	for _, opt := range opts {

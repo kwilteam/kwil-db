@@ -23,7 +23,7 @@ func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseD
 	// Then i expect success
 	assert.NoError(t, err)
 
-	// And i expect database should exist
+	// And i expect database should not exist
 	err = drop.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.Error(t, err)
 }

@@ -3,6 +3,8 @@ package txsvc
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"go.uber.org/zap"
 	commonpb "kwil/api/protobuf/common/v0"
 	txpb "kwil/api/protobuf/tx/v0"
 	"kwil/pkg/accounts"
@@ -22,6 +24,8 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, fmt.Errorf("failed to verify transaction: %w", err)
 	}
 
+	logger := s.log.With(zap.String("hash", hexutil.Encode(tx.Hash)), zap.String("sender", tx.Sender))
+	logger.Debug("receive new transaction", zap.String("type", tx.PayloadType.String()))
 	// handle the transaction according to its type
 	switch tx.PayloadType {
 	case accounts.DEPLOY_DATABASE:

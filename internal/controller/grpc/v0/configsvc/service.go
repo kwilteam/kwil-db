@@ -27,6 +27,7 @@ func (s *Service) GetAll(context.Context, *pb.GetCfgRequest) (*pb.GetCfgResponse
 			ChainCode:       s.cfg.Fund.Chain.ChainCode,
 			PoolAddress:     s.cfg.Fund.PoolAddress,
 			ProviderAddress: s.cfg.Fund.GetAccountAddress(),
+			RpcUrl:          s.cfg.Fund.Chain.PublicRpcUrl,
 		},
 		Gateway: &pb.GetGatewayCfgResponse{
 			GraphqlUrl: s.cfg.Gateway.GetGraphqlUrl(),
@@ -39,6 +40,7 @@ func (s *Service) GetFunding(context.Context, *pb.GetFundingCfgRequest) (*pb.Get
 		ChainCode:       s.cfg.Fund.Chain.ChainCode,
 		PoolAddress:     s.cfg.Fund.PoolAddress,
 		ProviderAddress: s.cfg.Fund.GetAccountAddress(),
+		RpcUrl:          s.cfg.Fund.Chain.PublicRpcUrl,
 		// @yaiba TODO: get token address and name
 		//TokenAddress: "",
 		//TokenName:    "",

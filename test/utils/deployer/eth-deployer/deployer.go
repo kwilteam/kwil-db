@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	escrow "kwil/pkg/chain/contracts/escrow/evm/abi"
 	token "kwil/pkg/chain/contracts/token/evm/abi"
-	"kwil/pkg/fund"
 	"math/big"
 	"sync"
 )
@@ -22,8 +21,8 @@ const (
 )
 
 type EthDeployer struct {
-	Provider string
-	PriKey   string
+	RPCURL string
+	PriKey string
 
 	privateKey *ecdsa.PrivateKey
 	publicKey  *ecdsa.PublicKey
@@ -37,17 +36,15 @@ type EthDeployer struct {
 	deployedEscrow *escrow.Escrow
 	deployedErc20  *token.Erc20
 
-	Chain fund.IFund
-
 	domination *big.Int
 }
 
-func NewEthDeployer(provider string, _privateKey string, domination *big.Int) *EthDeployer {
-	privateKey, publicKey := getKeys(_privateKey)
+func NewEthDeployer(rpcUrl string, privateKeyStr string, domination *big.Int) *EthDeployer {
+	privateKey, publicKey := getKeys(privateKeyStr)
 
 	d := &EthDeployer{
-		Provider:   provider,
-		PriKey:     _privateKey,
+		RPCURL:     rpcUrl,
+		PriKey:     privateKeyStr,
 		privateKey: privateKey,
 		publicKey:  publicKey,
 		Account:    crypto.PubkeyToAddress(*publicKey),
@@ -91,7 +88,7 @@ func (d *EthDeployer) GetPrivateKey() *ecdsa.PrivateKey {
 func (d *EthDeployer) getClient() (*ethclient.Client, error) {
 	var err error
 	d.connOnce.Do(func() {
-		d.ethClient, err = ethclient.Dial(d.Provider)
+		d.ethClient, err = ethclient.Dial(d.RPCURL)
 	})
 	return d.ethClient, err
 }
@@ -172,7 +169,10 @@ func (d *EthDeployer) DeployToken(ctx context.Context) (common.Address, error) {
 	if err != nil {
 		return deployedAddr, err
 	}
-	instance.Erc20Transactor.Approve(auth, deployedAddr, big.NewInt(TotalSupply*int64(10^18)))
+	_, err = instance.Erc20Transactor.Approve(auth, deployedAddr, big.NewInt(TotalSupply*int64(10^18)))
+	if err != nil {
+		return deployedAddr, err
+	}
 
 	return deployedAddr, nil
 }

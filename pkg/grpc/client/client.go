@@ -24,11 +24,10 @@ type Client struct {
 	cfgClt     cfgpb.ConfigServiceClient
 
 	conn *grpc.ClientConn
-	cfg  *Config
 }
 
 // @yaiba TODO: manually declare dependencies
-func NewClient(ctx context.Context, cfg *Config, log log.Logger, conn grpc.ClientConnInterface,
+func NewClient(ctx context.Context, log log.Logger, conn grpc.ClientConnInterface,
 	accountClt accountspb.AccountServiceClient, txClt txpb.TxServiceClient,
 	pricingClt pricingpb.PricingServiceClient, cfgClt cfgpb.ConfigServiceClient) GrpcClient {
 	return &Client{
@@ -37,25 +36,27 @@ func NewClient(ctx context.Context, cfg *Config, log log.Logger, conn grpc.Clien
 		pricingClt: pricingClt,
 		cfgClt:     cfgClt,
 		conn:       conn.(*grpc.ClientConn),
-		cfg:        cfg,
 	}
 }
 
-func New(ctx context.Context, cfg *Config) (*Client, error) {
-	conn, err := transport.Dial(ctx, cfg.Addr)
+func New(ctx context.Context, target string, opts ...grpc.DialOption) (*Client, error) {
+	conn, err := transport.Dial(ctx, target, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial server %s: %w", cfg.Addr, err)
+		return nil, fmt.Errorf("failed to dial server %s: %w", target, err)
 	}
 	return &Client{
 		accountClt: accountspb.NewAccountServiceClient(conn),
 		txClt:      txpb.NewTxServiceClient(conn),
 		pricingClt: pricingpb.NewPricingServiceClient(conn),
 		cfgClt:     cfgpb.NewConfigServiceClient(conn),
-		cfg:        cfg,
 		conn:       conn,
 	}, nil
 }
 
 func (c *Client) Close() error {
 	return c.conn.Close()
+}
+
+func (c *Client) GetTarget() string {
+	return c.conn.Target()
 }

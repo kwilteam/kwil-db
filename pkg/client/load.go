@@ -30,12 +30,12 @@ func (c *KwilClient) GetQuerySignature(ctx context.Context, dbid, queryName stri
 // if the dbi has already been retrieved, it is returned
 // otherwise, it is retrieved from the server and stored
 func (c *KwilClient) selectDB(ctx context.Context, id string) (dbi, error) {
-	var db dbi
 	db, ok := c.dbis[id]
 	if ok {
 		return db, nil
 	}
 
+	db = make(dbi)
 	qrs, err := c.retrieveDBI(ctx, id)
 	if err != nil {
 		return nil, err

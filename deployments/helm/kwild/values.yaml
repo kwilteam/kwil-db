@@ -245,6 +245,7 @@ kwildApp:
     reconnectInterval: 30
     poolAddress: ""
     rpcUrl: "ws://localhost:8545"
+    publicRpcUrl: "ws://localhost:8545"
     wallet: ""
     chainCode: 1
   log:

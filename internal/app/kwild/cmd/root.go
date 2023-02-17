@@ -66,7 +66,7 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to prepare queries: %w", err)
 		}
 
-		dps, err := deposits.NewDepositer(&cfg.Fund, client, queries, chainClient, cfg.Fund.Wallet, logger)
+		dps, err := deposits.NewDepositer(cfg.Fund.PoolAddress, client, queries, chainClient, cfg.Fund.Wallet, logger)
 		if err != nil {
 			return fmt.Errorf("failed to build deposits: %w", err)
 		}

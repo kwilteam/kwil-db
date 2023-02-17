@@ -26,6 +26,12 @@ type postgresContainer struct {
 	TContainer
 }
 
+func (c *postgresContainer) GetUnexposedDBUrl(ctx context.Context, databaseName string) string {
+	unexposedEndpoint, _ := c.UnexposedEndpoint(ctx)
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, unexposedEndpoint, databaseName)
+}
+
 func WithInitialDatabase(user string, password string) func(req *testcontainers.ContainerRequest) {
 	return func(req *testcontainers.ContainerRequest) {
 		if req.Env == nil {

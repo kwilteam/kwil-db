@@ -28,7 +28,7 @@ _ignore
 .env
 proto
 api/protobuf
-api/openapi-spec/v0/api.swagger.json
+api/openapi-spec/api/v0/api.swagger.json
 
 # helm charts deps
 deployments/helm/hasura/charts/
