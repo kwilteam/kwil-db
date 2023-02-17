@@ -42,7 +42,7 @@ OR
 create_user name satoshi age 32 --database-id x1234`,
 		Args: cobra.MatchAll(func(cmd *cobra.Command, args []string) error {
 			// check that args is odd and has at least 3 elements
-			if len(args) < 3 || len(args)%2 == 0 {
+			if len(args) < 2 || len(args)%2 == 0 {
 				return fmt.Errorf("invalid number of arguments")
 			}
 			return nil

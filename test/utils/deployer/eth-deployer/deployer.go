@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	escrow "kwil/pkg/chain/contracts/escrow/evm/abi"
 	token "kwil/pkg/chain/contracts/token/evm/abi"
-	"kwil/pkg/fund"
 	"math/big"
 	"sync"
 )
@@ -22,8 +21,8 @@ const (
 )
 
 type EthDeployer struct {
-	Provider string
-	PriKey   string
+	RpcUrl string
+	PriKey string
 
 	privateKey *ecdsa.PrivateKey
 	publicKey  *ecdsa.PublicKey
@@ -37,16 +36,14 @@ type EthDeployer struct {
 	deployedEscrow *escrow.Escrow
 	deployedErc20  *token.Erc20
 
-	Chain fund.IFund
-
 	domination *big.Int
 }
 
-func NewEthDeployer(provider string, _privateKey string, domination *big.Int) *EthDeployer {
+func NewEthDeployer(rpcUrl string, _privateKey string, domination *big.Int) *EthDeployer {
 	privateKey, publicKey := getKeys(_privateKey)
 
 	d := &EthDeployer{
-		Provider:   provider,
+		RpcUrl:     rpcUrl,
 		PriKey:     _privateKey,
 		privateKey: privateKey,
 		publicKey:  publicKey,
@@ -91,7 +88,7 @@ func (d *EthDeployer) GetPrivateKey() *ecdsa.PrivateKey {
 func (d *EthDeployer) getClient() (*ethclient.Client, error) {
 	var err error
 	d.connOnce.Do(func() {
-		d.ethClient, err = ethclient.Dial(d.Provider)
+		d.ethClient, err = ethclient.Dial(d.RpcUrl)
 	})
 	return d.ethClient, err
 }

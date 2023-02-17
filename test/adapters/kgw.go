@@ -6,8 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"kwil/internal/app/kgw"
-	"kwil/pkg/kclient"
 	"path"
 	"runtime"
 	"testing"
@@ -85,66 +83,4 @@ func StartKgwDockerService(ctx context.Context, t *testing.T, envs map[string]st
 	err = container.ShowPortInfo(ctx)
 	require.NoError(t, err)
 	return container
-}
-
-func GetKgwDriver(ctx context.Context, t *testing.T, kwildAddr string, graphqlAddr string, apiKey string, cfg *kclient.Config, fundEnvs map[string]string) *kgw.Driver {
-	t.Helper()
-
-	if kwildAddr != "" {
-		t.Logf("create kgw driver to %s", kwildAddr)
-		cfg.Node.Addr = kwildAddr
-		return kgw.NewDriver(cfg, graphqlAddr, apiKey)
-	}
-
-	// db container
-	dc := StartDBDockerService(t, ctx)
-	unexposedEndpoint, err := dc.UnexposedEndpoint(ctx)
-	require.NoError(t, err)
-	unexposedPgURL := fmt.Sprintf(
-		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, unexposedEndpoint, kwildDatabase)
-
-	// hasura container
-	unexposedHasuraPgURL := fmt.Sprintf(
-		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, unexposedEndpoint, "postgres")
-	hasuraEnvs := map[string]string{
-		"PG_DATABASE_URL":                      unexposedPgURL,
-		"HASURA_GRAPHQL_METADATA_DATABASE_URL": unexposedHasuraPgURL,
-		"HASURA_GRAPHQL_ENABLE_CONSOLE":        "true",
-		"HASURA_GRAPHQL_DEV_MODE":              "true",
-		"HASURA_METADATA_DB":                   "postgres",
-	}
-	hasurac := StartHasuraDockerService(ctx, t, hasuraEnvs)
-	unexposedHasuraEndpoint, err := hasurac.UnexposedEndpoint(ctx)
-	require.NoError(t, err)
-
-	// kwild container
-	fundEnvs["KWILD_GRAPHQL_ADDR"] = unexposedHasuraEndpoint
-	// @yaiba can't get addr here, because the gw container is not ready yet
-	// need a hacky way to get the addr
-	fundEnvs["KWILD_GATEWAY_ADDR"] = ""
-	fundEnvs["KWILD_DB_URL"] = unexposedPgURL
-	fundEnvs["KWILD_LOG_LEVEL"] = "info"
-	kc := StartKwildDockerService(t, ctx, fundEnvs)
-	exposedkwildEndpoint, err := kc.ExposedEndpoint(ctx)
-	require.NoError(t, err)
-	unexposedKwildEndpoint, err := kc.UnexposedEndpoint(ctx)
-	require.NoError(t, err)
-
-	// kgw container
-	kgwEnvs := map[string]string{
-		"KWILGW_KWILD_ADDR":         unexposedKwildEndpoint,
-		"KWILGW_GRAPHQL_ADDR":       unexposedHasuraEndpoint,
-		"KWILGW_LOG_LEVEL":          "info",
-		"KWILGW_SERVER_LISTEN_ADDR": ":8082",
-	}
-
-	kgwc := StartKgwDockerService(ctx, t, kgwEnvs)
-	kgwEndpoint, err := kgwc.ExposedEndpoint(ctx)
-	require.NoError(t, err)
-
-	cfg.Node.Addr = exposedkwildEndpoint
-	// from test-data/keys.json
-	testAPIKey := "testkwilkey"
-	t.Logf("create kgw driver to %s", kgwEndpoint)
-	return kgw.NewDriver(cfg, kgwEndpoint, testAPIKey)
 }

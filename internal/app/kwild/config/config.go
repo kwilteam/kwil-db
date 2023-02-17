@@ -1,9 +1,11 @@
 package config
 
 import (
+	"crypto/ecdsa"
 	"fmt"
+	ec "github.com/ethereum/go-ethereum/crypto"
 	"kwil/internal/pkg/config"
-	"kwil/pkg/fund"
+	"kwil/pkg/chain/client/dto"
 	"kwil/pkg/log"
 	"os"
 
@@ -45,6 +47,16 @@ const (
 	GatewayAddrKey = "gateway.addr"
 )
 
+type FundConfig struct {
+	Wallet      *ecdsa.PrivateKey `mapstructure:"wallet"`
+	PoolAddress string            `mapstructure:"pool_address"`
+	Chain       dto.Config        `mapstructure:",squash"`
+}
+
+func (c *FundConfig) GetAccountAddress() string {
+	return ec.PubkeyToAddress(c.Wallet.PublicKey).Hex()
+}
+
 type GatewayConfig struct {
 	Addr string `mapstructure:"addr"`
 }
@@ -84,7 +96,7 @@ type ServerConfig struct {
 type AppConfig struct {
 	Server  ServerConfig   `mapstructure:"server"`
 	Log     log.Config     `mapstructure:"log"`
-	Fund    fund.Config    `mapstructure:"fund"`
+	Fund    FundConfig     `mapstructure:"fund"`
 	DB      PostgresConfig `mapstructure:"db"`
 	Graphql GraphqlConfig  `mapstructure:"graphql"`
 	Gateway GatewayConfig  `mapstructure:"gateway"`
