@@ -32,8 +32,6 @@ builds:
         goarch: arm64
     ldflags:
       - -s -w
-    flags:
-      - -mod=vendor
     env:
       - CGO_ENABLED=0
       - CC_darwin_amd64=o64-clang
