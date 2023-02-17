@@ -1,1 +1,1 @@
-{"project_name":"kwil-cli","tag":"v0.0.2","previous_tag":"v0.0.1","version":"0.0.2","commit":"4b53058612fb328b8eaa416b58d00844b3bc6e40","date":"2023-02-16T18:11:20.465946-06:00","runtime":{"goos":"darwin","goarch":"amd64"}}
+{"project_name":"kwil-cli","tag":"v0.0.3","previous_tag":"v0.0.2","version":"0.0.3","commit":"cd62f9a810a5b8895a76edb1067c4d10fb61852c","date":"2023-02-16T18:15:47.989716-06:00","runtime":{"goos":"darwin","goarch":"amd64"}}

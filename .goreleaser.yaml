@@ -65,7 +65,7 @@ release:
   # Default is extracted from the origin remote URL or empty if its private hosted.
   github:
     owner: kwilteam
-    name: kwil-cli
+    name: kwil-db
 
   replace_existing_draft: true
 
