@@ -5,4 +5,5 @@ type Config struct {
 	ReconnectInterval int64  `mapstructure:"reconnect_interval"`
 	BlockConfirmation int64  `mapstructure:"block_confirmation"`
 	RpcUrl            string `mapstructure:"rpc_url"`
+	PublicRpcUrl      string `mapstructure:"public_rpc_url"`
 }

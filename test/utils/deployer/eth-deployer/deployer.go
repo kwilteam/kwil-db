@@ -21,7 +21,7 @@ const (
 )
 
 type EthDeployer struct {
-	RpcUrl string
+	RPCURL string
 	PriKey string
 
 	privateKey *ecdsa.PrivateKey
@@ -39,12 +39,12 @@ type EthDeployer struct {
 	domination *big.Int
 }
 
-func NewEthDeployer(rpcUrl string, _privateKey string, domination *big.Int) *EthDeployer {
-	privateKey, publicKey := getKeys(_privateKey)
+func NewEthDeployer(rpcUrl string, privateKeyStr string, domination *big.Int) *EthDeployer {
+	privateKey, publicKey := getKeys(privateKeyStr)
 
 	d := &EthDeployer{
-		RpcUrl:     rpcUrl,
-		PriKey:     _privateKey,
+		RPCURL:     rpcUrl,
+		PriKey:     privateKeyStr,
 		privateKey: privateKey,
 		publicKey:  publicKey,
 		Account:    crypto.PubkeyToAddress(*publicKey),
@@ -88,7 +88,7 @@ func (d *EthDeployer) GetPrivateKey() *ecdsa.PrivateKey {
 func (d *EthDeployer) getClient() (*ethclient.Client, error) {
 	var err error
 	d.connOnce.Do(func() {
-		d.ethClient, err = ethclient.Dial(d.RpcUrl)
+		d.ethClient, err = ethclient.Dial(d.RPCURL)
 	})
 	return d.ethClient, err
 }
@@ -169,7 +169,10 @@ func (d *EthDeployer) DeployToken(ctx context.Context) (common.Address, error) {
 	if err != nil {
 		return deployedAddr, err
 	}
-	instance.Erc20Transactor.Approve(auth, deployedAddr, big.NewInt(TotalSupply*int64(10^18)))
+	_, err = instance.Erc20Transactor.Approve(auth, deployedAddr, big.NewInt(TotalSupply*int64(10^18)))
+	if err != nil {
+		return deployedAddr, err
+	}
 
 	return deployedAddr, nil
 }

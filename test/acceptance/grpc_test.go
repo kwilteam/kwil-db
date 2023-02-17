@@ -27,6 +27,9 @@ import (
 
 var remote = flag.Bool("remote", false, "run tests against remote environment")
 
+// keepMiningBlocks is a helper function to keep mining blocks
+// since kwild need to mine blocks to process transactions, and ganache is configured to mine a block for every tx
+// so we need to keep produce txs to keep mining blocks
 func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account string) {
 	for {
 		select {
@@ -154,8 +157,6 @@ func setup(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger)
 	require.NoError(t, err, "failed to get unexposed endpoint")
 	// deploy token and escrow contract
 	// @yaiba TODO: chain agnostic
-	//t.Logf("create chain driver to %s", exposedChainRPC)
-	//chainDriver := ethFund.New(exposedChainRPC, cfg.DeployerAddr, logger)
 	t.Logf("create chain deployer to %s", exposedChainRPC)
 	chainDeployer := eth_deployer.NewEthDeployer(exposedChainRPC, cfg.DeployerPkStr, cfg.Domination)
 	tokenAddress, err := chainDeployer.DeployToken(ctx)
@@ -183,6 +184,7 @@ func setup(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger)
 	require.NoError(t, err)
 	kwildEnv := map[string]string{
 		"KWILD_FUND_RPC_URL":            unexposedChainRPC, // kwil will call using docker network
+		"KWILD_FUND_PUBLIC_RPC_URL":     exposedChainRPC,   // user will call using host network
 		"KWILD_FUND_POOL_ADDRESS":       escrowAddress.String(),
 		"KWILD_FUND_WALLET":             cfg.DeployerPkStr,
 		"KWILD_FUND_CHAIN_CODE":         fmt.Sprintf("%d", cfg.ChainCode),
@@ -198,7 +200,7 @@ func setup(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger)
 	kwildC := adapters.StartKwildDockerService(t, ctx, kwildEnv)
 
 	// kgw container
-	exposedkwildEndpoint, err := kwildC.ExposedEndpoint(ctx)
+	exposedKwildEndpoint, err := kwildC.ExposedEndpoint(ctx)
 	require.NoError(t, err)
 	unexposedKwildEndpoint, err := kwildC.UnexposedEndpoint(ctx)
 	require.NoError(t, err)
@@ -214,13 +216,13 @@ func setup(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger)
 	exposedKgwEndpoint, err := kgwC.ExposedEndpoint(ctx)
 	require.NoError(t, err)
 
-	cfg.NodeAddr = exposedkwildEndpoint
+	cfg.NodeAddr = exposedKwildEndpoint
 	cfg.GatewayAddr = exposedKgwEndpoint
 
 	t.Logf("create kwild driver to %s", cfg.NodeAddr)
-	kwilClt, err := client.New(ctx, cfg.NodeAddr,
-		// TODO: to use returned chain rpc url
-		client.WithChainRpcUrl(exposedChainRPC))
+	kwilClt, err := client.New(ctx, cfg.NodeAddr)
+	// use server returned chain rpc url
+	// client.WithChainRpcUrl(exposedChainRPC))
 
 	require.NoError(t, err, "failed to create kwil client")
 	kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPK, logger)
@@ -294,7 +296,8 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		// setup
 		driver, chainDeployer := setup(ctx, t, cfg, tLogger)
 
-		// only local env test
+		// NOTE: only local env test, public network test takes too long
+		// thus here test assume user is funded
 		if !*remote {
 			// Given user is funded
 			err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.FundAmount)

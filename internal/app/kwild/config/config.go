@@ -41,6 +41,7 @@ const (
 	FundPoolAddressKey       = "fund.pool_address"
 	FundChainCodeKey         = "fund.chain_code"
 	FundRPCURLKey            = "fund.rpc_url"
+	FundPublicRPCURLKey      = "fund.public_rpc_url"
 	FundReconnectIntervalKey = "fund.reconnect_interval"
 	FundBlockConfirmationKey = "fund.block_confirmation"
 
@@ -153,7 +154,8 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String(FundWalletKey, "", "your wallet private key")
 	fs.String(FundPoolAddressKey, "", "the address of the funding pool")
 	fs.String(FundChainCodeKey, "", "the chain code of the funding pool chain")
-	fs.String(FundRPCURLKey, "", "the provider url of the funding pool chain")
+	fs.String(FundRPCURLKey, "", "the provider rpc url of the funding pool chain")
+	fs.String(FundPublicRPCURLKey, "", "public provider rpc url of the funding pool chain for user onboarding")
 	fs.Int64(FundReconnectIntervalKey, 0, "the reconnect interval of the funding pool")
 	fs.Int64(FundBlockConfirmationKey, 0, "the block confirmation of the funding pool")
 
@@ -179,6 +181,7 @@ func BindGlobalEnv(fs *pflag.FlagSet) {
 		FundPoolAddressKey,
 		FundReconnectIntervalKey,
 		FundRPCURLKey,
+		FundPublicRPCURLKey,
 		FundWalletKey,
 		GraphqlAddr,
 		GatewayAddrKey,

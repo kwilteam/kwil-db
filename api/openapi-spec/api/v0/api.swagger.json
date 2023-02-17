@@ -748,6 +748,9 @@
         },
         "pool_address": {
           "type": "string"
+        },
+        "rpc_url": {
+          "type": "string"
         }
       }
     },

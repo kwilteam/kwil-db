@@ -76,6 +76,7 @@ func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (*KwilClient,
 	c.ChainCode = chainTypes.ChainCode(cfg.Funding.ChainCode)
 	c.ProviderAddress = cfg.Funding.ProviderAddress
 	c.EscrowContractAddress = cfg.Funding.PoolAddress
+	c.chainRpcUrl = &cfg.Funding.RpcUrl
 
 	// reapply opts since service config may have changed them if they were specified
 	for _, opt := range opts {

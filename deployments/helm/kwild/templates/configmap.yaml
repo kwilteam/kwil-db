@@ -10,6 +10,7 @@ data:
   KWILD_FUND_RECONNECT_INTERVAL: {{ .Values.kwildApp.fund.reconnectInterval | quote}}
   KWILD_FUND_POOL_ADDRESS: {{ .Values.kwildApp.fund.poolAddress | quote }}
   KWILD_FUND_RPC_URL: {{ .Values.kwildApp.fund.rpcUrl | quote }}
+  KWILD_FUND_PUBLIC_RPC_URL: {{ .Values.kwildApp.fund.publicRpcUrl | quote }}
   KWILD_FUND_WALLET: {{ .Values.kwildApp.fund.wallet | quote }}
   KWILD_LOG_LEVEL: {{ .Values.kwildApp.log.level | quote }}
   KWILD_LOG_OUTPUT_PATHS: {{ .Values.kwildApp.log.outputPaths | join "," | quote }}
