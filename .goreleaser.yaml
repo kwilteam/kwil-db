@@ -1,0 +1,73 @@
+project_name: kwil-cli
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+changelog:
+  skip: true
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+builds:
+  - id: "kwil-cli"
+    binary: kwil-cli
+    main: ./cmd/kwil-cli/main.go
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - 6
+      - 7
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+    env:
+      - CGO_ENABLED=0
+      - CC_darwin_amd64=o64-clang
+      - CCX_darwin_amd64=o64-clang+
+      - CC_darwin_arm64=aarch64-apple-darwin20.2-clang
+      - CCX_darwin_arm64=aarch64-apple-darwin20.2-clang++
+      - CC_windows_amd64=x86_64-w64-mingw32-gc
+      - CCX_windows_amd64=x86_64-w64-mingw32-g++
+      - 'CC={{ index .Env (print "CC_" .Os "_" .Arch) }}'
+      - 'CCX={{ index .Env (print "CCX_" .Os "_" .Arch) }}'
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+    - goos: windows
+      format: zip
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+release:
+  # Repo in which the release will be created.
+  # Default is extracted from the origin remote URL or empty if its private hosted.
+  github:
+    owner: kwilteam
+    name: kwil-cli
+
+  replace_existing_draft: true
+
+  ids:
+    - kwil-cli
