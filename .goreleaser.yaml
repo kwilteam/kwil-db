@@ -79,8 +79,5 @@ brews:
     name: kwil-cli
     homepage: https://kwil.com ## should change this to cli portion of docs once published
     tap:
-      owner: 
-      name:
-    commit_author:
-      name:
-      email:
+      owner: kwilteam 
+      name: homebrew-tools
