@@ -16,22 +16,21 @@ func executeCmd() *cobra.Command {
 	var queryName string
 
 	cmd := &cobra.Command{
-		Use:   "execute [query field value [field value]...]",
+		Use:   "execute",
 		Short: "Execute a query",
 		Long: `Execute executes a query against the specified database.  The query name is
-specified as the first argument, and the query a arguments are specified after.
-In order to specify an argument, you first need to specify the argument name.
-You then specify the argument type.
+specified as a required "--query" flag, and the query parameters as arguments.
+In order to specify an parameter, you first need to specify the prameter name, then the parameter value.
 
 For example, if I have a query name "create_user" that takes two arguments: name and age.
 I would specify the query as follows:
 
-create_user name satoshi age 32
+name satoshi age 32 --query=create_user
 
-You specify the database to execute this against with the --database-name flag, and
-the owner with the --database-owner flag.
+You specify the database to execute this against with the --name flag, and
+the owner with the --wner flag.
 
-You can also specify the database by passing the database id with the --database-id flag.
+You can also specify the database by passing the database id with the --dbid flag.
 
 For example:
 
@@ -39,10 +38,10 @@ create_user name satoshi age 32 --database-name mydb --database-owner 0xAfFDC06c
 
 OR
 
-create_user name satoshi age 32 --database-id x1234`,
+name satoshi age 32 --dbid=x1234 --query=create_user `,
 		Args: cobra.MatchAll(func(cmd *cobra.Command, args []string) error {
-			// check that args is odd and has at least 3 elements
-			if len(args) < 2 || len(args)%2 == 0 {
+			// check that args is even and has at least 2 elements
+			if len(args) < 2 || len(args)%2 != 0 {
 				return fmt.Errorf("invalid number of arguments")
 			}
 			return nil
