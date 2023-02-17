@@ -2,7 +2,7 @@ project_name: kwil-cli
 release:
   github:
     owner: kwilteam
-    name: kwil-cli
+    name: kwil-db
   replace_existing_draft: true
   name_template: '{{.Tag}}'
   ids:

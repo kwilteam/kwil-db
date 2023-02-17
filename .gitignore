@@ -35,3 +35,4 @@ deployments/helm/hasura/charts/
 deployments/helm/kwild/charts/
 deployments/helm/kwil/charts/
 
+dist/*

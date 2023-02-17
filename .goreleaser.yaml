@@ -14,7 +14,7 @@ changelog:
       - '^test:'
 
 builds:
-  - id: "kwil-cli"
+  - id: kwil-cli
     binary: kwil-cli
     main: ./cmd/kwil-cli/main.go
     goos:
@@ -32,6 +32,8 @@ builds:
         goarch: arm64
     ldflags:
       - -s -w
+    flags:
+      - -mod=vendor
     env:
       - CGO_ENABLED=0
       - CC_darwin_amd64=o64-clang
@@ -61,13 +63,24 @@ snapshot:
   name_template: "{{ incpatch .Version }}-next"
 
 release:
-  # Repo in which the release will be created.
-  # Default is extracted from the origin remote URL or empty if its private hosted.
+  prerelease: auto
   github:
     owner: kwilteam
     name: kwil-db
-
   replace_existing_draft: true
-
   ids:
     - kwil-cli
+
+universal_binaries:
+  - replace: true
+
+brews:
+  - 
+    name: kwil-cli
+    homepage: https://kwil.com ## should change this to cli portion of docs once published
+    tap:
+      owner: 
+      name:
+    commit_author:
+      name:
+      email:
