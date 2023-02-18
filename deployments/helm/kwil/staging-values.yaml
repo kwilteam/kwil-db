@@ -21,7 +21,8 @@ kwild:
     tag: latest
   kwildApp:
     fund:
-      wallet: 274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988
+      #wallet: 274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988
+      wallet: 30a4d9e36437d45e563b112ec38b8fc36c5aac80479fb3afce28022e4f3d74d7
       rpcUrl: wss://goerli.infura.io/ws/v3/745ef5cfaf9d405fb03b10a2c21d1f41
       publicRpcUrl: https://ethereum-goerli-rpc.allthatnode.com
       chainCode: 2
@@ -31,12 +32,12 @@ kwild:
       level: debug
     gateway:
       # TODO: change to staging domain
-      addr: "staging.gateway.kwil.com"
+      addr: "provider.kwil.com"
 
 global:
   postgres:
     enabled: true # to use an exising database
-    host: "kwildb.c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
+    host: "kwildb-prod-us-east-1.cluster-c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
     port: 5432
     database: "postgres"
     username: "postgres"
