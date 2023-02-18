@@ -32,12 +32,12 @@ kwild:
       level: debug
     gateway:
       # TODO: change to staging domain
-      addr: "provider-staging.kwil.com"
+      addr: "provider-test.kwil.com"
 
 global:
   postgres:
     enabled: true # to use an exising database
-    host: "kwildb-staging-us-east-1.cluster-c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
+    host: "kwildb-test-us-east-1.cluster-c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
     port: 5432
     database: "postgres"
     username: "postgres"
