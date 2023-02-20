@@ -57,8 +57,3 @@ release:
 
 universal_binaries:
   - replace: true
-
-artifacts:
-  - name: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
-    glob: dist/*(!.tar.gz|!zip)
-    overwrite: true
