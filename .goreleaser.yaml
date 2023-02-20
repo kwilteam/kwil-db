@@ -50,7 +50,7 @@ release:
   prerelease: auto
   github:
     owner: kwilteam
-    name: kwil-cli
+    name: kwil-db
   replace_existing_draft: true
   ids:
     - kwil-cli
