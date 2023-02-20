@@ -57,3 +57,9 @@ release:
 
 universal_binaries:
   - replace: true
+
+artifacts:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}{{ if .Ext }}.{{ .Ext }}{{ end }}"
+    glob: dist/*
+    ids:
+      - kwil-cli
