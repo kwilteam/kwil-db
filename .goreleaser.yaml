@@ -56,11 +56,3 @@ release:
 
 universal_binaries:
   - replace: true
-
-## brews:
-##   - 
-##     name: kwil-cli
-##     homepage: https://kwil.com ## should change this to cli portion of docs once published
-##     tap:
-##       owner: kwilteam 
-##       name: homebrew-tools
