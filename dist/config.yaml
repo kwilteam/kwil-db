@@ -4,9 +4,22 @@ release:
     owner: kwilteam
     name: kwil-db
   replace_existing_draft: true
+  prerelease: auto
   name_template: '{{.Tag}}'
   ids:
     - kwil-cli
+brews:
+  - name: kwil-cli
+    tap:
+      owner: kwilteam
+      name: homebrew-tools
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: Brew formula update for {{ .ProjectName }} version {{ .Tag }}
+    homepage: https://kwil.com
+    goarm: "6"
+    goamd64: v1
 scoop:
   name: kwil-cli
   commit_author:
@@ -136,6 +149,12 @@ announce:
     content_type: application/json; charset=utf-8
 git:
   tag_sort: -version:refname
+universal_binaries:
+  - id: kwil-cli
+    ids:
+      - kwil-cli
+    name_template: '{{ .ProjectName }}'
+    replace: true
 github_urls:
   download: https://github.com
 gitlab_urls:
