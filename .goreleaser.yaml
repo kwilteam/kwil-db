@@ -37,17 +37,9 @@ builds:
 
 checksum:
   name_template: 'checksums.txt'
-snapshot:
-  name_template: "{{ incpatch .Version }}-next"
 
 release:
   prerelease: auto
-  github:
-    owner: kwilteam
-    name: kwil-db
-  replace_existing_draft: true
-  ids:
-    - kwil-cli
 
 universal_binaries:
   - replace: true
