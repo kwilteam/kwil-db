@@ -2,9 +2,12 @@ project_name: kwil-cli
 release:
   github:
     owner: kwilteam
-    name: kwil-db
+    name: kwil-cli
+  replace_existing_draft: true
   prerelease: auto
   name_template: '{{.Tag}}'
+  ids:
+    - kwil-cli
 scoop:
   name: kwil-cli
   commit_author:
@@ -47,6 +50,14 @@ builds:
       - -s -w
     env:
       - CGO_ENABLED=0
+      - CC_darwin_amd64=o64-clang
+      - CCX_darwin_amd64=o64-clang+
+      - CC_darwin_arm64=aarch64-apple-darwin20.2-clang
+      - CCX_darwin_arm64=aarch64-apple-darwin20.2-clang++
+      - CC_windows_amd64=x86_64-w64-mingw32-gc
+      - CCX_windows_amd64=x86_64-w64-mingw32-g++
+      - CC={{ index .Env (print "CC_" .Os "_" .Arch) }}
+      - CCX={{ index .Env (print "CCX_" .Os "_" .Arch) }}
 archives:
   - id: default
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
