@@ -1,4 +1,4 @@
-6537f4f583ac129405e7e14866fee7810f6737d3bfcb8a2e149095b35cac4016  kwil-cli_0.0.16_linux_amd64.tar.gz
-657301ee6bb97b41c4a4ef187ffcaa818d0c36a2289bd16772f4e563879a0f50  kwil-cli_0.0.16_windows_amd64.tar.gz
-87546553532b0acf9fd9120318fab7a1220d14873ef6e0745b4a8f5d6bbb275e  kwil-cli_0.0.16_darwin_all.tar.gz
-a18a718b038562e0deb671aea22aed47fb5629f9b610bc6fb188f41013397c34  kwil-cli_0.0.16_linux_arm64.tar.gz
+14cab1785f3e5dd7f2536358ebb91034a7fecd3931ce002c6d65144a54624253  kwil-cli_0.0.18_linux_amd64.tar.gz
+33dfa233e7babd8b9f43bec18232228bd3a379b227e83ca1042bc3893b80ad9d  kwil-cli_0.0.18_windows_amd64.tar.gz
+4467badace11ded4fc0e53016cefdee5b954cf8de4c9fe091331db91aa1ee7e6  kwil-cli_0.0.18_darwin_all.tar.gz
+921bbb63564157ab1dca9efb3c20d55d114398dccf5d33d67144aa74724e3eab  kwil-cli_0.0.18_linux_arm64.tar.gz
