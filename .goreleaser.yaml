@@ -34,12 +34,31 @@ builds:
       - -s -w
     env:
       - CGO_ENABLED=0
+      - CC_darwin_amd64=o64-clang
+      - CCX_darwin_amd64=o64-clang+
+      - CC_darwin_arm64=aarch64-apple-darwin20.2-clang
+      - CCX_darwin_arm64=aarch64-apple-darwin20.2-clang++
+      - CC_windows_amd64=x86_64-w64-mingw32-gc
+      - CCX_windows_amd64=x86_64-w64-mingw32-g++
+      - 'CC={{ index .Env (print "CC_" .Os "_" .Arch) }}'
+      - 'CCX={{ index .Env (print "CCX_" .Os "_" .Arch) }}'
 
 checksum:
   name_template: 'checksums.txt'
 
 release:
   prerelease: auto
+  github:
+    owner: kwilteam
+    name: kwil-cli
+  replace_existing_draft: true
+  ids:
+    - kwil-cli
 
 universal_binaries:
   - replace: true
+
+artifacts:
+  - name: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    glob: dist/*(!.tar.gz|!zip)
+    overwrite: true

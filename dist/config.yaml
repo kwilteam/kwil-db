@@ -3,23 +3,8 @@ release:
   github:
     owner: kwilteam
     name: kwil-db
-  replace_existing_draft: true
   prerelease: auto
   name_template: '{{.Tag}}'
-  ids:
-    - kwil-cli
-brews:
-  - name: kwil-cli
-    tap:
-      owner: kwilteam
-      name: homebrew-tools
-    commit_author:
-      name: goreleaserbot
-      email: bot@goreleaser.com
-    commit_msg_template: Brew formula update for {{ .ProjectName }} version {{ .Tag }}
-    homepage: https://kwil.com
-    goarm: "6"
-    goamd64: v1
 scoop:
   name: kwil-cli
   commit_author:
@@ -62,21 +47,10 @@ builds:
       - -s -w
     env:
       - CGO_ENABLED=0
-      - CC_darwin_amd64=o64-clang
-      - CCX_darwin_amd64=o64-clang+
-      - CC_darwin_arm64=aarch64-apple-darwin20.2-clang
-      - CCX_darwin_arm64=aarch64-apple-darwin20.2-clang++
-      - CC_windows_amd64=x86_64-w64-mingw32-gc
-      - CCX_windows_amd64=x86_64-w64-mingw32-g++
-      - CC={{ index .Env (print "CC_" .Os "_" .Arch) }}
-      - CCX={{ index .Env (print "CCX_" .Os "_" .Arch) }}
 archives:
   - id: default
-    name_template: '{{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else if eq .Arch "386" }}i386 {{- else }}{{ .Arch }}{{ end }} {{- if .Arm }}v{{ .Arm }}{{ end }}'
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}'
     format: tar.gz
-    format_overrides:
-      - goos: windows
-        format: zip
     files:
       - src: license*
       - src: LICENSE*
@@ -85,7 +59,7 @@ archives:
       - src: changelog*
       - src: CHANGELOG*
 snapshot:
-  name_template: '{{ incpatch .Version }}-next'
+  name_template: '{{ .Version }}-SNAPSHOT-{{ .ShortCommit }}'
 checksum:
   name_template: checksums.txt
   algorithm: sha256
