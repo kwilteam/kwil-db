@@ -25,7 +25,7 @@ In order to specify an parameter, you first need to specify the prameter name, t
 For example, if I have a query name "create_user" that takes two arguments: name and age.
 I would specify the query as follows:
 
-name satoshi age 32 --query=create_user 
+name satoshi age 32 --query=create_user
 
 You specify the database to execute this against with the --name flag, and
 the owner with the --wner flag.
@@ -40,7 +40,7 @@ OR
 
 name satoshi age 32 --dbid=x1234 --query=create_user `,
 		Args: cobra.MatchAll(func(cmd *cobra.Command, args []string) error {
-			// check that args is odd and has at least 3 elements
+			// check that args is even and has at least 2 elements
 			if len(args) < 2 || len(args)%2 != 0 {
 				return fmt.Errorf("invalid number of arguments")
 			}

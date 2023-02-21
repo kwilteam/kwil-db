@@ -17,6 +17,7 @@ func (c *Client) GetServiceConfig(ctx context.Context) (SvcConfig, error) {
 			ChainCode:       resp.Funding.GetChainCode(),
 			PoolAddress:     resp.Funding.GetPoolAddress(),
 			ProviderAddress: resp.Funding.GetProviderAddress(),
+			RpcUrl:          resp.Funding.GetRpcUrl(),
 		},
 		Gateway: SvcGatewayConfig{
 			GraphqlUrl: resp.Gateway.GetGraphqlUrl(),
@@ -34,6 +35,7 @@ func (c *Client) GetFundingServiceConfig(ctx context.Context) (SvcFundingConfig,
 		ChainCode:       resp.GetChainCode(),
 		PoolAddress:     resp.GetPoolAddress(),
 		ProviderAddress: resp.GetProviderAddress(),
+		RpcUrl:          resp.GetRpcUrl(),
 	}, nil
 }
 

@@ -3,27 +3,22 @@ service:
   type: NodePort
   # comment nodePorts to enable multi instances on local machine
   nodePorts:
+    kwild: 32101
     kwil: 32102
 
 kwild:
-  service:
-    type: NodePort
-    nodePorts:
-      kwild: 32101
   hasura:
+    postgresql:
+      enabled: false
     service:
       type: NodePort
       # comment nodePorts to enable multi instances on local machine
       nodePorts:
         hasura: 32100
-    postgresql:
-      enabled: true
-      primary:
-        service:
-          type: NodePort
-          # comment nodePorts to enable multi instances on local machine
-          nodePorts:
-            postgresql: 32103
+  image:
+    repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwild
+    pullPolicy: IfNotPresent
+    tag: latest
   kwildApp:
     fund:
       wallet: 274194b20d248d47c05913c039c65783647e527aa6360e5e143417f8bb50b988
@@ -34,3 +29,22 @@ kwild:
       poolAddress: 0xb0a194286A901FeAEA39D2b765247BEd64aD4F41
     log:
       level: debug
+    gateway:
+      # TODO: change to staging domain
+      addr: "provider-test.kwil.com"
+
+global:
+  postgres:
+    enabled: true # to use an exising database
+    host: "kwildb-test-us-east-1.cluster-c4ahv6gbelvd.us-east-1.rds.amazonaws.com"
+    port: 5432
+    database: "postgres"
+    username: "postgres"
+    password: "postgres"
+
+#Location of image in AWS ECR
+
+image:
+  repository: 358914811005.dkr.ecr.us-east-1.amazonaws.com/kwil-gateway
+  pullPolicy: IfNotPresent
+  tag: latest

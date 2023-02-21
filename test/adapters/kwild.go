@@ -6,15 +6,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"kwil/internal/app/kwild"
-	"kwil/pkg/kclient"
 	"testing"
 	"time"
 )
 
 const (
 	KwildPort     = "50051"
-	kwildDatabase = "kwil"
+	KwildDatabase = "kwil"
 	kwildImage    = "kwild:latest"
 )
 
@@ -73,34 +71,4 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 	err = container.ShowPortInfo(ctx)
 	require.NoError(t, err)
 	return container
-}
-
-func GetKwildDriver(ctx context.Context, t *testing.T, addr string, cfg *kclient.Config, envs map[string]string) *kwild.Driver {
-	t.Helper()
-
-	if addr != "" {
-		t.Logf("create grpc driver to %s", addr)
-		cfg.Node.Addr = addr
-		return kwild.NewDriver(cfg)
-	}
-
-	dc := StartDBDockerService(t, ctx)
-	unexposedEndpoint, err := dc.UnexposedEndpoint(ctx)
-	require.NoError(t, err)
-
-	unexposedPgURL := fmt.Sprintf(
-		"postgres://%s:%s@%s/%s?sslmode=disable", pgUser, pgPassword, unexposedEndpoint, kwildDatabase)
-
-	envs["KWILD_DB_URL"] = unexposedPgURL
-	envs["KWILD_LOG_LEVEL"] = "info"
-	envs["KWILD_SERVER_LISTEN_ADDR"] = ":50051"
-	envs["KWILD_GATEWAY_ADDR"] = "localhost:8080"
-
-	// for specification verify
-	kc := StartKwildDockerService(t, ctx, envs)
-	endpoint, err := kc.ExposedEndpoint(ctx)
-	require.NoError(t, err)
-	t.Logf("create grpc driver to %s", endpoint)
-	cfg.Node.Addr = endpoint
-	return kwild.NewDriver(cfg)
 }

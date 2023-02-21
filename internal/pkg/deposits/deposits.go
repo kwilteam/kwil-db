@@ -8,7 +8,6 @@ import (
 	"kwil/internal/repository"
 	chainClient "kwil/pkg/chain/client"
 	"kwil/pkg/crypto"
-	"kwil/pkg/fund"
 	"kwil/pkg/log"
 	"kwil/pkg/sql/sqlclient"
 )
@@ -26,10 +25,9 @@ type depositer struct {
 	expirationPeriod int64
 }
 
-func NewDepositer(config *fund.Config, db *sqlclient.DB, queries repository.Queries, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, logger log.Logger) (Depositer, error) {
-
+func NewDepositer(poolAddress string, db *sqlclient.DB, queries repository.Queries, chainClient chainClient.ChainClient, privateKey *ecdsa.PrivateKey, logger log.Logger) (Depositer, error) {
 	// create the escrow contract
-	escrowContract, err := chainClient.Contracts().Escrow(config.PoolAddress)
+	escrowContract, err := chainClient.Contracts().Escrow(poolAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create escrow contract: %w", err)
 	}

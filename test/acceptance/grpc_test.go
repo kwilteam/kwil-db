@@ -5,36 +5,38 @@ import (
 	"crypto/ecdsa"
 	"flag"
 	"fmt"
-	"kwil/pkg/chain/client/dto"
+	"github.com/stretchr/testify/require"
+	"kwil/internal/app/kgw"
+	"kwil/internal/app/kwild"
 	"kwil/pkg/chain/types"
+	"kwil/pkg/client"
 	"kwil/pkg/databases"
-	"kwil/pkg/fund"
-	"kwil/pkg/grpc/client"
-	kwilClient "kwil/pkg/kclient"
 	"kwil/pkg/log"
 	"kwil/test/adapters"
 	"kwil/test/specifications"
 	"kwil/test/utils/deployer"
+	eth_deployer "kwil/test/utils/deployer/eth-deployer"
 	"math/big"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/spf13/viper"
-
 	"github.com/stretchr/testify/assert"
 )
 
 var remote = flag.Bool("remote", false, "run tests against remote environment")
 
+// keepMiningBlocks is a helper function to keep mining blocks
+// since kwild need to mine blocks to process transactions, and ganache is configured to mine a block for every tx
+// so we need to keep produce txs to keep mining blocks
 func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account string) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			time.Sleep(3 * time.Second)
+			time.Sleep(1 * time.Second)
 			// to mine new blocks
 			err := deployer.FundAccount(ctx, account, 1)
 			if err != nil {
@@ -44,64 +46,194 @@ func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account s
 	}
 }
 
+type TestEnvCfg struct {
+	UserPkStr         string
+	DeployerPkStr     string
+	DbSchemaPath      string
+	NodeAddr          string // kwild address
+	GatewayAddr       string // kgw address
+	ChainRPCURL       string
+	ChainSyncWaitTime time.Duration
+	ChainCode         types.ChainCode
+	FundAmount        int64
+	Domination        *big.Int
+	LogLevel          string
+
+	// populated by init
+	UserPK       *ecdsa.PrivateKey
+	DeployerPK   *ecdsa.PrivateKey
+	UserAddr     string
+	DeployerAddr string
+}
+
+func NewTestEnv(userPkStr, deployerPkStr, dbSchemaPath, remoteKwildAddr, remoteGatewayAddr, remoteChainRPCURL string,
+	chainSyncWaitTime time.Duration, chainCode types.ChainCode, fundAmount int64, domination *big.Int, logLevel string) TestEnvCfg {
+	return TestEnvCfg{
+		UserPkStr:         userPkStr,
+		DeployerPkStr:     deployerPkStr,
+		DbSchemaPath:      dbSchemaPath,
+		NodeAddr:          remoteKwildAddr,
+		GatewayAddr:       remoteGatewayAddr,
+		ChainRPCURL:       remoteChainRPCURL,
+		ChainSyncWaitTime: chainSyncWaitTime,
+		ChainCode:         chainCode,
+		FundAmount:        fundAmount,
+		Domination:        domination,
+		LogLevel:          logLevel,
+	}
+}
+
+func (e *TestEnvCfg) init(t *testing.T) {
+	var err error
+	e.UserPK, err = crypto.HexToECDSA(e.UserPkStr)
+	if err != nil {
+		t.Fatal(fmt.Errorf("invalid user private key: %w", err))
+	}
+	e.DeployerPK, err = crypto.HexToECDSA(e.DeployerPkStr)
+	if err != nil {
+		t.Fatal(fmt.Errorf("invalid deployer private key: %w", err))
+	}
+	e.UserAddr = crypto.PubkeyToAddress(e.UserPK.PublicKey).Hex()
+	e.DeployerAddr = crypto.PubkeyToAddress(e.DeployerPK.PublicKey).Hex()
+}
+
+func getTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
+	var e TestEnvCfg
+	if remote {
+		e = NewTestEnv(
+			os.Getenv("TEST_USER_PK"),
+			os.Getenv("TEST_DEPLOYER_PK"),
+			"./test-data/database_schema.json",
+			os.Getenv("TEST_KWILD_ADDR"),
+			os.Getenv("TEST_KGW_ADDR"),
+			os.Getenv("TEST_PROVIDER"),
+			15*time.Second,
+			types.GOERLI,
+			1,
+			big.NewInt(10000),
+			"debug")
+	} else {
+		e = NewTestEnv(
+			adapters.UserAccountPK,
+			adapters.DeployerAccountPK,
+			"./test-data/database_schema.json",
+			"",
+			"",
+			"",
+			2*time.Second,
+			types.GOERLI,
+			100,
+			big.NewInt(1000000000000000000),
+			"debug")
+	}
+
+	e.init(t)
+	return e
+}
+
+func setup(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger) (*kgw.KgwDriver, deployer.Deployer) {
+	specifications.SetSchemaLoader(
+		&specifications.FileDatabaseSchemaLoader{
+			FilePath: cfg.DbSchemaPath,
+			Modifier: func(db *databases.Database[[]byte]) {
+				db.Owner = cfg.UserAddr
+			}})
+
+	if cfg.NodeAddr != "" {
+		t.Logf("create kwild driver to %s", cfg.NodeAddr)
+		kwilClt, err := client.New(ctx, cfg.NodeAddr)
+		require.NoError(t, err, "failed to create kwil client")
+		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPK, logger)
+		t.Logf("create kgw driver to %s", cfg.GatewayAddr)
+		kgwDriver := kgw.NewKgwDriver(cfg.GatewayAddr, kwildDriver)
+		return kgwDriver, nil
+	}
+
+	// ganache container
+	ganacheC := adapters.StartGanacheDockerService(t, ctx, cfg.ChainCode.ToChainId().String())
+	exposedChainRPC, err := ganacheC.ExposedEndpoint(ctx)
+	require.NoError(t, err, "failed to get exposed endpoint")
+	unexposedChainRPC, err := ganacheC.UnexposedEndpoint(ctx)
+	require.NoError(t, err, "failed to get unexposed endpoint")
+	// deploy token and escrow contract
+	// @yaiba TODO: chain agnostic
+	t.Logf("create chain deployer to %s", exposedChainRPC)
+	chainDeployer := eth_deployer.NewEthDeployer(exposedChainRPC, cfg.DeployerPkStr, cfg.Domination)
+	tokenAddress, err := chainDeployer.DeployToken(ctx)
+	require.NoError(t, err, "failed to deploy token")
+	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
+	require.NoError(t, err, "failed to deploy escrow")
+
+	// postgres db container
+	dbC := adapters.StartDBDockerService(t, ctx)
+
+	// hasura container
+	unexposedKwilPgURL := dbC.GetUnexposedDBUrl(ctx, adapters.KwildDatabase)
+	unexposedHasuraPgURL := dbC.GetUnexposedDBUrl(ctx, "postgres")
+	hasuraEnvs := map[string]string{
+		"PG_DATABASE_URL":                      unexposedKwilPgURL,
+		"HASURA_GRAPHQL_METADATA_DATABASE_URL": unexposedHasuraPgURL,
+		"HASURA_GRAPHQL_ENABLE_CONSOLE":        "true",
+		"HASURA_GRAPHQL_DEV_MODE":              "true",
+		"HASURA_METADATA_DB":                   "postgres",
+	}
+	hasuraC := adapters.StartHasuraDockerService(ctx, t, hasuraEnvs)
+
+	// kwild container
+	unexposedHasuraEndpoint, err := hasuraC.UnexposedEndpoint(ctx)
+	require.NoError(t, err)
+	kwildEnv := map[string]string{
+		"KWILD_FUND_RPC_URL":            unexposedChainRPC, // kwil will call using docker network
+		"KWILD_FUND_PUBLIC_RPC_URL":     exposedChainRPC,   // user will call using host network
+		"KWILD_FUND_POOL_ADDRESS":       escrowAddress.String(),
+		"KWILD_FUND_WALLET":             cfg.DeployerPkStr,
+		"KWILD_FUND_CHAIN_CODE":         fmt.Sprintf("%d", cfg.ChainCode),
+		"KWILD_FUND_BLOCK_CONFIRMATION": "1",
+		"KWILD_FUND_RECONNECT_INTERVAL": "30",
+		"KWILD_GRAPHQL_ADDR":            unexposedHasuraEndpoint,
+		// @yaiba can't get addr here, because the gw container is not ready yet
+		// need a hacky way to get the addr
+		"KWILD_GATEWAY_ADDR": "",
+		"KWILD_DB_URL":       unexposedKwilPgURL,
+		"KWILD_LOG_LEVEL":    cfg.LogLevel,
+	}
+	kwildC := adapters.StartKwildDockerService(t, ctx, kwildEnv)
+
+	// kgw container
+	exposedKwildEndpoint, err := kwildC.ExposedEndpoint(ctx)
+	require.NoError(t, err)
+	unexposedKwildEndpoint, err := kwildC.UnexposedEndpoint(ctx)
+	require.NoError(t, err)
+	kgwEnv := map[string]string{
+		"KWILGW_KWILD_ADDR":         unexposedKwildEndpoint,
+		"KWILGW_GRAPHQL_ADDR":       unexposedHasuraEndpoint,
+		"KWILGW_LOG_LEVEL":          cfg.LogLevel,
+		"KWILGW_SERVER_LISTEN_ADDR": ":8082",
+	}
+	kgwC := adapters.StartKgwDockerService(ctx, t, kgwEnv)
+
+	//
+	exposedKgwEndpoint, err := kgwC.ExposedEndpoint(ctx)
+	require.NoError(t, err)
+
+	cfg.NodeAddr = exposedKwildEndpoint
+	cfg.GatewayAddr = exposedKgwEndpoint
+
+	t.Logf("create kwild driver to %s", cfg.NodeAddr)
+	kwilClt, err := client.New(ctx, cfg.NodeAddr)
+	// use server returned chain rpc url
+	// client.WithChainRpcUrl(exposedChainRPC))
+
+	require.NoError(t, err, "failed to create kwil client")
+	kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPK, logger)
+	t.Logf("create kgw driver to %s", cfg.GatewayAddr)
+	kgwDriver := kgw.NewKgwDriver(cfg.GatewayAddr, kwildDriver)
+	return kgwDriver, chainDeployer
+}
+
 func TestGrpcServerDatabaseService(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
-	}
-
-	var (
-		// test user
-		userAddr  string
-		userPKStr string
-		userPK    *ecdsa.PrivateKey
-		// test deployer
-		deployerAddr  string
-		deployerPKStr string
-		deployerPK    *ecdsa.PrivateKey
-		// database schema file
-		dbSchemaPath string
-		// remote kwil endpoint
-		remoteKwildAddr string
-		// remote blockchain endpoint
-		remoteRPCURL string
-		// blochchain block produce interval
-		chainSyncWaitTime  time.Duration
-		fundingPoolAddress string
-		_chainCode         types.ChainCode
-		fundAmount         int64
-		domination         *big.Int
-		remoteGraphqlAddr  string
-		remoteAPIKey       string
-	)
-
-	viper.SetDefault("log.level", "config")
-
-	localEnv := func() {
-		userPKStr = adapters.UserAccountPK
-		deployerPKStr = adapters.DeployerAccountPK
-		dbSchemaPath = "./test-data/database_schema.json"
-		remoteKwildAddr = ""
-		remoteRPCURL = ""
-		chainSyncWaitTime = 3 * time.Second
-		_chainCode = types.GOERLI
-		fundAmount = 100
-		domination = big.NewInt(1000000000000000000)
-	}
-
-	remoteEnv := func() {
-		// depends on the remote environment, change respectively
-		userPKStr = os.Getenv("TEST_USER_PK")
-		deployerPKStr = os.Getenv("TEST_DEPLOYER_PK")
-		dbSchemaPath = "./test-data/database_schema.json"
-		remoteKwildAddr = os.Getenv("TEST_KWILD_ADDR")
-		remoteRPCURL = os.Getenv("TEST_PROVIDER")
-		chainSyncWaitTime = 15 * time.Second
-		_chainCode = types.GOERLI
-		fundAmount = 1
-		fundingPoolAddress = os.Getenv("TEST_POOL_ADDRESS")
-		remoteGraphqlAddr = os.Getenv("TEST_GRAPHQL_ADDR")
-		domination = big.NewInt(10000)
-		remoteAPIKey = os.Getenv("TEST_KGW_API_KEY")
 	}
 
 	tLogger := log.New(log.Config{
@@ -109,53 +241,25 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 		OutputPaths: []string{"stdout"},
 	})
 
-	if *remote {
-		remoteEnv()
-	} else {
-		localEnv()
-	}
-
-	userPK, err := crypto.HexToECDSA(userPKStr)
-	if err != nil {
-		t.Fatal(fmt.Errorf("invalid user private key: %w", err))
-	}
-	deployerPK, err = crypto.HexToECDSA(deployerPKStr)
-	if err != nil {
-		t.Fatal(fmt.Errorf("invalid deployer private key: %w", err))
-	}
-	userAddr = crypto.PubkeyToAddress(userPK.PublicKey).Hex()
-	deployerAddr = crypto.PubkeyToAddress(deployerPK.PublicKey).Hex()
-
-	fundCfg := fund.Config{
-		Chain: dto.Config{
-			ChainCode:         int64(_chainCode),
-			RpcUrl:            remoteRPCURL,
-			BlockConfirmation: 10,
-			ReconnectInterval: 30,
-		},
-		Wallet:      userPK,
-		PoolAddress: fundingPoolAddress,
-	}
-
 	t.Run("should deposit fund", func(t *testing.T) {
 		if *remote {
 			t.Skip()
 		}
 
+		cfg := getTestEnvCfg(t, *remote)
 		ctx := context.Background()
 		// setup
-		chainDriver, chainDeployer, _, _ := adapters.GetChainDriverAndDeployer(ctx, t, remoteRPCURL,
-			deployerPKStr, deployerAddr, _chainCode, domination, &fundCfg, tLogger)
+		driver, chainDeployer := setup(ctx, t, cfg, tLogger)
 
 		// Given user is funded with escrow token
-		err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
+		err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.FundAmount)
 		assert.NoError(t, err, "failed to fund user config")
 
 		// and user has approved funding_pool to spend his token
-		specifications.ApproveTokenSpecification(ctx, t, chainDriver)
+		specifications.ApproveTokenSpecification(ctx, t, driver)
 
 		// should be able to deposit fund
-		specifications.DepositFundSpecification(ctx, t, chainDriver)
+		specifications.DepositFundSpecification(ctx, t, driver)
 	})
 
 	t.Run("should deploy and drop database", func(t *testing.T) {
@@ -163,89 +267,60 @@ func TestGrpcServerDatabaseService(t *testing.T) {
 			t.Skip()
 		}
 
+		cfg := getTestEnvCfg(t, *remote)
 		ctx := context.Background()
 		// setup
-		specifications.SetSchemaLoader(
-			&specifications.FileDatabaseSchemaLoader{
-				FilePath: dbSchemaPath,
-				Modifier: func(db *databases.Database[[]byte]) {
-					db.Owner = userAddr
-				}})
-		chainDriver, chainDeployer, userFundConfig, chainEnvs := adapters.GetChainDriverAndDeployer(ctx, t, remoteRPCURL,
-			deployerPKStr, deployerAddr, _chainCode, domination, &fundCfg, tLogger)
+		driver, chainDeployer := setup(ctx, t, cfg, tLogger)
 
-		if !*remote {
-			// Given user is funded
-			err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
-			assert.NoError(t, err, "failed to fund user config")
-			go keepMiningBlocks(ctx, chainDeployer, userAddr)
+		// Given user is funded with escrow token
+		err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.FundAmount)
+		assert.NoError(t, err, "failed to fund user config")
+		go keepMiningBlocks(ctx, chainDeployer, cfg.UserAddr)
+		// and user pledged fund to validator
+		specifications.ApproveTokenSpecification(ctx, t, driver)
+		specifications.DepositFundSpecification(ctx, t, driver)
 
-			// and user pledged fund to validator
-			specifications.ApproveTokenSpecification(ctx, t, chainDriver)
-			specifications.DepositFundSpecification(ctx, t, chainDriver)
-		}
+		// chain sync, wait kwil to register user
+		time.Sleep(cfg.ChainSyncWaitTime)
 
 		// When user deployed database
-		cltConfig := &kwilClient.Config{
-			Node: client.Config{
-				Addr: remoteKwildAddr,
-			},
-			Fund: *userFundConfig,
-			Log: log.Config{
-				Level:       "info",
-				OutputPaths: []string{"stdout"},
-			},
-		}
-		grpcDriver := adapters.GetKwildDriver(ctx, t, remoteKwildAddr, cltConfig, chainEnvs)
-		// chain sync, wait kwil to register user
-		time.Sleep(chainSyncWaitTime)
-		specifications.DatabaseDeploySpecification(ctx, t, grpcDriver)
+		specifications.DatabaseDeploySpecification(ctx, t, driver)
 
 		// Then user should be able to drop database
-		specifications.DatabaseDropSpecification(ctx, t, grpcDriver)
+		specifications.DatabaseDropSpecification(ctx, t, driver)
 	})
 
 	t.Run("should execute database", func(t *testing.T) {
+		cfg := getTestEnvCfg(t, *remote)
 		ctx := context.Background()
 		// setup
-		specifications.SetSchemaLoader(
-			&specifications.FileDatabaseSchemaLoader{
-				FilePath: dbSchemaPath,
-				Modifier: func(db *databases.Database[[]byte]) {
-					db.Owner = userAddr
-				}})
-		chainDriver, chainDeployer, userFundConfig, fundEnvs := adapters.GetChainDriverAndDeployer(ctx, t, remoteRPCURL,
-			deployerPKStr, deployerAddr, _chainCode, domination, &fundCfg, tLogger)
+		driver, chainDeployer := setup(ctx, t, cfg, tLogger)
 
+		// NOTE: only local env test, public network test takes too long
+		// thus here test assume user is funded
 		if !*remote {
 			// Given user is funded
-			err := chainDeployer.FundAccount(ctx, userAddr, fundAmount)
+			err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.FundAmount)
 			assert.NoError(t, err, "failed to fund user config")
-			go keepMiningBlocks(ctx, chainDeployer, userAddr)
+			go keepMiningBlocks(ctx, chainDeployer, cfg.UserAddr)
 
 			// and user pledged fund to validator
-			specifications.ApproveTokenSpecification(ctx, t, chainDriver)
-			specifications.DepositFundSpecification(ctx, t, chainDriver)
+			specifications.ApproveTokenSpecification(ctx, t, driver)
+			specifications.DepositFundSpecification(ctx, t, driver)
 		}
+
+		// chain sync, wait kwil to register user
+		time.Sleep(cfg.ChainSyncWaitTime)
 
 		// When user deployed database
-		cltConfig := &kwilClient.Config{
-			Node: client.Config{
-				Addr: remoteKwildAddr,
-			},
-			Fund: *userFundConfig,
-		}
-		grpcDriver := adapters.GetKgwDriver(ctx, t, remoteKwildAddr, remoteGraphqlAddr, remoteAPIKey, cltConfig, fundEnvs)
-		// chain sync, wait kwil to register user
-		time.Sleep(chainSyncWaitTime)
-		specifications.DatabaseDeploySpecification(ctx, t, grpcDriver)
+		specifications.DatabaseDeploySpecification(ctx, t, driver)
 
 		// Then user should be able to execute database
-		specifications.ExecuteDBInsertSpecification(ctx, t, grpcDriver)
-		specifications.ExecuteDBUpdateSpecification(ctx, t, grpcDriver)
-		specifications.ExecuteDBDeleteSpecification(ctx, t, grpcDriver)
+		specifications.ExecuteDBInsertSpecification(ctx, t, driver)
+		specifications.ExecuteDBUpdateSpecification(ctx, t, driver)
+		specifications.ExecuteDBDeleteSpecification(ctx, t, driver)
 
 		// and user should be able to drop database
-		specifications.DatabaseDropSpecification(ctx, t, grpcDriver)
+		specifications.DatabaseDropSpecification(ctx, t, driver)
 	})
 }

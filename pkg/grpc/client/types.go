@@ -16,6 +16,7 @@ type SvcFundingConfig struct {
 	ChainCode       int64
 	PoolAddress     string
 	ProviderAddress string
+	RpcUrl          string
 }
 
 type SvcGatewayConfig struct {

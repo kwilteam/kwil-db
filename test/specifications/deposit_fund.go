@@ -3,7 +3,6 @@ package specifications
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
-	"kwil/pkg/fund"
 	"math/big"
 	"testing"
 )
@@ -12,7 +11,6 @@ import (
 type DepositFundDsl interface {
 	DepositFund(ctx context.Context, amount *big.Int) error
 	GetDepositBalance(ctx context.Context) (*big.Int, error)
-	GetFundConfig() *fund.Config
 }
 
 func DepositFundSpecification(ctx context.Context, t *testing.T, deposit DepositFundDsl) {

@@ -27,7 +27,7 @@ func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute Exe
 		Degen:    true,
 	}
 	qualifiedUserTableName := fmt.Sprintf("%s_%s", dbID, userTableName)
-	userQueryInput := []any{"username", userQ.UserName}
+	userQueryInput := []string{"username", userQ.UserName}
 
 	// When i execute query to database
 	err := execute.ExecuteQuery(ctx, db.Name, userQueryName, userQueryInput)
