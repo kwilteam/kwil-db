@@ -1,5 +1,10 @@
 FROM golang:alpine AS stage
 
+ARG version
+ARG build_time
+ARG git_commit
+ARG git_version_commit=unknown
+
 WORKDIR /app
 RUN apk update && apk add git openssh
 
@@ -7,17 +12,14 @@ RUN echo -e "[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/" >> /r
 RUN cat /root/.gitconfig
 RUN mkdir /root/.ssh && echo "StrictHostKeyChecking no " > /root/.ssh/config
 
-COPY go.mod go.sum ./
-## --mount will work with docker buildkit(testcontainers)
-##RUN --mount=type=ssh,id=kwil  \
-RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o ./dist/kwild ./cmd/kwild
+RUN go mod download
+RUN GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time GIT_VERSION_COMMIT=$git_version_commit CGO_ENABLED=0 TARGET="/app/dist" ./scripts/build/binary kwild
+RUN chmod +x /app/dist/kwild-*
 
 FROM scratch
 WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=stage /app/dist/ ./
-EXPOSE 8082
+COPY --from=stage /app/dist/kwild-* ./kwild
 EXPOSE 50051
 ENTRYPOINT ["/app/kwild"]

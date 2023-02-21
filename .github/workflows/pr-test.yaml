@@ -57,6 +57,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-kwild
 
+      - name: manual git tag
+        run: echo "GIT_TAG=`echo $(git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//')`" >> $GITHUB_ENV
+
+      - name: manual build time
+        run: echo "BUILD_TIME=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`" >> $GITHUB_ENV
+
       - name: Build kwild image
         id: docker_build_kwild
         uses: docker/build-push-action@v4
@@ -64,6 +70,10 @@ jobs:
           context: .
           load: true
           builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            git_commit=${{ github.sha }}
+            version=${{ env.GIT_TAG }}
+            build_time=${{ env.BUILD_TIME }}
           file: ./build/package/docker/kwild.dockerfile
           push: false
           tags: kwild:latest
@@ -85,6 +95,10 @@ jobs:
           context: .
           load: true
           builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            git_commit=${{ github.sha }}
+            version=${{ env.GIT_TAG }}
+            build_time=${{ env.BUILD_TIME }}
           file: ./build/package/docker/kwil-gateway.dockerfile
           push: false
           tags: kwil-gateway:latest

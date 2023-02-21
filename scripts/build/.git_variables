@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+set -eu
+
+GIT_VERSION="${GIT_VERSION:-$(git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//' 2>/dev/null || echo 'unknown-version' )}"
+GIT_COMMIT=${GIT_COMMIT:-$(git rev-list -1 HEAD 2> /dev/null || true)}
+GIT_VERSION_COMMIT=${GIT_VERSION_COMMIT:-$(git describe --long --dirty | sed 's/^v//' 2> /dev/null || true)}
+
+if [ "$(uname)" = "Darwin" ]; then
+    # Using BSD date (macOS), which doesn't suppoort the --date option
+    # date -jf "<input format>" "<input value>" +"<output format>" (https://unix.stackexchange.com/a/86510)
+    BUILD_TIME=${BUILD_TIME:-$(TZ=UTC date -jf "%s" "${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ")}
+else
+    # Using GNU date (Linux)
+    BUILD_TIME=${BUILD_TIME:-$(TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ")}
+fi
+

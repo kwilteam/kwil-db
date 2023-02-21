@@ -23,20 +23,8 @@ tasks:
 
   build:cli:
     desc: Builds the kwil-cli
-    vars:
-      DATE:
-        sh: date
-      GOVERSION:
-        sh: go version
-      PREFIX: kwil/cmd/kwil-cli/app/build
-      VERSION:
-        sh: git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//' 2>/dev/null || echo "unknown-version"
-      GITCOMMIT:
-         sh: git rev-list -1 HEAD
-      BUILDTIME:
-        sh: date -u +%Y-%m-%dT%H:%M:%SZ
     cmds:
-      - go build -ldflags="-X '{{ .PREFIX }}.Version={{ .VERSION }}' -X '{{ .PREFIX }}.GitCommit={{ .GITCOMMIT }}' -X '{{ .PREFIX }}.BuildTime={{ .BUILDTIME }}'" -o .build/kwil-cli ./cmd/kwil-cli
+      - ./scripts/build/binary kwil-cli
     generates:
       - .build/kwil-cli
 
@@ -44,7 +32,7 @@ tasks:
     desc: Builds the kwil grpc server
     deps: [pb:compile:all]
     cmds:
-      - go build -o .build/kwild ./cmd/kwild
+      - ./scripts/build/binary kwild
     generates:
       - .build/kwild
 
@@ -61,7 +49,7 @@ tasks:
     desc: Builds the API Gateway
     deps: [ pb:compile:all ]
     cmds:
-      - go build -o .build/kwil-gateway ./cmd/kwil-gateway
+      - ./scripts/build/binary kwil-gateway
     generates:
       - .build/kwil-gateway
 
@@ -80,18 +68,14 @@ tasks:
   docker:gateway:
     desc: Build the docker image for kwil-gateway
     deps: [pb:compile:all]
-    env:
-      DOCKER_BUILDKIT: 1
     cmds:
-      - docker build . -t kwil-gateway:latest -f ./build/package/docker/kwil-gateway.dockerfile
+      - ./scripts/build/docker kwil-gateway
 
   docker:kwild:
     desc: Build the docker image for the kwild
     deps: [ pb:compile:all ]
-    env:
-      DOCKER_BUILDKIT: 1
     cmds:
-      - docker build . -t kwild:latest -f ./build/package/docker/kwild.dockerfile
+      - ./scripts/build/docker kwild
 
   #  ************ k8s ************
   # have dependencies on docker:kwild and docker:kwil, can't put this section in deployments/helm/Taskfile.yaml
@@ -118,14 +102,14 @@ tasks:
       - task: pb:compile:all
       - task: docker:kwild
       - task: docker:gateway
-      - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/dev-values.yaml
+      - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/local-values.yaml
 
   k8s:kwil:install:
     desc: Deploy kwil services to local k8s cluster
     deps:
       - k8s:helm:update
     cmds:
-      - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/dev-values.yaml
+      - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/local-values.yaml
 
   k8s:kwil:uninstall:
     desc: Undploy kwil services to local k8s cluster
@@ -138,14 +122,14 @@ tasks:
       - task: k8s:helm:update
       - task: pb:compile:all
       - task: docker:kwild
-      - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/dev-values.yaml
+      - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/local-values.yaml
 
   k8s:kwild:install:
     desc: Deploy kwil to local k8s cluster
     deps:
       - k8s:helm:update
     cmds:
-      - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/dev-values.yaml
+      - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/local-values.yaml
 
   k8s:kwild:uninstall:
     desc: Undeploy kwild to local k8s cluster
