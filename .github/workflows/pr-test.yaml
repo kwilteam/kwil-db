@@ -27,6 +27,8 @@ jobs:
 
       - name: Install Taskfile
         uses: arduino/setup-task@v1
+        with:
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Setup Go
         uses: actions/setup-go@v3
