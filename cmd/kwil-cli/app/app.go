@@ -4,6 +4,7 @@ import (
 	"kwil/cmd/kwil-cli/cmds/configure"
 	"kwil/cmd/kwil-cli/cmds/database"
 	"kwil/cmd/kwil-cli/cmds/fund"
+	"kwil/cmd/kwil-cli/cmds/system"
 	"kwil/cmd/kwil-cli/cmds/utils"
 	"kwil/cmd/kwil-cli/config"
 
@@ -24,7 +25,7 @@ func Execute() error {
 		configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),
-		//initCli.NewCmdInit(),
+		system.NewVersionCmd(),
 	)
 
 	return rootCmd.Execute()
