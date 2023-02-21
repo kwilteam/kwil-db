@@ -23,8 +23,20 @@ tasks:
 
   build:cli:
     desc: Builds the kwil-cli
+    vars:
+      DATE:
+        sh: date
+      GOVERSION:
+        sh: go version
+      PREFIX: kwil/cmd/kwil-cli/app/build
+      VERSION:
+        sh: git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//' 2>/dev/null || echo "unknown-version"
+      GITCOMMIT:
+         sh: git rev-list -1 HEAD
+      BUILDTIME:
+        sh: date -u +%Y-%m-%dT%H:%M:%SZ
     cmds:
-      - go build -o .build/kwil-cli ./cmd/kwil-cli
+      - go build -ldflags="-X '{{ .PREFIX }}.Version={{ .VERSION }}' -X '{{ .PREFIX }}.GitCommit={{ .GITCOMMIT }}' -X '{{ .PREFIX }}.BuildTime={{ .BUILDTIME }}'" -o .build/kwil-cli ./cmd/kwil-cli
     generates:
       - .build/kwil-cli
 
