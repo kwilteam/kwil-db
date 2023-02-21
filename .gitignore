@@ -34,3 +34,5 @@ api/openapi-spec/api/v0/api.swagger.json
 deployments/helm/hasura/charts/
 deployments/helm/kwild/charts/
 deployments/helm/kwil/charts/
+
+dist/*
