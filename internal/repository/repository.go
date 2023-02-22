@@ -15,6 +15,7 @@ type Queries interface {
 	ChainSyncer
 	Accounter
 	schema.SchemaManager
+	DbInfo
 	WithTx(tx *sql.Tx) Queries
 }
 

@@ -51,8 +51,10 @@ func (s *executor) GetQueryCostEstimationInfo(ctx context.Context, body *executa
 		return nil, fmt.Errorf("user %s cannot execute %s", caller, body.Query)
 	}
 
+	p, err := db.GetPreparer(body.Query, caller, body.Inputs)
+
 	// prepare query for gettign the row count
-	tstmt, targs, err := db.PrepareCountAllRowsStmt(body.Query, caller)
+	tstmt, targs, err := p.PrepareCountAll() //db.PrepareCountAll(body.Query, caller)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statements for query analysis: %w", err)
 	}
@@ -71,7 +73,7 @@ func (s *executor) GetQueryCostEstimationInfo(ctx context.Context, body *executa
 		fmt.Println(pricingParams.T)
 	}
 
-	ustmt, uargs, err := db.PrepareCountUpdatedRowsStmt(body.Query, caller, body.Inputs)
+	ustmt, uargs, err := p.PrepareCountUpdated()
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statements for query analysis: %w", err)
 	}
@@ -87,19 +89,20 @@ func (s *executor) GetQueryCostEstimationInfo(ctx context.Context, body *executa
 		fmt.Println(pricingParams.U)
 	}
 
-	executable := db.GetExecutable(body.Query)
-	tableSize, err := s.dao.GetTableSize(ctx, db.GetIdentifier().GetSchemaName(), executable.Table)
+	dbid, err := s.GetDBIdentifier(body.Database)
+	tableName, err := db.GetTableName()
+	tableSize, err := s.dao.GetTableSize(ctx, dbid.GetSchemaName(), tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get row size: %w", err)
 	}
 	pricingParams.S = tableSize / pricingParams.T
 
-	pricingParams.I, err = s.dao.GetIndexedColumnCount(ctx, db.GetIdentifier().GetSchemaName(), executable.Table)
+	pricingParams.I, err = s.dao.GetIndexedColumnCount(ctx, dbid.GetSchemaName(), tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get indexed column count: %w", err)
 	}
 	pricingParams.Q = executable.Type
-	pricingParams.W = append(pricingParams.W, len(executable.Where))
+	pricingParams.W = p.GetPredicateLengths()
 
 	return pricingParams, nil
 }

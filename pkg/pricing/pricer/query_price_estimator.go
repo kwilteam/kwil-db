@@ -3,14 +3,14 @@ package pricer
 import (
 	"context"
 	"fmt"
-	querytype "kwil/x/execution"
-	"kwil/x/execution/executor"
-	"kwil/x/pricing"
-	"kwil/x/types/databases/clean"
-	"kwil/x/types/execution"
-	"kwil/x/types/execution/convert"
+	querytype "kwil/pkg/databases/spec"
+
+	//querytype "kwil/internal/usecases/execution"
+	"kwil/internal/usecases/executor"
+	"kwil/pkg/databases/executables"
+	"kwil/pkg/pricing"
+	"kwil/pkg/utils/serialize"
 	txTypes "kwil/x/types/transactions"
-	"kwil/x/utils/serialize"
 	"math"
 	"strconv"
 )
@@ -29,20 +29,20 @@ const (
 
 func NewQueryPriceEstimator(ctx context.Context, tx *txTypes.Transaction, exec executor.Executor) (QueryPriceEstimator, error) {
 	// get executionBody
-	executionBody, err := serialize.Deserialize[*execution.ExecutionBody[[]byte]](tx.Payload)
+	executionBody, err := serialize.Deserialize[*executables.ExecutionBody](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode payload of type ExecutionBody: %w", err)
 	}
 
-	clean.Clean(&executionBody)
+	// clean.Clean(&executionBody)
 
-	convExecutionBody, err := convert.Bytes.BodyToKwilAny(executionBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert execution body to kwil any: %w", err)
-	}
+	// convExecutionBody, err := convert.Bytes.BodyToKwilAny(executionBody)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to convert execution body to kwil any: %w", err)
+	// }
 
 	// Execute the equivalent select query or explain query to get the cost estimation info
-	pricingparams, err := exec.GetQueryCostEstimationInfo(ctx, convExecutionBody, tx.Sender)
+	pricingparams, err := exec.GetQueryCostEstimationInfo(ctx, executionBody, tx.Sender)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get query cost estimation info: %w", err)
 	}

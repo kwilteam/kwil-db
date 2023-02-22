@@ -41,9 +41,9 @@ tasks:
     cmds:
       - sqlc generate
     sources:
-      - kwil/sql/*.sql
+      - internal/repository/sql/*.sql
     generates:
-      - kwil/repository/gen
+      - internal/repository/gen
 
   build:gateway:
     desc: Builds the API Gateway

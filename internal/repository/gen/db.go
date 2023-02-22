@@ -96,6 +96,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.getHeightByNameStmt, err = db.PrepareContext(ctx, getHeightByName); err != nil {
 		return nil, fmt.Errorf("error preparing query GetHeightByName: %w", err)
 	}
+	if q.getIndexedColumnCountStmt, err = db.PrepareContext(ctx, getIndexedColumnCount); err != nil {
+		return nil, fmt.Errorf("error preparing query GetIndexedColumnCount: %w", err)
+	}
 	if q.getIndexesStmt, err = db.PrepareContext(ctx, getIndexes); err != nil {
 		return nil, fmt.Errorf("error preparing query GetIndexes: %w", err)
 	}
@@ -110,6 +113,9 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	}
 	if q.getTableIdStmt, err = db.PrepareContext(ctx, getTableId); err != nil {
 		return nil, fmt.Errorf("error preparing query GetTableId: %w", err)
+	}
+	if q.getTableSizeStmt, err = db.PrepareContext(ctx, getTableSize); err != nil {
+		return nil, fmt.Errorf("error preparing query GetTableSize: %w", err)
 	}
 	if q.increaseBalanceStmt, err = db.PrepareContext(ctx, increaseBalance); err != nil {
 		return nil, fmt.Errorf("error preparing query IncreaseBalance: %w", err)
@@ -263,6 +269,11 @@ func (q *Queries) Close() error {
 			err = fmt.Errorf("error closing getHeightByNameStmt: %w", cerr)
 		}
 	}
+	if q.getIndexedColumnCountStmt != nil {
+		if cerr := q.getIndexedColumnCountStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getIndexedColumnCountStmt: %w", cerr)
+		}
+	}
 	if q.getIndexesStmt != nil {
 		if cerr := q.getIndexesStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getIndexesStmt: %w", cerr)
@@ -286,6 +297,11 @@ func (q *Queries) Close() error {
 	if q.getTableIdStmt != nil {
 		if cerr := q.getTableIdStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getTableIdStmt: %w", cerr)
+		}
+	}
+	if q.getTableSizeStmt != nil {
+		if cerr := q.getTableSizeStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getTableSizeStmt: %w", cerr)
 		}
 	}
 	if q.increaseBalanceStmt != nil {
@@ -370,8 +386,8 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db DBTX
-	tx *sql.Tx
+	db                         DBTX
+	tx                         *sql.Tx
 	addTxHashToWithdrawalStmt  *sql.Stmt
 	applyPermissionToRoleStmt  *sql.Stmt
 	commitDepositsStmt         *sql.Stmt
@@ -396,11 +412,13 @@ type Queries struct {
 	getDepositIdByTxStmt       *sql.Stmt
 	getHeightStmt              *sql.Stmt
 	getHeightByNameStmt        *sql.Stmt
+	getIndexedColumnCountStmt  *sql.Stmt
 	getIndexesStmt             *sql.Stmt
 	getQueriesStmt             *sql.Stmt
 	getRolePermissionsStmt     *sql.Stmt
 	getRolesStmt               *sql.Stmt
 	getTableIdStmt             *sql.Stmt
+	getTableSizeStmt           *sql.Stmt
 	increaseBalanceStmt        *sql.Stmt
 	listDatabasesStmt          *sql.Stmt
 	listDatabasesByOwnerStmt   *sql.Stmt
@@ -440,11 +458,13 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		getDepositIdByTxStmt:       q.getDepositIdByTxStmt,
 		getHeightStmt:              q.getHeightStmt,
 		getHeightByNameStmt:        q.getHeightByNameStmt,
+		getIndexedColumnCountStmt:  q.getIndexedColumnCountStmt,
 		getIndexesStmt:             q.getIndexesStmt,
 		getQueriesStmt:             q.getQueriesStmt,
 		getRolePermissionsStmt:     q.getRolePermissionsStmt,
 		getRolesStmt:               q.getRolesStmt,
 		getTableIdStmt:             q.getTableIdStmt,
+		getTableSizeStmt:           q.getTableSizeStmt,
 		increaseBalanceStmt:        q.increaseBalanceStmt,
 		listDatabasesStmt:          q.listDatabasesStmt,
 		listDatabasesByOwnerStmt:   q.listDatabasesByOwnerStmt,

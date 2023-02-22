@@ -69,6 +69,22 @@ func (e *DatabaseInterface) Prepare(query string, caller string, inputs []*UserI
 	return exec.prepare(inputs, caller)
 }
 
+func (e *DatabaseInterface) GetPreparer(query string, caller string, inputs []*UserInput) (*preparer, error) {
+	exec, ok := e.queries[query]
+	if !ok {
+		return nil, fmt.Errorf("query %s not found", query)
+	}
+	return exec.getPreparer(inputs, caller), nil
+}
+
+func (e *DatabaseInterface) GetTableName(query string) (string, error) {
+	exec, ok := e.queries[query]
+	if !ok {
+		return "", fmt.Errorf("query %s not found", query)
+	}
+	return exec.TableName, nil
+}
+
 // ConvertInputs takes a map of inputs passed as strings and tries to convert them to the correct type.
 // If successful, it returns a map of the inputs converted to the correct type.
 // If not, or if an input is missing, it returns an error.

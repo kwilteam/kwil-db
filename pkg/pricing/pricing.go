@@ -1,5 +1,7 @@
 package pricing
 
+import "kwil/pkg/databases/spec"
+
 type PricingRequestType int
 
 const (
@@ -10,7 +12,7 @@ const (
 )
 
 type Params struct {
-	Q execution.QueryType
+	Q spec.QueryType
 	T int64 //Total number of Rows in the Table
 	I int64 //Number of Indexed Columns in the Table
 	S int64 //Size of each row in bytes
