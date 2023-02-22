@@ -10,6 +10,7 @@ const (
 	INT32
 	INT64
 	BOOLEAN
+	UUID
 	END_DATA_TYPE
 )
 
@@ -23,6 +24,8 @@ func (d *DataType) String() string {
 		return `int64`
 	case BOOLEAN:
 		return `boolean`
+	case UUID:
+		return `uuid`
 	}
 	return `unknown`
 }
