@@ -2,7 +2,6 @@ name: goreleaser
 
 on:
   push:
-    # run only against tags
     tags:
       - '*'
 
@@ -18,6 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
+          fetch-depth: 0 # for goreleaser to work
           submodules: true
           token: ${{ secrets.KWIL_MACH_SECRET }}
 
@@ -47,17 +47,11 @@ jobs:
           task pb:compile:all
 
       - run: git fetch --force --tags
-      - uses: actions/setup-go@v3
-        with:
-          go-version: '>=1.19.0'
-          cache: true
-      # More assembly might be required: Docker logins, GPG, etc. It all depends
-      # on your needs.
+
       - uses: goreleaser/goreleaser-action@v4
         with:
-          # either 'goreleaser' (default) or 'goreleaser-pro':
           distribution: goreleaser
           version: ${{ env.GITHUB_REF_NAME }}
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}

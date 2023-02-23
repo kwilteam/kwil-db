@@ -32,6 +32,9 @@ builds:
         goarch: arm64
     ldflags:
       - -s -w
+      - -X 'kwil/cmd/kwil-cli/app/build.Version={{.Version}}'
+      - -X 'kwil/cmd/kwil-cli/app/build.GitCommit={{.Commit}}'
+      - -X 'kwil/cmd/kwil-cli/app/build.BuildTime={{.Date}}'
     env:
       - CGO_ENABLED=0
       - CC_darwin_amd64=o64-clang
@@ -50,7 +53,7 @@ release:
   prerelease: auto
   github:
     owner: kwilteam
-    name: kwil-db
+    name: kwil-cli
   replace_existing_draft: true
   ids:
     - kwil-cli
