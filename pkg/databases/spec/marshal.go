@@ -2,8 +2,9 @@ package spec
 
 import (
 	"fmt"
-	"github.com/cstockton/go-conv"
 	"kwil/pkg/utils/serialize"
+
+	"github.com/cstockton/go-conv"
 )
 
 func marshal(v any, d DataType) ([]byte, error) {
@@ -38,6 +39,13 @@ func marshal(v any, d DataType) ([]byte, error) {
 		}
 
 		return prepend(BOOLEAN, serialize.BoolToBytes(b)), nil
+	case UUID:
+		str, err := conv.String(v)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert value to string: %v", err)
+		}
+
+		return prepend(UUID, serialize.StringToBytes(str)), nil
 	}
 
 	return nil, fmt.Errorf("unknown type: %d", d)

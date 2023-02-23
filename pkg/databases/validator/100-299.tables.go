@@ -23,7 +23,7 @@ func (v *Validator) validateTables() error {
 
 	// validate tables
 	tablesNames := make(map[string]struct{})
-	for _, tbl := range v.db.Tables {
+	for _, tbl := range v.DB.Tables {
 		if _, ok := tablesNames[tbl.Name]; ok {
 			return violation(errorCode100, fmt.Errorf(`duplicate table name "%s"`, tbl.Name))
 		}
@@ -43,13 +43,13 @@ func (v *Validator) validateTables() error {
 // is within the allowed range
 func (v *Validator) validateTableCount() error {
 	// errorCode 101
-	if len(v.db.Tables) == 0 {
+	if len(v.DB.Tables) == 0 {
 		return violation(errorCode101, fmt.Errorf(`database has 0 tables`))
 	}
 
 	// errorCode 102
-	if len(v.db.Tables) > MAX_TABLE_COUNT {
-		return violation(errorCode102, fmt.Errorf(`database has too many tables: %v > %v`, len(v.db.Tables), MAX_TABLE_COUNT))
+	if len(v.DB.Tables) > MAX_TABLE_COUNT {
+		return violation(errorCode102, fmt.Errorf(`database has too many tables: %v > %v`, len(v.DB.Tables), MAX_TABLE_COUNT))
 	}
 
 	return nil
