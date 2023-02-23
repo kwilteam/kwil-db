@@ -1,7 +1,6 @@
 package schemabuilder_test
 
 import (
-	"fmt"
 	"kwil/pkg/databases/clean"
 	"kwil/pkg/databases/mocks"
 	schemabuilder "kwil/pkg/databases/sql-builder/schema-builder"
@@ -30,7 +29,4 @@ func Test_GenerateDDL(t *testing.T) {
 			t.Errorf("missing ddl statement: %v", stmt)
 		}
 	}
-
-	fmt.Println(ddl)
-	panic("")
 }
