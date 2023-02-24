@@ -50,6 +50,13 @@ jobs:
           version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'`
           echo "version=$version" >> $GITHUB_OUTPUT
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
