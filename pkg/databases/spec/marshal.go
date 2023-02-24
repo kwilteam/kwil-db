@@ -68,6 +68,8 @@ func tryUnmarshal(bts []byte, d DataType) (any, error) {
 		return serialize.BytesToInt64(bts), nil
 	case BOOLEAN:
 		return serialize.BytesToBool(bts), nil
+	case UUID:
+		return serialize.BytesToString(bts), nil
 	}
 
 	return nil, fmt.Errorf("unknown type: %d", d)
