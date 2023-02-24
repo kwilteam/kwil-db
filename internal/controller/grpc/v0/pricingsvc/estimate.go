@@ -14,8 +14,7 @@ func (s *Service) EstimateCost(ctx context.Context, req *pricingpb.EstimateReque
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
-
-	price, err := s.pricer.EstimatePrice(ctx, tx)
+	price, err := s.pricer.EstimatePrice(ctx, tx, s.executor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}

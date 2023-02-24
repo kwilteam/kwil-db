@@ -105,16 +105,19 @@ func (e *executable) getQuerySignature() (*QuerySignature, error) {
 
 // prepare takes the inputs and caller and returns the query and args
 func (e *executable) prepare(inputs []*UserInput, caller string) (string, []any, error) {
+	p := e.getPreparer(inputs, caller)
+	return p.Prepare()
+}
+
+func (e *executable) getPreparer(inputs []*UserInput, caller string) *preparer {
 	ins := make(map[string][]byte)
 	for _, input := range inputs {
 		ins[input.Name] = input.Value
 	}
 
-	p := &preparer{
+	return &preparer{
 		executable: e,
 		inputs:     ins,
 		caller:     caller,
 	}
-
-	return p.Prepare()
 }

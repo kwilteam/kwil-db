@@ -1,6 +1,9 @@
 package pricer
 
 import (
+	"context"
+	"kwil/internal/usecases/executor"
+	"kwil/pkg/accounts"
 	"kwil/pkg/pricing"
 )
 
@@ -22,4 +25,13 @@ func GetPrice(p pricing.PricingRequestType) string {
 		return QUERY_PRICE
 	}
 	return "0"
+}
+
+func EstimateQueryPrice(ctx context.Context, tx *accounts.Transaction, exec executor.Executor) (string, error) {
+	e, err := NewQueryPriceEstimator(ctx, tx, exec)
+	if err != nil {
+		return QUERY_PRICE, err
+	}
+
+	return e.Estimate()
 }

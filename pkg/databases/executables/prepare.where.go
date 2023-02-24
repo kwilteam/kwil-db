@@ -49,6 +49,13 @@ func (p *preparer) getWhereExpression() (andSelection, error) {
 	return whereArray, nil
 }
 
+// Update this predicates lengths with the number of ANDs between each ORs
+func (p *preparer) GetPredicateLengths() []int {
+	predicateLength := make([]int, 0)
+	predicateLength = append(predicateLength, len(p.executable.Query.Where))
+	return predicateLength
+}
+
 func operatorToGoquExpression(op spec.ComparisonOperatorType, column string, val any) (exp.Expression, error) {
 	switch op {
 	case spec.EQUAL:

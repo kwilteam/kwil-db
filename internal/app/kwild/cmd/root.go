@@ -84,7 +84,7 @@ var RootCmd = &cobra.Command{
 		accSvc := accountsvc.NewService(queries, logger)
 
 		// pricing service
-		prcSvc := pricingsvc.NewService()
+		prcSvc := pricingsvc.NewService(exec)
 
 		// tx service
 		txService := txsvc.NewService(queries, exec, logger)

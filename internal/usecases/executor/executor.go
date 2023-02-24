@@ -9,6 +9,7 @@ import (
 	"kwil/pkg/databases/executables"
 	"kwil/pkg/databases/spec"
 	"kwil/pkg/log"
+	"kwil/pkg/pricing"
 	"kwil/pkg/sql/sqlclient"
 )
 
@@ -18,6 +19,7 @@ type Executor interface {
 	ExecuteQuery(ctx context.Context, query *executables.ExecutionBody, caller string) error
 	GetQueries(id string) ([]*executables.QuerySignature, error)
 	GetDBIdentifier(id string) (*databases.DatabaseIdentifier, error)
+	GetQueryCostEstimationInfo(ctx context.Context, body *executables.ExecutionBody, caller string) (*pricing.Params, error)
 }
 
 type executor struct {
