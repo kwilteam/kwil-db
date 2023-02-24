@@ -14,19 +14,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
           submodules: true
           token: ${{ secrets.KWIL_MACH_SECRET }}
-
-#      github.event.release.tag_name is the tag that triggered the release
-      - name: fetch tags
-        run: git fetch -t
-
-      - name: check tags
-        run: git tag -l
-
-      - name: check status
-        run: git status
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v1
@@ -55,17 +44,9 @@ jobs:
         run: |
           task pb:compile:all
 
-      - name: check status
-        run: git status
-
       - name: configure variables
         id: config
         run: |
-          if [[ '${{ github.event.release.prerelease }}' == 'true' ]]; then
-            echo "cluster=staging" >> $GITHUB_OUTPUT
-          else
-            echo "cluster=prod" >> $GITHUB_OUTPUT
-          fi
           version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'`
           echo "version=$version" >> $GITHUB_OUTPUT
 
@@ -79,7 +60,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Cache Docker layers for kwild
+      - name: Cache Docker layers for KD
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kwild
@@ -87,7 +68,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-kwild
 
-      - name: Build kwild image
+      - name: Build & push KD image
         id: docker_build_kwild
         uses: docker/build-push-action@v4
         with:
@@ -105,7 +86,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      - name: Cache Docker layers for kwil-gateway
+      - name: Cache Docker layers for KG
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kgw
@@ -113,7 +94,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-kgw
 
-      - name: Build kwil-gateway image
+      - name: Build & push KG image
         id: docker_build_kgw
         uses: docker/build-push-action@v4
         with:
