@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/go-rosetta"
 	"html/template"
-	"kwil/cmd/kwil-cli/app/build"
+	"kwil/internal/pkg/build"
 	"os"
 	"runtime"
 	"text/tabwriter"
@@ -13,10 +13,10 @@ import (
 
 var versionTemplate = `
  Version:	{{.Version}}
- API version:	{{.APIVersion}}
- Go version:	{{.GoVersion}}
  Git commit:	{{.GitCommit}}
  Built:	{{.BuildTime}}
+ API version:	{{.APIVersion}}
+ Go version:	{{.GoVersion}}
  OS/Arch:	{{.Os}}/{{.Arch}}`
 
 type versionOptions struct {
@@ -24,13 +24,15 @@ type versionOptions struct {
 }
 
 type versionInfo struct {
-	Version    string
+	// build-time info
+	Version   string
+	GitCommit string
+	BuildTime string `json:",omitempty"`
+	// client machine info
 	APIVersion string `json:"ApiVersion"`
-	GitCommit  string
 	GoVersion  string
 	Os         string
 	Arch       string
-	BuildTime  string `json:",omitempty"`
 }
 
 func NewVersionCmd() *cobra.Command {
@@ -76,6 +78,7 @@ func runVesrion(opts *versionOptions) error {
 		BuildTime:  build.BuildTime,
 	}
 
+	// @yaiba TODO: add server version?
 	return prettyPrintVersion(vd, tmpl)
 }
 

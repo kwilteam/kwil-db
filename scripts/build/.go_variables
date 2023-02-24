@@ -1,0 +1,67 @@
+#!/usr/bin/env sh
+set -eu
+
+. ./scripts/build/.git_variables
+
+: "${CGO_ENABLED=}"
+: "${GO_LINKMODE=static}"
+: "${GO_BUILDMODE=}"
+: "${GO_BUILDTAGS=}"
+: "${GO_STRIP=}"
+
+GOOS="$(go env GOOS)"
+GOARCH="$(go env GOARCH)"
+if [ "${GOARCH}" = "arm" ]; then
+    GOARM="$(go env GOARM)"
+fi
+
+BINARY=${1:-}
+
+TARGET=${TARGET:-".build"}
+TARGET="$TARGET/${BINARY}-${GOOS}-${GOARCH}"
+if [ "${GOARCH}" = "arm" ] && [ -n "${GOARM}" ]; then
+    TARGET="${TARGET}-v${GOARM}"
+fi
+export TARGET
+
+if [ -z "$CGO_ENABLED" ]; then
+    case "$(go env GOOS)" in
+        linux)
+            case "$(go env GOARCH)" in
+                amd64|arm64|arm|s390x)
+                    CGO_ENABLED=1
+                ;;
+                *)
+                    CGO_ENABLED=0
+                ;;
+            esac
+        ;;
+        darwin|windows)
+            CGO_ENABLED=1
+        ;;
+        *)
+            CGO_ENABLED=0
+        ;;
+    esac
+fi
+export CGO_ENABLED
+
+BINARY_PKG_PREFIX="kwil/internal/pkg/build"
+GO_LDFLAGS="${GO_LDFLAGS:-}"
+GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.GitCommit=${GIT_COMMIT}\""
+GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.BuildTime=${BUILD_TIME}\""
+GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.Version=${GIT_VERSION}\""
+if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ] && [ "$(go env GOOS)" = "linux" ]; then
+    GO_LDFLAGS="$GO_LDFLAGS -extldflags -static"
+fi
+if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ]; then
+    # compiling statically with CGO enabled requires osusergo to be set.
+    GO_BUILDTAGS="$GO_BUILDTAGS osusergo"
+fi
+if [ -n "$GO_STRIP" ]; then
+    GO_LDFLAGS="$GO_LDFLAGS -s -w"
+fi
+
+export GO_LDFLAGS="$GO_LDFLAGS" # https://github.com/koalaman/shellcheck/issues/2064
+
+export SOURCE="kwil/cmd/${BINARY}"

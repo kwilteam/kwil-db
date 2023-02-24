@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+#
+# Build docker image
+#
+
+set -eu
+
+. ./scripts/build/.git_variables
+
+IMAGE=${1:-}
+
+echo Building "${IMAGE}"
+
+BUILD_ARGS="${BUILD_ARGS:-}"
+BUILD_ARGS="${BUILD_ARGS} --build-arg version=${GIT_VERSION}"
+BUILD_ARGS="${BUILD_ARGS} --build-arg git_commit=${GIT_COMMIT}"
+BUILD_ARGS="${BUILD_ARGS} --build-arg build_time=${BUILD_TIME}"
+
+export DOCKDER_BUILDKIT=1
+
+docker build .  -t "${IMAGE}:${GIT_VERSION}" -t "${IMAGE}:latest" ${BUILD_ARGS} -f "./build/package/docker/${IMAGE}.dockerfile" --progress=plain
