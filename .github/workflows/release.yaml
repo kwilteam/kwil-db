@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   release:
     types: [published]
 
@@ -43,6 +44,12 @@ jobs:
         run: |
           task pb:compile:all
 
+      - name: configure variables
+        id: config
+        run: |
+          version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'`
+          echo "version=$version" >> $GITHUB_OUTPUT
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
@@ -53,13 +60,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: manual git tag
-        run: echo "GIT_TAG=`echo $(git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//')`" >> $GITHUB_ENV
-
-      - name: manual build time
-        run: echo "BUILD_TIME=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`" >> $GITHUB_ENV
-
-      - name: Cache Docker layers for kwild
+      - name: Cache Docker layers for KD
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kwild
@@ -67,26 +68,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-kwild
 
-      - name: Build kwild image
+      - name: Build & push KD image
         id: docker_build_kwild
-        env:
-
         uses: docker/build-push-action@v4
         with:
           context: .
-          load: true
           builder: ${{ steps.buildx.outputs.name }}
           build-args: |
             git_commit=${{ github.sha }}
-            version=${{ env.GIT_TAG }}
-            build_time=${{ env.BUILD_TIME }}
+            version=${{ steps.config.outputs.version }}
+            build_time=${{ github.event.release.created_at }}
           file: ./build/package/docker/kwild.dockerfile
           push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWILD_ECR }}:${{ env.GIT_TAG }},${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWILD_ECR }}:latest
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWILD_ECR }}:${{ steps.config.outputs.version }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWILD_ECR }}:latest
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      - name: Cache Docker layers for kwil-gateway
+      - name: Cache Docker layers for KG
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kgw
@@ -94,20 +94,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-kgw
 
-      - name: Build kwil-gateway image
+      - name: Build & push KG image
         id: docker_build_kgw
         uses: docker/build-push-action@v4
         with:
           context: .
-          load: true
           builder: ${{ steps.buildx.outputs.name }}
           build-args: |
             git_commit=${{ github.sha }}
-            version=${{ env.GIT_TAG }}
-            build_time=${{ env.BUILD_TIME }}
+            version=${{ steps.config.outputs.version }}
+            build_time=${{ github.event.release.created_at }}
           file: ./build/package/docker/kwil-gateway.dockerfile
           push: true
-          tags: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWIL_GATEWAY_ECR }}:${{ env.GIT_TAG }},${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWIL_GATEWAY_ECR }}:latest
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWIL_GATEWAY_ECR }}:${{ steps.config.outputs.version }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWIL_GATEWAY_ECR }}:latest
           cache-from: type=local,src=/tmp/.buildx-cache-kgw
           cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
 
@@ -121,33 +122,19 @@ jobs:
   deploy-to-eks:
     name: Deploy new version to EKS
     runs-on: ubuntu-latest
-    needs: build-push-docker-image
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: true
-          token: ${{ secrets.KWIL_MACH_SECRET }}
-
-      - name: manual git tag
-        run: echo "GIT_TAG=`echo $(git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//')`" >> $GITHUB_ENV
+      - name: configure variables
+        id: config
+        run: |
+          if [[ '${{ github.event.release.prerelease }}' == 'true' ]]; then
+            echo "cluster=staging" >> $GITHUB_OUTPUT
+          else
+            echo "cluster=prod" >> $GITHUB_OUTPUT
+          fi
+          version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'`
+          echo "version=$version" >> $GITHUB_OUTPUT
 
       - name: deploy by release type to different eks cluster
         run: |
-          cluster="staging"
-          echo ${{ github.event.release }}
-          echo ${{ github.event.release.prerelease }}
-          echo ${{ github.event.release.tag_name }}
-          echo "will deploy ${{ env.GIT_TAG }} to eks cluster ${cluster}"
-
-
-#
-#          if [[ -n '${{ github.event.release }}' ]]; then  # release
-#          echo '::set-output name=release::${{ github.event.release.tag_name }}'
-#          if [[ '${{ github.event.release.prerelease }}' == 'true' ]]; then
-#          echo '::set-output name=beta::1'
-#          else
-#          echo '::set-output name=beta::'
-#          fi
-#          echo "deploy to eks cluster"
+          echo "will deploy ${{ steps.config.outputs.version }} to eks ${{ steps.config.outputs.cluster }} cluster"

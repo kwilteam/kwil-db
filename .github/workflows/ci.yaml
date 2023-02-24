@@ -17,9 +17,7 @@ jobs:
         run: echo "run unit test"
 
   acceptance-test:
-    name: CI pull request test
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v3
