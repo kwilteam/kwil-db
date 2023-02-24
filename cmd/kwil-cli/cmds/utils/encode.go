@@ -13,7 +13,7 @@ const (
 )
 
 var (
-	allowedTypes = []string{"null", "string", "int32", "int64", "boolean"}
+	allowedTypes = []string{"null", "string", "int32", "int64", "boolean", "uuid"}
 )
 
 func encodeCmd() *cobra.Command {
@@ -30,8 +30,7 @@ The output is printed to stdout.`,
 			// convert type
 			typ, err := spec.DataTypeConversions.StringToKwilType(passedType)
 			if err != nil {
-				fmt.Printf("type must be one of: %v",
-					allowedTypes)
+				fmt.Printf("type must be one of: %v", allowedTypes)
 				return fmt.Errorf("error converting type: %w", err)
 			}
 

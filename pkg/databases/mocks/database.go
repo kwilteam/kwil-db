@@ -13,10 +13,12 @@ var (
 		Tables: []*execution2.Table[*spec.KwilAny]{
 			&Table1,
 			&Table2,
+			&Table3,
 		},
 		SQLQueries: []*execution2.SQLQuery[*spec.KwilAny]{
 			&Insert1,
 			&Insert2,
+			&Insert3,
 			&Update1,
 			&Update2,
 			&Delete1,
@@ -40,6 +42,11 @@ var (
 	Table2 = execution2.Table[*spec.KwilAny]{
 		Name:    "table2",
 		Columns: []*execution2.Column[*spec.KwilAny]{&Column1, &Column3},
+	}
+
+	Table3 = execution2.Table[*spec.KwilAny]{
+		Name:    "table3",
+		Columns: []*execution2.Column[*spec.KwilAny]{&Column1, &Column4},
 	}
 
 	// columns
@@ -70,9 +77,20 @@ var (
 		Type: spec.BOOLEAN,
 	}
 
+	Column4 = execution2.Column[*spec.KwilAny]{
+		Name: "col4",
+		Type: spec.UUID,
+		Attributes: []*execution2.Attribute[*spec.KwilAny]{
+			{
+				Type:  spec.UNIQUE,
+				Value: spec.NewMust(nil),
+			},
+		},
+	}
+
 	// sql queries
 
-	// insert
+	// insert1 contains a string and an int32
 	Insert1 = execution2.SQLQuery[*spec.KwilAny]{
 		Name:  "insert1",
 		Type:  spec.INSERT,
@@ -83,6 +101,7 @@ var (
 		},
 	}
 
+	// Insert2 contains a string and a boolean
 	Insert2 = execution2.SQLQuery[*spec.KwilAny]{
 		Name:  "insert2",
 		Type:  spec.INSERT,
@@ -90,6 +109,17 @@ var (
 		Params: []*execution2.Parameter[*spec.KwilAny]{
 			&Parameter1,
 			&Parameter3,
+		},
+	}
+
+	// insert3 contains a string and a uuid
+	Insert3 = execution2.SQLQuery[*spec.KwilAny]{
+		Name:  "insert3",
+		Type:  spec.INSERT,
+		Table: "table3",
+		Params: []*execution2.Parameter[*spec.KwilAny]{
+			&Parameter1,
+			&Parameter4,
 		},
 	}
 
@@ -141,6 +171,7 @@ var (
 
 	// parameters
 
+	// parameter1 is a caller modified string
 	Parameter1 = execution2.Parameter[*spec.KwilAny]{
 		Name:     "param1",
 		Column:   "col1",
@@ -149,17 +180,28 @@ var (
 		Modifier: spec.CALLER,
 	}
 
+	// parameter2 is an int32
 	Parameter2 = execution2.Parameter[*spec.KwilAny]{
 		Name:   "param2",
 		Column: "col2",
 	}
 
+	// parameter3 is a boolean
 	Parameter3 = execution2.Parameter[*spec.KwilAny]{
 		Name:   "param3",
 		Column: "col3",
 		Static: false,
 	}
 
+	// parameter4 is a uuid
+	Parameter4 = execution2.Parameter[*spec.KwilAny]{
+		Name:   "param4",
+		Column: "col4",
+	}
+
+	// where clauses
+
+	// whereclause1 checks for EQUALS on col3 (boolean)
 	WhereClause1 = execution2.WhereClause[*spec.KwilAny]{
 		Name:     "where1",
 		Column:   "col3",
@@ -167,6 +209,7 @@ var (
 		Operator: spec.EQUAL,
 	}
 
+	// whereclause2 checks for EQUALS on col1 (string), and is caller modified
 	WhereClause2 = execution2.WhereClause[*spec.KwilAny]{
 		Name:     "where2",
 		Column:   "col1",
@@ -177,6 +220,8 @@ var (
 	}
 
 	// roles
+
+	// role1 has insert1, update1, and delete1 permissions
 	Role1 = execution2.Role{
 		Name:    "role1",
 		Default: true,
@@ -187,11 +232,13 @@ var (
 		},
 	}
 
+	// role2 has all permissions
 	Role2 = execution2.Role{
 		Name: "role2",
 		Permissions: []string{
 			"insert1",
 			"insert2",
+			"insert3",
 			"update1",
 			"update2",
 			"delete1",

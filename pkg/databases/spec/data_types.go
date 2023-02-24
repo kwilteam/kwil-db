@@ -25,6 +25,8 @@ func (c *dataTypes) StringToKwilType(s string) (DataType, error) {
 		return INT64, nil
 	case `boolean`:
 		return BOOLEAN, nil
+	case `uuid`:
+		return UUID, nil
 	}
 	return INVALID_DATA_TYPE, fmt.Errorf(`unknown type: "%s"`, s)
 }
@@ -70,6 +72,8 @@ func (c *dataTypes) KwilToPgType(k DataType) (string, error) {
 		return `int8`, nil
 	case BOOLEAN:
 		return `boolean`, nil
+	case UUID:
+		return `uuid`, nil
 	}
 	return ``, fmt.Errorf(`unknown type: "%s"`, k.String())
 }

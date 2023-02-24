@@ -116,8 +116,10 @@ func (v *Validator) validateInput(input databases.Input[*spec.KwilAny], table *d
 		}
 
 	} else { // not static: users can fill in the value
-		if input.GetValue().Bytes() != nil {
-			return violation(errorCode1002, fmt.Errorf(`value must not be set for non-static parameter / where-clause on column "%s"`, input.GetColumn()))
+		if input.GetValue() != nil { // double nested to avoid nil pointer dereference
+			if !input.GetValue().IsEmpty() {
+				return violation(errorCode1002, fmt.Errorf(`value must not be set for non-static parameter / where-clause on column "%s"`, input.GetColumn()))
+			}
 		}
 
 		if input.GetModifier() == spec.CALLER {

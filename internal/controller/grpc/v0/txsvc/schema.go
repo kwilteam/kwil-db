@@ -57,16 +57,16 @@ func (s *Service) ListDatabases(ctx context.Context, req *txpb.ListDatabasesRequ
 func (s *Service) GetQueries(ctx context.Context, req *txpb.GetQueriesRequest) (*txpb.GetQueriesResponse, error) {
 	execs, err := s.executor.GetQueries(req.Id)
 	if err != nil {
-		s.log.Sugar().Warnf("failed to get executables", err)
-		return nil, fmt.Errorf("failed to get executables")
+		s.log.Sugar().Warnf("failed to get queries", err)
+		return nil, fmt.Errorf("failed to get queries. ensure the database exists")
 	}
 
 	convertedExecutables := make([]*commonpb.QuerySignature, len(execs))
 	for i, e := range execs {
 		converted, err := serialize.Convert[executables.QuerySignature, commonpb.QuerySignature](e)
 		if err != nil {
-			s.log.Sugar().Warnf("failed to convert executables", err)
-			return nil, fmt.Errorf("failed to convert executables")
+			s.log.Sugar().Warnf("failed to convert queries", err)
+			return nil, fmt.Errorf("failed to convert queries")
 		}
 		convertedExecutables[i] = converted
 	}

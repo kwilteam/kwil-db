@@ -15,12 +15,12 @@ import (
 */
 
 func (v *Validator) validateQueries() error {
-	if len(v.db.SQLQueries) > MAX_QUERY_COUNT {
-		return violation(errorCode701, fmt.Errorf(`database has too many queries: %v > %v`, len(v.db.SQLQueries), MAX_QUERY_COUNT))
+	if len(v.DB.SQLQueries) > MAX_QUERY_COUNT {
+		return violation(errorCode701, fmt.Errorf(`database has too many queries: %v > %v`, len(v.DB.SQLQueries), MAX_QUERY_COUNT))
 	}
 
 	queryNames := make(map[string]struct{})
-	for _, q := range v.db.SQLQueries {
+	for _, q := range v.DB.SQLQueries {
 		if _, ok := queryNames[q.Name]; ok {
 			return violation(errorCode700, fmt.Errorf(`duplicate query name "%s"`, q.Name))
 		}
@@ -56,7 +56,7 @@ func (v *Validator) ValidateQuery(q *databases.SQLQuery[*spec.KwilAny]) error {
 		return violation(errorCode801, fmt.Errorf(`invalid query type "%d"`, q.Type))
 	}
 
-	table := v.db.GetTable(q.Table)
+	table := v.DB.GetTable(q.Table)
 	if table == nil {
 		return violation(errorCode802, fmt.Errorf(`table "%s" does not exist`, q.Table))
 	}

@@ -7,13 +7,13 @@ import (
 
 func (v *Validator) validateRoles() error {
 	// validate role count
-	err := validateRoleCount(v.db.Roles)
+	err := validateRoleCount(v.DB.Roles)
 	if err != nil {
 		return fmt.Errorf(`invalid role count: %w`, err)
 	}
 
 	roleNames := make(map[string]struct{})
-	for _, role := range v.db.Roles {
+	for _, role := range v.DB.Roles {
 		// validate role name is unique
 		if _, ok := roleNames[role.Name]; ok {
 			return violation(errorCode1300, fmt.Errorf(`duplicate role name "%s"`, role.Name))
@@ -57,7 +57,7 @@ func (v *Validator) ValidateRole(role *databases.Role) error {
 		perms[perm] = struct{}{}
 
 		// check if permission exists
-		qry := v.db.GetQuery(perm)
+		qry := v.DB.GetQuery(perm)
 		if qry == nil {
 			return violation(errorCode1401, fmt.Errorf(`query "%s" does not exist`, perm))
 		}

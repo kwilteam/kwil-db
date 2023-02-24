@@ -10,16 +10,12 @@ import (
 
 // a validator validates a database
 type Validator struct {
-	db *databases.Database[*spec.KwilAny]
-}
-
-func New(db *databases.Database[*spec.KwilAny]) *Validator {
-	return &Validator{db: db}
+	DB *databases.Database[*spec.KwilAny]
 }
 
 // Validate validates a database
 func (v *Validator) Validate(db *databases.Database[*spec.KwilAny]) error {
-	v.db = db
+	v.DB = db
 
 	// errorCode 0
 	err := CheckName(db.Name, MAX_DB_NAME_LENGTH)

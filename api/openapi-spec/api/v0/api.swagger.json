@@ -463,7 +463,8 @@
         "STRING",
         "INT32",
         "INT64",
-        "BOOLEAN"
+        "BOOLEAN",
+        "UUID"
       ],
       "default": "INVALID_TYPE"
     },

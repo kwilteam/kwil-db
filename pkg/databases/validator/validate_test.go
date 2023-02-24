@@ -59,7 +59,7 @@ func testNames(t *testing.T, db databases.Database[*spec.KwilAny]) {
 }
 
 func testMaxCounts(t *testing.T, db databases.Database[*spec.KwilAny]) {
-	v := validator.Validator{}
+	v := validator.Validator{DB: &db}
 
 	// testing table count
 	for i := 0; i < validator.MAX_TABLE_COUNT+1; i++ {
@@ -113,7 +113,7 @@ func testAttributes(t *testing.T) {
 }
 
 func testQueries(t *testing.T, db databases.Database[*spec.KwilAny]) {
-	v := validator.New(&db)
+	v := validator.Validator{DB: &db}
 
 	// testing that insert with no params is invalid
 	q := &databases.SQLQuery[*spec.KwilAny]{

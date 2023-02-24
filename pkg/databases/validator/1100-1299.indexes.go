@@ -17,7 +17,7 @@ func (v *Validator) validateIndexes() error {
 	indexNames := make(map[string]struct{})
 	// indexes must also check unique columns and type
 	indexColAndType := make(map[string]struct{})
-	for _, index := range v.db.Indexes {
+	for _, index := range v.DB.Indexes {
 		// check if index name is unique
 		if _, ok := indexNames[index.Name]; ok {
 			return violation(errorCode1100, fmt.Errorf(`duplicate index name "%s"`, index.Name))
@@ -46,8 +46,8 @@ func (v *Validator) validateIndexes() error {
 }
 
 func (v *Validator) validateIndexCount() error {
-	if len(v.db.Indexes) > MAX_INDEX_COUNT {
-		return violation(errorCode1101, fmt.Errorf(`database has too many indexes: %v > %v`, len(v.db.Indexes), MAX_INDEX_COUNT))
+	if len(v.DB.Indexes) > MAX_INDEX_COUNT {
+		return violation(errorCode1101, fmt.Errorf(`database has too many indexes: %v > %v`, len(v.DB.Indexes), MAX_INDEX_COUNT))
 	}
 
 	return nil
@@ -70,7 +70,7 @@ func (v *Validator) ValidateIndex(index *databases.Index) error {
 	}
 
 	// check if index table is valid
-	table := v.db.GetTable(index.Table)
+	table := v.DB.GetTable(index.Table)
 	if table == nil {
 		return violation(errorCode1203, fmt.Errorf(`table "%s" does not exist`, index.Table))
 	}
