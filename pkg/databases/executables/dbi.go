@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/spec"
+	"strings"
 )
 
 // QuerySignature is the name and arguments of a query
@@ -25,6 +26,12 @@ type DatabaseInterface struct {
 	queries      map[string]*executable
 	access       map[string]map[string]struct{} // maps a role name to an executable
 	defaultRoles []string
+}
+
+type QueryInfo struct {
+	TableName        string
+	QueryType        spec.QueryType
+	PredicateLengths []int
 }
 
 // FromDatabase creates a new DatabaseInterface from a database
@@ -69,6 +76,19 @@ func (e *DatabaseInterface) Prepare(query string, caller string, inputs []*UserI
 	return exec.prepare(inputs, caller)
 }
 
+func (e *DatabaseInterface) GetQueryInfo(query string, caller string, inputs []*UserInput) (*QueryInfo, error) {
+	exec, ok := e.queries[query]
+	if !ok {
+		return nil, fmt.Errorf("query %s not found", query)
+	}
+	n := strings.Split(exec.TableName, ".")
+
+	return &QueryInfo{
+		TableName: n[1],
+		QueryType: exec.Query.Type,
+	}, nil
+}
+
 func (e *DatabaseInterface) GetPreparer(query string, caller string, inputs []*UserInput) (*preparer, error) {
 	exec, ok := e.queries[query]
 	if !ok {
@@ -83,6 +103,14 @@ func (e *DatabaseInterface) GetTableName(query string) (string, error) {
 		return "", fmt.Errorf("query %s not found", query)
 	}
 	return exec.TableName, nil
+}
+
+func (e *DatabaseInterface) GetQueryType(query string) (spec.QueryType, error) {
+	exec, ok := e.queries[query]
+	if !ok {
+		return spec.INVALID_QUERY_TYPE, fmt.Errorf("query %s not found", query)
+	}
+	return exec.Query.Type, nil
 }
 
 // ConvertInputs takes a map of inputs passed as strings and tries to convert them to the correct type.

@@ -12,7 +12,7 @@ import (
 
 func (s *Service) handleExecution(ctx context.Context, tx *accountTypes.Transaction) (*txpb.BroadcastResponse, error) {
 	// get the fee
-	price, err := s.pricing.GetPrice(tx)
+	price, err := s.pricing.GetPrice(ctx, tx, s.executor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get price: %w", err)
 	}

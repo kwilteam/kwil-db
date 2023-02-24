@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"kwil/pkg/databases"
 	"kwil/pkg/databases/executables"
+	"kwil/pkg/databases/spec"
 	"kwil/pkg/pricing"
 	"strings"
 )
@@ -52,6 +53,13 @@ func (s *executor) GetQueryCostEstimationInfo(ctx context.Context, body *executa
 	}
 
 	p, err := db.GetPreparer(body.Query, caller, body.Inputs)
+	if err != nil {
+		return nil, err
+	}
+	qi, err := db.GetQueryInfo(body.Query, caller, body.Inputs)
+	if err != nil {
+		return nil, err
+	}
 
 	// prepare query for gettign the row count
 	tstmt, targs, err := p.PrepareCountAll() //db.PrepareCountAll(body.Query, caller)
@@ -72,36 +80,44 @@ func (s *executor) GetQueryCostEstimationInfo(ctx context.Context, body *executa
 		}
 		fmt.Println(pricingParams.T)
 	}
-
-	ustmt, uargs, err := p.PrepareCountUpdated()
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare statements for query analysis: %w", err)
+	if pricingParams.T == 0 {
+		pricingParams.T = 1
 	}
 
-	rows, err = s.db.QueryContext(ctx, ustmt, uargs...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
-	}
-	for rows.Next() {
-		if err := rows.Scan(&pricingParams.U); err != nil {
-			return nil, fmt.Errorf("failed to scan query: %w", err)
+	if qi.QueryType == spec.INSERT {
+		pricingParams.U = 1
+	} else {
+		ustmt, uargs, err := p.PrepareCountUpdated()
+		if err != nil {
+			return nil, fmt.Errorf("failed to prepare statements for query analysis: %w", err)
 		}
-		fmt.Println(pricingParams.U)
+
+		rows, err = s.db.QueryContext(ctx, ustmt, uargs...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute query: %w", err)
+		}
+		for rows.Next() {
+			if err := rows.Scan(&pricingParams.U); err != nil {
+				return nil, fmt.Errorf("failed to scan query: %w", err)
+			}
+			fmt.Println(pricingParams.U)
+		}
 	}
 
-	dbid, err := s.GetDBIdentifier(body.Database)
-	tableName, err := db.GetTableName()
-	tableSize, err := s.dao.GetTableSize(ctx, dbid.GetSchemaName(), tableName)
+	dbid, _ := s.GetDBIdentifier(body.Database)
+	tableSize, err := s.dao.GetTableSize(ctx, dbid.GetSchemaName(), qi.TableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get row size: %w", err)
 	}
+
 	pricingParams.S = tableSize / pricingParams.T
 
-	pricingParams.I, err = s.dao.GetIndexedColumnCount(ctx, dbid.GetSchemaName(), tableName)
+	pricingParams.I, err = s.dao.GetIndexedColumnCount(ctx, dbid.GetSchemaName(), qi.TableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get indexed column count: %w", err)
 	}
-	pricingParams.Q = executable.Type
+
+	pricingParams.Q = qi.QueryType
 	pricingParams.W = p.GetPredicateLengths()
 
 	return pricingParams, nil

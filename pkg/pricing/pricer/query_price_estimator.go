@@ -3,14 +3,12 @@ package pricer
 import (
 	"context"
 	"fmt"
-	querytype "kwil/pkg/databases/spec"
-
-	//querytype "kwil/internal/usecases/execution"
 	"kwil/internal/usecases/executor"
+	"kwil/pkg/accounts"
 	"kwil/pkg/databases/executables"
+	querytype "kwil/pkg/databases/spec"
 	"kwil/pkg/pricing"
 	"kwil/pkg/utils/serialize"
-	txTypes "kwil/x/types/transactions"
 	"math"
 	"strconv"
 )
@@ -27,19 +25,15 @@ const (
 	POSTGRES_BLOCKSIZE = 8192
 )
 
-func NewQueryPriceEstimator(ctx context.Context, tx *txTypes.Transaction, exec executor.Executor) (QueryPriceEstimator, error) {
+var W_I = [...]float64{20000000000000.0, 20000000000000.0, 20000000000000.0}
+var W_U = [...]float64{20000000000000.0, 20000000000000.0, 20000000000000.0}
+
+func NewQueryPriceEstimator(ctx context.Context, tx *accounts.Transaction, exec executor.Executor) (QueryPriceEstimator, error) {
 	// get executionBody
 	executionBody, err := serialize.Deserialize[*executables.ExecutionBody](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode payload of type ExecutionBody: %w", err)
 	}
-
-	// clean.Clean(&executionBody)
-
-	// convExecutionBody, err := convert.Bytes.BodyToKwilAny(executionBody)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to convert execution body to kwil any: %w", err)
-	// }
 
 	// Execute the equivalent select query or explain query to get the cost estimation info
 	pricingparams, err := exec.GetQueryCostEstimationInfo(ctx, executionBody, tx.Sender)
@@ -67,17 +61,17 @@ func (q *qpestimator) Estimate() (string, error) {
 }
 
 func (q *qpestimator) estimateInsert(p *pricing.Params) float64 {
-	return float64(p.I)*q.f0(float64(p.T)) + float64(q.f1(p.T)) + float64(p.S)
+	return float64(p.I)*q.f0(float64(p.T))*W_I[0] + float64(q.f1(p.T))*W_I[0] + float64(p.S)*W_I[0]
 }
 
 func (q *qpestimator) estimateUpdate(p *pricing.Params) float64 {
 	w := q.getWhereCost(p)
-	return float64(w) + float64(p.I)*math.Log(float64(p.T)) + float64(p.T*p.S)
+	return float64(w)*W_U[0] + float64(p.I)*math.Log(float64(p.T))*W_U[1] + float64(p.U*p.S)*W_U[2]
 }
 
 func (q *qpestimator) estimateDelete(p *pricing.Params) float64 {
 	w := q.getWhereCost(p)
-	return float64(w) + float64(p.I)*math.Log(float64(p.T)) + float64(p.T*p.S)
+	return float64(w)*W_U[0] + float64(p.I)*math.Log(float64(p.T))*W_U[1] + float64(p.U*p.S)*W_U[2]
 }
 
 func (q *qpestimator) getWhereCost(p *pricing.Params) float64 {
@@ -88,7 +82,7 @@ func (q *qpestimator) f0(t float64) float64 {
 	return math.Log(t)
 }
 
-func (q *qpestimator) f1(t int64) int64 {
+func (q *qpestimator) f1(t int64) float64 {
 	//return t
-	return t / POSTGRES_BLOCKSIZE
+	return float64(t) / float64(POSTGRES_BLOCKSIZE)
 }

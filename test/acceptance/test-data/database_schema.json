@@ -25,9 +25,6 @@
                     "type": 102,
                     "attributes": [
                         {
-                            "type": 102
-                        },
-                        {
                             "type": 103
                         },
                         {
@@ -61,9 +58,6 @@
                     "name": "wallet",
                     "type": 102,
                     "attributes": [
-                        {
-                            "type": 102
-                        },
                         {
                             "type": 103
                         }
