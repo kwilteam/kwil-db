@@ -2,7 +2,9 @@ package fund
 
 import (
 	"fmt"
+	ec "github.com/ethereum/go-ethereum/crypto"
 	"kwil/cmd/kwil-cli/config"
+	escrowTypes "kwil/pkg/chain/contracts/escrow/types"
 	"kwil/pkg/client"
 
 	"github.com/fatih/color"
@@ -18,7 +20,7 @@ func balancesCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
-				client.WithChainRpcUrl(config.Config.ClientChain.Provider),
+				client.WithChainRpcUrl(config.Config.ClientChain.ProviderRpcUrl),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create client: %w", err)
@@ -45,12 +47,26 @@ func balancesCmd() *cobra.Command {
 				return fmt.Errorf("error getting balance: %w", err)
 			}
 
+			// get deposit balance
+			pk, err := config.GetEcdsaPrivateKey()
+			if err != nil {
+				return fmt.Errorf("failed to get private key: %w", err)
+			}
+			escrowCtr, err := clt.EscrowContract(ctx)
+			depositBalance, err := escrowCtr.Balance(ctx, &escrowTypes.DepositBalanceParams{
+				Validator: clt.ProviderAddress,
+				Address:   ec.PubkeyToAddress(pk.PublicKey).Hex()})
+			if err != nil {
+				return fmt.Errorf("error getting deposit balance: %w", err)
+			}
+
 			color.Set(color.Bold)
-			cmd.Printf("Pool: %s\n", clt.EscrowContractAddress)
+			fmt.Printf("Pool: %s\n", clt.EscrowContractAddress)
 			color.Unset()
 			color.Set(color.FgGreen)
-			cmd.Printf("Allowance: %s\n", allowance)
-			cmd.Printf("Balance: %s\n", balance)
+			fmt.Printf("Allowance: %s\n", allowance)
+			fmt.Printf("Balance: %s\n", balance)
+			fmt.Printf("Deposit Balance: %s\n", depositBalance.Balance)
 			color.Unset()
 
 			return nil

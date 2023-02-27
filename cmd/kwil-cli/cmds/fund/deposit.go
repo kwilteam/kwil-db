@@ -3,26 +3,30 @@ package fund
 import (
 	"errors"
 	"fmt"
+	"github.com/manifoldco/promptui"
 	"kwil/cmd/kwil-cli/cmds/common/display"
 	"kwil/cmd/kwil-cli/config"
 	escrowTypes "kwil/pkg/chain/contracts/escrow/types"
 	"kwil/pkg/client"
 	"math/big"
 
-	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 )
 
 func depositCmd() *cobra.Command {
+	var opts struct {
+		assumeYes bool
+	}
+
 	var cmd = &cobra.Command{
-		Use:   "deposit",
+		Use:   "deposit AMOUNT",
 		Short: "Deposit funds into the funding pool.",
 		Long:  `Deposit funds into the funding pool.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
-				client.WithChainRpcUrl(config.Config.ClientChain.Provider),
+				client.WithChainRpcUrl(config.Config.ClientChain.ProviderRpcUrl),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create client: %w", err)
@@ -40,18 +44,21 @@ func depositCmd() *cobra.Command {
 			}
 
 			fmt.Printf("You will be depositing $%s %s into funding pool %s\n", token.Name(), amount, clt.EscrowContractAddress)
-			pr := promptui.Select{
-				Label: "Continue?",
-				Items: []string{"yes", "no"},
-			}
 
-			_, res, err := pr.Run()
-			if err != nil {
-				return fmt.Errorf("failed to get user input: %w", err)
-			}
+			if !opts.assumeYes {
+				pr := promptui.Select{
+					Label: "Continue?",
+					Items: []string{"yes", "no"},
+				}
 
-			if res != "yes" {
-				return errors.New("transaction cancelled")
+				_, res, err := pr.Run()
+				if err != nil {
+					return fmt.Errorf("failed to get user input: %w", err)
+				}
+
+				if res != "yes" {
+					return errors.New("transaction cancelled")
+				}
 			}
 
 			escrow, err := clt.EscrowContract(ctx)
@@ -79,6 +86,9 @@ func depositCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	flags := cmd.Flags()
+	flags.BoolVarP(&opts.assumeYes, "yes", "y", false, "Automatic yes to prompts.")
 
 	return cmd
 }
