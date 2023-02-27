@@ -31,8 +31,8 @@ func (p *pricer) EstimatePrice(ctx context.Context, tx *accounts.Transaction, ex
 	case accounts.DROP_DATABASE:
 		price = GetPrice(pricing.DROP)
 	case accounts.EXECUTE_QUERY:
-		//price = GetPrice(pricing.QUERY)
-		price, err = EstimateQueryPrice(ctx, tx, exec)
+		price = GetPrice(pricing.QUERY)
+		//price, err = EstimateQueryPrice(ctx, tx, exec)
 	default:
 		return "", fmt.Errorf("invalid payload type.  received: %d", tx.PayloadType)
 	}
@@ -50,8 +50,8 @@ func (p *pricer) GetPrice(ctx context.Context, tx *accounts.Transaction, exec ex
 	case accounts.DROP_DATABASE:
 		price = GetPrice(pricing.DROP)
 	case accounts.EXECUTE_QUERY:
-		//price = GetPrice(pricing.QUERY)
-		price, err = EstimateQueryPrice(ctx, tx, exec)
+		price = GetPrice(pricing.QUERY)
+		//price, err = EstimateQueryPrice(ctx, tx, exec)
 	default:
 		return "", fmt.Errorf("invalid payload type.  received: %d", tx.PayloadType)
 	}
