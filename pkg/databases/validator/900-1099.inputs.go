@@ -191,5 +191,9 @@ func operatorCanBeOnColumnType(operator spec.ComparisonOperatorType, colType spe
 		return operator == spec.EQUAL || operator == spec.NOT_EQUAL
 	}
 
+	if colType == spec.UUID {
+		return operator == spec.EQUAL || operator == spec.NOT_EQUAL
+	}
+
 	return false
 }
