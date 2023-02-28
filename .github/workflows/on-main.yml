@@ -1,4 +1,4 @@
-name: build and deploy on main branch
+name: on-main
 
 on:
   workflow_dispatch:
@@ -7,8 +7,8 @@ on:
       - main
 
 jobs:
-  build-push-docker-image:
-    name: Build and push Docker image
+  build-push-image:
+    name: Build & push image
     runs-on: ubuntu-latest
 
     steps:
@@ -46,10 +46,15 @@ jobs:
           task pb:compile:all
 
       - name: manual git tag
-        run: echo "GIT_TAG=`echo $(git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//')`" >> $GITHUB_ENV
+        run: |
+          version=`echo ${{ github.sha }} | cut -c 1-7`
+          echo "GIT_TAG=$version" >> $GITHUB_ENV
+        #run: echo "GIT_TAG=`git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//'`" >> $GITHUB_ENV
 
       - name: manual build time
-        run: echo "BUILD_TIME=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`" >> $GITHUB_ENV
+        run: |
+          build_time=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`
+          echo "BUILD_TIME=$build_time" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -72,7 +77,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kwild
-          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          #key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kwild
           restore-keys: |
             ${{ runner.os }}-buildx-kwild
 
@@ -97,7 +103,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kgw
-          key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          #key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kgw
           restore-keys: |
             ${{ runner.os }}-buildx-kgw
 
@@ -126,10 +133,16 @@ jobs:
           mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
 
   deploy-to-eks:
-    name: Deploy new code to EKS DEV cluster
+    name: Deploy to DEV cluster
     runs-on: ubuntu-latest
+    needs: build-push-image
 
     steps:
+      - name: manual git tag
+        run: |
+          version=`echo ${{ github.sha }} | cut -c 1-7`
+          echo "GIT_TAG=$version" >> $GITHUB_ENV
+
       - name: deploy by release type to eks DEV cluster
         run: |
           echo "deploy ${{ env.GIT_TAG }} to eks DEV cluster"

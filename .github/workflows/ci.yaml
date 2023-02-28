@@ -1,4 +1,4 @@
-name: CI workflow
+name: CI
 
 on:
   pull_request:
@@ -58,15 +58,21 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kwild
-          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          #key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kwild
           restore-keys: |
             ${{ runner.os }}-buildx-kwild
 
       - name: manual git tag
-        run: echo "GIT_TAG=`echo $(git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//')`" >> $GITHUB_ENV
+        run: |
+          version=`echo ${{ github.sha }} | cut -c 1-7`
+          echo "GIT_TAG=$version" >> $GITHUB_ENV
+        #run: echo "GIT_TAG=`git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//'`" >> $GITHUB_ENV
 
       - name: manual build time
-        run: echo "BUILD_TIME=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`" >> $GITHUB_ENV
+        run: |
+          build_time=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`
+          echo "BUILD_TIME=$build_time" >> $GITHUB_ENV
 
       - name: Build kwild image
         id: docker_build_kwild
@@ -89,7 +95,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kgw
-          key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          #key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kgw
           restore-keys: |
             ${{ runner.os }}-buildx-kgw
 
