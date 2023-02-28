@@ -51,6 +51,10 @@ jobs:
         run: |
           task pb:compile:all
 
+      - name: Build kwil-cli
+        run: |
+          task build:cli
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
