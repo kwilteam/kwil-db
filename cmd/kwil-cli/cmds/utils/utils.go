@@ -17,6 +17,7 @@ func NewCmdUtils() *cobra.Command {
 		signCmd(),
 		pingCmd(),
 		printConfigCmd(),
+		NewServerCfgCmd(),
 	)
 
 	return cmd

@@ -20,7 +20,7 @@ func executeCmd() *cobra.Command {
 		Short: "Execute a query",
 		Long: `Execute executes a query against the specified database.  The query name is
 specified as a required "--query" flag, and the query parameters as arguments.
-In order to specify an parameter, you first need to specify the prameter name, then the parameter value.
+In order to specify an parameter, you first need to specify the parameter name, then the parameter value.
 
 For example, if I have a query name "create_user" that takes two arguments: name and age.
 I would specify the query as follows:
@@ -28,13 +28,13 @@ I would specify the query as follows:
 name satoshi age 32 --query=create_user
 
 You specify the database to execute this against with the --name flag, and
-the owner with the --wner flag.
+the owner with the --owner flag.
 
 You can also specify the database by passing the database id with the --dbid flag.
 
 For example:
 
-create_user name satoshi age 32 --database-name mydb --database-owner 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D
+create_user name satoshi age 32 --name mydb --owner 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D
 
 OR
 

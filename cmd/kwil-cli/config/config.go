@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"kwil/internal/pkg/config"
 	"kwil/pkg/crypto"
 	"os"
 	"os/user"
@@ -14,23 +15,24 @@ import (
 
 type CliConfig struct {
 	Node struct {
-		KwilProviderRpcUrl string `yaml:"rpc_url"`
-	} `yaml:"node"`
+		KwilProviderRpcUrl string `mapstructure:"rpc_url"`
+	} `mapstructure:"node"`
 	Wallet struct {
-		PrivateKey string `yaml:"private_key"`
-	} `yaml:"wallet"`
+		PrivateKey string `mapstructure:"private_key"`
+	} `mapstructure:"wallet"`
 	ClientChain struct {
-		Provider string `yaml:"provider"`
-	}
+		ProviderRpcUrl string `mapstructure:"rpc_url"`
+	} `mapstructure:"chain"`
 }
 
 // loadConfig loads the configuration from the config file.
 // If the config file is not found, it will create a new one.
 func LoadConfig() {
+	config.SetEnvConfig(EnvPrefix)
+
 	viper.SetConfigName(DefaultConfigName)
 	viper.SetConfigType(DefaultConfigType)
 	viper.AddConfigPath(getDefaultConfigDir())
-
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			p := getDefaultConfigDir() + "/" + defaultConfigFileName()
@@ -65,7 +67,7 @@ func fillConfigStruct() {
 
 	Config.Node.KwilProviderRpcUrl = rpc
 	Config.Wallet.PrivateKey = viper.GetString(WalletPrivateKeyKey)
-	Config.ClientChain.Provider = viper.GetString(ClientChainProviderRpcUrlKey)
+	Config.ClientChain.ProviderRpcUrl = viper.GetString(ClientChainProviderRpcUrlKey)
 }
 
 func getUserRootDir() string {

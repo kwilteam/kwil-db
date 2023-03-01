@@ -11,7 +11,7 @@ import (
 
 func dropCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "drop",
+		Use:   "drop DB_NAME",
 		Short: "Drops a database",
 		Long:  "Drops a database.  Requires 1 argument: the name of the database to drop",
 		Args:  cobra.ExactArgs(1),

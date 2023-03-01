@@ -18,6 +18,8 @@ const (
 	// TotalSupply test token total supply is TotalSupply*10^18
 	// change x/contracts/token/evm/abi/erc20.bin if you want to change it
 	TotalSupply = 12345
+
+	DefaultDenomination = 10000
 )
 
 type EthDeployer struct {
@@ -36,19 +38,31 @@ type EthDeployer struct {
 	deployedEscrow *escrow.Escrow
 	deployedErc20  *token.Erc20
 
-	domination *big.Int
+	denomination *big.Int
 }
 
-func NewEthDeployer(rpcUrl string, privateKeyStr string, domination *big.Int) *EthDeployer {
+type EthDeployOption func(*EthDeployer)
+
+func WithDomination(domination *big.Int) EthDeployOption {
+	return func(d *EthDeployer) {
+		d.denomination = domination
+	}
+}
+
+func NewEthDeployer(rpcUrl string, privateKeyStr string, opts ...EthDeployOption) *EthDeployer {
 	privateKey, publicKey := getKeys(privateKeyStr)
 
 	d := &EthDeployer{
-		RPCURL:     rpcUrl,
-		PriKey:     privateKeyStr,
-		privateKey: privateKey,
-		publicKey:  publicKey,
-		Account:    crypto.PubkeyToAddress(*publicKey),
-		domination: domination,
+		RPCURL:       rpcUrl,
+		PriKey:       privateKeyStr,
+		privateKey:   privateKey,
+		publicKey:    publicKey,
+		Account:      crypto.PubkeyToAddress(*publicKey),
+		denomination: big.NewInt(DefaultDenomination),
+	}
+
+	for _, opt := range opts {
+		opt(d)
 	}
 
 	return d
@@ -188,7 +202,7 @@ func (d *EthDeployer) FundAccount(ctx context.Context, account string, amount in
 	//cAuth := d.getCallAuth(ctx, d.Account.Hex())
 	//decimals, err := d.deployedErc20.Decimals(cAuth)
 	//fmt.Println("token decimals = ", decimals)
-	realAmount := new(big.Int).Mul(big.NewInt(amount), d.domination)
+	realAmount := new(big.Int).Mul(big.NewInt(amount), d.denomination)
 
 	auth, err := d.getAccountAuth(ctx)
 	if err != nil {

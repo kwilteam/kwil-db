@@ -35,7 +35,7 @@ func setupKgw(ctx context.Context, opts ...containerOption) (*kgwContainer, erro
 		Mounts: testcontainers.ContainerMounts{
 			{
 				Source: testcontainers.GenericBindMountSource{
-					HostPath: path.Join(path.Dir(currentFilePath), "../acceptance/test-data/keys.json")},
+					HostPath: path.Join(path.Dir(currentFilePath), "../../acceptance/test-data/keys.json")},
 				Target:   "/app/keys.json",
 				ReadOnly: true,
 			},

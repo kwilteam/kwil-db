@@ -55,7 +55,6 @@ func (c *contract) Deposit(ctx context.Context, params *types2.DepositParams, pr
 	if err != nil {
 		return nil, err
 	}
-
 	return &types2.DepositResponse{
 		TxHash: res.Hash().String(),
 	}, nil
