@@ -28,7 +28,7 @@ func MustRun(cmd *exec.Cmd) error {
 	return cmd.Run()
 }
 
-// KwilCliDriver is a driver for the kwildb integration tests
+// KwilCliDriver is a cli driver for integration tests
 type KwilCliDriver struct {
 	cliBin        string
 	chainRPCURL   string
