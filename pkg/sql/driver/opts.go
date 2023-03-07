@@ -1,5 +1,7 @@
 package driver
 
+import "time"
+
 type ConnOpt func(*Connection)
 
 func WithPath(path string) ConnOpt {
@@ -11,5 +13,11 @@ func WithPath(path string) ConnOpt {
 func ReadOnly() ConnOpt {
 	return func(c *Connection) {
 		c.readOnly = true
+	}
+}
+
+func WithLockWaitTime(t time.Duration) ConnOpt {
+	return func(c *Connection) {
+		c.lockWaitTime = t
 	}
 }

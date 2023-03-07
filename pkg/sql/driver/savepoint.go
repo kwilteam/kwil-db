@@ -3,88 +3,73 @@ package driver
 import (
 	"bytes"
 	"io"
+	"math/rand"
+	"time"
 
 	"zombiezen.com/go/sqlite"
-	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-const mainDB = "main"
-
-type savepoint struct {
-	conn       *sqlite.Conn
-	notifyChan chan error // notifies when a savepoint is committed. an error can be sent to this channel to rollback the savepoint
-	session    *sqlite.Session
-	Started    bool
+type Savepoint struct {
+	*Connection
+	name string
+	ses  *sqlite.Session
 }
 
-func newSavepoint(conn *sqlite.Conn) *savepoint {
-	return &savepoint{
-		conn:       conn,
-		notifyChan: make(chan error),
-		session:    nil,
-		Started:    false,
+// Creates a savepoint with the given name. If no name is provided, a random
+// name will be generated.
+// Only the first argument is used, so you can pass in a string literal
+func (c *Connection) Savepoint(nameArr ...string) (*Savepoint, error) {
+	var name string
+	// generate a random name if none is provided
+	if len(nameArr) == 0 {
+		name = randomString(10)
+	} else {
+		name = nameArr[0]
 	}
-}
 
-// Start will start a savepoint and return an error if a savepoint is already active.
-func (s *savepoint) Start() (err error) {
-	if s.Started {
-		return ErrActiveSavepoint
+	if err := c.Execute("SAVEPOINT " + name); err != nil {
+		return nil, err
 	}
-	s.session, err = s.conn.CreateSession("")
+
+	ses, err := c.conn.CreateSession("")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	err = s.session.Attach("")
+
+	err = ses.Attach("")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	go func() {
-		err2, ok := <-s.notifyChan
-		if !ok {
-			panic("savepoint channel closed unexpectedly, or was never opened")
-		}
-		sqlitex.Save(s.conn)(&err2)
-	}()
-
-	s.Started = true
-	return nil
+	return &Savepoint{
+		Connection: c,
+		name:       name,
+		ses:        ses,
+	}, nil
 }
 
-// Commit will commit the savepoint and close the savepoint notify channel
-func (s *savepoint) Commit() error {
-	return s.end(nil)
+// end cleans up anything that needs to be closed
+// after the savepoint is committed or rolled back
+func (s *Savepoint) end() {
+	s.ses.Disable()
 }
 
-// Rollback will rollback the savepoint and close the savepoint notify channel
-func (s *savepoint) Rollback() error {
-	return s.end(ErrSavepointRollback)
+// Commit commits or "releases" the savepoint.
+// I use the term commit since it is more clear for most devs,
+// but the technical term for SQLite is "release".
+func (s *Savepoint) Commit() error {
+	defer s.end()
+	return s.Execute("RELEASE " + s.name)
 }
 
-// end will close the savepoint notify channel and set the savepoint as not started.
-func (s *savepoint) end(err error) error {
-	if !s.Started {
-		return ErrNoActiveSavepoint
-	}
-
-	s.notifyChan <- err
-
-	s.Started = false
-	s.safeDeleteSession()
-	return nil
+func (s *Savepoint) Rollback() error {
+	defer s.end()
+	return s.Execute("ROLLBACK TO " + s.name)
 }
 
-func (s *savepoint) safeDeleteSession() {
-	if s.session != nil {
-		s.session.Delete()
-		s.session = nil
-	}
-}
-
-// GenerateChangeset will generate a changeset from the savepoint.
-func (s *savepoint) GenerateChangeset() (*bytes.Buffer, error) {
-	err := s.session.Diff(mainDB, mainDB)
+// GetChangeset returns a bytes.Buffer containing the changeset
+func (s *Savepoint) GetChangeset() (*bytes.Buffer, error) {
+	err := s.ses.Diff("main", "main")
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +77,7 @@ func (s *savepoint) GenerateChangeset() (*bytes.Buffer, error) {
 	var buf bytes.Buffer
 	writer := io.Writer(&buf)
 
-	err = s.session.WriteChangeset(writer)
+	err = s.ses.WriteChangeset(writer)
 	if err != nil {
 		return nil, err
 	}
@@ -100,64 +85,22 @@ func (s *savepoint) GenerateChangeset() (*bytes.Buffer, error) {
 	return &buf, nil
 }
 
-// Savepoint begins a new savepoint.
-// If there is already a savepoint active, this will return an error.
-func (c *Connection) BeginSavepoint() (err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// ApplyChangeset applies the changeset to the database.
+// If it fails, it will return an error.
+func (s *Savepoint) ApplyChangeset(changeset *bytes.Buffer) error {
+	reader := io.Reader(changeset)
 
-	if c.savepoint == nil {
-		c.savepoint = newSavepoint(c.conn)
-	}
-
-	// this will catch if there is already a savepoint active
-	if err := c.savepoint.Start(); err != nil {
-		return err
-	}
-
-	return nil
+	return s.conn.ApplyChangeset(reader, nil, func(ct sqlite.ConflictType, ci *sqlite.ChangesetIterator) sqlite.ConflictAction {
+		return sqlite.ChangesetAbort
+	})
 }
 
-// CommitSavepoint will commit the current savepoint.
-// If there is no savepoint active, this will return an error.
-func (c *Connection) CommitSavepoint() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.savepoint == nil {
-		return ErrNoActiveSavepoint
+func randomString(length int) string {
+	rand.Seed(time.Now().UnixNano())
+	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+	result := make([]rune, length)
+	for i := range result {
+		result[i] = chars[rand.Intn(len(chars))]
 	}
-
-	return c.savepoint.Commit()
-}
-
-// RollbackSavepoint will rollback the current savepoint.
-// If there is no savepoint active, this will return an error.
-func (c *Connection) RollbackSavepoint() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.savepoint == nil {
-		return ErrNoActiveSavepoint
-	}
-
-	return c.savepoint.Rollback()
-}
-
-// ActiveSavepoint returns true if there is an active savepoint.
-func (c *Connection) ActiveSavepoint() bool {
-	return c.savepoint.Started
-}
-
-// GenerateChangeset will generate a changeset from the current savepoint.
-// If there is no savepoint active, this will return an error.
-func (c *Connection) GenerateChangeset() (*bytes.Buffer, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.savepoint == nil {
-		return nil, ErrNoActiveSavepoint
-	}
-
-	return c.savepoint.GenerateChangeset()
+	return string(result)
 }

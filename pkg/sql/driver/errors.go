@@ -8,4 +8,5 @@ var (
 	ErrActiveSavepoint   = errors.New("savepoint already active")
 	ErrSavepointRollback = errors.New("savepoint rollback")
 	ErrNoActiveSavepoint = errors.New("no active savepoint")
+	ErrLockWaitTimeout   = errors.New("lock wait timeout")
 )

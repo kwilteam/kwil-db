@@ -2,35 +2,51 @@ package driver
 
 import (
 	"fmt"
+	"os"
 	"sync"
+	"time"
 
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
+var (
+	DefaultPath string
+)
+
+func init() {
+	dirname, err := os.UserHomeDir()
+	if err != nil {
+		dirname = "./tmp"
+	}
+
+	DefaultPath = fmt.Sprintf("%s/.kwil/sqlite/", dirname)
+}
+
 const (
-	FilePathSuffix = ".sqlite"
-	DefaultPath    = "~./.kwil/sqlite/"
+	FilePathSuffix             = ".sqlite"
+	DefaultLockWaitTimeSeconds = 5
 )
 
 type Connection struct {
-	conn      *sqlite.Conn
-	mu        *sync.Mutex
-	DBID      string
-	lock      LockType
-	path      string
-	readOnly  bool
-	savepoint *savepoint
+	conn         *sqlite.Conn
+	mu           *sync.Mutex
+	DBID         string
+	lock         LockType
+	path         string
+	readOnly     bool
+	lockWaitTime time.Duration
 }
 
 // OpenConn opens a connection to the database with the given ID/name.
 func OpenConn(dbid string, opts ...ConnOpt) (*Connection, error) {
 	connection := &Connection{
-		DBID:     dbid,
-		mu:       &sync.Mutex{},
-		lock:     LOCK_TYPE_UNLOCKED,
-		path:     DefaultPath,
-		readOnly: false,
+		DBID:         dbid,
+		mu:           &sync.Mutex{},
+		lock:         LOCK_TYPE_UNLOCKED,
+		path:         DefaultPath,
+		readOnly:     false,
+		lockWaitTime: time.Second * DefaultLockWaitTimeSeconds,
 	}
 	for _, opt := range opts {
 		opt(connection)
@@ -52,7 +68,13 @@ func (c *Connection) openConn() error {
 	}
 
 	if c.conn == nil {
-		conn, err := sqlite.OpenConn(c.getFilePath(), flags)
+		fp := c.getFilePath()
+		err := createDirIfNeeded(fp)
+		if err != nil {
+			return err
+		}
+
+		conn, err := sqlite.OpenConn(fp, flags)
 		if err != nil {
 			return err
 		}
@@ -60,9 +82,6 @@ func (c *Connection) openConn() error {
 		c.lock = LOCK_TYPED_SHARED
 	}
 
-	if c.savepoint == nil {
-		c.savepoint = newSavepoint(c.conn)
-	}
 	return nil
 }
 
@@ -135,7 +154,7 @@ func (c *Connection) query(statement string, resultFn ResultFn, statementSetterF
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	stmt, err := c.Prepare(statement)
+	stmt, err := c.prepare(statement)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -163,9 +182,7 @@ func (c *Connection) query(statement string, resultFn ResultFn, statementSetterF
 }
 
 // Prepare prepares a statement for execution
-func (c *Connection) Prepare(statement string) (*Statement, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *Connection) prepare(statement string) (*Statement, error) {
 	if !c.Readable() {
 		return nil, ErrConnectionClosed
 	}
@@ -178,21 +195,27 @@ func (c *Connection) Prepare(statement string) (*Statement, error) {
 	return newStatement(sqliteStmt), nil
 }
 
-func (c *Connection) ExecuteStatement(stmt *Statement) (err error) {
+func (c *Connection) AcquireLock() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.Writable() {
-		return ErrNoWriteLock
-	}
 
-	if err := stmt.Clear(); err != nil {
-		return fmt.Errorf("failed to reset statement: %w", err)
-	}
-
-	_, err = stmt.step()
+	err := acquireLock(c.DBID, c.lockWaitTime)
 	if err != nil {
-		return fmt.Errorf("failed to execute statement: %w", err)
+		return err
 	}
 
+	c.lock = LOCK_TYPE_EXCLUSIVE
 	return nil
+}
+
+func (c *Connection) ReleaseLock() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.lock != LOCK_TYPE_EXCLUSIVE {
+		return
+	}
+
+	releaseLock(c.DBID)
+	c.lock = LOCK_TYPED_SHARED
 }
