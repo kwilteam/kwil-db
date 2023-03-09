@@ -1,8 +1,8 @@
 package token
 
-type Position struct {
-	Line   int
-	Column int
-}
+type Pos uint
 
-type Pos int
+type Position struct {
+	Line   Pos
+	Column Pos
+}

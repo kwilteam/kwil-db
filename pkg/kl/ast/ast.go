@@ -32,22 +32,29 @@ type (
 
 	Ident struct {
 		//Token token.Token
+		Name string
+	}
+
+	BasicLit struct {
+		Type  token.Token
 		Value string
 	}
 
-	Boolean struct {
-		Value bool
+	AttrExpr struct {
+		Name   Ident
+		Params []Expr
 	}
 
-	Integer struct {
-		Value int64
+	ParentExpr struct {
+		X Expr
 	}
 )
 
-func (x *BadExpr) exprNode() {}
-func (x *Ident) exprNode()   {}
-func (x *Boolean) exprNode() {}
-func (x *Integer) exprNode() {}
+func (x *BadExpr) exprNode()    {}
+func (x *Ident) exprNode()      {}
+func (x *BasicLit) exprNode()   {}
+func (x *AttrExpr) exprNode()   {}
+func (x *ParentExpr) exprNode() {}
 
 // ----------------------------------------
 // Statements
@@ -75,14 +82,11 @@ type FieldList struct {
 	Names []*Ident
 }
 
-type AttrType struct {
-	Token  token.Token
-	Params *FieldList
-}
-
 type (
 	AttrDef struct {
-		Type *AttrType
+		Name  *Ident
+		Type  token.Token
+		Param Expr
 	}
 
 	ColumnDef struct {
@@ -115,7 +119,7 @@ func (x *DatabaseDecl) stmtNode() {}
 func (x *ActionDecl) stmtNode()   {}
 
 func (d *DatabaseDecl) Build() (def DBDefinition) {
-	def.Name = d.Name.Value
+	def.Name = d.Name.Name
 	for _, stmt := range d.Body.Statements {
 		switch stmt.(type) {
 		case *TableDecl:
@@ -126,7 +130,9 @@ func (d *DatabaseDecl) Build() (def DBDefinition) {
 }
 
 func (d *TableDecl) Build() (def TableDefinition) {
-	def.Name = d.Name.Value
+	def.Name = d.Name.Name
+	def.Columns = []ColumnDefinition{}
+
 	for _, column := range d.Body {
 		def.Columns = append(def.Columns, column.Build())
 	}
@@ -134,25 +140,37 @@ func (d *TableDecl) Build() (def TableDefinition) {
 }
 
 func (d *ColumnDef) Build() (def ColumnDefinition) {
-	def.Name = d.Name.Value
-	def.Type = d.Type.Value
+	def.Name = d.Name.Name
+	def.Type = d.Type.Name
+	def.Attrs = []Attribute{}
 	for _, attr := range d.Attrs {
-		def.Attrs = append(def.Attrs,
-			AttributeType{
-				AType: attr.Type.Token.Type.ToInt(),
-				Value: "MAGIC",
-			})
+		//at := Attribute{
+		//	AType: attr.Param.Type.ToInt(),
+		//	Value: "MAGIC",
+		//}
+
+		at := Attribute{}
+
+		switch attr.Param.(type) {
+		case *BasicLit:
+			at.Value = attr.Param.(*BasicLit).Value
+			at.AType = attr.Param.(*BasicLit).Type.ToInt()
+		case *Ident:
+			at.Value = attr.Param.(*Ident).Name
+			at.AType = token.IDENT.ToInt()
+		}
+
+		def.Attrs = append(def.Attrs, at)
 	}
 	return
 }
 
 type Ast struct {
-	Statements []Stmt
+	Statements []Stmt // top level is always a database declaration, and only one
 }
 
 // Generate generates JSON string from AST
 func (a *Ast) Generate() []byte {
-
 	db := DBDefinition{}
 
 	for _, stmt := range a.Statements {

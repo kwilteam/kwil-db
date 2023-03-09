@@ -1,0 +1,47 @@
+{
+  "name": "test",
+  "tables": [
+    {
+      "name": "user",
+      "columns": [
+        {
+          "name": "username",
+          "type": "string",
+          "attributes": [
+            {
+              "type": 0
+            }
+          ]
+        },
+        {
+          "name": "age",
+          "type": "int",
+          "attributes": [
+            {
+              "type": 5,
+              "Value": "18"
+            },
+            {
+              "type": 5,
+              "Value": "30"
+            }
+          ]
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "attributes": [
+            {
+              "type": 5,
+              "Value": "50"
+            },
+            {
+              "type": 5,
+              "Value": "10"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

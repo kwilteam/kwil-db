@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/parser"
+	"strings"
 )
 
 const PROMPT = ">> "
@@ -19,7 +21,13 @@ func Start(in io.Reader, out io.Writer) {
 		}
 
 		line := buf.Text()
-		a, err := parser.Parse([]byte(line), parser.WithTraceOff())
+		var a *ast.Ast
+		var err error
+		if strings.ToLower(line[:8]) == "traceon;" {
+			a, err = parser.Parse([]byte(line[8:]))
+		} else {
+			a, err = parser.Parse([]byte(line), parser.WithTraceOff())
+		}
 		if err != nil {
 			fmt.Fprintf(out, "ERROR: %s\n", err)
 			continue

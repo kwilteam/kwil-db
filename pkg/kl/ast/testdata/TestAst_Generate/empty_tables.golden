@@ -1,0 +1,13 @@
+{
+  "name": "test",
+  "tables": [
+    {
+      "name": "user",
+      "columns": []
+    },
+    {
+      "name": "order",
+      "columns": []
+    }
+  ]
+}
