@@ -13,8 +13,9 @@ type parser struct {
 
 	errors []error
 
-	trace  bool
-	curTok token.Token
+	trace bool
+	tok   token.Token // current token
+	lit   string      // current literal
 }
 
 type Opt func(*parser)
@@ -25,7 +26,7 @@ func WithTraceOff() Opt {
 	}
 }
 
-func New(s *scanner.Scanner, opts ...Opt) *parser {
+func new(s *scanner.Scanner, opts ...Opt) *parser {
 	p := &parser{
 		scanner: s,
 		errors:  []error{},
@@ -36,7 +37,7 @@ func New(s *scanner.Scanner, opts ...Opt) *parser {
 		opt(p)
 	}
 
-	// init curTok
+	// init tok
 	p.next()
 
 	return p
@@ -56,7 +57,7 @@ func Parse(src []byte, opts ...Opt) (a *ast.Ast, err error) {
 
 	h := func(msg string) { p.error(msg) }
 	s := scanner.New(src, h)
-	p = New(s, opts...)
+	p = new(s, opts...)
 	a = p.Parse()
 	return a, err
 }
@@ -84,36 +85,63 @@ func (p *parser) errorf(format string, args ...any) {
 	p.errors = append(p.errors, fmt.Errorf(format, args...))
 }
 
-func (p *parser) curTokIs(t token.TokenType) bool {
-	return p.curTok.Type == t
+func (p *parser) curTokFrom(ts ...token.Token) bool {
+	for _, t := range ts {
+		if p.tok == t {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *parser) curTokIs(t token.Token) bool {
+	return p.tok == t
 }
 
 func (p *parser) errorExpected(msg string) {
 	p.errorf(msg)
 }
 
-func (p *parser) expect(t token.TokenType) {
+func (p *parser) expect(t token.Token) {
 	p.expectWithoutAdvance(t)
 	p.next()
 }
 
-func (p *parser) expectWithoutAdvance(t token.TokenType) bool {
+func (p *parser) expectWithoutAdvance(t token.Token) bool {
 	if !p.curTokIs(t) {
-		p.errorExpected(fmt.Sprintf("expect current token to be %s got %s instead", t, p.curTok.Type))
+		p.errorExpected(fmt.Sprintf("expect current token to be %s got %s instead", t, p.tok))
 		return false
 	}
 	return true
 }
 
+func (p *parser) parseBasicLit() *ast.BasicLit {
+	if !p.curTokFrom(token.INTEGER, token.STRING) {
+		p.errorExpected(fmt.Sprintf("expect basic literal, got %s", p.tok))
+	}
+
+	x := &ast.BasicLit{Type: p.tok, Value: p.lit}
+	p.next()
+	return x
+}
+
 func (p *parser) parseIdent() *ast.Ident {
 	name := ""
 	if p.curTokIs(token.IDENT) {
-		name = p.curTok.Literal
+		name = p.lit
 		p.next()
 	} else {
 		p.expect(token.IDENT)
 	}
-	return &ast.Ident{Value: name}
+	return &ast.Ident{Name: name}
+}
+
+func (p *parser) parseTypeName() *ast.Ident {
+	if p.trace {
+		defer un(trace("parseTypeName"))
+	}
+
+	return p.parseIdent()
 }
 
 type CompositeLit struct {
@@ -123,56 +151,71 @@ type CallExpr struct {
 }
 
 func (p *parser) next() {
-	p.curTok = *p.scanner.Next()
+	p.tok, p.lit = p.scanner.Next()
 }
 
-//func (p *parser) parseParameterList() []ast.Expr {
-//	if p.trace {
-//		defer un(trace("parseParams"))
-//	}
-//
-//	fmt.Println("parseParameterList", p.curTok, p.peekTok)
-//
-//	p.expect(token.LPAREN)
-//
-//	fmt.Println("parseParameterList.....", p.curTok, p.peekTok)
-//
-//	var params = []ast.Expr{}
-//	for !p.curTokIs(token.RPAREN) && !p.curTokIs(token.EOF) {
-//		switch p.curTok.Type {
-//		case token.IDENT:
-//			param := p.parseIdent()
-//			params = append(params, param)
-//		case token.INTEGER:
-//			param := &ast.BasicLit{Value: p.curTok.Literal, Type: token.INTEGER}
-//			params = append(params, param)
-//			p.next()
-//		}
-//
-//		//if p.peekTokIs(token.COMMA) {
-//		//	p.next()
-//		//}
-//	}
-//
-//	p.expect(token.RPAREN)
-//	return params
-//}
+func (p *parser) parseParameterList() []ast.Expr {
+	if p.trace {
+		defer un(trace("parseParameterList"))
+	}
+
+	var params = []ast.Expr{}
+	for !p.curTokIs(token.RPAREN) && !p.curTokIs(token.EOF) {
+		switch p.tok {
+		case token.IDENT:
+			param := p.parseIdent()
+			params = append(params, param)
+		case token.INTEGER, token.STRING:
+			param := &ast.BasicLit{Value: p.lit, Type: token.INTEGER}
+			params = append(params, param)
+			p.next()
+		}
+
+		//if p.peekTokIs(token.COMMA) {
+		//	p.next()
+		//}
+	}
+
+	p.expect(token.RPAREN)
+	return params
+}
+
+func (p *parser) parseParameter() ast.Expr {
+	if p.trace {
+		defer un(trace("parseParameter"))
+	}
+	
+	var param ast.Expr
+	switch p.tok {
+	case token.IDENT:
+		param = p.parseIdent()
+	case token.INTEGER, token.STRING:
+		param = p.parseBasicLit()
+	}
+
+	return param
+}
 
 func (p *parser) parseColumnAttr() *ast.AttrDef {
 	if p.trace {
 		defer un(trace("parseColumnAttr"))
 	}
 
-	attr := &ast.AttrDef{}
-	switch p.curTok.Type {
+	attr := &ast.AttrDef{Name: &ast.Ident{Name: p.lit}, Type: p.tok}
+	switch p.tok {
+	case token.MIN, token.MAX, token.MINLEN, token.MAXLEN:
+		// attribute with parameters
+		p.next()
+		p.expect(token.LPAREN)
+		if !p.curTokIs(token.RPAREN) {
+			attr.Param = p.parseParameter()
+		}
+		p.expect(token.RPAREN)
 	default:
 		// attribute without parameters
-		attr.Type = &ast.AttrType{
-			Token: p.curTok,
-		}
+		p.next()
 	}
 
-	p.next()
 	return attr
 }
 
@@ -184,9 +227,9 @@ func (p *parser) parseColumnAttrList() []*ast.AttrDef {
 	attrs := []*ast.AttrDef{}
 
 	for !p.curTokIs(token.COMMA) && !p.curTokIs(token.RBRACE) && !p.curTokIs(token.EOF) {
-		if !p.curTok.Type.IsAttrType() {
-			p.errorExpected(fmt.Sprintf("expect current token to be attr type got %s instead", p.curTok.Type))
-			p.next()
+		if !p.tok.IsAttr() {
+			p.errorExpected(fmt.Sprintf("expect current token to be attr got (%s:%s) instead", p.tok, p.lit))
+			p.next() // should advance to next attr
 		} else {
 			attr := p.parseColumnAttr()
 			attrs = append(attrs, attr)
@@ -205,7 +248,7 @@ func (p *parser) parseColumnDef() *ast.ColumnDef {
 
 	col := &ast.ColumnDef{}
 	col.Name = p.parseIdent()
-	col.Type = p.parseIdent()
+	col.Type = p.parseTypeName()
 	col.Attrs = p.parseColumnAttrList()
 
 	if p.curTokIs(token.COMMA) {
@@ -241,7 +284,7 @@ func (p *parser) parseBlockDeclaration() *ast.BlockStmt {
 
 	p.expect(token.LBRACE)
 
-	block := &ast.BlockStmt{Token: p.curTok}
+	block := &ast.BlockStmt{Token: p.tok}
 	block.Statements = []ast.Stmt{}
 
 	for !p.curTokIs(token.RBRACE) && !p.curTokIs(token.EOF) {
@@ -289,13 +332,13 @@ func (p *parser) parseStatement() ast.Stmt {
 		defer un(trace("parseStatement"))
 	}
 
-	switch p.curTok.Type {
+	switch p.tok {
 	case token.DATABASE:
 		return p.parseDatabaseDeclaration()
 	case token.TABLE:
 		return p.parseTableDeclaration()
 	default:
-		fmt.Printf("unknown statement, token: %s\n", p.curTok)
+		fmt.Printf("unknown statement, token: %s\n", p.tok)
 		return nil
 	}
 }

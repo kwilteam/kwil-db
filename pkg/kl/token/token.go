@@ -1,10 +1,10 @@
 package token
 
-type TokenType int
+type Token int
 
 const (
 	// Special tokens
-	ILLEGAL TokenType = iota
+	ILLEGAL Token = iota
 	EOF
 	COMMENT
 
@@ -31,21 +31,22 @@ const (
 	//UPDATE   // update
 	//DROP     // drop
 	//
-	//INT  // int
-	//UUID // uuid
-	//TEXT // string
+
 	//
 	//PRIMARY // primary
 	//UNIQUE  // unique
-	//MIN     // min
-	//MAX     // max
-	//MINLEN  // minlen
-	//MAXLEN  // maxlen
-	NULL
-	NOTNULL // notnull
 	//
 	//CONST      // const
 	//ACTION     // action
+
+	attrBeg
+	MIN    // min
+	MAX    // max
+	MINLEN // minlen
+	MAXLEN // maxlen
+	NULL
+	NOTNULL // notnull
+	attrEnd
 	keywordEnd // keywordEnd
 
 	symbolBeg
@@ -77,13 +78,17 @@ var tokens = [...]string{
 	EOF:     "EOF",
 	COMMENT: "COMMENT",
 	//
-	IDENT: "IDENT",
+	IDENT:   "IDENT",
+	INTEGER: "INTEGER",
+	STRING:  "STRING",
 	//
 	DATABASE: "database",
 	TABLE:    "table",
-	//INT:      "int",
-	//UUID:     "uuid",
-	//TEXT:     "text",
+
+	MIN:     "min",
+	MAX:     "max",
+	MINLEN:  "minlen",
+	MAXLEN:  "maxlen",
 	NULL:    "null",
 	NOTNULL: "notnull",
 	//
@@ -107,42 +112,41 @@ var tokens = [...]string{
 	//COLON:     ":",
 }
 
-func (t TokenType) ToInt() int {
+func (t Token) ToInt() int {
 	return int(t)
 }
 
-func (t TokenType) IsLiteral() bool {
-	return literalBeg < t && t < literalEnd
+func (t Token) String() string {
+	return tokens[t]
+}
+func (t Token) IsAttr() bool {
+	return attrBeg < t && t < attrEnd
 }
 
-func (t TokenType) String() string {
-	return tokens[t]
+func (t Token) IsLiteral() bool {
+	return literalBeg < t && t < literalEnd
 }
 
 //func (t TokenType) IsColumnType() bool {
 //	return t == INT || t == TEXT || t == UUID
 //}
 
-func (t TokenType) IsAttrType() bool {
-	return t == NULL || t == NOTNULL
-}
-
-var keywords map[string]TokenType
-var symbols map[string]TokenType
+var keywords map[string]Token
+var symbols map[string]Token
 
 func init() {
-	keywords = make(map[string]TokenType, keywordEnd-(keywordBeg+1))
+	keywords = make(map[string]Token, keywordEnd-(keywordBeg+1))
 	for i := keywordBeg + 1; i < keywordEnd; i++ {
 		keywords[tokens[i]] = i
 	}
 
-	symbols = make(map[string]TokenType, symbolEnd-(symbolBeg+1))
+	symbols = make(map[string]Token, symbolEnd-(symbolBeg+1))
 	for i := symbolBeg + 1; i < symbolEnd; i++ {
 		symbols[tokens[i]] = i
 	}
 }
 
-func Lookup(ident string) TokenType {
+func Lookup(ident string) Token {
 	if len(ident) == 1 {
 		return IDENT
 	}
@@ -151,10 +155,4 @@ func Lookup(ident string) TokenType {
 		return tok
 	}
 	return IDENT
-}
-
-type Token struct {
-	Type    TokenType
-	Literal string
-	//pos
 }

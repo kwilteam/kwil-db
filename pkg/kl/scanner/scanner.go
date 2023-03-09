@@ -125,6 +125,11 @@ func isDigit(ch rune) bool {
 	return isDecimal(ch) || ch >= utf8.RuneSelf && unicode.IsDigit(ch)
 }
 
+func t() {
+	var x, n, c int = 3, 4, 5
+	fmt.Println(x, n, c)
+}
+
 func (s *Scanner) scanIdentifier() string {
 	offs := s.offset
 	for isLetter(s.ch) || isDecimal(s.ch) || s.ch == '_' {
@@ -133,7 +138,7 @@ func (s *Scanner) scanIdentifier() string {
 	return string(s.src[offs:s.offset])
 }
 
-func (s *Scanner) scanNumber() (tok token.TokenType, lit string) {
+func (s *Scanner) scanNumber() (tok token.Token, lit string) {
 	offs := s.offset
 	for isDecimal(s.ch) {
 		s.nextChar()
@@ -152,25 +157,32 @@ func (s *Scanner) peek() byte {
 	return 0
 }
 
-func (s *Scanner) Next() (lit *token.Token) {
+func (s *Scanner) Next() (tok token.Token, lit string) {
 	s.skipWhitespace()
 
 	ch := s.ch
 	switch ch {
 	case eof:
-		lit = &token.Token{Type: token.EOF, Literal: "EOF"}
+		lit = "EOF"
+		tok = token.EOF
 	case '{':
-		lit = &token.Token{Type: token.LBRACE, Literal: "{"}
+		lit = "{"
+		tok = token.LBRACE
 	case '}':
-		lit = &token.Token{Type: token.RBRACE, Literal: "}"}
+		lit = "}"
+		tok = token.RBRACE
 	case '(':
-		lit = &token.Token{Type: token.LPAREN, Literal: "("}
+		lit = "("
+		tok = token.LPAREN
 	case ')':
-		lit = &token.Token{Type: token.RPAREN, Literal: ")"}
+		lit = ")"
+		tok = token.RPAREN
 	case ',':
-		lit = &token.Token{Type: token.COMMA, Literal: ","}
+		lit = ","
+		tok = token.COMMA
 	case ';':
-		lit = &token.Token{Type: token.SEMICOLON, Literal: ";"}
+		lit = ";"
+		tok = token.SEMICOLON
 	//case '=':
 	//	if s.peek() == '=' {
 	//		s.nextChar()
@@ -181,16 +193,18 @@ func (s *Scanner) Next() (lit *token.Token) {
 	default:
 		switch {
 		case isLetter(ch):
-			idt := s.scanIdentifier()
-			lit = &token.Token{Type: token.Lookup(idt), Literal: idt}
+			lit = s.scanIdentifier()
+			tok = token.Lookup(lit)
 			// no need to forward to nextChar, scanIdentifier did it
 			return
 		case isDecimal(ch):
-			tok, idt := s.scanNumber()
-			lit = &token.Token{Type: tok, Literal: idt}
+			tok, lit = s.scanNumber()
+			// no need to forward to nextChar, scanNumber did it
+			return
 		default:
 			s.error(s.offset, fmt.Sprintf("illegal character %#U", ch))
-			lit = &token.Token{Type: token.ILLEGAL, Literal: string(ch)}
+			tok = token.ILLEGAL
+			lit = string(ch)
 		}
 	}
 

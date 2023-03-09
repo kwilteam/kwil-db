@@ -35,8 +35,16 @@ func TestAst_Generate(t *testing.T) {
 		input string
 	}{
 		{
-			name:  "one table with three columns",
-			input: `database test{table user{user_id int notnull,username string null,gender bool}}`,
+			name:  "empty tables",
+			input: `database test{table user{} table order{}}`,
+		},
+		{
+			name:  "table without attributes",
+			input: `database test{table user{username string, age int, email string}}`,
+		},
+		{
+			name:  "table with attributes",
+			input: `database test{table user{username string notnull, age int min(18) max(30), email string maxlen(50) minlen(10)}}`,
 		},
 	}
 
