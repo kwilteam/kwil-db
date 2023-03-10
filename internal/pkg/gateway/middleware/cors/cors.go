@@ -7,7 +7,7 @@ import (
 
 const (
 	AllowMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-	AllowHeaders = "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType"
+	AllowHeaders = "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType, X-Api-Key"
 )
 
 func allowedOrigin(cors []string, origin string) bool {
