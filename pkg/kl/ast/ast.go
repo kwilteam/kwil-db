@@ -2,6 +2,7 @@ package ast
 
 import (
 	"encoding/json"
+	"fmt"
 	"kwil/pkg/kl/token"
 )
 
@@ -41,20 +42,38 @@ type (
 	}
 
 	AttrExpr struct {
-		Name   Ident
+		Name   *Ident
 		Params []Expr
 	}
 
 	ParentExpr struct {
 		X Expr
 	}
+
+	SelectorExpr struct {
+		Name *Ident
+		Sel  *Ident
+	}
 )
 
-func (x *BadExpr) exprNode()    {}
-func (x *Ident) exprNode()      {}
-func (x *BasicLit) exprNode()   {}
-func (x *AttrExpr) exprNode()   {}
-func (x *ParentExpr) exprNode() {}
+func (x *BadExpr) exprNode()      {}
+func (x *Ident) exprNode()        {}
+func (x *BasicLit) exprNode()     {}
+func (x *AttrExpr) exprNode()     {}
+func (x *ParentExpr) exprNode()   {}
+func (x *SelectorExpr) exprNode() {}
+
+func (x *Ident) String() string {
+	return x.Name
+}
+
+func (x *BasicLit) String() string {
+	return x.Value
+}
+
+func (x *SelectorExpr) String() string {
+	return fmt.Sprintf("%s.%s", x.Name, x.Sel)
+}
 
 // ----------------------------------------
 // Statements
@@ -89,6 +108,13 @@ type (
 		Param Expr
 	}
 
+	// IndexDef is a definition of an index, of table.
+	IndexDef struct {
+		Name    *Ident
+		Columns []Expr
+		Unique  bool
+	}
+
 	ColumnDef struct {
 		Name  *Ident
 		Type  *Ident
@@ -97,7 +123,8 @@ type (
 
 	TableDecl struct {
 		Name *Ident
-		Body []*ColumnDef
+		Body []Stmt
+		Idx  []Stmt
 	}
 
 	DatabaseDecl struct {
@@ -114,6 +141,7 @@ type (
 
 func (x *ColumnDef) stmtNode()    {}
 func (x *AttrDef) stmtNode()      {}
+func (x *IndexDef) stmtNode()     {}
 func (x *TableDecl) stmtNode()    {}
 func (x *DatabaseDecl) stmtNode() {}
 func (x *ActionDecl) stmtNode()   {}
@@ -132,9 +160,14 @@ func (d *DatabaseDecl) Build() (def DBDefinition) {
 func (d *TableDecl) Build() (def TableDefinition) {
 	def.Name = d.Name.Name
 	def.Columns = []ColumnDefinition{}
+	def.Indexes = []IndexDefinition{}
 
 	for _, column := range d.Body {
-		def.Columns = append(def.Columns, column.Build())
+		def.Columns = append(def.Columns, column.(*ColumnDef).Build())
+	}
+
+	for _, index := range d.Idx {
+		def.Indexes = append(def.Indexes, index.(*IndexDef).Build())
 	}
 	return
 }
@@ -144,11 +177,6 @@ func (d *ColumnDef) Build() (def ColumnDefinition) {
 	def.Type = d.Type.Name
 	def.Attrs = []Attribute{}
 	for _, attr := range d.Attrs {
-		//at := Attribute{
-		//	AType: attr.Param.Type.ToInt(),
-		//	Value: "MAGIC",
-		//}
-
 		at := Attribute{}
 
 		switch attr.Param.(type) {
@@ -161,6 +189,24 @@ func (d *ColumnDef) Build() (def ColumnDefinition) {
 		}
 
 		def.Attrs = append(def.Attrs, at)
+	}
+	return
+}
+
+func (d *IndexDef) Build() (def IndexDefinition) {
+	def.Name = d.Name.Name
+	def.Type = "index"
+	if d.Unique {
+		def.Type = "unique"
+	}
+	def.Columns = []string{}
+	for _, col := range d.Columns {
+		switch col.(type) {
+		case *Ident:
+			def.Columns = append(def.Columns, col.(*Ident).Name)
+		case *SelectorExpr:
+			def.Columns = append(def.Columns, col.(*SelectorExpr).String())
+		}
 	}
 	return
 }
