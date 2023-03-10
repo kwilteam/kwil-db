@@ -13,9 +13,11 @@ type parser struct {
 
 	errors []error
 
-	trace bool
-	tok   token.Token // current token
-	lit   string      // current literal
+	trace   bool
+	tok     token.Token // current token
+	lit     string      // current literal
+	peekTok token.Token // next token
+	peekLit string      // next literal
 }
 
 type Opt func(*parser)
@@ -37,7 +39,8 @@ func new(s *scanner.Scanner, opts ...Opt) *parser {
 		opt(p)
 	}
 
-	// init tok
+	// init tok and peekTok
+	p.next()
 	p.next()
 
 	return p
@@ -136,6 +139,20 @@ func (p *parser) parseIdent() *ast.Ident {
 	return &ast.Ident{Name: name}
 }
 
+func (p *parser) parseIdentList() (l []*ast.Ident) {
+	if p.trace {
+		defer un(trace("parseIdentList"))
+	}
+
+	l = append(l, p.parseIdent())
+	for p.curTokIs(token.COMMA) {
+		p.next()
+		l = append(l, p.parseIdent())
+	}
+
+	return l
+}
+
 func (p *parser) parseTypeName() *ast.Ident {
 	if p.trace {
 		defer un(trace("parseTypeName"))
@@ -151,49 +168,47 @@ type CallExpr struct {
 }
 
 func (p *parser) next() {
-	p.tok, p.lit = p.scanner.Next()
+	p.tok, p.lit = p.peekTok, p.peekLit
+	p.peekTok, p.peekLit = p.scanner.Next()
 }
 
-func (p *parser) parseParameterList() []ast.Expr {
+func (p *parser) parseParameterList() (l []ast.Expr) {
 	if p.trace {
 		defer un(trace("parseParameterList"))
 	}
 
-	var params = []ast.Expr{}
-	for !p.curTokIs(token.RPAREN) && !p.curTokIs(token.EOF) {
-		switch p.tok {
-		case token.IDENT:
-			param := p.parseIdent()
-			params = append(params, param)
-		case token.INTEGER, token.STRING:
-			param := &ast.BasicLit{Value: p.lit, Type: token.INTEGER}
-			params = append(params, param)
-			p.next()
-		}
+	p.expect(token.LPAREN)
 
-		//if p.peekTokIs(token.COMMA) {
-		//	p.next()
-		//}
+	l = append(l, p.parseParameter())
+	for p.curTokIs(token.COMMA) {
+		p.next()
+		l = append(l, p.parseParameter())
 	}
 
 	p.expect(token.RPAREN)
-	return params
+	return l
 }
 
-func (p *parser) parseParameter() ast.Expr {
+func (p *parser) parseParameter() (param ast.Expr) {
 	if p.trace {
 		defer un(trace("parseParameter"))
 	}
-	
-	var param ast.Expr
+
 	switch p.tok {
 	case token.IDENT:
-		param = p.parseIdent()
+		name := p.parseIdent()
+		if p.curTokIs(token.PERIOD) {
+			p.next()
+			selector := p.parseIdent()
+			param = &ast.SelectorExpr{Name: name, Sel: selector}
+		} else {
+			param = name
+		}
 	case token.INTEGER, token.STRING:
 		param = p.parseBasicLit()
 	}
 
-	return param
+	return
 }
 
 func (p *parser) parseColumnAttr() *ast.AttrDef {
@@ -258,23 +273,51 @@ func (p *parser) parseColumnDef() *ast.ColumnDef {
 	return col
 }
 
+func (p *parser) parserIndexDef(unique bool) *ast.IndexDef {
+	if p.trace {
+		defer un(trace("parserIndexDef"))
+	}
+
+	index := &ast.IndexDef{}
+	index.Name = p.parseIdent()
+
+	if unique {
+		index.Unique = true
+		p.expect(token.UNIQUE)
+	} else {
+		p.expect(token.INDEX)
+	}
+
+	index.Columns = p.parseParameterList()
+
+	if p.curTokIs(token.COMMA) {
+		p.next()
+	}
+
+	return index
+}
+
 // parseColumnDefList parses a list of column definitions(separated by commas, enclosed in braces).
-func (p *parser) parseColumnDefList() []*ast.ColumnDef {
+func (p *parser) parseColumnDefList() (cols []ast.Stmt) {
 	if p.trace {
 		defer un(trace("parseColumnDefList"))
 	}
 
 	p.expect(token.LBRACE)
 
-	columns := []*ast.ColumnDef{}
-
 	for !p.curTokIs(token.COMMA) && !p.curTokIs(token.RBRACE) && !p.curTokIs(token.EOF) {
-		columns = append(columns, p.parseColumnDef())
+		switch p.peekTok {
+		case token.INDEX:
+			cols = append(cols, p.parserIndexDef(false))
+		case token.UNIQUE:
+			cols = append(cols, p.parserIndexDef(true))
+		default:
+			cols = append(cols, p.parseColumnDef())
+		}
 	}
 
 	p.expect(token.RBRACE)
-
-	return columns
+	return cols
 }
 
 func (p *parser) parseBlockDeclaration() *ast.BlockStmt {
@@ -320,11 +363,22 @@ func (p *parser) parseTableDeclaration() *ast.TableDecl {
 
 	p.expect(token.TABLE)
 
-	stmt := &ast.TableDecl{}
-	stmt.Name = p.parseIdent()
-	stmt.Body = p.parseColumnDefList()
+	decl := &ast.TableDecl{}
+	decl.Name = p.parseIdent()
+	decl.Body = []ast.Stmt{}
+	decl.Idx = []ast.Stmt{}
 
-	return stmt
+	l := p.parseColumnDefList()
+	for _, v := range l {
+		switch v.(type) {
+		case *ast.IndexDef:
+			decl.Idx = append(decl.Idx, v)
+		default:
+			decl.Body = append(decl.Body, v)
+		}
+	}
+
+	return decl
 }
 
 func (p *parser) parseStatement() ast.Stmt {

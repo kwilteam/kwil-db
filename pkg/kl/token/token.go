@@ -30,11 +30,10 @@ const (
 	//FROM     // from
 	//UPDATE   // update
 	//DROP     // drop
-	//
-
+	UNIQUE // unique
+	INDEX  // index
 	//
 	//PRIMARY // primary
-	//UNIQUE  // unique
 	//
 	//CONST      // const
 	//ACTION     // action
@@ -66,8 +65,8 @@ const (
 	RBRACK // ]
 	RBRACE // }
 
-	COMMA // ,
-	//PERIOD    // .
+	COMMA     // ,
+	PERIOD    // .
 	SEMICOLON // ;
 	//COLON     // :
 	symbolEnd
@@ -84,6 +83,8 @@ var tokens = [...]string{
 	//
 	DATABASE: "database",
 	TABLE:    "table",
+	UNIQUE:   "unique",
+	INDEX:    "index",
 
 	MIN:     "min",
 	MAX:     "max",
@@ -100,14 +101,14 @@ var tokens = [...]string{
 	//NEQ:       "!=",
 	//LEQ:       "<=",
 	//GEQ:       ">=",
-	LPAREN: "(",
-	LBRACK: "[",
-	LBRACE: "{",
-	RPAREN: ")",
-	RBRACK: "]",
-	RBRACE: "}",
-	COMMA:  ",",
-	//PERIOD:    ".",
+	LPAREN:    "(",
+	LBRACK:    "[",
+	LBRACE:    "{",
+	RPAREN:    ")",
+	RBRACK:    "]",
+	RBRACE:    "}",
+	COMMA:     ",",
+	PERIOD:    ".",
 	SEMICOLON: ";",
 	//COLON:     ":",
 }

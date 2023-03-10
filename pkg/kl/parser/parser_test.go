@@ -53,6 +53,25 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "table with index",
+			input:  `database demo{table user{name string, age int, email string, uname unique(name, email), im index(email)}}`,
+			wantDB: "demo",
+			wantTables: []ast.TableDefinition{
+				{
+					Name: "user",
+					Columns: []ast.ColumnDefinition{
+						{Name: "name", Type: "string", Attrs: []ast.Attribute{}},
+						{Name: "age", Type: "int", Attrs: []ast.Attribute{}},
+						{Name: "email", Type: "string", Attrs: []ast.Attribute{}},
+					},
+					Indexes: []ast.IndexDefinition{
+						{Name: "uname", Type: "unique", Columns: []string{"name", "email"}},
+						{Name: "im", Type: "index", Columns: []string{"email"}},
+					},
+				},
+			},
+		},
 	}
 
 	for _, c := range tests {
@@ -100,6 +119,79 @@ func testDatabaseDeclaration(t *testing.T, s ast.Stmt, wantDB string, wantTables
 	return true
 }
 
+func testTableBody(t *testing.T, col *ast.ColumnDef, want ast.ColumnDefinition) bool {
+	if col.Name.Name != want.Name {
+		t.Errorf("columnDef.Name is not '%s'. got=%s", want.Name, col.Name.Name)
+		return false
+	}
+
+	if col.Type.Name != want.Type {
+		t.Errorf("columnDef.Name.Type is not '%s'. got=%s", want.Type, col.Type)
+		return false
+	}
+
+	if len(col.Attrs) != len(want.Attrs) {
+		t.Errorf("columnDef.Name.Attrs length is not %d. got=%d", len(want.Attrs), len(col.Attrs))
+		return false
+	}
+
+	for j, attr := range col.Attrs {
+		at := attr.Type.ToInt()
+		if at != want.Attrs[j].AType {
+			t.Errorf("columnDef.Name.Attrs[%d].Atype is not '%d'. got=%d", j, want.Attrs[j].AType, at)
+			return false
+		}
+
+		if attr.Param == nil {
+			continue
+		}
+
+		var v string
+		switch attr.Param.(type) {
+		case *ast.BasicLit:
+			v = attr.Param.(*ast.BasicLit).Value
+		case *ast.Ident:
+			v = attr.Param.(*ast.Ident).Name
+		}
+
+		if v != want.Attrs[j].Value {
+			t.Errorf("columnDef.Name.Attrs[%d].Param is not '%s'. got=%s", j, want.Attrs[j].Value, v)
+			return false
+		}
+	}
+
+	return true
+}
+
+func testTableIndex(t *testing.T, idx *ast.IndexDef, want ast.IndexDefinition) bool {
+	if idx.Name.Name != want.Name {
+		t.Errorf("indexDef.Name is not '%s'. got=%s", want.Name, idx.Name.Name)
+		return false
+	}
+
+	if len(idx.Columns) != len(want.Columns) {
+		t.Errorf("indexDef.Columns length is not %d. got=%d", len(want.Columns), len(idx.Columns))
+		return false
+	}
+
+	for j, col := range idx.Columns {
+		var name string
+		switch col.(type) {
+		case *ast.Ident:
+			name = col.(*ast.Ident).String()
+		case *ast.SelectorExpr:
+			name = col.(*ast.SelectorExpr).String()
+		}
+
+		if name != want.Columns[j] {
+			t.Errorf("indexDef.Columns[%d] is not '%s'. got=%s", j, want.Columns[j], name)
+			return false
+		}
+	}
+
+	return true
+}
+
 func testTableDeclaration(t *testing.T, s ast.Stmt, want ast.TableDefinition) bool {
 	tableDecl, ok := s.(*ast.TableDecl)
 	if !ok {
@@ -117,45 +209,17 @@ func testTableDeclaration(t *testing.T, s ast.Stmt, want ast.TableDefinition) bo
 		return false
 	}
 
-	for i, col := range tableDecl.Body {
-		if col.Name.Name != want.Columns[i].Name {
-			t.Errorf("tableDecl.Body[%d].Name is not '%s'. got=%s", i, want.Columns[i].Name, col.Name.Name)
+	for i, column := range tableDecl.Body {
+		col := column.(*ast.ColumnDef)
+		if !testTableBody(t, col, want.Columns[i]) {
 			return false
 		}
+	}
 
-		if col.Type.Name != want.Columns[i].Type {
-			t.Errorf("tableDecl.Body[%d].Type is not '%s'. got=%s", i, want.Columns[i].Type, col.Type)
+	for i, index := range tableDecl.Idx {
+		idx := index.(*ast.IndexDef)
+		if !testTableIndex(t, idx, want.Indexes[i]) {
 			return false
-		}
-
-		if len(col.Attrs) != len(want.Columns[i].Attrs) {
-			t.Errorf("tableDecl.Body[%d].Attrs length is not %d. got=%d", i, len(want.Columns[i].Attrs), len(col.Attrs))
-			return false
-		}
-
-		for j, attr := range col.Attrs {
-			at := attr.Type.ToInt()
-			if at != want.Columns[i].Attrs[j].AType {
-				t.Errorf("tableDecl.Body[%d].Attrs[%d].Atype is not '%d'. got=%d", i, j, want.Columns[i].Attrs[j].AType, at)
-				return false
-			}
-
-			if attr.Param == nil {
-				continue
-			}
-
-			var v string
-			switch attr.Param.(type) {
-			case *ast.BasicLit:
-				v = attr.Param.(*ast.BasicLit).Value
-			case *ast.Ident:
-				v = attr.Param.(*ast.Ident).Name
-			}
-
-			if v != want.Columns[i].Attrs[j].Value {
-				t.Errorf("tableDecl.Body[%d].Attrs[%d].Param is not '%s'. got=%s", i, j, want.Columns[i].Attrs[j].Value, v)
-				return false
-			}
 		}
 	}
 

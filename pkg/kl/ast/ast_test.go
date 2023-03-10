@@ -46,6 +46,10 @@ func TestAst_Generate(t *testing.T) {
 			name:  "table with attributes",
 			input: `database test{table user{username string notnull, age int min(18) max(30), email string maxlen(50) minlen(10)}}`,
 		},
+		{
+			name:  "table with index",
+			input: `database demo{table user{name string, age int, email string, uname unique(name, email), im index(email)}}`,
+		},
 	}
 
 	for _, tt := range tests {
