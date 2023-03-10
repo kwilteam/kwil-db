@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tonistiigi/go-rosetta"
 	"kwil/cmd/kwil-cli/app"
-	"kwil/internal/app/kgw"
 	"kwil/internal/app/kwild"
 	"kwil/pkg/chain/types"
 	"kwil/pkg/client"
@@ -247,25 +246,20 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 	setSchemaLoader(cfg)
 
 	if cfg.NodeAddr != "" {
-		t.Logf("create kwild driver to %s", cfg.NodeAddr)
+		t.Logf("create kwild driver to %s, (gateway: %s)", cfg.NodeAddr, cfg.GatewayAddr)
 		kwilClt, err := client.New(ctx, cfg.NodeAddr)
 		require.NoError(t, err, "failed to create kwil client")
-		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPK, logger)
-		t.Logf("create kgw driver to %s", cfg.GatewayAddr)
-		kgwDriver := kgw.NewKgwDriver(cfg.GatewayAddr, kwildDriver)
-		return kgwDriver, nil
+		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPK, cfg.GatewayAddr, logger)
+		return kwildDriver, nil
 	}
 
 	updatedCfg, chainDeployer := setupCommon(ctx, t, cfg)
 
-	t.Logf("create kwild driver to %s", updatedCfg.NodeAddr)
+	t.Logf("create kwild driver to %s, (gateway: %s)", updatedCfg.NodeAddr, updatedCfg.GatewayAddr)
 	kwilClt, err := client.New(ctx, updatedCfg.NodeAddr)
-
 	require.NoError(t, err, "failed to create kwil client")
-	kwildDriver := kwild.NewKwildDriver(kwilClt, updatedCfg.UserPK, logger)
-	t.Logf("create kgw driver to %s", cfg.GatewayAddr)
-	kgwDriver := kgw.NewKgwDriver(updatedCfg.GatewayAddr, kwildDriver)
-	return kgwDriver, chainDeployer
+	kwildDriver := kwild.NewKwildDriver(kwilClt, updatedCfg.UserPK, updatedCfg.GatewayAddr, logger)
+	return kwildDriver, chainDeployer
 }
 
 func GetDriver(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger) (KwilACTDriver, deployer.Deployer) {
