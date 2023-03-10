@@ -89,6 +89,10 @@ func (g *RProxy) makeHasuraHandler(fn http.HandlerFunc) http.HandlerFunc {
 
 		// restore body
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+		// avoid duplicated CORS issue, since hasura will set CORS headers
+		w.Header().Del("Access-Control-Allow-Origin")
+		w.Header().Del("Access-Control-Allow-Methods")
 		fn(w, r)
 	}
 }
