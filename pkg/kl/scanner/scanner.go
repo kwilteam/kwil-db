@@ -147,7 +147,23 @@ func (s *Scanner) scanNumber() (tok token.Token, lit string) {
 }
 
 func (s *Scanner) scanString() string {
-	return "???"
+	offs := s.offset - 1
+	for {
+		ch := s.ch
+		if ch == '\n' || ch < 0 {
+			s.error(offs, "unterminated string")
+			break
+		}
+
+		if ch == '"' {
+			break
+		}
+		s.nextChar()
+
+		// TODO: escaped char
+	}
+
+	return string(s.src[offs:s.offset])
 }
 
 func (s *Scanner) peek() byte {
@@ -183,6 +199,9 @@ func (s *Scanner) Next() (tok token.Token, lit string) {
 	case ';':
 		lit = ";"
 		tok = token.SEMICOLON
+	//case '"':
+	//	tok = token.STRING
+	//	lit = s.scanString()
 	//case '=':
 	//	if s.peek() == '=' {
 	//		s.nextChar()

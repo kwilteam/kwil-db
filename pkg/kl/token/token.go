@@ -20,9 +20,12 @@ const (
 	keywordBeg
 	DATABASE // database
 	TABLE    // table
-	//INSERT   // insert
-	//INTO     // into
-	//VALUES   // values
+	ACTION
+	PUBLIC // public
+	PRIVATE
+	INSERT // insert
+	INTO   // into
+	VALUES // values
 	//WHERE    // where
 	//AND      // and
 	//OR       // or
@@ -83,8 +86,15 @@ var tokens = [...]string{
 	//
 	DATABASE: "database",
 	TABLE:    "table",
-	UNIQUE:   "unique",
-	INDEX:    "index",
+	ACTION:   "action",
+	PUBLIC:   "public",
+	PRIVATE:  "private",
+	INSERT:   "insert",
+	INTO:     "into",
+	VALUES:   "values",
+
+	UNIQUE: "unique",
+	INDEX:  "index",
 
 	MIN:     "min",
 	MAX:     "max",
