@@ -1,0 +1,55 @@
+{
+  "name": "demo",
+  "tables": [
+    {
+      "name": "user",
+      "columns": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "age",
+          "type": "int"
+        },
+        {
+          "name": "email",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "create_user",
+      "public": true,
+      "type": "",
+      "params": [
+        "name",
+        "age"
+      ],
+      "ops": [
+        {
+          "op": "insert",
+          "args": [
+            "user"
+          ]
+        },
+        {
+          "op": "columns",
+          "args": [
+            "name",
+            "age"
+          ]
+        },
+        {
+          "op": "values",
+          "args": [
+            "name",
+            "age"
+          ]
+        }
+      ]
+    }
+  ]
+}

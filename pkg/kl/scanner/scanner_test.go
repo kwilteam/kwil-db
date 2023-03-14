@@ -19,6 +19,7 @@ var tokens = []elt{
 	{token.IDENT, "bar123"},
 	{token.IDENT, "foo_bar"},
 	{token.INTEGER, "123"},
+	//{token.STRING, "\"hello\""},
 
 	// symbols
 	{token.LPAREN, "("},
@@ -31,12 +32,20 @@ var tokens = []elt{
 	// keywords
 	{token.DATABASE, "database"},
 	{token.TABLE, "table"},
-	{token.NULL, "null"},
-	{token.NOTNULL, "notnull"},
+	{token.ACTION, "action"},
+	{token.PUBLIC, "public"},
+	{token.PRIVATE, "private"},
+	{token.INSERT, "insert"},
+	{token.INTO, "into"},
+	{token.VALUES, "values"},
+	{token.UNIQUE, "unique"},
+	{token.INDEX, "index"},
 	{token.MIN, "min"},
 	{token.MAX, "max"},
 	{token.MINLEN, "minlen"},
 	{token.MAXLEN, "maxlen"},
+	{token.NULL, "null"},
+	{token.NOTNULL, "notnull"},
 }
 
 const whitespace = " \t \n "
@@ -94,7 +103,7 @@ func TestScanner_Next(t *testing.T) {
 
 }
 
-func TestScanner_Next2(t *testing.T) {
+func TestScanner_Next_seq(t *testing.T) {
 	input := `database test {
 table user {
 user_id int notnull,
@@ -103,7 +112,13 @@ age int min(18) max(60),
 uuid uuid,
 gender bool,
 email string maxlen(50) minlen(10)
-}}`
+}
+
+action create_user(name, age) public {
+}
+
+}
+`
 
 	tests := []struct {
 		Type    token.Token
@@ -112,6 +127,7 @@ email string maxlen(50) minlen(10)
 		{Type: token.DATABASE, Literal: "database"},
 		{Type: token.IDENT, Literal: "test"},
 		{Type: token.LBRACE, Literal: "{"},
+		//table
 		{Type: token.TABLE, Literal: "table"},
 		{Type: token.IDENT, Literal: "user"},
 		{Type: token.LBRACE, Literal: "{"},
@@ -158,6 +174,19 @@ email string maxlen(50) minlen(10)
 		{Type: token.RPAREN, Literal: ")"},
 
 		{Type: token.RBRACE, Literal: "}"},
+
+		//action
+		{Type: token.ACTION, Literal: "action"},
+		{Type: token.IDENT, Literal: "create_user"},
+		{Type: token.LPAREN, Literal: "("},
+		{Type: token.IDENT, Literal: "name"},
+		{Type: token.COMMA, Literal: ","},
+		{Type: token.IDENT, Literal: "age"},
+		{Type: token.RPAREN, Literal: ")"},
+		{Type: token.PUBLIC, Literal: "public"},
+		{Type: token.LBRACE, Literal: "{"},
+		{Type: token.RBRACE, Literal: "}"},
+
 		{Type: token.RBRACE, Literal: "}"},
 	}
 
@@ -177,3 +206,7 @@ email string maxlen(50) minlen(10)
 		t.Errorf("got %d errors", s.ErrorCount)
 	}
 }
+
+//func TestScanner_Next_error(t *testing.T) {
+//
+//}

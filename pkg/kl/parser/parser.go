@@ -61,7 +61,7 @@ func Parse(src []byte, opts ...Opt) (a *ast.Ast, err error) {
 	h := func(msg string) { p.error(msg) }
 	s := scanner.New(src, h)
 	p = new(s, opts...)
-	a = p.Parse()
+	a = p.parse()
 	return a, err
 }
 
@@ -381,6 +381,53 @@ func (p *parser) parseTableDeclaration() *ast.TableDecl {
 	return decl
 }
 
+func (p *parser) parseActionDeclaration() *ast.ActionDecl {
+	if p.trace {
+		defer un(trace("parseActionDeclaration"))
+	}
+
+	p.expect(token.ACTION)
+
+	act := &ast.ActionDecl{}
+	act.Name = p.parseIdent()
+	act.Params = p.parseParameterList()
+
+	if p.curTokIs(token.PUBLIC) || p.curTokIs(token.PRIVATE) {
+		act.Public = p.tok == token.PUBLIC
+		p.next()
+	}
+
+	act.Body = p.parseBlockDeclaration()
+
+	return act
+}
+
+func (p *parser) parseInsertStatement() *ast.InsertStmt {
+	if p.trace {
+		defer un(trace("parseInsertStatement"))
+	}
+
+	p.expect(token.INSERT)
+	p.expect(token.INTO)
+
+	stmt := &ast.InsertStmt{}
+	stmt.Table = p.parseIdent()
+
+	// optional column list
+	if !p.curTokIs(token.VALUES) {
+		stmt.Columns = p.parseParameterList()
+	}
+
+	p.expect(token.VALUES)
+
+	stmt.Values = p.parseParameterList()
+	if p.curTokIs(token.COMMA) {
+		p.next()
+	}
+	return stmt
+
+}
+
 func (p *parser) parseStatement() ast.Stmt {
 	if p.trace {
 		defer un(trace("parseStatement"))
@@ -391,13 +438,19 @@ func (p *parser) parseStatement() ast.Stmt {
 		return p.parseDatabaseDeclaration()
 	case token.TABLE:
 		return p.parseTableDeclaration()
+	case token.ACTION:
+		return p.parseActionDeclaration()
+	case token.INSERT:
+		return p.parseInsertStatement()
 	default:
-		fmt.Printf("unknown statement, token: %s\n", p.tok)
+		fmt.Printf("unknown statement, token: %s, literal: %s\n", p.tok, p.lit)
+		p.next()
 		return nil
 	}
 }
 
-func (p *parser) Parse() *ast.Ast {
+func (p *parser) parse() *ast.Ast {
+	// since top level is only a database declaration, maybe just dbDecl in Ast?
 	_ast := &ast.Ast{}
 	_ast.Statements = []ast.Stmt{}
 

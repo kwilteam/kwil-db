@@ -9,10 +9,11 @@ import (
 
 func TestParser_DatabaseDeclaration(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantDB     string
-		wantTables []ast.TableDefinition
+		name        string
+		input       string
+		wantDB      string
+		wantTables  []ast.TableDefinition
+		wantActions []ast.ActionDefinition
 	}{
 		{
 			name:   "empty tables",
@@ -72,6 +73,34 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "table with action insert",
+			input: `database demo{table user{name string, age int, email string}
+                        action create_user(name, age) public {insert into user(name, age) values (name, age)}}`,
+			wantDB: "demo",
+			wantTables: []ast.TableDefinition{
+				{
+					Name: "user",
+					Columns: []ast.ColumnDefinition{
+						{Name: "name", Type: "string", Attrs: []ast.Attribute{}},
+						{Name: "age", Type: "int", Attrs: []ast.Attribute{}},
+						{Name: "email", Type: "string", Attrs: []ast.Attribute{}},
+					},
+				},
+			},
+			wantActions: []ast.ActionDefinition{
+				{
+					Name:   "create_user",
+					Params: []string{"name", "age"},
+					Public: true,
+					Ops: []ast.SQLOP{
+						{Op: "insert", Args: []string{"user"}},
+						{Op: "columns", Args: []string{"name", "age"}},
+						//{Op: "values", Args: []string{"name", "age", "a@b.com"}},
+					},
+				},
+			},
+		},
 	}
 
 	for _, c := range tests {
@@ -86,14 +115,14 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 				t.Errorf("Parse() got %d statements, want 1", len(a.Statements))
 			}
 
-			if !testDatabaseDeclaration(t, a.Statements[0], c.wantDB, c.wantTables) {
+			if !testDatabaseDeclaration(t, a.Statements[0], c.wantDB, c.wantTables, c.wantActions) {
 				return
 			}
 		})
 	}
 }
 
-func testDatabaseDeclaration(t *testing.T, s ast.Stmt, wantDB string, wantTables []ast.TableDefinition) bool {
+func testDatabaseDeclaration(t *testing.T, s ast.Stmt, wantDB string, wantTables []ast.TableDefinition, wantActions []ast.ActionDefinition) bool {
 	databaseDecl, ok := s.(*ast.DatabaseDecl)
 	if !ok {
 		t.Errorf("statement is not *ast.DatabaseDecl. got=%T", s)
@@ -105,14 +134,27 @@ func testDatabaseDeclaration(t *testing.T, s ast.Stmt, wantDB string, wantTables
 		return false
 	}
 
-	if len(databaseDecl.Body.Statements) != len(wantTables) {
-		t.Errorf("databaseDecl.Tables is not 1. got=%d", len(databaseDecl.Body.Statements))
+	wantStmts := len(wantTables) + len(wantActions)
+
+	if len(databaseDecl.Body.Statements) != wantStmts {
+		t.Errorf("databaseDecl.Tables is not %d,  got=%d", wantStmts, len(databaseDecl.Body.Statements))
 		return false
 	}
 
-	for i, table := range databaseDecl.Body.Statements {
-		if !testTableDeclaration(t, table, wantTables[i]) {
-			return false
+	ti := 0
+	ai := 0
+	for _, table := range databaseDecl.Body.Statements {
+		switch table.(type) {
+		case *ast.TableDecl:
+			if !testTableDeclaration(t, table, wantTables[ti]) {
+				return false
+			}
+			ti++
+		case *ast.ActionDecl:
+			if !testActionDeclaration(t, table, wantActions[ai]) {
+				return false
+			}
+			ai++
 		}
 	}
 
@@ -220,6 +262,88 @@ func testTableDeclaration(t *testing.T, s ast.Stmt, want ast.TableDefinition) bo
 		idx := index.(*ast.IndexDef)
 		if !testTableIndex(t, idx, want.Indexes[i]) {
 			return false
+		}
+	}
+
+	return true
+}
+
+func testInsertStatement(t *testing.T, s ast.Stmt, want []ast.SQLOP) bool {
+	insertStmt, ok := s.(*ast.InsertStmt)
+	if !ok {
+		t.Errorf("statement is not *ast.InsertStmt. got=%T", s)
+		return false
+	}
+
+	for _, w := range want {
+		switch w.Op {
+		case "insert":
+			if insertStmt.Table.Name != w.Args[0] {
+				t.Errorf("insertStmt.Table.Name is not '%s'. got=%s", w.Args[0], insertStmt.Table.Name)
+				return false
+			}
+		case "values":
+			if len(insertStmt.Values) != len(w.Args) {
+				t.Errorf("insertStmt.Values length is not %d. got=%d", len(w.Args), len(insertStmt.Values))
+				return false
+			}
+
+			for j, value := range insertStmt.Values {
+				v := value.String()
+				if v != w.Args[j] {
+					t.Errorf("insertStmt.Values[%d] is not '%s'. got=%s", j, w.Args[j], v)
+					return false
+				}
+			}
+
+		case "columns":
+			if len(insertStmt.Columns) != len(w.Args) {
+				t.Errorf("insertStmt.Columns length is not %d. got=%d", len(w.Args), len(insertStmt.Columns))
+				return false
+			}
+
+			for j, col := range insertStmt.Columns {
+				name := col.String()
+				if name != w.Args[j] {
+					t.Errorf("insertStmt.Columns[%d] is not '%s'. got=%s", j, w.Args[j], name)
+					return false
+				}
+			}
+		}
+	}
+
+	return true
+}
+
+func testActionDeclaration(t *testing.T, s ast.Stmt, want ast.ActionDefinition) bool {
+	actionDecl, ok := s.(*ast.ActionDecl)
+	if !ok {
+		t.Errorf("statement is not *ast.ActionDecl. got=%T", s)
+		return false
+	}
+
+	if actionDecl.Name.Name != want.Name {
+		t.Errorf("actionDecl.Name is not '%s'. got=%s", want.Name, actionDecl.Name.Name)
+		return false
+	}
+
+	if actionDecl.Public != want.Public {
+		t.Errorf("actionDecl.Public is not '%t'. got=%t", want.Public, actionDecl.Public)
+		return false
+	}
+
+	if len(actionDecl.Params) != len(want.Params) {
+		t.Errorf("actionDecl.Body length is not %d. got=%d", len(want.Params), len(actionDecl.Params))
+		return false
+	}
+
+	// by actionDecl.Type ?
+	for _, stmt := range actionDecl.Body.Statements {
+		switch st := stmt.(type) {
+		case *ast.InsertStmt:
+			if !testInsertStatement(t, st, want.Ops) {
+				return false
+			}
 		}
 	}
 

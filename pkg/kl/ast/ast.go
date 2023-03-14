@@ -11,6 +11,7 @@ type Node interface {
 
 type Expr interface {
 	Node
+	String() string
 	exprNode()
 }
 
@@ -63,6 +64,8 @@ func (x *AttrExpr) exprNode()     {}
 func (x *ParentExpr) exprNode()   {}
 func (x *SelectorExpr) exprNode() {}
 
+func (x *BadExpr) String() {}
+
 func (x *Ident) String() string {
 	return x.Name
 }
@@ -88,11 +91,33 @@ type (
 		Token      token.Token
 		Statements []Stmt
 	}
+
+	InsertStmt struct {
+		Table   *Ident
+		Columns []Expr
+		Values  []Expr
+	}
+
+	UpdateStmt struct {
+		Table   *Ident
+		Columns []Expr
+		Values  []Expr
+	}
 )
 
-func (x *BadStmt) stmtNode()   {}
-func (x *ExprStmt) stmtNode()  {}
-func (x *BlockStmt) stmtNode() {}
+func (x *BadStmt) stmtNode()    {}
+func (x *ExprStmt) stmtNode()   {}
+func (x *BlockStmt) stmtNode()  {}
+func (x *InsertStmt) stmtNode() {}
+func (x *UpdateStmt) stmtNode() {}
+
+func (s *InsertStmt) Validate() error {
+	if len(s.Columns) != len(s.Values) {
+		return fmt.Errorf("number of columns and values are different")
+	}
+
+	return nil
+}
 
 // ----------------------------------------
 // Declarations
@@ -133,9 +158,10 @@ type (
 	}
 
 	ActionDecl struct {
-		Name       *Ident
-		Parameters *FieldList
-		Body       *BlockStmt
+		Name   *Ident
+		Public bool
+		Params []Expr
+		Body   *BlockStmt
 	}
 )
 
@@ -146,12 +172,110 @@ func (x *TableDecl) stmtNode()    {}
 func (x *DatabaseDecl) stmtNode() {}
 func (x *ActionDecl) stmtNode()   {}
 
+func (a *ActionDecl) Validate() error {
+	declaredParams := map[string]bool{}
+
+	for _, param := range a.Params {
+		p, ok := param.(*Ident)
+		if !ok {
+			return fmt.Errorf("unsupported action parameter, got %s", param)
+		}
+		declaredParams[p.Name] = true
+	}
+
+	for _, stmt := range a.Body.Statements {
+		switch st := stmt.(type) {
+		case *InsertStmt:
+			if len(st.Columns) > 0 {
+				for _, column := range st.Columns {
+					_, ok := column.(*Ident)
+					if !ok {
+						return fmt.Errorf("unsupported column, got %s", column)
+					}
+				}
+			}
+
+			if len(st.Values) != len(st.Columns) {
+				return fmt.Errorf("unmatched number of columns and values")
+			}
+
+			for _, value := range st.Values {
+				switch v := value.(type) {
+				case *BasicLit:
+					continue
+				case *Ident:
+					_, paramExist := declaredParams[v.Name]
+					if !paramExist {
+						return fmt.Errorf("undefined parameter: %s", v.Name)
+					}
+				}
+			}
+		case *UpdateStmt:
+			continue
+		default:
+			return fmt.Errorf("unsupported action statement, got %s", stmt)
+		}
+	}
+
+	return nil
+}
+
+func (a *ActionDecl) Build() (def ActionDefinition) {
+	// should be validated before build
+	def.Name = a.Name.Name
+	def.Public = a.Public
+	def.Params = []string{}
+	def.Ops = []SQLOP{}
+
+	declaredParams := map[string]bool{}
+	for _, param := range a.Params {
+		if p, ok := param.(*Ident); ok {
+			def.Params = append(def.Params, p.Name)
+			declaredParams[p.Name] = true
+		}
+	}
+
+	for _, stmt := range a.Body.Statements {
+		switch st := stmt.(type) {
+		case *InsertStmt:
+			var columns []string
+			if len(st.Columns) > 0 {
+				for _, column := range st.Columns {
+					cl, _ := column.(*Ident)
+					columns = append(columns, cl.Name)
+				}
+			}
+			def.Ops = append(def.Ops, SQLOP{Op: "insert", Args: []string{st.Table.Name}})
+			def.Ops = append(def.Ops, SQLOP{Op: "columns", Args: columns})
+
+			var values []string
+			for _, value := range st.Values {
+				switch v := value.(type) {
+				case *BasicLit:
+					values = append(values, v.Value)
+				case *Ident:
+					if _, ok := declaredParams[v.Name]; ok {
+						values = append(values, v.Name)
+					}
+				}
+			}
+			def.Ops = append(def.Ops, SQLOP{Op: "values", Args: values})
+
+		case *UpdateStmt:
+			continue
+		}
+	}
+	return
+}
+
 func (d *DatabaseDecl) Build() (def DBDefinition) {
 	def.Name = d.Name.Name
 	for _, stmt := range d.Body.Statements {
-		switch stmt.(type) {
+		switch s := stmt.(type) {
 		case *TableDecl:
-			def.Tables = append(def.Tables, stmt.(*TableDecl).Build())
+			def.Tables = append(def.Tables, s.Build())
+		case *ActionDecl:
+			def.Actions = append(def.Actions, s.Build())
 		}
 	}
 	return
@@ -213,6 +337,10 @@ func (d *IndexDef) Build() (def IndexDefinition) {
 
 type Ast struct {
 	Statements []Stmt // top level is always a database declaration, and only one
+}
+
+type File struct {
+	Decl DatabaseDecl
 }
 
 // Generate generates JSON string from AST
