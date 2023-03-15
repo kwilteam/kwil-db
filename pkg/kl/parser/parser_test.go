@@ -16,8 +16,13 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		wantActions []ast.ActionDefinition
 	}{
 		{
+			name:   "empty database",
+			input:  "database test",
+			wantDB: "test",
+		},
+		{
 			name:   "empty tables",
-			input:  `database test{table user{} table order{}}`,
+			input:  `database test; table user{} table order{}`,
 			wantDB: "test",
 			wantTables: []ast.TableDefinition{
 				{Name: "user"},
@@ -25,7 +30,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		},
 		{
 			name:   "table with multiple columns and attributes",
-			input:  `database demo{table user{user_id int notnull,username string null,gender bool}}`,
+			input:  `database demo; table user{user_id int notnull,username string null,gender bool}`,
 			wantDB: "demo",
 			wantTables: []ast.TableDefinition{
 				{
@@ -40,7 +45,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		},
 		{
 			name:   "table with one column and attributes(with parameters)",
-			input:  `database demo{table user{age int min(18) max(30), email string maxlen(50) minlen(10)}}`,
+			input:  `database demo; table user{age int min(18) max(30), email string maxlen(50) minlen(10)}`,
 			wantDB: "demo",
 			wantTables: []ast.TableDefinition{
 				{
@@ -56,7 +61,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		},
 		{
 			name:   "table with index",
-			input:  `database demo{table user{name string, age int, email string, uname unique(name, email), im index(email)}}`,
+			input:  `database demo; table user{name string, age int, email string, uname unique(name, email), im index(email)}`,
 			wantDB: "demo",
 			wantTables: []ast.TableDefinition{
 				{
@@ -75,8 +80,9 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		},
 		{
 			name: "table with action insert",
-			input: `database demo{table user{name string, age int, email string}
-                        action create_user(name, age) public {insert into user(name, age) values (name, age)}}`,
+			input: `database demo;
+                        table user{name string, age int, email string}
+                        action create_user(name, age) public {insert into user(name, age) values (name, age)}`,
 			wantDB: "demo",
 			wantTables: []ast.TableDefinition{
 				{
@@ -111,54 +117,32 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 				t.Errorf("Parse() got error: %s", err)
 			}
 
-			if len(a.Statements) != 1 {
-				t.Errorf("Parse() got %d statements, want 1", len(a.Statements))
+			if a.Name.Name != c.wantDB {
+				t.Errorf("Parse() got database name %s, want %s", a.Name, c.wantDB)
 			}
 
-			if !testDatabaseDeclaration(t, a.Statements[0], c.wantDB, c.wantTables, c.wantActions) {
-				return
+			if len(a.Decls) != len(c.wantTables)+len(c.wantActions) {
+				t.Errorf("Parse() got %d declarations, want %d", len(a.Decls), len(c.wantTables)+len(c.wantActions))
+			}
+
+			ti := 0
+			ai := 0
+			for _, decl := range a.Decls {
+				switch d := decl.(type) {
+				case *ast.TableDecl:
+					if !testTableDeclaration(t, d, c.wantTables[ti]) {
+						return
+					}
+					ti++
+				case *ast.ActionDecl:
+					if !testActionDeclaration(t, d, c.wantActions[ai]) {
+						return
+					}
+					ai++
+				}
 			}
 		})
 	}
-}
-
-func testDatabaseDeclaration(t *testing.T, s ast.Stmt, wantDB string, wantTables []ast.TableDefinition, wantActions []ast.ActionDefinition) bool {
-	databaseDecl, ok := s.(*ast.DatabaseDecl)
-	if !ok {
-		t.Errorf("statement is not *ast.DatabaseDecl. got=%T", s)
-		return false
-	}
-
-	if databaseDecl.Name.Name != wantDB {
-		t.Errorf("databaseDecl.Name is not '%s'. got=%s", wantDB, databaseDecl.Name)
-		return false
-	}
-
-	wantStmts := len(wantTables) + len(wantActions)
-
-	if len(databaseDecl.Body.Statements) != wantStmts {
-		t.Errorf("databaseDecl.Tables is not %d,  got=%d", wantStmts, len(databaseDecl.Body.Statements))
-		return false
-	}
-
-	ti := 0
-	ai := 0
-	for _, table := range databaseDecl.Body.Statements {
-		switch table.(type) {
-		case *ast.TableDecl:
-			if !testTableDeclaration(t, table, wantTables[ti]) {
-				return false
-			}
-			ti++
-		case *ast.ActionDecl:
-			if !testActionDeclaration(t, table, wantActions[ai]) {
-				return false
-			}
-			ai++
-		}
-	}
-
-	return true
 }
 
 func testTableBody(t *testing.T, col *ast.ColumnDef, want ast.ColumnDefinition) bool {
@@ -234,10 +218,10 @@ func testTableIndex(t *testing.T, idx *ast.IndexDef, want ast.IndexDefinition) b
 	return true
 }
 
-func testTableDeclaration(t *testing.T, s ast.Stmt, want ast.TableDefinition) bool {
-	tableDecl, ok := s.(*ast.TableDecl)
+func testTableDeclaration(t *testing.T, d ast.Decl, want ast.TableDefinition) bool {
+	tableDecl, ok := d.(*ast.TableDecl)
 	if !ok {
-		t.Errorf("statement is not *ast.TableDecl. got=%T", s)
+		t.Errorf("statement is not *ast.TableDecl. got=%T", d)
 		return false
 	}
 
@@ -315,10 +299,10 @@ func testInsertStatement(t *testing.T, s ast.Stmt, want []ast.SQLOP) bool {
 	return true
 }
 
-func testActionDeclaration(t *testing.T, s ast.Stmt, want ast.ActionDefinition) bool {
-	actionDecl, ok := s.(*ast.ActionDecl)
+func testActionDeclaration(t *testing.T, d ast.Decl, want ast.ActionDefinition) bool {
+	actionDecl, ok := d.(*ast.ActionDecl)
 	if !ok {
-		t.Errorf("statement is not *ast.ActionDecl. got=%T", s)
+		t.Errorf("statement is not *ast.ActionDecl. got=%T", d)
 		return false
 	}
 
