@@ -82,17 +82,21 @@ func TestScanner_Next(t *testing.T) {
 			var s scanner.Scanner
 			s.Init(tt.fields.src)
 
+			pos := 0
 			for _, tok := range tokens {
-				gotTok, gotLit := s.Next()
-				//if gotPos != tt.wantPos {
-				//	t.Errorf("Next() gotPos = %v, want %v", gotPos, tt.wantPos)
-				//}
+				gotTok, gotLit, gotPos := s.Next()
 				if gotTok != tok.tok {
 					t.Errorf("Next() gotTok = %v, want %v", gotTok, tok.tok)
 				}
 				if gotLit != tok.lit {
 					t.Errorf("Next() gotLit = %v, want %v", gotLit, tok.lit)
 				}
+
+				if gotPos != token.Pos(pos) {
+					t.Errorf("Next() gotPos = %v, want %v", gotPos, pos)
+				}
+
+				pos += len(tok.lit) + len(whitespace)
 			}
 
 			if s.ErrorCount != 0 {
@@ -104,7 +108,7 @@ func TestScanner_Next(t *testing.T) {
 }
 
 func TestScanner_Next_seq(t *testing.T) {
-	input := `database test {
+	input := `database test;
 table user {
 user_id int notnull,
 username string null,
@@ -116,8 +120,6 @@ email string maxlen(50) minlen(10)
 
 action create_user(name, age) public {
 }
-
-}
 `
 
 	tests := []struct {
@@ -126,7 +128,7 @@ action create_user(name, age) public {
 	}{
 		{Type: token.DATABASE, Literal: "database"},
 		{Type: token.IDENT, Literal: "test"},
-		{Type: token.LBRACE, Literal: "{"},
+		{Type: token.SEMICOLON, Literal: ";"},
 		//table
 		{Type: token.TABLE, Literal: "table"},
 		{Type: token.IDENT, Literal: "user"},
@@ -186,15 +188,13 @@ action create_user(name, age) public {
 		{Type: token.PUBLIC, Literal: "public"},
 		{Type: token.LBRACE, Literal: "{"},
 		{Type: token.RBRACE, Literal: "}"},
-
-		{Type: token.RBRACE, Literal: "}"},
 	}
 
 	var s scanner.Scanner
 	s.Init([]byte(input))
 
 	for _, tt := range tests {
-		tok, lit := s.Next()
+		tok, lit, _ := s.Next()
 		if tok != tt.Type {
 			t.Errorf("Next() type wrong, Tok = %q, want %q", tok, tt.Type)
 		}

@@ -36,24 +36,25 @@ func TestAst_Generate(t *testing.T) {
 	}{
 		{
 			name:  "empty tables",
-			input: `database test{table user{} table order{}}`,
+			input: `database test; table user{} table order{}`,
 		},
 		{
 			name:  "table without attributes",
-			input: `database test{table user{username string, age int, email string}}`,
+			input: `database test; table user{username string, age int, email string}`,
 		},
 		{
 			name:  "table with attributes",
-			input: `database test{table user{username string notnull, age int min(18) max(30), email string maxlen(50) minlen(10)}}`,
+			input: `database test; table user{username string notnull, age int min(18) max(30), email string maxlen(50) minlen(10)}`,
 		},
 		{
 			name:  "table with index",
-			input: `database demo{table user{name string, age int, email string, uname unique(name, email), im index(email)}}`,
+			input: `database demo; table user{name string, age int, email string, uname unique(name, email), im index(email)}`,
 		},
 		{
 			name: "table with action insert",
-			input: `database demo{table user{name string, age int, email string}
-                        action create_user(name, age) public {insert into user(name, age) values (name, age)}}`,
+			input: `database demo;
+                        table user{name string, age int, email string}
+                        action create_user(name, age) public {insert into user(name, age) values (name, age)}`,
 		},
 	}
 
@@ -68,7 +69,7 @@ func TestAst_Generate(t *testing.T) {
 			got := a.Generate()
 			want := getGoldenFile(t, got, t.Name()+".golden")
 			if !bytes.Equal(got, want) {
-				t.Errorf("Generate() = %v,\nwant = %v", got, want)
+				t.Errorf("Generate() = %v,\n            want       = %v", got, want)
 			}
 		})
 	}

@@ -1,14 +1,23 @@
 package scanner
 
 import (
-	"errors"
 	"fmt"
+	"kwil/pkg/kl/token"
 )
 
-type ErrorList []error
+type Error struct {
+	Pos token.Position
+	Msg string
+}
 
-func (e *ErrorList) Add(msg string) {
-	*e = append(*e, errors.New(msg))
+func (e *Error) Error() string {
+	return fmt.Sprintf("%s: %s", e.Pos.String(), e.Msg)
+}
+
+type ErrorList []*Error
+
+func (e *ErrorList) Add(pos token.Position, msg string) {
+	*e = append(*e, &Error{pos, msg})
 }
 
 func (e ErrorList) Error() string {
@@ -20,4 +29,11 @@ func (e ErrorList) Error() string {
 	default:
 		return fmt.Sprintf("%s (with %d+ errors)", e[0], len(e)-1)
 	}
+}
+
+func (e ErrorList) Err() error {
+	if len(e) == 0 {
+		return nil
+	}
+	return e
 }

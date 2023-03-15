@@ -1,5 +1,6 @@
 {
   "name": "demo",
+  "owner": "",
   "tables": [
     {
       "name": "user",

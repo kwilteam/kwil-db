@@ -12,22 +12,19 @@ const (
 	eof = -1     // end of file
 )
 
-type ErrorHandler func(msg string)
+type ErrorHandler func(pos token.Position, msg string)
 
 // Scanner is a lexical scanner. It takes a []byte as input and produces a stream of tokens.
 type Scanner struct {
 	src []byte       // source
 	err ErrorHandler // error reporting; or nil
-	//mode Mode         // scanning mode
 
 	// scanning state
-	ch       rune // current character
-	offset   int  // current character offset
-	rdOffset int  // reading offset (position after current character)
-	//lineOffset int  // current line offset
-	insertSemi bool // insert a semicolon before nextChar newline
+	ch         rune // current character
+	offset     int  // current character offset
+	rdOffset   int  // reading offset (position after current character)
+	lineOffset int  // current line offset
 
-	// public state - ok to modify
 	ErrorCount int // number of errors encountered
 }
 
@@ -38,9 +35,8 @@ func New(src []byte, err ErrorHandler) *Scanner {
 	s.src = src
 	s.offset = 0
 	s.rdOffset = 0
-	//s.lineOffset = 0
+	s.lineOffset = 0
 	s.ch = ' '
-	s.insertSemi = false
 	s.ErrorCount = 0
 
 	// point to the first character
@@ -52,10 +48,14 @@ func New(src []byte, err ErrorHandler) *Scanner {
 	return &s
 }
 
-// nextChar reads the nextChar Unicode character
+// nextChar reads the next Unicode character
 func (s *Scanner) nextChar() {
 	if s.rdOffset < len(s.src) {
 		s.offset = s.rdOffset
+
+		if s.ch == '\n' {
+			s.lineOffset = s.offset
+		}
 
 		// support unicode
 		// convert byte to rune
@@ -82,7 +82,10 @@ func (s *Scanner) nextChar() {
 
 func (s *Scanner) error(offs int, msg string) {
 	if s.err != nil {
-		s.err(msg)
+		s.err(token.Position{
+			Line:   0,
+			Column: token.Pos(offs - s.lineOffset),
+		}, msg)
 	}
 	s.ErrorCount++
 }
@@ -97,7 +100,6 @@ func (s *Scanner) Init(src []byte) {
 	s.rdOffset = 0
 	//s.lineOffset = 0
 	s.ch = ' '
-	s.insertSemi = false
 	s.ErrorCount = 0
 
 	// point to the first character
@@ -108,7 +110,7 @@ func (s *Scanner) Init(src []byte) {
 }
 
 func (s *Scanner) skipWhitespace() {
-	for s.ch == ' ' || s.ch == '\t' || s.ch == '\n' && !s.insertSemi || s.ch == '\r' {
+	for s.ch == ' ' || s.ch == '\t' || s.ch == '\n' || s.ch == '\r' {
 		s.nextChar()
 	}
 }
@@ -173,8 +175,10 @@ func (s *Scanner) peek() byte {
 	return 0
 }
 
-func (s *Scanner) Next() (tok token.Token, lit string) {
+func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
 	s.skipWhitespace()
+
+	pos = token.Pos(s.offset)
 
 	ch := s.ch
 	switch ch {

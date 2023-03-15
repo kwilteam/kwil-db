@@ -20,6 +20,11 @@ type Stmt interface {
 	stmtNode()
 }
 
+type Decl interface {
+	Node
+	declNode()
+}
+
 // TODO: is it better to separate Decl and Stmt?
 //type Decl interface {
 //	Node
@@ -87,6 +92,10 @@ type (
 		X Expr
 	}
 
+	DeclStmt struct {
+		Decl Decl
+	}
+
 	BlockStmt struct {
 		Token      token.Token
 		Statements []Stmt
@@ -127,6 +136,8 @@ type FieldList struct {
 }
 
 type (
+	BadDecl struct{}
+
 	AttrDef struct {
 		Name  *Ident
 		Type  token.Token
@@ -152,11 +163,6 @@ type (
 		Idx  []Stmt
 	}
 
-	DatabaseDecl struct {
-		Name *Ident
-		Body *BlockStmt
-	}
-
 	ActionDecl struct {
 		Name   *Ident
 		Public bool
@@ -165,12 +171,12 @@ type (
 	}
 )
 
-func (x *ColumnDef) stmtNode()    {}
-func (x *AttrDef) stmtNode()      {}
-func (x *IndexDef) stmtNode()     {}
-func (x *TableDecl) stmtNode()    {}
-func (x *DatabaseDecl) stmtNode() {}
-func (x *ActionDecl) stmtNode()   {}
+func (x *BadDecl) declNode()    {}
+func (x *ColumnDef) stmtNode()  {}
+func (x *AttrDef) stmtNode()    {}
+func (x *IndexDef) stmtNode()   {}
+func (x *TableDecl) declNode()  {}
+func (x *ActionDecl) declNode() {}
 
 func (a *ActionDecl) Validate() error {
 	declaredParams := map[string]bool{}
@@ -268,19 +274,6 @@ func (a *ActionDecl) Build() (def ActionDefinition) {
 	return
 }
 
-func (d *DatabaseDecl) Build() (def DBDefinition) {
-	def.Name = d.Name.Name
-	for _, stmt := range d.Body.Statements {
-		switch s := stmt.(type) {
-		case *TableDecl:
-			def.Tables = append(def.Tables, s.Build())
-		case *ActionDecl:
-			def.Actions = append(def.Actions, s.Build())
-		}
-	}
-	return
-}
-
 func (d *TableDecl) Build() (def TableDefinition) {
 	def.Name = d.Name.Name
 	def.Columns = []ColumnDefinition{}
@@ -335,22 +328,21 @@ func (d *IndexDef) Build() (def IndexDefinition) {
 	return
 }
 
-type Ast struct {
-	Statements []Stmt // top level is always a database declaration, and only one
-}
-
-type File struct {
-	Decl DatabaseDecl
+type Database struct {
+	Name  *Ident
+	Decls []Decl
 }
 
 // Generate generates JSON string from AST
-func (a *Ast) Generate() []byte {
+func (d *Database) Generate() []byte {
 	db := DBDefinition{}
-
-	for _, stmt := range a.Statements {
-		switch stmt.(type) {
-		case *DatabaseDecl:
-			db = stmt.(*DatabaseDecl).Build()
+	db.Name = d.Name.Name
+	for _, decl := range d.Decls {
+		switch decl.(type) {
+		case *TableDecl:
+			db.Tables = append(db.Tables, decl.(*TableDecl).Build())
+		case *ActionDecl:
+			db.Actions = append(db.Actions, decl.(*ActionDecl).Build())
 		}
 	}
 

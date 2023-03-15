@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"errors"
 	"fmt"
 	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/scanner"
@@ -10,14 +9,17 @@ import (
 
 type parser struct {
 	scanner *scanner.Scanner
+	errors  scanner.ErrorList
+	file    *token.File
 
-	errors []error
+	trace bool
+	tok   token.Token // current token
+	lit   string      // current literal
+	pos   token.Pos   // current position
 
-	trace   bool
-	tok     token.Token // current token
-	lit     string      // current literal
 	peekTok token.Token // next token
 	peekLit string      // next literal
+	peekPos token.Pos   // next position
 }
 
 type Opt func(*parser)
@@ -28,12 +30,15 @@ func WithTraceOff() Opt {
 	}
 }
 
-func new(s *scanner.Scanner, opts ...Opt) *parser {
-	p := &parser{
-		scanner: s,
-		errors:  []error{},
-		trace:   true, // use a lot
+func WithTraceOn() Opt {
+	return func(p *parser) {
+		p.trace = true
 	}
+}
+
+func (p *parser) init(src []byte, opts ...Opt) {
+	eh := func(pos token.Position, msg string) { p.errors.Add(pos, msg) }
+	p.scanner = scanner.New(src, eh)
 
 	for _, opt := range opts {
 		opt(p)
@@ -42,50 +47,29 @@ func new(s *scanner.Scanner, opts ...Opt) *parser {
 	// init tok and peekTok
 	p.next()
 	p.next()
-
-	return p
 }
 
-func Parse(src []byte, opts ...Opt) (a *ast.Ast, err error) {
-	var p *parser
+func Parse(src []byte, opts ...Opt) (a *ast.Database, err error) {
+	var p parser
 	defer func() {
-		if r := recover(); r != nil {
-			p.errorExpected("panic")
+		if e := recover(); e != nil {
+			err = fmt.Errorf("panic: %v", e)
 		}
 
-		if len(p.errors) != 0 {
-			err = errors.New(p.Error())
-		}
+		err = p.errors.Err()
 	}()
 
-	h := func(msg string) { p.error(msg) }
-	s := scanner.New(src, h)
-	p = new(s, opts...)
+	//h := func(pos token.Position, msg string) { p.errors.Add(pos, msg) }
+	//s := scanner.New(src, h)
+	//p = init(s, opts...)
+
+	p.init(src, opts...)
 	a = p.parse()
 	return a, err
 }
 
-func (p *parser) Error() string {
-	switch len(p.errors) {
-	case 0:
-		return "no errors"
-	case 1:
-		return p.errors[0].Error()
-	default:
-		return fmt.Sprintf("%s (with %d+ errors)", p.errors[0], len(p.errors)-1)
-	}
-}
-
-func (p *parser) Errors() []error {
-	return p.errors
-}
-
-func (p *parser) error(msg string) {
-	p.errors = append(p.errors, errors.New(msg))
-}
-
-func (p *parser) errorf(format string, args ...any) {
-	p.errors = append(p.errors, fmt.Errorf(format, args...))
+func (p *parser) error(pos token.Pos, msg string) {
+	p.errors.Add(p.file.Position(pos), msg)
 }
 
 func (p *parser) curTokFrom(ts ...token.Token) bool {
@@ -101,18 +85,21 @@ func (p *parser) curTokIs(t token.Token) bool {
 	return p.tok == t
 }
 
-func (p *parser) errorExpected(msg string) {
-	p.errorf(msg)
+func (p *parser) errorExpected(pos token.Pos, msg string) {
+	msg = fmt.Sprintf("%d: %s", int(pos), msg)
+	p.error(pos, msg)
 }
 
-func (p *parser) expect(t token.Token) {
+func (p *parser) expect(t token.Token) token.Pos {
+	pos := p.pos
 	p.expectWithoutAdvance(t)
 	p.next()
+	return pos
 }
 
 func (p *parser) expectWithoutAdvance(t token.Token) bool {
 	if !p.curTokIs(t) {
-		p.errorExpected(fmt.Sprintf("expect current token to be %s got %s instead", t, p.tok))
+		p.errorExpected(p.pos, t.String())
 		return false
 	}
 	return true
@@ -120,7 +107,7 @@ func (p *parser) expectWithoutAdvance(t token.Token) bool {
 
 func (p *parser) parseBasicLit() *ast.BasicLit {
 	if !p.curTokFrom(token.INTEGER, token.STRING) {
-		p.errorExpected(fmt.Sprintf("expect basic literal, got %s", p.tok))
+		p.errorExpected(p.pos, "integer or string")
 	}
 
 	x := &ast.BasicLit{Type: p.tok, Value: p.lit}
@@ -168,8 +155,8 @@ type CallExpr struct {
 }
 
 func (p *parser) next() {
-	p.tok, p.lit = p.peekTok, p.peekLit
-	p.peekTok, p.peekLit = p.scanner.Next()
+	p.tok, p.lit, p.pos = p.peekTok, p.peekLit, p.peekPos
+	p.peekTok, p.peekLit, p.peekPos = p.scanner.Next()
 }
 
 func (p *parser) parseParameterList() (l []ast.Expr) {
@@ -243,7 +230,7 @@ func (p *parser) parseColumnAttrList() []*ast.AttrDef {
 
 	for !p.curTokIs(token.COMMA) && !p.curTokIs(token.RBRACE) && !p.curTokIs(token.EOF) {
 		if !p.tok.IsAttr() {
-			p.errorExpected(fmt.Sprintf("expect current token to be attr got (%s:%s) instead", p.tok, p.lit))
+			p.errorExpected(p.pos, fmt.Sprintf("expect current token to be attr got (%s:%s) instead", p.tok, p.lit))
 			p.next() // should advance to next attr
 		} else {
 			attr := p.parseColumnAttr()
@@ -343,19 +330,6 @@ func (p *parser) parseBlockDeclaration() *ast.BlockStmt {
 	return block
 }
 
-func (p *parser) parseDatabaseDeclaration() *ast.DatabaseDecl {
-	if p.trace {
-		defer un(trace("parseDatabaseDeclaration"))
-	}
-
-	p.expect(token.DATABASE)
-
-	db := &ast.DatabaseDecl{}
-	db.Name = p.parseIdent()
-	db.Body = p.parseBlockDeclaration()
-	return db
-}
-
 func (p *parser) parseTableDeclaration() *ast.TableDecl {
 	if p.trace {
 		defer un(trace("parseTableDeclaration"))
@@ -434,12 +408,6 @@ func (p *parser) parseStatement() ast.Stmt {
 	}
 
 	switch p.tok {
-	case token.DATABASE:
-		return p.parseDatabaseDeclaration()
-	case token.TABLE:
-		return p.parseTableDeclaration()
-	case token.ACTION:
-		return p.parseActionDeclaration()
 	case token.INSERT:
 		return p.parseInsertStatement()
 	default:
@@ -449,18 +417,90 @@ func (p *parser) parseStatement() ast.Stmt {
 	}
 }
 
-func (p *parser) parse() *ast.Ast {
-	// since top level is only a database declaration, maybe just dbDecl in Ast?
-	_ast := &ast.Ast{}
-	_ast.Statements = []ast.Stmt{}
+var declStart = map[token.Token]bool{
+	token.TABLE:  true,
+	token.ACTION: true,
+}
 
+var stmtStart = map[token.Token]bool{
+	token.INSERT: true,
+}
+
+func (p *parser) jump(to map[token.Token]bool) {
 	for !p.curTokIs(token.EOF) {
-		stmt := p.parseStatement()
-		if stmt != nil {
-			_ast.Statements = append(_ast.Statements, stmt)
+		if to[p.tok] {
+			return
 		}
 		p.next()
 	}
+}
 
-	return _ast
+// expectSemicolon expects an optional(before closing brace or paren) semicolon
+func (p *parser) expectSemicolon(next map[token.Token]bool) {
+	switch p.tok {
+	case token.SEMICOLON:
+		p.next()
+	case token.RPAREN:
+	case token.RBRACE:
+	case token.EOF:
+	default:
+		p.errorExpected(p.pos, fmt.Sprintf("expected semicolon, got %s", p.tok))
+		p.jump(next)
+	}
+}
+
+// expectSemicolon expects an optional(before closing brace or paren) comma
+func (p *parser) expectComma(next map[token.Token]bool) {
+	switch p.tok {
+	case token.COMMA:
+		p.next()
+	case token.RPAREN:
+	case token.RBRACE:
+	case token.EOF:
+	default:
+		p.errorExpected(p.pos, fmt.Sprintf("expected comma, got %s", p.tok))
+		p.jump(next)
+	}
+}
+
+func (p *parser) parseDeclaration() ast.Decl {
+	if p.trace {
+		defer un(trace("parseDeclaration"))
+	}
+
+	switch p.tok {
+	case token.TABLE:
+		return p.parseTableDeclaration()
+	case token.ACTION:
+		return p.parseActionDeclaration()
+	default:
+		p.errorExpected(p.pos, fmt.Sprintf("expected table or action, got %s(%s)", p.tok, p.lit))
+		p.jump(declStart)
+		return &ast.BadDecl{}
+	}
+}
+
+func (p *parser) parse() *ast.Database {
+	if p.trace {
+		defer un(trace("parse"))
+	}
+
+	if len(p.errors) != 0 {
+		return nil
+	}
+
+	_ = p.expect(token.DATABASE)
+	dbName := p.parseIdent()
+	p.expectSemicolon(declStart)
+
+	db := &ast.Database{
+		Name:  dbName,
+		Decls: []ast.Decl{},
+	}
+
+	for !p.curTokIs(token.EOF) {
+		db.Decls = append(db.Decls, p.parseDeclaration())
+	}
+
+	return db
 }
