@@ -1,12 +1,15 @@
 package token
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 type Pos uint
 
 type Position struct {
-	Line   Pos
-	Column Pos
+	Line   Pos // Line number, starting at 1.
+	Column Pos // Column number, starting at 1 (character count per line).
 }
 
 func (p Position) String() string {
@@ -14,10 +17,22 @@ func (p Position) String() string {
 }
 
 type File struct {
-	Name  string
-	lines []int
+	Size  int   // file size
+	Lines []int // start offset of each line
 }
 
 func (f *File) Position(pos Pos) Position {
-	return Position{Line: 1, Column: 1}
+	offset := int(pos)
+
+	if offset < 0 || offset > f.Size {
+		panic(fmt.Sprintf("invalid offset %d, range: [0, %d]", offset, f.Size))
+	}
+
+	p := sort.Search(len(f.Lines), func(i int) bool { return f.Lines[i] > offset })
+
+	return Position{Line: Pos(p), Column: Pos(offset - f.Lines[p-1] + 1)}
+}
+
+func (f *File) AddLine(offset int) {
+	f.Lines = append(f.Lines, offset)
 }
