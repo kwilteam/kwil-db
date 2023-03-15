@@ -21,12 +21,12 @@ func Start(in io.Reader, out io.Writer) {
 		}
 
 		line := buf.Text()
-		var a *ast.Ast
+		var a *ast.Database
 		var err error
-		if strings.ToLower(line[:8]) == "traceon;" {
-			a, err = parser.Parse([]byte(line[8:]))
+		if len(line) > 8 && strings.ToLower(line[:8]) == "traceon;" {
+			a, err = parser.Parse([]byte(line[8:]), parser.WithTraceOn())
 		} else {
-			a, err = parser.Parse([]byte(line), parser.WithTraceOff())
+			a, err = parser.Parse([]byte(line))
 		}
 		if err != nil {
 			fmt.Fprintf(out, "ERROR: %s\n", err)

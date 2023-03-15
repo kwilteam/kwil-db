@@ -79,8 +79,11 @@ func TestScanner_Next(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var s scanner.Scanner
-			s.Init(tt.fields.src)
+			file := token.File{
+				Size:  len(tt.fields.src),
+				Lines: []int{0},
+			}
+			s := scanner.New(tt.fields.src, nil, &file)
 
 			pos := 0
 			for _, tok := range tokens {
@@ -190,8 +193,11 @@ action create_user(name, age) public {
 		{Type: token.RBRACE, Literal: "}"},
 	}
 
-	var s scanner.Scanner
-	s.Init([]byte(input))
+	file := token.File{
+		Size:  len(input),
+		Lines: []int{0},
+	}
+	s := scanner.New([]byte(input), nil, &file)
 
 	for _, tt := range tests {
 		tok, lit, _ := s.Next()
@@ -202,6 +208,7 @@ action create_user(name, age) public {
 			t.Errorf("Next() literal wrong, Lit = %v, want %v", tok, tt.Literal)
 		}
 	}
+
 	if s.ErrorCount != 0 {
 		t.Errorf("got %d errors", s.ErrorCount)
 	}

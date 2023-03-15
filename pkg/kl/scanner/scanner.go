@@ -16,26 +16,26 @@ type ErrorHandler func(pos token.Position, msg string)
 
 // Scanner is a lexical scanner. It takes a []byte as input and produces a stream of tokens.
 type Scanner struct {
-	src []byte       // source
-	err ErrorHandler // error reporting; or nil
+	file *token.File  // source file handle
+	src  []byte       // source
+	err  ErrorHandler // error reporting; or nil
 
 	// scanning state
-	ch         rune // current character
-	offset     int  // current character offset
-	rdOffset   int  // reading offset (position after current character)
-	lineOffset int  // current line offset
+	ch       rune // current character
+	offset   int  // current character offset
+	rdOffset int  // reading offset (position after current character)
 
 	ErrorCount int // number of errors encountered
 }
 
-func New(src []byte, err ErrorHandler) *Scanner {
+func New(src []byte, err ErrorHandler, file *token.File) *Scanner {
 	var s Scanner
 
+	s.file = file
 	s.err = err
 	s.src = src
 	s.offset = 0
 	s.rdOffset = 0
-	s.lineOffset = 0
 	s.ch = ' '
 	s.ErrorCount = 0
 
@@ -54,7 +54,7 @@ func (s *Scanner) nextChar() {
 		s.offset = s.rdOffset
 
 		if s.ch == '\n' {
-			s.lineOffset = s.offset
+			s.file.AddLine(s.offset)
 		}
 
 		// support unicode
@@ -76,16 +76,16 @@ func (s *Scanner) nextChar() {
 		s.ch = r
 	} else {
 		s.offset = len(s.src)
+		if s.ch == '\n' {
+			s.file.AddLine(s.offset)
+		}
 		s.ch = eof
 	}
 }
 
 func (s *Scanner) error(offs int, msg string) {
 	if s.err != nil {
-		s.err(token.Position{
-			Line:   0,
-			Column: token.Pos(offs - s.lineOffset),
-		}, msg)
+		s.err(s.file.Position(token.Pos(offs)), msg)
 	}
 	s.ErrorCount++
 }
@@ -98,7 +98,6 @@ func (s *Scanner) Init(src []byte) {
 	s.src = src
 	s.offset = 0
 	s.rdOffset = 0
-	//s.lineOffset = 0
 	s.ch = ' '
 	s.ErrorCount = 0
 
@@ -181,6 +180,7 @@ func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
 	pos = token.Pos(s.offset)
 
 	ch := s.ch
+
 	switch ch {
 	case eof:
 		lit = "EOF"

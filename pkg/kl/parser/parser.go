@@ -37,8 +37,11 @@ func WithTraceOn() Opt {
 }
 
 func (p *parser) init(src []byte, opts ...Opt) {
+	p.file = &token.File{Size: len(src), Lines: []int{0}}
+	//p.errors = scanner.ErrorList{}
+
 	eh := func(pos token.Position, msg string) { p.errors.Add(pos, msg) }
-	p.scanner = scanner.New(src, eh)
+	p.scanner = scanner.New(src, eh, p.file)
 
 	for _, opt := range opts {
 		opt(p)
@@ -58,10 +61,6 @@ func Parse(src []byte, opts ...Opt) (a *ast.Database, err error) {
 
 		err = p.errors.Err()
 	}()
-
-	//h := func(pos token.Position, msg string) { p.errors.Add(pos, msg) }
-	//s := scanner.New(src, h)
-	//p = init(s, opts...)
 
 	p.init(src, opts...)
 	a = p.parse()
@@ -86,7 +85,7 @@ func (p *parser) curTokIs(t token.Token) bool {
 }
 
 func (p *parser) errorExpected(pos token.Pos, msg string) {
-	msg = fmt.Sprintf("%d: %s", int(pos), msg)
+	msg = fmt.Sprintf("expected %s, got %s(%s)", msg, p.tok.String(), p.lit)
 	p.error(pos, msg)
 }
 
@@ -230,7 +229,7 @@ func (p *parser) parseColumnAttrList() []*ast.AttrDef {
 
 	for !p.curTokIs(token.COMMA) && !p.curTokIs(token.RBRACE) && !p.curTokIs(token.EOF) {
 		if !p.tok.IsAttr() {
-			p.errorExpected(p.pos, fmt.Sprintf("expect current token to be attr got (%s:%s) instead", p.tok, p.lit))
+			p.errorExpected(p.pos, "column attribute")
 			p.next() // should advance to next attr
 		} else {
 			attr := p.parseColumnAttr()
@@ -322,8 +321,6 @@ func (p *parser) parseBlockDeclaration() *ast.BlockStmt {
 		if stmt != nil {
 			block.Statements = append(block.Statements, stmt)
 		}
-
-		//p.next()
 	}
 
 	p.expect(token.RBRACE)
@@ -444,7 +441,7 @@ func (p *parser) expectSemicolon(next map[token.Token]bool) {
 	case token.RBRACE:
 	case token.EOF:
 	default:
-		p.errorExpected(p.pos, fmt.Sprintf("expected semicolon, got %s", p.tok))
+		p.errorExpected(p.pos, "semicolon")
 		p.jump(next)
 	}
 }
@@ -458,7 +455,7 @@ func (p *parser) expectComma(next map[token.Token]bool) {
 	case token.RBRACE:
 	case token.EOF:
 	default:
-		p.errorExpected(p.pos, fmt.Sprintf("expected comma, got %s", p.tok))
+		p.errorExpected(p.pos, "comma")
 		p.jump(next)
 	}
 }
@@ -474,7 +471,7 @@ func (p *parser) parseDeclaration() ast.Decl {
 	case token.ACTION:
 		return p.parseActionDeclaration()
 	default:
-		p.errorExpected(p.pos, fmt.Sprintf("expected table or action, got %s(%s)", p.tok, p.lit))
+		p.errorExpected(p.pos, "table or action")
 		p.jump(declStart)
 		return &ast.BadDecl{}
 	}
