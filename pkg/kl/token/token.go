@@ -23,6 +23,7 @@ const (
 	ACTION
 	PUBLIC // public
 	PRIVATE
+
 	INSERT // insert
 	INTO   // into
 	VALUES // values
@@ -103,10 +104,10 @@ var tokens = [...]string{
 	NULL:    "null",
 	NOTNULL: "notnull",
 	//
-	//EQL:       "==",
+	EQL: "==",
 	//LSS:       "<",
 	//GTR:       ">",
-	//ASSIGN:    "=",
+	ASSIGN: "=",
 	//NOT:       "!",
 	//NEQ:       "!=",
 	//LEQ:       "<=",

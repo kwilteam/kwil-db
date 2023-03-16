@@ -202,11 +202,11 @@ func testTableIndex(t *testing.T, idx *ast.IndexDef, want ast.IndexDefinition) b
 
 	for j, col := range idx.Columns {
 		var name string
-		switch col.(type) {
+		switch c := col.(type) {
 		case *ast.Ident:
-			name = col.(*ast.Ident).String()
+			name = c.String()
 		case *ast.SelectorExpr:
-			name = col.(*ast.SelectorExpr).String()
+			name = c.String()
 		}
 
 		if name != want.Columns[j] {
