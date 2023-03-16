@@ -126,11 +126,6 @@ func isDigit(ch rune) bool {
 	return isDecimal(ch) || ch >= utf8.RuneSelf && unicode.IsDigit(ch)
 }
 
-func t() {
-	var x, n, c int = 3, 4, 5
-	fmt.Println(x, n, c)
-}
-
 func (s *Scanner) scanIdentifier() string {
 	offs := s.offset
 	for isLetter(s.ch) || isDecimal(s.ch) || s.ch == '_' {
@@ -147,31 +142,43 @@ func (s *Scanner) scanNumber() (tok token.Token, lit string) {
 	return token.INTEGER, string(s.src[offs:s.offset])
 }
 
-func (s *Scanner) scanString() string {
-	offs := s.offset - 1
+func (s *Scanner) scanEscape(quote rune) bool {
+	offs := s.offset
+
+	switch s.ch {
+	case 'n', '\\', quote:
+		s.nextChar()
+		return true
+	default:
+		msg := "unknown escape sequence"
+		if s.ch < 0 {
+			msg = "escape sequence not terminated"
+		}
+		s.error(offs, msg)
+		return false
+	}
+}
+
+func (s *Scanner) scanString(quote rune) string {
+	offs := s.offset
+
+	s.nextChar()
 	for {
 		ch := s.ch
 		if ch == '\n' || ch < 0 {
-			s.error(offs, "unterminated string")
-			break
-		}
-
-		if ch == '"' {
+			s.error(offs, "string literal not terminated")
 			break
 		}
 		s.nextChar()
-
-		// TODO: escaped char
+		if ch == quote {
+			break
+		}
+		if ch == '\\' {
+			s.scanEscape('"')
+		}
 	}
 
 	return string(s.src[offs:s.offset])
-}
-
-func (s *Scanner) peek() byte {
-	if s.rdOffset < len(s.src) {
-		return s.src[s.rdOffset]
-	}
-	return 0
 }
 
 func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
@@ -203,16 +210,21 @@ func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
 	case ';':
 		lit = ";"
 		tok = token.SEMICOLON
-	//case '"':
-	//	tok = token.STRING
-	//	lit = s.scanString()
-	//case '=':
-	//	if s.peek() == '=' {
-	//		s.nextChar()
-	//		lit = &token.Token{Type: token.EQL, Literal: "=="}
-	//	} else {
-	//		lit = &token.Token{Type: token.ASSIGN, Literal: "="}
-	//	}
+	case '"':
+		tok = token.STRING
+		lit = s.scanString('"')
+	case '\'':
+		tok = token.STRING
+		lit = s.scanString('\'')
+	case '=':
+		s.nextChar()
+		if s.ch == '=' {
+			lit = "=="
+			tok = token.EQL
+		} else {
+			lit = "="
+			tok = token.ASSIGN
+		}
 	default:
 		switch {
 		case isLetter(ch):

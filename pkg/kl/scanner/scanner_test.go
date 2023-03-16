@@ -19,7 +19,9 @@ var tokens = []elt{
 	{token.IDENT, "bar123"},
 	{token.IDENT, "foo_bar"},
 	{token.INTEGER, "123"},
-	//{token.STRING, "\"hello\""},
+	{token.STRING, `"hello"`},
+	{token.STRING, `"hello\\world\n"`},
+	{token.STRING, `'hello\\wor\"ld'`},
 
 	// symbols
 	{token.LPAREN, "("},
@@ -28,6 +30,8 @@ var tokens = []elt{
 	{token.RBRACE, "}"},
 	{token.COMMA, ","},
 	{token.SEMICOLON, ";"},
+	{token.ASSIGN, "="},
+	{token.EQL, "=="},
 
 	// keywords
 	{token.DATABASE, "database"},
@@ -92,7 +96,7 @@ func TestScanner_Next(t *testing.T) {
 					t.Errorf("Next() gotTok = %v, want %v", gotTok, tok.tok)
 				}
 				if gotLit != tok.lit {
-					t.Errorf("Next() gotLit = %v, want %v", gotLit, tok.lit)
+					t.Errorf("Next() gotLit = %q, want %q", gotLit, tok.lit)
 				}
 
 				if gotPos != token.Pos(pos) {
@@ -111,7 +115,8 @@ func TestScanner_Next(t *testing.T) {
 }
 
 func TestScanner_Next_seq(t *testing.T) {
-	input := `database test;
+	dbInput := `database test;`
+	tableInput := `
 table user {
 user_id int notnull,
 username string null,
@@ -119,11 +124,12 @@ age int min(18) max(60),
 uuid uuid,
 gender bool,
 email string maxlen(50) minlen(10)
-}
-
+}`
+	actionInput := `
 action create_user(name, age) public {
 }
 `
+	input := dbInput + tableInput + actionInput
 
 	tests := []struct {
 		Type    token.Token
@@ -211,6 +217,16 @@ action create_user(name, age) public {
 
 	if s.ErrorCount != 0 {
 		t.Errorf("got %d errors", s.ErrorCount)
+	}
+
+	cur := 3
+	actPos := len(dbInput) + len(tableInput) + cur
+	p := file.Position(token.Pos(actPos))
+	if p.Line != 10 {
+		t.Errorf("wrong line number, got %d, want %d", p.Line, 0)
+	}
+	if int(p.Column) != cur {
+		t.Errorf("wrong column number, got %d, want %d", p.Column, cur)
 	}
 }
 

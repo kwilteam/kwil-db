@@ -25,12 +25,6 @@ type Decl interface {
 	declNode()
 }
 
-// TODO: is it better to separate Decl and Stmt?
-//type Decl interface {
-//	Node
-//	declNode()
-//}
-
 // ----------------------------------------
 // Expression
 // only contains Ident,Boolean,Integer
@@ -296,12 +290,12 @@ func (d *ColumnDef) Build() (def ColumnDefinition) {
 	for _, attr := range d.Attrs {
 		at := Attribute{}
 
-		switch attr.Param.(type) {
+		switch a := attr.Param.(type) {
 		case *BasicLit:
-			at.Value = attr.Param.(*BasicLit).Value
-			at.AType = attr.Param.(*BasicLit).Type.ToInt()
+			at.Value = a.Value
+			at.AType = a.Type.ToInt()
 		case *Ident:
-			at.Value = attr.Param.(*Ident).Name
+			at.Value = a.Name
 			at.AType = token.IDENT.ToInt()
 		}
 
@@ -318,11 +312,11 @@ func (d *IndexDef) Build() (def IndexDefinition) {
 	}
 	def.Columns = []string{}
 	for _, col := range d.Columns {
-		switch col.(type) {
+		switch c := col.(type) {
 		case *Ident:
-			def.Columns = append(def.Columns, col.(*Ident).Name)
+			def.Columns = append(def.Columns, c.Name)
 		case *SelectorExpr:
-			def.Columns = append(def.Columns, col.(*SelectorExpr).String())
+			def.Columns = append(def.Columns, c.String())
 		}
 	}
 	return
@@ -338,11 +332,11 @@ func (d *Database) Generate() []byte {
 	db := DBDefinition{}
 	db.Name = d.Name.Name
 	for _, decl := range d.Decls {
-		switch decl.(type) {
+		switch a := decl.(type) {
 		case *TableDecl:
-			db.Tables = append(db.Tables, decl.(*TableDecl).Build())
+			db.Tables = append(db.Tables, a.Build())
 		case *ActionDecl:
-			db.Actions = append(db.Actions, decl.(*ActionDecl).Build())
+			db.Actions = append(db.Actions, a.Build())
 		}
 	}
 

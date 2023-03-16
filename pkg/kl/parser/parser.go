@@ -396,7 +396,6 @@ func (p *parser) parseInsertStatement() *ast.InsertStmt {
 		p.next()
 	}
 	return stmt
-
 }
 
 func (p *parser) parseStatement() ast.Stmt {
