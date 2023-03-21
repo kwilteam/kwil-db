@@ -187,6 +187,11 @@ func Test_RapidWrite(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(100)
 
+	err = conn.Execute(insertTestRow, 1000000, "test1000000")
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
 	for i := 0; i < 100; i++ {
 		go func(i int) {
 			idpref := i * 1000
@@ -203,6 +208,7 @@ func Test_RapidWrite(t *testing.T) {
 	}
 
 	wg.Wait()
+
 }
 
 func Test_Savepoints(t *testing.T) {

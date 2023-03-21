@@ -3,6 +3,7 @@ package driver
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -123,6 +124,8 @@ func (c *Connection) execute(stmt string, options *sqlitex.ExecOptions) error {
 		return ErrNoWriteLock
 	}
 
+	stmt = trimPadding(stmt)
+
 	err := sqlitex.Execute(c.conn, stmt, options)
 	if err != nil {
 		return fmt.Errorf("failed to execute statement: %w", err)
@@ -154,6 +157,7 @@ func (c *Connection) query(statement string, resultFn ResultFn, statementSetterF
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	statement = trimPadding(statement)
 	stmt, err := c.prepare(statement)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
@@ -218,4 +222,8 @@ func (c *Connection) ReleaseLock() {
 
 	releaseLock(c.DBID)
 	c.lock = LOCK_TYPED_SHARED
+}
+
+func trimPadding(s string) string {
+	return strings.TrimSpace(s)
 }

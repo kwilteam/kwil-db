@@ -22,7 +22,7 @@ func (c *Connection) Savepoint(nameArr ...string) (*Savepoint, error) {
 	var name string
 	// generate a random name if none is provided
 	if len(nameArr) == 0 {
-		name = randomString(10)
+		name = randomSavepointName(10)
 	} else {
 		name = nameArr[0]
 	}
@@ -95,12 +95,12 @@ func (s *Savepoint) ApplyChangeset(changeset *bytes.Buffer) error {
 	})
 }
 
-func randomString(length int) string {
+func randomSavepointName(length int) string {
 	rand.Seed(time.Now().UnixNano())
 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 	result := make([]rune, length)
 	for i := range result {
 		result[i] = chars[rand.Intn(len(chars))]
 	}
-	return string(result)
+	return "x" + string(result) // SQLite savepoints must start with a letter
 }

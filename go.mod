@@ -33,6 +33,7 @@ require (
 	google.golang.org/grpc v1.50.1
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.2.0
 	google.golang.org/protobuf v1.28.1
+	zombiezen.com/go/sqlite v0.12.0
 )
 
 require (
@@ -109,7 +110,6 @@ require (
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.4.0 // indirect
 	modernc.org/sqlite v1.20.0 // indirect
-	zombiezen.com/go/sqlite v0.12.0 // indirect
 )
 
 replace (
