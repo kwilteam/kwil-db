@@ -1,14 +1,17 @@
 {
-  "name": "test",
   "owner": "",
+  "name": "test",
   "tables": [
     {
       "name": "user",
-      "columns": []
+      "columns": [],
+      "indexes": []
     },
     {
       "name": "order",
-      "columns": []
+      "columns": [],
+      "indexes": []
     }
-  ]
+  ],
+  "actions": null
 }

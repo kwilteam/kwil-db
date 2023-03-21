@@ -22,6 +22,7 @@ var tokens = []elt{
 	{token.STRING, `"hello"`},
 	{token.STRING, `"hello\\world\n"`},
 	{token.STRING, `'hello\\wor\"ld'`},
+	{token.STRING, `'hello@world'`},
 
 	// symbols
 	{token.LPAREN, "("},
@@ -31,7 +32,18 @@ var tokens = []elt{
 	{token.COMMA, ","},
 	{token.SEMICOLON, ";"},
 	{token.ASSIGN, "="},
-	{token.EQL, "=="},
+	{token.ADD, "+"},
+	{token.SUB, "-"},
+	{token.DIV, "/"},
+	{token.MUL, "*"},
+	{token.MOD, "%"},
+	{token.LSS, "<"},
+	{token.GTR, ">"},
+	{token.LEQ, "<="},
+	{token.GEQ, ">="},
+	{token.NEQ, "!="},
+	{token.NEQ, "<>"},
+	{token.NOT, "!"},
 
 	// keywords
 	{token.DATABASE, "database"},
@@ -39,11 +51,16 @@ var tokens = []elt{
 	{token.ACTION, "action"},
 	{token.PUBLIC, "public"},
 	{token.PRIVATE, "private"},
+	{token.WITH, "with"},
+	{token.REPLACE, "replace"},
 	{token.INSERT, "insert"},
-	{token.INTO, "into"},
-	{token.VALUES, "values"},
+	{token.SELECT, "select"},
+	{token.UPDATE, "update"},
+	{token.DELETE, "delete"},
+	{token.DROP, "drop"},
 	{token.UNIQUE, "unique"},
 	{token.INDEX, "index"},
+	{token.PRIMARY, "primary"},
 	{token.MIN, "min"},
 	{token.MAX, "max"},
 	{token.MINLEN, "minlen"},
@@ -127,6 +144,7 @@ email string maxlen(50) minlen(10)
 }`
 	actionInput := `
 action create_user(name, age) public {
+INSERT into user (name, email) values ("test_name", "test_email@a.com");
 }
 `
 	input := dbInput + tableInput + actionInput
@@ -196,6 +214,23 @@ action create_user(name, age) public {
 		{Type: token.RPAREN, Literal: ")"},
 		{Type: token.PUBLIC, Literal: "public"},
 		{Type: token.LBRACE, Literal: "{"},
+		//
+		{Type: token.INSERT, Literal: "INSERT"},
+		{Type: token.IDENT, Literal: "into"},
+		{Type: token.IDENT, Literal: "user"},
+		{Type: token.LPAREN, Literal: "("},
+		{Type: token.IDENT, Literal: "name"},
+		{Type: token.COMMA, Literal: ","},
+		{Type: token.IDENT, Literal: "email"},
+		{Type: token.RPAREN, Literal: ")"},
+		{Type: token.IDENT, Literal: "values"},
+		{Type: token.LPAREN, Literal: "("},
+		{Type: token.STRING, Literal: `"test_name"`},
+		{Type: token.COMMA, Literal: ","},
+		{Type: token.STRING, Literal: `"test_email@a.com"`},
+		{Type: token.RPAREN, Literal: ")"},
+		{Type: token.SEMICOLON, Literal: ";"},
+
 		{Type: token.RBRACE, Literal: "}"},
 	}
 

@@ -14,8 +14,10 @@ const (
 	END_DATA_TYPE
 )
 
-func (d *DataType) String() string {
-	switch *d {
+func (d DataType) String() string {
+	switch d {
+	case NULL:
+		return `null`
 	case STRING:
 		return `string`
 	case INT32:

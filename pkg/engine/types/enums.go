@@ -22,8 +22,8 @@ const (
 	END_ATTRIBUTE_TYPE
 )
 
-func (a *AttributeType) String() string {
-	switch *a {
+func (a AttributeType) String() string {
+	switch a {
 	case PRIMARY_KEY:
 		return `primary_key`
 	case UNIQUE:

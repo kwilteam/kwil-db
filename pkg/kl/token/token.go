@@ -1,5 +1,7 @@
 package token
 
+import "strings"
+
 type Token int
 
 const (
@@ -24,21 +26,22 @@ const (
 	PUBLIC // public
 	PRIVATE
 
+	WITH
+	REPLACE
 	INSERT // insert
-	INTO   // into
-	VALUES // values
+	//INTO   // into
+	//VALUES // values
 	//WHERE    // where
 	//AND      // and
 	//OR       // or
-	//SELECT   // select
-	//FROM     // from
-	//UPDATE   // update
-	//DROP     // drop
-	UNIQUE // unique
-	INDEX  // index
-	//
-	//PRIMARY // primary
-	//
+	SELECT // select
+	UPDATE  // update
+	DELETE
+	DROP   // drop
+	UNIQUE  // unique
+	INDEX   // index
+	PRIMARY // primary
+
 	//CONST      // const
 	//ACTION     // action
 
@@ -53,14 +56,20 @@ const (
 	keywordEnd // keywordEnd
 
 	symbolBeg
+	ADD
+	SUB
+	DIV
+	MUL
+	MOD
+
 	ASSIGN // =
-	EQL    // ==
-	LSS    // <
-	GTR    // >
-	//NOT    // !
-	//NEQ // !=
-	//LEQ // <=
-	//GEQ // >=
+	//EQL    // ==
+	LSS // <
+	GTR // >
+	NOT // !
+	NEQ // !=
+	LEQ // <=
+	GEQ // >=
 
 	LPAREN // (
 	LBRACK // [
@@ -90,12 +99,19 @@ var tokens = [...]string{
 	ACTION:   "action",
 	PUBLIC:   "public",
 	PRIVATE:  "private",
+	WITH:     "with",
+	REPLACE:  "replace",
 	INSERT:   "insert",
-	INTO:     "into",
-	VALUES:   "values",
+	//INTO:     "into",
+	//VALUES:   "values",
+	SELECT: "select",
+	UPDATE: "update",
+	DELETE: "delete",
+	DROP:   "drop",
 
-	UNIQUE: "unique",
-	INDEX:  "index",
+	UNIQUE:  "unique",
+	INDEX:   "index",
+	PRIMARY: "primary",
 
 	MIN:     "min",
 	MAX:     "max",
@@ -104,14 +120,20 @@ var tokens = [...]string{
 	NULL:    "null",
 	NOTNULL: "notnull",
 	//
-	EQL: "==",
-	//LSS:       "<",
-	//GTR:       ">",
-	ASSIGN: "=",
-	//NOT:       "!",
-	//NEQ:       "!=",
-	//LEQ:       "<=",
-	//GEQ:       ">=",
+
+	ADD: "+",
+	SUB: "-",
+	MUL: "*",
+	DIV: "/",
+	MOD: "%",
+
+	LSS:       "<",
+	GTR:       ">",
+	ASSIGN:    "=",
+	NOT:       "!",
+	NEQ:       "!=",
+	LEQ:       "<=",
+	GEQ:       ">=",
 	LPAREN:    "(",
 	LBRACK:    "[",
 	LBRACE:    "{",
@@ -159,6 +181,8 @@ func init() {
 }
 
 func Lookup(ident string) Token {
+	ident = strings.ToLower(ident)
+
 	if len(ident) == 1 {
 		return IDENT
 	}
