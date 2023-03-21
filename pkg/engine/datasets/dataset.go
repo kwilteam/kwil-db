@@ -43,3 +43,29 @@ func OpenDataset(owner, name, path string) (*Dataset, error) {
 		statements: nil, // TODO: load prepared statements from disks
 	}, nil
 }
+
+func (d *Dataset) Close() error {
+	d.conn.ReleaseLock()
+	return d.conn.Close()
+}
+
+/*
+func (d *Dataset) ApplySchema(schema *models.Dataset) error {
+	if d.schema != nil {
+		return fmt.Errorf("schema already exists for dataset %s", d.DBID)
+	}
+
+	d.schema = schema
+
+}
+
+// applySchema applies a schema to the underlying sqlite database.
+func (d *Dataset) applySchema(schema *models.Dataset) error {
+
+}
+
+// storeSchema stores the schema in the underlying sqlite database.
+func (d *Dataset) storeSchema(schema *models.Dataset) error {
+
+}
+*/

@@ -110,6 +110,7 @@ type IndexType int
 const (
 	INVALID_INDEX_TYPE IndexType = iota + 100
 	BTREE
+	UNIQUE_BTREE
 	END_INDEX_TYPE
 )
 
@@ -117,6 +118,8 @@ func (i *IndexType) String() string {
 	switch *i {
 	case BTREE:
 		return "btree"
+	case UNIQUE_BTREE:
+		return "unique_btree"
 	}
 	return "unknown"
 }

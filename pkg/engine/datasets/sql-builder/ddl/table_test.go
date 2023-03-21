@@ -3,7 +3,7 @@ package ddlbuilder_test
 import (
 	"fmt"
 	"kwil/pkg/databases/spec"
-	ddlbuilder "kwil/pkg/databases/sql-builder/ddl"
+	"kwil/pkg/databases/sql-builder/ddl"
 	"testing"
 )
 
