@@ -40,7 +40,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 					Name: "user",
 					Columns: []*models.Column{
 						{Name: "user_id", Type: types.INT32, Attributes: []*models.Attribute{{Type: types.NOT_NULL}}},
-						{Name: "username", Type: types.STRING, Attributes: []*models.Attribute{}},
+						{Name: "username", Type: types.TEXT, Attributes: []*models.Attribute{}},
 						{Name: "gender", Type: types.BOOLEAN, Attributes: []*models.Attribute{}},
 					},
 				},
@@ -56,7 +56,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 					Columns: []*models.Column{
 						{Name: "age", Type: types.INT32, Attributes: []*models.Attribute{
 							{Type: types.MIN, Value: []byte("18")}, {Type: types.MAX, Value: []byte("30")}}},
-						{Name: "email", Type: types.STRING, Attributes: []*models.Attribute{
+						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{
 							{Type: types.MAX_LENGTH, Value: []byte("50")}, {Type: types.MIN_LENGTH, Value: []byte("10")}}},
 					},
 				},
@@ -70,9 +70,9 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 				{
 					Name: "user",
 					Columns: []*models.Column{
-						{Name: "name", Type: types.STRING, Attributes: []*models.Attribute{}},
+						{Name: "name", Type: types.TEXT, Attributes: []*models.Attribute{}},
 						{Name: "age", Type: types.INT64, Attributes: []*models.Attribute{}},
-						{Name: "email", Type: types.STRING, Attributes: []*models.Attribute{}},
+						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{}},
 					},
 					Indexes: []*models.Index{
 						{Name: "uname", Type: types.UNIQUE_BTREE, Columns: []string{"name", "email"}},
@@ -94,9 +94,9 @@ insert into user (name, email) values ("test_name", "test_email@a.com");
 				{
 					Name: "user",
 					Columns: []*models.Column{
-						{Name: "name", Type: types.STRING, Attributes: []*models.Attribute{}},
+						{Name: "name", Type: types.TEXT, Attributes: []*models.Attribute{}},
 						{Name: "age", Type: types.INT64, Attributes: []*models.Attribute{}},
-						{Name: "email", Type: types.STRING, Attributes: []*models.Attribute{}},
+						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{}},
 					},
 				},
 			},

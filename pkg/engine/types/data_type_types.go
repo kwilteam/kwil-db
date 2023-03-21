@@ -6,11 +6,8 @@ type DataType int
 const (
 	INVALID_DATA_TYPE DataType = iota + 100
 	NULL
-	STRING
-	INT32
-	INT64
-	BOOLEAN
-	UUID
+	TEXT
+	INT
 	END_DATA_TYPE
 )
 
@@ -18,16 +15,10 @@ func (d DataType) String() string {
 	switch d {
 	case NULL:
 		return `null`
-	case STRING:
-		return `string`
-	case INT32:
-		return `int32`
-	case INT64:
-		return `int64`
-	case BOOLEAN:
-		return `boolean`
-	case UUID:
-		return `uuid`
+	case TEXT:
+		return `text`
+	case INT:
+		return `int`
 	}
 	return `unknown`
 }
@@ -37,7 +28,7 @@ func (d *DataType) Int() int {
 }
 
 func (d *DataType) IsNumeric() bool {
-	return *d == INT32 || *d == INT64
+	return *d == INT
 }
 
 func (d *DataType) IsValid() bool {
@@ -46,5 +37,5 @@ func (d *DataType) IsValid() bool {
 
 // will check if the data type is a text type
 func (d *DataType) IsText() bool {
-	return *d == STRING
+	return *d == TEXT
 }

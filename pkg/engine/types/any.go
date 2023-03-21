@@ -117,14 +117,10 @@ func (a *ConcreteValue) String() string {
 // of "", this will return false.  0 is also nil for int types.
 func (a *ConcreteValue) IsEmpty() bool {
 	switch a.dataType {
-	case STRING:
+	case TEXT:
 		return a.value == nil || a.value.(string) == ""
-	case INT32:
-		return a.value == nil || a.value.(int32) == 0
-	case INT64:
-		return a.value == nil || a.value.(int64) == 0
-	case BOOLEAN:
-		return a.value == nil || !a.value.(bool)
+	case INT:
+		return a.value == nil || a.value.(int) == 0
 	}
 
 	return a.value == nil
@@ -139,14 +135,6 @@ func (a *ConcreteValue) Print() {
 
 func (a *ConcreteValue) AsInt() (int, error) {
 	return conv.Int(a.value)
-}
-
-func (a *ConcreteValue) AsInt32() (int32, error) {
-	return conv.Int32(a.value)
-}
-
-func (a *ConcreteValue) AsInt64() (int64, error) {
-	return conv.Int64(a.value)
 }
 
 func (a *ConcreteValue) AsString() (string, error) {

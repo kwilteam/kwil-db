@@ -2,22 +2,22 @@ package types_test
 
 import (
 	"bytes"
-	"kwil/pkg/databases/spec"
+	"kwil/pkg/engine/types"
 	"testing"
 )
 
 func Test_Any(t *testing.T) {
 	// test null
-	null, err := spec.New(nil)
+	null, err := types.New(nil)
 	if err != nil {
 		t.Errorf("failed to create null any: %v", err)
 	}
 
-	if null.Type() != spec.NULL {
-		t.Errorf("expected %d, got %d", spec.NULL, null.Type())
+	if null.Type() != types.NULL {
+		t.Errorf("expected %d, got %d", types.NULL, null.Type())
 	}
 
-	null2, err := spec.NewFromSerial(nil)
+	null2, err := types.NewFromSerial(nil)
 	if err != nil {
 		t.Errorf("failed to create null any from serial: %v", err)
 	}
@@ -26,65 +26,33 @@ func Test_Any(t *testing.T) {
 		t.Errorf("expected %v, got %v", null.Value(), null2.Value())
 	}
 
-	// test bool
-	bool1, err := spec.New(true)
-	if err != nil {
-		t.Errorf("failed to create bool any: %v", err)
-	}
-
-	if bool1.Type() != spec.BOOLEAN {
-		t.Errorf("expected %d, got %d", spec.BOOLEAN, bool1.Type())
-	}
-
-	val := bool1.Value()
-
-	if val != true {
-		t.Errorf("expected %v, got %v", true, val)
-	}
-
-	// test int32
-	int1, err := spec.New(int32(100))
+	// test int
+	int2, err := types.New(int(100))
 	if err != nil {
 		t.Errorf("failed to create int any: %v", err)
 	}
 
-	if int1.Type() != spec.INT32 {
-		t.Errorf("expected %d, got %d", spec.INT32, int1.Type())
+	if int2.Type() != types.INT {
+		t.Errorf("expected %d, got %d", types.INT, int2.Type())
 	}
 
-	val = int1.Value()
+	val := int2.Value()
 
-	if val.(int32) != 100 {
+	if val.(int) != 100 {
 		t.Errorf("expected %v, got %v", 100, val)
 	}
 
-	// test int64
-	int2, err := spec.New(int64(100))
-	if err != nil {
-		t.Errorf("failed to create int any: %v", err)
-	}
-
-	if int2.Type() != spec.INT64 {
-		t.Errorf("expected %d, got %d", spec.INT64, int2.Type())
-	}
-
-	val = int2.Value()
-
-	if val.(int64) != 100 {
-		t.Errorf("expected %v, got %v", 100, val)
-	}
-
-	// get int64 bytes
+	// get int bytes
 	bts := int2.Bytes()
 
 	// try to create a new any from the bytes
-	int3, err := spec.NewFromSerial(bts)
+	int3, err := types.NewFromSerial(bts)
 	if err != nil {
 		t.Errorf("failed to create new any from serial: %v", err)
 	}
 
-	if int3.Type() != spec.INT64 {
-		t.Errorf("expected %d, got %d", spec.INT64, int3.Type())
+	if int3.Type() != types.INT {
+		t.Errorf("expected %d, got %d", types.INT, int3.Type())
 	}
 
 	val = int3.Value()
