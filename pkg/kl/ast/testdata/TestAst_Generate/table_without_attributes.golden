@@ -1,23 +1,25 @@
 {
-  "name": "test",
   "owner": "",
+  "name": "test",
   "tables": [
     {
       "name": "user",
       "columns": [
         {
           "name": "username",
-          "type": "string"
+          "type": 102
         },
         {
           "name": "age",
-          "type": "int"
+          "type": 103
         },
         {
           "name": "email",
-          "type": "string"
+          "type": 102
         }
-      ]
+      ],
+      "indexes": []
     }
-  ]
+  ],
+  "actions": null
 }

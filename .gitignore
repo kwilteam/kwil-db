@@ -30,6 +30,7 @@ api/protobuf
 api/openapi-spec/api/v0/api.swagger.json
 .goreleaser.yaml
 
+gen/
 # helm charts deps
 deployments/helm/*/charts/
 

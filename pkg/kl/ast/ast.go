@@ -3,7 +3,10 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
+	"kwil/pkg/engine/models"
+	"kwil/pkg/engine/types"
 	"kwil/pkg/kl/token"
+	"strings"
 )
 
 type Node interface {
@@ -95,6 +98,10 @@ type (
 		Statements []Stmt
 	}
 
+	SQLStmt struct {
+		SQL string
+	}
+
 	InsertStmt struct {
 		Table   *Ident
 		Columns []Expr
@@ -111,6 +118,7 @@ type (
 func (x *BadStmt) stmtNode()    {}
 func (x *ExprStmt) stmtNode()   {}
 func (x *BlockStmt) stmtNode()  {}
+func (x SQLStmt) stmtNode()     {}
 func (x *InsertStmt) stmtNode() {}
 func (x *UpdateStmt) stmtNode() {}
 
@@ -220,95 +228,93 @@ func (a *ActionDecl) Validate() error {
 	return nil
 }
 
-func (a *ActionDecl) Build() (def ActionDefinition) {
+func (a *ActionDecl) Build() (def *models.Action) {
+	def = &models.Action{}
 	// should be validated before build
 	def.Name = a.Name.Name
 	def.Public = a.Public
-	def.Params = []string{}
-	def.Ops = []SQLOP{}
-
+	def.Inputs = []string{}
 	declaredParams := map[string]bool{}
 	for _, param := range a.Params {
 		if p, ok := param.(*Ident); ok {
-			def.Params = append(def.Params, p.Name)
+			def.Inputs = append(def.Inputs, p.Name)
 			declaredParams[p.Name] = true
 		}
 	}
 
 	for _, stmt := range a.Body.Statements {
 		switch st := stmt.(type) {
-		case *InsertStmt:
-			var columns []string
-			if len(st.Columns) > 0 {
-				for _, column := range st.Columns {
-					cl, _ := column.(*Ident)
-					columns = append(columns, cl.Name)
-				}
-			}
-			def.Ops = append(def.Ops, SQLOP{Op: "insert", Args: []string{st.Table.Name}})
-			def.Ops = append(def.Ops, SQLOP{Op: "columns", Args: columns})
-
-			var values []string
-			for _, value := range st.Values {
-				switch v := value.(type) {
-				case *BasicLit:
-					values = append(values, v.Value)
-				case *Ident:
-					if _, ok := declaredParams[v.Name]; ok {
-						values = append(values, v.Name)
-					}
-				}
-			}
-			def.Ops = append(def.Ops, SQLOP{Op: "values", Args: values})
-
-		case *UpdateStmt:
-			continue
+		case *SQLStmt:
+			def.Statements = append(def.Statements, st.SQL)
+		default:
+			panic("statement not supported")
 		}
 	}
 	return
 }
 
-func (d *TableDecl) Build() (def TableDefinition) {
+func (d *TableDecl) Build() (def *models.Table) {
+	def = &models.Table{}
 	def.Name = d.Name.Name
-	def.Columns = []ColumnDefinition{}
-	def.Indexes = []IndexDefinition{}
+	def.Columns = []*models.Column{}
+	def.Indexes = []*models.Index{}
 
 	for _, column := range d.Body {
-		def.Columns = append(def.Columns, column.(*ColumnDef).Build())
+		c, ok := column.(*ColumnDef)
+		if !ok {
+			panic("invalid column")
+		}
+		def.Columns = append(def.Columns, c.Build())
 	}
 
 	for _, index := range d.Idx {
-		def.Indexes = append(def.Indexes, index.(*IndexDef).Build())
-	}
-	return
-}
-
-func (d *ColumnDef) Build() (def ColumnDefinition) {
-	def.Name = d.Name.Name
-	def.Type = d.Type.Name
-	def.Attrs = []Attribute{}
-	for _, attr := range d.Attrs {
-		at := Attribute{}
-
-		switch a := attr.Param.(type) {
-		case *BasicLit:
-			at.Value = a.Value
-			at.AType = a.Type.ToInt()
-		case *Ident:
-			at.Value = a.Name
-			at.AType = token.IDENT.ToInt()
+		i, ok := index.(*IndexDef)
+		if !ok {
+			panic("invalid index")
 		}
 
-		def.Attrs = append(def.Attrs, at)
+		def.Indexes = append(def.Indexes, i.Build())
 	}
 	return
 }
 
-func (d *IndexDef) Build() (def IndexDefinition) {
+func (d *ColumnDef) Build() (def *models.Column) {
+	def = &models.Column{}
 	def.Name = d.Name.Name
-	def.Type = "index"
+
+	typeName := strings.ToLower(d.Type.Name)
+
+	def.Type = GetMappedColumnType(typeName)
+
+	def.Attributes = []*models.Attribute{}
+	for _, attr := range d.Attrs {
+		def.Attributes = append(def.Attributes, attr.Build())
+	}
+	return
+}
+
+func (d *AttrDef) Build() (def *models.Attribute) {
+	def = &models.Attribute{}
+	at := token.ILLEGAL
+	switch a := d.Param.(type) {
+	case *BasicLit:
+		def.Value = []byte(a.Value)
+		at = a.Type
+	case *Ident:
+		def.Value = []byte(a.Name)
+		at = token.IDENT
+	}
+
+	def.Type = GetMappedAttributeType(at)
+	return
+}
+
+func (d *IndexDef) Build() (def *models.Index) {
+	def = &models.Index{}
+	def.Name = d.Name.Name
+	def.Type = types.BTREE
 	if d.Unique {
-		def.Type = "unique"
+		def.Type = types.UNIQUE_BTREE
 	}
 	def.Columns = []string{}
 	for _, col := range d.Columns {
@@ -329,7 +335,7 @@ type Database struct {
 
 // Generate generates JSON string from AST
 func (d *Database) Generate() []byte {
-	db := DBDefinition{}
+	db := models.Dataset{}
 	db.Name = d.Name.Name
 	for _, decl := range d.Decls {
 		switch a := decl.(type) {

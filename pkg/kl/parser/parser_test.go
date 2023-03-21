@@ -1,9 +1,12 @@
 package parser_test
 
 import (
+	"bytes"
+	"kwil/pkg/engine/models"
+	"kwil/pkg/engine/types"
 	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/parser"
-	"kwil/pkg/kl/token"
+	"strings"
 	"testing"
 )
 
@@ -12,8 +15,8 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		name        string
 		input       string
 		wantDB      string
-		wantTables  []ast.TableDefinition
-		wantActions []ast.ActionDefinition
+		wantTables  []models.Table
+		wantActions []models.Action
 	}{
 		{
 			name:   "empty database",
@@ -24,56 +27,56 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 			name:   "empty tables",
 			input:  `database test; table user{} table order{}`,
 			wantDB: "test",
-			wantTables: []ast.TableDefinition{
+			wantTables: []models.Table{
 				{Name: "user"},
 				{Name: "order"}},
 		},
 		{
 			name:   "table with multiple columns and attributes",
-			input:  `database demo; table user{user_id int notnull,username string null,gender bool}`,
+			input:  `database demo; table user{user_id int32 notnull,username string,gender bool}`,
 			wantDB: "demo",
-			wantTables: []ast.TableDefinition{
+			wantTables: []models.Table{
 				{
 					Name: "user",
-					Columns: []ast.ColumnDefinition{
-						{Name: "user_id", Type: "int", Attrs: []ast.Attribute{{AType: token.NOTNULL.ToInt()}}},
-						{Name: "username", Type: "string", Attrs: []ast.Attribute{{AType: token.NULL.ToInt()}}},
-						{Name: "gender", Type: "bool", Attrs: []ast.Attribute{}},
+					Columns: []*models.Column{
+						{Name: "user_id", Type: types.INT32, Attributes: []*models.Attribute{{Type: types.NOT_NULL}}},
+						{Name: "username", Type: types.STRING, Attributes: []*models.Attribute{}},
+						{Name: "gender", Type: types.BOOLEAN, Attributes: []*models.Attribute{}},
 					},
 				},
 			},
 		},
 		{
 			name:   "table with one column and attributes(with parameters)",
-			input:  `database demo; table user{age int min(18) max(30), email string maxlen(50) minlen(10)}`,
+			input:  `database demo; table user{age int32 min(18) max(30), email string maxlen(50) minlen(10)}`,
 			wantDB: "demo",
-			wantTables: []ast.TableDefinition{
+			wantTables: []models.Table{
 				{
 					Name: "user",
-					Columns: []ast.ColumnDefinition{
-						{Name: "age", Type: "int", Attrs: []ast.Attribute{
-							{AType: token.MIN.ToInt(), Value: "18"}, {AType: token.MAX.ToInt(), Value: "30"}}},
-						{Name: "email", Type: "string", Attrs: []ast.Attribute{
-							{AType: token.MAXLEN.ToInt(), Value: "50"}, {AType: token.MINLEN.ToInt(), Value: "10"}}},
+					Columns: []*models.Column{
+						{Name: "age", Type: types.INT32, Attributes: []*models.Attribute{
+							{Type: types.MIN, Value: []byte("18")}, {Type: types.MAX, Value: []byte("30")}}},
+						{Name: "email", Type: types.STRING, Attributes: []*models.Attribute{
+							{Type: types.MAX_LENGTH, Value: []byte("50")}, {Type: types.MIN_LENGTH, Value: []byte("10")}}},
 					},
 				},
 			},
 		},
 		{
 			name:   "table with index",
-			input:  `database demo; table user{name string, age int, email string, uname unique(name, email), im index(email)}`,
+			input:  `database demo; table user{name string, age int64, email string, uname unique(name, email), im index(email)}`,
 			wantDB: "demo",
-			wantTables: []ast.TableDefinition{
+			wantTables: []models.Table{
 				{
 					Name: "user",
-					Columns: []ast.ColumnDefinition{
-						{Name: "name", Type: "string", Attrs: []ast.Attribute{}},
-						{Name: "age", Type: "int", Attrs: []ast.Attribute{}},
-						{Name: "email", Type: "string", Attrs: []ast.Attribute{}},
+					Columns: []*models.Column{
+						{Name: "name", Type: types.STRING, Attributes: []*models.Attribute{}},
+						{Name: "age", Type: types.INT64, Attributes: []*models.Attribute{}},
+						{Name: "email", Type: types.STRING, Attributes: []*models.Attribute{}},
 					},
-					Indexes: []ast.IndexDefinition{
-						{Name: "uname", Type: "unique", Columns: []string{"name", "email"}},
-						{Name: "im", Type: "index", Columns: []string{"email"}},
+					Indexes: []*models.Index{
+						{Name: "uname", Type: types.UNIQUE_BTREE, Columns: []string{"name", "email"}},
+						{Name: "im", Type: types.BTREE, Columns: []string{"email"}},
 					},
 				},
 			},
@@ -81,29 +84,30 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		{
 			name: "table with action insert",
 			input: `database demo;
-                        table user{name string, age int, email string}
-                        action create_user(name, age) public {insert into user(name, age) values (name, age)}`,
+                    table user{name string, age int64, email string}
+                    action create_user(name, age) public {
+insert into user (name, age) values (name, age);
+insert into user (name, email) values ("test_name", "test_email@a.com");
+}`,
 			wantDB: "demo",
-			wantTables: []ast.TableDefinition{
+			wantTables: []models.Table{
 				{
 					Name: "user",
-					Columns: []ast.ColumnDefinition{
-						{Name: "name", Type: "string", Attrs: []ast.Attribute{}},
-						{Name: "age", Type: "int", Attrs: []ast.Attribute{}},
-						{Name: "email", Type: "string", Attrs: []ast.Attribute{}},
+					Columns: []*models.Column{
+						{Name: "name", Type: types.STRING, Attributes: []*models.Attribute{}},
+						{Name: "age", Type: types.INT64, Attributes: []*models.Attribute{}},
+						{Name: "email", Type: types.STRING, Attributes: []*models.Attribute{}},
 					},
 				},
 			},
-			wantActions: []ast.ActionDefinition{
+			wantActions: []models.Action{
 				{
 					Name:   "create_user",
-					Params: []string{"name", "age"},
+					Inputs: []string{"name", "age"},
 					Public: true,
-					Ops: []ast.SQLOP{
-						{Op: "insert", Args: []string{"user"}},
-						{Op: "columns", Args: []string{"name", "age"}},
-						//{Op: "values", Args: []string{"name", "age", "a@b.com"}},
-					},
+					Statements: []string{
+						"insert into user (name, age) values (name, age)",
+						"insert into user (name, email) values (\"test_name\", 'test_email@a.com')"},
 				},
 			},
 		},
@@ -130,12 +134,12 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 			for _, decl := range a.Decls {
 				switch d := decl.(type) {
 				case *ast.TableDecl:
-					if !testTableDeclaration(t, d, c.wantTables[ti]) {
+					if !testTableDeclaration(t, d, &c.wantTables[ti]) {
 						return
 					}
 					ti++
 				case *ast.ActionDecl:
-					if !testActionDeclaration(t, d, c.wantActions[ai]) {
+					if !testActionDeclaration(t, d, &c.wantActions[ai]) {
 						return
 					}
 					ai++
@@ -145,26 +149,26 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 	}
 }
 
-func testTableBody(t *testing.T, col *ast.ColumnDef, want ast.ColumnDefinition) bool {
+func testTableBody(t *testing.T, col *ast.ColumnDef, want *models.Column) bool {
 	if col.Name.Name != want.Name {
 		t.Errorf("columnDef.Name is not '%s'. got=%s", want.Name, col.Name.Name)
 		return false
 	}
 
-	if col.Type.Name != want.Type {
+	if ast.GetMappedColumnType(col.Type.Name) != want.Type {
 		t.Errorf("columnDef.Name.Type is not '%s'. got=%s", want.Type, col.Type)
 		return false
 	}
 
-	if len(col.Attrs) != len(want.Attrs) {
-		t.Errorf("columnDef.Name.Attrs length is not %d. got=%d", len(want.Attrs), len(col.Attrs))
+	if len(col.Attrs) != len(want.Attributes) {
+		t.Errorf("columnDef.Name.Attrs length is not %d. got=%d", len(want.Attributes), len(col.Attrs))
 		return false
 	}
 
 	for j, attr := range col.Attrs {
-		at := attr.Type.ToInt()
-		if at != want.Attrs[j].AType {
-			t.Errorf("columnDef.Name.Attrs[%d].Atype is not '%d'. got=%d", j, want.Attrs[j].AType, at)
+		at := ast.GetMappedAttributeType(attr.Type)
+		if at != want.Attributes[j].Type {
+			t.Errorf("columnDef.Name.Attrs[%d].Atype is not '%d'. got=%d", j, want.Attributes[j].Type, at)
 			return false
 		}
 
@@ -173,15 +177,15 @@ func testTableBody(t *testing.T, col *ast.ColumnDef, want ast.ColumnDefinition) 
 		}
 
 		var v string
-		switch attr.Param.(type) {
+		switch t := attr.Param.(type) {
 		case *ast.BasicLit:
-			v = attr.Param.(*ast.BasicLit).Value
+			v = t.Value
 		case *ast.Ident:
-			v = attr.Param.(*ast.Ident).Name
+			v = t.Name
 		}
 
-		if v != want.Attrs[j].Value {
-			t.Errorf("columnDef.Name.Attrs[%d].Param is not '%s'. got=%s", j, want.Attrs[j].Value, v)
+		if !bytes.Equal([]byte(v), want.Attributes[j].Value) {
+			t.Errorf("columnDef.Name.Attrs[%d].Param is not '%s'. got=%s", j, want.Attributes[j].Value, v)
 			return false
 		}
 	}
@@ -189,7 +193,7 @@ func testTableBody(t *testing.T, col *ast.ColumnDef, want ast.ColumnDefinition) 
 	return true
 }
 
-func testTableIndex(t *testing.T, idx *ast.IndexDef, want ast.IndexDefinition) bool {
+func testTableIndex(t *testing.T, idx *ast.IndexDef, want *models.Index) bool {
 	if idx.Name.Name != want.Name {
 		t.Errorf("indexDef.Name is not '%s'. got=%s", want.Name, idx.Name.Name)
 		return false
@@ -218,7 +222,7 @@ func testTableIndex(t *testing.T, idx *ast.IndexDef, want ast.IndexDefinition) b
 	return true
 }
 
-func testTableDeclaration(t *testing.T, d ast.Decl, want ast.TableDefinition) bool {
+func testTableDeclaration(t *testing.T, d ast.Decl, want *models.Table) bool {
 	tableDecl, ok := d.(*ast.TableDecl)
 	if !ok {
 		t.Errorf("statement is not *ast.TableDecl. got=%T", d)
@@ -252,54 +256,24 @@ func testTableDeclaration(t *testing.T, d ast.Decl, want ast.TableDefinition) bo
 	return true
 }
 
-func testInsertStatement(t *testing.T, s ast.Stmt, want []ast.SQLOP) bool {
-	insertStmt, ok := s.(*ast.InsertStmt)
+func testSQLStatement(t *testing.T, s ast.Stmt, want string) bool {
+	sqlStmt, ok := s.(*ast.SQLStmt)
 	if !ok {
-		t.Errorf("statement is not *ast.InsertStmt. got=%T", s)
+		t.Errorf("statement is not *ast.SQLStmt. got=%T", s)
 		return false
 	}
 
-	for _, w := range want {
-		switch w.Op {
-		case "insert":
-			if insertStmt.Table.Name != w.Args[0] {
-				t.Errorf("insertStmt.Table.Name is not '%s'. got=%s", w.Args[0], insertStmt.Table.Name)
-				return false
-			}
-		case "values":
-			if len(insertStmt.Values) != len(w.Args) {
-				t.Errorf("insertStmt.Values length is not %d. got=%d", len(w.Args), len(insertStmt.Values))
-				return false
-			}
-
-			for j, value := range insertStmt.Values {
-				v := value.String()
-				if v != w.Args[j] {
-					t.Errorf("insertStmt.Values[%d] is not '%s'. got=%s", j, w.Args[j], v)
-					return false
-				}
-			}
-
-		case "columns":
-			if len(insertStmt.Columns) != len(w.Args) {
-				t.Errorf("insertStmt.Columns length is not %d. got=%d", len(w.Args), len(insertStmt.Columns))
-				return false
-			}
-
-			for j, col := range insertStmt.Columns {
-				name := col.String()
-				if name != w.Args[j] {
-					t.Errorf("insertStmt.Columns[%d] is not '%s'. got=%s", j, w.Args[j], name)
-					return false
-				}
-			}
-		}
+	gotSql := strings.ReplaceAll(sqlStmt.SQL, " ", "")
+	wantSql := strings.ReplaceAll(want, " ", "")
+	if gotSql != wantSql {
+		t.Errorf("sqlStmt.SQL is not '%s'. got=%s", wantSql, gotSql)
+		return false
 	}
 
-	return true
+	return false
 }
 
-func testActionDeclaration(t *testing.T, d ast.Decl, want ast.ActionDefinition) bool {
+func testActionDeclaration(t *testing.T, d ast.Decl, want *models.Action) bool {
 	actionDecl, ok := d.(*ast.ActionDecl)
 	if !ok {
 		t.Errorf("statement is not *ast.ActionDecl. got=%T", d)
@@ -316,18 +290,25 @@ func testActionDeclaration(t *testing.T, d ast.Decl, want ast.ActionDefinition) 
 		return false
 	}
 
-	if len(actionDecl.Params) != len(want.Params) {
-		t.Errorf("actionDecl.Body length is not %d. got=%d", len(want.Params), len(actionDecl.Params))
+	if len(actionDecl.Params) != len(want.Inputs) {
+		t.Errorf("actionDecl.Body length is not %d. got=%d", len(want.Inputs), len(actionDecl.Params))
 		return false
 	}
 
 	// by actionDecl.Type ?
+	si := 0
 	for _, stmt := range actionDecl.Body.Statements {
 		switch st := stmt.(type) {
-		case *ast.InsertStmt:
-			if !testInsertStatement(t, st, want.Ops) {
+		case *ast.SQLStmt:
+			if !testSQLStatement(t, st, want.Statements[si]) {
 				return false
 			}
+			si++
+
+			//case *ast.InsertStmt:
+			//	if !testInsertStatement(t, st, want.Ops) {
+			//		return false
+			//	}
 		}
 	}
 

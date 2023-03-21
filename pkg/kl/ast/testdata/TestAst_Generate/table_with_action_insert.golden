@@ -1,55 +1,36 @@
 {
-  "name": "demo",
   "owner": "",
+  "name": "demo",
   "tables": [
     {
       "name": "user",
       "columns": [
         {
           "name": "name",
-          "type": "string"
+          "type": 102
         },
         {
           "name": "age",
-          "type": "int"
+          "type": 104
         },
         {
           "name": "email",
-          "type": "string"
+          "type": 102
         }
-      ]
+      ],
+      "indexes": []
     }
   ],
   "actions": [
     {
       "name": "create_user",
       "public": true,
-      "type": "",
-      "params": [
+      "inputs": [
         "name",
         "age"
       ],
-      "ops": [
-        {
-          "op": "insert",
-          "args": [
-            "user"
-          ]
-        },
-        {
-          "op": "columns",
-          "args": [
-            "name",
-            "age"
-          ]
-        },
-        {
-          "op": "values",
-          "args": [
-            "name",
-            "age"
-          ]
-        }
+      "statements": [
+        "insert into user( name , age ) values ( name , age )"
       ]
     }
   ]

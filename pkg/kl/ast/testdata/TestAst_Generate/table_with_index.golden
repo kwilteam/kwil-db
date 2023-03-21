@@ -1,40 +1,41 @@
 {
-  "name": "demo",
   "owner": "",
+  "name": "demo",
   "tables": [
     {
       "name": "user",
       "columns": [
         {
           "name": "name",
-          "type": "string"
+          "type": 102
         },
         {
           "name": "age",
-          "type": "int"
+          "type": 104
         },
         {
           "name": "email",
-          "type": "string"
+          "type": 102
         }
       ],
       "indexes": [
         {
           "name": "uname",
-          "type": "unique",
           "columns": [
             "name",
             "email"
-          ]
+          ],
+          "type": 102
         },
         {
           "name": "im",
-          "type": "index",
           "columns": [
             "email"
-          ]
+          ],
+          "type": 101
         }
       ]
     }
-  ]
+  ],
+  "actions": null
 }

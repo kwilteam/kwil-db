@@ -192,6 +192,69 @@ func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
 	case eof:
 		lit = "EOF"
 		tok = token.EOF
+	case '+':
+		lit = "+"
+		tok = token.ADD
+	case '-':
+		lit = "-"
+		tok = token.SUB
+	case '/':
+		lit = "/"
+		tok = token.DIV
+	case '*':
+		lit = "*"
+		tok = token.MUL
+	case '%':
+		lit = "%"
+		tok = token.MOD
+	case '<':
+		//lit = "<"
+		//tok = token.LSS
+		s.nextChar()
+		if s.ch == '=' {
+			lit = "<="
+			tok = token.LEQ
+		} else if s.ch == '>' {
+			lit = "<>"
+			tok = token.NEQ // !=
+		} else {
+			lit = "<"
+			tok = token.LSS
+			return
+		}
+	case '>':
+		s.nextChar()
+		if s.ch == '=' {
+			lit = ">="
+			tok = token.GEQ
+		} else {
+			lit = ">"
+			tok = token.GTR
+			return
+		}
+	case '=':
+		lit = "="
+		tok = token.ASSIGN
+	//s.nextChar()
+	//if s.ch == '=' {
+	//	lit = "=="
+	//	tok = token.EQL
+	//} else {
+	//	lit = "="
+	//	tok = token.ASSIGN
+	//	//return
+	//}
+
+	case '!':
+		s.nextChar()
+		if s.ch == '=' {
+			lit = "!="
+			tok = token.NEQ
+		} else {
+			lit = "!"
+			tok = token.NOT
+			return
+		}
 	case '{':
 		lit = "{"
 		tok = token.LBRACE
@@ -207,24 +270,21 @@ func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
 	case ',':
 		lit = ","
 		tok = token.COMMA
+	case '.':
+		lit = "."
+		tok = token.PERIOD
 	case ';':
 		lit = ";"
 		tok = token.SEMICOLON
 	case '"':
 		tok = token.STRING
 		lit = s.scanString('"')
+		return
 	case '\'':
 		tok = token.STRING
 		lit = s.scanString('\'')
-	case '=':
-		s.nextChar()
-		if s.ch == '=' {
-			lit = "=="
-			tok = token.EQL
-		} else {
-			lit = "="
-			tok = token.ASSIGN
-		}
+		return
+
 	default:
 		switch {
 		case isLetter(ch):

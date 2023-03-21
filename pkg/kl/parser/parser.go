@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/scanner"
+	"kwil/pkg/kl/sql"
 	"kwil/pkg/kl/token"
+	"strings"
 )
 
 type parser struct {
@@ -247,16 +249,15 @@ func (p *parser) parseColumnDef() *ast.ColumnDef {
 
 	p.expectWithoutAdvance(token.IDENT)
 
-	col := &ast.ColumnDef{}
-	col.Name = p.parseIdent()
-	col.Type = p.parseTypeName()
-	col.Attrs = p.parseColumnAttrList()
+	colName := p.parseIdent()
+	colType := p.parseTypeName()
+	colAttrs := p.parseColumnAttrList()
 
 	if p.curTokIs(token.COMMA) {
 		p.next()
 	}
 
-	return col
+	return &ast.ColumnDef{Name: colName, Type: colType, Attrs: colAttrs}
 }
 
 func (p *parser) parserIndexDef(unique bool) *ast.IndexDef {
@@ -264,23 +265,22 @@ func (p *parser) parserIndexDef(unique bool) *ast.IndexDef {
 		defer un(trace("parserIndexDef"))
 	}
 
-	index := &ast.IndexDef{}
-	index.Name = p.parseIdent()
-
+	indexName := p.parseIdent()
+	indexUnique := false
 	if unique {
-		index.Unique = true
+		indexUnique = true
 		p.expect(token.UNIQUE)
 	} else {
 		p.expect(token.INDEX)
 	}
 
-	index.Columns = p.parseParameterList()
+	indexColumns := p.parseParameterList()
 
 	if p.curTokIs(token.COMMA) {
 		p.next()
 	}
 
-	return index
+	return &ast.IndexDef{Name: indexName, Unique: indexUnique, Columns: indexColumns}
 }
 
 // parseColumnDefList parses a list of column definitions(separated by commas, enclosed in braces).
@@ -373,29 +373,68 @@ func (p *parser) parseActionDeclaration() *ast.ActionDecl {
 	return act
 }
 
-func (p *parser) parseInsertStatement() *ast.InsertStmt {
+//func (p *parser) parseInsertStatement() *ast.InsertStmt {
+//	if p.trace {
+//		defer un(trace("parseInsertStatement"))
+//	}
+//
+//	p.expect(token.INSERT)
+//	p.expect(token.INTO)
+//
+//	stmt := &ast.InsertStmt{}
+//	stmt.Table = p.parseIdent()
+//
+//	// optional column list
+//	if !p.curTokIs(token.VALUES) {
+//		stmt.Columns = p.parseParameterList()
+//	}
+//
+//	p.expect(token.VALUES)
+//
+//	stmt.Values = p.parseParameterList()
+//	if p.curTokIs(token.COMMA) {
+//		p.next()
+//	}
+//	return stmt
+//}
+
+// parseSQLStatement parses a whole SQL statement as a string.
+func (p *parser) parseSQLStatement() *ast.SQLStmt {
 	if p.trace {
 		defer un(trace("parseInsertStatement"))
 	}
 
-	p.expect(token.INSERT)
-	p.expect(token.INTO)
+	var rawSQL []string
+	for !p.curTokIs(token.SEMICOLON) && !p.curTokIs(token.RBRACE) && !p.curTokIs(token.EOF) {
+		tok := p.tok
+		lit := p.lit
+		p.next()
 
-	stmt := &ast.InsertStmt{}
-	stmt.Table = p.parseIdent()
+		// parse table.column tokens
+		if tok == token.IDENT && p.curTokIs(token.PERIOD) {
+			p.next()
+			selector := p.parseIdent()
+			lit = fmt.Sprintf("%s.%s", lit, selector)
+		}
 
-	// optional column list
-	if !p.curTokIs(token.VALUES) {
-		stmt.Columns = p.parseParameterList()
+		// parse function calls, left parenthesis needs to be appended to the function name
+		if p.tok == token.LPAREN {
+			switch strings.ToLower(lit) {
+			case ",", ";", "from", "as", "join", "on", "where", "group", "having", "order", "limit", "offset", "into", "values":
+			default:
+				lit += "("
+				p.next()
+			}
+		}
+
+		rawSQL = append(rawSQL, lit)
 	}
 
-	p.expect(token.VALUES)
-
-	stmt.Values = p.parseParameterList()
-	if p.curTokIs(token.COMMA) {
+	if p.curTokIs(token.SEMICOLON) {
 		p.next()
 	}
-	return stmt
+
+	return &ast.SQLStmt{SQL: strings.Join(rawSQL, " ")}
 }
 
 func (p *parser) parseStatement() ast.Stmt {
@@ -403,11 +442,19 @@ func (p *parser) parseStatement() ast.Stmt {
 		defer un(trace("parseStatement"))
 	}
 
+	pos := p.pos
+	fp := p.file.Position(pos)
+
 	switch p.tok {
-	case token.INSERT:
-		return p.parseInsertStatement()
+	case token.INSERT, token.WITH, token.REPLACE, token.SELECT, token.UPDATE, token.DROP, token.DELETE:
+		s := p.parseSQLStatement()
+		if err := sql.ParseRawSQL(s.SQL, int(fp.Line), false); err != nil {
+			p.errorExpected(pos, fmt.Sprintf("valid sql statement(%s)", err))
+			return s
+		}
+		return s
 	default:
-		fmt.Printf("unknown statement, token: %s, literal: %s\n", p.tok, p.lit)
+		p.errorExpected(pos, fmt.Sprintf("unknown statement, token: %s, literal: %s\n", p.tok, p.lit))
 		p.next()
 		return nil
 	}
@@ -418,8 +465,13 @@ var declStart = map[token.Token]bool{
 	token.ACTION: true,
 }
 
-var stmtStart = map[token.Token]bool{
-	token.INSERT: true,
+var sqlStart = map[token.Token]bool{
+	token.INSERT:  true,
+	token.SELECT:  true,
+	token.UPDATE:  true,
+	token.DROP:    true,
+	token.WITH:    true,
+	token.REPLACE: true,
 }
 
 func (p *parser) jump(to map[token.Token]bool) {
