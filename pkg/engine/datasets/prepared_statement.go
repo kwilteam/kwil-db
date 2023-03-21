@@ -23,7 +23,7 @@ type PreparedStatement struct {
 	requiredPolyVars []string
 }
 
-func NewPreparedStatement(conn *driver.Connection, stmt string, schema *models.Database) (*PreparedStatement, error) {
+func NewPreparedStatement(conn *driver.Connection, stmt string, schema *models.Dataset) (*PreparedStatement, error) {
 	// get aliases
 	var ap aliasParser
 	aliases, err := ap.ParseAliases(stmt)

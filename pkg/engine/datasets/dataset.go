@@ -10,7 +10,7 @@ type Dataset struct {
 	Owner      string
 	Name       string
 	DBID       string
-	schema     *models.Database
+	schema     *models.Dataset
 	statements map[string]*PreparedStatement
 }
 

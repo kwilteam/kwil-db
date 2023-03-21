@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type Database struct {
+type Dataset struct {
 	Owner   string    `json:"owner" clean:"lower"`
 	Name    string    `json:"name" clean:"lower"`
 	Tables  []*Table  `json:"tables"`
@@ -13,11 +13,11 @@ type Database struct {
 }
 
 // hashes the lower-cased name and owner and prepends an x
-func (d *Database) GetSchemaName() string {
+func (d *Dataset) GetSchemaName() string {
 	return GenerateSchemaId(d.Owner, d.Name)
 }
 
-func (d *Database) GetTable(t string) *Table {
+func (d *Dataset) GetTable(t string) *Table {
 	for _, tbl := range d.Tables {
 		if tbl.Name == t {
 			return tbl
@@ -27,7 +27,7 @@ func (d *Database) GetTable(t string) *Table {
 }
 
 // GetTableMapping returns a map of table names to table objects
-func (d *Database) GetTableMapping() map[string]*Table {
+func (d *Dataset) GetTableMapping() map[string]*Table {
 	mapping := make(map[string]*Table)
 	for _, tbl := range d.Tables {
 		mapping[tbl.Name] = tbl
@@ -35,19 +35,19 @@ func (d *Database) GetTableMapping() map[string]*Table {
 	return mapping
 }
 
-func (d *Database) GetIdentifier() *DatabaseIdentifier {
-	return &DatabaseIdentifier{
+func (d *Dataset) GetIdentifier() *DatasetIdentifier {
+	return &DatasetIdentifier{
 		Owner: d.Owner,
 		Name:  d.Name,
 	}
 }
 
-type DatabaseIdentifier struct {
+type DatasetIdentifier struct {
 	Owner string `json:"owner"`
 	Name  string `json:"name"`
 }
 
-func (d *DatabaseIdentifier) GetSchemaName() string {
+func (d *DatasetIdentifier) GetSchemaName() string {
 	return GenerateSchemaId(d.Owner, d.Name)
 }
 
