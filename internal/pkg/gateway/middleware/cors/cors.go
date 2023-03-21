@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	AllowMethods = "GET, POST, PATCH, DELETE"
+	AllowMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 	AllowHeaders = "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType, X-Api-Key"
 )
 

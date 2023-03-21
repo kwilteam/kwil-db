@@ -53,7 +53,7 @@ func setupPostgres(ctx context.Context, opts ...containerOption) (*postgresConta
 		Env:   map[string]string{},
 		Files: []testcontainers.ContainerFile{
 			{
-				HostFilePath:      path.Join(path.Dir(currentFilePath), "../../scripts/pg-init-scripts/initdb.sh"),
+				HostFilePath:      path.Join(path.Dir(currentFilePath), "../../../scripts/pg-init-scripts/initdb.sh"),
 				ContainerFilePath: "/docker-entrypoint-initdb.d/initdb.sh",
 				FileMode:          0644,
 			},

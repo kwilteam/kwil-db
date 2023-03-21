@@ -6,6 +6,7 @@ import (
 	"fmt"
 	ec "github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
+	"kwil/internal/pkg/graphql/query"
 	escrowTypes "kwil/pkg/chain/contracts/escrow/types"
 	"kwil/pkg/client"
 	"kwil/pkg/databases"
@@ -15,18 +16,21 @@ import (
 	"strings"
 )
 
-// KwildDriver is a driver for the kwildb integration tests
+// KwildDriver is a grpc driver for  integration tests
 type KwildDriver struct {
-	clt    *client.KwilClient
-	pk     *ecdsa.PrivateKey
+	clt         *client.KwilClient
+	pk          *ecdsa.PrivateKey
+	gatewayAddr string // to ignore the gatewayAddr returned by the config.service
+
 	logger log.Logger
 }
 
-func NewKwildDriver(clt *client.KwilClient, pk *ecdsa.PrivateKey, logger log.Logger) *KwildDriver {
+func NewKwildDriver(clt *client.KwilClient, pk *ecdsa.PrivateKey, gatewayAddr string, logger log.Logger) *KwildDriver {
 	return &KwildDriver{
-		clt:    clt,
-		pk:     pk,
-		logger: logger,
+		clt:         clt,
+		pk:          pk,
+		gatewayAddr: gatewayAddr,
+		logger:      logger,
 	}
 }
 
@@ -155,4 +159,9 @@ func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
 	}
 	d.logger.Debug("drop database", zap.String("name", dbName), zap.String("owner", d.GetUserAddress()))
 	return nil
+}
+
+func (d *KwildDriver) QueryDatabase(ctx context.Context, queryStr string) ([]byte, error) {
+	url := fmt.Sprintf("http://%s/graphql", d.gatewayAddr)
+	return query.Query(ctx, url, queryStr)
 }

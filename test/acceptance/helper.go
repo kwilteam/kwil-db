@@ -1,39 +1,39 @@
-package acceptance_test
+package acceptance
 
 import (
 	"context"
 	"crypto/ecdsa"
-	"flag"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
-	"kwil/internal/app/kgw"
+	"github.com/tonistiigi/go-rosetta"
+	"kwil/cmd/kwil-cli/app"
 	"kwil/internal/app/kwild"
 	"kwil/pkg/chain/types"
 	"kwil/pkg/client"
 	"kwil/pkg/databases"
 	"kwil/pkg/log"
-	"kwil/test/adapters"
+	"kwil/test/acceptance/adapters"
+	"kwil/test/acceptance/utils/deployer"
+	"kwil/test/acceptance/utils/deployer/eth-deployer"
 	"kwil/test/specifications"
-	"kwil/test/utils/deployer"
-	eth_deployer "kwil/test/utils/deployer/eth-deployer"
 	"math/big"
 	"os"
+	"path"
+	"runtime"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/stretchr/testify/assert"
 )
 
-var remote = flag.Bool("remote", false, "run tests against remote environment")
-
-// keepMiningBlocks is a helper function to keep mining blocks
+// KeepMiningBlocks is a helper function to keep mining blocks
 // since kwild need to mine blocks to process transactions, and ganache is configured to mine a block for every tx
 // so we need to keep produce txs to keep mining blocks
-func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account string) {
+func KeepMiningBlocks(ctx context.Context, done chan struct{}, deployer deployer.Deployer, account string) {
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-done:
 			return
 		default:
 			time.Sleep(1 * time.Second)
@@ -49,14 +49,14 @@ func keepMiningBlocks(ctx context.Context, deployer deployer.Deployer, account s
 type TestEnvCfg struct {
 	UserPkStr         string
 	DeployerPkStr     string
-	DbSchemaPath      string
+	DBSchemaPath      string
 	NodeAddr          string // kwild address
 	GatewayAddr       string // kgw address
 	ChainRPCURL       string
 	ChainSyncWaitTime time.Duration
 	ChainCode         types.ChainCode
 	FundAmount        int64
-	Domination        *big.Int
+	denomination      *big.Int
 	LogLevel          string
 
 	// populated by init
@@ -67,23 +67,23 @@ type TestEnvCfg struct {
 }
 
 func NewTestEnv(userPkStr, deployerPkStr, dbSchemaPath, remoteKwildAddr, remoteGatewayAddr, remoteChainRPCURL string,
-	chainSyncWaitTime time.Duration, chainCode types.ChainCode, fundAmount int64, domination *big.Int, logLevel string) TestEnvCfg {
+	chainSyncWaitTime time.Duration, chainCode types.ChainCode, fundAmount int64, denomination *big.Int, logLevel string) TestEnvCfg {
 	return TestEnvCfg{
 		UserPkStr:         userPkStr,
 		DeployerPkStr:     deployerPkStr,
-		DbSchemaPath:      dbSchemaPath,
+		DBSchemaPath:      dbSchemaPath,
 		NodeAddr:          remoteKwildAddr,
 		GatewayAddr:       remoteGatewayAddr,
 		ChainRPCURL:       remoteChainRPCURL,
 		ChainSyncWaitTime: chainSyncWaitTime,
 		ChainCode:         chainCode,
 		FundAmount:        fundAmount,
-		Domination:        domination,
+		denomination:      denomination,
 		LogLevel:          logLevel,
 	}
 }
 
-func (e *TestEnvCfg) init(t *testing.T) {
+func (e *TestEnvCfg) Init(t *testing.T) {
 	var err error
 	e.UserPK, err = crypto.HexToECDSA(e.UserPkStr)
 	if err != nil {
@@ -97,7 +97,7 @@ func (e *TestEnvCfg) init(t *testing.T) {
 	e.DeployerAddr = crypto.PubkeyToAddress(e.DeployerPK.PublicKey).Hex()
 }
 
-func getTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
+func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 	var e TestEnvCfg
 	if remote {
 		e = NewTestEnv(
@@ -127,38 +127,21 @@ func getTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 			"debug")
 	}
 
-	e.init(t)
+	e.Init(t)
 	return e
 }
 
-func setup(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger) (*kgw.KgwDriver, deployer.Deployer) {
-	specifications.SetSchemaLoader(
-		&specifications.FileDatabaseSchemaLoader{
-			FilePath: cfg.DbSchemaPath,
-			Modifier: func(db *databases.Database[[]byte]) {
-				db.Owner = cfg.UserAddr
-			}})
-
-	if cfg.NodeAddr != "" {
-		t.Logf("create kwild driver to %s", cfg.NodeAddr)
-		kwilClt, err := client.New(ctx, cfg.NodeAddr)
-		require.NoError(t, err, "failed to create kwil client")
-		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPK, logger)
-		t.Logf("create kgw driver to %s", cfg.GatewayAddr)
-		kgwDriver := kgw.NewKgwDriver(cfg.GatewayAddr, kwildDriver)
-		return kgwDriver, nil
-	}
-
+func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg, deployer.Deployer) {
 	// ganache container
 	ganacheC := adapters.StartGanacheDockerService(t, ctx, cfg.ChainCode.ToChainId().String())
 	exposedChainRPC, err := ganacheC.ExposedEndpoint(ctx)
 	require.NoError(t, err, "failed to get exposed endpoint")
 	unexposedChainRPC, err := ganacheC.UnexposedEndpoint(ctx)
 	require.NoError(t, err, "failed to get unexposed endpoint")
+
 	// deploy token and escrow contract
-	// @yaiba TODO: chain agnostic
 	t.Logf("create chain deployer to %s", exposedChainRPC)
-	chainDeployer := eth_deployer.NewEthDeployer(exposedChainRPC, cfg.DeployerPkStr, cfg.Domination)
+	chainDeployer := GetDeployer("eth", exposedChainRPC, cfg.DeployerPkStr, cfg.denomination)
 	tokenAddress, err := chainDeployer.DeployToken(ctx)
 	require.NoError(t, err, "failed to deploy token")
 	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
@@ -216,111 +199,85 @@ func setup(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger)
 	exposedKgwEndpoint, err := kgwC.ExposedEndpoint(ctx)
 	require.NoError(t, err)
 
+	cfg.ChainRPCURL = exposedChainRPC
 	cfg.NodeAddr = exposedKwildEndpoint
 	cfg.GatewayAddr = exposedKgwEndpoint
-
-	t.Logf("create kwild driver to %s", cfg.NodeAddr)
-	kwilClt, err := client.New(ctx, cfg.NodeAddr)
-	// use server returned chain rpc url
-	// client.WithChainRpcUrl(exposedChainRPC))
-
-	require.NoError(t, err, "failed to create kwil client")
-	kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPK, logger)
-	t.Logf("create kgw driver to %s", cfg.GatewayAddr)
-	kgwDriver := kgw.NewKgwDriver(cfg.GatewayAddr, kwildDriver)
-	return kgwDriver, chainDeployer
+	return cfg, chainDeployer
 }
 
-func TestGrpcServerDatabaseService(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
+func arch() string {
+	arch := runtime.GOARCH
+	if rosetta.Enabled() {
+		arch += " (rosetta)"
+	}
+	return arch
+}
+
+func setSchemaLoader(cfg TestEnvCfg) {
+	specifications.SetSchemaLoader(
+		&specifications.FileDatabaseSchemaLoader{
+			FilePath: cfg.DBSchemaPath,
+			Modifier: func(db *databases.Database[[]byte]) {
+				db.Owner = cfg.UserAddr
+				// NOTE: this is a hack to make sure the db name is temporary unique
+				db.Name = fmt.Sprintf("%s_%s", db.Name, time.Now().Format("20160102"))
+			}})
+}
+
+func setupCliDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger) (KwilACTDriver, deployer.Deployer) {
+	setSchemaLoader(cfg)
+
+	_, currentFilePath, _, _ := runtime.Caller(1)
+	binPath := path.Join(path.Dir(currentFilePath), fmt.Sprintf("../../.build/kwil-cli-%s-%s", runtime.GOOS, arch()))
+	if cfg.NodeAddr != "" {
+		t.Logf("create cli driver to %s", cfg.NodeAddr)
+		cliDriver := app.NewKwilCliDriver(binPath, cfg.NodeAddr, cfg.GatewayAddr, "", cfg.UserPkStr, cfg.UserAddr, logger)
+		return cliDriver, nil
 	}
 
-	tLogger := log.New(log.Config{
-		Level:       "debug",
-		OutputPaths: []string{"stdout"},
-	})
+	updatedCfg, chainDeployer := setupCommon(ctx, t, cfg)
 
-	t.Run("should deposit fund", func(t *testing.T) {
-		if *remote {
-			t.Skip()
-		}
+	t.Logf("create cli driver to %s", updatedCfg.NodeAddr)
+	cliDriver := app.NewKwilCliDriver(binPath, updatedCfg.NodeAddr, updatedCfg.GatewayAddr, updatedCfg.ChainRPCURL, updatedCfg.UserPkStr, cfg.UserAddr, logger)
+	return cliDriver, chainDeployer
+}
 
-		cfg := getTestEnvCfg(t, *remote)
-		ctx := context.Background()
-		// setup
-		driver, chainDeployer := setup(ctx, t, cfg, tLogger)
+func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger) (KwilACTDriver, deployer.Deployer) {
+	setSchemaLoader(cfg)
 
-		// Given user is funded with escrow token
-		err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.FundAmount)
-		assert.NoError(t, err, "failed to fund user config")
+	if cfg.NodeAddr != "" {
+		t.Logf("create kwild driver to %s, (gateway: %s)", cfg.NodeAddr, cfg.GatewayAddr)
+		kwilClt, err := client.New(ctx, cfg.NodeAddr)
+		require.NoError(t, err, "failed to create kwil client")
+		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPK, cfg.GatewayAddr, logger)
+		return kwildDriver, nil
+	}
 
-		// and user has approved funding_pool to spend his token
-		specifications.ApproveTokenSpecification(ctx, t, driver)
+	updatedCfg, chainDeployer := setupCommon(ctx, t, cfg)
 
-		// should be able to deposit fund
-		specifications.DepositFundSpecification(ctx, t, driver)
-	})
+	t.Logf("create kwild driver to %s, (gateway: %s)", updatedCfg.NodeAddr, updatedCfg.GatewayAddr)
+	kwilClt, err := client.New(ctx, updatedCfg.NodeAddr)
+	require.NoError(t, err, "failed to create kwil client")
+	kwildDriver := kwild.NewKwildDriver(kwilClt, updatedCfg.UserPK, updatedCfg.GatewayAddr, logger)
+	return kwildDriver, chainDeployer
+}
 
-	t.Run("should deploy and drop database", func(t *testing.T) {
-		if *remote {
-			t.Skip()
-		}
+func GetDriver(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger) (KwilACTDriver, deployer.Deployer) {
+	switch driverType {
+	case "cli":
+		return setupCliDriver(ctx, t, cfg, logger)
+	case "grpc":
+		return setupGrpcDriver(ctx, t, cfg, logger)
+	default:
+		panic("unknown driver type")
+	}
+}
 
-		cfg := getTestEnvCfg(t, *remote)
-		ctx := context.Background()
-		// setup
-		driver, chainDeployer := setup(ctx, t, cfg, tLogger)
-
-		// Given user is funded with escrow token
-		err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.FundAmount)
-		assert.NoError(t, err, "failed to fund user config")
-		go keepMiningBlocks(ctx, chainDeployer, cfg.UserAddr)
-		// and user pledged fund to validator
-		specifications.ApproveTokenSpecification(ctx, t, driver)
-		specifications.DepositFundSpecification(ctx, t, driver)
-
-		// chain sync, wait kwil to register user
-		time.Sleep(cfg.ChainSyncWaitTime)
-
-		// When user deployed database
-		specifications.DatabaseDeploySpecification(ctx, t, driver)
-
-		// Then user should be able to drop database
-		specifications.DatabaseDropSpecification(ctx, t, driver)
-	})
-
-	t.Run("should execute database", func(t *testing.T) {
-		cfg := getTestEnvCfg(t, *remote)
-		ctx := context.Background()
-		// setup
-		driver, chainDeployer := setup(ctx, t, cfg, tLogger)
-
-		// NOTE: only local env test, public network test takes too long
-		// thus here test assume user is funded
-		if !*remote {
-			// Given user is funded
-			err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.FundAmount)
-			assert.NoError(t, err, "failed to fund user config")
-			go keepMiningBlocks(ctx, chainDeployer, cfg.UserAddr)
-
-			// and user pledged fund to validator
-			specifications.ApproveTokenSpecification(ctx, t, driver)
-			specifications.DepositFundSpecification(ctx, t, driver)
-		}
-
-		// chain sync, wait kwil to register user
-		time.Sleep(cfg.ChainSyncWaitTime)
-
-		// When user deployed database
-		specifications.DatabaseDeploySpecification(ctx, t, driver)
-
-		// Then user should be able to execute database
-		specifications.ExecuteDBInsertSpecification(ctx, t, driver)
-		specifications.ExecuteDBUpdateSpecification(ctx, t, driver)
-		specifications.ExecuteDBDeleteSpecification(ctx, t, driver)
-
-		// and user should be able to drop database
-		specifications.DatabaseDropSpecification(ctx, t, driver)
-	})
+func GetDeployer(deployerType string, rpcURL string, privateKeyStr string, domination *big.Int) deployer.Deployer {
+	switch deployerType {
+	case "eth":
+		return eth_deployer.NewEthDeployer(rpcURL, privateKeyStr, eth_deployer.WithDomination(domination))
+	default:
+		panic("unknown deployer type")
+	}
 }
