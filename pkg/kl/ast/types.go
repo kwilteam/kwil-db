@@ -6,12 +6,11 @@ import (
 )
 
 var columnTypes = map[string]types.DataType{
-	"null":   types.NULL,
-	"string": types.TEXT,
-	"int32":  types.INT32,
-	"int64":  types.INT64,
-	"bool":   types.BOOLEAN,
-	"uuid":   types.UUID,
+	"null": types.NULL,
+	"text": types.TEXT,
+	"int":  types.INT,
+	//"bool":   types.BOOLEAN,
+	//"uuid":   types.UUID,
 }
 
 var attributeTypes = map[token.Token]types.AttributeType{

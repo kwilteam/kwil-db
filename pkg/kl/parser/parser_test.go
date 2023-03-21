@@ -33,28 +33,28 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		},
 		{
 			name:   "table with multiple columns and attributes",
-			input:  `database demo; table user{user_id int32 notnull,username string,gender bool}`,
+			input:  `database demo; table user{user_id int notnull,username text}`,
 			wantDB: "demo",
 			wantTables: []models.Table{
 				{
 					Name: "user",
 					Columns: []*models.Column{
-						{Name: "user_id", Type: types.INT32, Attributes: []*models.Attribute{{Type: types.NOT_NULL}}},
+						{Name: "user_id", Type: types.INT, Attributes: []*models.Attribute{{Type: types.NOT_NULL}}},
 						{Name: "username", Type: types.TEXT, Attributes: []*models.Attribute{}},
-						{Name: "gender", Type: types.BOOLEAN, Attributes: []*models.Attribute{}},
+						//{Name: "gender", Type: types.BOOLEAN, Attributes: []*models.Attribute{}},
 					},
 				},
 			},
 		},
 		{
 			name:   "table with one column and attributes(with parameters)",
-			input:  `database demo; table user{age int32 min(18) max(30), email string maxlen(50) minlen(10)}`,
+			input:  `database demo; table user{age int min(18) max(30), email text maxlen(50) minlen(10)}`,
 			wantDB: "demo",
 			wantTables: []models.Table{
 				{
 					Name: "user",
 					Columns: []*models.Column{
-						{Name: "age", Type: types.INT32, Attributes: []*models.Attribute{
+						{Name: "age", Type: types.INT, Attributes: []*models.Attribute{
 							{Type: types.MIN, Value: []byte("18")}, {Type: types.MAX, Value: []byte("30")}}},
 						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{
 							{Type: types.MAX_LENGTH, Value: []byte("50")}, {Type: types.MIN_LENGTH, Value: []byte("10")}}},
@@ -64,14 +64,14 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		},
 		{
 			name:   "table with index",
-			input:  `database demo; table user{name string, age int64, email string, uname unique(name, email), im index(email)}`,
+			input:  `database demo; table user{name text, age int, email text, uname unique(name, email), im index(email)}`,
 			wantDB: "demo",
 			wantTables: []models.Table{
 				{
 					Name: "user",
 					Columns: []*models.Column{
 						{Name: "name", Type: types.TEXT, Attributes: []*models.Attribute{}},
-						{Name: "age", Type: types.INT64, Attributes: []*models.Attribute{}},
+						{Name: "age", Type: types.INT, Attributes: []*models.Attribute{}},
 						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{}},
 					},
 					Indexes: []*models.Index{
@@ -84,7 +84,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		{
 			name: "table with action insert",
 			input: `database demo;
-                    table user{name string, age int64, email string}
+                    table user{name text, age int, email text}
                     action create_user(name, age) public {
 insert into user (name, age) values (name, age);
 insert into user (name, email) values ("test_name", "test_email@a.com");
@@ -95,7 +95,7 @@ insert into user (name, email) values ("test_name", "test_email@a.com");
 					Name: "user",
 					Columns: []*models.Column{
 						{Name: "name", Type: types.TEXT, Attributes: []*models.Attribute{}},
-						{Name: "age", Type: types.INT64, Attributes: []*models.Attribute{}},
+						{Name: "age", Type: types.INT, Attributes: []*models.Attribute{}},
 						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{}},
 					},
 				},

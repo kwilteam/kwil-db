@@ -40,20 +40,20 @@ func TestAst_Generate(t *testing.T) {
 		},
 		{
 			name:  "table without attributes",
-			input: `database test; table user{username string, age int32, email string}`,
+			input: `database test; table user{username text, age int32, email text}`,
 		},
 		{
 			name:  "table with attributes",
-			input: `database test; table user{username string notnull, age int min(18) max(30), email string maxlen(50) minlen(10)}`,
+			input: `database test; table user{username text notnull, age int min(18) max(30), email text maxlen(50) minlen(10)}`,
 		},
 		{
 			name:  "table with index",
-			input: `database demo; table user{name string, age int64, email string, uname unique(name, email), im index(email)}`,
+			input: `database demo; table user{name text, age int, email text, uname unique(name, email), im index(email)}`,
 		},
 		{
 			name: "table with action insert",
 			input: `database demo;
-                        table user{name string, age int64, email string}
+                        table user{name text, age int64, email text}
                         action create_user(name, age) public {insert into user(name, age) values (name, age)}`,
 		},
 	}

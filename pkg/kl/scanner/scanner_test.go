@@ -136,7 +136,7 @@ func TestScanner_Next_seq(t *testing.T) {
 	tableInput := `
 table user {
 user_id int notnull,
-username string null,
+username text null,
 age int min(18) max(60),
 uuid uuid,
 gender bool,
@@ -167,7 +167,7 @@ INSERT into user (name, email) values ("test_name", "test_email@a.com");
 		{Type: token.COMMA, Literal: ","},
 
 		{Type: token.IDENT, Literal: "username"},
-		{Type: token.IDENT, Literal: "string"},
+		{Type: token.IDENT, Literal: "text"},
 		{Type: token.NULL, Literal: "null"},
 		{Type: token.COMMA, Literal: ","},
 
