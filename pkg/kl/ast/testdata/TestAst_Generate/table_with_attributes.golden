@@ -7,7 +7,7 @@
       "columns": [
         {
           "name": "username",
-          "type": 100,
+          "type": 102,
           "attributes": [
             {
               "type": 100,
@@ -31,7 +31,7 @@
         },
         {
           "name": "email",
-          "type": 100,
+          "type": 102,
           "attributes": [
             {
               "type": 100,
