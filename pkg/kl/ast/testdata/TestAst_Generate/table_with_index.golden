@@ -1,0 +1,40 @@
+{
+  "name": "demo",
+  "owner": "",
+  "tables": [
+    {
+      "name": "user",
+      "columns": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "age",
+          "type": "int"
+        },
+        {
+          "name": "email",
+          "type": "string"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "uname",
+          "type": "unique",
+          "columns": [
+            "name",
+            "email"
+          ]
+        },
+        {
+          "name": "im",
+          "type": "index",
+          "columns": [
+            "email"
+          ]
+        }
+      ]
+    }
+  ]
+}

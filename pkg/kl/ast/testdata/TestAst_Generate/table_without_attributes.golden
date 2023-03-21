@@ -1,0 +1,23 @@
+{
+  "name": "test",
+  "owner": "",
+  "tables": [
+    {
+      "name": "user",
+      "columns": [
+        {
+          "name": "username",
+          "type": "string"
+        },
+        {
+          "name": "age",
+          "type": "int"
+        },
+        {
+          "name": "email",
+          "type": "string"
+        }
+      ]
+    }
+  ]
+}
