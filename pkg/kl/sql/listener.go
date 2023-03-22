@@ -3,26 +3,27 @@ package sql
 import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/pkg/errors"
 	"kwil/internal/pkg/sqlite"
+	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/scanner"
 	"kwil/pkg/kl/token"
 	"strings"
 	"sync"
 )
 
+var (
+	argNow   = []string{"'now'"}
+	argEmpty = []string{}
+)
+
 var klStaticData struct {
-	once          sync.Once
-	banKeywords   []string
-	banKeywordMap map[string]bool
+	once sync.Once
 
-	banFunctions    []string
-	banFunctionsMap map[string]bool
-
-	banJoins   []string
-	banJoinMap map[string]bool
-
-	allowedJoinOps   []string
-	allowedJoinOpMap map[string]bool
+	banKeywords    map[string]bool
+	banFunctions   map[string][]string
+	banJoins       map[string]bool
+	allowedJoinOps map[string]bool
 }
 
 func buildMap(data []string) map[string]bool {
@@ -33,25 +34,38 @@ func buildMap(data []string) map[string]bool {
 	return m
 }
 
+func buildMapFn(fn []string, args [][]string) map[string][]string {
+	m := make(map[string][]string)
+	for i, v := range fn {
+		m[v] = args[i]
+	}
+	return m
+}
+
 func banDataInit() {
-	klStaticData.banFunctions = []string{
+	banFunctions := []string{
 		"date", "time", "datetime", "julianday", "unixepoch", //time
 		//"strftime", //time with special parameter
 		"random", "randomblob", //random
 		"changes", "last_insert_rowid", "total_changes", //changes
 	}
 
-	klStaticData.banKeywords = []string{
-		"current_time", "current_date", "current_timestamp", //time
+	banFunctionArgs := [][]string{
+		argNow, argNow, argNow, argNow, argNow, //time
+		argEmpty, argEmpty, //random
+		argNow, argNow, argNow, //changes
 	}
 
-	klStaticData.banJoins = []string{"cross", "natural"} // explicit cross join
+	banKeywords := []string{
+		"current_time", "current_date", "current_timestamp", //time
+	}
+	banJoins := []string{"cross", "natural"} // explicit cross join
+	allowedJoinOps := []string{"=", "!="}
 
-	klStaticData.allowedJoinOps = []string{"=", "!="}
-
-	klStaticData.banFunctionsMap = buildMap(klStaticData.banFunctions)
-	klStaticData.banJoinMap = buildMap(klStaticData.banJoins)
-	klStaticData.allowedJoinOpMap = buildMap(klStaticData.allowedJoinOps)
+	klStaticData.banFunctions = buildMapFn(banFunctions, banFunctionArgs)
+	klStaticData.banKeywords = buildMap(banKeywords)
+	klStaticData.banJoins = buildMap(banJoins)
+	klStaticData.allowedJoinOps = buildMap(allowedJoinOps)
 }
 
 func KlSQLInit() {
@@ -64,11 +78,11 @@ type errorHandler struct {
 	Errors  scanner.ErrorList
 }
 
-func (eh *errorHandler) Add(column int, msg string) {
+func (eh *errorHandler) Add(column int, err error) {
 	eh.Errors.Add(token.Position{
 		Line:   token.Pos(eh.CurLine),
 		Column: token.Pos(column),
-	}, msg)
+	}, err.Error())
 }
 
 type sqliteErrorListener struct {
@@ -77,25 +91,128 @@ type sqliteErrorListener struct {
 }
 
 func (s *sqliteErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol interface{}, line, column int, msg string, e antlr.RecognitionException) {
-	s.errorHandler.Add(column, msg)
+	s.errorHandler.Add(column, errors.Wrap(ErrSyntax, msg))
 }
 
 type KlSqliteListener struct {
 	*sqlite.BaseSQLiteParserListener
 	*errorHandler
 
+	ctx ast.ActionContext
+
 	trace bool
+
+	iuStarted bool //insert, update
 
 	joinCond      map[string]bool
 	joinCondStack []string
-	inJoin        bool
-	joinCondCnt   int
+	joinStarted   bool
+	joinConsCnt   int
+	joinOpCnt     int
+
+	exprStated bool
+	exprStack  []string
+
+	// fn name, fn params
+	fnParams  []string
+	fnStarted bool
 }
 
 var _ sqlite.SQLiteParserListener = &KlSqliteListener{}
 
-func NewSqliteListener(eh *errorHandler) *KlSqliteListener {
-	return &KlSqliteListener{errorHandler: eh}
+type KlSqliteListenerOption func(*KlSqliteListener)
+
+func WithTrace() KlSqliteListenerOption {
+	return func(l *KlSqliteListener) {
+		l.trace = true
+	}
+}
+
+func NewKlSqliteListener(eh *errorHandler, ctx ast.ActionContext, opts ...KlSqliteListenerOption) *KlSqliteListener {
+	k := &KlSqliteListener{errorHandler: eh, ctx: ctx}
+	for _, opt := range opts {
+		opt(k)
+	}
+	return k
+}
+
+func (tl *KlSqliteListener) startIU() {
+	tl.iuStarted = true
+}
+
+func (tl *KlSqliteListener) endIU() {
+	tl.iuStarted = false
+}
+
+func (tl *KlSqliteListener) inIU() bool {
+	return tl.iuStarted
+}
+
+func (tl *KlSqliteListener) startJoin() {
+	tl.joinOpCnt = 0
+	tl.joinConsCnt = 0
+	tl.joinStarted = true
+}
+
+func (tl *KlSqliteListener) endJoin() {
+	tl.joinOpCnt = -1
+	tl.joinConsCnt = -1
+	tl.joinStarted = false
+}
+
+func (tl *KlSqliteListener) inJoin() bool {
+	return tl.joinStarted
+}
+
+func (tl *KlSqliteListener) startExpr() {
+	tl.exprStated = true
+}
+
+func (tl *KlSqliteListener) endExpr() {
+	tl.exprStated = false
+}
+
+func (tl *KlSqliteListener) inExpr() bool {
+	return tl.exprStated
+}
+
+func (tl *KlSqliteListener) startFn() {
+	tl.fnStarted = true
+}
+
+func (tl *KlSqliteListener) endFn() {
+	tl.fnStarted = false
+}
+
+func (tl *KlSqliteListener) inFn() bool {
+	return tl.fnStarted
+}
+
+// banFunction bans functions based on the function name and arguments
+func (tl *KlSqliteListener) banFunction(ctx *sqlite.ExprContext) {
+	defer func() {
+		tl.endFn()
+	}()
+
+	if !tl.inIU() { // short circuit on only select/delete
+		return
+	}
+
+	fnName, fnArgs := tl.fnParams[0], tl.fnParams[1:]
+	if args, ok := klStaticData.banFunctions[fnName]; ok {
+		// fn match
+		argMatch := true
+		for i, arg := range args {
+			if arg != fnArgs[i] {
+				argMatch = false
+				break
+			}
+		}
+		if argMatch {
+			tok := ctx.GetStart()
+			tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrFunctionNotSupported, fnName))
+		}
+	}
 }
 
 func (tl *KlSqliteListener) joinPush(cond string) {
@@ -112,34 +229,27 @@ func (tl *KlSqliteListener) joinPop() string {
 	return cond
 }
 
+func (tl *KlSqliteListener) VisitTerminal(node antlr.TerminalNode) {
+	if tl.trace {
+		fmt.Println("visit terminal ", node.GetText())
+	}
+}
+
 func (tl *KlSqliteListener) EnterFunction_name(ctx *sqlite.Function_nameContext) {
 	if tl.trace {
 		fmt.Println("enter FUNCTION ", ctx.GetText())
 	}
 
-	tok := ctx.GetStart()
 	name := ctx.GetText()
 	name = strings.ToLower(name)
-	if _, ok := klStaticData.banFunctionsMap[name]; ok {
-		tl.errorHandler.Add(tok.GetColumn(), fmt.Sprintf("function %s is not supported", name))
-	}
+
+	tl.fnParams = append(tl.fnParams, name)
 }
 
 func (tl *KlSqliteListener) EnterSelect_stmt(ctx *sqlite.Select_stmtContext) {
 	if tl.trace {
 		fmt.Println("enter SELECT ", ctx.GetText())
 	}
-
-	//cds := ctx.GetChildren()
-	//for _, cd := range cds {
-	//	switch c := cd.(type) {
-	//	case *sqlite.Common_table_stmtContext:
-	//	case *sqlite.Select_coreContext:
-	//	case *sqlite.Order_by_stmtContext:
-	//	case *sqlite.Limit_stmtContext:
-	//	case *sqlite.Compound_operatorContext:
-	//	}
-	//}
 }
 
 func (tl *KlSqliteListener) EnterSelect_core(ctx *sqlite.Select_coreContext) {
@@ -150,22 +260,63 @@ func (tl *KlSqliteListener) EnterSelect_core(ctx *sqlite.Select_coreContext) {
 	cds := ctx.GetChildren()
 	tbs := 0
 	for _, cd := range cds {
-		switch c := cd.(type) {
+		switch cd.(type) {
 		case *sqlite.Table_or_subqueryContext:
-			fmt.Println("==table or subquery ", c.GetText())
 			tbs++
-			//case *sqlite.Result_columnContext:
-			//case *sqlite.Join_clauseContext:
-			//case *sqlite.ExprContext:
-			//case *sqlite.Window_nameContext:
-			//case *sqlite.Window_functionContext:
-			//case *sqlite.Values_clauseContext:
 		}
 	}
 
 	if tbs > 1 {
-		tl.errorHandler.Add(0, "implicit cartesian join(1) is not supported")
+		tl.errorHandler.Add(0, ErrSelectFromMultipleTables)
 	}
+}
+
+func (tl *KlSqliteListener) EnterInsert_stmt(ctx *sqlite.Insert_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter INSERT ", ctx.GetText())
+	}
+
+	tl.startIU()
+}
+
+func (tl *KlSqliteListener) ExitInsert_stmt(ctx *sqlite.Insert_stmtContext) {
+	if tl.trace {
+		fmt.Println("exit INSERT ", ctx.GetText())
+	}
+
+	tl.endIU()
+}
+
+func (tl *KlSqliteListener) EnterUpdate_stmt(ctx *sqlite.Update_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter UPDATE ", ctx.GetText())
+	}
+
+	tl.startIU()
+}
+
+func (tl *KlSqliteListener) ExitUpdate_stmt(ctx *sqlite.Update_stmtContext) {
+	if tl.trace {
+		fmt.Println("exit UPDATE ", ctx.GetText())
+	}
+
+	tl.endIU()
+}
+
+func (tl *KlSqliteListener) EnterUpsert_clause(ctx *sqlite.Upsert_clauseContext) {
+	if tl.trace {
+		fmt.Println("enter UPSERT ", ctx.GetText())
+	}
+
+	tl.startIU()
+}
+
+func (tl *KlSqliteListener) ExitUpsert_clause(ctx *sqlite.Upsert_clauseContext) {
+	if tl.trace {
+		fmt.Println("exit UPSERT ", ctx.GetText())
+	}
+
+	tl.endIU()
 }
 
 func (tl *KlSqliteListener) EnterSimple_select_stmt(ctx *sqlite.Simple_select_stmtContext) {
@@ -179,29 +330,7 @@ func (tl *KlSqliteListener) EnterJoin_clause(ctx *sqlite.Join_clauseContext) {
 		fmt.Println("enter Join clause ", ctx.GetText())
 	}
 
-	cds := ctx.GetChildren()
-
-	tl.joinCondCnt = 0
-	tl.inJoin = true
-
-	tl.joinCond = make(map[string]bool, 0)
-
-	joinLevel := 0
-	//joinCondCnt := 0
-
-	for _, cd := range cds {
-		switch cd.(type) {
-		//case *sqlite.Table_or_subqueryContext:
-		case *sqlite.Join_operatorContext:
-			joinLevel++
-			//case *sqlite.Join_constraintContext:
-		}
-	}
-
-	if joinLevel > 1 {
-		tok := ctx.GetStart()
-		tl.errorHandler.Add(tok.GetColumn(), "multi-level join is not supported")
-	}
+	tl.startJoin()
 }
 
 func (tl *KlSqliteListener) ExitJoin_clause(ctx *sqlite.Join_clauseContext) {
@@ -209,12 +338,17 @@ func (tl *KlSqliteListener) ExitJoin_clause(ctx *sqlite.Join_clauseContext) {
 		fmt.Println("exit Join clause ", ctx.GetText())
 	}
 
-	tl.inJoin = false
-
-	if tl.joinCondCnt == 0 {
+	if tl.joinOpCnt > 1 {
 		tok := ctx.GetStart()
-		tl.errorHandler.Add(tok.GetColumn(), "implicit cartesian join(2) is not supported")
+		tl.errorHandler.Add(tok.GetColumn(), ErrMultiJoinNotSupported)
 	}
+
+	if tl.joinConsCnt == 0 {
+		tok := ctx.GetStart()
+		tl.errorHandler.Add(tok.GetColumn(), ErrJoinWithoutCondition)
+	}
+
+	tl.endJoin()
 }
 
 func localEval(op, left, right string) bool {
@@ -232,60 +366,91 @@ func (tl *KlSqliteListener) EnterJoin_constraint(ctx *sqlite.Join_constraintCont
 		fmt.Println("enter Join constraint ", ctx.GetText())
 	}
 
-	cond := ctx.GetText()
-	tl.joinCond[cond] = false
-
 	op := ctx.GetStart()
 	tt := strings.ToLower(op.GetText())
+	// TODO: support "using"
 	if tt == "using" {
-		tl.errorHandler.Add(op.GetColumn(), "join using is not supported")
+		tl.errorHandler.Add(op.GetColumn(), ErrJoinUsingNotSupported)
 		return
 	}
 
-	tl.joinCondCnt++
-
-	ccds := ctx.GetChildren()
-	// ccds[0] is "ON"
-
-	// TODO: use separate Enter hooks
-	for _, ccd := range ccds {
-		switch ccc := ccd.(type) {
-		case *sqlite.ExprContext:
-			fmt.Println("----expr ", ccc.GetText())
-			fmt.Println("----expr child count ", ccc.GetChildCount())
-			exprs := ccc.GetChildren()
-			// infix expr
-			if len(exprs) == 3 {
-				for _, expr := range exprs {
-					switch e := expr.(type) {
-					case *sqlite.ExprContext:
-					case *antlr.TerminalNodeImpl:
-						tok := e.GetSymbol()
-						tokName := strings.ToLower(tok.GetText())
-						if _, ok := klStaticData.allowedJoinOpMap[tokName]; !ok {
-							tl.errorHandler.Add(tok.GetColumn(), fmt.Sprintf("join op(%s) is not supported", tokName))
-						}
-					}
-				}
-			} else {
-				tl.errorHandler.Add(op.GetColumn(), "join condition op(unary) is not supported")
-			}
-			//case *antlr.TerminalNodeImpl:
-			//	// `on` or `using`
-			//	fmt.Println("+-terminal node ", ccc.GetText())
-		}
-	}
+	tl.joinConsCnt++
 }
 
 func (tl *KlSqliteListener) EnterExpr(ctx *sqlite.ExprContext) {
 	if tl.trace {
 		fmt.Println("EnterExpr", ctx.GetText())
 	}
+
+	cnt := ctx.GetChildCount()
+	switch cnt {
+	case 1:
+		// literal or name
+		if v := ctx.BIND_PARAMETER(); v != nil {
+			tok := ctx.GetStart()
+			p := strings.Replace(v.GetText(), "$", "", -1)
+			if _, ok := tl.ctx[p]; !ok {
+				tl.errorHandler.Add(tok.GetColumn(), ErrBindParameterNotFound)
+			}
+		}
+	case 2:
+		// unary op
+	default:
+		// if first child is function, it is function
+		first := ctx.GetChild(0)
+		if _, ok := first.(*sqlite.Function_nameContext); ok {
+			tl.startFn()
+		}
+	}
+}
+
+func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
+	if tl.trace {
+		fmt.Println("ExitExpr", ctx.GetText())
+	}
+
+	cnt := ctx.GetChildCount()
+	switch cnt {
+	case 1:
+		// literal or name
+	case 2:
+		// unary op
+		op := ctx.GetStart()
+		if tl.inJoin() {
+			tl.errorHandler.Add(op.GetColumn(), errors.Wrap(ErrJoinConditionOpNotSupported, "unary"))
+		}
+	default:
+		// if first child is function, it is function
+		first := ctx.GetChild(0)
+		if _, ok := first.(*sqlite.Function_nameContext); ok {
+			tl.banFunction(ctx)
+		} else if tl.inJoin() {
+			// infix expr
+			cds := ctx.GetChildren()
+			operator := cds[1].(*antlr.TerminalNodeImpl).GetSymbol()
+			tokName := strings.ToLower(operator.GetText())
+			if _, ok := klStaticData.allowedJoinOps[tokName]; !ok {
+				tl.errorHandler.Add(operator.GetColumn(), errors.Wrap(ErrJoinConditionOpNotSupported, tokName))
+			}
+		}
+	}
 }
 
 func (tl *KlSqliteListener) EnterLiteral_value(ctx *sqlite.Literal_valueContext) {
 	if tl.trace {
 		fmt.Println("EnterLiteral_value", ctx.GetText())
+	}
+
+	name := ctx.GetText()
+	name = strings.ToLower(name)
+	if _, ok := klStaticData.banKeywords[name]; ok {
+		tok := ctx.GetStart()
+		tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrKeywordNotSupported, name))
+		return
+	}
+
+	if tl.inFn() {
+		tl.fnParams = append(tl.fnParams, name)
 	}
 }
 
@@ -294,13 +459,7 @@ func (tl *KlSqliteListener) ExitLiteral_value(ctx *sqlite.Literal_valueContext) 
 		fmt.Println("ExitLiteral_value", ctx.GetText())
 	}
 
-	//tl.joinPush(ctx.GetText())
-}
-
-func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
-	if tl.trace {
-		fmt.Println("ExitExpr", ctx.GetText())
-	}
+	tl.joinPush(ctx.GetText())
 }
 
 func (tl *KlSqliteListener) ExitJoin_constraint(ctx *sqlite.Join_constraintContext) {
@@ -321,6 +480,8 @@ func (tl *KlSqliteListener) EnterJoin_operator(ctx *sqlite.Join_operatorContext)
 	if tl.trace {
 		fmt.Println("enter JoinOper ", ctx.GetText())
 	}
+
+	tl.joinOpCnt++
 }
 
 func (tl *KlSqliteListener) ExitJoin_operator(ctx *sqlite.Join_operatorContext) {
@@ -330,7 +491,7 @@ func (tl *KlSqliteListener) ExitJoin_operator(ctx *sqlite.Join_operatorContext) 
 
 	tok := ctx.GetStart()
 	name := strings.ToLower(tok.GetText())
-	if _, ok := klStaticData.banJoinMap[name]; ok {
-		tl.errorHandler.Add(tok.GetColumn(), fmt.Sprintf("%s join is not supported", name))
+	if _, ok := klStaticData.banJoins[name]; ok {
+		tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrJoinNotSupported, name))
 	}
 }

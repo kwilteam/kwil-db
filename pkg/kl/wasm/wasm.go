@@ -40,7 +40,7 @@ func parseWrapper() js.Func {
 }
 
 func main() {
-	fmt.Println("This is KL WASM")
+	fmt.Println("Load KL parser...")
 	// expose the parse function to the global scope
 	js.Global().Set("parseKL", parseWrapper())
 	<-make(chan bool)

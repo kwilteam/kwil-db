@@ -306,7 +306,7 @@ func (p *parser) parseColumnDefList() (cols []ast.Stmt) {
 	return cols
 }
 
-func (p *parser) parseBlockDeclaration() *ast.BlockStmt {
+func (p *parser) parseBlockDeclaration(ctx ast.ActionContext) *ast.BlockStmt {
 	if p.trace {
 		defer un(trace("parseBlockDeclaration"))
 	}
@@ -317,7 +317,7 @@ func (p *parser) parseBlockDeclaration() *ast.BlockStmt {
 	block.Statements = []ast.Stmt{}
 
 	for !p.curTokIs(token.RBRACE) && !p.curTokIs(token.EOF) {
-		stmt := p.parseStatement()
+		stmt := p.parseStatement(ctx)
 		if stmt != nil {
 			block.Statements = append(block.Statements, stmt)
 		}
@@ -368,35 +368,23 @@ func (p *parser) parseActionDeclaration() *ast.ActionDecl {
 		p.next()
 	}
 
-	act.Body = p.parseBlockDeclaration()
+	ctx := ast.ActionContext{}
+	for _, v := range act.Params {
+		switch pv := v.(type) {
+		case *ast.Ident:
+			ctx[pv.Name] = nil
+		case *ast.BasicLit:
+			ctx[pv.Value] = nil
+		}
+	}
+
+	// TODO
+	// should do this after everything is parsed
+	// then every ast node need pos info for error reporting
+	act.Body = p.parseBlockDeclaration(ctx)
 
 	return act
 }
-
-//func (p *parser) parseInsertStatement() *ast.InsertStmt {
-//	if p.trace {
-//		defer un(trace("parseInsertStatement"))
-//	}
-//
-//	p.expect(token.INSERT)
-//	p.expect(token.INTO)
-//
-//	stmt := &ast.InsertStmt{}
-//	stmt.Table = p.parseIdent()
-//
-//	// optional column list
-//	if !p.curTokIs(token.VALUES) {
-//		stmt.Columns = p.parseParameterList()
-//	}
-//
-//	p.expect(token.VALUES)
-//
-//	stmt.Values = p.parseParameterList()
-//	if p.curTokIs(token.COMMA) {
-//		p.next()
-//	}
-//	return stmt
-//}
 
 // parseSQLStatement parses a whole SQL statement as a string.
 func (p *parser) parseSQLStatement() *ast.SQLStmt {
@@ -437,18 +425,18 @@ func (p *parser) parseSQLStatement() *ast.SQLStmt {
 	return &ast.SQLStmt{SQL: strings.Join(rawSQL, " ")}
 }
 
-func (p *parser) parseStatement() ast.Stmt {
+func (p *parser) parseStatement(ctx ast.ActionContext) ast.Stmt {
 	if p.trace {
 		defer un(trace("parseStatement"))
 	}
 
 	pos := p.pos
-	fp := p.file.Position(pos)
 
 	switch p.tok {
 	case token.INSERT, token.WITH, token.REPLACE, token.SELECT, token.UPDATE, token.DROP, token.DELETE:
 		s := p.parseSQLStatement()
-		if err := sql.ParseRawSQL(s.SQL, int(fp.Line), false); err != nil {
+		fp := p.file.Position(pos)
+		if err := sql.ParseRawSQL(s.SQL, int(fp.Line), ctx, false); err != nil {
 			p.errorExpected(pos, fmt.Sprintf("valid sql statement(%s)", err))
 			return s
 		}

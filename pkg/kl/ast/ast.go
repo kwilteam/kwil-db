@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+type ActionContext map[string]any
+
 type Node interface {
 }
 

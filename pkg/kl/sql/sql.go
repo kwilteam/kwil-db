@@ -6,11 +6,17 @@ import (
 	"kwil/internal/pkg/sqlite"
 )
 
-func ParseRawSQL(sql string, currentLine int, queryOnly bool) (err error) {
+func ParseRawSQL(sql string, currentLine int, ctx map[string]any, trace bool) (err error) {
 	KlSQLInit()
 
+	var listener *KlSqliteListener
 	eh := &errorHandler{CurLine: currentLine}
-	listener := NewSqliteListener(eh)
+	if trace {
+		listener = NewKlSqliteListener(eh, ctx, WithTrace())
+	} else {
+		listener = NewKlSqliteListener(eh, ctx)
+	}
+
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("panic: %v", e)
