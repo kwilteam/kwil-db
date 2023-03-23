@@ -47,8 +47,8 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 			},
 		},
 		{
-			name:   "table with one column and attributes(with parameters)",
-			input:  `database demo; table user{age int min(18) max(30), email text maxlen(50) minlen(10)}`,
+			name:   "table with columns and attributes(with parameters)",
+			input:  `database demo; table user{age int min(18) max(30), email text maxlen(50) minlen(10), country text default("mars"), status int default(0) }`,
 			wantDB: "demo",
 			wantTables: []models.Table{
 				{
@@ -58,6 +58,10 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 							{Type: types.MIN, Value: []byte("18")}, {Type: types.MAX, Value: []byte("30")}}},
 						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{
 							{Type: types.MAX_LENGTH, Value: []byte("50")}, {Type: types.MIN_LENGTH, Value: []byte("10")}}},
+						{Name: "country", Type: types.TEXT, Attributes: []*models.Attribute{
+							{Type: types.DEFAULT, Value: []byte(`"mars"`)}}},
+						{Name: "status", Type: types.INT, Attributes: []*models.Attribute{
+							{Type: types.DEFAULT, Value: []byte("0")}}},
 					},
 				},
 			},

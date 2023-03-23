@@ -293,6 +293,69 @@ func (tl *KlSqliteListener) EnterSelect_core(ctx *sqlite.Select_coreContext) {
 	}
 }
 
+func (tl *KlSqliteListener) EnterCreate_table_stmt(ctx *sqlite.Create_table_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter CREATE TABLE ", ctx.GetText())
+	}
+
+	tok := ctx.GetStart()
+	tl.errorHandler.Add(tok.GetColumn(), ErrCreateTableNotSupported)
+}
+
+func (tl *KlSqliteListener) EnterCreate_index_stmt(ctx *sqlite.Create_index_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter CREATE INDEX ", ctx.GetText())
+	}
+
+	tok := ctx.GetStart()
+	tl.errorHandler.Add(tok.GetColumn(), ErrCreateIndexNotSupported)
+}
+
+func (tl *KlSqliteListener) EnterCreate_trigger_stmt(ctx *sqlite.Create_trigger_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter CREATE TRIGGER ", ctx.GetText())
+	}
+
+	tok := ctx.GetStart()
+	tl.errorHandler.Add(tok.GetColumn(), ErrCreateTriggerNotSupported)
+}
+
+func (tl *KlSqliteListener) EnterCreate_view_stmt(ctx *sqlite.Create_view_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter CREATE VIEW ", ctx.GetText())
+	}
+
+	tok := ctx.GetStart()
+	tl.errorHandler.Add(tok.GetColumn(), ErrCreateViewNotSupported)
+}
+
+func (tl *KlSqliteListener) EnterCreate_virtual_table_stmt(ctx *sqlite.Create_virtual_table_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter CREATE VIRTUAL TABLE ", ctx.GetText())
+	}
+
+	tok := ctx.GetStart()
+	tl.errorHandler.Add(tok.GetColumn(), ErrCreateVirtualTableNotSupported)
+}
+
+func (tl *KlSqliteListener) EnterDrop_stmt(ctx *sqlite.Drop_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter DROP TABLE ", ctx.GetText())
+	}
+
+	tok := ctx.GetStart()
+	tl.errorHandler.Add(tok.GetColumn(), ErrDropTableNotSupported)
+}
+
+func (tl *KlSqliteListener) EnterAlter_table_stmt(ctx *sqlite.Alter_table_stmtContext) {
+	if tl.trace {
+		fmt.Println("enter ALTER TABLE ", ctx.GetText())
+	}
+
+	tok := ctx.GetStart()
+	tl.errorHandler.Add(tok.GetColumn(), ErrAlterTableNotSupported)
+}
+
 func (tl *KlSqliteListener) EnterInsert_stmt(ctx *sqlite.Insert_stmtContext) {
 	if tl.trace {
 		fmt.Println("enter INSERT ", ctx.GetText())
@@ -360,7 +423,7 @@ func (tl *KlSqliteListener) ExitJoin_clause(ctx *sqlite.Join_clauseContext) {
 		fmt.Println("exit Join clause ", ctx.GetText())
 	}
 
-	if tl.joinOpCnt > 1 {
+	if tl.joinOpCnt > JoinCountAllowed {
 		tok := ctx.GetStart()
 		tl.errorHandler.Add(tok.GetColumn(), ErrMultiJoinNotSupported)
 	}
@@ -408,11 +471,26 @@ func (tl *KlSqliteListener) EnterExpr(ctx *sqlite.ExprContext) {
 	switch cnt {
 	case 1:
 		// literal or name
+		// TODO: validate this after the whole expression is parsed?
 		if v := ctx.BIND_PARAMETER(); v != nil {
 			tok := ctx.GetStart()
-			p := strings.Replace(v.GetText(), "$", "", -1)
-			if _, ok := tl.ctx[p]; !ok {
-				tl.errorHandler.Add(tok.GetColumn(), ErrBindParameterNotFound)
+			param := tok.GetText()
+			paramPrefix := param[:1]
+			switch paramPrefix {
+			case BindParameterPrefix:
+				// refer to action parameter
+				p := strings.ReplaceAll(v.GetText(), "$", "")
+				if _, ok := tl.ctx[p]; !ok {
+					tl.errorHandler.Add(tok.GetColumn(), ErrBindParameterNotFound)
+				}
+			case ModifierPrefix:
+				// refer to modifier
+				p := strings.ReplaceAll(v.GetText(), "@", "")
+				if _, ok := Modifiers[Modifier(p)]; !ok {
+					tl.errorHandler.Add(tok.GetColumn(), ErrModifierNotSupported)
+				}
+			default:
+				tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrBindParameterPrefixNotSupported, paramPrefix))
 			}
 		}
 	case 2:

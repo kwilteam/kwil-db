@@ -194,6 +194,8 @@ func (p *parser) parseParameter() (param ast.Expr) {
 		}
 	case token.INTEGER, token.STRING:
 		param = p.parseBasicLit()
+	default:
+		p.errorExpected(p.pos, "parameter")
 	}
 
 	return
@@ -206,7 +208,7 @@ func (p *parser) parseColumnAttr() *ast.AttrDef {
 
 	attr := &ast.AttrDef{Name: &ast.Ident{Name: p.lit}, Type: p.tok}
 	switch p.tok {
-	case token.MIN, token.MAX, token.MINLEN, token.MAXLEN:
+	case token.MIN, token.MAX, token.MINLEN, token.MAXLEN, token.DEFAULT:
 		// attribute with parameters
 		p.next()
 		p.expect(token.LPAREN)
@@ -375,12 +377,19 @@ func (p *parser) parseActionDeclaration() *ast.ActionDecl {
 			ctx[pv.Name] = nil
 		case *ast.BasicLit:
 			ctx[pv.Value] = nil
+		case *ast.SelectorExpr:
+			ctx[pv.String()] = nil
 		}
 	}
 
 	// TODO
 	// should do this after everything is parsed
 	// then every ast node need pos info for error reporting
+	for _, v := range act.Params {
+		if _, ok := sql.Modifiers[sql.Modifier(v.String())]; ok {
+			p.errorExpected(p.pos, "parameter, not modifier")
+		}
+	}
 	act.Body = p.parseBlockDeclaration(ctx)
 
 	return act

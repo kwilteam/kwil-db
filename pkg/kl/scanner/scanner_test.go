@@ -65,8 +65,9 @@ var tokens = []elt{
 	{token.MAX, "max"},
 	{token.MINLEN, "minlen"},
 	{token.MAXLEN, "maxlen"},
-	{token.NULL, "null"},
+	//{token.NULL, "null"},
 	{token.NOTNULL, "notnull"},
+	{token.DEFAULT, "default"},
 }
 
 const whitespace = " \t \n "
@@ -136,7 +137,7 @@ func TestScanner_Next_seq(t *testing.T) {
 	tableInput := `
 table user {
 user_id int notnull,
-username text null,
+username text,
 age int min(18) max(60),
 uuid uuid,
 gender bool,
@@ -144,7 +145,7 @@ email string maxlen(50) minlen(10)
 }`
 	actionInput := `
 action create_user(name, age) public {
-INSERT into user (name, email) values ("test_name", "test_email@a.com");
+INSERT into user (name, email) values ("name", "a@b.com");
 }
 `
 	input := dbInput + tableInput + actionInput
@@ -168,7 +169,6 @@ INSERT into user (name, email) values ("test_name", "test_email@a.com");
 
 		{Type: token.IDENT, Literal: "username"},
 		{Type: token.IDENT, Literal: "text"},
-		{Type: token.NULL, Literal: "null"},
 		{Type: token.COMMA, Literal: ","},
 
 		{Type: token.IDENT, Literal: "age"},
@@ -225,9 +225,9 @@ INSERT into user (name, email) values ("test_name", "test_email@a.com");
 		{Type: token.RPAREN, Literal: ")"},
 		{Type: token.IDENT, Literal: "values"},
 		{Type: token.LPAREN, Literal: "("},
-		{Type: token.STRING, Literal: `"test_name"`},
+		{Type: token.STRING, Literal: `"name"`},
 		{Type: token.COMMA, Literal: ","},
-		{Type: token.STRING, Literal: `"test_email@a.com"`},
+		{Type: token.STRING, Literal: `"a@b.com"`},
 		{Type: token.RPAREN, Literal: ")"},
 		{Type: token.SEMICOLON, Literal: ";"},
 

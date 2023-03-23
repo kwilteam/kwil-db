@@ -6,11 +6,8 @@ import (
 )
 
 var columnTypes = map[string]types.DataType{
-	//"null": types.NULL,
 	"text": types.TEXT,
 	"int":  types.INT,
-	//"bool":   types.BOOLEAN,
-	//"uuid":   types.UUID,
 }
 
 var attributeTypes = map[token.Token]types.AttributeType{
@@ -21,7 +18,7 @@ var attributeTypes = map[token.Token]types.AttributeType{
 	token.MAXLEN:  types.MAX_LENGTH,
 	token.MIN:     types.MIN,
 	token.MAX:     types.MAX,
-	//token.DEFAULT:   types.DEFAULT_VALUE,
+	token.DEFAULT: types.DEFAULT,
 }
 
 func GetMappedColumnType(typeName string) types.DataType {

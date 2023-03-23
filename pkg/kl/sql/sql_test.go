@@ -71,7 +71,8 @@ func TestParseRawSQL_banRules(t *testing.T) {
 		{"current_time", "select current_time", ErrKeywordNotSupported},
 		{"current_timestamp", "select current_timestamp", ErrKeywordNotSupported},
 		// joins
-		{"multi joins", "select * from users join posts join comments on a=b", ErrMultiJoinNotSupported},
+		{"multi joins", "select * from users join posts join comments join t1 on a=b", nil},
+		{"multi joins 2", "select * from users join posts join comments join t1 join t2 on a=b", ErrMultiJoinNotSupported},
 		{"natural join", "select * from users natural join posts", ErrJoinNotSupported},
 		{"cross join", "select * from users cross join posts", ErrJoinNotSupported},
 		{"cartesian join 1", "select * from users, posts", ErrSelectFromMultipleTables},
@@ -85,8 +86,12 @@ func TestParseRawSQL_banRules(t *testing.T) {
 		{"join with non = cons", "select * from users join posts on a and b", ErrJoinConditionOpNotSupported},
 		//{"join with function cons", "select * from users join posts on random()", ErrJoinWithTrueCondition}, /// TODO: support this
 		// action parameters
-		{"insert", "insert into t values ($this)", nil},
-		{"insert", "insert into t values ($a)", ErrBindParameterNotFound},
+		{"insert with bind parameter", "insert into t values ($this)", nil},
+		{"insert with non exist bond parameter", "insert into t values ($a)", ErrBindParameterNotFound},
+		// modifiers
+		{"modifier", "select * from t where a = @caller", nil},
+		{"modifier 2", "select * from t where a = @block.height", nil},
+		{"modifier 3", "select * from t where a = @any", ErrModifierNotSupported},
 	}
 
 	ctx := ast.ActionContext{

@@ -1,6 +1,8 @@
 package token
 
-import "strings"
+import (
+	"strings"
+)
 
 type Token int
 
@@ -25,33 +27,24 @@ const (
 	ACTION
 	PUBLIC // public
 	PRIVATE
-
 	WITH
 	REPLACE
 	INSERT // insert
-	//INTO   // into
-	//VALUES // values
-	//WHERE    // where
-	//AND      // and
-	//OR       // or
 	SELECT // select
 	UPDATE // update
 	DELETE
-	DROP    // drop
-	UNIQUE  // unique
-	INDEX   // index
-	PRIMARY // primary
-
-	//CONST      // const
-	//ACTION     // action
+	DROP // drop
 
 	attrBeg
-	MIN    // min
-	MAX    // max
-	MINLEN // minlen
-	MAXLEN // maxlen
-	NULL
+	MIN     // min
+	MAX     // max
+	MINLEN  // minlen
+	MAXLEN  // maxlen
 	NOTNULL // notnull
+	PRIMARY // primary
+	DEFAULT // default
+	UNIQUE  // unique
+	INDEX   // index
 	attrEnd
 	keywordEnd // keywordEnd
 
@@ -63,13 +56,12 @@ const (
 	MOD
 
 	ASSIGN // =
-	//EQL    // ==
-	LSS // <
-	GTR // >
-	NOT // !
-	NEQ // !=
-	LEQ // <=
-	GEQ // >=
+	LSS    // <
+	GTR    // >
+	NOT    // !
+	NEQ    // !=
+	LEQ    // <=
+	GEQ    // >=
 
 	LPAREN // (
 	LBRACK // [
@@ -102,23 +94,20 @@ var tokens = [...]string{
 	WITH:     "with",
 	REPLACE:  "replace",
 	INSERT:   "insert",
-	//INTO:     "into",
-	//VALUES:   "values",
-	SELECT: "select",
-	UPDATE: "update",
-	DELETE: "delete",
-	DROP:   "drop",
-
-	UNIQUE:  "unique",
-	INDEX:   "index",
-	PRIMARY: "primary",
+	SELECT:   "select",
+	UPDATE:   "update",
+	DELETE:   "delete",
+	DROP:     "drop",
 
 	MIN:     "min",
 	MAX:     "max",
 	MINLEN:  "minlen",
 	MAXLEN:  "maxlen",
-	NULL:    "null",
 	NOTNULL: "notnull",
+	PRIMARY: "primary",
+	DEFAULT: "default",
+	UNIQUE:  "unique",
+	INDEX:   "index",
 	//
 
 	ADD: "+",
@@ -127,9 +116,9 @@ var tokens = [...]string{
 	DIV: "/",
 	MOD: "%",
 
+	ASSIGN:    "=",
 	LSS:       "<",
 	GTR:       ">",
-	ASSIGN:    "=",
 	NOT:       "!",
 	NEQ:       "!=",
 	LEQ:       "<=",
@@ -160,10 +149,6 @@ func (t Token) IsAttr() bool {
 func (t Token) IsLiteral() bool {
 	return literalBeg < t && t < literalEnd
 }
-
-//func (t TokenType) IsColumnType() bool {
-//	return t == INT || t == TEXT || t == UUID
-//}
 
 var keywords map[string]Token
 var symbols map[string]Token

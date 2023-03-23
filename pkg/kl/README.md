@@ -46,13 +46,19 @@ or
 
 ### raw SQLite sql
 
+#### bind parameter
+
+* `$VVV` for action parameter
+* `@VVV` for blockchain modifier
+* * `@caller` for caller address
+* * `@block.height` for block height
+
 below is a list of keywords/functions/combinations that are not allowed in raw SQLite sql:
 
 #### statements
 
 * `CREATE` statement
 * `DROP` statement
-* `DELETE` statement
 
 #### functions
 
