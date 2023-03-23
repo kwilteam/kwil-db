@@ -14,6 +14,7 @@ import (
 
 var (
 	argNow   = []string{"'now'"}
+	argNow2  = []string{"*", "'now'"}
 	argEmpty = []string{}
 )
 
@@ -34,26 +35,39 @@ func buildMap(data []string) map[string]bool {
 	return m
 }
 
-func buildMapFn(fn []string, args [][]string) map[string][]string {
+func buildMapFn(fn []string, argsMap map[string][]string) map[string][]string {
 	m := make(map[string][]string)
-	for i, v := range fn {
-		m[v] = args[i]
+	for _, v := range fn {
+		args, ok := argsMap[v]
+		if !ok {
+			args = argEmpty
+		}
+		m[v] = args
 	}
 	return m
 }
 
 func banDataInit() {
 	banFunctions := []string{
-		"date", "time", "datetime", "julianday", "unixepoch", //time
-		//"strftime", //time with special parameter
-		"random", "randomblob", //random
-		"changes", "last_insert_rowid", "total_changes", //changes
+		// time
+		"date", "time", "datetime", "julianday", "unixepoch", "strftime",
+		// random
+		"random", "randomblob",
+		//changes
+		"changes", "last_insert_rowid", "total_changes",
+		// math
+		"acos", "acosh", "asin", "asinh", "atan", "atan2", "atanh", "ceil", "ceiling", "cos", "cosh", "degrees",
+		"exp", "floor", "ln", "log", "log10", "log2", "mod", "pi", "pow", "power", "radians", "sin", "sinh",
+		"sqrt", "tan", "tanh", "trunc",
 	}
 
-	banFunctionArgs := [][]string{
-		argNow, argNow, argNow, argNow, argNow, //time
-		argEmpty, argEmpty, //random
-		argNow, argNow, argNow, //changes
+	banFunctionArgs := map[string][]string{
+		"date":      argNow,
+		"time":      argNow,
+		"datetime":  argNow,
+		"julianday": argNow,
+		"unixepoch": argNow,
+		"strftime":  argNow2,
 	}
 
 	banKeywords := []string{
@@ -194,15 +208,23 @@ func (tl *KlSqliteListener) banFunction(ctx *sqlite.ExprContext) {
 		tl.endFn()
 	}()
 
-	if !tl.inIU() { // short circuit on only select/delete
-		return
-	}
+	//if !tl.inIU() { // short circuit on only select/delete
+	//	return
+	//}
 
 	fnName, fnArgs := tl.fnParams[0], tl.fnParams[1:]
 	if args, ok := klStaticData.banFunctions[fnName]; ok {
+		if len(fnArgs) < len(args) {
+			args = args[:len(fnArgs)]
+		}
+
 		// fn match
 		argMatch := true
 		for i, arg := range args {
+			if args[i] == "*" {
+				continue
+			}
+
 			if arg != fnArgs[i] {
 				argMatch = false
 				break

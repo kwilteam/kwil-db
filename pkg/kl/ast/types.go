@@ -6,7 +6,7 @@ import (
 )
 
 var columnTypes = map[string]types.DataType{
-	"null": types.NULL,
+	//"null": types.NULL,
 	"text": types.TEXT,
 	"int":  types.INT,
 	//"bool":   types.BOOLEAN,
