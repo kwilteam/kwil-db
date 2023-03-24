@@ -2,9 +2,10 @@ package types
 
 type ActionContext map[string]any
 type TableContext struct {
-	Columns     []string
-	Indexes     []string
-	PrimaryKeys []string
+	Columns      []string
+	Indexes      []string
+	IndexColumns []string
+	PrimaryKeys  []string
 }
 
 type DatabaseContext struct {
@@ -14,9 +15,10 @@ type DatabaseContext struct {
 
 func NewTableContext() TableContext {
 	return TableContext{
-		Columns:     []string{},
-		Indexes:     []string{},
-		PrimaryKeys: []string{},
+		Columns:      []string{},
+		Indexes:      []string{},
+		PrimaryKeys:  []string{},
+		IndexColumns: []string{},
 	}
 }
 

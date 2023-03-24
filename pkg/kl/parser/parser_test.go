@@ -356,6 +356,11 @@ func TestParser_DatabaseDeclaration_errors(t *testing.T) {
 			input:     `database test; action a1() {insert into t1(id) values(1)}`,
 			wantError: sql.ErrTableNotFound,
 		},
+		{
+			name:      "referred column not found in index",
+			input:     `database test; table test {idx index(id)}`,
+			wantError: sql.ErrColumnNotFound,
+		},
 	}
 
 	for _, tt := range tests {

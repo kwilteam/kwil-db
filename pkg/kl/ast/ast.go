@@ -266,6 +266,12 @@ func (d *TableDecl) Validate(ctx klType.TableContext) error {
 		names[name] = true
 	}
 
+	for _, name := range ctx.IndexColumns {
+		if _, ok := names[name]; !ok {
+			return errors.Wrap(sql.ErrColumnNotFound, fmt.Sprintf("%s.%s", tableName, name))
+		}
+	}
+
 	for _, name := range ctx.Indexes {
 		if _, ok := names[name]; ok {
 			return errors.Wrap(ErrDuplicateColumnOrIndexName, fmt.Sprintf("%s.%s", tableName, name))
@@ -395,6 +401,7 @@ func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
 		}
 		for _, index := range table.Indexes {
 			tCtx.Indexes = append(tCtx.Indexes, index.Name)
+			tCtx.IndexColumns = index.Columns
 		}
 
 		ctx.Tables[table.Name] = tCtx
