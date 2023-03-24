@@ -194,7 +194,7 @@ func (a *ActionDecl) Validate(action string, ctx klType.DatabaseContext) error {
 			//fp := p.file.Position(pos)
 			lineNum := 0 //int(fp.Line)
 			if err := sql.ParseRawSQL(st.SQL, lineNum, action, ctx, false); err != nil {
-				return errors.Wrap(ErrInvalidStatement, action)
+				return errors.Wrap(err, action)
 			}
 		default:
 			return ErrInvalidStatement // TODO: add more info(pos)
@@ -318,17 +318,18 @@ func (d *ColumnDef) Build() (def *models.Column) {
 
 func (d *AttrDef) Build() (def *models.Attribute) {
 	def = &models.Attribute{}
-	at := token.ILLEGAL
+	def.Type = GetMappedAttributeType(d.Type)
+
+	if d.Param == nil {
+		return
+	}
+
 	switch a := d.Param.(type) {
 	case *BasicLit:
 		def.Value = []byte(a.Value)
-		at = a.Type
 	case *Ident:
 		def.Value = []byte(a.Name)
-		at = token.IDENT
 	}
-
-	def.Type = GetMappedAttributeType(at)
 	return
 }
 
@@ -360,6 +361,15 @@ type Database struct {
 
 // Generate generates JSON string from AST
 func (d *Database) Generate() []byte {
+	res, err := json.MarshalIndent(d.model, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
+
+func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
+	ctx = klType.NewDatabaseContext()
 	db := models.Dataset{}
 	db.Name = d.Name.Name
 	for _, decl := range d.Decls {
@@ -370,20 +380,11 @@ func (d *Database) Generate() []byte {
 			db.Actions = append(db.Actions, a.Build())
 		}
 	}
-
 	d.model = &db
 
-	res, err := json.MarshalIndent(db, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	return res
-}
-
-func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
 	// same table/index name will be overwritten
 	for _, table := range d.model.Tables {
-		tCtx := klType.TableContext{}
+		tCtx := klType.NewTableContext()
 		for _, column := range table.Columns {
 			tCtx.Columns = append(tCtx.Columns, column.Name)
 			for _, attr := range column.Attributes {
@@ -400,7 +401,7 @@ func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
 	}
 
 	for _, action := range d.model.Actions {
-		aCtx := klType.ActionContext{}
+		aCtx := klType.NewActionContext()
 		for _, input := range action.Inputs {
 			aCtx[input] = true
 		}

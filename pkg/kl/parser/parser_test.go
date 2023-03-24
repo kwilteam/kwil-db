@@ -338,7 +338,7 @@ func TestParser_DatabaseDeclaration_errors(t *testing.T) {
 		},
 		{
 			name:      "multi primary key",
-			input:     "database test; table test { id int primary key, age int primary key }",
+			input:     "database test; table test { id int primary, age int primary}",
 			wantError: ast.ErrMultiplePrimaryKeys,
 		},
 		{
@@ -348,7 +348,7 @@ func TestParser_DatabaseDeclaration_errors(t *testing.T) {
 		},
 		{
 			name:      "duplicate index",
-			input:     `database test; table test {id int, index id(id)}`,
+			input:     `database test; table test {id int, id index(id)}`,
 			wantError: ast.ErrDuplicateColumnOrIndexName,
 		},
 		{
@@ -365,7 +365,7 @@ func TestParser_DatabaseDeclaration_errors(t *testing.T) {
 				t.Errorf("Parse() expect error: %s, got nil", tt.wantError)
 			}
 
-			if strings.Contains(err.Error(), tt.wantError.Error()) {
+			if !strings.Contains(err.Error(), tt.wantError.Error()) {
 				t.Errorf("Parse() expect error: %s, got: %s", tt.wantError, err)
 			}
 		})
