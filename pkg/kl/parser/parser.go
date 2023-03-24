@@ -2,9 +2,9 @@ package parser
 
 import (
 	"fmt"
+	"kwil/internal/pkg/kl/types"
 	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/scanner"
-	"kwil/pkg/kl/sql"
 	"kwil/pkg/kl/token"
 	"strings"
 )
@@ -59,6 +59,7 @@ func Parse(src []byte, opts ...Opt) (a *ast.Database, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("panic: %v", e)
+			p.errors.Add(p.file.Position(p.pos), err.Error())
 		}
 
 		err = p.errors.Err()
@@ -308,7 +309,7 @@ func (p *parser) parseColumnDefList() (cols []ast.Stmt) {
 	return cols
 }
 
-func (p *parser) parseBlockDeclaration(ctx ast.ActionContext) *ast.BlockStmt {
+func (p *parser) parseBlockDeclaration(ctx types.ActionContext) *ast.BlockStmt {
 	if p.trace {
 		defer un(trace("parseBlockDeclaration"))
 	}
@@ -370,26 +371,26 @@ func (p *parser) parseActionDeclaration() *ast.ActionDecl {
 		p.next()
 	}
 
-	ctx := ast.ActionContext{}
-	for _, v := range act.Params {
-		switch pv := v.(type) {
-		case *ast.Ident:
-			ctx[pv.Name] = nil
-		case *ast.BasicLit:
-			ctx[pv.Value] = nil
-		case *ast.SelectorExpr:
-			ctx[pv.String()] = nil
-		}
-	}
-
-	// TODO
-	// should do this after everything is parsed
-	// then every ast node need pos info for error reporting
-	for _, v := range act.Params {
-		if _, ok := sql.Modifiers[sql.Modifier(v.String())]; ok {
-			p.errorExpected(p.pos, "parameter, not modifier")
-		}
-	}
+	ctx := types.ActionContext{}
+	//for _, v := range act.Params {
+	//	switch pv := v.(type) {
+	//	case *ast.Ident:
+	//		ctx[pv.Name] = nil
+	//	case *ast.BasicLit:
+	//		ctx[pv.Value] = nil
+	//	case *ast.SelectorExpr:
+	//		ctx[pv.String()] = nil
+	//	}
+	//}
+	//
+	//// TODO
+	//// should do this after everything is parsed
+	//// then every ast node need pos info for error reporting
+	//for _, v := range act.Params {
+	//	if _, ok := sql.Modifiers[sql.Modifier(v.String())]; ok {
+	//		p.errorExpected(p.pos, "parameter, not modifier")
+	//	}
+	//}
 	act.Body = p.parseBlockDeclaration(ctx)
 
 	return act
@@ -434,7 +435,7 @@ func (p *parser) parseSQLStatement() *ast.SQLStmt {
 	return &ast.SQLStmt{SQL: strings.Join(rawSQL, " ")}
 }
 
-func (p *parser) parseStatement(ctx ast.ActionContext) ast.Stmt {
+func (p *parser) parseStatement(ctx types.ActionContext) ast.Stmt {
 	if p.trace {
 		defer un(trace("parseStatement"))
 	}
@@ -444,11 +445,11 @@ func (p *parser) parseStatement(ctx ast.ActionContext) ast.Stmt {
 	switch p.tok {
 	case token.INSERT, token.WITH, token.REPLACE, token.SELECT, token.UPDATE, token.DROP, token.DELETE:
 		s := p.parseSQLStatement()
-		fp := p.file.Position(pos)
-		if err := sql.ParseRawSQL(s.SQL, int(fp.Line), ctx, false); err != nil {
-			p.errorExpected(pos, fmt.Sprintf("valid sql statement(%s)", err))
-			return s
-		}
+		//fp := p.file.Position(pos)
+		//if err := sql.ParseRawSQL(s.SQL, int(fp.Line), ctx, false); err != nil {
+		//	p.errorExpected(pos, fmt.Sprintf("valid sql statement(%s)", err))
+		//	return s
+		//}
 		return s
 	default:
 		p.errorExpected(pos, fmt.Sprintf("unknown statement, token: %s, literal: %s\n", p.tok, p.lit))
@@ -545,6 +546,10 @@ func (p *parser) parse() *ast.Database {
 
 	for !p.curTokIs(token.EOF) {
 		db.Decls = append(db.Decls, p.parseDeclaration())
+	}
+
+	if err := db.Validate(); err != nil {
+		p.errorExpected(p.pos, err.Error())
 	}
 
 	return db

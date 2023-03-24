@@ -6,6 +6,7 @@ import (
 	"kwil/pkg/engine/types"
 	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/parser"
+	"kwil/pkg/kl/sql"
 	"strings"
 	"testing"
 )
@@ -317,4 +318,56 @@ func testActionDeclaration(t *testing.T, d ast.Decl, want *models.Action) bool {
 	}
 
 	return true
+}
+
+func TestParser_DatabaseDeclaration_errors(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantError error
+	}{
+		{
+			name:      "duplicate table",
+			input:     `database test; table t1{} table t1{}`,
+			wantError: ast.ErrDuplicateTableName,
+		},
+		{
+			name:      "duplicate action",
+			input:     `database test; action a1(){} action a1(){}`,
+			wantError: ast.ErrDuplicateActionName,
+		},
+		{
+			name:      "multi primary key",
+			input:     "database test; table test { id int primary key, age int primary key }",
+			wantError: ast.ErrMultiplePrimaryKeys,
+		},
+		{
+			name:      "duplicate column",
+			input:     `database test; table test {id int, id int}`,
+			wantError: ast.ErrDuplicateColumnOrIndexName,
+		},
+		{
+			name:      "duplicate index",
+			input:     `database test; table test {id int, index id(id)}`,
+			wantError: ast.ErrDuplicateColumnOrIndexName,
+		},
+		{
+			name:      "referred table not found",
+			input:     `database test; action a1() {insert into t1(id) values(1)}`,
+			wantError: sql.ErrTableNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parser.Parse([]byte(tt.input), parser.WithTraceOff())
+			if err == nil {
+				t.Errorf("Parse() expect error: %s, got nil", tt.wantError)
+			}
+
+			if strings.Contains(err.Error(), tt.wantError.Error()) {
+				t.Errorf("Parse() expect error: %s, got: %s", tt.wantError, err)
+			}
+		})
+	}
 }

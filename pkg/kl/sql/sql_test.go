@@ -1,10 +1,13 @@
 package sql
 
 import (
-	"kwil/pkg/kl/ast"
+	"flag"
+	"kwil/internal/pkg/kl/types"
 	"strings"
 	"testing"
 )
+
+var trace = flag.Bool("trace", false, "run tests with tracing")
 
 func TestParseRawSQL_banRules(t *testing.T) {
 	tests := []struct {
@@ -14,8 +17,8 @@ func TestParseRawSQL_banRules(t *testing.T) {
 	}{
 		// non-deterministic time functions
 		{"select date function", "select date('2020-02-02')", nil},
-		{"select date function", "select date('now')", ErrFunctionNotSupported},
-		{"select date function", "select date('now', '+1 day')", ErrFunctionNotSupported},
+		{"select date function 1", "select date('now')", ErrFunctionNotSupported},
+		{"select date function 2", "select date('now', '+1 day')", ErrFunctionNotSupported},
 		{"select time function", "select time('now')", ErrFunctionNotSupported},
 		{"select datetime function", "select datetime('now')", ErrFunctionNotSupported},
 		{"select julianday function", "select julianday('now')", ErrFunctionNotSupported},
@@ -23,19 +26,19 @@ func TestParseRawSQL_banRules(t *testing.T) {
 		{"select strftime function", "select strftime('%Y%m%d', 'now')", ErrFunctionNotSupported},
 		{"select strftime function 2", "select strftime('%Y%m%d')", ErrFunctionNotSupported},
 		//
-		{"upsert date function", "insert into t values (date('now'))", ErrFunctionNotSupported},
-		{"upsert date function", "insert into t values ( date('now', '+1 day'))", ErrFunctionNotSupported},
-		{"upsert time function", "insert into t values ( time('now'))", ErrFunctionNotSupported},
-		{"upsert datetime function", "insert into t values ( datetime('now'))", ErrFunctionNotSupported},
-		{"upsert julianday function", "insert into t values ( julianday('now'))", ErrFunctionNotSupported},
-		{"upsert unixepoch function", "insert into t values ( unixepoch('now'))", ErrFunctionNotSupported},
-		{"upsert strftime function", "insert into t values (strftime('%Y%m%d', 'now'))", ErrFunctionNotSupported},
-		{"upsert strftime function 2", "insert into t values (strftime('%Y%m%d'))", ErrFunctionNotSupported},
+		{"upsert date function", "insert into t1 values (date('now'))", ErrFunctionNotSupported},
+		{"upsert date function 2", "insert into t1 values ( date('now', '+1 day'))", ErrFunctionNotSupported},
+		{"upsert time function", "insert into t1 values ( time('now'))", ErrFunctionNotSupported},
+		{"upsert datetime function", "insert into t1 values ( datetime('now'))", ErrFunctionNotSupported},
+		{"upsert julianday function", "insert into t1 values ( julianday('now'))", ErrFunctionNotSupported},
+		{"upsert unixepoch function", "insert into t1 values ( unixepoch('now'))", ErrFunctionNotSupported},
+		{"upsert strftime function", "insert into t1 values (strftime('%Y%m%d', 'now'))", ErrFunctionNotSupported},
+		{"upsert strftime function 2", "insert into t1 values (strftime('%Y%m%d'))", ErrFunctionNotSupported},
 		// non-deterministic random functions
 		{"random function", "select random()", ErrFunctionNotSupported},
 		{"randomblob function", "select randomblob(10)", ErrFunctionNotSupported},
-		{"random function", "insert into t values ( random())", ErrFunctionNotSupported},
-		{"randomblob function", "insert into t values ( randomblob(10))", ErrFunctionNotSupported},
+		{"random function", "insert into t2 values ( random())", ErrFunctionNotSupported},
+		{"randomblob function", "insert into t2 values ( randomblob(10))", ErrFunctionNotSupported},
 		// non-deterministic math functions
 		{"select acos function", "select acos(1)", ErrFunctionNotSupported},
 		{"select acosh function", "select acosh(1)", ErrFunctionNotSupported},
@@ -70,42 +73,82 @@ func TestParseRawSQL_banRules(t *testing.T) {
 		{"current_date", "select current_date", ErrKeywordNotSupported},
 		{"current_time", "select current_time", ErrKeywordNotSupported},
 		{"current_timestamp", "select current_timestamp", ErrKeywordNotSupported},
+		// non-exist table/column
+		{"select from table", "select * from t1", nil},
+		{"select with CTE", "with tt as (select * from t1) select * from tt", nil},
+		{"select non-exist table", "select * from t10", ErrTableNotFound},
 		// joins
-		{"multi joins", "select * from users join posts join comments join t1 on a=b", nil},
-		{"multi joins 2", "select * from users join posts join comments join t1 join t2 on a=b", ErrMultiJoinNotSupported},
-		{"natural join", "select * from users natural join posts", ErrJoinNotSupported},
-		{"cross join", "select * from users cross join posts", ErrJoinNotSupported},
-		{"cartesian join 1", "select * from users, posts", ErrSelectFromMultipleTables},
+		{"joins", "select * from t1 join t2 on t1.c1=t2.c1 ", nil},
+		{"joins 3", "select * from t1 join t2 on (1+2)=2", ErrJoinConditionTooDeep},
+		{"joins 2", "select * from t1 join t2 on t1.c1=t7.c1 ", ErrTableNotFound},
+		{"joins 3", "select * from t1 join t2 on t1.c1=t2.c7", ErrColumnNotFound},
+
+		{"multi joins", "select * from t1 join t2 join t3 join t4 on a=b", nil},
+		{"multi joins 2", "select * from t1 join t2 join t3 join t4 join t5 on a=b", ErrMultiJoinNotSupported},
+		{"natural join", "select * from t3 natural join t4", ErrJoinNotSupported},
+		{"cross join", "select * from t3 cross join t4", ErrJoinNotSupported},
+		{"cartesian join 1", "select * from t3, t4", ErrSelectFromMultipleTables},
 		// join without any condition
-		{"cartesian join 2 1", "select * from users left join posts", ErrJoinWithoutCondition},
-		{"cartesian join 2 2", "select * from users inner join posts", ErrJoinWithoutCondition},
-		{"cartesian join 2 3", "select * from users join posts", ErrJoinWithoutCondition},
+		{"cartesian join 2 1", "select * from t3 left join t4", ErrJoinWithoutCondition},
+		{"cartesian join 2 2", "select * from t3 inner join t4", ErrJoinWithoutCondition},
+		{"cartesian join 2 3", "select * from t3 join t4", ErrJoinWithoutCondition},
 		// join with condition
-		//{"join with multi level binary cons", "select * from users join posts on a=(b+c)", nil},
-		{"join with unary cons", "select * from users join posts on not a", ErrJoinConditionOpNotSupported},
-		{"join with non = cons", "select * from users join posts on a and b", ErrJoinConditionOpNotSupported},
-		//{"join with function cons", "select * from users join posts on random()", ErrJoinWithTrueCondition}, /// TODO: support this
+		{"join with unary cons", "select * from t3 join t4 on not a", ErrJoinConditionOpNotSupported},
+		{"join with non = cons", "select * from t3 join t4 on a and b", ErrJoinConditionOpNotSupported},
+		{"join with non = cons 2", "select * from t3 join t4 on a + b", ErrJoinConditionOpNotSupported},
+		//{"join with multi level binary cons", "select * from t3 join t4 on a=(b=c)", nil}, // TODO
+		//{"join with function cons", "select * from t3 join t4 on random()", ErrJoinWithTrueCondition}, /// TODO: support this
 		// action parameters
-		{"insert with bind parameter", "insert into t values ($this)", nil},
-		{"insert with non exist bond parameter", "insert into t values ($a)", ErrBindParameterNotFound},
+		{"insert with bind parameter", "insert into t3 values ($this)", nil},
+		{"insert with non exist bond parameter", "insert into t3 values ($a)", ErrBindParameterNotFound},
 		// modifiers
-		{"modifier", "select * from t where a = @caller", nil},
-		{"modifier 2", "select * from t where a = @block.height", nil},
-		{"modifier 3", "select * from t where a = @any", ErrModifierNotSupported},
+		{"modifier", "select * from t3 where a = @caller", nil},
+		{"modifier 2", "select * from t3 where a = @block_height", nil},
+		{"modifier 3", "select * from t3 where a = @any", ErrModifierNotSupported},
 	}
 
-	ctx := ast.ActionContext{
-		"this": nil,
-		"that": nil,
+	ctx := types.DatabaseContext{
+		Tables: map[string]types.TableContext{
+			"t1": {
+				Columns:     []string{"c1", "c2", "c3"},
+				PrimaryKeys: []string{"c1"},
+			},
+			"t2": {
+				Columns:     []string{"c1", "c2", "c3"},
+				PrimaryKeys: []string{"c1"},
+			},
+			"t3": {
+				Columns:     []string{"c1", "c2", "c3"},
+				PrimaryKeys: []string{"c1"},
+			},
+			"t4": {
+				Columns:     []string{"c1", "c2", "c3"},
+				PrimaryKeys: []string{"c1"},
+			},
+			"t5": {},
+		},
+		Actions: map[string]types.ActionContext{
+			"action1": {
+				"this": nil,
+				"that": nil,
+			},
+			"action2": {
+				"here":  nil,
+				"there": nil,
+			},
+		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := ParseRawSQL(test.input, 1, ctx, false)
+			err := ParseRawSQL(test.input, 1, "action1", ctx, *trace)
+
 			if err == nil && test.wantError == nil {
 				return
 			}
 
 			if err != nil && test.wantError != nil {
+				// TODO: errors.Is?
 				if strings.Contains(err.Error(), test.wantError.Error()) {
 					return
 				}

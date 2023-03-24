@@ -51,7 +51,7 @@ or
 * `$VVV` for action parameter
 * `@VVV` for blockchain modifier
 * * `@caller` for caller address
-* * `@block.height` for block height
+* * `@block_height` for block height
 
 below is a list of keywords/functions/combinations that are not allowed in raw SQLite sql:
 

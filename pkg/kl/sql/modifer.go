@@ -7,7 +7,7 @@ const BindParameterPrefix = `$`
 
 const (
 	ModifierCaller      Modifier = `caller`
-	ModifierBlockHeight Modifier = `block.height`
+	ModifierBlockHeight Modifier = `block_height`
 )
 
 var Modifiers = map[Modifier]bool{

@@ -3,13 +3,14 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
+	klType "kwil/internal/pkg/kl/types"
 	"kwil/pkg/engine/models"
 	"kwil/pkg/engine/types"
+	"kwil/pkg/kl/sql"
 	"kwil/pkg/kl/token"
 	"strings"
 )
-
-type ActionContext map[string]any
 
 type Node interface {
 }
@@ -103,34 +104,12 @@ type (
 	SQLStmt struct {
 		SQL string
 	}
-
-	InsertStmt struct {
-		Table   *Ident
-		Columns []Expr
-		Values  []Expr
-	}
-
-	UpdateStmt struct {
-		Table   *Ident
-		Columns []Expr
-		Values  []Expr
-	}
 )
 
-func (x *BadStmt) stmtNode()    {}
-func (x *ExprStmt) stmtNode()   {}
-func (x *BlockStmt) stmtNode()  {}
-func (x SQLStmt) stmtNode()     {}
-func (x *InsertStmt) stmtNode() {}
-func (x *UpdateStmt) stmtNode() {}
-
-func (s *InsertStmt) Validate() error {
-	if len(s.Columns) != len(s.Values) {
-		return fmt.Errorf("number of columns and values are different")
-	}
-
-	return nil
-}
+func (x *BadStmt) stmtNode()   {}
+func (x *ExprStmt) stmtNode()  {}
+func (x *BlockStmt) stmtNode() {}
+func (x SQLStmt) stmtNode()    {}
 
 // ----------------------------------------
 // Declarations
@@ -182,48 +161,43 @@ func (x *IndexDef) stmtNode()   {}
 func (x *TableDecl) declNode()  {}
 func (x *ActionDecl) declNode() {}
 
-func (a *ActionDecl) Validate() error {
+func (a *ActionDecl) BuildCtx() klType.ActionContext {
+	ctx := klType.ActionContext{}
+
+	for _, v := range a.Params {
+		switch pv := v.(type) {
+		case *Ident:
+			ctx[pv.Name] = nil
+		case *BasicLit:
+			ctx[pv.Value] = nil
+		case *SelectorExpr:
+			ctx[pv.String()] = nil
+		}
+	}
+	return ctx
+}
+
+func (a *ActionDecl) Validate(action string, ctx klType.DatabaseContext) error {
 	declaredParams := map[string]bool{}
 
 	for _, param := range a.Params {
 		p, ok := param.(*Ident)
 		if !ok {
-			return fmt.Errorf("unsupported action parameter, got %s", param)
+			return errors.Wrap(ErrInvalidActionParam, param.String())
 		}
 		declaredParams[p.Name] = true
 	}
 
 	for _, stmt := range a.Body.Statements {
 		switch st := stmt.(type) {
-		case *InsertStmt:
-			if len(st.Columns) > 0 {
-				for _, column := range st.Columns {
-					_, ok := column.(*Ident)
-					if !ok {
-						return fmt.Errorf("unsupported column, got %s", column)
-					}
-				}
+		case *SQLStmt:
+			//fp := p.file.Position(pos)
+			lineNum := 0 //int(fp.Line)
+			if err := sql.ParseRawSQL(st.SQL, lineNum, action, ctx, false); err != nil {
+				return errors.Wrap(ErrInvalidStatement, action)
 			}
-
-			if len(st.Values) != len(st.Columns) {
-				return fmt.Errorf("unmatched number of columns and values")
-			}
-
-			for _, value := range st.Values {
-				switch v := value.(type) {
-				case *BasicLit:
-					continue
-				case *Ident:
-					_, paramExist := declaredParams[v.Name]
-					if !paramExist {
-						return fmt.Errorf("undefined parameter: %s", v.Name)
-					}
-				}
-			}
-		case *UpdateStmt:
-			continue
 		default:
-			return fmt.Errorf("unsupported action statement, got %s", stmt)
+			return ErrInvalidStatement // TODO: add more info(pos)
 		}
 	}
 
@@ -253,6 +227,53 @@ func (a *ActionDecl) Build() (def *models.Action) {
 		}
 	}
 	return
+}
+
+func (d *TableDecl) BuildCtx() klType.TableContext {
+	ctx := klType.TableContext{}
+
+	for _, column := range d.Body {
+		c, _ := column.(*ColumnDef)
+		ctx.Columns = append(ctx.Columns, c.Name.Name)
+
+		for _, attr := range c.Attrs {
+			if attr.Name.Name == "primary" {
+				ctx.PrimaryKeys = append(ctx.PrimaryKeys, c.Name.Name)
+			}
+		}
+	}
+
+	for _, index := range d.Idx {
+		i, _ := index.(*IndexDef)
+		ctx.Indexes = append(ctx.Indexes, i.Name.Name)
+	}
+
+	return ctx
+}
+
+func (d *TableDecl) Validate(ctx klType.TableContext) error {
+	tableName := d.Name.Name
+	if len(ctx.PrimaryKeys) > 1 {
+		return errors.Wrap(ErrMultiplePrimaryKeys, tableName)
+	}
+
+	names := map[string]bool{}
+
+	for _, name := range ctx.Columns {
+		if _, ok := names[name]; ok {
+			return errors.Wrap(ErrDuplicateColumnOrIndexName, fmt.Sprintf("%s.%s", tableName, name))
+		}
+		names[name] = true
+	}
+
+	for _, name := range ctx.Indexes {
+		if _, ok := names[name]; ok {
+			return errors.Wrap(ErrDuplicateColumnOrIndexName, fmt.Sprintf("%s.%s", tableName, name))
+		}
+		names[name] = true
+	}
+
+	return nil
 }
 
 func (d *TableDecl) Build() (def *models.Table) {
@@ -333,6 +354,8 @@ func (d *IndexDef) Build() (def *models.Index) {
 type Database struct {
 	Name  *Ident
 	Decls []Decl
+
+	model *models.Dataset
 }
 
 // Generate generates JSON string from AST
@@ -348,9 +371,74 @@ func (d *Database) Generate() []byte {
 		}
 	}
 
+	d.model = &db
+
 	res, err := json.MarshalIndent(db, "", "  ")
 	if err != nil {
 		panic(err)
 	}
 	return res
+}
+
+func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
+	// same table/index name will be overwritten
+	for _, table := range d.model.Tables {
+		tCtx := klType.TableContext{}
+		for _, column := range table.Columns {
+			tCtx.Columns = append(tCtx.Columns, column.Name)
+			for _, attr := range column.Attributes {
+				if attr.Type == types.PRIMARY_KEY {
+					tCtx.PrimaryKeys = append(tCtx.PrimaryKeys, column.Name)
+				}
+			}
+		}
+		for _, index := range table.Indexes {
+			tCtx.Indexes = append(tCtx.Indexes, index.Name)
+		}
+
+		ctx.Tables[table.Name] = tCtx
+	}
+
+	for _, action := range d.model.Actions {
+		aCtx := klType.ActionContext{}
+		for _, input := range action.Inputs {
+			aCtx[input] = true
+		}
+
+		ctx.Actions[action.Name] = aCtx
+	}
+
+	return
+}
+
+func (d *Database) Validate() error {
+	ctx := d.BuildCtx()
+
+	actionNames := map[string]bool{}
+	tableNames := map[string]bool{}
+
+	for _, decl := range d.Decls {
+		switch a := decl.(type) {
+		case *ActionDecl:
+			if _, ok := actionNames[a.Name.Name]; ok {
+				return errors.Wrap(ErrDuplicateActionName, a.Name.Name)
+			}
+			actionNames[a.Name.Name] = true
+
+			if err := a.Validate(a.Name.Name, ctx); err != nil {
+				return err
+			}
+		case *TableDecl:
+			if _, ok := tableNames[a.Name.Name]; ok {
+				return errors.Wrap(ErrDuplicateTableName, a.Name.Name)
+			}
+			tableNames[a.Name.Name] = true
+
+			if err := a.Validate(ctx.Tables[a.Name.Name]); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
