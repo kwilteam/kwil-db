@@ -18,6 +18,8 @@ var tokens = []elt{
 	{token.IDENT, "foo"},
 	{token.IDENT, "bar123"},
 	{token.IDENT, "foo_bar"},
+	{token.IDENT, "$foo"},
+	{token.IDENT, "@bar"},
 	{token.INTEGER, "123"},
 	{token.STRING, `"hello"`},
 	{token.STRING, `"hello\\world\n"`},
@@ -144,8 +146,8 @@ gender bool,
 email string maxlen(50) minlen(10)
 }`
 	actionInput := `
-action create_user(name, age) public {
-INSERT into user (name, email) values ("name", "a@b.com");
+action create_user($name, $age) public {
+INSERT into user (name, email, wallet) values ($name, "a@b.com", @caller);
 }
 `
 	input := dbInput + tableInput + actionInput
@@ -208,9 +210,9 @@ INSERT into user (name, email) values ("name", "a@b.com");
 		{Type: token.ACTION, Literal: "action"},
 		{Type: token.IDENT, Literal: "create_user"},
 		{Type: token.LPAREN, Literal: "("},
-		{Type: token.IDENT, Literal: "name"},
+		{Type: token.IDENT, Literal: "$name"},
 		{Type: token.COMMA, Literal: ","},
-		{Type: token.IDENT, Literal: "age"},
+		{Type: token.IDENT, Literal: "$age"},
 		{Type: token.RPAREN, Literal: ")"},
 		{Type: token.PUBLIC, Literal: "public"},
 		{Type: token.LBRACE, Literal: "{"},
@@ -222,12 +224,16 @@ INSERT into user (name, email) values ("name", "a@b.com");
 		{Type: token.IDENT, Literal: "name"},
 		{Type: token.COMMA, Literal: ","},
 		{Type: token.IDENT, Literal: "email"},
+		{Type: token.COMMA, Literal: ","},
+		{Type: token.IDENT, Literal: "wallet"},
 		{Type: token.RPAREN, Literal: ")"},
 		{Type: token.IDENT, Literal: "values"},
 		{Type: token.LPAREN, Literal: "("},
-		{Type: token.STRING, Literal: `"name"`},
+		{Type: token.IDENT, Literal: `$name`},
 		{Type: token.COMMA, Literal: ","},
 		{Type: token.STRING, Literal: `"a@b.com"`},
+		{Type: token.COMMA, Literal: ","},
+		{Type: token.IDENT, Literal: `@caller`},
 		{Type: token.RPAREN, Literal: ")"},
 		{Type: token.SEMICOLON, Literal: ";"},
 
@@ -243,10 +249,10 @@ INSERT into user (name, email) values ("name", "a@b.com");
 	for _, tt := range tests {
 		tok, lit, _ := s.Next()
 		if tok != tt.Type {
-			t.Errorf("Next() type wrong, Tok = %q, want %q", tok, tt.Type)
+			t.Errorf("Next() type wrong, Tok = %q(%v), want %q(%v)", tok, lit, tt.Type, tt.Literal)
 		}
 		if lit != tt.Literal {
-			t.Errorf("Next() literal wrong, Lit = %v, want %v", tok, tt.Literal)
+			t.Errorf("Next() literal wrong, Lit = %v, want %v", lit, tt.Literal)
 		}
 	}
 

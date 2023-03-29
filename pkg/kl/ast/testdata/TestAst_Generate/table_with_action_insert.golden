@@ -26,11 +26,11 @@
       "name": "create_user",
       "public": true,
       "inputs": [
-        "name",
-        "age"
+        "$name",
+        "$age"
       ],
       "statements": [
-        "insert into user( name , age ) values ( name , age )"
+        "insert into user( name , age ) values ( $name , $age )"
       ]
     }
   ]

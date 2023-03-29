@@ -161,22 +161,6 @@ func (x *IndexDef) stmtNode()   {}
 func (x *TableDecl) declNode()  {}
 func (x *ActionDecl) declNode() {}
 
-func (a *ActionDecl) BuildCtx() klType.ActionContext {
-	ctx := klType.ActionContext{}
-
-	for _, v := range a.Params {
-		switch pv := v.(type) {
-		case *Ident:
-			ctx[pv.Name] = nil
-		case *BasicLit:
-			ctx[pv.Value] = nil
-		case *SelectorExpr:
-			ctx[pv.String()] = nil
-		}
-	}
-	return ctx
-}
-
 func (a *ActionDecl) Validate(action string, ctx klType.DatabaseContext) error {
 	declaredParams := map[string]bool{}
 
@@ -184,6 +168,9 @@ func (a *ActionDecl) Validate(action string, ctx klType.DatabaseContext) error {
 		p, ok := param.(*Ident)
 		if !ok {
 			return errors.Wrap(ErrInvalidActionParam, param.String())
+		}
+		if _, ok := declaredParams[p.Name]; ok {
+			return errors.Wrap(ErrDuplicateActionParam, p.Name)
 		}
 		declaredParams[p.Name] = true
 	}
@@ -229,28 +216,6 @@ func (a *ActionDecl) Build() (def *models.Action) {
 	return
 }
 
-func (d *TableDecl) BuildCtx() klType.TableContext {
-	ctx := klType.TableContext{}
-
-	for _, column := range d.Body {
-		c, _ := column.(*ColumnDef)
-		ctx.Columns = append(ctx.Columns, c.Name.Name)
-
-		for _, attr := range c.Attrs {
-			if attr.Name.Name == "primary" {
-				ctx.PrimaryKeys = append(ctx.PrimaryKeys, c.Name.Name)
-			}
-		}
-	}
-
-	for _, index := range d.Idx {
-		i, _ := index.(*IndexDef)
-		ctx.Indexes = append(ctx.Indexes, i.Name.Name)
-	}
-
-	return ctx
-}
-
 func (d *TableDecl) Validate(ctx klType.TableContext) error {
 	tableName := d.Name.Name
 	if len(ctx.PrimaryKeys) > 1 {
@@ -258,7 +223,6 @@ func (d *TableDecl) Validate(ctx klType.TableContext) error {
 	}
 
 	names := map[string]bool{}
-
 	for _, name := range ctx.Columns {
 		if _, ok := names[name]; ok {
 			return errors.Wrap(ErrDuplicateColumnOrIndexName, fmt.Sprintf("%s.%s", tableName, name))

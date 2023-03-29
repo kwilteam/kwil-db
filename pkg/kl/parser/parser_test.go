@@ -89,10 +89,10 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		{
 			name: "table with action insert",
 			input: `database demo;
-                    table user{name text, age int, email text}
-                    action create_user(name, age) public {
-insert into user (name, age) values (name, age);
-insert into user (name, email) values ("test_name", "test_email@a.com");
+                    table user{name text, age int, wallet text}
+                    action create_user($name, $age) public {
+insert into user (name, age) values ($name, $age);
+insert into user (name, wallet) values ("test_name", @caller);
 }`,
 			wantDB: "demo",
 			wantTables: []models.Table{
@@ -101,18 +101,18 @@ insert into user (name, email) values ("test_name", "test_email@a.com");
 					Columns: []*models.Column{
 						{Name: "name", Type: types.TEXT, Attributes: []*models.Attribute{}},
 						{Name: "age", Type: types.INT, Attributes: []*models.Attribute{}},
-						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{}},
+						{Name: "wallet", Type: types.TEXT, Attributes: []*models.Attribute{}},
 					},
 				},
 			},
 			wantActions: []models.Action{
 				{
 					Name:   "create_user",
-					Inputs: []string{"name", "age"},
+					Inputs: []string{"$name", "$age"},
 					Public: true,
 					Statements: []string{
-						"insert into user (name, age) values (name, age)",
-						"insert into user (name, email) values (\"test_name\", 'test_email@a.com')"},
+						"insert into user (name, age) values ($name, $age)",
+						"insert into user (name, wallet) values (\"test_name\", @caller)"},
 				},
 			},
 		},
@@ -360,6 +360,11 @@ func TestParser_DatabaseDeclaration_errors(t *testing.T) {
 			name:      "referred column not found in index",
 			input:     `database test; table test {idx index(id)}`,
 			wantError: sql.ErrColumnNotFound,
+		},
+		{
+			name:      "duplicate action params",
+			input:     `database test; action a1(id, id){}`,
+			wantError: ast.ErrDuplicateActionParam,
 		},
 	}
 

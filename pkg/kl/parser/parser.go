@@ -87,7 +87,18 @@ func (p *parser) curTokIs(t token.Token) bool {
 }
 
 func (p *parser) errorExpected(pos token.Pos, msg string) {
-	msg = fmt.Sprintf("expected %s, got %s(%s)", msg, p.tok.String(), p.lit)
+	msg = "expected " + msg
+	if pos == p.pos {
+		// the error happened at the current position;
+		// make the error message more specific
+		switch {
+		case p.tok.IsLiteral():
+			// print 123 rather than 'INT', etc.
+			msg += ", found " + p.lit
+		default:
+			msg += ", found '" + p.tok.String() + "'"
+		}
+	}
 	p.error(pos, msg)
 }
 
@@ -160,7 +171,7 @@ func (p *parser) next() {
 	p.peekTok, p.peekLit, p.peekPos = p.scanner.Next()
 }
 
-func (p *parser) parseParameterList() (l []ast.Expr) {
+func (p *parser) parseParameterList(paramPrefixToken token.Token) (l []ast.Expr) {
 	if p.trace {
 		defer un(trace("parseParameterList"))
 	}
@@ -168,10 +179,10 @@ func (p *parser) parseParameterList() (l []ast.Expr) {
 	p.expect(token.LPAREN)
 
 	if !p.curTokIs(token.RPAREN) {
-		l = append(l, p.parseParameter())
+		l = append(l, p.parseParameter(paramPrefixToken))
 		for p.curTokIs(token.COMMA) {
 			p.next()
-			l = append(l, p.parseParameter())
+			l = append(l, p.parseParameter(paramPrefixToken))
 		}
 	}
 
@@ -179,14 +190,23 @@ func (p *parser) parseParameterList() (l []ast.Expr) {
 	return l
 }
 
-func (p *parser) parseParameter() (param ast.Expr) {
+func (p *parser) parseParameter(prefixToken token.Token) (param ast.Expr) {
 	if p.trace {
 		defer un(trace("parseParameter"))
 	}
 
+	expectPrefix := prefixToken != token.ILLEGAL
+
 	switch p.tok {
 	case token.IDENT:
+		pos := p.pos
 		name := p.parseIdent()
+		if expectPrefix {
+			if !strings.Contains(name.Name, prefixToken.String()) {
+				p.errorExpected(pos, fmt.Sprintf("%s prefix", prefixToken.String()))
+			}
+		}
+
 		if p.curTokIs(token.PERIOD) {
 			p.next()
 			selector := p.parseIdent()
@@ -215,7 +235,7 @@ func (p *parser) parseColumnAttr() *ast.AttrDef {
 		p.next()
 		p.expect(token.LPAREN)
 		if !p.curTokIs(token.RPAREN) {
-			attr.Param = p.parseParameter()
+			attr.Param = p.parseParameter(token.ILLEGAL)
 		}
 		p.expect(token.RPAREN)
 	default:
@@ -278,7 +298,7 @@ func (p *parser) parserIndexDef(unique bool) *ast.IndexDef {
 		p.expect(token.INDEX)
 	}
 
-	indexColumns := p.parseParameterList()
+	indexColumns := p.parseParameterList(token.ILLEGAL)
 
 	if p.curTokIs(token.COMMA) {
 		p.next()
@@ -365,7 +385,7 @@ func (p *parser) parseActionDeclaration() *ast.ActionDecl {
 
 	act := &ast.ActionDecl{}
 	act.Name = p.parseIdent()
-	act.Params = p.parseParameterList()
+	act.Params = p.parseParameterList(token.DOLLAR)
 
 	if p.curTokIs(token.PUBLIC) || p.curTokIs(token.PRIVATE) {
 		act.Public = p.tok == token.PUBLIC

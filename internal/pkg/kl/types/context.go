@@ -3,8 +3,8 @@ package types
 type ActionContext map[string]any
 type TableContext struct {
 	Columns      []string
-	Indexes      []string
-	IndexColumns []string
+	Indexes      []string // index names
+	IndexColumns []string // columns(parameters) of index, corresponding to index name
 	PrimaryKeys  []string
 }
 

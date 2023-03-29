@@ -54,7 +54,7 @@ func TestAst_Generate(t *testing.T) {
 			name: "table with action insert",
 			input: `database demo;
                         table user{name text, age int, email text}
-                        action create_user(name, age) public {insert into user(name, age) values (name, age)}`,
+                        action create_user($name, $age) public {insert into user(name, age) values ($name, $age)}`,
 		},
 	}
 

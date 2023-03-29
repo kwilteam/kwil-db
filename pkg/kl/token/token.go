@@ -73,6 +73,8 @@ const (
 	COMMA     // ,
 	PERIOD    // .
 	SEMICOLON // ;
+	DOLLAR    // $
+	AT		// @
 	//COLON     // :
 	symbolEnd
 )
@@ -132,6 +134,8 @@ var tokens = [...]string{
 	COMMA:     ",",
 	PERIOD:    ".",
 	SEMICOLON: ";",
+	DOLLAR:    "$",
+	AT:        "@",
 	//COLON:     ":",
 }
 

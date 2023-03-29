@@ -8,6 +8,7 @@ var (
 	ErrDuplicateTableName         = errors.New("duplicate table")
 	ErrDuplicateActionName        = errors.New("duplicate action")
 	ErrInvalidActionParam         = errors.New("invalid action param")
+	ErrDuplicateActionParam       = errors.New("duplicate action param")
 	ErrInvalidColumnName          = errors.New("invalid column name")
 	ErrInvalidStatement           = errors.New("invalid statement")
 )

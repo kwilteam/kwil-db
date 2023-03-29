@@ -235,16 +235,6 @@ func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
 	case '=':
 		lit = "="
 		tok = token.ASSIGN
-	//s.nextChar()
-	//if s.ch == '=' {
-	//	lit = "=="
-	//	tok = token.EQL
-	//} else {
-	//	lit = "="
-	//	tok = token.ASSIGN
-	//	//return
-	//}
-
 	case '!':
 		s.nextChar()
 		if s.ch == '=' {
@@ -276,6 +266,20 @@ func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
 	case ';':
 		lit = ";"
 		tok = token.SEMICOLON
+	case '@':
+		// treat @xx as identifier
+		s.nextChar()
+		lit = s.scanIdentifier()
+		lit = "@" + lit
+		tok = token.Lookup(lit)
+		return
+	case '$':
+		// treat $xx as identifier
+		s.nextChar()
+		lit = s.scanIdentifier()
+		lit = "$" + lit
+		tok = token.Lookup(lit)
+		return
 	case '"':
 		tok = token.STRING
 		lit = s.scanString('"')
