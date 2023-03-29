@@ -550,17 +550,17 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 			tok := ctx.GetStart()
 			param := tok.GetText()
 			paramPrefix := param[:1]
+			paramName := param[1:]
 			switch paramPrefix {
 			case BindParameterPrefix:
 				// refer to action parameter
-				//p := strings.ReplaceAll(v.GetText(), "$", "")
-				p := v.GetText()
+				p := param
 				if _, ok := tl.actionCtx[p]; !ok {
 					tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrBindParameterNotFound, p))
 				}
 			case ModifierPrefix:
 				// refer to modifier
-				p := strings.ReplaceAll(v.GetText(), "@", "")
+				p := paramName
 				if _, ok := Modifiers[Modifier(p)]; !ok {
 					tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrModifierNotSupported, p))
 				}
