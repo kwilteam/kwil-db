@@ -2,4 +2,4 @@
 
 build:
 	@echo "Building wasm..."
-	@GOOS=js GOARCH=wasm go build -o kl.wasm -ldflags "-s -w" main.go
+	@GOOS=js GOARCH=wasm go build -o kl.wasm -ldflags "-s -w" -trimpath -tags netgowasm.go

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/scanner"
-	"kwil/pkg/kl/sql"
 	"kwil/pkg/kl/token"
 	"strings"
 )
@@ -59,6 +58,7 @@ func Parse(src []byte, opts ...Opt) (a *ast.Database, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("panic: %v", e)
+			p.errors.Add(p.file.Position(p.pos), err.Error())
 		}
 
 		err = p.errors.Err()
@@ -87,7 +87,18 @@ func (p *parser) curTokIs(t token.Token) bool {
 }
 
 func (p *parser) errorExpected(pos token.Pos, msg string) {
-	msg = fmt.Sprintf("expected %s, got %s(%s)", msg, p.tok.String(), p.lit)
+	msg = "expected " + msg
+	if pos == p.pos {
+		// the error happened at the current position;
+		// make the error message more specific
+		switch {
+		case p.tok.IsLiteral():
+			// print 123 rather than 'INT', etc.
+			msg += ", found " + p.lit
+		default:
+			msg += ", found '" + p.tok.String() + "'"
+		}
+	}
 	p.error(pos, msg)
 }
 
@@ -160,31 +171,42 @@ func (p *parser) next() {
 	p.peekTok, p.peekLit, p.peekPos = p.scanner.Next()
 }
 
-func (p *parser) parseParameterList() (l []ast.Expr) {
+func (p *parser) parseParameterList(paramPrefixToken token.Token) (l []ast.Expr) {
 	if p.trace {
 		defer un(trace("parseParameterList"))
 	}
 
 	p.expect(token.LPAREN)
 
-	l = append(l, p.parseParameter())
-	for p.curTokIs(token.COMMA) {
-		p.next()
-		l = append(l, p.parseParameter())
+	if !p.curTokIs(token.RPAREN) {
+		l = append(l, p.parseParameter(paramPrefixToken))
+		for p.curTokIs(token.COMMA) {
+			p.next()
+			l = append(l, p.parseParameter(paramPrefixToken))
+		}
 	}
 
 	p.expect(token.RPAREN)
 	return l
 }
 
-func (p *parser) parseParameter() (param ast.Expr) {
+func (p *parser) parseParameter(prefixToken token.Token) (param ast.Expr) {
 	if p.trace {
 		defer un(trace("parseParameter"))
 	}
 
+	expectPrefix := prefixToken != token.ILLEGAL
+
 	switch p.tok {
 	case token.IDENT:
+		pos := p.pos
 		name := p.parseIdent()
+		if expectPrefix {
+			if !strings.Contains(name.Name, prefixToken.String()) {
+				p.errorExpected(pos, fmt.Sprintf("%s prefix", prefixToken.String()))
+			}
+		}
+
 		if p.curTokIs(token.PERIOD) {
 			p.next()
 			selector := p.parseIdent()
@@ -194,6 +216,8 @@ func (p *parser) parseParameter() (param ast.Expr) {
 		}
 	case token.INTEGER, token.STRING:
 		param = p.parseBasicLit()
+		//default:
+		//	p.errorExpected(p.pos, "parameter")
 	}
 
 	return
@@ -206,12 +230,12 @@ func (p *parser) parseColumnAttr() *ast.AttrDef {
 
 	attr := &ast.AttrDef{Name: &ast.Ident{Name: p.lit}, Type: p.tok}
 	switch p.tok {
-	case token.MIN, token.MAX, token.MINLEN, token.MAXLEN:
+	case token.MIN, token.MAX, token.MINLEN, token.MAXLEN, token.DEFAULT:
 		// attribute with parameters
 		p.next()
 		p.expect(token.LPAREN)
 		if !p.curTokIs(token.RPAREN) {
-			attr.Param = p.parseParameter()
+			attr.Param = p.parseParameter(token.ILLEGAL)
 		}
 		p.expect(token.RPAREN)
 	default:
@@ -274,7 +298,7 @@ func (p *parser) parserIndexDef(unique bool) *ast.IndexDef {
 		p.expect(token.INDEX)
 	}
 
-	indexColumns := p.parseParameterList()
+	indexColumns := p.parseParameterList(token.ILLEGAL)
 
 	if p.curTokIs(token.COMMA) {
 		p.next()
@@ -361,7 +385,7 @@ func (p *parser) parseActionDeclaration() *ast.ActionDecl {
 
 	act := &ast.ActionDecl{}
 	act.Name = p.parseIdent()
-	act.Params = p.parseParameterList()
+	act.Params = p.parseParameterList(token.DOLLAR)
 
 	if p.curTokIs(token.PUBLIC) || p.curTokIs(token.PRIVATE) {
 		act.Public = p.tok == token.PUBLIC
@@ -372,31 +396,6 @@ func (p *parser) parseActionDeclaration() *ast.ActionDecl {
 
 	return act
 }
-
-//func (p *parser) parseInsertStatement() *ast.InsertStmt {
-//	if p.trace {
-//		defer un(trace("parseInsertStatement"))
-//	}
-//
-//	p.expect(token.INSERT)
-//	p.expect(token.INTO)
-//
-//	stmt := &ast.InsertStmt{}
-//	stmt.Table = p.parseIdent()
-//
-//	// optional column list
-//	if !p.curTokIs(token.VALUES) {
-//		stmt.Columns = p.parseParameterList()
-//	}
-//
-//	p.expect(token.VALUES)
-//
-//	stmt.Values = p.parseParameterList()
-//	if p.curTokIs(token.COMMA) {
-//		p.next()
-//	}
-//	return stmt
-//}
 
 // parseSQLStatement parses a whole SQL statement as a string.
 func (p *parser) parseSQLStatement() *ast.SQLStmt {
@@ -443,16 +442,10 @@ func (p *parser) parseStatement() ast.Stmt {
 	}
 
 	pos := p.pos
-	fp := p.file.Position(pos)
 
 	switch p.tok {
 	case token.INSERT, token.WITH, token.REPLACE, token.SELECT, token.UPDATE, token.DROP, token.DELETE:
-		s := p.parseSQLStatement()
-		if err := sql.ParseRawSQL(s.SQL, int(fp.Line), false); err != nil {
-			p.errorExpected(pos, fmt.Sprintf("valid sql statement(%s)", err))
-			return s
-		}
-		return s
+		return p.parseSQLStatement()
 	default:
 		p.errorExpected(pos, fmt.Sprintf("unknown statement, token: %s, literal: %s\n", p.tok, p.lit))
 		p.next()
@@ -548,6 +541,10 @@ func (p *parser) parse() *ast.Database {
 
 	for !p.curTokIs(token.EOF) {
 		db.Decls = append(db.Decls, p.parseDeclaration())
+	}
+
+	if err := db.Validate(); err != nil {
+		p.errorExpected(p.pos, err.Error())
 	}
 
 	return db

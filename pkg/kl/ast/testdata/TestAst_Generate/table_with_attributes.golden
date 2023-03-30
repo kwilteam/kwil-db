@@ -7,10 +7,10 @@
       "columns": [
         {
           "name": "username",
-          "type": 100,
+          "type": 102,
           "attributes": [
             {
-              "type": 100,
+              "type": 103,
               "value": null
             }
           ]
@@ -20,25 +20,25 @@
           "type": 103,
           "attributes": [
             {
-              "type": 100,
+              "type": 105,
               "value": "MTg="
             },
             {
-              "type": 100,
+              "type": 106,
               "value": "MzA="
             }
           ]
         },
         {
           "name": "email",
-          "type": 100,
+          "type": 102,
           "attributes": [
             {
-              "type": 100,
+              "type": 108,
               "value": "NTA="
             },
             {
-              "type": 100,
+              "type": 107,
               "value": "MTA="
             }
           ]

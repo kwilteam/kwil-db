@@ -6,6 +6,7 @@ import (
 	"kwil/pkg/engine/types"
 	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/parser"
+	"kwil/pkg/kl/sql"
 	"strings"
 	"testing"
 )
@@ -47,8 +48,8 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 			},
 		},
 		{
-			name:   "table with one column and attributes(with parameters)",
-			input:  `database demo; table user{age int min(18) max(30), email text maxlen(50) minlen(10)}`,
+			name:   "table with columns and attributes(with parameters)",
+			input:  `database demo; table user{age int min(18) max(30), email text maxlen(50) minlen(10), country text default("mars"), status int default(0) }`,
 			wantDB: "demo",
 			wantTables: []models.Table{
 				{
@@ -58,6 +59,10 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 							{Type: types.MIN, Value: []byte("18")}, {Type: types.MAX, Value: []byte("30")}}},
 						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{
 							{Type: types.MAX_LENGTH, Value: []byte("50")}, {Type: types.MIN_LENGTH, Value: []byte("10")}}},
+						{Name: "country", Type: types.TEXT, Attributes: []*models.Attribute{
+							{Type: types.DEFAULT, Value: []byte(`"mars"`)}}},
+						{Name: "status", Type: types.INT, Attributes: []*models.Attribute{
+							{Type: types.DEFAULT, Value: []byte("0")}}},
 					},
 				},
 			},
@@ -84,10 +89,10 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		{
 			name: "table with action insert",
 			input: `database demo;
-                    table user{name text, age int, email text}
-                    action create_user(name, age) public {
-insert into user (name, age) values (name, age);
-insert into user (name, email) values ("test_name", "test_email@a.com");
+                    table user{name text, age int, wallet text}
+                    action create_user($name, $age) public {
+insert into user (name, age) values ($name, $age);
+insert into user (name, wallet) values ("test_name", @caller);
 }`,
 			wantDB: "demo",
 			wantTables: []models.Table{
@@ -96,18 +101,18 @@ insert into user (name, email) values ("test_name", "test_email@a.com");
 					Columns: []*models.Column{
 						{Name: "name", Type: types.TEXT, Attributes: []*models.Attribute{}},
 						{Name: "age", Type: types.INT, Attributes: []*models.Attribute{}},
-						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{}},
+						{Name: "wallet", Type: types.TEXT, Attributes: []*models.Attribute{}},
 					},
 				},
 			},
 			wantActions: []models.Action{
 				{
 					Name:   "create_user",
-					Inputs: []string{"name", "age"},
+					Inputs: []string{"$name", "$age"},
 					Public: true,
 					Statements: []string{
-						"insert into user (name, age) values (name, age)",
-						"insert into user (name, email) values (\"test_name\", 'test_email@a.com')"},
+						"insert into user (name, age) values ($name, $age)",
+						"insert into user (name, wallet) values (\"test_name\", @caller)"},
 				},
 			},
 		},
@@ -313,4 +318,66 @@ func testActionDeclaration(t *testing.T, d ast.Decl, want *models.Action) bool {
 	}
 
 	return true
+}
+
+func TestParser_DatabaseDeclaration_errors(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantError error
+	}{
+		{
+			name:      "duplicate table",
+			input:     `database test; table t1{} table t1{}`,
+			wantError: ast.ErrDuplicateTableName,
+		},
+		{
+			name:      "duplicate action",
+			input:     `database test; action a1(){} action a1(){}`,
+			wantError: ast.ErrDuplicateActionName,
+		},
+		{
+			name:      "multi primary key",
+			input:     "database test; table test { id int primary, age int primary}",
+			wantError: ast.ErrMultiplePrimaryKeys,
+		},
+		{
+			name:      "duplicate column",
+			input:     `database test; table test {id int, id int}`,
+			wantError: ast.ErrDuplicateColumnOrIndexName,
+		},
+		{
+			name:      "duplicate index",
+			input:     `database test; table test {id int, id index(id)}`,
+			wantError: ast.ErrDuplicateColumnOrIndexName,
+		},
+		{
+			name:      "referred table not found",
+			input:     `database test; action a1() {insert into t1(id) values(1)}`,
+			wantError: sql.ErrTableNotFound,
+		},
+		{
+			name:      "referred column not found in index",
+			input:     `database test; table test {idx index(id)}`,
+			wantError: sql.ErrColumnNotFound,
+		},
+		{
+			name:      "duplicate action params",
+			input:     `database test; action a1(id, id){}`,
+			wantError: ast.ErrDuplicateActionParam,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parser.Parse([]byte(tt.input), parser.WithTraceOff())
+			if err == nil {
+				t.Errorf("Parse() expect error: %s, got nil", tt.wantError)
+			}
+
+			if !strings.Contains(err.Error(), tt.wantError.Error()) {
+				t.Errorf("Parse() expect error: %s, got: %s", tt.wantError, err)
+			}
+		})
+	}
 }

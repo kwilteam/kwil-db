@@ -1,25 +1,121 @@
 
-## statement
+## syntax
+```
+database <NAME>;
 
-A line of code that performs an action or sets a value.
+table <NAME> {<COLUMN list>}
+table ...
 
-* database statement
-* table statement
-* column definition
-* attribute definition
+action <NAME> (<PARAMETER list>) { <raw SQLite sql> }
+action ...
+```
 
-[//]: # (* action literal)
+### name
 
-## expression
+valid letters, starting with a letter:
+* `a-z`
+* `A-Z`
+* `0-9`
+* `_`
 
-* identifier
-* integer
-* boolean
+### column
 
+`<NAME> <COLUMN TYPE> <ATTRIBUTE list>`
+or
+`<NAME> <INDEX TYPE>(COLUMN NAME, ...)`
 
-## declaration
+#### column type
 
-A statement that declares the existence of a variable, function, type, or package
+* `int`
+* `text`
 
-* `action <name> (<parameter list>) { <statement list> } <parameter list>`
-* `<type> <expression>;`
+#### attribute
+
+* `primary`
+* `notnull`
+* `max(NUMBER)`
+* `min(NUMBER)`
+* `maxlen(NUMBER)`
+* `minlen(NUMBER)`
+* `default(NUMBER|STRING)`
+
+#### index type
+
+* `unique`
+* `index`
+
+### raw SQLite sql
+
+#### bind parameter
+
+* `$VVV` for action parameter
+* `@VVV` for blockchain modifier
+* * `@caller` for caller address
+* * `@block_height` for block height
+
+below is a list of keywords/functions/combinations that are not allowed in raw SQLite sql:
+
+#### statements
+
+* `CREATE` statement
+* `DROP` statement
+
+#### functions
+
+* `date` with time-value `'now'`
+* `datetime` with time-value `'now'`
+* `time` with time-value `'now'`
+* `julianday` with time-value `'now'`
+* `unixepoch` with time-value `'now'`
+* `strftime` with time-value `'now'`
+* `random`
+* `randomblob`
+* `changes`
+* `last_insert_rowid`
+* `total_changes`
+* `acos`
+* `acosh`
+* `asin`
+* `asinh`
+* `atan`
+* `atan2`
+* `atanh`
+* `ceil`
+* `ceiling`
+* `cos`
+* `cosh`
+* `degrees`
+* `exp`
+* `floor`
+* `ln`
+* `log`
+* `log`
+* `log10`
+* `log2`
+* `mod`
+* `pi`
+* `pow`
+* `power`
+* `radians`
+* `sin`
+* `sinh`
+* `sqrt`
+* `tan`
+* `tanh`
+* `trunc`
+
+#### keywords
+
+* `current_time`
+* `current_date`
+* `current_timestamp`
+
+#### joins
+
+* `cross join`
+* `natural join`
+* cartesian join
+  * `select * from a, b`
+  * `select * from a join b on TRUE`
+
+NOTE: `join on` only support one constraint and the operator must be `=`

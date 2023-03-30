@@ -7,15 +7,15 @@
       "columns": [
         {
           "name": "name",
-          "type": 100
+          "type": 102
         },
         {
           "name": "age",
-          "type": 100
+          "type": 103
         },
         {
           "name": "email",
-          "type": 100
+          "type": 102
         }
       ],
       "indexes": []
@@ -26,11 +26,11 @@
       "name": "create_user",
       "public": true,
       "inputs": [
-        "name",
-        "age"
+        "$name",
+        "$age"
       ],
       "statements": [
-        "insert into user( name , age ) values ( name , age )"
+        "insert into user( name , age ) values ( $name , $age )"
       ]
     }
   ]
