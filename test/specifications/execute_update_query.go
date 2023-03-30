@@ -27,7 +27,11 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 		Degen:    true,
 	}
 	qualifiedUserTableName := fmt.Sprintf("%s_%s", dbID, userTableName)
-	userQueryInput := []string{"username", userQ.UserName, "age", fmt.Sprintf("%d", userQ.Age), "where_username", userQ.UserName}
+	userQueryInput := []map[string]any{
+		{"username": userQ.UserName},
+		{"age": userQ.Age},
+		{"where_id": userQ.ID},
+	}
 
 	// When i execute query to database
 	err := execute.ExecuteQuery(ctx, db.Name, userQueryName, userQueryInput)

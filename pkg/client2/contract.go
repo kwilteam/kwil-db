@@ -15,7 +15,7 @@ func (c *Client) ApproveDeposit(ctx context.Context, amount *big.Int) (string, e
 		}
 	}
 
-	res, err := c.tokenContract.Approve(ctx, c.poolAddress, amount, c.PrivateKey)
+	res, err := c.tokenContract.Approve(ctx, c.PoolAddress, amount, c.PrivateKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to approve deposit: %w", err)
 	}
@@ -32,7 +32,7 @@ func (c *Client) Deposit(ctx context.Context, amount *big.Int) (string, error) {
 	}
 
 	res, err := c.poolContract.Deposit(ctx, &types.DepositParams{
-		Validator: c.providerAddress,
+		Validator: c.ProviderAddress,
 		Amount:    amount,
 	}, c.PrivateKey)
 	if err != nil {
@@ -55,7 +55,7 @@ func (c *Client) GetApprovedAmount(ctx context.Context) (*big.Int, error) {
 		return nil, fmt.Errorf("failed to get address: %w", err)
 	}
 
-	return c.tokenContract.Allowance(address, c.poolAddress)
+	return c.tokenContract.Allowance(address, c.PoolAddress)
 }
 
 func (c *Client) GetBalance(ctx context.Context) (*big.Int, error) {
@@ -72,4 +72,28 @@ func (c *Client) GetBalance(ctx context.Context) (*big.Int, error) {
 	}
 
 	return c.tokenContract.BalanceOf(address)
+}
+
+func (c *Client) GetDepositBalance(ctx context.Context) (*big.Int, error) {
+	if c.poolContract == nil {
+		err := c.initPoolContract(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to init pool contract: %w", err)
+		}
+	}
+
+	address, err := c.getAddress()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get address: %w", err)
+	}
+
+	res, err := c.poolContract.Balance(ctx, &types.DepositBalanceParams{
+		Validator: c.ProviderAddress,
+		Address:   address,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deposit balance: %w", err)
+	}
+
+	return res.Balance, nil
 }

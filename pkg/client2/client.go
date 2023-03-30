@@ -20,8 +20,8 @@ type Client struct {
 	datasets        map[string]*models.Dataset
 	PrivateKey      *ecdsa.PrivateKey
 	chainCode       chainCodes.ChainCode
-	providerAddress string
-	poolAddress     string
+	ProviderAddress string
+	PoolAddress     string
 	usingProvider   bool
 	chainRpcUrl     string
 	chainClient     cc.ChainClient
@@ -35,8 +35,8 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (*Client, error)
 	c := &Client{
 		datasets:        make(map[string]*models.Dataset),
 		chainCode:       chainCodes.ETHEREUM,
-		providerAddress: "",
-		poolAddress:     "",
+		ProviderAddress: "",
+		PoolAddress:     "",
 		usingProvider:   true,
 		chainRpcUrl:     "",
 	}
@@ -66,8 +66,8 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (*Client, error)
 	if err != nil {
 		return nil, err
 	}
-	c.providerAddress = config.ProviderAddress
-	c.poolAddress = config.PoolAddress
+	c.ProviderAddress = config.ProviderAddress
+	c.PoolAddress = config.PoolAddress
 	c.chainCode = chainCodes.ChainCode(config.ChainCode)
 
 	// re-apply opts to override provider config
@@ -118,12 +118,12 @@ func (c *Client) initPoolContract(ctx context.Context) error {
 	if c.chainClient == nil {
 		return fmt.Errorf("chain client is not initialized")
 	}
-	if c.poolAddress == "" {
+	if c.PoolAddress == "" {
 		return fmt.Errorf("pool address is not set")
 	}
 
 	var err error
-	c.poolContract, err = c.chainClient.Contracts().Escrow(c.poolAddress)
+	c.poolContract, err = c.chainClient.Contracts().Escrow(c.PoolAddress)
 	if err != nil {
 		return fmt.Errorf("failed to create escrow contract: %w", err)
 	}
@@ -149,8 +149,8 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*models.Dataset, e
 	return ds, nil
 }
 
-// DeploySchema deploys a schema
-func (c *Client) DeploySchema(ctx context.Context, ds *models.Dataset) (*kTx.Receipt, error) {
+// DeployDatabase deploys a schema
+func (c *Client) DeployDatabase(ctx context.Context, ds *models.Dataset) (*kTx.Receipt, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)

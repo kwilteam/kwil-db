@@ -21,13 +21,13 @@ func WithChainCode(chainCode int32) ClientOpt {
 
 func WithProviderAddress(address string) ClientOpt {
 	return func(c *Client) {
-		c.providerAddress = address
+		c.ProviderAddress = address
 	}
 }
 
 func WithPoolAddress(address string) ClientOpt {
 	return func(c *Client) {
-		c.poolAddress = address
+		c.PoolAddress = address
 	}
 }
 

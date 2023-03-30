@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"kwil/internal/pkg/graphql/query"
-	"kwil/pkg/databases"
+	"kwil/pkg/engine/models"
 	grpc "kwil/pkg/grpc/client/v1"
 	"kwil/pkg/log"
 	big2 "kwil/pkg/utils/numbers/big"
@@ -93,12 +93,6 @@ func (d *KwilCliDriver) GetServiceConfig(ctx context.Context) (svcCfg grpc.SvcCo
 		if strings.Contains(line, "ProviderAddress:") {
 			svcCfg.ProviderAddress = strings.TrimSpace(strings.Split(line, ":")[1])
 		}
-		if strings.Contains(line, "RpcUrl:") {
-			svcCfg.RpcUrl = strings.TrimSpace(strings.Split(line, ":")[1])
-		}
-		if strings.Contains(line, "GraphqlUrl:") {
-			svcCfg.Gateway.GraphqlUrl = strings.TrimSpace(strings.Split(line, ":")[1])
-		}
 	}
 
 	return
@@ -130,7 +124,7 @@ func (d *KwilCliDriver) GetDepositBalance(ctx context.Context) (*big.Int, error)
 	return nil, nil
 }
 
-func (d *KwilCliDriver) ApproveToken(ctx context.Context, spender string, amount *big.Int) error {
+func (d *KwilCliDriver) ApproveToken(ctx context.Context, amount *big.Int) error {
 	// approve cmd will get spender address
 	cmd := d.newCmd("fund", "approve", amount.String(), "-y")
 	err := MustRun(cmd)
@@ -140,8 +134,8 @@ func (d *KwilCliDriver) ApproveToken(ctx context.Context, spender string, amount
 	return nil
 }
 
-func (d *KwilCliDriver) GetAllowance(ctx context.Context, from string, spender string) (*big.Int, error) {
-	cmd := d.newCmd("fund", "balances", "--address", from)
+func (d *KwilCliDriver) GetAllowance(ctx context.Context) (*big.Int, error) {
+	cmd := d.newCmd("fund", "balances")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get allowance: %w", err)
@@ -157,7 +151,7 @@ func (d *KwilCliDriver) GetAllowance(ctx context.Context, from string, spender s
 	return nil, nil
 }
 
-func (d *KwilCliDriver) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) error {
+func (d *KwilCliDriver) DeployDatabase(ctx context.Context, db *models.Dataset) error {
 	schemaFile := path.Join(os.TempDir(), fmt.Sprintf("schema-%s.json", time.Now().Format("20060102150405")))
 
 	dbByte, err := json.Marshal(db)

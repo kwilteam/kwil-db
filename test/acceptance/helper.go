@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/cmd/kwil-cli/app"
+
+	//"kwil/cmd/kwil-cli/app"
 	"kwil/internal/app/kwild"
 	"kwil/pkg/chain/types"
 	client "kwil/pkg/client2"
-	"kwil/pkg/databases"
+	"kwil/pkg/engine/models"
 	"kwil/pkg/log"
 	"kwil/test/acceptance/adapters"
 	"kwil/test/acceptance/utils/deployer"
@@ -16,7 +17,6 @@ import (
 	"kwil/test/specifications"
 	"math/big"
 	"os"
-	"path"
 	"runtime"
 	"testing"
 	"time"
@@ -218,13 +218,14 @@ func setSchemaLoader(cfg TestEnvCfg) {
 	specifications.SetSchemaLoader(
 		&specifications.FileDatabaseSchemaLoader{
 			FilePath: cfg.DBSchemaPath,
-			Modifier: func(db *databases.Database[[]byte]) {
+			Modifier: func(db *models.Dataset) {
 				db.Owner = cfg.UserAddr
 				// NOTE: this is a hack to make sure the db name is temporary unique
 				db.Name = fmt.Sprintf("%s_%s", db.Name, time.Now().Format("20160102"))
 			}})
 }
 
+/*
 func setupCliDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger) (KwilACTDriver, deployer.Deployer) {
 	setSchemaLoader(cfg)
 
@@ -241,7 +242,7 @@ func setupCliDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger lo
 	t.Logf("create cli driver to %s", updatedCfg.NodeAddr)
 	cliDriver := app.NewKwilCliDriver(binPath, updatedCfg.NodeAddr, updatedCfg.GatewayAddr, updatedCfg.ChainRPCURL, updatedCfg.UserPkStr, cfg.UserAddr, logger)
 	return cliDriver, chainDeployer
-}
+}*/
 
 func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger) (KwilACTDriver, deployer.Deployer) {
 	setSchemaLoader(cfg)
@@ -265,8 +266,8 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 
 func GetDriver(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger) (KwilACTDriver, deployer.Deployer) {
 	switch driverType {
-	case "cli":
-		return setupCliDriver(ctx, t, cfg, logger)
+	//case "cli":
+	//	return setupCliDriver(ctx, t, cfg, logger)
 	case "grpc":
 		return setupGrpcDriver(ctx, t, cfg, logger)
 	default:

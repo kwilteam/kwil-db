@@ -2,14 +2,15 @@ package specifications
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"kwil/pkg/databases"
+	"kwil/pkg/engine/models"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // DatabaseDeployDsl is dsl for database deployment specification
 type DatabaseDeployDsl interface {
-	DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) error
+	DeployDatabase(ctx context.Context, db *models.Dataset) error
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 

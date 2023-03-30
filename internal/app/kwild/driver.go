@@ -5,9 +5,9 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"kwil/internal/pkg/graphql/query"
-	escrowTypes "kwil/pkg/chain/contracts/escrow/types"
 	client "kwil/pkg/client2"
 	"kwil/pkg/databases"
+	"kwil/pkg/engine/models"
 	grpc "kwil/pkg/grpc/client/v1"
 	"kwil/pkg/log"
 	"math/big"
@@ -39,20 +39,12 @@ func (d *KwildDriver) GetUserAddress() string {
 	return ec.PubkeyToAddress(d.pk.PublicKey).Hex()
 }
 
-func (d *KwildDriver) GetServiceConfig(ctx context.Context) (grpc.SvcConfig, error) {
+func (d *KwildDriver) GetServiceConfig(ctx context.Context) (*grpc.SvcConfig, error) {
 	return d.clt.GetConfig(ctx)
 }
 
 func (d *KwildDriver) DepositFund(ctx context.Context, amount *big.Int) error {
-	escrow, err := d.clt.EscrowContract(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get escrow contract: %w", err)
-	}
-
-	_, err = escrow.Deposit(ctx, &escrowTypes.DepositParams{
-		Amount:    amount,
-		Validator: d.clt.ProviderAddress,
-	}, d.pk)
+	_, err := d.clt.Deposit(ctx, amount)
 	if err != nil {
 		return fmt.Errorf("failed to send deposit transaction: %w", err)
 	}
@@ -63,61 +55,46 @@ func (d *KwildDriver) DepositFund(ctx context.Context, amount *big.Int) error {
 }
 
 func (d *KwildDriver) GetDepositBalance(ctx context.Context) (*big.Int, error) {
-	escrowCtr, err := d.clt.EscrowContract(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get escrow contract: %w", err)
-	}
-
-	balanceRes, err := escrowCtr.Balance(ctx, &escrowTypes.DepositBalanceParams{
-		Validator: d.clt.ProviderAddress,
-		Address:   d.GetUserAddress(),
-	})
+	bal, err := d.clt.GetDepositBalance(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return balanceRes.Balance, nil
+	return bal, nil
 }
 
-func (d *KwildDriver) ApproveToken(ctx context.Context, spender string, amount *big.Int) error {
-	tokenCtr, err := d.clt.TokenContract(ctx)
-	if err != nil {
-		return err
-	}
-
-	_, err = tokenCtr.Approve(ctx, d.clt.EscrowContractAddress, amount, d.pk)
+func (d *KwildDriver) ApproveToken(ctx context.Context, amount *big.Int) error {
+	_, err := d.clt.ApproveDeposit(ctx, amount)
 	if err != nil {
 		return err
 	}
 	d.logger.Debug("approve token", zap.String("from", ec.PubkeyToAddress(d.pk.PublicKey).Hex()),
-		zap.String("spender", d.clt.EscrowContractAddress), zap.String("amount", amount.String()))
+		zap.String("spender", d.clt.PoolAddress), zap.String("amount", amount.String()))
 	return nil
 }
 
-func (d *KwildDriver) GetAllowance(ctx context.Context, from string, spender string) (*big.Int, error) {
-	tokenCtr, err := d.clt.TokenContract(ctx)
+func (d *KwildDriver) GetAllowance(ctx context.Context) (*big.Int, error) {
+	amount, err := d.clt.GetApprovedAmount(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error getting token contract: %w", err)
+		return nil, err
 	}
 
-	allowance, err := tokenCtr.Allowance(d.GetUserAddress(), d.clt.EscrowContractAddress)
-	if err != nil {
-		return nil, fmt.Errorf("error getting allowance: %w", err)
-	}
-
-	return allowance, nil
+	return amount, nil
 }
 
-func (d *KwildDriver) DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) error {
-	_, err := d.clt.DeployDatabase(ctx, db, d.pk)
+func (d *KwildDriver) DeployDatabase(ctx context.Context, db *models.Dataset) error {
+	_, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {
 		return fmt.Errorf("error deploying database: %w", err)
 	}
+
 	d.logger.Debug("deploy database", zap.String("name", db.Name), zap.String("owner", db.Owner))
 	return nil
 }
 
 func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
-	schema, err := d.clt.GetSchema(ctx, owner, dbName)
+	dbid := models.GenerateSchemaId(owner, dbName)
+
+	schema, err := d.clt.GetSchema(ctx, dbid)
 	if err != nil {
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
@@ -128,25 +105,11 @@ func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, db
 	return fmt.Errorf("database does not exist")
 }
 
-func (d *KwildDriver) ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []string) error {
-	dbId := databases.GenerateSchemaId(d.GetUserAddress(), dbName)
-	qry, err := d.clt.GetQuerySignature(ctx, dbId, queryName)
+func (d *KwildDriver) ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []map[string]any) error {
+	dbid := databases.GenerateSchemaId(d.GetUserAddress(), dbName)
+	_, err := d.clt.ExecuteAction(ctx, dbid, queryName, queryInputs)
 	if err != nil {
-		return fmt.Errorf("error getting query signature: %w", err)
-	}
-
-	stringInputs := make(map[string]string) // maps the arg name to the arg value
-	for i := 0; i < len(queryInputs); i = i + 2 {
-		stringInputs[strings.ToLower(queryInputs[i])] = queryInputs[i+1]
-	}
-	inputs, err := qry.ConvertInputs(stringInputs)
-	if err != nil {
-		return fmt.Errorf("error converting inputs: %w", err)
-	}
-
-	_, err = d.clt.ExecuteDatabaseById(ctx, dbId, queryName, inputs, d.pk)
-	if err != nil {
-		return fmt.Errorf("error executing database: %w", err)
+		return fmt.Errorf("error executing query: %w", err)
 	}
 
 	d.logger.Debug("execute query", zap.String("database", dbName), zap.String("query", queryName))
@@ -154,7 +117,7 @@ func (d *KwildDriver) ExecuteQuery(ctx context.Context, dbName string, queryName
 }
 
 func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
-	_, err := d.clt.DropDatabase(ctx, dbName, d.pk)
+	_, err := d.clt.DropDatabase(ctx, dbName)
 	if err != nil {
 		return fmt.Errorf("error dropping database: %w", err)
 	}
