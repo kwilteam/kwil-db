@@ -31,9 +31,10 @@ func Test_Driver(t *testing.T) {
 
 	// test insert named
 	err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{
-		"$name": "test2",
-		"$id":   2,
-	})
+		"$name":   "test2",
+		"$id":     2,
+		"@caller": "test", // testing flag override
+	}, nil)
 	if err != nil {
 		t.Errorf("failed to insert: %v", err)
 	}
@@ -75,7 +76,7 @@ func Test_Driver(t *testing.T) {
 	err = conn.ExecuteNamed(updateTestRow, map[string]interface{}{
 		"$name": "test2-updated",
 		"$id":   2,
-	})
+	}, nil)
 	if err != nil {
 		t.Errorf("failed to update: %v", err)
 	}
@@ -101,6 +102,28 @@ func Test_Driver(t *testing.T) {
 		t.Errorf("expected row 1 to be {1, test1-updated}, got {%d, %s}", rows[0].id, rows[0].name)
 	}
 
+	ro, err := conn.CopyReadOnly()
+	if err != nil {
+		t.Errorf("failed to copy read only: %v", err)
+	}
+
+	var rows2 []Row
+	err = ro.Query("SELECT id, name FROM test_table;", func(stmt *driver.Statement) error {
+		var row Row
+		row.id = stmt.GetInt64("id")
+		row.name = stmt.GetText("name")
+
+		rows2 = append(rows2, row)
+		return nil
+	})
+	if err != nil {
+		t.Errorf("failed to query: %v", err)
+	}
+
+	if rows2[0].id != 1 || rows2[0].name != "test1-updated" {
+		t.Errorf("expected row to be {0, }, got {%d, %s}", rows2[0].id, rows2[0].name)
+	}
+
 	// test delete
 	err = conn.Execute(deleteTestRow, 1)
 	if err != nil {
@@ -110,7 +133,7 @@ func Test_Driver(t *testing.T) {
 	// test delete named
 	err = conn.ExecuteNamed(deleteTestRow, map[string]interface{}{
 		"$id": 2,
-	})
+	}, nil)
 	if err != nil {
 		t.Errorf("failed to delete: %v", err)
 	}
@@ -310,7 +333,12 @@ func Test_Savepoints(t *testing.T) {
 }
 
 func createTestDB() (*driver.Connection, error) {
-	conn, err := driver.OpenConn("test_database_NOBODYBETTERGUESSTHISDBID") // added random string to avoid collisions
+	conn, err := driver.OpenConn("test_database_NOBODYBETTERGUESSTHISDBID", driver.WithInjectableVars([]*driver.InjectableVar{
+		{
+			Name:       "@caller",
+			DefaultVal: "test",
+		},
+	})) // added random string to avoid collisions
 	if err != nil {
 		return nil, err
 	}
@@ -332,4 +360,152 @@ func createTestDB() (*driver.Connection, error) {
 	}
 
 	return conn, nil
+}
+
+func Test_Injectable(t *testing.T) {
+	conn, err := createTestDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	defer conn.ReleaseLock()
+
+	// test insert
+	err = conn.Execute(insertTestRow, 1, "test1")
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
+	// test insert named
+	err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{
+		"$name":   "test2",
+		"$id":     2,
+		"@caller": "test", // testing flag override
+	}, nil)
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
+	// query
+	err = conn.QueryNamed("SELECT * FROM test_table WHERE id = $id;", func(s *driver.Statement) error {
+		if s.GetInt64("id") != 2 {
+			t.Errorf("expected id to be 2, got %d", s.GetInt64("id"))
+		}
+
+		if s.GetText("name") != "test2" {
+			t.Errorf("expected name to be test2, got %s", s.GetText("name"))
+		}
+
+		return nil
+	},
+		map[string]interface{}{
+			"$id":     2,
+			"@caller": "test", // testing injected
+		})
+
+	if err != nil {
+		t.Errorf("failed to query: %v", err)
+	}
+}
+
+func Test_ReadOnly(t *testing.T) {
+	db, err := createTestDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer db.Close()
+
+	ro, err := db.CopyReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ro.Close()
+
+	// test insert
+	err = ro.Execute(insertTestRow, 1, "test1")
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+
+	// read
+	err = ro.QueryNamed("SELECT * FROM test_table WHERE id = $id;", func(s *driver.Statement) error {
+		if s.GetInt64("id") != 1 {
+			t.Errorf("expected id to be 1, got %d", s.GetInt64("id"))
+		}
+
+		if s.GetText("name") != "test1" {
+			t.Errorf("expected name to be test1, got %s", s.GetText("name"))
+		}
+
+		return nil
+	},
+		map[string]interface{}{
+			"$id": 1,
+		})
+
+	if err != nil {
+		t.Errorf("failed to query: %v", err)
+	}
+}
+
+func Test_ReadExec(t *testing.T) {
+	conn, err := createTestDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	defer conn.ReleaseLock()
+
+	// test insert
+	err = conn.Execute(insertTestRow, 1, "test1")
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
+	retVals := []int64{}
+	// test read
+	err = conn.ExecuteNamed("SELECT * FROM test_table", nil, func(s *driver.Statement) error {
+		retVals = append(retVals, s.GetInt64("id"))
+		return nil
+	})
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
+	if len(retVals) != 1 {
+		t.Errorf("expected 1 row, got %d", len(retVals))
+	}
+
+	// drop
+	err = conn.Execute(dropTestTable)
+	if err != nil {
+		t.Errorf("failed to drop: %v", err)
+	}
+}
+
+// previous error where db can crash if you query a non-existent table
+func Test_NonexistentTable(t *testing.T) {
+	conn, err := createTestDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	defer conn.ReleaseLock()
+
+	// test read
+	err = conn.QueryNamed("SELECT * FROM test_table23w24e2", func(s *driver.Statement) error {
+		return nil
+	}, nil)
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+	// try read with execute
+	err = conn.ExecuteNamed("SELECT * FROM test_table23w24e2", nil, func(s *driver.Statement) error {
+		return nil
+	})
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
 }

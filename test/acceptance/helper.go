@@ -4,18 +4,15 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/stretchr/testify/require"
-	"github.com/tonistiigi/go-rosetta"
 	"kwil/cmd/kwil-cli/app"
 	"kwil/internal/app/kwild"
 	"kwil/pkg/chain/types"
-	"kwil/pkg/client"
+	client "kwil/pkg/client2"
 	"kwil/pkg/databases"
 	"kwil/pkg/log"
 	"kwil/test/acceptance/adapters"
 	"kwil/test/acceptance/utils/deployer"
-	"kwil/test/acceptance/utils/deployer/eth-deployer"
+	eth_deployer "kwil/test/acceptance/utils/deployer/eth-deployer"
 	"kwil/test/specifications"
 	"math/big"
 	"os"
@@ -23,6 +20,10 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
+	"github.com/tonistiigi/go-rosetta"
 )
 
 // KeepMiningBlocks is a helper function to keep mining blocks

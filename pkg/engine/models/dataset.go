@@ -13,7 +13,7 @@ type Dataset struct {
 }
 
 // hashes the lower-cased name and owner and prepends an x
-func (d *Dataset) GetSchemaName() string {
+func (d *Dataset) ID() string {
 	return GenerateSchemaId(d.Owner, d.Name)
 }
 

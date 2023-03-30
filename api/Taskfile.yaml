@@ -28,3 +28,20 @@ tasks:
     generates:
       - api/protobuf/*/v0/*.go
       - api/openapi-spec/api/v0/api.swagger.json
+
+  compile:v1:
+    desc: Compiles all protobufs
+    deps: [update]
+    cmds:
+      - |
+        protoc -I ./proto \
+        --go_out=. --go_opt module=kwil \
+        --go-grpc_out=. --go-grpc_opt module=kwil \
+        --grpc-gateway_out=. --grpc-gateway_opt module=kwil --grpc-gateway_opt generate_unbound_methods=true \
+        --openapiv2_out=. --openapiv2_opt allow_merge=true --openapiv2_opt merge_file_name=api/openapi-spec/api/v1/api \
+        proto/kwil/*/v1/*.proto
+    sources:
+      - proto/kwil/*/v1/*.proto
+    generates:
+      - api/protobuf/*/v1/*.go
+      - api/openapi-spec/api/v1/api.swagger.json

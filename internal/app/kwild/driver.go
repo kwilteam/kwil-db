@@ -4,28 +4,29 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	ec "github.com/ethereum/go-ethereum/crypto"
-	"go.uber.org/zap"
 	"kwil/internal/pkg/graphql/query"
 	escrowTypes "kwil/pkg/chain/contracts/escrow/types"
-	"kwil/pkg/client"
+	client "kwil/pkg/client2"
 	"kwil/pkg/databases"
-	grpc "kwil/pkg/grpc/client"
+	grpc "kwil/pkg/grpc/client/v1"
 	"kwil/pkg/log"
 	"math/big"
 	"strings"
+
+	ec "github.com/ethereum/go-ethereum/crypto"
+	"go.uber.org/zap"
 )
 
 // KwildDriver is a grpc driver for  integration tests
 type KwildDriver struct {
-	clt         *client.KwilClient
+	clt         *client.Client
 	pk          *ecdsa.PrivateKey
 	gatewayAddr string // to ignore the gatewayAddr returned by the config.service
 
 	logger log.Logger
 }
 
-func NewKwildDriver(clt *client.KwilClient, pk *ecdsa.PrivateKey, gatewayAddr string, logger log.Logger) *KwildDriver {
+func NewKwildDriver(clt *client.Client, pk *ecdsa.PrivateKey, gatewayAddr string, logger log.Logger) *KwildDriver {
 	return &KwildDriver{
 		clt:         clt,
 		pk:          pk,
@@ -39,7 +40,7 @@ func (d *KwildDriver) GetUserAddress() string {
 }
 
 func (d *KwildDriver) GetServiceConfig(ctx context.Context) (grpc.SvcConfig, error) {
-	return d.clt.GetServiceConfig(ctx)
+	return d.clt.GetConfig(ctx)
 }
 
 func (d *KwildDriver) DepositFund(ctx context.Context, amount *big.Int) error {

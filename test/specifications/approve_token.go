@@ -2,10 +2,11 @@ package specifications
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	grpc "kwil/pkg/grpc/client"
+	grpc "kwil/pkg/grpc/client/v1"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type ApproveTokenDsl interface {
@@ -25,13 +26,13 @@ func ApproveTokenSpecification(ctx context.Context, t *testing.T, approve Approv
 	assert.NoError(t, err)
 
 	// When i approve validator to spend my tokens
-	err = approve.ApproveToken(ctx, svcCfg.Funding.PoolAddress, amount)
+	err = approve.ApproveToken(ctx, svcCfg.PoolAddress, amount)
 
 	// Then i expect success
 	assert.NoError(t, err)
 
 	// And i expect the allowance to be set
-	allowance, err := approve.GetAllowance(ctx, approve.GetUserAddress(), svcCfg.Funding.PoolAddress)
+	allowance, err := approve.GetAllowance(ctx, approve.GetUserAddress(), svcCfg.PoolAddress)
 	assert.NoError(t, err)
 	assert.Equal(t, amount, allowance)
 }

@@ -13,8 +13,9 @@ const (
 )
 
 const (
-	sqlListDatabases = "SELECT dbid, name, owner FROM databases;"
-	sqlDeleteDataset = "DELETE FROM databases WHERE dbid = $dbid;"
-	sqlCreateDataset = "INSERT INTO databases (dbid, name, owner) VALUES ($dbid, $name, $owner);"
-	sqlGetDataset    = "SELECT name, owner FROM databases WHERE dbid = $dbid;"
+	sqlListDatabases        = "SELECT dbid, name, owner FROM databases;"
+	sqlListDatabasesByOwner = "SELECT dbid, name, owner FROM databases WHERE owner = $owner;"
+	sqlDeleteDataset        = "DELETE FROM databases WHERE dbid = $dbid;"
+	sqlCreateDataset        = "INSERT INTO databases (dbid, name, owner) VALUES ($dbid, $name, $owner);"
+	sqlGetDataset           = "SELECT name, owner FROM databases WHERE dbid = $dbid;"
 )

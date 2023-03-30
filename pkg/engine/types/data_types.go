@@ -32,6 +32,7 @@ func (c *dataTypes) GolangToKwilType(k reflect.Kind) (DataType, error) {
 	case reflect.Invalid:
 		return NULL, nil
 	case reflect.String:
+		return TEXT, nil
 	case reflect.Int, reflect.Int64, reflect.Float64, reflect.Int32, reflect.Float32:
 		return INT, nil
 	}

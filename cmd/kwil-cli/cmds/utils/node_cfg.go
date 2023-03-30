@@ -3,14 +3,15 @@ package utils
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
 	"html/template"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
-	grpc "kwil/pkg/grpc/client"
+	grpc "kwil/pkg/grpc/client/v0"
 	"os"
 	"text/tabwriter"
+
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
 )
 
 var cfgYamlTemplate = `

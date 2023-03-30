@@ -6,13 +6,14 @@ import (
 	"math/rand"
 	"time"
 
-	"zombiezen.com/go/sqlite"
+	"github.com/kwilteam/go-sqlite"
 )
 
 type Savepoint struct {
 	*Connection
-	name string
-	ses  *sqlite.Session
+	name       string
+	ses        *sqlite.Session
+	sesDeleted bool
 }
 
 // Creates a savepoint with the given name. If no name is provided, a random
@@ -31,7 +32,7 @@ func (c *Connection) Savepoint(nameArr ...string) (*Savepoint, error) {
 		return nil, err
 	}
 
-	ses, err := c.conn.CreateSession("")
+	ses, err := c.Conn.CreateSession("")
 	if err != nil {
 		return nil, err
 	}
@@ -45,13 +46,17 @@ func (c *Connection) Savepoint(nameArr ...string) (*Savepoint, error) {
 		Connection: c,
 		name:       name,
 		ses:        ses,
+		sesDeleted: false,
 	}, nil
 }
 
 // end cleans up anything that needs to be closed
 // after the savepoint is committed or rolled back
 func (s *Savepoint) end() {
-	s.ses.Disable()
+	if !s.sesDeleted {
+		s.ses.Delete()
+		s.sesDeleted = true
+	}
 }
 
 // Commit commits or "releases" the savepoint.
@@ -90,7 +95,7 @@ func (s *Savepoint) GetChangeset() (*bytes.Buffer, error) {
 func (s *Savepoint) ApplyChangeset(changeset *bytes.Buffer) error {
 	reader := io.Reader(changeset)
 
-	return s.conn.ApplyChangeset(reader, nil, func(ct sqlite.ConflictType, ci *sqlite.ChangesetIterator) sqlite.ConflictAction {
+	return s.Conn.ApplyChangeset(reader, nil, func(ct sqlite.ConflictType, ci *sqlite.ChangesetIterator) sqlite.ConflictAction {
 		return sqlite.ChangesetAbort
 	})
 }

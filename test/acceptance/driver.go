@@ -3,7 +3,7 @@ package acceptance
 import (
 	"context"
 	"kwil/pkg/databases"
-	grpc "kwil/pkg/grpc/client"
+	grpc "kwil/pkg/grpc/client/v1"
 	"math/big"
 )
 

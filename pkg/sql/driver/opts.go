@@ -21,3 +21,9 @@ func WithLockWaitTime(t time.Duration) ConnOpt {
 		c.lockWaitTime = t
 	}
 }
+
+func WithInjectableVars(vars []*InjectableVar) ConnOpt {
+	return func(c *Connection) {
+		c.injectables = vars
+	}
+}

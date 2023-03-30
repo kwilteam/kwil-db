@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"zombiezen.com/go/sqlite"
+	"github.com/kwilteam/go-sqlite"
 )
 
 type Statement struct {
@@ -115,7 +115,6 @@ func (s *Statement) SetText(param string, val string) {
 func (s *Statement) SetBool(param string, val bool) {
 	s.stmt.SetBool(param, val)
 }
-
 func (s *Statement) SetNull(param string) {
 	s.stmt.SetNull(param)
 }
@@ -140,6 +139,8 @@ func (s *Statement) GetBytes(param string) (buf []byte, size int) {
 	return buf, s.stmt.GetBytes(param, buf)
 }
 
+//func (s *Statement)
+
 func (s *Statement) Clear() error {
 	s.stmt.Reset()
 	return s.stmt.ClearBindings()
@@ -150,4 +151,40 @@ func (s *Statement) Clear() error {
 // a database's locking rules.
 func (s *Statement) step() (rowReturned bool, err error) {
 	return s.stmt.Step()
+}
+
+func (s *Statement) Columns() []string {
+	colCount := s.stmt.ColumnCount()
+	cols := make([]string, colCount)
+	for i := 0; i < colCount; i++ {
+		cols[i] = s.stmt.ColumnName(i)
+	}
+
+	return cols
+}
+
+func (s *Statement) GetRecord() ([]any, error) {
+	colCount := s.stmt.ColumnCount()
+	cols := make([]any, colCount)
+	for i := 0; i < colCount; i++ {
+		colName := s.stmt.ColumnName(i)
+		colType := s.stmt.ColumnType(i)
+
+		switch colType {
+		case sqlite.TypeInteger:
+			cols[i] = s.stmt.GetInt64(colName)
+		case sqlite.TypeFloat:
+			cols[i] = s.stmt.GetFloat(colName)
+		case sqlite.TypeText:
+			cols[i] = s.stmt.GetText(colName)
+		case sqlite.TypeBlob:
+			cols[i], _ = s.GetBytes(colName)
+		case sqlite.TypeNull:
+			cols[i] = nil
+		default:
+			return nil, fmt.Errorf("unsupported column type: %s", colType)
+		}
+	}
+
+	return cols, nil
 }

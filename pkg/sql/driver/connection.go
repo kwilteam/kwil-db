@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"zombiezen.com/go/sqlite"
-	"zombiezen.com/go/sqlite/sqlitex"
+	"github.com/kwilteam/go-sqlite"
+	"github.com/kwilteam/go-sqlite/sqlitex"
 )
 
 var (
@@ -30,13 +30,15 @@ const (
 )
 
 type Connection struct {
-	conn         *sqlite.Conn
+	Conn         *sqlite.Conn
 	mu           *sync.Mutex
 	DBID         string
 	lock         LockType
 	path         string
 	readOnly     bool
 	lockWaitTime time.Duration
+	injectables  []*InjectableVar
+	opts         []ConnOpt
 }
 
 // OpenConn opens a connection to the database with the given ID/name.
@@ -48,6 +50,7 @@ func OpenConn(dbid string, opts ...ConnOpt) (*Connection, error) {
 		path:         DefaultPath,
 		readOnly:     false,
 		lockWaitTime: time.Second * DefaultLockWaitTimeSeconds,
+		opts:         opts,
 	}
 	for _, opt := range opts {
 		opt(connection)
@@ -68,7 +71,7 @@ func (c *Connection) openConn() error {
 		flags = sqlite.OpenReadOnly
 	}
 
-	if c.conn == nil {
+	if c.Conn == nil {
 		fp := c.getFilePath()
 		err := createDirIfNeeded(fp)
 		if err != nil {
@@ -79,7 +82,7 @@ func (c *Connection) openConn() error {
 		if err != nil {
 			return err
 		}
-		c.conn = conn
+		c.Conn = conn
 		c.lock = LOCK_TYPED_SHARED
 	}
 
@@ -94,11 +97,12 @@ func (c *Connection) getFilePath() string {
 func (c *Connection) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.conn != nil {
-		if err := c.conn.Close(); err != nil {
+	c.releaseLock()
+	if c.Conn != nil {
+		if err := c.Conn.Close(); err != nil {
 			return err
 		}
-		c.conn = nil
+		c.Conn = nil
 	}
 	return nil
 }
@@ -106,14 +110,29 @@ func (c *Connection) Close() error {
 // Execute executes a statement
 func (c *Connection) Execute(stmt string, args ...interface{}) error {
 	return c.execute(stmt, &sqlitex.ExecOptions{
-		Args: args,
+		Args:          args,
+		OverrideFlags: sqlitex.ForbidMissing,
 	})
 }
 
 // ExecuteNamed executes a statement
-func (c *Connection) ExecuteNamed(stmt string, args map[string]interface{}) error {
+func (c *Connection) ExecuteNamed(stmt string, args map[string]interface{}, resultFns ...ResultFn) error {
+	if args == nil {
+		args = make(map[string]interface{})
+	}
+	c.addInjectables(args)
 	return c.execute(stmt, &sqlitex.ExecOptions{
-		Named: args,
+		Named:         args,
+		OverrideFlags: sqlitex.ForbidMissing,
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			dStmt := newStatement(stmt)
+			for _, resultFn := range resultFns {
+				if err := resultFn(dStmt); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
 	})
 }
 
@@ -125,8 +144,11 @@ func (c *Connection) execute(stmt string, options *sqlitex.ExecOptions) error {
 	}
 
 	stmt = trimPadding(stmt)
+	if stmt == "" {
+		return fmt.Errorf("statement is empty")
+	}
 
-	err := sqlitex.Execute(c.conn, stmt, options)
+	err := sqlitex.Execute(c.Conn, stmt, options)
 	if err != nil {
 		return fmt.Errorf("failed to execute statement: %w", err)
 	}
@@ -147,8 +169,17 @@ func (c *Connection) Query(statement string, resultFn ResultFn, args ...interfac
 // QueryNamed executes a query and calls the resultFn for each row returned
 func (c *Connection) QueryNamed(statement string, resultFn ResultFn, args map[string]interface{}) error {
 	return c.query(statement, resultFn, func(stmt *Statement) error {
+		c.addInjectables(args)
 		return stmt.SetMany(args)
 	})
+}
+
+// Prepare prepares a statement for execution and stores it in the connection
+func (c *Connection) Prepare(statement string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, err := c.prepare(statement)
+	return err
 }
 
 // query executes a query and calls the resultFn for each row returned
@@ -162,6 +193,7 @@ func (c *Connection) query(statement string, resultFn ResultFn, statementSetterF
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}
+	defer stmt.Clear()
 
 	if err := statementSetterFn(stmt); err != nil {
 		return err
@@ -177,7 +209,11 @@ func (c *Connection) query(statement string, resultFn ResultFn, statementSetterF
 			break
 		}
 
-		if err := resultFn(stmt); err != nil {
+		c.mu.Unlock()
+		err = resultFn(stmt)
+		c.mu.Lock()
+
+		if err != nil {
 			return err
 		}
 	}
@@ -186,12 +222,12 @@ func (c *Connection) query(statement string, resultFn ResultFn, statementSetterF
 }
 
 // Prepare prepares a statement for execution
-func (c *Connection) prepare(statement string) (*Statement, error) {
+func (c *Connection) prepare(statement string, extraParams ...string) (*Statement, error) {
 	if !c.Readable() {
 		return nil, ErrConnectionClosed
 	}
 
-	sqliteStmt, err := c.conn.Prepare(statement)
+	sqliteStmt, err := c.Conn.Prepare(statement, c.listInjectables()...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}
@@ -216,6 +252,10 @@ func (c *Connection) ReleaseLock() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.releaseLock()
+}
+
+func (c *Connection) releaseLock() {
 	if c.lock != LOCK_TYPE_EXCLUSIVE {
 		return
 	}
@@ -224,6 +264,35 @@ func (c *Connection) ReleaseLock() {
 	c.lock = LOCK_TYPED_SHARED
 }
 
+func (c *Connection) LastInsertRowID() int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.Conn.LastInsertRowID()
+}
+
 func trimPadding(s string) string {
 	return strings.TrimSpace(s)
+}
+
+func (c *Connection) DisableForeignKeys() error {
+	return c.Execute("PRAGMA foreign_keys = OFF;")
+}
+
+func (c *Connection) EnableForeignKeys() error {
+	return c.Execute("PRAGMA foreign_keys = ON;")
+}
+
+func (c *Connection) CopyReadOnly() (*Connection, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.Conn == nil {
+		return nil, ErrConnectionClosed
+	}
+
+	newOpts := make([]ConnOpt, 0)
+	newOpts = append(newOpts, c.opts...)
+	newOpts = append(newOpts, ReadOnly())
+	return OpenConn(c.DBID, newOpts...)
 }

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"kwil/internal/pkg/graphql/query"
 	"kwil/pkg/databases"
-	grpc "kwil/pkg/grpc/client"
+	grpc "kwil/pkg/grpc/client/v1"
 	"kwil/pkg/log"
 	big2 "kwil/pkg/utils/numbers/big"
 	"math/big"
@@ -82,19 +82,19 @@ func (d *KwilCliDriver) GetServiceConfig(ctx context.Context) (svcCfg grpc.SvcCo
 
 		if strings.Contains(line, "ChainCode:") {
 			code := strings.TrimSpace(strings.Split(line, ":")[1])
-			svcCfg.Funding.ChainCode, err = strconv.ParseInt(code, 10, 64)
+			svcCfg.ChainCode, err = strconv.ParseInt(code, 10, 64)
 			if err != nil {
 				return
 			}
 		}
 		if strings.Contains(line, "PoolAddress:") {
-			svcCfg.Funding.PoolAddress = strings.TrimSpace(strings.Split(line, ":")[1])
+			svcCfg.PoolAddress = strings.TrimSpace(strings.Split(line, ":")[1])
 		}
 		if strings.Contains(line, "ProviderAddress:") {
-			svcCfg.Funding.ProviderAddress = strings.TrimSpace(strings.Split(line, ":")[1])
+			svcCfg.ProviderAddress = strings.TrimSpace(strings.Split(line, ":")[1])
 		}
 		if strings.Contains(line, "RpcUrl:") {
-			svcCfg.Funding.RpcUrl = strings.TrimSpace(strings.Split(line, ":")[1])
+			svcCfg.RpcUrl = strings.TrimSpace(strings.Split(line, ":")[1])
 		}
 		if strings.Contains(line, "GraphqlUrl:") {
 			svcCfg.Gateway.GraphqlUrl = strings.TrimSpace(strings.Split(line, ":")[1])

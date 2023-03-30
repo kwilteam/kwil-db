@@ -29,6 +29,19 @@ func NewExplicit(v any, dataType DataType) (*ConcreteValue, error) {
 	return newAny(v, dataType)
 }
 
+func NewEmpty() *ConcreteValue {
+	bts, err := marshal(nil, NULL)
+	if err != nil {
+		panic(err)
+	}
+
+	return &ConcreteValue{
+		value:    nil,
+		bytes:    bts,
+		dataType: NULL,
+	}
+}
+
 func newAny(v any, dataType DataType) (*ConcreteValue, error) {
 	// marshal the value
 	var bts []byte
