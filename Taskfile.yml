@@ -135,3 +135,9 @@ tasks:
     desc: Undeploy kwild to local k8s cluster
     cmds:
       - helm uninstall kwild
+
+  # ************ dev ************
+  dev:up:
+      desc: Start the dev environment
+      cmds:
+      - go test ./test/acceptance/ -dev -v

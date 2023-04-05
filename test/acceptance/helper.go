@@ -143,13 +143,13 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg,
 		"KWILD_LOG_LEVEL":                     cfg.LogLevel,
 	}
 	kwildC := adapters.StartKwildDockerService(t, ctx, kwildEnv)
-
-	// kgw container
 	exposedKwildEndpoint, err := kwildC.ExposedEndpoint(ctx)
+	exposedKgwEndpoint, err := kwildC.SecondExposedEndpoint(ctx)
 	require.NoError(t, err)
 
 	cfg.ChainRPCURL = exposedChainRPC
 	cfg.NodeURL = exposedKwildEndpoint
+	cfg.GatewayURL = exposedKgwEndpoint
 	return cfg, chainDeployer
 }
 
@@ -191,7 +191,7 @@ func setupCliDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger lo
 	return cliDriver, chainDeployer
 }*/
 
-func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger) (KwilAcceptanceDriver, deployer.Deployer) {
+func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger) (KwilAcceptanceDriver, deployer.Deployer, TestEnvCfg) {
 	setSchemaLoader(cfg)
 
 	if cfg.NodeURL != "" {
@@ -200,7 +200,7 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 		require.NoError(t, err, "failed to create kwil client")
 
 		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
-		return kwildDriver, nil
+		return kwildDriver, nil, cfg
 	}
 
 	updatedCfg, chainDeployer := setupCommon(ctx, t, cfg)
@@ -214,10 +214,10 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 	require.NoError(t, err, "failed to create kwil client")
 
 	kwildDriver := kwild.NewKwildDriver(kwilClt, updatedCfg.UserPrivateKey, updatedCfg.GatewayURL, logger)
-	return kwildDriver, chainDeployer
+	return kwildDriver, chainDeployer, updatedCfg
 }
 
-func GetDriver(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger) (KwilAcceptanceDriver, deployer.Deployer) {
+func GetDriver(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger) (KwilAcceptanceDriver, deployer.Deployer, TestEnvCfg) {
 	switch driverType {
 	//case "cli":
 	//	return setupCliDriver(ctx, t, cfg, logger)

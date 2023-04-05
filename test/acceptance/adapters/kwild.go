@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"github.com/docker/go-connections/nat"
 	"testing"
 	"time"
 
@@ -21,6 +22,8 @@ const (
 // kwildContainer represents the kwild container type used in the module
 type kwildContainer struct {
 	TContainer
+
+	SecondContainerPort string
 }
 
 // setupKwild creates an instance of the kwild container type
@@ -46,10 +49,13 @@ func setupKwild(ctx context.Context, opts ...containerOption) (*kwildContainer, 
 		return nil, err
 	}
 
-	return &kwildContainer{TContainer{
-		Container:     container,
-		ContainerPort: KwildPort,
-	}}, nil
+	return &kwildContainer{
+		TContainer: TContainer{
+			Container:     container,
+			ContainerPort: KwildPort,
+		},
+		SecondContainerPort: KwildGatewayPort,
+	}, nil
 }
 
 func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]string) *kwildContainer {
@@ -58,7 +64,8 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 	container, err := setupKwild(ctx,
 		//WithDockerFile("kwil"),
 		WithNetwork(kwilTestNetworkName),
-		WithExposedPorts([]string{KwildPort, KwildGatewayPort}),
+		WithExposedPort(KwildPort),
+		WithExposedPort(KwildGatewayPort),
 		WithEnv(envs),
 		// ForListeningPort requires image has /bin/sh
 		WithWaitStrategy(wait.ForLog("grpc server started") /*, wait.ForLog("deposits synced")*/),
@@ -73,4 +80,24 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 	err = container.ShowPortInfo(ctx)
 	require.NoError(t, err)
 	return container
+}
+
+func (c *kwildContainer) SecondExposedEndpoint(ctx context.Context) (string, error) {
+	host, err := c.Host(ctx)
+	if err != nil {
+		return "", err
+	}
+	hostPort, err := c.MappedPort(context.Background(), nat.Port(c.SecondContainerPort))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s:%s", host, hostPort.Port()), nil
+}
+
+func (c *kwildContainer) SecondUnexposedEndpoint(ctx context.Context) (string, error) {
+	ipC, err := c.ContainerIP(ctx)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s:%s", ipC, c.SecondContainerPort), nil
 }

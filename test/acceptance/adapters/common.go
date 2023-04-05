@@ -83,12 +83,21 @@ func WithWaitStrategy(strategies ...wait.Strategy) func(req *testcontainers.Cont
 	}
 }
 
+func WithExposedPort(port string) func(req *testcontainers.ContainerRequest) {
+	return func(req *testcontainers.ContainerRequest) {
+		if req.ExposedPorts == nil {
+			req.ExposedPorts = []string{}
+		}
+		req.ExposedPorts = append(req.ExposedPorts, port)
+	}
+}
+
 func WithExposedPorts(ports []string) func(req *testcontainers.ContainerRequest) {
 	return func(req *testcontainers.ContainerRequest) {
 		if req.ExposedPorts == nil {
 			req.ExposedPorts = []string{}
 		}
-		req.ExposedPorts = append(req.ExposedPorts, ports[0])
+		req.ExposedPorts = append(req.ExposedPorts, ports...)
 	}
 }
 

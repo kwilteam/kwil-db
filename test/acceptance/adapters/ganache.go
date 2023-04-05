@@ -82,7 +82,7 @@ func StartGanacheDockerService(t *testing.T, ctx context.Context, chainId string
 	container, err := setupGanache(ctx,
 		chainId,
 		WithNetwork(kwilTestNetworkName),
-		WithExposedPorts([]string{GanachePort}),
+		WithExposedPort(GanachePort),
 		WithWaitStrategy(
 			wait.ForLog("RPC Listening on 0.0.0.0:8545")))
 

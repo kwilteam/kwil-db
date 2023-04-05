@@ -14,6 +14,7 @@ import (
 )
 
 var remote = flag.Bool("remote", false, "run tests against remote environment")
+var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
 func TestKwildAcceptance(t *testing.T) {
 	if testing.Short() {
@@ -41,7 +42,13 @@ func TestKwildAcceptance(t *testing.T) {
 			done := make(chan struct{})
 
 			// setup
-			driver, chainDeployer := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger)
+			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger)
+
+			// running forever for local development
+			if *dev {
+				acceptance.DumpEnv(&runningCfg)
+				<-done
+			}
 
 			// NOTE: only local env test, public network test takes too long
 			// thus here test assume user is funded
