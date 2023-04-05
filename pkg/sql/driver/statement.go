@@ -163,24 +163,26 @@ func (s *Statement) Columns() []string {
 	return cols
 }
 
-func (s *Statement) GetRecord() ([]any, error) {
+type Record map[string]any
+
+func (s *Statement) GetRecord() (Record, error) {
 	colCount := s.stmt.ColumnCount()
-	cols := make([]any, colCount)
+	cols := make(Record)
 	for i := 0; i < colCount; i++ {
 		colName := s.stmt.ColumnName(i)
 		colType := s.stmt.ColumnType(i)
 
 		switch colType {
 		case sqlite.TypeInteger:
-			cols[i] = s.stmt.GetInt64(colName)
+			cols[colName] = s.stmt.GetInt64(colName)
 		case sqlite.TypeFloat:
-			cols[i] = s.stmt.GetFloat(colName)
+			cols[colName] = s.stmt.GetFloat(colName)
 		case sqlite.TypeText:
-			cols[i] = s.stmt.GetText(colName)
+			cols[colName] = s.stmt.GetText(colName)
 		case sqlite.TypeBlob:
-			cols[i], _ = s.GetBytes(colName)
+			cols[colName], _ = s.GetBytes(colName)
 		case sqlite.TypeNull:
-			cols[i] = nil
+			cols[colName] = nil
 		default:
 			return nil, fmt.Errorf("unsupported column type: %s", colType)
 		}

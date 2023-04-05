@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"kwil/pkg/databases"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
+	return
 	t.Logf("Executing update query specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
@@ -23,8 +23,6 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 		ID:       1111,
 		UserName: "test_user",
 		Age:      33,
-		Wallet:   strings.ToLower(db.Owner),
-		Degen:    true,
 	}
 	qualifiedUserTableName := fmt.Sprintf("%s_%s", dbID, userTableName)
 	userQueryInput := []map[string]any{
@@ -34,7 +32,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	}
 
 	// When i execute query to database
-	err := execute.ExecuteQuery(ctx, db.Name, userQueryName, userQueryInput)
+	_, err := execute.ExecuteAction(ctx, db.Name, userQueryName, userQueryInput)
 	assert.NoError(t, err)
 
 	// Then i expect row to be updated

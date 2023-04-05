@@ -136,20 +136,32 @@ func Test_BatchSpendAndCredit(t *testing.T) {
 		},
 	}
 
+	// start chain at height 0
+	const someChainCode = 0
+	err = as.CreateChain(someChainCode, 0)
+	if err != nil {
+		t.Errorf("error setting height: %v", err)
+	}
+
+	chainConifg := &balances.ChainConfig{
+		ChainCode: someChainCode,
+		Height:    1,
+	}
+
 	// try spend
-	err = as.BatchSpend(spendList)
+	err = as.BatchSpend(spendList, chainConifg)
 	if err == nil {
 		t.Errorf("expected error spending from non-existent accounts")
 	}
 
 	// try credit
-	err = as.BatchCredit(creditList)
+	err = as.BatchCredit(creditList, chainConifg)
 	if err != nil {
 		t.Errorf("error crediting accounts: %v", err)
 	}
 
 	// try spend
-	err = as.BatchSpend(spendList)
+	err = as.BatchSpend(spendList, nil)
 	if err != nil {
 		t.Errorf("error spending from accounts: %v", err)
 	}
@@ -181,5 +193,32 @@ func Test_BatchSpendAndCredit(t *testing.T) {
 
 	if account2.Nonce != 1 {
 		t.Errorf("expected nonce of 1, got %v", account2.Nonce)
+	}
+
+	// check the height
+	height, err := as.GetHeight(someChainCode)
+	if err != nil {
+		t.Errorf("error getting height: %v", err)
+	}
+
+	if height != 1 {
+		t.Errorf("expected height of 1, got %v", height)
+	}
+}
+
+func Test_NonexistentChain(t *testing.T) {
+	as, err := balances.NewAccountStore(balances.Wipe(), balances.WithPath(testPath))
+	if err != nil {
+		t.Errorf("error creating account store: %v", err)
+	}
+	defer as.Close()
+
+	height, err := as.GetHeight(0)
+	if err != nil {
+		t.Errorf("nonexistent chain should return height of 0, got error: %v", err)
+	}
+
+	if height != 0 {
+		t.Errorf("expected height of 0, got %v", height)
 	}
 }

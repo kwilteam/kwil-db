@@ -4,7 +4,7 @@ import (
 	"kwil/test/specifications"
 )
 
-type KwilACTDriver interface {
+type KwilAcceptanceDriver interface {
 	specifications.DatabaseDeployDsl
 	specifications.DatabaseDropDsl
 	specifications.ApproveTokenDsl

@@ -18,7 +18,7 @@ func (c *chainClient) GetLatestBlock(ctx context.Context) (*provider.Header, err
 
 	lastFinalized := header.Height - c.requiredConfirmations
 	if lastFinalized < 0 {
-		return nil, fmt.Errorf("latest block is less than required confirmations: %v", err)
+		return nil, fmt.Errorf("latest block is less than required confirmations.  latest block: %d.  required confirmations: %d: %v", header.Height, c.requiredConfirmations, err)
 	}
 
 	bigLastFinalized := big.NewInt(lastFinalized)

@@ -64,10 +64,7 @@ func TestMiscCrypto(t *testing.T) {
 		t.Errorf("error getting ecdsa private key from hex")
 	}
 
-	addr, err := crypto.AddressFromPrivateKey(ecdsaPk)
-	if err != nil {
-		t.Errorf("error getting address from private keys")
-	}
+	addr := crypto.AddressFromPrivateKey(ecdsaPk)
 
 	if addr != "0x995d95245698212D4Af52c8031F614C3D3127994" {
 		t.Errorf("received unexpected address")

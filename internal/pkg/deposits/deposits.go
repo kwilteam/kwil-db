@@ -32,10 +32,7 @@ func NewDepositer(poolAddress string, db *sqlclient.DB, queries repository.Queri
 		return nil, fmt.Errorf("failed to create escrow contract: %w", err)
 	}
 
-	providerAddress, err := crypto.AddressFromPrivateKey(privateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get public key from private key: %w", err)
-	}
+	providerAddress := crypto.AddressFromPrivateKey(privateKey)
 
 	// create the chain
 	chainSynchronizer, err := chainsync.New(chainClient, escrowContract, queries, db, logger, providerAddress)

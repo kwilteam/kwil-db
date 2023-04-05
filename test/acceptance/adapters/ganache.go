@@ -3,11 +3,12 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"testing"
-	"time"
 )
 
 const (
@@ -16,8 +17,8 @@ const (
 
 	WalletMnemonic    = "test test test test test test test test test test test junk"
 	WalletHDPath      = "m/44'/60'/0'"
-	DeployerAccountPK = "dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5"
-	UserAccountPK     = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
+	DeployerAccountPK = "dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5" // address: 0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C
+	UserAccountPK     = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e" // address: 0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7
 )
 
 // ganacheContainer represents the ganache container type used in the module
@@ -81,7 +82,7 @@ func StartGanacheDockerService(t *testing.T, ctx context.Context, chainId string
 	container, err := setupGanache(ctx,
 		chainId,
 		WithNetwork(kwilTestNetworkName),
-		WithExposedPort(GanachePort),
+		WithExposedPorts([]string{GanachePort}),
 		WithWaitStrategy(
 			wait.ForLog("RPC Listening on 0.0.0.0:8545")))
 

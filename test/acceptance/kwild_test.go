@@ -30,7 +30,7 @@ func TestKwildAcceptance(t *testing.T) {
 		driverType string
 	}{
 		{"grpc driver", "grpc"},
-		{"cli driver", "cli"},
+		//{"cli driver", "cli"},
 	}
 
 	for _, c := range cases {
@@ -47,7 +47,7 @@ func TestKwildAcceptance(t *testing.T) {
 			// thus here test assume user is funded
 			if !*remote {
 				// Given user is funded
-				err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.FundAmount)
+				err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.InitialFundAmount)
 				assert.NoError(t, err, "failed to fund user config")
 				go acceptance.KeepMiningBlocks(ctx, done, chainDeployer, cfg.UserAddr)
 

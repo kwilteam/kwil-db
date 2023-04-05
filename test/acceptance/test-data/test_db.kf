@@ -1,0 +1,63 @@
+database testdb;
+
+table users {
+    id int primary notnull,
+    username text,
+    age int,
+    wallet text
+}
+
+table posts {
+    id int primary notnull,
+    user_id int,
+    title text,
+    content text
+}
+
+action create_user($id, $username, $age)  {
+    INSERT INTO users (id, username, age, wallet)
+    VALUES ($id, $username, $age, @caller);
+}
+
+action update_username($username) {
+    UPDATE users
+    SET username = $username
+    WHERE wallet = @caller;
+}
+
+action create_post($id, $title, $content) {
+    INSERT INTO posts (id, user_id, title, content)
+    VALUES ($id, (
+        SELECT id FROM users WHERE wallet = @caller
+    ), $title, $content);
+}
+
+action delete_post($id) {
+    DELETE FROM posts
+    WHERE id = $id AND user_id = (
+        SELECT id
+        FROM users
+        WHERE wallet = @caller
+    );
+}
+
+action get_user_by_wallet($address) {
+    SELECT *
+    FROM users
+    WHERE wallet = $address;
+}
+
+action list_users() {
+    SELECT username
+    FROM users;
+}
+
+action get_user_posts($username) {
+    SELECT title, content
+    FROM posts
+    WHERE user_id = (
+        SELECT id
+        FROM users
+        WHERE username = $username
+    );
+}

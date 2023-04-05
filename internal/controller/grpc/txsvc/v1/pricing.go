@@ -17,11 +17,6 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
-	err = tx.Verify()
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify transaction: %w", err)
-	}
-
 	switch tx.PayloadType {
 	case kTx.DEPLOY_DATABASE:
 		return handlePricing(s.priceDeploy(ctx, tx))
@@ -50,10 +45,6 @@ func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.In
 		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
 	}
 
-	if ds.Owner != tx.Sender {
-		return nil, fmt.Errorf("database owner is not the same as the tx sender")
-	}
-
 	return s.executor.PriceDeploy(&entity.DeployDatabase{
 		Tx:     tx,
 		Schema: &ds,
@@ -64,10 +55,6 @@ func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int,
 	dsIdent, err := serialize.Deserialize[models.DatasetIdentifier](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset identifier: %w", err)
-	}
-
-	if dsIdent.Owner != tx.Sender {
-		return nil, fmt.Errorf("database owner is not the same as the tx sender")
 	}
 
 	return s.executor.PriceDrop(&entity.DropDatabase{

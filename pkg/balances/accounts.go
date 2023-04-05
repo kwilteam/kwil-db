@@ -6,6 +6,8 @@ import (
 	"kwil/pkg/sql/driver"
 	"math/big"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 type AccountStore struct {
@@ -27,11 +29,13 @@ func NewAccountStore(opts ...balancesOpts) (*AccountStore, error) {
 	for _, opt := range opts {
 		opt(ar)
 	}
+	ar.log.Named("account_store")
 
 	db, err := driver.OpenConn(accountDBName, driver.WithPath(ar.path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open account connection: %w", err)
 	}
+
 	err = db.AcquireLock()
 	if err != nil {
 		return nil, fmt.Errorf("failed to acquire lock: %w", err)
@@ -59,6 +63,12 @@ type Spend struct {
 	Nonce          int64
 }
 
+type ChainConfig struct {
+	ChainCode int32
+	Height    int64
+}
+
+// Spend spends an amount from an account.
 func (a *AccountStore) Spend(spend *Spend) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -66,7 +76,9 @@ func (a *AccountStore) Spend(spend *Spend) error {
 	return a.spend(spend)
 }
 
-func (a *AccountStore) BatchSpend(spendList []*Spend) error {
+// BatchSpend spends a list of spends in a single transaction.  It can optionally
+// update the chain height, however nil can be passed to skip this.
+func (a *AccountStore) BatchSpend(spendList []*Spend, chain *ChainConfig) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -83,6 +95,13 @@ func (a *AccountStore) BatchSpend(spendList []*Spend) error {
 		}
 	}
 
+	if chain != nil {
+		err := a.setChainHeight(chain.ChainCode, chain.Height)
+		if err != nil {
+			return fmt.Errorf("failed to set chain height: %w", err)
+		}
+	}
+
 	return sp.Commit()
 }
 
@@ -92,7 +111,8 @@ func (a *AccountStore) spend(spend *Spend) error {
 		return fmt.Errorf("failed to get account: %w", err)
 	}
 
-	if account.Nonce != spend.Nonce {
+	if account.Nonce+1 != spend.Nonce {
+		a.log.Debug("tx nonce incorrect", zap.String("address", spend.AccountAddress), zap.Int64("expected", account.Nonce), zap.Int64("actual", spend.Nonce))
 		return ErrInvalidNonce
 	}
 
@@ -119,6 +139,7 @@ type Credit struct {
 	Amount         *big.Int
 }
 
+// Credit credits an account.
 func (a *AccountStore) Credit(credit *Credit) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -126,7 +147,9 @@ func (a *AccountStore) Credit(credit *Credit) error {
 	return a.credit(credit)
 }
 
-func (a *AccountStore) BatchCredit(creditList []*Credit) error {
+// BatchCredit credits a list of credits in a single transaction.  It can optionally
+// update the chain height, however nil can be passed to skip this.
+func (a *AccountStore) BatchCredit(creditList []*Credit, chain *ChainConfig) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -140,6 +163,13 @@ func (a *AccountStore) BatchCredit(creditList []*Credit) error {
 		err := a.credit(credit)
 		if err != nil {
 			return fmt.Errorf("failed to credit: %w", err)
+		}
+	}
+
+	if chain != nil {
+		err := a.setChainHeight(chain.ChainCode, chain.Height)
+		if err != nil {
+			return fmt.Errorf("failed to set chain height: %w", err)
 		}
 	}
 
@@ -165,6 +195,7 @@ func (a *AccountStore) credit(credit *Credit) error {
 		}
 	}
 
+	a.log.Info("crediting account", zap.String("address", account.Address), zap.String("amount", credit.Amount.String()))
 	newBal := new(big.Int).Add(account.Balance, credit.Amount)
 	return a.setBalance(credit.AccountAddress, newBal)
 }

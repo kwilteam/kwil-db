@@ -1,4 +1,4 @@
-package client2
+package client
 
 import (
 	"context"
@@ -13,6 +13,9 @@ import (
 	"kwil/pkg/engine/types"
 	grpcClient "kwil/pkg/grpc/client/v1"
 	kTx "kwil/pkg/tx"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
@@ -31,10 +34,10 @@ type Client struct {
 }
 
 // New creates a new client
-func New(ctx context.Context, target string, opts ...ClientOpt) (*Client, error) {
-	c := &Client{
+func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
+	c = &Client{
 		datasets:        make(map[string]*models.Dataset),
-		chainCode:       chainCodes.ETHEREUM,
+		chainCode:       chainCodes.LOCAL,
 		ProviderAddress: "",
 		PoolAddress:     "",
 		usingProvider:   true,
@@ -45,19 +48,22 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (*Client, error)
 		opt(c)
 	}
 
-	var err error
-	if c.chainRpcUrl != "" {
-		err = c.initChainClient(ctx)
-		if err != nil {
-			return nil, err
+	defer func() {
+		if c.chainRpcUrl != "" {
+			e := c.initChainClient(ctx)
+			if err != nil {
+				err = e
+			}
 		}
-	}
+	}()
 
 	if !c.usingProvider {
 		return c, nil
 	}
 
-	c.client, err = grpcClient.New(target)
+	c.client, err = grpcClient.New(target, grpc.WithTransportCredentials(
+		insecure.NewCredentials(), // TODO: should add client configuration for secure transport
+	))
 	if err != nil {
 		return nil, err
 	}

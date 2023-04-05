@@ -3,13 +3,14 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
 	klType "kwil/internal/pkg/kl/types"
 	"kwil/pkg/engine/models"
 	"kwil/pkg/engine/types"
 	"kwil/pkg/kl/sql"
 	"kwil/pkg/kl/token"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type Node interface {
@@ -327,6 +328,11 @@ type Database struct {
 	Decls []Decl
 
 	model *models.Dataset
+}
+
+// Dataset returns the model of the database
+func (d *Database) Dataset() *models.Dataset {
+	return d.model
 }
 
 // Generate generates JSON string from AST

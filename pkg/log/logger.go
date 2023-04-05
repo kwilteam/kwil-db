@@ -9,7 +9,6 @@ import (
 
 type SugaredLogger = *zap.SugaredLogger
 type Logger = *zap.Logger
-type Field = zap.Field
 
 type Config struct {
 	Level string `mapstructure:"level"`
@@ -65,7 +64,8 @@ func New(config Config) Logger {
 }
 
 // NoOp is a logger that does nothing.
-// It is useful for testing, or for user packages where we want to turn off logging.
+// It is useful for testing, or for user packages where we want to
+// have logging configurable.
 func NewNoOp() Logger {
 	return zap.NewNop()
 }

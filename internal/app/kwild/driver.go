@@ -5,11 +5,11 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"kwil/internal/pkg/graphql/query"
-	client "kwil/pkg/client2"
-	"kwil/pkg/databases"
+	"kwil/pkg/client"
 	"kwil/pkg/engine/models"
 	grpc "kwil/pkg/grpc/client/v1"
 	"kwil/pkg/log"
+	kTx "kwil/pkg/tx"
 	"math/big"
 	"strings"
 
@@ -67,6 +67,7 @@ func (d *KwildDriver) ApproveToken(ctx context.Context, amount *big.Int) error {
 	if err != nil {
 		return err
 	}
+
 	d.logger.Debug("approve token", zap.String("from", ec.PubkeyToAddress(d.pk.PublicKey).Hex()),
 		zap.String("spender", d.clt.PoolAddress), zap.String("amount", amount.String()))
 	return nil
@@ -105,15 +106,14 @@ func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, db
 	return fmt.Errorf("database does not exist")
 }
 
-func (d *KwildDriver) ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []map[string]any) error {
-	dbid := databases.GenerateSchemaId(d.GetUserAddress(), dbName)
-	_, err := d.clt.ExecuteAction(ctx, dbid, queryName, queryInputs)
+func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, error) {
+	rec, err := d.clt.ExecuteAction(ctx, dbid, queryName, queryInputs)
 	if err != nil {
-		return fmt.Errorf("error executing query: %w", err)
+		return nil, fmt.Errorf("error executing query: %w", err)
 	}
 
-	d.logger.Debug("execute query", zap.String("database", dbName), zap.String("query", queryName))
-	return nil
+	d.logger.Debug("execute query", zap.String("database", dbid), zap.String("query", queryName))
+	return rec, nil
 }
 
 func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {

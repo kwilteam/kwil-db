@@ -1,206 +1,175 @@
 package config
 
 import (
-	"crypto/ecdsa"
 	"fmt"
-	ec "github.com/ethereum/go-ethereum/crypto"
-	"kwil/internal/pkg/config"
-	"kwil/pkg/chain/client/dto"
-	"kwil/pkg/log"
-	"os"
+	"reflect"
+	"strings"
 
-	"github.com/spf13/pflag"
+	"github.com/cstockton/go-conv"
 	"github.com/spf13/viper"
 )
 
-const (
-	EnvPrefix         = "KWILD"
-	DefaultConfigDir  = ".kwild"
-	DefaultConfigName = "config"
-	DefaultConfigType = "yaml"
-)
+func setupViper() {
+	// Allow reading environment variables with a prefix
+	viper.SetEnvPrefix(EnvPrefix) // This will look for environment variables with the "MYAPP_" prefix
 
-// viper keys
-const (
-	ServerListenAddrKey = "server.listen_addr"
+	// Replace '.' in the key with '_' when looking up environment variables
+	//viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	LogLevelKey       = "log.level"
-	LogOutputPathsKey = "log.output_paths"
-
-	DBHostKey     = "db.host"
-	DBPortKey     = "db.port"
-	DBUsernameKey = "db.username"
-	DBPasswordKey = "db.password"
-	DBDatabaseKey = "db.database"
-	DBUrlKey      = "db.url"
-	DBSslModeKey  = "db.sslmode"
-
-	GraphqlAddr = "graphql.addr"
-
-	FundWalletKey            = "fund.wallet"
-	FundPoolAddressKey       = "fund.pool_address"
-	FundChainCodeKey         = "fund.chain_code"
-	FundRPCURLKey            = "fund.rpc_url"
-	FundPublicRPCURLKey      = "fund.public_rpc_url"
-	FundReconnectIntervalKey = "fund.reconnect_interval"
-	FundBlockConfirmationKey = "fund.block_confirmation"
-
-	GatewayAddrKey = "gateway.addr"
-)
-
-type FundConfig struct {
-	Wallet      *ecdsa.PrivateKey `mapstructure:"wallet"`
-	PoolAddress string            `mapstructure:"pool_address"`
-	Chain       dto.Config        `mapstructure:",squash"`
+	// Automatically read environment variables
+	viper.AutomaticEnv()
 }
 
-func (c *FundConfig) GetAccountAddress() string {
-	return ec.PubkeyToAddress(c.Wallet.PublicKey).Hex()
+type cfgVar struct {
+	// EnvName is the name of the environment variable to use
+	EnvName string
+
+	// Required is true if the variable is required.
+	// This will cause an error if the variable is not set.
+	Required bool
+
+	// Default is the default value to use if the variable is not set.
+	Default any
+
+	// Setter is a function that will be called to set the value of the variable.
+	Setter func(any) (any, error)
+
+	// Field is the name of the field in the config struct to set.
+	// It can be nested using dot notation.
+	// For example, "Server.Port" will set the "Port" field of the "Server" field.
+	Field string
 }
 
-type GatewayConfig struct {
-	Addr string `mapstructure:"addr"`
-}
+func LoadConfig() (*KwildConfig, error) {
+	setupViper()
 
-func (c *GatewayConfig) GetGraphqlUrl() string {
-	graphqlUrl := c.Addr + "/graphql"
-	return graphqlUrl
-}
+	c := &KwildConfig{}
 
-type GraphqlConfig struct {
-	Addr string `mapstructure:"addr"`
-}
-
-type PostgresConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-	Database string `mapstructure:"database"`
-	Url      string `mapstructure:"url"`
-	SslMode  string `mapstructure:"sslmode"`
-}
-
-func (c *PostgresConfig) DbUrl() string {
-	if c.Url != "" {
-		return c.Url
+	for _, v := range RegisteredVariables {
+		if err := insertVar(c, v); err != nil {
+			return nil, err
+		}
 	}
 
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		c.Username, c.Password, c.Host, c.Port, c.Database, c.SslMode)
+	return c, nil
 }
 
-type ServerConfig struct {
-	ListenAddr string `mapstructure:"listen_addr"`
-}
-
-type AppConfig struct {
-	Server  ServerConfig   `mapstructure:"server"`
-	Log     log.Config     `mapstructure:"log"`
-	Fund    FundConfig     `mapstructure:"fund"`
-	DB      PostgresConfig `mapstructure:"db"`
-	Graphql GraphqlConfig  `mapstructure:"graphql"`
-	Gateway GatewayConfig  `mapstructure:"gateway"`
-}
-
-var ConfigFile string
-
-var defaultConfig = map[string]interface{}{
-	"log": map[string]interface{}{
-		"level":        "info",
-		"output_paths": []string{"stdout"},
-	},
-	"db": map[string]interface{}{
-		"port":    5432,
-		"sslmode": "disable",
-	},
-	"server": map[string]interface{}{
-		"listen_addr": "0.0.0.0:50051",
-	},
-	"graphql": map[string]interface{}{
-		"addr": "localhost:8080",
-	},
-	"fund": map[string]interface{}{
-		"reconnect_interval": 30,
-		"block_confirmation": 12,
-	},
-	"gateway": map[string]interface{}{
-		"addr": "localhost:8082",
-	},
-}
-
-// BindGlobalFlags binds the global flags to the command.
-func BindGlobalFlags(fs *pflag.FlagSet) {
-	// server flags
-	fs.String(ServerListenAddrKey, "", "the address of the Kwil server")
-
-	// log flags
-	fs.String(LogLevelKey, "", "the level of the Kwil log (default: info)")
-	fs.StringSlice(LogOutputPathsKey, []string{}, "the output path of the Kwil log (default: ['stdout']), use comma to separate multiple output paths")
-
-	// db flags
-	fs.String(DBHostKey, "", "the host of the postgres database")
-	fs.Int(DBPortKey, 0, "the port of the postgres database")
-	fs.String(DBUsernameKey, "", "the username of the postgres database")
-	fs.String(DBPasswordKey, "", "the password of the postgres database")
-	fs.String(DBDatabaseKey, "", "the database of the postgres database")
-	fs.String(DBSslModeKey, "", "the sslmode of the postgres database")
-	fs.String(DBUrlKey, "", "the url of the postgres database(if set, the other db flags will be ignored)")
-
-	// graphql flags
-	fs.String(GraphqlAddr, "", "the address of the Kwil graphql server")
-
-	// fund flags
-	fs.String(FundWalletKey, "", "your wallet private key")
-	fs.String(FundPoolAddressKey, "", "the address of the funding pool")
-	fs.String(FundChainCodeKey, "", "the chain code of the funding pool chain")
-	fs.String(FundRPCURLKey, "", "the provider rpc url of the funding pool chain")
-	fs.String(FundPublicRPCURLKey, "", "public provider rpc url of the funding pool chain for user onboarding")
-	fs.Int64(FundReconnectIntervalKey, 0, "the reconnect interval of the funding pool")
-	fs.Int64(FundBlockConfirmationKey, 0, "the block confirmation of the funding pool")
-
-	// gateway flags
-	fs.String(GatewayAddrKey, "", "the address of the Kwil gateway server")
-}
-
-// BindGlobalEnv binds the global flags to the environment variables.
-func BindGlobalEnv(fs *pflag.FlagSet) {
-	// node.endpoint maps to PREFIX_NODE_ENDPOINT
-	viper.SetEnvPrefix(EnvPrefix)
-
-	envs := []string{
-		DBDatabaseKey,
-		DBHostKey,
-		DBPasswordKey,
-		DBPortKey,
-		DBSslModeKey,
-		DBUrlKey,
-		DBUsernameKey,
-		FundBlockConfirmationKey,
-		FundChainCodeKey,
-		FundPoolAddressKey,
-		FundReconnectIntervalKey,
-		FundRPCURLKey,
-		FundPublicRPCURLKey,
-		FundWalletKey,
-		GraphqlAddr,
-		GatewayAddrKey,
-		LogLevelKey,
-		LogOutputPathsKey,
-		ServerListenAddrKey,
+func insertVar(c *KwildConfig, v cfgVar) error {
+	var value any
+	if viper.IsSet(v.EnvName) {
+		value = viper.Get(v.EnvName)
 	}
 
-	for _, v := range envs {
-		viper.BindEnv(v)
-		viper.BindPFlag(v, fs.Lookup(v))
+	if value == nil && v.Default != nil {
+		value = v.Default
 	}
+
+	if v.Required && value == nil {
+		return fmt.Errorf("missing required environment variable %s", v.EnvName)
+	}
+
+	field, err := locateField(c, v.Field)
+	if err != nil {
+		return fmt.Errorf("error locating field on variable '%s': %s", v.EnvName, err)
+	}
+
+	if v.Setter != nil {
+		value, err = v.Setter(value)
+		if err != nil {
+			return err
+		}
+
+		field.Set(reflect.ValueOf(value))
+	} else {
+		if value != nil {
+			if err := convertVal(field, value); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
-func LoadConfig() (cfg *AppConfig, err error) {
-	config.LoadConfig(defaultConfig, ConfigFile, EnvPrefix, DefaultConfigDir, DefaultConfigName, DefaultConfigType)
-
-	if err = viper.Unmarshal(&cfg, viper.DecodeHook(config.StringPrivateKeyHookFunc())); err != nil {
-		fmt.Fprintln(os.Stderr, "error unmarshal config file:", err)
+// locateField will locate and return the field in the given struct.
+// The field can be nested using dot notation.
+// For example, "Server.Port" will return the "Port" field of the "Server" field.
+func locateField(obj any, field string) (*reflect.Value, error) {
+	// Get the value of the struct
+	structValue := reflect.ValueOf(obj)
+	if structValue.Kind() != reflect.Ptr || structValue.IsNil() {
+		return nil, fmt.Errorf("obj must be a non-nil pointer to a struct")
 	}
-	return cfg, nil
+	// Dereference the pointer to get the struct
+	rv := structValue.Elem()
+	if rv.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("obj must be a pointer to a struct")
+	}
+
+	fields := strings.Split(field, ".")
+
+	for _, f := range fields {
+		if rv.Kind() == reflect.Ptr {
+			rv = rv.Elem()
+		}
+
+		if rv.Kind() != reflect.Struct {
+			return nil, fmt.Errorf("config field '%s' is of type '%s', must be a struct", f, rv.Kind())
+		}
+
+		rv = rv.FieldByName(f)
+		if !rv.IsValid() {
+			return nil, fmt.Errorf("field '%s' not found", f)
+		}
+	}
+
+	return &rv, nil
+}
+
+// convertVal converts a value to the given type.
+// this can then be used to set the value of a struct field.
+// this is helpful with native types like strings, ints, etc.
+// where you don't want to write a full setter function.
+func convertVal(field *reflect.Value, val any) error {
+	switch field.Type().Kind() {
+	case reflect.String:
+		strVal, err := conv.String(val)
+		if err != nil {
+			return err
+		}
+
+		field.SetString(strVal)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		intVal, err := conv.Int64(val)
+		if err != nil {
+			return err
+		}
+
+		field.SetInt(intVal)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		uintVal, err := conv.Uint64(val)
+		if err != nil {
+			return err
+		}
+
+		field.SetUint(uintVal)
+	case reflect.Bool:
+		boolVal, err := conv.Bool(val)
+		if err != nil {
+			return err
+		}
+
+		field.SetBool(boolVal)
+	case reflect.Float32, reflect.Float64:
+		floatVal, err := conv.Float64(val)
+		if err != nil {
+			return err
+		}
+
+		field.SetFloat(floatVal)
+	default:
+		return fmt.Errorf("unsupported type %s", field.Type().Kind())
+	}
+
+	return nil
 }

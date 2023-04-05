@@ -82,10 +82,7 @@ func (t *Transaction) Sign(p *ecdsa.PrivateKey) error {
 		return fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
-	address, err := kwilCrypto.AddressFromPrivateKey(p)
-	if err != nil {
-		return fmt.Errorf("failed to get address from private key: %v", err)
-	}
+	address := kwilCrypto.AddressFromPrivateKey(p)
 
 	t.Hash = hash
 	t.Signature = sig

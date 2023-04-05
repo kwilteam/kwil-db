@@ -51,7 +51,7 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 func (u *DatasetUseCase) PriceExecute(action *entity.ExecuteAction) (*big.Int, error) {
 	ds, ok := u.engine.Datasets[action.DBID]
 	if !ok {
-		return nil, fmt.Errorf("dataset not found")
+		return nil, fmt.Errorf("dataset not found '%s'", action.DBID)
 	}
 
 	execOpts := datasets.ExecOpts{

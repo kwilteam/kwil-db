@@ -1,7 +1,7 @@
 package models
 
 type ActionExecution struct {
-	Action string
-	DBID   string
-	Params []map[string][]byte
+	Action string              `json:"action"`
+	DBID   string              `json:"dbid"`
+	Params []map[string][]byte `json:"params"`
 }

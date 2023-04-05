@@ -3,10 +3,11 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/docker/go-connections/nat"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"time"
 )
 
 //func init() {
@@ -82,12 +83,12 @@ func WithWaitStrategy(strategies ...wait.Strategy) func(req *testcontainers.Cont
 	}
 }
 
-func WithExposedPort(port string) func(req *testcontainers.ContainerRequest) {
+func WithExposedPorts(ports []string) func(req *testcontainers.ContainerRequest) {
 	return func(req *testcontainers.ContainerRequest) {
 		if req.ExposedPorts == nil {
 			req.ExposedPorts = []string{}
 		}
-		req.ExposedPorts = append(req.ExposedPorts, port)
+		req.ExposedPorts = append(req.ExposedPorts, ports[0])
 	}
 }
 

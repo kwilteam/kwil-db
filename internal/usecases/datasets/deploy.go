@@ -4,6 +4,8 @@ import (
 	"kwil/internal/entity"
 	"kwil/pkg/tx"
 	"math/big"
+
+	"go.uber.org/zap"
 )
 
 func (u *DatasetUseCase) Deploy(deployment *entity.DeployDatabase) (*tx.Receipt, error) {
@@ -21,6 +23,8 @@ func (u *DatasetUseCase) Deploy(deployment *entity.DeployDatabase) (*tx.Receipt,
 	if err != nil {
 		return nil, err
 	}
+
+	u.log.Info("database deployed", zap.String("dbid", deployment.Schema.ID()), zap.String("deployer address", deployment.Tx.Sender))
 
 	return &tx.Receipt{
 		Hash: deployment.Tx.Hash,

@@ -21,7 +21,7 @@ type ExecOpts struct {
 	Caller string
 }
 
-func (d *Dataset) ExecuteAction(exec *models.ActionExecution, execOpts *ExecOpts) (res QueryResponse, err error) {
+func (d *Dataset) ExecuteAction(exec *models.ActionExecution, execOpts *ExecOpts) (res RecordSet, err error) {
 	sp, err := d.conn.Savepoint()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create savepoint: %w", err)
@@ -93,9 +93,9 @@ func (d *Dataset) GetActionPrice(action string, execOpts *ExecOpts) (res *big.In
 	return actionPrice, nil
 }
 
-type QueryResponse [][]any
+type RecordSet []driver.Record
 
-func (r *QueryResponse) Bytes() ([]byte, error) {
+func (r *RecordSet) Bytes() ([]byte, error) {
 	bts, err := json.Marshal(r)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling response: %w", err)
@@ -104,7 +104,7 @@ func (r *QueryResponse) Bytes() ([]byte, error) {
 	return bts, nil
 }
 
-func (d *Dataset) Query(stmt string) (res QueryResponse, err error) {
+func (d *Dataset) Query(stmt string) (res RecordSet, err error) {
 	err = d.readOnlyConn.Query(stmt, func(stmt *driver.Statement) error {
 		row, err := stmt.GetRecord()
 		if err != nil {

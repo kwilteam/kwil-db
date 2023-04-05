@@ -31,11 +31,13 @@ func New(opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
 		return nil, err
 	}
 
-	u.accountStore, err = balances.NewAccountStore(
-		balances.WithLogger(u.log),
-	)
-	if err != nil {
-		return nil, err
+	if u.accountStore == nil {
+		u.accountStore, err = balances.NewAccountStore(
+			balances.WithLogger(u.log),
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return u, nil

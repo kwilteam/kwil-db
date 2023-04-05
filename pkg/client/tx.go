@@ -1,4 +1,4 @@
-package client2
+package client
 
 import (
 	"context"
@@ -56,5 +56,5 @@ func (c *Client) getAddress() (string, error) {
 		return "", fmt.Errorf("private key is nil")
 	}
 
-	return crypto.AddressFromPrivateKey(c.PrivateKey)
+	return crypto.AddressFromPrivateKey(c.PrivateKey), nil
 }

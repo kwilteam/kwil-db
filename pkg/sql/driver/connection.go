@@ -296,3 +296,20 @@ func (c *Connection) CopyReadOnly() (*Connection, error) {
 	newOpts = append(newOpts, ReadOnly())
 	return OpenConn(c.DBID, newOpts...)
 }
+
+const sqlIfTableExists = `SELECT name FROM sqlite_master WHERE type='table' AND name=$name;`
+
+func (c *Connection) TableExists(name string) (bool, error) {
+	exists := false
+	err := c.QueryNamed(sqlIfTableExists, func(stmt *Statement) error {
+		exists = true
+		return nil
+	}, map[string]interface{}{
+		"$name": name,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}

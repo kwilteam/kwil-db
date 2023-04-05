@@ -3,12 +3,8 @@ package server
 import (
 	"context"
 	"fmt"
-	accountspb "kwil/api/protobuf/accounts/v0"
-	cfgpb "kwil/api/protobuf/config/v0"
-	pricingpb "kwil/api/protobuf/pricing/v0"
-	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/internal/app/kgw/config"
-	"kwil/internal/controller/http/v0/graphql"
+	txpb "kwil/api/protobuf/tx/v1"
+	"kwil/internal/app/kwild/config"
 	"kwil/internal/controller/http/v0/health"
 	"kwil/internal/controller/http/v0/swagger"
 	"kwil/internal/pkg/gateway/middleware"
@@ -26,10 +22,10 @@ type GWServer struct {
 	middlewares []*middleware.NamedMiddleware
 	logger      log.Logger
 	h           http.Handler
-	cfg         config.AppConfig
+	cfg         *config.KwildConfig
 }
 
-func NewGWServer(mux *runtime.ServeMux, cfg config.AppConfig, logger log.Logger) *GWServer {
+func NewGWServer(mux *runtime.ServeMux, cfg *config.KwildConfig, logger log.Logger) *GWServer {
 	return &GWServer{mux: mux,
 		logger: logger,
 		h:      mux,
@@ -46,8 +42,8 @@ func (g *GWServer) AddMiddlewares(ms ...*middleware.NamedMiddleware) {
 }
 
 func (g *GWServer) Serve() error {
-	g.logger.Info("kwil gateway started", zap.String("address", g.cfg.Server.ListenAddr))
-	return http.ListenAndServe(g.cfg.Server.ListenAddr, g)
+	g.logger.Info("kwil gateway started", zap.String("address", g.cfg.HttpListenAddress))
+	return http.ListenAndServe(g.cfg.HttpListenAddress, g)
 }
 
 func (g *GWServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -55,24 +51,12 @@ func (g *GWServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
-	endpoint := g.cfg.Kwild.Addr
-	g.logger.Info("grpc endpoint configured", zap.String("endpoint", endpoint))
+	endpoint := g.cfg.GrpcListenAddress
+	g.logger.Info("grpc address configured", zap.String("address", endpoint))
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	err := txpb.RegisterTxServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
 	if err != nil {
 		return fmt.Errorf("failed to register tx service handler: %w", err)
-	}
-	err = accountspb.RegisterAccountServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
-	if err != nil {
-		return fmt.Errorf("failed to register config service handler: %w", err)
-	}
-	err = pricingpb.RegisterPricingServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
-	if err != nil {
-		return fmt.Errorf("failed to register pricing service handler: %w", err)
-	}
-	err = cfgpb.RegisterConfigServiceHandlerFromEndpoint(ctx, g.mux, endpoint, opts)
-	if err != nil {
-		return fmt.Errorf("failed to register config service handler: %w", err)
 	}
 
 	return nil
@@ -85,13 +69,6 @@ func (g *GWServer) SetupHTTPSvc(ctx context.Context) error {
 	}
 
 	err = g.mux.HandlePath(http.MethodGet, "/swagger/ui", swagger.GWSwaggerUIHandler)
-
-	if err != nil {
-		return err
-	}
-
-	graphqlRProxy := graphql.NewRProxy(g.cfg.Graphql.Addr, g.logger.Named("rproxy"))
-	err = g.mux.HandlePath(http.MethodPost, "/graphql", graphqlRProxy.Handler)
 	if err != nil {
 		return err
 	}

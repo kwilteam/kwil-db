@@ -3,17 +3,19 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"testing"
-	"time"
 )
 
 const (
-	KwildPort     = "50051"
-	KwildDatabase = "kwil"
-	kwildImage    = "kwild:latest"
+	KwildPort        = "50051"
+	KwildGatewayPort = "8080"
+	KwildDatabase    = "kwil"
+	kwildImage       = "kwild:latest"
 )
 
 // kwildContainer represents the kwild container type used in the module
@@ -56,10 +58,10 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 	container, err := setupKwild(ctx,
 		//WithDockerFile("kwil"),
 		WithNetwork(kwilTestNetworkName),
-		WithExposedPort(KwildPort),
+		WithExposedPorts([]string{KwildPort, KwildGatewayPort}),
 		WithEnv(envs),
 		// ForListeningPort requires image has /bin/sh
-		WithWaitStrategy(wait.ForLog("grpc server started"), wait.ForLog("deposits synced")),
+		WithWaitStrategy(wait.ForLog("grpc server started") /*, wait.ForLog("deposits synced")*/),
 	)
 
 	require.NoError(t, err, "Could not start kwil container")
