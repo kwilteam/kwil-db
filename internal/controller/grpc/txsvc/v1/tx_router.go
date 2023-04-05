@@ -48,7 +48,7 @@ func (s *Service) executeAction(ctx context.Context, tx *kTx.Transaction) (*kTx.
 	}
 
 	return s.executor.Execute(&entity.ExecuteAction{
-		Tx:     tx,
-		Action: executionBody.Action,
+		Tx:            tx,
+		ExecutionBody: &executionBody,
 	})
 }

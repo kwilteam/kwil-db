@@ -70,7 +70,7 @@ func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.In
 	}
 
 	return s.executor.PriceExecute(&entity.ExecuteAction{
-		Tx:     tx,
-		Action: executionBody.Action,
+		Tx:            tx,
+		ExecutionBody: &executionBody,
 	})
 }

@@ -15,9 +15,9 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 		return nil, err
 	}
 
-	ds, ok := u.engine.Datasets[action.DBID]
+	ds, ok := u.engine.Datasets[action.ExecutionBody.DBID]
 	if !ok {
-		return nil, fmt.Errorf("dataset not found")
+		return nil, fmt.Errorf("dataset not found '%s'", action.ExecutionBody.DBID)
 	}
 
 	err = u.compareAndSpend(action.Tx.Sender, action.Tx.Fee, action.Tx.Nonce, price)
@@ -26,9 +26,9 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 	}
 
 	res, err := ds.ExecuteAction(&models.ActionExecution{
-		Action: action.Action,
-		Params: action.Params,
-		DBID:   action.DBID,
+		Action: action.ExecutionBody.Action,
+		Params: action.ExecutionBody.Params,
+		DBID:   action.ExecutionBody.DBID,
 	}, &datasets.ExecOpts{
 		Caller: action.Tx.Sender,
 	})
@@ -49,15 +49,15 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 }
 
 func (u *DatasetUseCase) PriceExecute(action *entity.ExecuteAction) (*big.Int, error) {
-	ds, ok := u.engine.Datasets[action.DBID]
+	ds, ok := u.engine.Datasets[action.ExecutionBody.DBID]
 	if !ok {
-		return nil, fmt.Errorf("dataset not found '%s'", action.DBID)
+		return nil, fmt.Errorf("dataset not found '%s'", action.ExecutionBody.DBID)
 	}
 
 	execOpts := datasets.ExecOpts{
 		Caller: action.Tx.Sender,
-		Params: action.Params,
+		Params: action.ExecutionBody.Params,
 	}
 
-	return ds.GetActionPrice(action.Action, &execOpts)
+	return ds.GetActionPrice(action.ExecutionBody.Action, &execOpts)
 }
