@@ -42,9 +42,9 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 	}
 
 	return &tx.Receipt{
-		Hash: action.Tx.Hash,
-		Fee:  price.String(),
-		Body: bts,
+		TxHash: action.Tx.Hash,
+		Fee:    price.String(),
+		Body:   bts,
 	}, nil
 }
 

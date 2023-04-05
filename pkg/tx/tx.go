@@ -92,7 +92,7 @@ func (t *Transaction) Sign(p *ecdsa.PrivateKey) error {
 }
 
 type Receipt struct {
-	Hash []byte `json:"hash"`
-	Fee  string `json:"fee"`
-	Body []byte `json:"body"`
+	TxHash []byte `json:"tx_hash"`
+	Fee    string `json:"fee"`
+	Body   []byte `json:"body"`
 }

@@ -38,7 +38,7 @@ func handleReceipt(r *kTx.Receipt, err error) (*txpb.BroadcastResponse, error) {
 
 	return &txpb.BroadcastResponse{
 		Receipt: &txpb.TxReceipt{
-			TxHash: r.Hash,
+			TxHash: r.TxHash,
 			Fee:    r.Fee,
 			Body:   r.Body,
 		},

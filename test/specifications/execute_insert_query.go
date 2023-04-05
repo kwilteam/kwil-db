@@ -70,10 +70,10 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 
 	// TODO test insert post table
 	// When i execute query to database
-	_, err := execute.ExecuteAction(ctx, dbID, userQueryName, userQueryInput)
+	res, err := execute.ExecuteAction(ctx, dbID, userQueryName, userQueryInput)
 	assert.NoError(t, err)
 
-	res, err := execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
+	res, err = execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
 	assert.NoError(t, err)
 
 	var results []map[string]any

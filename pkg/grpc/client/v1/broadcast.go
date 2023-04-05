@@ -20,7 +20,7 @@ func (c *Client) Broadcast(ctx context.Context, tx *kTx.Transaction) (*kTx.Recei
 		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: %w", err)
 	}
 
-	txRes, err := serialize.Convert[txpb.BroadcastResponse, kTx.Receipt](res)
+	txRes, err := serialize.Convert[txpb.TxReceipt, kTx.Receipt](res.Receipt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert response: %w", err)
 	}

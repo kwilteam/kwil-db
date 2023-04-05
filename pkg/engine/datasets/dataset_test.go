@@ -1,6 +1,7 @@
 package datasets_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"kwil/pkg/engine/datasets"
 	"kwil/pkg/engine/models"
@@ -56,7 +57,6 @@ func Test_Dataset(t *testing.T) {
 	// read back an action with results
 	res, err = ds.ExecuteAction(&models.ActionExecution{
 		Action: mocks.ACTION_GET_ALL_USERS.Name,
-		Params: params,
 		DBID:   ds.DBID, // not technically needed here
 	}, &datasets.ExecOpts{
 		Caller: "test",
@@ -67,6 +67,19 @@ func Test_Dataset(t *testing.T) {
 
 	if len(res) != 1 {
 		t.Fatal(`expected 1 row, got: `, len(res))
+	}
+
+	bts, err := res.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(string(bts))
+
+	var res2 []map[string]any
+	err = json.Unmarshal(bts, &res2)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

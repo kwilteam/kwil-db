@@ -27,8 +27,8 @@ func (u *DatasetUseCase) Deploy(deployment *entity.DeployDatabase) (*tx.Receipt,
 	u.log.Info("database deployed", zap.String("dbid", deployment.Schema.ID()), zap.String("deployer address", deployment.Tx.Sender))
 
 	return &tx.Receipt{
-		Hash: deployment.Tx.Hash,
-		Fee:  price.String(),
+		TxHash: deployment.Tx.Hash,
+		Fee:    price.String(),
 	}, nil
 }
 
@@ -53,8 +53,8 @@ func (u *DatasetUseCase) Drop(drop *entity.DropDatabase) (*tx.Receipt, error) {
 	}
 
 	return &tx.Receipt{
-		Hash: drop.Tx.Hash,
-		Fee:  price.String(),
+		TxHash: drop.Tx.Hash,
+		Fee:    price.String(),
 	}, nil
 }
 
