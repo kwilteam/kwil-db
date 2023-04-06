@@ -6,8 +6,8 @@ import (
 )
 
 func (u *DatasetUseCase) Query(query *entity.DBQuery) ([]byte, error) {
-	db, ok := u.engine.Datasets[query.DBID]
-	if !ok {
+	db, err := u.engine.GetDataset(query.DBID)
+	if err != nil {
 		return nil, fmt.Errorf("dataset not found")
 	}
 

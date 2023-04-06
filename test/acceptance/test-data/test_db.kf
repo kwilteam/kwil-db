@@ -48,7 +48,7 @@ action get_user_by_wallet($address) {
 }
 
 action list_users() {
-    SELECT username
+    SELECT *
     FROM users;
 }
 

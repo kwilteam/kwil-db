@@ -1,7 +1,6 @@
 package datasets
 
 import (
-	"fmt"
 	"kwil/internal/entity"
 	"kwil/pkg/engine/datasets"
 	"kwil/pkg/engine/models"
@@ -15,9 +14,9 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 		return nil, err
 	}
 
-	ds, ok := u.engine.Datasets[action.ExecutionBody.DBID]
-	if !ok {
-		return nil, fmt.Errorf("dataset not found '%s'", action.ExecutionBody.DBID)
+	ds, err := u.engine.GetDataset(action.ExecutionBody.DBID)
+	if err != nil {
+		return nil, err
 	}
 
 	err = u.compareAndSpend(action.Tx.Sender, action.Tx.Fee, action.Tx.Nonce, price)
@@ -49,14 +48,14 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 }
 
 func (u *DatasetUseCase) PriceExecute(action *entity.ExecuteAction) (*big.Int, error) {
-	ds, ok := u.engine.Datasets[action.ExecutionBody.DBID]
-	if !ok {
-		return nil, fmt.Errorf("dataset not found '%s'", action.ExecutionBody.DBID)
+	//ds, ok := u.engine.Datasets[action.ExecutionBody.DBID]
+	ds, err := u.engine.GetDataset(action.ExecutionBody.DBID)
+	if err != nil {
+		return nil, err
 	}
 
 	execOpts := datasets.ExecOpts{
 		Caller: action.Tx.Sender,
-		Params: action.ExecutionBody.Params,
 	}
 
 	return ds.GetActionPrice(action.ExecutionBody.Action, &execOpts)

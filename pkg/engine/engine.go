@@ -19,7 +19,7 @@ type Engine struct {
 	conn     *driver.Connection
 	path     string
 	log      log.Logger
-	Datasets map[string]*datasets.Dataset
+	datasets map[string]*datasets.Dataset
 }
 
 // Open opens the master database and loads all datasets into memory.
@@ -27,7 +27,7 @@ func Open(opts ...MasterOpt) (*Engine, error) {
 	e := &Engine{
 		log:      log.NewNoOp(),
 		path:     DefaultPath,
-		Datasets: make(map[string]*datasets.Dataset),
+		datasets: make(map[string]*datasets.Dataset),
 	}
 	for _, opt := range opts {
 		opt(e)
@@ -64,7 +64,7 @@ func Open(opts ...MasterOpt) (*Engine, error) {
 
 // Close closes the master database connection.
 func (e *Engine) Close() error {
-	for _, dataset := range e.Datasets {
+	for _, dataset := range e.datasets {
 		err := dataset.Close()
 		if err != nil {
 			e.log.Error("failed to close dataset", zap.String("dbid", dataset.DBID), zap.Error(err))
@@ -76,7 +76,7 @@ func (e *Engine) Close() error {
 
 // createDataset creates a new dataset in the master database, on disk, and in memory.
 func (e *Engine) createDataset(owner, name string) error {
-	if _, ok := e.Datasets[name]; ok {
+	if _, ok := e.datasets[name]; ok {
 		return fmt.Errorf("dataset already exists")
 	}
 
@@ -94,7 +94,7 @@ func (e *Engine) createDataset(owner, name string) error {
 		return fmt.Errorf("failed to wipe dataset: %w", err)
 	}
 
-	e.Datasets[dataset.DBID] = dataset
+	e.datasets[dataset.DBID] = dataset
 
 	return nil
 }
@@ -104,7 +104,7 @@ func (e *Engine) createDataset(owner, name string) error {
 // the order is important because if it fails between disk and master,
 // it will catch it when it runs "validateRegisteredDatasets"
 func (e *Engine) deleteDataset(dbid string) error {
-	delete(e.Datasets, dbid)
+	delete(e.datasets, dbid)
 
 	err := e.deleteDatasetFromDisk(dbid)
 	if err != nil {
@@ -135,7 +135,7 @@ func (e *Engine) loadAllDataSets() error {
 			return fmt.Errorf("failed to open dataset of name: %s, owner: %s: %w", name, owner, err)
 		}
 
-		e.Datasets[dataset.DBID] = dataset
+		e.datasets[dataset.DBID] = dataset
 
 		return nil
 	})
@@ -197,7 +197,7 @@ func readDir(dirPath string) ([]os.FileInfo, error) {
 
 func (e *Engine) Deploy(schema *models.Dataset) error {
 	dbid := models.GenerateSchemaId(schema.Owner, schema.Name)
-	_, ok := e.Datasets[dbid]
+	_, ok := e.datasets[dbid]
 	if ok {
 		return fmt.Errorf("dataset already exists")
 	}
@@ -207,7 +207,7 @@ func (e *Engine) Deploy(schema *models.Dataset) error {
 		return fmt.Errorf("failed to create dataset: %w", err)
 	}
 
-	dataset := e.Datasets[dbid]
+	dataset := e.datasets[dbid]
 
 	err = dataset.ApplySchema(schema)
 	if err != nil {
@@ -218,7 +218,7 @@ func (e *Engine) Deploy(schema *models.Dataset) error {
 }
 
 func (e *Engine) DropDataset(dbid string) error {
-	ds, ok := e.Datasets[dbid]
+	ds, ok := e.datasets[dbid]
 	if !ok {
 		return fmt.Errorf("dataset does not exist")
 	}
@@ -265,4 +265,13 @@ func (e *Engine) ListDatabases(owner string) ([]string, error) {
 	}
 
 	return dbs, nil
+}
+
+func (e *Engine) GetDataset(dbid string) (*datasets.Dataset, error) {
+	ds, ok := e.datasets[dbid]
+	if !ok {
+		return nil, fmt.Errorf("dataset does not exist")
+	}
+
+	return ds, nil
 }

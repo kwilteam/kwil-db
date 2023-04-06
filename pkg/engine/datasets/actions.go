@@ -3,6 +3,7 @@ package datasets
 import (
 	"fmt"
 	"kwil/pkg/engine/models"
+	"kwil/pkg/engine/types"
 	"kwil/pkg/sql/driver"
 	"kwil/pkg/utils/numbers/polynomial"
 	"math/big"
@@ -55,6 +56,41 @@ func (p *PreparedAction) GetAction() *models.Action {
 		Public:     p.Public,
 		Inputs:     p.Inputs,
 	}
+}
+
+func (p *PreparedAction) Prepare(exec *models.ActionExecution, opts *ExecOpts) (finalRecords []map[string]any, err error) {
+	for _, record := range exec.Params {
+		finalRecord, err := p.prepareSingle(record)
+		if err != nil {
+			return nil, fmt.Errorf("error preparing action %s: %w", p.Name, err)
+		}
+
+		finalRecord[callerVar] = opts.Caller
+
+		finalRecords = append(finalRecords, finalRecord)
+	}
+
+	return finalRecords, nil
+}
+
+// prepareSingle prepares a single record of a batch of records
+func (p *PreparedAction) prepareSingle(record map[string][]byte) (map[string]any, error) {
+	finalRecord := make(map[string]any)
+	for _, input := range p.Inputs {
+		val, ok := record[input]
+		if !ok {
+			return nil, fmt.Errorf(`missing input "%s"`, input)
+		}
+
+		concrete, err := types.NewFromSerial(val)
+		if err != nil {
+			return nil, fmt.Errorf("error converting serialized input %s: %w", input, err)
+		}
+
+		finalRecord[input] = concrete
+	}
+
+	return finalRecord, nil
 }
 
 type PreparedStatement struct {

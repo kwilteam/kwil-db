@@ -46,16 +46,16 @@ func Test_Dataset(t *testing.T) {
 	}
 
 	// read it back
-	res, err := ds.Query("SELECT * FROM users")
+	res1, err := ds.Query("SELECT * FROM users")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res) != 1 {
-		t.Fatal(`expected 1 row, got: `, len(res))
+	if len(res1) != 1 {
+		t.Fatal(`expected 1 row, got: `, len(res1))
 	}
 
 	// read back an action with results
-	res, err = ds.ExecuteAction(&models.ActionExecution{
+	res, err := ds.ExecuteAction(&models.ActionExecution{
 		Action: mocks.ACTION_GET_ALL_USERS.Name,
 		DBID:   ds.DBID, // not technically needed here
 	}, &datasets.ExecOpts{
@@ -66,7 +66,10 @@ func Test_Dataset(t *testing.T) {
 	}
 
 	if len(res) != 1 {
-		t.Fatal(`expected 1 row, got: `, len(res))
+		t.Fatal(`expected 1 statement result, got: `, len(res))
+	}
+	if len(res[0]) != 1 {
+		t.Fatal(`expected 1 row, got: `, len(res[0]))
 	}
 
 	bts, err := res.Bytes()
@@ -76,7 +79,7 @@ func Test_Dataset(t *testing.T) {
 
 	fmt.Println(string(bts))
 
-	var res2 []map[string]any
+	var res2 [][]map[string]any
 	err = json.Unmarshal(bts, &res2)
 	if err != nil {
 		t.Fatal(err)

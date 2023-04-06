@@ -1,7 +1,6 @@
 package datasets
 
 import (
-	"fmt"
 	"kwil/pkg/balances"
 	"kwil/pkg/engine"
 	"kwil/pkg/engine/models"
@@ -9,8 +8,8 @@ import (
 )
 
 type DatasetUseCase struct {
-	engine       *engine.Engine
-	accountStore *balances.AccountStore
+	engine       engineInterface
+	accountStore accountStore
 	log          log.Logger
 }
 
@@ -24,11 +23,13 @@ func New(opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
 	}
 
 	var err error
-	u.engine, err = engine.Open(
-		engine.WithLogger(u.log),
-	)
-	if err != nil {
-		return nil, err
+	if u.engine == nil {
+		u.engine, err = engine.Open(
+			engine.WithLogger(u.log),
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if u.accountStore == nil {
@@ -48,10 +49,15 @@ func (u *DatasetUseCase) ListDatabases(owner string) ([]string, error) {
 }
 
 func (u *DatasetUseCase) GetSchema(dbid string) (*models.Dataset, error) {
-	db, ok := u.engine.Datasets[dbid]
-	if !ok {
-		return nil, fmt.Errorf("dataset not found")
+	db, err := u.engine.GetDataset(dbid)
+	if err != nil {
+		return nil, err
 	}
 
 	return db.GetSchema(), nil
+}
+
+func (u *DatasetUseCase) Close() error {
+	u.accountStore.Close()
+	return u.engine.Close()
 }

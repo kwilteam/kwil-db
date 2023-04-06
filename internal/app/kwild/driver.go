@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/internal/pkg/graphql/query"
 	"kwil/pkg/client"
 	"kwil/pkg/engine/models"
 	grpc "kwil/pkg/grpc/client/v1"
@@ -106,14 +105,14 @@ func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, db
 	return fmt.Errorf("database does not exist")
 }
 
-func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, error) {
-	rec, err := d.clt.ExecuteAction(ctx, dbid, queryName, queryInputs)
+func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, [][]map[string]any, error) {
+	rec, res, err := d.clt.ExecuteAction(ctx, dbid, queryName, queryInputs)
 	if err != nil {
-		return nil, fmt.Errorf("error executing query: %w", err)
+		return nil, nil, fmt.Errorf("error executing query: %w", err)
 	}
 
 	d.logger.Debug("execute query", zap.String("database", dbid), zap.String("query", queryName))
-	return rec, nil
+	return rec, res, nil
 }
 
 func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
@@ -125,7 +124,6 @@ func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
 	return nil
 }
 
-func (d *KwildDriver) QueryDatabase(ctx context.Context, queryStr string) ([]byte, error) {
-	url := fmt.Sprintf("http://%s/graphql", d.gatewayAddr)
-	return query.Query(ctx, url, queryStr)
+func (d *KwildDriver) QueryDatabase(ctx context.Context, dbid, query string) ([]map[string]any, error) {
+	return d.clt.Query(ctx, dbid, query)
 }

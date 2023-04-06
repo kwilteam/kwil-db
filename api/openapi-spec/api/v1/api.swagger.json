@@ -100,36 +100,6 @@
         ]
       }
     },
-    "/api/v1/databases": {
-      "get": {
-        "operationId": "TxService_ListDatabases",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txListDatabasesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "owner",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
     "/api/v1/databases/{dbid}/schema": {
       "get": {
         "operationId": "TxService_GetSchema",
@@ -247,6 +217,36 @@
             "schema": {
               "$ref": "#/definitions/txQueryRequest"
             }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/{owner}/databases": {
+      "get": {
+        "operationId": "TxService_ListDatabases",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txListDatabasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [

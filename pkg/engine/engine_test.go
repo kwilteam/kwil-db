@@ -51,6 +51,14 @@ func Test_Engine_Deploy(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ds, err := master.GetDataset(db.DBID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if ds != nil {
+		t.Fatal("expected nil, got dataset")
+	}
+
 }
 
 // wipe and deploy guarantees that the database is brand new with a fresh schema
@@ -62,5 +70,5 @@ func wipeAndDeploy(t *testing.T, master *engine.Engine, schema *models.Dataset) 
 		return nil, err
 	}
 
-	return master.Datasets[schema.ID()], nil
+	return master.GetDataset(schema.ID())
 }

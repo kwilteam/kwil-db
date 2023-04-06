@@ -10,6 +10,7 @@ func WithPath(path string) balancesOpts {
 	}
 }
 
+// Wipe will delete the database file and recreate it
 func Wipe() balancesOpts {
 	return func(ar *AccountStore) {
 		ar.wipe = true

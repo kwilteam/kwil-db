@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	cc "kwil/pkg/chain/client"
 	ccs "kwil/pkg/chain/client/service"
@@ -13,6 +14,7 @@ import (
 	"kwil/pkg/engine/types"
 	grpcClient "kwil/pkg/grpc/client/v1"
 	kTx "kwil/pkg/tx"
+	"strings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -186,15 +188,24 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (*kTx.Receipt, e
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
 	}
 
-	tx, err := c.dropDatabaseTx(ctx, &models.DatasetIdentifier{
+	identifier := &models.DatasetIdentifier{
 		Owner: address,
 		Name:  name,
-	})
+	}
+
+	tx, err := c.dropDatabaseTx(ctx, identifier)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.client.Broadcast(ctx, tx)
+	res, err := c.client.Broadcast(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	delete(c.datasets, identifier.ID())
+
+	return res, nil
 }
 
 // dropDatabaseTx creates a new transaction to drop a database
@@ -202,11 +213,12 @@ func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *models.DatasetIden
 	return c.newTx(ctx, kTx.DROP_DATABASE, dbIdent)
 }
 
-// ExecuteAction executes an action
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, error) {
+// ExecuteAction executes an action.
+// It returns the receipt, as well as outputs which is the decoded body of the receipt.
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, [][]map[string]any, error) {
 	encodedValues, err := encodeInputs(inputs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	executionBody := &models.ActionExecution{
@@ -217,10 +229,30 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 
 	tx, err := c.executeActionTx(ctx, executionBody)
 	if err != nil {
+		return nil, nil, err
+	}
+
+	res, err := c.client.Broadcast(ctx, tx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	outputs, err := decodeOutputs(res.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return res, outputs, nil
+}
+
+func decodeOutputs(bts []byte) ([][]map[string]any, error) {
+	var outputs [][]map[string]any
+	err := json.Unmarshal(bts, &outputs)
+	if err != nil {
 		return nil, err
 	}
 
-	return c.client.Broadcast(ctx, tx)
+	return outputs, nil
 }
 
 // executeActionTx creates a new transaction to execute an action
@@ -249,4 +281,14 @@ func encodeInputs(inputs []map[string]any) ([]map[string][]byte, error) {
 // GetConfig returns the provider config
 func (c *Client) GetConfig(ctx context.Context) (*grpcClient.SvcConfig, error) {
 	return c.client.GetConfig(ctx)
+}
+
+// Query executes a query
+func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {
+	return c.client.Query(ctx, dbid, query)
+}
+
+func (c *Client) ListDatabases(ctx context.Context, owner string) ([]string, error) {
+	owner = strings.ToLower(owner)
+	return c.client.ListDatabases(ctx, owner)
 }

@@ -47,7 +47,7 @@ type DatasetIdentifier struct {
 	Name  string `json:"name"`
 }
 
-func (d *DatasetIdentifier) GetSchemaName() string {
+func (d *DatasetIdentifier) ID() string {
 	return GenerateSchemaId(d.Owner, d.Name)
 }
 

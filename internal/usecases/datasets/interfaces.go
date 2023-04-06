@@ -2,6 +2,8 @@ package datasets
 
 import (
 	"kwil/internal/entity"
+	"kwil/pkg/balances"
+	"kwil/pkg/engine/datasets"
 	"kwil/pkg/engine/models"
 	"kwil/pkg/tx"
 	"math/big"
@@ -38,4 +40,21 @@ type DatasetUseCaseInterface interface {
 
 	// GetSchema returns the schema of the given database
 	GetSchema(string) (*models.Dataset, error)
+}
+
+type engineInterface interface {
+	Close() error
+	Deploy(schema *models.Dataset) error
+	DropDataset(dbid string) error
+	GetDeployPrice(schema *models.Dataset) (*big.Int, error)
+	GetDropPrice(dbid string) (*big.Int, error)
+	ListDatabases(owner string) ([]string, error)
+	GetDataset(dbid string) (*datasets.Dataset, error)
+}
+
+type accountStore interface {
+	GetAccount(address string) (*balances.Account, error)
+	Spend(spend *balances.Spend) error
+	BatchCredit(creditList []*balances.Credit, chain *balances.ChainConfig) error
+	Close() error
 }
