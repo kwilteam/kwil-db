@@ -44,12 +44,6 @@ func TestKwildAcceptance(t *testing.T) {
 			// setup
 			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger)
 
-			// running forever for local development
-			if *dev {
-				acceptance.DumpEnv(&runningCfg)
-				<-done
-			}
-
 			// NOTE: only local env test, public network test takes too long
 			// thus here test assume user is funded
 			if !*remote {
@@ -65,6 +59,12 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// chain sync, wait kwil to register user
 			time.Sleep(cfg.ChainSyncWaitTime)
+
+			// running forever for local development
+			if *dev {
+				acceptance.DumpEnv(&runningCfg)
+				<-done
+			}
 
 			// When user deployed database
 			specifications.DatabaseDeploySpecification(ctx, t, driver)

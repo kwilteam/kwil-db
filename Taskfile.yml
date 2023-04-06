@@ -140,4 +140,4 @@ tasks:
   dev:up:
       desc: Start the dev environment
       cmds:
-      - go test ./test/acceptance/ -dev -v
+      - go test ./test/acceptance/ -timeout 12h -dev -v
