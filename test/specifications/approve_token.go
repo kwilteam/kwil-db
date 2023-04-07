@@ -25,10 +25,8 @@ func ApproveTokenSpecification(ctx context.Context, t *testing.T, approve Approv
 
 	// When i approve validator to spend my tokens
 	err := approve.ApproveToken(ctx, amount)
-
 	// Then i expect success
 	assert.NoError(t, err)
-
 	// And i expect the allowance to be set
 	allowance, err := approve.GetAllowance(ctx)
 	assert.NoError(t, err)

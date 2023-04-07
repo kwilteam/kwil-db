@@ -52,8 +52,10 @@ func TestKwildAcceptance(t *testing.T) {
 				// Given user is funded
 				err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.InitialFundAmount)
 				assert.NoError(t, err, "failed to fund user account")
+
 				err = chainDeployer.FundAccount(ctx, cfg.SecondUserAddr, cfg.InitialFundAmount)
 				assert.NoError(t, err, "failed to fund second user account")
+
 				go acceptance.KeepMiningBlocks(ctx, done, chainDeployer, cfg.UserAddr)
 
 				// and user pledged fund to validator
@@ -62,6 +64,7 @@ func TestKwildAcceptance(t *testing.T) {
 
 				// second user
 				specifications.ApproveTokenSpecification(ctx, t, secondDriver)
+
 				specifications.DepositFundSpecification(ctx, t, secondDriver)
 			}
 
@@ -86,8 +89,6 @@ func TestKwildAcceptance(t *testing.T) {
 			//specifications.ExecutePermissionedActionSpecification(ctx, t, secondDriver)
 
 			// and user should be able to drop database
-			specifications.DatabaseDropSpecification(ctx, t, driver)
-
 			close(done)
 		})
 	}

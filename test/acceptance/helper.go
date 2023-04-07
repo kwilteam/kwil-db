@@ -37,7 +37,7 @@ func KeepMiningBlocks(ctx context.Context, done chan struct{}, deployer deployer
 		case <-done:
 			return
 		default:
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1 * time.Second)
 			// to mine new blocks
 			err := deployer.FundAccount(ctx, account, 1)
 			if err != nil {
