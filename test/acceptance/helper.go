@@ -37,7 +37,7 @@ func KeepMiningBlocks(ctx context.Context, done chan struct{}, deployer deployer
 		case <-done:
 			return
 		default:
-			time.Sleep(1 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 			// to mine new blocks
 			err := deployer.FundAccount(ctx, account, 1)
 			if err != nil {
@@ -49,6 +49,7 @@ func KeepMiningBlocks(ctx context.Context, done chan struct{}, deployer deployer
 
 type TestEnvCfg struct {
 	UserPrivateKeyString             string
+	SecondUserPrivateKeyString       string
 	DatabaseDeployerPrivateKeyString string
 	DBSchemaFilePath                 string
 	NodeURL                          string // kwild address
@@ -61,10 +62,12 @@ type TestEnvCfg struct {
 	LogLevel                         string
 
 	// populated by init
-	UserPrivateKey     *ecdsa.PrivateKey
-	DeployerPrivateKey *ecdsa.PrivateKey
-	UserAddr           string
-	DeployerAddr       string
+	UserPrivateKey       *ecdsa.PrivateKey
+	SecondUserPrivateKey *ecdsa.PrivateKey
+	DeployerPrivateKey   *ecdsa.PrivateKey
+	UserAddr             string
+	SecondUserAddr       string
+	DeployerAddr         string
 }
 
 func (e *TestEnvCfg) init(t *testing.T) {
@@ -73,11 +76,16 @@ func (e *TestEnvCfg) init(t *testing.T) {
 	if err != nil {
 		t.Fatal(fmt.Errorf("invalid user private key: %w", err))
 	}
+	e.SecondUserPrivateKey, err = crypto.HexToECDSA(e.SecondUserPrivateKeyString)
+	if err != nil {
+		t.Fatal(fmt.Errorf("invalid second user private key: %w", err))
+	}
 	e.DeployerPrivateKey, err = crypto.HexToECDSA(e.DatabaseDeployerPrivateKeyString)
 	if err != nil {
 		t.Fatal(fmt.Errorf("invalid deployer private key: %w", err))
 	}
 	e.UserAddr = crypto.PubkeyToAddress(e.UserPrivateKey.PublicKey).Hex()
+	e.SecondUserAddr = crypto.PubkeyToAddress(e.SecondUserPrivateKey.PublicKey).Hex()
 	e.DeployerAddr = crypto.PubkeyToAddress(e.DeployerPrivateKey.PublicKey).Hex()
 }
 
@@ -87,6 +95,7 @@ func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 	if remote {
 		e = TestEnvCfg{
 			UserPrivateKeyString:             os.Getenv("TEST_USER_PK"),
+			SecondUserPrivateKeyString:       os.Getenv("TEST_SECOND_USER_PK"),
 			DatabaseDeployerPrivateKeyString: os.Getenv("TEST_DEPLOYER_PK"),
 			DBSchemaFilePath:                 "./test-data/test_db.kf",
 			NodeURL:                          os.Getenv("TEST_KWILD_ADDR"),
@@ -100,16 +109,17 @@ func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 		}
 	} else {
 		e = TestEnvCfg{
-			UserPrivateKeyString:             adapters.UserAccountPK,
-			DatabaseDeployerPrivateKeyString: adapters.DeployerAccountPK,
+			UserPrivateKeyString:             adapters.UserAccountPrivateKey,
+			SecondUserPrivateKeyString:       adapters.SecondUserPrivateKey,
+			DatabaseDeployerPrivateKeyString: adapters.DeployerAccountPrivateKey,
 			DBSchemaFilePath:                 "./test-data/test_db.kf",
 			NodeURL:                          "",
 			GatewayURL:                       "",
 			ChainRPCURL:                      "",
 			ChainSyncWaitTime:                2 * time.Second,
 			ChainCode:                        types.GOERLI,
-			InitialFundAmount:                100,
-			denomination:                     big.NewInt(1000000000000000000),
+			InitialFundAmount:                42,
+			denomination:                     big.NewInt(1000000000000000),
 			LogLevel:                         "debug",
 		}
 	}
@@ -144,6 +154,7 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg,
 	}
 	kwildC := adapters.StartKwildDockerService(t, ctx, kwildEnv)
 	exposedKwildEndpoint, err := kwildC.ExposedEndpoint(ctx)
+	require.NoError(t, err)
 	exposedKgwEndpoint, err := kwildC.SecondExposedEndpoint(ctx)
 	require.NoError(t, err)
 
@@ -217,12 +228,39 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 	return kwildDriver, chainDeployer, updatedCfg
 }
 
+// NewClient creates a new client that is a KwilAcceptanceDriver
+// this can be used to simulate several "wallets" in the same test
+func newGRPCClient(ctx context.Context, t *testing.T, cfg *TestEnvCfg, logger log.Logger) KwilAcceptanceDriver {
+	kwilClt, err := client.New(ctx, cfg.NodeURL,
+		client.WithChainRpcUrl(cfg.ChainRPCURL),
+		client.WithPrivateKey(cfg.UserPrivateKey),
+	)
+	require.NoError(t, err, "failed to create kwil client")
+
+	kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
+	return kwildDriver
+}
+
 func GetDriver(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger) (KwilAcceptanceDriver, deployer.Deployer, TestEnvCfg) {
 	switch driverType {
 	//case "cli":
 	//	return setupCliDriver(ctx, t, cfg, logger)
 	case "grpc":
 		return setupGrpcDriver(ctx, t, cfg, logger)
+	default:
+		panic("unknown driver type")
+	}
+}
+
+func NewClient(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger) KwilAcceptanceDriver {
+	// sort of hacky, but we want to use the second user's private key
+	cfg.UserPrivateKeyString = cfg.SecondUserPrivateKeyString
+	cfg.UserPrivateKey = cfg.SecondUserPrivateKey
+	switch driverType {
+	//case "cli":
+	//	return setupCliDriver(ctx, t, cfg, logger)
+	case "grpc":
+		return newGRPCClient(ctx, t, &cfg, logger)
 	default:
 		panic("unknown driver type")
 	}

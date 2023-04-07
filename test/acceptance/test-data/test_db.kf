@@ -14,25 +14,25 @@ table posts {
     content text
 }
 
-action create_user($id, $username, $age)  {
+action create_user($id, $username, $age) public {
     INSERT INTO users (id, username, age, wallet)
     VALUES ($id, $username, $age, @caller);
 }
 
-action update_username($username) {
+action update_username($username) public {
     UPDATE users
     SET username = $username
     WHERE wallet = @caller;
 }
 
-action create_post($id, $title, $content) {
+action create_post($id, $title, $content) private {
     INSERT INTO posts (id, user_id, title, content)
     VALUES ($id, (
         SELECT id FROM users WHERE wallet = @caller
     ), $title, $content);
 }
 
-action delete_post($id) {
+action delete_post($id) public {
     DELETE FROM posts
     WHERE id = $id AND user_id = (
         SELECT id
@@ -41,18 +41,18 @@ action delete_post($id) {
     );
 }
 
-action get_user_by_wallet($address) {
+action get_user_by_wallet($address) public {
     SELECT *
     FROM users
     WHERE wallet = $address;
 }
 
-action list_users() {
-    SELECT *
+action list_users() private {
+    SELECT username
     FROM users;
 }
 
-action get_user_posts($username) {
+action get_user_posts($username) public {
     SELECT title, content
     FROM posts
     WHERE user_id = (

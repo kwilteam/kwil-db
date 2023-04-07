@@ -19,9 +19,6 @@ type userTable struct {
 	Age      int32  `json:"age"`
 }
 
-type hasuraTable map[string][]userTable
-type hasuraResp map[string]hasuraTable
-
 type ExecuteQueryDsl interface {
 	// ExecuteAction executes QUERY to a database
 	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key

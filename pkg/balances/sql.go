@@ -54,7 +54,7 @@ const sqlSetBalance = "UPDATE accounts SET balance = $balance WHERE address = $a
 
 func (a *AccountStore) setBalance(address string, amount *big.Int) error {
 	return a.db.ExecuteNamed(sqlSetBalance, map[string]interface{}{
-		"$address": address,
+		"$address": strings.ToLower(address),
 		"$balance": amount.String(),
 	})
 }
@@ -63,7 +63,7 @@ const sqlSetNonce = "UPDATE accounts SET nonce = $nonce WHERE address = $address
 
 func (a *AccountStore) setNonce(address string, nonce int64) error {
 	return a.db.ExecuteNamed(sqlSetNonce, map[string]interface{}{
-		"$address": address,
+		"$address": strings.ToLower(address),
 		"$nonce":   nonce,
 	})
 }
@@ -72,7 +72,7 @@ const sqlCreateAccount = "INSERT INTO accounts (address, balance, nonce) VALUES 
 
 func (a *AccountStore) createAccount(address string) error {
 	return a.db.ExecuteNamed(sqlCreateAccount, map[string]interface{}{
-		"$address": address,
+		"$address": strings.ToLower(address),
 		"$balance": big.NewInt(0).String(),
 		"$nonce":   0,
 	})
@@ -99,7 +99,7 @@ func (a *AccountStore) getAccount(address string) (*Account, error) {
 
 		return nil
 	}, map[string]interface{}{
-		"$address": address,
+		"$address": strings.ToLower(address),
 	})
 	if err != nil {
 		return nil, err

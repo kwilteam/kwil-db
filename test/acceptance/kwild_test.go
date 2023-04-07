@@ -44,17 +44,33 @@ func TestKwildAcceptance(t *testing.T) {
 			// setup
 			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger)
 
+			secondDriver := acceptance.NewClient(ctx, t, c.driverType, runningCfg, tLogger)
+
+			// running forever for local development
+			if *dev {
+				acceptance.DumpEnv(&runningCfg)
+				<-done
+			}
+
 			// NOTE: only local env test, public network test takes too long
 			// thus here test assume user is funded
 			if !*remote {
 				// Given user is funded
 				err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.InitialFundAmount)
-				assert.NoError(t, err, "failed to fund user config")
+				assert.NoError(t, err, "failed to fund user account")
+				err = chainDeployer.FundAccount(ctx, cfg.SecondUserAddr, cfg.InitialFundAmount)
+				assert.NoError(t, err, "failed to fund second user account")
 				go acceptance.KeepMiningBlocks(ctx, done, chainDeployer, cfg.UserAddr)
 
 				// and user pledged fund to validator
 				specifications.ApproveTokenSpecification(ctx, t, driver)
 				specifications.DepositFundSpecification(ctx, t, driver)
+
+				time.Sleep(cfg.ChainSyncWaitTime)
+
+				// second user
+				specifications.ApproveTokenSpecification(ctx, t, secondDriver)
+				specifications.DepositFundSpecification(ctx, t, secondDriver)
 			}
 
 			// chain sync, wait kwil to register user
@@ -73,6 +89,9 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.ExecuteDBInsertSpecification(ctx, t, driver)
 			specifications.ExecuteDBUpdateSpecification(ctx, t, driver)
 			specifications.ExecuteDBDeleteSpecification(ctx, t, driver)
+
+			// Test permissioned actions
+			specifications.ExecutePermissionedActionSpecification(ctx, t, secondDriver)
 
 			// and user should be able to drop database
 			specifications.DatabaseDropSpecification(ctx, t, driver)

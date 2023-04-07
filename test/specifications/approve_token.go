@@ -21,7 +21,7 @@ func ApproveTokenSpecification(ctx context.Context, t *testing.T, approve Approv
 	// @yaiba TODO: make this into args?
 	//Given a user and a validator address, and an amount
 	//decimals := 18
-	amount := new(big.Int).Mul(big.NewInt(100), big.NewInt(1000000000000000000))
+	amount := new(big.Int).Mul(big.NewInt(100), big.NewInt(1000000000000000000)) // amount here doesn't matter since we can approve any amount
 
 	// When i approve validator to spend my tokens
 	err := approve.ApproveToken(ctx, amount)

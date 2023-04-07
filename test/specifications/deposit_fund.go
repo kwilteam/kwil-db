@@ -2,9 +2,10 @@ package specifications
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // DepositFundDsl is dsl for deposit fund specification
@@ -13,16 +14,17 @@ type DepositFundDsl interface {
 	GetDepositBalance(ctx context.Context) (*big.Int, error)
 }
 
+const depositAmount = 100000000000000
+
 func DepositFundSpecification(ctx context.Context, t *testing.T, deposit DepositFundDsl) {
 	t.Logf("Executing DepositFundSpecification")
 	// Given a user and a validator address, and an amount
 
-	amount := new(big.Int).Mul(big.NewInt(10), big.NewInt(1000000000000000000))
 	depositedAmountOld, err := deposit.GetDepositBalance(ctx)
 	assert.NoError(t, err)
 
 	// When i deposit fund from user to validator
-	err = deposit.DepositFund(ctx, amount)
+	err = deposit.DepositFund(ctx, big.NewInt(depositAmount))
 
 	// Then i expect success
 	assert.NoError(t, err)
