@@ -19,7 +19,7 @@ const (
 	WalletHDPath              = "m/44'/60'/0'"
 	DeployerAccountPrivateKey = "dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5" // address: 0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C
 	UserAccountPrivateKey     = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e" // address: 0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7
-	SecondUserPrivateKey      = "c3b47aa64318c3bdbb375afbd10d4c9f7fb095c516652f293f3adbb79ea4310d" // address: 0x15ee69BB1B148336F7e813a4FeC5C17CB0450C4e
+	SecondUserPrivateKey      = "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b" // address: 0x318b469BBa396AEc2C60342F9441be36A1945174
 )
 
 // ganacheContainer represents the ganache container type used in the module

@@ -66,8 +66,6 @@ func TestKwildAcceptance(t *testing.T) {
 				specifications.ApproveTokenSpecification(ctx, t, driver)
 				specifications.DepositFundSpecification(ctx, t, driver)
 
-				time.Sleep(cfg.ChainSyncWaitTime)
-
 				// second user
 				specifications.ApproveTokenSpecification(ctx, t, secondDriver)
 				specifications.DepositFundSpecification(ctx, t, secondDriver)

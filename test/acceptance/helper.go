@@ -118,8 +118,8 @@ func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 			ChainRPCURL:                      "",
 			ChainSyncWaitTime:                2 * time.Second,
 			ChainCode:                        types.GOERLI,
-			InitialFundAmount:                42,
-			denomination:                     big.NewInt(1000000000000000),
+			InitialFundAmount:                100,
+			denomination:                     big.NewInt(1000000000000000000),
 			LogLevel:                         "debug",
 		}
 	}
