@@ -284,8 +284,13 @@ func (c *Client) GetConfig(ctx context.Context) (*grpcClient.SvcConfig, error) {
 }
 
 // Query executes a query
-func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {
-	return c.client.Query(ctx, dbid, query)
+func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records, error) {
+	res, err := c.client.Query(ctx, dbid, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewRecordsFromMaps(res), nil
 }
 
 func (c *Client) ListDatabases(ctx context.Context, owner string) ([]string, error) {

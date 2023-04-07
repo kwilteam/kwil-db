@@ -13,16 +13,30 @@ type Records struct {
 	index int
 
 	// rows is the underlying sql.Rows object.
-	records []*Record
+	records []*Record `json:"records"`
 }
 
 type Record map[string]any
+
+func NewRecordFromMap(rec map[string]any) *Record {
+	record := Record(rec)
+	return &record
+}
 
 func NewRecords(records []*Record) *Records {
 	return &Records{
 		index:   -1,
 		records: records,
 	}
+}
+
+func NewRecordsFromMaps(recs []map[string]any) *Records {
+	records := make([]*Record, len(recs))
+	for i, rec := range recs {
+		records[i] = NewRecordFromMap(rec)
+	}
+
+	return NewRecords(records)
 }
 
 func (r *Records) Next() bool {
@@ -38,7 +52,7 @@ func (r *Records) Record() *Record {
 	return r.records[r.index]
 }
 
-func (r *Records) Scan(objects []any) error {
+func (r *Records) Scan(objects []interface{}) error {
 	if !r.Next() {
 		return errors.New("no more records")
 	}
@@ -85,7 +99,7 @@ func (r *Record) Scan(obj any) error {
 	case reflect.Float32, reflect.Float64, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.String, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Bool:
 		return r.convertIntoScalarValue(val)
 	default:
-		return fmt.Errorf("unsupported type: %s", reflect.TypeOf(obj).Kind().String())
+		return fmt.Errorf("record scan error: unsupported type: %s", reflect.TypeOf(obj).Kind().String())
 	}
 }
 
@@ -194,7 +208,7 @@ func convertIntoScalar(scalarValue reflect.Value, val any) error {
 		scalarValue.SetBool(boolVal)
 		return nil
 	default:
-		return fmt.Errorf("unsupported type: %s", scalarValue.Kind().String())
+		return fmt.Errorf("scalar conversion error: unsupported type: %s", scalarValue.Kind().String())
 	}
 }
 

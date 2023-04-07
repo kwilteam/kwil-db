@@ -44,7 +44,7 @@ func TestKwildAcceptance(t *testing.T) {
 			// setup
 			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger)
 
-			//secondDriver := acceptance.NewClient(ctx, t, c.driverType, runningCfg, tLogger)
+			secondDriver := acceptance.NewClient(ctx, t, c.driverType, runningCfg, tLogger)
 
 			// NOTE: only local env test, public network test takes too long
 			// thus here test assume user is funded
@@ -61,8 +61,8 @@ func TestKwildAcceptance(t *testing.T) {
 				specifications.DepositFundSpecification(ctx, t, driver)
 
 				// second user
-				//specifications.ApproveTokenSpecification(ctx, t, secondDriver)
-				//specifications.DepositFundSpecification(ctx, t, secondDriver)
+				specifications.ApproveTokenSpecification(ctx, t, secondDriver)
+				specifications.DepositFundSpecification(ctx, t, secondDriver)
 			}
 
 			// chain sync, wait kwil to register user

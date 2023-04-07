@@ -2,6 +2,7 @@ package specifications
 
 import (
 	"context"
+	"kwil/pkg/client"
 	"kwil/pkg/databases"
 	"testing"
 
@@ -23,7 +24,7 @@ type ExecuteQueryDsl interface {
 	// ExecuteAction executes QUERY to a database
 	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key
 	ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, [][]map[string]any, error)
-	QueryDatabase(ctx context.Context, dbid, query string) ([]map[string]any, error)
+	QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error)
 }
 
 func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
@@ -96,5 +97,10 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	assert.EqualValues(t, user2.ID, user2Id)
 	assert.EqualValues(t, user2.UserName, user2Username)
 	assert.EqualValues(t, user2.Age, user2Age)
+
+	// testing query database
+	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
+	assert.NoError(t, err)
+	assert.NotNil(t, records)
 
 }

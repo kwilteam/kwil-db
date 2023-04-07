@@ -253,7 +253,7 @@ func (e *Engine) GetDropPrice(dbid string) (*big.Int, error) {
 
 func (e *Engine) ListDatabases(owner string) ([]string, error) {
 	dbs := make([]string, 0)
-	err := e.conn.Query(sqlListDatabasesByOwner, func(stmt *driver.Statement) error {
+	err := e.conn.QueryNamed(sqlListDatabasesByOwner, func(stmt *driver.Statement) error {
 		dbs = append(dbs, stmt.GetText("name"))
 		return nil
 	},

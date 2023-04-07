@@ -35,7 +35,7 @@ func (s *Statement) BindAny(position int, val any) error {
 	case reflect.Bool:
 		s.stmt.BindBool(position, ref.Bool())
 	default:
-		return fmt.Errorf("unsupported type: %s", ref.Kind())
+		return fmt.Errorf("sqlite bind any error: unsupported type: %s", ref.Kind())
 	}
 
 	return nil
@@ -88,7 +88,7 @@ func (s *Statement) SetAny(param string, val any) error {
 	case reflect.Bool:
 		s.stmt.SetBool(param, ref.Bool())
 	default:
-		return fmt.Errorf("unsupported type: %s", ref.Kind())
+		return fmt.Errorf("sqlite set any error: unsupported type: %s", ref.Kind())
 	}
 
 	return nil
