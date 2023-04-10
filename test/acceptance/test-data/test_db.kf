@@ -11,7 +11,8 @@ table posts {
     id int primary notnull,
     user_id int,
     title text,
-    content text
+    content text,
+    unique_index unique(user_id, title)
 }
 
 action create_user($id, $username, $age) public {

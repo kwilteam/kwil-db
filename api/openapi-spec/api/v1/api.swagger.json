@@ -325,28 +325,14 @@
       "type": "object",
       "properties": {
         "type": {
-          "$ref": "#/definitions/txAttributeType"
+          "type": "integer",
+          "format": "int32"
         },
         "value": {
           "type": "string",
           "format": "byte"
         }
       }
-    },
-    "txAttributeType": {
-      "type": "string",
-      "enum": [
-        "INVALID_ATTRIBUTE",
-        "PRIMARY_KEY",
-        "UNIQUE",
-        "NOT_NULL",
-        "DEFAULT",
-        "MIN",
-        "MAX",
-        "MIN_LENGTH",
-        "MAX_LENGTH"
-      ],
-      "default": "INVALID_ATTRIBUTE"
     },
     "txBroadcastRequest": {
       "type": "object",
@@ -371,7 +357,8 @@
           "type": "string"
         },
         "type": {
-          "$ref": "#/definitions/txDataType"
+          "type": "integer",
+          "format": "int32"
         },
         "attributes": {
           "type": "array",
@@ -380,16 +367,6 @@
           }
         }
       }
-    },
-    "txDataType": {
-      "type": "string",
-      "enum": [
-        "INVALID_DATA_TYPE",
-        "NULL_DATA_TYPE",
-        "STRING_DATA_TYPE",
-        "INT_DATA_TYPE"
-      ],
-      "default": "INVALID_DATA_TYPE"
     },
     "txDataset": {
       "type": "object",
@@ -474,18 +451,10 @@
           }
         },
         "type": {
-          "$ref": "#/definitions/txIndexType"
+          "type": "integer",
+          "format": "int32"
         }
       }
-    },
-    "txIndexType": {
-      "type": "string",
-      "enum": [
-        "INVALID_INDEX_TYPE",
-        "BTREE_INDEX_TYPE",
-        "UNIQUE_BTREE_INDEX_TYPE"
-      ],
-      "default": "INVALID_INDEX_TYPE"
     },
     "txListDatabasesResponse": {
       "type": "object",
@@ -534,19 +503,10 @@
           "format": "byte"
         },
         "signature_type": {
-          "$ref": "#/definitions/txSignatureType"
+          "type": "integer",
+          "format": "int32"
         }
       }
-    },
-    "txSignatureType": {
-      "type": "string",
-      "enum": [
-        "INVALID_SINATURE_TYPE",
-        "PK_SECP256K1_UNCOMPRESSED",
-        "ACCOUNT_SECP256K1_UNCOMPRESSED",
-        "END_SIGNATURE_TYPE"
-      ],
-      "default": "INVALID_SINATURE_TYPE"
     },
     "txTable": {
       "type": "object",

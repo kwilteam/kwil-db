@@ -1,7 +1,7 @@
 package clean
 
 import (
-	execution2 "kwil/pkg/databases/spec"
+	types "kwil/pkg/engine/types"
 	"reflect"
 )
 
@@ -29,17 +29,17 @@ const (
 func cleanEnum(val reflect.Value, tags []string) {
 	switch tags[1] {
 	case enumDataType:
-		inenumRange(val, int64(execution2.INVALID_DATA_TYPE), int64(execution2.END_DATA_TYPE))
+		inenumRange(val, int64(types.INVALID_DATA_TYPE), int64(types.END_DATA_TYPE))
 	case enumAttributeType:
-		inenumRange(val, int64(execution2.INVALID_ATTRIBUTE_TYPE), int64(execution2.END_ATTRIBUTE_TYPE))
+		inenumRange(val, int64(types.INVALID_ATTRIBUTE_TYPE), int64(types.END_ATTRIBUTE_TYPE))
 	case enumQueryType:
-		inenumRange(val, int64(execution2.INVALID_QUERY_TYPE), int64(execution2.END_QUERY_TYPE))
+		inenumRange(val, int64(types.INVALID_QUERY_TYPE), int64(types.END_QUERY_TYPE))
 	case enumModifier:
-		inenumRange(val, int64(execution2.NO_MODIFIER), int64(execution2.END_MODIFIER_TYPE))
+		inenumRange(val, int64(types.NO_MODIFIER), int64(types.END_MODIFIER_TYPE))
 	case enumComparisonOperator:
-		inenumRange(val, int64(execution2.INVALID_COMPARISON_OPERATOR_TYPE), int64(execution2.END_COMPARISON_OPERATOR_TYPE))
+		inenumRange(val, int64(types.INVALID_COMPARISON_OPERATOR_TYPE), int64(types.END_COMPARISON_OPERATOR_TYPE))
 	case enumIndexType:
-		inenumRange(val, int64(execution2.INVALID_INDEX_TYPE), int64(execution2.END_INDEX_TYPE))
+		inenumRange(val, int64(types.INVALID_INDEX_TYPE), int64(types.END_INDEX_TYPE))
 	default:
 		panic("Unknown enum type: " + tags[1]) // since it is scanning our own struct tags, we should never get here
 	}

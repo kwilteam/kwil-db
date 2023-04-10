@@ -137,8 +137,8 @@ var (
 		Indexes: []*models.Index{
 			{
 				Name:    "posts_user_id_index",
-				Columns: []string{"user_id"},
-				Type:    types.BTREE,
+				Columns: []string{"user_id", "title"},
+				Type:    types.UNIQUE_BTREE,
 			},
 		},
 	}

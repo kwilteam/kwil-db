@@ -5,8 +5,6 @@ import (
 	"kwil/cmd/kwil-cli/cmds/common/display"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/engine/types"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -48,7 +46,7 @@ name satoshi age 32 --dbid=x1234 --query=create_user `,
 		}),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
+			clt, err := client.New(ctx, config.CliConfig.Node,
 				client.WithoutServiceConfig(),
 			)
 			if err != nil {
@@ -64,36 +62,12 @@ name satoshi age 32 --dbid=x1234 --query=create_user `,
 
 			lowerName := strings.ToLower(actionName)
 
-			schema, err := clt.GetSchema(ctx, dbId)
-			if err != nil {
-				return fmt.Errorf("error getting schema: %w", err)
-			}
-			action := schema.GetAction(lowerName)
-			if action == nil {
-				return fmt.Errorf("action %s not found", lowerName)
-			}
-
-			executionBody := &models.ActionExecution{
-				Action: lowerName,
-				DBID:   dbId,
-			}
-
-			qry, err := clt.GetQuerySignature(ctx, dbId, lowerName)
-			if err != nil {
-				return fmt.Errorf("error getting query signature: %w", err)
-			}
-
-			inputs, err := getInputs(qry, args)
+			inputs, err := getInputs(args)
 			if err != nil {
 				return fmt.Errorf("error getting inputs: %w", err)
 			}
 
-			ecdsaPk, err := config.GetEcdsaPrivateKey()
-			if err != nil {
-				return fmt.Errorf("failed to get ecdsa key: %w", err)
-			}
-
-			res, err := clt.ExecuteDatabaseById(ctx, dbId, lowerName, inputs, ecdsaPk)
+			receipt, results, err := clt.ExecuteAction(ctx, dbId, lowerName, inputs)
 			if err != nil {
 				return fmt.Errorf("error executing database: %w", err)
 			}
@@ -117,8 +91,8 @@ name satoshi age 32 --dbid=x1234 --query=create_user `,
 
 // inputs will be received as args.  The args will be in the form of
 // $argname:value.  Example $username:satoshi $age:32
-func getInputs(args []string) (map[string][]byte, error) {
-	inputs := make(map[string][]byte)
+func getInputs(args []string) ([]map[string]any, error) {
+	inputs := make(map[string]any)
 
 	for _, arg := range args {
 		if !strings.HasPrefix(arg, "$") {
@@ -131,7 +105,8 @@ func getInputs(args []string) (map[string][]byte, error) {
 			return nil, fmt.Errorf("invalid argument: %s.  argument must be in the form of $name:value", arg)
 		}
 
-		serialized, err := types.New()
-
+		inputs[split[0]] = split[1]
 	}
+
+	return []map[string]any{inputs}, nil
 }
