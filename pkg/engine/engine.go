@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"kwil/pkg/engine/datasets"
 	"kwil/pkg/engine/models"
+	"kwil/pkg/engine/models/clean"
 	"kwil/pkg/log"
 	"kwil/pkg/sql/driver"
 	"math/big"
@@ -91,6 +92,7 @@ func (e *Engine) createDataset(owner, name string) error {
 	}
 	err = dataset.Clear()
 	if err != nil {
+		dataset.Close() // must close the dataset before returning
 		return fmt.Errorf("failed to wipe dataset: %w", err)
 	}
 
@@ -201,8 +203,21 @@ func (e *Engine) Deploy(schema *models.Dataset) error {
 	if ok {
 		return fmt.Errorf("dataset already exists")
 	}
+	clean.Clean(schema)
 
-	err := e.createDataset(schema.Owner, schema.Name)
+	sp, err := e.conn.Savepoint()
+	if err != nil {
+		return fmt.Errorf("failed to create savepoint: %w", err)
+	}
+	defer func() {
+		err = sp.Rollback()
+		if err == nil {
+			// if we failed to create the dataset, we don't want to keep it in memory
+			delete(e.datasets, dbid)
+		}
+	}()
+
+	err = e.createDataset(schema.Owner, schema.Name)
 	if err != nil {
 		return fmt.Errorf("failed to create dataset: %w", err)
 	}
@@ -211,10 +226,11 @@ func (e *Engine) Deploy(schema *models.Dataset) error {
 
 	err = dataset.ApplySchema(schema)
 	if err != nil {
+		dataset.Close()
 		return fmt.Errorf("failed to apply schema: %w", err)
 	}
 
-	return nil
+	return sp.Commit()
 }
 
 func (e *Engine) DropDataset(dbid string) error {
@@ -258,7 +274,7 @@ func (e *Engine) ListDatabases(owner string) ([]string, error) {
 		return nil
 	},
 		map[string]interface{}{
-			"$owner": owner,
+			"$owner": strings.ToLower(owner),
 		})
 	if err != nil {
 		return nil, err

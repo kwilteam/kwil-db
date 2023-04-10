@@ -6,6 +6,7 @@ import (
 	"kwil/pkg/engine/models"
 	"kwil/pkg/engine/models/mocks"
 	"kwil/pkg/engine/types"
+	"strings"
 	"testing"
 )
 
@@ -71,4 +72,81 @@ func wipeAndDeploy(t *testing.T, master *engine.Engine, schema *models.Dataset) 
 	}
 
 	return master.GetDataset(schema.ID())
+}
+
+func Test_Fail_Deploy(t *testing.T) {
+	master, err := engine.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer master.Close()
+
+	master.DropDataset(mocks.MOCK_DATASET1.ID()) // ensure it's not there
+
+	// alter the schema to make it invalid
+	oldType := mocks.MOCK_DATASET1.Tables[0].Columns[0].Type
+	mocks.MOCK_DATASET1.Tables[0].Columns[0].Type = types.INVALID_DATA_TYPE
+
+	err = master.Deploy(&mocks.MOCK_DATASET1)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	_, err = master.GetDataset(mocks.MOCK_DATASET1.ID())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// fix the schema
+	mocks.MOCK_DATASET1.Tables[0].Columns[0].Type = oldType
+
+	// deploy again
+	err = master.Deploy(&mocks.MOCK_DATASET1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure it's there
+	_, err = master.GetDataset(mocks.MOCK_DATASET1.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// drop it
+	err = master.DropDataset(mocks.MOCK_DATASET1.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_List_Databases(t *testing.T) {
+	master, err := engine.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer master.Close()
+
+	_, err = wipeAndDeploy(t, master, &mocks.MOCK_DATASET1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// checking case insensitivity
+	dbs, err := master.ListDatabases(strings.ToUpper(mocks.MOCK_DATASET1.Owner))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(dbs) != 1 {
+		t.Fatal("expected 1 database")
+	}
+
+	dbs, err = master.ListDatabases(strings.ToLower(mocks.MOCK_DATASET1.Owner))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(dbs) != 1 {
+		t.Fatal("expected 1 database")
+	}
 }

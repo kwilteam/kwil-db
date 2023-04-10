@@ -15,7 +15,7 @@ func WithPrivateKey(key *ecdsa.PrivateKey) ClientOpt {
 
 func WithChainCode(chainCode int32) ClientOpt {
 	return func(c *Client) {
-		c.chainCode = chainCodes.ChainCode(chainCode)
+		c.ChainCode = chainCodes.ChainCode(chainCode)
 	}
 }
 
@@ -40,5 +40,11 @@ func WithChainRpcUrl(url string) ClientOpt {
 func WithoutProvider() ClientOpt {
 	return func(c *Client) {
 		c.usingProvider = false
+	}
+}
+
+func WithoutServiceConfig() ClientOpt {
+	return func(c *Client) {
+		c.withServerConfig = false
 	}
 }

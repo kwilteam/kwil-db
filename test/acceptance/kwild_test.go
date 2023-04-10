@@ -86,7 +86,7 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.ExecuteDBDeleteSpecification(ctx, t, driver)
 
 			// Test permissioned actions
-			//specifications.ExecutePermissionedActionSpecification(ctx, t, secondDriver)
+			specifications.ExecutePermissionedActionSpecification(ctx, t, secondDriver)
 
 			// and user should be able to drop database
 			close(done)

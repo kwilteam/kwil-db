@@ -117,7 +117,7 @@ func GetWalletAddress() (string, error) {
 		return "", fmt.Errorf("failed to get ecdsa key: %w", err)
 	}
 
-	return crypto.AddressFromPrivateKey(ecdsaKey)
+	return crypto.AddressFromPrivateKey(ecdsaKey), nil
 }
 
 // removeProtocol should remove the http:// or https:// from the url

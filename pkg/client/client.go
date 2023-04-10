@@ -21,29 +21,31 @@ import (
 )
 
 type Client struct {
-	client          *grpcClient.Client
-	datasets        map[string]*models.Dataset
-	PrivateKey      *ecdsa.PrivateKey
-	chainCode       chainCodes.ChainCode
-	ProviderAddress string
-	PoolAddress     string
-	usingProvider   bool
-	chainRpcUrl     string
-	chainClient     cc.ChainClient
-	tokenContract   token.TokenContract
-	tokenAddress    string
-	poolContract    escrow.EscrowContract
+	client           *grpcClient.Client
+	datasets         map[string]*models.Dataset
+	PrivateKey       *ecdsa.PrivateKey
+	ChainCode        chainCodes.ChainCode
+	ProviderAddress  string
+	PoolAddress      string
+	usingProvider    bool
+	withServerConfig bool
+	chainRpcUrl      string
+	chainClient      cc.ChainClient
+	tokenContract    token.TokenContract
+	tokenAddress     string
+	poolContract     escrow.EscrowContract
 }
 
 // New creates a new client
 func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
-		datasets:        make(map[string]*models.Dataset),
-		chainCode:       chainCodes.LOCAL,
-		ProviderAddress: "",
-		PoolAddress:     "",
-		usingProvider:   true,
-		chainRpcUrl:     "",
+		datasets:         make(map[string]*models.Dataset),
+		ChainCode:        chainCodes.LOCAL,
+		ProviderAddress:  "",
+		PoolAddress:      "",
+		usingProvider:    true,
+		withServerConfig: true,
+		chainRpcUrl:      "",
 	}
 
 	for _, opt := range opts {
@@ -70,13 +72,12 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 		return nil, err
 	}
 
-	config, err := c.GetConfig(ctx)
-	if err != nil {
-		return nil, err
+	if c.withServerConfig {
+		err = c.loadServerConfig(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
-	c.ProviderAddress = config.ProviderAddress
-	c.PoolAddress = config.PoolAddress
-	c.chainCode = chainCodes.ChainCode(config.ChainCode)
 
 	// re-apply opts to override provider config
 	for _, opt := range opts {
@@ -86,6 +87,18 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 	return c, nil
 }
 
+func (c *Client) loadServerConfig(ctx context.Context) error {
+	config, err := c.GetConfig(ctx)
+	if err != nil {
+		return err
+	}
+	c.ProviderAddress = config.ProviderAddress
+	c.PoolAddress = config.PoolAddress
+	c.ChainCode = chainCodes.ChainCode(config.ChainCode)
+
+	return nil
+}
+
 func (c *Client) initChainClient(ctx context.Context) error {
 	if c.chainRpcUrl == "" {
 		return fmt.Errorf("chain rpc url is not set")
@@ -93,7 +106,7 @@ func (c *Client) initChainClient(ctx context.Context) error {
 
 	var err error
 	c.chainClient, err = ccs.NewChainClient(c.chainRpcUrl,
-		ccs.WithChainCode(c.chainCode),
+		ccs.WithChainCode(c.ChainCode),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create chain client: %w", err)
@@ -296,4 +309,8 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records
 func (c *Client) ListDatabases(ctx context.Context, owner string) ([]string, error) {
 	owner = strings.ToLower(owner)
 	return c.client.ListDatabases(ctx, owner)
+}
+
+func (c *Client) Ping(ctx context.Context) (string, error) {
+	return c.client.Ping(ctx)
 }

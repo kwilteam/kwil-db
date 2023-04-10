@@ -7,7 +7,7 @@ import (
 
 var (
 	MOCK_DATASET1 = models.Dataset{
-		Owner: "owner",
+		Owner: "Owner",
 		Name:  "name",
 		Tables: []*models.Table{
 			&MOCK_TABLE1,

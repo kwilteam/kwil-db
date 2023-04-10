@@ -43,8 +43,8 @@ func (d *Dataset) GetIdentifier() *DatasetIdentifier {
 }
 
 type DatasetIdentifier struct {
-	Owner string `json:"owner"`
-	Name  string `json:"name"`
+	Owner string `json:"owner" clean:"lower"`
+	Name  string `json:"name" clean:"lower"`
 }
 
 func (d *DatasetIdentifier) ID() string {

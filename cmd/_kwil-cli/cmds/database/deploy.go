@@ -6,7 +6,7 @@ import (
 	"kwil/cmd/kwil-cli/cmds/common/display"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
-	"kwil/pkg/databases"
+	"kwil/pkg/engine/models"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,7 +29,7 @@ func deployCmd() *cobra.Command {
 				return fmt.Errorf("failed to read file: %w", err)
 			}
 
-			var db databases.Database[[]byte]
+			var db models.Dataset
 			err = json.Unmarshal(file, &db)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal file: %w", err)

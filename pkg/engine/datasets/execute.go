@@ -6,6 +6,7 @@ import (
 	"kwil/pkg/engine/models"
 	"kwil/pkg/sql/driver"
 	"math/big"
+	"strings"
 )
 
 const (
@@ -27,8 +28,6 @@ func buildExecOpts(eo *ExecOpts) {
 	}
 }
 
-//func (d *Dataset) executeSingle
-
 // ExecuteAction executes a predefined database action
 func (d *Dataset) ExecuteAction(exec *models.ActionExecution, opts *ExecOpts) (ActionResult, error) {
 	sp, err := d.conn.Savepoint()
@@ -42,6 +41,14 @@ func (d *Dataset) ExecuteAction(exec *models.ActionExecution, opts *ExecOpts) (A
 	ac, ok := d.actions[exec.Action]
 	if !ok {
 		return nil, fmt.Errorf("action %s does not exist", exec.Action)
+	}
+
+	canExecute, err := d.CanExecute(exec.Action, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if action access control: %w", err)
+	}
+	if !canExecute {
+		return nil, fmt.Errorf("action %s is not allowed for caller %s", exec.Action, opts.Caller)
 	}
 
 	inputs, err := ac.Prepare(exec, opts)
@@ -116,6 +123,25 @@ func (d *Dataset) execStatement(stmt string, input map[string]any) (RecordSet, e
 	}
 
 	return recordSet, nil
+}
+
+func (d *Dataset) CanExecute(action string, execOpts *ExecOpts) (bool, error) {
+	acc, ok := d.actions[action]
+	if !ok {
+		return false, fmt.Errorf("action %s does not exist", action)
+	}
+
+	if acc.Public {
+		return true, nil
+	}
+
+	buildExecOpts(execOpts)
+
+	if strings.EqualFold(execOpts.Caller, d.Owner) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 var actionPrice = big.NewInt(2000000000000000)

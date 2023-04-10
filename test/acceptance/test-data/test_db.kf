@@ -4,7 +4,7 @@ table users {
     id int primary notnull,
     username text,
     age int,
-    wallet text
+    wallet text unique
 }
 
 table posts {

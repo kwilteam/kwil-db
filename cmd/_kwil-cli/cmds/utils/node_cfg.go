@@ -6,7 +6,7 @@ import (
 	"html/template"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
-	grpc "kwil/pkg/grpc/client/v0"
+	grpc "kwil/pkg/grpc/client/v1"
 	"os"
 	"text/tabwriter"
 
@@ -62,15 +62,14 @@ func runServerCfg(ctx context.Context, opts *cfgOptions) error {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
 
-	svcCfg, err := clt.GetServiceConfig(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get service config")
-	}
-
-	return prettyPrint(svcCfg, tmpl)
+	return prettyPrint(&grpc.SvcConfig{
+		ChainCode:       int64(clt.ChainCode),
+		PoolAddress:     clt.PoolAddress,
+		ProviderAddress: clt.ProviderAddress,
+	}, tmpl)
 }
 
-func prettyPrint(svcCfg grpc.SvcConfig, tmpl *template.Template) error {
+func prettyPrint(svcCfg *grpc.SvcConfig, tmpl *template.Template) error {
 	t := tabwriter.NewWriter(os.Stdout, 20, 1, 1, ' ', 0)
 	err := tmpl.Execute(t, svcCfg)
 	_, _ = t.Write([]byte("\n"))

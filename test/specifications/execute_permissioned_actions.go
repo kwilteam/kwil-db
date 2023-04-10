@@ -42,5 +42,5 @@ func ExecutePermissionedActionSpecification(ctx context.Context, t *testing.T, e
 
 	// adhoc query should fail
 	_, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }

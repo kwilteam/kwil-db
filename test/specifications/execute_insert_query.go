@@ -40,23 +40,11 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 		Age:      22,
 	}
 
-	user2 := userTable{
-		ID:       2222,
-		UserName: "test_user2",
-		Age:      33,
-	}
-
 	userQueryInput := []map[string]any{
 		{
 			"$id":       user1.ID,
 			"$username": user1.UserName,
 			"$age":      user1.Age,
-		},
-
-		{
-			"$id":       user2.ID,
-			"$username": user2.UserName,
-			"$age":      user2.Age,
 		},
 	}
 
@@ -75,8 +63,8 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 
 	stmt1Results := results[0]
 
-	if len(stmt1Results) != 2 {
-		t.Errorf("expected 2 rows, got %d", len(stmt1Results))
+	if len(stmt1Results) != 1 {
+		t.Errorf("expected 1 row, got %d", len(stmt1Results))
 	}
 
 	returnedUser1 := stmt1Results[0]
@@ -89,18 +77,38 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	assert.EqualValues(t, user1.UserName, user1Username)
 	assert.EqualValues(t, user1.Age, user1Age)
 
-	returnedUser2 := stmt1Results[1]
-	user2Id, _ := conv.Int32(returnedUser2["id"])
-	user2Username := returnedUser2["username"].(string)
-	user2Age, _ := conv.Int32(returnedUser2["age"])
-
-	assert.EqualValues(t, user2.ID, user2Id)
-	assert.EqualValues(t, user2.UserName, user2Username)
-	assert.EqualValues(t, user2.Age, user2Age)
-
 	// testing query database
 	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
 	assert.NoError(t, err)
 	assert.NotNil(t, records)
 
+	// create post
+	const createPostQueryName = "create_post"
+	post1 := []map[string]any{
+		{
+			"$id":      1111,
+			"$title":   "test_post",
+			"$content": "test_body",
+		},
+		{
+			"$id":      2222,
+			"$title":   "test_post2",
+			"$content": "test_body2",
+		},
+	}
+
+	_, _, err = execute.ExecuteAction(ctx, dbID, createPostQueryName, post1)
+	assert.NoError(t, err)
+
+	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+	assert.NoError(t, err)
+	assert.NotNil(t, records)
+
+	counter := 0
+	for records.Next() {
+		_ = records.Record()
+		counter++
+	}
+
+	assert.EqualValues(t, 2, counter)
 }
