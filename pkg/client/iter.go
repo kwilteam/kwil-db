@@ -1,19 +1,11 @@
 package client
 
-import (
-	"errors"
-	"fmt"
-	"reflect"
-
-	"github.com/cstockton/go-conv"
-)
-
 type Records struct {
 	// index tracks the current row index for the iterator.
 	index int
 
 	// rows is the underlying sql.Rows object.
-	records []*Record `json:"records"`
+	records []*Record
 }
 
 type Record map[string]any
@@ -52,6 +44,16 @@ func (r *Records) Record() *Record {
 	return r.records[r.index]
 }
 
+func (r *Records) Export() []map[string]any {
+	records := make([]map[string]any, len(r.records))
+	for i, record := range r.records {
+		records[i] = *record
+	}
+
+	return records
+}
+
+/*
 func (r *Records) Scan(objects []interface{}) error {
 	if !r.Next() {
 		return errors.New("no more records")
@@ -219,3 +221,4 @@ func (r Record) values() []any {
 	}
 	return values
 }
+*/

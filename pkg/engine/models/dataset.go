@@ -42,6 +42,15 @@ func (d *Dataset) GetIdentifier() *DatasetIdentifier {
 	}
 }
 
+func (d *Dataset) GetAction(a string) *Action {
+	for _, act := range d.Actions {
+		if act.Name == a {
+			return act
+		}
+	}
+	return nil
+}
+
 type DatasetIdentifier struct {
 	Owner string `json:"owner" clean:"lower"`
 	Name  string `json:"name" clean:"lower"`

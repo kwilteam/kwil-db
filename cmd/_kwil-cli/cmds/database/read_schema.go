@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
+	"kwil/pkg/engine/types"
 
 	"github.com/spf13/cobra"
 )
@@ -29,7 +30,7 @@ func readSchemaCmd() *cobra.Command {
 				return fmt.Errorf("you must specify either a database name with the --name, or a database id with the --dbid flag")
 			}
 
-			meta, err := clt.GetSchemaById(ctx, dbid)
+			meta, err := clt.GetSchema(ctx, dbid)
 			if err != nil {
 				return err
 			}
@@ -44,39 +45,22 @@ func readSchemaCmd() *cobra.Command {
 					fmt.Printf("      Type: %s\n", c.Type.String())
 					for _, a := range c.Attributes {
 						fmt.Printf("      %s\n", a.Type.String())
-						if !a.Value.IsEmpty() {
-							fmt.Printf("        %s\n", a.Value.String())
+						value, err := types.NewFromSerial(a.Value)
+						if err != nil {
+							return err
+						}
+						if value.IsEmpty() {
+							fmt.Printf("        %s\n", value.String())
 						}
 					}
 				}
 			}
 
-			// print the roles
-			fmt.Println("Roles:")
-			for _, r := range meta.Roles {
-				fmt.Printf("  %s\n", r.Name)
-				fmt.Printf("    Permissions:\n")
-				for _, p := range r.Permissions {
-					fmt.Printf("      %s\n", p)
-				}
-			}
-
 			// print queries
-			fmt.Println("Queries:")
-			for _, q := range meta.SQLQueries {
+			fmt.Println("Actions:")
+			for _, q := range meta.Actions {
 				fmt.Printf("  %s\n", q.Name)
-			}
-
-			// Print indexes
-			fmt.Println("Indexes:")
-			for _, i := range meta.Indexes {
-				fmt.Printf("  %s:\n", i.Name)
-				fmt.Println("    Type: ", i.Using)
-				fmt.Printf("    Table: %s\n", i.Table)
-				fmt.Printf("    Columns:\n")
-				for _, c := range i.Columns {
-					fmt.Printf("      %s\n", c)
-				}
+				fmt.Printf("    Type: %s\n", q.Inputs)
 			}
 			return nil
 		},

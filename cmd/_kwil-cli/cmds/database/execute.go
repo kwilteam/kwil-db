@@ -5,15 +5,15 @@ import (
 	"kwil/cmd/kwil-cli/cmds/common/display"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
-	"kwil/pkg/databases/executables"
-	"kwil/pkg/databases/spec"
+	"kwil/pkg/engine/models"
+	"kwil/pkg/engine/types"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 func executeCmd() *cobra.Command {
-	var queryName string
+	var actionName string
 
 	cmd := &cobra.Command{
 		Use:   "execute",
@@ -62,7 +62,21 @@ name satoshi age 32 --dbid=x1234 --query=create_user `,
 				return fmt.Errorf("target database not properly specified: %w", err)
 			}
 
-			lowerName := strings.ToLower(queryName)
+			lowerName := strings.ToLower(actionName)
+
+			schema, err := clt.GetSchema(ctx, dbId)
+			if err != nil {
+				return fmt.Errorf("error getting schema: %w", err)
+			}
+			action := schema.GetAction(lowerName)
+			if action == nil {
+				return fmt.Errorf("action %s not found", lowerName)
+			}
+
+			executionBody := &models.ActionExecution{
+				Action: lowerName,
+				DBID:   dbId,
+			}
 
 			qry, err := clt.GetQuerySignature(ctx, dbId, lowerName)
 			if err != nil {
@@ -95,21 +109,29 @@ name satoshi age 32 --dbid=x1234 --query=create_user `,
 	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
 
-	cmd.Flags().StringVarP(&queryName, queryNameFlag, "q", "", "the query name (required)")
+	cmd.Flags().StringVarP(&actionName, queryNameFlag, "q", "", "the query name (required)")
 
 	cmd.MarkFlagRequired(queryNameFlag)
 	return cmd
 }
 
-func getInputs(executable *executables.QuerySignature, args []string) (map[string]*spec.KwilAny, error) {
-	if len(args) < 2 || len(args)%2 != 0 {
-		return nil, fmt.Errorf("invalid number of arguments")
-	}
+// inputs will be received as args.  The args will be in the form of
+// $argname:value.  Example $username:satoshi $age:32
+func getInputs(args []string) (map[string][]byte, error) {
+	inputs := make(map[string][]byte)
 
-	stringInputs := make(map[string]string) // maps the arg name to the arg value
-	for i := 0; i < len(args); i = i + 2 {
-		stringInputs[strings.ToLower(args[i])] = args[i+1]
-	}
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "$") {
+			return nil, fmt.Errorf("invalid argument: %s.  argument must begin with '$'", arg)
+		}
 
-	return executable.ConvertInputs(stringInputs)
+		// split the arg into name and value.  only split on the first ':'
+		split := strings.SplitN(arg, ":", 2)
+		if len(split) != 2 {
+			return nil, fmt.Errorf("invalid argument: %s.  argument must be in the form of $name:value", arg)
+		}
+
+		serialized, err := types.New()
+
+	}
 }

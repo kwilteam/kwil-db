@@ -87,7 +87,7 @@ func (p *PreparedAction) prepareSingle(record map[string][]byte) (map[string]any
 			return nil, fmt.Errorf("error converting serialized input %s: %w", input, err)
 		}
 
-		finalRecord[input] = concrete
+		finalRecord[input] = concrete.Value()
 	}
 
 	return finalRecord, nil
