@@ -62,3 +62,9 @@ action get_user_posts($username) public {
         WHERE username = $username
     );
 }
+
+action multi_select() public {
+    SELECT * FROM posts;
+
+    SELECT * FROM users;
+}

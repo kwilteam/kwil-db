@@ -134,4 +134,18 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	}
 
 	assert.EqualValues(t, 4, counter)
+
+	multiStmtActionName := "multi_select"
+	// execute multi statement action
+	_, res, err := execute.ExecuteAction(ctx, dbID, multiStmtActionName, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+
+	userRow1 := res[0]
+	// users has age, posts does not, but has content
+	_, ok := userRow1["age"]
+	assert.True(t, ok)
+
+	_, ok = userRow1["content"]
+	assert.False(t, ok)
 }
