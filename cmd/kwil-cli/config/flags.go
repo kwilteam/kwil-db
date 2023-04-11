@@ -12,7 +12,7 @@ const (
 	EnvPrefix = "KWIL_CLI"
 )
 
-var DefaultConfigPath string
+var DefaultConfigFile string
 
 func init() {
 	viper.SetConfigType("json")
@@ -24,9 +24,11 @@ func init() {
 		dirname = "/tmp"
 	}
 
-	DefaultConfigPath = fmt.Sprintf("%s/.kwil_cli/", dirname)
+	configPath := fmt.Sprintf("%s/.kwil_cli/", dirname)
 
-	viper.AddConfigPath(DefaultConfigPath)
+	DefaultConfigFile = fmt.Sprintf("%s/config.json", configPath)
+
+	viper.AddConfigPath(configPath)
 }
 
 const (

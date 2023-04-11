@@ -1,0 +1,47 @@
+database ecclesia;
+
+table users {
+    id int primary notnull,
+    username text notnull unique minlen(5) maxlen(32),
+    age int notnull max(69),
+    address text notnull unique
+}
+
+table posts {
+    id int primary notnull,
+    title text notnull maxlen(300),
+    content text notnull maxlen(10000),
+    author_id int notnull,
+}
+
+table likes {
+    user_id int notnull,
+    post_id int notnull,
+    like_index unique(user_id, post_id)
+}
+
+table comments {
+    id int primary notnull,
+    post_id int notnull,
+    content text notnull maxlen(200),
+    commenter_id int notnull,
+    comment_index index(post_id)
+}
+
+table followers {
+    follower_id int notnull,
+    followed_id int notnull,
+    follower_index unique(follower_id, followed_id)
+}
+
+action create_user ($id, $username, $age) public {
+    INSERT INTO users VALUES ($id, $username, $age, @caller);
+}
+
+action update_user ($username, $age) public {
+    UPDATE users SET username=$username, age=$age WHERE address=@caller;
+}
+
+action create_post ($id, $title, $content) public {
+    INSERT INTO posts VALUES ($id, $title, $content, (SELECT id FROM users WHERE address=@caller))
+}

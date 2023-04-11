@@ -33,7 +33,7 @@ func validateAttributes(col *models.Column) error {
 		attributeNames[attr.Type] = struct{}{}
 
 		if err := ValidateAttribute(col, attr); err != nil {
-			return fmt.Errorf("error on attribute %d: %w", attr.Type, err)
+			return fmt.Errorf("error on attribute %s: %w", attr.Type.String(), err)
 		}
 	}
 

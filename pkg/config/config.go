@@ -79,13 +79,11 @@ func insertVar(configStruct any, v CfgVar) error {
 	// dictating value precedence
 	var value any
 	if viper.IsSet(v.EnvName) {
-		fmt.Println("setting value from env var", v.EnvName)
 		value = viper.Get(v.EnvName)
 	} else if !field.IsZero() {
 		// do nothing, leave the value as is
 		return nil
 	} else if v.Default != nil {
-		fmt.Println("setting value from default")
 		value = v.Default
 	} else if v.Required && value == nil {
 		return fmt.Errorf("missing required environment variable %s", v.EnvName)

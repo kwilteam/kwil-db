@@ -22,7 +22,6 @@ type userTable struct {
 
 type ExecuteQueryDsl interface {
 	// ExecuteAction executes QUERY to a database
-	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key
 	ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, []map[string]any, error)
 	QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error)
 }

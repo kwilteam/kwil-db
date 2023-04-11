@@ -47,7 +47,7 @@ var (
 					},
 					{
 						Type:  types.MAX_LENGTH,
-						Value: types.NewMust(100).Bytes(),
+						Value: 100,
 					},
 				},
 			},
@@ -60,7 +60,7 @@ var (
 					},
 					{
 						Type:  types.MIN,
-						Value: types.NewMust(13).Bytes(),
+						Value: 13,
 					},
 				},
 			},
@@ -116,7 +116,7 @@ var (
 					},
 					{
 						Type:  types.MAX_LENGTH,
-						Value: types.NewMust(100).Bytes(),
+						Value: 100,
 					},
 				},
 			},
@@ -129,7 +129,7 @@ var (
 					},
 					{
 						Type:  types.MAX_LENGTH,
-						Value: types.NewMust(1000).Bytes(),
+						Value: 1000,
 					},
 				},
 			},

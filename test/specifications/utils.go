@@ -25,7 +25,6 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T) *models.Dataset {
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	// TODO: parse kl
 	ast, err := parser.Parse(d)
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)

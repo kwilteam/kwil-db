@@ -77,7 +77,7 @@ func NewFromSerial(b []byte) (*ConcreteValue, error) {
 
 	dataType := DataType(b[0])
 	if !dataType.IsValid() {
-		return nil, fmt.Errorf("serialized value starts with invalid data type identifier: %v", dataType)
+		return nil, fmt.Errorf("serialized value starts with invalid data type identifier: %v", dataType.Int())
 	}
 
 	// try to unmarshal the value
