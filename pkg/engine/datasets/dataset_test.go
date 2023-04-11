@@ -66,10 +66,10 @@ func Test_Dataset(t *testing.T) {
 	}
 
 	if len(res) != 1 {
-		t.Fatal(`expected 1 statement result, got: `, len(res))
+		t.Fatal(`expected 1 row, got: `, len(res))
 	}
-	if len(res[0]) != 1 {
-		t.Fatal(`expected 1 row, got: `, len(res[0]))
+	if len(res[0]) != 4 {
+		t.Fatal(`expected 4 columns, got: `, len(res[0]))
 	}
 
 	bts, err := res.Bytes()
@@ -79,10 +79,18 @@ func Test_Dataset(t *testing.T) {
 
 	fmt.Println(string(bts))
 
-	var res2 [][]map[string]any
+	var res2 []map[string]any
 	err = json.Unmarshal(bts, &res2)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if len(res2) != 1 {
+		t.Fatal(`expected 1 row, got: `, len(res2))
+	}
+
+	if len(res2[0]) != 4 {
+		t.Fatal(`expected 4 columns, got: `, len(res2[0]))
 	}
 }
 

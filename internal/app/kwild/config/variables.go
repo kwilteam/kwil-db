@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"kwil/pkg/config"
+
 	"github.com/cstockton/go-conv"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -33,7 +35,7 @@ type DepositsConfig struct {
 }
 
 var (
-	RegisteredVariables = []cfgVar{
+	RegisteredVariables = []config.CfgVar{
 		PrivateKey,
 		GrpcListenAddress,
 		DepositsReconnectionInterval,
@@ -49,7 +51,7 @@ var (
 )
 
 var (
-	PrivateKey = cfgVar{
+	PrivateKey = config.CfgVar{
 		EnvName:  "PRIVATE_KEY",
 		Required: true,
 		Field:    "PrivateKey",
@@ -63,43 +65,43 @@ var (
 		},
 	}
 
-	GrpcListenAddress = cfgVar{
+	GrpcListenAddress = config.CfgVar{
 		EnvName: "GRPC_LISTEN_ADDRESS",
 		Field:   "GrpcListenAddress",
 		Default: ":50051",
 	}
 
-	DepositsReconnectionInterval = cfgVar{
+	DepositsReconnectionInterval = config.CfgVar{
 		EnvName: "DEPOSITS_RECONNECTION_INTERVAL",
 		Field:   "Deposits.ReconnectionInterval",
 		Default: 30,
 	}
 
-	DepositsBlockConfirmation = cfgVar{
+	DepositsBlockConfirmation = config.CfgVar{
 		EnvName: "DEPOSITS_BLOCK_CONFIRMATIONS",
 		Field:   "Deposits.BlockConfirmations",
 		Default: 12,
 	}
 
-	DepositsChainCode = cfgVar{
+	DepositsChainCode = config.CfgVar{
 		EnvName: "DEPOSITS_CHAIN_CODE",
 		Field:   "Deposits.ChainCode",
 		Default: 0,
 	}
 
-	DepositsClientChainRPCURL = cfgVar{
+	DepositsClientChainRPCURL = config.CfgVar{
 		EnvName: "DEPOSITS_CLIENT_CHAIN_RPC_URL",
 		Field:   "Deposits.ClientChainRPCURL",
 		Default: "http://localhost:8545",
 	}
 
-	DepositsPoolAddress = cfgVar{
+	DepositsPoolAddress = config.CfgVar{
 		EnvName:  "DEPOSITS_POOL_ADDRESS",
 		Field:    "Deposits.PoolAddress",
 		Required: true,
 	}
 
-	SqliteFilePath = cfgVar{
+	SqliteFilePath = config.CfgVar{
 		EnvName: "SQLITE_FILE_PATH",
 		Field:   "SqliteFilePath",
 		Setter: func(val any) (any, error) {
@@ -116,13 +118,13 @@ var (
 		},
 	}
 
-	LogLevel = cfgVar{
+	LogLevel = config.CfgVar{
 		EnvName: "LOG_LEVEL",
 		Field:   "Log.Level",
 		Default: "info",
 	}
 
-	LogOutputPaths = cfgVar{
+	LogOutputPaths = config.CfgVar{
 		EnvName: "LOG_OUTPUT_PATHS",
 		Field:   "Log.OutputPaths",
 		Setter: func(val any) (any, error) {
@@ -139,7 +141,7 @@ var (
 		},
 	}
 
-	HttpListenAddress = cfgVar{
+	HttpListenAddress = config.CfgVar{
 		EnvName: "HTTP_LISTEN_ADDRESS",
 		Field:   "HttpListenAddress",
 		Default: ":8080",

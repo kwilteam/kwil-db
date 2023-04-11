@@ -3,7 +3,7 @@ package specifications
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/databases"
+	"kwil/pkg/engine/models"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +14,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing update query specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := databases.GenerateSchemaId(db.Owner, db.Name)
+	dbID := models.GenerateSchemaId(db.Owner, db.Name)
 
 	userQueryName := "update_user"
 	userTableName := "users"

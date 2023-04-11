@@ -31,7 +31,7 @@ var RootCmd = &cobra.Command{
 	Long:  "",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		cfg, err := config.LoadConfig()
+		cfg, err := config.LoadKwildConfig()
 		if err != nil {
 			return err
 		}
@@ -101,8 +101,7 @@ func init() {
 		RootCmd.PersistentFlags().StringVar(&config.ConfigFile, "config", "", fmt.Sprintf("config file to use (default: '%s')", defaultConfigPath))
 	*/
 
-	config.BindGlobalFlags(RootCmd.PersistentFlags())
-	config.BindGlobalEnv(RootCmd.PersistentFlags())
+	config.BindFlagsAndEnv(RootCmd.PersistentFlags())
 }
 
 func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.ChainClient, error) {

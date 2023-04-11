@@ -3,7 +3,7 @@ package specifications
 import (
 	"context"
 	"kwil/pkg/client"
-	"kwil/pkg/databases"
+	"kwil/pkg/engine/models"
 	"testing"
 
 	kTx "kwil/pkg/tx"
@@ -23,7 +23,7 @@ type userTable struct {
 type ExecuteQueryDsl interface {
 	// ExecuteAction executes QUERY to a database
 	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key
-	ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, [][]map[string]any, error)
+	ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, []map[string]any, error)
 	QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error)
 }
 
@@ -31,7 +31,7 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing insert query specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := databases.GenerateSchemaId(db.Owner, db.Name)
+	dbID := models.GenerateSchemaId(db.Owner, db.Name)
 
 	createUserQueryName := "create_user"
 	user1 := userTable{
@@ -61,13 +61,7 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 		t.Errorf("expected 1 statement result, got %d", len(results))
 	}
 
-	stmt1Results := results[0]
-
-	if len(stmt1Results) != 1 {
-		t.Errorf("expected 1 row, got %d", len(stmt1Results))
-	}
-
-	returnedUser1 := stmt1Results[0]
+	returnedUser1 := results[0]
 
 	user1Id, _ := conv.Int32(returnedUser1["id"])
 	user1Username := returnedUser1["username"].(string)
@@ -111,4 +105,33 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	}
 
 	assert.EqualValues(t, 2, counter)
+
+	// insert more
+	post2 := []map[string]any{
+		{
+			"$id":      3333,
+			"$title":   "test_post3",
+			"$content": "test_body3",
+		},
+		{
+			"$id":      4444,
+			"$title":   "test_post4",
+			"$content": "test_body4",
+		},
+	}
+
+	_, _, err = execute.ExecuteAction(ctx, dbID, createPostQueryName, post2)
+	assert.NoError(t, err)
+
+	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+	assert.NoError(t, err)
+	assert.NotNil(t, records)
+
+	counter = 0
+	for records.Next() {
+		_ = records.Record()
+		counter++
+	}
+
+	assert.EqualValues(t, 4, counter)
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"kwil/pkg/balances"
 	cc "kwil/pkg/chain/client"
 	ccs "kwil/pkg/chain/client/service"
 	"kwil/pkg/chain/contracts/escrow"
@@ -32,7 +33,8 @@ type Client struct {
 	chainRpcUrl      string
 	chainClient      cc.ChainClient
 	tokenContract    token.TokenContract
-	tokenAddress     string
+	TokenAddress     string
+	TokenSymbol      string
 	poolContract     escrow.EscrowContract
 }
 
@@ -46,6 +48,8 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 		usingProvider:    true,
 		withServerConfig: true,
 		chainRpcUrl:      "",
+		TokenAddress:     "",
+		TokenSymbol:      "",
 	}
 
 	for _, opt := range opts {
@@ -119,7 +123,7 @@ func (c *Client) initTokenContract(ctx context.Context) error {
 	if c.chainClient == nil {
 		return fmt.Errorf("chain client is not initialized")
 	}
-	if c.tokenAddress == "" {
+	if c.TokenAddress == "" {
 		err := c.initPoolContract(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to init pool contract to get token address: %w", err)
@@ -127,10 +131,12 @@ func (c *Client) initTokenContract(ctx context.Context) error {
 	}
 
 	var err error
-	c.tokenContract, err = c.chainClient.Contracts().Token(c.tokenAddress)
+	c.tokenContract, err = c.chainClient.Contracts().Token(c.TokenAddress)
 	if err != nil {
 		return fmt.Errorf("failed to create token contract: %w", err)
 	}
+
+	c.TokenSymbol = c.tokenContract.Symbol()
 
 	return nil
 }
@@ -149,7 +155,7 @@ func (c *Client) initPoolContract(ctx context.Context) error {
 		return fmt.Errorf("failed to create escrow contract: %w", err)
 	}
 
-	c.tokenAddress = c.poolContract.TokenAddress()
+	c.TokenAddress = c.poolContract.TokenAddress()
 
 	return nil
 }
@@ -228,7 +234,7 @@ func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *models.DatasetIden
 
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, [][]map[string]any, error) {
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
 	encodedValues, err := encodeInputs(inputs)
 	if err != nil {
 		return nil, nil, err
@@ -258,8 +264,8 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	return res, outputs, nil
 }
 
-func decodeOutputs(bts []byte) ([][]map[string]any, error) {
-	var outputs [][]map[string]any
+func decodeOutputs(bts []byte) ([]map[string]any, error) {
+	var outputs []map[string]any
 	err := json.Unmarshal(bts, &outputs)
 	if err != nil {
 		return nil, err
@@ -313,4 +319,8 @@ func (c *Client) ListDatabases(ctx context.Context, owner string) ([]string, err
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
 	return c.client.Ping(ctx)
+}
+
+func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {
+	return c.client.GetAccount(ctx, address)
 }

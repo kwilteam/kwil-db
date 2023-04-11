@@ -29,7 +29,7 @@ func buildExecOpts(eo *ExecOpts) {
 }
 
 // ExecuteAction executes a predefined database action
-func (d *Dataset) ExecuteAction(exec *models.ActionExecution, opts *ExecOpts) (ActionResult, error) {
+func (d *Dataset) ExecuteAction(exec *models.ActionExecution, opts *ExecOpts) (RecordSet, error) {
 	sp, err := d.conn.Savepoint()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create savepoint: %w", err)
@@ -70,20 +70,17 @@ func (d *Dataset) ExecuteAction(exec *models.ActionExecution, opts *ExecOpts) (A
 }
 
 // execAction executes an action for as many inputs as exists
-func (d *Dataset) execAction(action *PreparedAction, inputs []map[string]any) (ActionResult, error) {
+func (d *Dataset) execAction(action *PreparedAction, inputs []map[string]any) (result RecordSet, err error) {
 	if len(inputs) == 0 {
 		return d.execActionWithNoInputs(action)
 	}
 
-	result := make(ActionResult, 0)
 	for _, record := range inputs {
 		for _, statement := range action.Statements {
-			res, err := d.execStatement(statement.Stmt, record)
+			result, err = d.execStatement(statement.Stmt, record)
 			if err != nil {
-				return nil, fmt.Errorf("error executing statement: %w", err)
+				return nil, fmt.Errorf("error executing statement '%s': %w", statement.Stmt, err)
 			}
-
-			result = append(result, res)
 		}
 	}
 
@@ -92,15 +89,12 @@ func (d *Dataset) execAction(action *PreparedAction, inputs []map[string]any) (A
 
 // execActionWithNoInputs executes an action with no inputs.
 // the action will execute once
-func (d *Dataset) execActionWithNoInputs(action *PreparedAction) (ActionResult, error) {
-	result := make(ActionResult, 0)
+func (d *Dataset) execActionWithNoInputs(action *PreparedAction) (result RecordSet, err error) {
 	for _, statement := range action.Statements {
-		res, err := d.execStatement(statement.Stmt, nil)
+		result, err = d.execStatement(statement.Stmt, nil)
 		if err != nil {
-			return nil, fmt.Errorf("error executing statement: %w", err)
+			return nil, fmt.Errorf("error executing statement '%s': %w", statement.Stmt, err)
 		}
-
-		result = append(result, res)
 	}
 
 	return result, nil
@@ -152,19 +146,8 @@ func (d *Dataset) GetActionPrice(action string, execOpts *ExecOpts) (res *big.In
 
 type RecordSet []driver.Record
 
-type ActionResult []RecordSet
-
 func (r *RecordSet) Bytes() ([]byte, error) {
 	bts, err := json.Marshal(r)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling response: %w", err)
-	}
-
-	return bts, nil
-}
-
-func (a *ActionResult) Bytes() ([]byte, error) {
-	bts, err := json.Marshal(a)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling response: %w", err)
 	}

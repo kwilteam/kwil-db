@@ -2,7 +2,7 @@ package traverse_test
 
 import (
 	"fmt"
-	"kwil/pkg/databases/clean/traverse"
+	"kwil/pkg/engine/models/clean/traverse"
 	"reflect"
 	"testing"
 )
