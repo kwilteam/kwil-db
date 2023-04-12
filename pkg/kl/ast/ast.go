@@ -297,9 +297,9 @@ func (d *AttrDef) Build() (def *models.Attribute) {
 
 	switch a := d.Param.(type) {
 	case *BasicLit:
-		def.Value = []byte(a.Value)
+		def.Value = types.NewNoPanic(a.Value).Bytes()
 	case *Ident:
-		def.Value = []byte(a.Name)
+		def.Value = types.NewNoPanic(a.Name).Bytes()
 	}
 	return
 }

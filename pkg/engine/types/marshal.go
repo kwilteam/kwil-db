@@ -24,7 +24,7 @@ func marshal(v any, d DataType) ([]byte, error) {
 			return nil, fmt.Errorf("failed to convert value to int64: %v", err)
 		}
 
-		return prepend(INT, serialize.Int64ToBytes(int64(i))), nil
+		return prepend(INT, serialize.Int64ToBytes(i)), nil
 	}
 
 	return nil, fmt.Errorf("unknown type: %d", d)

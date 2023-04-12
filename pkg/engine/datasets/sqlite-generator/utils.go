@@ -72,6 +72,8 @@ func formatAttributeValue(value *types.ConcreteValue) (string, error) {
 			return "", err
 		}
 		return "'" + str + "'", nil
+	case types.NULL:
+		return "", nil
 	default:
 		return "", fmt.Errorf("unknown attribute value type %s", value.Type().String())
 	}

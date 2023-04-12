@@ -203,7 +203,10 @@ func (e *Engine) Deploy(schema *models.Dataset) error {
 	if ok {
 		return fmt.Errorf("dataset already exists")
 	}
-	clean.Clean(schema)
+	err := clean.CleanDataset(schema)
+	if err != nil {
+		return fmt.Errorf("failed to clean dataset: %w", err)
+	}
 
 	sp, err := e.conn.Savepoint()
 	if err != nil {

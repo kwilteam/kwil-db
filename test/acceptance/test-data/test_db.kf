@@ -3,7 +3,7 @@ database testdb;
 table users {
     id int primary notnull,
     username text,
-    age int,
+    age int min(0),
     wallet text unique
 }
 
@@ -11,7 +11,7 @@ table posts {
     id int primary notnull,
     user_id int,
     title text,
-    content text,
+    content text maxlen(1000),
     unique_index unique(user_id, title)
 }
 

@@ -129,12 +129,12 @@ func TestParseRawSQL_banRules(t *testing.T) {
 		},
 		Actions: map[string]types.ActionContext{
 			"action1": {
-				"this": nil,
-				"that": nil,
+				"$this": nil,
+				"$that": nil,
 			},
 			"action2": {
-				"here":  nil,
-				"there": nil,
+				"$here":  nil,
+				"$there": nil,
 			},
 		},
 	}

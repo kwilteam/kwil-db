@@ -69,6 +69,15 @@ func NewMust(v any) *ConcreteValue {
 	return a
 }
 
+// NewNoPanic is like NewMust but returns an empty value instead of panicking.
+func NewNoPanic(v any) *ConcreteValue {
+	a, err := New(v)
+	if err != nil {
+		return NewEmpty()
+	}
+	return a
+}
+
 // NewFromSerial creates a corresponding value type for the given serialized value.
 func NewFromSerial(b []byte) (*ConcreteValue, error) {
 	if len(b) == 0 {
