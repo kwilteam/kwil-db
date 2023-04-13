@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"kwil/pkg/engine/models"
 	"kwil/pkg/engine/types"
-	"kwil/pkg/kl/ast"
-	"kwil/pkg/kl/parser"
-	"kwil/pkg/kl/sql"
-	"kwil/pkg/kl/token"
+	"kwil/pkg/kuneiform/ast"
+	"kwil/pkg/kuneiform/parser"
+	"kwil/pkg/kuneiform/sql"
+	"kwil/pkg/kuneiform/token"
 	"strings"
 	"testing"
 )
@@ -200,7 +200,7 @@ func testTableBody(t *testing.T, col *ast.ColumnDef, want *models.Column) bool {
 }
 
 func testTableIndex(t *testing.T, idx *ast.IndexDef, want *models.Index) bool {
-	if idx.Name.Name != token.HASH.String() + want.Name {
+	if idx.Name.Name != token.HASH.String()+want.Name {
 		t.Errorf("indexDef.Name is not '%s'. got=%s", want.Name, idx.Name.Name)
 		return false
 	}

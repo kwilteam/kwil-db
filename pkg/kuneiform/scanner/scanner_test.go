@@ -1,8 +1,8 @@
 package scanner_test
 
 import (
-	"kwil/pkg/kl/scanner"
-	"kwil/pkg/kl/token"
+	"kwil/pkg/kuneiform/scanner"
+	"kwil/pkg/kuneiform/token"
 	"testing"
 )
 

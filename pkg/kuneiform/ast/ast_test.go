@@ -3,7 +3,7 @@ package ast_test
 import (
 	"bytes"
 	"flag"
-	"kwil/pkg/kl/parser"
+	"kwil/pkg/kuneiform/parser"
 	"os"
 	"path/filepath"
 	"testing"

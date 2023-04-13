@@ -2,7 +2,7 @@ package specifications
 
 import (
 	"kwil/pkg/engine/models"
-	"kwil/pkg/kl/parser"
+	"kwil/pkg/kuneiform/parser"
 	"os"
 	"testing"
 )

@@ -6,23 +6,36 @@ database <NAME>;
 table <NAME> {<COLUMN list>}
 table ...
 
-action <NAME> (<PARAMETER list>) { <raw SQLite sql> }
+action <NAME> (<PARAMETER_NAME list>) { <raw SQLite sql> }
 action ...
 ```
 
-### name
+---
 
+### names
+
+#### regular name
 valid letters, starting with a letter:
 * `a-z`
 * `A-Z`
 * `0-9`
 * `_`
 
+#### index name
+
+Index name starts with `#` symbol, followed by valid regular name.
+
+#### action parameter name
+
+Action parameter name starts with `$` symbol, followed by valid regular name.
+
 ### column
 
 `<NAME> <COLUMN TYPE> <ATTRIBUTE list>`
+
 or
-`<NAME> <INDEX TYPE>(COLUMN NAME, ...)`
+
+`<INDEX_NAME> <INDEX TYPE>(COLUMN NAME, ...)`
 
 #### column type
 
@@ -44,15 +57,20 @@ or
 * `unique`
 * `index`
 
-### raw SQLite sql
+---
 
-#### bind parameter
+## Raw SQLite sql
+
+Kuneiform supports raw SQLite sql in action body, with some restrictions.
+
+### bind parameter
 
 * `$VVV` for action parameter
 * `@VVV` for blockchain modifier
 * * `@caller` for caller address
 * * `@block_height` for block height
 
+### restrictions
 below is a list of keywords/functions/combinations that are not allowed in raw SQLite sql:
 
 #### statements

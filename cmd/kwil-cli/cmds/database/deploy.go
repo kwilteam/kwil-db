@@ -10,7 +10,7 @@ import (
 	"kwil/pkg/client"
 	"kwil/pkg/crypto"
 	"kwil/pkg/engine/models"
-	"kwil/pkg/kl/parser"
+	"kwil/pkg/kuneiform/parser"
 	"os"
 
 	"github.com/spf13/cobra"

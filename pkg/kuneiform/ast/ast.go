@@ -6,8 +6,8 @@ import (
 	klType "kwil/internal/pkg/kl/types"
 	"kwil/pkg/engine/models"
 	"kwil/pkg/engine/types"
-	"kwil/pkg/kl/sql"
-	"kwil/pkg/kl/token"
+	"kwil/pkg/kuneiform/sql"
+	"kwil/pkg/kuneiform/token"
 	"strings"
 
 	"github.com/pkg/errors"

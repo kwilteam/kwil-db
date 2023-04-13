@@ -2,7 +2,7 @@ package scanner
 
 import (
 	"fmt"
-	"kwil/pkg/kl/token"
+	"kwil/pkg/kuneiform/token"
 )
 
 type Error struct {

@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"kwil/pkg/kl/ast"
-	"kwil/pkg/kl/parser"
+	"kwil/pkg/kuneiform/ast"
+	"kwil/pkg/kuneiform/parser"
 	"strings"
 )
 

@@ -4,7 +4,7 @@ package main
 
 import (
 	"fmt"
-	"kwil/pkg/kl/parser"
+	"kwil/pkg/kuneiform/parser"
 	"syscall/js"
 )
 

@@ -6,8 +6,8 @@ import (
 	"github.com/pkg/errors"
 	"kwil/internal/pkg/kl/types"
 	"kwil/internal/pkg/sqlite"
-	"kwil/pkg/kl/scanner"
-	"kwil/pkg/kl/token"
+	"kwil/pkg/kuneiform/scanner"
+	"kwil/pkg/kuneiform/token"
 	"strings"
 	"sync"
 )

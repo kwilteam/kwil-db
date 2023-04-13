@@ -5,7 +5,7 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"kwil/internal/pkg/kl/types"
 	"kwil/internal/pkg/sqlite"
-	"kwil/pkg/kl/token"
+	"kwil/pkg/kuneiform/token"
 )
 
 func ParseRawSQL(sql string, currentLine int, actionName string, dbCtx types.DatabaseContext, trace bool) (err error) {

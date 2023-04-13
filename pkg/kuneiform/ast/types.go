@@ -2,7 +2,7 @@ package ast
 
 import (
 	"kwil/pkg/engine/types"
-	"kwil/pkg/kl/token"
+	"kwil/pkg/kuneiform/token"
 )
 
 var columnTypes = map[string]types.DataType{
