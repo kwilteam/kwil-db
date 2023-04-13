@@ -29,6 +29,14 @@ func NewExplicit(v any, dataType DataType) (*ConcreteValue, error) {
 	return newAny(v, dataType)
 }
 
+func NewExplicitMust(v any, dataType DataType) *ConcreteValue {
+	a, err := NewExplicit(v, dataType)
+	if err != nil {
+		panic(`failed to serialize value explicitly` + err.Error())
+	}
+	return a
+}
+
 func NewEmpty() *ConcreteValue {
 	bts, err := marshal(nil, NULL)
 	if err != nil {
@@ -100,6 +108,14 @@ func NewFromSerial(b []byte) (*ConcreteValue, error) {
 		dataType: dataType,
 		bytes:    b,
 	}, nil
+}
+
+func NewFromSerialMust(b []byte) *ConcreteValue {
+	a, err := NewFromSerial(b)
+	if err != nil {
+		panic(err)
+	}
+	return a
 }
 
 // Bytes returns the serialized value.
