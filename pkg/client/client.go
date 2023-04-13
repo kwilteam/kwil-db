@@ -240,10 +240,13 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		return nil, nil, err
 	}
 
+	return c.ExecuteActionSerialized(ctx, dbid, action, encodedValues)}
+
+func (c *Client) ExecuteActionSerialized(ctx context.Context, dbid string, action string, inputs []map[string][]byte) (*kTx.Receipt, []map[string]any, error) {
 	executionBody := &models.ActionExecution{
 		Action: action,
 		DBID:   dbid,
-		Params: encodedValues,
+		Params: inputs,
 	}
 
 	tx, err := c.executeActionTx(ctx, executionBody)

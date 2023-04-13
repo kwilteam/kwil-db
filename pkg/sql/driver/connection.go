@@ -66,9 +66,9 @@ func OpenConn(dbid string, opts ...ConnOpt) (*Connection, error) {
 func (c *Connection) openConn() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	flags := sqlite.OpenReadWrite | sqlite.OpenCreate
+	flags := sqlite.OpenReadWrite | sqlite.OpenCreate | sqlite.OpenWAL
 	if c.readOnly {
-		flags = sqlite.OpenReadOnly
+		flags = sqlite.OpenReadOnly | sqlite.OpenWAL
 	}
 
 	if c.Conn == nil {

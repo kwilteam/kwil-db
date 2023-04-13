@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	dbidFlag      = "dbid"
-	nameFlag      = "name"
-	ownerFlag     = "owner"
-	queryNameFlag = "query"
+	dbidFlag       = "dbid"
+	nameFlag       = "name"
+	ownerFlag      = "owner"
+	actionNameFlag = "action"
 )
 
 // getSelectedOwner is used to get the owner flag.  Since the owner flag is usually optional,

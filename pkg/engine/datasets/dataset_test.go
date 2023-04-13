@@ -12,20 +12,11 @@ import (
 )
 
 func Test_Dataset(t *testing.T) {
-	ds, err := datasets.OpenDataset("owner", "name", getDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ds, err = clearSet(ds)
+	ds, err := clearAndReapply()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ds.Close()
-
-	err = ds.ApplySchema(&mocks.MOCK_DATASET1)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	params := make([]map[string][]byte, 0)
 	args := make(map[string][]byte)
@@ -116,6 +107,92 @@ func Test_Read(t *testing.T) {
 	}
 }
 
+func Test_WriteAndRead(t *testing.T) {
+	ds, err := clearAndReapply()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ds.Close()
+
+	// write to the db
+	_, err = ds.ExecuteAction(&models.ActionExecution{
+		Action: mocks.ACTION_CREATE_USER.Name,
+		Params: []map[string][]byte{
+			{
+				"$name": types.NewMust("kwil").Bytes(),
+				"$age":  types.NewMust(21).Bytes(),
+			},
+			{
+				"$name": types.NewMust("kwil2").Bytes(),
+				"$age":  types.NewMust(22).Bytes(),
+			},
+		},
+	}, &datasets.ExecOpts{
+		Caller: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// read it back
+	res, err := ds.Query("SELECT * FROM users")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	counter := 0
+	err = res.ForEach(func(row map[string]any) error {
+		counter++
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if counter != 2 {
+		t.Fatal("expected 2 rows, got: ", counter)
+	}
+	// add more
+	// write to the db
+	_, err = ds.ExecuteAction(&models.ActionExecution{
+		Action: mocks.ACTION_CREATE_USER.Name,
+		Params: []map[string][]byte{
+			{
+				"$name": types.NewMust("kwil3").Bytes(),
+				"$age":  types.NewMust(23).Bytes(),
+			},
+			{
+				"$name": types.NewMust("kwil4").Bytes(),
+				"$age":  types.NewMust(24).Bytes(),
+			},
+		},
+	}, &datasets.ExecOpts{
+		Caller: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// read it back
+	res, err = ds.Query("SELECT * FROM users")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	counter = 0
+	err = res.ForEach(func(row map[string]any) error {
+		counter++
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if counter != 4 {
+		t.Fatal("expected 4 rows, got: ", counter)
+	}
+}
+
 func getDir() string {
 	dirname, err := os.UserHomeDir()
 	if err != nil {
@@ -140,4 +217,23 @@ func clearSet(ds *datasets.Dataset) (*datasets.Dataset, error) {
 	}
 
 	return datasets.OpenDataset(owner, name, getDir())
+}
+
+// clearAndReapply clears the dataset and re-applies the schema
+func clearAndReapply() (*datasets.Dataset, error) {
+	ds, err := datasets.OpenDataset("owner", "name", getDir())
+	if err != nil {
+		return nil, err
+	}
+	ds, err = clearSet(ds)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ds.ApplySchema(&mocks.MOCK_DATASET1)
+	if err != nil {
+		return nil, err
+	}
+
+	return ds, nil
 }

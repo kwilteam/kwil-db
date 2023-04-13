@@ -155,6 +155,17 @@ func (r *RecordSet) Bytes() ([]byte, error) {
 	return bts, nil
 }
 
+func (r *RecordSet) ForEach(fn func(row map[string]any) error) error {
+	for _, row := range *r {
+		err := fn(row)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (d *Dataset) Query(stmt string) (res RecordSet, err error) {
 	err = d.readOnlyConn.Query(stmt, func(stmt *driver.Statement) error {
 		row, err := stmt.GetRecord()

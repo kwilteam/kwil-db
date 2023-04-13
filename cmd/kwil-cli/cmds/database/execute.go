@@ -19,13 +19,13 @@ func executeCmd() *cobra.Command {
 		Use:   "execute",
 		Short: "Execute a query",
 		Long: `Execute executes a query against the specified database.  The query name is
-specified as a required "--query" flag, and the query parameters as arguments.
+specified as a required "--action" flag, and the query parameters as arguments.
 In order to specify an parameter, you first need to specify the parameter name, then the parameter value, delimited by a colon.
 
 For example, if I have a query name "create_user" that takes two arguments: name and age.
 I would specify the query as follows:
 
-$name:satoshi $age:32 --query=create_user
+$name:satoshi $age:32 --action=create_user
 
 You specify the database to execute this against with the --name flag, and
 the owner with the --owner flag.
@@ -38,7 +38,7 @@ $name:satoshi $age:32 --query=create_user --name mydb --owner 0xAfFDC06cF34aFD7D
 
 OR
 
-$name:satoshi $age:32 --dbid=x1234 --query=create_user `,
+$name:satoshi $age:32 --dbid=x1234 --action=create_user `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				dbId, err := getSelectedDbid(cmd, conf)
@@ -73,9 +73,9 @@ $name:satoshi $age:32 --dbid=x1234 --query=create_user `,
 	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
 
-	cmd.Flags().StringVarP(&actionName, queryNameFlag, "q", "", "the query name (required)")
+	cmd.Flags().StringVarP(&actionName, actionNameFlag, "a", "", "the action name (required)")
 
-	cmd.MarkFlagRequired(queryNameFlag)
+	cmd.MarkFlagRequired(actionNameFlag)
 	return cmd
 }
 

@@ -33,9 +33,6 @@ var (
 					{
 						Type: types.PRIMARY_KEY,
 					},
-					{
-						Type: types.NOT_NULL,
-					},
 				},
 			},
 			{
