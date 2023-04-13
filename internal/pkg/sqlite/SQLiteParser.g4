@@ -441,6 +441,12 @@ table_or_subquery: (
     | OPEN_PAR select_stmt CLOSE_PAR (AS_ table_alias)?
 ;
 
+result_column:
+    STAR
+    | table_name DOT STAR
+    | expr ( AS_ column_alias)?
+;
+
 //table_or_subquery: (
 //        (schema_name DOT)? table_name (AS_? table_alias)? (
 //            INDEXED_ BY_ index_name
@@ -453,12 +459,12 @@ table_or_subquery: (
 //    | OPEN_PAR (table_or_subquery (COMMA table_or_subquery)* | join_clause) CLOSE_PAR
 //    | OPEN_PAR select_stmt CLOSE_PAR (AS_? table_alias)?
 //;
-
-result_column:
-    STAR
-    | table_name DOT STAR
-    | expr ( AS_? column_alias)?
-;
+//
+//result_column:
+//    STAR
+//    | table_name DOT STAR
+//    | expr ( AS_? column_alias)?
+//;
 
 join_operator:
     COMMA
