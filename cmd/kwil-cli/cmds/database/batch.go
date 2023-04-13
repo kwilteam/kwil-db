@@ -11,13 +11,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type batchFileType string
+
+const (
+	batchFileTypeCSV batchFileType = "csv"
+)
+
 // batch is used for batch operations on databases
 func batchCmd() *cobra.Command {
+	var fileType string
+
 	cmd := &cobra.Command{
 		Use:   "batch",
-		Short: "Drops a database",
-		Long:  "Drops a database.  Requires 1 argument: the name of the database to drop",
-		Args:  cobra.ExactArgs(0),
+		Short: "Batch executes an action",
+		Long: `The batch command is used to batch execute an action on a database.  It
+reads in a file from the specified directory, and executes the action in bulk.
+The execution is treated as a single transaction, and will either succeed or fail.`,
+		Args: cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				res, err := client.DropDatabase(ctx, args[0])
@@ -31,5 +41,7 @@ func batchCmd() *cobra.Command {
 			})
 		},
 	}
+
+	cmd.Flags().StringVarP(&fileType, "file-type", "", "csv", "the type of file to read in")
 	return cmd
 }
