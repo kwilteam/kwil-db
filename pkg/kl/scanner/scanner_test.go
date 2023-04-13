@@ -20,6 +20,7 @@ var tokens = []elt{
 	{token.IDENT, "foo_bar"},
 	{token.IDENT, "$foo"},
 	{token.IDENT, "@bar"},
+	{token.IDENT, "#baz"},
 	{token.INTEGER, "123"},
 	{token.STRING, `"hello"`},
 	{token.STRING, `"hello\\world\n"`},
@@ -143,7 +144,8 @@ username text,
 age int min(18) max(60),
 uuid uuid,
 gender bool,
-email string maxlen(50) minlen(10)
+email string maxlen(50) minlen(10),
+#username index(username)
 }`
 	actionInput := `
 action create_user($name, $age) public {
@@ -202,6 +204,13 @@ INSERT into user (name, email, wallet) values ($name, "a@b.com", @caller);
 		{Type: token.MINLEN, Literal: "minlen"},
 		{Type: token.LPAREN, Literal: "("},
 		{Type: token.INTEGER, Literal: "10"},
+		{Type: token.RPAREN, Literal: ")"},
+		{Type: token.COMMA, Literal: ","},
+
+		{Type: token.IDENT, Literal: "#username"},
+		{Type: token.INDEX, Literal: "index"},
+		{Type: token.LPAREN, Literal: "("},
+		{Type: token.IDENT, Literal: "username"},
 		{Type: token.RPAREN, Literal: ")"},
 
 		{Type: token.RBRACE, Literal: "}"},
@@ -263,7 +272,7 @@ INSERT into user (name, email, wallet) values ($name, "a@b.com", @caller);
 	cur := 3
 	actPos := len(dbInput) + len(tableInput) + cur
 	p := file.Position(token.Pos(actPos))
-	if p.Line != 10 {
+	if p.Line != 11 {
 		t.Errorf("wrong line number, got %d, want %d", p.Line, 0)
 	}
 	if int(p.Column) != cur {

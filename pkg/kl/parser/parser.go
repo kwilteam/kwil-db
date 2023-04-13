@@ -127,6 +127,25 @@ func (p *parser) parseBasicLit() *ast.BasicLit {
 	return x
 }
 
+func (p *parser) parseIdentWithPrefix(prefixToken token.Token, prefixName string) *ast.Ident {
+	if p.trace {
+		defer un(trace("parseIdentWithPrefix"))
+	}
+
+	name := ""
+	if p.curTokIs(token.IDENT) {
+		name = p.lit
+		if !strings.HasPrefix(name, prefixToken.String()) {
+			p.errorExpected(p.pos, fmt.Sprintf("%s starts with '%s'", prefixName, prefixToken.String()))
+		}
+		p.next()
+	} else {
+		p.expect(token.IDENT)
+	}
+
+	return &ast.Ident{Name: name}
+}
+
 func (p *parser) parseIdent() *ast.Ident {
 	name := ""
 	if p.curTokIs(token.IDENT) {
@@ -135,6 +154,7 @@ func (p *parser) parseIdent() *ast.Ident {
 	} else {
 		p.expect(token.IDENT)
 	}
+
 	return &ast.Ident{Name: name}
 }
 
@@ -171,7 +191,7 @@ func (p *parser) next() {
 	p.peekTok, p.peekLit, p.peekPos = p.scanner.Next()
 }
 
-func (p *parser) parseParameterList(paramPrefixToken token.Token) (l []ast.Expr) {
+func (p *parser) parseParameterList(identPrefixToken token.Token, prefixName string) (l []ast.Expr) {
 	if p.trace {
 		defer un(trace("parseParameterList"))
 	}
@@ -179,10 +199,10 @@ func (p *parser) parseParameterList(paramPrefixToken token.Token) (l []ast.Expr)
 	p.expect(token.LPAREN)
 
 	if !p.curTokIs(token.RPAREN) {
-		l = append(l, p.parseParameter(paramPrefixToken))
+		l = append(l, p.parseParameter(identPrefixToken, prefixName))
 		for p.curTokIs(token.COMMA) {
 			p.next()
-			l = append(l, p.parseParameter(paramPrefixToken))
+			l = append(l, p.parseParameter(identPrefixToken, prefixName))
 		}
 	}
 
@@ -190,21 +210,21 @@ func (p *parser) parseParameterList(paramPrefixToken token.Token) (l []ast.Expr)
 	return l
 }
 
-func (p *parser) parseParameter(prefixToken token.Token) (param ast.Expr) {
+// parseParameter parses a parameter. A parameter can be a simple identifier(may starts with prefix) or a literal.
+func (p *parser) parseParameter(identPrefixToken token.Token, prefixName string) (param ast.Expr) {
 	if p.trace {
 		defer un(trace("parseParameter"))
 	}
 
-	expectPrefix := prefixToken != token.ILLEGAL
-
 	switch p.tok {
 	case token.IDENT:
-		pos := p.pos
-		name := p.parseIdent()
-		if expectPrefix {
-			if !strings.Contains(name.Name, prefixToken.String()) {
-				p.errorExpected(pos, fmt.Sprintf("%s prefix", prefixToken.String()))
-			}
+		identExpectPrefix := identPrefixToken != token.ILLEGAL
+
+		var name *ast.Ident
+		if identExpectPrefix {
+			name = p.parseIdentWithPrefix(identPrefixToken, prefixName)
+		} else {
+			name = p.parseIdent()
 		}
 
 		if p.curTokIs(token.PERIOD) {
@@ -235,7 +255,7 @@ func (p *parser) parseColumnAttr() *ast.AttrDef {
 		p.next()
 		p.expect(token.LPAREN)
 		if !p.curTokIs(token.RPAREN) {
-			attr.Param = p.parseParameter(token.ILLEGAL)
+			attr.Param = p.parseParameter(token.ILLEGAL, "")
 		}
 		p.expect(token.RPAREN)
 	default:
@@ -284,12 +304,13 @@ func (p *parser) parseColumnDef() *ast.ColumnDef {
 	return &ast.ColumnDef{Name: colName, Type: colType, Attrs: colAttrs}
 }
 
+// parseIndexDef parses an index definition. Index name must start with #.
 func (p *parser) parserIndexDef(unique bool) *ast.IndexDef {
 	if p.trace {
 		defer un(trace("parserIndexDef"))
 	}
 
-	indexName := p.parseIdent()
+	indexName := p.parseIdentWithPrefix(token.HASH, "index")
 	indexUnique := false
 	if unique {
 		indexUnique = true
@@ -298,7 +319,7 @@ func (p *parser) parserIndexDef(unique bool) *ast.IndexDef {
 		p.expect(token.INDEX)
 	}
 
-	indexColumns := p.parseParameterList(token.ILLEGAL)
+	indexColumns := p.parseParameterList(token.ILLEGAL, "")
 
 	if p.curTokIs(token.COMMA) {
 		p.next()
@@ -385,7 +406,7 @@ func (p *parser) parseActionDeclaration() *ast.ActionDecl {
 
 	act := &ast.ActionDecl{}
 	act.Name = p.parseIdent()
-	act.Params = p.parseParameterList(token.DOLLAR)
+	act.Params = p.parseParameterList(token.DOLLAR, "action parameter")
 
 	if p.curTokIs(token.PUBLIC) || p.curTokIs(token.PRIVATE) {
 		act.Public = p.tok == token.PUBLIC

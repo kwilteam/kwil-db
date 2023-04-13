@@ -7,6 +7,7 @@ import (
 	"kwil/pkg/kl/ast"
 	"kwil/pkg/kl/parser"
 	"kwil/pkg/kl/sql"
+	"kwil/pkg/kl/token"
 	"strings"
 	"testing"
 )
@@ -69,7 +70,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		},
 		{
 			name:   "table with index",
-			input:  `database demo; table user{name text, age int, email text, uname unique(name, email), im index(email)}`,
+			input:  `database demo; table user{name text, age int, email text, #uname unique(name, email), #im index(email)}`,
 			wantDB: "demo",
 			wantTables: []models.Table{
 				{
@@ -199,7 +200,7 @@ func testTableBody(t *testing.T, col *ast.ColumnDef, want *models.Column) bool {
 }
 
 func testTableIndex(t *testing.T, idx *ast.IndexDef, want *models.Index) bool {
-	if idx.Name.Name != want.Name {
+	if idx.Name.Name != token.HASH.String() + want.Name {
 		t.Errorf("indexDef.Name is not '%s'. got=%s", want.Name, idx.Name.Name)
 		return false
 	}

@@ -74,7 +74,8 @@ const (
 	PERIOD    // .
 	SEMICOLON // ;
 	DOLLAR    // $
-	AT		// @
+	AT        // @
+	HASH      // #
 	//COLON     // :
 	symbolEnd
 )
@@ -136,6 +137,7 @@ var tokens = [...]string{
 	SEMICOLON: ";",
 	DOLLAR:    "$",
 	AT:        "@",
+	HASH:      "#",
 	//COLON:     ":",
 }
 

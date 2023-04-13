@@ -306,7 +306,8 @@ func (d *AttrDef) Build() (def *models.Attribute) {
 
 func (d *IndexDef) Build() (def *models.Index) {
 	def = &models.Index{}
-	def.Name = d.Name.Name
+	// remove the prefix # of index name
+	def.Name = d.Name.Name[1:]
 	def.Type = types.BTREE
 	if d.Unique {
 		def.Type = types.UNIQUE_BTREE

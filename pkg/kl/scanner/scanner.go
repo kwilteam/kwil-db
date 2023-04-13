@@ -266,18 +266,11 @@ func (s *Scanner) Next() (tok token.Token, lit string, pos token.Pos) {
 	case ';':
 		lit = ";"
 		tok = token.SEMICOLON
-	case '@':
-		// treat @xx as identifier
+	case '@', '$', '#':
+		// treat @xx/$xx/#xx as identifier
 		s.nextChar()
 		lit = s.scanIdentifier()
-		lit = "@" + lit
-		tok = token.Lookup(lit)
-		return
-	case '$':
-		// treat $xx as identifier
-		s.nextChar()
-		lit = s.scanIdentifier()
-		lit = "$" + lit
+		lit = string(ch) + lit
 		tok = token.Lookup(lit)
 		return
 	case '"':

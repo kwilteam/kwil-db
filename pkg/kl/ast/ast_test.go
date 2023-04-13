@@ -48,7 +48,7 @@ func TestAst_Generate(t *testing.T) {
 		},
 		{
 			name:  "table with index",
-			input: `database demo; table user{name text, age int, email text, uname unique(name, email), im index(email)}`,
+			input: `database demo; table user{name text, age int, email text, #uname unique(name, email), #im index(email)}`,
 		},
 		{
 			name: "table with action insert",
