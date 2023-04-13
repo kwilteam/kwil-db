@@ -17,7 +17,7 @@ table posts {
 table likes {
     user_id int notnull,
     post_id int notnull,
-    like_index unique(user_id, post_id)
+    #like_index unique(user_id, post_id)
 }
 
 table comments {
@@ -25,13 +25,13 @@ table comments {
     post_id int notnull,
     content text notnull maxlen(200),
     commenter_id int notnull,
-    comment_index index(post_id)
+    #comment_index index(post_id)
 }
 
 table followers {
     follower_id int notnull,
     followed_id int notnull,
-    follower_index unique(follower_id, followed_id)
+    #follower_index unique(follower_id, followed_id)
 }
 
 action create_user ($id, $username, $age) public {

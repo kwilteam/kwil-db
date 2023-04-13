@@ -12,7 +12,7 @@ table posts {
     user_id int,
     title text,
     content text maxlen(1000),
-    unique_index unique(user_id, title)
+    #unique_index unique(user_id, title)
 }
 
 action create_user($id, $username, $age) public {
