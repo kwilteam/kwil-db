@@ -21,7 +21,6 @@ var (
 // batch is used for batch operations on databases
 func batchCmd() *cobra.Command {
 	var filePath string
-	var fileType string
 	var csvColumnMappings []string
 	var action string
 
@@ -37,6 +36,11 @@ The execution is treated as a single transaction, and will either succeed or fai
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return err
+				}
+
+				fileType, err := getFileType(filePath)
+				if err != nil {
+					return fmt.Errorf("error getting file type: %w", err)
 				}
 
 				if !isSupportedBatchFileType(fileType) {
@@ -66,7 +70,6 @@ The execution is treated as a single transaction, and will either succeed or fai
 		},
 	}
 
-	cmd.Flags().StringVarP(&fileType, "file-type", "t", "csv", "the type of file to read in")
 	cmd.Flags().StringSliceVarP(&csvColumnMappings, "map-input", "m", []string{}, "the variables mappings to the action inputs (e.g. id:$id, name:$name, age:$age)")
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "the path to the file to read in (e.g. /home/user/file.csv)")
 	cmd.Flags().StringVarP(&action, "action", "a", "", "the action to execute")
@@ -74,7 +77,6 @@ The execution is treated as a single transaction, and will either succeed or fai
 	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
 
-	cmd.MarkFlagRequired("file-type")
 	cmd.MarkFlagRequired("path")
 	cmd.MarkFlagRequired("action")
 	return cmd
@@ -121,9 +123,8 @@ func convertHeadersToColumnMappings(headers []string) map[string]string {
 
 	for _, header := range headers {
 		actionInput := header
-		if !strings.HasPrefix(header, "$") {
-			actionInput = fmt.Sprintf("$%s", header)
-		}
+
+		ensureInputFormat(&actionInput)
 
 		res[header] = actionInput
 	}
@@ -141,10 +142,17 @@ func convertColumnMappings(mappings []string) (map[string]string, error) {
 			return nil, fmt.Errorf("invalid mapping: %s", mapping)
 		}
 
+		ensureInputFormat(&parts[1])
 		res[parts[0]] = parts[1]
 	}
 
 	return res, nil
+}
+
+func ensureInputFormat(in *string) {
+	if !strings.HasPrefix(*in, "$") {
+		*in = fmt.Sprintf("$%s", *in)
+	}
 }
 
 func isSupportedBatchFileType(fileType string) bool {
@@ -155,4 +163,13 @@ func isSupportedBatchFileType(fileType string) bool {
 	}
 
 	return false
+}
+
+func getFileType(path string) (string, error) {
+	parts := strings.Split(path, ".")
+	if len(parts) == 0 {
+		return "", fmt.Errorf("invalid file path: %s", path)
+	}
+
+	return parts[len(parts)-1], nil
 }
