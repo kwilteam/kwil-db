@@ -87,6 +87,10 @@ func (p *PreparedAction) prepareSingle(record map[string][]byte) (map[string]any
 			return nil, fmt.Errorf("error converting serialized input %s: %w", input, err)
 		}
 
+		if err := concrete.Ok(); err != nil {
+			return nil, fmt.Errorf("invalid serialized input %s: %w", input, err)
+		}
+
 		finalRecord[input] = concrete.Value()
 	}
 

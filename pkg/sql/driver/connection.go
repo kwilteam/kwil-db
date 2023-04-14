@@ -342,6 +342,10 @@ func (c *Connection) ReOpen() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	return c.reOpen()
+}
+
+func (c *Connection) reOpen() error {
 	err := c.Conn.Close()
 	if err != nil {
 		return err
@@ -369,7 +373,7 @@ func (c *Connection) pollReOpen(interval ...time.Duration) {
 			break
 		}
 
-		err := c.ReOpen()
+		err := c.reOpen()
 		if err != nil {
 			consecutiveFailures++
 			log.Printf("failed to reopen sqlite connection during poll: %s", err)

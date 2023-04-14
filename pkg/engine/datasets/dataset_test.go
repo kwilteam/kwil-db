@@ -107,6 +107,33 @@ func Test_Read(t *testing.T) {
 	}
 }
 
+func Test_Over_Length_String(t *testing.T) {
+	ds, err := clearAndReapply()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ds.Close()
+
+	params := make([]map[string][]byte, 0)
+	args := make(map[string][]byte)
+	superLongString := "afcmekferjfejwabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabcaabcabcabca"
+	args["$name"] = types.NewMust(superLongString).Bytes()
+	args["$age"] = types.NewMust(21).Bytes()
+
+	params = append(params, args)
+	// testing execution
+	_, err = ds.ExecuteAction(&models.ActionExecution{
+		Action: mocks.ACTION_CREATE_USER.Name,
+		Params: params,
+		DBID:   ds.DBID, // not technically needed here
+	}, &datasets.ExecOpts{
+		Caller: "test",
+	})
+	if err == nil {
+		t.Fatal("expected an error from over-length string")
+	}
+}
+
 func getDir() string {
 	dirname, err := os.UserHomeDir()
 	if err != nil {

@@ -17,6 +17,10 @@ const (
 	END_DATA_TYPE
 )
 
+const (
+	max_text_len = 1024
+)
+
 func (d DataType) String() string {
 	switch d {
 	case NULL:

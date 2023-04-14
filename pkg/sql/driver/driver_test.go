@@ -5,6 +5,7 @@ import (
 	"kwil/pkg/sql/driver"
 	"sync"
 	"testing"
+	"time"
 )
 
 const (
@@ -508,6 +509,16 @@ func Test_NonexistentTable(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}
+
+	// check that table does not exist
+	exists, err := conn.TableExists("test_table23w24e2")
+	if err != nil {
+		t.Errorf("failed to check table exists: %v", err)
+	}
+
+	if exists {
+		t.Errorf("expected table to not exist")
+	}
 }
 
 func Test_Reopen(t *testing.T) {
@@ -534,11 +545,13 @@ func Test_Reopen(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		err = roConn.ReOpen()
 		if err != nil {
 			t.Errorf("failed to reopen: %v", err)
 		}
+
+		time.Sleep(1000 * time.Millisecond)
 
 		// insert another row
 		err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{

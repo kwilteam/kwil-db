@@ -182,3 +182,14 @@ func (a *ConcreteValue) AsString() (string, error) {
 func (a *ConcreteValue) AsBool() (bool, error) {
 	return conv.Bool(a.value)
 }
+
+func (a *ConcreteValue) Ok() error {
+	switch a.dataType {
+	case TEXT:
+		if len(a.value.(string)) > max_text_len {
+			return fmt.Errorf("text value exceeds max length of %d", max_text_len)
+		}
+	}
+
+	return nil
+}
