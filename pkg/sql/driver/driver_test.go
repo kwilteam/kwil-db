@@ -509,3 +509,68 @@ func Test_NonexistentTable(t *testing.T) {
 		t.Errorf("expected error, got nil")
 	}
 }
+
+func Test_Reopen(t *testing.T) {
+	conn, err := createTestDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	defer conn.ReleaseLock()
+
+	// test insert named
+	err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{
+		"$name":   "test2",
+		"$id":     2,
+		"@caller": "test", // testing flag override
+	}, nil)
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
+	// read-only
+	roConn, err := conn.CopyReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 100; i++ {
+		err = roConn.ReOpen()
+		if err != nil {
+			t.Errorf("failed to reopen: %v", err)
+		}
+
+		// insert another row
+		err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{
+			"$name":   "test2",
+			"$id":     i * 100,
+			"@caller": "test", // testing flag override
+		}, nil)
+		if err != nil {
+			t.Errorf("failed to insert: %v", err)
+		}
+
+		// read back the rows
+		type Row struct {
+			id   int64
+			name string
+		}
+
+		rows := []Row{}
+		err = conn.Query("SELECT id, name FROM test_table;", func(stmt *driver.Statement) error {
+			var row Row
+			row.id = stmt.GetInt64("id")
+			row.name = stmt.GetText("name")
+
+			rows = append(rows, row)
+			return nil
+		})
+		if err != nil {
+			t.Errorf("failed to query: %v", err)
+		}
+
+		if len(rows) != i+2 {
+			t.Errorf("expected i+2 rows, got %d", len(rows))
+		}
+	}
+}

@@ -3,6 +3,7 @@ package config_test
 import (
 	"fmt"
 	config "kwil/internal/app/kwild/config"
+	"kwil/pkg/crypto"
 	"os"
 	"testing"
 )
@@ -16,5 +17,6 @@ func Test_Config(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println(cfg)
+	addr := crypto.AddressFromPrivateKey(cfg.PrivateKey)
+	fmt.Println(addr)
 }

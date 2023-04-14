@@ -2,6 +2,7 @@ package driver
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ type Connection struct {
 	lockWaitTime time.Duration
 	injectables  []*InjectableVar
 	opts         []ConnOpt
+	closed       bool
 }
 
 // OpenConn opens a connection to the database with the given ID/name.
@@ -51,10 +53,14 @@ func OpenConn(dbid string, opts ...ConnOpt) (*Connection, error) {
 		readOnly:     false,
 		lockWaitTime: time.Second * DefaultLockWaitTimeSeconds,
 		opts:         opts,
+		closed:       false,
 	}
 	for _, opt := range opts {
 		opt(connection)
 	}
+
+	connection.mu.Lock()
+	defer connection.mu.Unlock()
 
 	if err := connection.openConn(); err != nil {
 		return nil, fmt.Errorf("failed to open connection: %w", err)
@@ -64,27 +70,23 @@ func OpenConn(dbid string, opts ...ConnOpt) (*Connection, error) {
 }
 
 func (c *Connection) openConn() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	flags := sqlite.OpenReadWrite | sqlite.OpenCreate | sqlite.OpenWAL
 	if c.readOnly {
 		flags = sqlite.OpenReadOnly | sqlite.OpenWAL
 	}
 
-	if c.Conn == nil {
-		fp := c.getFilePath()
-		err := createDirIfNeeded(fp)
-		if err != nil {
-			return err
-		}
-
-		conn, err := sqlite.OpenConn(fp, flags)
-		if err != nil {
-			return err
-		}
-		c.Conn = conn
-		c.lock = LOCK_TYPED_SHARED
+	fp := c.getFilePath()
+	err := createDirIfNeeded(fp)
+	if err != nil {
+		return err
 	}
+
+	conn, err := sqlite.OpenConn(fp, flags)
+	if err != nil {
+		return err
+	}
+	c.Conn = conn
+	c.lock = LOCK_TYPED_SHARED
 
 	return nil
 }
@@ -97,6 +99,12 @@ func (c *Connection) getFilePath() string {
 func (c *Connection) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil
+	}
+	c.closed = true
+
 	c.releaseLock()
 	if c.Conn != nil {
 		if err := c.Conn.Close(); err != nil {
@@ -186,7 +194,11 @@ func (c *Connection) Prepare(statement string) error {
 // statementSetterFn is a function that is called to set the arguments for the statement
 func (c *Connection) query(statement string, resultFn ResultFn, statementSetterFn func(*Statement) error) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	defer c.tryUnlock()
+
+	if resultFn == nil {
+		resultFn = func(*Statement) error { return nil }
+	}
 
 	statement = trimPadding(statement)
 	stmt, err := c.prepare(statement)
@@ -219,6 +231,11 @@ func (c *Connection) query(statement string, resultFn ResultFn, statementSetterF
 	}
 
 	return nil
+}
+
+func (c *Connection) tryUnlock() {
+	c.mu.TryLock()
+	c.mu.Unlock()
 }
 
 // Prepare prepares a statement for execution
@@ -294,7 +311,14 @@ func (c *Connection) CopyReadOnly() (*Connection, error) {
 	newOpts := make([]ConnOpt, 0)
 	newOpts = append(newOpts, c.opts...)
 	newOpts = append(newOpts, ReadOnly())
-	return OpenConn(c.DBID, newOpts...)
+	newConn, err := OpenConn(c.DBID, newOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	go newConn.pollReOpen()
+
+	return newConn, nil
 }
 
 const sqlIfTableExists = `SELECT name FROM sqlite_master WHERE type='table' AND name=$name;`
@@ -312,4 +336,43 @@ func (c *Connection) TableExists(name string) (bool, error) {
 	}
 
 	return exists, nil
+}
+
+func (c *Connection) ReOpen() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	err := c.Conn.Close()
+	if err != nil {
+		return err
+	}
+
+	return c.openConn()
+}
+
+// pollReOpen polls the connection and reopens it after the given interval
+// if no interval is given, it will default to 5 seconds
+func (c *Connection) pollReOpen(interval ...time.Duration) {
+	if len(interval) == 0 {
+		interval = []time.Duration{time.Second * 5}
+	}
+
+	consecutiveFailures := 0
+
+	for {
+		time.Sleep(interval[0])
+		if c.closed {
+			break
+		}
+		if consecutiveFailures > 5 {
+			log.Printf("failed to reopen sqlite connection 5 times in a row, giving up")
+			break
+		}
+
+		err := c.ReOpen()
+		if err != nil {
+			consecutiveFailures++
+			log.Printf("failed to reopen sqlite connection during poll: %s", err)
+		}
+	}
 }
