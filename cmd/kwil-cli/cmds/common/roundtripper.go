@@ -59,5 +59,16 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		return err
 	}
 
+	if flags&WithoutProvider == 0 {
+		pong, err := clt.Ping(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to ping provider: %w", err)
+		}
+
+		if pong != "pong" {
+			return fmt.Errorf("unexpected ping response: %s", pong)
+		}
+	}
+
 	return fn(ctx, clt, conf)
 }

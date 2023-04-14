@@ -56,16 +56,22 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 		opt(c)
 	}
 
-	defer func() {
+	defer func(c *Client) {
+		if c.chainRpcUrl != "" {
+			tempErr := c.initChainClient(ctx)
+			if tempErr != nil {
+				err = tempErr
+			}
+		}
+	}(c)
+
+	if !c.usingProvider {
 		if c.chainRpcUrl != "" {
 			e := c.initChainClient(ctx)
 			if err != nil {
 				err = e
 			}
 		}
-	}()
-
-	if !c.usingProvider {
 		return c, nil
 	}
 
@@ -240,7 +246,8 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		return nil, nil, err
 	}
 
-	return c.ExecuteActionSerialized(ctx, dbid, action, encodedValues)}
+	return c.ExecuteActionSerialized(ctx, dbid, action, encodedValues)
+}
 
 func (c *Client) ExecuteActionSerialized(ctx context.Context, dbid string, action string, inputs []map[string][]byte) (*kTx.Receipt, []map[string]any, error) {
 	executionBody := &models.ActionExecution{

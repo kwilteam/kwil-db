@@ -16,9 +16,7 @@ import (
 )
 
 func approveCmd() *cobra.Command {
-	var opts struct {
-		assumeYes bool
-	}
+	assumeYes := false
 
 	var cmd = &cobra.Command{
 		Use:   "approve AMOUNT",
@@ -26,7 +24,7 @@ func approveCmd() *cobra.Command {
 		Long:  `Approves the funding pool to spend your tokens.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), common.WithChainClient, func(ctx context.Context, client *client.Client, config *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), common.WithChainClient, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				amount, ok := new(big.Int).SetString(args[0], 10)
 				if !ok {
 					return fmt.Errorf("could not convert %s to int", args[0])
@@ -34,7 +32,7 @@ func approveCmd() *cobra.Command {
 
 				fmt.Printf("You will have a new amount approved of: %s\n", amount.String())
 
-				if !opts.assumeYes {
+				if !assumeYes {
 					// ask one more time to confirm the transaction
 					pr := promptui.Select{
 						Label: "Continue?",
@@ -66,7 +64,6 @@ func approveCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&opts.assumeYes, "yes", "y", false, "Automatic yes to prompts.")
-
+	cmd.Flags().BoolVarP(&assumeYes, "yes", "y", false, "Automatic yes to prompts.")
 	return cmd
 }

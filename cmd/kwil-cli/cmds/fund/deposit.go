@@ -16,9 +16,7 @@ import (
 )
 
 func depositCmd() *cobra.Command {
-	var opts struct {
-		assumeYes bool
-	}
+	assumeYes := false
 
 	var cmd = &cobra.Command{
 		Use:   "deposit AMOUNT",
@@ -33,7 +31,7 @@ func depositCmd() *cobra.Command {
 					return fmt.Errorf("error converting %s to big int", args[0])
 				}
 
-				if !opts.assumeYes {
+				if !assumeYes {
 					fmt.Printf("You will be depositing $%s %s into funding pool %s\n", client.TokenSymbol, amount, client.PoolAddress)
 					pr := promptui.Select{
 						Label: "Continue?",
@@ -65,7 +63,7 @@ func depositCmd() *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.BoolVarP(&opts.assumeYes, "yes", "y", false, "Automatic yes to prompts.")
+	flags.BoolVarP(&assumeYes, "yes", "y", false, "Automatic yes to prompts.")
 
 	return cmd
 }
