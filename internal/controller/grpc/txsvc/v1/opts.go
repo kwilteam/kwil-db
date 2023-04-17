@@ -18,3 +18,9 @@ func WithAccountStore(store *balances.AccountStore) TxSvcOpt {
 		s.accountStore = store
 	}
 }
+
+func WithSqliteFilePath(path string) TxSvcOpt {
+	return func(s *Service) {
+		s.sqliteFilePath = path
+	}
+}

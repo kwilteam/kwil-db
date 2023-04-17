@@ -81,6 +81,10 @@ func OpenDataset(owner, name, path string) (*Dataset, error) {
 
 // Close closes the dataset and releases the lock.
 func (d *Dataset) Close() error {
+	if d.readOnlyConn != nil {
+		d.readOnlyConn.ReleaseLock()
+		d.readOnlyConn.Close()
+	}
 	d.conn.ReleaseLock()
 	return d.conn.Close()
 }

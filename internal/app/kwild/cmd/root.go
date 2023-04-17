@@ -136,6 +136,7 @@ func buildTxSvc(cfg *config.KwildConfig, as *balances.AccountStore, logger log.L
 	return txsvc.NewService(cfg,
 		txsvc.WithLogger(logger),
 		txsvc.WithAccountStore(as),
+		txsvc.WithSqliteFilePath(cfg.SqliteFilePath),
 	)
 }
 

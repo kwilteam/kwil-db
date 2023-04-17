@@ -14,9 +14,10 @@ type Service struct {
 
 	log log.Logger
 
-	executor     datasets.DatasetUseCaseInterface
-	cfg          *config.KwildConfig
-	accountStore *balances.AccountStore
+	executor       datasets.DatasetUseCaseInterface
+	cfg            *config.KwildConfig
+	accountStore   *balances.AccountStore
+	sqliteFilePath string
 
 	providerAddress string
 }
@@ -52,6 +53,12 @@ func getDatasetUseCaseOpts(s *Service) []datasets.DatasetUseCaseOpt {
 		// otherwise, the dataset use case will create its own
 		opts = append(opts, datasets.WithAccountStore(s.accountStore))
 	}
+	if s.sqliteFilePath != "" {
+		// if a sqlite file path is provided, use it
+		// otherwise, the dataset use case will create its own
+		opts = append(opts, datasets.WithSqliteFilePath(s.sqliteFilePath))
+	}
+
 	opts = append(opts, datasets.WithLogger(s.log))
 	return opts
 }

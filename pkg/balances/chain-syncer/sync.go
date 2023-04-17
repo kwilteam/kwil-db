@@ -10,6 +10,7 @@ import (
 	chainCodes "kwil/pkg/chain/types"
 	"kwil/pkg/log"
 	"math/big"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -83,6 +84,8 @@ func (cs *ChainSyncer) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+
+		time.Sleep(100 * time.Millisecond) // alchemy doesn't like it when we make too many requests in a short period of time
 	}
 
 	return cs.listen(ctx)
@@ -202,7 +205,7 @@ func (cs *ChainSyncer) listen(ctx context.Context) error {
 					return
 				}
 
-				cs.log.Debug("Syncing deposits", zap.Int64("block", block), zap.Int64("number of deposits:", int64(len(credits))))
+				cs.log.Debug("Syncing deposits from block", zap.Int64("block", block), zap.Int64("number of deposits:", int64(len(credits))))
 
 				err = cs.accountRepository.BatchCredit(credits, &balances.ChainConfig{
 					ChainCode: cs.chainCode.Int32(),

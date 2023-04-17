@@ -38,3 +38,9 @@ func WithEngine(engine engineInterface) DatasetUseCaseOpt {
 		u.engine = engine
 	}
 }
+
+func WithSqliteFilePath(path string) DatasetUseCaseOpt {
+	return func(u *DatasetUseCase) {
+		u.sqliteFilePath = path
+	}
+}

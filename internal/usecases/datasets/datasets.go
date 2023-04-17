@@ -11,11 +11,14 @@ type DatasetUseCase struct {
 	engine       engineInterface
 	accountStore accountStore
 	log          log.Logger
+
+	sqliteFilePath string
 }
 
 func New(opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
 	u := &DatasetUseCase{
-		log: log.NewNoOp(),
+		log:            log.NewNoOp(),
+		sqliteFilePath: "",
 	}
 
 	for _, opt := range opts {
@@ -25,7 +28,7 @@ func New(opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
 	var err error
 	if u.engine == nil {
 		u.engine, err = engine.Open(
-			engine.WithLogger(u.log),
+			u.engineOpts()...,
 		)
 		if err != nil {
 			return nil, err
@@ -42,6 +45,16 @@ func New(opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
 	}
 
 	return u, nil
+}
+
+func (u *DatasetUseCase) engineOpts() []engine.MasterOpt {
+	opts := make([]engine.MasterOpt, 0)
+	if u.sqliteFilePath != "" {
+		opts = append(opts, engine.WithPath(u.sqliteFilePath))
+	}
+	opts = append(opts, engine.WithLogger(u.log))
+
+	return opts
 }
 
 func (u *DatasetUseCase) ListDatabases(owner string) ([]string, error) {
