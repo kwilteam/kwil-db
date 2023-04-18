@@ -62,7 +62,7 @@ func (p *PreparedAction) Prepare(exec *models.ActionExecution, opts *ExecOpts) (
 	for _, record := range exec.Params {
 		finalRecord, err := p.prepareSingle(record)
 		if err != nil {
-			return nil, fmt.Errorf("error preparing action %s: %w", p.Name, err)
+			return nil, fmt.Errorf("error preparing action inputs %s: %w", p.Name, err)
 		}
 
 		finalRecord[callerVar] = opts.Caller
@@ -73,7 +73,7 @@ func (p *PreparedAction) Prepare(exec *models.ActionExecution, opts *ExecOpts) (
 	return finalRecords, nil
 }
 
-// prepareSingle prepares a single record of a batch of records
+// prepareSingle prepares a single record
 func (p *PreparedAction) prepareSingle(record map[string][]byte) (map[string]any, error) {
 	finalRecord := make(map[string]any)
 	for _, input := range p.Inputs {

@@ -130,7 +130,7 @@ func (d *Dataset) ApplySchema(schema *models.Dataset) (err error) {
 	for _, action := range schema.Actions {
 		err := d.prepareAction(action)
 		if err != nil {
-			return fmt.Errorf("error preparing action %s: %w", action.Name, err)
+			return fmt.Errorf("error preparing action on schema apply %s: %w", action.Name, err)
 		}
 	}
 
@@ -156,7 +156,7 @@ func (d *Dataset) loadSchema() error {
 	for _, action := range schema.Actions {
 		err := d.prepareAction(action)
 		if err != nil {
-			return fmt.Errorf("error preparing action %s: %w", action.Name, err)
+			return fmt.Errorf("error preparing action on schema load %s: %w", action.Name, err)
 		}
 	}
 

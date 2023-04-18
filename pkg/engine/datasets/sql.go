@@ -389,7 +389,12 @@ func (d *Dataset) retrieveActions() ([]*models.Action, error) {
 		actionId := stmt.GetInt64("id")
 		actionName := stmt.GetText("action_name")
 		actionPublic := intToBool(int(stmt.GetInt64("action_public")))
-		actionInputs := strings.Split(stmt.GetText("action_inputs"), ",")
+		inputs := stmt.GetText("action_inputs")
+
+		var actionInputs []string
+		if inputs != "" {
+			actionInputs = strings.Split(stmt.GetText("action_inputs"), ",")
+		}
 
 		statements, err := d.retrieveActionStatements(actionId)
 		if err != nil {
