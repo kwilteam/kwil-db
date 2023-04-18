@@ -23,14 +23,21 @@ type GWServer struct {
 	logger      log.Logger
 	h           http.Handler
 	cfg         *config.KwildConfig
+	httpServer  *http.Server
 }
 
 func NewGWServer(mux *runtime.ServeMux, cfg *config.KwildConfig, logger log.Logger) *GWServer {
-	return &GWServer{mux: mux,
-		logger: logger,
+	gw := &GWServer{mux: mux,
+		logger: logger.Named("gateway"),
 		h:      mux,
 		cfg:    cfg,
 	}
+
+	gw.httpServer = &http.Server{
+		Addr:    cfg.HttpListenAddress,
+		Handler: gw,
+	}
+	return gw
 }
 
 func (g *GWServer) AddMiddlewares(ms ...*middleware.NamedMiddleware) {
@@ -43,7 +50,11 @@ func (g *GWServer) AddMiddlewares(ms ...*middleware.NamedMiddleware) {
 
 func (g *GWServer) Serve() error {
 	g.logger.Info("kwil gateway started", zap.String("address", g.cfg.HttpListenAddress))
-	return http.ListenAndServe(g.cfg.HttpListenAddress, g)
+	return g.httpServer.ListenAndServe()
+}
+
+func (g *GWServer) Shutdown(ctx context.Context) error {
+	return g.httpServer.Shutdown(ctx)
 }
 
 func (g *GWServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {

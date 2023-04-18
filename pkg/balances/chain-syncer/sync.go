@@ -190,11 +190,15 @@ func (cs *ChainSyncer) listen(ctx context.Context) error {
 
 	go func(blockChan <-chan int64) {
 		defer func() {
-			cs.log.Info("Chain syncer stopped listening")
+			if err := recover(); err != nil {
+				cs.log.Error("Chain syncer panic", zap.Any("error", err))
+			}
+			cs.log.Info("Chain syncer stopped")
 		}()
 		for {
 			select {
 			case <-ctx.Done():
+				cs.log.Info("stop Chain syncer")
 				return
 			case block := <-blockChan:
 				cs.log.Debug("Received block", zap.Int64("block", block))

@@ -3,80 +3,103 @@ package server
 import (
 	"context"
 	"errors"
-	txpb "kwil/api/protobuf/tx/v1"
 	"kwil/internal/app/kwild/config"
-	"kwil/internal/controller/grpc/healthsvc/v0"
-	"kwil/internal/controller/grpc/txsvc/v1"
 	chainsyncer "kwil/pkg/balances/chain-syncer"
-	"kwil/pkg/grpc/server"
+	grpcServer "kwil/pkg/grpc/server"
 	"kwil/pkg/log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type Server struct {
+	Ctx         context.Context
 	Cfg         *config.KwildConfig
 	Log         log.Logger
-	HealthSvc   *healthsvc.Server
 	ChainSyncer *chainsyncer.ChainSyncer
-	TxSvc       *txsvc.Service
+	Http        *GWServer
+	Grpc        *grpcServer.Server
+
+	done context.CancelFunc
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	s.Log.Info("starting server")
+	defer func() {
+		if err := recover(); err != nil {
+			s.Log.Error("kwild server panic", zap.Any("error", err))
+		}
+	}()
+
+	s.Log.Info("starting server...")
+
+	// graceful shutdown when receive signal
+	gracefulShutdown := make(chan os.Signal, 1)
+	signal.Notify(gracefulShutdown, syscall.SIGINT, syscall.SIGTERM)
 
 	cancelCtx, done := context.WithCancel(ctx)
+	s.done = done
 	g, gctx := errgroup.WithContext(cancelCtx)
 
 	g.Go(func() error {
-		if err := s.ChainSyncer.Start(gctx); err != nil {
-			return err
-		}
-		s.Log.Info("deposits synced")
-
-		<-gctx.Done()
-		return nil
-	})
-
-	g.Go(func() error {
-		grpcServer := server.New(s.Log)
-		txpb.RegisterTxServiceServer(grpcServer, s.TxSvc)
-		grpc_health_v1.RegisterHealthServer(grpcServer, s.HealthSvc)
-
 		go func() {
 			<-gctx.Done()
-			grpcServer.Stop()
-			s.Log.Info("grpc server stopped")
+			s.Log.Info("stop http server")
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer func() {
+				cancel()
+			}()
+			if err := s.Http.Shutdown(ctx); err != nil {
+				s.Log.Error("http server shutdown error", zap.Error(err))
+			}
+		}()
+		return s.Http.Serve()
+	})
+	s.Log.Info("http server started", zap.String("address", s.Cfg.HttpListenAddress))
+
+	//g.Go(func() error {
+	//	if err := s.ChainSyncer.Start(gctx); err != nil {
+	//		return err
+	//	}
+	//	s.Log.Info("deposits synced")
+	//	return nil
+	//})
+
+	g.Go(func() error {
+		go func() {
+			<-gctx.Done()
+			s.Log.Info("stop grpc server")
+			s.Grpc.Stop()
 		}()
 
-		return grpcServer.Serve(ctx, s.Cfg.GrpcListenAddress)
+		return s.Grpc.Serve(ctx, s.Cfg.GrpcListenAddress)
 	})
 	s.Log.Info("grpc server started", zap.String("address", s.Cfg.GrpcListenAddress))
 
 	g.Go(func() error {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		select {
 		case <-gctx.Done():
 			s.Log.Info("close signal goroutine", zap.Error(gctx.Err()))
 			return gctx.Err()
-		case sig := <-c:
+		case sig := <-gracefulShutdown:
 			s.Log.Warn("received signal", zap.String("signal", sig.String()))
-			done()
+			s.Stop()
 		}
 		return nil
 	})
+	s.Log.Info("signal watcher started")
 
 	err := g.Wait()
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			s.Log.Info("server context is canceled")
 			return nil
+		} else if errors.Is(err, http.ErrServerClosed) {
+			s.Log.Info("http server is closed")
 		} else {
 			s.Log.Error("server error", zap.Error(err))
 		}
@@ -85,7 +108,7 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
-//func (s *Server) Stop() error {
-//	s.log.Info("stopping server")
-//	return nil
-//}
+func (s *Server) Stop() {
+	s.Log.Warn("stop kwild services")
+	s.done()
+}

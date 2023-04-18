@@ -3,6 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	txpb "kwil/api/protobuf/tx/v1"
 	"kwil/internal/app/kwild/config"
 	"kwil/internal/app/kwild/server"
 	"kwil/internal/controller/grpc/healthsvc/v0"
@@ -10,6 +12,7 @@ import (
 	"kwil/internal/pkg/gateway/middleware/cors"
 	"kwil/internal/pkg/healthcheck"
 	simple_checker "kwil/internal/pkg/healthcheck/simple-checker"
+	grpcServer "kwil/pkg/grpc/server"
 
 	"kwil/pkg/balances"
 	chainsyncer "kwil/pkg/balances/chain-syncer"
@@ -22,7 +25,6 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 )
 
 var RootCmd = &cobra.Command{
@@ -37,6 +39,7 @@ var RootCmd = &cobra.Command{
 		}
 
 		logger := log.New(cfg.Log)
+		logger = logger.Named("kwild")
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
@@ -61,6 +64,8 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to build tx service: %w", err)
 		}
 
+		healthSvc := buildHealthSvc(logger)
+
 		// kwil gateway
 		gw := server.NewGWServer(runtime.NewServeMux(), cfg, logger)
 
@@ -77,19 +82,19 @@ var RootCmd = &cobra.Command{
 			cors.MCors([]string{}),
 		)
 
+		// grpc server
+		grpcServer := grpcServer.New(logger)
+		txpb.RegisterTxServiceServer(grpcServer, txSvc)
+		grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
+
+		// start
 		server := &server.Server{
 			Cfg:         cfg,
 			Log:         logger,
 			ChainSyncer: chainSyncer,
-			TxSvc:       txSvc,
-			HealthSvc:   buildHealthSvc(logger),
+			Http:        gw,
+			Grpc:        grpcServer,
 		}
-
-		go func() {
-			if err := gw.Serve(); err != nil {
-				logger.Error("failed to serve kwil gateway", zap.Error(err))
-			}
-		}()
 
 		return server.Start(ctx)
 	}}
@@ -107,7 +112,7 @@ func init() {
 func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.ChainClient, error) {
 	return ccService.NewChainClient(cfg.Deposits.ClientChainRPCURL,
 		ccService.WithChainCode(chainTypes.ChainCode(cfg.Deposits.ChainCode)),
-		ccService.WithLogger(logger),
+		ccService.WithLogger(logger.Named("chainClient")),
 		ccService.WithReconnectInterval(int64(cfg.Deposits.ReconnectionInterval)),
 		ccService.WithRequiredConfirmations(int64(cfg.Deposits.BlockConfirmations)),
 	)
@@ -115,7 +120,7 @@ func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.C
 
 func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (*balances.AccountStore, error) {
 	return balances.NewAccountStore(
-		balances.WithLogger(logger),
+		balances.WithLogger(logger.Named("accountStore")),
 		balances.WithPath(cfg.SqliteFilePath),
 	)
 }
@@ -124,7 +129,7 @@ func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *b
 	walletAddress := kwilCrypto.AddressFromPrivateKey(cfg.PrivateKey)
 
 	return chainsyncer.Builder().
-		WithLogger(logger).
+		WithLogger(logger.Named("chainSyncer")).
 		WritesTo(as).
 		ListensTo(cfg.Deposits.PoolAddress).
 		WithChainClient(cc).
@@ -134,7 +139,7 @@ func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *b
 
 func buildTxSvc(cfg *config.KwildConfig, as *balances.AccountStore, logger log.Logger) (*txsvc.Service, error) {
 	return txsvc.NewService(cfg,
-		txsvc.WithLogger(logger),
+		txsvc.WithLogger(logger.Named("txService")),
 		txsvc.WithAccountStore(as),
 		txsvc.WithSqliteFilePath(cfg.SqliteFilePath),
 	)
@@ -142,7 +147,7 @@ func buildTxSvc(cfg *config.KwildConfig, as *balances.AccountStore, logger log.L
 
 func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	// health service
-	registrar := healthcheck.NewRegistrar(logger)
+	registrar := healthcheck.NewRegistrar(logger.Named("healthcheck"))
 	registrar.RegisterAsyncCheck(10*time.Second, 3*time.Second, healthcheck.Check{
 		Name: "dummy",
 		Check: func(ctx context.Context) error {
