@@ -551,7 +551,7 @@ func Test_Reopen(t *testing.T) {
 			t.Errorf("failed to reopen: %v", err)
 		}
 
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
 		// insert another row
 		err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{
@@ -585,5 +585,117 @@ func Test_Reopen(t *testing.T) {
 		if len(rows) != i+2 {
 			t.Errorf("expected i+2 rows, got %d", len(rows))
 		}
+	}
+}
+
+func Test_Transaction_Failure(t *testing.T) {
+	conn, err := createTestDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	defer conn.ReleaseLock()
+
+	readOnly, err := conn.CopyReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sp, err := conn.Savepoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// insert another row
+	err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{
+		"$name":   "test1",
+		"$id":     1,
+		"@caller": "test", // testing flag override
+	}, nil)
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
+	// insert another row
+	err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{
+		"$name":   "test2",
+		"$id":     2,
+		"@caller": "test", // testing flag override
+	}, nil)
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
+	// insert a row that should fail
+	err = conn.ExecuteNamed(insertTestRow, map[string]interface{}{
+		"$name":   "test2",
+		"$id":     "nfcjkde",
+		"@caller": "test", // testing flag override
+	}, nil)
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+
+	// read back the rows
+	type Row struct {
+		id   int64
+		name string
+	}
+
+	rows := []Row{}
+	err = readOnly.Query("SELECT id, name FROM test_table;", func(stmt *driver.Statement) error {
+		var row Row
+		row.id = stmt.GetInt64("id")
+		row.name = stmt.GetText("name")
+
+		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		t.Errorf("failed to query: %v", err)
+	}
+
+	if len(rows) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(rows))
+	}
+
+	// read from the original connection
+	rows = []Row{}
+	err = conn.Query("SELECT id, name FROM test_table;", func(stmt *driver.Statement) error {
+		var row Row
+		row.id = stmt.GetInt64("id")
+		row.name = stmt.GetText("name")
+
+		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		t.Errorf("failed to query: %v", err)
+	}
+
+	if len(rows) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(rows))
+	}
+
+	err = sp.Rollback()
+	if err != nil {
+		t.Errorf("failed to rollback: %v", err)
+	}
+
+	rows = []Row{}
+	err = conn.Query("SELECT id, name FROM test_table;", func(stmt *driver.Statement) error {
+		var row Row
+		row.id = stmt.GetInt64("id")
+		row.name = stmt.GetText("name")
+
+		rows = append(rows, row)
+		return nil
+	})
+	if err != nil {
+		t.Errorf("failed to query: %v", err)
+	}
+
+	if len(rows) != 0 {
+		t.Errorf("expected 2 rows, got %d", len(rows))
 	}
 }

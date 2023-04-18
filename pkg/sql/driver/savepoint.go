@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/go-sqlite"
+	"go.uber.org/zap"
 )
 
 type Savepoint struct {
@@ -27,6 +28,8 @@ func (c *Connection) Savepoint(nameArr ...string) (*Savepoint, error) {
 	} else {
 		name = nameArr[0]
 	}
+
+	c.log.Debug("Creating savepoint", zap.String("name", name))
 
 	if err := c.Execute("SAVEPOINT " + name); err != nil {
 		return nil, err
@@ -64,11 +67,13 @@ func (s *Savepoint) end() {
 // but the technical term for SQLite is "release".
 func (s *Savepoint) Commit() error {
 	defer s.end()
+	s.log.Debug("Committing savepoint", zap.String("name", s.name))
 	return s.Execute("RELEASE " + s.name)
 }
 
 func (s *Savepoint) Rollback() error {
 	defer s.end()
+	s.log.Debug("Rolling back savepoint", zap.String("name", s.name))
 	return s.Execute("ROLLBACK TO " + s.name)
 }
 

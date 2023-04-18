@@ -2,7 +2,7 @@ package driver
 
 import (
 	"fmt"
-	"log"
+	"kwil/pkg/log"
 	"os"
 	"strings"
 	"sync"
@@ -32,6 +32,7 @@ const (
 
 type Connection struct {
 	Conn         *sqlite.Conn
+	log          log.Logger
 	mu           *sync.Mutex
 	DBID         string
 	lock         LockType
@@ -54,6 +55,7 @@ func OpenConn(dbid string, opts ...ConnOpt) (*Connection, error) {
 		lockWaitTime: time.Second * DefaultLockWaitTimeSeconds,
 		opts:         opts,
 		closed:       false,
+		log:          log.NewNoOp(),
 	}
 	for _, opt := range opts {
 		opt(connection)
@@ -316,8 +318,6 @@ func (c *Connection) CopyReadOnly() (*Connection, error) {
 		return nil, err
 	}
 
-	go newConn.pollReOpen()
-
 	return newConn, nil
 }
 
@@ -354,6 +354,8 @@ func (c *Connection) reOpen() error {
 	return c.openConn()
 }
 
+/*
+
 // pollReOpen polls the connection and reopens it after the given interval
 // if no interval is given, it will default to 5 seconds
 func (c *Connection) pollReOpen(interval ...time.Duration) {
@@ -380,3 +382,4 @@ func (c *Connection) pollReOpen(interval ...time.Duration) {
 		}
 	}
 }
+*/

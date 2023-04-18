@@ -1,6 +1,9 @@
 package driver
 
-import "time"
+import (
+	"kwil/pkg/log"
+	"time"
+)
 
 type ConnOpt func(*Connection)
 
@@ -25,5 +28,11 @@ func WithLockWaitTime(t time.Duration) ConnOpt {
 func WithInjectableVars(vars []*InjectableVar) ConnOpt {
 	return func(c *Connection) {
 		c.injectables = vars
+	}
+}
+
+func WithLogger(logger log.Logger) ConnOpt {
+	return func(c *Connection) {
+		c.log = logger.Named("sqlite")
 	}
 }
