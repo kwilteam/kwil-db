@@ -35,7 +35,7 @@ func Open(opts ...MasterOpt) (*Engine, error) {
 	}
 
 	var err error
-	e.conn, err = driver.OpenConn("master", driver.WithPath(e.path))
+	e.conn, err = driver.OpenConn("master", driver.WithPath(e.path), driver.WithLogger(e.log.Named("master_connection")))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open master connection: %w", err)
 	}
@@ -86,7 +86,9 @@ func (e *Engine) createDataset(owner, name string) error {
 		return fmt.Errorf("failed to add dataset to master: %w", err)
 	}
 
-	dataset, err := datasets.OpenDataset(owner, name, e.path)
+	dbid := models.GenerateSchemaId(owner, name)
+
+	dataset, err := datasets.OpenDataset(owner, name, e.datasetOpts(dbid)...)
 	if err != nil {
 		return fmt.Errorf("failed to open dataset: %w", err)
 	}
@@ -99,6 +101,15 @@ func (e *Engine) createDataset(owner, name string) error {
 	e.datasets[dataset.DBID] = dataset
 
 	return nil
+}
+
+func (e *Engine) datasetOpts(loggerName string) []datasets.DatasetConnectionOpts {
+	opts := []datasets.DatasetConnectionOpts{
+		datasets.WithLogger(e.log.Named(loggerName)),
+		datasets.WithPath(e.path),
+	}
+
+	return opts
 }
 
 // deleteDataset deletes a dataset from the master database, disk, and memory.
@@ -132,7 +143,8 @@ func (e *Engine) loadAllDataSets() error {
 		owner := stmt.GetText("owner")
 		name := stmt.GetText("name")
 
-		dataset, err := datasets.OpenDataset(owner, name, e.path)
+		dbid := models.GenerateSchemaId(owner, name)
+		dataset, err := datasets.OpenDataset(owner, name, e.datasetOpts(dbid)...)
 		if err != nil {
 			return fmt.Errorf("failed to open dataset of name: %s, owner: %s: %w", name, owner, err)
 		}

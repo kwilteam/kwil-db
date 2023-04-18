@@ -15,6 +15,7 @@ var (
 		},
 		Actions: []*models.Action{
 			&ACTION_CREATE_POST,
+			&ACTION_CREATE_POSTS,
 			&ACTION_CREATE_USER,
 			&ACTION_GET_USER,
 			&ACTION_GET_POSTS_BY_USER,
@@ -135,7 +136,7 @@ var (
 			{
 				Name:    "posts_user_id_index",
 				Columns: []string{"user_id", "title"},
-				Type:    types.UNIQUE_BTREE,
+				Type:    types.BTREE,
 			},
 		},
 	}
@@ -154,6 +155,17 @@ var (
 		Public: true,
 		Inputs: []string{"$user_id", "$title", "$body"},
 		Statements: []string{
+			"INSERT INTO posts (user_id, title, body) VALUES ($user_id, $title, $body)",
+		},
+	}
+
+	// useful for testing
+	ACTION_CREATE_POSTS = models.Action{
+		Name:   "create_multiple_post",
+		Public: true,
+		Inputs: []string{"$user_id", "$title", "$body"},
+		Statements: []string{
+			"INSERT INTO posts (user_id, title, body) VALUES ($user_id, $title, $body)",
 			"INSERT INTO posts (user_id, title, body) VALUES ($user_id, $title, $body)",
 		},
 	}

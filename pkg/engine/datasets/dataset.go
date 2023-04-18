@@ -5,6 +5,7 @@ import (
 	sqlitegenerator "kwil/pkg/engine/datasets/sqlite-generator"
 	"kwil/pkg/engine/models"
 	"kwil/pkg/engine/models/validation"
+	"kwil/pkg/log"
 	"kwil/pkg/sql/driver"
 )
 
@@ -25,6 +26,8 @@ type Dataset struct {
 	Tables       map[string]*models.Table
 	actions      map[string]*PreparedAction
 	readOnlyConn *driver.Connection
+	path         string
+	log          log.Logger
 }
 
 // prepareAction prepares an action for execution at a later time.
@@ -40,43 +43,62 @@ func (d *Dataset) prepareAction(action *models.Action) error {
 
 // OpenDataset opens a dataset with the given owner, name, and path.
 // if the dataset does not exist, it will be created.
-func OpenDataset(owner, name, path string) (*Dataset, error) {
+func OpenDataset(owner, name string, opts ...DatasetConnectionOpts) (*Dataset, error) {
 	dbid := models.GenerateSchemaId(owner, name)
 
-	conn, err := driver.OpenConn(dbid,
-		driver.WithPath(path),
-		driver.WithInjectableVars(injectableVars),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	readOnlyCon, err := conn.CopyReadOnly()
-	if err != nil {
-		return nil, err
-	}
-
-	err = conn.AcquireLock()
-	if err != nil {
-		return nil, err
-	}
-
-	d := &Dataset{
-		conn:         conn,
+	ds := &Dataset{
+		conn:         nil,
 		Owner:        owner,
 		Name:         name,
 		DBID:         dbid,
 		Tables:       make(map[string]*models.Table),
 		actions:      make(map[string]*PreparedAction),
-		readOnlyConn: readOnlyCon,
+		path:         "",
+		log:          log.NewNoOp(),
+		readOnlyConn: nil,
 	}
 
-	err = d.init()
+	for _, opt := range opts {
+		opt(ds)
+	}
+
+	var err error
+	ds.conn, err = driver.OpenConn(dbid,
+		ds.driverOpts()...,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	return d, nil
+	ds.readOnlyConn, err = ds.conn.CopyReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
+	err = ds.conn.AcquireLock()
+	if err != nil {
+		return nil, err
+	}
+
+	err = ds.init()
+	if err != nil {
+		return nil, err
+	}
+
+	return ds, nil
+}
+
+func (ds *Dataset) driverOpts() []driver.ConnOpt {
+	opts := []driver.ConnOpt{
+		driver.WithInjectableVars(injectableVars),
+		driver.WithLogger(ds.log),
+	}
+
+	if ds.path != "" {
+		opts = append(opts, driver.WithPath(ds.path))
+	}
+
+	return opts
 }
 
 // Close closes the dataset and releases the lock.

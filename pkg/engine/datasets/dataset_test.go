@@ -86,7 +86,7 @@ func Test_Dataset(t *testing.T) {
 }
 
 func Test_Read(t *testing.T) {
-	ds, err := datasets.OpenDataset("owner", "name", getDir())
+	ds, err := datasets.OpenDataset("owner", "name", datasets.WithPath(getDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,12 +157,12 @@ func clearSet(ds *datasets.Dataset) (*datasets.Dataset, error) {
 		return nil, err
 	}
 
-	return datasets.OpenDataset(owner, name, getDir())
+	return datasets.OpenDataset(owner, name, datasets.WithPath(getDir()))
 }
 
 // clearAndReapply clears the dataset and re-applies the schema
 func clearAndReapply() (*datasets.Dataset, error) {
-	ds, err := datasets.OpenDataset("owner", "name", getDir())
+	ds, err := datasets.OpenDataset("owner", "name", datasets.WithPath(getDir()))
 	if err != nil {
 		return nil, err
 	}
@@ -177,4 +177,42 @@ func clearAndReapply() (*datasets.Dataset, error) {
 	}
 
 	return ds, nil
+}
+
+func Test_Multi_Stmt_Action(t *testing.T) {
+	ds, err := clearAndReapply()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ds.Close()
+
+	params := make([]map[string][]byte, 0)
+	args := make(map[string][]byte)
+	args["$title"] = types.NewMust("bruhhhhhhhh").Bytes()
+	args["$body"] = types.NewMust("jbcjkswebkj").Bytes()
+	args["$user_id"] = types.NewMust(1).Bytes()
+
+	params = append(params, args)
+
+	// testing execution
+	_, err = ds.ExecuteAction(&models.ActionExecution{
+		Action: mocks.ACTION_CREATE_POSTS.Name,
+		DBID:   ds.DBID, // not technically needed here
+		Params: params,
+	}, &datasets.ExecOpts{
+		Caller: "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// read it back
+	res, err := ds.Query("SELECT * FROM posts")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(res) != 2 {
+		t.Fatal("expected 2 rows, got: ", len(res))
+	}
 }
