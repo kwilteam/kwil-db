@@ -336,7 +336,7 @@ func (d *Dataset) retrieveIndexes(tableId int64) ([]*models.Index, error) {
 	err := d.conn.QueryNamed(sqlGetIndexes, func(stmt *driver.Statement) error {
 		indexName := stmt.GetText("index_name")
 		indexType := types.IndexType(stmt.GetInt64("index_type"))
-		columns := strings.Split(stmt.GetText("columns"), ",")
+		columns := getDelimited(stmt.GetText("columns"))
 
 		indexes = append(indexes, &models.Index{
 			Name:    indexName,
@@ -393,7 +393,7 @@ func (d *Dataset) retrieveActions() ([]*models.Action, error) {
 
 		var actionInputs []string
 		if inputs != "" {
-			actionInputs = strings.Split(stmt.GetText("action_inputs"), ",")
+			actionInputs = getDelimited(stmt.GetText("action_inputs"))
 		}
 
 		statements, err := d.retrieveActionStatements(actionId)
@@ -516,4 +516,13 @@ func boolToInt(b bool) int {
 
 func intToBool(i int) bool {
 	return i == 1
+}
+
+func getDelimited(s string) []string {
+	var result []string
+	if s != "" {
+		result = strings.Split(s, ",")
+	}
+
+	return result
 }
