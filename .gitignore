@@ -36,3 +36,6 @@ gen/
 deployments/helm/*/charts/
 
 dist/*
+
+# IDE
+.run

@@ -8,6 +8,7 @@ set -eu
 : "${GO_BUILDMODE=}"
 : "${GO_BUILDTAGS=}"
 : "${GO_STRIP=}"
+: "${GO_GCFLAGS=}"
 
 GOOS="$(go env GOOS)"
 GOARCH="$(go env GOARCH)"
@@ -65,3 +66,6 @@ fi
 export GO_LDFLAGS="$GO_LDFLAGS" # https://github.com/koalaman/shellcheck/issues/2064
 
 export SOURCE="kwil/cmd/${BINARY}"
+
+GO_GCFLAGS="${GO_GCFLAGS:-}"
+export GO_GCFLAGS="$GO_GCFLAGS"
