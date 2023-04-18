@@ -37,7 +37,7 @@ func (c *chainClient) Listen(ctx context.Context, blocks chan<- int64) error {
 					sub = c.resubscribe(ctx, sub, internalChan)
 				}
 			case <-time.After(c.reconnectInterval):
-				c.log.Sugar().Error("subscription timeout")
+				c.log.Error("subscription timeout")
 				sub = c.resubscribe(ctx, sub, internalChan)
 			case block := <-internalChan:
 				height := block.Height - c.requiredConfirmations

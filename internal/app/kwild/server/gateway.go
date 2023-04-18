@@ -28,7 +28,7 @@ type GWServer struct {
 
 func NewGWServer(mux *runtime.ServeMux, cfg *config.KwildConfig, logger log.Logger) *GWServer {
 	gw := &GWServer{mux: mux,
-		logger: logger.Named("gateway"),
+		logger: *logger.Named("gateway"),
 		h:      mux,
 		cfg:    cfg,
 	}

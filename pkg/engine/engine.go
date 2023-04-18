@@ -35,7 +35,7 @@ func Open(opts ...MasterOpt) (*Engine, error) {
 	}
 
 	var err error
-	e.conn, err = driver.OpenConn("master", driver.WithPath(e.path), driver.WithLogger(e.log.Named("master_connection")))
+	e.conn, err = driver.OpenConn("master", driver.WithPath(e.path), driver.WithLogger(*e.log.Named("master_connection")))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open master connection: %w", err)
 	}
@@ -105,7 +105,7 @@ func (e *Engine) createDataset(owner, name string) error {
 
 func (e *Engine) datasetOpts(loggerName string) []datasets.DatasetConnectionOpts {
 	opts := []datasets.DatasetConnectionOpts{
-		datasets.WithLogger(e.log.Named(loggerName)),
+		datasets.WithLogger(*e.log.Named(loggerName)),
 		datasets.WithPath(e.path),
 	}
 

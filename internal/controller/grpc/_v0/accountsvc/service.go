@@ -15,7 +15,7 @@ type Service struct {
 
 func NewService(queries repository.Queries, logger log.Logger) *Service {
 	return &Service{
-		log: logger.Named("accountsvc"),
+		log: *logger.Named("accountsvc"),
 		dao: queries,
 	}
 }

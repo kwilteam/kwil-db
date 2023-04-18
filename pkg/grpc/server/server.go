@@ -16,7 +16,7 @@ type Server struct {
 }
 
 func New(logger log.Logger, opts ...Option) *Server {
-	l := logger.Named("grpcServer").WithOptions(zap.WithCaller(false))
+	l := *logger.Named("grpcServer").WithOptions(zap.WithCaller(false))
 
 	recoveryFunc := func(p interface{}) error {
 		l.Error("grpc: panic serving", zap.Any("panic", p))
@@ -33,7 +33,7 @@ func New(logger log.Logger, opts ...Option) *Server {
 	server := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			recovery.UnaryServerInterceptor(recoveryOpts...),
-			logging.UnaryServerInterceptor(InterceptorLogger(l), loggingOpts...),
+			logging.UnaryServerInterceptor(InterceptorLogger(&l), loggingOpts...),
 		),
 	)
 

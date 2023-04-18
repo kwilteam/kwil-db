@@ -30,7 +30,7 @@ type registrar struct {
 }
 
 func NewRegistrar(logger log.Logger) *registrar {
-	return &registrar{logger: logger.Named("healthcheck.registrar")}
+	return &registrar{logger: *logger.Named("healthcheck.registrar")}
 }
 
 func (r *registrar) RegisterAsyncCheck(refreshPeriod time.Duration, initialDelay time.Duration, check Check) {

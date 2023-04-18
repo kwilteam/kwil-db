@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"go.uber.org/zap"
+	"kwil/pkg/log"
 )
 
 // InterceptorLogger adapts zap logger to interceptor logger.
 // This code is simple enough to be copied and not imported.
-func InterceptorLogger(l *zap.Logger) logging.Logger {
+func InterceptorLogger(l *log.Logger) logging.Logger {
 	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
 		f := make([]zap.Field, 0, len(fields)/2)
 		for i := 0; i < len(fields); i += 2 {

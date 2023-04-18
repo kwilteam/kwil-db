@@ -19,7 +19,7 @@ func setUser(r *http.Request, u *User) *http.Request {
 }
 
 func MAuth(m Manager, logger log.Logger) *middleware.NamedMiddleware {
-	logger = logger.Named("auth")
+	logger = *logger.Named("auth")
 	return &middleware.NamedMiddleware{
 		Name: "auth",
 		Middleware: func(h http.Handler) http.Handler {

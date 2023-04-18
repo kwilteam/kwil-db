@@ -39,7 +39,7 @@ var RootCmd = &cobra.Command{
 		}
 
 		logger := log.New(cfg.Log)
-		logger = logger.Named("kwild")
+		logger = *logger.Named("kwild")
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
@@ -112,7 +112,7 @@ func init() {
 func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.ChainClient, error) {
 	return ccService.NewChainClient(cfg.Deposits.ClientChainRPCURL,
 		ccService.WithChainCode(chainTypes.ChainCode(cfg.Deposits.ChainCode)),
-		ccService.WithLogger(logger.Named("chainClient")),
+		ccService.WithLogger(*logger.Named("chainClient")),
 		ccService.WithReconnectInterval(int64(cfg.Deposits.ReconnectionInterval)),
 		ccService.WithRequiredConfirmations(int64(cfg.Deposits.BlockConfirmations)),
 	)
@@ -120,7 +120,7 @@ func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.C
 
 func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (*balances.AccountStore, error) {
 	return balances.NewAccountStore(
-		balances.WithLogger(logger.Named("accountStore")),
+		balances.WithLogger(*logger.Named("accountStore")),
 		balances.WithPath(cfg.SqliteFilePath),
 	)
 }
@@ -129,7 +129,7 @@ func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *b
 	walletAddress := kwilCrypto.AddressFromPrivateKey(cfg.PrivateKey)
 
 	return chainsyncer.Builder().
-		WithLogger(logger.Named("chainSyncer")).
+		WithLogger(*logger.Named("chainSyncer")).
 		WritesTo(as).
 		ListensTo(cfg.Deposits.PoolAddress).
 		WithChainClient(cc).
@@ -139,7 +139,7 @@ func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *b
 
 func buildTxSvc(cfg *config.KwildConfig, as *balances.AccountStore, logger log.Logger) (*txsvc.Service, error) {
 	return txsvc.NewService(cfg,
-		txsvc.WithLogger(logger.Named("txService")),
+		txsvc.WithLogger(*logger.Named("txService")),
 		txsvc.WithAccountStore(as),
 		txsvc.WithSqliteFilePath(cfg.SqliteFilePath),
 	)
@@ -147,7 +147,7 @@ func buildTxSvc(cfg *config.KwildConfig, as *balances.AccountStore, logger log.L
 
 func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	// health service
-	registrar := healthcheck.NewRegistrar(logger.Named("healthcheck"))
+	registrar := healthcheck.NewRegistrar(*logger.Named("healthcheck"))
 	registrar.RegisterAsyncCheck(10*time.Second, 3*time.Second, healthcheck.Check{
 		Name: "dummy",
 		Check: func(ctx context.Context) error {

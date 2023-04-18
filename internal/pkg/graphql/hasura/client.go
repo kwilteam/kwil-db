@@ -20,7 +20,7 @@ type client struct {
 func NewClient(endpoint string, logger log.Logger) *client {
 	return &client{
 		endpoint: endpoint,
-		logger:   logger.Named("hasura"),
+		logger:   *logger.Named("hasura"),
 	}
 }
 

@@ -17,7 +17,7 @@ type Service struct {
 func NewService(cfg *config.AppConfig, logger log.Logger) *Service {
 	return &Service{
 		cfg: cfg,
-		log: logger.Named("configsvc"),
+		log: *logger.Named("configsvc"),
 	}
 }
 

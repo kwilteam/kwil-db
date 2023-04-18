@@ -21,7 +21,7 @@ type Service struct {
 
 func NewService(queries repository.Queries, exec executor.Executor, logger log.Logger) *Service {
 	return &Service{
-		log:      logger.Named("txsvc"),
+		log:      *logger.Named("txsvc"),
 		dao:      queries,
 		executor: exec,
 		pricing:  pricer.NewPricer(),

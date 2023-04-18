@@ -33,6 +33,6 @@ func WithInjectableVars(vars []*InjectableVar) ConnOpt {
 
 func WithLogger(logger log.Logger) ConnOpt {
 	return func(c *Connection) {
-		c.log = logger.Named("sqlite")
+		c.log = *logger.Named("sqlite")
 	}
 }
