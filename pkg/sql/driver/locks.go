@@ -54,18 +54,16 @@ const (
 	// if there is no connection, it is unlocked
 	LOCK_TYPE_UNLOCKED LockType = iota
 
-	LOCK_TYPED_SHARED
-	LOCK_TYPE_RESERVED
-	LOCK_TYPE_PENDING
-	LOCK_TYPE_EXCLUSIVE
+	LOCK_TYPE_READ_ONLY
+	LOCK_TYPE_READ_WRITE
 )
 
 // Readable returns true if the connection is readable
 func (c *Connection) Readable() bool {
-	return c.lock == LOCK_TYPED_SHARED || c.lock == LOCK_TYPE_RESERVED || c.lock == LOCK_TYPE_PENDING || c.lock == LOCK_TYPE_EXCLUSIVE
+	return c.lock == LOCK_TYPE_READ_ONLY || c.lock == LOCK_TYPE_READ_WRITE
 }
 
 // Writable returns true if the connection is writable
 func (c *Connection) Writable() bool {
-	return c.lock == LOCK_TYPE_EXCLUSIVE
+	return c.lock == LOCK_TYPE_READ_WRITE
 }

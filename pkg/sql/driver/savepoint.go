@@ -15,6 +15,7 @@ type Savepoint struct {
 	name       string
 	ses        *sqlite.Session
 	sesDeleted bool
+	committed  bool
 }
 
 // Creates a savepoint with the given name. If no name is provided, a random
@@ -50,6 +51,7 @@ func (c *Connection) Savepoint(nameArr ...string) (*Savepoint, error) {
 		name:       name,
 		ses:        ses,
 		sesDeleted: false,
+		committed:  false,
 	}, nil
 }
 
@@ -66,12 +68,20 @@ func (s *Savepoint) end() {
 // I use the term commit since it is more clear for most devs,
 // but the technical term for SQLite is "release".
 func (s *Savepoint) Commit() error {
+	if s.committed {
+		return nil
+	}
+
 	defer s.end()
 	s.log.Debug("Committing savepoint", zap.String("name", s.name))
 	return s.Execute("RELEASE " + s.name)
 }
 
 func (s *Savepoint) Rollback() error {
+	if s.committed {
+		return nil
+	}
+
 	defer s.end()
 	s.log.Debug("Rolling back savepoint", zap.String("name", s.name))
 	return s.Execute("ROLLBACK TO " + s.name)

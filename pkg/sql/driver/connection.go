@@ -88,7 +88,7 @@ func (c *Connection) openConn() error {
 		return err
 	}
 	c.Conn = conn
-	c.lock = LOCK_TYPED_SHARED
+	c.lock = LOCK_TYPE_READ_ONLY
 
 	return nil
 }
@@ -263,7 +263,7 @@ func (c *Connection) AcquireLock() error {
 		return err
 	}
 
-	c.lock = LOCK_TYPE_EXCLUSIVE
+	c.lock = LOCK_TYPE_READ_WRITE
 	return nil
 }
 
@@ -275,12 +275,12 @@ func (c *Connection) ReleaseLock() {
 }
 
 func (c *Connection) releaseLock() {
-	if c.lock != LOCK_TYPE_EXCLUSIVE {
+	if c.lock != LOCK_TYPE_READ_WRITE {
 		return
 	}
 
 	releaseLock(c.DBID)
-	c.lock = LOCK_TYPED_SHARED
+	c.lock = LOCK_TYPE_READ_ONLY
 }
 
 func (c *Connection) LastInsertRowID() int64 {
