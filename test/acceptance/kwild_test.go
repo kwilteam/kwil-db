@@ -43,9 +43,6 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// setup
 			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger)
-
-			fmt.Printf("runningCfg: %+v	", runningCfg)
-
 			secondDriver := acceptance.NewClient(ctx, t, c.driverType, runningCfg, tLogger)
 
 			// NOTE: only local env test, public network test takes too long

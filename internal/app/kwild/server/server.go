@@ -61,13 +61,13 @@ func (s *Server) Start(ctx context.Context) error {
 	})
 	s.Log.Info("http server started", zap.String("address", s.Cfg.HttpListenAddress))
 
-	//g.Go(func() error {
-	//	if err := s.ChainSyncer.Start(gctx); err != nil {
-	//		return err
-	//	}
-	//	s.Log.Info("deposits synced")
-	//	return nil
-	//})
+	g.Go(func() error {
+		if err := s.ChainSyncer.Start(gctx); err != nil {
+			return err
+		}
+		s.Log.Info("deposits synced")
+		return nil
+	})
 
 	g.Go(func() error {
 		go func() {
