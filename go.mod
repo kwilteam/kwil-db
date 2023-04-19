@@ -15,11 +15,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
-<<<<<<< HEAD
-	github.com/kwilteam/go-sqlite v0.0.0-20230324224802-44fa185114b9
-=======
 	github.com/kwilteam/go-sqlite v0.0.0-20230418230614-a9e3f191e6ae
->>>>>>> 5b304dc (I am 90% sure I have found and fixed the bug causing wal checkpoint failures.  It seems that sqlites ROLLBACK TO command does not discard a checkpoint, but simply reverts to the start.  This can be found in the IF clause at https://github.com/sqlite/sqlite/blob/master/src/vdbe.c\#L3792.  This meant that any time a checkpoint was rolled back, it was being left open and future savepoints were nested therewithin.  I am fairly confident this was the issue, since I would get a database lock error whenever I forcefully checkpointed the WAL after the issue had come up (you can force this using the PRAGMA wal_checkpoint(TRUNCATE) sqlite command).  To fix this, I have a method that contains ROLLBACK TO and RELEASE which is deferred after each savepoint is opened.  I also attempt to forcefully checkpoint and truncate the WAL after a savepoint is released or rolledback, however I do not handle the error since it can still occur in a nested transaction.)
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pkg/errors v0.9.1
