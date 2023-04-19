@@ -54,6 +54,12 @@ OR
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
 
+				for _, input := range inputs {
+					fmt.Printf("input: %s\n", input)
+				}
+
+				return nil
+
 				receipt, results, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
 				if err != nil {
 					return fmt.Errorf("error executing database: %w", err)
@@ -86,9 +92,7 @@ func getInputs(args []string) ([]map[string]any, error) {
 	inputs := make(map[string]any)
 
 	for _, arg := range args {
-		if !strings.HasPrefix(arg, "$") {
-			ensureInputFormat(&arg)
-		}
+		ensureInputFormat(&arg)
 
 		// split the arg into name and value.  only split on the first ':'
 		split := strings.SplitN(arg, ":", 2)

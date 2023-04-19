@@ -20,6 +20,7 @@ const (
 )
 
 func acquireLock(dbid string, timeout time.Duration) error {
+	return nil
 	if _, ok := locks[dbid]; !ok {
 		locks[dbid] = &sync.Mutex{}
 	}
