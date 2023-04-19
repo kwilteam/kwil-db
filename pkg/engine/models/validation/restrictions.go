@@ -23,7 +23,7 @@ const (
 // index restrictions
 const (
 	MAX_INDEX_COUNT   = 100
-	MAX_INDEX_COLUMNS = 3
+	MAX_INDEX_COLUMNS = 5
 )
 
 // query restrictions
