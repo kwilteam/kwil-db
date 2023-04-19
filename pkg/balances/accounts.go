@@ -82,9 +82,9 @@ func (a *AccountStore) BatchSpend(spendList []*Spend, chain *ChainConfig) error 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	sp, err := a.db.Savepoint()
+	sp, err := a.db.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to create savepoint: %w", err)
+		return fmt.Errorf("failed to create Begin: %w", err)
 	}
 	defer sp.Rollback()
 
@@ -126,7 +126,7 @@ func (a *AccountStore) spend(spend *Spend) error {
 		return fmt.Errorf("failed to set balance: %w", err)
 	}
 
-	err = a.setNonce(spend.AccountAddress, spend.Nonce+1)
+	err = a.setNonce(spend.AccountAddress, spend.Nonce)
 	if err != nil {
 		return fmt.Errorf("failed to set nonce: %w", err)
 	}
@@ -153,9 +153,9 @@ func (a *AccountStore) BatchCredit(creditList []*Credit, chain *ChainConfig) err
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	sp, err := a.db.Savepoint()
+	sp, err := a.db.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to create savepoint: %w", err)
+		return fmt.Errorf("failed to create Begin: %w", err)
 	}
 	defer sp.Rollback()
 

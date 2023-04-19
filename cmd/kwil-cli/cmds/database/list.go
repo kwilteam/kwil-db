@@ -6,6 +6,7 @@ import (
 	"kwil/cmd/kwil-cli/cmds/common"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
+	"kwil/pkg/engine/models"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -36,7 +37,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 					fmt.Printf("Databases belonging to '%s':\n", owner)
 				}
 				for _, db := range dbs {
-					fmt.Println(" - " + db)
+					fmt.Println(" - " + db + "   (dbid:" + models.GenerateSchemaId(owner, db) + ")")
 				}
 
 				return nil

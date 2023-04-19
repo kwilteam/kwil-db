@@ -53,6 +53,10 @@ func (r *Records) Export() []map[string]any {
 	return records
 }
 
+func (r Record) Map() map[string]any {
+	return r
+}
+
 /*
 func (r *Records) Scan(objects []interface{}) error {
 	if !r.Next() {

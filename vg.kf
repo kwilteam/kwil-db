@@ -1,0 +1,90 @@
+database video_game;
+
+// table for storing all the accounts in a game
+table accounts {
+    id int primary notnull,
+    username text notnull minlen(5),
+    user_location text notnull,
+    wallet text notnull
+}
+
+// table for storing the score for a particular level
+table level_1_score {
+    id int primary notnull,
+    user_id int notnull,
+    score int notnull
+}
+
+// table for storing the ownership of an in-game asset
+table sword_owners {
+    id int primary notnull,
+    user_id int notnull,
+    sword_level int min(1) max(10)
+}
+
+// ction to create an account
+action create_account ($id, $username, $location) public {
+    INSERT INTO accounts VALUES ($id, $username, $location, @caller)
+}
+
+// action to update a username
+action update_username ($id, $username) public {
+    UPDATE accounts
+    SET username = $username, id = $id
+    WHERE wallet = @caller
+}
+
+// action to update a user's location'
+action update_location ($id, $location) public {
+    UPDATE accounts
+    SET user_location = $location
+    WHERE wallet = @caller
+        AND id = $id
+}
+
+// action to delete a user. This will delete the user's data across the whole database. Because Kwil does not currently support foreign key cascades, you would just write multiple DELETE queries
+action delete_user ($id) private {
+    DELETE FROM accounts
+    WHERE id = $id;
+    DELETE FROM level_1_score
+    WHERE user_id = (SELECT id from accounts WHERE id = $id);
+    DELETE FROM sword_owners
+    WHERE user_id = (SELECT id from accounts WHERE id = $id);
+}
+
+// action to list users
+action list_accounts () private {
+    SELECT * FROM accounts
+}
+
+// action to add a user's score for level 1
+action add_score ($id, $score) public {
+    INSERT INTO level_1_score VALUES ($id, (SELECT id FROM accounts WHERE wallet = @caller), $score)
+}
+
+// action to update a user's score for level 1
+action update_score ($score) public {
+    UPDATE level_1_score
+    SET score = $score
+    WHERE user_id = (SELECT id FROM accounts WHERE wallet = @caller)
+}
+
+action list_score () private {
+    SELECT * FROM level_1_score
+}
+
+// add action to add a new user as owning a sword
+action new_sword ($id, $level) public {
+    INSERT INTO sword_owners VALUES ($id, (SELECT id from accounts WHERE wallet = @caller), $level)
+}
+
+// private action to upgrade a sword's level
+action upgrade_sword ($id, $level) private {
+    UPDATE sword_owners
+    SET sword_level = $level
+    WHERE id = $id
+}
+
+action list_sword () private {
+    SELECT * FROM sword_owners
+}

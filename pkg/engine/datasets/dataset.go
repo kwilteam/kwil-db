@@ -114,11 +114,17 @@ func (d *Dataset) Close() error {
 // init initializes the underlying sqlite database.
 // it will also load the schema and actions from disk if it exists.
 func (d *Dataset) init() error {
-	stmts := getTableInits()
-	for _, stmt := range stmts {
-		err := d.conn.Execute(stmt)
+	for _, tbl := range metadataTables {
+		exists, err := d.conn.TableExists(tbl.String())
 		if err != nil {
-			return fmt.Errorf("error initializing dataset metadata tables: %w", err)
+			return fmt.Errorf("error checking if table exists: %w", err)
+		}
+
+		if !exists {
+			err := d.conn.Execute(tbl.initStmt())
+			if err != nil {
+				return fmt.Errorf("error initializing dataset metadata tables: %w", err)
+			}
 		}
 	}
 
@@ -136,7 +142,7 @@ func (d *Dataset) ApplySchema(schema *models.Dataset) (err error) {
 		return fmt.Errorf("error on schema: %w", err)
 	}
 
-	sp, err := d.conn.Savepoint()
+	sp, err := d.conn.Begin()
 	if err != nil {
 		return fmt.Errorf("error creating savepoint: %w", err)
 	}

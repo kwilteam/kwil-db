@@ -209,24 +209,25 @@ func readDir(dirPath string) ([]os.FileInfo, error) {
 	return files, nil
 }
 
-func (e *Engine) Deploy(schema *models.Dataset) error {
+func (e *Engine) Deploy(schema *models.Dataset) (err error) {
 	dbid := models.GenerateSchemaId(schema.Owner, schema.Name)
 	_, ok := e.datasets[dbid]
 	if ok {
 		return fmt.Errorf("dataset already exists")
 	}
-	err := clean.CleanDataset(schema)
+	err = clean.CleanDataset(schema)
 	if err != nil {
 		return fmt.Errorf("failed to clean dataset: %w", err)
 	}
 
-	sp, err := e.conn.Savepoint()
+	sp, err := e.conn.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to create savepoint: %w", err)
 	}
 	defer func() {
-		err = sp.Rollback()
-		if err == nil {
+		err2 := sp.Rollback()
+		if err2 == nil {
+			// TODO: rollback legit never returns an error, so it will always delete
 			// if we failed to create the dataset, we don't want to keep it in memory
 			delete(e.datasets, dbid)
 		}

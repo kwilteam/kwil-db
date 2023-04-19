@@ -30,7 +30,7 @@ func buildExecOpts(eo *ExecOpts) {
 
 // ExecuteAction executes a predefined database action
 func (d *Dataset) ExecuteAction(exec *models.ActionExecution, opts *ExecOpts) (RecordSet, error) {
-	sp, err := d.conn.Savepoint()
+	sp, err := d.conn.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create savepoint: %w", err)
 	}

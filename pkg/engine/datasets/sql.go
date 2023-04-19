@@ -8,53 +8,47 @@ import (
 	"strings"
 )
 
-const (
-	sqlInitTables = `
-		CREATE TABLE IF NOT EXISTS _tables (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			table_name TEXT NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS _columns (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			table_id INTEGER NOT NULL,
-			column_name TEXT NOT NULL,
-			column_type INTEGER NOT NULL,
-			FOREIGN KEY (table_id) REFERENCES _tables(id)
-		);
-		CREATE TABLE IF NOT EXISTS _attributes (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			column_id INTEGER NOT NULL,
-			attribute_type INTEGER NOT NULL,
-			attribute_value BLOB,
-			FOREIGN KEY (column_id) REFERENCES _columns(id)
-		);
-		CREATE TABLE IF NOT EXISTS _indexes (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			table_id INTEGER NOT NULL,
-			index_name TEXT NOT NULL,
-			index_type INTEGER NOT NULL,
-			columns TEXT NOT NULL,
-			FOREIGN KEY (table_id) REFERENCES _tables(id)
-		);
+type metadataTable string
 
-		CREATE TABLE IF NOT EXISTS _actions (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			action_name TEXT NOT NULL,
-			action_public INTEGER NOT NULL,
-			action_inputs TEXT NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS _action_statements (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			action_id INTEGER NOT NULL,
-			statement BLOB NOT NULL,
-			FOREIGN KEY (action_id) REFERENCES _actions(id)
-		);
-	`
+var metadataTables = []metadataTable{
+	tablesTable,
+	columnsTable,
+	attributesTable,
+	indexesTable,
+	actionsTable,
+	statementsTable,
+}
+
+const (
+	tablesTable     metadataTable = "_tables"
+	columnsTable    metadataTable = "_columns"
+	attributesTable metadataTable = "_attributes"
+	indexesTable    metadataTable = "_indexes"
+	actionsTable    metadataTable = "_actions"
+	statementsTable metadataTable = "_action_statements"
 )
 
-func getTableInits() []string {
-	inits := strings.Split(sqlInitTables, ";")
-	return inits[:len(inits)-1]
+func (m metadataTable) initStmt() string {
+	switch m {
+	case tablesTable:
+		return "CREATE TABLE IF NOT EXISTS _tables (id INTEGER PRIMARY KEY AUTOINCREMENT, table_name TEXT NOT NULL);"
+	case columnsTable:
+		return "CREATE TABLE IF NOT EXISTS _columns (id INTEGER PRIMARY KEY AUTOINCREMENT, table_id INTEGER NOT NULL, column_name TEXT NOT NULL, column_type INTEGER NOT NULL, FOREIGN KEY (table_id) REFERENCES _tables(id));"
+	case attributesTable:
+		return "CREATE TABLE IF NOT EXISTS _attributes (id INTEGER PRIMARY KEY AUTOINCREMENT, column_id INTEGER NOT NULL, attribute_type INTEGER NOT NULL, attribute_value BLOB, FOREIGN KEY (column_id) REFERENCES _columns(id));"
+	case indexesTable:
+		return "CREATE TABLE IF NOT EXISTS _indexes (id INTEGER PRIMARY KEY AUTOINCREMENT, table_id INTEGER NOT NULL, index_name TEXT NOT NULL, index_type INTEGER NOT NULL, columns TEXT NOT NULL, FOREIGN KEY (table_id) REFERENCES _tables(id));"
+	case actionsTable:
+		return "CREATE TABLE IF NOT EXISTS _actions (id INTEGER PRIMARY KEY AUTOINCREMENT, action_name TEXT NOT NULL, action_public INTEGER NOT NULL, action_inputs TEXT NOT NULL);"
+	case statementsTable:
+		return "CREATE TABLE IF NOT EXISTS _action_statements (id INTEGER PRIMARY KEY AUTOINCREMENT, action_id INTEGER NOT NULL, statement BLOB NOT NULL, FOREIGN KEY (action_id) REFERENCES _actions(id));"
+	default:
+		panic("unknown metadata table")
+	}
+}
+
+func (m *metadataTable) String() string {
+	return string(*m)
 }
 
 /*

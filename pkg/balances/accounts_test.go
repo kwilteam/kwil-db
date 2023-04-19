@@ -36,7 +36,7 @@ func Test_AccountStore(t *testing.T) {
 	spend := balances.Spend{
 		AccountAddress: "0x123",
 		Amount:         big.NewInt(100),
-		Nonce:          0,
+		Nonce:          1,
 	}
 
 	err = as.Spend(&spend)
@@ -106,17 +106,17 @@ func Test_BatchSpendAndCredit(t *testing.T) {
 		{
 			AccountAddress: "0x123",
 			Amount:         big.NewInt(100),
-			Nonce:          0,
+			Nonce:          1,
 		},
 		{
 			AccountAddress: "0x456",
 			Amount:         big.NewInt(100),
-			Nonce:          0,
+			Nonce:          1,
 		},
 		{
 			AccountAddress: "0x123",
 			Amount:         big.NewInt(100),
-			Nonce:          1,
+			Nonce:          2,
 		},
 	}
 

@@ -235,7 +235,7 @@ func Test_RapidWrite(t *testing.T) {
 
 }
 
-func Test_Savepoints(t *testing.T) {
+func Test_Bruh(t *testing.T) {
 	conn, err := createTestDB()
 	if err != nil {
 		t.Fatal(err)
@@ -243,7 +243,32 @@ func Test_Savepoints(t *testing.T) {
 	defer conn.Close()
 	defer conn.ReleaseLock()
 
-	sp, err := conn.Savepoint()
+	tx, err := driver.Begin(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = tx.Execute(insertTestRow, 1, "test1")
+	if err != nil {
+		t.Errorf("failed to insert: %v", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_Savepoints(t *testing.T) {
+	// TEST 1 rollback
+	conn, err := createTestDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	defer conn.ReleaseLock()
+
+	sp, err := conn.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,25 +296,21 @@ func Test_Savepoints(t *testing.T) {
 		t.Errorf("expected 0 rows, got %d", len(rows))
 	}
 
+	// TEST 2 changeset
+
 	// test savepoint with commit
-	sp, err = conn.Savepoint()
+	sp2, err := conn.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = sp.Execute(insertTestRow, 1, "test1")
+	err = conn.Execute(insertTestRow, 1, "test1")
 	if err != nil {
 		t.Errorf("failed to insert: %v", err)
 	}
 
-	// generate changeset
-	changeset, err := sp.GetChangeset()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// now commit
-	err = sp.Commit()
+	err = sp2.Commit()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,12 +334,6 @@ func Test_Savepoints(t *testing.T) {
 		t.Errorf("failed to delete: %v", err)
 	}
 
-	// apply changeset
-	err = sp.ApplyChangeset(changeset)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	rows = []int64{}
 	err = conn.Query("SELECT id FROM test_table;", func(stmt *driver.Statement) error {
 		rows = append(rows, stmt.GetInt64("id"))
@@ -328,8 +343,8 @@ func Test_Savepoints(t *testing.T) {
 		t.Errorf("failed to query: %v", err)
 	}
 
-	if len(rows) != 1 {
-		t.Errorf("expected 1 row, got %d", len(rows))
+	if len(rows) != 0 {
+		t.Errorf("expected 0 rows, got %d", len(rows))
 	}
 }
 
@@ -601,7 +616,7 @@ func Test_Transaction_Failure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sp, err := conn.Savepoint()
+	sp, err := conn.Begin()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -697,5 +712,42 @@ func Test_Transaction_Failure(t *testing.T) {
 
 	if len(rows) != 0 {
 		t.Errorf("expected 2 rows, got %d", len(rows))
+	}
+}
+
+func Test_Nested_Savepoints(t *testing.T) {
+	conn, err := createTestDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	defer conn.ReleaseLock()
+
+	sp1, err := conn.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sp2, err := conn.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sp2.Rollback()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if conn.AutocommitEnabled() {
+		t.Errorf("expected autocommit to be disabled since ther is an active savepoint")
+	}
+
+	err = sp1.Rollback()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !conn.AutocommitEnabled() {
+		t.Errorf("expected autocommit to be enabled since there are no active savepoints")
 	}
 }

@@ -2,6 +2,7 @@ package driver
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math/rand"
 	"time"
@@ -69,18 +70,18 @@ func (s *Savepoint) end() {
 // but the technical term for SQLite is "release".
 func (s *Savepoint) Commit() error {
 	if s.committed {
-		return nil
+		return fmt.Errorf("commit failed: savepoint already committed or rolled back")
 	}
-
+	s.committed = true
 	defer s.end()
-	s.log.Debug("Committing savepoint", zap.String("name", s.name))
 	return s.Execute("RELEASE " + s.name)
 }
 
 func (s *Savepoint) Rollback() error {
 	if s.committed {
-		return nil
+		return fmt.Errorf("rollback failed: savepoint already committed or rolled back")
 	}
+	s.committed = true
 
 	defer s.end()
 	s.log.Debug("Rolling back savepoint", zap.String("name", s.name))
@@ -115,12 +116,26 @@ func (s *Savepoint) ApplyChangeset(changeset *bytes.Buffer) error {
 	})
 }
 
-func randomSavepointName(length int) string {
+var letterRunes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+var alphanumericRunes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
+
+func init() {
 	rand.Seed(time.Now().UnixNano())
-	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-	result := make([]rune, length)
-	for i := range result {
-		result[i] = chars[rand.Intn(len(chars))]
+}
+
+func randomSavepointName(length int) string {
+	if length < 2 {
+		panic("Length must be at least 2 to generate a valid savepoint name.")
 	}
-	return "x" + string(result) // SQLite savepoints must start with a letter
+
+	result := make([]rune, length)
+	// First character must be a letter
+	result[0] = letterRunes[rand.Intn(len(letterRunes))]
+
+	// Rest of the characters can be alphanumeric
+	for i := 1; i < length; i++ {
+		result[i] = alphanumericRunes[rand.Intn(len(alphanumericRunes))]
+	}
+
+	return string(result)
 }

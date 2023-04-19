@@ -130,15 +130,15 @@ func removeComments(line string) string {
 		quoteIdxBacktick := strings.Index(line[:idx], "`")
 		isInString := false
 
-		if quoteIdxDouble != -1 && strings.Index(line[quoteIdxDouble+1:], "\"") != -1 {
+		if quoteIdxDouble != -1 && strings.Contains(line[quoteIdxDouble+1:], "'") {
 			isInString = true
 		}
 
-		if quoteIdxSingle != -1 && strings.Index(line[quoteIdxSingle+1:], "'") != -1 {
+		if quoteIdxSingle != -1 && strings.Contains(line[quoteIdxSingle+1:], "'") {
 			isInString = true
 		}
 
-		if quoteIdxBacktick != -1 && strings.Index(line[quoteIdxBacktick+1:], "`") != -1 {
+		if quoteIdxBacktick != -1 && strings.Contains(line[quoteIdxBacktick+1:], "'") {
 			isInString = true
 		}
 

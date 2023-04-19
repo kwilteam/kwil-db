@@ -117,7 +117,8 @@ func (c *Connection) Close() error {
 	return nil
 }
 
-// Execute executes a statement
+// Execute executes a statement/
+// WARNING: YOU SHOULD USUALLY USE ExecuteNamed INSTEAD
 func (c *Connection) Execute(stmt string, args ...interface{}) error {
 	return c.execute(stmt, &sqlitex.ExecOptions{
 		Args:          args,
@@ -352,6 +353,10 @@ func (c *Connection) reOpen() error {
 	}
 
 	return c.openConn()
+}
+
+func (c *Connection) AutocommitEnabled() bool {
+	return c.Conn.AutocommitEnabled()
 }
 
 /*
