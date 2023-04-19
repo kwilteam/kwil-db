@@ -58,8 +58,6 @@ OR
 					fmt.Printf("input: %s\n", input)
 				}
 
-				return nil
-
 				receipt, results, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
 				if err != nil {
 					return fmt.Errorf("error executing database: %w", err)

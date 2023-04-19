@@ -8,6 +8,7 @@ import (
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
 	"kwil/pkg/csv"
+	"kwil/pkg/engine/types"
 	"os"
 	"strings"
 
@@ -22,6 +23,7 @@ var (
 func batchCmd() *cobra.Command {
 	var filePath string
 	var csvColumnMappings []string
+	var inputValueMappings []string // these override the csv column mappings
 	var action string
 
 	cmd := &cobra.Command{
@@ -52,7 +54,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 					return fmt.Errorf("error opening file: %w", err)
 				}
 
-				inputs, err := buildInputs(file, fileType, csvColumnMappings)
+				inputs, err := buildInputs(file, fileType, csvColumnMappings, inputValueMappings)
 				if err != nil {
 					return fmt.Errorf("error building inputs: %w", err)
 				}
@@ -71,6 +73,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 	}
 
 	cmd.Flags().StringSliceVarP(&csvColumnMappings, "map-input", "m", []string{}, "the variables mappings to the action inputs (e.g. id:$id, name:$name, age:$age)")
+	cmd.Flags().StringSliceVarP(&inputValueMappings, "values", "v", []string{}, "the variables mappings to the action inputs (e.g. id:123, name:john, age:25).  These will apply to all rows, and will override the csv column mappings")
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "the path to the file to read in (e.g. /home/user/file.csv)")
 	cmd.Flags().StringVarP(&action, "action", "a", "", "the action to execute")
 	cmd.Flags().StringP(nameFlag, "n", "", "the database name")
@@ -83,17 +86,32 @@ The execution is treated as a single transaction, and will either succeed or fai
 }
 
 // buildInputs builds the inputs for the file
-func buildInputs(file *os.File, fileType string, columnMappingFlag []string) ([]map[string][]byte, error) {
+func buildInputs(file *os.File, fileType string, columnMappingFlag []string, inputMappings []string) ([]map[string][]byte, error) {
 	switch fileType {
 	case "csv":
-		return buildCsvInputs(file, columnMappingFlag)
+		return buildCsvInputs(file, columnMappingFlag, inputMappings)
 	default:
 		return nil, fmt.Errorf("unsupported file type: %s", fileType)
 	}
 }
 
+func addInputMappings(inputs []map[string][]byte, inputMappings []string) error {
+	for _, inputMapping := range inputMappings {
+		parts := strings.SplitN(inputMapping, ":", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid input mapping: %s", inputMapping)
+		}
+
+		for _, input := range inputs {
+			input[parts[0]] = types.NewExplicitMust(parts[1], types.TEXT).Bytes()
+		}
+	}
+
+	return nil
+}
+
 // buildCsvInputs builds the inputs for a csv file
-func buildCsvInputs(file *os.File, columnMappings []string) ([]map[string][]byte, error) {
+func buildCsvInputs(file *os.File, columnMappings []string, inputMappings []string) ([]map[string][]byte, error) {
 	data, err := csv.Read(file, csv.ContainsHeader)
 	if err != nil {
 		return nil, fmt.Errorf("error reading csv: %w", err)
@@ -104,7 +122,17 @@ func buildCsvInputs(file *os.File, columnMappings []string) ([]map[string][]byte
 		return nil, fmt.Errorf("error building column mappings: %w", err)
 	}
 
-	return data.BuildInputs(colMappings)
+	ins, err := data.BuildInputs(colMappings)
+	if err != nil {
+		return nil, fmt.Errorf("error building inputs: %w", err)
+	}
+
+	err = addInputMappings(ins, inputMappings)
+	if err != nil {
+		return nil, fmt.Errorf("error adding input mappings: %w", err)
+	}
+
+	return ins, nil
 }
 
 // buildColumnMappings builds the map used to map columns to inputs

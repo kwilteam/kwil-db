@@ -37,9 +37,6 @@ func attributeToSQLiteString(colName string, attr *models.Attribute) (string, er
 	case types.PRIMARY_KEY:
 		return "PRIMARY KEY", nil
 	case types.DEFAULT:
-		if val.IsEmpty() {
-			return "", fmt.Errorf("default value cannot be empty")
-		}
 		return "DEFAULT " + formattedVal, nil
 	case types.NOT_NULL:
 		return "NOT NULL", nil

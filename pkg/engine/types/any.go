@@ -156,9 +156,27 @@ func (a *ConcreteValue) String() string {
 func (a *ConcreteValue) IsEmpty() bool {
 	switch a.dataType {
 	case TEXT:
-		return a.value == nil || a.value.(string) == ""
+		if a.value == nil {
+			return true
+		}
+
+		convVal, err := conv.String(a.value)
+		if err != nil {
+			return false
+		}
+
+		return convVal == ""
 	case INT:
-		return a.value == nil || a.value.(int) == 0
+		if a.value == nil {
+			return true
+		}
+
+		convVal, err := conv.Int(a.value)
+		if err != nil {
+			return false
+		}
+
+		return convVal == 0
 	}
 
 	return a.value == nil
