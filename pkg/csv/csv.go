@@ -69,7 +69,7 @@ func (c *CSV) readAndTrimHeader(reader *csv.Reader) error {
 // It will loop through each column and try to convert it to a number. If it can't,
 // it will assume it's a string.
 func (c *CSV) determineSchema() error {
-	colTypes := make([]types.DataType, len(c.Records))
+	colTypes := make([]types.DataType, len(c.Records[0]))
 	for _, record := range c.Records {
 		for i, column := range record {
 			// if we've already determined the type is a string, skip

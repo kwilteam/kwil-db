@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	txpb "kwil/api/protobuf/tx/v1"
 	"kwil/internal/app/kwild/config"
 	"kwil/internal/app/kwild/server"
@@ -13,6 +12,8 @@ import (
 	"kwil/internal/pkg/healthcheck"
 	simple_checker "kwil/internal/pkg/healthcheck/simple-checker"
 	grpcServer "kwil/pkg/grpc/server"
+
+	"google.golang.org/grpc/health/grpc_health_v1"
 
 	"kwil/pkg/balances"
 	chainsyncer "kwil/pkg/balances/chain-syncer"

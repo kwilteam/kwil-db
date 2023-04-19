@@ -147,6 +147,5 @@ func LoadCliConfig() (*KwilCliConfig, error) {
 		GrpcURL:           viper.GetString("grpc_url"),
 		ClientChainRPCURL: viper.GetString("client_chain_rpc_url"),
 	}
-
 	return innerConf.toKwilCliConfig()
 }

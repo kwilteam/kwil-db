@@ -29,12 +29,17 @@ func init() {
 	DefaultConfigFile = fmt.Sprintf("%s/config.json", configPath)
 
 	viper.AddConfigPath(configPath)
+	viper.AutomaticEnv()
 }
 
 const (
 	privateKeyFlag  = "private-key"
 	grpcURLFlag     = "kwil-provider"
 	clientChainFlag = "client-chain-rpc-url"
+
+	privateKeyEnv  = "private_key"
+	grpcURLEnv     = "grpc_url"
+	clientChainEnv = "client_chain_rpc_url"
 )
 
 func BindGlobalFlags(fs *pflag.FlagSet) {
@@ -42,4 +47,8 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String(privateKeyFlag, "", "The private key of the wallet that will be used for signing")
 	fs.String(grpcURLFlag, "", "The kwil provider endpoint")
 	fs.String(clientChainFlag, "", "The client chain RPC URL")
+
+	viper.BindPFlag(privateKeyEnv, fs.Lookup(privateKeyFlag))
+	viper.BindPFlag(grpcURLEnv, fs.Lookup(grpcURLFlag))
+	viper.BindPFlag(clientChainEnv, fs.Lookup(clientChainFlag))
 }
