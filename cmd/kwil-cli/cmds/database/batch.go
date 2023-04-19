@@ -73,7 +73,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 	}
 
 	cmd.Flags().StringSliceVarP(&csvColumnMappings, "map-input", "m", []string{}, "the variables mappings to the action inputs (e.g. id:$id, name:$name, age:$age)")
-	cmd.Flags().StringSliceVarP(&inputValueMappings, "values", "v", []string{}, "the variables mappings to the action inputs (e.g. id:123, name:john, age:25).  These will apply to all rows, and will override the csv column mappings")
+	cmd.Flags().StringSliceVarP(&inputValueMappings, "value", "v", []string{}, "the variables mappings to the action inputs (e.g. id:123, name:john, age:25).  These will apply to all rows, and will override the csv column mappings")
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "the path to the file to read in (e.g. /home/user/file.csv)")
 	cmd.Flags().StringVarP(&action, "action", "a", "", "the action to execute")
 	cmd.Flags().StringP(nameFlag, "n", "", "the database name")
