@@ -2,7 +2,6 @@ package csv
 
 import (
 	"encoding/csv"
-	"fmt"
 	"io"
 	"kwil/pkg/engine/types"
 	"os"
@@ -107,7 +106,7 @@ func (c *CSV) BuildInputs(inputNames map[string]string) ([]map[string][]byte, er
 		for _, cell := range record {
 			inputName, ok := inputNames[*cell.Column]
 			if !ok {
-				return fmt.Errorf("column %s not found in schema", *cell.Column)
+				continue
 			}
 
 			input[inputName] = *cell.Value

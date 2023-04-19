@@ -95,19 +95,21 @@ func buildInputs(file *os.File, fileType string, columnMappingFlag []string, inp
 	}
 }
 
-func addInputMappings(inputs []map[string][]byte, inputMappings []string) error {
+func addInputMappings(inputs []map[string][]byte, inputMappings []string) ([]map[string][]byte, error) {
 	for _, inputMapping := range inputMappings {
 		parts := strings.SplitN(inputMapping, ":", 2)
 		if len(parts) != 2 {
-			return fmt.Errorf("invalid input mapping: %s", inputMapping)
+			return inputs, fmt.Errorf("invalid input mapping: %s", inputMapping)
 		}
+
+		ensureInputFormat(&parts[0])
 
 		for _, input := range inputs {
 			input[parts[0]] = types.NewExplicitMust(parts[1], types.TEXT).Bytes()
 		}
 	}
 
-	return nil
+	return inputs, nil
 }
 
 // buildCsvInputs builds the inputs for a csv file
@@ -127,7 +129,7 @@ func buildCsvInputs(file *os.File, columnMappings []string, inputMappings []stri
 		return nil, fmt.Errorf("error building inputs: %w", err)
 	}
 
-	err = addInputMappings(ins, inputMappings)
+	ins, err = addInputMappings(ins, inputMappings)
 	if err != nil {
 		return nil, fmt.Errorf("error adding input mappings: %w", err)
 	}
