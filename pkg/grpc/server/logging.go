@@ -9,28 +9,31 @@ import (
 )
 
 // InterceptorLogger adapts zap logger to interceptor logger.
-// This code is simple enough to be copied and not imported.
+// This code is copied from go-grpc-middleware/interceptors/logging/examples/zap/example_test.go
 func InterceptorLogger(l *log.Logger) logging.Logger {
+
 	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
-		f := make([]zap.Field, 0, len(fields)/2)
-		for i := 0; i < len(fields); i += 2 {
-			i := logging.Fields(fields).Iterator()
-			if i.Next() {
-				k, v := i.At()
-				f = append(f, zap.Any(k, v))
-			}
+		var f []zap.Field
+		i := logging.Fields(fields).Iterator()
+		for i.Next() {
+			k, v := i.At()
+			f = append(f, zap.Any(k, v))
 		}
-		l = l.WithOptions(zap.AddCallerSkip(1)).With(f...)
+
+		// TODO: this is a hack to get rid of the extended fields every time we log
+		// log wrapper is not correctly cloned
+		// here use zap.Logger
+		lg := l.L.WithOptions(zap.AddCallerSkip(1)).With(f...)
 
 		switch lvl {
 		case logging.LevelDebug:
-			l.Debug(msg)
+			lg.Debug(msg)
 		case logging.LevelInfo:
-			l.Info(msg)
+			lg.Info(msg)
 		case logging.LevelWarn:
-			l.Warn(msg)
+			lg.Warn(msg)
 		case logging.LevelError:
-			l.Error(msg)
+			lg.Error(msg)
 		default:
 			panic(fmt.Sprintf("unknown level %v", lvl))
 		}
