@@ -2,7 +2,6 @@ project_name: kwil-cli
 before:
   hooks:
     - go mod tidy
-    - go generate ./...
 
 changelog:
   skip: true

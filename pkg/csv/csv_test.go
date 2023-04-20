@@ -87,3 +87,38 @@ func loadTestCSV(t *testing.T) (*os.File, error) {
 	path := "./test.csv"
 	return os.Open(path)
 }
+
+func loadCornCSV(t *testing.T) (*os.File, error) {
+	path := "./corn.csv"
+	return os.Open(path)
+}
+
+func Test_ReadDoubleQuotes(t *testing.T) {
+	file, err := loadCornCSV(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := csv.Read(file, csv.ContainsHeader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inputNames := map[string]string{
+		"Date":  "$dt",
+		"Price": "$value",
+	}
+
+	res, err := data.BuildInputs(inputNames)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(res) != 23 {
+		t.Fatal(`expected 23 records, got: `, len(res))
+	}
+
+	if len(res[0]) != 2 {
+		t.Fatal(`expected 2 columns, got: `, len(res[0]))
+	}
+}

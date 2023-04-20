@@ -1,5 +1,7 @@
 package client
 
+import "fmt"
+
 type Records struct {
 	// index tracks the current row index for the iterator.
 	index int
@@ -53,8 +55,26 @@ func (r *Records) Export() []map[string]any {
 	return records
 }
 
+func (r *Records) ExportString() []map[string]string {
+	records := make([]map[string]string, len(r.records))
+	for i, record := range r.records {
+		records[i] = record.String()
+	}
+
+	return records
+}
+
 func (r Record) Map() map[string]any {
 	return r
+}
+
+func (r Record) String() map[string]string {
+	rec := make(map[string]string)
+	for k, v := range r {
+		rec[k] = fmt.Sprintf("%v", v)
+	}
+
+	return rec
 }
 
 /*

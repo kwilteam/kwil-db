@@ -28,15 +28,8 @@ func queryCmd() *cobra.Command {
 					return fmt.Errorf("error querying database: %w", err)
 				}
 
-				counter := 0
-				for res.Next() {
-					record := res.Record()
-					printMap(record.Map())
-					counter++
-				}
-				if counter == 0 {
-					fmt.Println("No records found")
-				}
+				results := res.ExportString()
+				printTable(results)
 
 				return nil
 			})
@@ -47,11 +40,4 @@ func queryCmd() *cobra.Command {
 	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
 	return cmd
-}
-
-func printMap(m map[string]interface{}) {
-	for k, v := range m {
-		fmt.Printf("%s: %v\n", k, v)
-	}
-	fmt.Println()
 }

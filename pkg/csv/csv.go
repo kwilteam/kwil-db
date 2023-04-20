@@ -5,6 +5,7 @@ import (
 	"io"
 	"kwil/pkg/engine/types"
 	"os"
+	"strings"
 )
 
 type CSVReaderFlag uint8
@@ -21,7 +22,7 @@ type CSV struct {
 
 func Read(csvFile *os.File, flags CSVReaderFlag) (*CSV, error) {
 	reader := csv.NewReader(csvFile)
-
+	reader.LazyQuotes = true
 	csvStruct := &CSV{
 		Records: [][]string{},
 	}
@@ -59,9 +60,27 @@ func (c *CSV) readAndTrimHeader(reader *csv.Reader) error {
 		return err
 	}
 
+	for i, singleHeader := range header {
+		header[i] = cleanHeader(singleHeader)
+	}
+
 	c.Header = header
 
 	return nil
+}
+
+// some headers are formatted as "\ufeff\"Date\"" instead of "Date"
+// this function will remove the leading \ufeff
+func cleanHeader(header string) string {
+	str := header
+	if strings.HasPrefix(header, "\ufeff") {
+		str = strings.Replace(header, "\ufeff", "", 1)
+	}
+
+	// remove leading and trailing quotes
+	str = strings.Trim(str, "\"")
+
+	return str
 }
 
 // determineSchema will determine whether a column should be a string or a number.
@@ -100,7 +119,7 @@ func (c *CSV) determineSchema() error {
 // action input name.
 func (c *CSV) BuildInputs(inputNames map[string]string) ([]map[string][]byte, error) {
 	resultMap := make([]map[string][]byte, 0)
-	err := c.ForEachRecord(func(record []*CSVCell) error {
+	err := c.ForEachRecord(func(record []CSVCell) error {
 		input := make(map[string][]byte)
 
 		for _, cell := range record {
@@ -135,7 +154,7 @@ func (c *CSV) GetColumnIndex(column string) int {
 
 // ForEachRecord will loop through each record in the CSV and call the function with the
 // record as a map of the CSV column name to value.
-func (c *CSV) ForEachRecord(fn func([]*CSVCell) error) error {
+func (c *CSV) ForEachRecord(fn func([]CSVCell) error) error {
 	var err error
 	for _, record := range c.Records {
 		err = fn(c.buildCSVCells(record))
@@ -155,12 +174,12 @@ type CSVCell struct {
 // buildCSVCells will build a map of the CSV column name to value.
 // The values are serialized strings.
 // If for some reason it fails to serialize to string, it will panic.
-func (c *CSV) buildCSVCells(record []string) []*CSVCell {
-	csvVals := make([]*CSVCell, len(record))
+func (c *CSV) buildCSVCells(record []string) []CSVCell {
+	csvVals := make([]CSVCell, len(record))
 	for i, column := range record {
 		serializedValue := types.NewExplicitMust(column, types.TEXT).Bytes()
 
-		csvVals[i] = &CSVCell{
+		csvVals[i] = CSVCell{
 			Column: &c.Header[i],
 			Value:  &serializedValue,
 		}
