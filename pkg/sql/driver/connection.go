@@ -247,7 +247,7 @@ func (c *Connection) prepare(statement string, extraParams ...string) (*Statemen
 		return nil, ErrConnectionClosed
 	}
 
-	sqliteStmt, err := c.Conn.Prepare(statement, c.listInjectables()...)
+	sqliteStmt, err := c.Conn.Prepare(statement)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}

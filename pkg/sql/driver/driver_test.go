@@ -235,30 +235,6 @@ func Test_RapidWrite(t *testing.T) {
 
 }
 
-func Test_Bruh(t *testing.T) {
-	conn, err := createTestDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	defer conn.ReleaseLock()
-
-	tx, err := driver.Begin(conn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = tx.Execute(insertTestRow, 1, "test1")
-	if err != nil {
-		t.Errorf("failed to insert: %v", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func Test_Savepoints(t *testing.T) {
 	// TEST 1 rollback
 	conn, err := createTestDB()

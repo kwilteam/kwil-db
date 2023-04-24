@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"kwil/cmd/kwil-cli/cmds/common"
 	"kwil/cmd/kwil-cli/config"
@@ -45,11 +46,13 @@ func NewServerCfgCmd() *cobra.Command {
 					return errors.Wrap(err, "template parsing error")
 				}
 
-				return prettyPrint(&grpc.SvcConfig{
-					ChainCode:       int64(client.ChainCode),
-					PoolAddress:     client.PoolAddress,
-					ProviderAddress: client.ProviderAddress,
-				}, tmpl)
+				cfg, err := client.GetConfig(ctx)
+				if err != nil {
+					return errors.Wrap(err, "error getting node configuration")
+				}
+
+				printCfg(cfg)
+				return nil
 			})
 		},
 	}
@@ -58,6 +61,12 @@ func NewServerCfgCmd() *cobra.Command {
 	flags.StringVarP(&opts.format, "format", "f", "", "Format the output using the given Go template")
 
 	return cmd
+}
+
+func printCfg(cfg *grpc.SvcConfig) {
+	fmt.Printf("ChainCode: %d\n", cfg.ChainCode)
+	fmt.Printf("PoolAddress: %s\n", cfg.PoolAddress)
+	fmt.Printf("ProviderAddress: %s\n", cfg.ProviderAddress)
 }
 
 func prettyPrint(svcCfg *grpc.SvcConfig, tmpl *template.Template) error {
