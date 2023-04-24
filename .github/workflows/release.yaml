@@ -3,11 +3,11 @@ name: Release
 on:
   workflow_dispatch:
   release:
-    types: [published]
+    types: [published, edited]
 
 jobs:
-  build-push-docker-image:
-    name: Build and push Docker image
+  build-push-image:
+    name: Build & push image
     runs-on: ubuntu-latest
 
     steps:
@@ -50,6 +50,13 @@ jobs:
           version=`echo ${{ github.event.release.tag_name }} | sed 's/^v//'`
           echo "version=$version" >> $GITHUB_OUTPUT
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
@@ -64,7 +71,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kwild
-          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          #key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kwild
           restore-keys: |
             ${{ runner.os }}-buildx-kwild
 
@@ -90,7 +98,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache-kgw
-          key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          #key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kgw
           restore-keys: |
             ${{ runner.os }}-buildx-kgw
 
@@ -120,8 +129,9 @@ jobs:
           mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
 
   deploy-to-eks:
-    name: Deploy new version to EKS
+    name: Deploy to k8s cluster
     runs-on: ubuntu-latest
+    needs: build-push-image
 
     steps:
       - name: configure variables

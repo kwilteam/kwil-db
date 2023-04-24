@@ -2,9 +2,10 @@ package specifications
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // DepositFundDsl is dsl for deposit fund specification

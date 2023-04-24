@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"kwil/pkg/databases/spec"
+	"kwil/pkg/engine/types"
 
 	"github.com/spf13/cobra"
 )
@@ -13,7 +13,7 @@ const (
 )
 
 var (
-	allowedTypes = []string{"null", "string", "int32", "int64", "boolean", "uuid"}
+	allowedTypes = []string{"null", "text", "int"}
 )
 
 func encodeCmd() *cobra.Command {
@@ -28,14 +28,14 @@ The type is specified by the --type flag. The value is specified by the --value 
 The output is printed to stdout.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// convert type
-			typ, err := spec.DataTypeConversions.StringToKwilType(passedType)
+			typ, err := types.DataTypeConversions.StringToKwilType(passedType)
 			if err != nil {
 				fmt.Printf("type must be one of: %v", allowedTypes)
 				return fmt.Errorf("error converting type: %w", err)
 			}
 
 			// encode
-			val, err := spec.NewExplicit(value, typ)
+			val, err := types.NewExplicit(value, typ)
 			if err != nil {
 				return fmt.Errorf("error encoding input: %w", err)
 			}

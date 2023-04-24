@@ -26,13 +26,16 @@ cmd/cmd
 **/**/node_modules
 _ignore
 .env
+.local_env
 api/protobuf
 api/openapi-spec/api/v0/api.swagger.json
 .goreleaser.yaml
 
+gen/
 # helm charts deps
-deployments/helm/hasura/charts/
-deployments/helm/kwild/charts/
-deployments/helm/kwil/charts/
+deployments/helm/*/charts/
 
 dist/*
+
+# IDE
+.run

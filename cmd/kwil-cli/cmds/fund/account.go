@@ -1,7 +1,9 @@
 package fund
 
 import (
+	"context"
 	"fmt"
+	"kwil/cmd/kwil-cli/cmds/common"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
 
@@ -16,28 +18,24 @@ func getAccountCmd() *cobra.Command {
 If no address is provided, it will use the address of the user's wallet.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl)
-			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
-			}
+			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+				// check if config is set
+				address, err := getSelectedAddress(cmd, conf)
+				if err != nil {
+					return fmt.Errorf("error getting selected address: %w", err)
+				}
 
-			// check if config is set
-			address, err := getSelectedAddress(cmd)
-			if err != nil {
-				return fmt.Errorf("error getting selected address: %w", err)
-			}
+				acc, err := client.GetAccount(ctx, address)
+				if err != nil {
+					return fmt.Errorf("error getting account config: %w", err)
+				}
 
-			acc, err := clt.GetAccount(ctx, address)
-			if err != nil {
-				return fmt.Errorf("error getting account config: %w", err)
-			}
-			fmt.Println("Address: ", acc.Address)
-			fmt.Println("Balance: ", acc.Balance)
-			fmt.Println("Spent:   ", acc.Spent)
-			fmt.Println("Nonce:   ", acc.Nonce)
+				fmt.Println("Address: ", acc.Address)
+				fmt.Println("Balance: ", acc.Balance)
+				fmt.Println("Nonce:   ", acc.Nonce)
 
-			return nil
+				return nil
+			})
 
 		},
 	}

@@ -2,17 +2,17 @@ package display
 
 import (
 	"fmt"
-	txTypes "kwil/pkg/accounts"
+	txTypes "kwil/pkg/tx"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-func PrintTxResponse(res *txTypes.Response) {
-	if res.Hash != nil {
+func PrintTxResponse(res *txTypes.Receipt) {
+	if res.TxHash != nil {
 		fmt.Println("Success!")
 	}
 	fmt.Println("Response:")
-	fmt.Println("  Hash:", hexutil.Encode(res.Hash))
+	fmt.Println("  Hash:", hexutil.Encode(res.TxHash))
 	fmt.Println("  Fee:", res.Fee)
 }
 

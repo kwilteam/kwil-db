@@ -21,7 +21,7 @@ type SimpleChecker struct {
 }
 
 func New(logger log.Logger) *SimpleChecker {
-	return &SimpleChecker{logger: logger.Named("healthcheck.simple-checker")}
+	return &SimpleChecker{logger: *logger.Named("healthcheck.simple-checker")}
 }
 
 func (c *SimpleChecker) Start() {

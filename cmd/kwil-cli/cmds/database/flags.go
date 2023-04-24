@@ -4,22 +4,22 @@ import (
 	"fmt"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/crypto"
-	"kwil/pkg/databases"
+	"kwil/pkg/engine/models"
 
 	"github.com/spf13/cobra"
 )
 
 const (
-	dbidFlag      = "dbid"
-	nameFlag      = "name"
-	ownerFlag     = "owner"
-	queryNameFlag = "query"
+	dbidFlag       = "dbid"
+	nameFlag       = "name"
+	ownerFlag      = "owner"
+	actionNameFlag = "action"
 )
 
 // getSelectedOwner is used to get the owner flag.  Since the owner flag is usually optional,
 // it will check to see if it was passed.  If it was not passed, it will attempt to
 // get the user's address from the configuration file.
-func getSelectedOwner(cmd *cobra.Command) (string, error) {
+func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) (string, error) {
 	var address string
 	if cmd.Flags().Changed(ownerFlag) {
 		var err error
@@ -36,11 +36,7 @@ func getSelectedOwner(cmd *cobra.Command) (string, error) {
 			return address, fmt.Errorf("invalid address provided: %s", address)
 		}
 	} else {
-		var err error
-		address, err = config.GetWalletAddress()
-		if err != nil {
-			return address, fmt.Errorf("failed to get address from private key: %w", err)
-		}
+		address = crypto.AddressFromPrivateKey(conf.PrivateKey)
 	}
 
 	return address, nil
@@ -50,7 +46,7 @@ func getSelectedOwner(cmd *cobra.Command) (string, error) {
 // Since the user can pass either a name and owner, or a dbid, we need to
 // check which one they passed and return the appropriate dbid.
 // If only a name flag is passed, it will get the owner from the configuration file.
-func getSelectedDbid(cmd *cobra.Command) (string, error) {
+func getSelectedDbid(cmd *cobra.Command, conf *config.KwilCliConfig) (string, error) {
 	if cmd.Flags().Changed(dbidFlag) {
 		return cmd.Flags().GetString(dbidFlag)
 	}
@@ -64,10 +60,10 @@ func getSelectedDbid(cmd *cobra.Command) (string, error) {
 		return "", fmt.Errorf("failed to get name from flag: %w", err)
 	}
 
-	owner, err := getSelectedOwner(cmd)
+	owner, err := getSelectedOwner(cmd, conf)
 	if err != nil {
 		return "", fmt.Errorf("failed to get owner flag: %w", err)
 	}
 
-	return databases.GenerateSchemaId(owner, name), nil
+	return models.GenerateSchemaId(owner, name), nil
 }

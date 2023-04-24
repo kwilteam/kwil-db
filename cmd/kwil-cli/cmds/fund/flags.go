@@ -2,6 +2,7 @@ package fund
 
 import (
 	"kwil/cmd/kwil-cli/config"
+	"kwil/pkg/crypto"
 
 	"github.com/spf13/cobra"
 )
@@ -12,10 +13,10 @@ const (
 
 // getAddress returns the address flag value.
 // If no value is passed, it will use the address of the user's wallet.
-func getSelectedAddress(cmd *cobra.Command) (string, error) {
+func getSelectedAddress(cmd *cobra.Command, conf *config.KwilCliConfig) (string, error) {
 	if cmd.Flags().Changed(addressFlag) {
 		return cmd.Flags().GetString(addressFlag)
 	}
 
-	return config.GetWalletAddress()
+	return crypto.AddressFromPrivateKey(conf.PrivateKey), nil
 }

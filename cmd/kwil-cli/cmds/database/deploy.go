@@ -1,64 +1,150 @@
 package database
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"kwil/cmd/kwil-cli/cmds/common"
 	"kwil/cmd/kwil-cli/cmds/common/display"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
-	"kwil/pkg/databases"
+	"kwil/pkg/crypto"
+	"kwil/pkg/engine/models"
+	"kwil/pkg/kuneiform/parser"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 func deployCmd() *cobra.Command {
+	var filePath string
+	var fileType string
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Deploy databases",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			filePath, err := cmd.Flags().GetString("path")
-			if err != nil {
-				return fmt.Errorf("must specify a path path with the --path flag")
-			}
+			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+				// read in the file
+				file, err := os.Open(filePath)
+				if err != nil {
+					return fmt.Errorf("failed to read file: %w", err)
+				}
+				defer file.Close()
 
-			// read in the file
-			file, err := os.ReadFile(filePath)
-			if err != nil {
-				return fmt.Errorf("failed to read file: %w", err)
-			}
+				var db *models.Dataset
+				if fileType == "kf" {
+					db, err = unmarshalKf(file)
+				} else if fileType == "json" {
+					db, err = unmarshalJson(file)
+				} else {
+					return fmt.Errorf("invalid file type: %s", fileType)
+				}
+				if err != nil {
+					return fmt.Errorf("failed to unmarshal file: %w", err)
+				}
 
-			var db databases.Database[[]byte]
-			err = json.Unmarshal(file, &db)
-			if err != nil {
-				return fmt.Errorf("failed to unmarshal file: %w", err)
-			}
+				db.Owner = crypto.AddressFromPrivateKey(conf.PrivateKey)
 
-			ctx := cmd.Context()
-			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
-				client.WithoutServiceConfig(),
-			)
-			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
-			}
+				res, err := client.DeployDatabase(ctx, db)
+				if err != nil {
+					return err
+				}
 
-			ecdsaKey, err := config.GetEcdsaPrivateKey()
-			if err != nil {
-				return fmt.Errorf("failed to get ecdsa key: %w", err)
-			}
-
-			res, err := clt.DeployDatabase(ctx, &db, ecdsaKey)
-			if err != nil {
-				return err
-			}
-
-			display.PrintTxResponse(res)
-			return nil
+				display.PrintTxResponse(res)
+				return nil
+			})
 		},
 	}
 
-	cmd.Flags().StringP("path", "p", "", "Path to the database definition file (required)")
+	cmd.Flags().StringVarP(&filePath, "path", "p", "", "Path to the database definition file (required)")
+	cmd.Flags().StringVarP(&fileType, "type", "t", "kf", "File type of the database definition file (kf or json).  defaults to kf (kuneiform).")
 	cmd.MarkFlagRequired("path")
 	return cmd
+}
+
+func unmarshalKf(file *os.File) (*models.Dataset, error) {
+	bts, err := parseComments(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse comments: %w", err)
+	}
+
+	ast, err := parser.Parse(bts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse file: %w", err)
+	}
+
+	return ast.Dataset(), nil
+}
+
+func unmarshalJson(file *os.File) (*models.Dataset, error) {
+	bts, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	var db models.Dataset
+	err = json.Unmarshal(bts, &db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal file: %w", err)
+	}
+
+	return &db, nil
+}
+
+// parseComments parses the comments from the file
+// and returns the bytes of the file without the comments
+func parseComments(file *os.File) ([]byte, error) {
+	reader := bufio.NewReader(file)
+	var result bytes.Buffer
+	for {
+		line, err := reader.ReadString('\n')
+
+		if err != nil && err != io.EOF {
+			fmt.Println("Error reading file:", err)
+			return nil, err
+		}
+
+		line = removeComments(line)
+		result.WriteString(line)
+
+		if err == io.EOF {
+			break
+		}
+	}
+
+	return result.Bytes(), nil
+}
+
+// removeComments removes the comments from the line
+func removeComments(line string) string {
+	// Check if the line contains a comment
+	if idx := strings.Index(line, "//"); idx != -1 {
+		// Check if the comment is within a string (either single, double, or backtick quotes)
+		quoteIdxDouble := strings.Index(line[:idx], "\"")
+		quoteIdxSingle := strings.Index(line[:idx], "'")
+		quoteIdxBacktick := strings.Index(line[:idx], "`")
+		isInString := false
+
+		if quoteIdxDouble != -1 && strings.Contains(line[quoteIdxDouble+1:], "'") {
+			isInString = true
+		}
+
+		if quoteIdxSingle != -1 && strings.Contains(line[quoteIdxSingle+1:], "'") {
+			isInString = true
+		}
+
+		if quoteIdxBacktick != -1 && strings.Contains(line[quoteIdxBacktick+1:], "'") {
+			isInString = true
+		}
+
+		if !isInString {
+			return line[:idx] + "\n"
+		}
+	}
+	return line
 }

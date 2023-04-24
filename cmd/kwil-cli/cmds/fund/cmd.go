@@ -17,6 +17,5 @@ func NewCmdFund() *cobra.Command {
 		balancesCmd(),
 		getAccountCmd(),
 	)
-
 	return cmd
 }

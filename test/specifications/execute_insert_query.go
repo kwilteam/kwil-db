@@ -2,68 +2,149 @@ package specifications
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"kwil/pkg/databases"
-	"strings"
+	"kwil/pkg/client"
+	"kwil/pkg/engine/models"
 	"testing"
 
+	kTx "kwil/pkg/tx"
+
+	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"
 )
+
+const listUsersActionName = "list_users"
 
 type userTable struct {
 	ID       int32  `json:"id"`
 	UserName string `json:"username"`
 	Age      int32  `json:"age"`
-	Wallet   string `json:"wallet"`
-	Degen    bool   `json:"degen"`
 }
 
-type hasuraTable map[string][]userTable
-type hasuraResp map[string]hasuraTable
-
 type ExecuteQueryDsl interface {
-	// ExecuteQuery executes QUERY to a database
-	// @yaiba TODO: owner is not needed?? because user can only execute queries using his private key
-	ExecuteQuery(ctx context.Context, dbName string, queryName string, queryInputs []string) error
-	QueryDatabase(ctx context.Context, query string) ([]byte, error)
+	// ExecuteAction executes QUERY to a database
+	ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, []map[string]any, error)
+	QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error)
 }
 
 func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
 	t.Logf("Executing insert query specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := databases.GenerateSchemaId(db.Owner, db.Name)
+	dbID := models.GenerateSchemaId(db.Owner, db.Name)
 
-	userQueryName := "create_user"
-	userTableName := "users"
-	userQ := userTable{
+	createUserQueryName := "create_user"
+	user1 := userTable{
 		ID:       1111,
 		UserName: "test_user",
 		Age:      22,
-		Wallet:   strings.ToLower(db.Owner),
-		Degen:    true,
 	}
 
-	qualifiedUserTableName := fmt.Sprintf("%s_%s", dbID, userTableName)
-	userQueryInput := []string{"id", fmt.Sprintf("%d", userQ.ID), "username", userQ.UserName, "age", fmt.Sprintf("%d", userQ.Age), "degen", "true"}
+	userQueryInput := []map[string]any{
+		{
+			"$id":       user1.ID,
+			"$username": user1.UserName,
+			"$age":      user1.Age,
+		},
+	}
 
 	// TODO test insert post table
 	// When i execute query to database
-	err := execute.ExecuteQuery(ctx, db.Name, userQueryName, userQueryInput)
+	_, _, err := execute.ExecuteAction(ctx, dbID, createUserQueryName, userQueryInput)
 	assert.NoError(t, err)
 
-	// Then i expect row to be inserted
-	query := fmt.Sprintf(`query MyQuery { %s (where: {id: {_eq: %d}}) {id username age wallet degen}}`,
-		qualifiedUserTableName, userQ.ID)
-	resByte, err := execute.QueryDatabase(ctx, query)
+	receipt, results, err := execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, receipt)
+
+	if len(results) != 1 {
+		t.Errorf("expected 1 statement result, got %d", len(results))
+	}
+
+	returnedUser1 := results[0]
+
+	user1Id, _ := conv.Int32(returnedUser1["id"])
+	user1Username := returnedUser1["username"].(string)
+	user1Age, _ := conv.Int32(returnedUser1["age"])
+
+	assert.EqualValues(t, user1.ID, user1Id)
+	assert.EqualValues(t, user1.UserName, user1Username)
+	assert.EqualValues(t, user1.Age, user1Age)
+
+	// testing query database
+	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
+	assert.NoError(t, err)
+	assert.NotNil(t, records)
+
+	// create post
+	const createPostQueryName = "create_post"
+	post1 := []map[string]any{
+		{
+			"$id":      1111,
+			"$title":   "test_post",
+			"$content": "test_body",
+		},
+		{
+			"$id":      2222,
+			"$title":   "test_post2",
+			"$content": "test_body2",
+		},
+	}
+
+	_, _, err = execute.ExecuteAction(ctx, dbID, createPostQueryName, post1)
 	assert.NoError(t, err)
 
-	var resp hasuraResp
-	err = json.Unmarshal(resByte, &resp)
+	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+	assert.NoError(t, err)
+	assert.NotNil(t, records)
+
+	counter := 0
+	for records.Next() {
+		_ = records.Record()
+		counter++
+	}
+
+	assert.EqualValues(t, 2, counter)
+
+	// insert more
+	post2 := []map[string]any{
+		{
+			"$id":      3333,
+			"$title":   "test_post3",
+			"$content": "test_body3",
+		},
+		{
+			"$id":      4444,
+			"$title":   "test_post4",
+			"$content": "test_body4",
+		},
+	}
+
+	_, _, err = execute.ExecuteAction(ctx, dbID, createPostQueryName, post2)
 	assert.NoError(t, err)
 
-	data := resp["data"]
-	res := data[qualifiedUserTableName][0]
-	assert.EqualValues(t, userQ, res)
+	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+	assert.NoError(t, err)
+	assert.NotNil(t, records)
+
+	counter = 0
+	for records.Next() {
+		_ = records.Record()
+		counter++
+	}
+
+	assert.EqualValues(t, 4, counter)
+
+	multiStmtActionName := "multi_select"
+	// execute multi statement action
+	_, res, err := execute.ExecuteAction(ctx, dbID, multiStmtActionName, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, res)
+
+	userRow1 := res[0]
+	// users has age, posts does not, but has content
+	_, ok := userRow1["age"]
+	assert.True(t, ok)
+
+	_, ok = userRow1["content"]
+	assert.False(t, ok)
 }

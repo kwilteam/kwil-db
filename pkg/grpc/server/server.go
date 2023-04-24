@@ -2,8 +2,8 @@ package server
 
 import (
 	"context"
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"kwil/pkg/log"
@@ -16,16 +16,25 @@ type Server struct {
 }
 
 func New(logger log.Logger, opts ...Option) *Server {
-	l := logger.Named("grpc_server").WithOptions(zap.WithCaller(false))
+	l := *logger.Named("grpcServer").WithOptions(zap.WithCaller(false))
+
+	recoveryFunc := func(p interface{}) error {
+		l.Error("grpc: panic serving", zap.Any("panic", p))
+		return nil
+	}
+	recoveryOpts := []recovery.Option{
+		recovery.WithRecoveryHandler(recoveryFunc),
+	}
+
+	loggingOpts := []logging.Option{
+		logging.WithLogOnEvents(logging.StartCall),
+	}
 
 	server := grpc.NewServer(
-		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			grpc_zap.StreamServerInterceptor(l),
-		)),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			grpc_zap.UnaryServerInterceptor(l),
-			BodyLoggerInterceptor(l),
-		)),
+		grpc.ChainUnaryInterceptor(
+			recovery.UnaryServerInterceptor(recoveryOpts...),
+			logging.UnaryServerInterceptor(InterceptorLogger(&l), loggingOpts...),
+		),
 	)
 
 	s := &Server{
@@ -50,23 +59,9 @@ func (s *Server) Serve(ctx context.Context, addr string) error {
 		return err
 	}
 
-	go func() {
-		<-ctx.Done()
-		s.server.GracefulStop()
-	}()
-
 	return s.server.Serve(lis)
 }
 
 func (s *Server) Stop() {
 	s.server.GracefulStop()
-}
-
-// BodyLoggerInterceptor returns a new unary server interceptor that logs the
-// request body.
-func BodyLoggerInterceptor(logger log.Logger) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		logger.Debug("request body", zap.Any("body", req))
-		return handler(ctx, req)
-	}
 }

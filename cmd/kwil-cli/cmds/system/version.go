@@ -63,6 +63,7 @@ func arch() string {
 
 func runVesrion(opts *versionOptions) error {
 	tmpl := template.New("version")
+	// load different template according to the opts.format
 	tmpl, err := tmpl.Parse(versionTemplate)
 	if err != nil {
 		return errors.Wrap(err, "template parsing error")

@@ -3,11 +3,12 @@ package evm
 import (
 	"context"
 	"crypto/ecdsa"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
 	kwilCommon "kwil/pkg/chain/contracts/common/evm"
 	"kwil/pkg/chain/contracts/escrow/evm/abi"
 	types2 "kwil/pkg/chain/contracts/escrow/types"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func (c *contract) GetDeposits(ctx context.Context, from, to int64, providerAddress string) ([]*types2.DepositEvent, error) {
@@ -55,7 +56,6 @@ func (c *contract) Deposit(ctx context.Context, params *types2.DepositParams, pr
 	if err != nil {
 		return nil, err
 	}
-
 	return &types2.DepositResponse{
 		TxHash: res.Hash().String(),
 	}, nil

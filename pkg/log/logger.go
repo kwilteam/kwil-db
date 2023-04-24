@@ -1,15 +1,72 @@
 package log
 
 import (
-	"runtime/debug"
-	"time"
-
 	"go.uber.org/zap"
 )
 
-type SugaredLogger = *zap.SugaredLogger
-type Logger = *zap.Logger
-type Field = zap.Field
+// Logger is a wrapper around zap.Logger, which adds some additional fields to critical log messages.
+type Logger struct {
+	L *zap.Logger
+}
+
+func (l *Logger) Debug(msg string, fields ...Field) {
+	l.L.Debug(msg, fields...)
+}
+
+func (l *Logger) Info(msg string, fields ...Field) {
+	l.L.Info(msg, fields...)
+}
+
+func (l *Logger) Warn(msg string, fields ...Field) {
+	l.L.Warn(msg, fields...)
+}
+
+func (l *Logger) Error(msg string, fields ...Field) {
+	fields = append(fields, detailedFields...)
+	l.L.Error(msg, fields...)
+}
+
+func (l *Logger) DPanic(msg string, fields ...Field) {
+	fields = append(fields, detailedFields...)
+	l.L.DPanic(msg, fields...)
+}
+
+func (l *Logger) Panic(msg string, fields ...Field) {
+	fields = append(fields, detailedFields...)
+	l.L.Panic(msg, fields...)
+}
+
+func (l *Logger) Fatal(msg string, fields ...Field) {
+	fields = append(fields, detailedFields...)
+	l.L.Fatal(msg, fields...)
+}
+
+func (l *Logger) clone() *Logger {
+	copy := *l
+	return &copy
+}
+
+func (l *Logger) Named(name string) *Logger {
+	if name == "" {
+		return l
+	}
+
+	_log := l.clone()
+	_log.L.Named(name)
+	return _log
+}
+
+func (l *Logger) With(fields ...Field) *Logger {
+	return &Logger{l.L.With(fields...)}
+}
+
+func (l *Logger) WithOptions(opts ...zap.Option) *Logger {
+	return &Logger{l.L.WithOptions(opts...)}
+}
+
+func (l *Logger) Sync() error {
+	return l.L.Sync()
+}
 
 type Config struct {
 	Level string `mapstructure:"level"`
@@ -18,29 +75,7 @@ type Config struct {
 }
 
 func New(config Config) Logger {
-	// @yaiba TODO: make those only for error level?
 	fields := make([]zap.Field, 0, 10)
-	if info, ok := debug.ReadBuildInfo(); ok {
-		fields = append(fields, zap.String("goversion", info.GoVersion))
-		if info.Main.Version != "" {
-			fields = append(fields, zap.String("mod_version", info.Main.Version))
-		}
-
-		for _, kv := range info.Settings {
-			switch kv.Key {
-			case "vcs.revision":
-				fields = append(fields, zap.String("revision", kv.Value))
-			case "vcs.time":
-				if t, err := time.Parse(time.RFC3339, kv.Value); err == nil {
-					fields = append(fields, zap.Time("build_time", t))
-				}
-			case "vcs.modified":
-				if kv.Value == "true" {
-					fields = append(fields, zap.Bool("dirty", true))
-				}
-			}
-		}
-	}
 
 	// poor man's config
 	cfg := zap.NewProductionConfig()
@@ -61,11 +96,14 @@ func New(config Config) Logger {
 	}
 
 	logger := zap.Must(cfg.Build(zap.Fields(fields...)))
-	return logger
+	// skip the logger wrapper
+	logger = logger.WithOptions(zap.AddCallerSkip(1))
+	return Logger{L: logger}
 }
 
 // NoOp is a logger that does nothing.
-// It is useful for testing, or for user packages where we want to turn off logging.
+// It is useful for testing, or for user packages where we want to
+// have logging configurable.
 func NewNoOp() Logger {
-	return zap.NewNop()
+	return Logger{L: zap.NewNop()}
 }

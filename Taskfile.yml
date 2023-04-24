@@ -36,23 +36,6 @@ tasks:
     generates:
       - .build/kwild
 
-  build:sql:
-    desc: Generates the SQL repository
-    cmds:
-      - sqlc generate
-    sources:
-      - internal/repository/sql/*.sql
-    generates:
-      - internal/repository/gen
-
-  build:gateway:
-    desc: Builds the API Gateway
-    deps: [ pb:compile:all ]
-    cmds:
-      - ./scripts/build/binary kwil-gateway
-    generates:
-      - .build/kwil-gateway
-
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs
     cmds:
@@ -135,3 +118,9 @@ tasks:
     desc: Undeploy kwild to local k8s cluster
     cmds:
       - helm uninstall kwild
+
+  # ************ dev ************
+  dev:up:
+      desc: Start the dev environment
+      cmds:
+      - go test ./test/acceptance/ -timeout 12h -dev -v

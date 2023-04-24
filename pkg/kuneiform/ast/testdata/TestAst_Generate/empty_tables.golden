@@ -1,0 +1,17 @@
+{
+  "owner": "",
+  "name": "test",
+  "tables": [
+    {
+      "name": "user",
+      "columns": [],
+      "indexes": []
+    },
+    {
+      "name": "order",
+      "columns": [],
+      "indexes": []
+    }
+  ],
+  "actions": null
+}

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func NewCmdConfigure() *cobra.Command {
@@ -19,40 +18,72 @@ func NewCmdConfigure() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			config.LoadConfig()
-
-			runner := &configPrompter{
-				Viper: viper.GetViper(),
-			}
-
-			// endpoint
-			runner.AddPrompt(&common.Prompter{
-				Label:   "Kwil RPC URL",
-				Default: viper.GetString(config.KwilProviderRpcUrlKey),
-			}, config.KwilProviderRpcUrlKey)
-
-			// private key
-			runner.AddPrompt(&common.Prompter{
-				Label:   "Private Key",
-				Default: viper.GetString(config.WalletPrivateKeyKey),
-			}, config.WalletPrivateKeyKey, isValidPrivateKey)
-
-			// eth provider
-			runner.AddPrompt(&common.Prompter{
-				Label:   "Client Chain RPC URL",
-				Default: viper.GetString(config.ClientChainProviderRpcUrlKey),
-			}, config.ClientChainProviderRpcUrlKey, containsProtocol)
-
-			// run the prompts
-			if err := runner.Run(); err != nil {
+			conf, err := config.LoadPersistedConfig()
+			if err != nil {
 				return err
 			}
 
-			return viper.WriteConfig()
+			promptGRPCURL(conf)
+			promptPrivateKey(conf)
+			promptClientChainRPCURL(conf)
+
+			return config.PersistConfig(conf)
 		},
 	}
 
 	return cmd
+}
+
+func promptGRPCURL(conf *config.KwilCliConfig) {
+	prompt := &common.Prompter{
+		Label:   "Kwil RPC URL",
+		Default: conf.GrpcURL,
+	}
+	res, err := prompt.Run()
+	if err != nil {
+		panic(err)
+	}
+
+	conf.GrpcURL = res
+}
+
+func promptPrivateKey(conf *config.KwilCliConfig) {
+	prompt := &common.Prompter{
+		Label:   "Private Key",
+		Default: crypto.HexFromECDSAPrivateKey(conf.PrivateKey),
+	}
+	res, err := prompt.Run()
+	if err != nil {
+		panic(err)
+	}
+
+	pk, err := crypto.ECDSAFromHex(res)
+	if err != nil {
+		fmt.Println(`invalid private key.  key could not be converted to hex.  received: `, res)
+		promptPrivateKey(conf)
+		return
+	}
+
+	conf.PrivateKey = pk
+}
+
+func promptClientChainRPCURL(conf *config.KwilCliConfig) {
+	prompt := &common.Prompter{
+		Label:   "Client Chain RPC URL",
+		Default: conf.ClientChainRPCURL,
+	}
+	res, err := prompt.Run()
+	if err != nil {
+		panic(err)
+	}
+
+	if containsProtocol(&res) != nil {
+		fmt.Println(`url must contain http:// , https:// , ws:// , or wss://.  received: `, res)
+		promptClientChainRPCURL(conf)
+		return
+	}
+
+	conf.ClientChainRPCURL = res
 }
 
 // containsProtocol should check if the url contains http:// or https://
@@ -61,12 +92,4 @@ func containsProtocol(url *string) error {
 		return nil
 	}
 	return fmt.Errorf("url must contain http:// or https://")
-}
-
-func isValidPrivateKey(pk *string) error {
-	_, err := crypto.ECDSAFromHex(*pk)
-	if err != nil {
-		return fmt.Errorf(`invalid private key.  key could not be converted to hex: %w`, err)
-	}
-	return nil
 }

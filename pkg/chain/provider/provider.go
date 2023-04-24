@@ -13,7 +13,7 @@ import (
 
 func New(endpoint string, chainCode types.ChainCode) (ChainProvider, error) {
 	switch chainCode {
-	case types.ETHEREUM, types.GOERLI:
+	case types.ETHEREUM, types.GOERLI, types.LOCAL:
 		return evm.New(endpoint, chainCode)
 	default:
 		return nil, fmt.Errorf("unsupported chain code: %s", fmt.Sprint(chainCode))

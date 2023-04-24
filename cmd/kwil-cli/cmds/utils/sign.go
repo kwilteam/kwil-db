@@ -15,13 +15,13 @@ func signCmd() *cobra.Command {
 		Long:  "",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pk, err := config.GetEcdsaPrivateKey()
+			conf, err := config.LoadCliConfig()
 			if err != nil {
-				return fmt.Errorf("error getting private key: %w", err)
+				return err
 			}
 
 			// generate signature
-			sig, err := crypto.Sign([]byte(args[0]), pk)
+			sig, err := crypto.Sign([]byte(args[0]), conf.PrivateKey)
 			if err != nil {
 				return fmt.Errorf("error generating signature: %w", err)
 			}

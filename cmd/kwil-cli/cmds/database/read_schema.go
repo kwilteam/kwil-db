@@ -1,9 +1,12 @@
 package database
 
 import (
+	"context"
 	"fmt"
+	"kwil/cmd/kwil-cli/cmds/common"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
+	"kwil/pkg/engine/types"
 
 	"github.com/spf13/cobra"
 )
@@ -16,69 +19,46 @@ func readSchemaCmd() *cobra.Command {
 		Long:  "",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
-				client.WithoutServiceConfig(),
-			)
-			if err != nil {
-				return err
-			}
+			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+				dbid, err := getSelectedDbid(cmd, conf)
+				if err != nil {
+					return fmt.Errorf("you must specify either a database name with the --name, or a database id with the --dbid flag")
+				}
 
-			dbid, err := getSelectedDbid(cmd)
-			if err != nil {
-				return fmt.Errorf("you must specify either a database name with the --name, or a database id with the --dbid flag")
-			}
+				meta, err := client.GetSchema(ctx, dbid)
+				if err != nil {
+					return err
+				}
 
-			meta, err := clt.GetSchemaById(ctx, dbid)
-			if err != nil {
-				return err
-			}
-
-			// now we print the metadata
-			fmt.Println("Tables:")
-			for _, t := range meta.Tables {
-				fmt.Printf("  %s\n", t.Name)
-				fmt.Printf("    Columns:\n")
-				for _, c := range t.Columns {
-					fmt.Printf("    %s\n", c.Name)
-					fmt.Printf("      Type: %s\n", c.Type.String())
-					for _, a := range c.Attributes {
-						fmt.Printf("      %s\n", a.Type.String())
-						if !a.Value.IsEmpty() {
-							fmt.Printf("        %s\n", a.Value.String())
+				// now we print the metadata
+				fmt.Println("Tables:")
+				for _, t := range meta.Tables {
+					fmt.Printf("  %s\n", t.Name)
+					fmt.Printf("    Columns:\n")
+					for _, c := range t.Columns {
+						fmt.Printf("    %s\n", c.Name)
+						fmt.Printf("      Type: %s\n", c.Type.String())
+						for _, a := range c.Attributes {
+							fmt.Printf("      %s\n", a.Type.String())
+							value, err := types.NewFromSerial(a.Value)
+							if err != nil {
+								return err
+							}
+							if value.IsEmpty() {
+								fmt.Printf("        %s\n", value.String())
+							}
 						}
 					}
 				}
-			}
 
-			// print the roles
-			fmt.Println("Roles:")
-			for _, r := range meta.Roles {
-				fmt.Printf("  %s\n", r.Name)
-				fmt.Printf("    Permissions:\n")
-				for _, p := range r.Permissions {
-					fmt.Printf("      %s\n", p)
+				// print queries
+				fmt.Println("Actions:")
+				for _, q := range meta.Actions {
+					fmt.Printf("  %s\n", q.Name)
+					fmt.Printf("    Type: %s\n", q.Inputs)
 				}
-			}
-
-			// print queries
-			fmt.Println("Queries:")
-			for _, q := range meta.SQLQueries {
-				fmt.Printf("  %s\n", q.Name)
-			}
-
-			// Print indexes
-			fmt.Println("Indexes:")
-			for _, i := range meta.Indexes {
-				fmt.Printf("  %s:\n", i.Name)
-				fmt.Println("    Type: ", i.Using)
-				fmt.Printf("    Table: %s\n", i.Table)
-				fmt.Printf("    Columns:\n")
-				for _, c := range i.Columns {
-					fmt.Printf("      %s\n", c)
-				}
-			}
-			return nil
+				return nil
+			})
 		},
 	}
 

@@ -2,16 +2,17 @@ package specifications
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	grpc "kwil/pkg/grpc/client"
+	grpc "kwil/pkg/grpc/client/v1"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type ApproveTokenDsl interface {
-	ApproveToken(ctx context.Context, spender string, amount *big.Int) error
-	GetAllowance(ctx context.Context, from string, spender string) (*big.Int, error)
-	GetServiceConfig(ctx context.Context) (grpc.SvcConfig, error)
+	ApproveToken(ctx context.Context, amount *big.Int) error
+	GetAllowance(ctx context.Context) (*big.Int, error)
+	GetServiceConfig(ctx context.Context) (*grpc.SvcConfig, error)
 	GetUserAddress() string
 }
 
@@ -20,18 +21,14 @@ func ApproveTokenSpecification(ctx context.Context, t *testing.T, approve Approv
 	// @yaiba TODO: make this into args?
 	//Given a user and a validator address, and an amount
 	//decimals := 18
-	amount := new(big.Int).Mul(big.NewInt(100), big.NewInt(1000000000000000000))
-	svcCfg, err := approve.GetServiceConfig(ctx)
-	assert.NoError(t, err)
+	amount := new(big.Int).Mul(big.NewInt(100), big.NewInt(1000000000000000000)) // amount here doesn't matter since we can approve any amount
 
 	// When i approve validator to spend my tokens
-	err = approve.ApproveToken(ctx, svcCfg.Funding.PoolAddress, amount)
-
+	err := approve.ApproveToken(ctx, amount)
 	// Then i expect success
 	assert.NoError(t, err)
-
 	// And i expect the allowance to be set
-	allowance, err := approve.GetAllowance(ctx, approve.GetUserAddress(), svcCfg.Funding.PoolAddress)
+	allowance, err := approve.GetAllowance(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, amount, allowance)
 }

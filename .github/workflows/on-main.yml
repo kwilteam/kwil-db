@@ -1,0 +1,148 @@
+name: on-main
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-push-image:
+    name: Build & push image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          version: '3.x'
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Install Taskfile
+        uses: arduino/setup-task@v1
+        with:
+          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19.0'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          go version
+          go mod download
+          task deps
+
+      - name: Compile Protobuf
+        run: |
+          task pb:compile:all
+
+      - name: manual git tag
+        run: |
+          version=`echo ${{ github.sha }} | cut -c 1-7`
+          echo "GIT_TAG=$version" >> $GITHUB_ENV
+        #run: echo "GIT_TAG=`git describe --match 'v[0-9]*' --dirty --always --tags | sed 's/^v//'`" >> $GITHUB_ENV
+
+      - name: manual build time
+        run: |
+          build_time=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`
+          echo "BUILD_TIME=$build_time" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Cache Docker layers for KD
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache-kwild
+          #key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kwild
+          restore-keys: |
+            ${{ runner.os }}-buildx-kwild
+
+      - name: Build & push KD image
+        id: docker_build_kwild
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            git_commit=${{ github.sha }}
+            version=${{ env.GIT_TAG }}
+            build_time=${{ env.BUILD_TIME }}
+          file: ./build/package/docker/kwild.dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWILD_ECR }}:${{ env.GIT_TAG }}
+          cache-from: type=local,src=/tmp/.buildx-cache-kwild
+          cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
+
+      - name: Cache Docker layers for KG
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache-kgw
+          #key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-kgw
+          restore-keys: |
+            ${{ runner.os }}-buildx-kgw
+
+      - name: Build & push KG image
+        id: docker_build_kgw
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            git_commit=${{ github.sha }}
+            version=${{ env.GIT_TAG }}
+            build_time=${{ env.BUILD_TIME }}
+          file: ./build/package/docker/kwil-gateway.dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWIL_GATEWAY_ECR }}:${{ env.GIT_TAG }}
+          cache-from: type=local,src=/tmp/.buildx-cache-kgw
+          cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache-kwild
+          mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
+          rm -rf /tmp/.buildx-cache-kgw
+          mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
+
+  deploy-to-eks:
+    name: Deploy to DEV cluster
+    runs-on: ubuntu-latest
+    needs: build-push-image
+
+    steps:
+      - name: manual git tag
+        run: |
+          version=`echo ${{ github.sha }} | cut -c 1-7`
+          echo "GIT_TAG=$version" >> $GITHUB_ENV
+
+      - name: deploy by release type to eks DEV cluster
+        run: |
+          echo "deploy ${{ env.GIT_TAG }} to eks DEV cluster"

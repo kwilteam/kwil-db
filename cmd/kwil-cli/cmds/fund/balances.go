@@ -1,7 +1,9 @@
 package fund
 
 import (
+	"context"
 	"fmt"
+	"kwil/cmd/kwil-cli/cmds/common"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
 
@@ -16,44 +18,40 @@ func balancesCmd() *cobra.Command {
 		Long:  `"balances" returns your allowance and balance for your currently configured funding pool.`,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
-				client.WithChainRpcUrl(config.Config.ClientChain.Provider),
-			)
-			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
-			}
+			return common.DialClient(cmd.Context(), common.WithChainClient, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+				address, err := getSelectedAddress(cmd, conf)
+				if err != nil {
+					return fmt.Errorf("error getting selected address: %w", err)
+				}
 
-			address, err := getSelectedAddress(cmd)
-			if err != nil {
-				return fmt.Errorf("error getting selected address: %w", err)
-			}
+				allowance, err := client.GetApprovedAmount(ctx, address)
+				if err != nil {
+					return fmt.Errorf("error getting allowance: %w", err)
+				}
 
-			tokenCtr, err := clt.TokenContract(ctx)
-			if err != nil {
-				return fmt.Errorf("error getting token contract: %w", err)
-			}
+				// get balance
+				balance, err := client.GetOnChainBalance(ctx, address)
+				if err != nil {
+					return fmt.Errorf("error getting balance: %w", err)
+				}
 
-			allowance, err := tokenCtr.Allowance(address, clt.EscrowContractAddress)
-			if err != nil {
-				return fmt.Errorf("error getting allowance: %w", err)
-			}
+				// get deposited amount
+				deposited, err := client.GetDepositedAmount(ctx, address)
+				if err != nil {
+					return fmt.Errorf("error getting deposited amount: %w", err)
+				}
 
-			// get balance
-			balance, err := tokenCtr.BalanceOf(address)
-			if err != nil {
-				return fmt.Errorf("error getting balance: %w", err)
-			}
+				color.Set(color.Bold)
+				fmt.Printf("Pool: %s\n", client.PoolAddress)
+				color.Unset()
+				color.Set(color.FgGreen)
+				fmt.Printf("Allowance: %s\n", allowance)
+				fmt.Printf("Balance: %s\n", balance)
+				fmt.Printf("Deposit Balance: %s\n", deposited)
+				color.Unset()
 
-			color.Set(color.Bold)
-			cmd.Printf("Pool: %s\n", clt.EscrowContractAddress)
-			color.Unset()
-			color.Set(color.FgGreen)
-			cmd.Printf("Allowance: %s\n", allowance)
-			cmd.Printf("Balance: %s\n", balance)
-			color.Unset()
-
-			return nil
+				return nil
+			})
 		},
 	}
 

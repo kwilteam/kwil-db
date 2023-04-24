@@ -1,93 +1,76 @@
 package database
 
 import (
+	"context"
 	"fmt"
+	"kwil/cmd/kwil-cli/cmds/common"
 	"kwil/cmd/kwil-cli/cmds/common/display"
 	"kwil/cmd/kwil-cli/config"
 	"kwil/pkg/client"
-	"kwil/pkg/databases/executables"
-	"kwil/pkg/databases/spec"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 func executeCmd() *cobra.Command {
-	var queryName string
+	var actionName string
 
 	cmd := &cobra.Command{
 		Use:   "execute",
 		Short: "Execute a query",
 		Long: `Execute executes a query against the specified database.  The query name is
-specified as a required "--query" flag, and the query parameters as arguments.
-In order to specify an parameter, you first need to specify the prameter name, then the parameter value.
+specified as a required "--action" flag, and the query parameters as arguments.
+In order to specify an parameter, you first need to specify the parameter name, then the parameter value, delimited by a colon.
+You can include the input's '$' prefix if you wish, but it is not required.
 
 For example, if I have a query name "create_user" that takes two arguments: name and age.
 I would specify the query as follows:
 
-name satoshi age 32 --query=create_user
+'$name:satoshi' '$age:32' --action=create_user
 
 You specify the database to execute this against with the --name flag, and
-the owner with the --wner flag.
+the owner with the --owner flag.
 
 You can also specify the database by passing the database id with the --dbid flag.
 
 For example:
 
-create_user name satoshi age 32 --database-name mydb --database-owner 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D
+'$name:satoshi' 'age:32' --action=create_user --name mydb --owner 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D
 
 OR
 
-name satoshi age 32 --dbid=x1234 --query=create_user `,
-		Args: cobra.MatchAll(func(cmd *cobra.Command, args []string) error {
-			// check that args is even and has at least 2 elements
-			if len(args) < 2 || len(args)%2 != 0 {
-				return fmt.Errorf("invalid number of arguments")
-			}
-			return nil
-		}),
+'$name:satoshi' '$age:32' --dbid=x1234 --action=create_user `,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			clt, err := client.New(ctx, config.Config.Node.KwilProviderRpcUrl,
-				client.WithoutServiceConfig(),
-			)
-			if err != nil {
-				return fmt.Errorf("failed to create client: %w", err)
-			}
+			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+				dbId, err := getSelectedDbid(cmd, conf)
+				if err != nil {
+					return fmt.Errorf("target database not properly specified: %w", err)
+				}
 
-			// if we get an error, it means the user did not specify the database id
-			// get the database name and owner
-			dbId, err := getSelectedDbid(cmd)
-			if err != nil {
-				return fmt.Errorf("target database not properly specified: %w", err)
-			}
+				lowerName := strings.ToLower(actionName)
 
-			lowerName := strings.ToLower(queryName)
+				inputs, err := getInputs(args)
+				if err != nil {
+					return fmt.Errorf("error getting inputs: %w", err)
+				}
 
-			qry, err := clt.GetQuerySignature(ctx, dbId, lowerName)
-			if err != nil {
-				return fmt.Errorf("error getting query signature: %w", err)
-			}
+				for _, input := range inputs {
+					fmt.Printf("input: %s\n", input)
+				}
 
-			inputs, err := getInputs(qry, args)
-			if err != nil {
-				return fmt.Errorf("error getting inputs: %w", err)
-			}
+				receipt, results, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
+				if err != nil {
+					return fmt.Errorf("error executing database: %w", err)
+				}
 
-			ecdsaPk, err := config.GetEcdsaPrivateKey()
-			if err != nil {
-				return fmt.Errorf("failed to get ecdsa key: %w", err)
-			}
+				// print the response
+				display.PrintTxResponse(receipt)
 
-			res, err := clt.ExecuteDatabaseById(ctx, dbId, lowerName, inputs, ecdsaPk)
-			if err != nil {
-				return fmt.Errorf("error executing database: %w", err)
-			}
+				// print the results
+				printActionResults(results)
 
-			// print the response
-			display.PrintTxResponse(res)
-
-			return nil
+				return nil
+			})
 		},
 	}
 
@@ -95,21 +78,36 @@ name satoshi age 32 --dbid=x1234 --query=create_user `,
 	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
 
-	cmd.Flags().StringVarP(&queryName, queryNameFlag, "q", "", "the query name (required)")
+	cmd.Flags().StringVarP(&actionName, actionNameFlag, "a", "", "the action name (required)")
 
-	cmd.MarkFlagRequired(queryNameFlag)
+	cmd.MarkFlagRequired(actionNameFlag)
 	return cmd
 }
 
-func getInputs(executable *executables.QuerySignature, args []string) (map[string]*spec.KwilAny, error) {
-	if len(args) < 2 || len(args)%2 != 0 {
-		return nil, fmt.Errorf("invalid number of arguments")
+// inputs will be received as args.  The args will be in the form of
+// $argname:value.  Example $username:satoshi $age:32
+func getInputs(args []string) ([]map[string]any, error) {
+	inputs := make(map[string]any)
+
+	for _, arg := range args {
+		ensureInputFormat(&arg)
+
+		// split the arg into name and value.  only split on the first ':'
+		split := strings.SplitN(arg, ":", 2)
+		if len(split) != 2 {
+			return nil, fmt.Errorf("invalid argument: %s.  argument must be in the form of $name:value", arg)
+		}
+
+		inputs[split[0]] = split[1]
 	}
 
-	stringInputs := make(map[string]string) // maps the arg name to the arg value
-	for i := 0; i < len(args); i = i + 2 {
-		stringInputs[strings.ToLower(args[i])] = args[i+1]
-	}
+	return []map[string]any{inputs}, nil
+}
 
-	return executable.ConvertInputs(stringInputs)
+func printActionResults(results []map[string]any) {
+	for _, row := range results {
+		for k, v := range row {
+			fmt.Printf("%s: %v", k, v)
+		}
+	}
 }

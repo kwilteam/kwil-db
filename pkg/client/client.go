@@ -2,83 +2,94 @@ package client
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
+	"kwil/pkg/balances"
 	cc "kwil/pkg/chain/client"
-	chainTypes "kwil/pkg/chain/types"
-	grpc "kwil/pkg/grpc/client"
+	ccs "kwil/pkg/chain/client/service"
+	"kwil/pkg/chain/contracts/escrow"
+	"kwil/pkg/chain/contracts/token"
+	chainCodes "kwil/pkg/chain/types"
+	"kwil/pkg/engine/models"
+	"kwil/pkg/engine/types"
+	grpcClient "kwil/pkg/grpc/client/v1"
+	kTx "kwil/pkg/tx"
 	"strings"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-const (
-	// DefaultProviderAddress is the default provider address for the kwil client
-	DefaultProviderAddress = "0x000"
-
-	// DefaultEscrowAddress is the default pool address for the kwil client
-	DefaultEscrowAddress = "0x000"
-
-	// DefaultChainCode is the default chain code for the kwil client
-	// Using Goerli testnet for now
-	DefaultChainCode = 2
-)
-
-type KwilClient struct {
-	grpc                  *grpc.Client
-	chainClient           cc.ChainClient
-	dbis                  map[string]dbi // maps the db name to its queries
-	usingServiceCfg       bool
-	chainRpcUrl           *string
-	ProviderAddress       string
-	EscrowContractAddress string
-	ChainCode             chainTypes.ChainCode
+type Client struct {
+	client           *grpcClient.Client
+	datasets         map[string]*models.Dataset
+	PrivateKey       *ecdsa.PrivateKey
+	ChainCode        chainCodes.ChainCode
+	ProviderAddress  string
+	PoolAddress      string
+	usingProvider    bool
+	withServerConfig bool
+	chainRpcUrl      string
+	chainClient      cc.ChainClient
+	tokenContract    token.TokenContract
+	TokenAddress     string
+	TokenSymbol      string
+	poolContract     escrow.EscrowContract
 }
 
-func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (*KwilClient, error) {
-	/*
-		c := &Client{
-			endpoint: rpcUrl,
-		}
-		for _, opt := range opts {
-			opt(c)
-		}
-
-		grpcClient, err := grpc.New(ctx, &grpc.Config{
-			Addr: rpcUrl,
-		})*/
-	// @yaiba TODO: option allow only chain interaction, no grpc interaction, avoid grpc connection
-	c := &KwilClient{
-		dbis:                  make(map[string]dbi),
-		usingServiceCfg:       true,
-		chainRpcUrl:           nil,
-		ProviderAddress:       DefaultProviderAddress,
-		EscrowContractAddress: DefaultEscrowAddress,
-		ChainCode:             DefaultChainCode,
+// New creates a new client
+func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
+	c = &Client{
+		datasets:         make(map[string]*models.Dataset),
+		ChainCode:        chainCodes.LOCAL,
+		ProviderAddress:  "",
+		PoolAddress:      "",
+		usingProvider:    true,
+		withServerConfig: true,
+		chainRpcUrl:      "",
+		TokenAddress:     "",
+		TokenSymbol:      "",
 	}
+
 	for _, opt := range opts {
 		opt(c)
 	}
 
-	var err error
-	c.grpc, err = grpc.New(ctx, rpcUrl)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create grpc client: %w", err)
-	}
+	defer func(c *Client) {
+		if c.chainRpcUrl != "" {
+			tempErr := c.initChainClient(ctx)
+			if tempErr != nil {
+				err = tempErr
+			}
+		}
+	}(c)
 
-	if !c.usingServiceCfg {
+	if !c.usingProvider {
+		if c.chainRpcUrl != "" {
+			e := c.initChainClient(ctx)
+			if err != nil {
+				err = e
+			}
+		}
 		return c, nil
 	}
 
-	// apply service config
-	cfg, err := c.grpc.GetServiceConfig(ctx)
+	c.client, err = grpcClient.New(target, grpc.WithTransportCredentials(
+		insecure.NewCredentials(), // TODO: should add client configuration for secure transport
+	))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get service config from kwil provider: %w", err)
+		return nil, err
 	}
 
-	c.ChainCode = chainTypes.ChainCode(cfg.Funding.ChainCode)
-	c.ProviderAddress = cfg.Funding.ProviderAddress
-	c.EscrowContractAddress = cfg.Funding.PoolAddress
-	c.chainRpcUrl = &cfg.Funding.RpcUrl
+	if c.withServerConfig {
+		err = c.loadServerConfig(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	// reapply opts since service config may have changed them if they were specified
+	// re-apply opts to override provider config
 	for _, opt := range opts {
 		opt(c)
 	}
@@ -86,18 +97,240 @@ func New(ctx context.Context, rpcUrl string, opts ...ClientOption) (*KwilClient,
 	return c, nil
 }
 
-func (c *KwilClient) GetServiceConfig(ctx context.Context) (grpc.SvcConfig, error) {
-	return c.grpc.GetServiceConfig(ctx)
+func (c *Client) loadServerConfig(ctx context.Context) error {
+	config, err := c.GetConfig(ctx)
+	if err != nil {
+		return err
+	}
+	c.ProviderAddress = config.ProviderAddress
+	c.PoolAddress = config.PoolAddress
+	c.ChainCode = chainCodes.ChainCode(config.ChainCode)
+
+	return nil
 }
 
-func (c *KwilClient) SetChainRpcUrl(url string) {
-	c.chainRpcUrl = &url
+func (c *Client) initChainClient(ctx context.Context) error {
+	if c.chainRpcUrl == "" {
+		return fmt.Errorf("chain rpc url is not set")
+	}
+
+	var err error
+	c.chainClient, err = ccs.NewChainClient(c.chainRpcUrl,
+		ccs.WithChainCode(c.ChainCode),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create chain client: %w", err)
+	}
+
+	return nil
 }
 
-func (c *KwilClient) ListDatabases(ctx context.Context, owner string) ([]string, error) {
-	return c.grpc.ListDatabases(ctx, strings.ToLower(owner))
+func (c *Client) initTokenContract(ctx context.Context) error {
+	if c.chainClient == nil {
+		return fmt.Errorf("chain client is not initialized")
+	}
+	if c.TokenAddress == "" {
+		err := c.initPoolContract(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to init pool contract to get token address: %w", err)
+		}
+	}
+
+	var err error
+	c.tokenContract, err = c.chainClient.Contracts().Token(c.TokenAddress)
+	if err != nil {
+		return fmt.Errorf("failed to create token contract: %w", err)
+	}
+
+	c.TokenSymbol = c.tokenContract.Symbol()
+
+	return nil
 }
 
-func (c *KwilClient) Ping(ctx context.Context) (string, error) {
-	return c.grpc.Ping(ctx)
+func (c *Client) initPoolContract(ctx context.Context) error {
+	if c.chainClient == nil {
+		return fmt.Errorf("chain client is not initialized")
+	}
+	if c.PoolAddress == "" {
+		return fmt.Errorf("pool address is not set")
+	}
+
+	var err error
+	c.poolContract, err = c.chainClient.Contracts().Escrow(c.PoolAddress)
+	if err != nil {
+		return fmt.Errorf("failed to create escrow contract: %w", err)
+	}
+
+	c.TokenAddress = c.poolContract.TokenAddress()
+
+	return nil
+}
+
+// GetSchema returns the schema of a database
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*models.Dataset, error) {
+	ds, ok := c.datasets[dbid]
+	if ok {
+		return ds, nil
+	}
+
+	ds, err := c.client.GetSchema(ctx, dbid)
+	if err != nil {
+		return nil, err
+	}
+
+	c.datasets[dbid] = ds
+	return ds, nil
+}
+
+// DeployDatabase deploys a schema
+func (c *Client) DeployDatabase(ctx context.Context, ds *models.Dataset) (*kTx.Receipt, error) {
+	address, err := c.getAddress()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get address from private key: %w", err)
+	}
+
+	if ds.Owner != address {
+		return nil, fmt.Errorf("dataset owner is not the same as the address")
+	}
+
+	tx, err := c.deploySchemaTx(ctx, ds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.client.Broadcast(ctx, tx)
+}
+
+// deploySchemaTx creates a new transaction to deploy a schema
+func (c *Client) deploySchemaTx(ctx context.Context, ds *models.Dataset) (*kTx.Transaction, error) {
+	return c.newTx(ctx, kTx.DEPLOY_DATABASE, ds)
+}
+
+// DropDatabase drops a database
+func (c *Client) DropDatabase(ctx context.Context, name string) (*kTx.Receipt, error) {
+	address, err := c.getAddress()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get address from private key: %w", err)
+	}
+
+	identifier := &models.DatasetIdentifier{
+		Owner: address,
+		Name:  name,
+	}
+
+	tx, err := c.dropDatabaseTx(ctx, identifier)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.client.Broadcast(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	delete(c.datasets, identifier.ID())
+
+	return res, nil
+}
+
+// dropDatabaseTx creates a new transaction to drop a database
+func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *models.DatasetIdentifier) (*kTx.Transaction, error) {
+	return c.newTx(ctx, kTx.DROP_DATABASE, dbIdent)
+}
+
+// ExecuteAction executes an action.
+// It returns the receipt, as well as outputs which is the decoded body of the receipt.
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
+	encodedValues, err := encodeInputs(inputs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c.ExecuteActionSerialized(ctx, dbid, action, encodedValues)
+}
+
+func (c *Client) ExecuteActionSerialized(ctx context.Context, dbid string, action string, inputs []map[string][]byte) (*kTx.Receipt, []map[string]any, error) {
+	executionBody := &models.ActionExecution{
+		Action: action,
+		DBID:   dbid,
+		Params: inputs,
+	}
+
+	tx, err := c.executeActionTx(ctx, executionBody)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	res, err := c.client.Broadcast(ctx, tx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	outputs, err := decodeOutputs(res.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return res, outputs, nil
+}
+
+func decodeOutputs(bts []byte) ([]map[string]any, error) {
+	var outputs []map[string]any
+	err := json.Unmarshal(bts, &outputs)
+	if err != nil {
+		return nil, err
+	}
+
+	return outputs, nil
+}
+
+// executeActionTx creates a new transaction to execute an action
+func (c *Client) executeActionTx(ctx context.Context, executionBody *models.ActionExecution) (*kTx.Transaction, error) {
+	return c.newTx(ctx, kTx.EXECUTE_ACTION, executionBody)
+}
+
+// encodeInputs converts an input map to a map of encoded values
+func encodeInputs(inputs []map[string]any) ([]map[string][]byte, error) {
+	encoded := make([]map[string][]byte, 0)
+	for _, record := range inputs {
+		encodedRecord := make(map[string][]byte)
+		for k, v := range record {
+			encodedValue, err := types.New(v)
+			if err != nil {
+				return nil, err
+			}
+			encodedRecord[k] = encodedValue.Bytes()
+		}
+
+		encoded = append(encoded, encodedRecord)
+	}
+	return encoded, nil
+}
+
+// GetConfig returns the provider config
+func (c *Client) GetConfig(ctx context.Context) (*grpcClient.SvcConfig, error) {
+	return c.client.GetConfig(ctx)
+}
+
+// Query executes a query
+func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records, error) {
+	res, err := c.client.Query(ctx, dbid, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewRecordsFromMaps(res), nil
+}
+
+func (c *Client) ListDatabases(ctx context.Context, owner string) ([]string, error) {
+	owner = strings.ToLower(owner)
+	return c.client.ListDatabases(ctx, owner)
+}
+
+func (c *Client) Ping(ctx context.Context) (string, error) {
+	return c.client.Ping(ctx)
+}
+
+func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {
+	return c.client.GetAccount(ctx, address)
 }

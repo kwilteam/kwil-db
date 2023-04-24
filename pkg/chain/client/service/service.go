@@ -66,7 +66,7 @@ func NewChainClient(chainRpcUrl string, opts ...ChainClientOpts) (client.ChainCl
 func NewChainClientWithProvider(prov provider.ChainProvider, conf *dto.Config, logger log.Logger) (client.ChainClient, error) {
 	return &chainClient{
 		provider:              prov,
-		log:                   logger.Named("chain_client"),
+		log:                   *logger.Named("chain_client"),
 		reconnectInterval:     time.Duration(conf.ReconnectInterval) * time.Second,
 		requiredConfirmations: conf.BlockConfirmation,
 		chainCode:             types.ChainCode(conf.ChainCode),

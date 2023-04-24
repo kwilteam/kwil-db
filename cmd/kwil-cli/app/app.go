@@ -32,8 +32,5 @@ func Execute() error {
 }
 
 func init() {
-	cobra.OnInitialize(config.LoadConfig)
-
 	config.BindGlobalFlags(rootCmd.PersistentFlags())
-	config.BindGlobalEnv(rootCmd.PersistentFlags())
 }

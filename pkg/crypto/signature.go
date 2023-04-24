@@ -42,10 +42,9 @@ func ECDSAFromHex(hex string) (*ecdsa.PrivateKey, error) {
 	return ec.HexToECDSA(hex)
 }
 
-func AddressFromPrivateKey(key *ecdsa.PrivateKey) (string, error) {
-
+func AddressFromPrivateKey(key *ecdsa.PrivateKey) string {
 	caddr := ec.PubkeyToAddress(key.PublicKey)
-	return caddr.Hex(), nil
+	return caddr.Hex()
 }
 
 func IsValidAddress(addr string) bool {
@@ -53,7 +52,7 @@ func IsValidAddress(addr string) bool {
 }
 
 func HexFromECDSAPrivateKey(key *ecdsa.PrivateKey) string {
-	return hexutil.Encode(ec.FromECDSA(key))
+	return hexutil.Encode(ec.FromECDSA(key))[2:]
 }
 
 func CheckSignature(addr string, sig Signature, data []byte) (bool, error) {

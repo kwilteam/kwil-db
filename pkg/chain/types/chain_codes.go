@@ -6,7 +6,7 @@ type ChainCode int // this is used to indicate the chain ID.
 // I am using this instead of typicaly ChainIDs beecause we will want to support non-EVM chains (which have no chain ID)
 
 const (
-	UNKNOWN_CHAIN ChainCode = iota
+	LOCAL ChainCode = iota
 	ETHEREUM
 	GOERLI
 )
@@ -28,5 +28,9 @@ func (c ChainCode) String() string {
 	case GOERLI:
 		return "Goerli"
 	}
-	return "Unknown"
+	return "Local"
+}
+
+func (c *ChainCode) Int32() int32 {
+	return int32(*c)
 }

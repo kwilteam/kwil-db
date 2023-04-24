@@ -1,0 +1,51 @@
+{
+  "owner": "",
+  "name": "test",
+  "tables": [
+    {
+      "name": "user",
+      "columns": [
+        {
+          "name": "username",
+          "type": 102,
+          "attributes": [
+            {
+              "type": 103,
+              "value": null
+            }
+          ]
+        },
+        {
+          "name": "age",
+          "type": 103,
+          "attributes": [
+            {
+              "type": 105,
+              "value": "ZjE4"
+            },
+            {
+              "type": 106,
+              "value": "ZjMw"
+            }
+          ]
+        },
+        {
+          "name": "email",
+          "type": 102,
+          "attributes": [
+            {
+              "type": 108,
+              "value": "ZjUw"
+            },
+            {
+              "type": 107,
+              "value": "ZjEw"
+            }
+          ]
+        }
+      ],
+      "indexes": []
+    }
+  ],
+  "actions": null
+}

@@ -2,10 +2,10 @@ package utils
 
 import (
 	"fmt"
-	"strings"
+	"kwil/cmd/kwil-cli/config"
+	"reflect"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func printConfigCmd() *cobra.Command {
@@ -14,7 +14,12 @@ func printConfigCmd() *cobra.Command {
 		Short: "Print the current configuration",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			printMapRecursively(viper.AllSettings(), 0)
+			cfg, err := config.LoadCliConfig()
+			if err != nil {
+				return err
+			}
+
+			printStruct(cfg.ToPeristedConfig())
 			return nil
 		},
 	}
@@ -22,21 +27,18 @@ func printConfigCmd() *cobra.Command {
 	return cmd
 }
 
-func printMapRecursively(m map[string]interface{}, indent int) {
-	for k, v := range m {
-		fmt.Print(strings.Repeat(" ", indent))
-		fmt.Printf("%s: ", k)
+func printStruct(s interface{}) {
+	v := reflect.ValueOf(s)
+	t := v.Type()
 
-		switch val := v.(type) {
-		case string:
-			fmt.Println(val)
-		case int:
-			fmt.Println(val)
-		case map[string]interface{}:
-			fmt.Println()
-			printMapRecursively(val, indent+2)
-		default:
-			fmt.Println(val)
-		}
+	if t.Kind() == reflect.Ptr {
+		v = v.Elem()
+		t = t.Elem()
+	}
+
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		fieldValue := v.Field(i)
+		fmt.Printf("%s: %v\n", field.Name, fieldValue)
 	}
 }

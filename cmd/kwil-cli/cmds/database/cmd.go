@@ -20,6 +20,8 @@ func NewCmdDatabase() *cobra.Command {
 		readSchemaCmd(),
 		executeCmd(),
 		listCmd(),
+		batchCmd(),
+		queryCmd(),
 	)
 
 	return rootCmd

@@ -2,14 +2,16 @@ package specifications
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"kwil/pkg/databases"
+	"fmt"
+	"kwil/pkg/engine/models"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // DatabaseDeployDsl is dsl for database deployment specification
 type DatabaseDeployDsl interface {
-	DeployDatabase(ctx context.Context, db *databases.Database[[]byte]) error
+	DeployDatabase(ctx context.Context, db *models.Dataset) error
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 
@@ -17,7 +19,8 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 	t.Logf("Executing database deploy specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-
+	dbid := db.ID()
+	fmt.Println(dbid)
 	// When i deploy the database
 	err := deploy.DeployDatabase(ctx, db)
 
