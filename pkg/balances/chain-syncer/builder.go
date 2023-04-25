@@ -2,6 +2,7 @@ package chainsyncer
 
 import (
 	"fmt"
+	"kwil/pkg/chain/contracts/escrow"
 	"kwil/pkg/log"
 )
 
@@ -94,7 +95,7 @@ func (c *ChainSyncBuilder) Build() (*ChainSyncer, error) {
 		return nil, fmt.Errorf("deposit receiver address not set")
 	}
 
-	escrowCtr, err := c.syncer.chainClient.Contracts().Escrow(c.syncer.escrowAddress)
+	escrowCtr, err := c.syncer.chainClient.Contracts().Escrow(c.syncer.escrowAddress, escrow.WithLogger(c.syncer.log))
 	if err != nil {
 		return nil, err
 	}

@@ -49,7 +49,7 @@ func (c *Client) GetApprovedAmount(ctx context.Context, address ...string) (*big
 		return nil, fmt.Errorf("failed to resolve address: %w", err)
 	}
 
-	return c.tokenContract.Allowance(addr, c.PoolAddress)
+	return c.tokenContract.Allowance(ctx, addr, c.PoolAddress)
 }
 
 func (c *Client) ensureTokenContractInitialized(ctx context.Context) error {
@@ -94,7 +94,7 @@ func (c *Client) GetOnChainBalance(ctx context.Context, addr ...string) (*big.In
 		return nil, fmt.Errorf("failed to get address: %w", err)
 	}
 
-	return c.tokenContract.BalanceOf(address)
+	return c.tokenContract.BalanceOf(ctx, address)
 }
 
 func (c *Client) GetDepositedAmount(ctx context.Context, addr ...string) (*big.Int, error) {
