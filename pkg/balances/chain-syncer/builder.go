@@ -2,7 +2,10 @@ package chainsyncer
 
 import (
 	"fmt"
+	"kwil/pkg/chain/contracts/escrow"
 	"kwil/pkg/log"
+	"kwil/pkg/utils/retry"
+	"time"
 )
 
 // trying a new builder pattern type here
@@ -106,6 +109,13 @@ func (c *ChainSyncBuilder) Build() (*ChainSyncer, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	c.syncer.retrier = retry.New(escrowCtr,
+		retry.WithLogger[escrow.EscrowContract](c.syncer.log),
+		retry.WithFactor[escrow.EscrowContract](2),
+		retry.WithMin[escrow.EscrowContract](time.Second*1),
+		retry.WithMax[escrow.EscrowContract](time.Second*10),
+	)
 
 	return c.syncer, nil
 }

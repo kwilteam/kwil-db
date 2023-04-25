@@ -1,6 +1,8 @@
 package serialize
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 func StringToBytes(s string) []byte {
 	return []byte(s)
