@@ -2,7 +2,10 @@ package utils
 
 import (
 	"context"
+<<<<<<< HEAD
 	"fmt"
+=======
+>>>>>>> dev
 	"html/template"
 	"kwil/cmd/kwil-cli/cmds/common"
 	"kwil/cmd/kwil-cli/config"
@@ -46,6 +49,7 @@ func NewServerCfgCmd() *cobra.Command {
 					return errors.Wrap(err, "template parsing error")
 				}
 
+<<<<<<< HEAD
 				cfg, err := client.GetConfig(ctx)
 				if err != nil {
 					return errors.Wrap(err, "error getting node configuration")
@@ -53,6 +57,13 @@ func NewServerCfgCmd() *cobra.Command {
 
 				printCfg(cfg)
 				return nil
+=======
+				return prettyPrint(&grpc.SvcConfig{
+					ChainCode:       int64(client.ChainCode),
+					PoolAddress:     client.PoolAddress,
+					ProviderAddress: client.ProviderAddress,
+				}, tmpl)
+>>>>>>> dev
 			})
 		},
 	}
@@ -63,12 +74,15 @@ func NewServerCfgCmd() *cobra.Command {
 	return cmd
 }
 
+<<<<<<< HEAD
 func printCfg(cfg *grpc.SvcConfig) {
 	fmt.Printf("ChainCode: %d\n", cfg.ChainCode)
 	fmt.Printf("PoolAddress: %s\n", cfg.PoolAddress)
 	fmt.Printf("ProviderAddress: %s\n", cfg.ProviderAddress)
 }
 
+=======
+>>>>>>> dev
 func prettyPrint(svcCfg *grpc.SvcConfig, tmpl *template.Template) error {
 	t := tabwriter.NewWriter(os.Stdout, 20, 1, 1, ' ', 0)
 	err := tmpl.Execute(t, svcCfg)

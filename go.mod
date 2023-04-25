@@ -7,7 +7,7 @@ require (
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230321174746-8dcc6526cfb1
 	github.com/cstockton/go-conv v1.0.0
 	github.com/docker/go-connections v0.4.0
-	github.com/ethereum/go-ethereum v1.11.6
+	github.com/ethereum/go-ethereum v1.10.21
 	github.com/fatih/color v1.13.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0
@@ -15,7 +15,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
-	github.com/kwilteam/go-sqlite v0.0.0-20230423205220-cb66abee713d
+	github.com/kwilteam/go-sqlite v0.0.0-20230418230614-a9e3f191e6ae
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pkg/errors v0.9.1
@@ -44,15 +44,15 @@ require (
 	github.com/chzyer/readline v1.5.0 // indirect
 	github.com/containerd/containerd v1.6.12 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/deckarep/golang-set/v2 v2.1.0 // indirect
+	github.com/deckarep/golang-set v1.8.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/docker/distribution v2.8.1+incompatible // indirect
 	github.com/docker/docker v20.10.20+incompatible // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/go-ole/go-ole v1.2.5 // indirect
-	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/fsnotify/fsnotify v1.5.4 // indirect
+	github.com/go-ole/go-ole v1.2.1 // indirect
+	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/gogo/protobuf v1.3.3 // indirect
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -68,7 +68,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.18 // indirect
 	github.com/mattn/go-runewidth v0.0.10 // indirect
 	github.com/moby/patternmatcher v0.5.0 // indirect
@@ -83,6 +83,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/rs/cors v1.8.2 // indirect
 	github.com/shirou/gopsutil v3.21.5+incompatible // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
@@ -94,8 +95,8 @@ require (
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/goleak v1.1.12 // indirect
-	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/crypto v0.4.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+	golang.org/x/crypto v0.1.0 // indirect
 	golang.org/x/exp v0.0.0-20230419192730-864b3d6c5c2c // indirect
 	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
