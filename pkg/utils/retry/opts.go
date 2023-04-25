@@ -1,44 +1,51 @@
 package retry
 
 import (
+	"context"
 	"kwil/pkg/log"
 	"time"
 )
 
-type RetryOpt[T any] func(*Retrier[T])
+type RetryOpt func(*retrier)
 
-func WithLogger[T any](log log.Logger) RetryOpt[T] {
-	return func(r *Retrier[T]) {
+func WithLogger(log log.Logger) RetryOpt {
+	return func(r *retrier) {
 		r.log = log
 	}
 }
 
-func WithFactor[T any](factor float64) RetryOpt[T] {
-	return func(r *Retrier[T]) {
+func WithFactor(factor float64) RetryOpt {
+	return func(r *retrier) {
 		r.retrier.Factor = factor
 	}
 }
 
-func WithoutJitter[T any]() RetryOpt[T] {
-	return func(r *Retrier[T]) {
+func WithoutJitter() RetryOpt {
+	return func(r *retrier) {
 		r.retrier.Jitter = false
 	}
 }
 
-func WithMax[T any](max time.Duration) RetryOpt[T] {
-	return func(r *Retrier[T]) {
+func WithMax(max time.Duration) RetryOpt {
+	return func(r *retrier) {
 		r.retrier.Max = max
 	}
 }
 
-func WithMin[T any](min time.Duration) RetryOpt[T] {
-	return func(r *Retrier[T]) {
+func WithMin(min time.Duration) RetryOpt {
+	return func(r *retrier) {
 		r.retrier.Min = min
 	}
 }
 
-func WithMaxRetries[T any](maxRetries int) RetryOpt[T] {
-	return func(r *Retrier[T]) {
+func WithMaxRetries(maxRetries int) RetryOpt {
+	return func(r *retrier) {
 		r.maxRetries = maxRetries
+	}
+}
+
+func WithContext(ctx context.Context) RetryOpt {
+	return func(r *retrier) {
+		r.ctx = ctx
 	}
 }

@@ -49,9 +49,6 @@ type ChainSyncer struct {
 	// receiverAddress is the address of the deposit receiver
 	// this will almost always be the address of the node's wallet
 	receiverAddress string
-
-	// retrier is the retrier that is used to retry failed queries
-	retrier *retry.Retrier[escrow.EscrowContract]
 }
 
 type accountRepository interface {
@@ -100,7 +97,7 @@ func (cs *ChainSyncer) Start(ctx context.Context) error {
 func (cs *ChainSyncer) getLatestBlockFromChain(ctx context.Context) (*provider.Header, error) {
 	var latestBlock *provider.Header
 
-	err := cs.retrier.Retry(ctx, func(_ context.Context, _ escrow.EscrowContract) error {
+	err := retry.Retry(func() error {
 		var err error
 		latestBlock, err = cs.chainClient.GetLatestBlock(ctx)
 		return err
@@ -157,9 +154,9 @@ func splitBlocks(start, end, chunkSize int64) []chunkRange {
 func (cs *ChainSyncer) getCreditsForRange(ctx context.Context, start, end int64) ([]*balances.Credit, error) {
 	var deposits []*types.DepositEvent
 
-	err := cs.retrier.Retry(ctx, func(ctx context.Context, ctr escrow.EscrowContract) error {
+	err := retry.Retry(func() error {
 		var err error
-		deposits, err = ctr.GetDeposits(ctx, start, end, cs.receiverAddress)
+		deposits, err = cs.escrowContract.GetDeposits(ctx, start, end, cs.receiverAddress)
 		return err
 	})
 	if err != nil {
