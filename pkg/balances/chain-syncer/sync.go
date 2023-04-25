@@ -6,17 +6,11 @@ import (
 	"kwil/pkg/balances"
 	"kwil/pkg/chain/contracts"
 	"kwil/pkg/chain/contracts/escrow"
-<<<<<<< HEAD
-	provider "kwil/pkg/chain/provider/dto"
-	chainCodes "kwil/pkg/chain/types"
-	"kwil/pkg/log"
-=======
 	"kwil/pkg/chain/contracts/escrow/types"
 	provider "kwil/pkg/chain/provider/dto"
 	chainCodes "kwil/pkg/chain/types"
 	"kwil/pkg/log"
 	"kwil/pkg/utils/retry"
->>>>>>> dev
 	"math/big"
 	"time"
 
@@ -55,12 +49,9 @@ type ChainSyncer struct {
 	// receiverAddress is the address of the deposit receiver
 	// this will almost always be the address of the node's wallet
 	receiverAddress string
-<<<<<<< HEAD
-=======
 
 	// retrier is the retrier that is used to retry failed queries
 	retrier *retry.Retrier[escrow.EscrowContract]
->>>>>>> dev
 }
 
 type accountRepository interface {
@@ -85,11 +76,7 @@ func (cs *ChainSyncer) Start(ctx context.Context) error {
 		return err
 	}
 
-<<<<<<< HEAD
-	latestBlock, err := cs.chainClient.GetLatestBlock(ctx)
-=======
 	latestBlock, err := cs.getLatestBlockFromChain(ctx)
->>>>>>> dev
 	if err != nil {
 		return err
 	}
@@ -109,8 +96,6 @@ func (cs *ChainSyncer) Start(ctx context.Context) error {
 	return cs.listen(ctx)
 }
 
-<<<<<<< HEAD
-=======
 // getLatestBlockFromChain retrieves the latest block from the chain.
 func (cs *ChainSyncer) getLatestBlockFromChain(ctx context.Context) (*provider.Header, error) {
 	var latestBlock *provider.Header
@@ -127,7 +112,6 @@ func (cs *ChainSyncer) getLatestBlockFromChain(ctx context.Context) (*provider.H
 	return latestBlock, nil
 }
 
->>>>>>> dev
 // getLastHeight retrieves the last synced height from the account repository
 func (cs *ChainSyncer) getLastHeight() (int64, error) {
 	return cs.accountRepository.GetHeight(cs.chainCode.Int32())
@@ -170,10 +154,6 @@ func splitBlocks(start, end, chunkSize int64) []chunkRange {
 }
 
 // getCreditsForRange retrieves all deposits for a given range of blocks, and returns them as credits
-<<<<<<< HEAD
-func (cs *ChainSyncer) getCreditsForRange(start, end int64) ([]*balances.Credit, error) {
-	deposits, err := cs.escrowContract.GetDeposits(context.Background(), start, end, cs.receiverAddress)
-=======
 func (cs *ChainSyncer) getCreditsForRange(ctx context.Context, start, end int64) ([]*balances.Credit, error) {
 	var deposits []*types.DepositEvent
 
@@ -182,7 +162,6 @@ func (cs *ChainSyncer) getCreditsForRange(ctx context.Context, start, end int64)
 		deposits, err = ctr.GetDeposits(ctx, start, end, cs.receiverAddress)
 		return err
 	})
->>>>>>> dev
 	if err != nil {
 		return nil, err
 	}
@@ -211,11 +190,7 @@ func (cs *ChainSyncer) syncChunk(ctx context.Context, chunk chunkRange) error {
 
 	cs.log.Debug("Syncing chunk", zap.Int64("start", chunk[0]), zap.Int64("end", chunk[1]))
 
-<<<<<<< HEAD
-	credits, err := cs.getCreditsForRange(chunk[0], chunk[1])
-=======
 	credits, err := cs.getCreditsForRange(ctx, chunk[0], chunk[1])
->>>>>>> dev
 	if err != nil {
 		return err
 	}
@@ -255,11 +230,7 @@ func (cs *ChainSyncer) listen(ctx context.Context) error {
 			case block := <-blockChan:
 				cs.log.Debug("Received block", zap.Int64("block", block))
 
-<<<<<<< HEAD
-				credits, err := cs.getCreditsForRange(block, block)
-=======
 				credits, err := cs.getCreditsForRange(ctx, block, block)
->>>>>>> dev
 				if err != nil {
 					cs.log.Error("Failed to get credits for block", zap.Int64("block", block), zap.Error(err))
 					return

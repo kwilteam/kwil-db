@@ -36,10 +36,6 @@ func (s *Server) Start(ctx context.Context) error {
 	}()
 
 	s.Log.Info("starting server...")
-<<<<<<< HEAD
-=======
-	s.Log.Info("using new retry version")
->>>>>>> dev
 
 	// graceful shutdown when receive signal
 	gracefulShutdown := make(chan os.Signal, 1)
