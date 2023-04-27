@@ -1,4 +1,4 @@
-package types
+package sql_parser
 
 type ActionContext map[string]any
 type TableContext struct {

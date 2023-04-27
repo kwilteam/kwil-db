@@ -66,7 +66,7 @@ func TestAst_Generate(t *testing.T) {
 				t.Errorf("Parse() got error: %s", err)
 			}
 
-			got := a.Generate()
+			got := a.GenerateJson()
 			want := getGoldenFile(t, got, t.Name()+".golden")
 			if !bytes.Equal(got, want) {
 				t.Errorf("Generate() = %v,\n            want       = %v", got, want)

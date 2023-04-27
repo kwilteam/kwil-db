@@ -18,7 +18,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * Project : sql-parser; an ANTLR4 grammar for SQLite https://github.com/bkiers/sql-parser
+ * Project : sqlite-parser; an ANTLR4 grammar for SQLite https://github.com/bkiers/sqlite-parser
  * Developed by : Bart Kiers, bart@big-o.nl
  */
 
@@ -54,7 +54,7 @@ EQ:        '==';
 NOT_EQ1:   '!=';
 NOT_EQ2:   '<>';
 
-// http://www.sql.org/lang_keywords.html
+// http://www.sqlite.org/lang_keywords.html
 ABORT_:             'ABORT';
 ACTION_:            'ACTION';
 ADD_:               'ADD';

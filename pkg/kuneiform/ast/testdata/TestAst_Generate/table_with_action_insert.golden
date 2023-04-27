@@ -17,8 +17,7 @@
           "name": "email",
           "type": 102
         }
-      ],
-      "indexes": []
+      ]
     }
   ],
   "actions": [

@@ -1,4 +1,4 @@
-package sql
+package sql_parser
 
 import (
 	"errors"
@@ -10,7 +10,11 @@ const (
 )
 
 var (
-	ErrSyntax                          = errors.New("syntax error")
+	ErrSyntax                = errors.New("syntax error")
+	ErrAmbiguity             = errors.New("ambiguity error")
+	ErrAttemptingFullContext = errors.New("attempting full context")
+	ErrContextSensitivity    = errors.New("context sensitivity")
+
 	ErrTableNotFound                   = errors.New("table not found")
 	ErrColumnNotFound                  = errors.New("column not found")
 	ErrCreateTableNotSupported         = errors.New("create table is not supported")

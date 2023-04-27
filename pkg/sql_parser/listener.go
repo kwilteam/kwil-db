@@ -1,13 +1,13 @@
-package sql
+package sql_parser
 
 import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"github.com/kwilteam/kwil-db/internal/pkg/kl/types"
 	"github.com/kwilteam/kwil-db/internal/pkg/sqlite"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/scanner"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"github.com/pkg/errors"
+
 	"strings"
 	"sync"
 )
@@ -87,12 +87,18 @@ func KlSQLInit() {
 	banData.once.Do(banDataInit)
 }
 
-type errorHandler struct {
+type ErrorHandler struct {
 	CurLine int
 	Errors  scanner.ErrorList
 }
 
-func (eh *errorHandler) Add(column int, err error) {
+func NewErrorHandler(currentLine int) *ErrorHandler {
+	return &ErrorHandler{
+		CurLine: currentLine,
+	}
+}
+
+func (eh *ErrorHandler) Add(column int, err error) {
 	eh.Errors.Add(token.Position{
 		Line:   token.Pos(eh.CurLine),
 		Column: token.Pos(column),
@@ -101,19 +107,50 @@ func (eh *errorHandler) Add(column int, err error) {
 
 type sqliteErrorListener struct {
 	*antlr.DefaultErrorListener
-	*errorHandler
+	*ErrorHandler
+
+	symbol string
+}
+
+func newSqliteErrorListener(eh *ErrorHandler) *sqliteErrorListener {
+	return &sqliteErrorListener{
+		ErrorHandler: eh,
+		symbol:       "",
+	}
 }
 
 func (s *sqliteErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol interface{}, line, column int, msg string, e antlr.RecognitionException) {
-	s.errorHandler.Add(column, errors.Wrap(ErrSyntax, msg))
+	symbol := offendingSymbol.(antlr.Token)
+	if s.symbol == "" {
+		s.symbol = symbol.GetText()
+	}
+	// calculate relative line number
+	relativeLine := line - 1
+	defer func() {
+		s.ErrorHandler.CurLine -= relativeLine
+	}()
+	s.ErrorHandler.CurLine += relativeLine
+	s.ErrorHandler.Add(column, errors.Wrap(ErrSyntax, msg))
+}
+
+func (s *sqliteErrorListener) ReportAmbiguity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex int, exact bool, ambigAlts *antlr.BitSet, configs antlr.ATNConfigSet) {
+	//s.ErrorHandler.Add(startIndex, errors.Wrap(ErrAmbiguity, "ambiguity"))
+}
+
+func (s *sqliteErrorListener) ReportAttemptingFullContext(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex int, conflictingAlts *antlr.BitSet, configs antlr.ATNConfigSet) {
+	//s.ErrorHandler.Add(startIndex, errors.Wrap(ErrAttemptingFullContext, "attempting full context"))
+}
+
+func (s *sqliteErrorListener) ReportContextSensitivity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex, prediction int, configs antlr.ATNConfigSet) {
+	//s.ErrorHandler.Add(startIndex, errors.Wrap(ErrContextSensitivity, "context sensitivity"))
 }
 
 type KlSqliteListener struct {
 	*sqlite.BaseSQLiteParserListener
-	*errorHandler
+	*ErrorHandler
 
-	actionCtx types.ActionContext
-	dbCtx     types.DatabaseContext
+	actionCtx ActionContext
+	dbCtx     DatabaseContext
 
 	trace bool
 
@@ -143,9 +180,9 @@ func WithTrace() KlSqliteListenerOption {
 	}
 }
 
-func NewKlSqliteListener(eh *errorHandler, actionName string, ctx types.DatabaseContext, opts ...KlSqliteListenerOption) *KlSqliteListener {
+func NewKlSqliteListener(eh *ErrorHandler, actionName string, ctx DatabaseContext, opts ...KlSqliteListenerOption) *KlSqliteListener {
 
-	k := &KlSqliteListener{errorHandler: eh, actionCtx: ctx.Actions[actionName], dbCtx: ctx}
+	k := &KlSqliteListener{ErrorHandler: eh, actionCtx: ctx.Actions[actionName], dbCtx: ctx}
 	for _, opt := range opts {
 		opt(k)
 	}
@@ -250,7 +287,7 @@ func (tl *KlSqliteListener) banFunction(ctx *sqlite.ExprContext) {
 		}
 		if argMatch {
 			tok := ctx.GetStart()
-			tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrFunctionNotSupported, fnName))
+			tl.ErrorHandler.Add(tok.GetColumn(), errors.Wrap(ErrFunctionNotSupported, fnName))
 		}
 	}
 }
@@ -277,7 +314,7 @@ func (tl *KlSqliteListener) EnterTable_name(ctx *sqlite.Table_nameContext) {
 	name := ctx.GetText()
 	if _, ok := tl.dbCtx.Tables[name]; !ok {
 		tok := ctx.GetStart()
-		tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrTableNotFound, name))
+		tl.ErrorHandler.Add(tok.GetColumn(), errors.Wrap(ErrTableNotFound, name))
 	}
 }
 
@@ -300,7 +337,7 @@ func (tl *KlSqliteListener) EnterCommon_table_expression(ctx *sqlite.Common_tabl
 	table := ctx.Table_name().GetText()
 
 	// support table alias
-	tl.dbCtx.Tables[table] = types.TableContext{}
+	tl.dbCtx.Tables[table] = TableContext{}
 }
 
 func (tl *KlSqliteListener) EnterSelect_stmt(ctx *sqlite.Select_stmtContext) {
@@ -324,7 +361,7 @@ func (tl *KlSqliteListener) EnterSelect_core(ctx *sqlite.Select_coreContext) {
 	}
 
 	if tbs > 1 {
-		tl.errorHandler.Add(0, ErrSelectFromMultipleTables)
+		tl.ErrorHandler.Add(0, ErrSelectFromMultipleTables)
 	}
 }
 
@@ -334,7 +371,7 @@ func (tl *KlSqliteListener) EnterCreate_table_stmt(ctx *sqlite.Create_table_stmt
 	}
 
 	tok := ctx.GetStart()
-	tl.errorHandler.Add(tok.GetColumn(), ErrCreateTableNotSupported)
+	tl.ErrorHandler.Add(tok.GetColumn(), ErrCreateTableNotSupported)
 }
 
 func (tl *KlSqliteListener) EnterCreate_index_stmt(ctx *sqlite.Create_index_stmtContext) {
@@ -343,7 +380,7 @@ func (tl *KlSqliteListener) EnterCreate_index_stmt(ctx *sqlite.Create_index_stmt
 	}
 
 	tok := ctx.GetStart()
-	tl.errorHandler.Add(tok.GetColumn(), ErrCreateIndexNotSupported)
+	tl.ErrorHandler.Add(tok.GetColumn(), ErrCreateIndexNotSupported)
 }
 
 func (tl *KlSqliteListener) EnterCreate_trigger_stmt(ctx *sqlite.Create_trigger_stmtContext) {
@@ -352,7 +389,7 @@ func (tl *KlSqliteListener) EnterCreate_trigger_stmt(ctx *sqlite.Create_trigger_
 	}
 
 	tok := ctx.GetStart()
-	tl.errorHandler.Add(tok.GetColumn(), ErrCreateTriggerNotSupported)
+	tl.ErrorHandler.Add(tok.GetColumn(), ErrCreateTriggerNotSupported)
 }
 
 func (tl *KlSqliteListener) EnterCreate_view_stmt(ctx *sqlite.Create_view_stmtContext) {
@@ -361,7 +398,7 @@ func (tl *KlSqliteListener) EnterCreate_view_stmt(ctx *sqlite.Create_view_stmtCo
 	}
 
 	tok := ctx.GetStart()
-	tl.errorHandler.Add(tok.GetColumn(), ErrCreateViewNotSupported)
+	tl.ErrorHandler.Add(tok.GetColumn(), ErrCreateViewNotSupported)
 }
 
 func (tl *KlSqliteListener) EnterCreate_virtual_table_stmt(ctx *sqlite.Create_virtual_table_stmtContext) {
@@ -370,7 +407,7 @@ func (tl *KlSqliteListener) EnterCreate_virtual_table_stmt(ctx *sqlite.Create_vi
 	}
 
 	tok := ctx.GetStart()
-	tl.errorHandler.Add(tok.GetColumn(), ErrCreateVirtualTableNotSupported)
+	tl.ErrorHandler.Add(tok.GetColumn(), ErrCreateVirtualTableNotSupported)
 }
 
 func (tl *KlSqliteListener) EnterDrop_stmt(ctx *sqlite.Drop_stmtContext) {
@@ -379,7 +416,7 @@ func (tl *KlSqliteListener) EnterDrop_stmt(ctx *sqlite.Drop_stmtContext) {
 	}
 
 	tok := ctx.GetStart()
-	tl.errorHandler.Add(tok.GetColumn(), ErrDropTableNotSupported)
+	tl.ErrorHandler.Add(tok.GetColumn(), ErrDropTableNotSupported)
 }
 
 func (tl *KlSqliteListener) EnterAlter_table_stmt(ctx *sqlite.Alter_table_stmtContext) {
@@ -388,7 +425,7 @@ func (tl *KlSqliteListener) EnterAlter_table_stmt(ctx *sqlite.Alter_table_stmtCo
 	}
 
 	tok := ctx.GetStart()
-	tl.errorHandler.Add(tok.GetColumn(), ErrAlterTableNotSupported)
+	tl.ErrorHandler.Add(tok.GetColumn(), ErrAlterTableNotSupported)
 }
 
 func (tl *KlSqliteListener) EnterInsert_stmt(ctx *sqlite.Insert_stmtContext) {
@@ -463,12 +500,12 @@ func (tl *KlSqliteListener) ExitJoin_clause(ctx *sqlite.Join_clauseContext) {
 
 	if tl.joinOpCnt > JoinCountAllowed {
 		tok := ctx.GetStart()
-		tl.errorHandler.Add(tok.GetColumn(), ErrMultiJoinNotSupported)
+		tl.ErrorHandler.Add(tok.GetColumn(), ErrMultiJoinNotSupported)
 	}
 
 	if tl.joinConsCnt == 0 {
 		tok := ctx.GetStart()
-		tl.errorHandler.Add(tok.GetColumn(), ErrJoinWithoutCondition)
+		tl.ErrorHandler.Add(tok.GetColumn(), ErrJoinWithoutCondition)
 	}
 }
 
@@ -491,7 +528,7 @@ func (tl *KlSqliteListener) EnterJoin_constraint(ctx *sqlite.Join_constraintCont
 	tt := strings.ToLower(op.GetText())
 	// TODO: support "using"
 	if tt == "using" {
-		tl.errorHandler.Add(op.GetColumn(), ErrJoinUsingNotSupported)
+		tl.ErrorHandler.Add(op.GetColumn(), ErrJoinUsingNotSupported)
 		return
 	}
 
@@ -556,23 +593,23 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 				// refer to action parameter
 				p := param
 				if _, ok := tl.actionCtx[p]; !ok {
-					tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrBindParameterNotFound, p))
+					tl.ErrorHandler.Add(tok.GetColumn(), errors.Wrap(ErrBindParameterNotFound, p))
 				}
 			case ModifierPrefix:
 				// refer to modifier
 				p := paramName
 				if _, ok := Modifiers[Modifier(p)]; !ok {
-					tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrModifierNotSupported, p))
+					tl.ErrorHandler.Add(tok.GetColumn(), errors.Wrap(ErrModifierNotSupported, p))
 				}
 			default:
-				tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrBindParameterPrefixNotSupported, paramPrefix))
+				tl.ErrorHandler.Add(tok.GetColumn(), errors.Wrap(ErrBindParameterPrefixNotSupported, paramPrefix))
 			}
 		}
 	case 2:
 		// unary op
 		op := ctx.GetStart()
 		if tl.inJoinCons() {
-			tl.errorHandler.Add(op.GetColumn(), errors.Wrap(ErrJoinConditionOpNotSupported, "unary"))
+			tl.ErrorHandler.Add(op.GetColumn(), errors.Wrap(ErrJoinConditionOpNotSupported, "unary"))
 		}
 	default:
 		first := ctx.GetChild(0)
@@ -588,7 +625,7 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 				columnName := cds[2].(*sqlite.Column_nameContext).GetText()
 
 				if _, ok := tl.dbCtx.Tables[tableName]; !ok {
-					tl.errorHandler.Add(operator.GetColumn(), errors.Wrap(ErrTableNotFound, tableName))
+					tl.ErrorHandler.Add(operator.GetColumn(), errors.Wrap(ErrTableNotFound, tableName))
 					return
 				}
 
@@ -600,7 +637,7 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 					}
 				}
 				if !found {
-					tl.errorHandler.Add(operator.GetColumn(),
+					tl.ErrorHandler.Add(operator.GetColumn(),
 						errors.Wrap(ErrColumnNotFound, fmt.Sprintf("%s.%s", tableName, columnName)))
 					return
 				}
@@ -609,7 +646,7 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 
 		if tl.inJoinCons() {
 			if isFn {
-				tl.errorHandler.Add(ctx.GetStart().GetColumn(), errors.Wrap(ErrJoinConditionFuncNotSupported, fnExpr.GetText()))
+				tl.ErrorHandler.Add(ctx.GetStart().GetColumn(), errors.Wrap(ErrJoinConditionFuncNotSupported, fnExpr.GetText()))
 				return
 			}
 
@@ -624,7 +661,7 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 			leftExpr, leftIsExpr := cds[0].(*sqlite.ExprContext)
 			rightExpr, rightIsExpr := cds[2].(*sqlite.ExprContext)
 			if tl.joinOnExprTooDeep() && (leftIsExpr || rightIsExpr) {
-				tl.errorHandler.Add(ctx.GetStart().GetColumn(), errors.Wrap(ErrJoinConditionTooDeep, ctx.GetText()))
+				tl.ErrorHandler.Add(ctx.GetStart().GetColumn(), errors.Wrap(ErrJoinConditionTooDeep, ctx.GetText()))
 				return
 			}
 
@@ -632,13 +669,13 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 			opName := strings.ToLower(operator.GetText())
 
 			if _, ok := klStaticData.allowedJoinOps[opName]; !ok {
-				tl.errorHandler.Add(operator.GetColumn(), errors.Wrap(ErrJoinConditionOpNotSupported, opName))
+				tl.ErrorHandler.Add(operator.GetColumn(), errors.Wrap(ErrJoinConditionOpNotSupported, opName))
 				return
 			}
 
 			if leftIsExpr && rightIsExpr {
 				if localEval(opName, leftExpr.GetText(), rightExpr.GetText()) {
-					tl.errorHandler.Add(operator.GetColumn(), errors.Wrap(ErrJoinWithTrueCondition, opName))
+					tl.ErrorHandler.Add(operator.GetColumn(), errors.Wrap(ErrJoinWithTrueCondition, opName))
 					return
 				}
 			}
@@ -653,11 +690,13 @@ func (tl *KlSqliteListener) EnterLiteral_value(ctx *sqlite.Literal_valueContext)
 		fmt.Println("EnterLiteral_value", ctx.GetText())
 	}
 
+	ctx.TRUE_()
+
 	name := ctx.GetText()
 	name = strings.ToLower(name)
 	if _, ok := klStaticData.banKeywords[name]; ok {
 		tok := ctx.GetStart()
-		tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrKeywordNotSupported, name))
+		tl.ErrorHandler.Add(tok.GetColumn(), errors.Wrap(ErrKeywordNotSupported, name))
 		return
 	}
 
@@ -690,6 +729,12 @@ func (tl *KlSqliteListener) ExitJoin_operator(ctx *sqlite.Join_operatorContext) 
 	tok := ctx.GetStart()
 	name := strings.ToLower(tok.GetText())
 	if _, ok := klStaticData.banJoins[name]; ok {
-		tl.errorHandler.Add(tok.GetColumn(), errors.Wrap(ErrJoinNotSupported, name))
+		tl.ErrorHandler.Add(tok.GetColumn(), errors.Wrap(ErrJoinNotSupported, name))
+	}
+}
+
+func (tl *KlSqliteListener) EnterAny_name(ctx *sqlite.Any_nameContext) {
+	if tl.trace {
+		fmt.Println("enter AnyName ", ctx.GetText())
 	}
 }

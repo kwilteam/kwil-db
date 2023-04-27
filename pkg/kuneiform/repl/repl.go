@@ -32,7 +32,7 @@ func Start(in io.Reader, out io.Writer) {
 			fmt.Fprintf(out, "ERROR: %s\n", err)
 			continue
 		}
-		r := string(a.Generate())
+		r := string(a.GenerateJson())
 		fmt.Fprintf(out, "<< \n%s\n", r)
 	}
 }
