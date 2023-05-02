@@ -88,6 +88,7 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.ExecutePermissionedActionSpecification(ctx, t, secondDriver)
 
 			// and user should be able to drop database
+			specifications.DatabaseDropSpecification(ctx, t, driver)
 			close(done)
 		})
 	}
