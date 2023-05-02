@@ -42,7 +42,7 @@ jobs:
 
       - name: Compile Protobuf
         run: |
-          task pb:compile:all
+          task pb:compile:v1
 
       - name: configure variables
         id: config

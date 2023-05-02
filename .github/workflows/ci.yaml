@@ -49,7 +49,7 @@ jobs:
 
       - name: Compile Protobuf
         run: |
-          task pb:compile:all
+          task pb:compile:v1
 
       - name: Build kwil-cli
         run: |
