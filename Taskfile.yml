@@ -7,30 +7,29 @@ includes:
 tasks:
   default:
     cmds:
-      - task: build
+      - task -l
 
-  deps:
+  install:deps:
     desc: Install tools required to build this app
     cmds:
       - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
 
   build:
-    desc: Builds the project
+    desc: Build cli & kwild
     cmds:
       - task: build:cli
       - task: build:kwild
-      - task: build:gateway
 
   build:cli:
-    desc: Builds the kwil-cli
+    desc: Build kwil-cli
     cmds:
       - ./scripts/build/binary kwil-cli
     generates:
       - .build/kwil-cli
 
   build:kwild:
-    desc: Builds the kwil grpc server
-    deps: [pb:compile:all]
+    desc: Builds kwild server
+    deps: [pb:compile:v1]
     cmds:
       - ./scripts/build/binary kwild
     generates:
@@ -38,6 +37,7 @@ tasks:
 
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs
+    internal: true
     cmds:
       - abigen --abi ./pkg/chain/contracts/escrow/evm/abi/escrow.json --bin ./pkg/chain/contracts/escrow/evm/abi/escrow.bin --pkg abi --type Escrow --out ./pkg/chain/contracts/escrow/evm/abi/escrow.go
       - abigen --abi ./pkg/chain/contracts/token/evm/abi/erc20.json --bin ./pkg/chain/contracts/token/evm/abi/erc20.bin --pkg abi --type Erc20 --out ./pkg/chain/contracts/token/evm/abi/erc20.go
@@ -48,76 +48,11 @@ tasks:
       - pkg/chain/contracts/*/evm/abi/*.go
 
   # ************ docker ************
-  docker:gateway:
-    desc: Build the docker image for kwil-gateway
-    deps: [pb:compile:all]
-    cmds:
-      - ./scripts/build/docker kwil-gateway
-
   docker:kwild:
     desc: Build the docker image for the kwild
-    deps: [ pb:compile:all ]
+    deps: [ pb:compile:v1 ]
     cmds:
       - ./scripts/build/docker kwild
-
-  #  ************ k8s ************
-  # have dependencies on docker:kwild and docker:kwil, can't put this section in deployments/helm/Taskfile.yaml
-  k8s:helm:update:
-    desc: Update the helm charts
-    cmds:
-      - rm -rf deployments/helm/kwild/charts
-      - rm -rf deployments/helm/kwil/charts
-      - helm dependency update deployments/helm/hasura
-      - helm dependency update deployments/helm/kwild
-      - helm dependency update deployments/helm/kwil
-    sources:
-      - deployments/helm/**/*.yaml
-      - deployments/helm/**/*.tpl
-    generates:
-      - deployments/helm/hasura/charts/*.tgz
-      - deployments/helm/kwild/charts/*.tgz
-      - deployments/helm/kwil/charts/*.tgz
-
-  k8s:kwil:
-    desc: Build and deploy kwil services to local k8s cluster
-    cmds:
-      - task: k8s:helm:update
-      - task: pb:compile:all
-      - task: docker:kwild
-      - task: docker:gateway
-      - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/local-values.yaml
-
-  k8s:kwil:install:
-    desc: Deploy kwil services to local k8s cluster
-    deps:
-      - k8s:helm:update
-    cmds:
-      - helm install kwil deployments/helm/kwil -f deployments/helm/kwil/local-values.yaml
-
-  k8s:kwil:uninstall:
-    desc: Undploy kwil services to local k8s cluster
-    cmds:
-      - helm uninstall kwil
-
-  k8s:kwild:
-    desc: Build and deploy kwil to local k8s cluster
-    cmds:
-      - task: k8s:helm:update
-      - task: pb:compile:all
-      - task: docker:kwild
-      - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/local-values.yaml
-
-  k8s:kwild:install:
-    desc: Deploy kwil to local k8s cluster
-    deps:
-      - k8s:helm:update
-    cmds:
-      - helm install kwild deployments/helm/kwild -f deployments/helm/kwild/local-values.yaml
-
-  k8s:kwild:uninstall:
-    desc: Undeploy kwild to local k8s cluster
-    cmds:
-      - helm uninstall kwild
 
   # ************ dev ************
   dev:up:

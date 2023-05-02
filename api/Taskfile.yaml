@@ -3,12 +3,13 @@ version: '3'
 tasks:
   update:
     desc: Updates protobuf git submodules
+    internal: true
     cmds:
       - git submodule update --remote
 
-  ## Compile all protobufs
-  compile:all:
-    desc: Compiles all protobufs
+  compile:v0:
+    desc: Compiles v0 protobuf
+    internal: true
     deps: [update]
     # TODO: enforce after github action supprort new versionning scheme
     #    version above 3.21 is not supported by github actions,
@@ -30,7 +31,7 @@ tasks:
       - api/openapi-spec/api/v0/api.swagger.json
 
   compile:v1:
-    desc: Compiles all protobufs
+    desc: Compiles v1 protobuf
     deps: [update]
     cmds:
       - |
