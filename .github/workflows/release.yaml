@@ -38,7 +38,7 @@ jobs:
         run: |
           go version
           go mod download
-          task deps
+          task install:deps
 
       - name: Compile Protobuf
         run: |
