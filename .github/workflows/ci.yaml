@@ -95,32 +95,6 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      - name: Cache Docker layers for kwil-gateway
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache-kgw
-          #key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
-          key: ${{ runner.os }}-buildx-kgw
-          restore-keys: |
-            ${{ runner.os }}-buildx-kgw
-
-      - name: Build kwil-gateway image
-        id: docker_build_kgw
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          load: true
-          builder: ${{ steps.buildx.outputs.name }}
-          build-args: |
-            git_commit=${{ github.sha }}
-            version=${{ env.GIT_TAG }}
-            build_time=${{ env.BUILD_TIME }}
-          file: ./build/package/docker/kwil-gateway.dockerfile
-          push: false
-          tags: kwil-gateway:latest
-          cache-from: type=local,src=/tmp/.buildx-cache-kgw
-          cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
-
       - name: Run acceptance test
         run: |
           go test ./test/acceptance/ -v
@@ -129,5 +103,3 @@ jobs:
         run: |
           rm -rf /tmp/.buildx-cache-kwild
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
-          rm -rf /tmp/.buildx-cache-kgw
-          mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw

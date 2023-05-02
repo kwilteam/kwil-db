@@ -99,38 +99,10 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      - name: Cache Docker layers for KG
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache-kgw
-          #key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
-          key: ${{ runner.os }}-buildx-kgw
-          restore-keys: |
-            ${{ runner.os }}-buildx-kgw
-
-      - name: Build & push KG image
-        id: docker_build_kgw
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          builder: ${{ steps.buildx.outputs.name }}
-          build-args: |
-            git_commit=${{ github.sha }}
-            version=${{ env.GIT_TAG }}
-            build_time=${{ env.BUILD_TIME }}
-          file: ./build/package/docker/kwil-gateway.dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_KWIL_GATEWAY_ECR }}:${{ env.GIT_TAG }}
-          cache-from: type=local,src=/tmp/.buildx-cache-kgw
-          cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
-
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache-kwild
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
-          rm -rf /tmp/.buildx-cache-kgw
-          mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
 
   deploy-to-eks:
     name: Deploy to DEV cluster
