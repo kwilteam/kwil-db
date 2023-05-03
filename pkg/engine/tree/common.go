@@ -1,7 +1,5 @@
 package tree
 
-type Alias struct{}
-
 type ReturningClause struct{}
 
 type CTE struct {

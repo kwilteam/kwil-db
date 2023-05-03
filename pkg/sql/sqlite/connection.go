@@ -6,7 +6,6 @@ import (
 	"kwil/pkg/log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/kwilteam/go-sqlite"
@@ -15,29 +14,30 @@ import (
 )
 
 type Connection struct {
-	conn            *sqlite.Conn
-	mu              *sync.Mutex // mutex to protect the write connection
-	globalVariables []*GlobalVariable
-	log             log.Logger
-	path            string
-	readPool        *sqlitex.Pool
-	poolSize        int
-	flags           sqlite.OpenFlags
-	isMemory        bool
-	name            string
+	conn              *sqlite.Conn
+	mu                lockable // mutex to protect the write connection, using an interface to allow for nil mutex
+	log               log.Logger
+	path              string
+	readPool          *sqlitex.Pool
+	poolSize          int
+	flags             sqlite.OpenFlags
+	isMemory          bool
+	name              string
+	globalVariableMap map[string]any
 }
 
 func OpenConn(name string, opts ...ConnectionOption) (*Connection, error) {
 	connection := &Connection{
-		log:      log.NewNoOp(),
-		mu:       &sync.Mutex{},
-		path:     DefaultPath,
-		name:     name,
-		poolSize: 10,
-		conn:     nil,
-		readPool: nil,
-		isMemory: false,
-		flags:    sqlite.OpenWAL,
+		log:               log.NewNoOp(),
+		mu:                &sync.Mutex{},
+		path:              DefaultPath,
+		name:              name,
+		poolSize:          10,
+		conn:              nil,
+		readPool:          nil,
+		isMemory:          false,
+		flags:             sqlite.OpenWAL,
+		globalVariableMap: map[string]any{},
 	}
 	for _, opt := range opts {
 		opt(connection)
@@ -92,6 +92,7 @@ func (c *Connection) mkPathDir() error {
 }
 
 // execute executes a statement on the write connection.
+// this should really only be used for DDL statements or pragmas.
 // dml statements should use prepared statements instead unless they are one-offs.
 // this method is intentionally barebones to prevent misuse.
 func (c *Connection) Execute(stmt string) error {
@@ -176,11 +177,11 @@ func (c *Connection) prepareRead(ctx context.Context, statement string) (stmt *S
 	}
 
 	if trailingBytes > 0 {
-		deferFunc()
+		c.readPool.Put(readConn)
 		return nil, deferFunc, fmt.Errorf("trailing bytes after statement: %q", trailingBytes)
 	}
 
-	return newStatement(c, innerStmt), deferFunc, nil
+	return c.newReadOnlyStatement(readConn, innerStmt), deferFunc, nil
 }
 
 // Query executes a read-only query against the database.
@@ -188,7 +189,7 @@ func (c *Connection) prepareRead(ctx context.Context, statement string) (stmt *S
 // to manually handle each result in between Step() calls, and a struct to store the results in.
 // All of these are optional, and if not provided, the function will return an error
 func (c *Connection) Query(ctx context.Context, statement string, opts *ExecOpts) error {
-	if c.conn == nil {
+	if c.readPool == nil {
 		return fmt.Errorf("connection is nil")
 	}
 	if opts == nil {
@@ -201,6 +202,7 @@ func (c *Connection) Query(ctx context.Context, statement string, opts *ExecOpts
 	err := c.query(ctx, statement, opts)
 	if err != nil {
 		c.log.Error("failed to execute query", zap.Error(err))
+		return err
 	}
 
 	return nil
@@ -215,7 +217,7 @@ func (c *Connection) query(ctx context.Context, statement string, opts *ExecOpts
 	}
 	defer deferFunc()
 
-	return stmt.Execute(opts)
+	return stmt.execute(opts)
 }
 
 func (c *Connection) CheckpointWal() error {
@@ -238,13 +240,6 @@ func (c *Connection) DisableForeignKey() error {
 
 	return c.execute(sqlDisableFK)
 }
-
-/*
-func (c *Connection) TableExistsW(ctx context.Context, tableName string) (bool, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-}*/
 
 func (c *Connection) ListTables(ctx context.Context) ([]string, error) {
 	tables := make([]string, 0)
@@ -342,18 +337,37 @@ func deleteIfExists(path string) error {
 	return os.Remove(path)
 }
 
-func trimPadding(s string) string {
-	ss := strings.TrimSpace(s)
-	return ss
-}
-
 type ResultSet struct {
 	Rows    [][]any  `json:"rows"`
 	Columns []string `json:"columns"`
 	index   int
 }
 
+// Next increments the row index by 1 and returns true if there is another row in the result set
 func (r *ResultSet) Next() bool {
 	r.index++
 	return r.index < len(r.Rows)
+}
+
+// GetColumn returns the value of the column at the given index
+func (r *ResultSet) GetColumn(name string) any {
+	for i, col := range r.Columns {
+		if col == name {
+			return r.Rows[r.index][i]
+		}
+	}
+	return nil
+}
+
+func (r *ResultSet) GetRecord() map[string]any {
+	record := make(map[string]any)
+	for i, col := range r.Columns {
+		record[col] = r.Rows[r.index][i]
+	}
+	return record
+}
+
+// Reset resets the row index to -1
+func (r *ResultSet) Reset() {
+	r.index = -1
 }

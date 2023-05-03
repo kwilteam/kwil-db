@@ -26,10 +26,12 @@ type Savepoint struct {
 
 // With both Commit and Rollback, if the checkpoint fails, it doesn't matter
 
+// Commit commits the savepoint and releases it
 func (sp *Savepoint) Commit() error {
 	return sp.conn.Execute("RELEASE " + sp.saveName)
 }
 
+// CommitAndCheckpoint commits the savepoint, releases it, and checkpoints the WAL
 func (sp *Savepoint) CommitAndCheckpoint() error {
 	err := sp.Commit()
 	if err != nil {
@@ -39,6 +41,7 @@ func (sp *Savepoint) CommitAndCheckpoint() error {
 	return sp.conn.CheckpointWal()
 }
 
+// Rollback rolls back the savepoint and releases it
 func (sp *Savepoint) Rollback() error {
 	err := sp.conn.Execute("ROLLBACK TO " + sp.saveName)
 	if err != nil {

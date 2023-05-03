@@ -5,6 +5,18 @@ import (
 	"strings"
 )
 
+func printTableAny(data []map[string]any) {
+	conv := make([]map[string]string, len(data))
+	for i, row := range data {
+		conv[i] = make(map[string]string)
+		for k, v := range row {
+			conv[i][k] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	printTable(conv)
+}
+
 func printTable(data []map[string]string) {
 	if len(data) == 0 {
 		fmt.Println("No data to display.")

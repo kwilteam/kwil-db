@@ -54,10 +54,6 @@ OR
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
 
-				for _, input := range inputs {
-					fmt.Printf("input: %s\n", input)
-				}
-
 				receipt, results, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
 				if err != nil {
 					return fmt.Errorf("error executing database: %w", err)
@@ -67,7 +63,7 @@ OR
 				display.PrintTxResponse(receipt)
 
 				// print the results
-				printActionResults(results)
+				printTableAny(results)
 
 				return nil
 			})
