@@ -10,26 +10,15 @@ import (
 	"go.uber.org/zap"
 )
 
-type Retrier[T any] struct {
-	val        T
+type retrier struct {
 	retrier    *backoff.Backoff
 	log        log.Logger
 	maxRetries int
+	ctx        context.Context
 }
 
-type retryMethod[T any] func(context.Context, T) error
-
-// New creates a new Retrier[T] with the given value and options.
-// Golang cannot infer the type of the options, so this must be declared specifically.
-// Example:
-//
-//	retrier := retry.New(strct,
-//		retry.WithFactor[*TestStruct](2),
-//		retry.WithMax[*TestStruct](time.Millisecond*5000),
-//	)
-func New[T any](val T, opts ...RetryOpt[T]) *Retrier[T] {
-	r := &Retrier[T]{
-		val: val,
+func Retry(fn func() error, opts ...RetryOpt) error {
+	ret := &retrier{
 		retrier: &backoff.Backoff{
 			Min:    1 * time.Second,
 			Max:    10 * time.Second,
@@ -38,43 +27,40 @@ func New[T any](val T, opts ...RetryOpt[T]) *Retrier[T] {
 		},
 		log:        log.NewNoOp(),
 		maxRetries: -1,
+		ctx:        context.Background(),
 	}
 
 	for _, opt := range opts {
-		opt(r)
+		opt(ret)
 	}
 
-	return r
-}
-
-func (r *Retrier[T]) Retry(ctx context.Context, method retryMethod[T]) error {
 	counter := 0
 	for {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-ret.ctx.Done():
+			return ret.ctx.Err()
 		default:
-			err := method(ctx, r.val)
+			err := fn()
 			if err == nil {
-				r.retrier.Reset()
+				ret.retrier.Reset()
 				return nil
 			}
 
 			counter++
-			r.log.Error("retrier: error occurred, retrying", zap.Error(err), zap.Int("retry_count", counter))
-			if r.exceedsMaxRetries(counter) {
-				r.retrier.Reset()
-				return fmt.Errorf("retrier: exceeded max retries (%d)", r.maxRetries)
+			ret.log.Error("retrier: error occurred, retrying", zap.Error(err), zap.Int("retry_count", counter))
+			if ret.exceedsMaxRetries(counter) {
+				ret.retrier.Reset()
+				return fmt.Errorf("retrier: exceeded max retries (%d)", ret.maxRetries)
 			}
 
-			time.Sleep(r.retrier.Duration())
+			time.Sleep(ret.retrier.Duration())
 		}
 	}
 }
 
-func (r *Retrier[T]) exceedsMaxRetries(retryNumber int) bool {
-	if r.maxRetries == -1 {
+func (ret *retrier) exceedsMaxRetries(retryNumber int) bool {
+	if ret.maxRetries == -1 {
 		return false
 	}
-	return retryNumber > r.maxRetries
+	return retryNumber > ret.maxRetries
 }

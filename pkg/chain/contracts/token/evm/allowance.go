@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func (c *contract) Allowance(owner, spender string) (*big.Int, error) {
+func (c *contract) Allowance(ctx context.Context, owner, spender string) (*big.Int, error) {
 	return c.ctr.Allowance(nil, common.HexToAddress(owner), common.HexToAddress(spender))
 }
 

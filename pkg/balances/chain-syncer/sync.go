@@ -6,11 +6,9 @@ import (
 	"kwil/pkg/balances"
 	"kwil/pkg/chain/contracts"
 	"kwil/pkg/chain/contracts/escrow"
-	"kwil/pkg/chain/contracts/escrow/types"
 	provider "kwil/pkg/chain/provider/dto"
 	chainCodes "kwil/pkg/chain/types"
 	"kwil/pkg/log"
-	"kwil/pkg/utils/retry"
 	"math/big"
 	"time"
 
@@ -49,9 +47,6 @@ type ChainSyncer struct {
 	// receiverAddress is the address of the deposit receiver
 	// this will almost always be the address of the node's wallet
 	receiverAddress string
-
-	// retrier is the retrier that is used to retry failed queries
-	retrier *retry.Retrier[escrow.EscrowContract]
 }
 
 type accountRepository interface {
@@ -76,7 +71,7 @@ func (cs *ChainSyncer) Start(ctx context.Context) error {
 		return err
 	}
 
-	latestBlock, err := cs.getLatestBlockFromChain(ctx)
+	latestBlock, err := cs.chainClient.GetLatestBlock(ctx)
 	if err != nil {
 		return err
 	}
@@ -94,22 +89,6 @@ func (cs *ChainSyncer) Start(ctx context.Context) error {
 	}
 
 	return cs.listen(ctx)
-}
-
-// getLatestBlockFromChain retrieves the latest block from the chain.
-func (cs *ChainSyncer) getLatestBlockFromChain(ctx context.Context) (*provider.Header, error) {
-	var latestBlock *provider.Header
-
-	err := cs.retrier.Retry(ctx, func(_ context.Context, _ escrow.EscrowContract) error {
-		var err error
-		latestBlock, err = cs.chainClient.GetLatestBlock(ctx)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return latestBlock, nil
 }
 
 // getLastHeight retrieves the last synced height from the account repository
@@ -155,13 +134,7 @@ func splitBlocks(start, end, chunkSize int64) []chunkRange {
 
 // getCreditsForRange retrieves all deposits for a given range of blocks, and returns them as credits
 func (cs *ChainSyncer) getCreditsForRange(ctx context.Context, start, end int64) ([]*balances.Credit, error) {
-	var deposits []*types.DepositEvent
-
-	err := cs.retrier.Retry(ctx, func(ctx context.Context, ctr escrow.EscrowContract) error {
-		var err error
-		deposits, err = ctr.GetDeposits(ctx, start, end, cs.receiverAddress)
-		return err
-	})
+	deposits, err := cs.escrowContract.GetDeposits(ctx, start, end, cs.receiverAddress)
 	if err != nil {
 		return nil, err
 	}

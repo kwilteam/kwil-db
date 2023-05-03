@@ -7,8 +7,8 @@ import (
 )
 
 type Contracter interface {
-	Escrow(address string) (escrow.EscrowContract, error)
-	Token(address string) (token.TokenContract, error)
+	Escrow(address string, opts ...escrow.EscrowOpts) (escrow.EscrowContract, error)
+	Token(address string, opts ...token.TokenOpts) (token.TokenContract, error)
 }
 
 type contractBuilder struct {
@@ -21,10 +21,10 @@ func New(provider provider.ChainProvider) Contracter {
 	}
 }
 
-func (c *contractBuilder) Escrow(address string) (escrow.EscrowContract, error) {
-	return escrow.New(c.provider, address)
+func (c *contractBuilder) Escrow(address string, opts ...escrow.EscrowOpts) (escrow.EscrowContract, error) {
+	return escrow.New(c.provider, address, opts...)
 }
 
-func (c *contractBuilder) Token(address string) (token.TokenContract, error) {
-	return token.New(c.provider, address)
+func (c *contractBuilder) Token(address string, opts ...token.TokenOpts) (token.TokenContract, error) {
+	return token.New(c.provider, address, opts...)
 }

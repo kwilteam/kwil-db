@@ -4,7 +4,7 @@ type InsertStatement struct {
 	CTEs            []*CTE
 	InsertOr        InsertOr
 	Table           string
-	Alias           *Alias
+	TableAlias      *Alias
 	Columns         []string
 	Expressions     [][]*Expression
 	Upsert          *Upsert
