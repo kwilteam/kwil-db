@@ -5,8 +5,8 @@ import (
 	"fmt"
 	txpb "kwil/api/protobuf/tx/v1"
 	"kwil/internal/app/kwild/config"
+	"kwil/internal/controller/http/swagger"
 	"kwil/internal/controller/http/v1/health"
-	"kwil/internal/controller/http/v1/swagger"
 	"kwil/internal/pkg/gateway/middleware"
 	"kwil/pkg/log"
 	"net/http"
@@ -74,7 +74,12 @@ func (g *GWServer) SetupGrpcSvc(ctx context.Context) error {
 }
 
 func (g *GWServer) SetupHTTPSvc(ctx context.Context) error {
-	err := g.mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONHandler)
+	err := g.mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONV0Handler)
+	if err != nil {
+		return err
+	}
+
+	err = g.mux.HandlePath(http.MethodGet, "/api/v1/swagger.json", swagger.GWSwaggerJSONV1Handler)
 	if err != nil {
 		return err
 	}

@@ -12,13 +12,26 @@
 <body>
 <div id="swagger-ui"></div>
 <script src="https://unpkg.com/swagger-ui-dist@4.14.0/swagger-ui-bundle.js" crossorigin></script>
+<!--<script src="https://unpkg.com/swagger-ui-dist@4.14.0/swagger-ui-standalone-preset.js" crossorigin></script>-->
 <script>
     window.onload = () => {
         window.ui = SwaggerUIBundle({
-            url: '/api/v0/swagger.json',
+            url: '/api/v1/swagger.json',
             dom_id: '#swagger-ui',
         });
     };
+    // with a topbar that allows you to change json file
+    // window.onload = () => {
+    //     window.ui = SwaggerUIBundle({
+    //         url: '/api/v1/swagger.json',
+    //         dom_id: '#swagger-ui',
+    //         presets: [
+    //             SwaggerUIBundle.presets.apis,
+    //             SwaggerUIStandalonePreset
+    //         ],
+    //         layout: "StandaloneLayout",
+    //     });
+    // };
 </script>
 </body>
 
