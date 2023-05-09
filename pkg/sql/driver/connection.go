@@ -258,34 +258,34 @@ func (c *Connection) prepare(statement string, extraParams ...string) (*Statemen
 func (c *Connection) AcquireLock() error {
 	c.lock = LOCK_TYPE_READ_WRITE
 	return nil
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	err := acquireLock(c.DBID, c.lockWaitTime)
-	if err != nil {
-		return err
-	}
-
-	c.lock = LOCK_TYPE_READ_WRITE
-	return nil
+	//c.mu.Lock()
+	//defer c.mu.Unlock()
+	//
+	//err := acquireLock(c.DBID, c.lockWaitTime)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//c.lock = LOCK_TYPE_READ_WRITE
+	//return nil
 }
 
 func (c *Connection) ReleaseLock() {
 	return
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.releaseLock()
+	//c.mu.Lock()
+	//defer c.mu.Unlock()
+	//
+	//c.releaseLock()
 }
 
 func (c *Connection) releaseLock() {
 	return
-	if c.lock != LOCK_TYPE_READ_WRITE {
-		return
-	}
-
-	releaseLock(c.DBID)
-	c.lock = LOCK_TYPE_READ_ONLY
+	//if c.lock != LOCK_TYPE_READ_WRITE {
+	//	return
+	//}
+	//
+	//releaseLock(c.DBID)
+	//c.lock = LOCK_TYPE_READ_ONLY
 }
 
 func (c *Connection) LastInsertRowID() int64 {

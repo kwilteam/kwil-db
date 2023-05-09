@@ -21,25 +21,25 @@ const (
 
 func acquireLock(dbid string, timeout time.Duration) error {
 	return nil
-	if _, ok := locks[dbid]; !ok {
-		locks[dbid] = &sync.Mutex{}
-	}
-
-	lockAcquired := make(chan bool)
-	mu := locks[dbid]
-
-	// start a goroutine that will try to acquire the lock
-	go func() {
-		mu.Lock()
-		lockAcquired <- true
-	}()
-
-	select {
-	case <-lockAcquired:
-		return nil
-	case <-time.After(timeout):
-		return ErrLockWaitTimeout
-	}
+	//if _, ok := locks[dbid]; !ok {
+	//	locks[dbid] = &sync.Mutex{}
+	//}
+	//
+	//lockAcquired := make(chan bool)
+	//mu := locks[dbid]
+	//
+	//// start a goroutine that will try to acquire the lock
+	//go func() {
+	//	mu.Lock()
+	//	lockAcquired <- true
+	//}()
+	//
+	//select {
+	//case <-lockAcquired:
+	//	return nil
+	//case <-time.After(timeout):
+	//	return ErrLockWaitTimeout
+	//}
 }
 
 func releaseLock(dbid string) {
