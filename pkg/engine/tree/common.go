@@ -1,15 +1,19 @@
 package tree
 
-type Alias struct{}
-
-type ReturningClause struct{}
-
 type CTE struct {
 	Table   string
 	Columns []string
-	Select  *SelectStatement
+	Select  *Select
 }
 
-type TableOrSubquery struct{}
+type OrderType string
 
-type JoinClause struct{}
+const (
+	OrderTypeNone OrderType = ""
+	OrderTypeAsc  OrderType = "ASC"
+	OrderTypeDesc OrderType = "DESC"
+)
+
+func (o OrderType) String() string {
+	return string(o)
+}

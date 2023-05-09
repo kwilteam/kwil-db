@@ -20,7 +20,7 @@ func newStatement(conn *Connection, stmt *sqlite.Stmt) *Statement {
 		stmt: stmt,
 	}
 
-	s.determineColumns()
+	s.determineColumnNames()
 
 	return s
 }
@@ -86,6 +86,21 @@ type ExecOpts struct {
 	ResultSet *ResultSet
 }
 
+// addDefaults adds the named arguments to the ExecOpts if they are not already set.
+func (e *ExecOpts) addDefaults(defaults map[string]any) {
+	if e.NamedArgs == nil {
+		e.NamedArgs = make(map[string]interface{})
+	}
+
+	for k, v := range defaults {
+		if _, ok := e.NamedArgs[k]; ok {
+			continue
+		}
+
+		e.NamedArgs[k] = v
+	}
+}
+
 func (e *ExecOpts) ensureResultFunc() {
 	if e.ResultFunc == nil {
 		e.ResultFunc = func(*Statement) error {
@@ -104,6 +119,12 @@ func (e *ExecOpts) ensureResultFunc() {
 func (s *Statement) Execute(opts *ExecOpts) error {
 	s.conn.mu.Lock()
 	defer s.conn.mu.Unlock()
+
+	return s.execute(opts)
+}
+
+// internal execute function that does not lock the connection.
+func (s *Statement) execute(opts *ExecOpts) error {
 	defer s.Clear()
 
 	if s.conn == nil {
@@ -116,14 +137,9 @@ func (s *Statement) Execute(opts *ExecOpts) error {
 
 	opts.ensureResultFunc()
 
-	err := s.bindMany(opts.Args)
+	err := s.bindParameters(opts)
 	if err != nil {
-		return fmt.Errorf("error binding args: %w", err)
-	}
-
-	err = s.setMany(opts.NamedArgs)
-	if err != nil {
-		return fmt.Errorf("error setting named args: %w", err)
+		return fmt.Errorf("error binding parameters: %w", err)
 	}
 
 	useResultSet := false
@@ -134,6 +150,7 @@ func (s *Statement) Execute(opts *ExecOpts) error {
 		opts.ResultSet.Columns = s.columnNames
 	}
 
+	firstIteration := true
 	for {
 		rowReturned, err := s.step()
 		if err != nil {
@@ -144,6 +161,11 @@ func (s *Statement) Execute(opts *ExecOpts) error {
 			break
 		}
 
+		if firstIteration {
+			s.determineColumnTypes() // sqlite doesn't detect proper column types on the 0th iteration
+			firstIteration = false
+		}
+
 		if useResultSet {
 			opts.ResultSet.Rows = append(opts.ResultSet.Rows, s.getRow())
 		}
@@ -152,6 +174,30 @@ func (s *Statement) Execute(opts *ExecOpts) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// bindParameters binds the parameters to the statement, whether they are named or not.
+// it will also properly set the default values for global parameters.
+// if there are conflicting values, the named parameters will override the positional parameters.
+func (s *Statement) bindParameters(opts *ExecOpts) error {
+	if opts.NamedArgs == nil {
+		opts.NamedArgs = make(map[string]interface{})
+	}
+
+	opts.addDefaults(s.conn.globalVariableMap)
+
+	err := s.bindMany(opts.Args)
+	if err != nil {
+		return fmt.Errorf("error binding args: %w", err)
+	}
+
+	// binding named after binding positional will override any positional values
+	err = s.setMany(opts.NamedArgs)
+	if err != nil {
+		return fmt.Errorf("error setting named args: %w", err)
 	}
 
 	return nil
@@ -252,6 +298,11 @@ func (s *Statement) bindMany(vals []any) error {
 
 // setAny sets the given value to the parameter name.
 func (s *Statement) setAny(param string, val any) error {
+	index := s.stmt.FindBindName("kwil set any", param)
+	if index <= 0 {
+		return nil
+	}
+
 	ref := reflect.ValueOf(val)
 	if !ref.IsValid() {
 		s.stmt.SetNull(param)
@@ -259,15 +310,15 @@ func (s *Statement) setAny(param string, val any) error {
 	}
 	switch ref.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		s.stmt.SetInt64(param, ref.Int())
+		s.stmt.BindInt64(index, ref.Int())
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		s.stmt.SetInt64(param, int64(ref.Uint()))
+		s.stmt.BindInt64(index, int64(ref.Uint()))
 	case reflect.Float32, reflect.Float64:
-		s.stmt.SetFloat(param, ref.Float())
+		s.stmt.BindFloat(index, ref.Float())
 	case reflect.String:
-		s.stmt.SetText(param, ref.String())
+		s.stmt.BindText(index, ref.String())
 	case reflect.Bool:
-		s.stmt.SetBool(param, ref.Bool())
+		s.stmt.BindBool(index, ref.Bool())
 	default:
 		return fmt.Errorf("kwildb set any error: unsupported type: %s", ref.Kind())
 	}
@@ -285,13 +336,22 @@ func (s *Statement) setMany(vals map[string]any) error {
 	return nil
 }
 
-// Step advances the statement to the next row of the result set.
-func (s *Statement) determineColumns() {
-	s.columnNames = make([]string, s.stmt.ColumnCount())
+// determineColumnNames determines the column names of the statement.
+func (s *Statement) determineColumnNames() {
+	if s.columnNames == nil {
+		s.columnNames = make([]string, s.stmt.ColumnCount())
+	}
+	for i := 0; i < s.stmt.ColumnCount(); i++ {
+		s.columnNames[i] = s.stmt.ColumnName(i)
+	}
+}
+
+// determineColumnTypes determines the column types of the statement.
+func (s *Statement) determineColumnTypes() {
 	s.columnTypes = make([]DataType, s.stmt.ColumnCount())
+
 	for i := 0; i < s.stmt.ColumnCount(); i++ {
 		s.columnTypes[i] = convertColumnType(s.stmt.ColumnType(i))
-		s.columnNames[i] = s.stmt.ColumnName(i)
 	}
 }
 
@@ -322,8 +382,9 @@ func convertColumnType(typ1 sqlite.ColumnType) DataType {
 	case sqlite.TypeBlob:
 		return DataTypeBlob
 	case sqlite.TypeNull:
-		return DataTypeNull
+		return DataTypeText // this is not a bug, if the user typecasts a return value it will get reported as type null and not be read properly
+		// if the value is actually null, it will just be read as a string
 	default:
-		panic("unknown column type" + typ1.String())
+		return DataTypeText
 	}
 }

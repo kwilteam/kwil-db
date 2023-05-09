@@ -1,10 +1,26 @@
 package tree
 
-type SelectStatement struct {
-	CTEs       []*CTE
+type Select struct {
+	SelectClause *SelectClause
+	OrderBy      *OrderBy
+	Limit        *Limit
+}
+
+func (s *Select) ToSQL() (string, error) {
+	return "", nil
+}
+
+type SelectClause struct {
 	SelectType SelectType
 	Columns    []string
 	From       *FromClause
+	Where      *Expression
+	GroupBy    *GroupBy
+	Compound   *CompoundOperator
+}
+
+func (s *SelectClause) ToSQL() string {
+	return ""
 }
 
 type SelectType uint8
@@ -15,8 +31,20 @@ const (
 )
 
 type FromClause struct {
-	TableOrSubquery *TableOrSubquery
+	TableOrSubquery TableOrSubquery
 	JoinClauses     []*JoinClause
 }
 
-type WhereClause struct{}
+type CompoundOperatorType uint8
+
+const (
+	CompoundOperatorTypeUnion CompoundOperatorType = iota
+	CompoundOperatorTypeUnionAll
+	CompoundOperatorTypeIntersect
+	CompoundOperatorTypeExcept
+)
+
+type CompoundOperator struct {
+	Operator     CompoundOperatorType
+	SelectClause *SelectClause
+}

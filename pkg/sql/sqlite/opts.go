@@ -46,18 +46,21 @@ func WithConnectionPoolSize(size int) ConnectionOption {
 }
 
 // WithGlobalVariables adds global variables to the connection
-func WithGlobalVariables(globalVariables []*GlobalVariable) ConnectionOption {
+func WithGlobalVariables(globalVariables map[string]any) ConnectionOption {
 	return func(conn *Connection) {
-		for _, variable := range globalVariables {
-			if conn.containsGlobalVar(variable.Name) {
-				panic("global variable already exists: " + variable.Name)
+		for name, value := range globalVariables {
+			if _, ok := conn.globalVariableMap[name]; ok {
+				panic("global variable already exists: " + name)
 			}
 
-			conn.globalVariables = append(conn.globalVariables, variable)
+			conn.globalVariableMap[name] = value
 		}
 	}
 }
 
+// InMemory specifies that the database should be in memory.
+// WARNING: If the database in in-memory, then users will be able to execute ad-hoc queries that would
+// otherwise be read-only
 func InMemory() ConnectionOption {
 	return func(conn *Connection) {
 		conn.path = "file::memory:?mode=memory"

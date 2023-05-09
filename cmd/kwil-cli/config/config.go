@@ -39,7 +39,7 @@ type kwilCliPersistedConfig struct {
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 	privateKey, err := crypto.ECDSAFromHex(c.PrivateKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid private key: %w.\nusing private key: %s", err, c.PrivateKey)
 	}
 
 	return &KwilCliConfig{
@@ -138,7 +138,7 @@ func LoadCliConfig() (*KwilCliConfig, error) {
 			fmt.Printf("Config file not found. Using default values and/or flags.\n")
 		} else {
 			fmt.Printf("Error reading config file: %s\n", err)
-			os.Exit(1)
+			fmt.Printf("Deleting corrupted config at %s.  Using default values and/or flags.\n")
 		}
 	}
 
