@@ -69,6 +69,9 @@ func (p *PreparedAction) Prepare(exec *models.ActionExecution, opts *ExecOpts) (
 
 		finalRecords = append(finalRecords, finalRecord)
 	}
+	if len(finalRecords) == 0 {
+		finalRecords = append(finalRecords, map[string]any{callerVar: opts.Caller})
+	}
 
 	return finalRecords, nil
 }
