@@ -7,7 +7,11 @@ set -eu
 
 . ./scripts/build/.git_variables
 
-IMAGE=${1:-}
+IMAGE=${1:-"kwild"}
+EXTRA=${2:-}
+DOCKER_FILE="${IMAGE}.dockerfile"
+
+test -z "${EXTRA}" || DOCKER_FILE="${IMAGE}.${EXTRA}.dockerfile"
 
 echo Building "${IMAGE}"
 
@@ -18,4 +22,4 @@ BUILD_ARGS="${BUILD_ARGS} --build-arg build_time=${BUILD_TIME}"
 
 export DOCKDER_BUILDKIT=1
 
-docker build .  -t "${IMAGE}:${GIT_VERSION}" -t "${IMAGE}:latest" ${BUILD_ARGS} -f "./build/package/docker/${IMAGE}.dockerfile" --progress=plain
+docker build .  -t "${IMAGE}:${GIT_VERSION}" -t "${IMAGE}:latest" ${BUILD_ARGS} -f "./build/package/docker/${DOCKER_FILE}" --progress=plain

@@ -2,10 +2,9 @@ package specifications
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"kwil/pkg/engine/models"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {

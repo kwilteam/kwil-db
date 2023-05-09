@@ -2,7 +2,6 @@ package specifications
 
 import (
 	"context"
-	"fmt"
 	"kwil/pkg/engine/models"
 	"testing"
 
@@ -19,8 +18,7 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 	t.Logf("Executing database deploy specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbid := db.ID()
-	fmt.Println(dbid)
+
 	// When i deploy the database
 	err := deploy.DeployDatabase(ctx, db)
 

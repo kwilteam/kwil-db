@@ -52,7 +52,8 @@ tasks:
     desc: Build the docker image for the kwild
     deps: [ pb:compile:v1 ]
     cmds:
-      - ./scripts/build/docker kwild
+      # pass any args to build debug image, e.g. task docker:kwild -- debug
+      - ./scripts/build/docker kwild  {{.CLI_ARGS}}
 
   # ************ dev ************
   dev:up:
