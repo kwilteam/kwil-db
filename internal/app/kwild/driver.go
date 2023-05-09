@@ -105,13 +105,13 @@ func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, db
 	return fmt.Errorf("database does not exist")
 }
 
-func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
-	rec, res, err := d.clt.ExecuteAction(ctx, dbid, queryName, queryInputs)
+func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
+	rec, res, err := d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error executing query: %w", err)
 	}
 
-	d.logger.Debug("execute query", zap.String("database", dbid), zap.String("query", queryName))
+	d.logger.Debug("execute action", zap.String("database", dbid), zap.String("action", actionName))
 	return rec, res, nil
 }
 

@@ -2,7 +2,6 @@ package specifications
 
 import (
 	"context"
-	"fmt"
 	"kwil/pkg/engine/models"
 	"testing"
 
@@ -10,40 +9,24 @@ import (
 )
 
 func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
-	return
-	t.Logf("Executing delete query specification")
+	t.Logf("Executing delete action specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
 	dbID := models.GenerateSchemaId(db.Owner, db.Name)
 
-	userQueryName := "delete_user"
-	userTableName := "users"
-	userQ := userTable{
-		ID:       1111,
-		UserName: "test_user",
-		Age:      33,
-	}
-	// qualifiedUserTableName
-	_ = fmt.Sprintf("%s_%s", dbID, userTableName)
-	userQueryInput := []map[string]any{
-		{"where_id": userQ.ID},
-	}
+	actionName := "delete_user"
+	actionInput := []map[string]any{}
 
 	// When i execute query to database
-	_, _, err := execute.ExecuteAction(ctx, db.Name, userQueryName, userQueryInput)
+	_, _, err := execute.ExecuteAction(ctx, dbID, actionName, actionInput)
 	assert.NoError(t, err)
 
 	// Then i expect row to be deleted
-	// query := fmt.Sprintf(`query MyQuery { %s (where: {id: {_eq: %d}}) {id username age wallet degen}}`,
-	// 	qualifiedUserTableName, userQ.ID)
-	// resByte, err := execute.QueryDatabase(ctx, query)
-	// assert.NoError(t, err)
+	receipt, results, err := execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, receipt)
 
-	// var resp hasuraResp
-	// err = json.Unmarshal(resByte, &resp)
-	// assert.NoError(t, err)
-
-	// data := resp["data"]
-	// res := data[qualifiedUserTableName]
-	// assert.Equal(t, 0, len(res))
+	if len(results) != 0 {
+		t.Errorf("expected 0 statement result, got %d", len(results))
+	}
 }

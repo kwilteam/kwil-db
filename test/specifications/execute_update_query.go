@@ -2,7 +2,7 @@ package specifications
 
 import (
 	"context"
-	"fmt"
+	"github.com/cstockton/go-conv"
 	"kwil/pkg/engine/models"
 	"testing"
 
@@ -10,42 +10,41 @@ import (
 )
 
 func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
-	return
-	t.Logf("Executing update query specification")
+	t.Logf("Executing update action specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
 	dbID := models.GenerateSchemaId(db.Owner, db.Name)
 
-	userQueryName := "update_user"
-	userTableName := "users"
+	actionName := "update_username"
 	userQ := userTable{
 		ID:       1111,
-		UserName: "test_user",
-		Age:      33,
+		UserName: "test_user_update",
+		Age:      22,
 	}
-	// qualifiedUserTableName
-	_ = fmt.Sprintf("%s_%s", dbID, userTableName)
-	userQueryInput := []map[string]any{
-		{"username": userQ.UserName},
-		{"age": userQ.Age},
-		{"where_id": userQ.ID},
+	actionInput := []map[string]any{
+		{"$username": userQ.UserName},
 	}
 
-	// When i execute query to database
-	_, _, err := execute.ExecuteAction(ctx, db.Name, userQueryName, userQueryInput)
+	// When i execute action to database
+	_, _, err := execute.ExecuteAction(ctx, dbID, actionName, actionInput)
 	assert.NoError(t, err)
 
-	// 	// Then i expect row to be updated
-	// 	query := fmt.Sprintf(`query MyQuery { %s (where: {id: {_eq: %d}}) {id username age wallet degen}}`,
-	// 		qualifiedUserTableName, userQ.ID)
-	// 	resByte, err := execute.QueryDatabase(ctx, query)
-	// 	assert.NoError(t, err)
+	// Then i expect row to be updated
+	receipt, results, err := execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, receipt)
 
-	// 	var resp hasuraResp
-	// 	err = json.Unmarshal(resByte, &resp)
-	// 	assert.NoError(t, err)
+	if len(results) != 1 {
+		t.Errorf("expected 1 statement result, got %d", len(results))
+	}
 
-	// data := resp["data"]
-	// res := data[qualifiedUserTableName][0]
-	// assert.EqualValues(t, userQ, res)
+	returnedUser1 := results[0]
+
+	user1Id, _ := conv.Int32(returnedUser1["id"])
+	user1Username := returnedUser1["username"].(string)
+	user1Age, _ := conv.Int32(returnedUser1["age"])
+
+	assert.EqualValues(t, userQ.ID, user1Id)
+	assert.EqualValues(t, userQ.UserName, user1Username)
+	assert.EqualValues(t, userQ.Age, user1Age)
 }

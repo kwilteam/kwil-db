@@ -26,6 +26,11 @@ action update_username($username) public {
     WHERE wallet = @caller;
 }
 
+action delete_user() public {
+    DELETE FROM users
+    WHERE wallet = @caller;
+}
+
 action create_post($id, $title, $content) private {
     INSERT INTO posts (id, user_id, title, content)
     VALUES ($id, (

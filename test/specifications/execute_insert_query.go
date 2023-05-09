@@ -22,24 +22,24 @@ type userTable struct {
 
 type ExecuteQueryDsl interface {
 	// ExecuteAction executes QUERY to a database
-	ExecuteAction(ctx context.Context, dbid string, queryName string, queryInputs []map[string]any) (*kTx.Receipt, []map[string]any, error)
+	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs []map[string]any) (*kTx.Receipt, []map[string]any, error)
 	QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error)
 }
 
 func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
-	t.Logf("Executing insert query specification")
+	t.Logf("Executing insert action specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
 	dbID := models.GenerateSchemaId(db.Owner, db.Name)
 
-	createUserQueryName := "create_user"
+	createUserActionName := "create_user"
 	user1 := userTable{
 		ID:       1111,
 		UserName: "test_user",
 		Age:      22,
 	}
 
-	userQueryInput := []map[string]any{
+	actionInput := []map[string]any{
 		{
 			"$id":       user1.ID,
 			"$username": user1.UserName,
@@ -47,9 +47,8 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 		},
 	}
 
-	// TODO test insert post table
-	// When i execute query to database
-	_, _, err := execute.ExecuteAction(ctx, dbID, createUserQueryName, userQueryInput)
+	// When i execute action to database
+	_, _, err := execute.ExecuteAction(ctx, dbID, createUserActionName, actionInput)
 	assert.NoError(t, err)
 
 	receipt, results, err := execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
