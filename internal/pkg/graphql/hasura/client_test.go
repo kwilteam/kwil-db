@@ -1,7 +1,7 @@
 package hasura
 
 import (
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"net/http"
 	"net/http/httptest"
 	"testing"

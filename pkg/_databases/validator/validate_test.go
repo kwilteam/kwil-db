@@ -1,10 +1,10 @@
 package validator_test
 
 import (
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/mocks"
-	"kwil/pkg/databases/spec"
-	"kwil/pkg/databases/validator"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/mocks"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases/validator"
 	"testing"
 
 	"github.com/mitchellh/copystructure"

@@ -3,8 +3,8 @@
 package schemabuilder
 
 import (
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 	"strings"
 )
 

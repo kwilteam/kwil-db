@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
 	"go.uber.org/zap"
-	"kwil/pkg/chain/provider/dto"
 	"time"
 
 	"github.com/jpillora/backoff"

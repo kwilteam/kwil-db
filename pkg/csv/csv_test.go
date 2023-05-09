@@ -1,8 +1,8 @@
 package csv_test
 
 import (
-	"kwil/pkg/csv"
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/csv"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"os"
 	"testing"
 )

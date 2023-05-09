@@ -2,9 +2,9 @@ package configsvc
 
 import (
 	"context"
-	pb "kwil/api/protobuf/config/v0"
-	"kwil/internal/app/kwild/config"
-	"kwil/pkg/log"
+	pb "github.com/kwilteam/kwil-db/api/protobuf/config/v0"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 type Service struct {

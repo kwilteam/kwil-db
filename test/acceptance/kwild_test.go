@@ -4,9 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"kwil/pkg/log"
-	"kwil/test/acceptance"
-	"kwil/test/specifications"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/test/acceptance"
+	"github.com/kwilteam/kwil-db/test/specifications"
 	"testing"
 	"time"
 

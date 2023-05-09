@@ -1,7 +1,7 @@
 package main
 
 import (
-	"kwil/cmd/kwil-cli/app"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
 	"os"
 )
 

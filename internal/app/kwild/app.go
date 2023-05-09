@@ -1,7 +1,7 @@
 package kwild
 
 import (
-	"kwil/internal/app/kwild/cmd"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd"
 )
 
 func Execute() error {

@@ -1,7 +1,7 @@
 package acceptance
 
 import (
-	"kwil/test/specifications"
+	"github.com/kwilteam/kwil-db/test/specifications"
 )
 
 type KwilAcceptanceDriver interface {

@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/account/v0/service.proto",
+    "title": "github.com/kwilteam/kwil-db/account/v0/service.proto",
     "version": "version not set"
   },
   "tags": [

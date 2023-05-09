@@ -3,9 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
-	txpb "kwil/api/protobuf/tx/v1"
-	kTx "kwil/pkg/tx"
-	"kwil/pkg/utils/serialize"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 	"math/big"
 )
 

@@ -2,8 +2,8 @@ package ddlbuilder_test
 
 import (
 	"fmt"
-	"kwil/pkg/databases/spec"
-	ddlbuilder "kwil/pkg/databases/sql-builder/ddl"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
+	ddlbuilder "github.com/kwilteam/kwil-db/pkg/databases/sql-builder/ddl"
 	"testing"
 )
 

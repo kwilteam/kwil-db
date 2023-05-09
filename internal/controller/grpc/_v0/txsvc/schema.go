@@ -3,13 +3,13 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	commonpb "kwil/api/protobuf/common/v0"
-	txpb "kwil/api/protobuf/tx/v0"
+	commonpb "github.com/kwilteam/kwil-db/api/protobuf/common/v0"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
 
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/convert"
-	"kwil/pkg/databases/executables"
-	"kwil/pkg/utils/serialize"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/convert"
+	"github.com/kwilteam/kwil-db/pkg/databases/executables"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*txpb.GetSchemaResponse, error) {

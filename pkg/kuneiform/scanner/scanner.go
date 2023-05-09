@@ -2,7 +2,7 @@ package scanner
 
 import (
 	"fmt"
-	"kwil/pkg/kuneiform/token"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"unicode"
 	"unicode/utf8"
 )

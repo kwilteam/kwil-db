@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/pkg/accounts"
-	"kwil/pkg/crypto"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/clean"
-	"kwil/pkg/databases/convert"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/accounts"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/clean"
+	"github.com/kwilteam/kwil-db/pkg/databases/convert"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 )
 
 func (c *KwilClient) GetSchema(ctx context.Context, owner, name string) (*databases.Database[*spec.KwilAny], error) {

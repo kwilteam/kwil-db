@@ -1,7 +1,7 @@
 package clean
 
 import (
-	types "kwil/pkg/engine/types"
+	types "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"reflect"
 )
 

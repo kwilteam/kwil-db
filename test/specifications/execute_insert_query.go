@@ -2,11 +2,11 @@ package specifications
 
 import (
 	"context"
-	"kwil/pkg/client"
-	"kwil/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"testing"
 
-	kTx "kwil/pkg/tx"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
 	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"

@@ -2,8 +2,8 @@ package config_test
 
 import (
 	"fmt"
-	config "kwil/internal/app/kwild/config"
-	"kwil/pkg/crypto"
+	config "github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"os"
 	"testing"
 )

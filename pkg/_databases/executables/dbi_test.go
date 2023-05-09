@@ -2,10 +2,10 @@ package executables_test
 
 import (
 	"fmt"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/executables"
-	"kwil/pkg/databases/mocks"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/executables"
+	"github.com/kwilteam/kwil-db/pkg/databases/mocks"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

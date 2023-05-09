@@ -1,7 +1,7 @@
 package client
 
 import (
-	txpb "kwil/api/protobuf/tx/v1"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 
 	"google.golang.org/grpc"
 )

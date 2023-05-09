@@ -2,9 +2,9 @@ package client
 
 import (
 	"context"
-	"kwil/pkg/accounts"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/executables"
+	"github.com/kwilteam/kwil-db/pkg/accounts"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/executables"
 )
 
 type SvcConfig struct {

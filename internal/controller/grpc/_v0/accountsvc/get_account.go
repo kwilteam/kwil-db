@@ -3,9 +3,9 @@ package accountsvc
 import (
 	"context"
 	"fmt"
-	accountspb "kwil/api/protobuf/accounts/v0"
-	commonpb "kwil/api/protobuf/common/v0"
-	"kwil/pkg/sql/errors"
+	accountspb "github.com/kwilteam/kwil-db/api/protobuf/accounts/v0"
+	commonpb "github.com/kwilteam/kwil-db/api/protobuf/common/v0"
+	"github.com/kwilteam/kwil-db/pkg/sql/errors"
 	"strings"
 )
 

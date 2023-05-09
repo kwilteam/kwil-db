@@ -2,7 +2,7 @@ package sqlitegenerator
 
 import (
 	"fmt"
-	"kwil/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"strings"
 )
 

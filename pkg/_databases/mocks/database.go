@@ -1,8 +1,8 @@
 package mocks
 
 import (
-	execution2 "kwil/pkg/databases"
-	"kwil/pkg/databases/spec"
+	execution2 "github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 )
 
 var (

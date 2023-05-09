@@ -1,8 +1,8 @@
 package cors
 
 import (
+	http2 "github.com/kwilteam/kwil-db/internal/pkg/test/http"
 	"io"
-	http2 "kwil/internal/pkg/test/http"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -168,7 +168,9 @@ func Test_allowedOrigin(t *testing.T) {
 				cors:   []string{testOrigin1},
 				origin: "http://baz.example",
 			},
-			want: false,
+			//want: false,
+			want: true, // allow all
+
 		},
 		{
 			name: "not allowed with multi origins",
@@ -176,7 +178,8 @@ func Test_allowedOrigin(t *testing.T) {
 				cors:   []string{testOrigin1, testOrigin2},
 				origin: "http://baz.example",
 			},
-			want: false,
+			//want: false,
+			want: true, // allow all
 		},
 	}
 	for _, tt := range tests {

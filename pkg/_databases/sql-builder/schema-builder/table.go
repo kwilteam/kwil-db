@@ -2,9 +2,9 @@ package schemabuilder
 
 import (
 	"fmt"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/spec"
-	ddlbuilder "kwil/pkg/databases/sql-builder/ddl"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
+	ddlbuilder "github.com/kwilteam/kwil-db/pkg/databases/sql-builder/ddl"
 )
 
 func GenerateTableDDL(t *databases.Table[*spec.KwilAny], schemaName string) ([]string, error) {

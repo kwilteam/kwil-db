@@ -3,12 +3,12 @@ package pricer
 import (
 	"context"
 	"fmt"
-	"kwil/internal/usecases/executor"
-	"kwil/pkg/accounts"
-	"kwil/pkg/databases/executables"
-	querytype "kwil/pkg/databases/spec"
-	"kwil/pkg/pricing"
-	"kwil/pkg/utils/serialize"
+	"github.com/kwilteam/kwil-db/internal/usecases/executor"
+	"github.com/kwilteam/kwil-db/pkg/accounts"
+	"github.com/kwilteam/kwil-db/pkg/databases/executables"
+	querytype "github.com/kwilteam/kwil-db/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/pricing"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 	"math"
 	"strconv"
 )

@@ -1,9 +1,9 @@
 package accountsvc
 
 import (
-	accountspb "kwil/api/protobuf/accounts/v0"
-	"kwil/internal/repository"
-	"kwil/pkg/log"
+	accountspb "github.com/kwilteam/kwil-db/api/protobuf/accounts/v0"
+	"github.com/kwilteam/kwil-db/internal/repository"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 type Service struct {

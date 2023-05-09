@@ -1,6 +1,6 @@
 package driver
 
-import poly "kwil/pkg/utils/numbers/polynomial"
+import poly "github.com/kwilteam/kwil-db/pkg/utils/numbers/polynomial"
 
 func (c *Connection) Plan(query string, args ...any) (plans QueryPlan, err error) {
 	return c.plan(query, func(stmt *Statement) error {

@@ -1,11 +1,11 @@
 package txsvc
 
 import (
-	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/internal/repository"
-	"kwil/internal/usecases/executor"
-	"kwil/pkg/log"
-	"kwil/pkg/pricing/pricer"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
+	"github.com/kwilteam/kwil-db/internal/repository"
+	"github.com/kwilteam/kwil-db/internal/usecases/executor"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/pricing/pricer"
 )
 
 type Service struct {

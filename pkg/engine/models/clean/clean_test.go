@@ -3,9 +3,9 @@ package clean_test
 import (
 	"bytes"
 	"fmt"
-	"kwil/pkg/engine/models/clean"
-	"kwil/pkg/engine/models/mocks"
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/models/clean"
+	"github.com/kwilteam/kwil-db/pkg/engine/models/mocks"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"testing"
 )
 

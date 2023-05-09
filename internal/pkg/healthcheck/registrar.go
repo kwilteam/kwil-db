@@ -2,8 +2,8 @@ package healthcheck
 
 import (
 	"context"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
-	"kwil/pkg/log"
 	"time"
 )
 

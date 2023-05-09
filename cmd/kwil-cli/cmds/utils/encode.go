@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 
 	"github.com/spf13/cobra"
 )

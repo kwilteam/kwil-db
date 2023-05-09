@@ -1,8 +1,8 @@
 package databases
 
 import (
-	"kwil/pkg/crypto"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 	"strings"
 )
 

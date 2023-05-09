@@ -3,9 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
-	cc "kwil/pkg/chain/client"
-	chainTypes "kwil/pkg/chain/types"
-	grpc "kwil/pkg/grpc/client/v1"
+	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
+	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
+	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"strings"
 )
 

@@ -2,7 +2,7 @@ package crypto_test
 
 import (
 	"encoding/hex"
-	"kwil/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"reflect"
 	"testing"
 )

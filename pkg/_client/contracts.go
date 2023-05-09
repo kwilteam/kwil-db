@@ -3,9 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
-	ccs "kwil/pkg/chain/client/service"
-	escrowContracts "kwil/pkg/chain/contracts/escrow"
-	tokenContracts "kwil/pkg/chain/contracts/token"
+	ccs "github.com/kwilteam/kwil-db/pkg/chain/client/service"
+	escrowContracts "github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow"
+	tokenContracts "github.com/kwilteam/kwil-db/pkg/chain/contracts/token"
 )
 
 func (c *KwilClient) EscrowContract(ctx context.Context) (escrowContracts.EscrowContract, error) {

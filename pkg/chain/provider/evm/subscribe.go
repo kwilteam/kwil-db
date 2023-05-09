@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/types"
-	dto2 "kwil/pkg/chain/provider/dto"
+	dto2 "github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
 )
 
 func (c *ethClient) SubscribeNewHead(ctx context.Context, ch chan<- dto2.Header) (dto2.Subscription, error) {

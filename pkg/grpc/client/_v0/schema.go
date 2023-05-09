@@ -3,10 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
-	commonpb "kwil/api/protobuf/common/v0"
-	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/pkg/databases"
-	"kwil/pkg/utils/serialize"
+	commonpb "github.com/kwilteam/kwil-db/api/protobuf/common/v0"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (c *Client) GetSchema(ctx context.Context, id string) (*databases.Database[[]byte], error) {

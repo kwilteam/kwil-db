@@ -2,7 +2,7 @@ package evm
 
 import (
 	"context"
-	"kwil/pkg/chain/provider/dto"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
 	"math/big"
 )
 

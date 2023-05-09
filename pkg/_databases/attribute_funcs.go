@@ -2,7 +2,7 @@ package databases
 
 import (
 	"fmt"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 )
 
 type attributes struct{}

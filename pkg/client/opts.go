@@ -2,7 +2,7 @@ package client
 
 import (
 	"crypto/ecdsa"
-	chainCodes "kwil/pkg/chain/types"
+	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
 )
 
 type ClientOpt func(*Client)

@@ -1,8 +1,8 @@
 package convert_test
 
 import (
-	"kwil/pkg/databases/convert"
-	"kwil/pkg/databases/mocks"
+	"github.com/kwilteam/kwil-db/pkg/databases/convert"
+	"github.com/kwilteam/kwil-db/pkg/databases/mocks"
 	"testing"
 )
 

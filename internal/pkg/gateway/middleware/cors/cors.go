@@ -1,7 +1,7 @@
 package cors
 
 import (
-	"kwil/internal/pkg/gateway/middleware"
+	"github.com/kwilteam/kwil-db/internal/pkg/gateway/middleware"
 	"net/http"
 )
 

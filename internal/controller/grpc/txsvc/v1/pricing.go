@@ -3,11 +3,11 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	txpb "kwil/api/protobuf/tx/v1"
-	"kwil/internal/entity"
-	"kwil/pkg/engine/models"
-	kTx "kwil/pkg/tx"
-	"kwil/pkg/utils/serialize"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 	"math/big"
 )
 

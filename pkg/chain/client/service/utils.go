@@ -2,7 +2,7 @@ package service
 
 import (
 	"github.com/ethereum/go-ethereum/ethclient"
-	"kwil/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/chain/types"
 )
 
 // This isn't best practice since these are simply passthroughs to the provider

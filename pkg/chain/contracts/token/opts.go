@@ -1,6 +1,6 @@
 package token
 
-import "kwil/pkg/log"
+import "github.com/kwilteam/kwil-db/pkg/log"
 
 type TokenOpts func(*token)
 

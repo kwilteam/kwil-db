@@ -2,7 +2,7 @@ package tree_test
 
 import (
 	"fmt"
-	"kwil/pkg/engine/tree"
+	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 	"testing"
 )
 

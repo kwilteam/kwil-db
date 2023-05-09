@@ -1,7 +1,7 @@
 package ddlbuilder
 
 import (
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 	"strings"
 )
 

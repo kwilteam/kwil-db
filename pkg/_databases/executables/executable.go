@@ -2,8 +2,8 @@ package executables
 
 import (
 	"fmt"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 )
 
 // executable is an executable query

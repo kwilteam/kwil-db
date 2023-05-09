@@ -1,7 +1,7 @@
 package main
 
 import (
-	"kwil/internal/app/kwild"
+	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"os"
 )
 

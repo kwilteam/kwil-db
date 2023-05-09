@@ -3,13 +3,13 @@ package service_test
 // this package is to contain the mock implementations
 import (
 	"context"
-	"kwil/pkg/chain/client"
-	"kwil/pkg/chain/client/dto"
-	"kwil/pkg/chain/client/service"
-	"kwil/pkg/chain/provider"
-	providerDto "kwil/pkg/chain/provider/dto"
-	"kwil/pkg/chain/types"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/chain/client"
+	"github.com/kwilteam/kwil-db/pkg/chain/client/dto"
+	"github.com/kwilteam/kwil-db/pkg/chain/client/service"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider"
+	providerDto "github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
+	"github.com/kwilteam/kwil-db/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethclient"

@@ -2,7 +2,7 @@ package specifications
 
 import (
 	"context"
-	grpc "kwil/pkg/grpc/client/v1"
+	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"math/big"
 	"testing"
 

@@ -1,6 +1,6 @@
 package databases
 
-import "kwil/pkg/databases/spec"
+import "github.com/kwilteam/kwil-db/pkg/databases/spec"
 
 // Input is a schema input; either a parameter or a where clause
 type Input[T spec.AnyValue] interface {

@@ -1,8 +1,8 @@
 package schemabuilder
 
 import (
-	"kwil/pkg/databases"
-	ddlb "kwil/pkg/databases/sql-builder/ddl"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	ddlb "github.com/kwilteam/kwil-db/pkg/databases/sql-builder/ddl"
 )
 
 func GenerateIndexDDL(index *databases.Index, schemaName string) string {

@@ -2,8 +2,8 @@ package validator
 
 import (
 	"fmt"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 )
 
 // validation errorCodes are annotated with errorCode number. i.e. "errorCode 1"

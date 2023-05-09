@@ -3,11 +3,11 @@ package utils
 import (
 	"context"
 	"fmt"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/pkg/client"
+	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"html/template"
-	"kwil/cmd/kwil-cli/cmds/common"
-	"kwil/cmd/kwil-cli/config"
-	"kwil/pkg/client"
-	grpc "kwil/pkg/grpc/client/v1"
 	"os"
 	"text/tabwriter"
 

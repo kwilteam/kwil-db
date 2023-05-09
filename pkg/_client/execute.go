@@ -4,10 +4,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/executables"
-	"kwil/pkg/databases/spec"
-	kTx "kwil/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/executables"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 )
 
 func (c *KwilClient) ExecuteDatabase(ctx context.Context, dbOwner, dbName string, queryName string, queryInputs map[string]*spec.KwilAny, privateKey *ecdsa.PrivateKey) (*kTx.Receipt, error) {

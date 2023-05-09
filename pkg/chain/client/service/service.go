@@ -2,12 +2,12 @@ package service
 
 import (
 	"fmt"
-	"kwil/pkg/chain/client"
-	"kwil/pkg/chain/client/dto"
-	"kwil/pkg/chain/contracts"
-	"kwil/pkg/chain/provider"
-	"kwil/pkg/chain/types"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/chain/client"
+	"github.com/kwilteam/kwil-db/pkg/chain/client/dto"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider"
+	"github.com/kwilteam/kwil-db/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"time"
 )
 

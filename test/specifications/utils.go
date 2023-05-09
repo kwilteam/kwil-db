@@ -1,8 +1,8 @@
 package specifications
 
 import (
-	"kwil/pkg/engine/models"
-	"kwil/pkg/kuneiform/parser"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 	"os"
 	"testing"
 )

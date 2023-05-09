@@ -1,6 +1,6 @@
 package pricing
 
-import "kwil/pkg/databases/spec"
+import "github.com/kwilteam/kwil-db/pkg/databases/spec"
 
 type PricingRequestType int
 

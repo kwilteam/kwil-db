@@ -1,10 +1,10 @@
 package schemabuilder_test
 
 import (
-	"kwil/pkg/databases/clean"
-	"kwil/pkg/databases/mocks"
-	schemabuilder "kwil/pkg/databases/sql-builder/schema-builder"
-	"kwil/pkg/databases/validator"
+	"github.com/kwilteam/kwil-db/pkg/databases/clean"
+	"github.com/kwilteam/kwil-db/pkg/databases/mocks"
+	schemabuilder "github.com/kwilteam/kwil-db/pkg/databases/sql-builder/schema-builder"
+	"github.com/kwilteam/kwil-db/pkg/databases/validator"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

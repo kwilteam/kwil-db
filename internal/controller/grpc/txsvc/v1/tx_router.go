@@ -3,10 +3,10 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	"kwil/internal/entity"
-	"kwil/pkg/engine/models"
-	kTx "kwil/pkg/tx"
-	"kwil/pkg/utils/serialize"
+	"github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (s *Service) deploy(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {

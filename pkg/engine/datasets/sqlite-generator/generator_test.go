@@ -2,8 +2,8 @@ package sqlitegenerator_test
 
 import (
 	"fmt"
-	sqlitegenerator "kwil/pkg/engine/datasets/sqlite-generator"
-	"kwil/pkg/engine/models/mocks"
+	sqlitegenerator "github.com/kwilteam/kwil-db/pkg/engine/datasets/sqlite-generator"
+	"github.com/kwilteam/kwil-db/pkg/engine/models/mocks"
 	"testing"
 )
 

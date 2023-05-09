@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/pkg/chain/contracts/escrow/evm"
-	"kwil/pkg/chain/contracts/escrow/types"
-	"kwil/pkg/chain/provider"
-	chainTypes "kwil/pkg/chain/types"
-	"kwil/pkg/log"
-	"kwil/pkg/utils/retry"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/evm"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/types"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider"
+	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/utils/retry"
 )
 
 type EscrowContract interface {

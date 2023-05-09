@@ -1,6 +1,6 @@
 package escrow
 
-import "kwil/pkg/log"
+import "github.com/kwilteam/kwil-db/pkg/log"
 
 type EscrowOpts func(*escrow)
 

@@ -3,9 +3,9 @@ package pricer
 import (
 	"context"
 	"fmt"
-	"kwil/internal/usecases/executor"
-	"kwil/pkg/accounts"
-	"kwil/pkg/pricing"
+	"github.com/kwilteam/kwil-db/internal/usecases/executor"
+	"github.com/kwilteam/kwil-db/pkg/accounts"
+	"github.com/kwilteam/kwil-db/pkg/pricing"
 )
 
 type Pricer interface {

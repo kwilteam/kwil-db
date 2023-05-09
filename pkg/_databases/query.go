@@ -3,7 +3,7 @@ package databases
 import (
 	"bytes"
 	"encoding/gob"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 )
 
 type SQLQuery[T spec.AnyValue] struct {

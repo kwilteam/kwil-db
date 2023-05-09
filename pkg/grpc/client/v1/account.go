@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
-	txpb "kwil/api/protobuf/tx/v1"
-	"kwil/pkg/balances"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/pkg/balances"
 	"math/big"
 )
 

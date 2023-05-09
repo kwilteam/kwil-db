@@ -1,10 +1,10 @@
 package datasets
 
 import (
-	"kwil/internal/entity"
-	"kwil/pkg/engine/datasets"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/tx"
+	"github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/engine/datasets"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/tx"
 	"math/big"
 )
 

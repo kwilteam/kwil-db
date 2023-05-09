@@ -2,7 +2,7 @@ package display
 
 import (
 	"fmt"
-	txTypes "kwil/pkg/tx"
+	txTypes "github.com/kwilteam/kwil-db/pkg/tx"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )

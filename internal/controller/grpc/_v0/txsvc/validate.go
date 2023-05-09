@@ -3,13 +3,13 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	commonpb "kwil/api/protobuf/common/v0"
-	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/clean"
-	"kwil/pkg/databases/convert"
-	"kwil/pkg/databases/validator"
-	"kwil/pkg/utils/serialize"
+	commonpb "github.com/kwilteam/kwil-db/api/protobuf/common/v0"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/clean"
+	"github.com/kwilteam/kwil-db/pkg/databases/convert"
+	"github.com/kwilteam/kwil-db/pkg/databases/validator"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (s *Service) ValidateSchema(ctx context.Context, req *txpb.ValidateSchemaRequest) (*txpb.ValidateSchemaResponse, error) {

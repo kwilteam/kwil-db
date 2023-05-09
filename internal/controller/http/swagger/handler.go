@@ -3,7 +3,7 @@ package swagger
 import (
 	"bytes"
 	_ "embed"
-	swagger "kwil/api/openapi-spec/api"
+	swagger "github.com/kwilteam/kwil-db/api/openapi-spec/api"
 	"net/http"
 	"time"
 )

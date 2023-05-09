@@ -1,8 +1,8 @@
 package service
 
 import (
-	"kwil/pkg/chain/types"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"time"
 )
 

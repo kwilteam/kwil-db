@@ -1,7 +1,7 @@
 package clean
 
 import (
-	"kwil/pkg/databases/clean/traverse"
+	"github.com/kwilteam/kwil-db/pkg/databases/clean/traverse"
 	"reflect"
 	"strings"
 )

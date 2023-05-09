@@ -1,9 +1,9 @@
 package pricingsvc
 
 import (
-	pricingpb "kwil/api/protobuf/pricing/v0"
-	"kwil/internal/usecases/executor"
-	"kwil/pkg/pricing/pricer"
+	pricingpb "github.com/kwilteam/kwil-db/api/protobuf/pricing/v0"
+	"github.com/kwilteam/kwil-db/internal/usecases/executor"
+	"github.com/kwilteam/kwil-db/pkg/pricing/pricer"
 )
 
 type Service struct {

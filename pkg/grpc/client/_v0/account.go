@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 	"fmt"
-	accountspb "kwil/api/protobuf/accounts/v0"
-	"kwil/pkg/accounts"
+	accountspb "github.com/kwilteam/kwil-db/api/protobuf/accounts/v0"
+	"github.com/kwilteam/kwil-db/pkg/accounts"
 )
 
 func (c *Client) GetAccount(ctx context.Context, address string) (*accounts.Account, error) {

@@ -1,7 +1,7 @@
 package ddlbuilder_test
 
 import (
-	ddlb "kwil/pkg/databases/sql-builder/ddl"
+	ddlb "github.com/kwilteam/kwil-db/pkg/databases/sql-builder/ddl"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

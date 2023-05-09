@@ -2,7 +2,7 @@ package datasets
 
 import (
 	"fmt"
-	"kwil/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/balances"
 	"math/big"
 )
 

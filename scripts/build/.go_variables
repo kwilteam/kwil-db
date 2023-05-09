@@ -47,7 +47,7 @@ if [ -z "$CGO_ENABLED" ]; then
 fi
 export CGO_ENABLED
 
-BINARY_PKG_PREFIX="kwil/internal/pkg/build"
+BINARY_PKG_PREFIX="github.com/kwilteam/kwil-db/internal/pkg/build"
 GO_LDFLAGS="${GO_LDFLAGS:-}"
 GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.GitCommit=${GIT_COMMIT}\""
 GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.BuildTime=${BUILD_TIME}\""
@@ -65,7 +65,7 @@ fi
 
 export GO_LDFLAGS="$GO_LDFLAGS" # https://github.com/koalaman/shellcheck/issues/2064
 
-export SOURCE="kwil/cmd/${BINARY}"
+export SOURCE="github.com/kwilteam/kwil-db/cmd/${BINARY}"
 
 GO_GCFLAGS="${GO_GCFLAGS:-}"
 export GO_GCFLAGS="$GO_GCFLAGS"

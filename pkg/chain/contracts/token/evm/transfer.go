@@ -3,8 +3,8 @@ package evm
 import (
 	"context"
 	"crypto/ecdsa"
-	kwilCommon "kwil/pkg/chain/contracts/common/evm"
-	"kwil/pkg/chain/contracts/token/types"
+	kwilCommon "github.com/kwilteam/kwil-db/pkg/chain/contracts/common/evm"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/token/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"

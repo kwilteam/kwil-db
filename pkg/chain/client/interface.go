@@ -2,9 +2,9 @@ package client
 
 import (
 	"context"
-	"kwil/pkg/chain/contracts"
-	provider "kwil/pkg/chain/provider/dto"
-	"kwil/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts"
+	provider "github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
+	"github.com/kwilteam/kwil-db/pkg/chain/types"
 )
 
 type ChainClient interface {

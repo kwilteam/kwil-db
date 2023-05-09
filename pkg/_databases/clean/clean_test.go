@@ -3,8 +3,8 @@ package clean_test
 import (
 	"encoding/json"
 	"fmt"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/clean"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/clean"
 	"os"
 	"testing"
 )

@@ -2,8 +2,8 @@ package engine
 
 import (
 	"fmt"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/sql/driver"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"os"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	txpb "kwil/api/protobuf/tx/v1"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 )
 
 func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {

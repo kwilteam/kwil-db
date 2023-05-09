@@ -1,7 +1,7 @@
 package client
 
 import (
-	chainTypes "kwil/pkg/chain/types"
+	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
 )
 
 type ClientOption func(*KwilClient)

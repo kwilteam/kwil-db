@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/pkg/crypto"
-	kTx "kwil/pkg/tx"
-	"kwil/pkg/utils/serialize"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 // buildTx creates the correct nonce, fee, and signs a transaction

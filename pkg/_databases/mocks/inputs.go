@@ -1,7 +1,7 @@
 package mocks
 
 import (
-	"kwil/pkg/databases/executables"
+	"github.com/kwilteam/kwil-db/pkg/databases/executables"
 )
 
 var (

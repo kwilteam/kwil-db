@@ -2,7 +2,7 @@ package retry
 
 import (
 	"context"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"time"
 )
 

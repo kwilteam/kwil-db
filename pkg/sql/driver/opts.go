@@ -1,7 +1,7 @@
 package driver
 
 import (
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"time"
 )
 

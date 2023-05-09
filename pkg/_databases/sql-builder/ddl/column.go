@@ -2,7 +2,7 @@ package ddlbuilder
 
 import (
 	"fmt"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 	"strings"
 
 	conv "github.com/cstockton/go-conv"

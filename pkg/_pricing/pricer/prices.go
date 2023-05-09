@@ -2,9 +2,9 @@ package pricer
 
 import (
 	"context"
-	"kwil/internal/usecases/executor"
-	"kwil/pkg/accounts"
-	"kwil/pkg/pricing"
+	"github.com/kwilteam/kwil-db/internal/usecases/executor"
+	"github.com/kwilteam/kwil-db/pkg/accounts"
+	"github.com/kwilteam/kwil-db/pkg/pricing"
 )
 
 // this is by no means a complete implementation of the pricing service

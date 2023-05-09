@@ -1,8 +1,8 @@
 package ddlbuilder_test
 
 import (
-	"kwil/pkg/databases/spec"
-	ddlb "kwil/pkg/databases/sql-builder/ddl"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
+	ddlb "github.com/kwilteam/kwil-db/pkg/databases/sql-builder/ddl"
 	"testing"
 )
 

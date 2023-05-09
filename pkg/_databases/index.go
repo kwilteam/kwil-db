@@ -1,6 +1,6 @@
 package databases
 
-import "kwil/pkg/databases/spec"
+import "github.com/kwilteam/kwil-db/pkg/databases/spec"
 
 type Index struct {
 	Name    string         `json:"name" clean:"lower"`

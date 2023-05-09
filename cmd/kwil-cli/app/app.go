@@ -1,12 +1,12 @@
 package app
 
 import (
-	"kwil/cmd/kwil-cli/cmds/configure"
-	"kwil/cmd/kwil-cli/cmds/database"
-	"kwil/cmd/kwil-cli/cmds/fund"
-	"kwil/cmd/kwil-cli/cmds/system"
-	"kwil/cmd/kwil-cli/cmds/utils"
-	"kwil/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/configure"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/fund"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/system"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/utils"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 
 	"github.com/spf13/cobra"
 )

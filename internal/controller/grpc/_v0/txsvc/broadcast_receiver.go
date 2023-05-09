@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	commonpb "github.com/kwilteam/kwil-db/api/protobuf/common/v0"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
+	"github.com/kwilteam/kwil-db/pkg/accounts"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 	"go.uber.org/zap"
-	commonpb "kwil/api/protobuf/common/v0"
-	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/pkg/accounts"
-	"kwil/pkg/utils/serialize"
 )
 
 // Broadcast handles broadcasted transactions

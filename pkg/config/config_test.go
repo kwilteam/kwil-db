@@ -2,8 +2,8 @@ package config_test
 
 import (
 	"crypto/ecdsa"
-	"kwil/pkg/config"
-	"kwil/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/config"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"os"
 	"testing"
 

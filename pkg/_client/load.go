@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/databases/executables"
+	"github.com/kwilteam/kwil-db/pkg/databases/executables"
 )
 
 // this file handles responsiiblities for getting and storing databases and their queries

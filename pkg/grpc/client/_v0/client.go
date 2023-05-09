@@ -3,12 +3,12 @@ package client
 import (
 	"context"
 	"fmt"
-	accountspb "kwil/api/protobuf/accounts/v0"
-	cfgpb "kwil/api/protobuf/config/v0"
-	pricingpb "kwil/api/protobuf/pricing/v0"
-	txpb "kwil/api/protobuf/tx/v0"
-	"kwil/internal/pkg/transport"
-	"kwil/pkg/log"
+	accountspb "github.com/kwilteam/kwil-db/api/protobuf/accounts/v0"
+	cfgpb "github.com/kwilteam/kwil-db/api/protobuf/config/v0"
+	pricingpb "github.com/kwilteam/kwil-db/api/protobuf/pricing/v0"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
+	"github.com/kwilteam/kwil-db/internal/pkg/transport"
+	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"google.golang.org/grpc"
 )

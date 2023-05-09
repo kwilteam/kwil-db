@@ -2,7 +2,7 @@ package spec_test
 
 import (
 	"bytes"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 	"testing"
 )
 

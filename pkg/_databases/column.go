@@ -1,7 +1,7 @@
 package databases
 
 import (
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 )
 
 type Column[T spec.AnyValue] struct {

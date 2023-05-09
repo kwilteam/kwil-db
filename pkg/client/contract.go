@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/chain/contracts/escrow/types"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/types"
 	"math/big"
 )
 

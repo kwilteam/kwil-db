@@ -1,6 +1,6 @@
 package models
 
-import "kwil/pkg/engine/types"
+import "github.com/kwilteam/kwil-db/pkg/engine/types"
 
 type Index struct {
 	Name    string          `json:"name" clean:"lower"`

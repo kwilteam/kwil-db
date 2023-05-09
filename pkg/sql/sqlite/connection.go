@@ -3,7 +3,7 @@ package sqlite
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"os"
 	"path/filepath"
 	"sync"

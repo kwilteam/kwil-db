@@ -1,6 +1,6 @@
 package engine
 
-import "kwil/pkg/log"
+import "github.com/kwilteam/kwil-db/pkg/log"
 
 type MasterOpt func(*Engine)
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/alexliesenfeld/health"
-	"kwil/internal/pkg/healthcheck"
+	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	"reflect"
 	"testing"
 	"time"

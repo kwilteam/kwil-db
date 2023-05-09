@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	crypto2 "kwil/pkg/crypto"
+	crypto2 "github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
 type Transaction struct {

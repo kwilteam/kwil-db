@@ -2,7 +2,7 @@ package validator
 
 import (
 	"fmt"
-	"kwil/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases"
 	"sort"
 )
 

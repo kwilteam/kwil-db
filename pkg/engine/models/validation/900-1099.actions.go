@@ -2,7 +2,7 @@ package validation
 
 import (
 	"fmt"
-	"kwil/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"regexp"
 )
 

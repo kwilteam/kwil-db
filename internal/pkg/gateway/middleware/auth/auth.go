@@ -2,9 +2,9 @@ package auth
 
 import (
 	"context"
+	"github.com/kwilteam/kwil-db/internal/pkg/gateway/middleware"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
-	"kwil/internal/pkg/gateway/middleware"
-	"kwil/pkg/log"
 	"net/http"
 )
 

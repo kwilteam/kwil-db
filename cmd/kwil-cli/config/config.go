@@ -4,8 +4,8 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"io"
-	"kwil/pkg/crypto"
 	"os"
 	"path/filepath"
 
@@ -138,7 +138,7 @@ func LoadCliConfig() (*KwilCliConfig, error) {
 			fmt.Printf("Config file not found. Using default values and/or flags.\n")
 		} else {
 			fmt.Printf("Error reading config file: %s\n", err)
-			fmt.Printf("Deleting corrupted config at %s.  Using default values and/or flags.\n")
+			fmt.Printf("Deleting corrupted config at %s.  Using default values and/or flags.\n", viper.ConfigFileUsed())
 		}
 	}
 

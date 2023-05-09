@@ -1,8 +1,8 @@
 package txsvc
 
 import (
-	"kwil/pkg/balances"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 type TxSvcOpt func(*Service)

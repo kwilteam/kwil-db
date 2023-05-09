@@ -2,8 +2,8 @@ package executables
 
 import (
 	"fmt"
-	"kwil/pkg/databases"
-	"kwil/pkg/databases/spec"
+	"github.com/kwilteam/kwil-db/pkg/databases"
+	"github.com/kwilteam/kwil-db/pkg/databases/spec"
 )
 
 func generateAccessParameters(db *databases.Database[*spec.KwilAny]) map[string]map[string]struct{} {

@@ -3,11 +3,11 @@ package txsvc
 import (
 	"context"
 	"fmt"
-	txpb "kwil/api/protobuf/tx/v0"
-	accountTypes "kwil/pkg/accounts"
-	"kwil/pkg/databases/clean"
-	"kwil/pkg/databases/executables"
-	"kwil/pkg/utils/serialize"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
+	accountTypes "github.com/kwilteam/kwil-db/pkg/accounts"
+	"github.com/kwilteam/kwil-db/pkg/databases/clean"
+	"github.com/kwilteam/kwil-db/pkg/databases/executables"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (s *Service) handleExecution(ctx context.Context, tx *accountTypes.Transaction) (*txpb.BroadcastResponse, error) {

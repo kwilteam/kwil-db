@@ -3,9 +3,9 @@ package repl
 import (
 	"bufio"
 	"fmt"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/ast"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 	"io"
-	"kwil/pkg/kuneiform/ast"
-	"kwil/pkg/kuneiform/parser"
 	"strings"
 )
 
