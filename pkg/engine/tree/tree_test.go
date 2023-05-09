@@ -7,37 +7,65 @@ import (
 )
 
 func Test_Insert(t *testing.T) {
-	ins := tree.InsertStatement{
+	ins := tree.Insert{
 		Table: "foo",
 		Columns: []string{
 			"bar",
 			"baz",
 		},
 		Values: [][]tree.InsertExpression{
-			[]tree.InsertExpression{
+			{
 				&tree.ExpressionLiteral{"barVal"},
 				&tree.ExpressionBindParameter{"$a"},
 			},
+			{
+				&tree.ExpressionLiteral{"bazVal"},
+				&tree.ExpressionBindParameter{"$b"},
+			},
 		},
 		Upsert: &tree.Upsert{
-			ConflictTargetColumn: "bar",
-			Type:                 tree.UpsertTypeDoUpdate,
-			Set: map[string]tree.Expression{
-				"baz": &tree.ExpressionBindParameter{"$b"},
+			ConflictTarget: &tree.ConflictTarget{
+				IndexedColumns: []*tree.IndexedColumn{
+					{
+						Column: "bar",
+					},
+				},
+				Where: &tree.ExpressionBinaryComparison{
+					Left:     &tree.ExpressionColumn{Column: "baz"},
+					Operator: tree.ComparisonOperatorEqual,
+					Right:    &tree.ExpressionBindParameter{"$c"},
+				},
 			},
-			Where: &tree.WhereClause{
-				Expression: &tree.ExpressionBinaryComparison{},
+			Type: tree.UpsertTypeDoUpdate,
+			Updates: []*tree.UpdateSetClause{
+				{
+					Columns:    []string{"bar"},
+					Expression: &tree.ExpressionLiteral{"5"},
+				},
+				{
+					Columns:    []string{"baz"},
+					Expression: &tree.ExpressionBindParameter{"$d"},
+				},
+			},
+			Where: &tree.ExpressionBinaryComparison{
+				Left:     &tree.ExpressionColumn{Column: "baz"},
+				Operator: tree.ComparisonOperatorEqual,
+				Right:    &tree.ExpressionBindParameter{"$c"},
+			},
+		},
+		ReturningClause: &tree.ReturningClause{
+			Returned: []*tree.ReturningClauseColumn{
+				{
+					All: true,
+				},
 			},
 		},
 	}
 
-	sql, args, err := ins.ToSql()
+	sql, err := ins.ToSql()
 	if err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(sql)
-	fmt.Println(args)
-
-	panic("")
 }

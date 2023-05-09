@@ -1,12 +1,26 @@
 package tree
 
-import "github.com/doug-martin/goqu/v9/exp"
+type Select struct {
+	SelectClause *SelectClause
+	OrderBy      *OrderBy
+	Limit        *Limit
+}
 
-type SelectStatement struct {
-	CTEs       []*CTE
+func (s *Select) ToSQL() (string, error) {
+	return "", nil
+}
+
+type SelectClause struct {
 	SelectType SelectType
 	Columns    []string
 	From       *FromClause
+	Where      *Expression
+	GroupBy    *GroupBy
+	Compound   *CompoundOperator
+}
+
+func (s *SelectClause) ToSQL() string {
+	return ""
 }
 
 type SelectType uint8
@@ -17,18 +31,20 @@ const (
 )
 
 type FromClause struct {
-	TableOrSubquery *TableOrSubquery
+	TableOrSubquery TableOrSubquery
 	JoinClauses     []*JoinClause
 }
 
-type WhereClause struct {
-	Expression Expression
-}
+type CompoundOperatorType uint8
 
-func (w *WhereClause) ToSqlStruct() any {
-	return w.Expression.ToSqlStruct()
-}
+const (
+	CompoundOperatorTypeUnion CompoundOperatorType = iota
+	CompoundOperatorTypeUnionAll
+	CompoundOperatorTypeIntersect
+	CompoundOperatorTypeExcept
+)
 
-func (w *WhereClause) toGoquExpr() exp.Expression {
-	return w.Expression.ToSqlStruct().(exp.Expression)
+type CompoundOperator struct {
+	Operator     CompoundOperatorType
+	SelectClause *SelectClause
 }

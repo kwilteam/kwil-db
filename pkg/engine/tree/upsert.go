@@ -1,10 +1,5 @@
 package tree
 
-import (
-	"github.com/doug-martin/goqu/v9"
-	"github.com/doug-martin/goqu/v9/exp"
-)
-
 type UpsertType uint8
 
 const (
@@ -13,31 +8,68 @@ const (
 )
 
 type Upsert struct {
-	ConflictTargetColumn string
-	Type                 UpsertType
-	Set                  map[string]Expression
-	Where                *WhereClause
+	stmt           *upsertBuilder
+	ConflictTarget *ConflictTarget
+	Type           UpsertType
+	Updates        []*UpdateSetClause
+	Where          Expression
 }
 
-func (u *Upsert) toGoqu() exp.ConflictExpression {
+func (u *Upsert) ToSQL() string {
+	u.stmt = Builder.BeginUpsert()
+	if u.ConflictTarget != nil {
+		u.stmt.ConflictTarget(u.ConflictTarget)
+	}
+
 	switch u.Type {
 	case UpsertTypeDoNothing:
-		return goqu.DoNothing()
+		u.stmt.DoNothing()
 	case UpsertTypeDoUpdate:
-		ups := goqu.DoUpdate(u.ConflictTargetColumn, u.getSetRecords())
+		u.stmt.DoUpdate(u.Updates)
 		if u.Where != nil {
-			ups = ups.Where(u.Where.toGoquExpr())
+			u.stmt.Where(u.Where)
 		}
-		return ups
-	default:
-		panic("invalid upsert type: " + string(u.Type))
 	}
+
+	return u.stmt.String()
 }
 
-func (u *Upsert) getSetRecords() goqu.Record {
-	setRecords := make(goqu.Record)
-	for column, expression := range u.Set {
-		setRecords[column] = expression.ToSqlStruct()
+type upsertBuilder struct {
+	stmt *sqlBuilder
+}
+
+func (b *builder) BeginUpsert() *upsertBuilder {
+	u := &upsertBuilder{
+		stmt: newSQLBuilder(),
 	}
-	return setRecords
+	u.stmt.Write(SPACE, ON, SPACE, CONFLICT, SPACE)
+	return u
+}
+
+func (b *upsertBuilder) ConflictTarget(ct *ConflictTarget) {
+	b.stmt.WriteString(ct.ToSQL())
+}
+
+func (b *upsertBuilder) String() string {
+	return b.stmt.String()
+}
+
+func (b *upsertBuilder) DoNothing() {
+	b.stmt.Write(SPACE, DO, SPACE, NOTHING, SPACE)
+}
+
+func (b *upsertBuilder) DoUpdate(setClause []*UpdateSetClause) {
+	b.stmt.Write(SPACE, DO, SPACE, UPDATE, SPACE, SET, SPACE)
+	for i, set := range setClause {
+		if i > 0 && i < len(setClause) {
+			b.stmt.Write(COMMA, SPACE)
+		}
+		b.stmt.WriteString(set.ToSQL())
+	}
+	b.stmt.Write(SPACE)
+}
+
+func (b *upsertBuilder) Where(expression Expression) {
+	b.stmt.Write(SPACE, WHERE, SPACE)
+	b.stmt.WriteString(expression.ToSQL())
 }
