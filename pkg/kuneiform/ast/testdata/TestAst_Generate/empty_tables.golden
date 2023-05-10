@@ -3,15 +3,10 @@
   "name": "test",
   "tables": [
     {
-      "name": "user",
-      "columns": [],
-      "indexes": []
+      "name": "user"
     },
     {
-      "name": "order",
-      "columns": [],
-      "indexes": []
+      "name": "order"
     }
-  ],
-  "actions": null
+  ]
 }

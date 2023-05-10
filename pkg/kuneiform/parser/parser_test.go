@@ -2,12 +2,13 @@ package parser_test
 
 import (
 	"bytes"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
-	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/ast"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/sql"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/utils"
+	"github.com/kwilteam/kwil-db/pkg/sql_parser"
+
 	"strings"
 	"testing"
 )
@@ -17,8 +18,8 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		name        string
 		input       string
 		wantDB      string
-		wantTables  []models.Table
-		wantActions []models.Action
+		wantTables  []schema.Table
+		wantActions []schema.Action
 	}{
 		{
 			name:   "empty database",
@@ -29,7 +30,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 			name:   "empty tables",
 			input:  `database test; table user{} table order{}`,
 			wantDB: "test",
-			wantTables: []models.Table{
+			wantTables: []schema.Table{
 				{Name: "user"},
 				{Name: "order"}},
 		},
@@ -37,14 +38,12 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 			name:   "table with multiple columns and attributes",
 			input:  `database demo; table user{user_id int notnull,username text}`,
 			wantDB: "demo",
-			wantTables: []models.Table{
+			wantTables: []schema.Table{
 				{
 					Name: "user",
-					Columns: []*models.Column{
-						{Name: "user_id", Type: types.INT, Attributes: []*models.Attribute{{Type: types.NOT_NULL}}},
-						{Name: "username", Type: types.TEXT, Attributes: []*models.Attribute{}},
-						//{Name: "gender", Type: types.BOOLEAN, Attributes: []*models.Attribute{}},
-					},
+					Columns: []schema.Column{
+						{Name: "user_id", Type: schema.ColInt, Attributes: []schema.Attribute{{Type: schema.AttrNotNull}}},
+						{Name: "username", Type: schema.ColText, Attributes: []schema.Attribute{}}},
 				},
 			},
 		},
@@ -52,18 +51,20 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 			name:   "table with columns and attributes(with parameters)",
 			input:  `database demo; table user{age int min(18) max(30), email text maxlen(50) minlen(10), country text default("mars"), status int default(0) }`,
 			wantDB: "demo",
-			wantTables: []models.Table{
+			wantTables: []schema.Table{
 				{
 					Name: "user",
-					Columns: []*models.Column{
-						{Name: "age", Type: types.INT, Attributes: []*models.Attribute{
-							{Type: types.MIN, Value: []byte("18")}, {Type: types.MAX, Value: []byte("30")}}},
-						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{
-							{Type: types.MAX_LENGTH, Value: []byte("50")}, {Type: types.MIN_LENGTH, Value: []byte("10")}}},
-						{Name: "country", Type: types.TEXT, Attributes: []*models.Attribute{
-							{Type: types.DEFAULT, Value: []byte(`"mars"`)}}},
-						{Name: "status", Type: types.INT, Attributes: []*models.Attribute{
-							{Type: types.DEFAULT, Value: []byte("0")}}},
+					Columns: []schema.Column{
+						{Name: "age", Type: schema.ColInt, Attributes: []schema.Attribute{
+							{Type: schema.AttrMin, Value: []byte("18")},
+							{Type: schema.AttrMax, Value: []byte("30")}}},
+						{Name: "email", Type: schema.ColText, Attributes: []schema.Attribute{
+							{Type: schema.AttrMaxLength, Value: []byte("50")},
+							{Type: schema.AttrMinLength, Value: []byte("10")}}},
+						{Name: "country", Type: schema.ColText, Attributes: []schema.Attribute{
+							{Type: schema.AttrDefault, Value: []byte(`"mars"`)}}},
+						{Name: "status", Type: schema.ColInt, Attributes: []schema.Attribute{
+							{Type: schema.AttrDefault, Value: []byte("0")}}},
 					},
 				},
 			},
@@ -72,17 +73,17 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 			name:   "table with index",
 			input:  `database demo; table user{name text, age int, email text, #uname unique(name, email), #im index(email)}`,
 			wantDB: "demo",
-			wantTables: []models.Table{
+			wantTables: []schema.Table{
 				{
 					Name: "user",
-					Columns: []*models.Column{
-						{Name: "name", Type: types.TEXT, Attributes: []*models.Attribute{}},
-						{Name: "age", Type: types.INT, Attributes: []*models.Attribute{}},
-						{Name: "email", Type: types.TEXT, Attributes: []*models.Attribute{}},
+					Columns: []schema.Column{
+						{Name: "name", Type: schema.ColText, Attributes: []schema.Attribute{}},
+						{Name: "age", Type: schema.ColInt, Attributes: []schema.Attribute{}},
+						{Name: "email", Type: schema.ColText, Attributes: []schema.Attribute{}},
 					},
-					Indexes: []*models.Index{
-						{Name: "uname", Type: types.UNIQUE_BTREE, Columns: []string{"name", "email"}},
-						{Name: "im", Type: types.BTREE, Columns: []string{"email"}},
+					Indexes: []schema.Index{
+						{Name: "uname", Type: schema.IdxBtree, Columns: []string{"name", "email"}},
+						{Name: "im", Type: schema.IdxBtree, Columns: []string{"email"}},
 					},
 				},
 			},
@@ -96,17 +97,17 @@ insert into user (name, age) values ($name, $age);
 insert into user (name, wallet) values ("test_name", @caller);
 }`,
 			wantDB: "demo",
-			wantTables: []models.Table{
+			wantTables: []schema.Table{
 				{
 					Name: "user",
-					Columns: []*models.Column{
-						{Name: "name", Type: types.TEXT, Attributes: []*models.Attribute{}},
-						{Name: "age", Type: types.INT, Attributes: []*models.Attribute{}},
-						{Name: "wallet", Type: types.TEXT, Attributes: []*models.Attribute{}},
+					Columns: []schema.Column{
+						{Name: "name", Type: schema.ColText, Attributes: []schema.Attribute{}},
+						{Name: "age", Type: schema.ColInt, Attributes: []schema.Attribute{}},
+						{Name: "wallet", Type: schema.ColText, Attributes: []schema.Attribute{}},
 					},
 				},
 			},
-			wantActions: []models.Action{
+			wantActions: []schema.Action{
 				{
 					Name:   "create_user",
 					Inputs: []string{"$name", "$age"},
@@ -140,12 +141,12 @@ insert into user (name, wallet) values ("test_name", @caller);
 			for _, decl := range a.Decls {
 				switch d := decl.(type) {
 				case *ast.TableDecl:
-					if !testTableDeclaration(t, d, &c.wantTables[ti]) {
+					if !testTableDeclaration(t, d, c.wantTables[ti]) {
 						return
 					}
 					ti++
 				case *ast.ActionDecl:
-					if !testActionDeclaration(t, d, &c.wantActions[ai]) {
+					if !testActionDeclaration(t, d, c.wantActions[ai]) {
 						return
 					}
 					ai++
@@ -155,14 +156,15 @@ insert into user (name, wallet) values ("test_name", @caller);
 	}
 }
 
-func testTableBody(t *testing.T, col *ast.ColumnDef, want *models.Column) bool {
+func testTableBody(t *testing.T, col *ast.ColumnDef, want schema.Column) bool {
 	if col.Name.Name != want.Name {
 		t.Errorf("columnDef.Name is not '%s'. got=%s", want.Name, col.Name.Name)
 		return false
 	}
 
-	if ast.GetMappedColumnType(col.Type.Name) != want.Type {
-		t.Errorf("columnDef.Name.Type is not '%s'. got=%s", want.Type, col.Type)
+	ct := utils.GetMappedColumnType(col.Type.Name)
+	if ct != want.Type {
+		t.Errorf("columnDef.Name.Type is not '%s'. got=%s", want.Type, ct)
 		return false
 	}
 
@@ -172,9 +174,10 @@ func testTableBody(t *testing.T, col *ast.ColumnDef, want *models.Column) bool {
 	}
 
 	for j, attr := range col.Attrs {
-		at := ast.GetMappedAttributeType(attr.Type)
+		at := utils.GetMappedAttributeType(attr.Type)
 		if at != want.Attributes[j].Type {
-			t.Errorf("columnDef.Name.Attrs[%d].Atype is not '%d'. got=%d", j, want.Attributes[j].Type, at)
+			t.Errorf("columnDef.Name.Attrs[%d].Atype is not '%s'. got=%s",
+				j, want.Attributes[j].Type, at)
 			return false
 		}
 
@@ -199,7 +202,7 @@ func testTableBody(t *testing.T, col *ast.ColumnDef, want *models.Column) bool {
 	return true
 }
 
-func testTableIndex(t *testing.T, idx *ast.IndexDef, want *models.Index) bool {
+func testTableIndex(t *testing.T, idx *ast.IndexDef, want schema.Index) bool {
 	if idx.Name.Name != token.HASH.String()+want.Name {
 		t.Errorf("indexDef.Name is not '%s'. got=%s", want.Name, idx.Name.Name)
 		return false
@@ -228,7 +231,7 @@ func testTableIndex(t *testing.T, idx *ast.IndexDef, want *models.Index) bool {
 	return true
 }
 
-func testTableDeclaration(t *testing.T, d ast.Decl, want *models.Table) bool {
+func testTableDeclaration(t *testing.T, d ast.Decl, want schema.Table) bool {
 	tableDecl, ok := d.(*ast.TableDecl)
 	if !ok {
 		t.Errorf("statement is not *ast.TableDecl. got=%T", d)
@@ -279,7 +282,7 @@ func testSQLStatement(t *testing.T, s ast.Stmt, want string) bool {
 	return false
 }
 
-func testActionDeclaration(t *testing.T, d ast.Decl, want *models.Action) bool {
+func testActionDeclaration(t *testing.T, d ast.Decl, want schema.Action) bool {
 	actionDecl, ok := d.(*ast.ActionDecl)
 	if !ok {
 		t.Errorf("statement is not *ast.ActionDecl. got=%T", d)
@@ -355,12 +358,12 @@ func TestParser_DatabaseDeclaration_errors(t *testing.T) {
 		{
 			name:      "referred table not found",
 			input:     `database test; action a1() {insert into t1(id) values(1)}`,
-			wantError: sql.ErrTableNotFound,
+			wantError: sql_parser.ErrTableNotFound,
 		},
 		{
 			name:      "referred column not found in index",
 			input:     `database test; table test {#idx index(id)}`,
-			wantError: sql.ErrColumnNotFound,
+			wantError: sql_parser.ErrColumnNotFound,
 		},
 		{
 			name:      "duplicate action params",

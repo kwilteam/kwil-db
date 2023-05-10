@@ -10,8 +10,7 @@
           "type": 102,
           "attributes": [
             {
-              "type": 103,
-              "value": null
+              "type": 103
             }
           ]
         },
@@ -43,9 +42,7 @@
             }
           ]
         }
-      ],
-      "indexes": []
+      ]
     }
-  ],
-  "actions": null
+  ]
 }

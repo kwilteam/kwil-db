@@ -85,9 +85,6 @@ type SQLiteParserListener interface {
 	// EnterCte_table_name is called when entering the cte_table_name production.
 	EnterCte_table_name(c *Cte_table_nameContext)
 
-	// EnterRecursive_cte is called when entering the recursive_cte production.
-	EnterRecursive_cte(c *Recursive_cteContext)
-
 	// EnterCommon_table_expression is called when entering the common_table_expression production.
 	EnterCommon_table_expression(c *Common_table_expressionContext)
 
@@ -105,9 +102,6 @@ type SQLiteParserListener interface {
 
 	// EnterExpr is called when entering the expr production.
 	EnterExpr(c *ExprContext)
-
-	// EnterRaise_function is called when entering the raise_function production.
-	EnterRaise_function(c *Raise_functionContext)
 
 	// EnterLiteral_value is called when entering the literal_value production.
 	EnterLiteral_value(c *Literal_valueContext)
@@ -160,6 +154,9 @@ type SQLiteParserListener interface {
 	// EnterResult_column is called when entering the result_column production.
 	EnterResult_column(c *Result_columnContext)
 
+	// EnterReturning_clause_result_column is called when entering the returning_clause_result_column production.
+	EnterReturning_clause_result_column(c *Returning_clause_result_columnContext)
+
 	// EnterJoin_operator is called when entering the join_operator production.
 	EnterJoin_operator(c *Join_operatorContext)
 
@@ -187,26 +184,8 @@ type SQLiteParserListener interface {
 	// EnterFilter_clause is called when entering the filter_clause production.
 	EnterFilter_clause(c *Filter_clauseContext)
 
-	// EnterWindow_defn is called when entering the window_defn production.
-	EnterWindow_defn(c *Window_defnContext)
-
-	// EnterOver_clause is called when entering the over_clause production.
-	EnterOver_clause(c *Over_clauseContext)
-
-	// EnterFrame_spec is called when entering the frame_spec production.
-	EnterFrame_spec(c *Frame_specContext)
-
 	// EnterFrame_clause is called when entering the frame_clause production.
 	EnterFrame_clause(c *Frame_clauseContext)
-
-	// EnterSimple_function_invocation is called when entering the simple_function_invocation production.
-	EnterSimple_function_invocation(c *Simple_function_invocationContext)
-
-	// EnterAggregate_function_invocation is called when entering the aggregate_function_invocation production.
-	EnterAggregate_function_invocation(c *Aggregate_function_invocationContext)
-
-	// EnterWindow_function_invocation is called when entering the window_function_invocation production.
-	EnterWindow_function_invocation(c *Window_function_invocationContext)
 
 	// EnterCommon_table_stmt is called when entering the common_table_stmt production.
 	EnterCommon_table_stmt(c *Common_table_stmtContext)
@@ -424,9 +403,6 @@ type SQLiteParserListener interface {
 	// ExitCte_table_name is called when exiting the cte_table_name production.
 	ExitCte_table_name(c *Cte_table_nameContext)
 
-	// ExitRecursive_cte is called when exiting the recursive_cte production.
-	ExitRecursive_cte(c *Recursive_cteContext)
-
 	// ExitCommon_table_expression is called when exiting the common_table_expression production.
 	ExitCommon_table_expression(c *Common_table_expressionContext)
 
@@ -444,9 +420,6 @@ type SQLiteParserListener interface {
 
 	// ExitExpr is called when exiting the expr production.
 	ExitExpr(c *ExprContext)
-
-	// ExitRaise_function is called when exiting the raise_function production.
-	ExitRaise_function(c *Raise_functionContext)
 
 	// ExitLiteral_value is called when exiting the literal_value production.
 	ExitLiteral_value(c *Literal_valueContext)
@@ -499,6 +472,9 @@ type SQLiteParserListener interface {
 	// ExitResult_column is called when exiting the result_column production.
 	ExitResult_column(c *Result_columnContext)
 
+	// ExitReturning_clause_result_column is called when exiting the returning_clause_result_column production.
+	ExitReturning_clause_result_column(c *Returning_clause_result_columnContext)
+
 	// ExitJoin_operator is called when exiting the join_operator production.
 	ExitJoin_operator(c *Join_operatorContext)
 
@@ -526,26 +502,8 @@ type SQLiteParserListener interface {
 	// ExitFilter_clause is called when exiting the filter_clause production.
 	ExitFilter_clause(c *Filter_clauseContext)
 
-	// ExitWindow_defn is called when exiting the window_defn production.
-	ExitWindow_defn(c *Window_defnContext)
-
-	// ExitOver_clause is called when exiting the over_clause production.
-	ExitOver_clause(c *Over_clauseContext)
-
-	// ExitFrame_spec is called when exiting the frame_spec production.
-	ExitFrame_spec(c *Frame_specContext)
-
 	// ExitFrame_clause is called when exiting the frame_clause production.
 	ExitFrame_clause(c *Frame_clauseContext)
-
-	// ExitSimple_function_invocation is called when exiting the simple_function_invocation production.
-	ExitSimple_function_invocation(c *Simple_function_invocationContext)
-
-	// ExitAggregate_function_invocation is called when exiting the aggregate_function_invocation production.
-	ExitAggregate_function_invocation(c *Aggregate_function_invocationContext)
-
-	// ExitWindow_function_invocation is called when exiting the window_function_invocation production.
-	ExitWindow_function_invocation(c *Window_function_invocationContext)
 
 	// ExitCommon_table_stmt is called when exiting the common_table_stmt production.
 	ExitCommon_table_stmt(c *Common_table_stmtContext)

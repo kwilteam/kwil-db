@@ -178,12 +178,6 @@ func (s *BaseSQLiteParserListener) EnterCte_table_name(ctx *Cte_table_nameContex
 // ExitCte_table_name is called when production cte_table_name is exited.
 func (s *BaseSQLiteParserListener) ExitCte_table_name(ctx *Cte_table_nameContext) {}
 
-// EnterRecursive_cte is called when production recursive_cte is entered.
-func (s *BaseSQLiteParserListener) EnterRecursive_cte(ctx *Recursive_cteContext) {}
-
-// ExitRecursive_cte is called when production recursive_cte is exited.
-func (s *BaseSQLiteParserListener) ExitRecursive_cte(ctx *Recursive_cteContext) {}
-
 // EnterCommon_table_expression is called when production common_table_expression is entered.
 func (s *BaseSQLiteParserListener) EnterCommon_table_expression(ctx *Common_table_expressionContext) {
 }
@@ -220,12 +214,6 @@ func (s *BaseSQLiteParserListener) EnterExpr(ctx *ExprContext) {}
 
 // ExitExpr is called when production expr is exited.
 func (s *BaseSQLiteParserListener) ExitExpr(ctx *ExprContext) {}
-
-// EnterRaise_function is called when production raise_function is entered.
-func (s *BaseSQLiteParserListener) EnterRaise_function(ctx *Raise_functionContext) {}
-
-// ExitRaise_function is called when production raise_function is exited.
-func (s *BaseSQLiteParserListener) ExitRaise_function(ctx *Raise_functionContext) {}
 
 // EnterLiteral_value is called when production literal_value is entered.
 func (s *BaseSQLiteParserListener) EnterLiteral_value(ctx *Literal_valueContext) {}
@@ -329,6 +317,14 @@ func (s *BaseSQLiteParserListener) EnterResult_column(ctx *Result_columnContext)
 // ExitResult_column is called when production result_column is exited.
 func (s *BaseSQLiteParserListener) ExitResult_column(ctx *Result_columnContext) {}
 
+// EnterReturning_clause_result_column is called when production returning_clause_result_column is entered.
+func (s *BaseSQLiteParserListener) EnterReturning_clause_result_column(ctx *Returning_clause_result_columnContext) {
+}
+
+// ExitReturning_clause_result_column is called when production returning_clause_result_column is exited.
+func (s *BaseSQLiteParserListener) ExitReturning_clause_result_column(ctx *Returning_clause_result_columnContext) {
+}
+
 // EnterJoin_operator is called when production join_operator is entered.
 func (s *BaseSQLiteParserListener) EnterJoin_operator(ctx *Join_operatorContext) {}
 
@@ -383,53 +379,11 @@ func (s *BaseSQLiteParserListener) EnterFilter_clause(ctx *Filter_clauseContext)
 // ExitFilter_clause is called when production filter_clause is exited.
 func (s *BaseSQLiteParserListener) ExitFilter_clause(ctx *Filter_clauseContext) {}
 
-// EnterWindow_defn is called when production window_defn is entered.
-func (s *BaseSQLiteParserListener) EnterWindow_defn(ctx *Window_defnContext) {}
-
-// ExitWindow_defn is called when production window_defn is exited.
-func (s *BaseSQLiteParserListener) ExitWindow_defn(ctx *Window_defnContext) {}
-
-// EnterOver_clause is called when production over_clause is entered.
-func (s *BaseSQLiteParserListener) EnterOver_clause(ctx *Over_clauseContext) {}
-
-// ExitOver_clause is called when production over_clause is exited.
-func (s *BaseSQLiteParserListener) ExitOver_clause(ctx *Over_clauseContext) {}
-
-// EnterFrame_spec is called when production frame_spec is entered.
-func (s *BaseSQLiteParserListener) EnterFrame_spec(ctx *Frame_specContext) {}
-
-// ExitFrame_spec is called when production frame_spec is exited.
-func (s *BaseSQLiteParserListener) ExitFrame_spec(ctx *Frame_specContext) {}
-
 // EnterFrame_clause is called when production frame_clause is entered.
 func (s *BaseSQLiteParserListener) EnterFrame_clause(ctx *Frame_clauseContext) {}
 
 // ExitFrame_clause is called when production frame_clause is exited.
 func (s *BaseSQLiteParserListener) ExitFrame_clause(ctx *Frame_clauseContext) {}
-
-// EnterSimple_function_invocation is called when production simple_function_invocation is entered.
-func (s *BaseSQLiteParserListener) EnterSimple_function_invocation(ctx *Simple_function_invocationContext) {
-}
-
-// ExitSimple_function_invocation is called when production simple_function_invocation is exited.
-func (s *BaseSQLiteParserListener) ExitSimple_function_invocation(ctx *Simple_function_invocationContext) {
-}
-
-// EnterAggregate_function_invocation is called when production aggregate_function_invocation is entered.
-func (s *BaseSQLiteParserListener) EnterAggregate_function_invocation(ctx *Aggregate_function_invocationContext) {
-}
-
-// ExitAggregate_function_invocation is called when production aggregate_function_invocation is exited.
-func (s *BaseSQLiteParserListener) ExitAggregate_function_invocation(ctx *Aggregate_function_invocationContext) {
-}
-
-// EnterWindow_function_invocation is called when production window_function_invocation is entered.
-func (s *BaseSQLiteParserListener) EnterWindow_function_invocation(ctx *Window_function_invocationContext) {
-}
-
-// ExitWindow_function_invocation is called when production window_function_invocation is exited.
-func (s *BaseSQLiteParserListener) ExitWindow_function_invocation(ctx *Window_function_invocationContext) {
-}
 
 // EnterCommon_table_stmt is called when production common_table_stmt is entered.
 func (s *BaseSQLiteParserListener) EnterCommon_table_stmt(ctx *Common_table_stmtContext) {}

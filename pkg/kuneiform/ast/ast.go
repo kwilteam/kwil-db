@@ -3,14 +3,13 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
-	klType "github.com/kwilteam/kwil-db/internal/pkg/kl/types"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/sql"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
-	"strings"
-
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/utils"
+	sqlParser "github.com/kwilteam/kwil-db/pkg/sql_parser"
 	"github.com/pkg/errors"
+	"strings"
 )
 
 type Node interface {
@@ -162,7 +161,7 @@ func (x *IndexDef) stmtNode()   {}
 func (x *TableDecl) declNode()  {}
 func (x *ActionDecl) declNode() {}
 
-func (a *ActionDecl) Validate(action string, ctx klType.DatabaseContext) error {
+func (a *ActionDecl) Validate(action string, ctx sqlParser.DatabaseContext) error {
 	declaredParams := map[string]bool{}
 
 	for _, param := range a.Params {
@@ -181,7 +180,7 @@ func (a *ActionDecl) Validate(action string, ctx klType.DatabaseContext) error {
 		case *SQLStmt:
 			//fp := p.file.Position(pos)
 			lineNum := 0 //int(fp.Line)
-			if err := sql.ParseRawSQL(st.SQL, lineNum, action, ctx, false); err != nil {
+			if err := sqlParser.ParseRawSQL(st.SQL, lineNum, action, ctx, nil, false, true); err != nil {
 				return errors.Wrap(err, action)
 			}
 		default:
@@ -192,8 +191,8 @@ func (a *ActionDecl) Validate(action string, ctx klType.DatabaseContext) error {
 	return nil
 }
 
-func (a *ActionDecl) Build() (def *models.Action) {
-	def = &models.Action{}
+func (a *ActionDecl) Build() (def schema.Action) {
+	def = schema.Action{}
 	// should be validated before build
 	def.Name = a.Name.Name
 	def.Public = a.Public
@@ -217,7 +216,7 @@ func (a *ActionDecl) Build() (def *models.Action) {
 	return
 }
 
-func (d *TableDecl) Validate(ctx klType.TableContext) error {
+func (d *TableDecl) Validate(ctx sqlParser.TableContext) error {
 	tableName := d.Name.Name
 	if len(ctx.PrimaryKeys) > 1 {
 		return errors.Wrap(ErrMultiplePrimaryKeys, tableName)
@@ -233,7 +232,7 @@ func (d *TableDecl) Validate(ctx klType.TableContext) error {
 
 	for _, name := range ctx.IndexColumns {
 		if _, ok := names[name]; !ok {
-			return errors.Wrap(sql.ErrColumnNotFound, fmt.Sprintf("%s.%s", tableName, name))
+			return errors.Wrap(sqlParser.ErrColumnNotFound, fmt.Sprintf("%s.%s", tableName, name))
 		}
 	}
 
@@ -247,11 +246,11 @@ func (d *TableDecl) Validate(ctx klType.TableContext) error {
 	return nil
 }
 
-func (d *TableDecl) Build() (def *models.Table) {
-	def = &models.Table{}
+func (d *TableDecl) Build() (def schema.Table) {
+	def = schema.Table{}
 	def.Name = d.Name.Name
-	def.Columns = []*models.Column{}
-	def.Indexes = []*models.Index{}
+	def.Columns = []schema.Column{}
+	def.Indexes = []schema.Index{}
 
 	for _, column := range d.Body {
 		c, ok := column.(*ColumnDef)
@@ -272,24 +271,24 @@ func (d *TableDecl) Build() (def *models.Table) {
 	return
 }
 
-func (d *ColumnDef) Build() (def *models.Column) {
-	def = &models.Column{}
+func (d *ColumnDef) Build() (def schema.Column) {
+	def = schema.Column{}
 	def.Name = d.Name.Name
 
 	typeName := strings.ToLower(d.Type.Name)
 
-	def.Type = GetMappedColumnType(typeName)
+	def.Type = utils.GetMappedColumnType(typeName)
 
-	def.Attributes = []*models.Attribute{}
+	def.Attributes = []schema.Attribute{}
 	for _, attr := range d.Attrs {
 		def.Attributes = append(def.Attributes, attr.Build())
 	}
 	return
 }
 
-func (d *AttrDef) Build() (def *models.Attribute) {
-	def = &models.Attribute{}
-	def.Type = GetMappedAttributeType(d.Type)
+func (d *AttrDef) Build() (def schema.Attribute) {
+	def = schema.Attribute{}
+	def.Type = utils.GetMappedAttributeType(d.Type)
 
 	if d.Param == nil {
 		return
@@ -297,6 +296,7 @@ func (d *AttrDef) Build() (def *models.Attribute) {
 
 	switch a := d.Param.(type) {
 	case *BasicLit:
+		// TODO: a standalone types package
 		def.Value = types.NewNoPanic(a.Value).Bytes()
 	case *Ident:
 		def.Value = types.NewNoPanic(a.Name).Bytes()
@@ -304,13 +304,13 @@ func (d *AttrDef) Build() (def *models.Attribute) {
 	return
 }
 
-func (d *IndexDef) Build() (def *models.Index) {
-	def = &models.Index{}
+func (d *IndexDef) Build() (def schema.Index) {
+	def = schema.Index{}
 	// remove the prefix # of index name
 	def.Name = d.Name.Name[1:]
-	def.Type = types.BTREE
+	def.Type = schema.IdxBtree
 	if d.Unique {
-		def.Type = types.UNIQUE_BTREE
+		def.Type = schema.IdxUniqueBtree
 	}
 	def.Columns = []string{}
 	for _, col := range d.Columns {
@@ -328,26 +328,26 @@ type Database struct {
 	Name  *Ident
 	Decls []Decl
 
-	model *models.Dataset
+	schema *schema.Schema
 }
 
-// Dataset returns the model of the database
-func (d *Database) Dataset() *models.Dataset {
-	return d.model
+// Schema returns the schema of the database
+func (d *Database) Schema() *schema.Schema {
+	return d.schema
 }
 
-// Generate generates JSON string from AST
-func (d *Database) Generate() []byte {
-	res, err := json.MarshalIndent(d.model, "", "  ")
+// GenerateJson generates JSON from AST
+func (d *Database) GenerateJson() []byte {
+	res, err := json.MarshalIndent(d.schema, "", "  ")
 	if err != nil {
 		panic(err)
 	}
 	return res
 }
 
-func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
-	ctx = klType.NewDatabaseContext()
-	db := models.Dataset{}
+func (d *Database) BuildSchemaCtx() (ctx sqlParser.DatabaseContext) {
+	ctx = sqlParser.NewDatabaseContext()
+	db := schema.Schema{}
 	db.Name = d.Name.Name
 	for _, decl := range d.Decls {
 		switch a := decl.(type) {
@@ -357,15 +357,15 @@ func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
 			db.Actions = append(db.Actions, a.Build())
 		}
 	}
-	d.model = &db
+	d.schema = &db
 
 	// same table/index name will be overwritten
-	for _, table := range d.model.Tables {
-		tCtx := klType.NewTableContext()
+	for _, table := range d.schema.Tables {
+		tCtx := sqlParser.NewTableContext()
 		for _, column := range table.Columns {
 			tCtx.Columns = append(tCtx.Columns, column.Name)
 			for _, attr := range column.Attributes {
-				if attr.Type == types.PRIMARY_KEY {
+				if attr.Type == schema.AttrPrimaryKey {
 					tCtx.PrimaryKeys = append(tCtx.PrimaryKeys, column.Name)
 				}
 			}
@@ -378,8 +378,8 @@ func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
 		ctx.Tables[table.Name] = tCtx
 	}
 
-	for _, action := range d.model.Actions {
-		aCtx := klType.NewActionContext()
+	for _, action := range d.schema.Actions {
+		aCtx := sqlParser.NewActionContext()
 		for _, input := range action.Inputs {
 			aCtx[input] = true
 		}
@@ -391,7 +391,7 @@ func (d *Database) BuildCtx() (ctx klType.DatabaseContext) {
 }
 
 func (d *Database) Validate() error {
-	ctx := d.BuildCtx()
+	ctx := d.BuildSchemaCtx()
 
 	actionNames := map[string]bool{}
 	tableNames := map[string]bool{}

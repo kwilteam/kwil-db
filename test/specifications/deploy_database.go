@@ -2,7 +2,7 @@ package specifications
 
 import (
 	"context"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +10,7 @@ import (
 
 // DatabaseDeployDsl is dsl for database deployment specification
 type DatabaseDeployDsl interface {
-	DeployDatabase(ctx context.Context, db *models.Dataset) error
+	DeployDatabase(ctx context.Context, db *schema.Schema) error
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 

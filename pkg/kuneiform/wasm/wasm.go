@@ -14,7 +14,7 @@ func parse(input string) (json string, err error) {
 		return "", err
 	}
 
-	json = string(a.Generate())
+	json = string(a.GenerateJson())
 	return
 }
 
