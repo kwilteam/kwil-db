@@ -2,9 +2,9 @@ package database
 
 import (
 	"fmt"
-	"kwil/cmd/kwil-cli/config"
-	"kwil/pkg/crypto"
-	"kwil/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
 
 	"github.com/spf13/cobra"
 )

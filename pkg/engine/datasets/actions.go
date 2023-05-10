@@ -2,10 +2,10 @@ package datasets
 
 import (
 	"fmt"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/engine/types"
-	"kwil/pkg/sql/driver"
-	"kwil/pkg/utils/numbers/polynomial"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
+	"github.com/kwilteam/kwil-db/pkg/utils/numbers/polynomial"
 	"math/big"
 )
 

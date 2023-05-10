@@ -1,8 +1,8 @@
 package ast
 
 import (
-	"kwil/pkg/engine/types"
-	"kwil/pkg/kuneiform/token"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 )
 
 var columnTypes = map[string]types.DataType{

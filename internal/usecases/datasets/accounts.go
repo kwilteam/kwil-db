@@ -1,6 +1,6 @@
 package datasets
 
-import "kwil/internal/entity"
+import "github.com/kwilteam/kwil-db/internal/entity"
 
 func (u *DatasetUseCase) GetAccount(address string) (*entity.Account, error) {
 	acc, err := u.accountStore.GetAccount(address)

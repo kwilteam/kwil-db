@@ -3,10 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
-	commonpb "kwil/api/protobuf/common/v0"
-	pricingpb "kwil/api/protobuf/pricing/v0"
-	"kwil/pkg/accounts"
-	"kwil/pkg/utils/serialize"
+	commonpb "github.com/kwilteam/kwil-db/api/protobuf/common/v0"
+	pricingpb "github.com/kwilteam/kwil-db/api/protobuf/pricing/v0"
+	"github.com/kwilteam/kwil-db/pkg/accounts"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (c *Client) EstimateCost(ctx context.Context, tx *accounts.Transaction) (string, error) {

@@ -1,8 +1,8 @@
 package scanner_test
 
 import (
-	"kwil/pkg/kuneiform/scanner"
-	"kwil/pkg/kuneiform/token"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/scanner"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"testing"
 )
 

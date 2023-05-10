@@ -3,8 +3,8 @@ package common
 import (
 	"context"
 	"fmt"
-	"kwil/cmd/kwil-cli/config"
-	"kwil/pkg/client"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/pkg/client"
 )
 
 const (

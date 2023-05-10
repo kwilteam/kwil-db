@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"kwil/pkg/chain/contracts/escrow/types"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/types"
 )
 
 func (c *contract) Balance(ctx context.Context, params *types.DepositBalanceParams) (*types.DepositBalanceResponse, error) {

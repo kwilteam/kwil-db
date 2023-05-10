@@ -1,7 +1,7 @@
 package config
 
 import (
-	"kwil/pkg/config"
+	"github.com/kwilteam/kwil-db/pkg/config"
 )
 
 func LoadKwildConfig() (*KwildConfig, error) {

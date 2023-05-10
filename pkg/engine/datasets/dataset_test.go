@@ -3,10 +3,10 @@ package datasets_test
 import (
 	"encoding/json"
 	"fmt"
-	"kwil/pkg/engine/datasets"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/engine/models/mocks"
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/datasets"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/models/mocks"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"os"
 	"testing"
 )

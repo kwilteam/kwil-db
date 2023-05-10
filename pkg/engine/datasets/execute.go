@@ -3,8 +3,8 @@ package datasets
 import (
 	"encoding/json"
 	"fmt"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/sql/driver"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"math/big"
 	"strings"
 )

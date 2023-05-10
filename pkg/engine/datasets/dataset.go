@@ -2,11 +2,11 @@ package datasets
 
 import (
 	"fmt"
-	sqlitegenerator "kwil/pkg/engine/datasets/sqlite-generator"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/engine/models/validation"
-	"kwil/pkg/log"
-	"kwil/pkg/sql/driver"
+	sqlitegenerator "github.com/kwilteam/kwil-db/pkg/engine/datasets/sqlite-generator"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/models/validation"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 )
 
 var (

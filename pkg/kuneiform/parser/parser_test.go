@@ -2,12 +2,12 @@ package parser_test
 
 import (
 	"bytes"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/engine/types"
-	"kwil/pkg/kuneiform/ast"
-	"kwil/pkg/kuneiform/parser"
-	"kwil/pkg/kuneiform/sql"
-	"kwil/pkg/kuneiform/token"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/ast"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/sql"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"strings"
 	"testing"
 )
@@ -349,7 +349,7 @@ func TestParser_DatabaseDeclaration_errors(t *testing.T) {
 		},
 		{
 			name:      "duplicate index",
-			input:     `database test; table test {id int, id index(id)}`,
+			input:     `database test; table test {id int, #id index(id)}`,
 			wantError: ast.ErrDuplicateColumnOrIndexName,
 		},
 		{
@@ -359,12 +359,12 @@ func TestParser_DatabaseDeclaration_errors(t *testing.T) {
 		},
 		{
 			name:      "referred column not found in index",
-			input:     `database test; table test {idx index(id)}`,
+			input:     `database test; table test {#idx index(id)}`,
 			wantError: sql.ErrColumnNotFound,
 		},
 		{
 			name:      "duplicate action params",
-			input:     `database test; action a1(id, id){}`,
+			input:     `database test; action a1($id, $id){}`,
 			wantError: ast.ErrDuplicateActionParam,
 		},
 	}

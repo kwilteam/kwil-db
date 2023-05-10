@@ -2,7 +2,7 @@ package balances
 
 import (
 	"fmt"
-	"kwil/pkg/sql/driver"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"math/big"
 	"strings"
 
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS accounts (
 	balance TEXT NOT NULL,
 	nonce INTEGER NOT NULL
 	);
-	
+
 CREATE TABLE IF NOT EXISTS chains (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	chain_code INTEGER NOT NULL UNIQUE,

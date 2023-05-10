@@ -1,7 +1,7 @@
 package polynomial_test
 
 import (
-	poly "kwil/pkg/utils/numbers/polynomial"
+	poly "github.com/kwilteam/kwil-db/pkg/utils/numbers/polynomial"
 	"math/big"
 	"testing"
 )

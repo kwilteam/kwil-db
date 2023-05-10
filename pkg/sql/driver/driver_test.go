@@ -2,7 +2,7 @@ package driver_test
 
 import (
 	"fmt"
-	"kwil/pkg/sql/driver"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"sync"
 	"testing"
 	"time"

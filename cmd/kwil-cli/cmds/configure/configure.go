@@ -2,9 +2,9 @@ package configure
 
 import (
 	"fmt"
-	"kwil/cmd/kwil-cli/cmds/common"
-	"kwil/cmd/kwil-cli/config"
-	"kwil/pkg/crypto"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"strings"
 
 	"github.com/spf13/cobra"

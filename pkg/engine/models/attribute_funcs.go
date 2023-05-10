@@ -2,7 +2,7 @@ package models
 
 import (
 	"fmt"
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 type attributes struct{}

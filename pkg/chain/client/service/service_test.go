@@ -3,7 +3,7 @@ package service_test
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/chain/provider/dto"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
 	"testing"
 	"time"
 )

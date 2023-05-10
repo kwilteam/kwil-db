@@ -1,7 +1,7 @@
 package models
 
 import (
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 type Column struct {

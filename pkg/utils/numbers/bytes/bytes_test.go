@@ -2,7 +2,7 @@ package bytes_test
 
 import (
 	"encoding/binary"
-	"kwil/pkg/utils/numbers/bytes"
+	"github.com/kwilteam/kwil-db/pkg/utils/numbers/bytes"
 	"testing"
 )
 

@@ -3,9 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/crypto"
-	kTx "kwil/pkg/tx"
-	"kwil/pkg/utils/serialize"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (c *Client) newTx(ctx context.Context, payloadType kTx.PayloadType, data any) (*kTx.Transaction, error) {

@@ -3,11 +3,11 @@ package config
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"os"
 	"strings"
 
-	"kwil/pkg/config"
+	"github.com/kwilteam/kwil-db/pkg/config"
 
 	"github.com/cstockton/go-conv"
 	"github.com/ethereum/go-ethereum/crypto"

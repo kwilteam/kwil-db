@@ -4,9 +4,9 @@ import (
 	"context"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"kwil/pkg/log"
 	"net"
 )
 

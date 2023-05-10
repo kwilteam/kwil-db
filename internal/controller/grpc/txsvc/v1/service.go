@@ -1,12 +1,12 @@
 package txsvc
 
 import (
-	txpb "kwil/api/protobuf/tx/v1"
-	"kwil/internal/app/kwild/config"
-	"kwil/internal/usecases/datasets"
-	"kwil/pkg/balances"
-	"kwil/pkg/crypto"
-	"kwil/pkg/log"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
+	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 type Service struct {

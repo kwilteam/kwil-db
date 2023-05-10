@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	txpb "kwil/api/protobuf/tx/v0"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
 )
 
 func (c *Client) ListDatabases(ctx context.Context, address string) ([]string, error) {

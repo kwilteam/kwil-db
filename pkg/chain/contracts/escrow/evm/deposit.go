@@ -3,9 +3,9 @@ package evm
 import (
 	"context"
 	"crypto/ecdsa"
-	kwilCommon "kwil/pkg/chain/contracts/common/evm"
-	"kwil/pkg/chain/contracts/escrow/evm/abi"
-	types2 "kwil/pkg/chain/contracts/escrow/types"
+	kwilCommon "github.com/kwilteam/kwil-db/pkg/chain/contracts/common/evm"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/evm/abi"
+	types2 "github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/types"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"

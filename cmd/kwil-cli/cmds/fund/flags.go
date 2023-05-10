@@ -1,8 +1,8 @@
 package fund
 
 import (
-	"kwil/cmd/kwil-cli/config"
-	"kwil/pkg/crypto"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 
 	"github.com/spf13/cobra"
 )

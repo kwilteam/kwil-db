@@ -3,9 +3,9 @@ package sql
 import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"kwil/internal/pkg/kl/types"
-	"kwil/internal/pkg/sqlite"
-	"kwil/pkg/kuneiform/token"
+	"github.com/kwilteam/kwil-db/internal/pkg/kl/types"
+	"github.com/kwilteam/kwil-db/internal/pkg/sqlite"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 )
 
 func ParseRawSQL(sql string, currentLine int, actionName string, dbCtx types.DatabaseContext, trace bool) (err error) {

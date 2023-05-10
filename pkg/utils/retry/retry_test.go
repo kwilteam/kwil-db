@@ -3,8 +3,8 @@ package retry_test
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/log"
-	retry "kwil/pkg/utils/retry"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	retry "github.com/kwilteam/kwil-db/pkg/utils/retry"
 	"testing"
 	"time"
 )

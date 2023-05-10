@@ -1,10 +1,10 @@
 package datasets
 
 import (
-	"kwil/pkg/balances"
-	"kwil/pkg/engine"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/engine"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 type DatasetUseCase struct {

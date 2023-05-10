@@ -3,7 +3,7 @@ package specifications
 import (
 	"context"
 	"github.com/cstockton/go-conv"
-	"kwil/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

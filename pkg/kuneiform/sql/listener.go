@@ -3,11 +3,11 @@ package sql
 import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/kwilteam/kwil-db/internal/pkg/kl/types"
+	"github.com/kwilteam/kwil-db/internal/pkg/sqlite"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/scanner"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"github.com/pkg/errors"
-	"kwil/internal/pkg/kl/types"
-	"kwil/internal/pkg/sqlite"
-	"kwil/pkg/kuneiform/scanner"
-	"kwil/pkg/kuneiform/token"
 	"strings"
 	"sync"
 )

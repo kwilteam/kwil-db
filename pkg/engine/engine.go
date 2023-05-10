@@ -2,11 +2,11 @@ package engine
 
 import (
 	"fmt"
-	"kwil/pkg/engine/datasets"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/engine/models/clean"
-	"kwil/pkg/log"
-	"kwil/pkg/sql/driver"
+	"github.com/kwilteam/kwil-db/pkg/engine/datasets"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/models/clean"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"math/big"
 	"os"
 	"strings"

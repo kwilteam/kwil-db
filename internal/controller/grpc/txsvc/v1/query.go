@@ -2,8 +2,8 @@ package txsvc
 
 import (
 	"context"
-	txpb "kwil/api/protobuf/tx/v1"
-	"kwil/internal/entity"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/internal/entity"
 )
 
 func (s *Service) Query(ctx context.Context, req *txpb.QueryRequest) (*txpb.QueryResponse, error) {

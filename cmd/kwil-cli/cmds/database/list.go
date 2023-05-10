@@ -3,10 +3,10 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/cmd/kwil-cli/cmds/common"
-	"kwil/cmd/kwil-cli/config"
-	"kwil/pkg/client"
-	"kwil/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"strings"
 
 	"github.com/spf13/cobra"

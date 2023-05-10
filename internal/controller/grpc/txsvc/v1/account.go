@@ -2,9 +2,9 @@ package txsvc
 
 import (
 	"context"
-	txpb "kwil/api/protobuf/tx/v1"
-	"kwil/internal/entity"
-	"kwil/pkg/utils/serialize"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (*txpb.GetAccountResponse, error) {

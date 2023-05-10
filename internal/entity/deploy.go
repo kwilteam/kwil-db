@@ -1,8 +1,8 @@
 package entity
 
 import (
-	"kwil/pkg/engine/models"
-	"kwil/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
 type DeployDatabase struct {

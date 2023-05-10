@@ -2,9 +2,9 @@ package client
 
 import (
 	"context"
-	txpb "kwil/api/protobuf/tx/v1"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/utils/serialize"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (c *Client) GetSchema(ctx context.Context, dbid string) (*models.Dataset, error) {

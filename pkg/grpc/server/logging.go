@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
-	"kwil/pkg/log"
 )
 
 // InterceptorLogger adapts zap logger to interceptor logger.

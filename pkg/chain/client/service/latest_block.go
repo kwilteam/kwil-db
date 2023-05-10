@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	provider "kwil/pkg/chain/provider/dto"
+	provider "github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
 	"math/big"
 )
 

@@ -1,9 +1,9 @@
 package auth
 
 import (
-	"go.uber.org/zap"
+	http2 "github.com/kwilteam/kwil-db/internal/pkg/test/http"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"io"
-	http2 "kwil/internal/pkg/test/http"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,7 +22,10 @@ func TestAuth_ServeHTTP(t *testing.T) {
 	healthcheckKey := "healthcheckkey"
 	km, _ := NewKeyManager(strings.NewReader(`{"keys": ["keya"]}`), healthcheckKey)
 	testData := "dummy served"
-	logger, _ := zap.NewDevelopment()
+	logger := log.New(log.Config{
+		Level:       "info",
+		OutputPaths: []string{"stdout"},
+	})
 
 	tests := []struct {
 		name    string

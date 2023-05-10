@@ -1,9 +1,9 @@
 package contracts
 
 import (
-	"kwil/pkg/chain/contracts/escrow"
-	"kwil/pkg/chain/contracts/token"
-	"kwil/pkg/chain/provider"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/token"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider"
 )
 
 type Contracter interface {

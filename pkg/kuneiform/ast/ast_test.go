@@ -3,7 +3,7 @@ package ast_test
 import (
 	"bytes"
 	"flag"
-	"kwil/pkg/kuneiform/parser"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 	"os"
 	"path/filepath"
 	"testing"

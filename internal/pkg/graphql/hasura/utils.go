@@ -2,8 +2,8 @@ package hasura
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
-	"kwil/pkg/log"
 	"strings"
 	"time"
 )

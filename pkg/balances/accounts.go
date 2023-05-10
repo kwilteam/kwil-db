@@ -2,8 +2,8 @@ package balances
 
 import (
 	"fmt"
-	"kwil/pkg/log"
-	"kwil/pkg/sql/driver"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"math/big"
 	"sync"
 

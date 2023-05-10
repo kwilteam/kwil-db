@@ -2,9 +2,9 @@ package parser
 
 import (
 	"fmt"
-	"kwil/pkg/kuneiform/ast"
-	"kwil/pkg/kuneiform/scanner"
-	"kwil/pkg/kuneiform/token"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/ast"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/scanner"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"strings"
 )
 

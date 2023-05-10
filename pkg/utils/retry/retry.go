@@ -3,7 +3,7 @@ package retry
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"time"
 
 	"github.com/jpillora/backoff"

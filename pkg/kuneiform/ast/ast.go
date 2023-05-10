@@ -3,11 +3,11 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
-	klType "kwil/internal/pkg/kl/types"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/engine/types"
-	"kwil/pkg/kuneiform/sql"
-	"kwil/pkg/kuneiform/token"
+	klType "github.com/kwilteam/kwil-db/internal/pkg/kl/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/sql"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"strings"
 
 	"github.com/pkg/errors"

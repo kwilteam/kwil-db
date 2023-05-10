@@ -2,7 +2,7 @@ package types_test
 
 import (
 	"bytes"
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"testing"
 )
 

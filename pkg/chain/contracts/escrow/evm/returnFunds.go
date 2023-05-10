@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
-	kwilCommon "kwil/pkg/chain/contracts/common/evm"
-	"kwil/pkg/chain/contracts/escrow/types"
+	kwilCommon "github.com/kwilteam/kwil-db/pkg/chain/contracts/common/evm"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/types"
 )
 
 // ReturnFunds calls the returnDeposit function

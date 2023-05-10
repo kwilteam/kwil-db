@@ -5,12 +5,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"kwil/pkg/chain/contracts/token/evm"
-	types2 "kwil/pkg/chain/contracts/token/types"
-	"kwil/pkg/chain/provider"
-	chainTypes "kwil/pkg/chain/types"
-	"kwil/pkg/log"
-	"kwil/pkg/utils/retry"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/token/evm"
+	types2 "github.com/kwilteam/kwil-db/pkg/chain/contracts/token/types"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider"
+	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/utils/retry"
 	"math/big"
 )
 

@@ -2,8 +2,8 @@ package chainsyncer
 
 import (
 	"fmt"
-	"kwil/pkg/chain/contracts/escrow"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 // trying a new builder pattern type here

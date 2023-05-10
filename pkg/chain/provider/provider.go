@@ -3,9 +3,9 @@ package provider
 import (
 	"context"
 	"fmt"
-	dto2 "kwil/pkg/chain/provider/dto"
-	"kwil/pkg/chain/provider/evm"
-	"kwil/pkg/chain/types"
+	dto2 "github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider/evm"
+	"github.com/kwilteam/kwil-db/pkg/chain/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/ethclient"

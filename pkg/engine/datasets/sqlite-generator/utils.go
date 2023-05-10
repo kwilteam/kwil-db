@@ -2,8 +2,8 @@ package sqlitegenerator
 
 import (
 	"fmt"
-	"kwil/pkg/engine/models"
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 func columnTypeToSQLiteType(columnType types.DataType) string {

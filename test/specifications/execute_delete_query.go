@@ -2,8 +2,8 @@ package specifications
 
 import (
 	"context"
+	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"github.com/stretchr/testify/assert"
-	"kwil/pkg/engine/models"
 	"testing"
 )
 

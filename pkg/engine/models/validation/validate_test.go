@@ -1,8 +1,8 @@
 package validation_test
 
 import (
-	"kwil/pkg/engine/models/mocks"
-	"kwil/pkg/engine/models/validation"
+	"github.com/kwilteam/kwil-db/pkg/engine/models/mocks"
+	"github.com/kwilteam/kwil-db/pkg/engine/models/validation"
 	"testing"
 )
 

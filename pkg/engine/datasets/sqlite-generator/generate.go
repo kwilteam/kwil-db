@@ -1,6 +1,6 @@
 package sqlitegenerator
 
-import "kwil/pkg/engine/models"
+import "github.com/kwilteam/kwil-db/pkg/engine/models"
 
 func GenerateDDL(table *models.Table) ([]string, error) {
 	var statements []string

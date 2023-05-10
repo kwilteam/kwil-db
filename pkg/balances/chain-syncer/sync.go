@@ -3,12 +3,12 @@ package chainsyncer
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/balances"
-	"kwil/pkg/chain/contracts"
-	"kwil/pkg/chain/contracts/escrow"
-	provider "kwil/pkg/chain/provider/dto"
-	chainCodes "kwil/pkg/chain/types"
-	"kwil/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow"
+	provider "github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
+	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"math/big"
 	"time"
 

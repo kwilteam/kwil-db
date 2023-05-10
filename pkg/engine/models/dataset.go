@@ -1,7 +1,7 @@
 package models
 
 import (
-	"kwil/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"strings"
 )
 

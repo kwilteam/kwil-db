@@ -3,7 +3,7 @@ package crypto_test
 import (
 	"bytes"
 	"fmt"
-	"kwil/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"

@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
-	cfgpb "kwil/api/protobuf/config/v0"
+	cfgpb "github.com/kwilteam/kwil-db/api/protobuf/config/v0"
 )
 
 func (c *Client) GetServiceConfig(ctx context.Context) (SvcConfig, error) {

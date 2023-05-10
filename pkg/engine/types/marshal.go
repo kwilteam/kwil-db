@@ -2,7 +2,7 @@ package types
 
 import (
 	"fmt"
-	"kwil/pkg/utils/serialize"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 
 	"github.com/cstockton/go-conv"
 )

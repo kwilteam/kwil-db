@@ -1,11 +1,11 @@
 package system
 
 import (
+	"github.com/kwilteam/kwil-db/internal/pkg/build"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/go-rosetta"
 	"html/template"
-	"kwil/internal/pkg/build"
 	"os"
 	"runtime"
 	"text/tabwriter"

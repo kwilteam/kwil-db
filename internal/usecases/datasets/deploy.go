@@ -1,8 +1,8 @@
 package datasets
 
 import (
-	"kwil/internal/entity"
-	"kwil/pkg/tx"
+	"github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/tx"
 	"math/big"
 
 	"go.uber.org/zap"

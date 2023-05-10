@@ -2,7 +2,7 @@ package txsvc
 
 import (
 	"context"
-	txpb "kwil/api/protobuf/tx/v1"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 )
 
 func (s *Service) Ping(ctx context.Context, req *txpb.PingRequest) (*txpb.PingResponse, error) {

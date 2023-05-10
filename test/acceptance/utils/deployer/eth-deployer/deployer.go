@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	escrow "kwil/pkg/chain/contracts/escrow/evm/abi"
-	token "kwil/pkg/chain/contracts/token/evm/abi"
+	escrow "github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/evm/abi"
+	token "github.com/kwilteam/kwil-db/pkg/chain/contracts/token/evm/abi"
 	"math/big"
 	"sync"
 

@@ -3,12 +3,12 @@ package database
 import (
 	"context"
 	"fmt"
-	"kwil/cmd/kwil-cli/cmds/common"
-	"kwil/cmd/kwil-cli/cmds/common/display"
-	"kwil/cmd/kwil-cli/config"
-	"kwil/pkg/client"
-	"kwil/pkg/csv"
-	"kwil/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/csv"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"os"
 	"strings"
 

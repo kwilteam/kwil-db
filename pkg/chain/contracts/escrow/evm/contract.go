@@ -1,8 +1,8 @@
 package evm
 
 import (
-	"kwil/pkg/chain/contracts/escrow/evm/abi"
-	"kwil/pkg/chain/provider"
+	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow/evm/abi"
+	"github.com/kwilteam/kwil-db/pkg/chain/provider"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"

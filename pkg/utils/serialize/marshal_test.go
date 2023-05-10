@@ -1,7 +1,7 @@
 package serialize_test
 
 import (
-	"kwil/pkg/utils/serialize"
+	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 	"testing"
 )
 

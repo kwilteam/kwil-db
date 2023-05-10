@@ -2,7 +2,7 @@ package balances_test
 
 import (
 	"fmt"
-	"kwil/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/balances"
 	"math/big"
 	"os"
 	"testing"

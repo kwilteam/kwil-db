@@ -3,7 +3,7 @@ package evm
 import (
 	"context"
 	"fmt"
-	"kwil/pkg/chain/types"
+	"github.com/kwilteam/kwil-db/pkg/chain/types"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"

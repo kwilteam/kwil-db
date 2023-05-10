@@ -2,7 +2,7 @@ package driver
 
 import (
 	"fmt"
-	poly "kwil/pkg/utils/numbers/polynomial"
+	poly "github.com/kwilteam/kwil-db/pkg/utils/numbers/polynomial"
 	"strings"
 
 	"github.com/cstockton/go-conv"

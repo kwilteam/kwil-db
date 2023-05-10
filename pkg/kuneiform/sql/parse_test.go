@@ -2,7 +2,7 @@ package sql
 
 import (
 	"flag"
-	"kwil/internal/pkg/kl/types"
+	"github.com/kwilteam/kwil-db/internal/pkg/kl/types"
 	"strings"
 	"testing"
 )

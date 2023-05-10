@@ -2,8 +2,8 @@ package csv
 
 import (
 	"encoding/csv"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"io"
-	"kwil/pkg/engine/types"
 	"os"
 	"strings"
 )

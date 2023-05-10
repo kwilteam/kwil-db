@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"kwil/pkg/sql/sqlite"
+	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
 )
 
 func Test_Query_With_Opts(t *testing.T) {

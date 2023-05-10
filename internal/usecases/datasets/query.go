@@ -2,7 +2,7 @@ package datasets
 
 import (
 	"fmt"
-	"kwil/internal/entity"
+	"github.com/kwilteam/kwil-db/internal/entity"
 )
 
 func (u *DatasetUseCase) Query(query *entity.DBQuery) ([]byte, error) {
