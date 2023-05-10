@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 	"math/big"
@@ -81,7 +82,7 @@ func (d *KwildDriver) GetAllowance(ctx context.Context) (*big.Int, error) {
 	return amount, nil
 }
 
-func (d *KwildDriver) DeployDatabase(ctx context.Context, db *models.Dataset) error {
+func (d *KwildDriver) DeployDatabase(ctx context.Context, db *schema.Schema) error {
 	_, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {
 		return fmt.Errorf("error deploying database: %w", err)

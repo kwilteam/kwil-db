@@ -11,8 +11,8 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"io"
 	"os"
 	"strings"
@@ -36,7 +36,7 @@ func deployCmd() *cobra.Command {
 				}
 				defer file.Close()
 
-				var db *models.Dataset
+				var db *schema.Schema
 				if fileType == "kf" {
 					db, err = unmarshalKf(file)
 				} else if fileType == "json" {
@@ -67,7 +67,7 @@ func deployCmd() *cobra.Command {
 	return cmd
 }
 
-func unmarshalKf(file *os.File) (*models.Dataset, error) {
+func unmarshalKf(file *os.File) (*schema.Schema, error) {
 	bts, err := parseComments(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse comments: %w", err)
@@ -78,16 +78,16 @@ func unmarshalKf(file *os.File) (*models.Dataset, error) {
 		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}
 
-	return ast.Dataset(), nil
+	return ast.Schema(), nil
 }
 
-func unmarshalJson(file *os.File) (*models.Dataset, error) {
+func unmarshalJson(file *os.File) (*schema.Schema, error) {
 	bts, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var db models.Dataset
+	var db schema.Schema
 	err = json.Unmarshal(bts, &db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal file: %w", err)

@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"os"
 
 	//"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/pkg/chain/types"
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/test/acceptance/adapters"
 	"github.com/kwilteam/kwil-db/test/acceptance/utils/deployer"
@@ -176,7 +176,7 @@ func setSchemaLoader(cfg TestEnvCfg) {
 	specifications.SetSchemaLoader(
 		&specifications.FileDatabaseSchemaLoader{
 			FilePath: cfg.DBSchemaFilePath,
-			Modifier: func(db *models.Dataset) {
+			Modifier: func(db *schema.Schema) {
 				db.Owner = cfg.UserAddr
 				// NOTE: this is a hack to make sure the db name is temporary unique
 				db.Name = fmt.Sprintf("%s_%s", db.Name, time.Now().Format("20160102"))

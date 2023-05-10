@@ -3,6 +3,7 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/utils"
@@ -295,9 +296,10 @@ func (d *AttrDef) Build() (def schema.Attribute) {
 
 	switch a := d.Param.(type) {
 	case *BasicLit:
-		def.Value = []byte(a.Value)
+		// TODO: a standalone types package
+		def.Value = types.NewNoPanic(a.Value).Bytes()
 	case *Ident:
-		def.Value = []byte(a.Name)
+		def.Value = types.NewNoPanic(a.Name).Bytes()
 	}
 	return
 }

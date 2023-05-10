@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 	"strings"
 
@@ -23,7 +24,7 @@ import (
 
 type Client struct {
 	client           *grpcClient.Client
-	datasets         map[string]*models.Dataset
+	datasets         map[string]*schema.Schema
 	PrivateKey       *ecdsa.PrivateKey
 	ChainCode        chainCodes.ChainCode
 	ProviderAddress  string
@@ -41,7 +42,7 @@ type Client struct {
 // New creates a new client
 func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
-		datasets:         make(map[string]*models.Dataset),
+		datasets:         make(map[string]*schema.Schema),
 		ChainCode:        chainCodes.LOCAL,
 		ProviderAddress:  "",
 		PoolAddress:      "",
@@ -167,7 +168,7 @@ func (c *Client) initPoolContract(ctx context.Context) error {
 }
 
 // GetSchema returns the schema of a database
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*models.Dataset, error) {
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*schema.Schema, error) {
 	ds, ok := c.datasets[dbid]
 	if ok {
 		return ds, nil
@@ -183,7 +184,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*models.Dataset, e
 }
 
 // DeployDatabase deploys a schema
-func (c *Client) DeployDatabase(ctx context.Context, ds *models.Dataset) (*kTx.Receipt, error) {
+func (c *Client) DeployDatabase(ctx context.Context, ds *schema.Schema) (*kTx.Receipt, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
@@ -202,7 +203,7 @@ func (c *Client) DeployDatabase(ctx context.Context, ds *models.Dataset) (*kTx.R
 }
 
 // deploySchemaTx creates a new transaction to deploy a schema
-func (c *Client) deploySchemaTx(ctx context.Context, ds *models.Dataset) (*kTx.Transaction, error) {
+func (c *Client) deploySchemaTx(ctx context.Context, ds *schema.Schema) (*kTx.Transaction, error) {
 	return c.newTx(ctx, kTx.DEPLOY_DATABASE, ds)
 }
 
