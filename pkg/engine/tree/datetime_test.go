@@ -1,9 +1,9 @@
 package tree_test
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
-	"strings"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 )
 
 func TestDateTimeFunction_String(t *testing.T) {
@@ -191,7 +191,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 				return
 			}
 
-			if strings.Trim(got, " ") != strings.Trim(tt.want, " ") {
+			if !compareIgnoringWhitespace(got, tt.want) {
 				t.Errorf("DateTimeFunction.String() = %v, want %v", got, tt.want)
 			}
 		})

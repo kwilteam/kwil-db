@@ -2,15 +2,44 @@ package tree
 
 import (
 	"fmt"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
 )
 
 type Insert struct {
-	stmt            *insertBuilder
+	CTE        []*CTE
+	InsertStmt *InsertStmt
+}
+
+func (ins *Insert) ToSQL() (str string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	stmt := sqlwriter.NewWriter()
+
+	if len(ins.CTE) > 0 {
+		stmt.Token.With()
+		stmt.WriteList(len(ins.CTE), func(i int) {
+			stmt.WriteString(ins.CTE[i].ToSQL())
+		})
+	}
+
+	stmt.WriteString(ins.InsertStmt.ToSQL())
+
+	stmt.Token.Semicolon()
+
+	return stmt.String(), nil
+}
+
+type InsertStmt struct {
 	InsertType      InsertType
 	Table           string
 	TableAlias      string
 	Columns         []string
-	Values          [][]InsertExpression
+	Values          [][]Expression
 	Upsert          *Upsert
 	ReturningClause *ReturningClause
 }
@@ -23,121 +52,69 @@ const (
 	InsertTypeInsertOrReplace
 )
 
-func (i *Insert) ToSql() (result string, err error) {
-	defer func() {
-		if err == nil {
-			return
-		}
-		if r := recover(); r != nil {
-			err = fmt.Errorf("panic in InsertStatement.ToSql: %v", r)
-		}
-	}()
-
-	if i.Table == "" {
-		return "", fmt.Errorf("sql syntax error: insert does not contain table name")
-	}
-
-	i.stmt = Builder.BeginInsert()
-	i.stmt.Insert(i.InsertType)
-	i.stmt.Table(i.Table)
-	if i.TableAlias != "" {
-		i.stmt.TableAlias(i.TableAlias)
-	}
-	if len(i.Columns) > 0 {
-		i.stmt.Columns(i.Columns...)
-	}
-
-	if len(i.Values) > 0 {
-		i.stmt.Values(i.Values...)
-	}
-
-	if i.Upsert != nil {
-		i.stmt.Upsert(i.Upsert)
-	}
-
-	if i.ReturningClause != nil {
-		i.stmt.Returning(i.ReturningClause)
-	}
-
-	return i.stmt.ToSQL(), nil
-}
-
-func (b *builder) BeginInsert() *insertBuilder {
-	return &insertBuilder{
-		stmt: newSQLBuilder(),
-	}
-}
-
-type insertBuilder struct {
-	stmt *sqlBuilder
-}
-
-func (b *insertBuilder) Insert(insertType InsertType) {
-	switch insertType {
+func (i *InsertType) String() string {
+	switch *i {
 	case InsertTypeInsert:
-		b.stmt.Write(SPACE, INSERT, SPACE, INTO, SPACE)
+		return "INSERT"
 	case InsertTypeReplace:
-		b.stmt.Write(SPACE, REPLACE, SPACE, INTO, SPACE)
+		return "REPLACE"
 	case InsertTypeInsertOrReplace:
-		b.stmt.Write(SPACE, INSERT, SPACE, OR, SPACE, REPLACE, SPACE, INTO, SPACE)
+		return "INSERT OR REPLACE"
+	default:
+		panic(fmt.Errorf("unknown InsertType: %d", *i))
 	}
 }
 
-func (b *insertBuilder) Table(tbl string) {
-	b.stmt.Write(SPACE)
-	b.stmt.WriteIdent(tbl)
-	b.stmt.Write(SPACE)
-}
+func (ins *InsertStmt) ToSQL() string {
+	ins.check()
 
-func (b *insertBuilder) TableAlias(alias string) {
-	b.stmt.Write(SPACE, AS, SPACE)
-	b.stmt.WriteIdent(alias)
-	b.stmt.Write(SPACE)
-}
+	stmt := sqlwriter.NewWriter()
+	stmt.WriteString(ins.InsertType.String())
+	stmt.Token.Into()
+	stmt.WriteIdent(ins.Table)
 
-func (b *insertBuilder) Columns(columns ...string) {
-	b.stmt.Write(SPACE, LPAREN)
-	for i, col := range columns {
-		if i > 0 && i < len(columns) {
-			b.stmt.Write(COMMA, SPACE)
+	if ins.TableAlias != "" {
+		stmt.Token.As()
+		stmt.WriteIdent(ins.TableAlias)
+	}
+	if len(ins.Columns) > 0 {
+		stmt.WriteParenList(len(ins.Columns), func(i int) {
+			stmt.WriteIdent(ins.Columns[i])
+		})
+	}
+
+	stmt.Token.Values()
+	for i := range ins.Values {
+		if i > 0 && i < len(ins.Values) {
+			stmt.Token.Comma()
 		}
-		b.stmt.WriteIdent(col)
+
+		stmt.WriteParenList(len(ins.Values[i]), func(j int) {
+			stmt.WriteString(ins.Values[i][j].ToSQL())
+		})
 	}
-	b.stmt.Write(RPAREN)
-}
 
-func (b *insertBuilder) Values(values ...[]InsertExpression) {
-	b.stmt.Write(SPACE, VALUES, SPACE)
-	for i, value := range values {
-		if i > 0 && i < len(values) {
-			b.stmt.Write(COMMA, SPACE)
-		}
-		b.singleValues(value...)
+	if ins.Upsert != nil {
+		stmt.WriteString(ins.Upsert.ToSQL())
 	}
-}
 
-func (b *insertBuilder) singleValues(values ...InsertExpression) {
-	b.stmt.Write(LPAREN)
-	for i, value := range values {
-		if i > 0 && i < len(values) {
-			b.stmt.Write(COMMA, SPACE)
-		}
-		b.stmt.WriteString(value.ToSQL())
+	if ins.ReturningClause != nil {
+		stmt.WriteString(ins.ReturningClause.ToSQL())
 	}
-	b.stmt.Write(RPAREN)
+
+	return stmt.String()
 }
 
-func (b *insertBuilder) Upsert(upsert *Upsert) {
-	b.stmt.Write(SPACE)
-	b.stmt.WriteString(upsert.ToSQL())
-}
+func (ins *InsertStmt) check() {
+	if ins.Table == "" {
+		panic("InsertStatement: table name is empty")
+	}
 
-func (b *insertBuilder) Returning(returning *ReturningClause) {
-	b.stmt.Write(SPACE)
-	b.stmt.WriteString(returning.ToSQL())
-}
+	if len(ins.Values) == 0 {
+		panic("InsertStatement: values is empty")
+	}
 
-func (b *insertBuilder) ToSQL() string {
-	b.stmt.Write(SEMICOLON)
-	return b.stmt.String()
+	if ins.Upsert != nil && ins.InsertType != InsertTypeInsert {
+		panic("InsertStatement: upsert is only allowed for INSERT")
+	}
 }

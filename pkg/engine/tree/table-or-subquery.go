@@ -1,5 +1,11 @@
 package tree
 
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+
+// TableOrSubquery is any of:
+//   - TableOrSubqueryTable
+//   - TableOrSubquerySelect
+//   - TableOrSubqueryList
 type TableOrSubquery interface {
 	ToSQL() string
 	TableOrSubquery()
@@ -15,15 +21,13 @@ func (t *TableOrSubqueryTable) ToSQL() string {
 		panic("table name is empty")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
-	stmt.WriteString(t.Name)
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
+	stmt.WriteIdentNoSpace(t.Name)
 
 	if t.Alias != "" {
-		stmt.Write(SPACE, AS, SPACE)
-		stmt.WriteString(t.Alias)
-		stmt.Write(SPACE)
+		stmt.Token.As()
+		stmt.WriteIdentNoSpace(t.Alias)
+
 	}
 
 	return stmt.String()
@@ -31,7 +35,7 @@ func (t *TableOrSubqueryTable) ToSQL() string {
 func (t *TableOrSubqueryTable) TableOrSubquery() {}
 
 type TableOrSubquerySelect struct {
-	Select *Select
+	Select *SelectStmt
 	Alias  string
 }
 
@@ -40,20 +44,17 @@ func (t *TableOrSubquerySelect) ToSQL() string {
 		panic("select is nil")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE, LPAREN, SPACE)
+	stmt := sqlwriter.NewWriter()
+	stmt.Token.Lparen()
 
-	selectString, err := t.Select.ToSQL()
-	if err != nil {
-		panic(err)
-	}
+	selectString := t.Select.ToSQL()
 	stmt.WriteString(selectString)
-	stmt.Write(SPACE, RPAREN, SPACE)
+	stmt.Token.Rparen()
 
 	if t.Alias != "" {
-		stmt.Write(SPACE, AS, SPACE)
+		stmt.Token.As()
 		stmt.WriteString(t.Alias)
-		stmt.Write(SPACE)
+
 	}
 
 	return stmt.String()
@@ -69,17 +70,11 @@ func (t *TableOrSubqueryList) ToSQL() string {
 		panic("table or subquery list is empty")
 	}
 
-	stmt := newSQLBuilder()
+	stmt := sqlwriter.NewWriter()
 
-	stmt.Write(SPACE, LPAREN, SPACE)
-	for i, tableOrSubquery := range t.TableOrSubqueries {
-		if i > 0 && i < len(t.TableOrSubqueries) {
-			stmt.Write(COMMA, SPACE)
-		}
-
-		stmt.WriteString(tableOrSubquery.ToSQL())
-	}
-	stmt.Write(SPACE, RPAREN, SPACE)
+	stmt.WriteParenList(len(t.TableOrSubqueries), func(i int) {
+		stmt.WriteString(t.TableOrSubqueries[i].ToSQL())
+	})
 
 	return stmt.String()
 }
@@ -89,19 +84,19 @@ type TableOrSubqueryJoin struct {
 	JoinClause *JoinClause
 }
 
+func (t *TableOrSubqueryJoin) TableOrSubquery() {}
+
 func (t *TableOrSubqueryJoin) ToSQL() string {
 
-	/*
-		if t.JoinClause == nil {
-			panic("join clause is nil")
-		}
+	if t.JoinClause == nil {
+		panic("join clause is nil")
+	}
 
-		stmt := newSQLBuilder()
-		stmt.Write(SPACE, LPAREN, SPACE)
-		stmt.WriteString(t.JoinClause.ToSQL())
-		stmt.Write(SPACE, RPAREN, SPACE)
+	stmt := sqlwriter.NewWriter()
+	stmt.Token.Lparen()
+	stmt.WriteString(t.JoinClause.ToSQL())
+	stmt.Token.Rparen()
 
-		return stmt.String()
-	*/
-	return ""
+	return stmt.String()
+
 }

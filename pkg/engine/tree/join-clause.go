@@ -1,5 +1,7 @@
 package tree
 
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+
 /*
 From the SQLite documentation:
 	If the join-operator is "CROSS JOIN", "INNER JOIN", "JOIN" or a comma (",") and there is no ON or USING clause,
@@ -46,6 +48,20 @@ type JoinClause struct {
 	Joins           []*JoinPredicate
 }
 
+func (j *JoinClause) ToSQL() string {
+	if j.TableOrSubquery == nil {
+		panic("join table or subquery cannot be nil")
+	}
+
+	stmt := sqlwriter.NewWriter()
+	stmt.WriteString(j.TableOrSubquery.ToSQL())
+	for _, join := range j.Joins {
+		stmt.WriteString(join.ToSQL())
+	}
+
+	return stmt.String()
+}
+
 type JoinPredicate struct {
 	JoinOperator *JoinOperator
 	Table        TableOrSubquery
@@ -54,20 +70,23 @@ type JoinPredicate struct {
 
 func (j *JoinPredicate) ToSQL() string {
 	if j.Constraint == nil {
-		panic("join constraint cannot be nil")
+		panic("join 'ON' cannot be nil")
 	}
-	if j.Constraint.Joinable() {
+	if !j.Constraint.Joinable() {
 		panic("invalid join constraint")
 	}
+	if j.JoinOperator == nil {
+		panic("join operator cannot be nil")
+	}
+	if j.Table == nil {
+		panic("join table cannot be nil")
+	}
 
-	stmt := newSQLBuilder()
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(j.JoinOperator.ToSQL())
 	stmt.WriteString(j.Table.ToSQL())
-
-	if j.Constraint != nil {
-		stmt.Write(SPACE, ON, SPACE)
-		stmt.WriteString(j.Constraint.ToSQL())
-	}
+	stmt.Token.On()
+	stmt.WriteString(j.Constraint.ToSQL())
 
 	return stmt.String()
 }
@@ -89,33 +108,32 @@ const (
 )
 
 func (j *JoinOperator) ToSQL() string {
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 
 	if j.Natural {
-		stmt.Write(NATURAL, SPACE)
+		stmt.Token.Natural()
 	}
 
 	switch j.JoinType {
 	case JoinTypeJoin:
 		// do nothing
 	case JoinTypeInner:
-		stmt.Write(INNER, SPACE)
+		stmt.Token.Inner()
 	case JoinTypeLeft:
-		stmt.Write(LEFT, SPACE)
+		stmt.Token.Left()
 	case JoinTypeRight:
-		stmt.Write(RIGHT, SPACE)
+		stmt.Token.Right()
 	case JoinTypeFull:
-		stmt.Write(FULL, SPACE)
+		stmt.Token.Full()
 	}
 
 	if j.Outer {
 		if j.JoinType == JoinTypeInner || j.JoinType == JoinTypeJoin {
 			panic("outer join cannot be used with generic join or inner join")
 		}
-		stmt.Write(OUTER, SPACE)
+		stmt.Token.Outer()
 	}
 
-	stmt.Write(JOIN, SPACE)
+	stmt.Token.Join()
 	return stmt.String()
 }

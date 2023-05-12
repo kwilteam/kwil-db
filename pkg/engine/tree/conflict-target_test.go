@@ -1,8 +1,9 @@
 package tree_test
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 )
 
 func TestConflictTarget_ToSQL(t *testing.T) {
@@ -19,22 +20,9 @@ func TestConflictTarget_ToSQL(t *testing.T) {
 			name: "valid conflict target",
 			fields: fields{
 				ConflictTarget: &tree.ConflictTarget{
-					IndexedColumns: []*tree.IndexedColumn{
-						{
-							Column: "bar",
-						},
-						{
-							Expression: &tree.ExpressionBinaryComparison{
-								Left:     &tree.ExpressionColumn{Column: "baz"},
-								Operator: tree.ComparisonOperatorEqual,
-								Right:    &tree.ExpressionBindParameter{Parameter: "$c"},
-							},
-							Collation: "collation",
-							OrderType: tree.OrderTypeDesc,
-						},
-					},
+					IndexedColumns: []string{"bar", "baz"},
 					Where: &tree.ExpressionBinaryComparison{
-						Left: &tree.ExpressionExpressionList{
+						Left: &tree.ExpressionList{
 							Expressions: []tree.Expression{
 								&tree.ExpressionBinaryComparison{
 									Left:     &tree.ExpressionColumn{Column: "baz"},
@@ -48,7 +36,7 @@ func TestConflictTarget_ToSQL(t *testing.T) {
 					},
 				},
 			},
-			want: `("bar", ("baz" = $c) COLLATE collation DESC) WHERE ("baz" = $c) = $d`,
+			want: `("bar", "baz") WHERE ("baz" = $c) = $d`,
 		},
 	}
 	for _, tt := range tests {

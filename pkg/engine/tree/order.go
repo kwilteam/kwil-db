@@ -1,11 +1,5 @@
 package tree
 
-type CTE struct {
-	Table   string
-	Columns []string
-	Select  *Select
-}
-
 type OrderType string
 
 const (
@@ -15,5 +9,12 @@ const (
 )
 
 func (o OrderType) String() string {
+	o.check()
 	return string(o)
+}
+
+func (o OrderType) check() {
+	if o != OrderTypeNone && o != OrderTypeAsc && o != OrderTypeDesc {
+		panic("invalid order type")
+	}
 }

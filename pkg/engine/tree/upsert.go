@@ -1,5 +1,7 @@
 package tree
 
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+
 type UpsertType uint8
 
 const (
@@ -8,7 +10,6 @@ const (
 )
 
 type Upsert struct {
-	stmt           *upsertBuilder
 	ConflictTarget *ConflictTarget
 	Type           UpsertType
 	Updates        []*UpdateSetClause
@@ -16,60 +17,29 @@ type Upsert struct {
 }
 
 func (u *Upsert) ToSQL() string {
-	u.stmt = Builder.BeginUpsert()
+	stmt := sqlwriter.NewWriter()
+
+	stmt.Token.On().Conflict()
+
 	if u.ConflictTarget != nil {
-		u.stmt.ConflictTarget(u.ConflictTarget)
+		stmt.WriteString(u.ConflictTarget.ToSQL())
 	}
 
 	switch u.Type {
 	case UpsertTypeDoNothing:
-		u.stmt.DoNothing()
+		stmt.Token.Do().Nothing()
 	case UpsertTypeDoUpdate:
-		u.stmt.DoUpdate(u.Updates)
+		stmt.Token.Do().Update().Set()
+
+		stmt.WriteList(len(u.Updates), func(i int) {
+			stmt.WriteString(u.Updates[i].ToSQL())
+		})
+
 		if u.Where != nil {
-			u.stmt.Where(u.Where)
+			stmt.Token.Where()
+			stmt.WriteString(u.Where.ToSQL())
 		}
 	}
 
-	return u.stmt.String()
-}
-
-type upsertBuilder struct {
-	stmt *sqlBuilder
-}
-
-func (b *builder) BeginUpsert() *upsertBuilder {
-	u := &upsertBuilder{
-		stmt: newSQLBuilder(),
-	}
-	u.stmt.Write(SPACE, ON, SPACE, CONFLICT, SPACE)
-	return u
-}
-
-func (b *upsertBuilder) ConflictTarget(ct *ConflictTarget) {
-	b.stmt.WriteString(ct.ToSQL())
-}
-
-func (b *upsertBuilder) String() string {
-	return b.stmt.String()
-}
-
-func (b *upsertBuilder) DoNothing() {
-	b.stmt.Write(SPACE, DO, SPACE, NOTHING, SPACE)
-}
-
-func (b *upsertBuilder) DoUpdate(setClause []*UpdateSetClause) {
-	b.stmt.Write(SPACE, DO, SPACE, UPDATE, SPACE, SET, SPACE)
-	for i, set := range setClause {
-		if i > 0 && i < len(setClause) {
-			b.stmt.Write(COMMA, SPACE)
-		}
-		b.stmt.WriteString(set.ToSQL())
-	}
-	b.stmt.Write(SPACE)
-}
-
-func (b *upsertBuilder) Where(expression Expression) {
-	b.stmt.Write(SPACE, WHERE, SPACE)
-	b.stmt.WriteString(expression.ToSQL())
+	return stmt.String()
 }

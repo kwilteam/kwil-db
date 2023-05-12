@@ -1,51 +1,25 @@
 package tree
 
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+
 type ConflictTarget struct {
-	stmt           *conflictTargetBuilder
-	IndexedColumns []*IndexedColumn
+	IndexedColumns []string
 	Where          Expression
 }
 
 func (c *ConflictTarget) ToSQL() string {
-	c.stmt = Builder.BeginConflictTarget()
+	stmt := sqlwriter.NewWriter()
 
 	if len(c.IndexedColumns) > 0 {
-		c.stmt.IndexedColumns(c.IndexedColumns)
+		stmt.WriteParenList(len(c.IndexedColumns), func(i int) {
+			stmt.WriteIdent(c.IndexedColumns[i])
+		})
 	}
 
 	if c.Where != nil {
-		c.stmt.Where(c.Where)
+		stmt.Token.Where()
+		stmt.WriteString(c.Where.ToSQL())
 	}
 
-	return c.stmt.String()
-}
-
-type conflictTargetBuilder struct {
-	stmt *sqlBuilder
-}
-
-func (b *builder) BeginConflictTarget() *conflictTargetBuilder {
-	return &conflictTargetBuilder{
-		stmt: newSQLBuilder(),
-	}
-}
-
-func (b *conflictTargetBuilder) IndexedColumns(ics []*IndexedColumn) {
-	b.stmt.Write(SPACE, LPAREN)
-	for i, ic := range ics {
-		if i > 0 && i < len(ics) {
-			b.stmt.Write(COMMA, SPACE)
-		}
-		b.stmt.WriteString(ic.ToSQL())
-	}
-	b.stmt.Write(RPAREN, SPACE)
-}
-
-func (b *conflictTargetBuilder) Where(w Expression) {
-	b.stmt.Write(SPACE, WHERE, SPACE)
-	b.stmt.WriteString(w.ToSQL())
-}
-
-func (b *conflictTargetBuilder) String() string {
-	return b.stmt.String()
+	return stmt.String()
 }

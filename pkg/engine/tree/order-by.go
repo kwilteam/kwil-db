@@ -1,25 +1,23 @@
 package tree
 
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+
 type OrderBy struct {
 	OrderingTerms []*OrderingTerm
 }
 
 func (o *OrderBy) ToSQL() string {
-	stmt := newSQLBuilder()
+	stmt := sqlwriter.NewWriter()
 
-	stmt.Write(SPACE, ORDER, SPACE, BY, SPACE)
+	stmt.Token.Order().By()
 
 	if len(o.OrderingTerms) == 0 {
 		panic("no ordering terms provided to OrderBy")
 	}
 
-	for i, term := range o.OrderingTerms {
-		if i > 0 && i < len(o.OrderingTerms) {
-			stmt.Write(COMMA, SPACE)
-		}
-
-		stmt.WriteString(term.ToSQL())
-	}
+	stmt.WriteList(len(o.OrderingTerms), func(i int) {
+		stmt.WriteString(o.OrderingTerms[i].ToSQL())
+	})
 
 	return stmt.String()
 }
@@ -32,26 +30,21 @@ type OrderingTerm struct {
 }
 
 func (o *OrderingTerm) ToSQL() string {
-	stmt := newSQLBuilder()
+	stmt := sqlwriter.NewWriter()
 
 	stmt.WriteString(o.Expression.ToSQL())
 
-	if o.Collation != CollationTypeNone {
-		stmt.Write(SPACE, COLLATE, SPACE)
+	if o.Collation.Valid() {
+		stmt.Token.Collate()
 		stmt.WriteString(o.Collation.String())
-		stmt.Write(SPACE)
 	}
 
 	if o.OrderType != OrderTypeNone {
-		stmt.Write(SPACE)
 		stmt.WriteString(o.OrderType.String())
-		stmt.Write(SPACE)
 	}
 
 	if o.NullOrdering != NullOrderingTypeNone {
-		stmt.Write(SPACE)
 		stmt.WriteString(o.NullOrdering.String())
-		stmt.Write(SPACE)
 	}
 
 	return stmt.String()
