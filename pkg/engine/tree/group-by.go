@@ -1,27 +1,27 @@
 package tree
 
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+
 type GroupBy struct {
 	Expressions []Expression
 	Having      Expression
 }
 
 func (g *GroupBy) ToSQL() string {
-	stmt := newSQLBuilder()
+	stmt := sqlwriter.NewWriter()
 
 	if len(g.Expressions) == 0 {
 		panic("no expressions provided to GroupBy")
 	}
 
-	stmt.Write(SPACE, GROUP, SPACE, BY, SPACE)
-	for i, expr := range g.Expressions {
-		if i > 0 && i < len(g.Expressions) {
-			stmt.Write(COMMA, SPACE)
-		}
-		stmt.WriteString(expr.ToSQL())
-	}
+	stmt.Token.Group().By()
+
+	stmt.WriteList(len(g.Expressions), func(i int) {
+		stmt.WriteString(g.Expressions[i].ToSQL())
+	})
 
 	if g.Having != nil {
-		stmt.Write(SPACE, HAVING, SPACE)
+		stmt.Token.Having()
 		stmt.WriteString(g.Having.ToSQL())
 	}
 

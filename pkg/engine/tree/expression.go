@@ -5,28 +5,31 @@ import (
 	"math"
 	"reflect"
 
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+
 	"github.com/cstockton/go-conv"
 )
 
 type Expression interface {
-	IsExpression()
+	isExpression() // private function to prevent external packages from implementing this interface
 	ToSQL() string
 	Joinable() bool
 }
 
+/*
 // Literal, BindParameter, ExpressionSelect
 type InsertExpression interface {
 	Expression
 	// Insert doesn't do anything, but it makes it clear to package consumers what can be used in an INSERT statement
 	Insert()
-}
+}*/
 
 type ExpressionLiteral struct {
 	Value interface{}
 }
 
 func (e *ExpressionLiteral) Insert()       {}
-func (e *ExpressionLiteral) IsExpression() {}
+func (e *ExpressionLiteral) isExpression() {}
 func (e *ExpressionLiteral) ToSQL() string {
 	dataType := reflect.TypeOf(e.Value)
 	switch dataType.Kind() {
@@ -63,7 +66,7 @@ type ExpressionBindParameter struct {
 }
 
 func (e *ExpressionBindParameter) Insert()       {}
-func (e *ExpressionBindParameter) IsExpression() {}
+func (e *ExpressionBindParameter) isExpression() {}
 func (e *ExpressionBindParameter) ToSQL() string {
 	if e.Parameter == "" {
 		panic("ExpressionBindParameter: bind parameter cannot be empty")
@@ -85,14 +88,12 @@ type ExpressionColumn struct {
 }
 
 func (e *ExpressionColumn) Insert()       {}
-func (e *ExpressionColumn) IsExpression() {}
+func (e *ExpressionColumn) isExpression() {}
 func (e *ExpressionColumn) ToSQL() string {
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
-
+	stmt := sqlwriter.NewWriter()
 	if e.Table != "" {
 		stmt.WriteIdent(e.Table)
-		stmt.Write(PERIOD)
+		stmt.Token.Period()
 	}
 
 	if e.Column == "" {
@@ -100,8 +101,6 @@ func (e *ExpressionColumn) ToSQL() string {
 	}
 
 	stmt.WriteIdent(e.Column)
-
-	stmt.Write(SPACE)
 	return stmt.String()
 }
 
@@ -115,16 +114,12 @@ type ExpressionBinaryComparison struct {
 	Right    Expression
 }
 
-func (e *ExpressionBinaryComparison) IsExpression() {}
+func (e *ExpressionBinaryComparison) isExpression() {}
 func (e *ExpressionBinaryComparison) ToSQL() string {
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(e.Left.ToSQL())
-	stmt.Write(SPACE)
 	stmt.WriteString(e.Operator.String())
-	stmt.Write(SPACE)
 	stmt.WriteString(e.Right.ToSQL())
-	stmt.Write(SPACE)
 	return stmt.String()
 }
 
@@ -143,46 +138,39 @@ type ExpressionFunction struct {
 	Inputs   []Expression
 }
 
-func (e *ExpressionFunction) IsExpression() {}
+func (e *ExpressionFunction) isExpression() {}
 func (e *ExpressionFunction) Insert()       {}
 func (e *ExpressionFunction) ToSQL() string {
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(e.Function.String(e.Inputs))
-	stmt.Write(SPACE)
 	return stmt.String()
 }
 
 func (e *ExpressionFunction) Joinable() bool {
-	for _, input := range e.Inputs { // I don't know if this is actually safe, there is likely a way to hack this.
-		if input.Joinable() {
-			return true
-		}
-	}
 	return false
 }
 
-type ExpressionExpressionList struct {
+type ExpressionList struct {
 	Expressions []Expression
 }
 
-func (e *ExpressionExpressionList) IsExpression() {}
-func (e *ExpressionExpressionList) Insert()       {}
-func (e *ExpressionExpressionList) ToSQL() string {
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
-	stmt.Write(LPAREN)
-	for i, expr := range e.Expressions {
-		if i > 0 && i < len(e.Expressions) {
-			stmt.Write(COMMA, SPACE)
-		}
-		stmt.WriteString(expr.ToSQL())
+func (e *ExpressionList) isExpression() {}
+func (e *ExpressionList) Insert()       {}
+func (e *ExpressionList) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if len(e.Expressions) == 0 {
+		panic("ExpressionExpressionList: expressions cannot be empty")
 	}
-	stmt.Write(RPAREN, SPACE)
+
+	stmt.WriteParenList(len(e.Expressions), func(i int) {
+		stmt.WriteString(e.Expressions[i].ToSQL())
+	})
+
 	return stmt.String()
 }
 
-func (e *ExpressionExpressionList) Joinable() bool {
+func (e *ExpressionList) Joinable() bool {
 	return false
 }
 
@@ -191,7 +179,7 @@ type ExpressionCollate struct {
 	Collation  CollationType
 }
 
-func (e *ExpressionCollate) IsExpression() {}
+func (e *ExpressionCollate) isExpression() {}
 func (e *ExpressionCollate) ToSQL() string {
 	if e.Expression == nil {
 		panic("ExpressionCollate: expression cannot be nil")
@@ -200,12 +188,10 @@ func (e *ExpressionCollate) ToSQL() string {
 		panic("ExpressionCollate: collation name cannot be empty")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(e.Expression.ToSQL())
-	stmt.Write(SPACE, COLLATE, SPACE)
+	stmt.Token.Collate()
 	stmt.WriteString(e.Collation.String())
-	stmt.Write(SPACE)
 	return stmt.String()
 }
 
@@ -220,24 +206,20 @@ type ExpressionStringCompare struct {
 	Escape   Expression // can only be used with LIKE or NOT LIKE
 }
 
-func (e *ExpressionStringCompare) IsExpression() {}
+func (e *ExpressionStringCompare) isExpression() {}
 func (e *ExpressionStringCompare) ToSQL() string {
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(e.Left.ToSQL())
-	stmt.Write(SPACE)
 	stmt.WriteString(e.Operator.String())
-	stmt.Write(SPACE)
 	stmt.WriteString(e.Right.ToSQL())
 	if e.Escape != nil {
 		if !e.Operator.Escapable() {
 			panic("ExpressionStringCompare: escape can only be used with LIKE or NOT LIKE")
 		}
 
-		stmt.Write(SPACE, ESCAPE, SPACE)
+		stmt.Token.Escape()
 		stmt.WriteString(e.Escape.ToSQL())
 	}
-	stmt.Write(SPACE)
 	return stmt.String()
 }
 
@@ -250,22 +232,19 @@ type ExpressionIsNull struct {
 	IsNull     bool
 }
 
-func (e *ExpressionIsNull) IsExpression() {}
+func (e *ExpressionIsNull) isExpression() {}
 func (e *ExpressionIsNull) ToSQL() string {
 	if e.Expression == nil {
 		panic("ExpressionIsNull: expression cannot be nil")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(e.Expression.ToSQL())
-	stmt.Write(SPACE)
 	if e.IsNull {
-		stmt.Write(IS, SPACE, NULL)
+		stmt.Token.Is().Null()
 	} else {
-		stmt.Write(IS, SPACE, NOT, SPACE, NULL)
+		stmt.Token.Is().Not().Null()
 	}
-	stmt.Write(SPACE)
 	return stmt.String()
 }
 
@@ -280,7 +259,7 @@ type ExpressionDistinct struct {
 	Distinct bool
 }
 
-func (e *ExpressionDistinct) IsExpression() {}
+func (e *ExpressionDistinct) isExpression() {}
 func (e *ExpressionDistinct) ToSQL() string {
 	if e.Left == nil {
 		panic("ExpressionDistinct: left expression cannot be nil")
@@ -289,18 +268,16 @@ func (e *ExpressionDistinct) ToSQL() string {
 		panic("ExpressionDistinct: right expression cannot be nil")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(e.Left.ToSQL())
-	stmt.Write(SPACE, IS, SPACE)
+	stmt.Token.Is()
 	if e.IsNot {
-		stmt.Write(NOT, SPACE)
+		stmt.Token.Not()
 	}
 	if e.Distinct {
-		stmt.Write(DISTINCT, SPACE, FROM, SPACE)
+		stmt.Token.Distinct().From()
 	}
 	stmt.WriteString(e.Right.ToSQL())
-	stmt.Write(SPACE)
 	return stmt.String()
 }
 
@@ -315,7 +292,7 @@ type ExpressionBetween struct {
 	Right      Expression
 }
 
-func (e *ExpressionBetween) IsExpression() {}
+func (e *ExpressionBetween) isExpression() {}
 func (e *ExpressionBetween) ToSQL() string {
 	if e.Expression == nil {
 		panic("ExpressionBetween: expression cannot be nil")
@@ -327,26 +304,20 @@ func (e *ExpressionBetween) ToSQL() string {
 		panic("ExpressionBetween: right expression cannot be nil")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(e.Expression.ToSQL())
-	stmt.Write(SPACE)
 	if e.NotBetween {
-		stmt.Write(NOT, SPACE)
+		stmt.Token.Not()
 	}
-	stmt.Write(BETWEEN, SPACE)
+	stmt.Token.Between()
 	stmt.WriteString(e.Left.ToSQL())
-	stmt.Write(SPACE, AND, SPACE)
+	stmt.Token.And()
 	stmt.WriteString(e.Right.ToSQL())
-	stmt.Write(SPACE)
 	return stmt.String()
 }
 
 func (e *ExpressionBetween) Joinable() bool {
-	if e.Expression.Joinable() {
-		return true
-	}
-	return false
+	return e.Expression.Joinable()
 }
 
 type ExpressionIn struct {
@@ -355,7 +326,7 @@ type ExpressionIn struct {
 	InExpressions []Expression
 }
 
-func (e *ExpressionIn) IsExpression() {}
+func (e *ExpressionIn) isExpression() {}
 func (e *ExpressionIn) ToSQL() string {
 	if e.Expression == nil {
 		panic("ExpressionIn: expression cannot be nil")
@@ -364,22 +335,17 @@ func (e *ExpressionIn) ToSQL() string {
 		panic("ExpressionIn: expressions cannot be empty")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(e.Expression.ToSQL())
-	stmt.Write(SPACE)
 	if e.NotIn {
-		stmt.Write(NOT, SPACE)
+		stmt.Token.Not()
 	}
-	stmt.Write(IN, SPACE)
-	stmt.Write(LPAREN)
-	for i, expr := range e.InExpressions {
-		if i > 0 && i < len(e.InExpressions) {
-			stmt.Write(COMMA, SPACE)
-		}
-		stmt.WriteString(expr.ToSQL())
-	}
-	stmt.Write(RPAREN, SPACE)
+	stmt.Token.In()
+
+	stmt.WriteParenList(len(e.InExpressions), func(i int) {
+		stmt.WriteString(e.InExpressions[i].ToSQL())
+	})
+
 	return stmt.String()
 }
 
@@ -390,36 +356,40 @@ func (e *ExpressionIn) Joinable() bool {
 type ExpressionSelect struct {
 	IsNot    bool
 	IsExists bool
-	Select   *Select
+	Select   *SelectStmt
 }
 
 func (e *ExpressionSelect) Insert()       {}
-func (e *ExpressionSelect) IsExpression() {}
+func (e *ExpressionSelect) isExpression() {}
 func (e *ExpressionSelect) ToSQL() string {
+	e.check()
+
+	stmt := sqlwriter.NewWriter()
+	if e.IsNot {
+		stmt.Token.Not()
+	}
+	if e.IsExists {
+		stmt.Token.Exists()
+	}
+	stmt.Token.Lparen()
+
+	selectSql := e.Select.ToSQL()
+
+	stmt.WriteString(selectSql)
+	stmt.Token.Rparen()
+	return stmt.String()
+}
+
+func (e *ExpressionSelect) check() {
 	if e.Select == nil {
 		panic("ExpressionSelect: select cannot be nil")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
 	if e.IsNot {
-		stmt.Write(NOT, SPACE)
 		if !e.IsExists {
 			panic("ExpressionSelect: NOT can only be used with EXISTS")
 		}
 	}
-	if e.IsExists {
-		stmt.Write(EXISTS, SPACE)
-	}
-	stmt.Write(LPAREN)
-
-	selectSql, err := e.Select.ToSQL()
-	if err != nil {
-		panic(fmt.Errorf("ExpressionSelect: failed to convert select to SQL: %w", err))
-	}
-	stmt.WriteString(selectSql)
-	stmt.Write(RPAREN, SPACE)
-	return stmt.String()
 }
 
 func (e *ExpressionSelect) Joinable() bool {
@@ -432,34 +402,31 @@ type ExpressionCase struct {
 	ElseExpression Expression
 }
 
-func (e *ExpressionCase) IsExpression() {}
+func (e *ExpressionCase) isExpression() {}
 func (e *ExpressionCase) ToSQL() string {
 	if len(e.WhenThenPairs) == 0 {
 		panic("ExpressionCase: must contain at least 1 when-then pair")
 	}
 
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE, CASE, SPACE)
+	stmt := sqlwriter.NewWriter()
+	stmt.Token.Case()
 	if e.CaseExpression != nil {
 		stmt.WriteString(e.CaseExpression.ToSQL())
-		stmt.Write(SPACE)
 	}
 
 	for _, whenThen := range e.WhenThenPairs {
-		stmt.Write(WHEN, SPACE)
+		stmt.Token.When()
 		stmt.WriteString(whenThen[0].ToSQL())
-		stmt.Write(SPACE, THEN, SPACE)
+		stmt.Token.Then()
 		stmt.WriteString(whenThen[1].ToSQL())
-		stmt.Write(SPACE)
 	}
 
 	if e.ElseExpression != nil {
-		stmt.Write(ELSE, SPACE)
+		stmt.Token.Else()
 		stmt.WriteString(e.ElseExpression.ToSQL())
-		stmt.Write(SPACE)
 	}
 
-	stmt.Write(END, SPACE)
+	stmt.Token.End()
 	return stmt.String()
 }
 

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
 )
 
 /*
@@ -157,13 +159,10 @@ func (d *DateTimeFunction) String(exprs []Expression) string {
 
 // buildWithInputs builds the datetime function with the given inputs
 func (d *DateTimeFunction) buildWithInputs(exprs []Expression) string {
-	return d.buildFunctionString(func(stmt *sqlBuilder) {
-		for i, expr := range exprs {
-			if i > 0 && i < len(exprs) {
-				stmt.Write(COMMA, SPACE)
-			}
-			stmt.WriteString(expr.ToSQL())
-		}
+	return d.buildFunctionString(func(stmt *sqlwriter.SqlWriter) {
+		stmt.WriteList(len(exprs), func(i int) {
+			stmt.WriteString(exprs[i].ToSQL())
+		})
 	})
 }
 

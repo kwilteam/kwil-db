@@ -1,8 +1,9 @@
 package tree_test
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 )
 
 func TestOrderBy_ToSQL(t *testing.T) {

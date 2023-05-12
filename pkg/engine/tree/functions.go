@@ -1,5 +1,7 @@
 package tree
 
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+
 // AnySQLFunction is a function that can be used in a SQL statement
 // String is a function that takes a slice of Expressions and returns a string of the function invocation
 // ex: func(args []Expression) string { return "ABS(" + args[0].ToSQL() + ")" }
@@ -20,14 +22,12 @@ type SQLFunction interface {
 
 // buildFunctionString is a helper function to build a function string
 // it will write the string as FUNC( fn )
-func (s *AnySQLFunction) buildFunctionString(fn func(*sqlBuilder)) string {
-	stmt := newSQLBuilder()
-	stmt.Write(SPACE)
+func (s *AnySQLFunction) buildFunctionString(fn func(*sqlwriter.SqlWriter)) string {
+	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(s.FunctionName)
-	stmt.WriteString("(")
+	stmt.Token.Lparen()
 	fn(stmt)
-	stmt.WriteString(")")
-	stmt.Write(SPACE)
+	stmt.Token.Rparen()
 	return stmt.String()
 }
 
@@ -40,20 +40,17 @@ func (s *AnySQLFunction) String(exprs []Expression) string {
 		panic("too many arguments for function " + s.FunctionName)
 	}
 
-	return s.buildFunctionString(func(stmt *sqlBuilder) {
-		for i, expr := range exprs {
-			if i > 0 && i < len(exprs) {
-				stmt.Write(COMMA, SPACE)
-			}
-			stmt.WriteString(expr.ToSQL())
-		}
+	return s.buildFunctionString(func(stmt *sqlwriter.SqlWriter) {
+		stmt.WriteList(len(exprs), func(i int) {
+			stmt.WriteString(exprs[i].ToSQL())
+		})
 	})
 }
 
 // StringAll calls the function with a "*" argument. This is used for COUNT(*), for example
 func (s *AnySQLFunction) StringAll() string {
-	return s.buildFunctionString(func(stmt *sqlBuilder) {
-		stmt.Write(ASTERISK)
+	return s.buildFunctionString(func(stmt *sqlwriter.SqlWriter) {
+		stmt.Token.Asterisk()
 	})
 }
 

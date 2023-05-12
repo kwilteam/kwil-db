@@ -1,8 +1,9 @@
 package tree_test
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 )
 
 func TestExpressionLiteral_ToSQL(t *testing.T) {
@@ -144,7 +145,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		},
 		{
 			name: "expression list",
-			fields: &tree.ExpressionExpressionList{
+			fields: &tree.ExpressionList{
 				Expressions: []tree.Expression{
 					&tree.ExpressionColumn{
 						Column: "foo",
@@ -398,6 +399,37 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				},
 			},
 			wantPanic: true,
+		},
+		{
+			name: "select subquery",
+			fields: &tree.ExpressionSelect{
+				IsNot:    true,
+				IsExists: true,
+				Select: &tree.SelectStmt{
+					SelectCore: &tree.SelectCore{
+						SelectType: tree.SelectTypeAll,
+						From: &tree.FromClause{
+							JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name:  "foo",
+									Alias: "f",
+								},
+							},
+						},
+						Where: &tree.ExpressionBinaryComparison{
+							Left: &tree.ExpressionColumn{
+								Table:  "f",
+								Column: "foo",
+							},
+							Operator: tree.ComparisonOperatorEqual,
+							Right: &tree.ExpressionBindParameter{
+								Parameter: "$a",
+							},
+						},
+					},
+				},
+			},
+			want: `NOT EXISTS (SELECT * FROM "foo" AS "f" WHERE "f"."foo" = $a)`,
 		},
 		{
 			name: "case expression",
