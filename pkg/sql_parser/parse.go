@@ -3,8 +3,8 @@ package sql_parser
 import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"github.com/kwilteam/kwil-db/internal/pkg/sqlite"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
+	"github.com/kwilteam/kwil-db/pkg/sql_parser/sqlite"
 )
 
 func ParseRawSQL(sql string, currentLine int, actionName string, dbCtx DatabaseContext,
