@@ -1,6 +1,10 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+import (
+	"fmt"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+)
 
 type Select struct {
 	CTE        []*CTE
@@ -90,7 +94,7 @@ func (s *SelectCore) ToSQL() string {
 		stmt.WriteString(s.GroupBy.ToSQL())
 	}
 	if s.Compound != nil {
-		stmt.WriteString(s.Compound.SelectClause.ToSQL())
+		stmt.WriteString(s.Compound.ToSQL())
 	}
 	return stmt.String()
 }
@@ -122,7 +126,29 @@ const (
 	CompoundOperatorTypeExcept
 )
 
+func (c *CompoundOperatorType) ToSQL() string {
+	switch *c {
+	case CompoundOperatorTypeUnion:
+		return "UNION"
+	case CompoundOperatorTypeUnionAll:
+		return "UNION ALL"
+	case CompoundOperatorTypeIntersect:
+		return "INTERSECT"
+	case CompoundOperatorTypeExcept:
+		return "EXCEPT"
+	default:
+		panic(fmt.Errorf("unknown compound operator type %d", *c))
+	}
+}
+
 type CompoundOperator struct {
 	Operator     CompoundOperatorType
 	SelectClause *SelectCore
+}
+
+func (c *CompoundOperator) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+	stmt.WriteString(c.Operator.ToSQL())
+	stmt.WriteString(c.SelectClause.ToSQL())
+	return stmt.String()
 }
