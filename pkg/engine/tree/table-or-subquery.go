@@ -8,7 +8,7 @@ import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
 //   - TableOrSubqueryList
 type TableOrSubquery interface {
 	ToSQL() string
-	TableOrSubquery()
+	tableOrSubquery()
 }
 
 type TableOrSubqueryTable struct {
@@ -32,7 +32,7 @@ func (t *TableOrSubqueryTable) ToSQL() string {
 
 	return stmt.String()
 }
-func (t *TableOrSubqueryTable) TableOrSubquery() {}
+func (t *TableOrSubqueryTable) tableOrSubquery() {}
 
 type TableOrSubquerySelect struct {
 	Select *SelectStmt
@@ -59,7 +59,7 @@ func (t *TableOrSubquerySelect) ToSQL() string {
 
 	return stmt.String()
 }
-func (t *TableOrSubquerySelect) TableOrSubquery() {}
+func (t *TableOrSubquerySelect) tableOrSubquery() {}
 
 type TableOrSubqueryList struct {
 	TableOrSubqueries []TableOrSubquery
@@ -78,13 +78,13 @@ func (t *TableOrSubqueryList) ToSQL() string {
 
 	return stmt.String()
 }
-func (t *TableOrSubqueryList) TableOrSubquery() {}
+func (t *TableOrSubqueryList) tableOrSubquery() {}
 
 type TableOrSubqueryJoin struct {
 	JoinClause *JoinClause
 }
 
-func (t *TableOrSubqueryJoin) TableOrSubquery() {}
+func (t *TableOrSubqueryJoin) tableOrSubquery() {}
 
 func (t *TableOrSubqueryJoin) ToSQL() string {
 

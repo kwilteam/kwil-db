@@ -1,6 +1,10 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+import (
+	"fmt"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+)
 
 /*
 From the SQLite documentation:
@@ -125,6 +129,8 @@ func (j *JoinOperator) ToSQL() string {
 		stmt.Token.Right()
 	case JoinTypeFull:
 		stmt.Token.Full()
+	default:
+		panic("invalid join type: " + fmt.Sprint(j.JoinType))
 	}
 
 	if j.Outer {

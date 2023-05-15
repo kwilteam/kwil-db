@@ -261,5 +261,58 @@ _In SQL:_
 ```sql
 SELECT *
 FROM posts
-WHERE au
+# Getting posts from a set of authors
+WHERE author_id IN ('satoshi', 'hal_finney', 'roger_ver');
+```
+
+#### ExpressionSelect
+
+The select expression, also known as a subquery, allows users to specify results of a SELECT that should be used in a query.  In most cases, this has to be a "scalar subquery"; that is, it can only return one column.  This is not enforced at the statement validation level, but instead at the execution level.
+
+```go
+type ExpressionSelect struct {
+    IsNot    bool
+    IsExists bool
+    Select   *SelectStmt
+}
+```
+
+_In SQL:_
+
+```sql
+INSERT INTO posts (id, title, content, author_id)
+# A scalar subquery used to get the user_id of the caller
+VALUES ($id, $title, $content, (
+    SELECT id
+    FROM users
+    WHERE wallet_address = @caller
+    )
+);
+```
+
+#### ExpressionCase
+
+A case expression is the logical equivalent of an IF... THEN... ELSE... statement, where conditions are checked until one is met.
+
+```go
+type ExpressionCase struct {
+    CaseExpression Expression
+    WhenThenPairs  [][2]Expression
+    ElseExpression Expression
+}
+```
+
+_In SQL:_
+
+```sql
+SELECT username, 
+# If users have an age, we will identify the age classification
+    CASE age NOT NULL
+        WHEN age > 65 THEN 'Senior'
+        WHEN age > 35 THEN 'Middle-Age'
+        WHEN age > 18 THEN 'Young-Adult'
+        ELSE 'Minor'
+    END
+AS age_classification
+FROM users;
 ```
