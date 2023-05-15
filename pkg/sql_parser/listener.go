@@ -274,7 +274,7 @@ func (tl *KlSqliteListener) EnterCommon_table_expression(ctx *sqlite.Common_tabl
 		fmt.Println("enter CTE ", ctx.GetText())
 	}
 
-	table := ctx.Table_name().GetText()
+	table := ctx.Cte_table_name().GetText()
 
 	// support table alias
 	tl.dbCtx.Tables[table] = TableContext{}
