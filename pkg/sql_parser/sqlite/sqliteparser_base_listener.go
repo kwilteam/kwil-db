@@ -166,12 +166,6 @@ func (s *BaseSQLiteParserListener) EnterCreate_virtual_table_stmt(ctx *Create_vi
 func (s *BaseSQLiteParserListener) ExitCreate_virtual_table_stmt(ctx *Create_virtual_table_stmtContext) {
 }
 
-// EnterWith_clause is called when production with_clause is entered.
-func (s *BaseSQLiteParserListener) EnterWith_clause(ctx *With_clauseContext) {}
-
-// ExitWith_clause is called when production with_clause is exited.
-func (s *BaseSQLiteParserListener) ExitWith_clause(ctx *With_clauseContext) {}
-
 // EnterCte_table_name is called when production cte_table_name is entered.
 func (s *BaseSQLiteParserListener) EnterCte_table_name(ctx *Cte_table_nameContext) {}
 
@@ -184,6 +178,12 @@ func (s *BaseSQLiteParserListener) EnterCommon_table_expression(ctx *Common_tabl
 
 // ExitCommon_table_expression is called when production common_table_expression is exited.
 func (s *BaseSQLiteParserListener) ExitCommon_table_expression(ctx *Common_table_expressionContext) {}
+
+// EnterWith_clause is called when production with_clause is entered.
+func (s *BaseSQLiteParserListener) EnterWith_clause(ctx *With_clauseContext) {}
+
+// ExitWith_clause is called when production with_clause is exited.
+func (s *BaseSQLiteParserListener) ExitWith_clause(ctx *With_clauseContext) {}
 
 // EnterDelete_stmt is called when production delete_stmt is entered.
 func (s *BaseSQLiteParserListener) EnterDelete_stmt(ctx *Delete_stmtContext) {}

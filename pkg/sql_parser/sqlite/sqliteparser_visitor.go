@@ -79,14 +79,14 @@ type SQLiteParserVisitor interface {
 	// Visit a parse tree produced by SQLiteParser#create_virtual_table_stmt.
 	VisitCreate_virtual_table_stmt(ctx *Create_virtual_table_stmtContext) interface{}
 
-	// Visit a parse tree produced by SQLiteParser#with_clause.
-	VisitWith_clause(ctx *With_clauseContext) interface{}
-
 	// Visit a parse tree produced by SQLiteParser#cte_table_name.
 	VisitCte_table_name(ctx *Cte_table_nameContext) interface{}
 
 	// Visit a parse tree produced by SQLiteParser#common_table_expression.
 	VisitCommon_table_expression(ctx *Common_table_expressionContext) interface{}
+
+	// Visit a parse tree produced by SQLiteParser#with_clause.
+	VisitWith_clause(ctx *With_clauseContext) interface{}
 
 	// Visit a parse tree produced by SQLiteParser#delete_stmt.
 	VisitDelete_stmt(ctx *Delete_stmtContext) interface{}

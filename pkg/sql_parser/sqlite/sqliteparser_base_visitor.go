@@ -103,15 +103,15 @@ func (v *BaseSQLiteParserVisitor) VisitCreate_virtual_table_stmt(ctx *Create_vir
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSQLiteParserVisitor) VisitWith_clause(ctx *With_clauseContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseSQLiteParserVisitor) VisitCte_table_name(ctx *Cte_table_nameContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *BaseSQLiteParserVisitor) VisitCommon_table_expression(ctx *Common_table_expressionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLiteParserVisitor) VisitWith_clause(ctx *With_clauseContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

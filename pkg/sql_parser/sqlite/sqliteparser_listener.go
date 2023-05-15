@@ -79,14 +79,14 @@ type SQLiteParserListener interface {
 	// EnterCreate_virtual_table_stmt is called when entering the create_virtual_table_stmt production.
 	EnterCreate_virtual_table_stmt(c *Create_virtual_table_stmtContext)
 
-	// EnterWith_clause is called when entering the with_clause production.
-	EnterWith_clause(c *With_clauseContext)
-
 	// EnterCte_table_name is called when entering the cte_table_name production.
 	EnterCte_table_name(c *Cte_table_nameContext)
 
 	// EnterCommon_table_expression is called when entering the common_table_expression production.
 	EnterCommon_table_expression(c *Common_table_expressionContext)
+
+	// EnterWith_clause is called when entering the with_clause production.
+	EnterWith_clause(c *With_clauseContext)
 
 	// EnterDelete_stmt is called when entering the delete_stmt production.
 	EnterDelete_stmt(c *Delete_stmtContext)
@@ -397,14 +397,14 @@ type SQLiteParserListener interface {
 	// ExitCreate_virtual_table_stmt is called when exiting the create_virtual_table_stmt production.
 	ExitCreate_virtual_table_stmt(c *Create_virtual_table_stmtContext)
 
-	// ExitWith_clause is called when exiting the with_clause production.
-	ExitWith_clause(c *With_clauseContext)
-
 	// ExitCte_table_name is called when exiting the cte_table_name production.
 	ExitCte_table_name(c *Cte_table_nameContext)
 
 	// ExitCommon_table_expression is called when exiting the common_table_expression production.
 	ExitCommon_table_expression(c *Common_table_expressionContext)
+
+	// ExitWith_clause is called when exiting the with_clause production.
+	ExitWith_clause(c *With_clauseContext)
 
 	// ExitDelete_stmt is called when exiting the delete_stmt production.
 	ExitDelete_stmt(c *Delete_stmtContext)

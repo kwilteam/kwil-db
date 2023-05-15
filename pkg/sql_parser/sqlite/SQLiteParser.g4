@@ -213,18 +213,14 @@ create_virtual_table_stmt:
     )?
 ;
 
-with_clause:
-    WITH_ cte_table_name AS_ OPEN_PAR select_stmt CLOSE_PAR (
-        COMMA cte_table_name AS_ OPEN_PAR select_stmt CLOSE_PAR
-    )*
-;
-
 cte_table_name:
-    table_name (OPEN_PAR column_name ( COMMA column_name)* CLOSE_PAR)?
+    table_name (OPEN_PAR column_name (COMMA column_name)* CLOSE_PAR)?
 ;
-
 common_table_expression:
-    table_name (OPEN_PAR column_name ( COMMA column_name)* CLOSE_PAR)? AS_ OPEN_PAR select_stmt CLOSE_PAR
+    cte_table_name AS_ OPEN_PAR select_stmt CLOSE_PAR
+;
+with_clause:
+    WITH_ common_table_expression (COMMA common_table_expression)*
 ;
 
 delete_stmt:
