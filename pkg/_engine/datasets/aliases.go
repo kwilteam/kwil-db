@@ -2,7 +2,7 @@ package datasets
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/pkg/sqlite"
+	"github.com/kwilteam/kwil-db/pkg/sql_parser/sqlite"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 )
