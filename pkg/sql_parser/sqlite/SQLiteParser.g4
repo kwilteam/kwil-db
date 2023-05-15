@@ -311,7 +311,7 @@ values_clause:
 
 insert_stmt:
     with_clause?
-    (INSERT_ | INSERT_ OR_ REPLACE_) INTO_ table_name
+    (REPLACE_ | INSERT_ | INSERT_ OR_ REPLACE_) INTO_ table_name
     (AS_ table_alias)?
     (OPEN_PAR column_name ( COMMA column_name)* CLOSE_PAR)?
     values_clause
