@@ -120,6 +120,8 @@ func TestParseRawSQL_allowed(t *testing.T) {
 
 		// insert stmt
 		{"insert", "insert into t1 values (1)"},
+		{"insert replace", "replace into t1 values (1)"},
+		{"insert or replace", "insert or replace into t1 values (1)"},
 		{"insert with columns", "insert into t1 (a,b) values (1,2)"},
 		{"insert with cte", "with t as (select 1) insert into t1 (a,b) values (1,2)"},
 		{"insert with returning", "insert into t1 (a,b) values (1,2) returning a"},
@@ -209,7 +211,6 @@ func TestParseRawSQL_syntax_not_allowed(t *testing.T) {
 		//{"expr raise", "select raise(fail, 'dsd')", "raise"},
 
 		// insert
-		{"insert replace", "replace into t1 values (1)", "replace"},
 		{"insert or abort", "insert or abort into t1 values (1)", "abort"},
 		{"insert or fail", "insert or fail into t1 values (1)", "fail"},
 		{"insert or ignore", "insert or ignore into t1 values (1)", "ignore"},
