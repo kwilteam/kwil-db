@@ -3,10 +3,11 @@ package sqlite
 import (
 	"context"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/go-sqlite"
 	"github.com/kwilteam/go-sqlite/sqlitex"
@@ -365,6 +366,21 @@ func (r *ResultSet) GetRecord() map[string]any {
 		record[col] = r.Rows[r.index][i]
 	}
 	return record
+}
+
+// Records will retrieve all records for the result set.
+// It will not reset the row index.
+func (r *ResultSet) Records() []map[string]any {
+	records := make([]map[string]any, len(r.Rows))
+	for i, row := range r.Rows {
+		record := make(map[string]any)
+		for j, col := range r.Columns {
+			record[col] = row[j]
+		}
+		records[i] = record
+	}
+
+	return records
 }
 
 // Reset resets the row index to -1

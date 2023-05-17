@@ -255,6 +255,11 @@ func Test_Database_Wal(t *testing.T) {
 	if len(results.Rows) != 1 {
 		t.Fatal("expected 1 row")
 	}
+
+	res2 := results.Records()
+	if len(res2) != 1 {
+		t.Fatal("expected 1 row")
+	}
 }
 
 func Test_Global_Variables(t *testing.T) {
