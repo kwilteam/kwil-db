@@ -24,7 +24,7 @@ func TestSelect_ToSQL(t *testing.T) {
 					mockCTE,
 				},
 				SelectStmt: &tree.SelectStmt{
-					SelectCore: &tree.SelectCore{
+					SelectCores: []*tree.SelectCore{{
 						SelectType: tree.SelectTypeAll,
 						Columns:    []string{"foo", "bar"},
 						From: &tree.FromClause{
@@ -50,7 +50,7 @@ func TestSelect_ToSQL(t *testing.T) {
 								Right:    &tree.ExpressionBindParameter{Parameter: "$b"},
 							},
 						},
-					},
+					}},
 					OrderBy: &tree.OrderBy{
 						OrderingTerms: []*tree.OrderingTerm{
 							{

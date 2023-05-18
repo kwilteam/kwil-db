@@ -35,15 +35,16 @@ func (s *Select) ToSQL() (str string, err error) {
 }
 
 type SelectStmt struct {
-	SelectCore *SelectCore
+	SelectCores []*SelectCore
 	OrderBy    *OrderBy
 	Limit      *Limit
 }
 
 func (s *SelectStmt) ToSQL() (res string) {
-
 	stmt := sqlwriter.NewWriter()
-	stmt.WriteString(s.SelectCore.ToSQL())
+	for _, core := range s.SelectCores {
+		stmt.WriteString(core.ToSQL())
+	}
 	if s.OrderBy != nil {
 		stmt.WriteString(s.OrderBy.ToSQL())
 	}
@@ -69,6 +70,11 @@ func (s *SelectCore) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
+
+	if s.Compound != nil {
+		stmt.WriteString(s.Compound.ToSQL())
+	}
+
 	stmt.Token.Select()
 	if s.SelectType == SelectTypeDistinct {
 		stmt.Token.Distinct()
@@ -142,13 +148,11 @@ func (c *CompoundOperatorType) ToSQL() string {
 }
 
 type CompoundOperator struct {
-	Operator     CompoundOperatorType
-	SelectClause *SelectCore
+	Operator CompoundOperatorType
 }
 
 func (c *CompoundOperator) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(c.Operator.ToSQL())
-	stmt.WriteString(c.SelectClause.ToSQL())
 	return stmt.String()
 }

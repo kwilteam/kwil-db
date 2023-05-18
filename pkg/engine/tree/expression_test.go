@@ -406,24 +406,26 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				IsNot:    true,
 				IsExists: true,
 				Select: &tree.SelectStmt{
-					SelectCore: &tree.SelectCore{
-						SelectType: tree.SelectTypeAll,
-						From: &tree.FromClause{
-							JoinClause: &tree.JoinClause{
-								TableOrSubquery: &tree.TableOrSubqueryTable{
-									Name:  "foo",
-									Alias: "f",
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							From: &tree.FromClause{
+								JoinClause: &tree.JoinClause{
+									TableOrSubquery: &tree.TableOrSubqueryTable{
+										Name:  "foo",
+										Alias: "f",
+									},
 								},
 							},
-						},
-						Where: &tree.ExpressionBinaryComparison{
-							Left: &tree.ExpressionColumn{
-								Table:  "f",
-								Column: "foo",
-							},
-							Operator: tree.ComparisonOperatorEqual,
-							Right: &tree.ExpressionBindParameter{
-								Parameter: "$a",
+							Where: &tree.ExpressionBinaryComparison{
+								Left: &tree.ExpressionColumn{
+									Table:  "f",
+									Column: "foo",
+								},
+								Operator: tree.ComparisonOperatorEqual,
+								Right: &tree.ExpressionBindParameter{
+									Parameter: "$a",
+								},
 							},
 						},
 					},
