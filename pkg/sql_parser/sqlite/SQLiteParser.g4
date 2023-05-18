@@ -114,7 +114,7 @@ create_index_stmt:
         indexed_column (COMMA indexed_column)* CLOSE_PAR (WHERE_ expr)?
 ;
 
-indexed_column: (column_name | expr) (COLLATE_ collation_name)? asc_desc?
+indexed_column: column_name
 ;
 
 create_table_stmt:
@@ -323,6 +323,11 @@ returning_clause:
     RETURNING_ returning_clause_result_column (COMMA returning_clause_result_column)*
 ;
 
+// @yaiba eaiser to parse this way
+upsert_update:
+    (column_name | column_name_list) ASSIGN expr
+;
+
 upsert_clause:
     ON_ CONFLICT_
     (OPEN_PAR indexed_column (COMMA indexed_column)* CLOSE_PAR (WHERE_ expr)?)?
@@ -331,8 +336,7 @@ upsert_clause:
         NOTHING_
         | UPDATE_ SET_
             (
-                (column_name | column_name_list) ASSIGN expr
-                (COMMA (column_name | column_name_list) ASSIGN expr)*
+                upsert_update (COMMA upsert_update)*
                 (WHERE_ expr)?
             )
     )
