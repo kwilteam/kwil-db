@@ -118,6 +118,9 @@ type SQLiteParserVisitor interface {
 	// Visit a parse tree produced by SQLiteParser#returning_clause.
 	VisitReturning_clause(ctx *Returning_clauseContext) interface{}
 
+	// Visit a parse tree produced by SQLiteParser#upsert_update.
+	VisitUpsert_update(ctx *Upsert_updateContext) interface{}
+
 	// Visit a parse tree produced by SQLiteParser#upsert_clause.
 	VisitUpsert_clause(ctx *Upsert_clauseContext) interface{}
 

@@ -245,6 +245,12 @@ func (s *BaseSQLiteParserListener) EnterReturning_clause(ctx *Returning_clauseCo
 // ExitReturning_clause is called when production returning_clause is exited.
 func (s *BaseSQLiteParserListener) ExitReturning_clause(ctx *Returning_clauseContext) {}
 
+// EnterUpsert_update is called when production upsert_update is entered.
+func (s *BaseSQLiteParserListener) EnterUpsert_update(ctx *Upsert_updateContext) {}
+
+// ExitUpsert_update is called when production upsert_update is exited.
+func (s *BaseSQLiteParserListener) ExitUpsert_update(ctx *Upsert_updateContext) {}
+
 // EnterUpsert_clause is called when production upsert_clause is entered.
 func (s *BaseSQLiteParserListener) EnterUpsert_clause(ctx *Upsert_clauseContext) {}
 

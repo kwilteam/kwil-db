@@ -155,6 +155,10 @@ func (v *BaseSQLiteParserVisitor) VisitReturning_clause(ctx *Returning_clauseCon
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseSQLiteParserVisitor) VisitUpsert_update(ctx *Upsert_updateContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseSQLiteParserVisitor) VisitUpsert_clause(ctx *Upsert_clauseContext) interface{} {
 	return v.VisitChildren(ctx)
 }

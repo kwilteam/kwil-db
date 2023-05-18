@@ -118,6 +118,9 @@ type SQLiteParserListener interface {
 	// EnterReturning_clause is called when entering the returning_clause production.
 	EnterReturning_clause(c *Returning_clauseContext)
 
+	// EnterUpsert_update is called when entering the upsert_update production.
+	EnterUpsert_update(c *Upsert_updateContext)
+
 	// EnterUpsert_clause is called when entering the upsert_clause production.
 	EnterUpsert_clause(c *Upsert_clauseContext)
 
@@ -435,6 +438,9 @@ type SQLiteParserListener interface {
 
 	// ExitReturning_clause is called when exiting the returning_clause production.
 	ExitReturning_clause(c *Returning_clauseContext)
+
+	// ExitUpsert_update is called when exiting the upsert_update production.
+	ExitUpsert_update(c *Upsert_updateContext)
 
 	// ExitUpsert_clause is called when exiting the upsert_clause production.
 	ExitUpsert_clause(c *Upsert_clauseContext)
