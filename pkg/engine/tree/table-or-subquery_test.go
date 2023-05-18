@@ -40,12 +40,14 @@ func TestTableOrSubqueryTable_ToSQL(t *testing.T) {
 			fields: fields{
 				TableOrSubquery: &tree.TableOrSubquerySelect{
 					Select: &tree.SelectStmt{
-						SelectCore: &tree.SelectCore{
-							SelectType: tree.SelectTypeAll,
-							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryTable{
-										Name: "foo",
+						SelectCores: []*tree.SelectCore{
+							{
+								SelectType: tree.SelectTypeAll,
+								From: &tree.FromClause{
+									JoinClause: &tree.JoinClause{
+										TableOrSubquery: &tree.TableOrSubqueryTable{
+											Name: "foo",
+										},
 									},
 								},
 							},
@@ -65,12 +67,14 @@ func TestTableOrSubqueryTable_ToSQL(t *testing.T) {
 						},
 						&tree.TableOrSubquerySelect{
 							Select: &tree.SelectStmt{
-								SelectCore: &tree.SelectCore{
-									SelectType: tree.SelectTypeAll,
-									From: &tree.FromClause{
-										JoinClause: &tree.JoinClause{
-											TableOrSubquery: &tree.TableOrSubqueryTable{
-												Name: "foo",
+								SelectCores: []*tree.SelectCore{
+									{
+										SelectType: tree.SelectTypeAll,
+										From: &tree.FromClause{
+											JoinClause: &tree.JoinClause{
+												TableOrSubquery: &tree.TableOrSubqueryTable{
+													Name: "foo",
+												},
 											},
 										},
 									},

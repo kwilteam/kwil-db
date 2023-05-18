@@ -37,13 +37,15 @@ func TestUpdate_ToSQL(t *testing.T) {
 								IsNot:    true,
 								IsExists: true,
 								Select: &tree.SelectStmt{
-									SelectCore: &tree.SelectCore{
-										SelectType: tree.SelectTypeAll,
-										Columns:    []string{"foo", "bar"},
-										From: &tree.FromClause{
-											JoinClause: &tree.JoinClause{
-												TableOrSubquery: &tree.TableOrSubqueryTable{
-													Name: "foo",
+									SelectCores: []*tree.SelectCore{
+										{
+											SelectType: tree.SelectTypeAll,
+											Columns:    []string{"foo", "bar"},
+											From: &tree.FromClause{
+												JoinClause: &tree.JoinClause{
+													TableOrSubquery: &tree.TableOrSubqueryTable{
+														Name: "foo",
+													},
 												},
 											},
 										},

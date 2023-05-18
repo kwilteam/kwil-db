@@ -59,7 +59,7 @@ const (
 	BitwiseOperatorRightShift BitwiseOperator = ">>"
 )
 
-func (b BitwiseOperator) Unary() {}
+func (b BitwiseOperator) Binary() {}
 func (b BitwiseOperator) String() string {
 	return string(b)
 }
