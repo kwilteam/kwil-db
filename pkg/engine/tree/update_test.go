@@ -40,7 +40,10 @@ func TestUpdate_ToSQL(t *testing.T) {
 									SelectCores: []*tree.SelectCore{
 										{
 											SelectType: tree.SelectTypeAll,
-											Columns:    []string{"foo", "bar"},
+											Columns: []tree.ResultColumn{
+												&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "foo"}},
+												&tree.ResultColumnExpression{Expression: &tree.ExpressionColumn{Column: "bar"}},
+											},
 											From: &tree.FromClause{
 												JoinClause: &tree.JoinClause{
 													TableOrSubquery: &tree.TableOrSubqueryTable{

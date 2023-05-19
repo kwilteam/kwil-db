@@ -57,7 +57,7 @@ func (s *SelectStmt) ToSQL() (res string) {
 
 type SelectCore struct {
 	SelectType SelectType
-	Columns    []string
+	Columns    []ResultColumn
 	From       *FromClause
 	Where      Expression
 	GroupBy    *GroupBy
@@ -83,7 +83,7 @@ func (s *SelectCore) ToSQL() string {
 			if i > 0 && i < len(s.Columns) {
 				stmt.Token.Comma()
 			}
-			stmt.WriteIdent(col)
+			stmt.WriteString(col.ToSQL())
 		}
 	}
 
