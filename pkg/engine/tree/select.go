@@ -36,8 +36,8 @@ func (s *Select) ToSQL() (str string, err error) {
 
 type SelectStmt struct {
 	SelectCores []*SelectCore
-	OrderBy    *OrderBy
-	Limit      *Limit
+	OrderBy     *OrderBy
+	Limit       *Limit
 }
 
 func (s *SelectStmt) ToSQL() (res string) {
@@ -65,10 +65,6 @@ type SelectCore struct {
 }
 
 func (s *SelectCore) ToSQL() string {
-	if s.From == nil {
-		panic("from clause is required")
-	}
-
 	stmt := sqlwriter.NewWriter()
 
 	if s.Compound != nil {
@@ -91,7 +87,9 @@ func (s *SelectCore) ToSQL() string {
 		}
 	}
 
-	stmt.WriteString(s.From.ToSQL())
+	if s.From != nil {
+		stmt.WriteString(s.From.ToSQL())
+	}
 	if s.Where != nil {
 		stmt.Token.Where()
 		stmt.WriteString(s.Where.ToSQL())
