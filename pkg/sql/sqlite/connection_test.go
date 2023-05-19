@@ -35,13 +35,12 @@ func Test_Query_With_Opts(t *testing.T) {
 	}
 
 	// insert users
-	err = stmt.Execute(&sqlite.ExecOpts{
-		NamedArgs: map[string]interface{}{
-			"$id":   1,
-			"$name": "John",
-			"$age":  30,
-		},
-	})
+	err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+		"$id":   1,
+		"$name": "John",
+		"$age":  30,
+	}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,9 +50,9 @@ func Test_Query_With_Opts(t *testing.T) {
 	// test ResultSet read back
 	results := &sqlite.ResultSet{}
 	// read it back
-	err = conn.Query(ctx, "SELECT * FROM users", &sqlite.ExecOpts{
-		ResultSet: results,
-	})
+	err = conn.Query(ctx, "SELECT * FROM users",
+		sqlite.WithResultSet(results),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,9 +66,7 @@ func Test_Query_With_Opts(t *testing.T) {
 
 	// Test ResultFunc
 	result := &sqlite.ResultSet{}
-	err = conn.Query(ctx, "SELECT * FROM users", &sqlite.ExecOpts{
-		ResultSet: result,
-	})
+	err = conn.Query(ctx, "SELECT * FROM users", sqlite.WithResultSet(result))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,10 +78,7 @@ func Test_Query_With_Opts(t *testing.T) {
 	// test numbered args
 	results = &sqlite.ResultSet{}
 	// read it back
-	err = conn.Query(ctx, "SELECT * FROM users WHERE id = $1", &sqlite.ExecOpts{
-		ResultSet: results,
-		Args:      []interface{}{"1"},
-	})
+	err = conn.Query(ctx, "SELECT * FROM users WHERE id = $1", sqlite.WithArgs([]interface{}{"1"}), sqlite.WithResultSet(results))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,12 +90,12 @@ func Test_Query_With_Opts(t *testing.T) {
 	// test named args
 	results = &sqlite.ResultSet{}
 	// read it back
-	err = conn.Query(ctx, "SELECT * FROM users WHERE id = $id", &sqlite.ExecOpts{
-		ResultSet: results,
-		NamedArgs: map[string]interface{}{
+	err = conn.Query(ctx, "SELECT * FROM users WHERE id = $id",
+		sqlite.WithNamedArgs(map[string]interface{}{
 			"$id": 1,
-		},
-	})
+		}),
+		sqlite.WithResultSet(results),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,15 +109,14 @@ func Test_Query_With_Opts(t *testing.T) {
 	var userId int64
 	counter := 0
 	// test result func
-	err = conn.Query(ctx, "SELECT * FROM users", &sqlite.ExecOpts{
-		ResultFunc: func(stmt *sqlite.Statement) error {
-			counter++
-			userName = stmt.GetText("name")
-			userAge = stmt.GetInt64("age")
-			userId = stmt.GetInt64("id")
-			return nil
-		},
-	})
+	err = conn.Query(ctx, "SELECT * FROM users", sqlite.WithResultFunc(func(stmt *sqlite.Statement) error {
+		counter++
+		userName = stmt.GetText("name")
+		userAge = stmt.GetInt64("age")
+		userId = stmt.GetInt64("id")
+		return nil
+	}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,22 +165,19 @@ func Test_Database_Wal(t *testing.T) {
 	}
 
 	// insert users
-	err = stmt.Execute(&sqlite.ExecOpts{
-		NamedArgs: map[string]interface{}{
-			"$id":   1,
-			"$name": "John",
-			"$age":  30,
-		},
-	})
+	err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+		"$id":   1,
+		"$name": "John",
+		"$age":  30,
+	}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// query users
 	results := &sqlite.ResultSet{}
-	err = conn.Query(context.Background(), "SELECT * FROM users", &sqlite.ExecOpts{
-		ResultSet: results,
-	})
+	err = conn.Query(context.Background(), "SELECT * FROM users", sqlite.WithResultSet(results))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,9 +194,7 @@ func Test_Database_Wal(t *testing.T) {
 
 	// query users
 	results = &sqlite.ResultSet{}
-	err = conn.Query(context.Background(), "SELECT * FROM users", &sqlite.ExecOpts{
-		ResultSet: results,
-	})
+	err = conn.Query(context.Background(), "SELECT * FROM users", sqlite.WithResultSet(results))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,13 +210,12 @@ func Test_Database_Wal(t *testing.T) {
 	}
 
 	// insert users
-	err = stmt.Execute(&sqlite.ExecOpts{
-		NamedArgs: map[string]interface{}{
-			"$id":   1,
-			"$name": "John",
-			"$age":  30,
-		},
-	})
+	err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+		"$id":   1,
+		"$name": "John",
+		"$age":  30,
+	}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,9 +232,7 @@ func Test_Database_Wal(t *testing.T) {
 
 	// query users
 	results = &sqlite.ResultSet{}
-	err = conn.Query(context.Background(), "SELECT * FROM users", &sqlite.ExecOpts{
-		ResultSet: results,
-	})
+	err = conn.Query(context.Background(), "SELECT * FROM users", sqlite.WithResultSet(results))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,20 +262,17 @@ func Test_Global_Variables(t *testing.T) {
 	}
 
 	// test defaults
-	err = stmt.Execute(&sqlite.ExecOpts{
-		NamedArgs: map[string]interface{}{
-			"$id": 1,
-		},
-	})
+	err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+		"$id": 1,
+	}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// query users
 	results := &sqlite.ResultSet{}
-	err = conn.Query(context.Background(), "SELECT * FROM users", &sqlite.ExecOpts{
-		ResultSet: results,
-	})
+	err = conn.Query(context.Background(), "SELECT * FROM users", sqlite.WithResultSet(results))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,21 +301,19 @@ func Test_Global_Variables(t *testing.T) {
 	}
 
 	// now we test that the global variables can be overwritten
-	err = stmt.Execute(&sqlite.ExecOpts{
-		NamedArgs: map[string]interface{}{
-			"$id":     2,
-			"@caller": "0xjohndoe",
-			"@block":  69,
-		}})
+	err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+		"$id":     2,
+		"@caller": "0xjohndoe",
+		"@block":  69,
+	}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// query users
 	results = &sqlite.ResultSet{}
-	err = conn.Query(context.Background(), "SELECT * FROM users", &sqlite.ExecOpts{
-		ResultSet: results,
-	})
+	err = conn.Query(context.Background(), "SELECT * FROM users", sqlite.WithResultSet(results))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,9 +418,7 @@ func Test_Order_Determinism(t *testing.T) {
 			}
 
 			for _, user := range users {
-				err = stmt.Execute(&sqlite.ExecOpts{
-					NamedArgs: user,
-				})
+				err = stmt.Execute(sqlite.WithNamedArgs(user))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -449,9 +427,8 @@ func Test_Order_Determinism(t *testing.T) {
 			for i := 0; i < 100; i++ {
 				// query users
 				results := &sqlite.ResultSet{}
-				err = conn.Query(context.Background(), "SELECT * FROM users as u1 CROSS JOIN users AS u2", &sqlite.ExecOpts{
-					ResultSet: results,
-				})
+				err = conn.Query(context.Background(), "SELECT * FROM users as u1 CROSS JOIN users AS u2",
+					sqlite.WithResultSet(results))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -491,13 +468,13 @@ func Test_Reads(t *testing.T) {
 	}
 
 	// insert users
-	err = stmt.Execute(&sqlite.ExecOpts{
-		NamedArgs: map[string]interface{}{
+	err = stmt.Execute(
+		sqlite.WithNamedArgs(map[string]interface{}{
 			"$id":   1,
 			"$name": "John",
 			"$age":  30,
-		},
-	})
+		}),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

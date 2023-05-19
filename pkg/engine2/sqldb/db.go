@@ -1,4 +1,4 @@
-package dataset
+package sqldb
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
 )
 
+// DB is an interface used by deployed datasets to interact with the underlying database.
 type DB interface {
 	// Prepare returns a prepared statement, bound to this connection.
 	Prepare(query string) (Statement, error)
@@ -16,20 +17,23 @@ type DB interface {
 	// Close closes the database connection.
 	Close() error
 
+	// Delete deletes the database.
+	Delete() error
+
 	// Savepoint creates a new savepoint.
 	Savepoint() (Savepoint, error)
 
 	// ListTables returns a list of all tables in the database.
-	ListTables() ([]*dto.Table, error)
+	ListTables(ctx context.Context) ([]*dto.Table, error)
 
 	// ListActions returns a list of all actions in the database.
-	ListActions() ([]*dto.Action, error)
+	ListActions(ctx context.Context) ([]*dto.Action, error)
 
 	// CreateTable creates a new table.
-	CreateTable(table *dto.Table) error
+	CreateTable(ctx context.Context, table *dto.Table) error
 
-	// CreateAction persists a new action.
-	CreateAction(action *dto.Action) error
+	// StoreAction persists a new action.
+	StoreAction(ctx context.Context, action *dto.Action) error
 }
 
 type Statement interface {

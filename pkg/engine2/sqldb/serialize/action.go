@@ -33,7 +33,7 @@ func SerializeAction(action *dto.Action) (*Serializable, error) {
 
 	return &Serializable{
 		Name:    action.Name,
-		Type:    IdentifierTable,
+		Type:    IdentifierAction,
 		Version: actionVersion,
 		Data:    data,
 	}, nil
