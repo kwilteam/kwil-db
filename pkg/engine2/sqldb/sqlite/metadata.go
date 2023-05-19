@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
-	"github.com/kwilteam/kwil-db/pkg/engine2/sqlite/serialize"
+	"github.com/kwilteam/kwil-db/pkg/engine2/sqldb/serialize"
+	sqlitegenerator "github.com/kwilteam/kwil-db/pkg/engine2/sqldb/sql-ddl-generator"
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
 )
 
@@ -16,13 +17,13 @@ const (
 		meta_type TEXT NOT NULL,
 		version INTEGER NOT NULL,
 		data BLOB NOT NULL,
-		UNIQUE(meta_type, name)
+		PRIMARY KEY (meta_type, name)
 	) WITHOUT ROWID;`
 	sqlGetMetadata   = `SELECT version, data, name FROM ` + metadataTableName + ` WHERE meta_type = $metatype;`
 	sqlStoreMetadata = `INSERT INTO ` + metadataTableName + ` (name, meta_type, version, data) VALUES ($name, $metatype, $version, $data);`
 )
 
-func (s *SqliteDB) initTables() error {
+func (s *SqliteStore) initTables() error {
 	ctx := context.Background()
 
 	exists, err := s.conn.TableExists(ctx, metadataTableName)
@@ -42,7 +43,70 @@ func (s *SqliteDB) initTables() error {
 	return nil
 }
 
-func (s *SqliteDB) getMetadata(ctx context.Context, metaType serialize.TypeIdentifier) ([]*serialize.Serializable, error) {
+func (s *SqliteStore) CreateTable(ctx context.Context, table *dto.Table) error {
+	sp, err := s.conn.Savepoint()
+	if err != nil {
+		return err
+	}
+	defer sp.Rollback()
+
+	err = s.deployTable(ctx, table)
+	if err != nil {
+		return err
+	}
+
+	err = s.storeTable(ctx, table)
+	if err != nil {
+		return err
+	}
+
+	return sp.Commit()
+}
+
+// deployTable deploys a table to the database.
+// If the table already exists, it is not deployed, and false is returned.
+// If the table does not exist, it is deployed, and true is returned.
+func (s *SqliteStore) deployTable(ctx context.Context, table *dto.Table) error {
+	exists, err := s.conn.TableExists(ctx, table.Name)
+	if err != nil {
+		return fmt.Errorf("failed to check if table %s exists: %w", table.Name, err)
+	}
+
+	if exists {
+		return fmt.Errorf("table %s already exists", table.Name)
+	}
+
+	stmts, err := sqlitegenerator.GenerateDDL(table)
+	if err != nil {
+		return fmt.Errorf("failed to generate DDL for table %s: %w", table.Name, err)
+	}
+
+	for _, stmt := range stmts {
+		err := s.conn.Execute(stmt)
+		if err != nil {
+			return fmt.Errorf("failed to execute DDL for table %s: %w", table.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *SqliteStore) StoreAction(ctx context.Context, action *dto.Action) error {
+	sp, err := s.conn.Savepoint()
+	if err != nil {
+		return err
+	}
+	defer sp.Rollback()
+
+	err = s.storeAction(ctx, action)
+	if err != nil {
+		return err
+	}
+
+	return sp.Commit()
+}
+
+func (s *SqliteStore) getMetadata(ctx context.Context, metaType serialize.TypeIdentifier) ([]*serialize.Serializable, error) {
 	res := make([]*serialize.Serializable, 0)
 
 	err := s.conn.Query(ctx, sqlGetMetadata, &sqlite.ExecOpts{
@@ -70,7 +134,7 @@ func (s *SqliteDB) getMetadata(ctx context.Context, metaType serialize.TypeIdent
 	return res, nil
 }
 
-func (s *SqliteDB) ListTables(ctx context.Context) ([]*dto.Table, error) {
+func (s *SqliteStore) ListTables(ctx context.Context) ([]*dto.Table, error) {
 	sers, err := s.getMetadata(ctx, serialize.IdentifierTable)
 	if err != nil {
 		return nil, err
@@ -89,7 +153,7 @@ func (s *SqliteDB) ListTables(ctx context.Context) ([]*dto.Table, error) {
 	return tables, nil
 }
 
-func (s *SqliteDB) ListActions(ctx context.Context) ([]*dto.Action, error) {
+func (s *SqliteStore) ListActions(ctx context.Context) ([]*dto.Action, error) {
 	sers, err := s.getMetadata(ctx, serialize.IdentifierAction)
 	if err != nil {
 		return nil, err
@@ -108,7 +172,7 @@ func (s *SqliteDB) ListActions(ctx context.Context) ([]*dto.Action, error) {
 	return actions, nil
 }
 
-func (s *SqliteDB) storeTable(ctx context.Context, table *dto.Table) error {
+func (s *SqliteStore) storeTable(ctx context.Context, table *dto.Table) error {
 	ser, err := serialize.SerializeTable(table)
 	if err != nil {
 		return err
@@ -117,7 +181,7 @@ func (s *SqliteDB) storeTable(ctx context.Context, table *dto.Table) error {
 	return s.storeMetadata(ctx, ser)
 }
 
-func (s *SqliteDB) storeAction(ctx context.Context, action *dto.Action) error {
+func (s *SqliteStore) storeAction(ctx context.Context, action *dto.Action) error {
 	ser, err := serialize.SerializeAction(action)
 	if err != nil {
 		return err
@@ -126,7 +190,7 @@ func (s *SqliteDB) storeAction(ctx context.Context, action *dto.Action) error {
 	return s.storeMetadata(ctx, ser)
 }
 
-func (s *SqliteDB) storeMetadata(ctx context.Context, ser *serialize.Serializable) error {
+func (s *SqliteStore) storeMetadata(ctx context.Context, ser *serialize.Serializable) error {
 	exists, err := s.exists(ctx, ser.Name, ser.Type)
 	if err != nil {
 		return err
@@ -158,7 +222,7 @@ func (s *SqliteDB) storeMetadata(ctx context.Context, ser *serialize.Serializabl
 
 // getMetadataStmt retrives the metadata table insert statement.
 // It is cached on the SqliteDB struct.
-func (s *SqliteDB) getMetadataStmt() (*sqlite.Statement, error) {
+func (s *SqliteStore) getMetadataStmt() (*sqlite.Statement, error) {
 	if s.metadataStmt != nil {
 		return s.metadataStmt, nil
 	}
@@ -174,7 +238,7 @@ func (s *SqliteDB) getMetadataStmt() (*sqlite.Statement, error) {
 }
 
 // exists checks if metadata of that name and type exists
-func (s *SqliteDB) exists(ctx context.Context, name string, metaType serialize.TypeIdentifier) (bool, error) {
+func (s *SqliteStore) exists(ctx context.Context, name string, metaType serialize.TypeIdentifier) (bool, error) {
 	var exists bool
 
 	err := s.conn.Query(ctx, `SELECT EXISTS(SELECT 1 FROM `+metadataTableName+` WHERE name = $name AND meta_type = $metatype);`, &sqlite.ExecOpts{

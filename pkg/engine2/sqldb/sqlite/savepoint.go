@@ -8,7 +8,7 @@ type Savepoint struct {
 	sp *sqlite.Savepoint
 }
 
-func NewSavepoint(sp *sqlite.Savepoint) *Savepoint {
+func newSavepoint(sp *sqlite.Savepoint) *Savepoint {
 	return &Savepoint{sp: sp}
 }
 

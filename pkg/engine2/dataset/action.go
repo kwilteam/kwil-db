@@ -4,55 +4,22 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
+	"github.com/kwilteam/kwil-db/pkg/engine2/sqldb"
 )
 
-const (
-	defaultCallerAddress = "0x0000000000000000000000000000000000000000"
-	callerVarName        = "@caller"
-)
-
-// An Action is a set of statements that takes a predefined set of inputs,
+// An preparedAction is a set of statements that takes a predefined set of inputs,
 // and can be executed atomically.  It is the primary way to interact with
 // a dataset.
-type Action struct {
+type preparedAction struct {
 	*dto.Action
-	stmts   []Statement
+	stmts   []sqldb.Statement
 	dataset *Dataset
-}
-
-type TxContext struct {
-	Caller string
-}
-
-// fillDefaults fills in default values for the options.
-func (t *TxContext) fillDefaults() *TxContext {
-	if t == nil {
-		t = &TxContext{}
-	}
-
-	if t.Caller == "" {
-		t.Caller = defaultCallerAddress
-	}
-
-	return t
-}
-
-// fillInputs adds the ExecOpts values to the inputs map.
-func (t *TxContext) fillInputs(inputs map[string]any) map[string]any {
-	t = t.fillDefaults()
-	if inputs == nil {
-		inputs = make(map[string]any)
-	}
-
-	inputs[callerVarName] = t.Caller
-
-	return inputs
 }
 
 // Execute executes the action.
 // It takes in a map of inputs and options.
 // It returns a result set and an error.
-func (a *Action) Execute(txCtx *TxContext, userInputs map[string]any) (dto.Result, error) {
+func (a *preparedAction) Execute(txCtx *dto.TxContext, userInputs map[string]any) (dto.Result, error) {
 	err := a.checkAccessControl(txCtx)
 	if err != nil {
 		return nil, fmt.Errorf("Action.Execute: failed access control: %w", err)
@@ -64,7 +31,7 @@ func (a *Action) Execute(txCtx *TxContext, userInputs map[string]any) (dto.Resul
 	}
 	defer savepoint.Rollback()
 
-	inputs := txCtx.fillInputs(userInputs)
+	inputs := txCtx.FillInputs(userInputs)
 
 	var res dto.Result
 	for _, stmt := range a.stmts {
@@ -85,7 +52,7 @@ func (a *Action) Execute(txCtx *TxContext, userInputs map[string]any) (dto.Resul
 // BatchExecute executes the action multiple times.
 // It takes in a map of inputs and options.
 // It returns a result set and an error.
-func (a *Action) BatchExecute(txCtx *TxContext, userInputs []map[string]any) (dto.Result, error) {
+func (a *preparedAction) BatchExecute(txCtx *dto.TxContext, userInputs []map[string]any) (dto.Result, error) {
 	savepoint, err := a.dataset.db.Savepoint()
 	if err != nil {
 		return nil, fmt.Errorf("Action.BatchExecute: failed to create savepoint: %w", err)
@@ -109,7 +76,7 @@ func (a *Action) BatchExecute(txCtx *TxContext, userInputs []map[string]any) (dt
 }
 
 // Close closes the action.
-func (a *Action) Close() error {
+func (a *preparedAction) Close() error {
 	for _, stmt := range a.stmts {
 		err := stmt.Close()
 		if err != nil {
@@ -119,7 +86,7 @@ func (a *Action) Close() error {
 	return nil
 }
 
-func (a *Action) checkAccessControl(opts *TxContext) error {
+func (a *preparedAction) checkAccessControl(opts *dto.TxContext) error {
 	if a.Public {
 		return nil
 	}

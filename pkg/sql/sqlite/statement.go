@@ -109,6 +109,36 @@ func (e *ExecOpts) ensureResultFunc() {
 	}
 }
 
+type ExecOption func(*ExecOpts)
+
+// WithResultFunc specifies the result function to use
+func WithResultFunc(resultFunc func(*Statement) error) ExecOption {
+	return func(opts *ExecOpts) {
+		opts.ResultFunc = resultFunc
+	}
+}
+
+// WithArgs specifies the args to use
+func WithArgs(args ...interface{}) ExecOption {
+	return func(opts *ExecOpts) {
+		opts.Args = args
+	}
+}
+
+// WithNamedArgs specifies the named args to use
+func WithNamedArgs(namedArgs map[string]interface{}) ExecOption {
+	return func(opts *ExecOpts) {
+		opts.NamedArgs = namedArgs
+	}
+}
+
+// WithResultSet specifies the result set to use
+func WithResultSet(resultSet *ResultSet) ExecOption {
+	return func(opts *ExecOpts) {
+		opts.ResultSet = resultSet
+	}
+}
+
 // Execute executes the statement.
 // It takes an optional ExecOpts struct that can be used to set the arguments for the statement by parameter name,
 // or by numeric index.  It also allows for a ResultFunc to be set that is called as the cursor steps through
@@ -116,23 +146,25 @@ func (e *ExecOpts) ensureResultFunc() {
 // If both Args and NamedArgs are set, the NamedArgs will be used.
 // Both NamedArgs and Args will override values set before the call to Execute.
 // It also allows for a ResultSet to be set that will be populated with the results of the query.
-func (s *Statement) Execute(opts *ExecOpts) error {
+func (s *Statement) Execute(opts ...ExecOption) error {
 	s.conn.mu.Lock()
 	defer s.conn.mu.Unlock()
 
-	return s.execute(opts)
+	return s.execute(opts...)
 }
 
 // internal execute function that does not lock the connection.
-func (s *Statement) execute(opts *ExecOpts) error {
+func (s *Statement) execute(options ...ExecOption) error {
 	defer s.Clear()
 
 	if s.conn == nil {
 		return fmt.Errorf("connection has been closed")
 	}
 
-	if opts == nil {
-		opts = &ExecOpts{}
+	opts := &ExecOpts{}
+
+	for _, opt := range options {
+		opt(opts)
 	}
 
 	opts.ensureResultFunc()
@@ -224,8 +256,12 @@ func (s *Statement) GetBool(param string) bool {
 }
 
 // GetBytes gets the blob value of the given parameter and returns it as a byte slice.
-func (s *Statement) GetBytes(param string) (buf []byte) {
+func (s *Statement) GetBytes(param string) []byte {
+	length := s.stmt.GetLen(param)
+
+	buf := make([]byte, length)
 	s.stmt.GetBytes(param, buf)
+
 	return buf
 }
 
@@ -319,6 +355,8 @@ func (s *Statement) setAny(param string, val any) error {
 		s.stmt.BindText(index, ref.String())
 	case reflect.Bool:
 		s.stmt.BindBool(index, ref.Bool())
+	case reflect.Array, reflect.Slice:
+		s.stmt.BindBytes(index, ref.Bytes())
 	default:
 		return fmt.Errorf("kwildb set any error: unsupported type: %s", ref.Kind())
 	}

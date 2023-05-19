@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
-	sqlitegenerator "github.com/kwilteam/kwil-db/pkg/engine2/sqlite/sql-ddl-generator"
+	sqlitegenerator "github.com/kwilteam/kwil-db/pkg/engine2/sqldb/sql-ddl-generator"
 )
 
 func Test_Generate(t *testing.T) {
