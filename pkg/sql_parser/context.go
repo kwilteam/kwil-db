@@ -1,6 +1,6 @@
 package sql_parser
 
-type ActionContext map[string]any
+type ActionContext map[string]interface{}
 type TableContext struct {
 	Columns      []string
 	Indexes      []string // index names
