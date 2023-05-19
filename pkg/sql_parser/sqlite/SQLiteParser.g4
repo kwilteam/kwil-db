@@ -216,19 +216,21 @@ create_virtual_table_stmt:
 cte_table_name:
     table_name (OPEN_PAR column_name (COMMA column_name)* CLOSE_PAR)?
 ;
+
 common_table_expression:
-    cte_table_name AS_ OPEN_PAR select_stmt CLOSE_PAR
+    cte_table_name AS_ OPEN_PAR select_stmt_core CLOSE_PAR
 ;
-with_clause:
+
+common_table_stmt: //additional structures
     WITH_ common_table_expression (COMMA common_table_expression)*
 ;
 
 delete_stmt:
-    with_clause? DELETE_ FROM_ qualified_table_name (WHERE_ expr)? returning_clause?
+    common_table_stmt? DELETE_ FROM_ qualified_table_name (WHERE_ expr)? returning_clause?
 ;
 
 delete_stmt_limited:
-    with_clause? DELETE_ FROM_ qualified_table_name (WHERE_ expr)? returning_clause? (
+    common_table_stmt? DELETE_ FROM_ qualified_table_name (WHERE_ expr)? returning_clause? (
         order_by_stmt? limit_stmt
     )?
 ;
@@ -287,8 +289,8 @@ expr:
     | expr ( ISNULL_ | NOTNULL_ | NOT_ NULL_)
     | expr IS_ NOT_? (DISTINCT_ FROM_)? expr
     | expr NOT_? BETWEEN_ expr AND_ expr
-    | expr NOT_? IN_ OPEN_PAR (select_stmt | expr ( COMMA expr)*)? CLOSE_PAR
-    | ((NOT_)? EXISTS_)? OPEN_PAR select_stmt CLOSE_PAR
+    | expr NOT_? IN_ OPEN_PAR (select_stmt_core | expr ( COMMA expr)*)? CLOSE_PAR
+    | ((NOT_)? EXISTS_)? OPEN_PAR select_stmt_core CLOSE_PAR
     | CASE_ expr? (WHEN_ expr THEN_ expr)+ (ELSE_ expr)? END_
 ;
 
@@ -310,7 +312,7 @@ values_clause:
 ;
 
 insert_stmt:
-    with_clause?
+    common_table_stmt?
     (REPLACE_ | INSERT_ | INSERT_ OR_ REPLACE_) INTO_ table_name
     (AS_ table_alias)?
     (OPEN_PAR column_name ( COMMA column_name)* CLOSE_PAR)?
@@ -330,14 +332,14 @@ upsert_update:
 
 upsert_clause:
     ON_ CONFLICT_
-    (OPEN_PAR indexed_column (COMMA indexed_column)* CLOSE_PAR (WHERE_ expr)?)?
+    (OPEN_PAR indexed_column (COMMA indexed_column)* CLOSE_PAR (WHERE_ target_expr=expr)?)?
     DO_
     (
         NOTHING_
         | UPDATE_ SET_
             (
                 upsert_update (COMMA upsert_update)*
-                (WHERE_ expr)?
+                (WHERE_ update_expr=expr)?
             )
     )
 ;
@@ -359,8 +361,12 @@ reindex_stmt:
     REINDEX_ (collation_name | (schema_name DOT)? (table_name | index_name))?
 ;
 
+select_stmt_core:
+    select_core (compound_operator select_core)* order_by_stmt? limit_stmt?
+;
+
 select_stmt:
-    common_table_stmt? select_core (compound_operator select_core)* order_by_stmt? limit_stmt?
+    common_table_stmt? select_stmt_core
 ;
 
 join_clause:
@@ -369,7 +375,8 @@ join_clause:
 
 select_core:
     (
-        SELECT_ DISTINCT_? result_column (COMMA result_column)*
+        SELECT_ DISTINCT_?
+        result_column (COMMA result_column)*
         (FROM_ (table_or_subquery (COMMA table_or_subquery)* | join_clause))?
         (WHERE_ whereExpr=expr)?
         (
@@ -397,7 +404,7 @@ compound_select_stmt:
 table_or_subquery:
     table_name (AS_ table_alias)?
     | OPEN_PAR (table_or_subquery (COMMA table_or_subquery)* | join_clause) CLOSE_PAR
-    | OPEN_PAR select_stmt CLOSE_PAR (AS_ table_alias)?
+    | OPEN_PAR select_stmt_core CLOSE_PAR (AS_ table_alias)?
 ;
 
 result_column:
@@ -412,8 +419,7 @@ returning_clause_result_column:
 ;
 
 join_operator:
-    COMMA
-    | ((LEFT_ | RIGHT_ | FULL_) OUTER_? | INNER_)? JOIN_
+    NATURAL_? ((LEFT_ | RIGHT_ | FULL_) OUTER_? | INNER_)? JOIN_
 ;
 
 join_constraint:
@@ -427,7 +433,7 @@ compound_operator:
 ;
 
 update_stmt:
-    with_clause? UPDATE_ (
+    common_table_stmt? UPDATE_ (
         OR_ (ROLLBACK_ | ABORT_ | REPLACE_ | FAIL_ | IGNORE_)
     )? qualified_table_name SET_ (column_name | column_name_list) ASSIGN expr (
         COMMA (column_name | column_name_list) ASSIGN expr
@@ -441,7 +447,7 @@ column_name_list:
 ;
 
 update_stmt_limited:
-    with_clause? UPDATE_ (
+    common_table_stmt? UPDATE_ (
         OR_ (ROLLBACK_ | ABORT_ | REPLACE_ | FAIL_ | IGNORE_)
     )? qualified_table_name SET_ (column_name | column_name_list) ASSIGN expr (
         COMMA (column_name | column_name_list) ASSIGN expr
@@ -466,10 +472,6 @@ frame_clause: (RANGE_ | ROWS_ | GROUPS_) (
         frame_single
         | BETWEEN_ frame_left AND_ frame_right
     )
-;
-
-common_table_stmt: //additional structures
-    WITH_ common_table_expression (COMMA common_table_expression)*
 ;
 
 order_by_stmt:

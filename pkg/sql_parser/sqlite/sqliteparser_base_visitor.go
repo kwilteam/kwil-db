@@ -111,7 +111,7 @@ func (v *BaseSQLiteParserVisitor) VisitCommon_table_expression(ctx *Common_table
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseSQLiteParserVisitor) VisitWith_clause(ctx *With_clauseContext) interface{} {
+func (v *BaseSQLiteParserVisitor) VisitCommon_table_stmt(ctx *Common_table_stmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -172,6 +172,10 @@ func (v *BaseSQLiteParserVisitor) VisitPragma_value(ctx *Pragma_valueContext) in
 }
 
 func (v *BaseSQLiteParserVisitor) VisitReindex_stmt(ctx *Reindex_stmtContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseSQLiteParserVisitor) VisitSelect_stmt_core(ctx *Select_stmt_coreContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -248,10 +252,6 @@ func (v *BaseSQLiteParserVisitor) VisitFilter_clause(ctx *Filter_clauseContext) 
 }
 
 func (v *BaseSQLiteParserVisitor) VisitFrame_clause(ctx *Frame_clauseContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseSQLiteParserVisitor) VisitCommon_table_stmt(ctx *Common_table_stmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

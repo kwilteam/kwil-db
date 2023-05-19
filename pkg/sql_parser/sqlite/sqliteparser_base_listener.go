@@ -179,11 +179,11 @@ func (s *BaseSQLiteParserListener) EnterCommon_table_expression(ctx *Common_tabl
 // ExitCommon_table_expression is called when production common_table_expression is exited.
 func (s *BaseSQLiteParserListener) ExitCommon_table_expression(ctx *Common_table_expressionContext) {}
 
-// EnterWith_clause is called when production with_clause is entered.
-func (s *BaseSQLiteParserListener) EnterWith_clause(ctx *With_clauseContext) {}
+// EnterCommon_table_stmt is called when production common_table_stmt is entered.
+func (s *BaseSQLiteParserListener) EnterCommon_table_stmt(ctx *Common_table_stmtContext) {}
 
-// ExitWith_clause is called when production with_clause is exited.
-func (s *BaseSQLiteParserListener) ExitWith_clause(ctx *With_clauseContext) {}
+// ExitCommon_table_stmt is called when production common_table_stmt is exited.
+func (s *BaseSQLiteParserListener) ExitCommon_table_stmt(ctx *Common_table_stmtContext) {}
 
 // EnterDelete_stmt is called when production delete_stmt is entered.
 func (s *BaseSQLiteParserListener) EnterDelete_stmt(ctx *Delete_stmtContext) {}
@@ -274,6 +274,12 @@ func (s *BaseSQLiteParserListener) EnterReindex_stmt(ctx *Reindex_stmtContext) {
 
 // ExitReindex_stmt is called when production reindex_stmt is exited.
 func (s *BaseSQLiteParserListener) ExitReindex_stmt(ctx *Reindex_stmtContext) {}
+
+// EnterSelect_stmt_core is called when production select_stmt_core is entered.
+func (s *BaseSQLiteParserListener) EnterSelect_stmt_core(ctx *Select_stmt_coreContext) {}
+
+// ExitSelect_stmt_core is called when production select_stmt_core is exited.
+func (s *BaseSQLiteParserListener) ExitSelect_stmt_core(ctx *Select_stmt_coreContext) {}
 
 // EnterSelect_stmt is called when production select_stmt is entered.
 func (s *BaseSQLiteParserListener) EnterSelect_stmt(ctx *Select_stmtContext) {}
@@ -390,12 +396,6 @@ func (s *BaseSQLiteParserListener) EnterFrame_clause(ctx *Frame_clauseContext) {
 
 // ExitFrame_clause is called when production frame_clause is exited.
 func (s *BaseSQLiteParserListener) ExitFrame_clause(ctx *Frame_clauseContext) {}
-
-// EnterCommon_table_stmt is called when production common_table_stmt is entered.
-func (s *BaseSQLiteParserListener) EnterCommon_table_stmt(ctx *Common_table_stmtContext) {}
-
-// ExitCommon_table_stmt is called when production common_table_stmt is exited.
-func (s *BaseSQLiteParserListener) ExitCommon_table_stmt(ctx *Common_table_stmtContext) {}
 
 // EnterOrder_by_stmt is called when production order_by_stmt is entered.
 func (s *BaseSQLiteParserListener) EnterOrder_by_stmt(ctx *Order_by_stmtContext) {}

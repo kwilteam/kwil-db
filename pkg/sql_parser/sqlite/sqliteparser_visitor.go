@@ -85,8 +85,8 @@ type SQLiteParserVisitor interface {
 	// Visit a parse tree produced by SQLiteParser#common_table_expression.
 	VisitCommon_table_expression(ctx *Common_table_expressionContext) interface{}
 
-	// Visit a parse tree produced by SQLiteParser#with_clause.
-	VisitWith_clause(ctx *With_clauseContext) interface{}
+	// Visit a parse tree produced by SQLiteParser#common_table_stmt.
+	VisitCommon_table_stmt(ctx *Common_table_stmtContext) interface{}
 
 	// Visit a parse tree produced by SQLiteParser#delete_stmt.
 	VisitDelete_stmt(ctx *Delete_stmtContext) interface{}
@@ -132,6 +132,9 @@ type SQLiteParserVisitor interface {
 
 	// Visit a parse tree produced by SQLiteParser#reindex_stmt.
 	VisitReindex_stmt(ctx *Reindex_stmtContext) interface{}
+
+	// Visit a parse tree produced by SQLiteParser#select_stmt_core.
+	VisitSelect_stmt_core(ctx *Select_stmt_coreContext) interface{}
 
 	// Visit a parse tree produced by SQLiteParser#select_stmt.
 	VisitSelect_stmt(ctx *Select_stmtContext) interface{}
@@ -189,9 +192,6 @@ type SQLiteParserVisitor interface {
 
 	// Visit a parse tree produced by SQLiteParser#frame_clause.
 	VisitFrame_clause(ctx *Frame_clauseContext) interface{}
-
-	// Visit a parse tree produced by SQLiteParser#common_table_stmt.
-	VisitCommon_table_stmt(ctx *Common_table_stmtContext) interface{}
 
 	// Visit a parse tree produced by SQLiteParser#order_by_stmt.
 	VisitOrder_by_stmt(ctx *Order_by_stmtContext) interface{}
