@@ -85,8 +85,8 @@ type SQLiteParserListener interface {
 	// EnterCommon_table_expression is called when entering the common_table_expression production.
 	EnterCommon_table_expression(c *Common_table_expressionContext)
 
-	// EnterWith_clause is called when entering the with_clause production.
-	EnterWith_clause(c *With_clauseContext)
+	// EnterCommon_table_stmt is called when entering the common_table_stmt production.
+	EnterCommon_table_stmt(c *Common_table_stmtContext)
 
 	// EnterDelete_stmt is called when entering the delete_stmt production.
 	EnterDelete_stmt(c *Delete_stmtContext)
@@ -132,6 +132,9 @@ type SQLiteParserListener interface {
 
 	// EnterReindex_stmt is called when entering the reindex_stmt production.
 	EnterReindex_stmt(c *Reindex_stmtContext)
+
+	// EnterSelect_stmt_core is called when entering the select_stmt_core production.
+	EnterSelect_stmt_core(c *Select_stmt_coreContext)
 
 	// EnterSelect_stmt is called when entering the select_stmt production.
 	EnterSelect_stmt(c *Select_stmtContext)
@@ -189,9 +192,6 @@ type SQLiteParserListener interface {
 
 	// EnterFrame_clause is called when entering the frame_clause production.
 	EnterFrame_clause(c *Frame_clauseContext)
-
-	// EnterCommon_table_stmt is called when entering the common_table_stmt production.
-	EnterCommon_table_stmt(c *Common_table_stmtContext)
 
 	// EnterOrder_by_stmt is called when entering the order_by_stmt production.
 	EnterOrder_by_stmt(c *Order_by_stmtContext)
@@ -406,8 +406,8 @@ type SQLiteParserListener interface {
 	// ExitCommon_table_expression is called when exiting the common_table_expression production.
 	ExitCommon_table_expression(c *Common_table_expressionContext)
 
-	// ExitWith_clause is called when exiting the with_clause production.
-	ExitWith_clause(c *With_clauseContext)
+	// ExitCommon_table_stmt is called when exiting the common_table_stmt production.
+	ExitCommon_table_stmt(c *Common_table_stmtContext)
 
 	// ExitDelete_stmt is called when exiting the delete_stmt production.
 	ExitDelete_stmt(c *Delete_stmtContext)
@@ -453,6 +453,9 @@ type SQLiteParserListener interface {
 
 	// ExitReindex_stmt is called when exiting the reindex_stmt production.
 	ExitReindex_stmt(c *Reindex_stmtContext)
+
+	// ExitSelect_stmt_core is called when exiting the select_stmt_core production.
+	ExitSelect_stmt_core(c *Select_stmt_coreContext)
 
 	// ExitSelect_stmt is called when exiting the select_stmt production.
 	ExitSelect_stmt(c *Select_stmtContext)
@@ -510,9 +513,6 @@ type SQLiteParserListener interface {
 
 	// ExitFrame_clause is called when exiting the frame_clause production.
 	ExitFrame_clause(c *Frame_clauseContext)
-
-	// ExitCommon_table_stmt is called when exiting the common_table_stmt production.
-	ExitCommon_table_stmt(c *Common_table_stmtContext)
 
 	// ExitOrder_by_stmt is called when exiting the order_by_stmt production.
 	ExitOrder_by_stmt(c *Order_by_stmtContext)
