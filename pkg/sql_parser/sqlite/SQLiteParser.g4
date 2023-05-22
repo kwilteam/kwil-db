@@ -259,7 +259,7 @@ drop_stmt:
 expr:
     literal_value
     | BIND_PARAMETER
-    | ((schema_name DOT)? table_name DOT)? column_name
+    | (table_name DOT)? column_name
     | unary_operator expr
     // binary operators
     | expr PIPE2 expr
