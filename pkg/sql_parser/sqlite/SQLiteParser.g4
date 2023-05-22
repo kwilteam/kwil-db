@@ -272,8 +272,7 @@ expr:
         | EQ
         | NOT_EQ1
         | NOT_EQ2
-        | IS_
-        | IS_ NOT_
+        | IS_ NOT_?
         | IN_
     ) expr
     | expr AND_ expr
