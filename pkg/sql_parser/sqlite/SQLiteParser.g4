@@ -279,7 +279,7 @@ expr:
     | expr AND_ expr
     | expr OR_ expr
     //
-    | function_name OPEN_PAR ((DISTINCT_? expr ( COMMA expr)*) | STAR)? CLOSE_PAR filter_clause?
+    | function_name OPEN_PAR ((expr ( COMMA expr)*) | STAR)? CLOSE_PAR
     | OPEN_PAR expr (COMMA expr)* CLOSE_PAR
     | expr COLLATE_ collation_name
     | expr NOT_? (LIKE_ | REGEXP_ | MATCH_ | GLOB_) expr (ESCAPE_ expr)?
@@ -288,7 +288,7 @@ expr:
     | expr NOT_? BETWEEN_ expr AND_ expr
     | expr NOT_? IN_ OPEN_PAR (expr ( COMMA expr)*)? CLOSE_PAR
     | ((NOT_)? EXISTS_)? OPEN_PAR select_stmt_core CLOSE_PAR
-    | CASE_ expr? (WHEN_ expr THEN_ expr)+ (ELSE_ expr)? END_
+    | CASE_ case_expr=expr? (WHEN_ when_expr+=expr THEN_ then_expr+=expr)+ (ELSE_ else_expr=expr)? END_
 ;
 
 literal_value:
