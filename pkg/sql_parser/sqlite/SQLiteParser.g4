@@ -286,7 +286,7 @@ expr:
     | expr ( ISNULL_ | NOTNULL_ | NOT_ NULL_)
     | expr IS_ NOT_? (DISTINCT_ FROM_)? expr
     | expr NOT_? BETWEEN_ expr AND_ expr
-    | expr NOT_? IN_ OPEN_PAR (select_stmt_core | expr ( COMMA expr)*)? CLOSE_PAR
+    | expr NOT_? IN_ OPEN_PAR (expr ( COMMA expr)*)? CLOSE_PAR
     | ((NOT_)? EXISTS_)? OPEN_PAR select_stmt_core CLOSE_PAR
     | CASE_ expr? (WHEN_ expr THEN_ expr)+ (ELSE_ expr)? END_
 ;
