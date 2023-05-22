@@ -256,7 +256,6 @@ type ExpressionDistinct struct {
 	Left     Expression
 	Right    Expression
 	IsNot    bool
-	Distinct bool
 }
 
 func (e *ExpressionDistinct) isExpression() {}
@@ -274,9 +273,7 @@ func (e *ExpressionDistinct) ToSQL() string {
 	if e.IsNot {
 		stmt.Token.Not()
 	}
-	if e.Distinct {
-		stmt.Token.Distinct().From()
-	}
+	stmt.Token.Distinct().From()
 	stmt.WriteString(e.Right.ToSQL())
 	return stmt.String()
 }

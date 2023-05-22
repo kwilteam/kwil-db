@@ -275,20 +275,20 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Right: &tree.ExpressionLiteral{
 					Value: "bar",
 				},
-				IsNot:    true,
-				Distinct: true,
+				IsNot: true,
 			},
 			want: `"foo" IS NOT DISTINCT FROM 'bar'`,
 		},
 		{
 			name: "expr is expr",
-			fields: &tree.ExpressionDistinct{
+			fields: &tree.ExpressionBinaryComparison{
 				Left: &tree.ExpressionColumn{
 					Column: "foo",
 				},
 				Right: &tree.ExpressionLiteral{
 					Value: "bar",
 				},
+				Operator: tree.ComparisonOperatorIs,
 			},
 			want: `"foo" IS 'bar'`,
 		},
