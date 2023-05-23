@@ -8,7 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 
 	"github.com/spf13/cobra"
 )

@@ -1,6 +1,6 @@
 package client
 
-import "github.com/kwilteam/kwil-db/pkg/engine2/utils"
+import "github.com/kwilteam/kwil-db/pkg/engine/utils"
 
 // some of these mimic internal/entity
 

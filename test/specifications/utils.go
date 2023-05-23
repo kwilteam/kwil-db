@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 )

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/log"
