@@ -23,7 +23,7 @@ func GetMappedIndexType(typeName string) schema.IndexType {
 }
 
 func GetMappedColumnType(typeName string) schema.ColumnType {
-	return schema.ColumnType(strings.ToUpper(typeName))
+	return schema.ColumnType(strings.ToLower(typeName))
 }
 
 func GetMappedAttributeType(t token.Token) schema.AttributeType {
