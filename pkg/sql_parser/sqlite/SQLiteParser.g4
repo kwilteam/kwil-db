@@ -281,7 +281,7 @@ expr:
     | function_name OPEN_PAR ((expr ( COMMA expr)*) | STAR)? CLOSE_PAR
     | OPEN_PAR expr (COMMA expr)* CLOSE_PAR
     | expr COLLATE_ collation_name
-    | expr NOT_? (LIKE_ | REGEXP_ | MATCH_ | GLOB_) expr (ESCAPE_ expr)?
+    | expr NOT_? ((LIKE_ expr (ESCAPE_ expr)?) | ((REGEXP_ | MATCH_ | GLOB_) expr))
     | expr ( ISNULL_ | NOTNULL_ | NOT_ NULL_)
     | expr IS_ NOT_? (DISTINCT_ FROM_)? expr
     | expr NOT_? BETWEEN_ expr AND_ expr
