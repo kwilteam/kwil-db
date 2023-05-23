@@ -1,6 +1,6 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine2/tree/sql-writer"
 
 // AnySQLFunction is a function that can be used in a SQL statement
 // String is a function that takes a slice of Expressions and returns a string of the function invocation

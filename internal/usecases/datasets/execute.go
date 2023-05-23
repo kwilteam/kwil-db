@@ -1,11 +1,11 @@
 package datasets
 
 import (
-	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine/datasets"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
-	"github.com/kwilteam/kwil-db/pkg/tx"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
+	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
 func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, error) {
@@ -24,18 +24,16 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 		return nil, err
 	}
 
-	res, err := ds.ExecuteAction(&models.ActionExecution{
-		Action: action.ExecutionBody.Action,
-		Params: action.ExecutionBody.Params,
-		DBID:   action.ExecutionBody.DBID,
-	}, &datasets.ExecOpts{
-		Caller: action.Tx.Sender,
-	})
+	res, err := ds.Execute(&dto.TxContext{
+		Caller:  action.Tx.Sender,
+		Action:  action.ExecutionBody.Action,
+		Dataset: action.ExecutionBody.DBID,
+	}, action.ExecutionBody.Params)
 	if err != nil {
 		return nil, err
 	}
 
-	bts, err := res.Bytes()
+	bts, err := readQueryResult(res)
 	if err != nil {
 		return nil, err
 	}
@@ -48,15 +46,5 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 }
 
 func (u *DatasetUseCase) PriceExecute(action *entity.ExecuteAction) (*big.Int, error) {
-	//ds, ok := u.engine.Datasets[action.ExecutionBody.DBID]
-	ds, err := u.engine.GetDataset(action.ExecutionBody.DBID)
-	if err != nil {
-		return nil, err
-	}
-
-	execOpts := datasets.ExecOpts{
-		Caller: action.Tx.Sender,
-	}
-
-	return ds.GetActionPrice(action.ExecutionBody.Action, &execOpts)
+	return actionPrice, nil
 }

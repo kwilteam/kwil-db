@@ -1,81 +1,85 @@
 package schema
 
-// ColumnType is the type of column
-type ColumnType int
-
-const (
-	InvalidColumnType ColumnType = iota + 100
-	ColNull
-	ColText
-	ColInt
-	EndColumnType
+import (
+	"fmt"
+	"strings"
 )
 
-var columnTypes = [...]string{
-	ColNull: "null",
-	ColText: "text",
-	ColInt:  "int",
-}
+// ColumnType is the type of column
+type ColumnType string
+
+const (
+	ColNull ColumnType = "null"
+	ColText ColumnType = "text"
+	ColInt  ColumnType = "int"
+)
 
 func (t ColumnType) String() string {
-	if t <= InvalidColumnType || t >= EndColumnType {
-		return "unknown"
+	return string(t)
+}
+
+func GetColumnType(col string) (ColumnType, error) {
+	column, ok := columnTypes[strings.ToLower(col)]
+	if !ok {
+		return "", fmt.Errorf("invalid column type: %s", col)
 	}
-	return columnTypes[t]
+
+	return column, nil
+}
+
+var columnTypes = map[string]ColumnType{
+	"null": ColNull,
+	"text": ColText,
+	"int":  ColInt,
 }
 
 // AttributeType is the type of attribute
-type AttributeType int
+type AttributeType string
 
 const (
-	InvalidAttributeType AttributeType = iota + 100
-	AttrPrimaryKey
-	AttrUnique
-	AttrNotNull
-	AttrDefault
-	AttrMin       // Min allowed value
-	AttrMax       // Max allowed value
-	AttrMinLength // Min allowed length
-	AttrMaxLength // Max allowed length
-	EndAttributeType
+	AttrPrimaryKey AttributeType = "primary_key"
+	AttrUnique     AttributeType = "unique"
+	AttrNotNull    AttributeType = "not_null"
+	AttrDefault    AttributeType = "default"
+	AttrMin        AttributeType = "min"
+	AttrMax        AttributeType = "max"
+	AttrMinLength  AttributeType = "min_length"
+	AttrMaxLength  AttributeType = "max_length"
 )
 
-var attributeTypes = [...]string{
-	AttrPrimaryKey: "primary_key",
-	AttrUnique:     "unique",
-	AttrNotNull:    "not_null",
-	AttrDefault:    "default",
-	AttrMin:        "min",
-	AttrMax:        "max",
-	AttrMinLength:  "min_length",
-	AttrMaxLength:  "max_length",
+func (t AttributeType) String() string {
+	return string(t)
 }
 
-func (t AttributeType) String() string {
-	if t <= InvalidAttributeType || t >= EndAttributeType {
-		return "unknown"
+func GetAttributeType(attr string) (AttributeType, error) {
+	attribute, ok := attributeTypes[strings.ToLower(attr)]
+	if !ok {
+		return "", fmt.Errorf("invalid attribute type: %s", attr)
 	}
-	return attributeTypes[t]
+
+	return attribute, nil
+}
+
+// attributeTypes maps the Kuneiform attribute tokens to the schema attribute type
+var attributeTypes = map[string]AttributeType{
+	"primary": AttrPrimaryKey,
+	"unique":  AttrUnique,
+	"notnull": AttrNotNull,
+	"default": AttrDefault,
+	"min":     AttrMin,
+	"max":     AttrMax,
+	"minlen":  AttrMinLength,
+	"maxlen":  AttrMaxLength,
 }
 
 // IndexType is the type of index
-type IndexType int
+type IndexType string
 
 const (
-	InvalidIndexType IndexType = iota + 100
-	IdxBtree
-	IdxUniqueBtree
-	EndIndexType
+	IdxBtree       IndexType = "btree"
+	IdxUniqueBtree IndexType = "unique_btree"
 )
 
-var indexTypes = [...]string{
-	IdxBtree:       "btree",
-	IdxUniqueBtree: "unique",
-}
-
 func (t IndexType) String() string {
-	if t <= InvalidIndexType || t >= EndIndexType {
-		return "unknown"
-	}
-	return indexTypes[t]
+	return string(t)
 }

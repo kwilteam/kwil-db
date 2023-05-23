@@ -2,9 +2,9 @@ package specifications
 
 import (
 	"context"
-	"github.com/cstockton/go-conv"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"testing"
+
+	"github.com/cstockton/go-conv"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -13,8 +13,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing update action specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := models.GenerateSchemaId(db.Owner, db.Name)
-
+	dbID := GenerateSchemaId(db.Owner, db.Name)
 	actionName := "update_username"
 	userQ := userTable{
 		ID:       1111,

@@ -8,6 +8,11 @@ import (
 )
 
 func indexTypeToSQLiteString(indexType dto.IndexType) (string, error) {
+	err := indexType.Clean()
+	if err != nil {
+		return "", err
+	}
+
 	switch indexType {
 	case dto.BTREE:
 		return "", nil

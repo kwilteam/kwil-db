@@ -7,19 +7,34 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
 )
 
-func columnTypeToSQLiteType(columnType dto.DataType) string {
+func columnTypeToSQLiteType(columnType dto.DataType) (string, error) {
+	err := columnType.Clean()
+	if err != nil {
+		return "", err
+	}
+
+	sqlType := ""
 	switch columnType {
 	case dto.TEXT:
-		return "TEXT"
+		sqlType = "TEXT"
 	case dto.INT:
-		return "INTEGER"
+		sqlType = "INTEGER"
+	case dto.NULL:
+		sqlType = "NULL"
 	default:
-		return ""
+		return "", fmt.Errorf("unknown column type: %s", columnType)
 	}
+
+	return sqlType, nil
 }
 
 func attributeToSQLiteString(colName string, attr *dto.Attribute) (string, error) {
 	formattedVal, err := formatAttributeValue(attr.Value)
+	if err != nil {
+		return "", err
+	}
+
+	err = attr.Clean()
 	if err != nil {
 		return "", err
 	}

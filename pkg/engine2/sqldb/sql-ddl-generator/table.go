@@ -12,7 +12,11 @@ func GenerateCreateTableStatement(table *dto.Table) (string, error) {
 
 	for _, column := range table.Columns {
 		colName := wrapIdent(column.Name)
-		colType := columnTypeToSQLiteType(column.Type)
+		colType, err := columnTypeToSQLiteType(column.Type)
+		if err != nil {
+			return "", err
+		}
+
 		var colAttributes []string
 
 		for _, attr := range column.Attributes {

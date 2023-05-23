@@ -10,21 +10,22 @@ type Table struct {
 	Indexes []*Index  `json:"indexes"`
 }
 
-func (t *Table) GetColumn(c string) *Column {
+func (t *Table) Clean() error {
 	for _, col := range t.Columns {
-		if col.Name == c {
-			return col
+		if err := col.Clean(); err != nil {
+			return err
 		}
 	}
-	return nil
-}
 
-func (t *Table) ListColumns() []string {
-	var columns []string
-	for _, col := range t.Columns {
-		columns = append(columns, col.Name)
+	for _, idx := range t.Indexes {
+		if err := idx.Clean(); err != nil {
+			return err
+		}
 	}
-	return columns
+
+	return runCleans(
+		cleanIdent(&t.Name),
+	)
 }
 
 type Column struct {
@@ -33,18 +34,33 @@ type Column struct {
 	Attributes []*Attribute `json:"attributes,omitempty" traverse:"shallow"`
 }
 
-func (c *Column) GetAttribute(attrType AttributeType) *Attribute {
+func (c *Column) Clean() error {
 	for _, attr := range c.Attributes {
-		if attr.Type == attrType {
-			return attr
+		if err := attr.Clean(); err != nil {
+			return err
 		}
 	}
-	return nil
+
+	return runCleans(
+		cleanIdent(&c.Name),
+		c.Type.Clean(),
+	)
 }
 
 type Attribute struct {
 	Type  AttributeType `json:"type" clean:"is_enum,attribute_type"`
 	Value any           `json:"value"`
+}
+
+func (a *Attribute) Clean() error {
+	if a.Value == nil {
+		return a.Type.Clean()
+	}
+
+	return runCleans(
+		a.Type.Clean(),
+		cleanScalar(&a.Value),
+	)
 }
 
 // IsType will coerce the attribute value to the correct data type, depending on the attribute type.

@@ -325,12 +325,10 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "integer",
-          "format": "int32"
+          "type": "string"
         },
         "value": {
-          "type": "string",
-          "format": "byte"
+          "type": "string"
         }
       }
     },
@@ -357,8 +355,7 @@
           "type": "string"
         },
         "type": {
-          "type": "integer",
-          "format": "int32"
+          "type": "string"
         },
         "attributes": {
           "type": "array",
@@ -451,8 +448,7 @@
           }
         },
         "type": {
-          "type": "integer",
-          "format": "int32"
+          "type": "string"
         }
       }
     },

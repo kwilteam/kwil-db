@@ -1,6 +1,8 @@
 package txsvc
 
 import (
+	"context"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
@@ -22,7 +24,7 @@ type Service struct {
 	providerAddress string
 }
 
-func NewService(config *config.KwildConfig, opts ...TxSvcOpt) (*Service, error) {
+func NewService(ctx context.Context, config *config.KwildConfig, opts ...TxSvcOpt) (*Service, error) {
 	s := &Service{
 		log:             log.NewNoOp(),
 		cfg:             config,
@@ -36,7 +38,7 @@ func NewService(config *config.KwildConfig, opts ...TxSvcOpt) (*Service, error) 
 	dataSetOpts := getDatasetUseCaseOpts(s)
 
 	var err error
-	s.executor, err = datasets.New(
+	s.executor, err = datasets.New(ctx,
 		dataSetOpts...,
 	)
 	if err != nil {

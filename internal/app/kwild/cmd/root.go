@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
@@ -15,6 +16,8 @@ import (
 
 	"google.golang.org/grpc/health/grpc_health_v1"
 
+	"time"
+
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	chainsyncer "github.com/kwilteam/kwil-db/pkg/balances/chain-syncer"
 	chainClient "github.com/kwilteam/kwil-db/pkg/chain/client"
@@ -22,7 +25,6 @@ import (
 	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/spf13/cobra"
@@ -60,7 +62,7 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to build chain syncer: %w", err)
 		}
 
-		txSvc, err := buildTxSvc(cfg, accountStore, logger)
+		txSvc, err := buildTxSvc(ctx, cfg, accountStore, logger)
 		if err != nil {
 			return fmt.Errorf("failed to build tx service: %w", err)
 		}
@@ -135,11 +137,12 @@ func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *b
 		ListensTo(cfg.Deposits.PoolAddress).
 		WithChainClient(cc).
 		WithReceiverAddress(walletAddress).
+		WithChunkSize(int64(cfg.ChainSyncer.ChunkSize)).
 		Build()
 }
 
-func buildTxSvc(cfg *config.KwildConfig, as *balances.AccountStore, logger log.Logger) (*txsvc.Service, error) {
-	return txsvc.NewService(cfg,
+func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as *balances.AccountStore, logger log.Logger) (*txsvc.Service, error) {
+	return txsvc.NewService(ctx, cfg,
 		txsvc.WithLogger(*logger.Named("txService")),
 		txsvc.WithAccountStore(as),
 		txsvc.WithSqliteFilePath(cfg.SqliteFilePath),

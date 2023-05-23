@@ -3,7 +3,7 @@ package tree
 import (
 	"fmt"
 
-	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine2/tree/sql-writer"
 )
 
 type Insert struct {

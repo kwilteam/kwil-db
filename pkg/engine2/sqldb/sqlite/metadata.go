@@ -109,11 +109,11 @@ func (s *SqliteStore) StoreAction(ctx context.Context, action *dto.Action) error
 func (s *SqliteStore) getMetadata(ctx context.Context, metaType serialize.TypeIdentifier) ([]*serialize.Serializable, error) {
 	res := make([]*serialize.Serializable, 0)
 
-	err := s.conn.Query(ctx, sqlGetMetadata, &sqlite.ExecOpts{
-		NamedArgs: map[string]any{
+	err := s.conn.Query(ctx, sqlGetMetadata,
+		sqlite.WithNamedArgs(map[string]any{
 			"$metatype": metaType,
-		},
-		ResultFunc: func(stmt *sqlite.Statement) error {
+		}),
+		sqlite.WithResultFunc(func(stmt *sqlite.Statement) error {
 			ser := &serialize.Serializable{
 				Type: metaType,
 			}
@@ -125,8 +125,8 @@ func (s *SqliteStore) getMetadata(ctx context.Context, metaType serialize.TypeId
 			res = append(res, ser)
 
 			return nil
-		},
-	})
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -205,14 +205,14 @@ func (s *SqliteStore) storeMetadata(ctx context.Context, ser *serialize.Serializ
 		return err
 	}
 
-	err = stmt.Execute(&sqlite.ExecOpts{
-		NamedArgs: map[string]any{
+	err = stmt.Execute(
+		sqlite.WithNamedArgs(map[string]any{
 			"$name":     ser.Name,
 			"$metatype": ser.Type,
 			"$version":  ser.Version,
 			"$data":     ser.Data,
-		},
-	})
+		}),
+	)
 	if err != nil {
 		return err
 	}
@@ -241,19 +241,23 @@ func (s *SqliteStore) getMetadataStmt() (*sqlite.Statement, error) {
 func (s *SqliteStore) exists(ctx context.Context, name string, metaType serialize.TypeIdentifier) (bool, error) {
 	var exists bool
 
-	err := s.conn.Query(ctx, `SELECT EXISTS(SELECT 1 FROM `+metadataTableName+` WHERE name = $name AND meta_type = $metatype);`, &sqlite.ExecOpts{
-		NamedArgs: map[string]any{
+	err := s.conn.Query(ctx, `SELECT EXISTS(SELECT 1 FROM `+metadataTableName+` WHERE name = $name AND meta_type = $metatype);`,
+		sqlite.WithNamedArgs(map[string]any{
 			"$name":     name,
 			"$metatype": metaType,
-		},
-		ResultFunc: func(stmt *sqlite.Statement) error {
+		}),
+		sqlite.WithResultFunc(func(stmt *sqlite.Statement) error {
 			exists = stmt.GetBool("exists")
 			return nil
-		},
-	})
+		}),
+	)
 	if err != nil {
 		return false, err
 	}
 
 	return exists, nil
+}
+
+func (s *SqliteStore) TableExists(ctx context.Context, table string) (bool, error) {
+	return s.conn.TableExists(ctx, table)
 }

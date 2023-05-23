@@ -3,7 +3,7 @@ package sqlwriter_test
 import (
 	"testing"
 
-	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine2/tree/sql-writer"
 )
 
 // most of this gets tested by the tree package, so I am not too worried about coverage here

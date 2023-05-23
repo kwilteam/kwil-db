@@ -1,6 +1,6 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine2/tree/sql-writer"
 
 type QualifiedTableName struct {
 	TableName  string

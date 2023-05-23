@@ -1,4 +1,4 @@
-package mocks
+package data
 
 import "github.com/kwilteam/kwil-db/pkg/engine2/dto"
 

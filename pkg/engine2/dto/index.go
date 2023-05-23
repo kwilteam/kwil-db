@@ -1,5 +1,10 @@
 package dto
 
+import (
+	"fmt"
+	"strings"
+)
+
 type IndexType string
 
 type Index struct {
@@ -8,15 +13,36 @@ type Index struct {
 	Type    IndexType `json:"type" clean:"is_enum,index_type"`
 }
 
+func (i *Index) Clean() error {
+	return runCleans(
+		cleanIdent(&i.Name),
+		cleanIdents(&i.Columns),
+		i.Type.Clean(),
+	)
+}
+
 const (
 	BTREE        IndexType = "BTREE"
 	UNIQUE_BTREE IndexType = "UNIQUE_BTREE"
 )
 
-func (i *IndexType) String() string {
-	return string(*i)
+func (i IndexType) String() string {
+	return string(i)
 }
 
 func (i *IndexType) IsValid() bool {
-	return *i == BTREE || *i == UNIQUE_BTREE
+	upper := strings.ToUpper(i.String())
+
+	return upper == BTREE.String() ||
+		upper == UNIQUE_BTREE.String()
+}
+
+func (i *IndexType) Clean() error {
+	if !i.IsValid() {
+		return fmt.Errorf("invalid index type: %s", i.String())
+	}
+
+	*i = IndexType(strings.ToUpper(i.String()))
+
+	return nil
 }

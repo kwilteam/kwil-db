@@ -3,14 +3,14 @@ package database
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/csv"
-	"github.com/kwilteam/kwil-db/pkg/engine/types"
-	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -59,7 +59,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 					return fmt.Errorf("error building inputs: %w", err)
 				}
 
-				receipt, _, err := client.ExecuteActionSerialized(ctx, dbid, strings.ToLower(action), inputs)
+				receipt, _, err := client.ExecuteAction(ctx, dbid, strings.ToLower(action), inputs)
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}
@@ -86,7 +86,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 }
 
 // buildInputs builds the inputs for the file
-func buildInputs(file *os.File, fileType string, columnMappingFlag []string, inputMappings []string) ([]map[string][]byte, error) {
+func buildInputs(file *os.File, fileType string, columnMappingFlag []string, inputMappings []string) ([]map[string]any, error) {
 	switch fileType {
 	case "csv":
 		return buildCsvInputs(file, columnMappingFlag, inputMappings)
@@ -95,7 +95,7 @@ func buildInputs(file *os.File, fileType string, columnMappingFlag []string, inp
 	}
 }
 
-func addInputMappings(inputs []map[string][]byte, inputMappings []string) ([]map[string][]byte, error) {
+func addInputMappings(inputs []map[string]any, inputMappings []string) ([]map[string]any, error) {
 	for _, inputMapping := range inputMappings {
 		parts := strings.SplitN(inputMapping, ":", 2)
 		if len(parts) != 2 {
@@ -105,7 +105,7 @@ func addInputMappings(inputs []map[string][]byte, inputMappings []string) ([]map
 		ensureInputFormat(&parts[0])
 
 		for _, input := range inputs {
-			input[parts[0]] = types.NewExplicitMust(parts[1], types.TEXT).Bytes()
+			input[parts[0]] = parts[1]
 		}
 	}
 
@@ -113,7 +113,7 @@ func addInputMappings(inputs []map[string][]byte, inputMappings []string) ([]map
 }
 
 // buildCsvInputs builds the inputs for a csv file
-func buildCsvInputs(file *os.File, columnMappings []string, inputMappings []string) ([]map[string][]byte, error) {
+func buildCsvInputs(file *os.File, columnMappings []string, inputMappings []string) ([]map[string]any, error) {
 	data, err := csv.Read(file, csv.ContainsHeader)
 	if err != nil {
 		return nil, fmt.Errorf("error reading csv: %w", err)

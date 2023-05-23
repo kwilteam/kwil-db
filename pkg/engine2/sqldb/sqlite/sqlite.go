@@ -61,10 +61,10 @@ func (s *SqliteStore) Prepare(query string) (sqldb.Statement, error) {
 func (s *SqliteStore) Query(ctx context.Context, query string, args map[string]any) (dto.Result, error) {
 	res := &sqlite.ResultSet{}
 
-	err := s.conn.Query(ctx, query, &sqlite.ExecOpts{
-		NamedArgs: args,
-		ResultSet: res,
-	})
+	err := s.conn.Query(ctx, query,
+		sqlite.WithNamedArgs(args),
+		sqlite.WithResultSet(res),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,15 @@ func (s *SqliteStore) Query(ctx context.Context, query string, args map[string]a
 }
 
 func (s *SqliteStore) Close() error {
-	return s.conn.Close(nil)
+	ch := make(chan struct{})
+	err := s.conn.Close(ch)
+	if err != nil {
+		return err
+	}
+
+	<-ch
+
+	return nil
 }
 
 func (s *SqliteStore) Delete() error {
@@ -101,11 +109,5 @@ func (s *SqliteStore) PrepareRaw(stmt string) (sqldb.Statement, error) {
 
 // Execute executes a statement
 func (s *SqliteStore) Execute(stmt string, inputs map[string]any) error {
-	opts := []sqlite.ExecutionOpts{}
-
-	if inputs != nil {
-		opts = append(opts, sqlite.ExecuteWithArgs(inputs))
-	}
-
-	return s.conn.Execute(stmt, opts...)
+	return s.conn.Execute(stmt, inputs)
 }

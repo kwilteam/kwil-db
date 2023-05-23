@@ -2,9 +2,9 @@ package specifications
 
 import (
 	"context"
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/client"
 
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
@@ -30,7 +30,7 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing insert action specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := models.GenerateSchemaId(db.Owner, db.Name)
+	dbID := GenerateSchemaId(db.Owner, db.Name)
 
 	createUserActionName := "create_user"
 	user1 := userTable{

@@ -3,7 +3,7 @@ package tree_test
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
+	"github.com/kwilteam/kwil-db/pkg/engine2/tree"
 )
 
 func Test_sqlFunction_String(t *testing.T) {

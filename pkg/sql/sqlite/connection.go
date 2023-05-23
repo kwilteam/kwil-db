@@ -112,7 +112,7 @@ func (c *Connection) Execute(stmt string, args ...map[string]any) error {
 // execute executes a one-off statement.  It does not use a mutex, unlike Execute.
 func (c *Connection) execute(stmt string, args ...map[string]any) error {
 	if len(args) == 0 {
-		return sqlitex.ExecTransient(c.conn, stmt, nil)
+		return sqlitex.ExecuteTransient(c.conn, stmt, nil)
 	}
 
 	for _, arg := range args {
@@ -132,16 +132,19 @@ func (c *Connection) Prepare(stmt string) (*Statement, error) {
 		return nil, fmt.Errorf("connection is nil")
 	}
 
-	innerStmt, err := c.conn.Prepare(stmt)
+	innerStmt, trailingBytes, err := c.conn.PrepareTransient(trimPadding(stmt))
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	if trailingBytes > 0 { // there should not be trailing bytes since we use trimPadding
+		return nil, fmt.Errorf("trailing bytes after statement: %q", trailingBytes)
 	}
 
 	return newStatement(c, innerStmt), nil
 }
 
 // Close closes the connection.
-// It takes an optional wait channel, which will be waited on before the connection is closed.
+// It takes an optional wait channel, which will be waited on until the connection is closed.
 func (c *Connection) Close(ch chan<- struct{}) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

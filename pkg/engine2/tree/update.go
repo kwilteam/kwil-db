@@ -1,6 +1,6 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine2/tree/sql-writer"
 
 // Update Statement with CTEs
 type Update struct {

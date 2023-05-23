@@ -1,22 +1,12 @@
 package engine2
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
-var defaultPath string
-
-func init() {
-	dirname, err := os.UserHomeDir()
-	if err != nil {
-		dirname = "/tmp"
-	}
-
-	defaultPath = fmt.Sprintf("%s/.kwil/sqlite/", dirname)
-}
+const (
+	defaultName = "kwil_master"
+)
 
 type EngineOpt func(*engine)
 
@@ -29,5 +19,17 @@ func WithPath(path string) EngineOpt {
 func WithLogger(l log.Logger) EngineOpt {
 	return func(e *engine) {
 		e.log = l
+	}
+}
+
+func WithName(name string) EngineOpt {
+	return func(e *engine) {
+		e.name = name
+	}
+}
+
+func WithWipe() EngineOpt {
+	return func(e *engine) {
+		e.wipeOnStart = true
 	}
 }

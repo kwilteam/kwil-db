@@ -16,10 +16,10 @@ func NewStatement(stmt *sqlite.Statement) *Statement {
 func (s *Statement) Execute(args map[string]any) (dto.Result, error) {
 	res := &sqlite.ResultSet{}
 
-	err := s.stmt.Execute(&sqlite.ExecOpts{
-		NamedArgs: args,
-		ResultSet: res,
-	})
+	err := s.stmt.Execute(
+		sqlite.WithNamedArgs(args),
+		sqlite.WithResultSet(res),
+	)
 
 	if err != nil {
 		return nil, err
