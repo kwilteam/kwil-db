@@ -557,7 +557,7 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 		fnExpr, isFn := first.(*sqlite.Function_nameContext)
 
 		if !isFn {
-			dot := ctx.DOT(0)
+			dot := ctx.DOT()
 			if dot != nil { // always check table.column existence
 				cds := ctx.GetChildren()
 				tableName := cds[0].(*sqlite.Table_nameContext).GetText()
@@ -591,7 +591,7 @@ func (tl *KlSqliteListener) ExitExpr(ctx *sqlite.ExprContext) {
 			}
 
 			// dot have been checked above
-			dot := ctx.DOT(0)
+			dot := ctx.DOT()
 			if dot != nil {
 				return
 			}
