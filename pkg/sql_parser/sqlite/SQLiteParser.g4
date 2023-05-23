@@ -260,8 +260,10 @@ expr:
     literal_value
     | BIND_PARAMETER
     | (table_name DOT)? column_name
-    | unary_operator expr
-    // binary operators
+    | OPEN_PAR expr CLOSE_PAR
+    | OPEN_PAR expr (COMMA expr)* CLOSE_PAR
+    | (MINUS | PLUS | TILDE) unary_expr=expr
+    | expr COLLATE_ collation_name
     | expr PIPE2 expr
     | expr ( STAR | DIV | MOD) expr
     | expr ( PLUS | MINUS) expr
@@ -273,19 +275,16 @@ expr:
         | NOT_EQ1
         | NOT_EQ2
         | IS_ NOT_?
-        | IN_
+        | IS_ NOT_? DISTINCT_ FROM_
+        | NOT_? (IN_ | GLOB_ | MATCH_ | REGEXP_)
     ) expr
+    | expr NOT_? LIKE_ expr (ESCAPE_ expr)?
+    | expr NOT_? BETWEEN_ expr AND_ expr
+    | expr ( ISNULL_ | NOTNULL_ | NOT_ NULL_)
+    | NOT_ unary_expr=expr
     | expr AND_ expr
     | expr OR_ expr
-    //
     | function_name OPEN_PAR ((expr ( COMMA expr)*) | STAR)? CLOSE_PAR
-    | OPEN_PAR expr (COMMA expr)* CLOSE_PAR
-    | expr COLLATE_ collation_name
-    | expr NOT_? ((LIKE_ expr (ESCAPE_ expr)?) | ((REGEXP_ | MATCH_ | GLOB_) expr))
-    | expr ( ISNULL_ | NOTNULL_ | NOT_ NULL_)
-    | expr IS_ NOT_? (DISTINCT_ FROM_)? expr
-    | expr NOT_? BETWEEN_ expr AND_ expr
-    | expr NOT_? IN_ OPEN_PAR (expr ( COMMA expr)*)? CLOSE_PAR
     | ((NOT_)? EXISTS_)? OPEN_PAR select_stmt_core CLOSE_PAR
     | CASE_ case_expr=expr? (WHEN_ when_expr+=expr THEN_ then_expr+=expr)+ (ELSE_ else_expr=expr)? END_
 ;
