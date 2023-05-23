@@ -2,10 +2,11 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (c *Client) newTx(ctx context.Context, payloadType kTx.PayloadType, data any) (*kTx.Transaction, error) {
@@ -14,7 +15,7 @@ func (c *Client) newTx(ctx context.Context, payloadType kTx.PayloadType, data an
 	}
 
 	// serialize data
-	bts, err := serialize.Serialize(data)
+	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize data: %w", err)
 	}

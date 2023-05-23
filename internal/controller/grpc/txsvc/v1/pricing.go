@@ -2,6 +2,7 @@ package txsvc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -9,11 +10,10 @@ import (
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequest) (*txpb.EstimatePriceResponse, error) {
-	tx, err := serialize.Convert[txpb.Tx, kTx.Transaction](req.Tx)
+	tx, err := convertTx(req.Tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
@@ -41,19 +41,19 @@ func handlePricing(price *big.Int, err error) (*txpb.EstimatePriceResponse, erro
 }
 
 func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	ds, err := serialize.Deserialize[entity.Schema](tx.Payload)
+	ds, err := unmarshalSchema(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
 	}
 
 	return s.executor.PriceDeploy(&entity.DeployDatabase{
 		Tx:     tx,
-		Schema: &ds,
+		Schema: ds,
 	})
 }
 
 func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	dsIdent, err := serialize.Deserialize[entity.DatasetIdentifier](tx.Payload)
+	dsIdent, err := unmarshalDatasetIdentifier(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset identifier: %w", err)
 	}
@@ -65,13 +65,46 @@ func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int,
 }
 
 func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	executionBody, err := serialize.Deserialize[entity.ActionExecution](tx.Payload)
+	executionBody, err := unmarshalActionExecution(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}
 
 	return s.executor.PriceExecute(&entity.ExecuteAction{
 		Tx:            tx,
-		ExecutionBody: &executionBody,
+		ExecutionBody: executionBody,
 	})
+}
+
+func unmarshalActionExecution(payload []byte) (*entity.ActionExecution, error) {
+	exec := entity.ActionExecution{}
+
+	err := json.Unmarshal(payload, &exec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal action execution: %w", err)
+	}
+
+	return &exec, nil
+}
+
+func unmarshalSchema(payload []byte) (*entity.Schema, error) {
+	schema := entity.Schema{}
+
+	err := json.Unmarshal(payload, &schema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal schema: %w", err)
+	}
+
+	return &schema, nil
+}
+
+func unmarshalDatasetIdentifier(payload []byte) (*entity.DatasetIdentifier, error) {
+	dsIdent := entity.DatasetIdentifier{}
+
+	err := json.Unmarshal(payload, &dsIdent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal dataset identifier: %w", err)
+	}
+
+	return &dsIdent, nil
 }

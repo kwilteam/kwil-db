@@ -31,3 +31,14 @@ func (x PayloadType) String() string {
 		return fmt.Sprintf("PayloadType(%d)", x)
 	}
 }
+
+func (x PayloadType) IsValid() error {
+	if x < INVALID_PAYLOAD_TYPE || x >= END_PAYLOAD_TYPE {
+		return fmt.Errorf("invalid payload type '%d'", x)
+	}
+	return nil
+}
+
+func (x PayloadType) Int32() int32 {
+	return int32(x)
+}

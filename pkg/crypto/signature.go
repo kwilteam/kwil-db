@@ -20,6 +20,17 @@ const (
 	END_SIGNATURE_TYPE
 )
 
+func (s *SignatureType) IsValid() error {
+	if *s < SIGNATURE_TYPE_INVALID || *s >= END_SIGNATURE_TYPE {
+		return fmt.Errorf("invalid signature type '%d'", *s)
+	}
+	return nil
+}
+
+func (s SignatureType) Int32() int32 {
+	return int32(s)
+}
+
 type Signature struct {
 	Signature []byte        `json:"signature_bytes"`
 	Type      SignatureType `json:"signature_type"`

@@ -3,13 +3,14 @@ package txsvc
 import (
 	"context"
 	"fmt"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*txpb.BroadcastResponse, error) {
-	tx, err := serialize.Convert[txpb.Tx, kTx.Transaction](req.Tx)
+	tx, err := convertTx(req.Tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
@@ -42,5 +43,30 @@ func handleReceipt(r *kTx.Receipt, err error) (*txpb.BroadcastResponse, error) {
 			Fee:    r.Fee,
 			Body:   r.Body,
 		},
+	}, nil
+}
+
+func convertTx(incoming *txpb.Tx) (*kTx.Transaction, error) {
+	payloadType := kTx.PayloadType(incoming.PayloadType)
+	if err := payloadType.IsValid(); err != nil {
+		return nil, err
+	}
+
+	signatureType := crypto.SignatureType(incoming.Signature.SignatureType)
+	if err := signatureType.IsValid(); err != nil {
+		return nil, err
+	}
+
+	return &kTx.Transaction{
+		Hash:        incoming.Hash,
+		PayloadType: payloadType,
+		Payload:     incoming.Payload,
+		Fee:         incoming.Fee,
+		Nonce:       incoming.Nonce,
+		Signature: crypto.Signature{
+			Signature: incoming.Signature.SignatureBytes,
+			Type:      signatureType,
+		},
+		Sender: incoming.Sender,
 	}, nil
 }
