@@ -3,27 +3,21 @@ package client
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
-	"math/big"
 )
 
 func (c *Client) Broadcast(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	pbTx, err := serialize.Convert[kTx.Transaction, txpb.Tx](tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert transaction: %w", err)
-	}
+	pbTx := convertTx(tx)
 
 	res, err := c.txClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
 	if err != nil {
 		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: %w", err)
 	}
 
-	txRes, err := serialize.Convert[txpb.TxReceipt, kTx.Receipt](res.Receipt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert response: %w", err)
-	}
+	txRes := convertReceipt(res.Receipt)
 
 	return txRes, nil
 }
@@ -39,10 +33,7 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 
 func (c *Client) EstimateCost(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
 	// convert transaction to proto
-	pbTx, err := serialize.Convert[kTx.Transaction, txpb.Tx](tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert transaction: %w", err)
-	}
+	pbTx := convertTx(tx)
 
 	res, err := c.txClient.EstimatePrice(ctx, &txpb.EstimatePriceRequest{
 		Tx: pbTx,
@@ -57,4 +48,27 @@ func (c *Client) EstimateCost(ctx context.Context, tx *kTx.Transaction) (*big.In
 	}
 
 	return bigCost, nil
+}
+
+func convertTx(incoming *kTx.Transaction) *txpb.Tx {
+	return &txpb.Tx{
+		Hash:        incoming.Hash,
+		PayloadType: incoming.PayloadType.Int32(),
+		Payload:     incoming.Payload,
+		Fee:         incoming.Fee,
+		Nonce:       incoming.Nonce,
+		Signature: &txpb.Signature{
+			SignatureBytes: incoming.Signature.Signature,
+			SignatureType:  incoming.Signature.Type.Int32(),
+		},
+		Sender: incoming.Sender,
+	}
+}
+
+func convertReceipt(incoming *txpb.TxReceipt) *kTx.Receipt {
+	return &kTx.Receipt{
+		TxHash: incoming.TxHash,
+		Fee:    incoming.Fee,
+		Body:   incoming.Body,
+	}
 }

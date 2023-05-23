@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kwilteam/kwil-db/internal/pkg/graphql/query"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -212,6 +211,5 @@ func (d *KwilCliDriver) DropDatabase(ctx context.Context, dbName string) error {
 }
 
 func (d *KwilCliDriver) QueryDatabase(ctx context.Context, queryStr string) ([]byte, error) {
-	url := fmt.Sprintf("http://%s/graphql", d.nodeGwURL)
-	return query.Query(ctx, url, queryStr)
+	return nil, nil
 }
