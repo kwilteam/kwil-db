@@ -82,10 +82,10 @@ func ParseRawSQLVisitor(sql string, currentLine int, actionName string, dbCtx Da
 	defer func() {
 		if e := recover(); e != nil {
 			err = fmt.Errorf("panic: %v", e)
-			visitor.Errors.Add(token.Position{}, err.Error())
+			errorListener.Errors.Add(token.Position{}, err.Error())
 		}
 
-		err = visitor.Errors.Err()
+		err = errorListener.Errors.Err()
 	}()
 
 	//// execute during parsing(careful don't mess up parser_inner throwing error)
@@ -93,6 +93,9 @@ func ParseRawSQLVisitor(sql string, currentLine int, actionName string, dbCtx Da
 	//p.Parse()
 	// or after parsing, execute while walking the tree
 	parseCtx := p.Parse()
+	if errorListener.Errors.Err() != nil {
+		return nil, errorListener.Errors.Err()
+	}
 
 	if trace {
 		visitor = NewKFSqliteVisitor(errorListener.ErrorHandler, actionName, dbCtx)
