@@ -12,8 +12,6 @@ func Test_Query_With_Opts(t *testing.T) {
 	conn, teardown := openRealDB()
 	defer teardown()
 
-	defer conn.Close(nil)
-
 	// prepare invalid statement
 	_, err := conn.Prepare("INSERT INTOewfnw users (id, name, age) VALUES ($id, $name, $age)")
 	if err == nil {
