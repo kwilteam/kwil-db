@@ -3,14 +3,15 @@ package txsvc
 import (
 	"context"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
 
 func (s *Service) deploy(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	ds, err := serialize.Deserialize[models.Dataset](tx.Payload)
+	ds, err := serialize.Deserialize[entity.Schema](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
 	}
@@ -19,14 +20,14 @@ func (s *Service) deploy(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt
 		return nil, fmt.Errorf("database owner is not the same as the tx sender")
 	}
 
-	return s.executor.Deploy(&entity.DeployDatabase{
+	return s.executor.Deploy(ctx, &entity.DeployDatabase{
 		Schema: &ds,
 		Tx:     tx,
 	})
 }
 
 func (s *Service) drop(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	dsIdent, err := serialize.Deserialize[models.DatasetIdentifier](tx.Payload)
+	dsIdent, err := serialize.Deserialize[entity.DatasetIdentifier](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset identifier: %w", err)
 	}
@@ -35,14 +36,14 @@ func (s *Service) drop(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, 
 		return nil, fmt.Errorf("database owner is not the same as the tx sender")
 	}
 
-	return s.executor.Drop(&entity.DropDatabase{
-		DBID: models.GenerateSchemaId(dsIdent.Owner, dsIdent.Name),
+	return s.executor.Drop(ctx, &entity.DropDatabase{
+		DBID: utils.GenerateDBID(dsIdent.Name, dsIdent.Owner),
 		Tx:   tx,
 	})
 }
 
 func (s *Service) executeAction(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	executionBody, err := serialize.Deserialize[models.ActionExecution](tx.Payload)
+	executionBody, err := serialize.Deserialize[entity.ActionExecution](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}

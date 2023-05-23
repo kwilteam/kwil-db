@@ -1,5 +1,10 @@
 package dto
 
+import (
+	"fmt"
+	"strings"
+)
+
 type AttributeType string
 
 const (
@@ -18,5 +23,24 @@ func (a AttributeType) String() string {
 }
 
 func (a *AttributeType) IsValid() bool {
-	return *a == PRIMARY_KEY || *a == UNIQUE || *a == NOT_NULL || *a == DEFAULT || *a == MIN || *a == MAX || *a == MIN_LENGTH || *a == MAX_LENGTH
+	upper := strings.ToUpper(a.String())
+
+	return upper == PRIMARY_KEY.String() ||
+		upper == UNIQUE.String() ||
+		upper == NOT_NULL.String() ||
+		upper == DEFAULT.String() ||
+		upper == MIN.String() ||
+		upper == MAX.String() ||
+		upper == MIN_LENGTH.String() ||
+		upper == MAX_LENGTH.String()
+}
+
+func (a *AttributeType) Clean() error {
+	if !a.IsValid() {
+		return fmt.Errorf("invalid attribute type: %s", a.String())
+	}
+
+	*a = AttributeType(strings.ToUpper(a.String()))
+
+	return nil
 }

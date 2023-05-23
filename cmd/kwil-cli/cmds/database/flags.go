@@ -2,9 +2,10 @@ package database
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
 
 	"github.com/spf13/cobra"
 )
@@ -65,5 +66,5 @@ func getSelectedDbid(cmd *cobra.Command, conf *config.KwilCliConfig) (string, er
 		return "", fmt.Errorf("failed to get owner flag: %w", err)
 	}
 
-	return models.GenerateSchemaId(owner, name), nil
+	return utils.GenerateDBID(name, owner), nil
 }

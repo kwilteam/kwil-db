@@ -3,12 +3,13 @@ package txsvc
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
-	"math/big"
 )
 
 func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequest) (*txpb.EstimatePriceResponse, error) {
@@ -40,7 +41,7 @@ func handlePricing(price *big.Int, err error) (*txpb.EstimatePriceResponse, erro
 }
 
 func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	ds, err := serialize.Deserialize[models.Dataset](tx.Payload)
+	ds, err := serialize.Deserialize[entity.Schema](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
 	}
@@ -52,19 +53,19 @@ func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.In
 }
 
 func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	dsIdent, err := serialize.Deserialize[models.DatasetIdentifier](tx.Payload)
+	dsIdent, err := serialize.Deserialize[entity.DatasetIdentifier](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset identifier: %w", err)
 	}
 
 	return s.executor.PriceDrop(&entity.DropDatabase{
-		DBID: models.GenerateSchemaId(dsIdent.Owner, dsIdent.Name),
+		DBID: utils.GenerateDBID(dsIdent.Name, dsIdent.Owner),
 		Tx:   tx,
 	})
 }
 
 func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	executionBody, err := serialize.Deserialize[models.ActionExecution](tx.Payload)
+	executionBody, err := serialize.Deserialize[entity.ActionExecution](tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}

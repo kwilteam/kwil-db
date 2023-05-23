@@ -2,7 +2,6 @@ package csv
 
 import (
 	"encoding/csv"
-	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"io"
 	"os"
 	"strings"
@@ -15,9 +14,8 @@ const (
 )
 
 type CSV struct {
-	Header      []string
-	Records     [][]string
-	ColumnTypes []types.DataType
+	Header  []string
+	Records [][]string
 }
 
 func Read(csvFile *os.File, flags CSVReaderFlag) (*CSV, error) {
@@ -44,11 +42,6 @@ func Read(csvFile *os.File, flags CSVReaderFlag) (*CSV, error) {
 		}
 
 		csvStruct.Records = append(csvStruct.Records, record)
-	}
-
-	err := csvStruct.determineSchema()
-	if err != nil {
-		return nil, err
 	}
 
 	return csvStruct, nil
@@ -83,44 +76,14 @@ func cleanHeader(header string) string {
 	return str
 }
 
-// determineSchema will determine whether a column should be a string or a number.
-// It will loop through each column and try to convert it to a number. If it can't,
-// it will assume it's a string.
-func (c *CSV) determineSchema() error {
-	colTypes := make([]types.DataType, len(c.Records[0]))
-	for _, record := range c.Records {
-		for i, column := range record {
-			// if we've already determined the type is a string, skip
-			if colTypes[i] == types.TEXT {
-				continue
-			}
-
-			// try to convert to number
-			_, err := types.INT.CoerceAny(column)
-			if err != nil {
-				// if we can't, assume string
-				colTypes[i] = types.TEXT
-				continue
-			}
-
-			// else, assume int
-			colTypes[i] = types.INT
-		}
-	}
-
-	c.ColumnTypes = colTypes
-
-	return nil
-}
-
 // BuildInputs is the same as BuildInputs, but it takes a schema to ensure that the input
 // is valid. If the input is invalid, it will return an error.
 // The function takes an action, as well as a map mapping the CSV column name to the
 // action input name.
-func (c *CSV) BuildInputs(inputNames map[string]string) ([]map[string][]byte, error) {
-	resultMap := make([]map[string][]byte, 0)
+func (c *CSV) BuildInputs(inputNames map[string]string) ([]map[string]any, error) {
+	resultMap := make([]map[string]any, 0)
 	err := c.ForEachRecord(func(record []CSVCell) error {
-		input := make(map[string][]byte)
+		input := make(map[string]any)
 
 		for _, cell := range record {
 			inputName, ok := inputNames[*cell.Column]
@@ -128,7 +91,7 @@ func (c *CSV) BuildInputs(inputNames map[string]string) ([]map[string][]byte, er
 				continue
 			}
 
-			input[inputName] = *cell.Value
+			input[inputName] = cell.Value
 		}
 
 		resultMap = append(resultMap, input)
@@ -168,7 +131,7 @@ func (c *CSV) ForEachRecord(fn func([]CSVCell) error) error {
 
 type CSVCell struct {
 	Column *string
-	Value  *[]byte
+	Value  string
 }
 
 // buildCSVCells will build a map of the CSV column name to value.
@@ -177,11 +140,10 @@ type CSVCell struct {
 func (c *CSV) buildCSVCells(record []string) []CSVCell {
 	csvVals := make([]CSVCell, len(record))
 	for i, column := range record {
-		serializedValue := types.NewExplicitMust(column, types.TEXT).Bytes()
 
 		csvVals[i] = CSVCell{
 			Column: &c.Header[i],
-			Value:  &serializedValue,
+			Value:  column,
 		}
 	}
 

@@ -70,10 +70,10 @@ func (a *Action) Execute(userInputs map[string]any, opts *ExecOpts) (results *sq
 	defer savepoint.Rollback()
 
 	for _, stmt := range a.stmts {
-		err = stmt.Execute(&sqlite.ExecOpts{
-			NamedArgs: inputs,
-			ResultSet: results,
-		})
+		err = stmt.Execute(
+			sqlite.WithNamedArgs(inputs),
+			sqlite.WithResultSet(results),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("Action.Execute: failed to execute statement: %w", err)
 		}

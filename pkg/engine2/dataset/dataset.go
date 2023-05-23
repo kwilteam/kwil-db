@@ -10,26 +10,17 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
 )
 
-// DatasetContext is a context for a dataset.
-// Once provided, it should not be modified.
-type DatasetContext struct {
-	// Name is the name of the dataset.
-	Name string
-	// Owner is the owner of the dataset.
-	Owner string
-}
-
 // A database is a single deployed instance of kwil-db.
 // It contains a SQLite file
 type Dataset struct {
-	Ctx     *DatasetContext
+	Ctx     *dto.DatasetContext
 	db      sqldb.DB
 	actions map[string]*preparedAction
 	tables  map[string]*dto.Table
 }
 
 // NewDataset creates a new dataset.
-func NewDataset(ctx context.Context, dsCtx *DatasetContext, db sqldb.DB) (*Dataset, error) {
+func NewDataset(ctx context.Context, dsCtx *dto.DatasetContext, db sqldb.DB) (*Dataset, error) {
 	ds := &Dataset{
 		Ctx:     dsCtx,
 		db:      db,
@@ -174,9 +165,46 @@ func (d *Dataset) Execute(txCtx *dto.TxContext, inputs []map[string]any) (dto.Re
 		return nil, fmt.Errorf(`action "%s" does not exist`, txCtx.Action)
 	}
 
+	if len(inputs) == 0 {
+		return action.Execute(txCtx, nil)
+	}
+
 	return action.BatchExecute(txCtx, inputs)
 }
 
+// Savepoint creates a new savepoint.
 func (d *Dataset) Savepoint() (sqldb.Savepoint, error) {
 	return d.db.Savepoint()
+}
+
+// Delete deletes the dataset.
+func (d *Dataset) Delete(txCtx *dto.TxContext) error {
+	if txCtx.Caller != d.Ctx.Owner {
+		return fmt.Errorf("caller does not have permission to delete dataset")
+	}
+
+	for _, action := range d.actions {
+		err := action.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	return d.db.Delete()
+}
+
+// Query executes a query and returns the result.
+// It is a read-only operation.
+func (d *Dataset) Query(ctx context.Context, stmt string, args map[string]any) (dto.Result, error) {
+	return d.db.Query(ctx, stmt, args)
+}
+
+// Owner returns the owner of the dataset.
+func (d *Dataset) Owner() string {
+	return d.Ctx.Owner
+}
+
+// Name returns the name of the dataset.
+func (d *Dataset) Name() string {
+	return d.Ctx.Name
 }

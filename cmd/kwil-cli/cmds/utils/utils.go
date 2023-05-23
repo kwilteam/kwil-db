@@ -13,7 +13,6 @@ func NewCmdUtils() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		encodeCmd(),
 		signCmd(),
 		pingCmd(),
 		printConfigCmd(),

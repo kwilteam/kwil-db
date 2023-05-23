@@ -1,6 +1,6 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine2/tree/sql-writer"
 
 // UpdateSetClause is a clause that represents the SET clause in an UPDATE statement.
 // This does NOT include the SET keyword.

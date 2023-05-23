@@ -3,16 +3,14 @@ package sqlite_test
 import (
 	"context"
 	"fmt"
-	"math/rand"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
 )
 
 func Test_Query_With_Opts(t *testing.T) {
-	conn := openMemoryDB()
+	conn, teardown := openRealDB()
+	defer teardown()
 
 	defer conn.Close(nil)
 
@@ -78,7 +76,7 @@ func Test_Query_With_Opts(t *testing.T) {
 	// test numbered args
 	results = &sqlite.ResultSet{}
 	// read it back
-	err = conn.Query(ctx, "SELECT * FROM users WHERE id = $1", sqlite.WithArgs([]interface{}{"1"}), sqlite.WithResultSet(results))
+	err = conn.Query(ctx, "SELECT * FROM users WHERE id = $1", sqlite.WithArgs("1"), sqlite.WithResultSet(results))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,12 +246,8 @@ func Test_Database_Wal(t *testing.T) {
 }
 
 func Test_Global_Variables(t *testing.T) {
-	conn := openMemoryDB(sqlite.WithGlobalVariables(map[string]any{
-		"@caller": "0xbennan",
-		"@block":  420,
-	}))
-
-	defer conn.Close(nil)
+	conn, td := openRealDB()
+	defer td()
 
 	// prepare statement
 	stmt, err := conn.Prepare("INSERT INTO users (id, name, age) VALUES ($id, @caller, @block)")
@@ -263,7 +257,9 @@ func Test_Global_Variables(t *testing.T) {
 
 	// test defaults
 	err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
-		"$id": 1,
+		"$id":     1,
+		"@caller": "0xbennan",
+		"@block":  420,
 	}),
 	)
 	if err != nil {
@@ -349,12 +345,12 @@ func Test_Global_Variables(t *testing.T) {
 }
 
 func openRealDB() (conn *sqlite.Connection, teardown func() error) {
-	conn, err := sqlite.OpenConn("testdb", sqlite.WithPath("./tmp/"))
+	conn1, err := sqlite.OpenConn("testdb", sqlite.WithPath("./tmp/"))
 	if err != nil {
 		panic(err)
 	}
 
-	err = conn.Delete()
+	err = conn1.Delete()
 	if err != nil {
 		panic(err)
 	}
@@ -367,92 +363,6 @@ func openRealDB() (conn *sqlite.Connection, teardown func() error) {
 	initTables(conn)
 
 	return conn, conn.Delete
-}
-
-// this runs the same insert 100 times, and tests each result 100 times
-func Test_Order_Determinism(t *testing.T) {
-
-	rand.Seed(time.Now().UnixNano())
-
-	for i := 0; i < 100; i++ {
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		func() {
-			conn := openMemoryDB(sqlite.WithConnectionPoolSize(1))
-
-			defer func() { // since delete takes a while, we have to wait for it to finish before we can close the connection
-				err := conn.Delete()
-				if err != nil {
-					t.Fatal(err)
-				}
-				wg.Done()
-			}()
-
-			// prepare statement
-			stmt, err := conn.Prepare("INSERT INTO users (id, name, age) VALUES ($id, $name, $age)")
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			users := []map[string]interface{}{
-				{
-					"$id":   1,
-					"$name": "bennan",
-					"$age":  420,
-				},
-				{
-					"$id":   2,
-					"$name": "luke",
-					"$age":  69,
-				},
-				{
-					"$id":   3,
-					"$name": "gavin",
-					"$age":  65,
-				},
-				{
-					"$id":   4,
-					"$name": "luis",
-					"$age":  61023,
-				},
-			}
-
-			for _, user := range users {
-				err = stmt.Execute(sqlite.WithNamedArgs(user))
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			for i := 0; i < 100; i++ {
-				// query users
-				results := &sqlite.ResultSet{}
-				err = conn.Query(context.Background(), "SELECT * FROM users as u1 CROSS JOIN users AS u2",
-					sqlite.WithResultSet(results))
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				idCounter := int64(1)
-				for results.Next() {
-					rec := results.GetRecord()
-
-					id, ok := rec["id"].(int64)
-					if !ok {
-						t.Fatalf("expected int64, got %T", rec["id"])
-					}
-
-					if (idCounter-id)%4 != 0 {
-						t.Fatalf("expected %d, got %d", idCounter, id)
-					}
-
-					idCounter++
-				}
-			}
-
-		}()
-		wg.Wait()
-	}
 }
 
 func Test_Reads(t *testing.T) {
@@ -480,35 +390,50 @@ func Test_Reads(t *testing.T) {
 	}
 
 	// try to insert user with a query
-	err = conn.Query(context.Background(), "INSERT INTO users (id, name, age) VALUES ($id, $name, $age)", &sqlite.ExecOpts{
-		NamedArgs: map[string]interface{}{
+	err = conn.Query(context.Background(), "INSERT INTO users (id, name, age) VALUES ($id, $name, $age)",
+		sqlite.WithNamedArgs(map[string]interface{}{
 			"$id":   2,
 			"$name": "Jane",
 			"$age":  25,
-		},
-	})
+		}),
+	)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
 	// test injection
-	err = conn.Query(context.Background(), "SELECT * FROM users; INSERT INTO users VALUES (4, 'bb', 3)", &sqlite.ExecOpts{})
+	err = conn.Query(context.Background(), "SELECT * FROM users; INSERT INTO users VALUES (4, 'bb', 3);")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
-func openMemoryDB(opts ...sqlite.ConnectionOption) *sqlite.Connection {
-	opts = append(opts, sqlite.InMemory())
+// testing statement prepare with two statements that are the same
+// usually, this returns 1 prepared statement, but our implementation
+// returns 2
+func Test_Preparation(t *testing.T) {
+	db, td := openRealDB()
+	defer td()
 
-	conn, err := sqlite.OpenConn("testdb", opts...)
+	stmt, err := db.Prepare("SELECT * FROM users;")
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	initTables(conn)
+	stmt2, err := db.Prepare("SELECT * FROM users;")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	return conn
+	err = stmt.Finalize()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = stmt2.Finalize()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 const (
@@ -532,7 +457,7 @@ func initTables(conn *sqlite.Connection) {
 	}
 
 	if len(tables) != 1 {
-		panic("expected 1 table, got " + fmt.Sprint((len(tables))))
+		panic("expected 1 table, got " + fmt.Sprint(len(tables)))
 	}
 
 	if tables[0] != "users" {

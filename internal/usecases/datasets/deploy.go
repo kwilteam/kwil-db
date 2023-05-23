@@ -1,14 +1,18 @@
 package datasets
 
 import (
-	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/tx"
+	"context"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/engine2"
+	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
+	"github.com/kwilteam/kwil-db/pkg/tx"
 
 	"go.uber.org/zap"
 )
 
-func (u *DatasetUseCase) Deploy(deployment *entity.DeployDatabase) (*tx.Receipt, error) {
+func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDatabase) (*tx.Receipt, error) {
 	price, err := u.PriceDeploy(deployment)
 	if err != nil {
 		return nil, err
@@ -19,12 +23,20 @@ func (u *DatasetUseCase) Deploy(deployment *entity.DeployDatabase) (*tx.Receipt,
 		return nil, err
 	}
 
-	err = u.engine.Deploy(deployment.Schema)
+	dataset, err := u.engine.NewDataset(ctx, &dto.DatasetContext{
+		Name:  deployment.Schema.Name,
+		Owner: deployment.Tx.Sender,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	u.log.Info("database deployed", zap.String("dbid", deployment.Schema.ID()), zap.String("deployer address", deployment.Tx.Sender))
+	err = deploySchema(ctx, dataset, deployment.Schema)
+	if err != nil {
+		return nil, err
+	}
+
+	u.log.Info("database deployed", zap.String("dbid", dataset.Id()), zap.String("deployer address", deployment.Tx.Sender))
 
 	return &tx.Receipt{
 		TxHash: deployment.Tx.Hash,
@@ -32,11 +44,46 @@ func (u *DatasetUseCase) Deploy(deployment *entity.DeployDatabase) (*tx.Receipt,
 	}, nil
 }
 
-func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.Int, error) {
-	return u.engine.GetDeployPrice(deployment.Schema)
+// deploySchema applies the schema to the database
+func deploySchema(ctx context.Context, dataset engine2.Dataset, schema *entity.Schema) error {
+	sp, err := dataset.Savepoint()
+	if err != nil {
+		return err
+	}
+	defer sp.Rollback()
+
+	convertedTables, err := convertTablesToDto(schema.Tables)
+	if err != nil {
+		return err
+	}
+
+	for _, table := range convertedTables {
+		err := dataset.CreateTable(ctx, table)
+		if err != nil {
+			return err
+		}
+	}
+
+	convertedActions, err := convertActionsToDto(schema.Actions)
+	if err != nil {
+		return err
+	}
+
+	for _, action := range convertedActions {
+		err := dataset.CreateAction(ctx, action)
+		if err != nil {
+			return err
+		}
+	}
+
+	return sp.Commit()
 }
 
-func (u *DatasetUseCase) Drop(drop *entity.DropDatabase) (*tx.Receipt, error) {
+func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.Int, error) {
+	return deployPrice, nil
+}
+
+func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (*tx.Receipt, error) {
 	price, err := u.PriceDrop(drop)
 	if err != nil {
 		return nil, err
@@ -47,10 +94,15 @@ func (u *DatasetUseCase) Drop(drop *entity.DropDatabase) (*tx.Receipt, error) {
 		return nil, err
 	}
 
-	err = u.engine.DropDataset(drop.DBID)
+	err = u.engine.DeleteDataset(ctx, &dto.TxContext{
+		Caller:  drop.Tx.Sender,
+		Dataset: drop.DBID,
+	}, drop.DBID)
 	if err != nil {
 		return nil, err
 	}
+
+	u.log.Info("database dropped", zap.String("dbid", drop.DBID), zap.String("dropper address", drop.Tx.Sender))
 
 	return &tx.Receipt{
 		TxHash: drop.Tx.Hash,
@@ -59,5 +111,5 @@ func (u *DatasetUseCase) Drop(drop *entity.DropDatabase) (*tx.Receipt, error) {
 }
 
 func (u *DatasetUseCase) PriceDrop(drop *entity.DropDatabase) (*big.Int, error) {
-	return u.engine.GetDropPrice(drop.DBID)
+	return dropPrice, nil
 }

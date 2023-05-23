@@ -3,10 +3,11 @@ package ast_test
 import (
 	"bytes"
 	"flag"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 )
 
 var update = flag.Bool("update", false, "update .golden files")

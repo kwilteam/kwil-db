@@ -17,7 +17,7 @@ func Test_Generate(t *testing.T) {
 				Type: dto.INT,
 				Attributes: []*dto.Attribute{
 					{
-						Type: dto.PRIMARY_KEY,
+						Type: "primary_key", // testing string case insensitivity
 					},
 					{
 						Type: dto.NOT_NULL,

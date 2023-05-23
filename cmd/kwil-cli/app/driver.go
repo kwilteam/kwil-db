@@ -5,11 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/kwilteam/kwil-db/internal/pkg/graphql/query"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
-	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	big2 "github.com/kwilteam/kwil-db/pkg/utils/numbers/big"
 	"math/big"
 	"os"
 	"os/exec"
@@ -17,6 +12,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/kwilteam/kwil-db/internal/pkg/graphql/query"
+	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	big2 "github.com/kwilteam/kwil-db/pkg/utils/numbers/big"
 )
 
 func MustRun(cmd *exec.Cmd) error {
@@ -151,7 +152,7 @@ func (d *KwilCliDriver) GetAllowance(ctx context.Context) (*big.Int, error) {
 	return nil, nil
 }
 
-func (d *KwilCliDriver) DeployDatabase(ctx context.Context, db *models.Dataset) error {
+func (d *KwilCliDriver) DeployDatabase(ctx context.Context, db *schema.Schema) error {
 	schemaFile := path.Join(os.TempDir(), fmt.Sprintf("schema-%s.json", time.Now().Format("20060102150405")))
 
 	dbByte, err := json.Marshal(db)

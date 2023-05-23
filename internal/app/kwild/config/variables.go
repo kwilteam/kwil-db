@@ -3,9 +3,10 @@ package config
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"os"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/kwil-db/pkg/config"
 
@@ -22,6 +23,7 @@ type KwildConfig struct {
 	HttpListenAddress string
 	PrivateKey        *ecdsa.PrivateKey
 	Deposits          DepositsConfig
+	ChainSyncer       ChainSyncerConfig
 	SqliteFilePath    string
 	Log               log.Config
 }
@@ -34,6 +36,10 @@ type DepositsConfig struct {
 	PoolAddress          string
 }
 
+type ChainSyncerConfig struct {
+	ChunkSize int
+}
+
 var (
 	RegisteredVariables = []config.CfgVar{
 		PrivateKey,
@@ -43,6 +49,7 @@ var (
 		DepositsChainCode,
 		DepositsClientChainRPCURL,
 		DepositsPoolAddress,
+		ChainSyncerChunkSize,
 		SqliteFilePath,
 		LogLevel,
 		LogOutputPaths,
@@ -99,6 +106,12 @@ var (
 		EnvName:  "DEPOSITS_POOL_ADDRESS",
 		Field:    "Deposits.PoolAddress",
 		Required: true,
+	}
+
+	ChainSyncerChunkSize = config.CfgVar{
+		EnvName: "CHAIN_SYNCER_CHUNK_SIZE",
+		Field:   "ChainSyncer.ChunkSize",
+		Default: 100000,
 	}
 
 	SqliteFilePath = config.CfgVar{

@@ -5,7 +5,7 @@ import (
 	"math"
 	"reflect"
 
-	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine2/tree/sql-writer"
 
 	"github.com/cstockton/go-conv"
 )

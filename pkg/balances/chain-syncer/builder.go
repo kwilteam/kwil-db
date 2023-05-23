@@ -2,6 +2,7 @@ package chainsyncer
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
@@ -70,6 +71,10 @@ func (c *ChainSyncChainClientBuilder) WithStartingHeight(height int64) *ChainSyn
 
 // WithChunkSize sets the chunk size of the chain syncer
 func (c *ChainSyncChainClientBuilder) WithChunkSize(size int64) *ChainSyncChainClientBuilder {
+	if size <= 0 {
+		panic("chunk size must be greater than 0")
+	}
+
 	c.syncer.chunkSize = size
 	return c
 }

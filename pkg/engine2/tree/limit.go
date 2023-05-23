@@ -1,6 +1,6 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine2/tree/sql-writer"
 
 // Limit is a LIMIT clause.
 // It takes an expression, and can optionally take either an offset or a second expression.

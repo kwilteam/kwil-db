@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/engine2/dto/mocks"
+	"github.com/kwilteam/kwil-db/pkg/engine2/dto/data"
 	dbi "github.com/kwilteam/kwil-db/pkg/engine2/sqldb"
 	"github.com/kwilteam/kwil-db/pkg/engine2/sqldb/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -66,7 +66,7 @@ func Test_MetadataTracking(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, mocks.ActionInsertUser, actions[0])
+	assert.Equal(t, data.ActionInsertUser, actions[0])
 
 	tables, err := db.ListTables(context.Background())
 	if err != nil {
@@ -77,7 +77,7 @@ func Test_MetadataTracking(t *testing.T) {
 		t.Fatalf("expected 1 table, got %d", len(tables))
 	}
 
-	assert.Equal(t, mocks.TableUsers, tables[0])
+	assert.Equal(t, data.TableUsers, tables[0])
 
 }
 
@@ -99,7 +99,7 @@ func openTestDB(t *testing.T) (dbi.DB, func()) {
 func createTestSchema(db dbi.DB) error {
 	ctx := context.Background()
 
-	err := db.CreateTable(ctx, mocks.TableUsers)
+	err := db.CreateTable(ctx, data.TableUsers)
 	if err != nil {
 		return err
 	}
@@ -110,12 +110,12 @@ func createTestSchema(db dbi.DB) error {
 func createTestAction(db dbi.DB) (dbi.Statement, error) {
 
 	ctx := context.Background()
-	err := db.StoreAction(ctx, mocks.ActionInsertUser)
+	err := db.StoreAction(ctx, data.ActionInsertUser)
 	if err != nil {
 		return nil, err
 	}
 
-	stmt, err := db.Prepare(mocks.ActionInsertUser.Statements[0])
+	stmt, err := db.Prepare(data.ActionInsertUser.Statements[0])
 	if err != nil {
 		return nil, err
 	}

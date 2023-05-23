@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/engine2"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -13,7 +14,7 @@ func WithLogger(logger log.Logger) DatasetUseCaseOpt {
 	}
 }
 
-func WithAccountStore(store accountStore) DatasetUseCaseOpt {
+func WithAccountStore(store AccountStore) DatasetUseCaseOpt {
 	return func(u *DatasetUseCase) {
 		u.accountStore = store
 	}
@@ -33,14 +34,14 @@ func WithTempAccountStore() DatasetUseCaseOpt {
 	}
 }
 
-func WithEngine(engine engineInterface) DatasetUseCaseOpt {
-	return func(u *DatasetUseCase) {
-		u.engine = engine
-	}
-}
-
 func WithSqliteFilePath(path string) DatasetUseCaseOpt {
 	return func(u *DatasetUseCase) {
 		u.sqliteFilePath = path
+	}
+}
+
+func WithEngine(engine engine2.Engine) DatasetUseCaseOpt {
+	return func(u *DatasetUseCase) {
+		u.engine = engine
 	}
 }

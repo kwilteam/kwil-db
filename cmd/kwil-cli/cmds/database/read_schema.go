@@ -3,10 +3,10 @@ package database
 import (
 	"context"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine/types"
 
 	"github.com/spf13/cobra"
 )
@@ -40,12 +40,8 @@ func readSchemaCmd() *cobra.Command {
 						fmt.Printf("      Type: %s\n", c.Type.String())
 						for _, a := range c.Attributes {
 							fmt.Printf("      %s\n", a.Type.String())
-							value, err := types.NewFromSerial(a.Value)
-							if err != nil {
-								return err
-							}
-							if value.IsEmpty() {
-								fmt.Printf("        %s\n", value.String())
+							if a.Value != nil {
+								fmt.Printf("        %s\n", fmt.Sprint(a.Value))
 							}
 						}
 					}

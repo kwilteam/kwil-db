@@ -21,7 +21,7 @@ type Column struct {
 
 type Attribute struct {
 	Type  AttributeType `json:"type"`
-	Value []byte        `json:"value,omitempty"`
+	Value any           `json:"value,omitempty"`
 }
 
 type Index struct {

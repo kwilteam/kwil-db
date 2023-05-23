@@ -1,10 +1,10 @@
 package csv_test
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/csv"
-	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"os"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/csv"
 )
 
 func Test_CSV(t *testing.T) {
@@ -20,18 +20,6 @@ func Test_CSV(t *testing.T) {
 
 	if len(data.Header) != 3 {
 		t.Fatal(`expected 3 columns, got: `, len(data.Header))
-	}
-
-	if data.ColumnTypes[0] != types.INT {
-		t.Fatal(`expected first column to be an int, got: `, data.ColumnTypes[0])
-	}
-
-	if data.ColumnTypes[1] != types.TEXT {
-		t.Fatal(`expected second column to be a string, got: `, data.ColumnTypes[1])
-	}
-
-	if data.ColumnTypes[2] != types.INT {
-		t.Fatal(`expected third column to be an int, got: `, data.ColumnTypes[2])
 	}
 }
 
@@ -66,20 +54,20 @@ func Test_PrepareInputs(t *testing.T) {
 		t.Fatal(`expected 3 columns, got: `, len(record))
 	}
 
-	row0col0 := types.NewFromSerialMust(record["$id"])
-	row0col1 := types.NewFromSerialMust(record["$name"])
-	row0col2 := types.NewFromSerialMust(record["$age"])
+	row0col0 := record["$id"]
+	row0col1 := record["$name"]
+	row0col2 := record["$age"]
 
-	if row0col0.String() != "1" {
-		t.Fatal("expected row 0, column 0 to be 1, got: ", types.NewFromSerialMust(record[inputNames["$id"]]).String())
+	if row0col0 != "1" {
+		t.Fatal("expected row 0, column 0 to be 1, got: ", record[inputNames["$id"]])
 	}
 
-	if row0col1.String() != "Theodore Berry" {
-		t.Fatal("expected row 0, column 1 to be Theodore Berry, got: ", types.NewFromSerialMust(record[inputNames["$name"]]).String())
+	if row0col1 != "Theodore Berry" {
+		t.Fatal("expected row 0, column 1 to be Theodore Berry, got: ", record[inputNames["$name"]])
 	}
 
-	if row0col2.String() != "51" {
-		t.Fatal("expected row 0, column 2 to be 51, got: ", types.NewFromSerialMust(record[inputNames["$age"]]).String())
+	if row0col2 != "51" {
+		t.Fatal("expected row 0, column 2 to be 51, got: ", record[inputNames["$age"]])
 	}
 }
 
