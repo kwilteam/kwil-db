@@ -260,7 +260,6 @@ expr:
     literal_value
     | BIND_PARAMETER
     | (table_name DOT)? column_name
-    | OPEN_PAR expr CLOSE_PAR
     | OPEN_PAR expr (COMMA expr)* CLOSE_PAR
     | (MINUS | PLUS | TILDE) unary_expr=expr
     | expr COLLATE_ collation_name
