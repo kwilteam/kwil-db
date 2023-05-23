@@ -7,38 +7,38 @@
       "columns": [
         {
           "name": "username",
-          "type": 102,
+          "type": "text",
           "attributes": [
             {
-              "type": 103
+              "type": "not_null"
             }
           ]
         },
         {
           "name": "age",
-          "type": 103,
+          "type": "int",
           "attributes": [
             {
-              "type": 105,
-              "value": "ZjE4"
+              "type": "min",
+              "value": "18"
             },
             {
-              "type": 106,
-              "value": "ZjMw"
+              "type": "max",
+              "value": "30"
             }
           ]
         },
         {
           "name": "email",
-          "type": 102,
+          "type": "text",
           "attributes": [
             {
-              "type": 108,
-              "value": "ZjUw"
+              "type": "max_length",
+              "value": "50"
             },
             {
-              "type": 107,
-              "value": "ZjEw"
+              "type": "min_length",
+              "value": "10"
             }
           ]
         }

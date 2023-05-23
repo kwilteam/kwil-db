@@ -5,18 +5,17 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
 	ccs "github.com/kwilteam/kwil-db/pkg/chain/client/service"
 	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow"
 	"github.com/kwilteam/kwil-db/pkg/chain/contracts/token"
 	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
-	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-	"strings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -214,7 +213,7 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (*kTx.Receipt, e
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
 	}
 
-	identifier := &models.DatasetIdentifier{
+	identifier := &datasetIdentifier{
 		Owner: address,
 		Name:  name,
 	}
@@ -229,29 +228,20 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (*kTx.Receipt, e
 		return nil, err
 	}
 
-	delete(c.datasets, identifier.ID())
+	delete(c.datasets, identifier.Dbid())
 
 	return res, nil
 }
 
 // dropDatabaseTx creates a new transaction to drop a database
-func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *models.DatasetIdentifier) (*kTx.Transaction, error) {
+func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *datasetIdentifier) (*kTx.Transaction, error) {
 	return c.newTx(ctx, kTx.DROP_DATABASE, dbIdent)
 }
 
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
-	encodedValues, err := encodeInputs(inputs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return c.ExecuteActionSerialized(ctx, dbid, action, encodedValues)
-}
-
-func (c *Client) ExecuteActionSerialized(ctx context.Context, dbid string, action string, inputs []map[string][]byte) (*kTx.Receipt, []map[string]any, error) {
-	executionBody := &models.ActionExecution{
+	executionBody := &actionExecution{
 		Action: action,
 		DBID:   dbid,
 		Params: inputs,
@@ -276,6 +266,10 @@ func (c *Client) ExecuteActionSerialized(ctx context.Context, dbid string, actio
 }
 
 func decodeOutputs(bts []byte) ([]map[string]any, error) {
+	if len(bts) == 0 {
+		return []map[string]any{}, nil
+	}
+
 	var outputs []map[string]any
 	err := json.Unmarshal(bts, &outputs)
 	if err != nil {
@@ -286,26 +280,8 @@ func decodeOutputs(bts []byte) ([]map[string]any, error) {
 }
 
 // executeActionTx creates a new transaction to execute an action
-func (c *Client) executeActionTx(ctx context.Context, executionBody *models.ActionExecution) (*kTx.Transaction, error) {
+func (c *Client) executeActionTx(ctx context.Context, executionBody *actionExecution) (*kTx.Transaction, error) {
 	return c.newTx(ctx, kTx.EXECUTE_ACTION, executionBody)
-}
-
-// encodeInputs converts an input map to a map of encoded values
-func encodeInputs(inputs []map[string]any) ([]map[string][]byte, error) {
-	encoded := make([]map[string][]byte, 0)
-	for _, record := range inputs {
-		encodedRecord := make(map[string][]byte)
-		for k, v := range record {
-			encodedValue, err := types.New(v)
-			if err != nil {
-				return nil, err
-			}
-			encodedRecord[k] = encodedValue.Bytes()
-		}
-
-		encoded = append(encoded, encodedRecord)
-	}
-	return encoded, nil
 }
 
 // GetConfig returns the provider config

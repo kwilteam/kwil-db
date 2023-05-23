@@ -1,13 +1,15 @@
 package parser_test
 
 import (
-	"bytes"
+	"fmt"
+
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/ast"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/utils"
 	"github.com/kwilteam/kwil-db/pkg/sql_parser"
+	"github.com/stretchr/testify/assert"
 
 	"strings"
 	"testing"
@@ -56,15 +58,15 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 					Name: "user",
 					Columns: []schema.Column{
 						{Name: "age", Type: schema.ColInt, Attributes: []schema.Attribute{
-							{Type: schema.AttrMin, Value: []byte("18")},
-							{Type: schema.AttrMax, Value: []byte("30")}}},
+							{Type: schema.AttrMin, Value: "18"},
+							{Type: schema.AttrMax, Value: "30"}}},
 						{Name: "email", Type: schema.ColText, Attributes: []schema.Attribute{
-							{Type: schema.AttrMaxLength, Value: []byte("50")},
-							{Type: schema.AttrMinLength, Value: []byte("10")}}},
+							{Type: schema.AttrMaxLength, Value: 50},
+							{Type: schema.AttrMinLength, Value: "10"}}},
 						{Name: "country", Type: schema.ColText, Attributes: []schema.Attribute{
-							{Type: schema.AttrDefault, Value: []byte(`"mars"`)}}},
+							{Type: schema.AttrDefault, Value: `"mars"`}}},
 						{Name: "status", Type: schema.ColInt, Attributes: []schema.Attribute{
-							{Type: schema.AttrDefault, Value: []byte("0")}}},
+							{Type: schema.AttrDefault, Value: "0"}}},
 					},
 				},
 			},
@@ -193,10 +195,11 @@ func testTableBody(t *testing.T, col *ast.ColumnDef, want schema.Column) bool {
 			v = t.Name
 		}
 
-		if !bytes.Equal([]byte(v), want.Attributes[j].Value) {
-			t.Errorf("columnDef.Name.Attrs[%d].Param is not '%s'. got=%s", j, want.Attributes[j].Value, v)
-			return false
-		}
+		assert.Equal(t, v, fmt.Sprint(want.Attributes[j].Value))
+		// if !bytes.Equal([]byte(v), want.Attributes[j].Value) {
+		// 	t.Errorf("columnDef.Name.Attrs[%d].Param is not '%s'. got=%s", j, want.Attributes[j].Value, v)
+		// 	return false
+		// }
 	}
 
 	return true

@@ -3,11 +3,12 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
-	"strings"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 
 	"github.com/spf13/cobra"
 )
@@ -37,7 +38,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 					fmt.Printf("Databases belonging to '%s':\n", owner)
 				}
 				for _, db := range dbs {
-					fmt.Println(" - " + db + "   (dbid:" + models.GenerateSchemaId(owner, db) + ")")
+					fmt.Println(" - " + db + "   (dbid:" + utils.GenerateDBID(db, owner) + ")")
 				}
 
 				return nil

@@ -1,21 +1,23 @@
 package datasets
 
 import (
+	"context"
+
+	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/engine"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 type DatasetUseCase struct {
-	engine       engineInterface
-	accountStore accountStore
+	engine       engine.Engine
+	accountStore AccountStore
 	log          log.Logger
 
 	sqliteFilePath string
 }
 
-func New(opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
+func New(ctx context.Context, opts ...DatasetUseCaseOpt) (DatasetUseCaseInterface, error) {
 	u := &DatasetUseCase{
 		log:            log.NewNoOp(),
 		sqliteFilePath: "",
@@ -27,7 +29,7 @@ func New(opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
 
 	var err error
 	if u.engine == nil {
-		u.engine, err = engine.Open(
+		u.engine, err = engine.Open(ctx,
 			u.engineOpts()...,
 		)
 		if err != nil {
@@ -47,30 +49,39 @@ func New(opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
 	return u, nil
 }
 
-func (u *DatasetUseCase) engineOpts() []engine.MasterOpt {
-	opts := make([]engine.MasterOpt, 0)
+func (u *DatasetUseCase) engineOpts() []engine.EngineOpt {
+	opts := []engine.EngineOpt{
+		engine.WithLogger(u.log),
+	}
 	if u.sqliteFilePath != "" {
 		opts = append(opts, engine.WithPath(u.sqliteFilePath))
 	}
-	opts = append(opts, engine.WithLogger(u.log))
 
 	return opts
 }
 
-func (u *DatasetUseCase) ListDatabases(owner string) ([]string, error) {
-	return u.engine.ListDatabases(owner)
+func (u *DatasetUseCase) ListDatabases(ctx context.Context, owner string) ([]string, error) {
+	return u.engine.ListDatasets(ctx, owner)
 }
 
-func (u *DatasetUseCase) GetSchema(dbid string) (*models.Dataset, error) {
+func (u *DatasetUseCase) GetSchema(dbid string) (*entity.Schema, error) {
 	db, err := u.engine.GetDataset(dbid)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.GetSchema(), nil
+	actions := db.ListActions()
+	tables := db.ListTables()
+
+	return &entity.Schema{
+		Owner:   db.Owner(),
+		Name:    db.Name(),
+		Actions: convertActions(actions),
+		Tables:  convertTables(tables),
+	}, nil
 }
 
 func (u *DatasetUseCase) Close() error {
 	u.accountStore.Close()
-	return u.engine.Close()
+	return u.engine.Close(true)
 }

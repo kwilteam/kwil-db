@@ -7,15 +7,15 @@
       "columns": [
         {
           "name": "name",
-          "type": 102
+          "type": "text"
         },
         {
           "name": "age",
-          "type": 103
+          "type": "int"
         },
         {
           "name": "email",
-          "type": 102
+          "type": "text"
         }
       ]
     }

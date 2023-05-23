@@ -2,16 +2,16 @@ package specifications
 
 import (
 	"context"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
 	t.Logf("Executing delete action specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t)
-	dbID := models.GenerateSchemaId(db.Owner, db.Name)
+	dbID := GenerateSchemaId(db.Owner, db.Name)
 
 	actionName := "delete_user"
 	actionInput := []map[string]any{}

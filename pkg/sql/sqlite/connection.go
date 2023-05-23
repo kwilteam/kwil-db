@@ -3,10 +3,11 @@ package sqlite
 import (
 	"context"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/go-sqlite"
 	"github.com/kwilteam/go-sqlite/sqlitex"
@@ -26,6 +27,8 @@ type Connection struct {
 	globalVariableMap map[string]any
 }
 
+// OpenConn opens a connection to the database with the given name.
+// It takes optional ConnectionOptions, which can be used to specify the path, logger, and other options.
 func OpenConn(name string, opts ...ConnectionOption) (*Connection, error) {
 	connection := &Connection{
 		log:               log.NewNoOp(),
@@ -95,19 +98,33 @@ func (c *Connection) mkPathDir() error {
 // this should really only be used for DDL statements or pragmas.
 // dml statements should use prepared statements instead unless they are one-offs.
 // this method is intentionally barebones to prevent misuse.
-func (c *Connection) Execute(stmt string) error {
+func (c *Connection) Execute(stmt string, args ...map[string]any) error {
+
 	if c.conn == nil {
 		return fmt.Errorf("connection is nil")
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.execute(stmt)
+	return c.execute(stmt, args...)
 }
 
 // execute executes a one-off statement.  It does not use a mutex, unlike Execute.
-func (c *Connection) execute(stmt string) error {
-	return sqlitex.ExecuteTransient(c.conn, stmt, nil)
+func (c *Connection) execute(stmt string, args ...map[string]any) error {
+	if len(args) == 0 {
+		return sqlitex.ExecuteTransient(c.conn, stmt, nil)
+	}
+
+	for _, arg := range args {
+		err := sqlitex.ExecuteTransient(c.conn, stmt, &sqlitex.ExecOptions{
+			Named: arg,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to execute statement: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (c *Connection) Prepare(stmt string) (*Statement, error) {
@@ -115,16 +132,19 @@ func (c *Connection) Prepare(stmt string) (*Statement, error) {
 		return nil, fmt.Errorf("connection is nil")
 	}
 
-	innerStmt, err := c.conn.Prepare(stmt)
+	innerStmt, trailingBytes, err := c.conn.PrepareTransient(trimPadding(stmt))
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	if trailingBytes > 0 { // there should not be trailing bytes since we use trimPadding
+		return nil, fmt.Errorf("trailing bytes after statement: %q", trailingBytes)
 	}
 
 	return newStatement(c, innerStmt), nil
 }
 
 // Close closes the connection.
-// It takes an optional wait channel, which will be waited on before the connection is closed.
+// It takes an optional wait channel, which will be waited on until the connection is closed.
 func (c *Connection) Close(ch chan<- struct{}) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -188,18 +208,12 @@ func (c *Connection) prepareRead(ctx context.Context, statement string) (stmt *S
 // It takes a QueryOpts struct, which can contain arguments, a function to manually bind parameters, a function
 // to manually handle each result in between Step() calls, and a struct to store the results in.
 // All of these are optional, and if not provided, the function will return an error
-func (c *Connection) Query(ctx context.Context, statement string, opts *ExecOpts) error {
+func (c *Connection) Query(ctx context.Context, statement string, options ...ExecOption) error {
 	if c.readPool == nil {
 		return fmt.Errorf("connection is nil")
 	}
-	if opts == nil {
-		return fmt.Errorf("query options cannot be nil")
-	}
-	if opts.ResultFunc == nil {
-		opts.ResultFunc = func(*Statement) error { return nil }
-	}
 
-	err := c.query(ctx, statement, opts)
+	err := c.query(ctx, statement, options...)
 	if err != nil {
 		c.log.Error("failed to execute query", zap.Error(err))
 		return err
@@ -210,14 +224,14 @@ func (c *Connection) Query(ctx context.Context, statement string, opts *ExecOpts
 
 // query executes a query and calls the resultFn for each row returned
 // statementSetterFn is a function that is called to set the arguments for the statement
-func (c *Connection) query(ctx context.Context, statement string, opts *ExecOpts) error {
+func (c *Connection) query(ctx context.Context, statement string, options ...ExecOption) error {
 	stmt, deferFunc, err := c.prepareRead(ctx, statement)
 	if err != nil {
 		return fmt.Errorf("error preparing read: %w", err)
 	}
 	defer deferFunc()
 
-	return stmt.execute(opts)
+	return stmt.execute(options...)
 }
 
 func (c *Connection) CheckpointWal() error {
@@ -243,12 +257,13 @@ func (c *Connection) DisableForeignKey() error {
 
 func (c *Connection) ListTables(ctx context.Context) ([]string, error) {
 	tables := make([]string, 0)
-	err := c.Query(ctx, sqlListTables, &ExecOpts{
-		ResultFunc: func(stmt *Statement) error {
+	err := c.Query(ctx, sqlListTables,
+		WithResultFunc(func(stmt *Statement) error {
 			tables = append(tables, stmt.GetText("name"))
 			return nil
-		},
-	})
+		}),
+	)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tables: %w", err)
 	}
@@ -258,15 +273,15 @@ func (c *Connection) ListTables(ctx context.Context) ([]string, error) {
 
 func (c *Connection) TableExists(ctx context.Context, tableName string) (bool, error) {
 	exists := false
-	err := c.Query(ctx, sqlIfTableExists, &ExecOpts{
-		NamedArgs: map[string]interface{}{
-			"$name": tableName,
-		},
-		ResultFunc: func(stmt *Statement) error {
+	err := c.Query(ctx, sqlIfTableExists,
+		WithResultFunc(func(stmt *Statement) error {
 			exists = true
 			return nil
-		},
-	})
+		}),
+		WithNamedArgs(map[string]interface{}{
+			"$name": tableName,
+		}),
+	)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if table exists: %w", err)
 	}
@@ -365,6 +380,21 @@ func (r *ResultSet) GetRecord() map[string]any {
 		record[col] = r.Rows[r.index][i]
 	}
 	return record
+}
+
+// Records will retrieve all records for the result set.
+// It will not reset the row index.
+func (r *ResultSet) Records() []map[string]any {
+	records := make([]map[string]any, len(r.Rows))
+	for i, row := range r.Rows {
+		record := make(map[string]any)
+		for j, col := range r.Columns {
+			record[col] = row[j]
+		}
+		records[i] = record
+	}
+
+	return records
 }
 
 // Reset resets the row index to -1

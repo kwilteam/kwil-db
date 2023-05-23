@@ -2,7 +2,6 @@ package specifications
 
 import (
 	"context"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,7 +22,7 @@ func ExecutePermissionedActionSpecification(ctx context.Context, t *testing.T, e
 	t.Logf("Executing permissioned action specification")
 
 	db := SchemaLoader.Load(t)
-	dbID := models.GenerateSchemaId(db.Owner, db.Name)
+	dbID := GenerateSchemaId(db.Owner, db.Name)
 
 	createUserQueryInputs := []map[string]any{
 		{

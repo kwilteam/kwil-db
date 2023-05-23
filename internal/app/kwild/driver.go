@@ -4,14 +4,15 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine/models"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-	"math/big"
-	"strings"
 
 	ec "github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
@@ -93,14 +94,14 @@ func (d *KwildDriver) DeployDatabase(ctx context.Context, db *schema.Schema) err
 }
 
 func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
-	dbid := models.GenerateSchemaId(owner, dbName)
+	dbid := utils.GenerateDBID(dbName, owner)
 
-	schema, err := d.clt.GetSchema(ctx, dbid)
+	dbSchema, err := d.clt.GetSchema(ctx, dbid)
 	if err != nil {
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
 
-	if strings.EqualFold(schema.Owner, owner) && strings.EqualFold(schema.Name, dbName) {
+	if strings.EqualFold(dbSchema.Owner, owner) && strings.EqualFold(dbSchema.Name, dbName) {
 		return nil
 	}
 	return fmt.Errorf("database does not exist")

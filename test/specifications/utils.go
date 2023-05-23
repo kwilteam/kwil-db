@@ -1,10 +1,12 @@
 package specifications
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"os"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 )
 
 type DatabaseSchemaLoader interface {
@@ -34,4 +36,8 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T) *schema.Schema {
 	l.Modifier(db)
 
 	return db
+}
+
+func GenerateSchemaId(owner, name string) string {
+	return utils.GenerateDBID(name, owner)
 }

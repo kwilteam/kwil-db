@@ -1,17 +1,35 @@
 package engine
 
-import "github.com/kwilteam/kwil-db/pkg/log"
+import (
+	"github.com/kwilteam/kwil-db/pkg/log"
+)
 
-type MasterOpt func(*Engine)
+const (
+	defaultName = "kwil_master"
+)
 
-func WithLogger(l log.Logger) MasterOpt {
-	return func(m *Engine) {
-		m.log = l
+type EngineOpt func(*engine)
+
+func WithPath(path string) EngineOpt {
+	return func(e *engine) {
+		e.path = path
 	}
 }
 
-func WithPath(path string) MasterOpt {
-	return func(m *Engine) {
-		m.path = path
+func WithLogger(l log.Logger) EngineOpt {
+	return func(e *engine) {
+		e.log = l
+	}
+}
+
+func WithName(name string) EngineOpt {
+	return func(e *engine) {
+		e.name = name
+	}
+}
+
+func WithWipe() EngineOpt {
+	return func(e *engine) {
+		e.wipeOnStart = true
 	}
 }

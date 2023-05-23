@@ -3,13 +3,11 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/engine/types"
+
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/utils"
 	sqlParser "github.com/kwilteam/kwil-db/pkg/sql_parser"
 	"github.com/pkg/errors"
-	"strings"
 )
 
 type Node interface {
@@ -275,9 +273,11 @@ func (d *ColumnDef) Build() (def schema.Column) {
 	def = schema.Column{}
 	def.Name = d.Name.Name
 
-	typeName := strings.ToLower(d.Type.Name)
-
-	def.Type = utils.GetMappedColumnType(typeName)
+	var err error
+	def.Type, err = schema.GetColumnType(d.Type.Name)
+	if err != nil {
+		panic(err)
+	}
 
 	def.Attributes = []schema.Attribute{}
 	for _, attr := range d.Attrs {
@@ -288,7 +288,12 @@ func (d *ColumnDef) Build() (def schema.Column) {
 
 func (d *AttrDef) Build() (def schema.Attribute) {
 	def = schema.Attribute{}
-	def.Type = utils.GetMappedAttributeType(d.Type)
+
+	var err error
+	def.Type, err = schema.GetAttributeType(d.Name.Name)
+	if err != nil {
+		panic(err)
+	}
 
 	if d.Param == nil {
 		return
@@ -297,9 +302,9 @@ func (d *AttrDef) Build() (def schema.Attribute) {
 	switch a := d.Param.(type) {
 	case *BasicLit:
 		// TODO: a standalone types package
-		def.Value = types.NewNoPanic(a.Value).Bytes()
+		def.Value = a.Value
 	case *Ident:
-		def.Value = types.NewNoPanic(a.Name).Bytes()
+		def.Value = a.Name
 	}
 	return
 }
