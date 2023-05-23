@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
+	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 )
 
 func (u *DatasetUseCase) Query(ctx context.Context, query *entity.DBQuery) ([]byte, error) {

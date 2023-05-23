@@ -4,7 +4,7 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
+	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 

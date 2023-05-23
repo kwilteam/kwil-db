@@ -2,7 +2,7 @@ package datasets
 
 import (
 	"github.com/kwilteam/kwil-db/internal/entity"
-	engineDto "github.com/kwilteam/kwil-db/pkg/engine2/dto"
+	engineDto "github.com/kwilteam/kwil-db/pkg/engine/dto"
 )
 
 func convertActions(actions []*engineDto.Action) []*entity.Action {

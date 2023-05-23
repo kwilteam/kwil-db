@@ -5,12 +5,12 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	"github.com/kwilteam/kwil-db/pkg/engine2"
+	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 type DatasetUseCase struct {
-	engine       engine2.Engine
+	engine       engine.Engine
 	accountStore AccountStore
 	log          log.Logger
 
@@ -29,7 +29,7 @@ func New(ctx context.Context, opts ...DatasetUseCaseOpt) (DatasetUseCaseInterfac
 
 	var err error
 	if u.engine == nil {
-		u.engine, err = engine2.Open(ctx,
+		u.engine, err = engine.Open(ctx,
 			u.engineOpts()...,
 		)
 		if err != nil {
@@ -49,12 +49,12 @@ func New(ctx context.Context, opts ...DatasetUseCaseOpt) (DatasetUseCaseInterfac
 	return u, nil
 }
 
-func (u *DatasetUseCase) engineOpts() []engine2.EngineOpt {
-	opts := []engine2.EngineOpt{
-		engine2.WithLogger(u.log),
+func (u *DatasetUseCase) engineOpts() []engine.EngineOpt {
+	opts := []engine.EngineOpt{
+		engine.WithLogger(u.log),
 	}
 	if u.sqliteFilePath != "" {
-		opts = append(opts, engine2.WithPath(u.sqliteFilePath))
+		opts = append(opts, engine.WithPath(u.sqliteFilePath))
 	}
 
 	return opts

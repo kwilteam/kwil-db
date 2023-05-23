@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	"github.com/kwilteam/kwil-db/pkg/engine2"
-	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
-	"github.com/kwilteam/kwil-db/pkg/engine2/sqldb"
-	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
+	"github.com/kwilteam/kwil-db/pkg/engine"
+	"github.com/kwilteam/kwil-db/pkg/engine/dto"
+	"github.com/kwilteam/kwil-db/pkg/engine/sqldb"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 )
 
 type mockEngine struct {
@@ -51,7 +51,7 @@ func (m *mockEngine) DeleteDataset(ctx context.Context, txCtx *dto.TxContext, db
 	return nil
 }
 
-func (m *mockEngine) GetDataset(dbid string) (engine2.Dataset, error) {
+func (m *mockEngine) GetDataset(dbid string) (engine.Dataset, error) {
 	ds, ok := m.datasets[dbid]
 	if !ok {
 		return nil, fmt.Errorf("dataset not found")
@@ -64,7 +64,7 @@ func (m *mockEngine) ListDatasets(ctx context.Context, owner string) ([]string, 
 	return m.ownedDatasets[owner], nil
 }
 
-func (m *mockEngine) NewDataset(ctx context.Context, dsCtx *dto.DatasetContext) (engine2.Dataset, error) {
+func (m *mockEngine) NewDataset(ctx context.Context, dsCtx *dto.DatasetContext) (engine.Dataset, error) {
 	mockDs := &mockDataset{}
 
 	id := makeDbid(dsCtx.Name, dsCtx.Owner)

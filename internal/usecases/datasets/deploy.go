@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine2"
-	"github.com/kwilteam/kwil-db/pkg/engine2/dto"
+	"github.com/kwilteam/kwil-db/pkg/engine"
+	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 	"github.com/kwilteam/kwil-db/pkg/tx"
 
 	"go.uber.org/zap"
@@ -45,7 +45,7 @@ func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDa
 }
 
 // deploySchema applies the schema to the database
-func deploySchema(ctx context.Context, dataset engine2.Dataset, schema *entity.Schema) error {
+func deploySchema(ctx context.Context, dataset engine.Dataset, schema *entity.Schema) error {
 	sp, err := dataset.Savepoint()
 	if err != nil {
 		return err

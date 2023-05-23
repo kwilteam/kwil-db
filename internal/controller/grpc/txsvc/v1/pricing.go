@@ -7,7 +7,7 @@ import (
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine2/utils"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 )
