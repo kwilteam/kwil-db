@@ -257,10 +257,15 @@ drop_stmt:
     OR
  */
 expr:
+    // primary expressions(those dont fit operator pattern), order is irrelevant
     literal_value
     | BIND_PARAMETER
     | (table_name DOT)? column_name
+    | ((NOT_)? EXISTS_)? OPEN_PAR select_stmt_core CLOSE_PAR
+    | function_name OPEN_PAR ((expr ( COMMA expr)*) | STAR)? CLOSE_PAR
+    | CASE_ case_expr=expr? (WHEN_ when_expr+=expr THEN_ then_expr+=expr)+ (ELSE_ else_expr=expr)? END_
     | OPEN_PAR expr (COMMA expr)* CLOSE_PAR
+    // order is relevant for the rest
     | (MINUS | PLUS | TILDE) unary_expr=expr
     | expr COLLATE_ collation_name
     | expr PIPE2 expr
@@ -268,6 +273,7 @@ expr:
     | expr ( PLUS | MINUS) expr
     | expr ( LT2 | GT2 | AMP | PIPE) expr
     | expr ( LT | LT_EQ | GT | GT_EQ) expr
+    // below are all operators with the same precedence
     | expr (
         ASSIGN
         | EQ
@@ -280,12 +286,10 @@ expr:
     | expr NOT_? LIKE_ expr (ESCAPE_ expr)?
     | expr NOT_? BETWEEN_ expr AND_ expr
     | expr ( ISNULL_ | NOTNULL_ | NOT_ NULL_)
+    //
     | NOT_ unary_expr=expr
     | expr AND_ expr
     | expr OR_ expr
-    | function_name OPEN_PAR ((expr ( COMMA expr)*) | STAR)? CLOSE_PAR
-    | ((NOT_)? EXISTS_)? OPEN_PAR select_stmt_core CLOSE_PAR
-    | CASE_ case_expr=expr? (WHEN_ when_expr+=expr THEN_ then_expr+=expr)+ (ELSE_ else_expr=expr)? END_
 ;
 
 literal_value:
@@ -368,17 +372,14 @@ join_clause:
 ;
 
 select_core:
+    SELECT_ DISTINCT_?
+    result_column (COMMA result_column)*
+    (FROM_ (table_or_subquery | join_clause))?
+    (WHERE_ whereExpr=expr)?
     (
-        SELECT_ DISTINCT_?
-        result_column (COMMA result_column)*
-        (FROM_ (table_or_subquery (COMMA table_or_subquery)* | join_clause))?
-        (WHERE_ whereExpr=expr)?
-        (
-          GROUP_ BY_ groupByExpr+=expr (COMMA groupByExpr+=expr)*
-          (HAVING_ havingExpr=expr)?
-        )?
-    )
-    | values_clause
+      GROUP_ BY_ groupByExpr+=expr (COMMA groupByExpr+=expr)*
+      (HAVING_ havingExpr=expr)?
+    )?
 ;
 
 factored_select_stmt:
