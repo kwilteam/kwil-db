@@ -417,7 +417,6 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 		{"null", "select null", genSelectColumnLiteralTree("null")},
 		{"true", "select true", genSelectColumnLiteralTree("true")},
 		{"false", "select false", genSelectColumnLiteralTree("false")},
-		{"blob", "select x'01'", genSelectColumnLiteralTree("x'01'")},
 		// bind parameter
 		{"expr bind parameter $", "select $a",
 			&tree.Select{
@@ -709,58 +708,47 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 		{"expr function upper", `select upper('z')`,
 			genSimpleFunctionSelectTree(&tree.FunctionUPPER, genLiteralExpression("'z'"))},
 		// expr datetime functions
-		{"expr function date now", `select date('now')`,
-			genSimpleFunctionSelectTree(&tree.FunctionDATE, genLiteralExpression("'now'"))},
 		{"expr function date", `select date(1092941466)`,
 			genSimpleFunctionSelectTree(&tree.FunctionDATE, genLiteralExpression("1092941466"))},
-		//{"expr function date 1 modifier", `select date('now','start of month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionDATE,
-		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
-		//{"expr function date 2 modifiers", `select date('now','start of month','+1 month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionDATE,
-		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
-		{"expr function time now", `select time('now')`,
-			genSimpleFunctionSelectTree(&tree.FunctionTIME, genLiteralExpression("'now'"))},
+		{"expr function date 1 modifier", `select date(1092941466,'start of month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionDATE,
+				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"))},
+		{"expr function date 2 modifiers", `select date(1092941466,'start of month','+1 month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionDATE,
+				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
 		{"expr function time", `select time(1092941466)`,
 			genSimpleFunctionSelectTree(&tree.FunctionTIME, genLiteralExpression("1092941466"))},
-		//{"expr function time 1 modifier", `select time('now','start of month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionTIME,
-		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
-		//{"expr function time 2 modifiers", `select time('now','start of month','+1 month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionTIME,
-		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
-		{"expr function datetime now", `select datetime('now')`,
-			genSimpleFunctionSelectTree(&tree.FunctionDATETIME, genLiteralExpression("'now'"))},
+		{"expr function time 1 modifier", `select time(1092941466,'start of month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionTIME,
+				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"))},
+		{"expr function time 2 modifiers", `select time(1092941466,'start of month','+1 month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionTIME,
+				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
 		{"expr function datetime", `select datetime(1092941466)`,
 			genSimpleFunctionSelectTree(&tree.FunctionDATETIME, genLiteralExpression("1092941466"))},
-		//{"expr function datetime 1 modifier", `select datetime('now','start of month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionDATETIME,
-		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
-		//{"expr function datetime 2 modifiers", `select datetime('now','start of month','+1 month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionDATETIME,
-		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
-		{"expr function strftime now", `select strftime('%d','now')`,
-			genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
-				genLiteralExpression("'%d'"), genLiteralExpression("'now'"))},
+		{"expr function datetime 1 modifier", `select datetime(1092941466,'start of month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionDATETIME,
+				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"))},
+		{"expr function datetime 2 modifiers", `select datetime(1092941466,'start of month','+1 month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionDATETIME,
+				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
 		{"expr function strftime", `select strftime('%d',1092941466)`,
 			genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
 				genLiteralExpression("'%d'"), genLiteralExpression("1092941466"))},
-		//{"expr function strftime 1 modifer", `select strftime('%d','now','start of month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
-		//		genLiteralExpression("'%d'"), genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
-		//{"expr function strftime 2 modifiers", `select strftime('%d','now','start of month','+1 month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
-		//		genLiteralExpression("'%d'"), genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
-		{"expr function unixepoch now", `select unixepoch('now')`,
-			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH, genLiteralExpression("'now'"))},
+		{"expr function strftime 1 modifer", `select strftime('%d',1092941466,'start of month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
+				genLiteralExpression("'%d'"), genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"))},
+		{"expr function strftime 2 modifiers", `select strftime('%d',1092941466,'start of month','+1 month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
+				genLiteralExpression("'%d'"), genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
 		{"expr function unixepoch", `select unixepoch(1092941466)`,
 			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH, genLiteralExpression("1092941466"))},
-		//{"expr function unixepoch 1 modifier", `select unixepoch('now','start of month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
-		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
-		//{"expr function unixepoch 2 modifiers", `select unixepoch('now','start of month','+1 month')`,
-		//	genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
-		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
+		{"expr function unixepoch 1 modifier", `select unixepoch(1092941466,'start of month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
+				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"))},
+		{"expr function unixepoch 2 modifiers", `select unixepoch(1092941466,'start of month','+1 month')`,
+			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
+				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
 		// expr list
 		{"expr list", "select (1)",
 			&tree.Select{
@@ -2081,6 +2069,7 @@ func TestParseRawSQL_syntax_not_allowed(t *testing.T) {
 		{"current_date", "select current_date", "current_date"},
 		{"current_time", "select current_time", "current_time"},
 		{"current_timestamp", "select current_timestamp", "current_timestamp"},
+		{"blob", "select x'01'", "x'01'"},
 
 		// bind parameter
 		{"expr bind parameter ?", "select ?", "?"},
@@ -2291,6 +2280,55 @@ func TestParseRawSQL_banRules(t *testing.T) {
 			}
 
 			t.Errorf("ParseRawSQL() expected: %s, got %s", tt.wantError, err)
+		})
+	}
+}
+
+func TestParseRawSQL_semantic_invalid(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		// expr datetime functions
+		{"expr function date now", `select date('now')`},
+		{"expr function date 1 modifier", `select date('now','start of month')`},
+		{"expr function date 2 modifiers", `select date('now','start of month','+1 month')`},
+		{"expr function time now", `select time('now')`},
+		{"expr function time 1 modifier", `select time('now','start of month')`},
+		{"expr function time 2 modifiers", `select time('now','start of month','+1 month')`},
+		{"expr function datetime now", `select datetime('now')`},
+		{"expr function datetime 1 modifier", `select datetime('now','start of month')`},
+		{"expr function datetime 2 modifiers", `select datetime('now','start of month','+1 month')`},
+		{"expr function strftime now", `select strftime('%d','now')`},
+		{"expr function strftime 1 modifer", `select strftime('%d','now','start of month')`},
+		{"expr function strftime 2 modifiers", `select strftime('%d','now','start of month','+1 month')`},
+		{"expr function unixepoch now", `select unixepoch('now')`},
+		{"expr function unixepoch 1 modifier", `select unixepoch('now','start of month')`},
+		{"expr function unixepoch 2 modifiers", `select unixepoch('now','start of month','+1 month')`},
+	}
+
+	ctx := DatabaseContext{Actions: map[string]ActionContext{"action1": {}}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			eh := NewErrorHandler(1)
+			el := newSqliteErrorListener(eh)
+			ast, err := ParseRawSQLVisitor(tt.input, 1, "action1", ctx, el, *trace, false)
+			if err != nil {
+				t.Errorf("ParseRawSQL() got %s", err)
+				return
+			}
+
+			astNodes := ast.(asts)
+			node := astNodes[0]
+
+			fmt.Printf("AST: %+v\n", node)
+			sql, err := node.(tree.Ast).ToSQL()
+			assert.Error(t, err, "ToSQL() should return error")
+
+			fmt.Println("SQL from AST: ", sql)
+			//if sql != tt.input {
+			//	t.Errorf("ParseRawSQL() got %s, want %s", sql, tt.input)
+			//}
 		})
 	}
 }
