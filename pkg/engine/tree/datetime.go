@@ -195,12 +195,10 @@ func validateIsNotNow(exp Expression) error {
 	if !ok {
 		return nil
 	}
-	strVal, ok := literal.Value.(string)
-	if !ok {
-		return nil
-	}
 
-	if strings.EqualFold(strVal, "now") {
+	value := trimLiteralQuotes(literal.Value)
+
+	if strings.EqualFold(value, "now") {
 		return fmt.Errorf("cannot use 'now' as an input for datetime function")
 	}
 	return nil
@@ -224,14 +222,14 @@ func validateModifier(expr Expression) error {
 		return fmt.Errorf("datetime modifier must be an ExpressionLiteral")
 	}
 
-	modifier, ok := literal.Value.(string)
-	if !ok {
-		return fmt.Errorf("datetime modifier ExpressionLiteral value must be a string, but got %T", literal.Value)
-	}
-
 	// now we need to parse the modifier
-	modifier = strings.Trim(modifier, " ")
+	modifier := strings.Trim(literal.Value, " ")
 	splitLen := len(strings.Split(modifier, " "))
+	if !isStringLiteral(modifier) {
+		return fmt.Errorf("modifier must be a string literal.  found: %s", modifier)
+	}
+	modifier = trimLiteralQuotes(modifier)
+
 	if splitLen == 1 {
 		if strings.EqualFold(modifier, "unixepoch") {
 			return nil
@@ -256,6 +254,11 @@ func validateModifier(expr Expression) error {
 		}
 	}
 	return fmt.Errorf("modifier %s is not supported", modifier)
+}
+
+func trimLiteralQuotes(literal string) string {
+	literal = strings.Trim(literal, "'")
+	return literal
 }
 
 func isValidStartOfModifier(modifier string) bool {

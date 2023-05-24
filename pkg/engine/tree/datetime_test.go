@@ -34,7 +34,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 				Function: tree.FunctionDATE,
 			},
 			args: args{
-				exprs: []tree.Expression{&tree.ExpressionLiteral{"now"}},
+				exprs: []tree.Expression{&tree.ExpressionLiteral{"'now'"}},
 			},
 			wantPanic: true,
 		},
@@ -44,7 +44,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 				Function: tree.FunctionDATE,
 			},
 			args: args{
-				exprs: []tree.Expression{&tree.ExpressionLiteral{"06-06-2023"}},
+				exprs: []tree.Expression{&tree.ExpressionLiteral{"'06-06-2023'"}},
 			},
 			want: "date('06-06-2023')",
 		},
@@ -55,8 +55,8 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"06-06-2023"},
-					&tree.ExpressionLiteral{"localtime"},
+					&tree.ExpressionLiteral{"'06-06-2023'"},
+					&tree.ExpressionLiteral{"'localtime'"},
 				},
 			},
 			wantPanic: true,
@@ -68,8 +68,8 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"06-06-2023"},
-					&tree.ExpressionLiteral{"+1 day"},
+					&tree.ExpressionLiteral{"'06-06-2023'"},
+					&tree.ExpressionLiteral{"'+1 day'"},
 				},
 			},
 			want: "date('06-06-2023', '+1 day')",
@@ -81,8 +81,8 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"06-06-2023"},
-					&tree.ExpressionLiteral{"+1.3 day"},
+					&tree.ExpressionLiteral{"'06-06-2023'"},
+					&tree.ExpressionLiteral{"'+1.3 day'"},
 				},
 			},
 			wantPanic: true,
@@ -94,8 +94,8 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"%Y-%m-%d %H:%M:%S"},
-					&tree.ExpressionLiteral{"now"},
+					&tree.ExpressionLiteral{"'%Y-%m-%d %H:%M:%S'"},
+					&tree.ExpressionLiteral{"'now'"},
 				},
 			},
 			wantPanic: true,
@@ -107,18 +107,18 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"%Y-%m-%d"},
-					&tree.ExpressionLiteral{"2003-03-03"},
-					&tree.ExpressionLiteral{"+1 days"},
-					&tree.ExpressionLiteral{"+10 years"},
-					&tree.ExpressionLiteral{"-1 months"},
-					&tree.ExpressionLiteral{"-1 hours"},
-					&tree.ExpressionLiteral{"-1 minutes"},
-					&tree.ExpressionLiteral{"start of month"},
-					&tree.ExpressionLiteral{"start of year"},
-					&tree.ExpressionLiteral{"start of day"},
-					&tree.ExpressionLiteral{"weekday 3"},
-					&tree.ExpressionLiteral{"unixepoch"},
+					&tree.ExpressionLiteral{"'%Y-%m-%d'"},
+					&tree.ExpressionLiteral{"'2003-03-03'"},
+					&tree.ExpressionLiteral{"'+1 days'"},
+					&tree.ExpressionLiteral{"'+10 years'"},
+					&tree.ExpressionLiteral{"'-1 months'"},
+					&tree.ExpressionLiteral{"'-1 hours'"},
+					&tree.ExpressionLiteral{"'-1 minutes'"},
+					&tree.ExpressionLiteral{"'start of month'"},
+					&tree.ExpressionLiteral{"'start of year'"},
+					&tree.ExpressionLiteral{"'start of day'"},
+					&tree.ExpressionLiteral{"'weekday 3'"},
+					&tree.ExpressionLiteral{"'unixepoch'"},
 				},
 			},
 			want: "strftime('%Y-%m-%d', '2003-03-03', '+1 days', '+10 years', '-1 months', '-1 hours', '-1 minutes', 'start of month', 'start of year', 'start of day', 'weekday 3', 'unixepoch')",
@@ -130,8 +130,8 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"%Y-%m-%d"},
-					&tree.ExpressionLiteral{"2003-03-03"},
+					&tree.ExpressionLiteral{"'%Y-%m-%d'"},
+					&tree.ExpressionLiteral{"'2003-03-03'"},
 				},
 			},
 			want: "strftime('%Y-%m-%d', '2003-03-03')",
@@ -143,9 +143,9 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"%Y-%m-%d"},
-					&tree.ExpressionLiteral{"2003-03-03"},
-					&tree.ExpressionLiteral{"+1 days"},
+					&tree.ExpressionLiteral{"'%Y-%m-%d'"},
+					&tree.ExpressionLiteral{"'2003-03-03'"},
+					&tree.ExpressionLiteral{"'+1 days'"},
 				},
 			},
 			want: "strftime('%Y-%m-%d', '2003-03-03', '+1 days')",
@@ -157,7 +157,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"%Y-%m-%d"},
+					&tree.ExpressionLiteral{"'%Y-%m-%d'"},
 				},
 			},
 			wantPanic: true,
@@ -169,8 +169,8 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			args: args{
 				exprs: []tree.Expression{
-					&tree.ExpressionLiteral{"BRUH%Y-%m-%d-%s"},
-					&tree.ExpressionLiteral{"2003-03-03"},
+					&tree.ExpressionLiteral{"'BRUH%Y-%m-%d-%s'"},
+					&tree.ExpressionLiteral{"'2003-03-03'"},
 				},
 			},
 			wantPanic: true,

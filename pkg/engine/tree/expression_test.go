@@ -17,39 +17,21 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 		{
 			name: "expression literal",
 			fields: &tree.ExpressionLiteral{
-				Value: "foo",
+				Value: "'foo'",
 			},
 			want: "'foo'",
 		},
 		{
 			name: "expression literal with int",
 			fields: &tree.ExpressionLiteral{
-				Value: 1,
+				Value: "1",
 			},
 			want: "1",
 		},
 		{
 			name: "expression literal with float",
 			fields: &tree.ExpressionLiteral{
-				Value: 1.1,
-			},
-			wantPanic: true,
-		},
-		{
-			name: "expression literal with single quotes",
-			fields: &tree.ExpressionLiteral{
-				Value: "'foos'",
-			},
-			want: "'foos'",
-		},
-		{
-			name: "expression literal with struct",
-			fields: &tree.ExpressionLiteral{
-				Value: struct {
-					Foo string
-				}{
-					Foo: "bar",
-				},
+				Value: "1.1",
 			},
 			wantPanic: true,
 		},
@@ -121,7 +103,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				},
 				Operator: tree.ComparisonOperatorEqual,
 				Right: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 			},
 			want: `"foo" = 'bar'`,
@@ -183,7 +165,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					},
 					Operator: tree.ComparisonOperatorEqual,
 					Right: &tree.ExpressionLiteral{
-						Value: "bar",
+						Value: "'bar'",
 					},
 				},
 				Collation: tree.CollationTypeBinary,
@@ -206,7 +188,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					},
 					Operator: tree.ComparisonOperatorEqual,
 					Right: &tree.ExpressionLiteral{
-						Value: "bar",
+						Value: "'bar'",
 					},
 				},
 			},
@@ -220,10 +202,10 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				},
 				Operator: tree.StringOperatorNotLike,
 				Right: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 				Escape: &tree.ExpressionLiteral{
-					Value: "baz",
+					Value: "'baz'",
 				},
 			},
 			want: `"foo" NOT LIKE 'bar' ESCAPE 'baz'`,
@@ -236,10 +218,10 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				},
 				Operator: tree.StringOperatorGlob,
 				Right: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 				Escape: &tree.ExpressionLiteral{
-					Value: "baz",
+					Value: "'baz'",
 				},
 			},
 			wantPanic: true,
@@ -252,7 +234,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				},
 				Operator: tree.StringOperatorNotGlob,
 				Right: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 			},
 			want: `"foo" NOT GLOB 'bar'`,
@@ -290,7 +272,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				Right: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 				IsNot: true,
 			},
@@ -303,7 +285,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				Right: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 				Operator: tree.ComparisonOperatorIs,
 			},
@@ -313,7 +295,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			name: "distinct with no left",
 			fields: &tree.ExpressionDistinct{
 				Right: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 			},
 			wantPanic: true,
@@ -335,10 +317,10 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				},
 				NotBetween: true,
 				Left: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 				Right: &tree.ExpressionLiteral{
-					Value: "baz",
+					Value: "'baz'",
 				},
 			},
 			want: `"foo" NOT BETWEEN 'bar' AND 'baz'`,
@@ -347,10 +329,10 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			name: "between with no expression",
 			fields: &tree.ExpressionBetween{
 				Left: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 				Right: &tree.ExpressionLiteral{
-					Value: "baz",
+					Value: "'baz'",
 				},
 			},
 			wantPanic: true,
@@ -362,7 +344,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				Right: &tree.ExpressionLiteral{
-					Value: "baz",
+					Value: "'baz'",
 				},
 			},
 			wantPanic: true,
@@ -374,7 +356,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				Left: &tree.ExpressionLiteral{
-					Value: "bar",
+					Value: "'bar'",
 				},
 			},
 			wantPanic: true,
@@ -421,15 +403,15 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				WhenThenPairs: [][2]tree.Expression{
 					{
 						&tree.ExpressionLiteral{
-							Value: "bar",
+							Value: "'bar'",
 						},
 						&tree.ExpressionLiteral{
-							Value: "baz",
+							Value: "'baz'",
 						},
 					},
 				},
 				ElseExpression: &tree.ExpressionLiteral{
-					Value: "qux",
+					Value: "'qux'",
 				},
 			},
 			want: `CASE "foo" WHEN 'bar' THEN 'baz' ELSE 'qux' END`,
@@ -440,15 +422,15 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				WhenThenPairs: [][2]tree.Expression{
 					{
 						&tree.ExpressionLiteral{
-							Value: "bar",
+							Value: "'bar'",
 						},
 						&tree.ExpressionLiteral{
-							Value: "baz",
+							Value: "'baz'",
 						},
 					},
 				},
 				ElseExpression: &tree.ExpressionLiteral{
-					Value: "qux",
+					Value: "'qux'",
 				},
 			},
 			want: `CASE WHEN 'bar' THEN 'baz' ELSE 'qux' END`,
@@ -460,7 +442,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 				ElseExpression: &tree.ExpressionLiteral{
-					Value: "qux",
+					Value: "'qux'",
 				},
 			},
 			wantPanic: true,
@@ -474,10 +456,10 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				WhenThenPairs: [][2]tree.Expression{
 					{
 						&tree.ExpressionLiteral{
-							Value: "bar",
+							Value: "'bar'",
 						},
 						&tree.ExpressionLiteral{
-							Value: "baz",
+							Value: "'baz'",
 						},
 					},
 				},
