@@ -5,11 +5,6 @@ type BinaryOperator interface {
 	String() string
 }
 
-type UnaryOperator interface {
-	Unary()
-	String() string
-}
-
 type ArithmeticOperator string
 
 const (
@@ -21,7 +16,6 @@ const (
 )
 
 func (a ArithmeticOperator) Binary() {}
-func (a ArithmeticOperator) Unary()  {}
 func (a ArithmeticOperator) String() string {
 	return string(a)
 }
@@ -100,4 +94,17 @@ func (s StringOperator) Escapable() bool {
 	default:
 		return false
 	}
+}
+
+type UnaryOperator string
+
+const (
+	UnaryOperatorPlus   UnaryOperator = "+"
+	UnaryOperatorMinus  UnaryOperator = "-"
+	UnaryOperatorNot    UnaryOperator = "NOT"
+	UnaryOperatorBitNot UnaryOperator = "~"
+)
+
+func (u UnaryOperator) String() string {
+	return string(u)
 }

@@ -127,12 +127,7 @@ var (
 	}}
 )
 
-// This will panic if called, since "*" is not a valid argument for a datetime function
-func (d *DateTimeFunction) StringAll() string {
-	panic("cannot use '*' as an input for datetime function " + d.FunctionName)
-}
-
-func (d *DateTimeFunction) String(exprs []Expression) string {
+func (d *DateTimeFunction) String(exprs ...Expression) string {
 	if len(exprs) < int(d.Min) {
 		panic("not enough arguments for datetime function '" + d.FunctionName + "'")
 	}

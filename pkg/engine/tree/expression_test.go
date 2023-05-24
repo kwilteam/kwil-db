@@ -33,7 +33,14 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			fields: &tree.ExpressionLiteral{
 				Value: 1.1,
 			},
-			want: "1",
+			wantPanic: true,
+		},
+		{
+			name: "expression literal with single quotes",
+			fields: &tree.ExpressionLiteral{
+				Value: "'foos'",
+			},
+			want: "'foos'",
 		},
 		{
 			name: "expression literal with struct",
@@ -95,6 +102,16 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				Table: "bar",
 			},
 			wantPanic: true,
+		},
+		{
+			name: "expression unary operator",
+			fields: &tree.ExpressionUnary{
+				Operator: tree.UnaryOperatorNot,
+				Operand: &tree.ExpressionColumn{
+					Column: "foo",
+				},
+			},
+			want: `NOT "foo"`,
 		},
 		{
 			name: "expression binary comparison",
@@ -358,44 +375,6 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 				},
 				Left: &tree.ExpressionLiteral{
 					Value: "bar",
-				},
-			},
-			wantPanic: true,
-		},
-		{
-			name: "valid in",
-			fields: &tree.ExpressionIn{
-				Expression: &tree.ExpressionColumn{
-					Column: "foo",
-				},
-				NotIn: true,
-				InExpressions: []tree.Expression{
-					&tree.ExpressionLiteral{
-						Value: "bar",
-					},
-					&tree.ExpressionLiteral{
-						Value: "baz",
-					},
-				},
-			},
-			want: `"foo" NOT IN ('bar', 'baz')`,
-		},
-		{
-			name: "in with no expression",
-			fields: &tree.ExpressionIn{
-				InExpressions: []tree.Expression{
-					&tree.ExpressionLiteral{
-						Value: "bar",
-					},
-				},
-			},
-			wantPanic: true,
-		},
-		{
-			name: "in with no in expressions",
-			fields: &tree.ExpressionIn{
-				Expression: &tree.ExpressionColumn{
-					Column: "foo",
 				},
 			},
 			wantPanic: true,

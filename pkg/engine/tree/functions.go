@@ -14,10 +14,8 @@ type AnySQLFunction struct {
 
 // types of functions (like scalar, aggregate, window, etc) are extenstions of sqlFunction; this is an interface to accept any of them
 type SQLFunction interface {
-	String([]Expression) string
-
-	// StringAll calls the function with a "*" argument. This is used for COUNT(*), for example
-	StringAll() string
+	Name() string
+	String(...Expression) string
 }
 
 // buildFunctionString is a helper function to build a function string
@@ -31,13 +29,22 @@ func (s *AnySQLFunction) buildFunctionString(fn func(*sqlwriter.SqlWriter)) stri
 	return stmt.String()
 }
 
+// Name returns the name of the function
+func (s *AnySQLFunction) Name() string {
+	return s.FunctionName
+}
+
 // String is a generic function that takes a slice of Expressions and returns a string of the function invocation
-func (s *AnySQLFunction) String(exprs []Expression) string {
+func (s *AnySQLFunction) String(exprs ...Expression) string {
 	if s.Min > 0 && len(exprs) < int(s.Min) {
 		panic("too few arguments for function " + s.FunctionName)
 	}
 	if s.Max > 0 && len(exprs) > int(s.Max) {
 		panic("too many arguments for function " + s.FunctionName)
+	}
+
+	if len(exprs) == 0 {
+		return s.stringAll()
 	}
 
 	return s.buildFunctionString(func(stmt *sqlwriter.SqlWriter) {
@@ -48,7 +55,7 @@ func (s *AnySQLFunction) String(exprs []Expression) string {
 }
 
 // StringAll calls the function with a "*" argument. This is used for COUNT(*), for example
-func (s *AnySQLFunction) StringAll() string {
+func (s *AnySQLFunction) stringAll() string {
 	return s.buildFunctionString(func(stmt *sqlwriter.SqlWriter) {
 		stmt.Token.Asterisk()
 	})
@@ -56,11 +63,6 @@ func (s *AnySQLFunction) StringAll() string {
 
 type ScalarFunction struct {
 	AnySQLFunction
-}
-
-// This will panic if called, since "*" is not a valid argument for a scalar function
-func (s *ScalarFunction) StringAll() string {
-	panic("cannot use '*' as an input for scalar function " + s.FunctionName)
 }
 
 var (
@@ -121,14 +123,6 @@ var (
 		FunctionName: "ltrim",
 		Min:          1,
 		Max:          2,
-	}}
-	FunctionMAX = ScalarFunction{AnySQLFunction{
-		FunctionName: "max",
-		Min:          1,
-	}}
-	FunctionMIN = ScalarFunction{AnySQLFunction{
-		FunctionName: "min",
-		Min:          1,
 	}}
 	FunctionNULLIF = ScalarFunction{AnySQLFunction{
 		FunctionName: "nullif",
@@ -202,8 +196,6 @@ var SQLFunctions = map[string]SQLFunction{
 	"like":     &FunctionLIKE,
 	"lower":    &FunctionLOWER,
 	"ltrim":    &FunctionLTRIM,
-	"max":      &FunctionMAX,
-	"min":      &FunctionMIN,
 	"nullif":   &FunctionNULLIF,
 	"quote":    &FunctionQUOTE,
 	"replace":  &FunctionREPLACE,
@@ -221,4 +213,10 @@ var SQLFunctions = map[string]SQLFunction{
 	"datetime":  &FunctionDATETIME,
 	"unixepoch": &FunctionUNIXEPOCH,
 	"strftime":  &FunctionSTRFTIME,
+	// Aggregate functions
+	"count":        &FunctionCOUNT,
+	"sum":          &FunctionSUM,
+	"min":          &FunctionMIN,
+	"max":          &FunctionMAX,
+	"group_concat": &FunctionGROUPCONCAT,
 }

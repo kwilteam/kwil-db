@@ -100,7 +100,7 @@ func Test_sqlFunction_String(t *testing.T) {
 					}
 				}()
 			}
-			got := s.String(tt.args.exprs)
+			got := s.String(tt.args.exprs...)
 			if tt.wantPanic {
 				return
 			}
@@ -112,26 +112,32 @@ func Test_sqlFunction_String(t *testing.T) {
 	}
 }
 
-func TestAnySQLFunction_StringAll(t *testing.T) {
+func Test_ScalarFunction_String(t *testing.T) {
 	type fields struct {
-		Function tree.AnySQLFunction
+		Function tree.ScalarFunction
+	}
+	type args struct {
+		exprs []tree.Expression
 	}
 	tests := []struct {
 		name      string
 		fields    fields
+		args      args
 		want      string
 		wantPanic bool
 	}{
 		{
-			name: "valid function",
+			name: "format function",
 			fields: fields{
-				Function: tree.AnySQLFunction{
-					FunctionName: "count",
-					Min:          0,
-					Max:          1,
+				Function: tree.FunctionFORMAT,
+			},
+			args: args{
+				exprs: []tree.Expression{
+					&tree.ExpressionLiteral{Value: "Hello, %s"},
+					&tree.ExpressionLiteral{Value: "World"},
 				},
 			},
-			want: `count(*)`,
+			want: "format('Hello, %s', 'World')",
 		},
 	}
 	for _, tt := range tests {
@@ -149,59 +155,7 @@ func TestAnySQLFunction_StringAll(t *testing.T) {
 					}
 				}()
 			}
-			got := s.StringAll()
-			if tt.wantPanic {
-				return
-			}
-			b := compareIgnoringWhitespace(got, tt.want)
-			if b == false {
-				t.Errorf("sqlFunction.String() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestScalarFunction_StringAll(t *testing.T) {
-	type fields struct {
-		Function tree.ScalarFunction
-	}
-	tests := []struct {
-		name      string
-		fields    fields
-		want      string
-		wantPanic bool
-	}{
-		{
-			name: "valid function",
-			fields: fields{
-				Function: tree.ScalarFunction{
-					tree.AnySQLFunction{
-						FunctionName: "abs",
-						Min:          1,
-						Max:          1,
-					},
-				},
-			},
-			wantPanic: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &tree.ScalarFunction{
-				tree.AnySQLFunction{
-					FunctionName: tt.fields.Function.FunctionName,
-					Min:          tt.fields.Function.Min,
-					Max:          tt.fields.Function.Max,
-				}}
-
-			if tt.wantPanic {
-				defer func() {
-					if r := recover(); r == nil {
-						t.Errorf("sqlFunction.String() should have panicked")
-					}
-				}()
-			}
-			got := s.StringAll()
+			got := s.String(tt.args.exprs...)
 			if tt.wantPanic {
 				return
 			}

@@ -112,6 +112,31 @@ func TestJoinClause_ToSQL(t *testing.T) {
 			},
 			wantPanic: true,
 		},
+		{
+			name: "join clause with only 1 column as the condition",
+			fields: fields{
+				TableOrSubquery: &tree.TableOrSubqueryTable{
+					Name:  "table1",
+					Alias: "t1",
+				},
+				Joins: []*tree.JoinPredicate{
+					{
+						JoinOperator: &tree.JoinOperator{
+							JoinType: tree.JoinTypeInner,
+						},
+						Table: &tree.TableOrSubqueryTable{
+							Name:  "table2",
+							Alias: "t2",
+						},
+						Constraint: &tree.ExpressionColumn{
+							Table:  "t1",
+							Column: "col1",
+						},
+					},
+				},
+			},
+			wantPanic: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
