@@ -76,7 +76,7 @@ func (j *JoinPredicate) ToSQL() string {
 	if j.Constraint == nil {
 		panic("join 'ON' cannot be nil")
 	}
-	if !j.Constraint.Joinable() {
+	if j.Constraint.joinable() != joinableStatusValid {
 		panic("invalid join constraint")
 	}
 	if j.JoinOperator == nil {

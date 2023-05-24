@@ -186,7 +186,7 @@ func TestDateTimeFunction_String(t *testing.T) {
 				}()
 			}
 
-			got := tt.fields.Function.String(tt.args.exprs)
+			got := tt.fields.Function.String(tt.args.exprs...)
 			if tt.wantPanic {
 				return
 			}

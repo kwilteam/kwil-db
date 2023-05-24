@@ -197,7 +197,7 @@ _In SQL:_
 SELECT *
 FROM posts
 ## getting all posts that have a body
-WHERE content NOT NULLl
+WHERE content NOT NULL
 ```
 
 #### ExpressionDistinct

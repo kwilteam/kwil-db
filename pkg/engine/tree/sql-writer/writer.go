@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+var (
+	// Options is a struct that can be used to configure the behavior of the sql writer.
+	// It is global, and should only be used for testing purposes.
+	Options = struct{ IdentWrapper string }{IdentWrapper: `"`}
+)
+
 type SqlWriter struct {
 	stmt  *strings.Builder
 	Token *tokenWriter
@@ -33,9 +39,11 @@ func (s *SqlWriter) WriteString(str string) {
 }
 
 func (s *SqlWriter) WriteIdent(str string) {
-	s.stmt.WriteString(` "`)
+	s.Token.Space()
+	s.stmt.WriteString(Options.IdentWrapper)
 	s.stmt.WriteString(str)
-	s.stmt.WriteString(`" `)
+	s.stmt.WriteString(Options.IdentWrapper)
+	s.Token.Space()
 }
 
 func (s *SqlWriter) WriteIdentNoSpace(str string) {
