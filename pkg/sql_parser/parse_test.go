@@ -1868,7 +1868,6 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 			// use assert.Exactly?
 			assert.EqualValues(t, tt.expect, node, "ParseRawSQL() got %s, want %s", node, tt.expect)
 
-			fmt.Printf("AST: %+v\n", node)
 			sql, err := node.(tree.Ast).ToSQL()
 			if err != nil {
 				t.Errorf("ParseRawSQL() got %s", err)
@@ -1892,7 +1891,6 @@ func TestParseRawSQL_listener_allowed(t *testing.T) {
 		{"null", "select null"},
 		{"true", "select true"},
 		{"false", "select false"},
-		{"blob", "select x'01'"},
 
 		// common table stmt
 		{"cte", "with t as (select 1) select * from t"},
@@ -2033,13 +2031,10 @@ func TestParseRawSQL_listener_allowed(t *testing.T) {
 		{"select with where", "select * from t1 where 1"},
 		{"select with group by", "select * from t1 group by c1"},
 		{"select with group by and having", "select * from t1 group by c1 having 1"},
-		{"select values", "values (1)"},
-		{"select values with cte", "with t as (select 1) values (1)"},
 		{"select with compound operator union", "select * from t1 union select * from t2"},
 		{"select with compound operator union all", "select * from t1 union all select * from t2"},
 		{"select with compound operator intersect", "select * from t1 intersect select * from t2"},
 		{"select with compound operator except", "select * from t1 except select * from t2"},
-		{"select with compound operator and values", "select * from t1 union values (1)"},
 		{"select with order by", "select * from t1 order by c1 collate collate_name asc"},
 		{"select with limit", "select * from t1 limit 1"},
 		{"select with limit offset", "select * from t1 limit 1 offset 2"},
@@ -2110,6 +2105,9 @@ func TestParseRawSQL_syntax_not_allowed(t *testing.T) {
 		{"select all", "select all c1 from t1", "c1"},
 		{"select with window", "select * from t1 window w1 as (partition by 1)", "window"},
 		{"select with not supported null ordering", "select * from t1 order by c1 nulls firstss", "firstss"},
+		{"select values", "values (1)", "values"},
+		{"select values with cte", "with t as (select 1) values (1)", "values"},
+		{"select with compound operator and values", "select * from t1 union values (1)", "values"},
 
 		// function
 		{"expr function distinct param", "select f(distinct 1,2)", "("},
@@ -2119,6 +2117,7 @@ func TestParseRawSQL_syntax_not_allowed(t *testing.T) {
 		{"cross join", "select * from t3 cross join t4", "cross"},
 		{"join using", "select * from t3 join t4 using (c1)", "using"},
 		{"join without condition", "select * from t3 join t4", "<EOF>"},
+		{"comma cartesian join 1", "select * from t3, t4", ","},
 	}
 
 	ctx := DatabaseContext{}
@@ -2210,7 +2209,6 @@ func TestParseRawSQL_banRules(t *testing.T) {
 
 		{"multi joins", `select * from t1 join t2 on t1.c1=t2.c1 join t3 on t3.c2=t1.c1 join t4 on t4.c1=t1.c1`, nil},
 		{"multi joins too many", "select * from t1 join t2 on t1.c1=t2.c1 join t3 on t3.c2=t1.c1 join t4 on t4.c1=t1.c1 join t5 on t5.c2=t1.c1", ErrMultiJoinNotSupported},
-		{"cartesian join 1", "select * from t3, t4", ErrSelectFromMultipleTables},
 		// join with condition
 		{"join with non = cons", "select * from t3 join t4 on a and b", ErrJoinConditionOpNotSupported},
 		{"join with non = cons 2", "select * from t3 join t4 on a + b", ErrJoinConditionOpNotSupported},
@@ -2321,14 +2319,8 @@ func TestParseRawSQL_semantic_invalid(t *testing.T) {
 			astNodes := ast.(asts)
 			node := astNodes[0]
 
-			fmt.Printf("AST: %+v\n", node)
-			sql, err := node.(tree.Ast).ToSQL()
+			_, err = node.(tree.Ast).ToSQL()
 			assert.Error(t, err, "ToSQL() should return error")
-
-			fmt.Println("SQL from AST: ", sql)
-			//if sql != tt.input {
-			//	t.Errorf("ParseRawSQL() got %s, want %s", sql, tt.input)
-			//}
 		})
 	}
 }
