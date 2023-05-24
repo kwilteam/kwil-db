@@ -427,14 +427,18 @@ compound_operator:
     | EXCEPT_
 ;
 
+update_set_subclause:
+    (column_name | column_name_list) ASSIGN expr
+;
+
 update_stmt:
-    common_table_stmt? UPDATE_ (
-        OR_ (ROLLBACK_ | ABORT_ | REPLACE_ | FAIL_ | IGNORE_)
-    )? qualified_table_name SET_ (column_name | column_name_list) ASSIGN expr (
-        COMMA (column_name | column_name_list) ASSIGN expr
-    )* (
-        FROM_ (table_or_subquery (COMMA table_or_subquery)* | join_clause)
-    )? (WHERE_ expr)? returning_clause?
+    common_table_stmt?
+    UPDATE_ (OR_ (ROLLBACK_ | ABORT_ | REPLACE_ | FAIL_ | IGNORE_))?
+    qualified_table_name
+    SET_ update_set_subclause (COMMA update_set_subclause)*
+    (FROM_ (table_or_subquery | join_clause))?
+    (WHERE_ expr)?
+    returning_clause?
 ;
 
 column_name_list:
@@ -442,17 +446,18 @@ column_name_list:
 ;
 
 update_stmt_limited:
-    common_table_stmt? UPDATE_ (
-        OR_ (ROLLBACK_ | ABORT_ | REPLACE_ | FAIL_ | IGNORE_)
-    )? qualified_table_name SET_ (column_name | column_name_list) ASSIGN expr (
-        COMMA (column_name | column_name_list) ASSIGN expr
-    )* (WHERE_ expr)? returning_clause? (order_by_stmt? limit_stmt)?
+    common_table_stmt?
+    UPDATE_ (OR_ (ROLLBACK_ | ABORT_ | REPLACE_ | FAIL_ | IGNORE_))?
+    qualified_table_name
+    SET_  (update_set_subclause COMMA update_set_subclause)*
+    (WHERE_ expr)?
+    returning_clause?
+    (order_by_stmt? limit_stmt)?
 ;
 
-qualified_table_name: (schema_name DOT)? table_name (AS_ alias)? (
-        INDEXED_ BY_ index_name
-        | NOT_ INDEXED_
-    )?
+qualified_table_name:
+    table_name (AS_ alias)?
+    (INDEXED_ BY_ index_name | NOT_ INDEXED_)?
 ;
 
 vacuum_stmt:
