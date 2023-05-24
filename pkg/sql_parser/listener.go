@@ -114,7 +114,7 @@ var _ sqlite.SQLiteParserListener = &KlSqliteListener{}
 
 type KlSqliteListenerOption func(*KlSqliteListener)
 
-func WithTrace() KlSqliteListenerOption {
+func KlListenerWithTrace() KlSqliteListenerOption {
 	return func(l *KlSqliteListener) {
 		l.trace = true
 	}

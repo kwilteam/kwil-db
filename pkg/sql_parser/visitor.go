@@ -20,14 +20,25 @@ type KFSqliteVisitor struct {
 	trace bool
 }
 
+type KFSqliteVisitorOption func(*KFSqliteVisitor)
+
+func KFVisitorWithTrace() KFSqliteVisitorOption {
+	return func(l *KFSqliteVisitor) {
+		l.trace = true
+	}
+}
+
 var _ sqlite.SQLiteParserVisitor = &KFSqliteVisitor{}
 
-func NewKFSqliteVisitor(eh *ErrorHandler, actionName string, ctx DatabaseContext) *KFSqliteVisitor {
+func NewKFSqliteVisitor(eh *ErrorHandler, actionName string, ctx DatabaseContext, opts ...KFSqliteVisitorOption) *KFSqliteVisitor {
 	k := &KFSqliteVisitor{
 		ErrorHandler: *eh,
 		actionCtx:    ctx.Actions[actionName],
 		dbCtx:        ctx,
 		trace:        false,
+	}
+	for _, opt := range opts {
+		opt(k)
 	}
 	return k
 }
@@ -1051,7 +1062,9 @@ func (v *KFSqliteVisitor) Visit(tree antlr.ParseTree) interface{} {
 	//if tree == nil {
 	//	return nil
 	//}
-	fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(tree), tree.GetText())
+	if v.trace {
+		fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(tree), tree.GetText())
+	}
 	return tree.Accept(v)
 }
 
