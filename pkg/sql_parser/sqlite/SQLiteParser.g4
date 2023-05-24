@@ -295,7 +295,6 @@ expr:
 literal_value:
     NUMERIC_LITERAL
     | STRING_LITERAL
-    | BLOB_LITERAL
     | NULL_
     | TRUE_
     | FALSE_
