@@ -102,7 +102,7 @@ var (
 	FunctionINSTR = ScalarFunction{AnySQLFunction{
 		FunctionName: "instr",
 		Min:          2,
-		Max:          3,
+		Max:          2,
 	}}
 	FunctionLENGTH = ScalarFunction{AnySQLFunction{
 		FunctionName: "length",
@@ -157,7 +157,7 @@ var (
 	FunctionTRIM = ScalarFunction{AnySQLFunction{
 		FunctionName: "trim",
 		Min:          1,
-		Max:          3,
+		Max:          2,
 	}}
 	FunctionTYPEOF = ScalarFunction{AnySQLFunction{
 		FunctionName: "typeof",
