@@ -11,26 +11,12 @@ import (
 
 var trace = flag.Bool("trace", false, "run tests with tracing")
 
+var columnStar = []tree.ResultColumn{
+	&tree.ResultColumnStar{},
+}
+
 func genLiteralExpression(value string) tree.Expression {
 	return &tree.ExpressionLiteral{Value: value}
-}
-
-func genLiteralExpressions(values []string) []tree.Expression {
-	t := make([]tree.Expression, len(values))
-	for i, v := range values {
-		t[i] = genLiteralExpression(v)
-	}
-	return t
-}
-
-func genLiteralExpressionList(values []string) *tree.ExpressionList {
-	t := make([]tree.Expression, len(values))
-	for i, v := range values {
-		t[i] = genLiteralExpression(v)
-	}
-	return &tree.ExpressionList{
-		Expressions: t,
-	}
 }
 
 func getResultColumnExprs(values ...string) []tree.ResultColumn {
@@ -175,6 +161,13 @@ func genSimpleStringCompareSelectTree(op tree.StringOperator, leftValue, rightVa
 	}
 }
 
+func genSimpleCTETree(table, value string) *tree.CTE {
+	return &tree.CTE{
+		Table:  table,
+		Select: genSelectColumnLiteralTree(value).SelectStmt,
+	}
+}
+
 func genSimpleExprNullSelectTree(value string, isNull bool) *tree.Select {
 	return &tree.Select{
 		SelectStmt: &tree.SelectStmt{
@@ -195,6 +188,86 @@ func genSimpleExprNullSelectTree(value string, isNull bool) *tree.Select {
 	}
 }
 
+func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.Select {
+	return &tree.Select{
+		SelectStmt: &tree.SelectStmt{
+			SelectCores: []*tree.SelectCore{
+				{
+					SelectType: tree.SelectTypeAll,
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionFunction{
+								Function: f,
+								Inputs:   inputs,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func genSimpleJoinSelectTree(joinOP *tree.JoinOperator, t1, t1Column, t2, t2Column string) *tree.Select {
+	return &tree.Select{
+		SelectStmt: &tree.SelectStmt{
+			SelectCores: []*tree.SelectCore{
+				{
+					SelectType: tree.SelectTypeAll,
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnStar{},
+					},
+					From: &tree.FromClause{JoinClause: &tree.JoinClause{
+						TableOrSubquery: &tree.TableOrSubqueryTable{
+							Name: t1,
+						},
+						Joins: []*tree.JoinPredicate{
+							{
+								JoinOperator: joinOP,
+								Table:        &tree.TableOrSubqueryTable{Name: t2},
+								Constraint: &tree.ExpressionBinaryComparison{
+									Operator: tree.ComparisonOperatorEqual,
+									Left:     &tree.ExpressionColumn{Table: t1, Column: t1Column},
+									Right:    &tree.ExpressionColumn{Table: t2, Column: t2Column},
+								},
+							},
+						},
+					}},
+				},
+			},
+		},
+	}
+}
+
+func genSimpleUpdateTree(qt *tree.QualifiedTableName, column, value string) *tree.Update {
+	return &tree.Update{
+		UpdateStmt: &tree.UpdateStmt{
+			QualifiedTableName: qt,
+			UpdateSetClause: []*tree.UpdateSetClause{
+				{
+					Columns:    []string{column},
+					Expression: genLiteralExpression(value),
+				},
+			},
+		},
+	}
+}
+
+func genSimpleUpdateOrTree(qt *tree.QualifiedTableName, uo tree.UpdateOr, column, value string) *tree.Update {
+	return &tree.Update{
+		UpdateStmt: &tree.UpdateStmt{
+			Or:                 uo,
+			QualifiedTableName: qt,
+			UpdateSetClause: []*tree.UpdateSetClause{
+				{
+					Columns:    []string{column},
+					Expression: genLiteralExpression(value),
+				},
+			},
+		},
+	}
+}
+
 func TestParseRawSQL_visitor_allowed(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -204,12 +277,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 		// common table stmt
 		{"cte", "with t as (select 1) select *",
 			&tree.Select{
-				CTE: []*tree.CTE{
-					{
-						Table:  "t",
-						Select: genSelectColumnLiteralTree("1").SelectStmt,
-					},
-				},
+				CTE:        []*tree.CTE{genSimpleCTETree("t", "1")},
 				SelectStmt: genSelectColumnStarTree().SelectStmt,
 			},
 		},
@@ -225,21 +293,19 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 				SelectStmt: genSelectColumnStarTree().SelectStmt,
 			},
 		},
-		//
 		//// compound operator
-		{"union", "select 1 union select 2",
+		{"compound union", "select 1 union select 2",
 			genSimpleCompoundSelectTree(tree.CompoundOperatorTypeUnion),
 		},
-		{"union all", "select 1 union all select 2",
+		{"compound union all", "select 1 union all select 2",
 			genSimpleCompoundSelectTree(tree.CompoundOperatorTypeUnionAll),
 		},
-		{"intersect", "select 1 intersect select 2",
+		{"compound intersect", "select 1 intersect select 2",
 			genSimpleCompoundSelectTree(tree.CompoundOperatorTypeIntersect),
 		},
-		{"except", "select 1 except select 2",
+		{"compound except", "select 1 except select 2",
 			genSimpleCompoundSelectTree(tree.CompoundOperatorTypeExcept),
 		},
-		//
 		// result column
 		{"*", "select *", genSelectColumnStarTree()},
 		{"table.*", "select t.*", genSelectColumnTableTree("t")},
@@ -250,9 +316,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					SelectCores: []*tree.SelectCore{
 						{
 							SelectType: tree.SelectTypeAll,
-							Columns: []tree.ResultColumn{
-								&tree.ResultColumnStar{},
-							},
+							Columns:    columnStar,
 							From: &tree.FromClause{
 								JoinClause: &tree.JoinClause{
 									TableOrSubquery: &tree.TableOrSubqueryTable{
@@ -272,9 +336,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					SelectCores: []*tree.SelectCore{
 						{
 							SelectType: tree.SelectTypeAll,
-							Columns: []tree.ResultColumn{
-								&tree.ResultColumnStar{},
-							},
+							Columns:    columnStar,
 							From: &tree.FromClause{
 								JoinClause: &tree.JoinClause{
 									TableOrSubquery: &tree.TableOrSubquerySelect{
@@ -294,9 +356,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					SelectCores: []*tree.SelectCore{
 						{
 							SelectType: tree.SelectTypeAll,
-							Columns: []tree.ResultColumn{
-								&tree.ResultColumnStar{},
-							},
+							Columns:    columnStar,
 							From: &tree.FromClause{
 								JoinClause: &tree.JoinClause{
 									TableOrSubquery: &tree.TableOrSubqueryList{
@@ -318,9 +378,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					SelectCores: []*tree.SelectCore{
 						{
 							SelectType: tree.SelectTypeAll,
-							Columns: []tree.ResultColumn{
-								&tree.ResultColumnStar{},
-							},
+							Columns:    columnStar,
 							From: &tree.FromClause{
 								JoinClause: &tree.JoinClause{
 									TableOrSubquery: &tree.TableOrSubqueryTable{Name: "t1", Alias: "tt"},
@@ -466,12 +524,12 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionBinaryComparison{
-										Left:     &tree.ExpressionLiteral{Value: "1"},
+										Left:     genLiteralExpression("1"),
 										Operator: tree.ComparisonOperatorIn,
 										Right: &tree.ExpressionList{
 											Expressions: []tree.Expression{
-												&tree.ExpressionLiteral{Value: "1"},
-												&tree.ExpressionLiteral{Value: "2"},
+												genLiteralExpression("1"),
+												genLiteralExpression("2"),
 											},
 										},
 									},
@@ -491,12 +549,12 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionBinaryComparison{
-										Left:     &tree.ExpressionLiteral{Value: "1"},
+										Left:     genLiteralExpression("1"),
 										Operator: tree.ComparisonOperatorNotIn,
 										Right: &tree.ExpressionList{
 											Expressions: []tree.Expression{
-												&tree.ExpressionLiteral{Value: "1"},
-												&tree.ExpressionLiteral{Value: "2"},
+												genLiteralExpression("1"),
+												genLiteralExpression("2"),
 											},
 										},
 									},
@@ -516,7 +574,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionBinaryComparison{
-										Left:     &tree.ExpressionLiteral{Value: "1"},
+										Left:     genLiteralExpression("1"),
 										Operator: tree.ComparisonOperatorIn,
 										Right: &tree.ExpressionSelect{
 											Select: genSelectColumnLiteralTree("1").SelectStmt,
@@ -538,7 +596,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionBinaryComparison{
-										Left:     &tree.ExpressionLiteral{Value: "1"},
+										Left:     genLiteralExpression("1"),
 										Operator: tree.ComparisonOperatorNotIn,
 										Right: &tree.ExpressionSelect{
 											Select: genSelectColumnLiteralTree("1").SelectStmt,
@@ -571,12 +629,138 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 		{"expr binary op glob", "select 1 not glob 2",
 			genSimpleStringCompareSelectTree(tree.StringOperatorNotGlob, "1", "2", "")},
 		// function
-		//{"expr function no param", "select f()"},
-		//{"expr function one param", "select f(1)"},
-		//{"expr function multi param", "select f(1,2)"},
-		//{"expr function distinct param", "select f(distinct 1,2)"},
-		//{"expr function * param", "select f(*)"},
-		//{"expr function with filter", "select f(1) filter (where 1)"},
+		// core functions
+		{"expr function abs", "select abs(1)",
+			genSimpleFunctionSelectTree(&tree.FunctionABS, genLiteralExpression("1"))},
+		{"expr function coalesce", "select coalesce(1,2)",
+			genSimpleFunctionSelectTree(&tree.FunctionCOALESCE,
+				genLiteralExpression("1"), genLiteralExpression("2"))},
+		{"expr function format", `select format('%d',2)`,
+			genSimpleFunctionSelectTree(&tree.FunctionFORMAT,
+				genLiteralExpression(`'%d'`), genLiteralExpression("2"))},
+		{"expr function glob", `select glob('1','2')`,
+			genSimpleFunctionSelectTree(&tree.FunctionGLOB,
+				genLiteralExpression(`'1'`), genLiteralExpression(`'2'`))},
+		{"expr function hex", `select hex(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionHEX, genLiteralExpression("1"))},
+		{"expr function ifnull", `select ifnull(1,2)`,
+			genSimpleFunctionSelectTree(&tree.FunctionIFNULL,
+				genLiteralExpression("1"), genLiteralExpression("2"))},
+		{"expr function iif", `select iif(1,2,3)`,
+			genSimpleFunctionSelectTree(&tree.FunctionIIF,
+				genLiteralExpression("1"), genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function instr", `select instr(1,2)`,
+			genSimpleFunctionSelectTree(&tree.FunctionINSTR,
+				genLiteralExpression("1"), genLiteralExpression("2"))},
+		{"expr function length", `select length(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionLENGTH, genLiteralExpression("1"))},
+		{"expr function like", `select like('1','2')`,
+			genSimpleFunctionSelectTree(&tree.FunctionLIKE,
+				genLiteralExpression("'1'"), genLiteralExpression("'2'"))},
+		{"expr function like 2", `select like('1','2', '3')`,
+			genSimpleFunctionSelectTree(&tree.FunctionLIKE,
+				genLiteralExpression("'1'"), genLiteralExpression("'2'"), genLiteralExpression("'3'"))},
+		{"expr function lower", `select lower('Z')`,
+			genSimpleFunctionSelectTree(&tree.FunctionLOWER, genLiteralExpression("'Z'"))},
+		{"expr function ltrim", `select ltrim('12')`,
+			genSimpleFunctionSelectTree(&tree.FunctionLTRIM, genLiteralExpression("'12'"))},
+		{"expr function ltrim 2", `select ltrim('12', '1')`,
+			genSimpleFunctionSelectTree(&tree.FunctionLTRIM, genLiteralExpression("'12'"), genLiteralExpression("'1'"))},
+		{"expr function max", `select max(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"))},
+		{"expr function max", `select max(1,2,3)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMAX,
+				genLiteralExpression("1"), genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function min", `select min(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"))},
+		{"expr function min", `select min(1,2,3)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMIN,
+				genLiteralExpression("1"), genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function nullif", `select nullif(1,2)`,
+			genSimpleFunctionSelectTree(&tree.FunctionNULLIF,
+				genLiteralExpression("1"), genLiteralExpression("2"))},
+		{"expr function quote", `select quote(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionQUOTE, genLiteralExpression("1"))},
+		{"expr function replace", `select replace('1','2','3')`,
+			genSimpleFunctionSelectTree(&tree.FunctionREPLACE,
+				genLiteralExpression("'1'"), genLiteralExpression("'2'"), genLiteralExpression("'3'"))},
+		{"expr function rtrim", `select rtrim('12')`,
+			genSimpleFunctionSelectTree(&tree.FunctionRTRIM, genLiteralExpression("'12'"))},
+		{"expr function rtrim 2", `select rtrim('12', '1')`,
+			genSimpleFunctionSelectTree(&tree.FunctionRTRIM, genLiteralExpression("'12'"), genLiteralExpression("'1'"))},
+		{"expr function sign", `select sign(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionSIGN, genLiteralExpression("1"))},
+		{"expr function substr", `select substr('1',2)`,
+			genSimpleFunctionSelectTree(&tree.FunctionSUBSTR,
+				genLiteralExpression("'1'"), genLiteralExpression("2"))},
+		{"expr function substr 2", `select substr('1',2,3)`,
+			genSimpleFunctionSelectTree(&tree.FunctionSUBSTR,
+				genLiteralExpression("'1'"), genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function trim", `select trim('12')`,
+			genSimpleFunctionSelectTree(&tree.FunctionTRIM, genLiteralExpression("'12'"))},
+		{"expr function trim 2", `select trim('12', '1')`,
+			genSimpleFunctionSelectTree(&tree.FunctionTRIM, genLiteralExpression("'12'"), genLiteralExpression("'1'"))},
+		{"expr function typeof", `select typeof(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionTYPEOF, genLiteralExpression("1"))},
+		{"expr function unhex", `select unhex(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionUNHEX, genLiteralExpression("1"))},
+		{"expr function unicode", `select unicode('1')`,
+			genSimpleFunctionSelectTree(&tree.FunctionUNICODE, genLiteralExpression("'1'"))},
+		{"expr function upper", `select upper('z')`,
+			genSimpleFunctionSelectTree(&tree.FunctionUPPER, genLiteralExpression("'z'"))},
+		// expr datetime functions
+		{"expr function date now", `select date('now')`,
+			genSimpleFunctionSelectTree(&tree.FunctionDATE, genLiteralExpression("'now'"))},
+		{"expr function date", `select date(1092941466)`,
+			genSimpleFunctionSelectTree(&tree.FunctionDATE, genLiteralExpression("1092941466"))},
+		//{"expr function date 1 modifier", `select date('now','start of month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionDATE,
+		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
+		//{"expr function date 2 modifiers", `select date('now','start of month','+1 month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionDATE,
+		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
+		{"expr function time now", `select time('now')`,
+			genSimpleFunctionSelectTree(&tree.FunctionTIME, genLiteralExpression("'now'"))},
+		{"expr function time", `select time(1092941466)`,
+			genSimpleFunctionSelectTree(&tree.FunctionTIME, genLiteralExpression("1092941466"))},
+		//{"expr function time 1 modifier", `select time('now','start of month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionTIME,
+		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
+		//{"expr function time 2 modifiers", `select time('now','start of month','+1 month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionTIME,
+		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
+		{"expr function datetime now", `select datetime('now')`,
+			genSimpleFunctionSelectTree(&tree.FunctionDATETIME, genLiteralExpression("'now'"))},
+		{"expr function datetime", `select datetime(1092941466)`,
+			genSimpleFunctionSelectTree(&tree.FunctionDATETIME, genLiteralExpression("1092941466"))},
+		//{"expr function datetime 1 modifier", `select datetime('now','start of month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionDATETIME,
+		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
+		//{"expr function datetime 2 modifiers", `select datetime('now','start of month','+1 month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionDATETIME,
+		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
+		{"expr function strftime now", `select strftime('%d','now')`,
+			genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
+				genLiteralExpression("'%d'"), genLiteralExpression("'now'"))},
+		{"expr function strftime", `select strftime('%d',1092941466)`,
+			genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
+				genLiteralExpression("'%d'"), genLiteralExpression("1092941466"))},
+		//{"expr function strftime 1 modifer", `select strftime('%d','now','start of month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
+		//		genLiteralExpression("'%d'"), genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
+		//{"expr function strftime 2 modifiers", `select strftime('%d','now','start of month','+1 month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionSTRFTIME,
+		//		genLiteralExpression("'%d'"), genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
+		{"expr function unixepoch now", `select unixepoch('now')`,
+			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH, genLiteralExpression("'now'"))},
+		{"expr function unixepoch", `select unixepoch(1092941466)`,
+			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH, genLiteralExpression("1092941466"))},
+		//{"expr function unixepoch 1 modifier", `select unixepoch('now','start of month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
+		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"))},
+		//{"expr function unixepoch 2 modifiers", `select unixepoch('now','start of month','+1 month')`,
+		//	genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
+		//		genLiteralExpression("'now'"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
 		// expr list
 		{"expr list", "select (1)",
 			&tree.Select{
@@ -588,7 +772,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionList{
 										Expressions: []tree.Expression{
-											&tree.ExpressionLiteral{Value: "1"},
+											genLiteralExpression("1"),
 										},
 									},
 								},
@@ -623,8 +807,8 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionDistinct{
-										Left:  &tree.ExpressionLiteral{Value: "1"},
-										Right: &tree.ExpressionLiteral{Value: "2"},
+										Left:  genLiteralExpression("1"),
+										Right: genLiteralExpression("2"),
 										IsNot: false,
 									},
 								},
@@ -643,8 +827,8 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 							Columns: []tree.ResultColumn{
 								&tree.ResultColumnExpression{
 									Expression: &tree.ExpressionDistinct{
-										Left:  &tree.ExpressionLiteral{Value: "1"},
-										Right: &tree.ExpressionLiteral{Value: "2"},
+										Left:  genLiteralExpression("1"),
+										Right: genLiteralExpression("2"),
 										IsNot: true,
 									},
 								},
@@ -655,115 +839,317 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 			},
 		},
 		// between
-		//{"expr between", "select 1 between 2 and 3",
-		//	&tree.Select{
-		//		SelectStmt: &tree.SelectStmt{
-		//			SelectCores: []*tree.SelectCore{
-		//				{
-		//					SelectType: tree.SelectTypeAll,
-		//					Columns: []tree.ResultColumn{
-		//						&tree.ResultColumnExpression{
-		//							Expression: &tree.ExpressionBetween{
-		//								Expression: &tree.ExpressionLiteral{Value: "1"},
-		//								Left:       &tree.ExpressionLiteral{Value: "2"},
-		//								Right:      &tree.ExpressionLiteral{Value: "3"},
-		//							},
-		//						},
-		//					},
-		//				},
-		//			},
-		//		},
-		//	},
-		//},
-		//{"expr not between", "select 1 not between 2 and 3"},
-		////
-		//{"expr in", "select 1 in (1,2)"},
-		//{"expr not in", "select 1 not in (1,2)"},
-		//{"expr in subquery", "select 1 in (select 1)"},
-		////
-		//{"expr exists", "select exists (select 1)"},
-		//{"expr not exists", "select not exists (select 1)"},
-		////
-		//{"expr case", "select case when 1 then 2 end"},
-		//{"expr case else", "select case when 1 then 2 else 3 end"},
-		//{"expr case multi when", "select case when 1 then 2 when 3 then 4 end"},
-		//{"expr case expr", "select case 1 when 2 then 3 end"},
-
-		// insert stmt
+		{"expr between", "select 1 between 2 and 3",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBetween{
+										Expression: genLiteralExpression("1"),
+										Left:       genLiteralExpression("2"),
+										Right:      &tree.ExpressionLiteral{Value: "3"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr not between", "select 1 not between 2 and 3",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBetween{
+										Expression: genLiteralExpression("1"),
+										Left:       genLiteralExpression("2"),
+										Right:      &tree.ExpressionLiteral{Value: "3"},
+										NotBetween: true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		//
+		{"expr exists", "select (select 1)",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionSelect{
+										IsNot:    false,
+										IsExists: false,
+										Select:   genSelectColumnLiteralTree("1").SelectStmt,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr exists", "select exists (select 1)",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionSelect{
+										IsNot:    false,
+										IsExists: true,
+										Select:   genSelectColumnLiteralTree("1").SelectStmt,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr not exists", "select not exists (select 1)",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionSelect{
+										IsNot:    true,
+										IsExists: true,
+										Select:   genSelectColumnLiteralTree("1").SelectStmt,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		// case
+		{"expr case", "select case when 1 then 2 end",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionCase{
+										WhenThenPairs: [][2]tree.Expression{
+											{
+												genLiteralExpression("1"),
+												genLiteralExpression("2"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr case else", "select case when 1 then 2 else 3 end",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionCase{
+										WhenThenPairs: [][2]tree.Expression{
+											{
+												genLiteralExpression("1"),
+												genLiteralExpression("2"),
+											},
+										},
+										ElseExpression: &tree.ExpressionLiteral{Value: "3"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr case multi when", "select case when 1 then 2 when 3 then 4 end",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionCase{
+										WhenThenPairs: [][2]tree.Expression{
+											{
+												genLiteralExpression("1"),
+												genLiteralExpression("2"),
+											},
+											{
+												&tree.ExpressionLiteral{Value: "3"},
+												&tree.ExpressionLiteral{Value: "4"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr case expr", "select case 1 when 2 then 3 end",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionCase{
+										CaseExpression: genLiteralExpression("1"),
+										WhenThenPairs: [][2]tree.Expression{
+											{
+												genLiteralExpression("2"),
+												&tree.ExpressionLiteral{Value: "3"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		//// insert stmt
 		{"insert", "insert into t1 values (1)",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					InsertType: tree.InsertTypeInsert,
-					Values:     [][]tree.Expression{{&tree.ExpressionLiteral{Value: "1"}}},
+					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
 				}}},
 		{"insert replace", "replace into t1 values (1)",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					InsertType: tree.InsertTypeReplace,
-					Values:     [][]tree.Expression{{&tree.ExpressionLiteral{Value: "1"}}},
+					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
 				}}},
 		{"insert or replace", "insert or replace into t1 values (1)",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					InsertType: tree.InsertTypeInsertOrReplace,
-					Values:     [][]tree.Expression{{&tree.ExpressionLiteral{Value: "1"}}},
+					Values:     [][]tree.Expression{{genLiteralExpression("1")}},
 				}}},
 		{"insert with columns", "insert into t1 (a,b) values (1,2)",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
 					InsertType: tree.InsertTypeInsert,
 					Values: [][]tree.Expression{
 						{
-							&tree.ExpressionLiteral{Value: "1"},
-							&tree.ExpressionLiteral{Value: "2"},
+							genLiteralExpression("1"),
+							genLiteralExpression("2"),
 						},
 					}}}},
-		//{"insert with cte", "with t as (select 1) insert into t1 (a,b) values (1,2)",
-		//	genInsertTree(tree.InsertTypeInsert, "t1", []string{"a", "b"}, []string{"1", "2"}, genCteSimple(), nil)},
+		{"insert with columns with table alias", "insert into t1 as t (a,b) values (1,2)",
+			&tree.Insert{
+				InsertStmt: &tree.InsertStmt{
+					Table:      "t1",
+					TableAlias: "t",
+					Columns:    []string{"a", "b"},
+					InsertType: tree.InsertTypeInsert,
+					Values: [][]tree.Expression{
+						{
+							genLiteralExpression("1"),
+							genLiteralExpression("2"),
+						},
+					}}}},
 		{"insert with cte", "with t as (select 1) insert into t1 (a,b) values (1,2)",
 			&tree.Insert{
-				CTE: []*tree.CTE{
-					{
-						Table:  "t",
-						Select: genSelectColumnLiteralTree("1").SelectStmt,
-					},
-				},
+				CTE: []*tree.CTE{genSimpleCTETree("t", "1")},
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
 					InsertType: tree.InsertTypeInsert,
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
-
-		//{"insert with returning", "insert into t1 (a,b) values (1,2) returning a",
-		//	&tree.Insert{
-		//		CTE: nil,
-		//		InsertStmt: &tree.InsertStmt{
-		//			Table:      "t1",
-		//			Columns:    []string{"a", "b"},
-		//			InsertType: tree.InsertTypeInsert,
-		//			Values: [][]tree.Expression{
-		//				{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
-		//			},
-		//			//ReturningClause:
-		//		}}},
-		//{"insert with returning *", "insert into t1 (a,b) values (1,2) returning *"},
-		//{"insert with or replace", "insert or replace into t1 (a,b) values (1,2)"},
-		//{"insert with table alias", "insert into t1 as t (a,b) values (1,2)"},
-
+		{"insert with returning", "insert into t1 (a,b) values (1,2) returning a as c",
+			&tree.Insert{
+				InsertStmt: &tree.InsertStmt{
+					Table:      "t1",
+					Columns:    []string{"a", "b"},
+					InsertType: tree.InsertTypeInsert,
+					Values: [][]tree.Expression{
+						{genLiteralExpression("1"), genLiteralExpression("2")},
+					},
+					ReturningClause: &tree.ReturningClause{
+						Returned: []*tree.ReturningClauseColumn{
+							{
+								Expression: &tree.ExpressionColumn{
+									Column: "a",
+								},
+								Alias: "c",
+							},
+						},
+					}}}},
+		{"insert with returning literal", "insert into t1 (a,b) values (1,2) returning 1",
+			&tree.Insert{
+				InsertStmt: &tree.InsertStmt{
+					Table:      "t1",
+					Columns:    []string{"a", "b"},
+					InsertType: tree.InsertTypeInsert,
+					Values: [][]tree.Expression{
+						{genLiteralExpression("1"), genLiteralExpression("2")},
+					},
+					ReturningClause: &tree.ReturningClause{
+						Returned: []*tree.ReturningClauseColumn{
+							{
+								Expression: genLiteralExpression("1"),
+							},
+						},
+					}}}},
+		{"insert with returning *", "insert into t1 (a,b) values (1,2) returning *",
+			&tree.Insert{
+				InsertStmt: &tree.InsertStmt{
+					Table:      "t1",
+					Columns:    []string{"a", "b"},
+					InsertType: tree.InsertTypeInsert,
+					Values: [][]tree.Expression{
+						{genLiteralExpression("1"), genLiteralExpression("2")},
+					},
+					ReturningClause: &tree.ReturningClause{
+						Returned: []*tree.ReturningClauseColumn{
+							{
+								All: true,
+							},
+						},
+					}}}},
 		{"insert with values upsert without target do nothing", "insert into t1 (a,b) values (1,2) on conflict do nothing",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
@@ -772,7 +1158,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 						Type: tree.UpsertTypeDoNothing,
 					},
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
 		{"insert with values upsert with target without where do nothing",
 			"insert into t1 (a,b) values (1,2) on conflict (c1,c2) do nothing",
@@ -788,12 +1174,11 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 						Type: tree.UpsertTypeDoNothing,
 					},
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
 		{"insert with values upsert with target and where do nothing",
 			"insert into t1 (a,b) values (1,2) on conflict(c1,c2) where 1 do nothing",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
@@ -806,12 +1191,11 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 						Type: tree.UpsertTypeDoNothing,
 					},
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
 		{"insert with values upsert with update column name",
 			"insert into t1 (a,b) values (1,2) on conflict do update set b=1",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
@@ -820,16 +1204,15 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 						Type: tree.UpsertTypeDoUpdate,
 						Updates: []*tree.UpdateSetClause{
 							{Columns: []string{"b"},
-								Expression: &tree.ExpressionLiteral{Value: "1"}},
+								Expression: genLiteralExpression("1")},
 						},
 					},
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
 		{"insert with values upsert with update multi column name",
 			"insert into t1 (a,b) values (1,2) on conflict do update set b=1,c=2",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
@@ -839,21 +1222,20 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 						Updates: []*tree.UpdateSetClause{
 							{
 								Columns:    []string{"b"},
-								Expression: &tree.ExpressionLiteral{Value: "1"},
+								Expression: genLiteralExpression("1"),
 							},
 							{
 								Columns:    []string{"c"},
-								Expression: &tree.ExpressionLiteral{Value: "2"},
+								Expression: genLiteralExpression("2"),
 							},
 						},
 					},
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
 		{"insert with values upsert with update column name list",
 			"insert into t1 (a,b) values (1,2) on conflict do update set (b,c)=(1,2)",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
@@ -865,19 +1247,18 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 								Columns: []string{"b", "c"},
 								Expression: &tree.ExpressionList{
 									Expressions: []tree.Expression{
-										&tree.ExpressionLiteral{Value: "1"},
-										&tree.ExpressionLiteral{Value: "2"},
+										genLiteralExpression("1"),
+										genLiteralExpression("2"),
 									}},
 							},
 						},
 					},
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
 		{"insert with values upsert with update multi column name list",
 			"insert into t1 (a,b) values (1,2) on conflict do update set (b,c)=(1,2), (d,e)=(3,4)",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
@@ -889,8 +1270,8 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 								Columns: []string{"b", "c"},
 								Expression: &tree.ExpressionList{
 									Expressions: []tree.Expression{
-										&tree.ExpressionLiteral{Value: "1"},
-										&tree.ExpressionLiteral{Value: "2"},
+										genLiteralExpression("1"),
+										genLiteralExpression("2"),
 									}},
 							},
 							{
@@ -904,12 +1285,11 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 						},
 					},
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
 		{"insert with values upsert with update and where",
 			"insert into t1 (a,b) values (1,2) on conflict do update set b=1 where 1",
 			&tree.Insert{
-				CTE: nil,
 				InsertStmt: &tree.InsertStmt{
 					Table:      "t1",
 					Columns:    []string{"a", "b"},
@@ -918,44 +1298,564 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 						Type: tree.UpsertTypeDoUpdate,
 						Updates: []*tree.UpdateSetClause{
 							{Columns: []string{"b"},
-								Expression: &tree.ExpressionLiteral{Value: "1"}},
+								Expression: genLiteralExpression("1")},
 						},
-						Where: &tree.ExpressionLiteral{Value: "1"},
+						Where: genLiteralExpression("1"),
 					},
 					Values: [][]tree.Expression{
-						{&tree.ExpressionLiteral{Value: "1"}, &tree.ExpressionLiteral{Value: "2"}},
+						{genLiteralExpression("1"), genLiteralExpression("2")},
 					}}}},
-
-		//// join
-		//{"join on", "select * from t1 join t2 on t1.c1=t2.c1"},
-		//{"join implicit", "select * from t1,t2 on t1.c1=t2.c1"},
-		//{"left join", "select * from t1 left join t2 on t1.c1=t2.c1"},
-		//{"left outer join", "select * from t1 left outer join t2 on t1.c1=t2.c1"},
-		//{"right join", "select * from t1 right join t2 on t1.c1=t2.c1"},
-		//{"right outer join", "select * from t1 right outer join t2 on t1.c1=t2.c1"},
-		//{"full join", "select * from t1 full join t2 on t1.c1=t2.c1"},
-		//{"full outer join", "select * from t1 full outer join t2 on t1.c1=t2.c1"},
-		//{"inner join", "select * from t1 inner join t2 on t1.c1=t2.c1"},
-		//
 		//// select
-		//{"select *", "select * from t1"},
-		//{"select with cte", "with t as (select 1) select * from t1"},
-		//{"select distinct", "select distinct * from t1"},
-		//{"select from join clause", "select * from t1 join t2 on t1.c1=t2.c1"},
-		//{"select with where", "select * from t1 where 1"},
-		//{"select with group by", "select * from t1 group by c1"},
-		//{"select with group by and having", "select * from t1 group by c1 having 1"},
-		//{"select values", "values (1)"},
-		//{"select values with cte", "with t as (select 1) values (1)"},
-		//{"select with compound operator union", "select * from t1 union select * from t2"},
-		//{"select with compound operator union all", "select * from t1 union all select * from t2"},
-		//{"select with compound operator intersect", "select * from t1 intersect select * from t2"},
-		//{"select with compound operator except", "select * from t1 except select * from t2"},
-		//{"select with compound operator and values", "select * from t1 union values (1)"},
-		//{"select with order by", "select * from t1 order by c1 collate collate_name asc"},
-		//{"select with limit", "select * from t1 limit 1"},
-		//{"select with limit offset", "select * from t1 limit 1 offset 2"},
-		//{"select with limit comma", "select * from t1 limit 1,10"},
+		{"select *", "select * from t1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+						},
+					},
+				}}},
+		{"select with cte", "with t as (select 1) select * from t1",
+			&tree.Select{
+				CTE: []*tree.CTE{genSimpleCTETree("t", "1")},
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+						},
+					},
+				}}},
+		{"select distinct", "select distinct * from t1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeDistinct,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+						},
+					},
+				}}},
+		{"select with where", "select * from t1 where c1=1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+							Where: &tree.ExpressionBinaryComparison{
+								Left:     &tree.ExpressionColumn{Column: "c1"},
+								Operator: tree.ComparisonOperatorEqual,
+								Right:    genLiteralExpression("1"),
+							},
+						},
+					},
+				}}},
+		{"select with where and", "select * from t1 where c1=1 and c2=2",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+							Where: &tree.ExpressionBinaryComparison{
+								Left: &tree.ExpressionBinaryComparison{
+									Left:     &tree.ExpressionColumn{Column: "c1"},
+									Operator: tree.ComparisonOperatorEqual,
+									Right:    genLiteralExpression("1"),
+								},
+								Operator: tree.LogicalOperatorAnd,
+								Right: &tree.ExpressionBinaryComparison{
+									Left:     &tree.ExpressionColumn{Column: "c2"},
+									Operator: tree.ComparisonOperatorEqual,
+									Right:    genLiteralExpression("2"),
+								},
+							},
+						},
+					},
+				}}},
+		{"select with where or", "select * from t1 where c1=1 or c2=2",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+							Where: &tree.ExpressionBinaryComparison{
+								Left: &tree.ExpressionBinaryComparison{
+									Left:     &tree.ExpressionColumn{Column: "c1"},
+									Operator: tree.ComparisonOperatorEqual,
+									Right:    genLiteralExpression("1"),
+								},
+								Operator: tree.LogicalOperatorOr,
+								Right: &tree.ExpressionBinaryComparison{
+									Left:     &tree.ExpressionColumn{Column: "c2"},
+									Operator: tree.ComparisonOperatorEqual,
+									Right:    genLiteralExpression("2"),
+								},
+							},
+						},
+					},
+				}}},
+		{"select with group by", "select * from t1 group by c1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+							GroupBy: &tree.GroupBy{
+								Expressions: []tree.Expression{
+									&tree.ExpressionColumn{Column: "c1"},
+								},
+							},
+						},
+					},
+				}}},
+		{"select with group by and having", "select * from t1 group by c1 having 1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+							GroupBy: &tree.GroupBy{
+								Expressions: []tree.Expression{
+									&tree.ExpressionColumn{Column: "c1"},
+								},
+								Having: genLiteralExpression("1"),
+							},
+						},
+					},
+				}}},
+		{"select with order by", "select * from t1 order by c1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+						},
+					},
+					OrderBy: &tree.OrderBy{
+						OrderingTerms: []*tree.OrderingTerm{
+							{
+								Expression: &tree.ExpressionColumn{Column: "c1"},
+							},
+						},
+					},
+				}}},
+
+		{"select with order by all", "select * from t1 order by c1 collate nocase asc nulls first",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+						},
+					},
+					OrderBy: &tree.OrderBy{
+						OrderingTerms: []*tree.OrderingTerm{
+							{
+								Expression:   &tree.ExpressionColumn{Column: "c1"},
+								Collation:    tree.CollationTypeNoCase,
+								OrderType:    tree.OrderTypeAsc,
+								NullOrdering: tree.NullOrderingTypeFirst,
+							},
+						},
+					},
+				}}},
+		{"select with limit", "select * from t1 limit 1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+						},
+					},
+					Limit: &tree.Limit{Expression: genLiteralExpression("1")},
+				}}},
+		{"select with limit offset", "select * from t1 limit 1 offset 2",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+						},
+					},
+					Limit: &tree.Limit{
+						Expression: genLiteralExpression("1"),
+						Offset:     genLiteralExpression("2"),
+					},
+				}}},
+		{"select with limit comma", "select * from t1 limit 1,10",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+							}},
+						},
+					},
+					Limit: &tree.Limit{
+						Expression:       genLiteralExpression("1"),
+						SecondExpression: genLiteralExpression("10"),
+					},
+				}}},
+		//// join
+		//{"join implicit", "select * from t1,t2 on t1.c1=t2.c1"},
+		{"join on", "select * from t1 join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeJoin,
+			}, "t1", "c1", "t2", "c1")},
+		{"natural join on", "select * from t1 natural join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeJoin,
+				Natural:  true,
+			}, "t1", "c1", "t2", "c1")},
+		{"left join on", "select * from t1 left join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeLeft,
+			}, "t1", "c1", "t2", "c1")},
+		{"left outer join on", "select * from t1 left outer join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeLeft,
+				Outer:    true,
+			}, "t1", "c1", "t2", "c1")},
+		{"natural left join on", "select * from t1 natural left join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeLeft,
+				Natural:  true,
+			}, "t1", "c1", "t2", "c1")},
+		{"natural left outer join on", "select * from t1 natural left outer join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeLeft,
+				Outer:    true,
+				Natural:  true,
+			}, "t1", "c1", "t2", "c1")},
+		{"right join on", "select * from t1 right join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeRight,
+			}, "t1", "c1", "t2", "c1")},
+		{"right outer join on", "select * from t1 right outer join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeRight,
+				Outer:    true,
+			}, "t1", "c1", "t2", "c1")},
+		{"natural right join on", "select * from t1 natural right join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeRight,
+				Natural:  true,
+			}, "t1", "c1", "t2", "c1")},
+		{"natural right outer join on", "select * from t1 natural right outer join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeRight,
+				Natural:  true,
+				Outer:    true,
+			}, "t1", "c1", "t2", "c1")},
+		{"full join on", "select * from t1 full join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeFull,
+			}, "t1", "c1", "t2", "c1")},
+		{"full outer join on", "select * from t1 full outer join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeFull,
+				Outer:    true,
+			}, "t1", "c1", "t2", "c1")},
+		{"natural full join on", "select * from t1 natural full join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeFull,
+				Natural:  true,
+			}, "t1", "c1", "t2", "c1")},
+		{"natural full outer join on", "select * from t1 natural full outer join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeFull,
+				Outer:    true,
+				Natural:  true,
+			}, "t1", "c1", "t2", "c1")},
+		{"inner join on", "select * from t1 inner join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeInner,
+			}, "t1", "c1", "t2", "c1")},
+		{"natural inner join on", "select * from t1 natural inner join t2 on t1.c1=t2.c1",
+			genSimpleJoinSelectTree(&tree.JoinOperator{
+				JoinType: tree.JoinTypeInner,
+				Natural:  true,
+			}, "t1", "c1", "t2", "c1")},
+		{"join multi", "select * from t1 join t2 on t1.c1=t2.c1 left join t3 on t1.c1=t3.c1",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{JoinClause: &tree.JoinClause{
+								TableOrSubquery: &tree.TableOrSubqueryTable{
+									Name: "t1",
+								},
+								Joins: []*tree.JoinPredicate{
+									{
+										JoinOperator: &tree.JoinOperator{
+											JoinType: tree.JoinTypeJoin,
+										},
+										Table: &tree.TableOrSubqueryTable{Name: "t2"},
+										Constraint: &tree.ExpressionBinaryComparison{
+											Operator: tree.ComparisonOperatorEqual,
+											Left:     &tree.ExpressionColumn{Table: "t1", Column: "c1"},
+											Right:    &tree.ExpressionColumn{Table: "t2", Column: "c1"},
+										},
+									},
+									{
+										JoinOperator: &tree.JoinOperator{
+											JoinType: tree.JoinTypeLeft,
+										},
+										Table: &tree.TableOrSubqueryTable{Name: "t3"},
+										Constraint: &tree.ExpressionBinaryComparison{
+											Operator: tree.ComparisonOperatorEqual,
+											Left:     &tree.ExpressionColumn{Table: "t1", Column: "c1"},
+											Right:    &tree.ExpressionColumn{Table: "t3", Column: "c1"},
+										},
+									},
+								},
+							},
+							},
+						},
+					},
+				}}},
+
+		//// update stmt
+		{"update", "update t1 set c1=1",
+			genSimpleUpdateTree(&tree.QualifiedTableName{TableName: "t1"}, "c1", "1")},
+		{"update with table alias", "update t1 as t set c1=1",
+			genSimpleUpdateTree(&tree.QualifiedTableName{
+				TableName:  "t1",
+				TableAlias: "t",
+			}, "c1", "1")},
+		{"update with table indexed", "update t1 indexed by i1 set c1=1",
+			genSimpleUpdateTree(&tree.QualifiedTableName{
+				TableName: "t1",
+				IndexedBy: "i1",
+			}, "c1", "1")},
+		{"update with table not indexed", "update t1 not indexed set c1=1",
+			genSimpleUpdateTree(&tree.QualifiedTableName{
+				TableName:  "t1",
+				NotIndexed: true,
+			}, "c1", "1")},
+		{"update or abort", "update or abort t1 set c1=1",
+			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrAbort, "c1", "1")},
+		{"update or fail", "update or fail t1 set c1=1",
+			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrFail, "c1", "1")},
+		{"update or ignore", "update or ignore t1 set c1=1",
+			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrIgnore, "c1", "1")},
+		{"update or replace", "update or replace t1 set c1=1",
+			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrReplace, "c1", "1")},
+		{"update or rollback", "update or rollback t1 set c1=1",
+			genSimpleUpdateOrTree(&tree.QualifiedTableName{TableName: "t1"}, tree.UpdateOrRollback, "c1", "1")},
+		{"update with multi set", "update t1 set c1=1, c2=2",
+			&tree.Update{
+				UpdateStmt: &tree.UpdateStmt{
+					QualifiedTableName: &tree.QualifiedTableName{TableName: "t1"},
+					UpdateSetClause: []*tree.UpdateSetClause{
+						{
+							Columns:    []string{"c1"},
+							Expression: genLiteralExpression("1"),
+						},
+						{
+							Columns:    []string{"c2"},
+							Expression: genLiteralExpression("2"),
+						},
+					},
+				},
+			},
+		},
+		{"update with column list set", "update t1 set (c1, c2)=(1,2)",
+			&tree.Update{
+				UpdateStmt: &tree.UpdateStmt{
+					QualifiedTableName: &tree.QualifiedTableName{TableName: "t1"},
+					UpdateSetClause: []*tree.UpdateSetClause{
+						{
+							Columns: []string{"c1", "c2"},
+							Expression: &tree.ExpressionList{
+								Expressions: []tree.Expression{
+									genLiteralExpression("1"),
+									genLiteralExpression("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"update from table", "update t1 set c1=1 from t2",
+			&tree.Update{
+				UpdateStmt: &tree.UpdateStmt{
+					QualifiedTableName: &tree.QualifiedTableName{TableName: "t1"},
+					UpdateSetClause: []*tree.UpdateSetClause{
+						{
+							Columns:    []string{"c1"},
+							Expression: genLiteralExpression("1"),
+						},
+					},
+					From: &tree.FromClause{JoinClause: &tree.JoinClause{
+						TableOrSubquery: &tree.TableOrSubqueryTable{Name: "t2"},
+					}},
+				},
+			},
+		},
+		{"update from join", "update t1 set c1=1 from t2 join t3 on t2.c1=t3.c1",
+			&tree.Update{
+				UpdateStmt: &tree.UpdateStmt{
+					QualifiedTableName: &tree.QualifiedTableName{TableName: "t1"},
+					UpdateSetClause: []*tree.UpdateSetClause{
+						{
+							Columns:    []string{"c1"},
+							Expression: genLiteralExpression("1"),
+						},
+					},
+					From: &tree.FromClause{
+						JoinClause: &tree.JoinClause{
+							TableOrSubquery: &tree.TableOrSubqueryTable{Name: "t2"},
+							Joins: []*tree.JoinPredicate{
+								{
+									JoinOperator: &tree.JoinOperator{
+										JoinType: tree.JoinTypeJoin,
+									},
+									Table: &tree.TableOrSubqueryTable{Name: "t3"},
+									Constraint: &tree.ExpressionBinaryComparison{
+										Operator: tree.ComparisonOperatorEqual,
+										Left:     &tree.ExpressionColumn{Table: "t2", Column: "c1"},
+										Right:    &tree.ExpressionColumn{Table: "t3", Column: "c1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"update where", "update t1 set c1=1 where c2=1",
+			&tree.Update{
+				UpdateStmt: &tree.UpdateStmt{
+					QualifiedTableName: &tree.QualifiedTableName{TableName: "t1"},
+					UpdateSetClause: []*tree.UpdateSetClause{
+						{
+							Columns:    []string{"c1"},
+							Expression: genLiteralExpression("1"),
+						},
+					},
+					Where: &tree.ExpressionBinaryComparison{
+						Operator: tree.ComparisonOperatorEqual,
+						Left:     &tree.ExpressionColumn{Column: "c2"},
+						Right:    genLiteralExpression("1"),
+					},
+				},
+			},
+		},
+		{"update returning", "update t1 set c1=1 returning *",
+			&tree.Update{
+				UpdateStmt: &tree.UpdateStmt{
+					QualifiedTableName: &tree.QualifiedTableName{TableName: "t1"},
+					UpdateSetClause: []*tree.UpdateSetClause{
+						{
+							Columns:    []string{"c1"},
+							Expression: genLiteralExpression("1"),
+						},
+					},
+					Returning: &tree.ReturningClause{
+						Returned: []*tree.ReturningClauseColumn{
+							{
+								All: true,
+							},
+						},
+					},
+				},
+			},
+		},
+		{"update with cte", "with t as (select 1) update t1 set c1=1",
+			&tree.Update{
+				CTE: []*tree.CTE{
+					genSimpleCTETree("t", "1"),
+				},
+				UpdateStmt: &tree.UpdateStmt{
+					QualifiedTableName: &tree.QualifiedTableName{TableName: "t1"},
+					UpdateSetClause: []*tree.UpdateSetClause{
+						{
+							Columns:    []string{"c1"},
+							Expression: genLiteralExpression("1"),
+						},
+					},
+				},
+			},
+		},
 	}
 
 	ctx := DatabaseContext{Actions: map[string]ActionContext{"action1": {}}}
@@ -1220,6 +2120,7 @@ func TestParseRawSQL_syntax_not_allowed(t *testing.T) {
 		// select
 		{"select all", "select all c1 from t1", "c1"},
 		{"select with window", "select * from t1 window w1 as (partition by 1)", "window"},
+		{"select with not supported null ordering", "select * from t1 order by c1 nulls firstss", "firstss"},
 
 		// function
 		{"expr function distinct param", "select f(distinct 1,2)", "("},
