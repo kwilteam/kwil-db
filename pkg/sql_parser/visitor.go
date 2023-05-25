@@ -174,7 +174,40 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 		}
 		return expr
 	case ctx.GetElevate_expr() != nil:
-		return v.visitExpr(ctx.GetElevate_expr())
+		expr := v.visitExpr(ctx.GetElevate_expr())
+		switch t := expr.(type) {
+		case *tree.ExpressionLiteral:
+			t.Wrapped = true
+		case *tree.ExpressionBindParameter:
+			t.Wrapped = true
+		case *tree.ExpressionColumn:
+			t.Wrapped = true
+		case *tree.ExpressionUnary:
+			t.Wrapped = true
+		case *tree.ExpressionBinaryComparison:
+			t.Wrapped = true
+		case *tree.ExpressionFunction:
+			t.Wrapped = true
+		case *tree.ExpressionList:
+			t.Wrapped = true
+		case *tree.ExpressionCollate:
+			t.Wrapped = true
+		case *tree.ExpressionStringCompare:
+			t.Wrapped = true
+		case *tree.ExpressionIsNull:
+			t.Wrapped = true
+		case *tree.ExpressionDistinct:
+			t.Wrapped = true
+		case *tree.ExpressionBetween:
+			t.Wrapped = true
+		case *tree.ExpressionSelect:
+			t.Wrapped = true
+		case *tree.ExpressionCase:
+			t.Wrapped = true
+		default:
+			panic(fmt.Sprintf("unknown expression type %T", expr))
+		}
+		return expr
 	// unary operators
 	case ctx.MINUS() != nil && ctx.GetUnary_expr() != nil:
 		return &tree.ExpressionUnary{
