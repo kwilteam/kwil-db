@@ -45,6 +45,10 @@ jobs:
         run: |
           task pb:compile:v1
 
+      - name: Generate antlr code
+        run: |
+          task build:antlr
+
       - name: Run unit test
         run: |
           task test:unit
@@ -84,6 +88,10 @@ jobs:
       - name: Compile Protobuf
         run: |
           task pb:compile:v1
+
+      - name: Generate antlr code
+        run: |
+          task build:antlr
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
