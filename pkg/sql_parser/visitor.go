@@ -919,6 +919,29 @@ func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlite.Result_columnContext) i
 	return nil
 }
 
+// VisitDelete_stmt is called when visiting a delete_stmt, return *tree.Delete
+func (v *KFSqliteVisitor) VisitDelete_stmt(ctx *sqlite.Delete_stmtContext) interface{} {
+	t := tree.Delete{}
+
+	if ctx.Common_table_stmt() != nil {
+		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
+	}
+
+	stmt := tree.DeleteStmt{}
+	stmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
+
+	if ctx.WHERE_() != nil {
+		stmt.Where = v.Visit(ctx.Expr()).(tree.Expression)
+	}
+
+	if ctx.Returning_clause() != nil {
+		stmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
+	}
+
+	t.DeleteStmt = &stmt
+	return &t
+}
+
 // VisitSelect_core is called when visiting a select_core, return *tree.SelectCore
 func (v *KFSqliteVisitor) VisitSelect_core(ctx *sqlite.Select_coreContext) interface{} {
 	t := tree.SelectCore{
