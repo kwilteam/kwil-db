@@ -831,6 +831,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 											Left: &tree.ExpressionUnary{
 												Operator: tree.UnaryOperatorNot,
 												Operand: &tree.ExpressionBinaryComparison{
+													Wrapped:  true,
 													Operator: tree.ComparisonOperatorEqual,
 													Left: &tree.ExpressionUnary{
 														Operator: tree.UnaryOperatorMinus,
@@ -870,6 +871,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 										Left: &tree.ExpressionUnary{
 											Operator: tree.UnaryOperatorNot,
 											Operand: &tree.ExpressionBinaryComparison{
+												Wrapped:  true,
 												Operator: tree.ComparisonOperatorEqual,
 												Left: &tree.ExpressionUnary{
 													Operator: tree.UnaryOperatorMinus,
@@ -879,6 +881,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 											},
 										},
 										Right: &tree.ExpressionBinaryComparison{
+											Wrapped:  true,
 											Operator: tree.LogicalOperatorOr,
 											Left: &tree.ExpressionIsNull{
 												Expression: genLiteralExpression("1"),
@@ -899,8 +902,6 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 			},
 		},
 		//{"expr precedence 1", "select 3 + 4 * 5 - 2 / 2 + -1",
-		//{"expr precedence 2", "SELECT 1 = 1 AND 2 > 1 OR 3 < 2"},
-		//{"expr precedence 3", "SELECT NOT 1 = 1 OR 3 < 2"},
 		//{"expr precedence 4", "SELECT (3 + 4) * 5 - 2 / 2"},
 
 		// collate
