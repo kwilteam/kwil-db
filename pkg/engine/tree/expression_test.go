@@ -263,7 +263,7 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 					Column: "foo",
 				},
 			},
-			want: `"foo" IS NOT NULL`,
+			want: `"foo" NOT NULL`,
 		},
 		{
 			name: "is not distinct from",
