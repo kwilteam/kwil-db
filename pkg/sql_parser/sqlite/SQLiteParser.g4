@@ -258,10 +258,8 @@ expr:
     | BIND_PARAMETER
     | (table_name DOT)? column_name
     | ((NOT_)? EXISTS_)? OPEN_PAR select_stmt_core CLOSE_PAR
-    | function_name OPEN_PAR ((expr ( COMMA expr)*) | STAR)? CLOSE_PAR
-    | CASE_ case_expr=expr? (WHEN_ when_expr+=expr THEN_ then_expr+=expr)+ (ELSE_ else_expr=expr)? END_
-    | OPEN_PAR expr (COMMA expr)* CLOSE_PAR
     // order is relevant for the rest
+    | OPEN_PAR elevate_expr=expr CLOSE_PAR
     | (MINUS | PLUS | TILDE) unary_expr=expr
     | expr COLLATE_ collation_name
     | expr PIPE2 expr
@@ -286,6 +284,9 @@ expr:
     | NOT_ unary_expr=expr
     | expr AND_ expr
     | expr OR_ expr
+    | OPEN_PAR expr_list+=expr (COMMA expr_list+=expr)* CLOSE_PAR
+    | function_name OPEN_PAR ((expr ( COMMA expr)*) | STAR)? CLOSE_PAR
+    | CASE_ case_expr=expr? (WHEN_ when_expr+=expr THEN_ then_expr+=expr)+ (ELSE_ else_expr=expr)? END_
 ;
 
 literal_value:
