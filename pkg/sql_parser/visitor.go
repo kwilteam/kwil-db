@@ -116,7 +116,6 @@ func (v *KFSqliteVisitor) visitExprList(exprList []sqlite.IExprContext) *tree.Ex
 	for i, exprCtx := range exprList {
 		exprs[i] = v.visitExpr(exprCtx)
 	}
-	fmt.Printf("expr list: %+v\n", exprs)
 	return &tree.ExpressionList{Expressions: exprs}
 }
 
@@ -401,7 +400,6 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 		}
 		return expr
 	case ctx.BETWEEN_() != nil:
-		fmt.Println("between", ctx.GetText())
 		expr := &tree.ExpressionBetween{
 			Expression: v.visitExpr(ctx.Expr(0)),
 			Left:       v.visitExpr(ctx.Expr(1)),
@@ -901,8 +899,6 @@ func (v *KFSqliteVisitor) VisitJoin_clause(ctx *sqlite.Join_clauseContext) inter
 		joins[i] = &jp
 	}
 	clause.Joins = joins
-
-	fmt.Println("Join_clause: ", clause)
 
 	return &clause
 }

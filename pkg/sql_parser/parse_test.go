@@ -2047,8 +2047,6 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 
 			astNodes := ast.(asts)
 			node := astNodes[0]
-			//fmt.Printf("AST: %+v\n", node.(*tree.Insert).InsertStmt)
-			//fmt.Printf("exp: %+v\n", tt.expect.(*tree.Insert).InsertStmt)
 			// use assert.Exactly?
 			assert.EqualValues(t, tt.expect, node, "ParseRawSQL() got %s, want %s", node, tt.expect)
 
@@ -2056,12 +2054,24 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 			if err != nil {
 				t.Errorf("ParseRawSQL() got %s", err)
 			}
-			fmt.Println("SQL from AST: ", sql)
-			//if sql != tt.input {
-			//	t.Errorf("ParseRawSQL() got %s, want %s", sql, tt.input)
-			//}
+
+			if *trace {
+				fmt.Println("SQL from AST: ", sql)
+			}
+
+			assert.True(t,
+				strings.EqualFold(unFormatSql(sql), unFormatSql(tt.input)),
+				"ParseRawSQL() got %s, want %s", sql, tt.input)
 		})
 	}
+}
+
+func unFormatSql(sql string) string {
+	sql = strings.ReplaceAll(sql, " ", "")
+	sql = strings.ReplaceAll(sql, ";", "")
+	// double quotes are for table/column names
+	sql = strings.ReplaceAll(sql, `"`, "")
+	return sql
 }
 
 func TestParseRawSQL_listener_allowed(t *testing.T) {
