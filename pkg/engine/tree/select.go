@@ -97,9 +97,6 @@ func (s *SelectCore) ToSQL() string {
 	if s.GroupBy != nil {
 		stmt.WriteString(s.GroupBy.ToSQL())
 	}
-	if s.Compound != nil {
-		stmt.WriteString(s.Compound.ToSQL())
-	}
 	return stmt.String()
 }
 
