@@ -29,6 +29,26 @@ func getResultColumnExprs(values ...string) []tree.ResultColumn {
 	return t
 }
 
+func genSelectUnaryExprTree(op tree.UnaryOperator, value string) *tree.Select {
+	return &tree.Select{
+		SelectStmt: &tree.SelectStmt{
+			SelectCores: []*tree.SelectCore{
+				{
+					SelectType: tree.SelectTypeAll,
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionUnary{
+								Operator: op,
+								Operand:  genLiteralExpression(value),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func genSelectColumnLiteralTree(value string) *tree.Select {
 	t := tree.Select{
 		SelectStmt: &tree.SelectStmt{
@@ -468,10 +488,10 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					},
 				}}},
 		// unary op
-		//{"expr unary op +", "select +1"},
-		//{"expr unary op -", "select -1"},
-		//{"expr unary op ~", "select ~1"},
-		//{"expr unary op not", "select not 1"},
+		{"expr unary op +", "select +1", genSelectUnaryExprTree(tree.UnaryOperatorPlus, "1")},
+		{"expr unary op -", "select -1", genSelectUnaryExprTree(tree.UnaryOperatorMinus, "1")},
+		{"expr unary op ~", "select ~1", genSelectUnaryExprTree(tree.UnaryOperatorBitNot, "1")},
+		{"expr unary op not", "select not 1", genSelectUnaryExprTree(tree.UnaryOperatorNot, "1")},
 		// binary op
 		//{"expr binary op ||", "select 1 || 2",
 		{"expr binary op *", "select 1 * 2",
@@ -750,7 +770,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
 				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
 		// expr list
-		{"expr list", "select (1)",
+		{"expr list", "select (1,2)",
 			&tree.Select{
 				SelectStmt: &tree.SelectStmt{
 					SelectCores: []*tree.SelectCore{
@@ -761,6 +781,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 									Expression: &tree.ExpressionList{
 										Expressions: []tree.Expression{
 											genLiteralExpression("1"),
+											genLiteralExpression("2"),
 										},
 									},
 								},
@@ -770,6 +791,117 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 				},
 			},
 		},
+		// expr precedence
+		{"expr precedence 1", "select -1 > 2",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBinaryComparison{
+										Operator: tree.ComparisonOperatorGreaterThan,
+										Left: &tree.ExpressionUnary{
+											Operator: tree.UnaryOperatorMinus,
+											Operand:  genLiteralExpression("1"),
+										},
+										Right: genLiteralExpression("2"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr precedence 2", "SELECT NOT (-1 = 1) AND 1 notnull OR 3 < 2",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBinaryComparison{
+										Operator: tree.LogicalOperatorOr,
+										Left: &tree.ExpressionBinaryComparison{
+											Operator: tree.LogicalOperatorAnd,
+											Left: &tree.ExpressionUnary{
+												Operator: tree.UnaryOperatorNot,
+												Operand: &tree.ExpressionBinaryComparison{
+													Operator: tree.ComparisonOperatorEqual,
+													Left: &tree.ExpressionUnary{
+														Operator: tree.UnaryOperatorMinus,
+														Operand:  genLiteralExpression("1"),
+													},
+													Right: genLiteralExpression("1"),
+												},
+											},
+											Right: &tree.ExpressionIsNull{
+												Expression: genLiteralExpression("1"),
+												IsNull:     false,
+											},
+										},
+										Right: &tree.ExpressionBinaryComparison{
+											Operator: tree.ComparisonOperatorLessThan,
+											Left:     genLiteralExpression("3"),
+											Right:    genLiteralExpression("2"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr precedence 3", "SELECT NOT (-1 = 1) AND (1 notnull OR 3 < 2)",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBinaryComparison{
+										Operator: tree.LogicalOperatorAnd,
+										Left: &tree.ExpressionUnary{
+											Operator: tree.UnaryOperatorNot,
+											Operand: &tree.ExpressionBinaryComparison{
+												Operator: tree.ComparisonOperatorEqual,
+												Left: &tree.ExpressionUnary{
+													Operator: tree.UnaryOperatorMinus,
+													Operand:  genLiteralExpression("1"),
+												},
+												Right: genLiteralExpression("1"),
+											},
+										},
+										Right: &tree.ExpressionBinaryComparison{
+											Operator: tree.LogicalOperatorOr,
+											Left: &tree.ExpressionIsNull{
+												Expression: genLiteralExpression("1"),
+												IsNull:     false,
+											},
+											Right: &tree.ExpressionBinaryComparison{
+												Operator: tree.ComparisonOperatorLessThan,
+												Left:     genLiteralExpression("3"),
+												Right:    genLiteralExpression("2"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		//{"expr precedence 1", "select 3 + 4 * 5 - 2 / 2 + -1",
+		//{"expr precedence 2", "SELECT 1 = 1 AND 2 > 1 OR 3 < 2"},
+		//{"expr precedence 3", "SELECT NOT 1 = 1 OR 3 < 2"},
+		//{"expr precedence 4", "SELECT (3 + 4) * 5 - 2 / 2"},
+
 		// collate
 		{"expr collate nocase", "select 1 collate nocase",
 			genSimpleCollateSelectTree(tree.CollationTypeNoCase, "1")},
@@ -1560,7 +1692,6 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					},
 				}}},
 		//// join
-		//{"join implicit", "select * from t1,t2 on t1.c1=t2.c1"},
 		{"join on", "select * from t1 join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeJoin,
