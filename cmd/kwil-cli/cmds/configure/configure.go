@@ -2,10 +2,11 @@ package configure
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -60,7 +61,20 @@ func promptPrivateKey(conf *config.KwilCliConfig) {
 	pk, err := crypto.ECDSAFromHex(res)
 	if err != nil {
 		fmt.Println(`invalid private key.  key could not be converted to hex.  received: `, res)
-		promptPrivateKey(conf)
+		promptAskAgain := &common.Prompter{
+			Label: "Would you like to enter another? (y/n)",
+		}
+		res, err := promptAskAgain.Run()
+		if err != nil {
+			panic(err)
+		}
+
+		if res == "y" || res == "yes" {
+
+			promptPrivateKey(conf)
+			return
+		}
+
 		return
 	}
 
