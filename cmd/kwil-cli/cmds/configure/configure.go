@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
+	common "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 
@@ -13,20 +13,23 @@ import (
 
 func NewCmdConfigure() *cobra.Command {
 	var cmd = &cobra.Command{
-		Use:           "configure",
-		Short:         "Configure your client",
-		Long:          "",
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		Use:   "configure",
+		Short: "Configure your client",
+		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			conf, err := config.LoadPersistedConfig()
 			if err != nil {
 				return err
 			}
 
-			promptGRPCURL(conf)
-			promptPrivateKey(conf)
-			promptClientChainRPCURL(conf)
+			err = runErrs(conf,
+				promptGRPCURL,
+				promptPrivateKey,
+				promptClientChainRPCURL,
+			)
+			if err != nil {
+				return err
+			}
 
 			return config.PersistConfig(conf)
 		},
@@ -35,27 +38,41 @@ func NewCmdConfigure() *cobra.Command {
 	return cmd
 }
 
-func promptGRPCURL(conf *config.KwilCliConfig) {
+func runErrs(conf *config.KwilCliConfig, fns ...func(*config.KwilCliConfig) error) error {
+	for _, fn := range fns {
+
+		err := fn(conf)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func promptGRPCURL(conf *config.KwilCliConfig) error {
 	prompt := &common.Prompter{
 		Label:   "Kwil RPC URL",
 		Default: conf.GrpcURL,
 	}
 	res, err := prompt.Run()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	conf.GrpcURL = res
+
+	return nil
 }
 
-func promptPrivateKey(conf *config.KwilCliConfig) {
+func promptPrivateKey(conf *config.KwilCliConfig) error {
 	prompt := &common.Prompter{
 		Label:   "Private Key",
 		Default: crypto.HexFromECDSAPrivateKey(conf.PrivateKey),
 	}
 	res, err := prompt.Run()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	pk, err := crypto.ECDSAFromHex(res)
@@ -64,40 +81,41 @@ func promptPrivateKey(conf *config.KwilCliConfig) {
 		promptAskAgain := &common.Prompter{
 			Label: "Would you like to enter another? (y/n)",
 		}
-		res, err := promptAskAgain.Run()
+		res2, err := promptAskAgain.Run()
 		if err != nil {
-			panic(err)
+			return err
 		}
 
-		if res == "y" || res == "yes" {
-
-			promptPrivateKey(conf)
-			return
+		if res2 == "y" || res == "yes" {
+			return promptPrivateKey(conf)
 		}
 
-		return
+		return nil
 	}
 
 	conf.PrivateKey = pk
+
+	return nil
 }
 
-func promptClientChainRPCURL(conf *config.KwilCliConfig) {
+func promptClientChainRPCURL(conf *config.KwilCliConfig) error {
 	prompt := &common.Prompter{
 		Label:   "Client Chain RPC URL",
 		Default: conf.ClientChainRPCURL,
 	}
 	res, err := prompt.Run()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	if containsProtocol(&res) != nil {
 		fmt.Println(`url must contain http:// , https:// , ws:// , or wss://.  received: `, res)
-		promptClientChainRPCURL(conf)
-		return
+		return promptClientChainRPCURL(conf)
 	}
 
 	conf.ClientChainRPCURL = res
+
+	return nil
 }
 
 // containsProtocol should check if the url contains http:// or https://

@@ -1,6 +1,7 @@
 package specifications
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -32,6 +33,13 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T) *schema.Schema {
 	}
 
 	db := ast.Schema()
+
+	jsonBytes, err := json.Marshal(db)
+	if err != nil {
+		t.Fatal("cannot marshal database schema", err)
+	}
+
+	os.WriteFile("./db.json", jsonBytes, 0644)
 
 	l.Modifier(db)
 
