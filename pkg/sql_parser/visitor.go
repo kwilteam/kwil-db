@@ -2,11 +2,12 @@ package sql_parser
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 	"github.com/kwilteam/kwil-db/pkg/sql_parser/sqlite"
-	"reflect"
-	"strings"
 )
 
 // KFSqliteVisitor is visitor that visit Antlr parsed tree and returns the AST.

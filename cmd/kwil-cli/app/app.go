@@ -28,7 +28,12 @@ func Execute() error {
 		system.NewVersionCmd(),
 	)
 
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func init() {

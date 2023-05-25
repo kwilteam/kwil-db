@@ -4,10 +4,11 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 
 	"github.com/spf13/viper"
 )
@@ -37,16 +38,19 @@ type kwilCliPersistedConfig struct {
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
-	privateKey, err := crypto.ECDSAFromHex(c.PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid private key: %w.\nusing private key: %s", err, c.PrivateKey)
-	}
-
-	return &KwilCliConfig{
-		PrivateKey:        privateKey,
+	kwilConfig := &KwilCliConfig{
 		GrpcURL:           c.GrpcURL,
 		ClientChainRPCURL: c.ClientChainRPCURL,
-	}, nil
+	}
+
+	privateKey, err := crypto.ECDSAFromHex(c.PrivateKey)
+	if err != nil {
+		return kwilConfig, nil
+	}
+
+	kwilConfig.PrivateKey = privateKey
+
+	return kwilConfig, nil
 }
 
 func PersistConfig(conf *KwilCliConfig) error {

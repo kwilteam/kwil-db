@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 )
@@ -17,6 +18,9 @@ const (
 	// WithChainClient is a flag that can be passed to DialClient to indicate that the client should be configured to use a chain client.
 	// If no ChainRPCURL is provided in the config, this will return an error
 	WithChainClient
+
+	// WithoutPrivateKey is a flag that can be passed to DialClient to indicate that the client should not use the private key in the config
+	WithoutPrivateKey
 )
 
 type RoundTripper func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error
@@ -41,11 +45,15 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		}
 		options = append(options, client.WithChainRpcUrl(conf.ClientChainRPCURL))
 	}
+	if flags&WithoutPrivateKey == 0 {
+		// this means it needs to use the private key
+		if conf.PrivateKey == nil {
+			return fmt.Errorf("private key not provided")
+		}
 
-	if conf.PrivateKey != nil {
-		// if there is a private key, we should use it in the client
 		options = append(options, client.WithPrivateKey(conf.PrivateKey))
 	}
+
 	if conf.GrpcURL == "" {
 		// the grpc url is required
 		// this is somewhat redundant since the config marks it as required, but in case the config is changed
@@ -69,6 +77,5 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 			return fmt.Errorf("unexpected ping response: %s", pong)
 		}
 	}
-
 	return fn(ctx, clt, conf)
 }

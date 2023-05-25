@@ -3,10 +3,11 @@ package sql_parser
 import (
 	"flag"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
-	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/tree"
+	"github.com/stretchr/testify/assert"
 )
 
 var trace = flag.Bool("trace", false, "run tests with tracing")

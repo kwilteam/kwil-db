@@ -3,6 +3,7 @@ package fund
 import (
 	"context"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
@@ -18,7 +19,7 @@ func balancesCmd() *cobra.Command {
 		Long:  `"balances" returns your allowance and balance for your currently configured funding pool.`,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), common.WithChainClient, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), common.WithChainClient|common.WithoutPrivateKey, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				address, err := getSelectedAddress(cmd, conf)
 				if err != nil {
 					return fmt.Errorf("error getting selected address: %w", err)
