@@ -238,7 +238,7 @@ func (e *ExpressionIsNull) ToSQL() string {
 	if e.IsNull {
 		stmt.Token.Is().Null()
 	} else {
-		stmt.Token.Is().Not().Null()
+		stmt.Token.Not().Null()
 	}
 	return stmt.String()
 }
