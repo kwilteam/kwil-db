@@ -53,7 +53,6 @@ sql_stmt: (EXPLAIN_ (QUERY_ PLAN_)?)? (
         | create_view_stmt
         | create_virtual_table_stmt
         | delete_stmt
-        | delete_stmt_limited
         | detach_stmt
         | drop_stmt
         | insert_stmt
@@ -226,13 +225,10 @@ common_table_stmt: //additional structures
 ;
 
 delete_stmt:
-    common_table_stmt? DELETE_ FROM_ qualified_table_name (WHERE_ expr)? returning_clause?
-;
-
-delete_stmt_limited:
-    common_table_stmt? DELETE_ FROM_ qualified_table_name (WHERE_ expr)? returning_clause? (
-        order_by_stmt? limit_stmt
-    )?
+    common_table_stmt?
+    DELETE_ FROM_ qualified_table_name
+    (WHERE_ expr)?
+    returning_clause?
 ;
 
 detach_stmt:
