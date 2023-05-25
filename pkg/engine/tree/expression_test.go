@@ -22,6 +22,14 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			want: "'foo'",
 		},
 		{
+			name: "expression literal with wrapped paren",
+			fields: &tree.ExpressionLiteral{
+				Value:   "'foo'",
+				Wrapped: true,
+			},
+			want: "( 'foo' )",
+		},
+		{
 			name: "expression literal with int",
 			fields: &tree.ExpressionLiteral{
 				Value: "1",

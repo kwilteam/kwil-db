@@ -23,7 +23,10 @@ type InsertExpression interface {
 	Insert()
 }*/
 
+type Wrapped bool
+
 type ExpressionLiteral struct {
+	Wrapped
 	Value string
 }
 
@@ -31,8 +34,15 @@ func (e *ExpressionLiteral) Insert()       {}
 func (e *ExpressionLiteral) isExpression() {}
 func (e *ExpressionLiteral) ToSQL() string {
 	validateIsNonStringLiteral(e.Value)
+	stmt := sqlwriter.NewWriter()
 
-	return e.Value
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
+	stmt.WriteString(e.Value)
+
+	return stmt.String()
 }
 
 func isStringLiteral(str string) bool {
@@ -64,6 +74,7 @@ func validateIsNonStringLiteral(str string) {
 }
 
 type ExpressionBindParameter struct {
+	Wrapped
 	Parameter string
 }
 
@@ -77,10 +88,19 @@ func (e *ExpressionBindParameter) ToSQL() string {
 		panic("ExpressionBindParameter: bind parameter must start with $")
 	}
 
-	return e.Parameter
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
+	stmt.WriteString(e.Parameter)
+
+	return stmt.String()
 }
 
 type ExpressionColumn struct {
+	Wrapped
 	Table  string
 	Column string
 }
@@ -89,6 +109,11 @@ func (e *ExpressionColumn) Insert()       {}
 func (e *ExpressionColumn) isExpression() {}
 func (e *ExpressionColumn) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	if e.Table != "" {
 		stmt.WriteIdent(e.Table)
 		stmt.Token.Period()
@@ -103,6 +128,7 @@ func (e *ExpressionColumn) ToSQL() string {
 }
 
 type ExpressionUnary struct {
+	Wrapped
 	Operator UnaryOperator
 	Operand  Expression
 }
@@ -111,12 +137,18 @@ func (e *ExpressionUnary) isExpression() {}
 
 func (e *ExpressionUnary) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Operand.ToSQL())
 	return stmt.String()
 }
 
 type ExpressionBinaryComparison struct {
+	Wrapped
 	Left     Expression
 	Operator BinaryOperator
 	Right    Expression
@@ -125,6 +157,11 @@ type ExpressionBinaryComparison struct {
 func (e *ExpressionBinaryComparison) isExpression() {}
 func (e *ExpressionBinaryComparison) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	stmt.WriteString(e.Left.ToSQL())
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Right.ToSQL())
@@ -132,6 +169,7 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 }
 
 type ExpressionFunction struct {
+	Wrapped
 	Function SQLFunction
 	Inputs   []Expression
 	Distinct bool
@@ -141,6 +179,11 @@ func (e *ExpressionFunction) isExpression() {}
 func (e *ExpressionFunction) Insert()       {}
 func (e *ExpressionFunction) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	var stringToWrite string
 
 	if e.Distinct {
@@ -158,6 +201,7 @@ func (e *ExpressionFunction) ToSQL() string {
 }
 
 type ExpressionList struct {
+	Wrapped
 	Expressions []Expression
 }
 
@@ -165,6 +209,10 @@ func (e *ExpressionList) isExpression() {}
 func (e *ExpressionList) Insert()       {}
 func (e *ExpressionList) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
 
 	if len(e.Expressions) == 0 {
 		panic("ExpressionExpressionList: expressions cannot be empty")
@@ -178,6 +226,7 @@ func (e *ExpressionList) ToSQL() string {
 }
 
 type ExpressionCollate struct {
+	Wrapped
 	Expression Expression
 	Collation  CollationType
 }
@@ -192,6 +241,11 @@ func (e *ExpressionCollate) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	stmt.WriteString(e.Expression.ToSQL())
 	stmt.Token.Collate()
 	stmt.WriteString(e.Collation.String())
@@ -199,6 +253,7 @@ func (e *ExpressionCollate) ToSQL() string {
 }
 
 type ExpressionStringCompare struct {
+	Wrapped
 	Left     Expression
 	Operator StringOperator
 	Right    Expression
@@ -208,6 +263,11 @@ type ExpressionStringCompare struct {
 func (e *ExpressionStringCompare) isExpression() {}
 func (e *ExpressionStringCompare) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	stmt.WriteString(e.Left.ToSQL())
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Right.ToSQL())
@@ -223,6 +283,7 @@ func (e *ExpressionStringCompare) ToSQL() string {
 }
 
 type ExpressionIsNull struct {
+	Wrapped
 	Expression Expression
 	IsNull     bool
 }
@@ -234,6 +295,11 @@ func (e *ExpressionIsNull) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	stmt.WriteString(e.Expression.ToSQL())
 	if e.IsNull {
 		stmt.Token.Is().Null()
@@ -244,6 +310,7 @@ func (e *ExpressionIsNull) ToSQL() string {
 }
 
 type ExpressionDistinct struct {
+	Wrapped
 	Left  Expression
 	Right Expression
 	IsNot bool
@@ -259,6 +326,11 @@ func (e *ExpressionDistinct) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	stmt.WriteString(e.Left.ToSQL())
 	stmt.Token.Is()
 	if e.IsNot {
@@ -270,6 +342,7 @@ func (e *ExpressionDistinct) ToSQL() string {
 }
 
 type ExpressionBetween struct {
+	Wrapped
 	Expression Expression
 	NotBetween bool
 	Left       Expression
@@ -289,6 +362,11 @@ func (e *ExpressionBetween) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	stmt.WriteString(e.Expression.ToSQL())
 	if e.NotBetween {
 		stmt.Token.Not()
@@ -301,6 +379,7 @@ func (e *ExpressionBetween) ToSQL() string {
 }
 
 type ExpressionSelect struct {
+	Wrapped
 	IsNot    bool
 	IsExists bool
 	Select   *SelectStmt
@@ -312,6 +391,11 @@ func (e *ExpressionSelect) ToSQL() string {
 	e.check()
 
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	if e.IsNot {
 		stmt.Token.Not()
 	}
@@ -340,6 +424,7 @@ func (e *ExpressionSelect) check() {
 }
 
 type ExpressionCase struct {
+	Wrapped
 	CaseExpression Expression
 	WhenThenPairs  [][2]Expression
 	ElseExpression Expression
@@ -352,6 +437,11 @@ func (e *ExpressionCase) ToSQL() string {
 	}
 
 	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
 	stmt.Token.Case()
 	if e.CaseExpression != nil {
 		stmt.WriteString(e.CaseExpression.ToSQL())

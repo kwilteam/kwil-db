@@ -17,13 +17,13 @@ func Test_Writer(t *testing.T) {
 		t.Errorf("expected ' TEST1  TEST2 ', got %s", stmt.String())
 	}
 
-	stmt = sqlwriter.NewWriter()
+	stmt = sqlwriter.NewWriter().WrapParen()
 	stmt.Token.Lparen()
 	stmt.WriteInt64(1)
 	stmt.Token.Rparen()
-
-	if stmt.String() != " (  1  ) " {
-		t.Errorf("expected ' (  1  ) ', got %s", stmt.String())
+	str := stmt.String()
+	if str != "( (  1  ) )" {
+		t.Errorf("expected '( (  1  ) ), got %s", stmt.String())
 	}
 
 }
