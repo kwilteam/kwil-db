@@ -174,50 +174,24 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 			expr.IsExists = true
 		}
 		return expr
-	case ctx.Function_name() != nil:
-		expr := &tree.ExpressionFunction{
-			Inputs: make([]tree.Expression, len(ctx.AllExpr())),
+	case ctx.GetElevate_expr() != nil:
+		return v.visitExpr(ctx.GetElevate_expr())
+	// unary operators
+	case ctx.MINUS() != nil && ctx.GetUnary_expr() != nil:
+		return &tree.ExpressionUnary{
+			Operator: tree.UnaryOperatorMinus,
+			Operand:  v.visitExpr(ctx.GetUnary_expr()),
 		}
-		funcName := ctx.Function_name().GetText()
-
-		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
-		if !ok {
-			panic(fmt.Sprintf("unsupported function '%s'", funcName))
+	case ctx.PLUS() != nil && ctx.GetUnary_expr() != nil:
+		return &tree.ExpressionUnary{
+			Operator: tree.UnaryOperatorPlus,
+			Operand:  v.visitExpr(ctx.GetUnary_expr()),
 		}
-		expr.Function = f
-
-		for i, e := range ctx.AllExpr() {
-			expr.Inputs[i] = v.visitExpr(e)
+	case ctx.TILDE() != nil && ctx.GetUnary_expr() != nil:
+		return &tree.ExpressionUnary{
+			Operator: tree.UnaryOperatorBitNot,
+			Operand:  v.visitExpr(ctx.GetUnary_expr()),
 		}
-		return expr
-	case ctx.CASE_() != nil:
-		whenExprCount := len(ctx.GetWhen_expr())
-		expr := &tree.ExpressionCase{
-			WhenThenPairs: make([][2]tree.Expression, whenExprCount),
-		}
-		for i := 0; i < whenExprCount; i++ {
-			expr.WhenThenPairs[i][0] = v.visitExpr(ctx.GetWhen_expr()[i])
-			expr.WhenThenPairs[i][1] = v.visitExpr(ctx.GetThen_expr()[i])
-		}
-
-		if ctx.GetCase_expr() != nil {
-			expr.CaseExpression = v.visitExpr(ctx.GetCase_expr())
-		}
-
-		if ctx.GetElse_expr() != nil {
-			expr.ElseExpression = v.visitExpr(ctx.GetElse_expr())
-		}
-		return expr
-	//
-	//// unary operators
-	//case ctx.Unary_operator() != nil:
-	//	fmt.Println("))))))))))) ", ctx.GetText())
-	//	//opCtx := ctx.Unary_operator()
-	//	//switch {
-	//	//case opCtx.MINUS() != nil:
-	//	//
-	//	//}
-	//	panic("wont reach here")
 	case ctx.COLLATE_() != nil:
 		// collation_name is any_name
 		collationName := ctx.Collation_name().GetText()
@@ -455,8 +429,10 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 		}
 	// not unary op
 	case ctx.NOT_() != nil && ctx.GetUnary_expr() != nil:
-		fmt.Println("not unary op", ctx.GetText())
-		panic("not unary op")
+		return &tree.ExpressionUnary{
+			Operator: tree.UnaryOperatorNot,
+			Operand:  v.visitExpr(ctx.GetUnary_expr()),
+		}
 	case ctx.AND_() != nil:
 		return &tree.ExpressionBinaryComparison{
 			Left:     v.visitExpr(ctx.Expr(0)),
@@ -469,9 +445,44 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 			Operator: tree.LogicalOperatorOr,
 			Right:    v.visitExpr(ctx.Expr(1)),
 		}
-	// expr list
-	default:
+	case ctx.GetExpr_list() != nil:
 		return v.visitExprList(ctx.AllExpr())
+	case ctx.Function_name() != nil:
+		expr := &tree.ExpressionFunction{
+			Inputs: make([]tree.Expression, len(ctx.AllExpr())),
+		}
+		funcName := ctx.Function_name().GetText()
+
+		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
+		if !ok {
+			panic(fmt.Sprintf("unsupported function '%s'", funcName))
+		}
+		expr.Function = f
+
+		for i, e := range ctx.AllExpr() {
+			expr.Inputs[i] = v.visitExpr(e)
+		}
+		return expr
+	case ctx.CASE_() != nil:
+		whenExprCount := len(ctx.GetWhen_expr())
+		expr := &tree.ExpressionCase{
+			WhenThenPairs: make([][2]tree.Expression, whenExprCount),
+		}
+		for i := 0; i < whenExprCount; i++ {
+			expr.WhenThenPairs[i][0] = v.visitExpr(ctx.GetWhen_expr()[i])
+			expr.WhenThenPairs[i][1] = v.visitExpr(ctx.GetThen_expr()[i])
+		}
+
+		if ctx.GetCase_expr() != nil {
+			expr.CaseExpression = v.visitExpr(ctx.GetCase_expr())
+		}
+
+		if ctx.GetElse_expr() != nil {
+			expr.ElseExpression = v.visitExpr(ctx.GetElse_expr())
+		}
+		return expr
+	default:
+		panic(fmt.Sprintf("cannot recognize expr '%s'", ctx.GetText()))
 	}
 
 	return nil
