@@ -1844,6 +1844,59 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 				},
 			},
 		},
+
+		//// delete
+		{"delete all", "delete from t1",
+			&tree.Delete{
+				DeleteStmt: &tree.DeleteStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName: "t1",
+					},
+				},
+			},
+		},
+		{"delete with where", "delete from t1 where c1='1'",
+			&tree.Delete{
+				DeleteStmt: &tree.DeleteStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName: "t1",
+					},
+					Where: &tree.ExpressionBinaryComparison{
+						Operator: tree.ComparisonOperatorEqual,
+						Left:     &tree.ExpressionColumn{Column: "c1"},
+						Right:    genLiteralExpression("'1'"),
+					},
+				},
+			},
+		},
+		{"delete with returning", "delete from t1 returning *",
+			&tree.Delete{
+				DeleteStmt: &tree.DeleteStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName: "t1",
+					},
+					Returning: &tree.ReturningClause{
+						Returned: []*tree.ReturningClauseColumn{
+							{
+								All: true,
+							},
+						},
+					},
+				},
+			},
+		},
+		{"delete with cte", "with t as (select 1) delete from t1",
+			&tree.Delete{
+				CTE: []*tree.CTE{
+					genSimpleCTETree("t", "1"),
+				},
+				DeleteStmt: &tree.DeleteStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName: "t1",
+					},
+				},
+			},
+		},
 	}
 
 	ctx := DatabaseContext{Actions: map[string]ActionContext{"action1": {}}}
