@@ -2,7 +2,7 @@ package tree
 
 import (
 	"fmt"
-	"reflect"
+	"strings"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
 
@@ -24,42 +24,43 @@ type InsertExpression interface {
 }*/
 
 type ExpressionLiteral struct {
-	Value interface{}
+	Value string
 }
 
 func (e *ExpressionLiteral) Insert()       {}
 func (e *ExpressionLiteral) isExpression() {}
 func (e *ExpressionLiteral) ToSQL() string {
-	dataType := reflect.TypeOf(e.Value)
-	switch dataType.Kind() {
-	case reflect.String:
-		return formatStringLiteral(e.Value)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Bool, reflect.Array, reflect.Slice:
-		return toString(e.Value)
-	case reflect.Float32, reflect.Float64:
-		panic("ExpressionLiteral: floating point literals are not supported")
-	default:
-		panic(fmt.Errorf("ExpressionLiteral: unsupported literal type: %s", dataType.Kind()))
-	}
+	validateIsNonStringLiteral(e.Value)
+
+	return e.Value
 }
 
-func toString(val any) string {
-	strVal, err := conv.String(val)
-	if err != nil {
-		panic(fmt.Errorf("failed to convert literal to string: %w", err))
-	}
-	return strVal
+func isStringLiteral(str string) bool {
+	return str[0] == '\'' && str[len(str)-1] == '\''
 }
 
-func formatStringLiteral(literal any) string {
-	strVal := toString(literal)
-	if strVal[0] != '\'' {
-		strVal = "'" + strVal
+func validateIsNonStringLiteral(str string) {
+	if isStringLiteral(str) {
+		return
 	}
-	if strVal[len(strVal)-1] != '\'' {
-		strVal = strVal + "'"
+
+	if strings.EqualFold(str, "null") {
+		return
 	}
-	return strVal
+	if strings.EqualFold(str, "true") || strings.EqualFold(str, "false") {
+		return
+	}
+
+	if len(strings.Split(str, ".")) > 1 {
+		panic(fmt.Errorf("literal cannot be float.  received: %s", str))
+	}
+
+	_, err := conv.Int64(str)
+	if err == nil {
+		return
+	}
+
+	panic(fmt.Errorf("invalid literal: %s", str))
 }
 
 type ExpressionBindParameter struct {

@@ -20,7 +20,7 @@ func ParseRawSQL(sql string, currentLine int, actionName string, dbCtx DatabaseC
 	}
 
 	if trace {
-		listener = NewKlSqliteListener(errorListener.ErrorHandler, actionName, dbCtx, WithTrace())
+		listener = NewKlSqliteListener(errorListener.ErrorHandler, actionName, dbCtx, KlListenerWithTrace())
 	} else {
 		listener = NewKlSqliteListener(errorListener.ErrorHandler, actionName, dbCtx)
 	}
@@ -98,7 +98,7 @@ func ParseRawSQLVisitor(sql string, currentLine int, actionName string, dbCtx Da
 	}
 
 	if trace {
-		visitor = NewKFSqliteVisitor(errorListener.ErrorHandler, actionName, dbCtx)
+		visitor = NewKFSqliteVisitor(errorListener.ErrorHandler, actionName, dbCtx, KFVisitorWithTrace())
 	} else {
 		visitor = NewKFSqliteVisitor(errorListener.ErrorHandler, actionName, dbCtx)
 	}

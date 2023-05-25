@@ -20,14 +20,25 @@ type KFSqliteVisitor struct {
 	trace bool
 }
 
+type KFSqliteVisitorOption func(*KFSqliteVisitor)
+
+func KFVisitorWithTrace() KFSqliteVisitorOption {
+	return func(l *KFSqliteVisitor) {
+		l.trace = true
+	}
+}
+
 var _ sqlite.SQLiteParserVisitor = &KFSqliteVisitor{}
 
-func NewKFSqliteVisitor(eh *ErrorHandler, actionName string, ctx DatabaseContext) *KFSqliteVisitor {
+func NewKFSqliteVisitor(eh *ErrorHandler, actionName string, ctx DatabaseContext, opts ...KFSqliteVisitorOption) *KFSqliteVisitor {
 	k := &KFSqliteVisitor{
 		ErrorHandler: *eh,
 		actionCtx:    ctx.Actions[actionName],
 		dbCtx:        ctx,
 		trace:        false,
+	}
+	for _, opt := range opts {
+		opt(k)
 	}
 	return k
 }
@@ -114,18 +125,27 @@ func (v *KFSqliteVisitor) VisitExpr(ctx *sqlite.ExprContext) interface{} {
 	return v.visitExpr(ctx)
 }
 
+func (v *KFSqliteVisitor) getCollateType(collationName string) tree.CollationType {
+	switch strings.ToLower(collationName) {
+	case "binary":
+		return tree.CollationTypeBinary
+	case "nocase":
+		return tree.CollationTypeNoCase
+	case "rtrim":
+		return tree.CollationTypeRTrim
+	default:
+		panic(fmt.Sprintf("unknown collation type %s", collationName))
+	}
+}
+
 func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 	if ctx == nil {
 		return nil
 	}
 
-	//// handle expr list
-	//startNode, ok := ctx.GetChild(0).(antlr.TerminalNode)
-	//if ok && startNode.GetSymbol().GetTokenType() == sqlite.SQLiteParserOPEN_PAR {
-	//	return v.visitExprList(ctx.AllExpr())
-	//}
-
+	// order is important, map to expr definition in Antlr grammar(not exactly)
 	switch {
+	// primary expressions
 	case ctx.Literal_value() != nil:
 		return &tree.ExpressionLiteral{Value: ctx.Literal_value().GetText()}
 	case ctx.BIND_PARAMETER() != nil:
@@ -139,6 +159,56 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 			expr.Column = ctx.Column_name().GetText()
 		}
 		return expr
+	case ctx.Select_stmt_core() != nil && ctx.IN_() == nil:
+		// select_stmt_core not in IN
+		stmt := v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt)
+		expr := &tree.ExpressionSelect{
+			IsNot:    false,
+			IsExists: false,
+			Select:   stmt,
+		}
+		if ctx.NOT_() != nil {
+			expr.IsNot = true
+		}
+		if ctx.EXISTS_() != nil {
+			expr.IsExists = true
+		}
+		return expr
+	case ctx.Function_name() != nil:
+		expr := &tree.ExpressionFunction{
+			Inputs: make([]tree.Expression, len(ctx.AllExpr())),
+		}
+		funcName := ctx.Function_name().GetText()
+
+		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
+		if !ok {
+			panic(fmt.Sprintf("unsupported function '%s'", funcName))
+		}
+		expr.Function = f
+
+		for i, e := range ctx.AllExpr() {
+			expr.Inputs[i] = v.visitExpr(e)
+		}
+		return expr
+	case ctx.CASE_() != nil:
+		whenExprCount := len(ctx.GetWhen_expr())
+		expr := &tree.ExpressionCase{
+			WhenThenPairs: make([][2]tree.Expression, whenExprCount),
+		}
+		for i := 0; i < whenExprCount; i++ {
+			expr.WhenThenPairs[i][0] = v.visitExpr(ctx.GetWhen_expr()[i])
+			expr.WhenThenPairs[i][1] = v.visitExpr(ctx.GetThen_expr()[i])
+		}
+
+		if ctx.GetCase_expr() != nil {
+			expr.CaseExpression = v.visitExpr(ctx.GetCase_expr())
+		}
+
+		if ctx.GetElse_expr() != nil {
+			expr.ElseExpression = v.visitExpr(ctx.GetElse_expr())
+		}
+		return expr
+	//
 	//// unary operators
 	//case ctx.Unary_operator() != nil:
 	//	fmt.Println("))))))))))) ", ctx.GetText())
@@ -148,6 +218,13 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 	//	//
 	//	//}
 	//	panic("wont reach here")
+	case ctx.COLLATE_() != nil:
+		// collation_name is any_name
+		collationName := ctx.Collation_name().GetText()
+		return &tree.ExpressionCollate{
+			Expression: v.visitExpr(ctx.Expr(0)),
+			Collation:  v.getCollateType(collationName),
+		}
 	// binary opertors
 	//case ctx.PIPE2() != nil: // TODO: ??
 	//	return &tree.ExpressionBinaryComparison{
@@ -281,10 +358,6 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 		}
 		return expr
 	case ctx.IN_() != nil:
-		fmt.Println("open_par  ", ctx.OPEN_PAR())
-		fmt.Println("expr  ", ctx.Expr(0).GetText())
-		fmt.Println("expr  ", ctx.Expr(1).GetText())
-
 		expr := &tree.ExpressionBinaryComparison{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Operator: tree.ComparisonOperatorIn,
@@ -309,51 +382,6 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 			expr.Right = v.visitExpr(ctx.Expr(1))
 		}
 		return expr
-	case ctx.AND_() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.LogicalOperatorAnd,
-			Right:    v.visitExpr(ctx.Expr(1)),
-		}
-	case ctx.OR_() != nil:
-		return &tree.ExpressionBinaryComparison{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Operator: tree.LogicalOperatorOr,
-			Right:    v.visitExpr(ctx.Expr(1)),
-		}
-	case ctx.Function_name() != nil:
-		expr := &tree.ExpressionFunction{
-			Inputs: make([]tree.Expression, len(ctx.AllExpr())),
-		}
-
-		f, ok := tree.SQLFunctions["abs"]
-		if !ok {
-			panic(fmt.Sprintf("unsupported function '%s'", ctx.Function_name().GetText()))
-		}
-		expr.Function = f
-
-		for i, e := range ctx.AllExpr() {
-			expr.Inputs[i] = v.visitExpr(e)
-		}
-		return expr
-	case ctx.COLLATE_() != nil:
-		// collation_name is any_name
-		collationName := ctx.Collation_name().GetText()
-		var collationType tree.CollationType
-		switch strings.ToLower(collationName) {
-		case "binary":
-			collationType = tree.CollationTypeBinary
-		case "nocase":
-			collationType = tree.CollationTypeNoCase
-		case "rtrim":
-			collationType = tree.CollationTypeRTrim
-		default:
-			panic(fmt.Sprintf("unknown collation type %s", collationName))
-		}
-		return &tree.ExpressionCollate{
-			Expression: v.visitExpr(ctx.Expr(0)),
-			Collation:  collationType,
-		}
 	// string comparison
 	case ctx.LIKE_() != nil:
 		expr := &tree.ExpressionStringCompare{
@@ -398,6 +426,17 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 			expr.Operator = tree.StringOperatorNotGlob
 		}
 		return expr
+	case ctx.BETWEEN_() != nil:
+		fmt.Println("between", ctx.GetText())
+		expr := &tree.ExpressionBetween{
+			Expression: v.visitExpr(ctx.Expr(0)),
+			Left:       v.visitExpr(ctx.Expr(1)),
+			Right:      v.visitExpr(ctx.Expr(2)),
+		}
+		if ctx.NOT_() != nil {
+			expr.NotBetween = true
+		}
+		return expr
 	// null
 	case ctx.ISNULL_() != nil:
 		return &tree.ExpressionIsNull{
@@ -414,51 +453,22 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 			Expression: v.visitExpr(ctx.Expr(0)),
 			IsNull:     false,
 		}
-	case ctx.BETWEEN_() != nil:
-		fmt.Println("between", ctx.GetText())
-		expr := &tree.ExpressionBetween{
-			Expression: v.visitExpr(ctx.Expr(0)),
-			Left:       v.visitExpr(ctx.Expr(1)),
-			Right:      v.visitExpr(ctx.Expr(2)),
+	// not unary op
+	case ctx.NOT_() != nil && ctx.GetUnary_expr() != nil:
+		fmt.Println("not unary op", ctx.GetText())
+		panic("not unary op")
+	case ctx.AND_() != nil:
+		return &tree.ExpressionBinaryComparison{
+			Left:     v.visitExpr(ctx.Expr(0)),
+			Operator: tree.LogicalOperatorAnd,
+			Right:    v.visitExpr(ctx.Expr(1)),
 		}
-		if ctx.NOT_() != nil {
-			expr.NotBetween = true
+	case ctx.OR_() != nil:
+		return &tree.ExpressionBinaryComparison{
+			Left:     v.visitExpr(ctx.Expr(0)),
+			Operator: tree.LogicalOperatorOr,
+			Right:    v.visitExpr(ctx.Expr(1)),
 		}
-		return expr
-	case ctx.Select_stmt_core() != nil && ctx.IN_() == nil:
-		// select_stmt_core not in IN
-		stmt := v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt)
-		expr := &tree.ExpressionSelect{
-			IsNot:    false,
-			IsExists: false,
-			Select:   stmt,
-		}
-		if ctx.NOT_() != nil {
-			expr.IsNot = true
-		}
-		if ctx.EXISTS_() != nil {
-			expr.IsExists = true
-		}
-		return expr
-	case ctx.CASE_() != nil:
-		whenExprCount := len(ctx.GetWhen_expr())
-		expr := &tree.ExpressionCase{
-			WhenThenPairs: make([][2]tree.Expression, whenExprCount),
-		}
-		for i := 0; i < whenExprCount; i++ {
-			expr.WhenThenPairs[i][0] = v.visitExpr(ctx.GetWhen_expr()[i])
-			expr.WhenThenPairs[i][1] = v.visitExpr(ctx.GetThen_expr()[i])
-		}
-
-		if ctx.GetCase_expr() != nil {
-			expr.CaseExpression = v.visitExpr(ctx.GetCase_expr())
-		}
-
-		if ctx.GetElse_expr() != nil {
-			expr.ElseExpression = v.visitExpr(ctx.GetElse_expr())
-		}
-
-		return expr
 	// expr list
 	default:
 		return v.visitExprList(ctx.AllExpr())
@@ -549,6 +559,7 @@ func (v *KFSqliteVisitor) VisitUpsert_update(ctx *sqlite.Upsert_updateContext) i
 	return &clause
 }
 
+// VisitColumn_name_list is called when visiting a column_name_list, return []string
 func (v *KFSqliteVisitor) VisitColumn_name_list(ctx *sqlite.Column_name_listContext) interface{} {
 	names := make([]string, len(ctx.AllColumn_name()))
 	for i, nameCtx := range ctx.AllColumn_name() {
@@ -565,7 +576,118 @@ func (v *KFSqliteVisitor) VisitColumn_name(ctx *sqlite.Column_nameContext) inter
 // VisitReturning_clause is called when visiting a returning_clause, return *tree.ReturningClause
 func (v *KFSqliteVisitor) VisitReturning_clause(ctx *sqlite.Returning_clauseContext) interface{} {
 	clause := tree.ReturningClause{}
+	clause.Returned = make([]*tree.ReturningClauseColumn, len(ctx.AllReturning_clause_result_column()))
+	for i, columnCtx := range ctx.AllReturning_clause_result_column() {
+		if columnCtx.STAR() != nil {
+			clause.Returned[i] = &tree.ReturningClauseColumn{
+				All: true,
+			}
+			continue
+		}
+
+		clause.Returned[i] = &tree.ReturningClauseColumn{
+			Expression: v.Visit(columnCtx.Expr()).(tree.Expression),
+		}
+
+		if columnCtx.Column_alias() != nil {
+			clause.Returned[i].Alias = columnCtx.Column_alias().GetText()
+		}
+
+	}
 	return &clause
+}
+
+// VisitUpdate_set_subclause is called when visiting a column_assign_subclause, return *tree.UpdateSetClause
+func (v *KFSqliteVisitor) VisitUpdate_set_subclause(ctx *sqlite.Update_set_subclauseContext) interface{} {
+	result := tree.UpdateSetClause{}
+
+	if ctx.Column_name_list() != nil {
+		result.Columns = v.Visit(ctx.Column_name_list()).([]string)
+	} else {
+		result.Columns = []string{ctx.Column_name().GetText()}
+	}
+
+	result.Expression = v.Visit(ctx.Expr()).(tree.Expression)
+	return &result
+}
+
+// VisitQualified_table_name is called when visiting a qualified_table_name, return *tree.QualifiedTableName
+func (v *KFSqliteVisitor) VisitQualified_table_name(ctx *sqlite.Qualified_table_nameContext) interface{} {
+	result := tree.QualifiedTableName{}
+
+	result.TableName = ctx.Table_name().GetText()
+
+	if ctx.Alias() != nil {
+		result.TableAlias = ctx.Alias().GetText()
+	}
+
+	if ctx.INDEXED_() != nil {
+		if ctx.NOT_() != nil {
+			result.NotIndexed = true
+		} else {
+			result.IndexedBy = ctx.Index_name().GetText()
+		}
+	}
+
+	return &result
+}
+
+// VisitUpdate_stmt is called when visiting a update_stmt, return *tree.Update
+func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *sqlite.Update_stmtContext) interface{} {
+	t := tree.Update{}
+	var updateStmt tree.UpdateStmt
+
+	if ctx.Common_table_stmt() != nil {
+		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
+	}
+
+	if ctx.OR_() != nil {
+		switch {
+		case ctx.ROLLBACK_() != nil:
+			updateStmt.Or = tree.UpdateOrRollback
+		case ctx.ABORT_() != nil:
+			updateStmt.Or = tree.UpdateOrAbort
+		case ctx.REPLACE_() != nil:
+			updateStmt.Or = tree.UpdateOrReplace
+		case ctx.FAIL_() != nil:
+			updateStmt.Or = tree.UpdateOrFail
+		case ctx.IGNORE_() != nil:
+			updateStmt.Or = tree.UpdateOrIgnore
+		}
+	}
+
+	updateStmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
+
+	updateStmt.UpdateSetClause = make([]*tree.UpdateSetClause, len(ctx.AllUpdate_set_subclause()))
+	for i, subclauseCtx := range ctx.AllUpdate_set_subclause() {
+		updateStmt.UpdateSetClause[i] = v.Visit(subclauseCtx).(*tree.UpdateSetClause)
+	}
+
+	if ctx.FROM_() != nil {
+		fromClause := tree.FromClause{
+			JoinClause: &tree.JoinClause{},
+		}
+
+		if ctx.Join_clause() != nil {
+			fromClause.JoinClause = v.Visit(ctx.Join_clause()).(*tree.JoinClause)
+		} else {
+			// table_or_subquery
+			fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
+		}
+
+		updateStmt.From = &fromClause
+	}
+
+	if ctx.WHERE_() != nil {
+		updateStmt.Where = v.Visit(ctx.Expr()).(tree.Expression)
+	}
+
+	if ctx.Returning_clause() != nil {
+		updateStmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
+	}
+
+	t.UpdateStmt = &updateStmt
+	return &t
 }
 
 func (v *KFSqliteVisitor) VisitInsert_stmt(ctx *sqlite.Insert_stmtContext) interface{} {
@@ -618,15 +740,73 @@ func (v *KFSqliteVisitor) VisitCompound_operator(ctx *sqlite.Compound_operatorCo
 	panic("unreachable")
 }
 
-//// VisitOrder_by_stmt is called when visiting a order_by_stmt, return *tree.OrderBy
-//func (v *KFSqliteVisitor) VisitOrder_by_stmt(ctx *sqlite.Order_by_stmtContext) interface{} {
-//
-//}
-//
-//// VisitLimit_stmt is called when visiting a limit_stmt, return *tree.Limit
-//func (v *KFSqliteVisitor) VisitLimit_stmt(ctx *sqlite.Limit_stmtContext) interface{} {
-//
-//}
+// VisitOrdering_term is called when visiting a ordering_term, return *tree.OrderingTerm
+func (v *KFSqliteVisitor) VisitOrdering_term(ctx *sqlite.Ordering_termContext) interface{} {
+	result := tree.OrderingTerm{}
+
+	// @yaiba NOTE: antlr will treat expr as a `expr collate collation_name` expression if COLLATE is present
+	// then `COLLATE_()` will be in ctx.Expr() ctx
+	// then the returned expression will be tree.ExpressionCollate
+	if ctx.Expr().COLLATE_() != nil {
+		collateExpr := v.Visit(ctx.Expr()).(tree.Expression)
+		e, ok := collateExpr.(*tree.ExpressionCollate)
+		if ok {
+			result.Expression = e.Expression
+			result.Collation = e.Collation
+		} else {
+			panic("parse COLLATE failed in ordering_term")
+		}
+	} else {
+		result.Expression = v.Visit(ctx.Expr()).(tree.Expression)
+	}
+
+	if ctx.Asc_desc() != nil {
+		if ctx.Asc_desc().DESC_() != nil {
+			result.OrderType = tree.OrderTypeDesc
+		} else {
+			result.OrderType = tree.OrderTypeAsc
+		}
+	}
+
+	if ctx.NULLS_() != nil {
+		if ctx.FIRST_() != nil {
+			result.NullOrdering = tree.NullOrderingTypeFirst
+		} else {
+			result.NullOrdering = tree.NullOrderingTypeLast
+		}
+	}
+
+	return &result
+}
+
+// VisitOrder_by_stmt is called when visiting a order_by_stmt, return *tree.OrderBy
+func (v *KFSqliteVisitor) VisitOrder_by_stmt(ctx *sqlite.Order_by_stmtContext) interface{} {
+	count := len(ctx.AllOrdering_term())
+	result := tree.OrderBy{OrderingTerms: make([]*tree.OrderingTerm, count)}
+
+	for i, orderingTermCtx := range ctx.AllOrdering_term() {
+		result.OrderingTerms[i] = v.Visit(orderingTermCtx).(*tree.OrderingTerm)
+	}
+
+	return &result
+}
+
+// VisitLimit_stmt is called when visiting a limit_stmt, return *tree.Limit
+func (v *KFSqliteVisitor) VisitLimit_stmt(ctx *sqlite.Limit_stmtContext) interface{} {
+	result := tree.Limit{
+		Expression: v.Visit(ctx.Expr(0)).(tree.Expression),
+	}
+
+	if ctx.OFFSET_() != nil {
+		result.Offset = v.Visit(ctx.Expr(1)).(tree.Expression)
+	}
+
+	if ctx.COMMA() != nil {
+		result.SecondExpression = v.Visit(ctx.Expr(1)).(tree.Expression)
+	}
+
+	return &result
+}
 
 // VisitTable_or_subquery is called when visiting a table_or_subquery, return tree.TableOrSubquery
 func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *sqlite.Table_or_subqueryContext) interface{} {
@@ -661,13 +841,12 @@ func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *sqlite.Table_or_subqueryCo
 
 // VisitJoin_operator is called when visiting a join_operator, return *tree.JoinOperator
 func (v *KFSqliteVisitor) VisitJoin_operator(ctx *sqlite.Join_operatorContext) interface{} {
-	jp := tree.JoinOperator{}
+	jp := tree.JoinOperator{
+		JoinType: tree.JoinTypeJoin,
+	}
 
 	if ctx.NATURAL_() != nil {
 		jp.Natural = true
-	}
-	if ctx.OUTER_() != nil {
-		jp.Outer = true
 	}
 
 	if ctx.INNER_() != nil {
@@ -684,6 +863,10 @@ func (v *KFSqliteVisitor) VisitJoin_operator(ctx *sqlite.Join_operatorContext) i
 		jp.JoinType = tree.JoinTypeFull
 	}
 
+	if ctx.OUTER_() != nil {
+		jp.Outer = true
+	}
+
 	return &jp
 }
 
@@ -693,7 +876,6 @@ func (v *KFSqliteVisitor) VisitJoin_clause(ctx *sqlite.Join_clauseContext) inter
 
 	// just table_or_subquery
 	clause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
-
 	if len(ctx.AllTable_or_subquery()) == 1 {
 		return &clause
 	}
@@ -763,19 +945,23 @@ func (v *KFSqliteVisitor) VisitSelect_core(ctx *sqlite.Select_coreContext) inter
 			fromClause.JoinClause = v.Visit(ctx.Join_clause()).(*tree.JoinClause)
 		} else {
 			// table_or_subquery
-			if len(ctx.AllTable_or_subquery()) == 1 {
-				fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
-			} else {
-				tos := make([]tree.TableOrSubquery, len(ctx.AllTable_or_subquery()))
+			fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery()).(tree.TableOrSubquery)
 
-				for i, tableOrSubqueryCtx := range ctx.AllTable_or_subquery() {
-					tos[i] = v.Visit(tableOrSubqueryCtx).(tree.TableOrSubquery)
-				}
-
-				fromClause.JoinClause.TableOrSubquery = &tree.TableOrSubqueryList{
-					TableOrSubqueries: tos,
-				}
-			}
+			// with comma(cartesian) join
+			//if len(ctx.AllTable_or_subquery()) == 1 {
+			//	fromClause.JoinClause.TableOrSubquery = v.Visit(ctx.Table_or_subquery(0)).(tree.TableOrSubquery)
+			//} else {
+			//	//tos := make([]tree.TableOrSubquery, len(ctx.AllTable_or_subquery()))
+			//	//
+			//	//for i, tableOrSubqueryCtx := range ctx.AllTable_or_subquery() {
+			//	//	tos[i] = v.Visit(tableOrSubqueryCtx).(tree.TableOrSubquery)
+			//	//}
+			//	//
+			//	//fromClause.JoinClause.TableOrSubquery = &tree.TableOrSubqueryList{
+			//	//	TableOrSubqueries: tos,
+			//	//}
+			//	panic("not support comma(cartesian) join")
+			//}
 		}
 
 		t.From = &fromClause
@@ -876,7 +1062,9 @@ func (v *KFSqliteVisitor) Visit(tree antlr.ParseTree) interface{} {
 	//if tree == nil {
 	//	return nil
 	//}
-	fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(tree), tree.GetText())
+	if v.trace {
+		fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(tree), tree.GetText())
+	}
 	return tree.Accept(v)
 }
 

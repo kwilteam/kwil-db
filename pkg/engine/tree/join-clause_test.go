@@ -104,7 +104,7 @@ func TestJoinClause_ToSQL(t *testing.T) {
 							},
 							Operator: tree.ComparisonOperatorEqual,
 							Right: &tree.ExpressionLiteral{
-								Value: "value",
+								Value: "'value'",
 							},
 						},
 					},

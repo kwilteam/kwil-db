@@ -167,7 +167,7 @@ var (
 	FunctionUNHEX = ScalarFunction{AnySQLFunction{
 		FunctionName: "unhex",
 		Min:          1,
-		Max:          1,
+		Max:          2,
 	}}
 	FunctionUNICODE = ScalarFunction{AnySQLFunction{
 		FunctionName: "unicode",

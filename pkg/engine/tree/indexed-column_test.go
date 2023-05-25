@@ -28,7 +28,7 @@ func TestIndexedColumn_ToSQL(t *testing.T) {
 			name: "column and expression cannot both be set",
 			fields: fields{
 				Column:     "column",
-				Expression: &tree.ExpressionLiteral{"expression"},
+				Expression: &tree.ExpressionLiteral{"'expression'"},
 				Collation:  tree.CollationTypeBinary,
 				OrderType:  tree.OrderTypeNone,
 			},
@@ -46,7 +46,7 @@ func TestIndexedColumn_ToSQL(t *testing.T) {
 		{
 			name: "valid indexed-column with expression",
 			fields: fields{
-				Expression: &tree.ExpressionLiteral{"expr"},
+				Expression: &tree.ExpressionLiteral{"'expr'"},
 				Collation:  tree.CollationTypeRTrim,
 				OrderType:  tree.OrderTypeAsc,
 			},
