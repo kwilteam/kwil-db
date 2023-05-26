@@ -30,6 +30,26 @@ func getResultColumnExprs(values ...string) []tree.ResultColumn {
 	return t
 }
 
+func genSelectUnaryExprTree(op tree.UnaryOperator, value string) *tree.Select {
+	return &tree.Select{
+		SelectStmt: &tree.SelectStmt{
+			SelectCores: []*tree.SelectCore{
+				{
+					SelectType: tree.SelectTypeAll,
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionUnary{
+								Operator: op,
+								Operand:  genLiteralExpression(value),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func genSelectColumnLiteralTree(value string) *tree.Select {
 	t := tree.Select{
 		SelectStmt: &tree.SelectStmt{
@@ -469,10 +489,10 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					},
 				}}},
 		// unary op
-		//{"expr unary op +", "select +1"},
-		//{"expr unary op -", "select -1"},
-		//{"expr unary op ~", "select ~1"},
-		//{"expr unary op not", "select not 1"},
+		{"expr unary op +", "select +1", genSelectUnaryExprTree(tree.UnaryOperatorPlus, "1")},
+		{"expr unary op -", "select -1", genSelectUnaryExprTree(tree.UnaryOperatorMinus, "1")},
+		{"expr unary op ~", "select ~1", genSelectUnaryExprTree(tree.UnaryOperatorBitNot, "1")},
+		{"expr unary op not", "select not 1", genSelectUnaryExprTree(tree.UnaryOperatorNot, "1")},
 		// binary op
 		//{"expr binary op ||", "select 1 || 2",
 		{"expr binary op *", "select 1 * 2",
@@ -751,7 +771,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
 				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
 		// expr list
-		{"expr list", "select (1)",
+		{"expr list", "select (1,2)",
 			&tree.Select{
 				SelectStmt: &tree.SelectStmt{
 					SelectCores: []*tree.SelectCore{
@@ -762,6 +782,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 									Expression: &tree.ExpressionList{
 										Expressions: []tree.Expression{
 											genLiteralExpression("1"),
+											genLiteralExpression("2"),
 										},
 									},
 								},
@@ -771,6 +792,118 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 				},
 			},
 		},
+		// expr precedence
+		{"expr precedence 1", "select -1 > 2",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBinaryComparison{
+										Operator: tree.ComparisonOperatorGreaterThan,
+										Left: &tree.ExpressionUnary{
+											Operator: tree.UnaryOperatorMinus,
+											Operand:  genLiteralExpression("1"),
+										},
+										Right: genLiteralExpression("2"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr precedence 2", "SELECT NOT (-1 = 1) AND 1 notnull OR 3 < 2",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBinaryComparison{
+										Operator: tree.LogicalOperatorOr,
+										Left: &tree.ExpressionBinaryComparison{
+											Operator: tree.LogicalOperatorAnd,
+											Left: &tree.ExpressionUnary{
+												Operator: tree.UnaryOperatorNot,
+												Operand: &tree.ExpressionBinaryComparison{
+													Wrapped:  true,
+													Operator: tree.ComparisonOperatorEqual,
+													Left: &tree.ExpressionUnary{
+														Operator: tree.UnaryOperatorMinus,
+														Operand:  genLiteralExpression("1"),
+													},
+													Right: genLiteralExpression("1"),
+												},
+											},
+											Right: &tree.ExpressionIsNull{
+												Expression: genLiteralExpression("1"),
+												IsNull:     false,
+											},
+										},
+										Right: &tree.ExpressionBinaryComparison{
+											Operator: tree.ComparisonOperatorLessThan,
+											Left:     genLiteralExpression("3"),
+											Right:    genLiteralExpression("2"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"expr precedence 3", "SELECT NOT (-1 = 1) AND (1 notnull OR 3 < 2)",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionBinaryComparison{
+										Operator: tree.LogicalOperatorAnd,
+										Left: &tree.ExpressionUnary{
+											Operator: tree.UnaryOperatorNot,
+											Operand: &tree.ExpressionBinaryComparison{
+												Wrapped:  true,
+												Operator: tree.ComparisonOperatorEqual,
+												Left: &tree.ExpressionUnary{
+													Operator: tree.UnaryOperatorMinus,
+													Operand:  genLiteralExpression("1"),
+												},
+												Right: genLiteralExpression("1"),
+											},
+										},
+										Right: &tree.ExpressionBinaryComparison{
+											Wrapped:  true,
+											Operator: tree.LogicalOperatorOr,
+											Left: &tree.ExpressionIsNull{
+												Expression: genLiteralExpression("1"),
+												IsNull:     false,
+											},
+											Right: &tree.ExpressionBinaryComparison{
+												Operator: tree.ComparisonOperatorLessThan,
+												Left:     genLiteralExpression("3"),
+												Right:    genLiteralExpression("2"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		//{"expr precedence 1", "select 3 + 4 * 5 - 2 / 2 + -1",
+		//{"expr precedence 4", "SELECT (3 + 4) * 5 - 2 / 2"},
+
 		// collate
 		{"expr collate nocase", "select 1 collate nocase",
 			genSimpleCollateSelectTree(tree.CollationTypeNoCase, "1")},
@@ -1175,7 +1308,7 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					Upsert: &tree.Upsert{
 						ConflictTarget: &tree.ConflictTarget{
 							IndexedColumns: []string{"c1", "c2"},
-							Where:          &tree.ExpressionLiteral{"1"},
+							Where:          &tree.ExpressionLiteral{Value: "1"},
 						},
 						Type: tree.UpsertTypeDoNothing,
 					},
@@ -1561,7 +1694,6 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 					},
 				}}},
 		//// join
-		//{"join implicit", "select * from t1,t2 on t1.c1=t2.c1"},
 		{"join on", "select * from t1 join t2 on t1.c1=t2.c1",
 			genSimpleJoinSelectTree(&tree.JoinOperator{
 				JoinType: tree.JoinTypeJoin,
@@ -1845,6 +1977,59 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 				},
 			},
 		},
+
+		//// delete
+		{"delete all", "delete from t1",
+			&tree.Delete{
+				DeleteStmt: &tree.DeleteStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName: "t1",
+					},
+				},
+			},
+		},
+		{"delete with where", "delete from t1 where c1='1'",
+			&tree.Delete{
+				DeleteStmt: &tree.DeleteStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName: "t1",
+					},
+					Where: &tree.ExpressionBinaryComparison{
+						Operator: tree.ComparisonOperatorEqual,
+						Left:     &tree.ExpressionColumn{Column: "c1"},
+						Right:    genLiteralExpression("'1'"),
+					},
+				},
+			},
+		},
+		{"delete with returning", "delete from t1 returning *",
+			&tree.Delete{
+				DeleteStmt: &tree.DeleteStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName: "t1",
+					},
+					Returning: &tree.ReturningClause{
+						Returned: []*tree.ReturningClauseColumn{
+							{
+								All: true,
+							},
+						},
+					},
+				},
+			},
+		},
+		{"delete with cte", "with t as (select 1) delete from t1",
+			&tree.Delete{
+				CTE: []*tree.CTE{
+					genSimpleCTETree("t", "1"),
+				},
+				DeleteStmt: &tree.DeleteStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName: "t1",
+					},
+				},
+			},
+		},
 	}
 
 	ctx := DatabaseContext{Actions: map[string]ActionContext{"action1": {}}}
@@ -1864,8 +2049,6 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 
 			astNodes := ast.(asts)
 			node := astNodes[0]
-			//fmt.Printf("AST: %+v\n", node.(*tree.Insert).InsertStmt)
-			//fmt.Printf("exp: %+v\n", tt.expect.(*tree.Insert).InsertStmt)
 			// use assert.Exactly?
 			assert.EqualValues(t, tt.expect, node, "ParseRawSQL() got %s, want %s", node, tt.expect)
 
@@ -1873,12 +2056,24 @@ func TestParseRawSQL_visitor_allowed(t *testing.T) {
 			if err != nil {
 				t.Errorf("ParseRawSQL() got %s", err)
 			}
-			fmt.Println("SQL from AST: ", sql)
-			//if sql != tt.input {
-			//	t.Errorf("ParseRawSQL() got %s, want %s", sql, tt.input)
-			//}
+
+			if *trace {
+				fmt.Println("SQL from AST: ", sql)
+			}
+
+			assert.True(t,
+				strings.EqualFold(unFormatSql(sql), unFormatSql(tt.input)),
+				"ParseRawSQL() got %s, want %s", sql, tt.input)
 		})
 	}
+}
+
+func unFormatSql(sql string) string {
+	sql = strings.ReplaceAll(sql, " ", "")
+	sql = strings.ReplaceAll(sql, ";", "")
+	// double quotes are for table/column names
+	sql = strings.ReplaceAll(sql, `"`, "")
+	return sql
 }
 
 func TestParseRawSQL_listener_allowed(t *testing.T) {

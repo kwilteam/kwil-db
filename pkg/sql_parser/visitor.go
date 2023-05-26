@@ -117,7 +117,6 @@ func (v *KFSqliteVisitor) visitExprList(exprList []sqlite.IExprContext) *tree.Ex
 	for i, exprCtx := range exprList {
 		exprs[i] = v.visitExpr(exprCtx)
 	}
-	fmt.Printf("expr list: %+v\n", exprs)
 	return &tree.ExpressionList{Expressions: exprs}
 }
 
@@ -175,50 +174,57 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 			expr.IsExists = true
 		}
 		return expr
-	case ctx.Function_name() != nil:
-		expr := &tree.ExpressionFunction{
-			Inputs: make([]tree.Expression, len(ctx.AllExpr())),
-		}
-		funcName := ctx.Function_name().GetText()
-
-		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
-		if !ok {
-			panic(fmt.Sprintf("unsupported function '%s'", funcName))
-		}
-		expr.Function = f
-
-		for i, e := range ctx.AllExpr() {
-			expr.Inputs[i] = v.visitExpr(e)
+	case ctx.GetElevate_expr() != nil:
+		expr := v.visitExpr(ctx.GetElevate_expr())
+		switch t := expr.(type) {
+		case *tree.ExpressionLiteral:
+			t.Wrapped = true
+		case *tree.ExpressionBindParameter:
+			t.Wrapped = true
+		case *tree.ExpressionColumn:
+			t.Wrapped = true
+		case *tree.ExpressionUnary:
+			t.Wrapped = true
+		case *tree.ExpressionBinaryComparison:
+			t.Wrapped = true
+		case *tree.ExpressionFunction:
+			t.Wrapped = true
+		case *tree.ExpressionList:
+			t.Wrapped = true
+		case *tree.ExpressionCollate:
+			t.Wrapped = true
+		case *tree.ExpressionStringCompare:
+			t.Wrapped = true
+		case *tree.ExpressionIsNull:
+			t.Wrapped = true
+		case *tree.ExpressionDistinct:
+			t.Wrapped = true
+		case *tree.ExpressionBetween:
+			t.Wrapped = true
+		case *tree.ExpressionSelect:
+			t.Wrapped = true
+		case *tree.ExpressionCase:
+			t.Wrapped = true
+		default:
+			panic(fmt.Sprintf("unknown expression type %T", expr))
 		}
 		return expr
-	case ctx.CASE_() != nil:
-		whenExprCount := len(ctx.GetWhen_expr())
-		expr := &tree.ExpressionCase{
-			WhenThenPairs: make([][2]tree.Expression, whenExprCount),
+	// unary operators
+	case ctx.MINUS() != nil && ctx.GetUnary_expr() != nil:
+		return &tree.ExpressionUnary{
+			Operator: tree.UnaryOperatorMinus,
+			Operand:  v.visitExpr(ctx.GetUnary_expr()),
 		}
-		for i := 0; i < whenExprCount; i++ {
-			expr.WhenThenPairs[i][0] = v.visitExpr(ctx.GetWhen_expr()[i])
-			expr.WhenThenPairs[i][1] = v.visitExpr(ctx.GetThen_expr()[i])
+	case ctx.PLUS() != nil && ctx.GetUnary_expr() != nil:
+		return &tree.ExpressionUnary{
+			Operator: tree.UnaryOperatorPlus,
+			Operand:  v.visitExpr(ctx.GetUnary_expr()),
 		}
-
-		if ctx.GetCase_expr() != nil {
-			expr.CaseExpression = v.visitExpr(ctx.GetCase_expr())
+	case ctx.TILDE() != nil && ctx.GetUnary_expr() != nil:
+		return &tree.ExpressionUnary{
+			Operator: tree.UnaryOperatorBitNot,
+			Operand:  v.visitExpr(ctx.GetUnary_expr()),
 		}
-
-		if ctx.GetElse_expr() != nil {
-			expr.ElseExpression = v.visitExpr(ctx.GetElse_expr())
-		}
-		return expr
-	//
-	//// unary operators
-	//case ctx.Unary_operator() != nil:
-	//	fmt.Println("))))))))))) ", ctx.GetText())
-	//	//opCtx := ctx.Unary_operator()
-	//	//switch {
-	//	//case opCtx.MINUS() != nil:
-	//	//
-	//	//}
-	//	panic("wont reach here")
 	case ctx.COLLATE_() != nil:
 		// collation_name is any_name
 		collationName := ctx.Collation_name().GetText()
@@ -428,7 +434,6 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 		}
 		return expr
 	case ctx.BETWEEN_() != nil:
-		fmt.Println("between", ctx.GetText())
 		expr := &tree.ExpressionBetween{
 			Expression: v.visitExpr(ctx.Expr(0)),
 			Left:       v.visitExpr(ctx.Expr(1)),
@@ -456,8 +461,10 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 		}
 	// not unary op
 	case ctx.NOT_() != nil && ctx.GetUnary_expr() != nil:
-		fmt.Println("not unary op", ctx.GetText())
-		panic("not unary op")
+		return &tree.ExpressionUnary{
+			Operator: tree.UnaryOperatorNot,
+			Operand:  v.visitExpr(ctx.GetUnary_expr()),
+		}
 	case ctx.AND_() != nil:
 		return &tree.ExpressionBinaryComparison{
 			Left:     v.visitExpr(ctx.Expr(0)),
@@ -470,9 +477,44 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 			Operator: tree.LogicalOperatorOr,
 			Right:    v.visitExpr(ctx.Expr(1)),
 		}
-	// expr list
-	default:
+	case ctx.GetExpr_list() != nil:
 		return v.visitExprList(ctx.AllExpr())
+	case ctx.Function_name() != nil:
+		expr := &tree.ExpressionFunction{
+			Inputs: make([]tree.Expression, len(ctx.AllExpr())),
+		}
+		funcName := ctx.Function_name().GetText()
+
+		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
+		if !ok {
+			panic(fmt.Sprintf("unsupported function '%s'", funcName))
+		}
+		expr.Function = f
+
+		for i, e := range ctx.AllExpr() {
+			expr.Inputs[i] = v.visitExpr(e)
+		}
+		return expr
+	case ctx.CASE_() != nil:
+		whenExprCount := len(ctx.GetWhen_expr())
+		expr := &tree.ExpressionCase{
+			WhenThenPairs: make([][2]tree.Expression, whenExprCount),
+		}
+		for i := 0; i < whenExprCount; i++ {
+			expr.WhenThenPairs[i][0] = v.visitExpr(ctx.GetWhen_expr()[i])
+			expr.WhenThenPairs[i][1] = v.visitExpr(ctx.GetThen_expr()[i])
+		}
+
+		if ctx.GetCase_expr() != nil {
+			expr.CaseExpression = v.visitExpr(ctx.GetCase_expr())
+		}
+
+		if ctx.GetElse_expr() != nil {
+			expr.ElseExpression = v.visitExpr(ctx.GetElse_expr())
+		}
+		return expr
+	default:
+		panic(fmt.Sprintf("cannot recognize expr '%s'", ctx.GetText()))
 	}
 
 	return nil
@@ -892,8 +934,6 @@ func (v *KFSqliteVisitor) VisitJoin_clause(ctx *sqlite.Join_clauseContext) inter
 	}
 	clause.Joins = joins
 
-	fmt.Println("Join_clause: ", clause)
-
 	return &clause
 }
 
@@ -918,6 +958,29 @@ func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlite.Result_columnContext) i
 	}
 
 	return nil
+}
+
+// VisitDelete_stmt is called when visiting a delete_stmt, return *tree.Delete
+func (v *KFSqliteVisitor) VisitDelete_stmt(ctx *sqlite.Delete_stmtContext) interface{} {
+	t := tree.Delete{}
+
+	if ctx.Common_table_stmt() != nil {
+		t.CTE = v.Visit(ctx.Common_table_stmt()).([]*tree.CTE)
+	}
+
+	stmt := tree.DeleteStmt{}
+	stmt.QualifiedTableName = v.Visit(ctx.Qualified_table_name()).(*tree.QualifiedTableName)
+
+	if ctx.WHERE_() != nil {
+		stmt.Where = v.Visit(ctx.Expr()).(tree.Expression)
+	}
+
+	if ctx.Returning_clause() != nil {
+		stmt.Returning = v.Visit(ctx.Returning_clause()).(*tree.ReturningClause)
+	}
+
+	t.DeleteStmt = &stmt
+	return &t
 }
 
 // VisitSelect_core is called when visiting a select_core, return *tree.SelectCore

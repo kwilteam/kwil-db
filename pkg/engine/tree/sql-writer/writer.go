@@ -14,6 +14,7 @@ var (
 type SqlWriter struct {
 	stmt  *strings.Builder
 	Token *tokenWriter
+	wrap  bool
 }
 
 func NewWriter() *SqlWriter {
@@ -21,10 +22,22 @@ func NewWriter() *SqlWriter {
 	return &SqlWriter{
 		stmt:  builder,
 		Token: newTokenWriter(builder),
+		wrap:  false,
 	}
 }
 
+func (s *SqlWriter) WrapParen() *SqlWriter {
+	s.wrap = true
+	s.stmt.WriteString("(") // use this instead of token to prevent extra spaces
+
+	return s
+}
+
 func (s *SqlWriter) String() string {
+	if s.wrap {
+		s.stmt.WriteString(")")
+	}
+
 	return s.stmt.String()
 }
 

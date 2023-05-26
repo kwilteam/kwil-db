@@ -21,8 +21,9 @@ func (d *Delete) ToSQL() (str string, err error) {
 		stmt.WriteList(len(d.CTE), func(i int) {
 			stmt.WriteString(d.CTE[i].ToSQL())
 		})
-		stmt.WriteString(d.DeleteStmt.ToSQL())
 	}
+
+	stmt.WriteString(d.DeleteStmt.ToSQL())
 
 	stmt.Token.Semicolon()
 
