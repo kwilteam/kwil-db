@@ -37,6 +37,10 @@ func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) (string, e
 			return address, fmt.Errorf("invalid address provided: %s", address)
 		}
 	} else {
+		if conf.PrivateKey == nil {
+			return address, fmt.Errorf("no address provided")
+		}
+
 		address = crypto.AddressFromPrivateKey(conf.PrivateKey)
 	}
 

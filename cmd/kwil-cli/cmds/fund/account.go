@@ -3,6 +3,7 @@ package fund
 import (
 	"context"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
@@ -18,7 +19,7 @@ func getAccountCmd() *cobra.Command {
 If no address is provided, it will use the address of the user's wallet.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), common.WithoutServiceConfig|common.WithoutPrivateKey, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				// check if config is set
 				address, err := getSelectedAddress(cmd, conf)
 				if err != nil {
