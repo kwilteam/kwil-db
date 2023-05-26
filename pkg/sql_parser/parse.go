@@ -8,59 +8,8 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/sql_parser/sqlite"
 )
 
-func ParseRawSQL(sql string, currentLine int, actionName string, dbCtx DatabaseContext,
-	errorListener *sqliteErrorListener, trace bool, walkTree bool) (err error) {
-	KlSQLInit()
-
-	var listener *KlSqliteListener
-
-	if errorListener == nil {
-		errorHandler := NewErrorHandler(currentLine)
-		errorListener = newSqliteErrorListener(errorHandler)
-	}
-
-	if trace {
-		listener = NewKlSqliteListener(errorListener.ErrorHandler, actionName, dbCtx, KlListenerWithTrace())
-	} else {
-		listener = NewKlSqliteListener(errorListener.ErrorHandler, actionName, dbCtx)
-	}
-
-	stream := antlr.NewInputStream(sql)
-	lexer := sqlite.NewSQLiteLexer(stream)
-	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := sqlite.NewSQLiteParser(tokenStream)
-
-	// remove default error listener
-	p.RemoveErrorListeners()
-	p.AddErrorListener(errorListener)
-
-	p.BuildParseTrees = true
-
-	defer func() {
-		if e := recover(); e != nil {
-			err = fmt.Errorf("panic: %v", e)
-			listener.Errors.Add(token.Position{0, 0}, err.Error())
-		}
-
-		err = listener.Errors.Err()
-	}()
-
-	//// execute during parsing(careful don't mess up parser_inner throwing error)
-	//p.AddParseListener(listener)
-	//p.Parse()
-	// or after parsing, execute while walking the tree
-	tree := p.Parse()
-
-	if walkTree {
-		antlr.ParseTreeWalkerDefault.Walk(listener, tree)
-	}
-
-	return err
-}
-
-func ParseRawSQLVisitor(sql string, currentLine int, actionName string, dbCtx DatabaseContext,
-	errorListener *sqliteErrorListener, trace bool, walkTree bool) (ast tree.Ast, err error) {
-	KlSQLInit()
+// ParseSqlStatement parses a single raw sql statement and returns tree.Ast
+func ParseSqlStatement(sql string, currentLine int, errorListener *sqliteErrorListener, trace bool) (ast tree.Ast, err error) {
 	var visitor *KFSqliteVisitor
 
 	if errorListener == nil {
@@ -88,21 +37,18 @@ func ParseRawSQLVisitor(sql string, currentLine int, actionName string, dbCtx Da
 		err = errorListener.Errors.Err()
 	}()
 
-	//// execute during parsing(careful don't mess up parser_inner throwing error)
-	//p.AddParseListener(visitor)
-	//p.Parse()
-	// or after parsing, execute while walking the tree
+	if trace {
+		visitor = NewKFSqliteVisitor(errorListener.ErrorHandler, KFVisitorWithTrace())
+	} else {
+		visitor = NewKFSqliteVisitor(errorListener.ErrorHandler)
+	}
+
 	parseCtx := p.Parse()
 	if errorListener.Errors.Err() != nil {
 		return nil, errorListener.Errors.Err()
 	}
 
-	if trace {
-		visitor = NewKFSqliteVisitor(errorListener.ErrorHandler, actionName, dbCtx, KFVisitorWithTrace())
-	} else {
-		visitor = NewKFSqliteVisitor(errorListener.ErrorHandler, actionName, dbCtx)
-	}
-
 	result := visitor.Visit(parseCtx)
-	return result.(tree.Ast), err
+	// since we only expect a single statement
+	return result.([]tree.Ast)[0], err
 }
