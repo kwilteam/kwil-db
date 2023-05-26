@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 
@@ -18,6 +19,10 @@ func signCmd() *cobra.Command {
 			conf, err := config.LoadCliConfig()
 			if err != nil {
 				return err
+			}
+
+			if conf.PrivateKey == nil {
+				return fmt.Errorf("no private key provided")
 			}
 
 			// generate signature

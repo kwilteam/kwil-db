@@ -4,10 +4,12 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"io"
 	"os"
 	"path/filepath"
+
+	common "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 
 	"github.com/spf13/viper"
 )
@@ -37,16 +39,19 @@ type kwilCliPersistedConfig struct {
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
-	privateKey, err := crypto.ECDSAFromHex(c.PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid private key: %w.\nusing private key: %s", err, c.PrivateKey)
-	}
-
-	return &KwilCliConfig{
-		PrivateKey:        privateKey,
+	kwilConfig := &KwilCliConfig{
 		GrpcURL:           c.GrpcURL,
 		ClientChainRPCURL: c.ClientChainRPCURL,
-	}, nil
+	}
+
+	privateKey, err := crypto.ECDSAFromHex(c.PrivateKey)
+	if err != nil {
+		return kwilConfig, nil
+	}
+
+	kwilConfig.PrivateKey = privateKey
+
+	return kwilConfig, nil
 }
 
 func PersistConfig(conf *KwilCliConfig) error {
@@ -135,10 +140,10 @@ func LoadPersistedConfig() (*KwilCliConfig, error) {
 func LoadCliConfig() (*KwilCliConfig, error) {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Printf("Config file not found. Using default values and/or flags.\n")
+			fmt.Printf("Config file not found. Using default values and/or flags.  To create a config file, run 'kwil-cli configure'\n")
 		} else {
 			fmt.Printf("Error reading config file: %s\n", err)
-			fmt.Printf("Deleting corrupted config at %s.  Using default values and/or flags.\n", viper.ConfigFileUsed())
+			askAndDeleteConfig()
 		}
 	}
 
@@ -148,4 +153,27 @@ func LoadCliConfig() (*KwilCliConfig, error) {
 		ClientChainRPCURL: viper.GetString("client_chain_rpc_url"),
 	}
 	return innerConf.toKwilCliConfig()
+}
+
+func askAndDeleteConfig() {
+	askDelete := &common.Prompter{
+		Label: fmt.Sprintf("Would you like to delete the corrupted config file at %s? (y/n) ", viper.ConfigFileUsed()),
+	}
+
+	response, err := askDelete.Run()
+	if err != nil {
+		fmt.Printf("Error reading response: %s\n", err)
+		return
+	}
+
+	if response != "y" {
+		fmt.Println("Not deleting config file.  Using default values and/or flags.")
+		return
+	}
+
+	err = os.Remove(viper.ConfigFileUsed())
+	if err != nil {
+		fmt.Printf("Error deleting config file: %s\n", err)
+		return
+	}
 }
