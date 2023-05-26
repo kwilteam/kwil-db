@@ -14,9 +14,6 @@ type KFSqliteVisitor struct {
 	sqlite.BaseSQLiteParserVisitor
 	ErrorHandler
 
-	actionCtx ActionContext
-	dbCtx     DatabaseContext
-
 	trace bool
 }
 
@@ -30,11 +27,9 @@ func KFVisitorWithTrace() KFSqliteVisitorOption {
 
 var _ sqlite.SQLiteParserVisitor = &KFSqliteVisitor{}
 
-func NewKFSqliteVisitor(eh *ErrorHandler, actionName string, ctx DatabaseContext, opts ...KFSqliteVisitorOption) *KFSqliteVisitor {
+func NewKFSqliteVisitor(eh *ErrorHandler, opts ...KFSqliteVisitorOption) *KFSqliteVisitor {
 	k := &KFSqliteVisitor{
 		ErrorHandler: *eh,
-		actionCtx:    ctx.Actions[actionName],
-		dbCtx:        ctx,
 		trace:        false,
 	}
 	for _, opt := range opts {
@@ -43,32 +38,18 @@ func NewKFSqliteVisitor(eh *ErrorHandler, actionName string, ctx DatabaseContext
 	return k
 }
 
-type cteTableName struct {
-	table   string
-	columns []string
-}
-
-type withClause struct {
-	tableName cteTableName
-}
-
-func (v *KFSqliteVisitor) visitCteTableName(ctx sqlite.ICte_table_nameContext) (tableName cteTableName) {
-	tableName.table = ctx.Table_name().GetText()
-	colNameCtxs := ctx.AllColumn_name()
-	for _, colName := range colNameCtxs {
-		tableName.columns = append(tableName.columns, colName.GetText())
-	}
-
-	return tableName
-}
-
-func (v *KFSqliteVisitor) visitCommonTableExpression(ctx sqlite.ICommon_table_expressionContext) *tree.CTE {
+// VisitCommon_table_expression is called when visiting a common_table_expression, return *tree.CTE
+func (v *KFSqliteVisitor) VisitCommon_table_expression(ctx *sqlite.Common_table_expressionContext) interface{} {
 	cte := tree.CTE{}
+
+	// cte_table_name
 	cteTableCtx := ctx.Cte_table_name()
-	tableName := v.visitCteTableName(cteTableCtx)
-	cte.Table = tableName.table
-	if tableName.columns != nil {
-		cte.Columns = tableName.columns
+	cte.Table = cteTableCtx.Table_name().GetText()
+	if len(cteTableCtx.AllColumn_name()) > 0 {
+		cte.Columns = make([]string, len(cteTableCtx.AllColumn_name()))
+		for i, colNameCtx := range cteTableCtx.AllColumn_name() {
+			cte.Columns[i] = colNameCtx.GetText()
+		}
 	}
 
 	selectStmtCoreCtx := ctx.Select_stmt_core()
@@ -85,8 +66,7 @@ func (v *KFSqliteVisitor) VisitCommon_table_stmt(ctx *sqlite.Common_table_stmtCo
 	cteCount := len(ctx.AllCommon_table_expression())
 	ctes := make([]*tree.CTE, cteCount)
 	for i := 0; i < cteCount; i++ {
-		cteCtx := ctx.Common_table_expression(i)
-		cte := v.visitCommonTableExpression(cteCtx)
+		cte := v.Visit(ctx.Common_table_expression(i)).(*tree.CTE)
 		ctes[i] = cte
 	}
 	return ctes
@@ -515,11 +495,10 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 	default:
 		panic(fmt.Sprintf("cannot recognize expr '%s'", ctx.GetText()))
 	}
-
-	return nil
 }
 
-func (v *KFSqliteVisitor) visitValuesClause(ctx sqlite.IValues_clauseContext) [][]tree.Expression {
+// VisitValues_clause is called when visiting a values_clause, return [][]tree.Expression
+func (v *KFSqliteVisitor) VisitValues_clause(ctx *sqlite.Values_clauseContext) interface{} {
 	if ctx == nil {
 		return nil
 	}
@@ -535,14 +514,6 @@ func (v *KFSqliteVisitor) visitValuesClause(ctx sqlite.IValues_clauseContext) []
 		rows[i] = exprs
 	}
 	return rows
-}
-
-func (v *KFSqliteVisitor) VisitValues_clause(ctx *sqlite.Values_clauseContext) interface{} {
-	if ctx == nil {
-		return nil
-	}
-
-	return v.visitValuesClause(ctx)
 }
 
 // VisitUpsert_clause is called when visiting a upsert_clause, return *tree.Upsert
@@ -1095,26 +1066,20 @@ func (v *KFSqliteVisitor) VisitSelect_stmt(ctx *sqlite.Select_stmtContext) inter
 	return &t
 }
 
-type KVisitorReturn struct {
-	Value interface{}
-	Error error
-}
-
 func (v *KFSqliteVisitor) VisitSql_stmt_list(ctx *sqlite.Sql_stmt_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *KFSqliteVisitor) VisitSql_stmt(ctx *sqlite.Sql_stmtContext) interface{} {
 	// Sql_stmtContext will only have one stmt
-	return v.VisitChildren(ctx).(asts)[0]
+	return v.VisitChildren(ctx).([]tree.Ast)[0]
 }
 
 // VisitParse is called first by Visitor.Visit
 func (v *KFSqliteVisitor) VisitParse(ctx *sqlite.ParseContext) interface{} {
 	// ParseContext will only have one Sql_stmt_listContext
 	sqlStmtListContext := ctx.Sql_stmt_list(0)
-	// return asts type
-	return v.VisitChildren(sqlStmtListContext).(asts)
+	return v.VisitChildren(sqlStmtListContext).([]tree.Ast)
 }
 
 // Visit dispatch to the visit method of the ctx
@@ -1136,7 +1101,7 @@ func (v *KFSqliteVisitor) Visit(tree antlr.ParseTree) interface{} {
 // refer to https://github.com/antlr/antlr4/pull/1841#issuecomment-576791512
 // calling function need to convert the result to asts
 func (v *KFSqliteVisitor) VisitChildren(node antlr.RuleNode) interface{} {
-	var result asts
+	var result []tree.Ast
 	n := node.GetChildCount()
 	for i := 0; i < n; i++ {
 		if !v.shouldVisitNextChild(node, result) {
@@ -1145,7 +1110,7 @@ func (v *KFSqliteVisitor) VisitChildren(node antlr.RuleNode) interface{} {
 		}
 		child := node.GetChild(i)
 		c := child.(antlr.ParseTree)
-		childResult := v.Visit(c)
+		childResult := v.Visit(c).(tree.Ast)
 		result = append(result, childResult)
 	}
 	return result
@@ -1154,11 +1119,4 @@ func (v *KFSqliteVisitor) VisitChildren(node antlr.RuleNode) interface{} {
 func (v *KFSqliteVisitor) shouldVisitNextChild(node antlr.RuleNode, currentResult interface{}) bool {
 	// apply default logic
 	return true
-}
-
-// asts is a slice of ast
-type asts []interface{}
-
-func (a asts) ToSQL() (string, error) {
-	panic("not implemented")
 }

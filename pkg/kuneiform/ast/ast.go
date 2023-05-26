@@ -3,7 +3,6 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	sqlParser "github.com/kwilteam/kwil-db/pkg/sql_parser"
@@ -159,7 +158,7 @@ func (x *IndexDef) stmtNode()   {}
 func (x *TableDecl) declNode()  {}
 func (x *ActionDecl) declNode() {}
 
-func (a *ActionDecl) Validate(action string, ctx sqlParser.DatabaseContext) error {
+func (a *ActionDecl) Validate(action string) error {
 	declaredParams := map[string]bool{}
 
 	for _, param := range a.Params {
@@ -178,7 +177,12 @@ func (a *ActionDecl) Validate(action string, ctx sqlParser.DatabaseContext) erro
 		case *SQLStmt:
 			//fp := p.file.Position(pos)
 			lineNum := 0 //int(fp.Line)
-			if err := sqlParser.ParseRawSQL(st.SQL, lineNum, action, ctx, nil, false, true); err != nil {
+			astTree, err := sqlParser.ParseSqlStatement(st.SQL, lineNum, nil, false)
+			if err != nil {
+				return errors.Wrap(err, action)
+			}
+
+			if _, err := astTree.ToSQL(); err != nil {
 				return errors.Wrap(err, action)
 			}
 		default:
@@ -409,7 +413,7 @@ func (d *Database) Validate() error {
 			}
 			actionNames[a.Name.Name] = true
 
-			if err := a.Validate(a.Name.Name, ctx); err != nil {
+			if err := a.Validate(a.Name.Name); err != nil {
 				return err
 			}
 		case *TableDecl:
