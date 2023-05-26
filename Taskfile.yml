@@ -9,15 +9,8 @@ tasks:
     cmds:
       - task -l
 
-  install:antlr:
-    desc: Download antlr4 jar file
-    cmds:
-      - if [ ! -f ./pkg/sql_parser/sqlite/antlr-4.12.0-complete.jar ]; then curl -o ./pkg/sql_parser/sqlite/antlr-4.12.0-complete.jar https://www.antlr.org/download/antlr-4.12.0-complete.jar; fi
-
   install:deps:
     desc: Install tools required to build this app
-    deps:
-      - task: install:antlr
     cmds:
       - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
 
@@ -45,13 +38,12 @@ tasks:
 
   build:antlr:
     desc: Generate antlr parser code
-    deps: [install:antlr]
     cmds:
-      - go generate ./pkg/sql_parser/sqlite
+      - cd ./pkg/sql_parser/sql_grammar && ./generate.sh
     sources:
-      - pkg/sql_parser/sqlite/*.g4
+      - pkg/sql_parser/sql_grammar/*.g4
     generates:
-      - pkg/sql_parser/sqlite/*.go
+      - pkg/sql_parser/sql_grammar/*.go
 
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs

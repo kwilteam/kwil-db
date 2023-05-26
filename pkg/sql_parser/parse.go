@@ -5,7 +5,7 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
-	"github.com/kwilteam/kwil-db/pkg/sql_parser/sqlite"
+	grammar "github.com/kwilteam/kwil-db/pkg/sql_parser/sql_grammar"
 )
 
 // ParseSqlStatement parses a single raw sql statement and returns tree.Ast
@@ -18,9 +18,9 @@ func ParseSqlStatement(sql string, currentLine int, errorListener *sqliteErrorLi
 	}
 
 	stream := antlr.NewInputStream(sql)
-	lexer := sqlite.NewSQLiteLexer(stream)
+	lexer := grammar.NewSQLiteLexer(stream)
 	tokenStream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-	p := sqlite.NewSQLiteParser(tokenStream)
+	p := grammar.NewSQLiteParser(tokenStream)
 
 	// remove default error visitor
 	p.RemoveErrorListeners()
