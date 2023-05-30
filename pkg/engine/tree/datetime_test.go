@@ -175,6 +175,19 @@ func TestDateTimeFunction_String(t *testing.T) {
 			},
 			wantPanic: true,
 		},
+		{
+			name: "using decimal seconds for formatted time",
+			fields: fields{
+				Function: tree.FunctionSTRFTIME,
+			},
+			args: args{
+				exprs: []tree.Expression{
+					&tree.ExpressionLiteral{Value: "'HH:MM:SS.SSS'"},
+					&tree.ExpressionLiteral{Value: "'2003-03-03'"},
+				},
+			},
+			wantPanic: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
