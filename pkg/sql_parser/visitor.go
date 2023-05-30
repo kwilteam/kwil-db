@@ -7,12 +7,12 @@ import (
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/kwilteam/kwil-db/pkg/engine/tree"
-	"github.com/kwilteam/kwil-db/pkg/sql_parser/sqlite"
+	grammar "github.com/kwilteam/kwil-db/pkg/sql_parser/sql_grammar"
 )
 
 // KFSqliteVisitor is visitor that visit Antlr parsed tree and returns the AST.
 type KFSqliteVisitor struct {
-	sqlite.BaseSQLiteParserVisitor
+	grammar.BaseSQLiteParserVisitor
 	ErrorHandler
 
 	trace bool
@@ -26,7 +26,7 @@ func KFVisitorWithTrace() KFSqliteVisitorOption {
 	}
 }
 
-var _ sqlite.SQLiteParserVisitor = &KFSqliteVisitor{}
+var _ grammar.SQLiteParserVisitor = &KFSqliteVisitor{}
 
 func NewKFSqliteVisitor(eh *ErrorHandler, opts ...KFSqliteVisitorOption) *KFSqliteVisitor {
 	k := &KFSqliteVisitor{
@@ -40,7 +40,7 @@ func NewKFSqliteVisitor(eh *ErrorHandler, opts ...KFSqliteVisitorOption) *KFSqli
 }
 
 // VisitCommon_table_expression is called when visiting a common_table_expression, return *tree.CTE
-func (v *KFSqliteVisitor) VisitCommon_table_expression(ctx *sqlite.Common_table_expressionContext) interface{} {
+func (v *KFSqliteVisitor) VisitCommon_table_expression(ctx *grammar.Common_table_expressionContext) interface{} {
 	cte := tree.CTE{}
 
 	// cte_table_name
@@ -59,7 +59,7 @@ func (v *KFSqliteVisitor) VisitCommon_table_expression(ctx *sqlite.Common_table_
 }
 
 // VisitCommon_table_stmt is called when visiting a common_table_stmt, return []*tree.CTE.
-func (v *KFSqliteVisitor) VisitCommon_table_stmt(ctx *sqlite.Common_table_stmtContext) interface{} {
+func (v *KFSqliteVisitor) VisitCommon_table_stmt(ctx *grammar.Common_table_stmtContext) interface{} {
 	if ctx == nil {
 		return nil
 	}
@@ -73,7 +73,7 @@ func (v *KFSqliteVisitor) VisitCommon_table_stmt(ctx *sqlite.Common_table_stmtCo
 	return ctes
 }
 
-func getInsertType(ctx *sqlite.Insert_stmtContext) tree.InsertType {
+func getInsertType(ctx *grammar.Insert_stmtContext) tree.InsertType {
 	var insertType tree.InsertType
 	if ctx.OR_() != nil {
 		switch {
@@ -91,7 +91,7 @@ func getInsertType(ctx *sqlite.Insert_stmtContext) tree.InsertType {
 	return insertType
 }
 
-func (v *KFSqliteVisitor) visitExprList(exprList []sqlite.IExprContext) *tree.ExpressionList {
+func (v *KFSqliteVisitor) visitExprList(exprList []grammar.IExprContext) *tree.ExpressionList {
 	exprCount := len(exprList)
 	exprs := make([]tree.Expression, exprCount)
 	for i, exprCtx := range exprList {
@@ -101,7 +101,7 @@ func (v *KFSqliteVisitor) visitExprList(exprList []sqlite.IExprContext) *tree.Ex
 }
 
 // VisitExpr is called when visiting an expression, return tree.Expression.
-func (v *KFSqliteVisitor) VisitExpr(ctx *sqlite.ExprContext) interface{} {
+func (v *KFSqliteVisitor) VisitExpr(ctx *grammar.ExprContext) interface{} {
 	return v.visitExpr(ctx)
 }
 
@@ -118,7 +118,7 @@ func (v *KFSqliteVisitor) getCollateType(collationName string) tree.CollationTyp
 	}
 }
 
-func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
+func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 	if ctx == nil {
 		return nil
 	}
@@ -499,7 +499,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlite.IExprContext) tree.Expression {
 }
 
 // VisitValues_clause is called when visiting a values_clause, return [][]tree.Expression
-func (v *KFSqliteVisitor) VisitValues_clause(ctx *sqlite.Values_clauseContext) interface{} {
+func (v *KFSqliteVisitor) VisitValues_clause(ctx *grammar.Values_clauseContext) interface{} {
 	if ctx == nil {
 		return nil
 	}
@@ -518,7 +518,7 @@ func (v *KFSqliteVisitor) VisitValues_clause(ctx *sqlite.Values_clauseContext) i
 }
 
 // VisitUpsert_clause is called when visiting a upsert_clause, return *tree.Upsert
-func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *sqlite.Upsert_clauseContext) interface{} {
+func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *grammar.Upsert_clauseContext) interface{} {
 	clause := tree.Upsert{
 		Type: tree.UpsertTypeDoNothing,
 	}
@@ -561,7 +561,7 @@ func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *sqlite.Upsert_clauseContext) i
 }
 
 // VisitUpsert_update is called when visiting a upsert_update, return *tree.UpdateSetClause
-func (v *KFSqliteVisitor) VisitUpsert_update(ctx *sqlite.Upsert_updateContext) interface{} {
+func (v *KFSqliteVisitor) VisitUpsert_update(ctx *grammar.Upsert_updateContext) interface{} {
 	clause := tree.UpdateSetClause{}
 	if ctx.Column_name_list() != nil {
 		clause.Columns = v.Visit(ctx.Column_name_list()).([]string)
@@ -574,7 +574,7 @@ func (v *KFSqliteVisitor) VisitUpsert_update(ctx *sqlite.Upsert_updateContext) i
 }
 
 // VisitColumn_name_list is called when visiting a column_name_list, return []string
-func (v *KFSqliteVisitor) VisitColumn_name_list(ctx *sqlite.Column_name_listContext) interface{} {
+func (v *KFSqliteVisitor) VisitColumn_name_list(ctx *grammar.Column_name_listContext) interface{} {
 	names := make([]string, len(ctx.AllColumn_name()))
 	for i, nameCtx := range ctx.AllColumn_name() {
 		names[i] = nameCtx.GetText()
@@ -583,12 +583,12 @@ func (v *KFSqliteVisitor) VisitColumn_name_list(ctx *sqlite.Column_name_listCont
 }
 
 // VisitColumn_name is called when visiting a column_name, return string
-func (v *KFSqliteVisitor) VisitColumn_name(ctx *sqlite.Column_nameContext) interface{} {
+func (v *KFSqliteVisitor) VisitColumn_name(ctx *grammar.Column_nameContext) interface{} {
 	return ctx.GetText()
 }
 
 // VisitReturning_clause is called when visiting a returning_clause, return *tree.ReturningClause
-func (v *KFSqliteVisitor) VisitReturning_clause(ctx *sqlite.Returning_clauseContext) interface{} {
+func (v *KFSqliteVisitor) VisitReturning_clause(ctx *grammar.Returning_clauseContext) interface{} {
 	clause := tree.ReturningClause{}
 	clause.Returned = make([]*tree.ReturningClauseColumn, len(ctx.AllReturning_clause_result_column()))
 	for i, columnCtx := range ctx.AllReturning_clause_result_column() {
@@ -612,7 +612,7 @@ func (v *KFSqliteVisitor) VisitReturning_clause(ctx *sqlite.Returning_clauseCont
 }
 
 // VisitUpdate_set_subclause is called when visiting a column_assign_subclause, return *tree.UpdateSetClause
-func (v *KFSqliteVisitor) VisitUpdate_set_subclause(ctx *sqlite.Update_set_subclauseContext) interface{} {
+func (v *KFSqliteVisitor) VisitUpdate_set_subclause(ctx *grammar.Update_set_subclauseContext) interface{} {
 	result := tree.UpdateSetClause{}
 
 	if ctx.Column_name_list() != nil {
@@ -626,7 +626,7 @@ func (v *KFSqliteVisitor) VisitUpdate_set_subclause(ctx *sqlite.Update_set_subcl
 }
 
 // VisitQualified_table_name is called when visiting a qualified_table_name, return *tree.QualifiedTableName
-func (v *KFSqliteVisitor) VisitQualified_table_name(ctx *sqlite.Qualified_table_nameContext) interface{} {
+func (v *KFSqliteVisitor) VisitQualified_table_name(ctx *grammar.Qualified_table_nameContext) interface{} {
 	result := tree.QualifiedTableName{}
 
 	result.TableName = ctx.Table_name().GetText()
@@ -647,7 +647,7 @@ func (v *KFSqliteVisitor) VisitQualified_table_name(ctx *sqlite.Qualified_table_
 }
 
 // VisitUpdate_stmt is called when visiting a update_stmt, return *tree.Update
-func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *sqlite.Update_stmtContext) interface{} {
+func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *grammar.Update_stmtContext) interface{} {
 	t := tree.Update{}
 	var updateStmt tree.UpdateStmt
 
@@ -704,7 +704,7 @@ func (v *KFSqliteVisitor) VisitUpdate_stmt(ctx *sqlite.Update_stmtContext) inter
 	return &t
 }
 
-func (v *KFSqliteVisitor) VisitInsert_stmt(ctx *sqlite.Insert_stmtContext) interface{} {
+func (v *KFSqliteVisitor) VisitInsert_stmt(ctx *grammar.Insert_stmtContext) interface{} {
 	t := tree.Insert{}
 	var insertStmt tree.InsertStmt
 
@@ -739,7 +739,7 @@ func (v *KFSqliteVisitor) VisitInsert_stmt(ctx *sqlite.Insert_stmtContext) inter
 }
 
 // VisitCompound_operator is called when visiting a compound_operator, return *tree.CompoundOperator
-func (v *KFSqliteVisitor) VisitCompound_operator(ctx *sqlite.Compound_operatorContext) interface{} {
+func (v *KFSqliteVisitor) VisitCompound_operator(ctx *grammar.Compound_operatorContext) interface{} {
 	switch {
 	case ctx.UNION_() != nil:
 		if ctx.ALL_() != nil {
@@ -755,7 +755,7 @@ func (v *KFSqliteVisitor) VisitCompound_operator(ctx *sqlite.Compound_operatorCo
 }
 
 // VisitOrdering_term is called when visiting a ordering_term, return *tree.OrderingTerm
-func (v *KFSqliteVisitor) VisitOrdering_term(ctx *sqlite.Ordering_termContext) interface{} {
+func (v *KFSqliteVisitor) VisitOrdering_term(ctx *grammar.Ordering_termContext) interface{} {
 	result := tree.OrderingTerm{}
 
 	// @yaiba NOTE: antlr will treat expr as a `expr collate collation_name` expression if COLLATE is present
@@ -794,7 +794,7 @@ func (v *KFSqliteVisitor) VisitOrdering_term(ctx *sqlite.Ordering_termContext) i
 }
 
 // VisitOrder_by_stmt is called when visiting a order_by_stmt, return *tree.OrderBy
-func (v *KFSqliteVisitor) VisitOrder_by_stmt(ctx *sqlite.Order_by_stmtContext) interface{} {
+func (v *KFSqliteVisitor) VisitOrder_by_stmt(ctx *grammar.Order_by_stmtContext) interface{} {
 	count := len(ctx.AllOrdering_term())
 	result := tree.OrderBy{OrderingTerms: make([]*tree.OrderingTerm, count)}
 
@@ -806,7 +806,7 @@ func (v *KFSqliteVisitor) VisitOrder_by_stmt(ctx *sqlite.Order_by_stmtContext) i
 }
 
 // VisitLimit_stmt is called when visiting a limit_stmt, return *tree.Limit
-func (v *KFSqliteVisitor) VisitLimit_stmt(ctx *sqlite.Limit_stmtContext) interface{} {
+func (v *KFSqliteVisitor) VisitLimit_stmt(ctx *grammar.Limit_stmtContext) interface{} {
 	result := tree.Limit{
 		Expression: v.Visit(ctx.Expr(0)).(tree.Expression),
 	}
@@ -823,7 +823,7 @@ func (v *KFSqliteVisitor) VisitLimit_stmt(ctx *sqlite.Limit_stmtContext) interfa
 }
 
 // VisitTable_or_subquery is called when visiting a table_or_subquery, return tree.TableOrSubquery
-func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *sqlite.Table_or_subqueryContext) interface{} {
+func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryContext) interface{} {
 	switch {
 	case ctx.Table_name() != nil:
 		t := tree.TableOrSubqueryTable{
@@ -854,7 +854,7 @@ func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *sqlite.Table_or_subqueryCo
 }
 
 // VisitJoin_operator is called when visiting a join_operator, return *tree.JoinOperator
-func (v *KFSqliteVisitor) VisitJoin_operator(ctx *sqlite.Join_operatorContext) interface{} {
+func (v *KFSqliteVisitor) VisitJoin_operator(ctx *grammar.Join_operatorContext) interface{} {
 	jp := tree.JoinOperator{
 		JoinType: tree.JoinTypeJoin,
 	}
@@ -885,7 +885,7 @@ func (v *KFSqliteVisitor) VisitJoin_operator(ctx *sqlite.Join_operatorContext) i
 }
 
 // VisitJoin_clause is called when visiting a join_clause, return *tree.JoinClause
-func (v *KFSqliteVisitor) VisitJoin_clause(ctx *sqlite.Join_clauseContext) interface{} {
+func (v *KFSqliteVisitor) VisitJoin_clause(ctx *grammar.Join_clauseContext) interface{} {
 	clause := tree.JoinClause{}
 
 	// just table_or_subquery
@@ -909,7 +909,7 @@ func (v *KFSqliteVisitor) VisitJoin_clause(ctx *sqlite.Join_clauseContext) inter
 }
 
 // VisitResult_column is called when visiting a result_column, return tree.ResultColumn
-func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlite.Result_columnContext) interface{} {
+func (v *KFSqliteVisitor) VisitResult_column(ctx *grammar.Result_columnContext) interface{} {
 	switch {
 	// table_name need to be checked first
 	case ctx.Table_name() != nil:
@@ -932,7 +932,7 @@ func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlite.Result_columnContext) i
 }
 
 // VisitDelete_stmt is called when visiting a delete_stmt, return *tree.Delete
-func (v *KFSqliteVisitor) VisitDelete_stmt(ctx *sqlite.Delete_stmtContext) interface{} {
+func (v *KFSqliteVisitor) VisitDelete_stmt(ctx *grammar.Delete_stmtContext) interface{} {
 	t := tree.Delete{}
 
 	if ctx.Common_table_stmt() != nil {
@@ -955,7 +955,7 @@ func (v *KFSqliteVisitor) VisitDelete_stmt(ctx *sqlite.Delete_stmtContext) inter
 }
 
 // VisitSelect_core is called when visiting a select_core, return *tree.SelectCore
-func (v *KFSqliteVisitor) VisitSelect_core(ctx *sqlite.Select_coreContext) interface{} {
+func (v *KFSqliteVisitor) VisitSelect_core(ctx *grammar.Select_coreContext) interface{} {
 	t := tree.SelectCore{
 		SelectType: tree.SelectTypeAll,
 	}
@@ -1027,7 +1027,7 @@ func (v *KFSqliteVisitor) VisitSelect_core(ctx *sqlite.Select_coreContext) inter
 }
 
 // VisitSelect_stmt_core is called when visiting a select_stmt_core, return *tree.SelectStmt
-func (v *KFSqliteVisitor) VisitSelect_stmt_core(ctx *sqlite.Select_stmt_coreContext) interface{} {
+func (v *KFSqliteVisitor) VisitSelect_stmt_core(ctx *grammar.Select_stmt_coreContext) interface{} {
 	t := tree.SelectStmt{}
 	selectCores := make([]*tree.SelectCore, len(ctx.AllSelect_core()))
 
@@ -1056,7 +1056,7 @@ func (v *KFSqliteVisitor) VisitSelect_stmt_core(ctx *sqlite.Select_stmt_coreCont
 }
 
 // VisitSelect_stmt is called when visiting a select_stmt, return *tree.Select
-func (v *KFSqliteVisitor) VisitSelect_stmt(ctx *sqlite.Select_stmtContext) interface{} {
+func (v *KFSqliteVisitor) VisitSelect_stmt(ctx *grammar.Select_stmtContext) interface{} {
 	t := tree.Select{}
 
 	if ctx.Common_table_stmt() != nil {
@@ -1067,17 +1067,17 @@ func (v *KFSqliteVisitor) VisitSelect_stmt(ctx *sqlite.Select_stmtContext) inter
 	return &t
 }
 
-func (v *KFSqliteVisitor) VisitSql_stmt_list(ctx *sqlite.Sql_stmt_listContext) interface{} {
+func (v *KFSqliteVisitor) VisitSql_stmt_list(ctx *grammar.Sql_stmt_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *KFSqliteVisitor) VisitSql_stmt(ctx *sqlite.Sql_stmtContext) interface{} {
+func (v *KFSqliteVisitor) VisitSql_stmt(ctx *grammar.Sql_stmtContext) interface{} {
 	// Sql_stmtContext will only have one stmt
 	return v.VisitChildren(ctx).([]tree.Ast)[0]
 }
 
 // VisitParse is called first by Visitor.Visit
-func (v *KFSqliteVisitor) VisitParse(ctx *sqlite.ParseContext) interface{} {
+func (v *KFSqliteVisitor) VisitParse(ctx *grammar.ParseContext) interface{} {
 	// ParseContext will only have one Sql_stmt_listContext
 	sqlStmtListContext := ctx.Sql_stmt_list(0)
 	return v.VisitChildren(sqlStmtListContext).([]tree.Ast)
