@@ -357,5 +357,11 @@ func parseFormat(format string) error {
 	if containsAny(format, unsupportedSubstitutions) {
 		return fmt.Errorf("format string %s contains unsupported substitutions", format)
 	}
+
+	// check if it uses decimals
+	if strings.Contains(format, ".") {
+		return fmt.Errorf("format string %s contains unsupported decimals", format)
+	}
+
 	return nil
 }

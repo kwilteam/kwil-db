@@ -52,6 +52,16 @@ func convertTx(incoming *txpb.Tx) (*kTx.Transaction, error) {
 		return nil, err
 	}
 
+	var sigBytes []byte
+	var sigType crypto.SignatureType
+
+	if incoming.Signature == nil {
+		sigBytes, sigType = newEmptySignature()
+	} else {
+		sigBytes = incoming.Signature.SignatureBytes
+		sigType = crypto.SignatureType(incoming.Signature.SignatureType)
+	}
+
 	signatureType := crypto.SignatureType(incoming.Signature.SignatureType)
 	if err := signatureType.IsValid(); err != nil {
 		return nil, err
@@ -64,9 +74,13 @@ func convertTx(incoming *txpb.Tx) (*kTx.Transaction, error) {
 		Fee:         incoming.Fee,
 		Nonce:       incoming.Nonce,
 		Signature: crypto.Signature{
-			Signature: incoming.Signature.SignatureBytes,
-			Type:      signatureType,
+			Signature: sigBytes,
+			Type:      sigType,
 		},
 		Sender: incoming.Sender,
 	}, nil
+}
+
+func newEmptySignature() (bytes []byte, sigType crypto.SignatureType) {
+	return []byte{}, crypto.PK_SECP256K1_UNCOMPRESSED
 }
