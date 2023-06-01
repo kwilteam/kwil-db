@@ -14,6 +14,22 @@ tasks:
     cmds:
       - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
 
+  git:init:
+    desc: Initialize git submodules
+    cmds:
+      - git submodule update --init
+
+  git:sync:
+    desc: Sync git submodules
+    cmds:
+      - git submodule update --remote
+
+  init:
+    desc: Initialize the project
+    deps: [install:deps, git:init]
+    cmds:
+      - go mod download
+
   build:
     desc: Build cli & kwild
     cmds:
@@ -63,9 +79,9 @@ tasks:
       - pkg/chain/contracts/*/evm/abi/*.go
 
   # ************ docker ************
-  docker:kwild:
+  build:docker:
     desc: Build the docker image for the kwild
-    deps: [ pb:compile:v1 ]
+    deps: [ pb:compile:v1, build:antlr ]
     cmds:
       # pass any args to build debug image, e.g. task docker:kwild -- debug
       - ./scripts/build/docker kwild  {{.VARIANT}}
