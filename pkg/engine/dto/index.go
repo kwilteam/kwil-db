@@ -35,7 +35,8 @@ func (i *IndexType) IsValid() bool {
 	upper := strings.ToUpper(i.String())
 
 	return upper == BTREE.String() ||
-		upper == UNIQUE_BTREE.String()
+		upper == UNIQUE_BTREE.String() ||
+		upper == PRIMARY.String()
 }
 
 func (i *IndexType) Clean() error {
