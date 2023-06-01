@@ -220,31 +220,31 @@ func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 	//		Operator: tree.BitwiseOperatorBitwiseOr,
 	//	}
 	case ctx.STAR() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
 			Operator: tree.ArithmeticOperatorMultiply,
 		}
 	case ctx.DIV() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
 			Operator: tree.ArithmeticOperatorDivide,
 		}
 	case ctx.MOD() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
 			Operator: tree.ArithmeticOperatorModulus,
 		}
 	case ctx.PLUS() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
 			Operator: tree.ArithmeticOperatorAdd,
 		}
 	case ctx.MINUS() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
 			Operator: tree.ArithmeticOperatorSubtract,
