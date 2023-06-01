@@ -2,11 +2,21 @@ package sql_parser
 
 import (
 	"fmt"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/token"
 	grammar "github.com/kwilteam/kwil-db/pkg/sql_parser/sql_grammar"
 )
+
+// Parse parses a raw sql string and returns a tree.Ast
+func Parse(sql string) (ast tree.Ast, err error) {
+	currentLine := 1
+	errorHandler := NewErrorHandler(currentLine)
+	errorListener := newSqliteErrorListener(errorHandler)
+
+	return ParseSqlStatement(sql, currentLine, errorListener, false)
+}
 
 // ParseSqlStatement parses a single raw sql statement and returns tree.Ast
 func ParseSqlStatement(sql string, currentLine int, errorListener *sqliteErrorListener, trace bool) (ast tree.Ast, err error) {
