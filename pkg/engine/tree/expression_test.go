@@ -474,6 +474,19 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			},
 			want: `CASE "foo" WHEN 'bar' THEN 'baz' END`,
 		},
+		{
+			name: "arithmetic expression",
+			fields: &tree.ExpressionArithmetic{
+				Left: &tree.ExpressionColumn{
+					Column: "foo",
+				},
+				Operator: tree.ArithmeticOperatorAdd,
+				Right: &tree.ExpressionLiteral{
+					Value: "1",
+				},
+			},
+			want: `"foo" + 1`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

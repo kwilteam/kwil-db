@@ -131,3 +131,11 @@ func (e *ExpressionSelect) joinable() joinableStatus {
 func (e *ExpressionCase) joinable() joinableStatus {
 	return joinableStatusInvalid
 }
+
+func (e *ExpressionArithmetic) joinable() joinableStatus {
+	if e.Left.joinable() == joinableStatusContainsColumn || e.Right.joinable() == joinableStatusContainsColumn {
+		return joinableStatusContainsColumn
+	}
+
+	return joinableStatusInvalid
+}

@@ -1,7 +1,7 @@
 package tree
 
 type BinaryOperator interface {
-	Binary()
+	binary()
 	String() string
 }
 
@@ -13,9 +13,10 @@ const (
 	ArithmeticOperatorMultiply ArithmeticOperator = "*"
 	ArithmeticOperatorDivide   ArithmeticOperator = "/"
 	ArithmeticOperatorModulus  ArithmeticOperator = "%"
+	// this is not technically an arithmetic operator, but it is used in arithmetic expressions
+	ArithmeticConcat ArithmeticOperator = "||"
 )
 
-func (a ArithmeticOperator) Binary() {}
 func (a ArithmeticOperator) String() string {
 	return string(a)
 }
@@ -23,7 +24,9 @@ func (a ArithmeticOperator) String() string {
 type ComparisonOperator string
 
 const (
+	ComparisonOperatorDoubleEqual        ComparisonOperator = "=="
 	ComparisonOperatorEqual              ComparisonOperator = "="
+	ComparisonOperatorNotEqualDiamond    ComparisonOperator = "<>"
 	ComparisonOperatorNotEqual           ComparisonOperator = "!="
 	ComparisonOperatorGreaterThan        ComparisonOperator = ">"
 	ComparisonOperatorLessThan           ComparisonOperator = "<"
@@ -33,11 +36,9 @@ const (
 	ComparisonOperatorIsNot              ComparisonOperator = "IS NOT"
 	ComparisonOperatorIn                 ComparisonOperator = "IN"
 	ComparisonOperatorNotIn              ComparisonOperator = "NOT IN"
-	ComparisonOperatorBetween            ComparisonOperator = "BETWEEN"
-	ComparisonOperatorNotBetween         ComparisonOperator = "NOT BETWEEN"
 )
 
-func (c ComparisonOperator) Binary() {}
+func (c ComparisonOperator) binary() {}
 func (c ComparisonOperator) String() string {
 	return string(c)
 }
@@ -53,7 +54,7 @@ const (
 	BitwiseOperatorRightShift BitwiseOperator = ">>"
 )
 
-func (b BitwiseOperator) Binary() {}
+func (b BitwiseOperator) binary() {}
 func (b BitwiseOperator) String() string {
 	return string(b)
 }
@@ -65,7 +66,7 @@ const (
 	LogicalOperatorOr  LogicalOperator = "OR"
 )
 
-func (l LogicalOperator) Binary() {}
+func (l LogicalOperator) binary() {}
 func (l LogicalOperator) String() string {
 	return string(l)
 }
@@ -83,7 +84,7 @@ const (
 	StringOperatorNotMatch  StringOperator = "NOT MATCH"
 )
 
-func (s StringOperator) Binary() {}
+func (s StringOperator) binary() {}
 func (s StringOperator) String() string {
 	return string(s)
 }

@@ -156,6 +156,27 @@ func genSimpleBinaryCompareSelectTree(op tree.BinaryOperator, leftValue, rightVa
 	}
 }
 
+func genSimplyArithmeticSelectTree(op tree.ArithmeticOperator, leftValue, rightValue string) *tree.Select {
+	return &tree.Select{
+		SelectStmt: &tree.SelectStmt{
+			SelectCores: []*tree.SelectCore{
+				{
+					SelectType: tree.SelectTypeAll,
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionArithmetic{
+								Left:     &tree.ExpressionLiteral{Value: leftValue},
+								Operator: op,
+								Right:    &tree.ExpressionLiteral{Value: rightValue},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func genSimpleStringCompareSelectTree(op tree.StringOperator, leftValue, rightValue, escape string) *tree.Select {
 	escapeExpr := tree.Expression(&tree.ExpressionLiteral{Value: escape})
 	if escape == "" {
@@ -496,15 +517,15 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// binary op
 		//{"expr binary op ||", "select 1 || 2",
 		{"expr binary op *", "select 1 * 2",
-			genSimpleBinaryCompareSelectTree(tree.ArithmeticOperatorMultiply, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorMultiply, "1", "2")},
 		{"expr binary op /", "select 1 / 2",
-			genSimpleBinaryCompareSelectTree(tree.ArithmeticOperatorDivide, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorDivide, "1", "2")},
 		{"expr binary op %", "select 1 % 2",
-			genSimpleBinaryCompareSelectTree(tree.ArithmeticOperatorModulus, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorModulus, "1", "2")},
 		{"expr binary op +", "select 1 + 2",
-			genSimpleBinaryCompareSelectTree(tree.ArithmeticOperatorAdd, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorAdd, "1", "2")},
 		{"expr binary op -", "select 1 - 2",
-			genSimpleBinaryCompareSelectTree(tree.ArithmeticOperatorSubtract, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorSubtract, "1", "2")},
 		{"expr binary op <<", "select 1 << 2",
 			genSimpleBinaryCompareSelectTree(tree.BitwiseOperatorLeftShift, "1", "2")},
 		{"expr binary op >>", "select 1 >> 2",

@@ -462,3 +462,24 @@ func (e *ExpressionCase) ToSQL() string {
 	stmt.Token.End()
 	return stmt.String()
 }
+
+type ExpressionArithmetic struct {
+	Wrapped
+	Left     Expression
+	Operator ArithmeticOperator
+	Right    Expression
+}
+
+func (e *ExpressionArithmetic) isExpression() {}
+func (e *ExpressionArithmetic) ToSQL() string {
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
+	stmt.WriteString(e.Left.ToSQL())
+	stmt.WriteString(e.Operator.String())
+	stmt.WriteString(e.Right.ToSQL())
+	return stmt.String()
+}
