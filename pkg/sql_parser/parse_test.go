@@ -392,28 +392,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				},
 			},
 		},
-		{"table or subquery nest tos", "select * from (t1 as tt, t2 as ttt)",
-			&tree.Select{
-				SelectStmt: &tree.SelectStmt{
-					SelectCores: []*tree.SelectCore{
-						{
-							SelectType: tree.SelectTypeAll,
-							Columns:    columnStar,
-							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryList{
-										TableOrSubqueries: []tree.TableOrSubquery{
-											&tree.TableOrSubqueryTable{Name: "t1", Alias: "tt"},
-											&tree.TableOrSubqueryTable{Name: "t2", Alias: "ttt"},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
 		{"table or subquery join", "select * from t1 as tt join t2 as ttt on tt.a = ttt.a",
 			&tree.Select{
 				SelectStmt: &tree.SelectStmt{
@@ -2122,6 +2100,7 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		{"table or subquery not indexed", "select * from t1 not indexed", "not"},
 		// NOTE: what is table function??
 		{"table or subquery table function", "SELECT value FROM f(1)", "("},
+		{"table or subquery nest tos", "select * from (t1, t2)", ","},
 
 		// expr
 		{"expr names", "select schema.table.column", "."}, // no schema
@@ -2150,7 +2129,7 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		{"select with compound operator and values", "select * from t1 union values (1)", "values"},
 
 		// function
-		{"expr function distinct param", "select f(distinct 1,2)", "("},
+		{"expr function distinct param", "select f(distinct 1, 2)", "1"},
 		{"expr function with filter", "select f(1) filter (where 1)", "filter"},
 
 		// join
@@ -2158,6 +2137,12 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		{"join using", "select * from t3 join t4 using (c1)", "using"},
 		{"join without condition", "select * from t3 join t4", "<EOF>"},
 		{"comma cartesian join 1", "select * from t3, t4", ","},
+
+		// other statement
+		{"explain", "explain select * from t1", "explain"},
+		{"explain query plan", "explain query plan select * from t1", "explain"},
+		{"create table", "create table t1 (c1 int)", "create"},
+		{"drop table", "drop table t1", "drop"},
 	}
 
 	for _, tt := range tests {

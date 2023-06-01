@@ -833,14 +833,6 @@ func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryC
 			t.Alias = ctx.Table_alias().GetText()
 		}
 		return &t
-	case len(ctx.AllTable_or_subquery()) != 0:
-		ts := make([]tree.TableOrSubquery, len(ctx.AllTable_or_subquery()))
-		for i, subCtx := range ctx.AllTable_or_subquery() {
-			ts[i] = v.Visit(subCtx).(tree.TableOrSubquery)
-		}
-		return &tree.TableOrSubqueryList{
-			TableOrSubqueries: ts,
-		}
 	case ctx.Select_stmt_core() != nil:
 		t := tree.TableOrSubquerySelect{
 			Select: v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt),
