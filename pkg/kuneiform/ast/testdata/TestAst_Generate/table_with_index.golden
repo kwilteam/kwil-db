@@ -33,6 +33,13 @@
             "email"
           ],
           "type": "btree"
+        },
+        {
+          "name": "pm",
+          "columns": [
+            "name"
+          ],
+          "type": "primary"
         }
       ]
     }
