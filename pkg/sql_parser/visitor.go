@@ -1105,11 +1105,13 @@ func (v *KFSqliteVisitor) VisitChildren(node antlr.RuleNode) interface{} {
 	var result []tree.Ast
 	n := node.GetChildCount()
 	for i := 0; i < n; i++ {
-		if !v.shouldVisitNextChild(node, result) {
-			fmt.Println("should not VisitNextChild")
+		child := node.GetChild(i)
+		if !v.shouldVisitNextChild(child, result) {
+			if v.trace {
+				fmt.Printf("should not visit next child: %v,\n", reflect.TypeOf(child))
+			}
 			break
 		}
-		child := node.GetChild(i)
 		c := child.(antlr.ParseTree)
 		childResult := v.Visit(c).(tree.Ast)
 		result = append(result, childResult)
@@ -1117,7 +1119,10 @@ func (v *KFSqliteVisitor) VisitChildren(node antlr.RuleNode) interface{} {
 	return result
 }
 
-func (v *KFSqliteVisitor) shouldVisitNextChild(node antlr.RuleNode, currentResult interface{}) bool {
-	// apply default logic
+func (v *KFSqliteVisitor) shouldVisitNextChild(node antlr.Tree, currentResult interface{}) bool {
+	if _, ok := node.(antlr.TerminalNode); ok {
+		return false
+	}
+
 	return true
 }

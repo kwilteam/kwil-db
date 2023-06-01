@@ -12,10 +12,7 @@ import (
 // Parse parses a raw sql string and returns a tree.Ast
 func Parse(sql string) (ast tree.Ast, err error) {
 	currentLine := 1
-	errorHandler := NewErrorHandler(currentLine)
-	errorListener := newSqliteErrorListener(errorHandler)
-
-	return ParseSqlStatement(sql, currentLine, errorListener, false)
+	return ParseSqlStatement(sql, currentLine, nil, false)
 }
 
 // ParseSqlStatement parses a single raw sql statement and returns tree.Ast
