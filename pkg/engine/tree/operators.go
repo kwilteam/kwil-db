@@ -8,11 +8,16 @@ type BinaryOperator interface {
 type ArithmeticOperator string
 
 const (
-	ArithmeticOperatorAdd      ArithmeticOperator = "+"
-	ArithmeticOperatorSubtract ArithmeticOperator = "-"
-	ArithmeticOperatorMultiply ArithmeticOperator = "*"
-	ArithmeticOperatorDivide   ArithmeticOperator = "/"
-	ArithmeticOperatorModulus  ArithmeticOperator = "%"
+	ArithmeticOperatorAdd               ArithmeticOperator = "+"
+	ArithmeticOperatorSubtract          ArithmeticOperator = "-"
+	ArithmeticOperatorMultiply          ArithmeticOperator = "*"
+	ArithmeticOperatorDivide            ArithmeticOperator = "/"
+	ArithmeticOperatorModulus           ArithmeticOperator = "%"
+	ArithmeticOperatorBitwiseAnd        ArithmeticOperator = "&"
+	ArithmeticOperatorBitwiseOr         ArithmeticOperator = "|"
+	ArithmeticOperatorBitwiseLeftShift  ArithmeticOperator = "<<"
+	ArithmeticOperatorBitwiseRightShift ArithmeticOperator = ">>"
+	// treat ~ as unary operator
 	// this is not technically an arithmetic operator, but it is used in arithmetic expressions
 	ArithmeticConcat ArithmeticOperator = "||"
 )
@@ -41,22 +46,6 @@ const (
 func (c ComparisonOperator) binary() {}
 func (c ComparisonOperator) String() string {
 	return string(c)
-}
-
-type BitwiseOperator string
-
-const (
-	BitwiseOperatorAnd        BitwiseOperator = "&"
-	BitwiseOperatorOr         BitwiseOperator = "|"
-	BitwiseOperatorXor        BitwiseOperator = "^"
-	BitwiseOperatorNot        BitwiseOperator = "~"
-	BitwiseOperatorLeftShift  BitwiseOperator = "<<"
-	BitwiseOperatorRightShift BitwiseOperator = ">>"
-)
-
-func (b BitwiseOperator) binary() {}
-func (b BitwiseOperator) String() string {
-	return string(b)
 }
 
 type LogicalOperator string
