@@ -305,27 +305,20 @@ func (p *parser) parseColumnDef() *ast.ColumnDef {
 }
 
 // parseIndexDef parses an index definition. Index name must start with #.
-func (p *parser) parserIndexDef(unique bool) *ast.IndexDef {
+func (p *parser) parserIndexDef(indexToken token.Token) *ast.IndexDef {
 	if p.trace {
 		defer un(trace("parserIndexDef"))
 	}
 
 	indexName := p.parseIdentWithPrefix(token.HASH, "index")
-	indexUnique := false
-	if unique {
-		indexUnique = true
-		p.expect(token.UNIQUE)
-	} else {
-		p.expect(token.INDEX)
-	}
-
+	p.expect(indexToken)
 	indexColumns := p.parseParameterList(token.ILLEGAL, "")
 
 	if p.curTokIs(token.COMMA) {
 		p.next()
 	}
 
-	return &ast.IndexDef{Name: indexName, Unique: indexUnique, Columns: indexColumns}
+	return &ast.IndexDef{Name: indexName, Type: indexToken, Columns: indexColumns}
 }
 
 // parseColumnDefList parses a list of column definitions(separated by commas, enclosed in braces).
@@ -339,9 +332,11 @@ func (p *parser) parseColumnDefList() (cols []ast.Stmt) {
 	for !p.curTokIs(token.COMMA) && !p.curTokIs(token.RBRACE) && !p.curTokIs(token.EOF) {
 		switch p.peekTok {
 		case token.INDEX:
-			cols = append(cols, p.parserIndexDef(false))
+			cols = append(cols, p.parserIndexDef(token.INDEX))
 		case token.UNIQUE:
-			cols = append(cols, p.parserIndexDef(true))
+			cols = append(cols, p.parserIndexDef(token.UNIQUE))
+		case token.PRIMARY:
+			cols = append(cols, p.parserIndexDef(token.PRIMARY))
 		default:
 			cols = append(cols, p.parseColumnDef())
 		}

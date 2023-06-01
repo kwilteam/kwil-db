@@ -128,7 +128,7 @@ type (
 	IndexDef struct {
 		Name    *Ident
 		Columns []Expr
-		Unique  bool
+		Type    token.Token
 	}
 
 	ColumnDef struct {
@@ -317,10 +317,13 @@ func (d *IndexDef) Build() (def schema.Index) {
 	def = schema.Index{}
 	// remove the prefix # of index name
 	def.Name = d.Name.Name[1:]
-	def.Type = schema.IdxBtree
-	if d.Unique {
-		def.Type = schema.IdxUniqueBtree
+
+	var err error
+	def.Type, err = schema.GetIndexType(d.Type.String())
+	if err != nil {
+		panic(err)
 	}
+
 	def.Columns = []string{}
 	for _, col := range d.Columns {
 		switch c := col.(type) {
