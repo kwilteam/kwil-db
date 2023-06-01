@@ -39,11 +39,16 @@ tasks:
   build:antlr:
     desc: Generate antlr parser code
     cmds:
+      - rm -rf pkg/sql_parser/sql_grammar/*.go
+      - rm -rf pkg/sql_parser/sql_grammar/*.tokens
+      - rm -rf pkg/sql_parser/sql_grammar/*.interp
       - cd ./pkg/sql_parser/sql_grammar && ./generate.sh
     sources:
       - pkg/sql_parser/sql_grammar/*.g4
     generates:
       - pkg/sql_parser/sql_grammar/*.go
+      - pkg/sql_parser/sql_grammar/*.tokens
+      - pkg/sql_parser/sql_grammar/*.interp
 
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs
