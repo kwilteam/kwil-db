@@ -215,7 +215,6 @@ var SQLFunctions = map[string]SQLFunction{
 	"strftime":  &FunctionSTRFTIME,
 	// Aggregate functions
 	"count":        &FunctionCOUNT,
-	"sum":          &FunctionSUM,
 	"min":          &FunctionMIN,
 	"max":          &FunctionMAX,
 	"group_concat": &FunctionGROUPCONCAT,

@@ -775,6 +775,25 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr function unixepoch 2 modifiers", `select unixepoch(1092941466,'start of month','+1 month')`,
 			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
 				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
+		// aggregate functions
+		{"expr function count", `select count(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionCOUNT, genLiteralExpression("1"))},
+		{"expr function max", `select max(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"))},
+		{"expr function max scalar", `select max(1, 2, 3)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"),
+				genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function min", `select min(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"))},
+		{"expr function min scalar", `select min(1,2,3)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"),
+				genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function group_concat", `select group_concat(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"))},
+		{"expr function group_concat 2", `select group_concat(1, 2)`,
+			genSimpleFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"),
+				genLiteralExpression("2"))},
+
 		// expr list
 		{"expr list", "select (1,2)",
 			&tree.Select{
