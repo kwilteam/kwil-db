@@ -191,7 +191,7 @@ func (e *ExpressionFunction) ToSQL() string {
 		if !ok {
 			panic("ExpressionFunction: function '" + e.Function.Name() + "' does not support DISTINCT")
 		}
-		stringToWrite = exprFunc.StringDistinct(e.Inputs...)
+		stringToWrite = exprFunc.stringDistinct(e.Inputs...)
 	} else {
 		stringToWrite = e.Function.String(e.Inputs...)
 	}
