@@ -78,8 +78,25 @@ type IndexType string
 const (
 	IdxBtree       IndexType = "btree"
 	IdxUniqueBtree IndexType = "unique_btree"
+	IdxPrimary     IndexType = "primary"
 )
 
 func (t IndexType) String() string {
 	return string(t)
+}
+
+// indexTypes maps the Kuneiform index tokens to the schema index type
+var indexTypes = map[string]IndexType{
+	"index":   IdxBtree,
+	"unique":  IdxUniqueBtree,
+	"primary": IdxPrimary,
+}
+
+func GetIndexType(idxType string) (IndexType, error) {
+	index, ok := indexTypes[strings.ToLower(idxType)]
+	if !ok {
+		return "", fmt.Errorf("invalid index type: %s", idxType)
+	}
+
+	return index, nil
 }

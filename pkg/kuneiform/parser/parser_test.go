@@ -2,7 +2,6 @@ package parser_test
 
 import (
 	"fmt"
-
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/ast"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
@@ -73,7 +72,7 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 		},
 		{
 			name:   "table with index",
-			input:  `database demo; table user{name text, age int, email text, #uname unique(name, email), #im index(email)}`,
+			input:  `database demo; table user{name text, age int, email text, #uname unique(name, email), #im index(email), #pm primary(name)}`,
 			wantDB: "demo",
 			wantTables: []schema.Table{
 				{
@@ -84,8 +83,9 @@ func TestParser_DatabaseDeclaration(t *testing.T) {
 						{Name: "email", Type: schema.ColText, Attributes: []schema.Attribute{}},
 					},
 					Indexes: []schema.Index{
-						{Name: "uname", Type: schema.IdxBtree, Columns: []string{"name", "email"}},
+						{Name: "uname", Type: schema.IdxUniqueBtree, Columns: []string{"name", "email"}},
 						{Name: "im", Type: schema.IdxBtree, Columns: []string{"email"}},
+						{Name: "pm", Type: schema.IdxPrimary, Columns: []string{"name"}},
 					},
 				},
 			},
@@ -208,6 +208,13 @@ func testTableBody(t *testing.T, col *ast.ColumnDef, want schema.Column) bool {
 func testTableIndex(t *testing.T, idx *ast.IndexDef, want schema.Index) bool {
 	if idx.Name.Name != token.HASH.String()+want.Name {
 		t.Errorf("indexDef.Name is not '%s'. got=%s", want.Name, idx.Name.Name)
+		return false
+	}
+
+	it, err := schema.GetIndexType(idx.Type.String())
+	assert.NoError(t, err)
+	if it != want.Type {
+		t.Errorf("indexDef.Type is not '%s'. got=%s", want.Type, it)
 		return false
 	}
 

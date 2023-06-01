@@ -70,11 +70,4 @@ var (
 		Min:          1,
 	},
 	}
-
-	FunctionSUM = AggregateFunc{AnySQLFunction: AnySQLFunction{
-		FunctionName: "sum",
-		Min:          1,
-		Max:          1,
-	},
-	}
 )

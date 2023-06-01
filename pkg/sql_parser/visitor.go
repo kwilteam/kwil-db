@@ -205,6 +205,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 			Operator: tree.UnaryOperatorBitNot,
 			Operand:  v.visitExpr(ctx.GetUnary_expr()),
 		}
+	// collate
 	case ctx.COLLATE_() != nil:
 		// collation_name is any_name
 		collationName := ctx.Collation_name().GetText()
@@ -213,12 +214,13 @@ func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 			Collation:  v.getCollateType(collationName),
 		}
 	// binary opertors
-	//case ctx.PIPE2() != nil: // TODO: ??
-	//	return &tree.ExpressionBinaryComparison{
-	//		Left:     v.visitExpr(ctx.Expr(0)),
-	//		Right:    v.visitExpr(ctx.Expr(1)),
-	//		Operator: tree.BitwiseOperatorBitwiseOr,
-	//	}
+	// artithmetic operators
+	case ctx.PIPE2() != nil:
+		return &tree.ExpressionArithmetic{
+			Left:     v.visitExpr(ctx.Expr(0)),
+			Right:    v.visitExpr(ctx.Expr(1)),
+			Operator: tree.ArithmeticConcat,
+		}
 	case ctx.STAR() != nil:
 		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
@@ -250,29 +252,30 @@ func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 			Operator: tree.ArithmeticOperatorSubtract,
 		}
 	case ctx.LT2() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.BitwiseOperatorLeftShift,
+			Operator: tree.ArithmeticOperatorBitwiseLeftShift,
 		}
 	case ctx.GT2() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.BitwiseOperatorRightShift,
+			Operator: tree.ArithmeticOperatorBitwiseRightShift,
 		}
 	case ctx.AMP() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.BitwiseOperatorAnd,
+			Operator: tree.ArithmeticOperatorBitwiseAnd,
 		}
 	case ctx.PIPE() != nil:
-		return &tree.ExpressionBinaryComparison{
+		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.BitwiseOperatorOr,
+			Operator: tree.ArithmeticOperatorBitwiseOr,
 		}
+	// compare operators
 	case ctx.LT() != nil:
 		return &tree.ExpressionBinaryComparison{
 			Left:     v.visitExpr(ctx.Expr(0)),
@@ -303,24 +306,24 @@ func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 			Right:    v.visitExpr(ctx.Expr(1)),
 			Operator: tree.ComparisonOperatorEqual,
 		}
-	//case ctx.EQ() != nil:
-	//	return &tree.ExpressionBinaryComparison{
-	//		Left:     v.visitExpr(ctx.Expr(0)),
-	//		Right:    v.visitExpr(ctx.Expr(1)), // TODO: equal
-	//		Operator: tree.ComparisonOperatorEqual,
-	//	}
+	case ctx.EQ() != nil:
+		return &tree.ExpressionBinaryComparison{
+			Left:     v.visitExpr(ctx.Expr(0)),
+			Right:    v.visitExpr(ctx.Expr(1)),
+			Operator: tree.ComparisonOperatorDoubleEqual,
+		}
 	case ctx.NOT_EQ1() != nil:
 		return &tree.ExpressionBinaryComparison{
 			Left:     v.visitExpr(ctx.Expr(0)),
 			Right:    v.visitExpr(ctx.Expr(1)),
 			Operator: tree.ComparisonOperatorNotEqual,
 		}
-	//case ctx.NOT_EQ2() != nil:
-	//	return &tree.ExpressionBinaryComparison{
-	//		Left:     v.visitExpr(ctx.Expr(0)),
-	//		Right:    v.visitExpr(ctx.Expr(1)),
-	//		Operator: tree.ComparisonOperatorNotEqual2,
-	//	}
+	case ctx.NOT_EQ2() != nil:
+		return &tree.ExpressionBinaryComparison{
+			Left:     v.visitExpr(ctx.Expr(0)),
+			Right:    v.visitExpr(ctx.Expr(1)),
+			Operator: tree.ComparisonOperatorNotEqualDiamond,
+		}
 	case ctx.IS_() != nil:
 		if ctx.DISTINCT_() == nil {
 			// binary comparison
@@ -439,7 +442,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 			Expression: v.visitExpr(ctx.Expr(0)),
 			IsNull:     false,
 		}
-	// not unary op
+	// unary op NOT
 	case ctx.NOT_() != nil && ctx.GetUnary_expr() != nil:
 		return &tree.ExpressionUnary{
 			Operator: tree.UnaryOperatorNot,
@@ -470,6 +473,10 @@ func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 			panic(fmt.Sprintf("unsupported function '%s'", funcName))
 		}
 		expr.Function = f
+
+		if ctx.DISTINCT_() != nil {
+			expr.Distinct = true
+		}
 
 		for i, e := range ctx.AllExpr() {
 			expr.Inputs[i] = v.visitExpr(e)
@@ -833,14 +840,6 @@ func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *grammar.Table_or_subqueryC
 			t.Alias = ctx.Table_alias().GetText()
 		}
 		return &t
-	case len(ctx.AllTable_or_subquery()) != 0:
-		ts := make([]tree.TableOrSubquery, len(ctx.AllTable_or_subquery()))
-		for i, subCtx := range ctx.AllTable_or_subquery() {
-			ts[i] = v.Visit(subCtx).(tree.TableOrSubquery)
-		}
-		return &tree.TableOrSubqueryList{
-			TableOrSubqueries: ts,
-		}
 	case ctx.Select_stmt_core() != nil:
 		t := tree.TableOrSubquerySelect{
 			Select: v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt),

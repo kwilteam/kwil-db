@@ -250,6 +250,27 @@ func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) 
 	}
 }
 
+func genDistinctFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.Select {
+	return &tree.Select{
+		SelectStmt: &tree.SelectStmt{
+			SelectCores: []*tree.SelectCore{
+				{
+					SelectType: tree.SelectTypeAll,
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionFunction{
+								Function: f,
+								Inputs:   inputs,
+								Distinct: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func genSimpleJoinSelectTree(joinOP *tree.JoinOperator, t1, t1Column, t2, t2Column string) *tree.Select {
 	return &tree.Select{
 		SelectStmt: &tree.SelectStmt{
@@ -316,6 +337,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		input  string
 		expect tree.Ast
 	}{
+		// with semicolon at the end
+		{"*", "select *;", genSelectColumnStarTree()},
 		// common table stmt
 		{"cte", "with t as (select 1) select *",
 			&tree.Select{
@@ -384,28 +407,6 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 									TableOrSubquery: &tree.TableOrSubquerySelect{
 										Select: genSelectColumnLiteralTree("1").SelectStmt,
 										Alias:  "tt",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{"table or subquery nest tos", "select * from (t1 as tt, t2 as ttt)",
-			&tree.Select{
-				SelectStmt: &tree.SelectStmt{
-					SelectCores: []*tree.SelectCore{
-						{
-							SelectType: tree.SelectTypeAll,
-							Columns:    columnStar,
-							From: &tree.FromClause{
-								JoinClause: &tree.JoinClause{
-									TableOrSubquery: &tree.TableOrSubqueryList{
-										TableOrSubqueries: []tree.TableOrSubquery{
-											&tree.TableOrSubqueryTable{Name: "t1", Alias: "tt"},
-											&tree.TableOrSubqueryTable{Name: "t2", Alias: "ttt"},
-										},
 									},
 								},
 							},
@@ -515,7 +516,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr unary op ~", "select ~1", genSelectUnaryExprTree(tree.UnaryOperatorBitNot, "1")},
 		{"expr unary op not", "select not 1", genSelectUnaryExprTree(tree.UnaryOperatorNot, "1")},
 		// binary op
-		//{"expr binary op ||", "select 1 || 2",
+		{"expr binary op ||", "select 1 || 2",
+			genSimplyArithmeticSelectTree(tree.ArithmeticConcat, "1", "2")},
 		{"expr binary op *", "select 1 * 2",
 			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorMultiply, "1", "2")},
 		{"expr binary op /", "select 1 / 2",
@@ -527,13 +529,13 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr binary op -", "select 1 - 2",
 			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorSubtract, "1", "2")},
 		{"expr binary op <<", "select 1 << 2",
-			genSimpleBinaryCompareSelectTree(tree.BitwiseOperatorLeftShift, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseLeftShift, "1", "2")},
 		{"expr binary op >>", "select 1 >> 2",
-			genSimpleBinaryCompareSelectTree(tree.BitwiseOperatorRightShift, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseRightShift, "1", "2")},
 		{"expr binary op &", "select 1 & 2",
-			genSimpleBinaryCompareSelectTree(tree.BitwiseOperatorAnd, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseAnd, "1", "2")},
 		{"expr binary op |", "select 1 | 2",
-			genSimpleBinaryCompareSelectTree(tree.BitwiseOperatorOr, "1", "2")},
+			genSimplyArithmeticSelectTree(tree.ArithmeticOperatorBitwiseOr, "1", "2")},
 		{"expr binary op <", "select 1 < 2",
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorLessThan, "1", "2")},
 		{"expr binary op <=", "select 1 <= 2",
@@ -544,9 +546,12 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorGreaterThanOrEqual, "1", "2")},
 		{"expr binary op =", "select 1 = 2",
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorEqual, "1", "2")},
+		{"expr binary op =", "select 1 == 2",
+			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorDoubleEqual, "1", "2")},
 		{"expr binary op !=", "select 1 != 2",
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorNotEqual, "1", "2")},
-		//{"expr binary op <>", "select 1 <> 2"},
+		{"expr binary op <>", "select 1 <> 2",
+			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorNotEqualDiamond, "1", "2")},
 		{"expr binary op is", "select 1 is 2",
 			genSimpleBinaryCompareSelectTree(tree.ComparisonOperatorIs, "1", "2")},
 		{"expr binary op is not", "select 1 is not 2",
@@ -791,6 +796,42 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr function unixepoch 2 modifiers", `select unixepoch(1092941466,'start of month','+1 month')`,
 			genSimpleFunctionSelectTree(&tree.FunctionUNIXEPOCH,
 				genLiteralExpression("1092941466"), genLiteralExpression("'start of month'"), genLiteralExpression("'+1 month'"))},
+		// aggregate functions
+		{"expr function count", `select count(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionCOUNT, genLiteralExpression("1"))},
+		{"expr function count distinct", `select count(distinct 1)`,
+			genDistinctFunctionSelectTree(&tree.FunctionCOUNT, genLiteralExpression("1"))},
+		{"expr function max", `select max(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"))},
+		{"expr function max distinct ", `select max(distinct 1)`,
+			genDistinctFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"))},
+		{"expr function max scalar", `select max(1, 2, 3)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"),
+				genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function max scalar distinct", `select max(distinct 1, 2, 3)`,
+			genDistinctFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"),
+				genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function min", `select min(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"))},
+		{"expr function min distinct", `select min(distinct 1)`,
+			genDistinctFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"))},
+		{"expr function min scalar", `select min(1,2,3)`,
+			genSimpleFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"),
+				genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function min scalar distinct", `select min(distinct 1,2,3)`,
+			genDistinctFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"),
+				genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function group_concat", `select group_concat(1)`,
+			genSimpleFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"))},
+		{"expr function group_concat distinct", `select group_concat(distinct 1)`,
+			genDistinctFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"))},
+		{"expr function group_concat 2", `select group_concat(1, 2)`,
+			genSimpleFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"),
+				genLiteralExpression("2"))},
+		{"expr function group_concat 2 distinct", `select group_concat(distinct 1, 2)`,
+			genDistinctFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"),
+				genLiteralExpression("2"))},
+
 		// expr list
 		{"expr list", "select (1,2)",
 			&tree.Select{
@@ -922,8 +963,52 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				},
 			},
 		},
-		//{"expr precedence 1", "select 3 + 4 * 5 - 2 / 2 + -1",
-		//{"expr precedence 4", "SELECT (3 + 4) * 5 - 2 / 2"},
+		{"expr precedence 4", "select not 3 + 4 * 5 - 2 = 2 + -1 & 7",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionUnary{
+										Operator: tree.UnaryOperatorNot,
+										Operand: &tree.ExpressionBinaryComparison{
+											Operator: tree.ComparisonOperatorEqual,
+											Left: &tree.ExpressionArithmetic{
+												Operator: tree.ArithmeticOperatorSubtract,
+												Left: &tree.ExpressionArithmetic{
+													Operator: tree.ArithmeticOperatorAdd,
+													Left:     genLiteralExpression("3"),
+													Right: &tree.ExpressionArithmetic{
+														Operator: tree.ArithmeticOperatorMultiply,
+														Left:     genLiteralExpression("4"),
+														Right:    genLiteralExpression("5"),
+													},
+												},
+												Right: genLiteralExpression("2"),
+											},
+											Right: &tree.ExpressionArithmetic{
+												Left: &tree.ExpressionArithmetic{
+													Left:     genLiteralExpression("2"),
+													Operator: tree.ArithmeticOperatorAdd,
+													Right: &tree.ExpressionUnary{
+														Operator: tree.UnaryOperatorMinus,
+														Operand:  genLiteralExpression("1"),
+													},
+												},
+												Operator: tree.ArithmeticOperatorBitwiseAnd,
+												Right:    genLiteralExpression("7"),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 
 		// collate
 		{"expr collate nocase", "select 1 collate nocase",
@@ -1228,6 +1313,18 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 						{
 							genLiteralExpression("1"),
 							genLiteralExpression("2"),
+						},
+					}}}},
+		{"insert with columns with bind parameter", "insert into t1 (a,b) values ($a, $b)",
+			&tree.Insert{
+				InsertStmt: &tree.InsertStmt{
+					Table:      "t1",
+					Columns:    []string{"a", "b"},
+					InsertType: tree.InsertTypeInsert,
+					Values: [][]tree.Expression{
+						{
+							&tree.ExpressionBindParameter{Parameter: "$a"},
+							&tree.ExpressionBindParameter{Parameter: "$b"},
 						},
 					}}}},
 		{"insert with cte", "with t as (select 1) insert into t1 (a,b) values (1,2)",
@@ -2122,6 +2219,7 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		{"table or subquery not indexed", "select * from t1 not indexed", "not"},
 		// NOTE: what is table function??
 		{"table or subquery table function", "SELECT value FROM f(1)", "("},
+		{"table or subquery nest tos", "select * from (t1, t2)", ","},
 
 		// expr
 		{"expr names", "select schema.table.column", "."}, // no schema
@@ -2150,7 +2248,6 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		{"select with compound operator and values", "select * from t1 union values (1)", "values"},
 
 		// function
-		{"expr function distinct param", "select f(distinct 1,2)", "("},
 		{"expr function with filter", "select f(1) filter (where 1)", "filter"},
 
 		// join
@@ -2158,6 +2255,12 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		{"join using", "select * from t3 join t4 using (c1)", "using"},
 		{"join without condition", "select * from t3 join t4", "<EOF>"},
 		{"comma cartesian join 1", "select * from t3, t4", ","},
+
+		// other statement
+		{"explain", "explain select * from t1", "explain"},
+		{"explain query plan", "explain query plan select * from t1", "explain"},
+		{"create table", "create table t1 (c1 int)", "create"},
+		{"drop table", "drop table t1", "drop"},
 	}
 
 	for _, tt := range tests {

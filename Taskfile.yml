@@ -14,6 +14,22 @@ tasks:
     cmds:
       - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
 
+  git:init:
+    desc: Initialize git submodules
+    cmds:
+      - git submodule update --init
+
+  git:sync:
+    desc: Sync git submodules
+    cmds:
+      - git submodule update --remote
+
+  init:
+    desc: Initialize the project
+    deps: [install:deps, git:init]
+    cmds:
+      - go mod download
+
   build:
     desc: Build cli & kwild
     cmds:
@@ -39,11 +55,16 @@ tasks:
   build:antlr:
     desc: Generate antlr parser code
     cmds:
+      - rm -rf pkg/sql_parser/sql_grammar/*.go
+      - rm -rf pkg/sql_parser/sql_grammar/*.tokens
+      - rm -rf pkg/sql_parser/sql_grammar/*.interp
       - cd ./pkg/sql_parser/sql_grammar && ./generate.sh
     sources:
       - pkg/sql_parser/sql_grammar/*.g4
     generates:
       - pkg/sql_parser/sql_grammar/*.go
+      - pkg/sql_parser/sql_grammar/*.tokens
+      - pkg/sql_parser/sql_grammar/*.interp
 
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs
@@ -58,9 +79,9 @@ tasks:
       - pkg/chain/contracts/*/evm/abi/*.go
 
   # ************ docker ************
-  docker:kwild:
+  build:docker:
     desc: Build the docker image for the kwild
-    deps: [ pb:compile:v1 ]
+    deps: [ pb:compile:v1, build:antlr ]
     cmds:
       # pass any args to build debug image, e.g. task docker:kwild -- debug
       - ./scripts/build/docker kwild  {{.VARIANT}}
@@ -77,7 +98,7 @@ tasks:
   # ************ test ************
   test:act:
     desc: Run acceptance tests
-    deps: [ docker:kwild ]
+    deps: [ build:docker]
     cmds:
       - go test ./test/acceptance/ -v
 
