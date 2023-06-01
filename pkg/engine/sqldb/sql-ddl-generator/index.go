@@ -35,7 +35,7 @@ func GenerateCreateIndexStatements(tableName string, indexes []*dto.Index) ([]st
 		}
 
 		// Skip primary indexes, as they are created with the table
-		if index.Type == dto.PRIMARY {
+		if strings.EqualFold(index.Type.String(), dto.PRIMARY.String()) {
 			continue
 		}
 

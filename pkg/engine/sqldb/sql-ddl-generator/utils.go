@@ -41,7 +41,7 @@ func attributeToSQLiteString(colName string, attr *dto.Attribute) (string, error
 
 	switch attr.Type {
 	case dto.PRIMARY_KEY:
-		return "PRIMARY KEY", nil
+		return "", nil
 	case dto.DEFAULT:
 		return "DEFAULT " + formattedVal, nil
 	case dto.NOT_NULL:
