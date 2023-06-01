@@ -250,6 +250,27 @@ func genSimpleFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) 
 	}
 }
 
+func genDistinctFunctionSelectTree(f tree.SQLFunction, inputs ...tree.Expression) *tree.Select {
+	return &tree.Select{
+		SelectStmt: &tree.SelectStmt{
+			SelectCores: []*tree.SelectCore{
+				{
+					SelectType: tree.SelectTypeAll,
+					Columns: []tree.ResultColumn{
+						&tree.ResultColumnExpression{
+							Expression: &tree.ExpressionFunction{
+								Function: f,
+								Inputs:   inputs,
+								Distinct: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func genSimpleJoinSelectTree(joinOP *tree.JoinOperator, t1, t1Column, t2, t2Column string) *tree.Select {
 	return &tree.Select{
 		SelectStmt: &tree.SelectStmt{
@@ -778,20 +799,37 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		// aggregate functions
 		{"expr function count", `select count(1)`,
 			genSimpleFunctionSelectTree(&tree.FunctionCOUNT, genLiteralExpression("1"))},
+		{"expr function count distinct", `select count(distinct 1)`,
+			genDistinctFunctionSelectTree(&tree.FunctionCOUNT, genLiteralExpression("1"))},
 		{"expr function max", `select max(1)`,
 			genSimpleFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"))},
+		{"expr function max distinct ", `select max(distinct 1)`,
+			genDistinctFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"))},
 		{"expr function max scalar", `select max(1, 2, 3)`,
 			genSimpleFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"),
 				genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function max scalar distinct", `select max(distinct 1, 2, 3)`,
+			genDistinctFunctionSelectTree(&tree.FunctionMAX, genLiteralExpression("1"),
+				genLiteralExpression("2"), genLiteralExpression("3"))},
 		{"expr function min", `select min(1)`,
 			genSimpleFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"))},
+		{"expr function min distinct", `select min(distinct 1)`,
+			genDistinctFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"))},
 		{"expr function min scalar", `select min(1,2,3)`,
 			genSimpleFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"),
 				genLiteralExpression("2"), genLiteralExpression("3"))},
+		{"expr function min scalar distinct", `select min(distinct 1,2,3)`,
+			genDistinctFunctionSelectTree(&tree.FunctionMIN, genLiteralExpression("1"),
+				genLiteralExpression("2"), genLiteralExpression("3"))},
 		{"expr function group_concat", `select group_concat(1)`,
 			genSimpleFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"))},
+		{"expr function group_concat distinct", `select group_concat(distinct 1)`,
+			genDistinctFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"))},
 		{"expr function group_concat 2", `select group_concat(1, 2)`,
 			genSimpleFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"),
+				genLiteralExpression("2"))},
+		{"expr function group_concat 2 distinct", `select group_concat(distinct 1, 2)`,
+			genDistinctFunctionSelectTree(&tree.FunctionGROUPCONCAT, genLiteralExpression("1"),
 				genLiteralExpression("2"))},
 
 		// expr list
@@ -2210,7 +2248,6 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		{"select with compound operator and values", "select * from t1 union values (1)", "values"},
 
 		// function
-		{"expr function distinct param", "select f(distinct 1, 2)", "1"},
 		{"expr function with filter", "select f(1) filter (where 1)", "filter"},
 
 		// join

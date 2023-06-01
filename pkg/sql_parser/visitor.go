@@ -474,6 +474,10 @@ func (v *KFSqliteVisitor) visitExpr(ctx grammar.IExprContext) tree.Expression {
 		}
 		expr.Function = f
 
+		if ctx.DISTINCT_() != nil {
+			expr.Distinct = true
+		}
+
 		for i, e := range ctx.AllExpr() {
 			expr.Inputs[i] = v.visitExpr(e)
 		}
