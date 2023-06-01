@@ -4,16 +4,16 @@ import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
 
 type distinctable interface {
 	SQLFunction
-	StringDistinct(exprs ...Expression) string
+	stringDistinct(exprs ...Expression) string
 }
 
 type AggregateFunc struct {
 	AnySQLFunction
 }
 
-// StringDistinct returns the string representation of the function with the
+// stringDistinct returns the string representation of the function with the
 // given arguments, prepended by the DISTINCT keyword.
-func (s *AggregateFunc) StringDistinct(exprs ...Expression) string {
+func (s *AggregateFunc) stringDistinct(exprs ...Expression) string {
 	if s.Min > 0 && len(exprs) < int(s.Min) {
 		panic("too few arguments for function " + s.FunctionName)
 	}
@@ -32,6 +32,13 @@ func (s *AggregateFunc) StringDistinct(exprs ...Expression) string {
 			stmt.WriteString(exprs[i].ToSQL())
 		})
 	})
+}
+
+func (s *AggregateFunc) String(exprs ...Expression) string {
+	if s.distinct {
+		return s.stringDistinct(exprs...)
+	}
+	return s.string(exprs...)
 }
 
 var (

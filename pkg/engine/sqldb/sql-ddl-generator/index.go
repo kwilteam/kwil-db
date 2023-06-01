@@ -18,6 +18,8 @@ func indexTypeToSQLiteString(indexType dto.IndexType) (string, error) {
 		return "", nil
 	case dto.UNIQUE_BTREE:
 		return " UNIQUE", nil
+	case dto.PRIMARY:
+		return " PRIMARY KEY", nil
 	default:
 		return "", fmt.Errorf("unknown index type: %s", indexType)
 	}
@@ -30,6 +32,11 @@ func GenerateCreateIndexStatements(tableName string, indexes []*dto.Index) ([]st
 		indexType, err := indexTypeToSQLiteString(index.Type)
 		if err != nil {
 			return nil, err
+		}
+
+		// Skip primary indexes, as they are created with the table
+		if index.Type == dto.PRIMARY {
+			continue
 		}
 
 		cols := make([]string, len(index.Columns))

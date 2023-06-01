@@ -24,6 +24,7 @@ func (i *Index) Clean() error {
 const (
 	BTREE        IndexType = "BTREE"
 	UNIQUE_BTREE IndexType = "UNIQUE_BTREE"
+	PRIMARY      IndexType = "PRIMARY"
 )
 
 func (i IndexType) String() string {

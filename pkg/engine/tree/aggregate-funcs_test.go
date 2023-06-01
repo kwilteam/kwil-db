@@ -44,7 +44,8 @@ func TestAggregateFunc_String(t *testing.T) {
 			}
 
 			s := tt.fields.AggregateFunc
-			got := s.StringDistinct(tt.args.exprs...)
+			s.SetDistinct(true)
+			got := s.String(tt.args.exprs...)
 
 			if !compareIgnoringWhitespace(got, tt.want) {
 				t.Errorf("AggregateFunc.String() = %v, want %v", got, tt.want)
