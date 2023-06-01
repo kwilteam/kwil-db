@@ -11,16 +11,39 @@ type Table struct {
 }
 
 func (t *Table) Clean() error {
+	hasPrimaryAttribute := false
 	for _, col := range t.Columns {
 		if err := col.Clean(); err != nil {
 			return err
 		}
+		if col.hasPrimary() {
+			if hasPrimaryAttribute {
+				return fmt.Errorf("table %s has multiple primary attributes", t.Name)
+			}
+			hasPrimaryAttribute = true
+		}
 	}
 
+	hasPrimaryIndex := false
 	for _, idx := range t.Indexes {
 		if err := idx.Clean(); err != nil {
 			return err
 		}
+
+		if idx.Type == PRIMARY {
+			if hasPrimaryIndex {
+				return fmt.Errorf("table %s has multiple primary indexes", t.Name)
+			}
+			hasPrimaryIndex = true
+		}
+	}
+
+	if !hasPrimaryAttribute && !hasPrimaryIndex {
+		return fmt.Errorf("table %s has no primary key", t.Name)
+	}
+
+	if hasPrimaryAttribute && hasPrimaryIndex {
+		return fmt.Errorf("table %s has both primary attribute and primary index", t.Name)
 	}
 
 	return runCleans(
@@ -45,6 +68,15 @@ func (c *Column) Clean() error {
 		cleanIdent(&c.Name),
 		c.Type.Clean(),
 	)
+}
+
+func (c *Column) hasPrimary() bool {
+	for _, attr := range c.Attributes {
+		if attr.Type == PRIMARY_KEY {
+			return true
+		}
+	}
+	return false
 }
 
 type Attribute struct {
