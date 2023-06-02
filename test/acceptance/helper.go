@@ -4,10 +4,16 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"os"
 
+	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
+
 	//"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
+	"math/big"
+	"runtime"
+	"testing"
+	"time"
+
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/pkg/chain/types"
 	"github.com/kwilteam/kwil-db/pkg/client"
@@ -16,10 +22,6 @@ import (
 	"github.com/kwilteam/kwil-db/test/acceptance/utils/deployer"
 	eth_deployer "github.com/kwilteam/kwil-db/test/acceptance/utils/deployer/eth-deployer"
 	"github.com/kwilteam/kwil-db/test/specifications"
-	"math/big"
-	"runtime"
-	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
@@ -175,7 +177,6 @@ func arch() string {
 func setSchemaLoader(cfg TestEnvCfg) {
 	specifications.SetSchemaLoader(
 		&specifications.FileDatabaseSchemaLoader{
-			FilePath: cfg.DBSchemaFilePath,
 			Modifier: func(db *schema.Schema) {
 				db.Owner = cfg.UserAddr
 				// NOTE: this is a hack to make sure the db name is temporary unique

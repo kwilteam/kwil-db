@@ -39,6 +39,8 @@ type Dataset interface {
 
 	// Name returns the name of the dataset.
 	Name() string
+
+	Delete(txCtx *dto.TxContext) error
 }
 
 // internalDataset exposes more than the public Dataset interface.
