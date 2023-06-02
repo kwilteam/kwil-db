@@ -90,7 +90,7 @@ tasks:
   dev:up:
     desc: Start the dev environment
     deps:
-      - task: docker:kwild
+      - task: build:docker
         vars: {VARIANT: "shell"}
     cmds:
       - go test ./test/acceptance/ -timeout 12h -dev -v
