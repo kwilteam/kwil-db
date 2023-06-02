@@ -11,10 +11,13 @@ import (
 
 func (c *Client) Broadcast(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
 	pbTx := convertTx(tx)
-
 	res, err := c.txClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
 	if err != nil {
 		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: %w", err)
+	}
+
+	if res.Receipt == nil {
+		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: receipt is nil")
 	}
 
 	txRes := convertReceipt(res.Receipt)

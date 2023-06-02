@@ -102,7 +102,16 @@ func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.In
 	return deployPrice, nil
 }
 
-func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (*tx.Receipt, error) {
+func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error) {
+	// TODO: there are a lot of errors with drop and having potentially orphaned data
+	// this can cause panics.  For now, I will catch panics since we are releasing today
+	defer func() {
+		if r := recover(); r != nil {
+			u.log.Error("recovering from panic in drop", zap.Any("panic", r))
+			err = errors.New("Unexpected internal error. Please report this to the Kwil team.")
+		}
+	}()
+
 	price, err := u.PriceDrop(drop)
 	if err != nil {
 		return nil, err
