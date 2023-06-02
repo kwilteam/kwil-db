@@ -73,13 +73,10 @@ func (s *SqliteStore) Query(ctx context.Context, query string, args map[string]a
 }
 
 func (s *SqliteStore) Close() error {
-	ch := make(chan struct{})
 	err := s.conn.Close()
 	if err != nil {
 		return err
 	}
-
-	<-ch
 
 	return nil
 }
