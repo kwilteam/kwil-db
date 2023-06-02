@@ -1,7 +1,7 @@
 package specifications
 
 var (
-	SchemaLoader DatabaseSchemaLoader = &FileDatabaseSchemaLoader{FilePath: ""}
+	SchemaLoader DatabaseSchemaLoader = &FileDatabaseSchemaLoader{}
 )
 
 func SetSchemaLoader(loader DatabaseSchemaLoader) {

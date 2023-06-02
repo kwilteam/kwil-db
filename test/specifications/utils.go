@@ -10,24 +10,44 @@ import (
 )
 
 type DatabaseSchemaLoader interface {
-	Load(t *testing.T) *schema.Schema
+	Load(t *testing.T, targetSchema *testSchema) *schema.Schema
+	LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *schema.Schema
 }
 
 type FileDatabaseSchemaLoader struct {
-	FilePath string
 	Modifier func(db *schema.Schema)
 }
 
-func (l *FileDatabaseSchemaLoader) Load(t *testing.T) *schema.Schema {
+func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) *schema.Schema {
 	t.Helper()
 
-	d, err := os.ReadFile(l.FilePath)
+	d, err := os.ReadFile(targetSchema.GetFilePath())
 	if err != nil {
 		t.Fatal("cannot open database schema file", err)
 	}
 
 	ast, err := parser.Parse(d)
 	if err != nil {
+		t.Fatal("cannot parse database schema", err)
+	}
+
+	db := ast.Schema()
+
+	l.Modifier(db)
+
+	return db
+}
+
+func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *schema.Schema {
+	t.Helper()
+
+	d, err := os.ReadFile(targetSchema.GetFilePath())
+	if err != nil {
+		t.Fatal("cannot open database schema file", err)
+	}
+
+	ast, _ := parser.Parse(d)
+	if ast == nil {
 		t.Fatal("cannot parse database schema", err)
 	}
 
