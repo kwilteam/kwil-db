@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqldb"
@@ -13,6 +14,7 @@ import (
 // A database is a single deployed instance of kwil-db.
 // It contains a SQLite file
 type Dataset struct {
+	mu      sync.RWMutex
 	Ctx     *dto.DatasetContext
 	db      sqldb.DB
 	actions map[string]*preparedAction
@@ -22,6 +24,7 @@ type Dataset struct {
 // NewDataset creates a new dataset.
 func NewDataset(ctx context.Context, dsCtx *dto.DatasetContext, db sqldb.DB) (*Dataset, error) {
 	ds := &Dataset{
+		mu:      sync.RWMutex{},
 		Ctx:     dsCtx,
 		db:      db,
 		actions: make(map[string]*preparedAction),
@@ -56,6 +59,9 @@ func NewDataset(ctx context.Context, dsCtx *dto.DatasetContext, db sqldb.DB) (*D
 
 // CreateAction creates a new action and prepares it for use.
 func (d *Dataset) CreateAction(ctx context.Context, actionDefinition *dto.Action) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	if d.actions[strings.ToLower(actionDefinition.Name)] != nil {
 		return fmt.Errorf(`action "%s" already exists`, actionDefinition.Name)
 	}
@@ -96,11 +102,17 @@ func (d *Dataset) prepareAction(action *dto.Action) (*preparedAction, error) {
 
 // GetAction returns an action by name.
 func (d *Dataset) GetAction(name string) *dto.Action {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	return d.actions[strings.ToLower(name)].Action
 }
 
 // ListActions returns a list of actions.
 func (d *Dataset) ListActions() []*dto.Action {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	actions := make([]*dto.Action, 0, len(d.actions))
 	for _, action := range d.actions {
 		actions = append(actions, action.Action)
@@ -111,6 +123,9 @@ func (d *Dataset) ListActions() []*dto.Action {
 
 // CreateTable creates a new table and prepares it for use.
 func (d *Dataset) CreateTable(ctx context.Context, table *dto.Table) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	if d.tables[strings.ToLower(table.Name)] != nil {
 		return fmt.Errorf(`table "%s" already exists`, table.Name)
 	}
@@ -127,11 +142,17 @@ func (d *Dataset) CreateTable(ctx context.Context, table *dto.Table) error {
 
 // GetTable returns a table by name.
 func (d *Dataset) GetTable(name string) *dto.Table {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	return d.tables[strings.ToLower(name)]
 }
 
 // ListTables returns a list of tables.
 func (d *Dataset) ListTables() []*dto.Table {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	tables := make([]*dto.Table, 0, len(d.tables))
 	for _, table := range d.tables {
 		tables = append(tables, table)
@@ -142,6 +163,9 @@ func (d *Dataset) ListTables() []*dto.Table {
 
 // Close closes the dataset.
 func (d *Dataset) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	for _, action := range d.actions {
 		err := action.Close()
 		if err != nil {
@@ -160,6 +184,9 @@ func (d *Dataset) Id() string {
 // Execute executes an action.
 // It will execute as many times as there are inputs, and will return the last result.
 func (d *Dataset) Execute(txCtx *dto.TxContext, inputs []map[string]any) (dto.Result, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	action, ok := d.actions[strings.ToLower(txCtx.Action)]
 	if !ok {
 		return nil, fmt.Errorf(`action "%s" does not exist`, txCtx.Action)
@@ -179,6 +206,9 @@ func (d *Dataset) Savepoint() (sqldb.Savepoint, error) {
 
 // Delete deletes the dataset.
 func (d *Dataset) Delete(txCtx *dto.TxContext) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	if txCtx.Caller != d.Ctx.Owner {
 		return fmt.Errorf("caller does not have permission to delete dataset")
 	}
@@ -196,6 +226,9 @@ func (d *Dataset) Delete(txCtx *dto.TxContext) error {
 // Query executes a query and returns the result.
 // It is a read-only operation.
 func (d *Dataset) Query(ctx context.Context, stmt string, args map[string]any) (dto.Result, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	return d.db.Query(ctx, stmt, args)
 }
 

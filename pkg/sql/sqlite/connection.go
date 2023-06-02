@@ -145,35 +145,29 @@ func (c *Connection) Prepare(stmt string) (*Statement, error) {
 
 // Close closes the connection.
 // It takes an optional wait channel, which will be waited on until the connection is closed.
-func (c *Connection) Close(ch chan<- struct{}) error {
+func (c *Connection) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.close(ch)
+	return c.close()
 }
 
 // close closes the connection.
 // It takes an optional wait channel, which will be waited on before the connection is closed.
-func (c *Connection) close(ch chan<- struct{}) error {
+func (c *Connection) close() error {
 	if c.conn == nil { // if the connection is nil, it's already closed / been deleted
 		return nil
 	}
 
-	go func(ch chan<- struct{}) {
-		err := c.readPool.Close()
-		if err != nil {
-			c.log.Error("failed to close read connection pool", zap.Error(err))
-		}
+	err := c.readPool.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close read connection pool: %w", err)
+	}
 
-		err = c.conn.Close()
-		if err != nil {
-			c.log.Error("failed to close readwrite connection", zap.Error(err))
-		}
-
-		if ch != nil {
-			ch <- struct{}{}
-		}
-	}(ch)
+	err = c.conn.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close connection: %w", err)
+	}
 
 	return nil
 }
@@ -299,12 +293,10 @@ func (c *Connection) Delete() error {
 		return nil
 	}
 
-	waitChan := make(chan struct{})
-	err := c.close(waitChan)
+	err := c.close()
 	if err != nil {
 		return fmt.Errorf("failed to close connection: %w", err)
 	}
-	<-waitChan
 
 	if c.isMemory {
 		c.conn = nil

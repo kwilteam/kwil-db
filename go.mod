@@ -15,7 +15,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
-	github.com/kwilteam/go-sqlite v0.0.0-20230425182842-29dae07f6350
+	github.com/kwilteam/go-sqlite v0.0.0-20230602183907-e8a7f12655aa
 	github.com/manifoldco/promptui v0.9.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pkg/errors v0.9.1
