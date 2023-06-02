@@ -21,7 +21,7 @@ func ExecutePermissionedActionSpecification(ctx context.Context, t *testing.T, e
 	// create_user is public, list_users is private
 	t.Logf("Executing permissioned action specification")
 
-	db := SchemaLoader.Load(t)
+	db := SchemaLoader.Load(t, schema_testdb)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
 
 	createUserQueryInputs := []map[string]any{

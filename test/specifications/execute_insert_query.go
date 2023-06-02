@@ -29,7 +29,7 @@ type ExecuteQueryDsl interface {
 func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
 	t.Logf("Executing insert action specification")
 	// Given a valid database schema
-	db := SchemaLoader.Load(t)
+	db := SchemaLoader.Load(t, schema_testdb)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
 
 	createUserActionName := "create_user"

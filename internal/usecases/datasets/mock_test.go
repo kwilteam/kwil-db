@@ -161,6 +161,10 @@ func (m *mockDataset) Savepoint() (sqldb.Savepoint, error) {
 	return &mockSavepoint{}, nil
 }
 
+func (m *mockDataset) Delete(txCtx *dto.TxContext) error {
+	return nil
+}
+
 type mockResult struct {
 }
 

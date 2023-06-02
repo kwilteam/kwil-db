@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 	"github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/pkg/errors"
 
 	"go.uber.org/zap"
 )
@@ -23,20 +24,10 @@ func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDa
 		return nil, err
 	}
 
-	dataset, err := u.engine.NewDataset(ctx, &dto.DatasetContext{
-		Name:  deployment.Schema.Name,
-		Owner: deployment.Tx.Sender,
-	})
+	err = u.deployDataset(ctx, deployment)
 	if err != nil {
 		return nil, err
 	}
-
-	err = deploySchema(ctx, dataset, deployment.Schema)
-	if err != nil {
-		return nil, err
-	}
-
-	u.log.Info("database deployed", zap.String("dbid", dataset.Id()), zap.String("deployer address", deployment.Tx.Sender))
 
 	return &tx.Receipt{
 		TxHash: deployment.Tx.Hash,
@@ -44,18 +35,46 @@ func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDa
 	}, nil
 }
 
+func (u *DatasetUseCase) deployDataset(ctx context.Context, deployment *entity.DeployDatabase) error {
+	dataset, err := u.engine.NewDataset(ctx, &dto.DatasetContext{
+		Name:  deployment.Schema.Name,
+		Owner: deployment.Tx.Sender,
+	})
+	if err != nil {
+		return err
+	}
+
+	err = u.deploySchema(ctx, dataset, deployment.Schema)
+	if err != nil {
+		err2 := u.engine.DeleteDataset(ctx, &dto.TxContext{
+			Caller: deployment.Tx.Sender,
+		}, dataset.Id())
+
+		if err2 != nil {
+			u.log.Error("failed to delete dataset after failed schema deployment", zap.Error(err2))
+			err = errors.Wrap(err, err2.Error())
+		}
+
+		return err
+	}
+
+	u.log.Info("database deployed", zap.String("dbid", dataset.Id()), zap.String("deployer address", deployment.Tx.Sender))
+
+	return nil
+}
+
 // deploySchema applies the schema to the database
-func deploySchema(ctx context.Context, dataset engine.Dataset, schema *entity.Schema) error {
+func (u *DatasetUseCase) deploySchema(ctx context.Context, dataset engine.Dataset, schema *entity.Schema) error {
+	convertedTables, err := convertTablesToDto(schema.Tables)
+	if err != nil {
+		return err
+	}
+
 	sp, err := dataset.Savepoint()
 	if err != nil {
 		return err
 	}
 	defer sp.Rollback()
-
-	convertedTables, err := convertTablesToDto(schema.Tables)
-	if err != nil {
-		return err
-	}
 
 	for _, table := range convertedTables {
 		err := dataset.CreateTable(ctx, table)

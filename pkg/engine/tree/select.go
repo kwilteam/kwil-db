@@ -14,7 +14,12 @@ type Select struct {
 func (s *Select) ToSQL() (str string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = r.(error)
+			err2, ok := r.(error)
+			if !ok {
+				err2 = fmt.Errorf("%v", r)
+			}
+
+			err = err2
 		}
 	}()
 

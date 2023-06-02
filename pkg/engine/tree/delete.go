@@ -1,6 +1,10 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+import (
+	"fmt"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/tree/sql-writer"
+)
 
 type Delete struct {
 	CTE        []*CTE
@@ -10,7 +14,12 @@ type Delete struct {
 func (d *Delete) ToSQL() (str string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = r.(error)
+			err2, ok := r.(error)
+			if !ok {
+				err2 = fmt.Errorf("%v", r)
+			}
+
+			err = err2
 		}
 	}()
 
