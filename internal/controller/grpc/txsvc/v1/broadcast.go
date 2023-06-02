@@ -3,7 +3,6 @@ package txsvc
 import (
 	"context"
 	"fmt"
-
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
@@ -62,8 +61,7 @@ func convertTx(incoming *txpb.Tx) (*kTx.Transaction, error) {
 		sigType = crypto.SignatureType(incoming.Signature.SignatureType)
 	}
 
-	signatureType := crypto.SignatureType(incoming.Signature.SignatureType)
-	if err := signatureType.IsValid(); err != nil {
+	if err := sigType.IsValid(); err != nil {
 		return nil, err
 	}
 
