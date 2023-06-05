@@ -5,9 +5,10 @@ import (
 )
 
 type Table struct {
-	Name    string    `json:"name" clean:"lower"`
-	Columns []*Column `json:"columns"`
-	Indexes []*Index  `json:"indexes"`
+	Name        string        `json:"name" clean:"lower"`
+	Columns     []*Column     `json:"columns"`
+	Indexes     []*Index      `json:"indexes"`
+	ForeignKeys []*ForeignKey `json:"foreign_keys"`
 }
 
 func (t *Table) Clean() error {

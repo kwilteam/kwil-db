@@ -201,6 +201,112 @@ func TestGenerateDDL(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "table with foreign key on update set cascade",
+			args: args{
+				table: &dto.Table{
+					Name: "test",
+					Columns: []*dto.Column{
+						{
+							Name: "id",
+							Type: dto.INT,
+							Attributes: []*dto.Attribute{
+								{
+									Type: dto.PRIMARY_KEY,
+								},
+							},
+						},
+						{
+							Name: "name",
+							Type: dto.TEXT,
+							Attributes: []*dto.Attribute{
+								{
+									Type:  dto.DEFAULT,
+									Value: "foo",
+								},
+							},
+						},
+					},
+					ForeignKeys: []*dto.ForeignKey{
+						{
+
+							ChildKeys:   []string{"name"},
+							ParentKeys:  []string{"username"},
+							ParentTable: "users",
+							Actions: []*dto.ForeignKeyAction{
+								{
+									On: dto.ON_UPDATE,
+									Do: dto.DO_CASCADE,
+								},
+							},
+						},
+					},
+				},
+			},
+			want: []string{`CREATE TABLE "test" ("id" INTEGER, "name" TEXT DEFAULT 'foo', FOREIGN KEY ("name") REFERENCES "users"("username") ON UPDATE CASCADE, PRIMARY KEY ("id")) WITHOUT ROWID, STRICT;`},
+		},
+		{
+			name: "table with multiple foreign keys and multiple actions per foreign key",
+			args: args{
+				table: &dto.Table{
+					Name: "table1",
+					Columns: []*dto.Column{
+						{
+							Name: "id",
+							Type: dto.INT,
+							Attributes: []*dto.Attribute{
+								{
+									Type: dto.PRIMARY_KEY,
+								},
+							},
+						},
+						{
+							Name: "name",
+							Type: dto.TEXT,
+							Attributes: []*dto.Attribute{
+								{
+									Type:  dto.DEFAULT,
+									Value: "foo",
+								},
+							},
+						},
+					},
+					ForeignKeys: []*dto.ForeignKey{
+						{
+							ChildKeys:   []string{"name"},
+							ParentKeys:  []string{"username"},
+							ParentTable: "users",
+							Actions: []*dto.ForeignKeyAction{
+								{
+									On: dto.ON_UPDATE,
+									Do: dto.DO_CASCADE,
+								},
+								{
+									On: dto.ON_DELETE,
+									Do: dto.DO_SET_DEFAULT,
+								},
+							},
+						},
+						{
+							ChildKeys:   []string{"id", "name"},
+							ParentKeys:  []string{"id", "username"},
+							ParentTable: "table2",
+							Actions: []*dto.ForeignKeyAction{
+								{
+									On: dto.ON_UPDATE,
+									Do: dto.DO_SET_NULL,
+								},
+								{
+									On: dto.ON_DELETE,
+									Do: dto.DO_SET_NULL,
+								},
+							},
+						},
+					},
+				},
+			},
+			want: []string{`CREATE TABLE "table1" ("id" INTEGER, "name" TEXT DEFAULT 'foo', FOREIGN KEY ("name") REFERENCES "users"("username") ON UPDATE CASCADE ON DELETE SET DEFAULT, FOREIGN KEY ("id", "name") REFERENCES "table2"("id", "username") ON UPDATE SET NULL ON DELETE SET NULL, PRIMARY KEY ("id")) WITHOUT ROWID, STRICT;`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

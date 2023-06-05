@@ -46,6 +46,11 @@ func NewSqliteStore(name string, opts ...SqliteOpts) (*SqliteStore, error) {
 		return nil, fmt.Errorf("failed to initialize tables: %w", err)
 	}
 
+	err = sqliteDB.conn.EnableForeignKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
 	return sqliteDB, nil
 }
 
