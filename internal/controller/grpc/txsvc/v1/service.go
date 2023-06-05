@@ -3,6 +3,7 @@ package txsvc
 import (
 	"context"
 
+	"github.com/cometbft/cometbft/node"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
@@ -22,6 +23,7 @@ type Service struct {
 	sqliteFilePath string
 
 	providerAddress string
+	BcNode          *node.Node
 }
 
 func NewService(ctx context.Context, config *config.KwildConfig, opts ...TxSvcOpt) (*Service, error) {
@@ -63,4 +65,8 @@ func getDatasetUseCaseOpts(s *Service) []datasets.DatasetUseCaseOpt {
 
 	opts = append(opts, datasets.WithLogger(s.log))
 	return opts
+}
+
+func (s *Service) GetExecutor() datasets.DatasetUseCaseInterface {
+	return s.executor
 }

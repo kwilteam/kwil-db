@@ -6,6 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -13,9 +17,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
-	"io"
-	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -38,9 +39,9 @@ func deployCmd() *cobra.Command {
 
 				var db *schema.Schema
 				if fileType == "kf" {
-					db, err = unmarshalKf(file)
+					db, err = UnmarshalKf(file)
 				} else if fileType == "json" {
-					db, err = unmarshalJson(file)
+					db, err = UnmarshalJson(file)
 				} else {
 					return fmt.Errorf("invalid file type: %s", fileType)
 				}
@@ -67,7 +68,7 @@ func deployCmd() *cobra.Command {
 	return cmd
 }
 
-func unmarshalKf(file *os.File) (*schema.Schema, error) {
+func UnmarshalKf(file *os.File) (*schema.Schema, error) {
 	bts, err := parseComments(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse comments: %w", err)
@@ -81,7 +82,7 @@ func unmarshalKf(file *os.File) (*schema.Schema, error) {
 	return ast.Schema(), nil
 }
 
-func unmarshalJson(file *os.File) (*schema.Schema, error) {
+func UnmarshalJson(file *os.File) (*schema.Schema, error) {
 	bts, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)

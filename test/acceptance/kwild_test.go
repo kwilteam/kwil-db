@@ -4,11 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/specifications"
-	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )

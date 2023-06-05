@@ -2,21 +2,26 @@ package txsvc
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
+	localClient "github.com/cometbft/cometbft/rpc/client/local"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/internal/entity"
 )
 
 func (s *Service) Query(ctx context.Context, req *txpb.QueryRequest) (*txpb.QueryResponse, error) {
-	bts, err := s.executor.Query(ctx, &entity.DBQuery{
-		DBID:  req.Dbid,
-		Query: req.Query,
-	})
+	bcClient := localClient.New(s.BcNode)
+	req_data, err := json.Marshal(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to serialize query request data: %w", err)
+	}
+
+	res, err := bcClient.ABCIQuery(ctx, "", req_data)
+	if err != nil || res.Response.Code != 0 {
+		return nil, fmt.Errorf("failed to query with error:  %s and response code: %v", err, res.Response.Code)
 	}
 
 	return &txpb.QueryResponse{
-		Result: bts,
+		Result: res.Response.Value,
 	}, nil
 }

@@ -206,6 +206,7 @@ func (e *engine) DeleteDataset(ctx context.Context, txCtx *dto.TxContext, dbid s
 
 	err := ds.Delete(txCtx)
 	if err != nil {
+		e.log.Error("failed to delete dataset", zap.Error(err), zap.String("dbid", dbid))
 		return err
 	}
 
