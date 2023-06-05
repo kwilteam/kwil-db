@@ -24,8 +24,14 @@ import (
 	eth_deployer "github.com/kwilteam/kwil-db/test/acceptance/utils/deployer/eth-deployer"
 	"github.com/kwilteam/kwil-db/test/specifications"
 
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/compose"
+	"github.com/testcontainers/testcontainers-go/wait"
+	"github.com/tonistiigi/go-rosetta"
 )
 
 // KeepMiningBlocks is a helper function to keep mining blocks
@@ -133,6 +139,127 @@ func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 	return e
 }
 
+func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg, []*testcontainers.DockerContainer, deployer.Deployer) {
+	// Create Ganache container
+	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
+	t.Logf("Create ganache container:  %s\n", cfg.ChainCode.ToChainId().String())
+	dockerComposeId := fmt.Sprintf("%d", time.Now().Unix())
+	t.Log("dockerComposeId", dockerComposeId)
+	path := "./cluster_data/ganache/docker-compose.yml"
+	composeG, err := compose.NewDockerCompose(path)
+	require.NoError(t, err, "failed to create ganache docker compose")
+	err = composeG.
+		WithEnv(map[string]string{
+			"uid": dockerComposeId,
+		}).
+		WaitForService("ganache", wait.NewLogStrategy("RPC Listening on 0.0.0.0:8545")).
+		Up(ctx)
+	require.NoError(t, err, "failed to start ganache container")
+	t.Log("Ganache container is up")
+	// t.Cleanup(func() {
+	// 	assert.NoError(t, composeG.Down(context.Background(), compose.RemoveOrphans(true), compose.RemoveImagesLocal), "compose.Down()")
+	// })
+
+	serviceG := composeG.Services()
+	assert.Contains(t, serviceG, "ganache")
+
+	ganacheC, err := composeG.ServiceContainer(ctx, "ganache")
+	require.NoError(t, err, "failed to get ganache container")
+
+	exposedChainRPC, err := ganacheC.PortEndpoint(ctx, "8545", "ws")
+	t.Log("exposedChainRPC", exposedChainRPC)
+	require.NoError(t, err, "failed to get exposed endpoint")
+	ganacheIp, err := ganacheC.ContainerIP(ctx)
+	require.NoError(t, err, "failed to get ganache container ip")
+	unexposedChainRPC := fmt.Sprintf("ws://%s:8545", ganacheIp)
+	t.Log("unexposedChainRPC", unexposedChainRPC)
+
+	// Deploy contracts
+	chainDeployer := GetDeployer("eth", exposedChainRPC, cfg.DatabaseDeployerPrivateKeyString, cfg.denomination)
+	tokenAddress, err := chainDeployer.DeployToken(ctx)
+	require.NoError(t, err, "failed to deploy token")
+	t.Log("Token address: ", tokenAddress.String())
+	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
+	require.NoError(t, err, "failed to deploy contract")
+	t.Logf("Escrow address: %s\n", escrowAddress.String())
+	cfg.ChainRPCURL = exposedChainRPC
+	t.Log("create Kwil cluster container")
+	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
+	time.Sleep(20 * time.Second)
+
+	// Create Kwil cluster container
+	path = "./cluster_data/kwil/docker-compose.yml"
+	composeKwild, err := compose.NewDockerCompose(path)
+	require.NoError(t, err, "failed to create docker compose object for kwild cluster")
+	err = composeKwild.
+		WithEnv(map[string]string{
+			"uid": dockerComposeId,
+			// "KWILD_DEPOSITS_POOL_ADDRESS":         escrowAddress.String(),
+			// "KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL": unexposedChainRPC,
+			// "KWILD_PRIVATE_KEY":                   "b08786f38934aac966d10f0bc79a72f15067896d3b3beba721b5c235ffc5cc5f",
+			// "KWILD_DEPOSITS_BLOCK_CONFIRMATIONS":  "1",
+			// "KWILD_DEPOSITS_CHAIN_CODE":           "2",
+			// "KWILD_LOG_LEVEL":                     "debug",
+			// "COMET_BFT_HOME":                      "/apt/comet-bft",
+		}).
+		WaitForService("k1", wait.NewLogStrategy("grpc server started")).
+		WaitForService("k2", wait.NewLogStrategy("grpc server started")).
+		WaitForService("k3", wait.NewLogStrategy("grpc server started")).
+		Up(ctx)
+
+	// require.NoError(t, err, "failed to start kwild cluster container")
+	// t.Cleanup(func() {
+	// 	assert.NoError(t, composeKwild.Down(context.Background(), compose.RemoveOrphans(true), compose.RemoveImagesLocal), "compose.Down()")
+	// })
+
+	kwildserviceNames := composeKwild.Services()
+	t.Log("serviceNames", kwildserviceNames)
+	var kwildC []*testcontainers.DockerContainer
+	for _, name := range kwildserviceNames {
+		container, err := composeKwild.ServiceContainer(ctx, name)
+		require.NoError(t, err, "failed to get container for service %s", name)
+		kwildC = append(kwildC, container)
+		/* ports, err := container.Ports(ctx)
+		require.NoError(t, err, "failed to get ports for service %s", name)
+		t.Logf("ports: %v for container name: %s", ports, name)
+
+		nodeURL, err := container.PortEndpoint(ctx, "50051", "")
+		require.NoError(t, err, "failed to get node url for service %s", name)
+		t.Logf("nodeURL: %s for container name: %s", nodeURL, name)
+		gatewayURL, err := container.PortEndpoint(ctx, "8080", "")
+		require.NoError(t, err, "failed to get gateway url for service %s", name)
+		t.Logf("gatewayURL: %s for container name: %s", gatewayURL, name) */
+	}
+	return cfg, kwildC, chainDeployer
+}
+
+func SetupKwildDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, kwildC *testcontainers.DockerContainer, logger log.Logger) KwilAcceptanceDriver {
+	setSchemaLoader(cfg)
+
+	nodeURL, err := kwildC.PortEndpoint(ctx, "50051", "")
+	require.NoError(t, err)
+	gatewayURL, err := kwildC.PortEndpoint(ctx, "8080", "")
+	require.NoError(t, err)
+	cometBftURL, err := kwildC.PortEndpoint(ctx, "26657", "tcp")
+	require.NoError(t, err)
+
+	name, err := kwildC.Name(ctx)
+	require.NoError(t, err)
+
+	t.Logf("nodeURL: %s gatewayURL: %s for container name: %s", nodeURL, gatewayURL, name)
+	kwilClt, err := client.New(ctx, nodeURL,
+		client.WithChainRpcUrl(cfg.ChainRPCURL),
+		client.WithPrivateKey(cfg.UserPrivateKey),
+	)
+	require.NoError(t, err, "failed to create kwil client")
+
+	bcClt, err := rpchttp.New(cometBftURL, "/websocket")
+	require.NoError(t, err, "failed to create comet bft client")
+
+	kwildDriver := kwild.NewKwildDriver(kwilClt, bcClt, cfg.UserPrivateKey, gatewayURL, logger)
+	return kwildDriver
+}
+
 func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg, deployer.Deployer) {
 	// ganache container
 	ganacheC := adapters.StartGanacheDockerService(t, ctx, cfg.ChainCode.ToChainId().String())
@@ -219,7 +346,7 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 		kwilClt, err := client.New(ctx, cfg.NodeURL)
 		require.NoError(t, err, "failed to create kwil client")
 
-		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
+		kwildDriver := kwild.NewKwildDriver(kwilClt, nil, cfg.UserPrivateKey, cfg.GatewayURL, logger)
 		return kwildDriver, nil, cfg
 	}
 
@@ -233,7 +360,7 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 	)
 	require.NoError(t, err, "failed to create kwil client")
 
-	kwildDriver := kwild.NewKwildDriver(kwilClt, updatedCfg.UserPrivateKey, updatedCfg.GatewayURL, logger)
+	kwildDriver := kwild.NewKwildDriver(kwilClt, nil, updatedCfg.UserPrivateKey, updatedCfg.GatewayURL, logger)
 	return kwildDriver, chainDeployer, updatedCfg
 }
 
@@ -246,7 +373,7 @@ func newGRPCClient(ctx context.Context, t *testing.T, cfg *TestEnvCfg, logger lo
 	)
 	require.NoError(t, err, "failed to create kwil client")
 
-	kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
+	kwildDriver := kwild.NewKwildDriver(kwilClt, nil, cfg.UserPrivateKey, cfg.GatewayURL, logger)
 	return kwildDriver
 }
 

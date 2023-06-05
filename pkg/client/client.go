@@ -257,7 +257,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		return nil, nil, err
 	}
 
-	outputs, err := decodeOutputs(res.Body)
+	outputs, err := DecodeOutputs(res.Body)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -265,7 +265,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	return res, outputs, nil
 }
 
-func decodeOutputs(bts []byte) ([]map[string]any, error) {
+func DecodeOutputs(bts []byte) ([]map[string]any, error) {
 	if len(bts) == 0 {
 		return []map[string]any{}, nil
 	}

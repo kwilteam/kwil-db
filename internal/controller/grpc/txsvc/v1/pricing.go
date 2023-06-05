@@ -41,7 +41,7 @@ func handlePricing(price *big.Int, err error) (*txpb.EstimatePriceResponse, erro
 }
 
 func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	ds, err := unmarshalSchema(tx.Payload)
+	ds, err := UnmarshalSchema(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
 	}
@@ -53,7 +53,7 @@ func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.In
 }
 
 func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	dsIdent, err := unmarshalDatasetIdentifier(tx.Payload)
+	dsIdent, err := UnmarshalDatasetIdentifier(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset identifier: %w", err)
 	}
@@ -65,7 +65,7 @@ func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int,
 }
 
 func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	executionBody, err := unmarshalActionExecution(tx.Payload)
+	executionBody, err := UnmarshalActionExecution(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}
@@ -76,7 +76,7 @@ func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.In
 	})
 }
 
-func unmarshalActionExecution(payload []byte) (*entity.ActionExecution, error) {
+func UnmarshalActionExecution(payload []byte) (*entity.ActionExecution, error) {
 	exec := entity.ActionExecution{}
 
 	err := json.Unmarshal(payload, &exec)
@@ -87,7 +87,7 @@ func unmarshalActionExecution(payload []byte) (*entity.ActionExecution, error) {
 	return &exec, nil
 }
 
-func unmarshalSchema(payload []byte) (*entity.Schema, error) {
+func UnmarshalSchema(payload []byte) (*entity.Schema, error) {
 	schema := entity.Schema{}
 
 	err := json.Unmarshal(payload, &schema)
@@ -98,7 +98,7 @@ func unmarshalSchema(payload []byte) (*entity.Schema, error) {
 	return &schema, nil
 }
 
-func unmarshalDatasetIdentifier(payload []byte) (*entity.DatasetIdentifier, error) {
+func UnmarshalDatasetIdentifier(payload []byte) (*entity.DatasetIdentifier, error) {
 	dsIdent := entity.DatasetIdentifier{}
 
 	err := json.Unmarshal(payload, &dsIdent)

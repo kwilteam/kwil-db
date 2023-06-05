@@ -1,0 +1,72 @@
+version: "3"
+
+services:
+  k1:
+    container_name: k1_$uid
+    image: kwild:latest
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+      - "26656:26656"
+      - "26657:26657"
+    env_file:
+      - .env
+      - k1/.env
+    environment:
+      - ID=0
+      - LOG=${LOG:-cometbft.log}
+    volumes:
+      - ./k1:/app/config
+      - ./k1/node0/:/app/comet-bft/
+    networks:
+      kwilnet:
+        ipv4_address: 172.10.100.2
+
+  k2:
+    container_name: k2_$uid
+    image: kwild:latest
+    ports:
+      - "8081:8080"
+      - "50052:50051"
+      - "26666:26656"
+      - "26667:26657"
+    env_file:
+      - .env
+      - k2/.env
+    environment:
+      - LOG=${LOG:-cometbft.log}
+    volumes:
+      - ./k2:/app/config
+      - ./k2/node1/:/app/comet-bft/
+    networks:
+      kwilnet:
+        ipv4_address: 172.10.100.3
+
+  k3:
+    container_name: k3_$uid
+    image: kwild:latest
+    ports:
+      - "8082:8080"
+      - "50053:50051"
+      - "26676:26656"
+      - "26677:26657"
+    env_file:
+      - .env
+      - k3/.env
+    environment:
+      - LOG=${LOG:-cometbft.log}
+    volumes:
+      - ./k3:/app/config
+      - ./k3/node2/:/app/comet-bft/
+    networks:
+      kwilnet:
+        ipv4_address: 172.10.100.4
+
+
+networks:
+  kwilnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.10.100.0/16

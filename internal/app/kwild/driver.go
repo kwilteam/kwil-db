@@ -3,9 +3,11 @@ package kwild
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/client"
@@ -14,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	ec "github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
 )
@@ -21,15 +24,17 @@ import (
 // KwildDriver is a grpc driver for  integration tests
 type KwildDriver struct {
 	clt         *client.Client
+	bcClt       *rpchttp.HTTP
 	pk          *ecdsa.PrivateKey
 	gatewayAddr string // to ignore the gatewayAddr returned by the config.service
 
 	logger log.Logger
 }
 
-func NewKwildDriver(clt *client.Client, pk *ecdsa.PrivateKey, gatewayAddr string, logger log.Logger) *KwildDriver {
+func NewKwildDriver(clt *client.Client, bcClt *rpchttp.HTTP, pk *ecdsa.PrivateKey, gatewayAddr string, logger log.Logger) *KwildDriver {
 	return &KwildDriver{
 		clt:         clt,
+		bcClt:       bcClt,
 		pk:          pk,
 		gatewayAddr: gatewayAddr,
 		logger:      logger,
@@ -64,6 +69,7 @@ func (d *KwildDriver) GetDepositBalance(ctx context.Context) (*big.Int, error) {
 }
 
 func (d *KwildDriver) ApproveToken(ctx context.Context, amount *big.Int) error {
+	fmt.Println("Cherry: approve token", amount.String())
 	_, err := d.clt.ApproveDeposit(ctx, amount)
 	if err != nil {
 		return err
@@ -84,9 +90,30 @@ func (d *KwildDriver) GetAllowance(ctx context.Context) (*big.Int, error) {
 }
 
 func (d *KwildDriver) DeployDatabase(ctx context.Context, db *schema.Schema) error {
-	_, err := d.clt.DeployDatabase(ctx, db)
+	searchQuery := fmt.Sprintf("deploy.Result=%s", "Success")
+	res, err := d.bcClt.TxSearch(ctx, searchQuery, false, nil, nil, "")
 	if err != nil {
+		fmt.Printf("Failed to search transaction before deploying the database: %v\n", err)
+		return fmt.Errorf("failed to search transaction: %w", err)
+	}
+
+	numTx_pre := len(res.Txs)
+
+	_, err = d.clt.DeployDatabase(ctx, db)
+	if err != nil {
+		fmt.Println("Error deploying database: ", err.Error())
 		return fmt.Errorf("error deploying database: %w", err)
+	}
+	time.Sleep(10 * time.Second)
+	res, err = d.bcClt.TxSearch(ctx, "deploy.Result='Success'", false, nil, nil, "asc")
+	if err != nil {
+		fmt.Printf("Failed to search transaction after deploying the database: %v\n", err)
+		return fmt.Errorf("failed to search transaction: %w", err)
+	}
+	numTx_post := len(res.Txs)
+
+	if numTx_post != numTx_pre+1 {
+		return fmt.Errorf("failed to deploy database")
 	}
 
 	d.logger.Debug("deploy database", zap.String("name", db.Name), zap.String("owner", db.Owner))
@@ -108,13 +135,46 @@ func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, db
 }
 
 func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
-	rec, res, err := d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs)
+	res, err := d.bcClt.TxSearch(ctx, "execute.Result='Success'", false, nil, nil, "asc")
 	if err != nil {
-		return nil, nil, fmt.Errorf("error executing query: %w", err)
+		fmt.Println("Failed to search transaction before executing the action: ", err.Error())
+		return nil, nil, fmt.Errorf("failed to search transaction: %w", err)
 	}
 
+	numTx_pre := len(res.Txs)
+
+	_, _, err = d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs)
+	if err != nil {
+		fmt.Println("Error executing action: ", err.Error())
+		return nil, nil, fmt.Errorf("error executing query: %w", err)
+	}
+	time.Sleep(10 * time.Second)
+	res, err = d.bcClt.TxSearch(ctx, fmt.Sprintf("execute.Result=%s", "Success"), false, nil, nil, "")
+	if err != nil {
+		fmt.Println("Failed to search transaction after executing the action: ", err.Error())
+		return nil, nil, fmt.Errorf("failed to search transaction: %w", err)
+	}
+
+	numTx_post := len(res.Txs)
+	if numTx_post != numTx_pre+1 {
+		fmt.Println("Failed to execute action")
+		return nil, nil, fmt.Errorf("failed to execute action")
+	}
+
+	data := res.Txs[numTx_post-1].TxResult.Data
+	var rec *kTx.Receipt
+	err = json.Unmarshal(data, &rec)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	outputs, err := client.DecodeOutputs(rec.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+	//events := res.Txs[numTx_post-1].TxResult.Events[0].Attributes
 	d.logger.Debug("execute action", zap.String("database", dbid), zap.String("action", actionName))
-	return rec, res, nil
+	return rec, outputs, nil
 }
 
 func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {

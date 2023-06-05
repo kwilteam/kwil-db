@@ -2,10 +2,14 @@ package txsvc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+
+	localClient "github.com/cometbft/cometbft/rpc/client/local"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"go.uber.org/zap"
 )
 
 func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*txpb.BroadcastResponse, error) {
@@ -14,21 +18,23 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
-	err = tx.Verify()
+	bts, err := json.Marshal(tx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify transaction: %w", err)
+		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
 	}
 
-	switch tx.PayloadType {
-	case kTx.DEPLOY_DATABASE:
-		return handleReceipt(s.deploy(ctx, tx))
-	case kTx.DROP_DATABASE:
-		return handleReceipt(s.drop(ctx, tx))
-	case kTx.EXECUTE_ACTION:
-		return handleReceipt(s.executeAction(ctx, tx))
-	default:
-		return nil, fmt.Errorf("invalid payload type")
+	bcClient := localClient.New(s.BcNode)
+	_, err = bcClient.BroadcastTxAsync(ctx, bts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to broadcast transaction with error:  %s", err)
 	}
+
+	s.log.Info("broadcasted transaction ", zap.String("payload_type", tx.PayloadType.String()))
+	return &txpb.BroadcastResponse{
+		Receipt: &txpb.TxReceipt{
+			TxHash: tx.Hash,
+		},
+	}, nil
 }
 
 func handleReceipt(r *kTx.Receipt, err error) (*txpb.BroadcastResponse, error) {
