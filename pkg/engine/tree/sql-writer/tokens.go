@@ -315,6 +315,11 @@ func (t *tokenWriter) With() *tokenWriter {
 	return t
 }
 
+func (t *tokenWriter) Raise() *tokenWriter {
+	t.token(raise)
+	return t
+}
+
 const (
 	lparen      sqliteSymbol = "("
 	rparen      sqliteSymbol = ")"
@@ -375,4 +380,5 @@ const (
 	delete      sqliteSymbol = "DELETE"
 	indexed     sqliteSymbol = "INDEXED"
 	with        sqliteSymbol = "WITH"
+	raise       sqliteSymbol = "RAISE"
 )

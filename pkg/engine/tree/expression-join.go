@@ -42,7 +42,6 @@ package tree
 
 	There are 4 states that an expression can be in:
 	- Invalid: The expression automatically disqualifies the join
-	- NeedsColumn: The expression can be used in a join if a column is used in another expression
 	- ContainsColumn: The expressions contains a column, and therefore can be used as one side of a join condition
 	- Valid: The expression is a binary comparison where each side is 'ContainsColumn', joined with an "=", and therefore can be used as a join condition
 */
@@ -55,7 +54,6 @@ type joinableStatus uint8
 
 const (
 	joinableStatusInvalid joinableStatus = iota
-	joinableStatusNeedsColumn
 	joinableStatusContainsColumn
 	joinableStatusValid
 )
@@ -137,5 +135,9 @@ func (e *ExpressionArithmetic) joinable() joinableStatus {
 		return joinableStatusContainsColumn
 	}
 
+	return joinableStatusInvalid
+}
+
+func (e *ExpressionRaise) joinable() joinableStatus {
 	return joinableStatusInvalid
 }
