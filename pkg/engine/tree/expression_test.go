@@ -487,6 +487,44 @@ func TestExpressionLiteral_ToSQL(t *testing.T) {
 			},
 			want: `"foo" + 1`,
 		},
+		{
+			name: "raise expression with ignore",
+			fields: &tree.ExpressionRaise{
+				Type: tree.RAISETYPE_IGNORE,
+			},
+			want: "RAISE (IGNORE)",
+		},
+		{
+			name: "raise ignore with message",
+			fields: &tree.ExpressionRaise{
+				Type:    tree.RAISETYPE_IGNORE,
+				Message: "foo",
+			},
+			wantPanic: true,
+		},
+		{
+			name: "raise expression with rollback with empty message",
+			fields: &tree.ExpressionRaise{
+				Type: tree.RAISETYPE_ROLLBACK,
+			},
+			wantPanic: true,
+		},
+		{
+			name: "raise rollback with message that is not a string literal",
+			fields: &tree.ExpressionRaise{
+				Type:    tree.RAISETYPE_ROLLBACK,
+				Message: "foo",
+			},
+			wantPanic: true,
+		},
+		{
+			name: "raise rollback with message",
+			fields: &tree.ExpressionRaise{
+				Type:    tree.RAISETYPE_ROLLBACK,
+				Message: "'foo'",
+			},
+			want: "RAISE (ROLLBACK, 'foo')",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

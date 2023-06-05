@@ -483,3 +483,97 @@ func (e *ExpressionArithmetic) ToSQL() string {
 	stmt.WriteString(e.Right.ToSQL())
 	return stmt.String()
 }
+
+// ExpressionRaise is a special expression that is used to raise an error.
+type ExpressionRaise struct {
+	Wrapped
+	Type    RaiseType
+	Message string
+}
+
+func (e *ExpressionRaise) isExpression() {}
+
+func (e *ExpressionRaise) ToSQL() string {
+	err := e.Type.Clean()
+	if err != nil {
+		panic(err)
+	}
+
+	err = e.checkMessage()
+	if err != nil {
+		panic(err)
+	}
+
+	stmt := sqlwriter.NewWriter()
+
+	if e.Wrapped {
+		stmt.WrapParen()
+	}
+
+	stmt.Token.Raise()
+	stmt.Token.Lparen()
+
+	stmt.WriteString(e.Type.String())
+
+	if e.Type != RAISETYPE_IGNORE {
+		stmt.Token.Comma()
+		stmt.WriteString(e.Message)
+	}
+
+	stmt.Token.Rparen()
+
+	return stmt.String()
+}
+
+func (e *ExpressionRaise) checkMessage() error {
+	canHaveMessage := true
+	if e.Type == RAISETYPE_IGNORE {
+		canHaveMessage = false
+	}
+
+	// check that message begins and ends with single quotes
+	if canHaveMessage && !isStringLiteral(e.Message) {
+		return fmt.Errorf("message must be a string literal. received: %s", e.Message)
+	}
+
+	if !canHaveMessage && e.Message != "" {
+		return fmt.Errorf("cannot have message with RaiseType %s", e.Type)
+	}
+
+	return nil
+}
+
+// RaiseType is the type of error to raise.
+// If a RaiseType is IGNORE, then it cannot have a message.
+type RaiseType string
+
+const (
+	RAISETYPE_IGNORE   RaiseType = "IGNORE"
+	RAISETYPE_ROLLBACK RaiseType = "ROLLBACK"
+	RAISETYPE_ABORT    RaiseType = "ABORT"
+	RAISETYPE_FAIL     RaiseType = "FAIL"
+)
+
+func (r RaiseType) String() string {
+	return string(r)
+}
+
+func (r *RaiseType) IsValid() bool {
+	upper := strings.ToUpper(string(*r))
+
+	return upper == RAISETYPE_IGNORE.String() ||
+		upper == RAISETYPE_ROLLBACK.String() ||
+		upper == RAISETYPE_ABORT.String() ||
+		upper == RAISETYPE_FAIL.String()
+}
+
+func (r *RaiseType) Clean() error {
+	upper := strings.ToUpper(string(*r))
+
+	if !r.IsValid() {
+		return fmt.Errorf("invalid RaiseType. received: %s", *r)
+	}
+
+	*r = RaiseType(upper)
+	return nil
+}
