@@ -16,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
+	types "github.com/cometbft/cometbft/abci/types"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	ec "github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
@@ -69,12 +70,12 @@ func (d *KwildDriver) GetDepositBalance(ctx context.Context) (*big.Int, error) {
 }
 
 func (d *KwildDriver) ApproveToken(ctx context.Context, amount *big.Int) error {
-	fmt.Println("Cherry: approve token", amount.String())
-	_, err := d.clt.ApproveDeposit(ctx, amount)
+	txHash, err := d.clt.ApproveDeposit(ctx, amount)
 	if err != nil {
 		return err
 	}
 
+	fmt.Println("Cherry: approve token txHash", txHash)
 	d.logger.Debug("approve token", zap.String("from", ec.PubkeyToAddress(d.pk.PublicKey).Hex()),
 		zap.String("spender", d.clt.PoolAddress), zap.String("amount", amount.String()))
 	return nil
@@ -90,44 +91,31 @@ func (d *KwildDriver) GetAllowance(ctx context.Context) (*big.Int, error) {
 }
 
 func (d *KwildDriver) DeployDatabase(ctx context.Context, db *schema.Schema) error {
-	searchQuery := fmt.Sprintf("deploy.Result=%s", "Success")
-	res, err := d.bcClt.TxSearch(ctx, searchQuery, false, nil, nil, "")
-	if err != nil {
-		fmt.Printf("Failed to search transaction before deploying the database: %v\n", err)
-		return fmt.Errorf("failed to search transaction: %w", err)
-	}
-
-	numTx_pre := len(res.Txs)
-
-	_, err = d.clt.DeployDatabase(ctx, db)
+	rec, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {
 		fmt.Println("Error deploying database: ", err.Error())
 		return fmt.Errorf("error deploying database: %w", err)
 	}
-	time.Sleep(10 * time.Second)
-	res, err = d.bcClt.TxSearch(ctx, "deploy.Result='Success'", false, nil, nil, "asc")
+	time.Sleep(15 * time.Second)
+	res, err := d.bcClt.Tx(ctx, rec.TxHash, false)
 	if err != nil {
-		fmt.Printf("Failed to search transaction after deploying the database: %v\n", err)
-		return fmt.Errorf("failed to search transaction: %w", err)
-	}
-	numTx_post := len(res.Txs)
-
-	if numTx_post != numTx_pre+1 {
-		return fmt.Errorf("failed to deploy database")
+		fmt.Println("Error getting transaction: ", err.Error())
+		return fmt.Errorf("error getting transaction: %w", err)
 	}
 
+	fmt.Println("Deployed database", res.TxResult.Events[0])
 	d.logger.Debug("deploy database", zap.String("name", db.Name), zap.String("owner", db.Owner))
 	return nil
 }
 
 func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
 	dbid := utils.GenerateDBID(dbName, owner)
-
+	fmt.Println("Cherry: dbid", dbid)
 	dbSchema, err := d.clt.GetSchema(ctx, dbid)
 	if err != nil {
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
-
+	fmt.Println("Cherry: dbSchema", dbSchema, err)
 	if strings.EqualFold(dbSchema.Owner, owner) && strings.EqualFold(dbSchema.Name, dbName) {
 		return nil
 	}
@@ -135,57 +123,68 @@ func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, db
 }
 
 func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
-	res, err := d.bcClt.TxSearch(ctx, "execute.Result='Success'", false, nil, nil, "asc")
-	if err != nil {
-		fmt.Println("Failed to search transaction before executing the action: ", err.Error())
-		return nil, nil, fmt.Errorf("failed to search transaction: %w", err)
-	}
-
-	numTx_pre := len(res.Txs)
-
-	_, _, err = d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs)
+	rec, err := d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs)
 	if err != nil {
 		fmt.Println("Error executing action: ", err.Error())
 		return nil, nil, fmt.Errorf("error executing query: %w", err)
 	}
-	time.Sleep(10 * time.Second)
-	res, err = d.bcClt.TxSearch(ctx, fmt.Sprintf("execute.Result=%s", "Success"), false, nil, nil, "")
+	time.Sleep(15 * time.Second)
+
+	res, err := d.bcClt.Tx(ctx, rec.TxHash, false)
 	if err != nil {
-		fmt.Println("Failed to search transaction after executing the action: ", err.Error())
-		return nil, nil, fmt.Errorf("failed to search transaction: %w", err)
+		fmt.Println("Error getting transaction: ", err.Error())
+		return nil, nil, fmt.Errorf("error getting transaction: %w", err)
 	}
 
-	numTx_post := len(res.Txs)
-	if numTx_post != numTx_pre+1 {
-		fmt.Println("Failed to execute action")
-		return nil, nil, fmt.Errorf("failed to execute action")
-	}
-
-	data := res.Txs[numTx_post-1].TxResult.Data
-	var rec *kTx.Receipt
-	err = json.Unmarshal(data, &rec)
+	data := res.TxResult.Data
+	var updated_rec *kTx.Receipt
+	err = json.Unmarshal(data, &updated_rec)
 	if err != nil {
 		return nil, nil, err
 	}
+	fmt.Println("Updated receipt: ", updated_rec)
 
-	outputs, err := client.DecodeOutputs(rec.Body)
+	outputs, err := client.DecodeOutputs(updated_rec.Body)
 	if err != nil {
 		return nil, nil, err
 	}
+	fmt.Println("Outputs: ", outputs)
+	//fmt.Println("Executed actions on the database", res.TxResult.Events[0])
 	//events := res.Txs[numTx_post-1].TxResult.Events[0].Attributes
 	d.logger.Debug("execute action", zap.String("database", dbid), zap.String("action", actionName))
 	return rec, outputs, nil
 }
 
 func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
-	_, err := d.clt.DropDatabase(ctx, dbName)
+	rec, err := d.clt.DropDatabase(ctx, dbName)
 	if err != nil {
 		return fmt.Errorf("error dropping database: %w", err)
 	}
+	time.Sleep(15 * time.Second)
+	res, err := d.bcClt.Tx(ctx, rec.TxHash, false)
+	if err != nil {
+		fmt.Println("Error getting transaction: ", err.Error())
+		return fmt.Errorf("error getting transaction: %w", err)
+	}
+
+	if !GetTransactionResult(res.TxResult.Events[0].Attributes) {
+		return fmt.Errorf("failed to drop database")
+	}
+
+	fmt.Println("Dropped database", res.TxResult.Events[0].Attributes)
 	d.logger.Debug("drop database", zap.String("name", dbName), zap.String("owner", d.GetUserAddress()))
 	return nil
 }
 
 func (d *KwildDriver) QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error) {
 	return d.clt.Query(ctx, dbid, query)
+}
+
+func GetTransactionResult(attributes []types.EventAttribute) bool {
+	for _, attr := range attributes {
+		if attr.Key == "Result" {
+			return attr.Value == "Success"
+		}
+	}
+	return false
 }

@@ -2,6 +2,7 @@ package specifications
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/cstockton/go-conv"
@@ -14,6 +15,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	// Given a valid database schema
 	db := SchemaLoader.Load(t, schema_testdb)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
+	fmt.Println("id, owner, name: ", dbID, db.Owner, db.Name)
 	actionName := "update_username"
 	userQ := userTable{
 		ID:       1111,
@@ -36,7 +38,7 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	if len(results) != 1 {
 		t.Errorf("expected 1 statement result, got %d", len(results))
 	}
-
+	fmt.Println(results)
 	returnedUser1 := results[0]
 
 	user1Id, _ := conv.Int32(returnedUser1["id"])

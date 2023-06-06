@@ -240,7 +240,7 @@ func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *datasetIdentifier)
 
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, error) {
 	executionBody := &actionExecution{
 		Action: action,
 		DBID:   dbid,
@@ -249,20 +249,20 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 
 	tx, err := c.executeActionTx(ctx, executionBody)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	res, err := c.client.Broadcast(ctx, tx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	outputs, err := DecodeOutputs(res.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return res, outputs, nil
+	/* 	outputs, err := DecodeOutputs(res.Body)
+	   	if err != nil {
+	   		return nil, err
+	   	}
+	*/
+	return res, nil
 }
 
 func DecodeOutputs(bts []byte) ([]map[string]any, error) {

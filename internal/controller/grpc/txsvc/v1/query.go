@@ -21,7 +21,11 @@ func (s *Service) Query(ctx context.Context, req *txpb.QueryRequest) (*txpb.Quer
 		return nil, fmt.Errorf("failed to query with error:  %s and response code: %v", err, res.Response.Code)
 	}
 
-	return &txpb.QueryResponse{
-		Result: res.Response.Value,
-	}, nil
+	var resp *txpb.QueryResponse
+	err = json.Unmarshal(res.Response.Value, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize query response: %w", err)
+	}
+
+	return resp, nil
 }
