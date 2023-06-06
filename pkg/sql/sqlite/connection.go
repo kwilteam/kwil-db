@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql/sqlite/functions"
 
 	"github.com/kwilteam/go-sqlite"
 	"github.com/kwilteam/go-sqlite/sqlitex"
@@ -81,7 +82,12 @@ func (c *Connection) openConn() error {
 		return fmt.Errorf("failed to open readwrite connection: %w", err)
 	}
 
-	c.readPool, err = sqlitex.Open(c.getFilePath(), c.openFlags(true), c.poolSize)
+	err = functions.Register(c.conn)
+	if err != nil {
+		return fmt.Errorf("failed to register custom functions: %w", err)
+	}
+
+	c.readPool, err = sqlitex.Open(c.getFilePath(), c.openFlags(true), c.poolSize, functions.Register)
 	if err != nil {
 		return fmt.Errorf("failed to create read connection pool: %w", err)
 	}
