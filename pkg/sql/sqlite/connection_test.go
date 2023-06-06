@@ -343,7 +343,7 @@ func Test_Global_Variables(t *testing.T) {
 }
 
 func openRealDB() (conn *sqlite.Connection, teardown func() error) {
-	conn1, err := sqlite.OpenConn("testdb", sqlite.WithPath("./tmp/"))
+	conn1, err := sqlite.OpenConn("testdb", sqlite.WithPath("./tmp/"), sqlite.WithConnectionPoolSize(1))
 	if err != nil {
 		panic(err)
 	}
@@ -431,6 +431,65 @@ func Test_Preparation(t *testing.T) {
 	err = stmt2.Finalize()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func Test_CustomFunction(t *testing.T) {
+	db, td := openRealDB()
+	defer td()
+
+	// testing the custom error('msg') function
+	stmt, err := db.Prepare("SELECT ERROR('msg');")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+
+	err = stmt.Execute()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	err = db.Query(ctx, "SELECT error('msg');")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	// try inserting data with an error, within a savepoint
+	sp, err := db.Savepoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stmt, err = db.Prepare("INSERT INTO users (id, name, age) VALUES ($id, $name, $age) RETURNING ERROR('msg');")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+		"$id":   1,
+		"$name": "John",
+		"$age":  30,
+	}))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	err = sp.Rollback()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ensure that no user was inserted
+	results := &sqlite.ResultSet{}
+	err = db.Query(ctx, "SELECT * FROM users", sqlite.WithResultSet(results))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(results.Rows) != 0 {
+		t.Fatalf("expected 0 rows, got %d", len(results.Rows))
 	}
 }
 
