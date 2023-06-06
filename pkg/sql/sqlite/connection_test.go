@@ -451,6 +451,15 @@ func Test_CustomFunction(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
+	err2 := stmt.Execute()
+	if err2 == nil {
+		t.Fatal("expected error")
+	}
+
+	if err.Error() != err2.Error() {
+		t.Fatalf("expected errors to be the same, got %s and %s", err.Error(), err2.Error())
+	}
+
 	err = db.Query(ctx, "SELECT error('msg');")
 	if err == nil {
 		t.Fatal("expected error")
