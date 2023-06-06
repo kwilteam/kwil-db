@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -17,7 +16,7 @@ import (
 var remote = flag.Bool("remote", false, "run tests against remote environment")
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
-func setupConfig() {
+/* func setupConfig() {
 	cmd := exec.Command("cp", "--recursive", "./cluster_data/kwil/k1/node0-cpy", "./cluster_data/kwil/k1/node0")
 	cmd.Run()
 	cmd = exec.Command("cp", "--recursive", "./cluster_data/kwil/k2/node1-cpy", "./cluster_data/kwil/k2/node1")
@@ -33,7 +32,7 @@ func teardownConfig() {
 	cmd.Run()
 	cmd = exec.Command("cp", "-rf", "./cluster_data/kwil/k3/node2")
 	cmd.Run()
-}
+} */
 
 func TestKwildIntegration(t *testing.T) {
 	tLogger := log.New(log.Config{
@@ -48,7 +47,7 @@ func TestKwildIntegration(t *testing.T) {
 
 	// Bringup the KWIL DB cluster with 3 nodes
 	cfg.DBSchemaFilePath = "./test-data/test_db.kf"
-	setupConfig()
+	//setupConfig()
 	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
 	cfg, kwildC, chainDeployer := acceptance.SetupKwildCluster(ctx, t, cfg)
 
@@ -91,6 +90,9 @@ func TestKwildIntegration(t *testing.T) {
 	fmt.Print("Deposit fund2")
 	specifications.DepositFundSpecification(ctx, t, invalidUserDriver)
 	time.Sleep(cfg.ChainSyncWaitTime)
+
+	time.Sleep(cfg.ChainSyncWaitTime)
+
 	// running forever for local development
 	if *dev {
 		acceptance.DumpEnv(&cfg)
@@ -105,17 +107,17 @@ func TestKwildIntegration(t *testing.T) {
 	specifications.DatabaseVerifySpecification(ctx, t, node3Driver, true)
 
 	// // Execute actions on the database
-	specifications.ExecuteDBDeleteSpecification(ctx, t, node1Driver)
+	specifications.ExecuteDBInsertSpecification(ctx, t, node1Driver)
 	specifications.ExecuteDBUpdateSpecification(ctx, t, node2Driver)
 	specifications.ExecuteDBDeleteSpecification(ctx, t, node3Driver)
 
 	// // Test permissioned actions
-	// specifications.ExecutePermissionedActionSpecification(ctx, t, invalidUserDriver)
+	specifications.ExecutePermissionedActionSpecification(ctx, t, invalidUserDriver)
 
 	// // Drop the database and verify that the database does not exist on other nodes
-	// specifications.DatabaseDropSpecification(ctx, t, node1Driver)
+	specifications.DatabaseDropSpecification(ctx, t, node1Driver)
 	// specifications.DatabaseVerifySpecification(ctx, t, node2Driver, false)
 	// specifications.DatabaseVerifySpecification(ctx, t, node3Driver, false)
 	// Teardown
-	teardownConfig()
+	//teardownConfig()
 }

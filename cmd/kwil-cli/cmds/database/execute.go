@@ -55,7 +55,7 @@ OR
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
 
-				receipt, results, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
+				receipt, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
 				if err != nil {
 					return fmt.Errorf("error executing database: %w", err)
 				}
@@ -64,7 +64,7 @@ OR
 				display.PrintTxResponse(receipt)
 
 				// print the results
-				printTableAny(results)
+				// printTableAny(results)
 
 				return nil
 			})

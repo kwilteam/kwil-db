@@ -127,8 +127,8 @@ tasks:
       - go test `go list ./... | grep -v /kwil-db\/test/` -count=1
       - task vendor:clean
 
-  test:integration:
+  test:it:
     desc: Run integration tests
-    deps: [ docker:kwild ]
+    #deps: [ build:docker ]
     cmds:
       - go test -count=1 -timeout 0 ./test/integration-tests/ -v

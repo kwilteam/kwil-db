@@ -3,8 +3,9 @@ package evm
 import (
 	"context"
 	"crypto/ecdsa"
-	"github.com/kwilteam/kwil-db/pkg/chain/provider"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/pkg/chain/provider"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ec "github.com/ethereum/go-ethereum/crypto"

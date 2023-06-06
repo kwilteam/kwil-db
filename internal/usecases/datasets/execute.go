@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
@@ -31,7 +32,7 @@ func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteActi
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Println("cherry exec res", res)
 	bts, err := readQueryResult(res)
 	if err != nil {
 		return nil, err
