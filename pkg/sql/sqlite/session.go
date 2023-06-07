@@ -187,6 +187,7 @@ func (c *Changeset) New(index int) (*Value, error) {
 	}, nil
 }
 
+// PrimaryKey returns the values of the primary key columns in order.
 func (c *Changeset) PrimaryKey() ([]*Value, error) {
 	pkCols, err := c.iter.PrimaryKey()
 	if err != nil {
@@ -197,7 +198,7 @@ func (c *Changeset) PrimaryKey() ([]*Value, error) {
 
 	for i, isPrimary := range pkCols {
 		if isPrimary {
-			val, err := c.New(i)
+			val, err := c.getPrimaryKeyValue(i)
 			if err != nil {
 				return nil, err
 			}
@@ -205,9 +206,26 @@ func (c *Changeset) PrimaryKey() ([]*Value, error) {
 			pkVals = append(pkVals, val)
 		}
 	}
-	// TODO: this is not done
 
 	return pkVals, nil
+}
+
+// getPrimaryKeyValue returns the value of the primary key column at the given index.
+// this should only be used for primary key columns; it can be used for any, but the result
+// will not be helpful, as you should use New() or Old() for non-primary key columns.
+func (c *Changeset) getPrimaryKeyValue(column int) (*Value, error) {
+	op, err := c.Operation()
+	if err != nil {
+		return nil, err
+	}
+
+	if op.Type == OpInsert || op.Type == OpUpdate {
+		return c.New(column)
+	} else if op.Type == OpDelete {
+		return c.Old(column)
+	} else {
+		return nil, fmt.Errorf("Changeset.getPrimaryKeyValue(): operation is not OpInsert, OpUpdate, or OpDelete. received: %v", op.Type)
+	}
 }
 
 // Value is a value from a column in a row.
