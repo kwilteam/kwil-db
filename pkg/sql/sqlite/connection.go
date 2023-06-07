@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -349,6 +350,39 @@ func deleteIfExists(path string) error {
 
 	return os.Remove(path)
 }
+
+// ApplyChangeset applies a changeset to the database.
+// It will either all succeed or all fail.
+func (c *Connection) ApplyChangeset(r io.Reader) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.conn.ApplyChangeset(r, nil, func(ct sqlite.ConflictType, ci *sqlite.ChangesetIterator) sqlite.ConflictAction {
+		return sqlite.ChangesetAbort
+	})
+}
+
+/*
+for some fucking reason this will not work, we don't even need it yet so will come back when we do
+the invertedChangset is null, however r is (AFAIK) a valid changeset
+// InverseChangeset applies the inverse of the given changeset.
+func (c *Connection) InverseChangeset(r *bytes.Buffer) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	invertedChangeset := new(bytes.Buffer)
+	err := sqlite.InvertChangeset(r, invertedChangeset)
+	if err != nil {
+		return fmt.Errorf("failed to invert changeset: %w", err)
+	}
+
+	if invertedChangeset.Len() == 0 {
+		return fmt.Errorf("inverted changeset is empty")
+	}
+
+	return c.conn.ApplyInverseChangeset(invertedChangeset, nil, nil)
+}
+*/
 
 type ResultSet struct {
 	Rows    [][]any  `json:"rows"`

@@ -1,5 +1,7 @@
 package sqlite
 
+import "github.com/kwilteam/go-sqlite"
+
 type DataType uint8
 
 const (
@@ -8,4 +10,14 @@ const (
 	DataTypeFloat
 	DataTypeText
 	DataTypeBlob
+)
+
+var (
+	innerSqliteTypeMap = map[sqlite.ColumnType]DataType{
+		sqlite.TypeInteger: DataTypeInteger,
+		sqlite.TypeFloat:   DataTypeFloat,
+		sqlite.TypeText:    DataTypeText,
+		sqlite.TypeBlob:    DataTypeBlob,
+		sqlite.TypeNull:    DataTypeNull,
+	}
 )

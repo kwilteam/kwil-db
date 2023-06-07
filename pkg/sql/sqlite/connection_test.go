@@ -507,7 +507,7 @@ const (
 		id INTEGER PRIMARY KEY NOT NULL,
 		name TEXT NOT NULL,
 		age INTEGER NOT NULL
-	);`
+	) WITHOUT ROWID, STRICT;`
 )
 
 func initTables(conn *sqlite.Connection) {
