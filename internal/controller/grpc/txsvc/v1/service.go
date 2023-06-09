@@ -7,6 +7,8 @@ import (
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
+	"github.com/kwilteam/kwil-db/pkg/balances"
+	cfg "github.com/kwilteam/kwil-db/pkg/config"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
@@ -21,6 +23,7 @@ type Service struct {
 	accountStore   datasets.AccountStore
 	sqliteFilePath string
 	extensionUrls  []string
+	Validators     *cfg.ApprovedValidators
 
 	providerAddress string
 	BcNode          *node.Node
