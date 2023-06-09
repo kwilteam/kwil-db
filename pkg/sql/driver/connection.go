@@ -2,14 +2,16 @@ package driver
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/kwilteam/kwil-db/pkg/log"
+
 	"github.com/kwilteam/go-sqlite"
 	"github.com/kwilteam/go-sqlite/sqlitex"
+	"github.com/kwilteam/kwil-db/pkg/utils"
 )
 
 var (
@@ -78,7 +80,7 @@ func (c *Connection) openConn() error {
 	}
 
 	fp := c.getFilePath()
-	err := createDirIfNeeded(fp)
+	err := utils.CreateDirIfNeeded(fp)
 	if err != nil {
 		return err
 	}

@@ -19,6 +19,7 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	ccfg "github.com/cometbft/cometbft/config"
 	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
+
 	cmtlog "github.com/cometbft/cometbft/libs/log"
 	nm "github.com/cometbft/cometbft/node"
 
@@ -41,6 +42,7 @@ import (
 	chainClient "github.com/kwilteam/kwil-db/pkg/chain/client"
 	ccService "github.com/kwilteam/kwil-db/pkg/chain/client/service" // shorthand for chain client service
 	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
+	kwilcfg "github.com/kwilteam/kwil-db/pkg/config"
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
@@ -174,6 +176,11 @@ func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger
 	txpb.RegisterTxServiceServer(grpcServer, txSvc)
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
 	fmt.Printf("Registering grpc services\n")
+
+	val_file_path := "/tmp/.kwil/validators.txt"
+	txSvc.Validators = kwilcfg.NewApprovedValidators(val_file_path)
+	txSvc.Validators.LoadOrCreateFile(val_file_path)
+
 	server := &server.Server{
 		Cfg:         cfg,
 		Log:         logger,
