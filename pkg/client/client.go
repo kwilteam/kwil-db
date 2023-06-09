@@ -17,6 +17,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -310,4 +311,8 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 
 func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {
 	return c.client.GetAccount(ctx, address)
+}
+
+func (c *Client) ApproveValidator(ctx context.Context, pubKey ed25519.PubKey) error {
+	return c.client.ApproveValidator(ctx, pubKey)
 }
