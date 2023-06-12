@@ -16,6 +16,7 @@ var (
 func NewCmdValidator() *cobra.Command {
 	rootCmd.AddCommand(
 		approveCmd(),
+		joinCmd(),
 	)
 
 	return rootCmd

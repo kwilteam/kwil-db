@@ -46,6 +46,38 @@
         ]
       }
     },
+    "/api/v1/approve_validator": {
+      "post": {
+        "operationId": "TxService_ApproveValidator",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txValidatorApprovalResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txValidatorApprovalRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v1/broadcast": {
       "post": {
         "operationId": "TxService_Broadcast",
@@ -216,6 +248,38 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/txQueryRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/validator_join": {
+      "post": {
+        "operationId": "TxService_ValidatorJoin",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txValidatorJoinResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txValidatorJoinRequest"
             }
           }
         ],
@@ -491,6 +555,14 @@
         }
       }
     },
+    "txRequestStatus": {
+      "type": "string",
+      "enum": [
+        "OK",
+        "ERROR"
+      ],
+      "default": "OK"
+    },
     "txSignature": {
       "type": "object",
       "properties": {
@@ -567,6 +639,43 @@
         "body": {
           "type": "string",
           "format": "byte"
+        }
+      }
+    },
+    "txValidatorApprovalRequest": {
+      "type": "object",
+      "properties": {
+        "PubKey": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "txValidatorApprovalResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/txRequestStatus"
+        },
+        "log": {
+          "type": "string"
+        }
+      }
+    },
+    "txValidatorJoinRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/txTx"
+        }
+      },
+      "title": "If power is 0, the validator will be removed from the validator set\nIf power is \u003e 0, if the validator is in the approved validator list, validator will be added to the validator set\nBase64 encoded both pubkey and validator power"
+    },
+    "txValidatorJoinResponse": {
+      "type": "object",
+      "properties": {
+        "receipt": {
+          "$ref": "#/definitions/txTxReceipt"
         }
       }
     }

@@ -2,8 +2,9 @@ package datasets
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/balances"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/pkg/balances"
 )
 
 // compareAndSpend compares the price to the fee and spends the price if the fee is enough.
@@ -16,6 +17,7 @@ func (u *DatasetUseCase) compareAndSpend(address, fee string, nonce int64, price
 
 	// compare price to fee
 	if price.Cmp(bigFee) > 0 {
+		fmt.Println("fee is not enough", price, bigFee)
 		return fmt.Errorf("fee is not enough")
 	}
 

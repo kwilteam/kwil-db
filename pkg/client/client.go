@@ -316,3 +316,28 @@ func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Acco
 func (c *Client) ApproveValidator(ctx context.Context, pubKey ed25519.PubKey) error {
 	return c.client.ApproveValidator(ctx, pubKey)
 }
+
+func (c *Client) ValidatorJoin(ctx context.Context, pubKey ed25519.PubKey, power int64) (*kTx.Receipt, error) {
+	fmt.Println("ValidatorJoin - inside client wrapper")
+	validator := &validator{
+		PubKey: pubKey,
+		Power:  power,
+	}
+
+	tx, err := c.validatorJoinTx(ctx, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("ValidatorJoin - before broadcast: Tx: ", tx)
+	res, err := c.client.ValidatorJoin(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (c *Client) validatorJoinTx(ctx context.Context, validator *validator) (*kTx.Transaction, error) {
+	return c.newTx(ctx, kTx.VALIDATOR_JOIN, validator)
+}
