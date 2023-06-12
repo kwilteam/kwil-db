@@ -15,6 +15,8 @@ import (
 
 	// shorthand for chain client service
 	abcitypes "github.com/cometbft/cometbft/abci/types"
+	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
+	pc "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	txsvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
@@ -22,14 +24,20 @@ import (
 )
 
 type KwilDbApplication struct {
-	server   *server.Server
-	executor datasets.DatasetUseCaseInterface
+	server             *server.Server
+	executor           datasets.DatasetUseCaseInterface
+	ValUpdates         []abcitypes.ValidatorUpdate
+	valAddrToPubKeyMap map[string]pc.PublicKey
 }
 
 var _ abcitypes.Application = (*KwilDbApplication)(nil)
 
 func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseInterface) (*KwilDbApplication, error) {
-	return &KwilDbApplication{server: srv, executor: executor}, nil
+	return &KwilDbApplication{
+		server:             srv,
+		executor:           executor,
+		valAddrToPubKeyMap: make(map[string]pc.PublicKey),
+	}, nil
 }
 
 func (app *KwilDbApplication) Start(ctx context.Context) error {
@@ -105,6 +113,8 @@ func (app *KwilDbApplication) DeliverTx(req_tx abcitypes.RequestDeliverTx) abcit
 		return app.drop_database(&tx)
 	case kTx.EXECUTE_ACTION:
 		return app.execute_action(&tx)
+	case kTx.VALIDATOR_JOIN:
+		return app.validator_join(&tx)
 	default:
 		err = fmt.Errorf("unknown payload type: %s", tx.PayloadType)
 	}
@@ -269,7 +279,49 @@ func (app *KwilDbApplication) execute_action(tx *kTx.Transaction) abcitypes.Resp
 	return abcitypes.ResponseDeliverTx{Code: 0, Data: data, Events: events}
 }
 
-func (app *KwilDbApplication) InitChain(chain abcitypes.RequestInitChain) abcitypes.ResponseInitChain {
+func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
+	var events []abcitypes.Event
+
+	validator, err := txsvc.UnmarshalValidator(tx.Payload)
+	if err != nil {
+		app.server.Log.Error("ABCI validator join: failed to unmarshal validator join ", zap.String("error", err.Error()))
+		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("join_validator", err, "", ""))}
+	}
+
+	// Add validator to the validator set updates
+	valInfo := string(validator.PubKey) + ":" + fmt.Sprintf("%d", validator.Power)
+	app.server.Log.Info("ABCI: adding validator to the validator set updates", zap.String("validator info", valInfo))
+
+	valUpdates := abcitypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
+	app.ValUpdates = append(app.ValUpdates, valUpdates)
+
+	events = []abcitypes.Event{
+		{
+			Type: "validator_join",
+			Attributes: []abcitypes.EventAttribute{
+				{Key: "Result", Value: "Success", Index: true},
+				{Key: "ValidatorPubKey", Value: string(validator.PubKey), Index: true},
+				{Key: "ValidatorPower", Value: fmt.Sprintf("%d", validator.Power), Index: true},
+			},
+		},
+	}
+	return abcitypes.ResponseDeliverTx{Code: 0, Events: events}
+}
+
+func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitypes.ResponseInitChain {
+	app.ValUpdates = append(app.ValUpdates, req.Validators...)
+	for _, val := range req.Validators {
+		pubkey, err := cryptoenc.PubKeyFromProto(val.PubKey)
+		if err != nil {
+			fmt.Println("can't decode public key: %w", err)
+		}
+		publicKey, err := cryptoenc.PubKeyToProto(pubkey)
+		if err != nil {
+			fmt.Println("can't encode public key: %w", err)
+		}
+
+		app.valAddrToPubKeyMap[string(pubkey.Address())] = publicKey
+	}
 	return abcitypes.ResponseInitChain{}
 }
 
@@ -282,11 +334,13 @@ func (app *KwilDbApplication) ProcessProposal(proposal abcitypes.RequestProcessP
 }
 
 func (app *KwilDbApplication) BeginBlock(block abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
+	app.ValUpdates = make([]abcitypes.ValidatorUpdate, 0)
+	// TODO: Punish bad validators
 	return abcitypes.ResponseBeginBlock{}
 }
 
 func (app *KwilDbApplication) EndBlock(block abcitypes.RequestEndBlock) abcitypes.ResponseEndBlock {
-	return abcitypes.ResponseEndBlock{}
+	return abcitypes.ResponseEndBlock{ValidatorUpdates: app.ValUpdates}
 }
 
 func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {

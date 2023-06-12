@@ -25,6 +25,8 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		return handlePricing(s.priceDrop(ctx, tx))
 	case kTx.EXECUTE_ACTION:
 		return handlePricing(s.priceAction(ctx, tx))
+	case kTx.VALIDATOR_JOIN:
+		return handlePricing(s.priceValidatorJoin(ctx, tx))
 	default:
 		return nil, fmt.Errorf("invalid payload type")
 	}
@@ -74,6 +76,10 @@ func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.In
 		Tx:            tx,
 		ExecutionBody: executionBody,
 	})
+}
+
+func (s *Service) priceValidatorJoin(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
+	return big.NewInt(10000000000000), nil
 }
 
 func UnmarshalActionExecution(payload []byte) (*entity.ActionExecution, error) {
