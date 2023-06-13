@@ -15,11 +15,6 @@ func Register(c *sqlite.Conn) error {
 		return fmt.Errorf(`failed to register "ERROR" function: %w`, err)
 	}
 
-	err = c.CreateFunction("PING", (*sqlite.FunctionImpl)(pingImpl))
-	if err != nil {
-		return fmt.Errorf(`failed to register "PING" function: %w`, err)
-	}
-
 	return nil
 }
 

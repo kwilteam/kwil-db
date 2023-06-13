@@ -27,6 +27,7 @@ type Connection struct {
 	isMemory          bool
 	name              string
 	globalVariableMap map[string]any
+	attachedDBs       map[string]string // maps the name to the file name
 }
 
 // OpenConn opens a connection to the database with the given name.
@@ -41,8 +42,9 @@ func OpenConn(name string, opts ...ConnectionOption) (*Connection, error) {
 		conn:              nil,
 		readPool:          nil,
 		isMemory:          false,
-		flags:             sqlite.OpenWAL,
-		globalVariableMap: map[string]any{},
+		flags:             sqlite.OpenWAL | sqlite.OpenURI,
+		globalVariableMap: make(map[string]any),
+		attachedDBs:       make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(connection)
@@ -78,7 +80,11 @@ func (c *Connection) getFilePath() string {
 	if c.isMemory {
 		return c.path
 	}
-	return fmt.Sprintf("%s%s.sqlite", c.path, c.name)
+	return c.formatFilePath(c.name)
+}
+
+func (c *Connection) formatFilePath(fileName string) string {
+	return fmt.Sprintf("%s%s.sqlite", c.path, fileName)
 }
 
 func (c *Connection) openConn() error {
@@ -93,12 +99,80 @@ func (c *Connection) openConn() error {
 		return fmt.Errorf("failed to register custom functions: %w", err)
 	}
 
-	c.readPool, err = sqlitex.Open(c.getFilePath(), c.openFlags(true), c.poolSize, functions.Register)
+	err = c.attachDBs(c.conn)
+	if err != nil {
+		return fmt.Errorf("failed to attach databases: %w", err)
+	}
+
+	err = c.initializeReadPool()
+	if err != nil {
+		return fmt.Errorf("failed to initialize read pool: %w", err)
+	}
+
+	return nil
+}
+
+// initializeReadPool initializes the read connection pool.
+// it will ensure attached databases and sqlite extensions are registered.
+func (c *Connection) initializeReadPool() error {
+	var err error
+	c.readPool, err = sqlitex.Open(c.getFilePath(), c.openFlags(true), c.poolSize)
 	if err != nil {
 		return fmt.Errorf("failed to create read connection pool: %w", err)
 	}
 
+	poolArray := make([]*sqlite.Conn, c.poolSize)
+
+	for i := 0; i < c.poolSize; i++ {
+		conn := c.readPool.Get(context.Background())
+		if conn == nil {
+			return fmt.Errorf("failed to get read connection from connection pool")
+		}
+
+		poolArray[i] = conn
+	}
+
+	for _, conn := range poolArray {
+		err = functions.Register(conn)
+		if err != nil {
+			return fmt.Errorf("failed to register custom functions: %w", err)
+		}
+
+		err = c.attachDBs(conn)
+		if err != nil {
+			return fmt.Errorf("failed to attach databases: %w", err)
+		}
+	}
+
+	for _, conn := range poolArray {
+		c.readPool.Put(conn)
+	}
+
 	return nil
+}
+
+// attachDBs attaches the databases to the connection
+func (c *Connection) attachDBs(conn *sqlite.Conn) error {
+	for name, file := range c.attachedDBs {
+		err := attachDB(conn, name, c.formatURI(file))
+		if err != nil {
+			return fmt.Errorf("failed to attach database: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func attachDB(c *sqlite.Conn, schemaName, uri string) error {
+	return sqlitex.ExecuteTransient(c, fmt.Sprintf(sqlAttach, uri, schemaName), nil)
+}
+
+const sqlAttach = `ATTACH DATABASE '%s' AS %s;`
+
+// formatURI formats the URI for the given file name.
+// It includes a read only flag
+func (c *Connection) formatURI(fileName string) string {
+	return fmt.Sprintf("file:%s?mode=ro", c.formatFilePath(fileName))
 }
 
 func (c *Connection) mkPathDir() error {
@@ -171,12 +245,14 @@ func (c *Connection) close() error {
 		return nil
 	}
 
-	err := c.readPool.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close read connection pool: %w", err)
+	if c.readPool != nil {
+		err := c.readPool.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close read connection pool: %w", err)
+		}
 	}
 
-	err = c.conn.Close()
+	err := c.conn.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close connection: %w", err)
 	}
