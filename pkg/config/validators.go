@@ -6,7 +6,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/pkg/utils"
 )
 
@@ -24,13 +23,13 @@ func NewApprovedValidators(filePath string) *ApprovedValidators {
 	}
 }
 
-func (a *ApprovedValidators) AddValidator(address ed25519.PubKey) error {
+func (a *ApprovedValidators) AddValidator(address string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	pubkey := string(address)
-	if !a.Validators[pubkey] {
+
+	if !a.Validators[address] {
 		// TODO: Check for the validity of the Validator pubkey
-		a.Validators[pubkey] = true
+		a.Validators[address] = true
 
 		f, err := utils.OpenFile(a.filePath, os.O_CREATE|os.O_RDWR|os.O_APPEND)
 		if err != nil {
@@ -39,7 +38,7 @@ func (a *ApprovedValidators) AddValidator(address ed25519.PubKey) error {
 		}
 		defer f.Close()
 
-		_, err = f.Write([]byte(pubkey + "\n"))
+		_, err = f.Write([]byte(address + "\n"))
 		if err != nil {
 			fmt.Println("error writing approved Validator to file")
 			return err
@@ -48,10 +47,10 @@ func (a *ApprovedValidators) AddValidator(address ed25519.PubKey) error {
 	return nil
 }
 
-func (a *ApprovedValidators) IsValidator(address ed25519.PubKey) bool {
+func (a *ApprovedValidators) IsValidator(address string) bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.Validators[string(address)]
+	return a.Validators[address]
 }
 
 func (a *ApprovedValidators) LoadOrCreateFile(filepath string) error {

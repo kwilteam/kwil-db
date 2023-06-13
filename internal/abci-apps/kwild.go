@@ -14,6 +14,7 @@ import (
 	//"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 
 	// shorthand for chain client service
+	"github.com/cometbft/cometbft/abci/types"
 	abcitypes "github.com/cometbft/cometbft/abci/types"
 	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
 	pc "github.com/cometbft/cometbft/proto/tendermint/crypto"
@@ -288,12 +289,32 @@ func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.Resp
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("join_validator", err, "", ""))}
 	}
 
+	fmt.Println("ValidatorJoin Validator:", validator.PubKey, validator)
+
+	pubKey, err := txsvc.UnmarshalValidatorPublicKey(string(validator.PubKey))
+	if err != nil {
+		fmt.Println("failed to unmarshal Validator public key", err)
+		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("join_validator", err, "", ""))}
+	}
+	validator.PubKey = pubKey.Bytes()
+
 	// Add validator to the validator set updates
-	valInfo := string(validator.PubKey) + ":" + fmt.Sprintf("%d", validator.Power)
+	valInfo := string(pubKey.Bytes()) + ":" + fmt.Sprintf("%d", validator.Power)
 	app.server.Log.Info("ABCI: adding validator to the validator set updates", zap.String("validator info", valInfo))
 
 	valUpdates := abcitypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
 	app.ValUpdates = append(app.ValUpdates, valUpdates)
+
+	pubkey, err := cryptoenc.PubKeyFromProto(valUpdates.PubKey)
+	if err != nil {
+		app.server.Log.Error("ABCI validator join: failed to get pubkey from proto ", zap.String("error", err.Error()))
+		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("join_validator", err, "", ""))}
+	}
+
+	app.valAddrToPubKeyMap[string(pubkey.Address())] = valUpdates.PubKey
+	app.server.Log.Info("ABCI: added validator to the addr-pubkey map:", zap.String("Addr", string(pubkey.Address())), zap.String("PubKey", string(pubkey.Bytes())))
+
+	// TODO:  Persist these changes to the disk: only if a validator is removed or added (ignore the power updates )
 
 	events = []abcitypes.Event{
 		{
@@ -333,9 +354,27 @@ func (app *KwilDbApplication) ProcessProposal(proposal abcitypes.RequestProcessP
 	return abcitypes.ResponseProcessProposal{Status: abcitypes.ResponseProcessProposal_ACCEPT}
 }
 
-func (app *KwilDbApplication) BeginBlock(block abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
+func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
 	app.ValUpdates = make([]abcitypes.ValidatorUpdate, 0)
-	// TODO: Punish bad validators
+	// Punish bad validators
+	for _, ev := range req.ByzantineValidators {
+		if ev.Type == types.MisbehaviorType_DUPLICATE_VOTE {
+			addr := string(ev.Validator.Address)
+			if pubKey, ok := app.valAddrToPubKeyMap[addr]; ok {
+
+				app.ValUpdates = append(app.ValUpdates, abcitypes.ValidatorUpdate{PubKey: pubKey, Power: ev.Validator.Power - 1})
+				app.server.Log.Info("Decreased val power by 1 because of the equivocation", zap.String("val", addr))
+				if (ev.Validator.Power - 1) == 0 {
+					app.server.Log.Info("Val power is 0, removing it from the validator set", zap.String("val", addr))
+					delete(app.valAddrToPubKeyMap, addr)
+					// TODO: Persist these updates to the disk ==> Is it possible to save it in the kwil db sql db?
+				}
+			} else {
+				app.server.Log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
+			}
+
+		}
+	}
 	return abcitypes.ResponseBeginBlock{}
 }
 
