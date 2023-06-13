@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	"github.com/kwilteam/kwil-db/pkg/engine/dto"
+	"github.com/kwilteam/kwil-db/pkg/engine/extensions"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqldb/sqlite"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -40,6 +41,7 @@ type engine struct {
 	log         log.Logger
 	datasets    map[string]internalDataset
 	wipeOnStart bool
+	extensions  *extensions.ExtensionRunner
 }
 
 func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
@@ -48,6 +50,7 @@ func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
 		log:         log.NewNoOp(),
 		datasets:    make(map[string]internalDataset),
 		wipeOnStart: false,
+		extensions:  &extensions.ExtensionRunner{},
 	}
 
 	for _, opt := range opts {
@@ -65,6 +68,11 @@ func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
 	}
 
 	err = e.openStoredDatasets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = e.openExtensions(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +144,10 @@ func (e *engine) openStoredDatasets(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (e *engine) openExtensions(ctx context.Context) error {
+	return e.extensions.Initialize(ctx, e.openDB)
 }
 
 func (e *engine) Close(closeAll bool) error {

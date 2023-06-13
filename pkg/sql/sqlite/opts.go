@@ -2,10 +2,10 @@ package sqlite
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"os"
+	"strings"
 
-	"github.com/kwilteam/go-sqlite"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 var (
@@ -58,15 +58,15 @@ func WithGlobalVariables(globalVariables map[string]any) ConnectionOption {
 	}
 }
 
-// InMemory specifies that the database should be in memory.
-// WARNING: If the database in in-memory, then users will be able to execute ad-hoc queries that would
-// otherwise be read-only
-func InMemory() ConnectionOption {
+// WithAttachedDatabase
+func WithAttachedDatabase(name string, fileName string) ConnectionOption {
 	return func(conn *Connection) {
-		conn.path = "file::memory:?mode=memory"
-		// need to disable wal mode and use shared cache for in memory databases
-		// also need to enable URI mode since the in-memory database is not a file
-		conn.flags = conn.flags | sqlite.OpenSharedCache | sqlite.OpenURI&^sqlite.OpenWAL
-		conn.isMemory = true
+		name = strings.ToLower(name)
+
+		if _, ok := conn.attachedDBs[name]; ok {
+			panic("attached database already exists: " + name)
+		}
+
+		conn.attachedDBs[name] = fileName
 	}
 }
