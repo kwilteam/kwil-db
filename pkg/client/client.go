@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
 	ccs "github.com/kwilteam/kwil-db/pkg/chain/client/service"
@@ -14,7 +15,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/chain/contracts/token"
 	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
 	"google.golang.org/grpc"

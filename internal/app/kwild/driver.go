@@ -7,10 +7,10 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/kwilteam/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
