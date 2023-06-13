@@ -313,7 +313,7 @@ func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Acco
 	return c.client.GetAccount(ctx, address)
 }
 
-func (c *Client) ApproveValidator(ctx context.Context, pubKey ed25519.PubKey) error {
+func (c *Client) ApproveValidator(ctx context.Context, pubKey []byte) error {
 	return c.client.ApproveValidator(ctx, pubKey)
 }
 
