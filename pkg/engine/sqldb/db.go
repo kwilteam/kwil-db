@@ -6,8 +6,9 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 )
 
-// DB is an interface used by deployed datasets to interact with the underlying database.
-type DB interface {
+// Datastore is an interface for interacting with a database.
+// It is used by both the main application as well as extensions.
+type Datastore interface {
 	// Prepare returns a prepared statement, bound to this connection.
 	Prepare(query string) (Statement, error)
 
@@ -26,11 +27,16 @@ type DB interface {
 	// ListTables returns a list of all tables in the database.
 	ListTables(ctx context.Context) ([]*dto.Table, error)
 
-	// ListActions returns a list of all actions in the database.
-	ListActions(ctx context.Context) ([]*dto.Action, error)
-
 	// CreateTable creates a new table.
 	CreateTable(ctx context.Context, table *dto.Table) error
+}
+
+// DB is an interface used by deployed datasets to interact with the underlying database.
+type DB interface {
+	Datastore
+
+	// ListActions returns a list of all actions in the database.
+	ListActions(ctx context.Context) ([]*dto.Action, error)
 
 	// StoreAction persists a new action.
 	StoreAction(ctx context.Context, action *dto.Action) error

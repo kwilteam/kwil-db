@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"github.com/kwilteam/kwil-db/pkg/engine/extensions"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -31,5 +32,14 @@ func WithName(name string) EngineOpt {
 func WithWipe() EngineOpt {
 	return func(e *engine) {
 		e.wipeOnStart = true
+	}
+}
+
+func WithExtension(ext *extensions.Extension) EngineOpt {
+	return func(e *engine) {
+		err := e.extensions.Register(ext)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
