@@ -6,9 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/engine"
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 	"github.com/kwilteam/kwil-db/pkg/tx"
-	"github.com/pkg/errors"
 
 	"go.uber.org/zap"
 )
@@ -36,66 +34,30 @@ func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDa
 }
 
 func (u *DatasetUseCase) deployDataset(ctx context.Context, deployment *entity.DeployDatabase) error {
-	dataset, err := u.engine.NewDataset(ctx, &dto.DatasetContext{
-		Name:  deployment.Schema.Name,
-		Owner: deployment.Tx.Sender,
+	tables, err := convertTablesToDto(deployment.Schema.Tables)
+	if err != nil {
+		return err
+	}
+
+	actions, err := convertActionsToDto(deployment.Schema.Actions)
+	if err != nil {
+		return err
+	}
+
+	extensions := convertExtensionsToDto(deployment.Schema.Extensions)
+
+	dbid, err := u.engine.CreateDataset(ctx, deployment.Schema.Name, deployment.Schema.Owner, &engine.Schema{
+		Tables:     tables,
+		Procedures: actions,
+		Extensions: extensions,
 	})
 	if err != nil {
 		return err
 	}
 
-	err = u.deploySchema(ctx, dataset, deployment.Schema)
-	if err != nil {
-		err2 := u.engine.DeleteDataset(ctx, &dto.TxContext{
-			Caller: deployment.Tx.Sender,
-		}, dataset.Id())
-
-		if err2 != nil {
-			u.log.Error("failed to delete dataset after failed schema deployment", zap.Error(err2))
-			err = errors.Wrap(err, err2.Error())
-		}
-
-		return err
-	}
-
-	u.log.Info("database deployed", zap.String("dbid", dataset.Id()), zap.String("deployer address", deployment.Tx.Sender))
+	u.log.Info("database deployed", zap.String("dbid", dbid), zap.String("deployer address", deployment.Tx.Sender))
 
 	return nil
-}
-
-// deploySchema applies the schema to the database
-func (u *DatasetUseCase) deploySchema(ctx context.Context, dataset engine.Dataset, schema *entity.Schema) error {
-	convertedTables, err := convertTablesToDto(schema.Tables)
-	if err != nil {
-		return err
-	}
-
-	sp, err := dataset.Savepoint()
-	if err != nil {
-		return err
-	}
-	defer sp.Rollback()
-
-	for _, table := range convertedTables {
-		err := dataset.CreateTable(ctx, table)
-		if err != nil {
-			return err
-		}
-	}
-
-	convertedActions, err := convertActionsToDto(schema.Actions)
-	if err != nil {
-		return err
-	}
-
-	for _, action := range convertedActions {
-		err := dataset.CreateAction(ctx, action)
-		if err != nil {
-			return err
-		}
-	}
-
-	return sp.Commit()
 }
 
 func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.Int, error) {
@@ -103,15 +65,6 @@ func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.In
 }
 
 func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error) {
-	// TODO: there are a lot of errors with drop and having potentially orphaned data
-	// this can cause panics.  For now, I will catch panics since we are releasing today
-	defer func() {
-		if r := recover(); r != nil {
-			u.log.Error("recovering from panic in drop", zap.Any("panic", r))
-			err = errors.New("Unexpected internal error. Please report this to the Kwil team.")
-		}
-	}()
-
 	price, err := u.PriceDrop(drop)
 	if err != nil {
 		return nil, err
@@ -122,10 +75,7 @@ func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (t
 		return nil, err
 	}
 
-	err = u.engine.DeleteDataset(ctx, &dto.TxContext{
-		Caller:  drop.Tx.Sender,
-		Dataset: drop.DBID,
-	}, drop.DBID)
+	err = u.engine.DropDataset(ctx, drop.Tx.Sender, drop.DBID)
 	if err != nil {
 		return nil, err
 	}

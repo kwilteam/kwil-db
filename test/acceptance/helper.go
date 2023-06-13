@@ -4,8 +4,9 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/tonistiigi/go-rosetta"
 	"os"
+
+	"github.com/tonistiigi/go-rosetta"
 
 	//"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
 	"math/big"
@@ -61,6 +62,9 @@ type TestEnvCfg struct {
 	InitialFundAmount                int64
 	denomination                     *big.Int
 	LogLevel                         string
+
+	// Math extension
+	MathExtensionPort string
 
 	// populated by init
 	UserPrivateKey       *ecdsa.PrivateKey
@@ -137,6 +141,10 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg,
 	unexposedChainRPC, err := ganacheC.UnexposedEndpoint(ctx)
 	require.NoError(t, err, "failed to get unexposed endpoint")
 
+	mathExtC := adapters.StartMathExtensionDockerService(t, ctx)
+	unexposedMathRPC, err := mathExtC.UnexposedEndpoint(ctx)
+	require.NoError(t, err, "failed to get exposed endpoint")
+
 	// deploy token and escrow contract
 	t.Logf("create chain deployer to %s", exposedChainRPC)
 	chainDeployer := GetDeployer("eth", exposedChainRPC, cfg.DatabaseDeployerPrivateKeyString, cfg.denomination)
@@ -152,6 +160,7 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg,
 		"KWILD_DEPOSITS_POOL_ADDRESS":         escrowAddress.String(),
 		"KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL": unexposedChainRPC,
 		"KWILD_LOG_LEVEL":                     cfg.LogLevel,
+		"KWILD_EXTENSION_ENDPOINTS":           unexposedMathRPC,
 	}
 	kwildC := adapters.StartKwildDockerService(t, ctx, kwildEnv)
 	exposedKwildEndpoint, err := kwildC.ExposedEndpoint(ctx)

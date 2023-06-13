@@ -6,7 +6,6 @@ import (
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
-	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
@@ -18,8 +17,9 @@ type Service struct {
 
 	executor       datasets.DatasetUseCaseInterface
 	cfg            *config.KwildConfig
-	accountStore   *balances.AccountStore
+	accountStore   datasets.AccountStore
 	sqliteFilePath string
+	extensionUrls  []string
 
 	providerAddress string
 }
@@ -29,6 +29,7 @@ func NewService(ctx context.Context, config *config.KwildConfig, opts ...TxSvcOp
 		log:             log.NewNoOp(),
 		cfg:             config,
 		providerAddress: crypto.AddressFromPrivateKey(config.PrivateKey),
+		extensionUrls:   []string{},
 	}
 
 	for _, opt := range opts {
@@ -59,6 +60,10 @@ func getDatasetUseCaseOpts(s *Service) []datasets.DatasetUseCaseOpt {
 		// if a sqlite file path is provided, use it
 		// otherwise, the dataset use case will create its own
 		opts = append(opts, datasets.WithSqliteFilePath(s.sqliteFilePath))
+	}
+
+	if len(s.extensionUrls) > 0 {
+		opts = append(opts, datasets.WithExtensions(s.extensionUrls...))
 	}
 
 	opts = append(opts, datasets.WithLogger(s.log))

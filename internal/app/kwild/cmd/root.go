@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"syscall"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -36,8 +37,8 @@ func NewStartCmd() *cobra.Command {
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Starts kwild server",
-	Long:  "Starts node with Kwild services",
+	Short: "kwil grpc server",
+	Long:  "Starts node with Kwild and CometBFT services",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg, err := config.LoadKwildConfig()
@@ -125,14 +126,35 @@ func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.C
 	)
 }
 
-func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (*balances.AccountStore, error) {
+func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (AccountStore, error) {
+	if cfg.WithoutAccountStore {
+		return balances.NewEmptyAccountStore(*logger.Named("emptyAccountStore")), nil
+	}
+
 	return balances.NewAccountStore(
 		balances.WithLogger(*logger.Named("accountStore")),
 		balances.WithPath(cfg.SqliteFilePath),
 	)
 }
 
-func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *balances.AccountStore, logger log.Logger) (*chainsyncer.ChainSyncer, error) {
+type AccountStore interface {
+	BatchCredit(creditList []*balances.Credit, chain *balances.ChainConfig) error
+	BatchSpend(spendList []*balances.Spend, chain *balances.ChainConfig) error
+	ChainExists(chainCode int32) (bool, error)
+	Close() error
+	CreateChain(chainCode int32, height int64) error
+	Credit(credit *balances.Credit) error
+	GetAccount(address string) (*balances.Account, error)
+	GetHeight(chainCode int32) (int64, error)
+	SetHeight(chainCode int32, height int64) error
+	Spend(spend *balances.Spend) error
+}
+
+func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as AccountStore, logger log.Logger) (starter, error) {
+	if cfg.WithoutChainSyncer {
+		return chainsyncer.NewEmptyChainSyncer(), nil
+	}
+
 	walletAddress := kwilCrypto.AddressFromPrivateKey(cfg.PrivateKey)
 
 	return chainsyncer.Builder().
@@ -145,11 +167,12 @@ func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *b
 		Build()
 }
 
-func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as *balances.AccountStore, logger log.Logger) (*txsvc.Service, error) {
+func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as AccountStore, logger log.Logger) (*txsvc.Service, error) {
 	return txsvc.NewService(ctx, cfg,
 		txsvc.WithLogger(*logger.Named("txService")),
 		txsvc.WithAccountStore(as),
 		txsvc.WithSqliteFilePath(cfg.SqliteFilePath),
+		txsvc.WithExtensions(cfg.ExtensionEndpoints...),
 	)
 }
 
@@ -167,81 +190,18 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	return healthsvc.NewServer(ck)
 }
 
-// from v0, removed 04/03/23
-/*
-	ctx := cmd.Context()
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return err
-	}
+type starter interface {
+	Start(ctx context.Context) error
+}
 
-	// build log
-	//log, err := log.NewLogger(cfg.log)
-	logger := log.New(cfg.Log)
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	client, err := sqlclient.Open(cfg.DB.DbUrl(), 60*time.Second)
-	if err != nil {
-		return fmt.Errorf("failed to open sql client: %w", err)
-	}
-
-	//&cfg.Fund.Chain, logger
-	chainClient, err := service.NewChainClient(cfg.Fund.Chain.RpcUrl,
-		service.WithChainCode(chainTypes.ChainCode(cfg.Fund.Chain.ChainCode)),
-		service.WithLogger(logger),
-		service.WithReconnectInterval(cfg.Fund.Chain.ReconnectInterval),
-		service.WithRequiredConfirmations(cfg.Fund.Chain.BlockConfirmation),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build chain client: %w", err)
-	}
-
-	// build repository prepared statement
-	queries, err := repository.Prepare(ctx, client)
-	if err != nil {
-		return fmt.Errorf("failed to prepare queries: %w", err)
-	}
-
-	dps, err := deposits.NewDepositer(cfg.Fund.PoolAddress, client, queries, chainClient, cfg.Fund.Wallet, logger)
-	if err != nil {
-		return fmt.Errorf("failed to build deposits: %w", err)
-	}
-
-	hasuraManager := hasura.NewClient(cfg.Graphql.Addr, logger)
-	go hasura.Initialize(cfg.Graphql.Addr, logger)
-
-	// build executor
-	exec, err := executor.NewExecutor(ctx, client, queries, hasuraManager, logger)
-	if err != nil {
-		return fmt.Errorf("failed to build executor: %w", err)
-	}
-
-	// build config service
-	accSvc := accountsvc.NewService(queries, logger)
-
-	// pricing service
-	prcSvc := pricingsvc.NewService(exec)
-
-	// tx service
-	txService := txsvc.NewService(queries, exec, logger)
-
-	// health service
-	registrar := healthcheck.NewRegistrar(logger)
-	registrar.RegisterAsyncCheck(10*time.Second, 3*time.Second, healthcheck.Check{
-		Name: "dummy",
-		Check: func(ctx context.Context) error {
-			// error make this check fail, nil will make it succeed
+func NewStopCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the kwild process",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			syscall.Kill(1, syscall.SIGTERM)
+			fmt.Printf("stopping kwild process\n")
 			return nil
 		},
-	})
-	ck := registrar.BuildChecker(simple_checker.New(logger))
-	healthService := healthsvc.NewServer(ck)
-
-	// configuration service
-	cfgService := configsvc.NewService(cfg, logger)
-	// build server
-	svr := server.New(cfg.Server, txService, accSvc, cfgService, healthService, prcSvc, dps, logger)
-	return svr.Start(ctx)
-*/
+	}
+}

@@ -2,10 +2,11 @@ package balances
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"math/big"
 	"sync"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 
 	"go.uber.org/zap"
 )

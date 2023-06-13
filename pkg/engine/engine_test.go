@@ -2,123 +2,228 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/engine"
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
-	"github.com/kwilteam/kwil-db/pkg/engine/dto/data"
-
+	engine "github.com/kwilteam/kwil-db/pkg/engine"
+	engineTesting "github.com/kwilteam/kwil-db/pkg/engine/testing"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/types/testdata"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_Engine(t *testing.T) {
+var (
+	testTables = []*types.Table{
+		&testdata.Table_users,
+		&testdata.Table_posts,
+	}
+
+	testProcedures = []*types.Procedure{
+		&testdata.Procedure_create_user,
+		&testdata.Procedure_create_post,
+	}
+
+	testInitializedExtensions = []*types.Extension{
+		{
+			Name: "erc20",
+			Initialization: map[string]string{
+				"address": "0x1234",
+			},
+			Alias: "usdc",
+		},
+	}
+)
+
+func Test_Open(t *testing.T) {
 	ctx := context.Background()
 
-	master, err := openEngine(true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer master.Delete(true)
-
-	ds, err := openDataset(master)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sameDs, err := master.GetDataset(ds.Id())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, ds, sameDs)
-
-	err = master.DeleteDataset(ctx, &dto.TxContext{
-		Caller: "testOwner",
-	}, ds.Id())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = master.GetDataset(ds.Id())
-	if err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// testing that a dataset is persisted and reloads properly
-func Test_DatasetPersistence(t *testing.T) {
-
-	master, err := openEngine(true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ds, err := openDataset(master)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = addUsersTable(ds)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = master.Close(false)
-	if err != nil {
-		t.Error(err)
-	}
-
-	master, err = openEngine(false)
-	if err != nil {
-		t.Error(err)
-	}
-	defer master.Delete(true)
-
-	ds2, err := master.GetDataset(ds.Id())
-	if err != nil {
-		t.Error(err)
-	}
-
-	tables := ds2.ListTables()
-	if len(tables) != 1 {
-		t.Error("expected 1 table")
-	}
-}
-
-func openEngine(wipe bool) (engine.Engine, error) {
-	ctx := context.Background()
-
-	opts := []engine.EngineOpt{engine.WithName("unittest")}
-	if wipe {
-		opts = append(opts, engine.WithWipe())
-	}
-
-	master, err := engine.Open(ctx,
-		opts...,
+	e, teardown, err := engineTesting.NewTestEngine(ctx,
+		engine.WithExtensions(testExtensions),
 	)
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
+	defer teardown()
 
-	return master, nil
-}
-
-func openDataset(e engine.Engine) (engine.Dataset, error) {
-	ctx := context.Background()
-
-	ds, err := e.NewDataset(ctx, &dto.DatasetContext{
-		Name:  "testName",
-		Owner: "testOwner",
+	_, err = e.CreateDataset(ctx, "testdb1", "0xSatoshi", &engine.Schema{
+		Extensions: testInitializedExtensions,
+		Tables:     testTables,
+		Procedures: testProcedures,
 	})
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 
-	return ds, nil
+	// close the engine
+	err = e.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e2, teardown, err := engineTesting.NewTestEngine(ctx,
+		engine.WithExtensions(testExtensions),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardown()
+
+	// check if the dataset was created
+	dataset, err := e2.GetDataset(ctx, utils.GenerateDBID("testdb1", "0xSatoshi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check if the dataset has the correct tables
+	tables, err := dataset.ListTables(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.ElementsMatch(t, testTables, tables)
+
+	// check if the dataset has the correct procedures
+	procs := dataset.ListProcedures()
+	assert.ElementsMatch(t, testProcedures, procs)
+
+	// list the datasets
+	datasets, err := e2.ListDatasets(ctx, "0xSatoshi")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.ElementsMatch(t, []string{"testdb1"}, datasets)
 }
 
-func addUsersTable(ds engine.Dataset) error {
-	ctx := context.Background()
+func Test_CreateDataset(t *testing.T) {
+	type dbStruct struct {
+		dbName string
+		owner  string
+		schema *engine.Schema
+	}
+	tests := []struct {
+		name     string
+		database dbStruct
+		wantErr  bool
+	}{
+		{
+			name: "create a dataset with a variety of statements",
+			database: dbStruct{
+				dbName: "test_db",
+				owner:  "test_owner",
+				schema: &engine.Schema{
+					Extensions: testInitializedExtensions,
+					Tables:     testTables,
+					Procedures: []*types.Procedure{
+						{
+							Name:   "create_user",
+							Args:   []string{"$id", "$username", "$age"},
+							Public: true,
+							Statements: []string{
+								"$current_bal = usdc.balanceOf(@caller);",
+								"SELECT case when $current_bal < 100 then ERROR('not enough balance') end;",
+								"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "create a dataset with invalid dml",
+			database: dbStruct{
+				dbName: "test_db",
+				owner:  "test_owner",
+				schema: &engine.Schema{
+					Extensions: testInitializedExtensions,
+					Tables:     testTables,
+					Procedures: []*types.Procedure{
+						{
+							Name:   "create_user",
+							Args:   []string{"$id", "$username", "$age"},
+							Public: true,
+							Statements: []string{
+								"INSERT INTO the table users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
 
-	return ds.CreateTable(ctx, data.TableUsers)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			e, teardown, err := engineTesting.NewTestEngine(ctx,
+				engine.WithExtensions(testExtensions),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer teardown()
+
+			_, err = e.CreateDataset(ctx, tt.database.dbName, tt.database.owner, tt.database.schema)
+			hasErr := err != nil
+			if hasErr != tt.wantErr {
+				t.Errorf("Engine.CreateDataset() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			// check if the dataset was created
+			_, err = e.GetDataset(ctx, utils.GenerateDBID(tt.database.dbName, tt.database.owner))
+			if hasErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+		})
+	}
+}
+
+type testExtension struct {
+	requiredMetadata map[string]string
+	methods          []string
+}
+
+func (t *testExtension) CreateInstance(ctx context.Context, metadata map[string]string) (engine.ExtensionInstance, error) {
+	for k, v := range t.requiredMetadata {
+		if metadata[k] != v {
+			return nil, errors.New("metadata not found")
+		}
+	}
+
+	return &testExtensionInstance{
+		methods: t.methods,
+	}, nil
+}
+
+type testExtensionInstance struct {
+	methods []string
+}
+
+func (t *testExtensionInstance) Execute(ctx context.Context, method string, args ...any) ([]any, error) {
+	for _, m := range t.methods {
+		if m == method {
+			return []any{}, nil
+		}
+	}
+
+	return nil, errors.New("method not found")
+}
+
+var testExtensions = map[string]engine.ExtensionInitializer{
+	"erc20": &testExtension{
+		requiredMetadata: map[string]string{
+			"address": "0x1234",
+		},
+		methods: []string{
+			"balanceOf",
+		},
+	},
 }

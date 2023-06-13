@@ -8,7 +8,10 @@ import (
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/internal/entity/data"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
+	"github.com/kwilteam/kwil-db/pkg/engine"
+	engineTesting "github.com/kwilteam/kwil-db/pkg/engine/testing"
 	"github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDatasetUseCase_Deploy(t *testing.T) {
@@ -53,9 +56,20 @@ func TestDatasetUseCase_Deploy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u, err := newDatasetUsecase(tt.args.ctx)
+			ctx := context.Background()
+
+			eng, teardown, err := engineTesting.NewTestEngine(ctx)
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
+			}
+			defer teardown()
+
+			u, err := datasets.New(ctx,
+				datasets.WithEngine(eng),
+				datasets.WithAccountStore(&mockAccountStore{}),
+			)
+			if err != nil {
+				t.Fatal(err)
 			}
 
 			got, err := u.Deploy(tt.args.ctx, tt.args.deployment)
@@ -66,13 +80,13 @@ func TestDatasetUseCase_Deploy(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("DatasetUseCase.Deploy() = %v, want %v", got, tt.want)
 			}
+
+			schema, err := u.GetSchema(ctx, engine.GenerateDBID(tt.args.deployment.Schema.Name, tt.args.deployment.Schema.Owner))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, tt.args.deployment.Schema, schema)
 		})
 	}
-}
-
-func newDatasetUsecase(ctx context.Context) (datasets.DatasetUseCaseInterface, error) {
-	return datasets.New(ctx,
-		datasets.WithEngine(newMockEngine()),
-		datasets.WithAccountStore(&mockAccountStore{}),
-	)
 }

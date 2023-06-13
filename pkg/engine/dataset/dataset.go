@@ -2,242 +2,202 @@ package dataset
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
-	"github.com/kwilteam/kwil-db/pkg/engine/sqldb"
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/pkg/log"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/execution"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
-// A database is a single deployed instance of kwil-db.
-// It contains a SQLite file
+// A dataset is a deployed Kwil database with an underlying data store and engine.
 type Dataset struct {
-	mu      sync.RWMutex
-	Ctx     *dto.DatasetContext
-	db      sqldb.DB
-	actions map[string]*preparedAction
-	tables  map[string]*dto.Table
+	metadata *Metadata
+	db       Datastore
+	engine   Engine
+	log      log.Logger
+
+	// initializers are the intiialization functions for extensions
+	initializers map[string]Initializer
+	// owner is the owner of the dataset
+	owner string
+	// name is the name of the dataset
+	name string
+	// allowMissingExtensions will let a dataset load, even if required extension initializers are not provided
+	// default is true
+	allowMissingExtensions bool
 }
 
-// NewDataset creates a new dataset.
-func NewDataset(ctx context.Context, dsCtx *dto.DatasetContext, db sqldb.DB) (*Dataset, error) {
-	ds := &Dataset{
-		mu:      sync.RWMutex{},
-		Ctx:     dsCtx,
-		db:      db,
-		actions: make(map[string]*preparedAction),
-		tables:  make(map[string]*dto.Table),
+// OpenDataset opens a new dataset and loads the metadata from the database
+func OpenDataset(ctx context.Context, ds Datastore, opts ...OpenOpt) (*Dataset, error) {
+	dataset := &Dataset{
+		db:                     ds,
+		initializers:           make(map[string]Initializer),
+		log:                    log.NewNoOp(),
+		allowMissingExtensions: false,
 	}
 
-	tables, err := db.ListTables(ctx)
+	for _, opt := range opts {
+		opt(dataset)
+	}
+
+	engineOpts, err := dataset.getEngineOpts(ctx, dataset.initializers)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list tables: %w", err)
+		return nil, err
 	}
 
-	for _, table := range tables {
-		ds.tables[strings.ToLower(table.Name)] = table
-	}
-
-	actions, err := db.ListActions(ctx)
+	engine, err := execution.NewEngine(ctx, datastoreWrapper{ds}, engineOpts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list actions: %w", err)
+		return nil, err
 	}
 
-	for _, action := range actions {
-		prepAction, err := ds.prepareAction(action)
-		if err != nil {
-			return nil, fmt.Errorf("failed to prepare action: %w", err)
+	procedures, err := ds.ListProcedures(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dataset.engine = engine
+	dataset.metadata = newMetadata(procedures)
+
+	return dataset, nil
+}
+
+func (d *Dataset) execConstructor(ctx context.Context, opts *TxOpts) error {
+	for _, procedure := range d.metadata.Procedures {
+		if strings.EqualFold(procedure.Name, constructorName) {
+			_, err := d.executeOnce(ctx, procedure, make(map[string]any), opts)
+			if err != nil {
+				return err
+			}
+
+			return nil
 		}
-
-		ds.actions[strings.ToLower(action.Name)] = prepAction
 	}
-
-	return ds, nil
-}
-
-// CreateAction creates a new action and prepares it for use.
-func (d *Dataset) CreateAction(ctx context.Context, actionDefinition *dto.Action) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.actions[strings.ToLower(actionDefinition.Name)] != nil {
-		return fmt.Errorf(`action "%s" already exists`, actionDefinition.Name)
-	}
-
-	newAction, err := d.prepareAction(actionDefinition)
-	if err != nil {
-		return fmt.Errorf("failed to prepare action: %w", err)
-	}
-
-	err = d.db.StoreAction(ctx, actionDefinition)
-	if err != nil {
-		return fmt.Errorf("failed to store action: %w", err)
-	}
-
-	d.actions[strings.ToLower(newAction.Name)] = newAction
 
 	return nil
 }
 
-func (d *Dataset) prepareAction(action *dto.Action) (*preparedAction, error) {
-	newAction := &preparedAction{
-		Action:  action,
-		stmts:   make([]sqldb.Statement, len(action.Statements)),
-		dataset: d,
+const constructorName = "constructor"
+
+// Execute executes a procedure.
+func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]any, opts *TxOpts) ([]map[string]any, error) {
+	if strings.EqualFold(action, constructorName) {
+		return nil, fmt.Errorf("cannot execute constructor")
 	}
 
-	for i, statement := range action.Statements {
-		stmt, err := d.db.Prepare(statement)
+	proc, ok := d.metadata.Procedures[action]
+	if !ok {
+		return nil, fmt.Errorf("procedure %s does not exist", action)
+	}
+
+	savepoint, err := d.db.Savepoint()
+	if err != nil {
+		return nil, err
+	}
+	defer savepoint.Rollback()
+
+	if len(args) == 0 { // if no args, add an empty arg map so we can execute once
+		args = append(args, make(map[string]any))
+	}
+
+	var result []map[string]any
+	for _, arg := range args {
+		result, err = d.executeOnce(ctx, proc, arg, opts)
 		if err != nil {
-			return nil, fmt.Errorf("failed to prepare statement: %w", err)
+			return nil, err
+		}
+	}
+
+	err = savepoint.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (d *Dataset) executeOnce(ctx context.Context, proc *types.Procedure, args map[string]any, opts *TxOpts) ([]map[string]any, error) {
+	var argArr []any
+	for _, arg := range proc.Args {
+		val, ok := args[arg]
+		if !ok {
+			return nil, fmt.Errorf("missing argument %s", arg)
 		}
 
-		newAction.stmts[i] = stmt
+		argArr = append(argArr, val)
 	}
 
-	return newAction, nil
+	return d.engine.ExecuteProcedure(ctx, proc.Name, argArr,
+		execution.WithCaller(opts.Caller),
+		execution.WithDatasetID(d.DBID()),
+	)
 }
 
-// GetAction returns an action by name.
-func (d *Dataset) GetAction(name string) *dto.Action {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.actions[strings.ToLower(name)].Action
+// Query executes a ad-hoc, read-only query.
+func (d *Dataset) Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error) {
+	return d.db.Query(ctx, stmt, args)
 }
 
-// ListActions returns a list of actions.
-func (d *Dataset) ListActions() []*dto.Action {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	actions := make([]*dto.Action, 0, len(d.actions))
-	for _, action := range d.actions {
-		actions = append(actions, action.Action)
+// ListProcedures returns the procedures in the dataset.
+func (d *Dataset) ListProcedures() []*types.Procedure {
+	var procs []*types.Procedure
+	for _, procedure := range d.metadata.Procedures {
+		procs = append(procs, procedure)
 	}
 
-	return actions
+	return procs
 }
 
-// CreateTable creates a new table and prepares it for use.
-func (d *Dataset) CreateTable(ctx context.Context, table *dto.Table) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.tables[strings.ToLower(table.Name)] != nil {
-		return fmt.Errorf(`table "%s" already exists`, table.Name)
-	}
-
-	err := d.db.CreateTable(ctx, table)
-	if err != nil {
-		return fmt.Errorf("failed to create table: %w", err)
-	}
-
-	d.tables[strings.ToLower(table.Name)] = table
-
-	return nil
-}
-
-// GetTable returns a table by name.
-func (d *Dataset) GetTable(name string) *dto.Table {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.tables[strings.ToLower(name)]
-}
-
-// ListTables returns a list of tables.
-func (d *Dataset) ListTables() []*dto.Table {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	tables := make([]*dto.Table, 0, len(d.tables))
-	for _, table := range d.tables {
-		tables = append(tables, table)
-	}
-
-	return tables
+// ListTables returns the tables in the dataset.
+func (d *Dataset) ListTables(ctx context.Context) ([]*types.Table, error) {
+	return d.db.ListTables(ctx)
 }
 
 // Close closes the dataset.
 func (d *Dataset) Close() error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	var errs []string
 
-	for _, action := range d.actions {
-		err := action.Close()
-		if err != nil {
-			return err
-		}
+	err := d.engine.Close()
+	if err != nil {
+		errs = append(errs, err.Error())
 	}
 
-	return d.db.Close()
-}
-
-// Id returns the id of the dataset.
-func (d *Dataset) Id() string {
-	return utils.GenerateDBID(d.Ctx.Name, d.Ctx.Owner)
-}
-
-// Execute executes an action.
-// It will execute as many times as there are inputs, and will return the last result.
-func (d *Dataset) Execute(txCtx *dto.TxContext, inputs []map[string]any) (dto.Result, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	action, ok := d.actions[strings.ToLower(txCtx.Action)]
-	if !ok {
-		return nil, fmt.Errorf(`action "%s" does not exist`, txCtx.Action)
+	err = d.db.Close()
+	if err != nil {
+		errs = append(errs, err.Error())
 	}
 
-	if len(inputs) == 0 {
-		return action.Execute(txCtx, nil)
+	if len(errs) > 0 {
+		return fmt.Errorf("errors closing dataset: %s", strings.Join(errs, ", "))
 	}
 
-	return action.BatchExecute(txCtx, inputs)
-}
-
-// Savepoint creates a new savepoint.
-func (d *Dataset) Savepoint() (sqldb.Savepoint, error) {
-	return d.db.Savepoint()
+	return nil
 }
 
 // Delete deletes the dataset.
-func (d *Dataset) Delete(txCtx *dto.TxContext) error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+func (d *Dataset) Delete() error {
+	var errs []error
 
-	if txCtx.Caller != d.Ctx.Owner {
-		return fmt.Errorf("caller does not have permission to delete dataset")
+	err := d.engine.Close()
+	if err != nil {
+		errs = append(errs, err)
 	}
 
-	for _, action := range d.actions {
-		err := action.Close()
-		if err != nil {
-			return err
-		}
+	err = d.db.Delete()
+	if err != nil {
+		errs = append(errs, err)
 	}
 
-	return d.db.Delete()
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
 }
 
-// Query executes a query and returns the result.
-// It is a read-only operation.
-func (d *Dataset) Query(ctx context.Context, stmt string, args map[string]any) (dto.Result, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return d.db.Query(ctx, stmt, args)
-}
-
-// Owner returns the owner of the dataset.
-func (d *Dataset) Owner() string {
-	return d.Ctx.Owner
-}
-
-// Name returns the name of the dataset.
-func (d *Dataset) Name() string {
-	return d.Ctx.Name
+// Metadata returns the metadata for the dataset.
+func (d *Dataset) Metadata() (name, owner string) {
+	return d.name, d.owner
 }

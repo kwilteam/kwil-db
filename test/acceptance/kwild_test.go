@@ -4,11 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/specifications"
-	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -84,11 +85,12 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.ExecuteDBUpdateSpecification(ctx, t, driver)
 			specifications.ExecuteDBDeleteSpecification(ctx, t, driver)
 
-			// Test permissioned actions
-			specifications.ExecutePermissionedActionSpecification(ctx, t, secondDriver)
+			// test that the loaded extensions works
+			specifications.ExecuteExtensionSpecification(ctx, t, driver)
 
 			// and user should be able to drop database
 			specifications.DatabaseDropSpecification(ctx, t, driver)
+
 			close(done)
 		})
 	}

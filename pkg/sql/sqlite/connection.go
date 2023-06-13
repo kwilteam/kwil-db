@@ -2,10 +2,12 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -17,32 +19,32 @@ import (
 )
 
 type Connection struct {
-	conn              *sqlite.Conn
-	mu                lockable // mutex to protect the write connection, using an interface to allow for nil mutex
-	log               log.Logger
-	path              string
-	readPool          *sqlitex.Pool
-	poolSize          int
-	flags             sqlite.OpenFlags
-	isMemory          bool
-	name              string
-	globalVariableMap map[string]any
+	conn        *sqlite.Conn
+	mu          lockable // mutex to protect the write connection, using an interface to allow for nil mutex
+	log         log.Logger
+	path        string
+	readPool    *sqlitex.Pool
+	poolSize    int
+	flags       sqlite.OpenFlags
+	isMemory    bool
+	name        string
+	attachedDBs map[string]string // maps the name to the file name
 }
 
 // OpenConn opens a connection to the database with the given name.
 // It takes optional ConnectionOptions, which can be used to specify the path, logger, and other options.
 func OpenConn(name string, opts ...ConnectionOption) (*Connection, error) {
 	connection := &Connection{
-		log:               log.NewNoOp(),
-		mu:                &sync.Mutex{},
-		path:              DefaultPath,
-		name:              name,
-		poolSize:          10,
-		conn:              nil,
-		readPool:          nil,
-		isMemory:          false,
-		flags:             sqlite.OpenWAL,
-		globalVariableMap: map[string]any{},
+		log:         log.NewNoOp(),
+		mu:          &sync.Mutex{},
+		path:        DefaultPath,
+		name:        name,
+		poolSize:    10,
+		conn:        nil,
+		readPool:    nil,
+		isMemory:    false,
+		flags:       sqlite.OpenWAL | sqlite.OpenURI,
+		attachedDBs: make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(connection)
@@ -78,7 +80,11 @@ func (c *Connection) getFilePath() string {
 	if c.isMemory {
 		return c.path
 	}
-	return fmt.Sprintf("%s%s.sqlite", c.path, c.name)
+	return c.formatFilePath(c.name)
+}
+
+func (c *Connection) formatFilePath(fileName string) string {
+	return fmt.Sprintf("%s%s.sqlite", c.path, fileName)
 }
 
 func (c *Connection) openConn() error {
@@ -93,12 +99,80 @@ func (c *Connection) openConn() error {
 		return fmt.Errorf("failed to register custom functions: %w", err)
 	}
 
-	c.readPool, err = sqlitex.Open(c.getFilePath(), c.openFlags(true), c.poolSize, functions.Register)
+	err = c.attachDBs(c.conn)
+	if err != nil {
+		return fmt.Errorf("failed to attach databases: %w", err)
+	}
+
+	err = c.initializeReadPool()
+	if err != nil {
+		return fmt.Errorf("failed to initialize read pool: %w", err)
+	}
+
+	return nil
+}
+
+// initializeReadPool initializes the read connection pool.
+// it will ensure attached databases and sqlite extensions are registered.
+func (c *Connection) initializeReadPool() error {
+	var err error
+	c.readPool, err = sqlitex.Open(c.getFilePath(), c.openFlags(true), c.poolSize)
 	if err != nil {
 		return fmt.Errorf("failed to create read connection pool: %w", err)
 	}
 
+	poolArray := make([]*sqlite.Conn, c.poolSize)
+
+	for i := 0; i < c.poolSize; i++ {
+		conn := c.readPool.Get(context.Background())
+		if conn == nil {
+			return fmt.Errorf("failed to get read connection from connection pool")
+		}
+
+		poolArray[i] = conn
+	}
+
+	for _, conn := range poolArray {
+		err = functions.Register(conn)
+		if err != nil {
+			return fmt.Errorf("failed to register custom functions: %w", err)
+		}
+
+		err = c.attachDBs(conn)
+		if err != nil {
+			return fmt.Errorf("failed to attach databases: %w", err)
+		}
+	}
+
+	for _, conn := range poolArray {
+		c.readPool.Put(conn)
+	}
+
 	return nil
+}
+
+// attachDBs attaches the databases to the connection
+func (c *Connection) attachDBs(conn *sqlite.Conn) error {
+	for name, file := range c.attachedDBs {
+		err := attachDB(conn, name, c.formatURI(file))
+		if err != nil {
+			return fmt.Errorf("failed to attach database: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func attachDB(c *sqlite.Conn, schemaName, uri string) error {
+	return sqlitex.ExecuteTransient(c, fmt.Sprintf(sqlAttach, uri, schemaName), nil)
+}
+
+const sqlAttach = `ATTACH DATABASE '%s' AS %s;`
+
+// formatURI formats the URI for the given file name.
+// It includes a read only flag
+func (c *Connection) formatURI(fileName string) string {
+	return fmt.Sprintf("file:%s?mode=ro", c.formatFilePath(fileName))
 }
 
 func (c *Connection) mkPathDir() error {
@@ -123,12 +197,14 @@ func (c *Connection) Execute(stmt string, args ...map[string]any) error {
 
 // execute executes a one-off statement.  It does not use a mutex, unlike Execute.
 func (c *Connection) execute(stmt string, args ...map[string]any) error {
+	cleanedStmt := trimPadding(stmt)
+
 	if len(args) == 0 {
-		return sqlitex.ExecuteTransient(c.conn, stmt, nil)
+		return sqlitex.ExecuteTransient(c.conn, cleanedStmt, nil)
 	}
 
 	for _, arg := range args {
-		err := sqlitex.ExecuteTransient(c.conn, stmt, &sqlitex.ExecOptions{
+		err := sqlitex.ExecuteTransient(c.conn, cleanedStmt, &sqlitex.ExecOptions{
 			Named: arg,
 		})
 		if err != nil {
@@ -171,12 +247,14 @@ func (c *Connection) close() error {
 		return nil
 	}
 
-	err := c.readPool.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close read connection pool: %w", err)
+	if c.readPool != nil {
+		err := c.readPool.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close read connection pool: %w", err)
+		}
 	}
 
-	err = c.conn.Close()
+	err := c.conn.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close connection: %w", err)
 	}
@@ -193,17 +271,20 @@ func (c *Connection) prepareRead(ctx context.Context, statement string) (stmt *S
 
 	deferFunc = func() error {
 		c.readPool.Put(readConn)
+
+		if stmt == nil {
+			return nil
+		}
+
 		return stmt.stmt.Finalize()
 	}
 
 	innerStmt, trailingBytes, err := readConn.PrepareTransient(trimPadding(statement))
 	if err != nil {
-		c.readPool.Put(readConn)
 		return nil, deferFunc, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 
 	if trailingBytes > 0 {
-		c.readPool.Put(readConn)
 		return nil, deferFunc, fmt.Errorf("trailing bytes after statement: %q", trailingBytes)
 	}
 
@@ -214,30 +295,47 @@ func (c *Connection) prepareRead(ctx context.Context, statement string) (stmt *S
 // It takes a QueryOpts struct, which can contain arguments, a function to manually bind parameters, a function
 // to manually handle each result in between Step() calls, and a struct to store the results in.
 // All of these are optional, and if not provided, the function will return an error
-func (c *Connection) Query(ctx context.Context, statement string, options ...ExecOption) error {
+// TODO: rename this to BeginQuery
+func (c *Connection) Query(ctx context.Context, statement string, options ...ExecOption) (*Results, error) {
 	if c.readPool == nil {
-		return fmt.Errorf("connection is nil")
+		return nil, fmt.Errorf("connection is nil")
 	}
 
-	err := c.query(ctx, statement, options...)
+	results, err := c.query(ctx, statement, removeNilVals(options)...)
 	if err != nil {
 		c.log.Error("failed to execute query", zap.Error(err))
-		return err
+		return nil, err
 	}
 
-	return nil
+	return results, nil
+}
+
+func removeNilVals[T any](vals []T) []T {
+	newVals := make([]T, 0)
+	for _, val := range vals {
+		if !reflect.ValueOf(&val).Elem().IsZero() {
+			newVals = append(newVals, val)
+		}
+	}
+	return newVals
 }
 
 // query executes a query and calls the resultFn for each row returned
 // statementSetterFn is a function that is called to set the arguments for the statement
-func (c *Connection) query(ctx context.Context, statement string, options ...ExecOption) error {
+func (c *Connection) query(ctx context.Context, statement string, options ...ExecOption) (*Results, error) {
 	stmt, deferFunc, err := c.prepareRead(ctx, statement)
 	if err != nil {
-		return fmt.Errorf("error preparing read: %w", err)
+		return nil, errors.Join(fmt.Errorf("error preparing read: %w", err), deferFunc())
 	}
-	defer deferFunc()
 
-	return stmt.execute(options...)
+	results, err := stmt.execute(ctx, options...)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("error executing read: %w", err), deferFunc())
+	}
+
+	results.addCloser(deferFunc)
+
+	return results, nil
 }
 
 func (c *Connection) CheckpointWal() error {
@@ -263,15 +361,35 @@ func (c *Connection) DisableForeignKey() error {
 
 func (c *Connection) ListTables(ctx context.Context) ([]string, error) {
 	tables := make([]string, 0)
-	err := c.Query(ctx, sqlListTables,
-		WithResultFunc(func(stmt *Statement) error {
-			tables = append(tables, stmt.GetText("name"))
-			return nil
-		}),
-	)
-
+	results, err := c.Query(ctx, sqlListTables)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tables: %w", err)
+	}
+	defer results.Finish()
+
+	for {
+		rowReturned, err := results.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next row: %w", err)
+		}
+
+		if !rowReturned {
+			break
+		}
+
+		row := results.GetRecord()
+
+		nameAny, ok := row["name"]
+		if !ok {
+			return nil, fmt.Errorf("failed to get name from row: %w", err)
+		}
+
+		name, ok := nameAny.(string)
+		if !ok {
+			return nil, fmt.Errorf("failed to cast name to string: %w", err)
+		}
+
+		tables = append(tables, name)
 	}
 
 	return tables, nil
@@ -279,17 +397,27 @@ func (c *Connection) ListTables(ctx context.Context) ([]string, error) {
 
 func (c *Connection) TableExists(ctx context.Context, tableName string) (bool, error) {
 	exists := false
-	err := c.Query(ctx, sqlIfTableExists,
-		WithResultFunc(func(stmt *Statement) error {
-			exists = true
-			return nil
-		}),
+	results, err := c.Query(ctx, sqlIfTableExists,
 		WithNamedArgs(map[string]interface{}{
 			"$name": tableName,
 		}),
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if table exists: %w", err)
+	}
+	defer results.Finish()
+
+	for {
+		rowReturned, err := results.Next()
+		if err != nil {
+			return false, fmt.Errorf("failed to get next row: %w", err)
+		}
+
+		if !rowReturned {
+			break
+		}
+
+		exists = true
 	}
 
 	return exists, nil

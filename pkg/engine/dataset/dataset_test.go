@@ -2,121 +2,335 @@ package dataset_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
-	data "github.com/kwilteam/kwil-db/pkg/engine/dto/data"
-
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/pkg/engine/db"
+	"github.com/kwilteam/kwil-db/pkg/engine/db/test"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_Dataset(t *testing.T) {
-	ctx := context.Background()
+// TODO: test things that should not work, like calling a private procedure,
+// deploying gibberish in a procedure, incorrect table names, etc.
 
-	ds, err := dataset.NewDataset(ctx, &dto.DatasetContext{
-		Name:  "testName",
-		Owner: "testOwner",
-	}, newMockDB())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ds.Close()
-
-	if ds.Id() != utils.GenerateDBID("testName", "testOwner") {
-		t.Fatal("unexpected id")
+func Test_Execute(t *testing.T) {
+	type fields struct {
+		availableExtensions     []*testExt
+		extensionInitialization []*types.Extension
+		tables                  []*types.Table
+		procedures              []*types.Procedure
 	}
 
-	err = ds.CreateTable(ctx, data.TableUsers)
-	if err != nil {
-		t.Fatal(err)
+	defaultFields := fields{
+		availableExtensions:     testAvailableExtensions,
+		extensionInitialization: testExtensions,
+		tables:                  test_tables,
+		procedures:              test_procedures,
+	}
+	_ = defaultFields
+
+	type args struct {
+		procedure string
+		inputs    []map[string]interface{}
+		finisher  func(*dataset.Dataset) error
 	}
 
-	tableUsers := ds.GetTable(data.TableUsers.Name)
+	tests := []struct {
+		name            string
+		fields          fields
+		args            args
+		expectedOutputs []map[string]interface{}
+		wantErr         bool
+		wantBuilderErr  bool
+	}{
+		{
+			name:   "execute a dml procedure successfully",
+			fields: defaultFields,
+			args: args{
+				procedure: "create_user",
+				inputs: []map[string]interface{}{
+					{
+						"$id":       "1",
+						"$username": "test_username",
+						"$age":      20,
+					},
+				},
+			},
+			expectedOutputs: []map[string]interface{}{},
+			wantErr:         false,
+		},
+		{
+			name:   "execute a procedure with an extension successfully",
+			fields: defaultFields,
+			args: args{
+				procedure: "get_time",
+				inputs:    []map[string]interface{}{},
+			},
+			expectedOutputs: nil,
+			wantErr:         false,
+		},
+		{
+			name:   "violate foreign key constraint",
+			fields: defaultFields,
+			args: args{
+				procedure: "create_post",
+				inputs: []map[string]interface{}{
+					{
+						"$id":        "1",
+						"$title":     "test_title",
+						"$content":   "test_content",
+						"$author_id": "20485",
+					},
+				},
+			},
+			expectedOutputs: nil,
+			wantErr:         true,
+		},
+		{
+			name:   "execute nested procedure that returns data successfully",
+			fields: defaultFields,
+			args: args{
+				procedure: "create_post_and_user",
+				inputs: []map[string]interface{}{
+					{
+						"$id":        "1",
+						"$title":     "test_title",
+						"$content":   "test_content",
+						"$author_id": "1",
+						"$username":  "test_username",
+						"$age":       20,
+					},
+				},
+			},
+			expectedOutputs: []map[string]interface{}{
+				{
+					"username":       "test_username",
+					"wallet_address": callerAddress,
+					"title":          "test_title",
+					"content":        "test_content",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "batch execute and return the final output",
+			fields: fields{
+				availableExtensions:     testAvailableExtensions,
+				extensionInitialization: testExtensions,
+				tables:                  test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:   "create_user_manual",
+						Args:   []string{"$id", "$username", "$age", "$address"},
+						Public: true,
+						Statements: []string{
+							"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, $address);",
+							"SELECT username, (SELECT count(*) FROM users) as num_users FROM users WHERE id = $id;",
+							//"SELECT count(*) FROM users;",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "create_user_manual",
+				inputs: []map[string]interface{}{
+					{
+						"$id":       "1",
+						"$username": "test_username",
+						"$age":      20,
+						"$address":  "0x123",
+					},
+					{
+						"$id":       "2",
+						"$username": "test_username2",
+						"$age":      20,
+						"$address":  "0x456",
+					},
+				},
+			},
+			expectedOutputs: []map[string]interface{}{
+				{
+					"username":  "test_username2",
+					"num_users": int64(2), // we get num users to make sure the first insert was successful
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "failed batch insert will revert all inserts",
+			fields: fields{
+				availableExtensions:     testAvailableExtensions,
+				extensionInitialization: testExtensions,
+				tables:                  test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:   "create_user_manual",
+						Args:   []string{"$id", "$username", "$age", "$address"},
+						Public: true,
+						Statements: []string{
+							"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, $address);",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "create_user_manual",
+				inputs: []map[string]interface{}{
+					{
+						"$id":       "1",
+						"$username": "test_username",
+						"$age":      20,
+						"$address":  "0x123",
+					},
+					{
+						"$id":       "2abc", // this will fail
+						"$username": "test_username2",
+						"$age":      20,
+						"$address":  "0x456",
+					},
+				},
+				finisher: func(database *dataset.Dataset) error {
+					results, err := database.Query(context.Background(), "SELECT * FROM users;", nil)
+					if err != nil {
+						return err
+					}
 
-	assert.Equal(t, data.TableUsers, tableUsers)
+					if len(results) != 0 {
+						return fmt.Errorf("expected no results, got %d", len(results))
+					}
 
-	tableList := ds.ListTables()
-
-	assert.Equal(t, []*dto.Table{data.TableUsers}, tableList)
-
-	err = ds.CreateAction(ctx, data.ActionInsertUser)
-	if err != nil {
-		t.Fatal(err)
+					return nil
+				},
+			},
+			expectedOutputs: nil,
+			wantErr:         true,
+		},
+		{
+			name: "use extension that is not included in the extensions list",
+			fields: fields{
+				availableExtensions:     testAvailableExtensions,
+				extensionInitialization: testExtensions,
+				tables:                  test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:   "use_ext",
+						Args:   []string{"$name"},
+						Public: true,
+						Statements: []string{
+							"$result = crypto.keccack256($name);",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "use_ext",
+				inputs: []map[string]interface{}{
+					{
+						"$name": "satoshi",
+					},
+				},
+			},
+			expectedOutputs: nil,
+			wantErr:         true,
+		},
+		{
+			name: "use extension that this server does not have an initializer for",
+			fields: fields{
+				availableExtensions: testAvailableExtensions,
+				extensionInitialization: []*types.Extension{
+					{
+						Name:           "crypto",
+						Initialization: map[string]string{},
+						Alias:          "crypto",
+					},
+				},
+				tables: test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:   "use_ext",
+						Args:   []string{"$name"},
+						Public: true,
+						Statements: []string{
+							"$result = crypto.keccack256($name);",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "use_ext",
+				inputs: []map[string]interface{}{
+					{
+						"$name": "satoshi",
+					},
+				},
+			},
+			expectedOutputs: nil,
+			wantErr:         true,
+			wantBuilderErr:  true,
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			database, teardown, err := test.OpenTestDB(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer teardown()
 
-	insertUserAction := ds.GetAction(data.ActionInsertUser.Name)
+			availableExtensions := map[string]dataset.Initializer{}
+			for _, etx := range tt.fields.availableExtensions {
+				availableExtensions[etx.name] = etx
+			}
 
-	assert.Equal(t, data.ActionInsertUser, insertUserAction)
+			ds, err := dataset.Builder().
+				WithTables(tt.fields.tables...).
+				WithProcedures(tt.fields.procedures...).
+				WithInitializers(availableExtensions).
+				WithExtensions(tt.fields.extensionInitialization...).
+				WithDatastore(databaseWrapper{database}).
+				Named(datasetName).OwnedBy(callerAddress).
+				Build(ctx)
+			if tt.wantBuilderErr {
+				assert.Error(t, err)
+				return
+			} else {
+				assert.NoError(t, err)
+			}
+			defer ds.Delete()
 
-	actionList := ds.ListActions()
+			defer func() {
+				if tt.args.finisher != nil {
+					err = tt.args.finisher(ds)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}()
 
-	assert.Equal(t, []*dto.Action{data.ActionInsertUser}, actionList)
+			outputs, err := ds.Execute(ctx, tt.args.procedure, tt.args.inputs, &dataset.TxOpts{
+				Caller: callerAddress,
+			})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Dataset.Execute() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
 
-	// test that I cannot create a table with the same name
-	err = ds.CreateTable(ctx, data.TableUsers)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	// test that I cannot create an action with the same name
-	err = ds.CreateAction(ctx, data.ActionInsertUser)
-	if err == nil {
-		t.Fatal("expected error")
+			assert.EqualValues(t, tt.expectedOutputs, outputs, fmt.Sprintf("expected %v, got %v", tt.expectedOutputs, outputs))
+		})
 	}
 }
 
-func Test_Execution(t *testing.T) {
-	ctx := context.Background()
+type databaseWrapper struct {
+	*db.DB
+}
 
-	ds, err := dataset.NewDataset(ctx, &dto.DatasetContext{
-		Name:  "testName",
-		Owner: "testOwner",
-	}, newMockDB())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ds.Close()
+func (d databaseWrapper) Prepare(stmt string) (dataset.Statement, error) {
+	return d.DB.Prepare(stmt)
+}
 
-	inputs := []map[string]any{
-		{
-			"age":  20,
-			"name": "foo",
-		},
-		{
-			"age":  30,
-			"name": "bar",
-		},
-	}
-
-	// execute non-existent action
-	_, err = ds.Execute(&dto.TxContext{
-		Caller: "0xbennanmode",
-		Action: data.ActionInsertUser.Name,
-	}, inputs)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	// create action
-	err = ds.CreateAction(ctx, data.ActionInsertUser)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := ds.Execute(&dto.TxContext{
-		Caller: "0xbennanmode",
-		Action: data.ActionInsertUser.Name,
-	}, inputs)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records := result.Records()
-
-	// the mock result returns 2 records
-	if len(records) != 2 {
-		t.Fatalf("expected 2 records, got %d", len(records))
-	}
+func (d databaseWrapper) Savepoint() (dataset.Savepoint, error) {
+	return d.DB.Savepoint()
 }

@@ -13,11 +13,10 @@ import (
 func (c *Connection) newReadOnlyStatement(readConn *sqlite.Conn, stmt *sqlite.Stmt) *Statement {
 	s := &Statement{
 		conn: &Connection{
-			conn:              readConn,
-			mu:                &nilMutex{},
-			globalVariableMap: c.globalVariableMap,
-			log:               *c.log.Named("readonly-connection"),
-			name:              c.name,
+			conn: readConn,
+			mu:   &nilMutex{},
+			log:  *c.log.Named("readonly-connection"),
+			name: c.name,
 		},
 		stmt: stmt,
 	}

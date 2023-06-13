@@ -19,13 +19,16 @@ const (
 )
 
 type KwildConfig struct {
-	GrpcListenAddress string
-	HttpListenAddress string
-	PrivateKey        *ecdsa.PrivateKey
-	Deposits          DepositsConfig
-	ChainSyncer       ChainSyncerConfig
-	SqliteFilePath    string
-	Log               log.Config
+	GrpcListenAddress   string
+	HttpListenAddress   string
+	PrivateKey          *ecdsa.PrivateKey
+	Deposits            DepositsConfig
+	ChainSyncer         ChainSyncerConfig
+	WithoutChainSyncer  bool
+	WithoutAccountStore bool
+	SqliteFilePath      string
+	Log                 log.Config
+	ExtensionEndpoints  []string
 }
 
 type DepositsConfig struct {
@@ -48,21 +51,28 @@ var (
 		DepositsBlockConfirmation,
 		DepositsChainCode,
 		DepositsClientChainRPCURL,
+		WithoutAccountStore,
+		WithoutChainSyncer,
 		DepositsPoolAddress,
 		ChainSyncerChunkSize,
 		SqliteFilePath,
 		LogLevel,
 		LogOutputPaths,
 		HttpListenAddress,
+		ExtensionEndpoints,
 	}
 )
 
 var (
 	PrivateKey = config.CfgVar{
-		EnvName:  "PRIVATE_KEY",
-		Required: true,
-		Field:    "PrivateKey",
+		EnvName: "PRIVATE_KEY",
+		Field:   "PrivateKey",
 		Setter: func(val any) (any, error) {
+			if val == nil {
+				fmt.Println("no private key provided, generating a new one...")
+				return crypto.GenerateKey()
+			}
+
 			strVal, err := conv.String(val)
 			if err != nil {
 				return nil, err
@@ -103,9 +113,9 @@ var (
 	}
 
 	DepositsPoolAddress = config.CfgVar{
-		EnvName:  "DEPOSITS_POOL_ADDRESS",
-		Field:    "Deposits.PoolAddress",
-		Required: true,
+		EnvName: "DEPOSITS_POOL_ADDRESS",
+		Field:   "Deposits.PoolAddress",
+		Default: "0x0000000000000000000000000000000000000000",
 	}
 
 	ChainSyncerChunkSize = config.CfgVar{
@@ -158,5 +168,39 @@ var (
 		EnvName: "HTTP_LISTEN_ADDRESS",
 		Field:   "HttpListenAddress",
 		Default: ":8080",
+	}
+
+	ExtensionEndpoints = config.CfgVar{
+		EnvName: "EXTENSION_ENDPOINTS",
+		Field:   "ExtensionEndpoints",
+		Setter: func(val any) (any, error) {
+			if val == nil {
+				return nil, nil
+			}
+
+			str, err := conv.String(val)
+			if err != nil {
+				return nil, err
+			}
+
+			endpointArr := strings.Split(str, ",")
+			for i := range endpointArr {
+				endpointArr[i] = strings.TrimSpace(endpointArr[i])
+			}
+
+			return endpointArr, nil
+		},
+	}
+
+	WithoutAccountStore = config.CfgVar{
+		EnvName: "WITHOUT_ACCOUNT_STORE",
+		Field:   "WithoutAccountStore",
+		Default: false,
+	}
+
+	WithoutChainSyncer = config.CfgVar{
+		EnvName: "WITHOUT_CHAIN_SYNCER",
+		Field:   "WithoutChainSyncer",
+		Default: false,
 	}
 )

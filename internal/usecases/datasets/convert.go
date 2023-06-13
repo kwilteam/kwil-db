@@ -2,15 +2,15 @@ package datasets
 
 import (
 	"github.com/kwilteam/kwil-db/internal/entity"
-	engineDto "github.com/kwilteam/kwil-db/pkg/engine/dto"
+	engineDto "github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
-func convertActions(actions []*engineDto.Action) []*entity.Action {
+func convertActions(actions []*engineDto.Procedure) []*entity.Action {
 	entityActions := make([]*entity.Action, len(actions))
 	for i, action := range actions {
 		entityActions[i] = &entity.Action{
 			Name:       action.Name,
-			Inputs:     action.Inputs,
+			Inputs:     action.Args,
 			Public:     action.Public,
 			Statements: action.Statements,
 		}
@@ -70,12 +70,12 @@ func convertIndexes(indexes []*engineDto.Index) []*entity.Index {
 	return entityIndexes
 }
 
-func convertActionsToDto(actions []*entity.Action) ([]*engineDto.Action, error) {
-	entityActions := make([]*engineDto.Action, len(actions))
+func convertActionsToDto(actions []*entity.Action) ([]*engineDto.Procedure, error) {
+	entityActions := make([]*engineDto.Procedure, len(actions))
 	for i, action := range actions {
-		entityActions[i] = &engineDto.Action{
+		entityActions[i] = &engineDto.Procedure{
 			Name:       action.Name,
-			Inputs:     action.Inputs,
+			Args:       action.Inputs,
 			Public:     action.Public,
 			Statements: action.Statements,
 		}
@@ -89,6 +89,19 @@ func convertActionsToDto(actions []*entity.Action) ([]*engineDto.Action, error) 
 	}
 
 	return entityActions, nil
+}
+
+func convertExtensionsToDto(extensions []*entity.Extension) []*engineDto.Extension {
+	entityExtensions := make([]*engineDto.Extension, len(extensions))
+	for i, extension := range extensions {
+		entityExtensions[i] = &engineDto.Extension{
+			Name:           extension.Name,
+			Initialization: extension.Config,
+			Alias:          extension.Alias,
+		}
+	}
+
+	return entityExtensions
 }
 
 func convertTablesToDto(tables []*entity.Table) ([]*engineDto.Table, error) {

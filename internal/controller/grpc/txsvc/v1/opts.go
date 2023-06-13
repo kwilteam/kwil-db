@@ -1,7 +1,7 @@
 package txsvc
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -13,7 +13,7 @@ func WithLogger(logger log.Logger) TxSvcOpt {
 	}
 }
 
-func WithAccountStore(store *balances.AccountStore) TxSvcOpt {
+func WithAccountStore(store datasets.AccountStore) TxSvcOpt {
 	return func(s *Service) {
 		s.accountStore = store
 	}
@@ -22,5 +22,11 @@ func WithAccountStore(store *balances.AccountStore) TxSvcOpt {
 func WithSqliteFilePath(path string) TxSvcOpt {
 	return func(s *Service) {
 		s.sqliteFilePath = path
+	}
+}
+
+func WithExtensions(extConfigs ...string) TxSvcOpt {
+	return func(s *Service) {
+		s.extensionUrls = extConfigs
 	}
 }

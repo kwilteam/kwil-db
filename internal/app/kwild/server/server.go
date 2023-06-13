@@ -3,25 +3,29 @@ package server
 import (
 	"context"
 	"errors"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	chainsyncer "github.com/kwilteam/kwil-db/pkg/balances/chain-syncer"
-	grpcServer "github.com/kwilteam/kwil-db/pkg/grpc/server"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	grpcServer "github.com/kwilteam/kwil-db/pkg/grpc/server"
+	"github.com/kwilteam/kwil-db/pkg/log"
+
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
+
+type starter interface {
+	Start(ctx context.Context) error
+}
 
 type Server struct {
 	Ctx         context.Context
 	Cfg         *config.KwildConfig
 	Log         log.Logger
-	ChainSyncer *chainsyncer.ChainSyncer
+	ChainSyncer starter
 	Http        *GWServer
 	Grpc        *grpcServer.Server
 

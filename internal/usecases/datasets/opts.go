@@ -40,8 +40,14 @@ func WithSqliteFilePath(path string) DatasetUseCaseOpt {
 	}
 }
 
-func WithEngine(engine engine.Engine) DatasetUseCaseOpt {
+func WithEngine(eng *engine.Engine) DatasetUseCaseOpt {
 	return func(u *DatasetUseCase) {
-		u.engine = engine
+		u.engine = eng
+	}
+}
+
+func WithExtensions(extUrls ...string) DatasetUseCaseOpt {
+	return func(u *DatasetUseCase) {
+		u.extensionUrls = extUrls
 	}
 }

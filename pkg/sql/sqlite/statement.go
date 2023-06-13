@@ -1,13 +1,17 @@
 package sqlite
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"reflect"
 
 	"github.com/kwilteam/go-sqlite"
 )
 
 type Statement struct {
+	busy        bool
 	conn        *Connection
 	stmt        *sqlite.Stmt
 	columnNames []string
@@ -16,6 +20,7 @@ type Statement struct {
 
 func newStatement(conn *Connection, stmt *sqlite.Stmt) *Statement {
 	s := &Statement{
+		busy: false,
 		conn: conn,
 		stmt: stmt,
 	}
@@ -73,50 +78,14 @@ func (s *Statement) step() (rowReturned bool, err error) {
 }
 
 type ExecOpts struct {
-	//ResultFunc is a function that is called for each row returned
-	ResultFunc func(*Statement) error
-
 	// Args is a list of arguments to be passed to the query
 	Args []interface{}
 
 	// NamedArgs is a map of named arguments to be passed to the query
 	NamedArgs map[string]interface{}
-
-	// ResultSet
-	ResultSet *ResultSet
-}
-
-// addDefaults adds the named arguments to the ExecOpts if they are not already set.
-func (e *ExecOpts) addDefaults(defaults map[string]any) {
-	if e.NamedArgs == nil {
-		e.NamedArgs = make(map[string]interface{})
-	}
-
-	for k, v := range defaults {
-		if _, ok := e.NamedArgs[k]; ok {
-			continue
-		}
-
-		e.NamedArgs[k] = v
-	}
-}
-
-func (e *ExecOpts) ensureResultFunc() {
-	if e.ResultFunc == nil {
-		e.ResultFunc = func(*Statement) error {
-			return nil
-		}
-	}
 }
 
 type ExecOption func(*ExecOpts)
-
-// WithResultFunc specifies the result function to use
-func WithResultFunc(resultFunc func(*Statement) error) ExecOption {
-	return func(opts *ExecOpts) {
-		opts.ResultFunc = resultFunc
-	}
-}
 
 // WithArgs specifies the args to use
 func WithArgs(args ...interface{}) ExecOption {
@@ -132,13 +101,6 @@ func WithNamedArgs(namedArgs map[string]interface{}) ExecOption {
 	}
 }
 
-// WithResultSet specifies the result set to use
-func WithResultSet(resultSet *ResultSet) ExecOption {
-	return func(opts *ExecOpts) {
-		opts.ResultSet = resultSet
-	}
-}
-
 // Execute executes the statement.
 // It takes an optional ExecOpts struct that can be used to set the arguments for the statement by parameter name,
 // or by numeric index.  It also allows for a ResultFunc to be set that is called as the cursor steps through
@@ -146,20 +108,24 @@ func WithResultSet(resultSet *ResultSet) ExecOption {
 // If both Args and NamedArgs are set, the NamedArgs will be used.
 // Both NamedArgs and Args will override values set before the call to Execute.
 // It also allows for a ResultSet to be set that will be populated with the results of the query.
-func (s *Statement) Execute(opts ...ExecOption) error {
+func (s *Statement) Start(ctx context.Context, opts ...ExecOption) (*Results, error) {
 	s.conn.mu.Lock()
 	defer s.conn.mu.Unlock()
 
-	return s.execute(opts...)
+	return s.execute(ctx, opts...)
 }
 
 // internal execute function that does not lock the connection.
-func (s *Statement) execute(options ...ExecOption) error {
-	defer s.Clear()
-
+func (s *Statement) execute(ctx context.Context, options ...ExecOption) (*Results, error) {
 	if s.conn == nil {
-		return fmt.Errorf("connection has been closed")
+		return nil, fmt.Errorf("connection has been closed")
 	}
+
+	if s.busy {
+		return nil, fmt.Errorf("statement is busy")
+	}
+
+	s.busy = true
 
 	opts := &ExecOpts{}
 
@@ -167,48 +133,149 @@ func (s *Statement) execute(options ...ExecOption) error {
 		opt(opts)
 	}
 
-	opts.ensureResultFunc()
-
 	err := s.bindParameters(opts)
 	if err != nil {
-		return fmt.Errorf("error binding parameters: %w", err)
+		return nil, fmt.Errorf("error binding parameters: %w", err)
 	}
 
-	useResultSet := false
-	if opts.ResultSet != nil {
-		useResultSet = true
+	// Return results object to allow user to iterate manually
+	return &Results{
+		ctx:            ctx,
+		statement:      s,
+		firstIteration: true,
+		options:        opts,
+		closed:         false,
+		complete:       false,
+		closers:        make([]func() error, 0),
+	}, nil
+}
 
-		opts.ResultSet.index = -1
-		opts.ResultSet.Columns = s.columnNames
+type Results struct {
+	ctx            context.Context
+	statement      *Statement
+	firstIteration bool
+	options        *ExecOpts
+	closed         bool
+
+	// complete tracks if there are more steps that can be taken
+	complete bool
+
+	// can be given extra closers for transient statements
+	closers []func() error
+}
+
+func (r *Results) addCloser(closer func() error) {
+	r.closers = append(r.closers, closer)
+}
+
+func (r *Results) Next() (rowReturned bool, err error) {
+	if r.ctx != nil {
+		select {
+		case <-r.ctx.Done():
+			return false, r.ctx.Err()
+		default:
+		}
 	}
 
-	firstIteration := true
+	if r.closed {
+		return false, fmt.Errorf("results have been closed")
+	}
+
+	if r.complete {
+		return false, nil
+	}
+
+	innerRowReturned, err := r.statement.step()
+	if err != nil {
+		return false, err
+	}
+
+	if !innerRowReturned {
+		r.complete = true
+		return false, nil
+	}
+
+	if r.firstIteration {
+		r.statement.determineColumnTypes()
+		r.firstIteration = false
+	}
+
+	return true, nil
+}
+
+func (r *Results) GetRecord() map[string]any {
+	row := make(map[string]any)
+	for i, col := range r.statement.columnNames {
+		row[col] = r.statement.getAny(i)
+	}
+	return row
+}
+
+// ExportRecords will export all records from the result set into a slice of maps.
+// It closes the result set when it is done.
+func (r *Results) ExportRecords() ([]map[string]any, error) {
+	records := make([]map[string]any, 0)
+
 	for {
-		rowReturned, err := s.step()
+		rowReturned, err := r.Next()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if !rowReturned {
 			break
 		}
 
-		if firstIteration {
-			s.determineColumnTypes() // sqlite doesn't detect proper column types on the 0th iteration
-			firstIteration = false
-		}
+		records = append(records, r.GetRecord())
+	}
 
-		if useResultSet {
-			opts.ResultSet.Rows = append(opts.ResultSet.Rows, s.getRow())
-		}
+	return records, r.Close()
+}
 
-		err = opts.ResultFunc(s)
+// Finish finishes the results and closes the statement.
+func (r *Results) Finish() (err error) {
+	for {
+		rowReturned, err := r.Next()
 		if err != nil {
-			return err
+			return errors.Join(err, r.Close())
+		}
+
+		if !rowReturned {
+			break
 		}
 	}
 
-	return nil
+	return r.Close()
+}
+
+func (r *Results) Close() error {
+	if r.closed {
+		return nil
+	}
+
+	r.closed = true
+	r.statement.busy = false
+
+	var errs []error
+	err := r.statement.Clear()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	for _, closer := range r.closers { // we need to run closers after clearing, since
+		// closers are often used to close transient statements
+		err := closer()
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// Reset resets the cursor to the beginning of the result set.
+func (r *Results) Reset() error {
+	return r.statement.Clear()
 }
 
 // bindParameters binds the parameters to the statement, whether they are named or not.
@@ -218,8 +285,6 @@ func (s *Statement) bindParameters(opts *ExecOpts) error {
 	if opts.NamedArgs == nil {
 		opts.NamedArgs = make(map[string]interface{})
 	}
-
-	opts.addDefaults(s.conn.globalVariableMap)
 
 	err := s.bindMany(opts.Args)
 	if err != nil {
@@ -270,14 +335,6 @@ func (s *Statement) ReadBlob(param string, buf []byte) {
 	s.stmt.GetBytes(param, buf)
 }
 
-func (s *Statement) getRow() []any {
-	row := make([]any, len(s.columnTypes))
-	for i := range row {
-		row[i] = s.getAny(i)
-	}
-	return row
-}
-
 func (s *Statement) getAny(position int) any {
 	switch s.columnTypes[position] {
 	case DataTypeInteger:
@@ -287,9 +344,12 @@ func (s *Statement) getAny(position int) any {
 	case DataTypeText:
 		return s.stmt.ColumnText(position)
 	case DataTypeBlob:
-		var buf []byte
-		s.stmt.ColumnBytes(position, buf)
-		return buf
+		rdr := s.stmt.ColumnReader(position)
+		bts, err := io.ReadAll(rdr)
+		if err != nil {
+			panic(fmt.Errorf("kwildb get any error: error reading blob: %w", err))
+		}
+		return bts
 	case DataTypeNull:
 		return nil
 	default:
@@ -395,7 +455,7 @@ func (s *Statement) determineColumnTypes() {
 
 // Clear resets the statement and clears all bound parameters.
 func (s *Statement) Clear() error {
-	err := s.stmt.Reset()
+	err := s.Reset()
 	if err != nil {
 		return err
 	}
@@ -406,6 +466,11 @@ func (s *Statement) Clear() error {
 // Finalize finalizes the statement.
 func (s *Statement) Finalize() error {
 	return s.stmt.Finalize()
+}
+
+// Reset resets the statement.
+func (s *Statement) Reset() error {
+	return s.stmt.Reset()
 }
 
 // convertColumnType converts a sqlite.ColumnType to a DataType.

@@ -16,9 +16,15 @@ tasks:
 
   vendor:
     desc: Generate vendor
+    deps:
+      - task: vendor:clean
+    cmds:
+      - go mod vendor
+
+  vendor:clean:
+    desc: Clean vendor
     cmds:
       - rm -rf ./vendor
-      - go mod vendor
 
   git:init:
     desc: Initialize git submodules
@@ -79,6 +85,17 @@ tasks:
       - task: vendor
       # pass any args to build debug image, e.g. task docker:kwild -- debug
       - ./scripts/build/docker kwild {{.VARIANT}}
+      - task: vendor:clean
+
+  publish:dockerhub:
+    desc: Publish docker image to dockerhub
+    deps: [ pb:compile:v1]
+    cmds: 
+      - task: vendor
+      - TAG={{.TAG}} ./scripts/publish/dockerhub
+      - task: vendor:clean
+    requires:
+      vars: [TAG]
 
   # ************ dev ************
   dev:up:
@@ -88,7 +105,6 @@ tasks:
         vars: {VARIANT: 'shell'}
     cmds:
       - go test ./test/acceptance/ -timeout 12h -dev -v
-
   # ************ test ************
   test:act:
     desc: Run acceptance tests
@@ -98,8 +114,14 @@ tasks:
     cmds:
       - go test ./test/acceptance/ -v
 
+  test:act:no-build:
+    desc: Run acceptance tests without building docker image
+    cmds:
+      - go test ./test/acceptance/ -v
+
   test:unit:
     desc: Run unit tests
-    deps: [ vendor ]
     cmds:
+      - task vendor
       - go test `go list ./... | grep -v /kwil-db\/test/` -count=1
+      - task vendor:clean
