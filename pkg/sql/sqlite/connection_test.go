@@ -363,6 +363,27 @@ func openRealDB() (conn *sqlite.Connection, teardown func() error) {
 	return conn, conn.Delete
 }
 
+func openRealDBWithAttached() (conn *sqlite.Connection, teardown func() error) {
+	conn1, err := sqlite.OpenConn("testdb", sqlite.WithPath("./tmp/"), sqlite.WithConnectionPoolSize(1), sqlite.WithAttachedDatabase("test_attach", "attachdb"))
+	if err != nil {
+		panic(err)
+	}
+
+	err = conn1.Delete()
+	if err != nil {
+		panic(err)
+	}
+
+	conn, err = sqlite.OpenConn("testdb", sqlite.WithPath("./tmp/"), sqlite.WithAttachedDatabase("test_attach", "attachdb"))
+	if err != nil {
+		panic(err)
+	}
+
+	initTables(conn)
+
+	return conn, conn.Delete
+}
+
 func Test_Reads(t *testing.T) {
 	conn, td := openRealDB()
 	defer td()
@@ -502,6 +523,39 @@ func Test_CustomFunction(t *testing.T) {
 	}
 }
 
+func Test_Attach(t *testing.T) {
+	err := createAttachDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	db, td := openRealDBWithAttached()
+	defer td()
+
+	// try preparing and executing a statement
+	stmt, err := db.Prepare("INSERT INTO test_attach.users (id, name, age) VALUES ($id, $name, $age)")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+		"$id":   1,
+		"$name": "John",
+		"$age":  30,
+	}))
+	if err == nil {
+		t.Fatal("expected error when writing to readonly database")
+	}
+
+	// test that we can read from the attached database
+	// if it is not registered it will panic
+	results := &sqlite.ResultSet{}
+	err = db.Query(context.Background(), "SELECT * FROM test_attach.users", sqlite.WithResultSet(results))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 const (
 	usersTable = `CREATE TABLE IF NOT EXISTS users (
 		id INTEGER PRIMARY KEY NOT NULL,
@@ -539,4 +593,27 @@ func initTables(conn *sqlite.Connection) {
 	if !exists {
 		panic("expected users table to exist")
 	}
+}
+
+const attachedDBFileName = "attachdb"
+
+func createAttachDB() error {
+	conn1, err := sqlite.OpenConn(attachedDBFileName, sqlite.WithPath("./tmp/"), sqlite.WithConnectionPoolSize(1))
+	if err != nil {
+		return err
+	}
+
+	err = conn1.Delete()
+	if err != nil {
+		return err
+	}
+
+	conn, err := sqlite.OpenConn(attachedDBFileName, sqlite.WithPath("./tmp/"))
+	if err != nil {
+		return err
+	}
+
+	initTables(conn)
+
+	return nil
 }

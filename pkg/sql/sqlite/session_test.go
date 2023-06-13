@@ -23,6 +23,7 @@ func Test_ChangesetApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer ses.Delete()
 
 	// insert a row
 	err = db.Execute("INSERT INTO users (id, name, age) VALUES ($id, $name, $age)", map[string]interface{}{
@@ -87,6 +88,7 @@ func Test_ChangesetIgnoresIntermediateOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer ses.Delete()
 
 	// insert some rows
 	err = insertUsers(db, []*user{
@@ -132,6 +134,7 @@ func Test_ChangesetIgnoresIntermediateOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer cs.Close()
 
 	// changeset should have two inserts containing John and Jill
 	counter := 0
