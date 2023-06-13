@@ -6,13 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kwilteam/kuneiform/kfparser"
+
+	"github.com/kwilteam/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 	"io"
 	"os"
 	"strings"
@@ -68,17 +69,17 @@ func deployCmd() *cobra.Command {
 }
 
 func unmarshalKf(file *os.File) (*schema.Schema, error) {
-	bts, err := parseComments(file)
+	source, err := io.ReadAll(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse comments: %w", err)
+		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
 	}
 
-	ast, err := parser.Parse(bts)
+	astSchema, err := kfparser.Parse(string(source))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}
 
-	return ast.Schema(), nil
+	return astSchema, nil
 }
 
 func unmarshalJson(file *os.File) (*schema.Schema, error) {

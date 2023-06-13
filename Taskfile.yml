@@ -55,16 +55,19 @@ tasks:
   build:antlr:
     desc: Generate antlr parser code
     cmds:
-      - rm -rf pkg/sql_parser/sql_grammar/*.go
-      - rm -rf pkg/sql_parser/sql_grammar/*.tokens
-      - rm -rf pkg/sql_parser/sql_grammar/*.interp
-      - cd ./pkg/sql_parser/sql_grammar && ./generate.sh
+      - rm -rf ./pkg/{kfgrammar,sqlgrammar}/go.mod       #need for replacing submodule package
+      - rm -rf ./pkg/{kfgrammar,sqlgrammar}/*.go
+      - rm -rf ./pkg/{kfgrammar,sqlgrammar}/*.tokens
+      - rm -rf ./pkg/{kfgrammar,sqlgrammar}/*.interp
+      - cd ./pkg/kfgrammar && go mod init kfgrammar && ./generate.sh
+      - cd ./pkg/sqlgrammar && go mod init sqlgrammar && ./generate.sh
     sources:
-      - pkg/sql_parser/sql_grammar/*.g4
+      - ./pkg/{kfgrammar,sqlgrammar}/*.g4
     generates:
-      - pkg/sql_parser/sql_grammar/*.go
-      - pkg/sql_parser/sql_grammar/*.tokens
-      - pkg/sql_parser/sql_grammar/*.interp
+      - ./pkg/{kfgrammar,sqlgrammar}/*.go
+      - ./pkg/{kfgrammar,sqlgrammar}/*.tokens
+      - ./pkg/{kfgrammar,sqlgrammar}/*.interp
+      - ./pkg/{kfgrammar,sqlgrammar}/go.mod
 
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs
@@ -73,10 +76,10 @@ tasks:
       - abigen --abi ./pkg/chain/contracts/escrow/evm/abi/escrow.json --bin ./pkg/chain/contracts/escrow/evm/abi/escrow.bin --pkg abi --type Escrow --out ./pkg/chain/contracts/escrow/evm/abi/escrow.go
       - abigen --abi ./pkg/chain/contracts/token/evm/abi/erc20.json --bin ./pkg/chain/contracts/token/evm/abi/erc20.bin --pkg abi --type Erc20 --out ./pkg/chain/contracts/token/evm/abi/erc20.go
     sources:
-      - pkg/chain/contracts/*/evm/abi/*.json
-      - pkg/chain/contracts/*/evm/abi/*.bin
+      - ./pkg/chain/contracts/*/evm/abi/*.json
+      - ./pkg/chain/contracts/*/evm/abi/*.bin
     generates:
-      - pkg/chain/contracts/*/evm/abi/*.go
+      - ./pkg/chain/contracts/*/evm/abi/*.go
 
   # ************ docker ************
   build:docker:

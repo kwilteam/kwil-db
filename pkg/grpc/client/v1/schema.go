@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 
+	"github.com/kwilteam/kuneiform/schema"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
 )
 
 func (c *Client) GetSchema(ctx context.Context, dbid string) (*schema.Schema, error) {

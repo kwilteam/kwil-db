@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/tonistiigi/go-rosetta"
 	"os"
 
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
+	"github.com/kwilteam/kuneiform/schema"
 
 	//"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
 	"math/big"
@@ -25,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
-	"github.com/tonistiigi/go-rosetta"
 )
 
 // KeepMiningBlocks is a helper function to keep mining blocks

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
+	"github.com/kwilteam/kuneiform/schema"
 
 	"github.com/stretchr/testify/assert"
 )
