@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/cometbft/cometbft/crypto"
-	cmtjson "github.com/cometbft/cometbft/libs/json"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -28,19 +26,8 @@ func joinCmd() *cobra.Command {
 				return err
 			}
 			fmt.Println("Power:", power, "Pubkey:", args[0])
-
-			key := fmt.Sprintf(`{"type":"tendermint/PubKeyEd25519","value":"%s"}`, args[0])
-			fmt.Println("Key:", key)
-
-			var publicKey crypto.PubKey
-			err = cmtjson.Unmarshal([]byte(key), &publicKey)
-			if err != nil {
-				return fmt.Errorf("failed to unmarshal private validator pubkey: %w", err)
-			}
-			fmt.Println("publicKey: ", publicKey)
 			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
-
-				receipt, err := client.ValidatorJoin(ctx, publicKey.Bytes(), power)
+				receipt, err := client.ValidatorJoin(ctx, []byte(args[0]), power)
 				if err != nil {
 					return err
 				}
