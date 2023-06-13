@@ -288,6 +288,7 @@ func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.Resp
 		app.server.Log.Error("ABCI validator join: failed to unmarshal validator join ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("join_validator", err, "", ""))}
 	}
+
 	fmt.Println("ValidatorJoin Validator:", validator.PubKey, validator)
 
 	pubKey, err := txsvc.UnmarshalValidatorPublicKey(string(validator.PubKey))
@@ -303,6 +304,7 @@ func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.Resp
 
 	valUpdates := abcitypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
 	app.ValUpdates = append(app.ValUpdates, valUpdates)
+
 	pubkey, err := cryptoenc.PubKeyFromProto(valUpdates.PubKey)
 	if err != nil {
 		app.server.Log.Error("ABCI validator join: failed to get pubkey from proto ", zap.String("error", err.Error()))

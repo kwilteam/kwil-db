@@ -27,7 +27,6 @@ func joinCmd() *cobra.Command {
 			}
 			fmt.Println("Power:", power, "Pubkey:", args[0])
 			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
-
 				receipt, err := client.ValidatorJoin(ctx, []byte(args[0]), power)
 				if err != nil {
 					return err

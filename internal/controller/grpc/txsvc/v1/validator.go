@@ -7,6 +7,7 @@ import (
 
 	"github.com/cometbft/cometbft/crypto"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
+
 	localClient "github.com/cometbft/cometbft/rpc/client/local"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/entity"
