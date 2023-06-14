@@ -1,9 +1,3 @@
 [submodule "proto"]
 	path = proto
 	url = https://github.com/kwilteam/proto
-[submodule "kuneiform-grammar"]
-	path = pkg/kfgrammar
-	url = https://github.com/kwilteam/kuneiform-grammar
-[submodule "sql-grammar"]
-	path = pkg/sqlgrammar
-	url = https://github.com/kwilteam/sql-grammar

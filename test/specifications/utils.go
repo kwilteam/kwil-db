@@ -43,7 +43,7 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, _ := kfparser.Parse(string(d))
+	db, err := kfparser.Parse(string(d))
 	if db == nil {
 		t.Fatal("cannot parse database schema", err)
 	}

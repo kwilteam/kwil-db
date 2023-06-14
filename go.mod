@@ -16,7 +16,7 @@ require (
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
-	github.com/kwilteam/kuneiform v0.1.1-0.20230614215716-80ed919c1b66
+	github.com/kwilteam/kuneiform v0.1.1-0.20230614231919-76fa63bf584c
 	github.com/kwilteam/sql-grammar-go v0.0.0
 	github.com/manifoldco/promptui v0.9.0
 	github.com/pkg/errors v0.9.1

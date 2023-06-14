@@ -14,6 +14,12 @@ tasks:
     cmds:
       - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
 
+  vendor:
+    desc: Generate vendor
+    cmds:
+      - rm -rf ./vendor
+      - go mod vendor
+
   git:init:
     desc: Initialize git submodules
     cmds:
@@ -38,7 +44,7 @@ tasks:
 
   build:cli:
     desc: Build kwil-cli
-    deps: [pb:compile:v1, build:antlr]
+    deps: [pb:compile:v1]
     cmds:
       - ./scripts/build/binary kwil-cli
     generates:
@@ -46,28 +52,11 @@ tasks:
 
   build:kwild:
     desc: Builds kwild server
-    deps: [pb:compile:v1, build:antlr]
+    deps: [pb:compile:v1]
     cmds:
       - ./scripts/build/binary kwild
     generates:
       - .build/kwild
-
-  build:antlr:
-    desc: Generate antlr parser code
-    cmds:
-      - rm -rf ./pkg/{kfgrammar,sqlgrammar}/go.mod       #need for replacing submodule package
-      - rm -rf ./pkg/{kfgrammar,sqlgrammar}/*.go
-      - rm -rf ./pkg/{kfgrammar,sqlgrammar}/*.tokens
-      - rm -rf ./pkg/{kfgrammar,sqlgrammar}/*.interp
-      - cd ./pkg/kfgrammar && go mod init kfgrammar && ./generate.sh
-      - cd ./pkg/sqlgrammar && go mod init sqlgrammar && ./generate.sh
-    sources:
-      - ./pkg/{kfgrammar,sqlgrammar}/*.g4
-    generates:
-      - ./pkg/{kfgrammar,sqlgrammar}/*.go
-      - ./pkg/{kfgrammar,sqlgrammar}/*.tokens
-      - ./pkg/{kfgrammar,sqlgrammar}/*.interp
-      - ./pkg/{kfgrammar,sqlgrammar}/go.mod
 
   build:abi:
     desc: Builds Golang bindings for EVM contract ABIs
@@ -84,7 +73,7 @@ tasks:
   # ************ docker ************
   build:docker:
     desc: Build the docker image for the kwild
-    deps: [ pb:compile:v1, build:antlr ]
+    deps: [ pb:compile:v1, vendor]
     cmds:
       # pass any args to build debug image, e.g. task docker:kwild -- debug
       - ./scripts/build/docker kwild  {{.VARIANT}}
@@ -107,5 +96,6 @@ tasks:
 
   test:unit:
     desc: Run unit tests
+    deps: [ vendor ]
     cmds:
       - go test `go list ./... | grep -v /kwil-db\/test/` -count=1
