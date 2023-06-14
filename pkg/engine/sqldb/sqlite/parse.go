@@ -1,6 +1,6 @@
 package sqlite
 
-import "github.com/kwilteam/kuneiform/sqlparser"
+import "github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
 
 // TODO: import parsefunc here once Gavin has implemented it
 

@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/alexliesenfeld/health v0.6.0
+	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9
 	github.com/cstockton/go-conv v1.0.0
 	github.com/docker/go-connections v0.4.0
 	github.com/ethereum/go-ethereum v1.10.21
@@ -15,7 +16,8 @@ require (
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
-	github.com/kwilteam/kuneiform v0.1.1-0.20230613190442-ab8f799749db
+	github.com/kwilteam/kuneiform v0.0.0-00010101000000-000000000000
+	github.com/kwilteam/sql-grammar-go v0.0.0-20230614214308-49b3d70d9050
 	github.com/manifoldco/promptui v0.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.7.0
@@ -36,7 +38,6 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/StackExchange/wmi v0.0.0-20210224194228-fe8f1750fd46 // indirect
-	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.0 // indirect
@@ -66,8 +67,7 @@ require (
 	github.com/jackc/pgproto3/v2 v2.3.1 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
-	github.com/kwilteam/kuneiform/kfgrammar v0.0.0-00010101000000-000000000000 // indirect
-	github.com/kwilteam/kuneiform/sqlgrammar v0.0.0-00010101000000-000000000000 // indirect
+	github.com/kwilteam/kuneiform-grammar-go v0.0.0-20230614214351-51787a07d322 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.18 // indirect
@@ -118,7 +118,4 @@ replace (
 	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20221013203545-33ab36d6b304+incompatible // 22.06 branch
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	github.com/keybase/go-keychain => github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4
-
-	github.com/kwilteam/kuneiform/kfgrammar => ./pkg/kfgrammar
-	github.com/kwilteam/kuneiform/sqlgrammar => ./pkg/sqlgrammar
 )
