@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/tx/v1/account.proto",
+    "title": "kwil/node/v1/node.proto",
     "version": "version not set"
   },
   "tags": [

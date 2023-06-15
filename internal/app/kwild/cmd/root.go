@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
+	valNode "github.com/kwilteam/kwil-db/internal/node"
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -43,7 +44,6 @@ import (
 	chainClient "github.com/kwilteam/kwil-db/pkg/chain/client"
 	ccService "github.com/kwilteam/kwil-db/pkg/chain/client/service" // shorthand for chain client service
 	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
-	kwilcfg "github.com/kwilteam/kwil-db/pkg/config"
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
@@ -87,11 +87,12 @@ var startCmd = &cobra.Command{
 
 		fmt.Printf("Starting Tendermint node\n")
 		// Start the Tendermint node
-		cometNode, err := newCometNode(app)
+		cometNode, err := newCometNode(app, txSvc)
 		if err != nil {
 			return nil
 		}
 		txSvc.BcNode = cometNode
+		txSvc.NodeReactor.GetPool().BcNode = cometNode
 
 		go func() {
 			cometNode.Start()
@@ -108,7 +109,11 @@ var startCmd = &cobra.Command{
 
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
+		fmt.Println("Waiting for any signals - End of main")
+		txSvc.NodeReactor.Wg.Add(1)
+		go txSvc.NodeReactor.JoinRequestRoutine()
 		<-c
+		txSvc.NodeReactor.Wg.Wait()
 		return nil
 	}}
 
@@ -182,10 +187,6 @@ func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
 	fmt.Printf("Registering grpc services\n")
 
-	val_file_path := "/tmp/.kwil/validators.txt"
-	txSvc.Validators = kwilcfg.NewApprovedValidators(val_file_path)
-	txSvc.Validators.LoadOrCreateFile(val_file_path)
-
 	server := &server.Server{
 		Cfg:         cfg,
 		Log:         logger,
@@ -196,7 +197,7 @@ func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger
 	return server, txSvc, nil
 }
 
-func newCometNode(app abci.Application) (*nm.Node, error) {
+func newCometNode(app abci.Application, txSvc *txsvc.Service) (*nm.Node, error) {
 	config := ccfg.DefaultConfig()
 	CometHomeDir := os.Getenv("COMET_BFT_HOME")
 	fmt.Printf("Home Directory: %v", CometHomeDir)
@@ -229,6 +230,13 @@ func newCometNode(app abci.Application) (*nm.Node, error) {
 		return nil, fmt.Errorf("failed to parse log level: %v", err)
 	}
 
+	val_file_path := "/tmp/.kwil/validators.txt"
+	validators := valNode.NewApprovedValidators(val_file_path)
+	validators.LoadOrCreateFile(val_file_path)
+
+	nodeReactor := valNode.NewReactor(validators)
+	txSvc.NodeReactor = nodeReactor
+
 	node, err := nm.NewNode(
 		config,
 		pv,
@@ -237,7 +245,8 @@ func newCometNode(app abci.Application) (*nm.Node, error) {
 		nm.DefaultGenesisDocProviderFunc(config),
 		nm.DefaultDBProvider,
 		nm.DefaultMetricsProvider(config.Instrumentation),
-		logger)
+		logger,
+		nm.CustomReactors(map[string]p2p.Reactor{"NODE": nodeReactor}))
 
 	if err != nil {
 		return nil, fmt.Errorf("creating node: %v", err)

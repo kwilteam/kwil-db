@@ -1,4 +1,4 @@
-package config
+package node
 
 import (
 	"bytes"
@@ -10,14 +10,14 @@ import (
 )
 
 type ApprovedValidators struct {
-	Validators map[string]bool
+	Validators map[string]bool // TODO: better to store address to pubKey mapping?
 	filePath   string
 	mu         sync.RWMutex
 }
 
 func NewApprovedValidators(filePath string) *ApprovedValidators {
 	return &ApprovedValidators{
-		Validators: make(map[string]bool),
+		Validators: make(map[string]bool), // Key: 32-bit address of the Validator's public key
 		filePath:   filePath,
 		mu:         sync.RWMutex{},
 	}
