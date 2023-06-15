@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 )
 
@@ -49,13 +50,33 @@ func attributeToSQLiteString(colName string, attr *dto.Attribute) (string, error
 	case dto.UNIQUE:
 		return "UNIQUE", nil
 	case dto.MIN:
-		return "CHECK (" + colName + " >= " + formattedVal + ")", nil
+		intVal, err := conv.Int(attr.Value)
+		if err != nil {
+			return "", err
+		}
+
+		return "CHECK (" + colName + " >= " + fmt.Sprint(intVal) + ")", nil
 	case dto.MAX:
-		return "CHECK (" + colName + " <= " + formattedVal + ")", nil
+		intVal, err := conv.Int(attr.Value)
+		if err != nil {
+			return "", err
+		}
+
+		return "CHECK (" + colName + " <= " + fmt.Sprint(intVal) + ")", nil
 	case dto.MIN_LENGTH:
-		return "CHECK (LENGTH(" + colName + ") >= " + formattedVal + ")", nil
+		intVal, err := conv.Int(attr.Value)
+		if err != nil {
+			return "", err
+		}
+
+		return "CHECK (LENGTH(" + colName + ") >= " + fmt.Sprint(intVal) + ")", nil
 	case dto.MAX_LENGTH:
-		return "CHECK (LENGTH(" + colName + ") <= " + formattedVal + ")", nil
+		intVal, err := conv.Int(attr.Value)
+		if err != nil {
+			return "", err
+		}
+
+		return "CHECK (LENGTH(" + colName + ") <= " + fmt.Sprint(intVal) + ")", nil
 	default:
 		return "", nil
 	}
