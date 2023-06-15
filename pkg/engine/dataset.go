@@ -19,12 +19,6 @@ type Dataset interface {
 	// ListTables returns a list of all tables in the database.
 	ListTables() []*dto.Table
 
-	// CreateTable creates a new table.
-	CreateTable(ctx context.Context, table *dto.Table) error
-
-	// CreateAction creates a new action.
-	CreateAction(ctx context.Context, action *dto.Action) error
-
 	// Execute executes an action and returns the result.
 	Execute(txCtx *dto.TxContext, inputs []map[string]any) (dto.Result, error)
 

@@ -106,6 +106,21 @@ func (s *SqliteStore) StoreAction(ctx context.Context, action *dto.Action) error
 	return sp.Commit()
 }
 
+func (s *SqliteStore) StoreExtension(ctx context.Context, ext *dto.ExtensionInitialization) error {
+	sp, err := s.conn.Savepoint()
+	if err != nil {
+		return err
+	}
+	defer sp.Rollback()
+
+	err = s.storeExtension(ctx, ext)
+	if err != nil {
+		return err
+	}
+
+	return sp.Commit()
+}
+
 func (s *SqliteStore) getMetadata(ctx context.Context, metaType serialize.TypeIdentifier) ([]*serialize.Serializable, error) {
 	res := make([]*serialize.Serializable, 0)
 
@@ -172,6 +187,25 @@ func (s *SqliteStore) ListActions(ctx context.Context) ([]*dto.Action, error) {
 	return actions, nil
 }
 
+func (s *SqliteStore) GetExtensions(ctx context.Context) ([]*dto.ExtensionInitialization, error) {
+	sers, err := s.getMetadata(ctx, serialize.IdentifierExtension)
+	if err != nil {
+		return nil, err
+	}
+
+	var extensions []*dto.ExtensionInitialization
+	for _, ser := range sers {
+		ext, err := ser.Extension()
+		if err != nil {
+			return nil, err
+		}
+
+		extensions = append(extensions, ext)
+	}
+
+	return extensions, nil
+}
+
 func (s *SqliteStore) storeTable(ctx context.Context, table *dto.Table) error {
 	ser, err := serialize.SerializeTable(table)
 	if err != nil {
@@ -183,6 +217,15 @@ func (s *SqliteStore) storeTable(ctx context.Context, table *dto.Table) error {
 
 func (s *SqliteStore) storeAction(ctx context.Context, action *dto.Action) error {
 	ser, err := serialize.SerializeAction(action)
+	if err != nil {
+		return err
+	}
+
+	return s.storeMetadata(ctx, ser)
+}
+
+func (s *SqliteStore) storeExtension(ctx context.Context, ext *dto.ExtensionInitialization) error {
+	ser, err := serialize.SerializeExtension(ext)
 	if err != nil {
 		return err
 	}

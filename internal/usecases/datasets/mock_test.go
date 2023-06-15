@@ -64,15 +64,18 @@ func (m *mockEngine) ListDatasets(ctx context.Context, owner string) ([]string, 
 	return m.ownedDatasets[owner], nil
 }
 
-func (m *mockEngine) NewDataset(ctx context.Context, dsCtx *dto.DatasetContext) (engine.Dataset, error) {
-	mockDs := &mockDataset{}
+func (m *mockEngine) NewDataset(ctx context.Context, opts ...engine.CreateDatasetOpt) (engine.Dataset, error) {
+	mockDs := &mockDataset{
+		name:  "mock",
+		owner: "mock",
+	}
 
-	id := makeDbid(dsCtx.Name, dsCtx.Owner)
+	id := makeDbid(mockDs.name, mockDs.owner)
 
 	m.datasets[id] = mockDs
-	m.ownedDatasets[dsCtx.Owner] = append(m.ownedDatasets[dsCtx.Owner], id)
+	m.ownedDatasets[mockDs.owner] = append(m.ownedDatasets[mockDs.owner], id)
 
-	return newMockDataset(dsCtx.Owner, dsCtx.Name), nil
+	return newMockDataset(mockDs.owner, mockDs.name), nil
 }
 
 func makeDbid(name, owner string) string {

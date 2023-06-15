@@ -14,47 +14,100 @@ import (
 // A database is a single deployed instance of kwil-db.
 // It contains a SQLite file
 type Dataset struct {
-	mu      sync.RWMutex
-	Ctx     *dto.DatasetContext
-	db      sqldb.DB
-	actions map[string]*preparedAction
-	tables  map[string]*dto.Table
+	mu                    sync.RWMutex
+	name                  string
+	owner                 string
+	db                    sqldb.DB
+	actions               map[string]*preparedAction
+	tables                map[string]*dto.Table
+	extensions            map[string]InitializedExtension
+	extensionInitializers map[string]Initializer
 }
 
-// NewDataset creates a new dataset.
-func NewDataset(ctx context.Context, dsCtx *dto.DatasetContext, db sqldb.DB) (*Dataset, error) {
+func OpenDataset(ctx context.Context, db sqldb.DB, opts ...OpenOpt) (*Dataset, error) {
 	ds := &Dataset{
-		mu:      sync.RWMutex{},
-		Ctx:     dsCtx,
-		db:      db,
-		actions: make(map[string]*preparedAction),
-		tables:  make(map[string]*dto.Table),
+		mu:                    sync.RWMutex{},
+		db:                    db,
+		actions:               make(map[string]*preparedAction),
+		tables:                make(map[string]*dto.Table),
+		extensions:            make(map[string]InitializedExtension),
+		extensionInitializers: make(map[string]Initializer),
 	}
 
-	tables, err := db.ListTables(ctx)
+	for _, opt := range opts {
+		opt(ds)
+	}
+
+	err := ds.loadTables(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list tables: %w", err)
+		return nil, fmt.Errorf("failed to load tables: %w", err)
 	}
 
-	for _, table := range tables {
-		ds.tables[strings.ToLower(table.Name)] = table
-	}
-
-	actions, err := db.ListActions(ctx)
+	err = ds.loadActions(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list actions: %w", err)
+		return nil, fmt.Errorf("failed to load actions: %w", err)
 	}
 
-	for _, action := range actions {
-		prepAction, err := ds.prepareAction(action)
-		if err != nil {
-			return nil, fmt.Errorf("failed to prepare action: %w", err)
-		}
-
-		ds.actions[strings.ToLower(action.Name)] = prepAction
+	err = ds.loadExtensions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load extensions: %w", err)
 	}
 
 	return ds, nil
+}
+
+func (d *Dataset) loadTables(ctx context.Context) error {
+	tables, err := d.db.ListTables(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list tables: %w", err)
+	}
+
+	for _, table := range tables {
+		d.tables[strings.ToLower(table.Name)] = table
+	}
+
+	return nil
+}
+
+func (d *Dataset) loadActions(ctx context.Context) error {
+	actions, err := d.db.ListActions(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list actions: %w", err)
+	}
+
+	for _, action := range actions {
+		prepAction, err := d.prepareAction(action)
+		if err != nil {
+			return fmt.Errorf("failed to prepare action: %w", err)
+		}
+
+		d.actions[strings.ToLower(action.Name)] = prepAction
+	}
+
+	return nil
+}
+
+func (d *Dataset) loadExtensions(ctx context.Context) error {
+	exts, err := d.db.GetExtensions(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get extensions: %w", err)
+	}
+
+	for _, ext := range exts {
+		initializer, ok := d.extensionInitializers[ext.Name]
+		if !ok {
+			return fmt.Errorf("schema requires extension %s, but it is not registered on this node", ext.Name)
+		}
+
+		initializedExt, err := initializer.Initialize(ctx, ext.Metadata)
+		if err != nil {
+			return fmt.Errorf("failed to initialize extension %s: %w", ext.Name, err)
+		}
+
+		d.extensions[ext.Name] = initializedExt
+	}
+
+	return nil
 }
 
 // CreateAction creates a new action and prepares it for use.
@@ -178,7 +231,7 @@ func (d *Dataset) Close() error {
 
 // Id returns the id of the dataset.
 func (d *Dataset) Id() string {
-	return utils.GenerateDBID(d.Ctx.Name, d.Ctx.Owner)
+	return utils.GenerateDBID(d.name, d.owner)
 }
 
 // Execute executes an action.
@@ -209,7 +262,7 @@ func (d *Dataset) Delete(txCtx *dto.TxContext) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if txCtx.Caller != d.Ctx.Owner {
+	if txCtx.Caller != d.owner {
 		return fmt.Errorf("caller does not have permission to delete dataset")
 	}
 
@@ -234,10 +287,10 @@ func (d *Dataset) Query(ctx context.Context, stmt string, args map[string]any) (
 
 // Owner returns the owner of the dataset.
 func (d *Dataset) Owner() string {
-	return d.Ctx.Owner
+	return d.owner
 }
 
 // Name returns the name of the dataset.
 func (d *Dataset) Name() string {
-	return d.Ctx.Name
+	return d.name
 }

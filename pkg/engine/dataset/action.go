@@ -99,7 +99,7 @@ func (a *preparedAction) checkAccessControl(opts *dto.TxContext) error {
 		return fmt.Errorf("failed to execute private action '%s': caller not provided", a.Name)
 	}
 
-	if opts.Caller != a.dataset.Ctx.Owner {
+	if opts.Caller != a.dataset.owner {
 		return fmt.Errorf("failed to execute private action '%s': caller is not the owner", a.Name)
 	}
 

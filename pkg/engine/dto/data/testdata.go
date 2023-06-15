@@ -45,4 +45,11 @@ var (
 		Statements: []string{"INSERT INTO users (id, name, age) VALUES ($id, $name, $age);"},
 		Public:     true,
 	}
+
+	ExtensionTest = &dto.ExtensionInitialization{
+		Name: "test",
+		Metadata: map[string]string{
+			"foo": "bar",
+		},
+	}
 )

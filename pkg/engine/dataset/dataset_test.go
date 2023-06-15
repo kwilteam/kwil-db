@@ -15,10 +15,10 @@ import (
 func Test_Dataset(t *testing.T) {
 	ctx := context.Background()
 
-	ds, err := dataset.NewDataset(ctx, &dto.DatasetContext{
-		Name:  "testName",
-		Owner: "testOwner",
-	}, newMockDB())
+	ds, err := dataset.OpenDataset(ctx, newMockDB(),
+		dataset.WithName("testName"),
+		dataset.WithOwner("testOwner"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,10 +70,10 @@ func Test_Dataset(t *testing.T) {
 func Test_Execution(t *testing.T) {
 	ctx := context.Background()
 
-	ds, err := dataset.NewDataset(ctx, &dto.DatasetContext{
-		Name:  "testName",
-		Owner: "testOwner",
-	}, newMockDB())
+	ds, err := dataset.OpenDataset(ctx, newMockDB(),
+		dataset.WithName("testName"),
+		dataset.WithOwner("testOwner"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
