@@ -24,7 +24,7 @@ type JoinRequestPool struct {
 	RequestCh     chan JoinRequest // Sends requests to the channel, to be consumed by the reactor
 	ApprovedVals  *ApprovedValidators
 	join_requests map[string]*JoinRequestStatus
-	bcNode        *cmtNode.Node
+	BcNode        *cmtNode.Node
 }
 
 type JoinRequest struct {
@@ -60,6 +60,7 @@ func NewJoinRequestPool(approvedVals *ApprovedValidators, reqCh chan JoinRequest
 
 func (pool *JoinRequestPool) AddRequest(request JoinRequest) {
 	address := request.PubKey.Address().String()
+	fmt.Println("Received join request from: ", address)
 	validators, _ := core.Validators(&types.Context{}, nil, nil, nil)
 	fmt.Println("Received Validators info: ", validators)
 
@@ -96,7 +97,7 @@ func (pool *JoinRequestPool) AddRequest(request JoinRequest) {
 		pool.join_requests[address].required_votes -= 1
 		pool.join_requests[address].approved_validators = append(pool.join_requests[address].approved_validators, address)
 	}
-
+	fmt.Println(pool.join_requests[address].approved_votes, pool.join_requests[address].required_votes, pool.join_requests[address].approved_validators, pool.join_requests[address].rejected_validators)
 	pool.RequestCh <- request
 	fmt.Println("Added request to requestCh")
 }
@@ -104,7 +105,9 @@ func (pool *JoinRequestPool) AddRequest(request JoinRequest) {
 // Update the status of the request
 // Not sure what peer info is available to us
 func (pool *JoinRequestPool) AddVote(address string, peerID string, vote bool) Status {
+	fmt.Println("Add vote", pool.join_requests)
 	status := pool.join_requests[address]
+	fmt.Println(status, "address", address)
 	ready_status := Pending
 	status.mu.Lock()
 	if vote {
@@ -115,7 +118,7 @@ func (pool *JoinRequestPool) AddVote(address string, peerID string, vote bool) S
 		status.rejected_votes += 1
 		status.rejected_validators = append(status.rejected_validators, peerID)
 	}
-	ready := status.required_votes == 0
+	ready := status.required_votes < 0
 	if ready {
 		status.status = int64(Approved)
 		ready_status = Approved
@@ -123,6 +126,7 @@ func (pool *JoinRequestPool) AddVote(address string, peerID string, vote bool) S
 		status.status = int64(Rejected)
 		ready_status = Rejected
 	}
+	fmt.Println("Votes: ", status.approved_votes, status.required_votes, status.approved_validators, status.rejected_validators)
 	status.mu.Unlock()
 
 	return ready_status

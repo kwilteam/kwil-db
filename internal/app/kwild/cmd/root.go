@@ -87,6 +87,7 @@ var RootCmd = &cobra.Command{
 			return nil
 		}
 		txSvc.BcNode = cometNode
+		txSvc.NodeReactor.GetPool().BcNode = cometNode
 
 		go func() {
 			cometNode.Start()

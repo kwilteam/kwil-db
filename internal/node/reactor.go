@@ -9,7 +9,7 @@ import (
 	"github.com/cometbft/cometbft/libs/log"
 	"github.com/cometbft/cometbft/p2p"
 	localClient "github.com/cometbft/cometbft/rpc/client/local"
-	nodepb "github.com/kwilteam/kwil-db/api/protobuf/node/v1"
+	// nodepb "github.com/kwilteam/kwil-db/api/protobuf/node/v1"
 )
 
 const (
@@ -63,7 +63,8 @@ func (r *Reactor) GetChannels() []*p2p.ChannelDescriptor {
 			SendQueueCapacity:   1000,
 			RecvBufferCapacity:  50 * 4096,
 			RecvMessageCapacity: 104857605,
-			MessageType:         &nodepb.Message{},
+			// MessageType:         &nodepb.Message{},
+			MessageType: &Message{},
 		},
 	}
 }
@@ -88,9 +89,9 @@ func (r *Reactor) ReceiveEnvelope(e p2p.Envelope) {
 	}
 	// TODO:
 	/* TODO: Check that the message is received from the current validator set, else ignore the request and maybe block the peer?*/
-	fmt.Println("Node Reactor Receive msg: ", "e.Src", e.Src, "chID", e.ChannelID, "msg", e.Message)
+	fmt.Println("Node Reactor Receive msg: ", "e.Src", e.Src, "chID", e.ChannelID, "msg", e.Message, "type", reflect.TypeOf(e.Message))
 	switch msg := e.Message.(type) {
-	case *nodepb.ValidatorJoinRequestVote:
+	case *ValidatorJoinRequestVote:
 		/*
 			Received request to vote to join a ndoe as a validator
 			1. Check if the node is in the approved list of a validator
@@ -101,12 +102,13 @@ func (r *Reactor) ReceiveEnvelope(e p2p.Envelope) {
 		vote := r.pool.ApprovedVals.IsValidator(address)
 		e.Src.SendEnvelope(p2p.Envelope{
 			ChannelID: NodeJoinChannel,
-			Message: &nodepb.ValidatorJoinResponseVote{
-				Accepted: vote,
+			Message: &ValidatorJoinResponseVote{
+				ValidatorAddress: msg.ValidatorAddress,
+				Accepted:         vote,
 			},
 		})
 
-	case *nodepb.ValidatorJoinResponseVote:
+	case *ValidatorJoinResponseVote:
 		/*
 			Received vote for the nodeJoinRequest of a validator
 			Count the votes and decide whether to admit the node as a validator or not
@@ -117,7 +119,7 @@ func (r *Reactor) ReceiveEnvelope(e p2p.Envelope) {
 			// Send a ValidatorJoin transaction to the ABCI Application
 			fmt.Println("Sending ValidatorJoin transaction to ABCI Application")
 			tx := r.txs[msg.ValidatorAddress]
-			bcClient := localClient.New(r.pool.bcNode)
+			bcClient := localClient.New(r.pool.BcNode)
 			res, err := bcClient.BroadcastTxAsync(context.Background(), tx)
 			if err != nil {
 				fmt.Println("Error broadcasting tx", "err", err, "address", msg.ValidatorAddress)
@@ -142,7 +144,7 @@ func (r *Reactor) JoinRequestRoutine() {
 			address := request.PubKey.Address().String()
 			r.Switch.BroadcastEnvelope(p2p.Envelope{
 				ChannelID: NodeJoinChannel,
-				Message: &nodepb.ValidatorJoinRequestVote{
+				Message: &ValidatorJoinRequestVote{
 					ValidatorAddress: address,
 				},
 			})
