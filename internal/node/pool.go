@@ -65,6 +65,7 @@ func NewJoinRequestPool(approvedVals *ApprovedValidators, nwApprovedVals *Approv
 func (pool *JoinRequestPool) AddRequest(request JoinRequest) {
 	address := request.PubKey.Address().String()
 	fmt.Println("Received join request from: ", address)
+	fmt.Println("Received join request from: ", address)
 	validators, _ := core.Validators(&types.Context{}, nil, nil, nil)
 	fmt.Println("Received Validators info: ", validators, " Count: ", validators.Count)
 	numValidators := validators.Count
