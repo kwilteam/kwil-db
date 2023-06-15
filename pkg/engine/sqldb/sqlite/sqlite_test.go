@@ -82,6 +82,11 @@ func Test_MetadataTracking(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = createTestExtension(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	actions, err := db.ListActions(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -99,6 +104,15 @@ func Test_MetadataTracking(t *testing.T) {
 	}
 
 	assert.Equal(t, data.TableUsers, tables[0])
+
+	exts, err := db.GetExtensions(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(exts) != 1 {
+		t.Fatalf("expected 1 extension, got %d", len(exts))
+	}
 
 }
 
@@ -142,6 +156,16 @@ func createTestAction(db dbi.DB) (dbi.Statement, error) {
 	}
 
 	return stmt, nil
+}
+
+func createTestExtension(db dbi.DB) error {
+	ctx := context.Background()
+	err := db.StoreExtension(ctx, data.ExtensionTest)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func insertTestUser(t *testing.T, stmt dbi.Statement, usr *user) {

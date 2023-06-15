@@ -47,18 +47,12 @@ func Test_Engine(t *testing.T) {
 
 // testing that a dataset is persisted and reloads properly
 func Test_DatasetPersistence(t *testing.T) {
-
 	master, err := openEngine(true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ds, err := openDataset(master)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = addUsersTable(ds)
 	if err != nil {
 		t.Error(err)
 	}
@@ -88,7 +82,7 @@ func Test_DatasetPersistence(t *testing.T) {
 func openEngine(wipe bool) (engine.Engine, error) {
 	ctx := context.Background()
 
-	opts := []engine.EngineOpt{engine.WithName("unittest")}
+	opts := []engine.EngineOpt{engine.WithFileName("unittest")}
 	if wipe {
 		opts = append(opts, engine.WithWipe())
 	}
@@ -106,19 +100,10 @@ func openEngine(wipe bool) (engine.Engine, error) {
 func openDataset(e engine.Engine) (engine.Dataset, error) {
 	ctx := context.Background()
 
-	ds, err := e.NewDataset(ctx, &dto.DatasetContext{
-		Name:  "testName",
-		Owner: "testOwner",
-	})
+	ds, err := e.NewDataset(ctx, engine.WithTables(data.TableUsers), engine.WithOwner("testOwner"), engine.WithName("testName"))
 	if err != nil {
 		return nil, err
 	}
 
 	return ds, nil
-}
-
-func addUsersTable(ds engine.Dataset) error {
-	ctx := context.Background()
-
-	return ds.CreateTable(ctx, data.TableUsers)
 }
