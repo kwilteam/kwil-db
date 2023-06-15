@@ -1,4 +1,0 @@
-syntax = "proto3";
-package extension;
-option go_package = "github.com/kwilteam/kwil-db/pkg/engine/extension;extension";
-

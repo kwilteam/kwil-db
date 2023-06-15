@@ -57,6 +57,14 @@ func (m *mockDb) StoreAction(ctx context.Context, action *dto.Action) error {
 	return nil
 }
 
+func (m *mockDb) StoreExtension(ctx context.Context, ext *dto.ExtensionInitialization) error {
+	return nil
+}
+
+func (m *mockDb) GetExtensions(ctx context.Context) ([]*dto.ExtensionInitialization, error) {
+	return nil, nil
+}
+
 type mockStatement struct {
 }
 

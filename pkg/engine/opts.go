@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"strings"
+
 	"github.com/kwilteam/kwil-db/pkg/engine/extensions"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
@@ -23,7 +25,7 @@ func WithLogger(l log.Logger) EngineOpt {
 	}
 }
 
-func WithName(name string) EngineOpt {
+func WithFileName(name string) EngineOpt {
 	return func(e *engine) {
 		e.name = name
 	}
@@ -35,11 +37,13 @@ func WithWipe() EngineOpt {
 	}
 }
 
-func WithExtension(ext *extensions.Extension) EngineOpt {
+func WithExtension(name, endpoint string, config map[string]string) EngineOpt {
 	return func(e *engine) {
-		err := e.extensions.Register(ext)
-		if err != nil {
-			panic(err)
+		lowerName := strings.ToLower(name)
+		if _, ok := e.extensions[lowerName]; ok {
+			panic("extension of same name already registered: " + name)
 		}
+
+		e.extensions[lowerName] = extensions.New(name, endpoint, config)
 	}
 }

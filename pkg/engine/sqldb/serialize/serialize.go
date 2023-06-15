@@ -11,8 +11,9 @@ type Serializable struct {
 }
 
 const (
-	tableVersion  = 1
-	actionVersion = 1
+	tableVersion     = 1
+	actionVersion    = 1
+	extensionVersion = 1
 )
 
 type serializer interface {
@@ -22,8 +23,9 @@ type serializer interface {
 type TypeIdentifier string
 
 const (
-	IdentifierTable  TypeIdentifier = "table"
-	IdentifierAction TypeIdentifier = "action"
+	IdentifierTable     TypeIdentifier = "table"
+	IdentifierAction    TypeIdentifier = "action"
+	IdentifierExtension TypeIdentifier = "extension"
 )
 
 func (t TypeIdentifier) String() string {

@@ -40,6 +40,12 @@ type DB interface {
 
 	// StoreAction persists a new action.
 	StoreAction(ctx context.Context, action *dto.Action) error
+
+	// StoreExtension persists a new extension.
+	StoreExtension(ctx context.Context, ext *dto.ExtensionInitialization) error
+
+	// GetExtensions returns a map of all extensions and their metadata.
+	GetExtensions(ctx context.Context) ([]*dto.ExtensionInitialization, error)
 }
 
 type Statement interface {
