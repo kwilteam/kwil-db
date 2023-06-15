@@ -73,8 +73,10 @@ tasks:
   # ************ docker ************
   build:docker:
     desc: Build the docker image for the kwild
-    deps: [ pb:compile:v1, vendor]
+    deps: [ pb:compile:v1]
     cmds:
+      # need to run after protobuf is compiled
+      - task: vendor
       # pass any args to build debug image, e.g. task docker:kwild -- debug
       - ./scripts/build/docker kwild  {{.VARIANT}}
 

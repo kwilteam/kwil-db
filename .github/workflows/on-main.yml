@@ -36,18 +36,22 @@ jobs:
           cache: true
 
       - name: Install dependencies
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
         run: |
           go version
-          go mod download
+          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           task install:deps
+          go mod download
 
       - name: Compile Protobuf
         run: |
           task pb:compile:v1
 
-      - name: Generate antlr code
+      - name: Generate go vendor
+        #for faster builds and private repos, need to run this after pb:compile:v1
         run: |
-          task build:antlr
+          task vendor
 
       - name: manual git tag
         run: |
