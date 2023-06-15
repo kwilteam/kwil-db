@@ -15,7 +15,8 @@ import (
 
 type Engine interface {
 	// NewDataset creates a new dataset.
-	NewDataset(ctx context.Context, dsCtx *dto.DatasetContext) (Dataset, error)
+	// TODO: this should probably be a builder, since many of the options are required.
+	NewDataset(ctx context.Context, opts ...CreateDatasetOpt) (Dataset, error)
 
 	// GetDatastore returns a datastore for the given dataset.
 	GetDataset(dbid string) (Dataset, error)
@@ -41,7 +42,7 @@ type engine struct {
 	log         log.Logger
 	datasets    map[string]internalDataset
 	wipeOnStart bool
-	extensions  *extensions.ExtensionRunner
+	extensions  map[string]*extensions.Extension
 }
 
 func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
@@ -50,7 +51,7 @@ func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
 		log:         log.NewNoOp(),
 		datasets:    make(map[string]internalDataset),
 		wipeOnStart: false,
-		extensions:  &extensions.ExtensionRunner{},
+		extensions:  map[string]*extensions.Extension{},
 	}
 
 	for _, opt := range opts {
@@ -72,7 +73,7 @@ func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
 		return nil, err
 	}
 
-	err = e.openExtensions(ctx)
+	err = e.connectExtensions(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -134,10 +135,12 @@ func (e *engine) openStoredDatasets(ctx context.Context) error {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
 
-		e.datasets[dbid], err = dataset.NewDataset(ctx, &dto.DatasetContext{
-			Name:  storedDataset.name,
-			Owner: storedDataset.owner,
-		}, db)
+		e.datasets[dbid], err = dataset.OpenDataset(ctx, db,
+			dataset.WithName(storedDataset.name),
+			dataset.WithOwner(storedDataset.owner),
+			dataset.WithExtensionInitializers(e.extensionInitializers()),
+		)
+
 		if err != nil {
 			return fmt.Errorf("failed to open dataset: %w", err)
 		}
@@ -146,8 +149,15 @@ func (e *engine) openStoredDatasets(ctx context.Context) error {
 	return nil
 }
 
-func (e *engine) openExtensions(ctx context.Context) error {
-	return e.extensions.Initialize(ctx, e.openDB)
+func (e *engine) connectExtensions(ctx context.Context) error {
+	for name, ext := range e.extensions {
+		err := ext.Connect(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to connect extension %s: %w", name, err)
+		}
+	}
+
+	return nil
 }
 
 func (e *engine) Close(closeAll bool) error {
@@ -161,42 +171,6 @@ func (e *engine) Close(closeAll bool) error {
 	}
 
 	return e.db.Close()
-}
-
-func (e *engine) NewDataset(ctx context.Context, dsCtx *dto.DatasetContext) (Dataset, error) {
-	dbid := utils.GenerateDBID(dsCtx.Name, dsCtx.Owner)
-
-	_, ok := e.datasets[dbid]
-	if ok {
-		return nil, fmt.Errorf("dataset %s already exists", dbid)
-	}
-
-	db, err := e.openDB(dbid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-
-	newDataset, err := dataset.NewDataset(ctx, dsCtx, db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open dataset: %w", err)
-	}
-
-	e.datasets[dbid] = newDataset
-
-	err = e.registerDataset(dsCtx.Name, dsCtx.Owner)
-	if err != nil {
-		e.log.Error("failed to register dataset", zap.Error(err))
-
-		delete(e.datasets, dbid)
-		err = db.Delete()
-		if err != nil {
-			e.log.Error("failed to delete dataset", zap.Error(err))
-		}
-
-		return nil, fmt.Errorf("failed to store dataset: %w", err)
-	}
-
-	return newDataset, nil
 }
 
 // GetDataset retrieves a dataset if it exists
@@ -256,4 +230,22 @@ func (d *engine) Delete(deleteAll bool) error {
 
 func (e *engine) ListDatasets(ctx context.Context, owner string) ([]string, error) {
 	return e.listDatasetsByOwner(ctx, owner)
+}
+
+// function that implements dataset.Initializer
+type extenstionInitializer func(ctx context.Context, metadata map[string]string) (*extensions.Instance, error)
+
+// method for implementing dataset.Initializer
+func (f extenstionInitializer) Initialize(ctx context.Context, metadata map[string]string) (dataset.InitializedExtension, error) {
+	return f(ctx, metadata)
+}
+
+func (e *engine) extensionInitializers() map[string]dataset.Initializer {
+	initializers := make(map[string]dataset.Initializer)
+
+	for name, ext := range e.extensions {
+		initializers[name] = extenstionInitializer(ext.CreateInstance)
+	}
+
+	return initializers
 }

@@ -36,66 +36,29 @@ func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDa
 }
 
 func (u *DatasetUseCase) deployDataset(ctx context.Context, deployment *entity.DeployDatabase) error {
-	dataset, err := u.engine.NewDataset(ctx, &dto.DatasetContext{
-		Name:  deployment.Schema.Name,
-		Owner: deployment.Tx.Sender,
-	})
+	tables, err := convertTablesToDto(deployment.Schema.Tables)
 	if err != nil {
 		return err
 	}
 
-	err = u.deploySchema(ctx, dataset, deployment.Schema)
+	actions, err := convertActionsToDto(deployment.Schema.Actions)
 	if err != nil {
-		err2 := u.engine.DeleteDataset(ctx, &dto.TxContext{
-			Caller: deployment.Tx.Sender,
-		}, dataset.Id())
+		return err
+	}
 
-		if err2 != nil {
-			u.log.Error("failed to delete dataset after failed schema deployment", zap.Error(err2))
-			err = errors.Wrap(err, err2.Error())
-		}
-
+	dataset, err := u.engine.NewDataset(ctx,
+		engine.WithTables(tables...),
+		engine.WithActions(actions...),
+		engine.WithOwner(deployment.Tx.Sender),
+		engine.WithName(deployment.Schema.Name),
+	)
+	if err != nil {
 		return err
 	}
 
 	u.log.Info("database deployed", zap.String("dbid", dataset.Id()), zap.String("deployer address", deployment.Tx.Sender))
 
 	return nil
-}
-
-// deploySchema applies the schema to the database
-func (u *DatasetUseCase) deploySchema(ctx context.Context, dataset engine.Dataset, schema *entity.Schema) error {
-	convertedTables, err := convertTablesToDto(schema.Tables)
-	if err != nil {
-		return err
-	}
-
-	sp, err := dataset.Savepoint()
-	if err != nil {
-		return err
-	}
-	defer sp.Rollback()
-
-	for _, table := range convertedTables {
-		err := dataset.CreateTable(ctx, table)
-		if err != nil {
-			return err
-		}
-	}
-
-	convertedActions, err := convertActionsToDto(schema.Actions)
-	if err != nil {
-		return err
-	}
-
-	for _, action := range convertedActions {
-		err := dataset.CreateAction(ctx, action)
-		if err != nil {
-			return err
-		}
-	}
-
-	return sp.Commit()
 }
 
 func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.Int, error) {
