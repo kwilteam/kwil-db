@@ -16,8 +16,8 @@ require (
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
-	github.com/kwilteam/kuneiform v0.1.1-0.20230614231919-76fa63bf584c
-	github.com/kwilteam/sql-grammar-go v0.0.0
+	github.com/kwilteam/kuneiform v0.2.0
+	github.com/kwilteam/sql-grammar-go v0.0.1
 	github.com/manifoldco/promptui v0.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.7.0
@@ -67,7 +67,7 @@ require (
 	github.com/jackc/pgproto3/v2 v2.3.1 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
-	github.com/kwilteam/kuneiform-grammar-go v0.0.0 // indirect
+	github.com/kwilteam/kuneiform-grammar-go v0.0.1 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.18 // indirect
