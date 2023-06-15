@@ -28,6 +28,6 @@ WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/kwild-* ./kwild
 
-EXPOSE 40000 50051 8082
+EXPOSE 40000 50051 8080
 
 CMD ["/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/app/kwild"]
