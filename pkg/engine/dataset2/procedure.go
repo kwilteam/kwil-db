@@ -2,7 +2,7 @@ package dataset2
 
 import "fmt"
 
-const currentProcedureVersion = 1
+const currentProcedureVersion = 2
 
 // a procedure is a collection of operations that can be executed as a single unit
 // it is atomic, and has local variables
