@@ -2,9 +2,8 @@ package specifications
 
 import (
 	"context"
-	"testing"
-
 	"github.com/cstockton/go-conv"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -14,14 +13,18 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	// Given a valid database schema
 	db := SchemaLoader.Load(t, schema_testdb)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
-	actionName := "update_username"
+	actionName := "update_user"
 	userQ := userTable{
-		ID:       1111,
+		ID:       2222,
 		UserName: "test_user_update",
 		Age:      22,
 	}
 	actionInput := []map[string]any{
-		{"$username": userQ.UserName},
+		{
+			"$id":       userQ.ID,
+			"$username": userQ.UserName,
+			"$age":      userQ.Age,
+		},
 	}
 
 	// When i execute action to database
@@ -46,4 +49,23 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	assert.EqualValues(t, userQ.ID, user1Id)
 	assert.EqualValues(t, userQ.UserName, user1Username)
 	assert.EqualValues(t, userQ.Age, user1Age)
+
+	//// check foreign key constraint
+	getUserPostsByUserIdActionName := "get_user_posts_by_userid"
+	actionInput = []map[string]any{
+		{"$id": userQ.ID},
+	}
+	receipt, results, err = execute.ExecuteAction(ctx, dbID, getUserPostsByUserIdActionName, actionInput)
+	assert.NoError(t, err)
+	assert.NotNil(t, receipt)
+	assert.NotZero(t, len(results), "should get user's posts after user_id updated")
+
+	//getUserPostsActionName := "get_user_posts"
+	//actionInput = []map[string]any{
+	//	{"$username": userQ.UserName},
+	//}
+	//receipt, results, err = execute.ExecuteAction(ctx, dbID, getUserPostsActionName, actionInput)
+	//assert.NoError(t, err)
+	//assert.NotNil(t, receipt)
+	//assert.NotZero(t, len(results), "should get user's posts after user_id updated")
 }

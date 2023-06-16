@@ -12,12 +12,19 @@ table posts {
     user_id int,
     title text,
     content text maxlen(1000),
-    #unique_index unique(user_id, title)
+    #unique_index unique(user_id, title),
+    foreign_key (user_id) references users(id) on_delete do cascade on_update do cascade
 }
 
 action create_user($id, $username, $age) public {
     INSERT INTO users (id, username, age, wallet)
     VALUES ($id, $username, $age, @caller);
+}
+
+action update_user($id, $username, $age) public {
+    UPDATE users
+    SET id = $id, username = $username, age = $age
+    WHERE wallet = @caller;
 }
 
 action update_username($username) public {
@@ -58,6 +65,12 @@ action list_users() private {
     FROM users;
 }
 
+action get_user_posts_by_userid($id) public {
+    SELECT title, content
+    FROM posts
+    WHERE user_id = $id;
+}
+
 action get_user_posts($username) public {
     SELECT title, content
     FROM posts
@@ -66,6 +79,12 @@ action get_user_posts($username) public {
         FROM users
         WHERE username = $username
     );
+}
+
+action get_post($id) public {
+    SELECT *
+    FROM posts
+    WHERE id = $id;
 }
 
 action multi_select() public {
