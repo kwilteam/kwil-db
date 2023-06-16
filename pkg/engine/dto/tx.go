@@ -1,9 +1,14 @@
 package dto
 
+import "context"
+
 type TxContext struct {
+	Ctx     context.Context
 	Caller  string
 	Action  string
 	Dataset string
+	Values  []map[string]any
+	index   int // index is the current index of the values slice.
 }
 
 // fillDefaults fills in default values for the options.

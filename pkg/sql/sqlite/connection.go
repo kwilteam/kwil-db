@@ -17,34 +17,32 @@ import (
 )
 
 type Connection struct {
-	conn              *sqlite.Conn
-	mu                lockable // mutex to protect the write connection, using an interface to allow for nil mutex
-	log               log.Logger
-	path              string
-	readPool          *sqlitex.Pool
-	poolSize          int
-	flags             sqlite.OpenFlags
-	isMemory          bool
-	name              string
-	globalVariableMap map[string]any
-	attachedDBs       map[string]string // maps the name to the file name
+	conn        *sqlite.Conn
+	mu          lockable // mutex to protect the write connection, using an interface to allow for nil mutex
+	log         log.Logger
+	path        string
+	readPool    *sqlitex.Pool
+	poolSize    int
+	flags       sqlite.OpenFlags
+	isMemory    bool
+	name        string
+	attachedDBs map[string]string // maps the name to the file name
 }
 
 // OpenConn opens a connection to the database with the given name.
 // It takes optional ConnectionOptions, which can be used to specify the path, logger, and other options.
 func OpenConn(name string, opts ...ConnectionOption) (*Connection, error) {
 	connection := &Connection{
-		log:               log.NewNoOp(),
-		mu:                &sync.Mutex{},
-		path:              DefaultPath,
-		name:              name,
-		poolSize:          10,
-		conn:              nil,
-		readPool:          nil,
-		isMemory:          false,
-		flags:             sqlite.OpenWAL | sqlite.OpenURI,
-		globalVariableMap: make(map[string]any),
-		attachedDBs:       make(map[string]string),
+		log:         log.NewNoOp(),
+		mu:          &sync.Mutex{},
+		path:        DefaultPath,
+		name:        name,
+		poolSize:    10,
+		conn:        nil,
+		readPool:    nil,
+		isMemory:    false,
+		flags:       sqlite.OpenWAL | sqlite.OpenURI,
+		attachedDBs: make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(connection)

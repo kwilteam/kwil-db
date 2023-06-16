@@ -7,6 +7,16 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/sqldb"
 )
 
+// this file contains global variables and their defaults, like @caller
+
+const (
+	callerVarName = "@caller"
+
+	actionVarName = "@action"
+
+	datasetVarName = "@dataset"
+)
+
 // An preparedAction is a set of statements that takes a predefined set of inputs,
 // and can be executed atomically.  It is the primary way to interact with
 // a dataset.
@@ -31,7 +41,7 @@ func (a *preparedAction) Execute(txCtx *dto.TxContext, userInputs map[string]any
 	}
 	defer savepoint.Rollback()
 
-	inputs := txCtx.FillInputs(userInputs)
+	inputs := fillInputs(userInputs, txCtx)
 
 	var res dto.Result
 	for _, stmt := range a.stmts {
@@ -47,6 +57,19 @@ func (a *preparedAction) Execute(txCtx *dto.TxContext, userInputs map[string]any
 	}
 
 	return res, nil
+}
+
+// fillInputs adds the ExecOpts values to the inputs map.
+func fillInputs(inputs map[string]any, opts *dto.TxContext) map[string]any {
+	if inputs == nil {
+		inputs = make(map[string]any)
+	}
+
+	inputs[callerVarName] = opts.Caller
+	inputs[actionVarName] = opts.Action
+	inputs[datasetVarName] = opts.Dataset
+
+	return inputs
 }
 
 // BatchExecute executes the action multiple times.
