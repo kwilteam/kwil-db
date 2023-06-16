@@ -59,6 +59,11 @@ func OpenConn(name string, opts ...ConnectionOption) (*Connection, error) {
 		return nil, fmt.Errorf("failed to open connection: %w", err)
 	}
 
+	err = connection.EnableForeignKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to enable foreign key: %w", err)
+	}
+
 	return connection, nil
 }
 

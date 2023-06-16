@@ -2,8 +2,9 @@ package specifications
 
 import (
 	"context"
-	"github.com/cstockton/go-conv"
 	"testing"
+
+	"github.com/cstockton/go-conv"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -49,6 +50,12 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	assert.EqualValues(t, userQ.ID, user1Id)
 	assert.EqualValues(t, userQ.UserName, user1Username)
 	assert.EqualValues(t, userQ.Age, user1Age)
+
+	// TODO: delete
+	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+	assert.NoError(t, err)
+	assert.NotZero(t, len(records.Export()), "should get user's posts before user_id updated")
+	// TODO: undelete
 
 	//// check foreign key constraint
 	getUserPostsByUserIdActionName := "get_user_posts_by_userid"
