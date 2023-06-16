@@ -12,7 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const listUsersActionName = "list_users"
+const (
+	createUserActionName = "create_user"
+	listUsersActionName  = "list_users"
+)
 
 type userTable struct {
 	ID       int32  `json:"id"`
@@ -32,23 +35,22 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	db := SchemaLoader.Load(t, schema_testdb)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
 
-	createUserActionName := "create_user"
+	// When i execute action to database
+
 	user1 := userTable{
 		ID:       1111,
 		UserName: "test_user",
 		Age:      22,
 	}
 
-	actionInput := []map[string]any{
+	createUserActionInput := []map[string]any{
 		{
 			"$id":       user1.ID,
 			"$username": user1.UserName,
 			"$age":      user1.Age,
 		},
 	}
-
-	// When i execute action to database
-	_, _, err := execute.ExecuteAction(ctx, dbID, createUserActionName, actionInput)
+	_, _, err := execute.ExecuteAction(ctx, dbID, createUserActionName, createUserActionInput)
 	assert.NoError(t, err)
 
 	receipt, results, err := execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
