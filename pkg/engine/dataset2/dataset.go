@@ -1,4 +1,4 @@
-package dataset
+package dataset2
 
 import (
 	"context"
@@ -17,18 +17,21 @@ type Dataset struct {
 	mu                    sync.RWMutex
 	name                  string
 	owner                 string
-	db                    sqldb.DB
-	actions               map[string]*preparedAction
+	db                    Datastore
+	procedures            map[string]*StoredProcedure
 	tables                map[string]*dto.Table
 	extensions            map[string]InitializedExtension
 	extensionInitializers map[string]Initializer
 }
 
-func OpenDataset(ctx context.Context, db sqldb.DB, opts ...OpenOpt) (*Dataset, error) {
+// OpenDataset initializes a Dataset struct and loads tables, actions, and extensions.
+// It accepts a context, database interface and a variadic number of options to customize the Dataset.
+// It returns a pointer to the Dataset and an error if any operation fails.
+func OpenDataset(ctx context.Context, db Datastore, opts ...OpenOpt) (*Dataset, error) {
 	ds := &Dataset{
 		mu:                    sync.RWMutex{},
 		db:                    db,
-		actions:               make(map[string]*preparedAction),
+		procedures:            make(map[string]*StoredProcedure),
 		tables:                make(map[string]*dto.Table),
 		extensions:            make(map[string]InitializedExtension),
 		extensionInitializers: make(map[string]Initializer),
@@ -43,7 +46,7 @@ func OpenDataset(ctx context.Context, db sqldb.DB, opts ...OpenOpt) (*Dataset, e
 		return nil, fmt.Errorf("failed to load tables: %w", err)
 	}
 
-	err = ds.loadActions(ctx)
+	err = ds.loadProcedures(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load actions: %w", err)
 	}
@@ -56,6 +59,8 @@ func OpenDataset(ctx context.Context, db sqldb.DB, opts ...OpenOpt) (*Dataset, e
 	return ds, nil
 }
 
+// loadTables loads the tables from the database and stores them in the Dataset's 'tables' map.
+// It accepts a context and returns an error if the operation fails.
 func (d *Dataset) loadTables(ctx context.Context) error {
 	tables, err := d.db.ListTables(ctx)
 	if err != nil {
@@ -69,24 +74,28 @@ func (d *Dataset) loadTables(ctx context.Context) error {
 	return nil
 }
 
-func (d *Dataset) loadActions(ctx context.Context) error {
-	actions, err := d.db.ListActions(ctx)
+// loadProcedures loads the actions from the database, prepares them, and stores them in the Dataset's 'actions' map.
+// It accepts a context and returns an error if the operation fails.
+func (d *Dataset) loadProcedures(ctx context.Context) error {
+	procs, err := d.db.ListProcedures(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list actions: %w", err)
 	}
 
-	for _, action := range actions {
-		prepAction, err := d.prepareAction(action)
+	for _, action := range procs {
+		prepAction, err := d.prepareProcedure(action)
 		if err != nil {
 			return fmt.Errorf("failed to prepare action: %w", err)
 		}
 
-		d.actions[strings.ToLower(action.Name)] = prepAction
+		d.procedures[strings.ToLower(action.Name)] = prepAction
 	}
 
 	return nil
 }
 
+// loadExtensions initializes the registered extensions and stores them in the Dataset's 'extensions' map.
+// It accepts a context and returns an error if the operation fails.
 func (d *Dataset) loadExtensions(ctx context.Context) error {
 	exts, err := d.db.GetExtensions(ctx)
 	if err != nil {
@@ -110,69 +119,75 @@ func (d *Dataset) loadExtensions(ctx context.Context) error {
 	return nil
 }
 
-// CreateAction creates a new action and prepares it for use.
+// CreateAction prepares and stores a new action in the Dataset's 'actions' map.
+// It accepts a context and an Action struct and returns an error if the operation fails.
 func (d *Dataset) CreateAction(ctx context.Context, actionDefinition *dto.Action) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.actions[strings.ToLower(actionDefinition.Name)] != nil {
+	if d.procedures[strings.ToLower(actionDefinition.Name)] != nil {
 		return fmt.Errorf(`action "%s" already exists`, actionDefinition.Name)
 	}
 
-	newAction, err := d.prepareAction(actionDefinition)
+	newProcedure, err := d.prepareProcedure(actionDefinition)
 	if err != nil {
 		return fmt.Errorf("failed to prepare action: %w", err)
 	}
 
-	err = d.db.StoreAction(ctx, actionDefinition)
+	err = d.db.StoreProcedure(ctx, actionDefinition)
 	if err != nil {
 		return fmt.Errorf("failed to store action: %w", err)
 	}
 
-	d.actions[strings.ToLower(newAction.Name)] = newAction
+	d.procedures[strings.ToLower(newProcedure.Name)] = newProcedure
 
 	return nil
 }
 
-func (d *Dataset) prepareAction(action *dto.Action) (*preparedAction, error) {
-	newAction := &preparedAction{
-		Action:  action,
-		stmts:   make([]sqldb.Statement, len(action.Statements)),
-		dataset: d,
-	}
-
-	for i, statement := range action.Statements {
-		stmt, err := d.db.Prepare(statement)
-		if err != nil {
-			return nil, fmt.Errorf("failed to prepare statement: %w", err)
+// TODO: implement
+func (d *Dataset) prepareProcedure(action *dto.Action) (*StoredProcedure, error) {
+	return nil, nil
+	/*
+		newAction := &procedure{
+			Action:     action,
+			operations: make([]operation, len(action.Statements)),
+			dataset:    d,
 		}
 
-		newAction.stmts[i] = stmt
-	}
+		for i, statement := range action.Statements {
+			stmt, err := d.db.Prepare(statement)
+			if err != nil {
+				return nil, fmt.Errorf("failed to prepare statement: %w", err)
+			}
 
-	return newAction, nil
+			newAction.operations[i] = stmt
+		}
+
+		return newAction, nil
+	*/
 }
 
-// GetAction returns an action by name.
+// GetAction retrieves an action from the Dataset's 'actions' map by its name.
+// It returns the Action struct or nil if the action does not exist.
 func (d *Dataset) GetAction(name string) (*dto.Action, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	preparedActiom, ok := d.actions[strings.ToLower(name)]
+	preparedProcedure, ok := d.procedures[strings.ToLower(name)]
 	if !ok {
 		return nil, fmt.Errorf(`action "%s" does not exist`, name)
 	}
 
-	return preparedActiom.Action, nil
+	return preparedProcedure.Action, nil
 }
 
-// ListActions returns a list of actions.
-func (d *Dataset) ListActions() []*dto.Action {
+// ListProcedures returns a list of procedures.
+func (d *Dataset) ListProcedures() []*dto.Action {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	actions := make([]*dto.Action, 0, len(d.actions))
-	for _, action := range d.actions {
+	actions := make([]*dto.Action, 0, len(d.procedures))
+	for _, action := range d.procedures {
 		actions = append(actions, action.Action)
 	}
 
@@ -224,13 +239,14 @@ func (d *Dataset) ListTables() []*dto.Table {
 	return tables
 }
 
-// Close closes the dataset.
+// Close closes the dataset, freeing up resources.
+// It closes all actions and the database connection, returning an error if any operation fails.
 func (d *Dataset) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	for _, action := range d.actions {
-		err := action.Close()
+	for _, action := range d.procedures {
+		err := action.close()
 		if err != nil {
 			return err
 		}
@@ -244,22 +260,32 @@ func (d *Dataset) Id() string {
 	return utils.GenerateDBID(d.name, d.owner)
 }
 
-// Execute executes an action.
-// It will execute as many times as there are inputs, and will return the last result.
-func (d *Dataset) Execute(txCtx *dto.TxContext, inputs []map[string]any) (dto.Result, error) {
+// Execute executes a procedure atomically.
+// It accepts a context, the procedure name, a double slice of inputs, and options.
+// It returns the result of the last execution and an error if any operation fails.
+func (d *Dataset) Execute(ctx context.Context, procedureName string, inputs [][]any, opts ...ExecutionOpt) (dto.Result, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	action, ok := d.actions[strings.ToLower(txCtx.Action)]
+	execCtx := newExecutionContext(ctx, procedureName, opts...)
+
+	procedure, ok := d.procedures[procedureName]
 	if !ok {
-		return nil, fmt.Errorf(`action "%s" does not exist`, txCtx.Action)
+		return nil, fmt.Errorf(`action "%s" does not exist`, procedureName)
 	}
 
 	if len(inputs) == 0 {
-		return action.Execute(txCtx, nil)
+		inputs = append(inputs, []any{}) // this will cause it to execute once with no inputs
 	}
 
-	return action.BatchExecute(txCtx, inputs)
+	for _, input := range inputs {
+		err := procedure.Execute(execCtx, input)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return execCtx.lastDmlResult, nil
 }
 
 // Savepoint creates a new savepoint.
@@ -276,8 +302,8 @@ func (d *Dataset) Delete(txCtx *dto.TxContext) error {
 		return fmt.Errorf("caller does not have permission to delete dataset")
 	}
 
-	for _, action := range d.actions {
-		err := action.Close()
+	for _, action := range d.procedures {
+		err := action.close()
 		if err != nil {
 			return err
 		}
@@ -286,8 +312,8 @@ func (d *Dataset) Delete(txCtx *dto.TxContext) error {
 	return d.db.Delete()
 }
 
-// Query executes a query and returns the result.
-// It is a read-only operation.
+// Query performs a read-only query on the dataset.
+// It accepts a context, a query string, and a map of arguments. It returns the query result and an error if the operation fails.
 func (d *Dataset) Query(ctx context.Context, stmt string, args map[string]any) (dto.Result, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

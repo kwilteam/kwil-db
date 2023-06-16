@@ -86,21 +86,6 @@ type ExecOpts struct {
 	ResultSet *ResultSet
 }
 
-// addDefaults adds the named arguments to the ExecOpts if they are not already set.
-func (e *ExecOpts) addDefaults(defaults map[string]any) {
-	if e.NamedArgs == nil {
-		e.NamedArgs = make(map[string]interface{})
-	}
-
-	for k, v := range defaults {
-		if _, ok := e.NamedArgs[k]; ok {
-			continue
-		}
-
-		e.NamedArgs[k] = v
-	}
-}
-
 func (e *ExecOpts) ensureResultFunc() {
 	if e.ResultFunc == nil {
 		e.ResultFunc = func(*Statement) error {
@@ -218,8 +203,6 @@ func (s *Statement) bindParameters(opts *ExecOpts) error {
 	if opts.NamedArgs == nil {
 		opts.NamedArgs = make(map[string]interface{})
 	}
-
-	opts.addDefaults(s.conn.globalVariableMap)
 
 	err := s.bindMany(opts.Args)
 	if err != nil {
