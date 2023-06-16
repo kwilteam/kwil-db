@@ -8,7 +8,6 @@ import (
 )
 
 // This file contains functionality to register custom functions with SQLite
-
 func Register(c *sqlite.Conn) error {
 	err := errorFunc.Register(c)
 	if err != nil {

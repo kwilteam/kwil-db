@@ -45,19 +45,6 @@ func WithConnectionPoolSize(size int) ConnectionOption {
 	}
 }
 
-// WithGlobalVariables adds global variables to the connection
-func WithGlobalVariables(globalVariables map[string]any) ConnectionOption {
-	return func(conn *Connection) {
-		for name, value := range globalVariables {
-			if _, ok := conn.globalVariableMap[name]; ok {
-				panic("global variable already exists: " + name)
-			}
-
-			conn.globalVariableMap[name] = value
-		}
-	}
-}
-
 // WithAttachedDatabase
 func WithAttachedDatabase(name string, fileName string) ConnectionOption {
 	return func(conn *Connection) {
