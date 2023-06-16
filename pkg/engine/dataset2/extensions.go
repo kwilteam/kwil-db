@@ -10,3 +10,9 @@ type InitializedExtension interface {
 type Initializer interface {
 	Initialize(context.Context, map[string]string) (InitializedExtension, error)
 }
+
+type Extension struct {
+	Alias    string
+	Name     string
+	Metadata map[string]string
+}
