@@ -95,9 +95,10 @@ func convertTablesToDto(tables []*entity.Table) ([]*engineDto.Table, error) {
 	entityTables := make([]*engineDto.Table, len(tables))
 	for i, table := range tables {
 		entityTables[i] = &engineDto.Table{
-			Name:    table.Name,
-			Columns: convertColumnsToDto(table.Columns),
-			Indexes: convertIndexesToDto(table.Indexes),
+			Name:        table.Name,
+			Columns:     convertColumnsToDto(table.Columns),
+			Indexes:     convertIndexesToDto(table.Indexes),
+			ForeignKeys: convertForeignKeysToDto(table.ForeignKeys),
 		}
 	}
 
@@ -109,6 +110,32 @@ func convertTablesToDto(tables []*entity.Table) ([]*engineDto.Table, error) {
 	}
 
 	return entityTables, nil
+}
+
+func convertForeignKeysToDto(foreignKeys []*entity.ForeignKey) []*engineDto.ForeignKey {
+	entityForeignKeys := make([]*engineDto.ForeignKey, len(foreignKeys))
+	for i, foreignKey := range foreignKeys {
+		entityForeignKeys[i] = &engineDto.ForeignKey{
+			ChildKeys:   foreignKey.ChildKeys,
+			ParentKeys:  foreignKey.ParentKeys,
+			ParentTable: foreignKey.ParentTable,
+			Actions:     convertForeignKeyActionsToDto(foreignKey.Actions),
+		}
+	}
+
+	return entityForeignKeys
+}
+
+func convertForeignKeyActionsToDto(foreignKeyActions []*entity.ForeignKeyAction) []*engineDto.ForeignKeyAction {
+	entityForeignKeyActions := make([]*engineDto.ForeignKeyAction, len(foreignKeyActions))
+	for i, foreignKeyAction := range foreignKeyActions {
+		entityForeignKeyActions[i] = &engineDto.ForeignKeyAction{
+			On: engineDto.ForeignKeyActionOn(foreignKeyAction.On),
+			Do: engineDto.ForeignKeyActionDo(foreignKeyAction.Do),
+		}
+	}
+
+	return entityForeignKeyActions
 }
 
 func convertColumnsToDto(columns []*entity.Column) []*engineDto.Column {
