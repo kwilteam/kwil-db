@@ -118,7 +118,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		return nil
 	}
 
-	// order is important, map to expr definition in Antlr kf-sqlgrammar(not exactly)
+	// order is important, map to expr definition in Antlr sql-grammar(not exactly)
 	switch {
 	// primary expressions
 	case ctx.Literal_value() != nil:
