@@ -681,6 +681,8 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 		{"expr function coalesce", "select coalesce(1,2)",
 			genSimpleFunctionSelectTree(&tree.FunctionCOALESCE,
 				genLiteralExpression("1"), genLiteralExpression("2"))},
+		{"expr function error", "select error('error message')",
+			genSimpleFunctionSelectTree(&tree.FunctionERROR, genLiteralExpression(`'error message'`))},
 		{"expr function format", `select format('%d',2)`,
 			genSimpleFunctionSelectTree(&tree.FunctionFORMAT,
 				genLiteralExpression(`'%d'`), genLiteralExpression("2"))},

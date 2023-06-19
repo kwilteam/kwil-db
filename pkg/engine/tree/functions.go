@@ -86,6 +86,11 @@ var (
 		FunctionName: "coalesce",
 		Min:          2,
 	}}
+	FunctionERROR = ScalarFunction{AnySQLFunction{
+		FunctionName: "error",
+		Min:          1,
+		Max:          1,
+	}}
 	FunctionFORMAT = ScalarFunction{AnySQLFunction{
 		FunctionName: "format",
 		Min:          1,
@@ -197,6 +202,7 @@ var SQLFunctions = map[string]SQLFunction{
 	// Scalar functions
 	"abs":      &FunctionABS,
 	"coalesce": &FunctionCOALESCE,
+	"error":    &FunctionERROR,
 	"format":   &FunctionFORMAT,
 	"glob":     &FunctionGLOB,
 	"hex":      &FunctionHEX,
