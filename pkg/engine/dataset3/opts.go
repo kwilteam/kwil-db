@@ -16,7 +16,7 @@ func WithOwner(owner string) OpenOpt {
 
 func WithExtensionInitializers(initializers map[string]Initializer) OpenOpt {
 	return func(ds *Dataset) {
-		ds.cache.extensionInitializers = initializers
+		ds.extensionInitializers = initializers
 	}
 }
 

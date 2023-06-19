@@ -14,11 +14,14 @@ import (
 // A database is a single deployed instance of kwil-db.
 // It contains a SQLite file
 type Dataset struct {
-	mu     sync.RWMutex
-	name   string
-	owner  string
-	db     Datastore
-	tables map[string]*dto.Table
+	mu                    sync.RWMutex
+	name                  string
+	owner                 string
+	db                    Datastore
+	procedures            map[string]*StoredProcedure
+	tables                map[string]*dto.Table
+	extensions            map[string]InitializedExtension
+	extensionInitializers map[string]Initializer
 
 	cache *Cache
 }
@@ -28,10 +31,12 @@ type Dataset struct {
 // It returns a pointer to the Dataset and an error if any operation fails.
 func OpenDataset(ctx context.Context, db Datastore, opts ...OpenOpt) (*Dataset, error) {
 	ds := &Dataset{
-		mu:     sync.RWMutex{},
-		db:     db,
-		tables: make(map[string]*dto.Table),
-		cache:  newCache(),
+		mu:                    sync.RWMutex{},
+		db:                    db,
+		procedures:            make(map[string]*StoredProcedure),
+		tables:                make(map[string]*dto.Table),
+		extensions:            make(map[string]InitializedExtension),
+		extensionInitializers: make(map[string]Initializer),
 	}
 
 	for _, opt := range opts {
@@ -85,7 +90,7 @@ func (d *Dataset) loadProcedures(ctx context.Context) error {
 			return fmt.Errorf("failed to prepare action: %w", err)
 		}
 
-		d.cache.procedures[strings.ToLower(action.Name)] = prepAction
+		d.procedures[strings.ToLower(action.Name)] = prepAction
 	}
 
 	return nil
@@ -100,7 +105,7 @@ func (d *Dataset) loadExtensions(ctx context.Context) error {
 	}
 
 	for _, ext := range exts {
-		initializer, ok := d.cache.extensionInitializers[ext.Name]
+		initializer, ok := d.extensionInitializers[ext.Name]
 		if !ok {
 			return fmt.Errorf("schema requires extension %s, but it is not registered on this node", ext.Name)
 		}
@@ -110,7 +115,7 @@ func (d *Dataset) loadExtensions(ctx context.Context) error {
 			return fmt.Errorf("failed to initialize extension %s: %w", ext.Name, err)
 		}
 
-		d.cache.initializedExtensions[ext.Name] = initializedExt
+		d.extensions[ext.Name] = initializedExt
 	}
 
 	return nil
@@ -122,7 +127,7 @@ func (d *Dataset) CreateAction(ctx context.Context, actionDefinition *dto.Action
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.cache.procedures[strings.ToLower(actionDefinition.Name)] != nil {
+	if d.procedures[strings.ToLower(actionDefinition.Name)] != nil {
 		return fmt.Errorf(`action "%s" already exists`, actionDefinition.Name)
 	}
 
@@ -136,7 +141,7 @@ func (d *Dataset) CreateAction(ctx context.Context, actionDefinition *dto.Action
 		return fmt.Errorf("failed to store action: %w", err)
 	}
 
-	d.cache.procedures[strings.ToLower(newProcedure.Name)] = newProcedure
+	d.procedures[strings.ToLower(newProcedure.Name)] = newProcedure
 
 	return nil
 }
@@ -170,7 +175,7 @@ func (d *Dataset) GetAction(name string) (*dto.Action, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	preparedProcedure, ok := d.cache.procedures[strings.ToLower(name)]
+	preparedProcedure, ok := d.procedures[strings.ToLower(name)]
 	if !ok {
 		return nil, fmt.Errorf(`action "%s" does not exist`, name)
 	}
@@ -183,8 +188,8 @@ func (d *Dataset) ListProcedures() []*dto.Action {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	actions := make([]*dto.Action, 0, len(d.cache.procedures))
-	for _, action := range d.cache.procedures {
+	actions := make([]*dto.Action, 0, len(d.procedures))
+	for _, action := range d.procedures {
 		actions = append(actions, action.Action)
 	}
 
@@ -242,7 +247,7 @@ func (d *Dataset) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	for _, action := range d.cache.procedures {
+	for _, action := range d.procedures {
 		err := action.close()
 		if err != nil {
 			return err
@@ -266,7 +271,7 @@ func (d *Dataset) Execute(ctx context.Context, procedureName string, inputs [][]
 
 	execCtx := newExecutionContext(ctx, procedureName, opts...)
 
-	procedure, ok := d.cache.procedures[procedureName]
+	procedure, ok := d.procedures[procedureName]
 	if !ok {
 		return nil, fmt.Errorf(`action "%s" does not exist`, procedureName)
 	}
@@ -299,7 +304,7 @@ func (d *Dataset) Delete(txCtx *dto.TxContext) error {
 		return fmt.Errorf("caller does not have permission to delete dataset")
 	}
 
-	for _, action := range d.cache.procedures {
+	for _, action := range d.procedures {
 		err := action.close()
 		if err != nil {
 			return err

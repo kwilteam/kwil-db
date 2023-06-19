@@ -35,7 +35,6 @@ func NewSqliteStore(name string, opts ...SqliteOpts) (*SqliteStore, error) {
 	sqliteDB.conn, err = sqlite.OpenConn(sqliteDB.name,
 		sqlite.WithPath(sqliteDB.path),
 		sqlite.WithLogger(sqliteDB.log),
-		sqlite.WithGlobalVariables(sqliteDB.globalVars),
 	)
 	if err != nil {
 		return nil, err
