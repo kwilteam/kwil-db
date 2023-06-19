@@ -87,7 +87,7 @@ func (o *ExtensionMethodOperation) returns() []string {
 }
 
 func (o *ExtensionMethodOperation) prepare(d *Dataset) (operation, error) {
-	extensions, ok := d.cache.initializedExtensions[o.Extension]
+	extensions, ok := d.extensions[o.Extension]
 	if !ok {
 		return nil, fmt.Errorf("unknown extension '%s'", o.Extension)
 	}
@@ -122,7 +122,7 @@ func (o *ProcedureCallOperation) returns() []string {
 }
 
 func (o *ProcedureCallOperation) prepare(d *Dataset) (operation, error) {
-	procedure, ok := d.cache.procedures[o.Procedure]
+	procedure, ok := d.procedures[o.Procedure]
 	if !ok {
 		return nil, fmt.Errorf("unknown procedure '%s'", o.Procedure)
 	}
