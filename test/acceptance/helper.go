@@ -7,8 +7,6 @@ import (
 	"github.com/tonistiigi/go-rosetta"
 	"os"
 
-	"github.com/kwilteam/kuneiform/schema"
-
 	//"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
 	"math/big"
 	"runtime"
@@ -16,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
+	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/chain/types"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/log"

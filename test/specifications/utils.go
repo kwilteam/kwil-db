@@ -1,11 +1,12 @@
 package specifications
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
 	"github.com/kwilteam/kuneiform/kfparser"
-	"github.com/kwilteam/kuneiform/schema"
+	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 )
 
@@ -26,9 +27,20 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := kfparser.Parse(string(d))
+	astSchema, err := kfparser.Parse(string(d))
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
+	}
+
+	schemaJson, err := json.Marshal(astSchema)
+	if err != nil {
+		t.Fatal("failed to marshal schema: %w", err)
+	}
+
+	var db *schema.Schema
+	err = json.Unmarshal(schemaJson, &db)
+	if err != nil {
+		t.Fatal("failed to unmarshal schema json: %w", err)
 	}
 
 	l.Modifier(db)
@@ -43,9 +55,21 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	db, err := kfparser.Parse(string(d))
-	if db == nil {
+	astSchema, err := kfparser.Parse(string(d))
+	// ignore validation error
+	if astSchema == nil {
 		t.Fatal("cannot parse database schema", err)
+	}
+
+	schemaJson, err := json.Marshal(astSchema)
+	if err != nil {
+		t.Fatal("failed to marshal schema: %w", err)
+	}
+
+	var db *schema.Schema
+	err = json.Unmarshal(schemaJson, &db)
+	if err != nil {
+		t.Fatal("failed to unmarshal schema json: %w", err)
 	}
 
 	l.Modifier(db)

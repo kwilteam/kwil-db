@@ -4,8 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kwilteam/kuneiform/schema"
-
+	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/stretchr/testify/assert"
 )
 
