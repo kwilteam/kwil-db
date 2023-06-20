@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"github.com/kwilteam/kuneiform/kfparser"
 
-	"github.com/kwilteam/kuneiform/schema"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"io"
@@ -79,7 +79,18 @@ func unmarshalKf(file *os.File) (*schema.Schema, error) {
 		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}
 
-	return astSchema, nil
+	schemaJson, err := json.Marshal(astSchema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal schema: %w", err)
+	}
+
+	var db schema.Schema
+	err = json.Unmarshal(schemaJson, &db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal schema json: %w", err)
+	}
+
+	return &db, nil
 }
 
 func unmarshalJson(file *os.File) (*schema.Schema, error) {

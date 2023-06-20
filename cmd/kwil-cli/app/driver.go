@@ -13,7 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kwilteam/kuneiform/schema"
+	schema "github.com/kwilteam/kwil-db/internal/entity"
+
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	big2 "github.com/kwilteam/kwil-db/pkg/utils/numbers/big"

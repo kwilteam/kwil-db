@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/kwilteam/kuneiform/schema"
+	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"

@@ -46,7 +46,7 @@ tasks:
     desc: Build kwil-cli
     deps: [pb:compile:v1]
     cmds:
-      - ./scripts/build/binary kwil-cli
+      - ./scripts/build/binary kwil-cli #-mod=mod
     generates:
       - .build/kwil-cli
 
@@ -54,7 +54,7 @@ tasks:
     desc: Builds kwild server
     deps: [pb:compile:v1]
     cmds:
-      - ./scripts/build/binary kwild
+      - ./scripts/build/binary kwild #-mod=mod
     generates:
       - .build/kwild
 
