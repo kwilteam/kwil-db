@@ -15,7 +15,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
-	github.com/kwilteam/action-grammar-go v0.0.0-20230622213346-de161ad562a2
+	github.com/kwilteam/action-grammar-go v0.0.0-20230626155541-72265621f427
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
 	github.com/kwilteam/kuneiform v0.3.0
 	github.com/kwilteam/kwil-extensions v0.0.0-20230616024244-cf8467a6f299
