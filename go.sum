@@ -288,8 +288,8 @@ github.com/kwilteam/kuneiform v0.3.0 h1:uxspP5N19bdczmundI9ts4wRK+ZsSL6VXMMaAFD3
 github.com/kwilteam/kuneiform v0.3.0/go.mod h1:pCAi14pJ6ps+LC/iy02OzlRr9uFtPmllos9BfWoUyfc=
 github.com/kwilteam/kuneiform-grammar-go v0.3.0 h1:GSbkAc6416QGluMJfItw7+cc5uGf9NWuy5qn0eqORxg=
 github.com/kwilteam/kuneiform-grammar-go v0.3.0/go.mod h1:uki0OHLCXttIQqy/DsJ5X9WaNtRf3HB/OmxCCd+XdZU=
-github.com/kwilteam/sql-grammar-go v0.0.1 h1:Crr8YHyg1ZzrgLGuRNCa/U8rFPZ5EWt+qW/zR5d9czM=
-github.com/kwilteam/sql-grammar-go v0.0.1/go.mod h1:OqmGyCwHfBZvYv/sYPrQ5Ih290dhlD5AcKOHDlUSS0Y=
+github.com/kwilteam/sql-grammar-go v0.0.2 h1:Tg8xo/Pzd72QsO19wwNvFrpw2muuBaERP7XTv21U4Iw=
+github.com/kwilteam/sql-grammar-go v0.0.2/go.mod h1:OqmGyCwHfBZvYv/sYPrQ5Ih290dhlD5AcKOHDlUSS0Y=
 github.com/lib/pq v1.0.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
 github.com/lib/pq v1.1.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
 github.com/lib/pq v1.2.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=

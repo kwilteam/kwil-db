@@ -17,7 +17,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
 	github.com/kwilteam/kuneiform v0.3.0
-	github.com/kwilteam/sql-grammar-go v0.0.1
+	github.com/kwilteam/sql-grammar-go v0.0.2
 	github.com/manifoldco/promptui v0.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.7.0

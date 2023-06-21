@@ -2198,9 +2198,6 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 		causeSymbol string
 	}{
 		// literal value
-		{"current_date", "select current_date", "current_date"},
-		{"current_time", "select current_time", "current_time"},
-		{"current_timestamp", "select current_timestamp", "current_timestamp"},
 		{"blob", "select x'01'", "x'01'"},
 
 		// bind parameter
