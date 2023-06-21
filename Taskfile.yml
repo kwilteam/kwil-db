@@ -16,9 +16,15 @@ tasks:
 
   vendor:
     desc: Generate vendor
+    deps:
+      - task: vendor:clean
+    cmds:
+      - go mod vendor
+
+  vendor:clean:
+    desc: Clean vendor
     cmds:
       - rm -rf ./vendor
-      - go mod vendor
 
   git:init:
     desc: Initialize git submodules
@@ -79,6 +85,7 @@ tasks:
       - task: vendor
       # pass any args to build debug image, e.g. task docker:kwild -- debug
       - ./scripts/build/docker kwild {{.VARIANT}}
+      - task: vendor:clean
 
   # ************ dev ************
   dev:up:
@@ -100,6 +107,7 @@ tasks:
 
   test:unit:
     desc: Run unit tests
-    deps: [ vendor ]
     cmds:
+      - task vendor
       - go test `go list ./... | grep -v /kwil-db\/test/` -count=1
+      - task vendor:clean
