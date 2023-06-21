@@ -15,11 +15,13 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/jpillora/backoff v1.0.0
+	github.com/kwilteam/action-grammar-go v0.0.0-20230622213346-de161ad562a2
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
 	github.com/kwilteam/kuneiform v0.3.0
 	github.com/kwilteam/kwil-extensions v0.0.0-20230616024244-cf8467a6f299
 	github.com/kwilteam/sql-grammar-go v0.0.2
 	github.com/manifoldco/promptui v0.9.0
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
@@ -73,7 +75,6 @@ require (
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.18 // indirect
 	github.com/mattn/go-runewidth v0.0.10 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/patternmatcher v0.5.0 // indirect
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/term v0.0.0-20221128092401-c43b287e0e0f // indirect
