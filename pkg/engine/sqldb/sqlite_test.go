@@ -1,4 +1,4 @@
-package sqlite_test
+package sqldb_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dto/data"
 	dbi "github.com/kwilteam/kwil-db/pkg/engine/sqldb"
-	"github.com/kwilteam/kwil-db/pkg/engine/sqldb/sqlite"
+	sqlite "github.com/kwilteam/kwil-db/pkg/engine/sqldb"
 	"github.com/stretchr/testify/assert"
 )
 

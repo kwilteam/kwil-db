@@ -7,7 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 	"github.com/kwilteam/kwil-db/pkg/engine/extensions"
-	"github.com/kwilteam/kwil-db/pkg/engine/sqldb/sqlite"
+	"github.com/kwilteam/kwil-db/pkg/engine/sqldb"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
@@ -82,17 +82,17 @@ func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
 }
 
 // openDB opens a database connections and wraps it in a sqldb.DB.
-// This should probably be done in a different package to avoid coupling to sqlite.
-func (e *engine) openDB(name string) (*sqlite.SqliteStore, error) {
-	opts := []sqlite.SqliteOpts{
-		sqlite.WithGlobalVariables(dto.GlobalVars),
-		sqlite.WithLogger(e.log),
+// This should probably be done in a different package to avoid coupling to sqldb.
+func (e *engine) openDB(name string) (*sqldb.SqliteStore, error) {
+	opts := []sqldb.SqliteOpts{
+		sqldb.WithGlobalVariables(dto.GlobalVars),
+		sqldb.WithLogger(e.log),
 	}
 	if e.path != "" {
-		opts = append(opts, sqlite.WithPath(e.path))
+		opts = append(opts, sqldb.WithPath(e.path))
 	}
 
-	return sqlite.NewSqliteStore(name,
+	return sqldb.NewSqliteStore(name,
 		opts...,
 	)
 }

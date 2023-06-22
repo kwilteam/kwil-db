@@ -2,15 +2,22 @@ package dataset2
 
 import (
 	"fmt"
+	"strings"
 )
 
 // a procedure is a collection of operations that can be executed as a single unit
 // it is atomic, and has local variables
 type Procedure struct {
-	Name       string           `json:"name"`
-	Parameters []string         `json:"args"`
-	Scoping    ProcedureScoping `json:"scoping"`
-	Body       []*OpCodeExecution
+	Name       string                  `json:"name"`
+	Parameters []string                `json:"args"`
+	Scoping    ProcedureScoping        `json:"scoping"`
+	Body       []*InstructionExecution `json:"body"`
+}
+
+func (p *Procedure) Clean() error {
+	p.Name = strings.ToLower(p.Name)
+	// TODO: complete this
+	return nil
 }
 
 type ProcedureScoping uint8

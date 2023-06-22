@@ -14,11 +14,14 @@ import (
 // A database is a single deployed instance of kwil-db.
 // It contains a SQLite file
 type Dataset struct {
-	mu     sync.RWMutex
-	name   string
-	owner  string
-	db     Datastore
-	tables map[string]*dto.Table
+	mu         sync.RWMutex
+	name       string
+	owner      string
+	db         Datastore
+	tables     map[string]*dto.Table
+	procedures map[string]*StoredProcedure
+	onLoad     []*InstructionExecution
+	onDeploy   []*InstructionExecution
 
 	cache *Cache
 }
@@ -48,12 +51,13 @@ func OpenDataset(ctx context.Context, db Datastore, opts ...OpenOpt) (*Dataset, 
 		return nil, fmt.Errorf("failed to load actions: %w", err)
 	}
 
-	err = ds.loadExtensions(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load extensions: %w", err)
-	}
-
 	return ds, nil
+}
+
+func (d *Dataset) evaluateOnLoad(ctx context.Context) error {
+	execCtx := newExecutionContext(ctx, "_load", WithCaller(d.owner), WithDataset(d.name))
+
+	evaluateInstructions(execCtx, d, d.onLoad, execCtx)
 }
 
 // loadTables loads the tables from the database and stores them in the Dataset's 'tables' map.
@@ -73,6 +77,7 @@ func (d *Dataset) loadTables(ctx context.Context) error {
 
 // loadProcedures loads the actions from the database, prepares them, and stores them in the Dataset's 'actions' map.
 // It accepts a context and returns an error if the operation fails.
+// TODO: change this to new procedures
 func (d *Dataset) loadProcedures(ctx context.Context) error {
 	procs, err := d.db.ListProcedures(ctx)
 	if err != nil {
@@ -91,33 +96,9 @@ func (d *Dataset) loadProcedures(ctx context.Context) error {
 	return nil
 }
 
-// loadExtensions initializes the registered extensions and stores them in the Dataset's 'extensions' map.
-// It accepts a context and returns an error if the operation fails.
-func (d *Dataset) loadExtensions(ctx context.Context) error {
-	exts, err := d.db.GetExtensions(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get extensions: %w", err)
-	}
-
-	for _, ext := range exts {
-		initializer, ok := d.cache.extensionInitializers[ext.Name]
-		if !ok {
-			return fmt.Errorf("schema requires extension %s, but it is not registered on this node", ext.Name)
-		}
-
-		initializedExt, err := initializer.Initialize(ctx, ext.Metadata)
-		if err != nil {
-			return fmt.Errorf("failed to initialize extension %s: %w", ext.Name, err)
-		}
-
-		d.cache.initializedExtensions[ext.Name] = initializedExt
-	}
-
-	return nil
-}
-
 // CreateAction prepares and stores a new action in the Dataset's 'actions' map.
 // It accepts a context and an Action struct and returns an error if the operation fails.
+// TODO: delete, will be replaced with CreateProcedure
 func (d *Dataset) CreateAction(ctx context.Context, actionDefinition *dto.Action) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -140,6 +121,18 @@ func (d *Dataset) CreateAction(ctx context.Context, actionDefinition *dto.Action
 
 	return nil
 }
+
+/*
+func (d *Dataset) CreateProcedure(ctx context.Context, procedure *Procedure) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	lowerName := strings.ToLower(procedure.Name)
+	if _, ok := d.cache.procedures[lowerName]; ok {
+		return fmt.Errorf(`procedure "%s" already exists`, procedure.Name)
+	}
+
+}*/
 
 // TODO: implement
 func (d *Dataset) prepareProcedure(action *dto.Action) (*StoredProcedure, error) {
