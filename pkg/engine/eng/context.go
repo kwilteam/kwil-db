@@ -1,9 +1,8 @@
-package dataset2
+package eng
 
 import (
 	"context"
-
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
+	"io"
 )
 
 const (
@@ -23,24 +22,24 @@ type executionContext struct {
 	ctx           context.Context
 	caller        string
 	action        string
-	dataset       string
-	lastDmlResult dto.Result
+	datasetID     string
+	lastDmlResult io.Reader
 }
 
 func (ec *executionContext) contextualVariables() map[string]any {
 	return map[string]any{
 		callerVarName:  ec.caller,
 		actionVarName:  ec.action,
-		datasetVarName: ec.dataset,
+		datasetVarName: ec.datasetID,
 	}
 }
 
 func newExecutionContext(ctx context.Context, action string, opts ...ExecutionOpt) *executionContext {
 	ec := &executionContext{
-		ctx:     ctx,
-		caller:  defaultCallerAddress,
-		action:  defaultAction,
-		dataset: datasetDefault,
+		ctx:       ctx,
+		caller:    defaultCallerAddress,
+		action:    action,
+		datasetID: datasetDefault,
 	}
 
 	for _, opt := range opts {
@@ -48,4 +47,25 @@ func newExecutionContext(ctx context.Context, action string, opts ...ExecutionOp
 	}
 
 	return ec
+}
+
+type ExecutionOpt func(*executionContext)
+
+func WithCaller(caller string) ExecutionOpt {
+	return func(ec *executionContext) {
+		ec.caller = caller
+	}
+}
+
+func WithDatasetID(dataset string) ExecutionOpt {
+	return func(ec *executionContext) {
+		ec.datasetID = dataset
+	}
+}
+
+// a procedureContext is the context for executing a procedure.
+// it contains the executionContext, as well as the values scoped to the procedure.
+type procedureContext struct {
+	*executionContext
+	values map[string]any
 }

@@ -1,18 +1,10 @@
 package dataset2
 
-import (
-	"context"
-	"fmt"
-	"strings"
-
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
-)
-
+/*
 func Builder() DatasetBuilder {
 	return &datasetBuilder{
 		tables:                map[string]*dto.Table{},
-		procedures:            map[string]*dto.Action{},
-		extensionMetadata:     map[string]map[string]string{},
+		procedures:            map[string]*Procedure{},
 		extensionInitializers: map[string]Initializer{},
 	}
 }
@@ -21,9 +13,10 @@ type datasetBuilder struct {
 	name                  string
 	owner                 string
 	tables                map[string]*dto.Table
-	procedures            map[string]*dto.Action
-	extensionMetadata     map[string]map[string]string // extension name -> extension metadata
+	procedures            map[string]*Procedure
 	extensionInitializers map[string]Initializer
+	onDeploy              []*OpCodeExecution
+	onLoad                []*OpCodeExecution
 	db                    Datastore
 	errs                  []error
 }
@@ -33,8 +26,7 @@ type DatasetBuilder interface {
 	Named(string) DatasetBuilder
 	OwnedBy(string) DatasetBuilder
 	WithTables(...*dto.Table) DatasetBuilder
-	WithProcedures(...*dto.Action) DatasetBuilder
-	WithExtensions(map[string]map[string]string) DatasetBuilder
+	WithProcedures(...*Procedure) DatasetBuilder
 	WithExtensionInitializers(map[string]Initializer) DatasetBuilder
 	WithDatastore(Datastore) DatasetBuilder
 	Build(context.Context) (*Dataset, error)
@@ -63,7 +55,7 @@ func (b *datasetBuilder) WithTables(tables ...*dto.Table) DatasetBuilder {
 	return b
 }
 
-func (b *datasetBuilder) WithProcedures(actions ...*dto.Action) DatasetBuilder {
+func (b *datasetBuilder) WithProcedures(actions ...*Procedure) DatasetBuilder {
 	for _, procedure := range actions {
 		lowerName := strings.ToLower(procedure.Name)
 		if _, ok := b.procedures[lowerName]; ok {
@@ -72,18 +64,6 @@ func (b *datasetBuilder) WithProcedures(actions ...*dto.Action) DatasetBuilder {
 		}
 
 		b.procedures[lowerName] = procedure
-	}
-	return b
-}
-
-func (b *datasetBuilder) WithExtensions(extensions map[string]map[string]string) DatasetBuilder {
-	for name, ext := range extensions {
-		if _, ok := b.extensionMetadata[name]; ok {
-			b.errs = append(b.errs, fmt.Errorf("extension %s already exists", name))
-			continue
-		}
-
-		b.extensionMetadata[name] = ext
 	}
 	return b
 }
@@ -227,3 +207,4 @@ func (b *datasetBuilder) validate() error {
 
 	return nil
 }
+*/
