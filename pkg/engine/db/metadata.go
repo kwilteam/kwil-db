@@ -3,7 +3,10 @@ package db
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 type metadata struct {
@@ -19,6 +22,20 @@ const (
 	metadataTypeProcedure  metadataType = "procedure"
 	metadataTypeExtensions metadataType = "extensions"
 )
+
+func getMetadataType(val any) (metadataType, error) {
+	var metaType metadataType
+	switch val.(type) {
+	case *types.Table:
+		metaType = metadataTypeTable
+	case *types.Procedure:
+		metaType = metadataTypeProcedure
+	default:
+		return "", fmt.Errorf("unknown metadata type: %T", val)
+	}
+
+	return metaType, nil
+}
 
 const (
 	metadataTableName            = "metadata"
@@ -116,4 +133,72 @@ func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadat
 	}
 
 	return metas, nil
+}
+
+// versionedMetadata is a generic that wraps a serializable type with a version
+type versionedMetadata struct {
+	Version int `json:"version"`
+	Data    any `json:"data"`
+}
+
+func (d *DB) getVersionedMetadata(ctx context.Context, metaType metadataType) ([]*versionedMetadata, error) {
+	metas, err := d.getMetadata(ctx, metaType)
+	if err != nil {
+		return nil, err
+	}
+
+	var versionedMetas []*versionedMetadata
+	for _, meta := range metas {
+		versionedMeta := &versionedMetadata{}
+		err = json.Unmarshal(meta.Content, versionedMeta)
+		if err != nil {
+			return nil, err
+		}
+
+		versionedMetas = append(versionedMetas, versionedMeta)
+	}
+
+	return versionedMetas, nil
+}
+
+func (d *DB) persistVersionedMetadata(ctx context.Context, meta *versionedMetadata) error {
+	bts, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	metaType, err := getMetadataType(meta.Data)
+	if err != nil {
+		return err
+	}
+
+	ident, err := getIdentifier(meta.Data)
+	if err != nil {
+		return err
+	}
+
+	return d.storeMetadata(ctx, &metadata{
+		Identifier: ident,
+		Type:       string(metaType),
+		Content:    bts,
+	})
+}
+
+// getIdentifier returns the identifier for a serializable type.
+// this is opposed to using a method on the structs, which requires an extra
+// method in the types package
+func getIdentifier(data any) (string, error) {
+	// we have to use any instead of serializable because you can't type-assert a generic
+	var ident string
+
+	switch dataType := data.(type) {
+	case *types.Table:
+		ident = dataType.Name
+	case *types.Procedure:
+		ident = dataType.Name
+	default:
+		return "", fmt.Errorf("invalid serializable type: %s", data)
+	}
+
+	return ident, nil
 }
