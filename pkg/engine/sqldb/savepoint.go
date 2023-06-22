@@ -1,4 +1,4 @@
-package sqlite
+package sqldb
 
 import (
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
