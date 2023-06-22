@@ -41,26 +41,6 @@ var metadataVersionMap = map[reflect.Type]int{
 	procedureType: 1,
 }
 
-// getIdentifier returns the identifier for a serializable type.
-// this is opposed to using a method on the structs, which requires an extra
-// method in the types package
-func getIdentifier(data any) (string, error) {
-	// we have to use any instead of serializable because you can't type-assert a generic
-	var ident string
-
-	refType := reflect.TypeOf(data).Elem()
-	switch refType {
-	case tableType:
-		ident = data.(*types.Table).Name
-	case procedureType:
-		ident = data.(*types.Procedure).Name
-	default:
-		return "", fmt.Errorf("invalid serializable type: %s", refType.String())
-	}
-
-	return ident, nil
-}
-
 // serialized is a generic that wraps a serializable type with a version
 type serialized[T serializable] struct {
 	Version int `json:"version"`
