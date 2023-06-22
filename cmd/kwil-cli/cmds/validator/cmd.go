@@ -17,6 +17,8 @@ func NewCmdValidator() *cobra.Command {
 	rootCmd.AddCommand(
 		approveCmd(),
 		joinCmd(),
+		leaveCmd(),
+		statusCmd(),
 	)
 
 	return rootCmd
