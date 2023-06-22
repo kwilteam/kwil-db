@@ -40,3 +40,31 @@ func (c *Client) ValidatorJoin(ctx context.Context, tx *kTx.Transaction) (*kTx.R
 	txRes := ConvertReceipt(resp.Receipt)
 	return txRes, nil
 }
+
+func (c *Client) ValidatorLeave(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
+	pbTx := ConvertTx(tx)
+	fmt.Println("Broadcasting ValidatorLeave transaction")
+	resp, err := c.txClient.ValidatorLeave(ctx, &txpb.ValidatorLeaveRequest{Tx: pbTx})
+	if err != nil {
+		fmt.Println("TxServiceClient failed to leave Validator", err)
+		return nil, fmt.Errorf("TxServiceClient failed to leave Validator: %w", err)
+	}
+
+	if resp.Receipt == nil {
+		fmt.Println("TxServiceClient failed to leave Validator: receipt is nil")
+		return nil, fmt.Errorf("TxServiceClient failed to leave Validator: receipt is nil")
+	}
+
+	txRes := ConvertReceipt(resp.Receipt)
+	return txRes, nil
+}
+
+func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*txpb.ValidatorJoinStatusResponse, error) {
+
+	resp, err := c.txClient.ValidatorJoinStatus(ctx, &txpb.ValidatorJoinStatusRequest{Pubkey: pubKey})
+	if err != nil {
+		return nil, fmt.Errorf("failed to approve Validator: %w", err)
+	}
+
+	return resp, nil
+}

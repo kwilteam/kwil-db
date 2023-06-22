@@ -11,6 +11,7 @@ const (
 	DROP_DATABASE
 	EXECUTE_ACTION
 	VALIDATOR_JOIN
+	VALIDATOR_LEAVE
 	END_PAYLOAD_TYPE
 )
 
@@ -30,6 +31,8 @@ func (x PayloadType) String() string {
 		return "END_PAYLOAD_TYPE"
 	case VALIDATOR_JOIN:
 		return "VALIDATOR_JOIN"
+	case VALIDATOR_LEAVE:
+		return "VALIDATOR_LEAVE"
 	default:
 		return fmt.Sprintf("PayloadType(%d)", x)
 	}

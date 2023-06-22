@@ -4,7 +4,7 @@ set -e
 
 start() {
   # Build Kwild
-  test $1 && task --taskfile ../../Taskfile.yml docker:kwild -- shell || echo "skip build image"
+  test $1 && task --taskfile ../../Taskfile.yml build:docker -- shell || echo "skip build image"
   #task --taskfile ../../Taskfile.yml docker:kwild -- shell
 
   # start ganache
