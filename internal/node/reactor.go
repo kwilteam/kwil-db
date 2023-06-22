@@ -30,9 +30,9 @@ type Reactor struct {
 	Wg sync.WaitGroup
 }
 
-func NewReactor(approvedVals *ApprovedValidators) *Reactor {
+func NewReactor(approvedVals *ApprovedValidators, nwApprovedVals *ApprovedValidators) *Reactor {
 	requestsCh := make(chan JoinRequest, maxJoinRequests)
-	pool := NewJoinRequestPool(approvedVals, requestsCh)
+	pool := NewJoinRequestPool(approvedVals, nwApprovedVals, requestsCh)
 	nodeR := &Reactor{
 		pool:      pool,
 		RequestCh: requestsCh,
@@ -99,18 +99,22 @@ func (r *Reactor) ReceiveEnvelope(e p2p.Envelope) {
 		*/
 		address := string(msg.ValidatorAddress)
 		fmt.Println("Received request to vote for Validator ", address, "from", e.Src.ID())
-		vote := r.pool.ApprovedVals.IsValidator(address)
-		e.Src.SendEnvelope(p2p.Envelope{
-			ChannelID: NodeJoinChannel,
-			Message: &ValidatorJoinResponseVote{
-				ValidatorAddress: msg.ValidatorAddress,
-				Accepted:         vote,
-			},
-		})
-
+		// Only the current validator set can vote
+		if r.pool.IsNodeValidator() {
+			vote := r.pool.ApprovedVals.IsValidator(address)
+			e.Src.SendEnvelope(p2p.Envelope{
+				ChannelID: NodeJoinChannel,
+				Message: &ValidatorJoinResponseVote{
+					ValidatorAddress: msg.ValidatorAddress,
+					Accepted:         vote,
+				},
+			})
+		} else {
+			fmt.Println("Not a validator, ignoring request to vote for Validator Join", address, "from", e.Src.ID())
+		}
 	case *ValidatorJoinResponseVote:
 		/*
-			Received vote for the nodeJoinRequest of a validator
+			Received vote for the nodeJoinRequest of a vali	dator
 			Count the votes and decide whether to admit the node as a validator or not
 			If Validator is in approved state, send a ValidatorJoin transaction to the ABCI Application
 		*/
@@ -127,6 +131,7 @@ func (r *Reactor) ReceiveEnvelope(e p2p.Envelope) {
 			}
 			fmt.Println("Broadcasted tx to ABCI app", "res", res, "address", msg.ValidatorAddress)
 			r.pool.AddHash(msg.ValidatorAddress, string(res.Hash))
+			r.pool.ApprovedNetworkVals.AddValidator(msg.ValidatorAddress)
 		}
 	default:
 		fmt.Println("Unknown message type", reflect.TypeOf(msg))

@@ -14,7 +14,7 @@ import (
 	//"github.com/kwilteam/kwil-db/pkg/utils/serialize"
 
 	// shorthand for chain client service
-	"github.com/cometbft/cometbft/abci/types"
+
 	abcitypes "github.com/cometbft/cometbft/abci/types"
 	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
 	pc "github.com/cometbft/cometbft/proto/tendermint/crypto"
@@ -116,6 +116,8 @@ func (app *KwilDbApplication) DeliverTx(req_tx abcitypes.RequestDeliverTx) abcit
 		return app.execute_action(&tx)
 	case kTx.VALIDATOR_JOIN:
 		return app.validator_join(&tx)
+	case kTx.VALIDATOR_LEAVE:
+		return app.validator_leave(&tx)
 	default:
 		err = fmt.Errorf("unknown payload type: %s", tx.PayloadType)
 	}
@@ -283,36 +285,15 @@ func (app *KwilDbApplication) execute_action(tx *kTx.Transaction) abcitypes.Resp
 func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
 	var events []abcitypes.Event
 
-	validator, err := txsvc.UnmarshalValidator(tx.Payload)
+	validator, err := app.validator_update(tx, true)
 	if err != nil {
-		app.server.Log.Error("ABCI validator join: failed to unmarshal validator join ", zap.String("error", err.Error()))
-		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("join_validator", err, "", ""))}
+		app.server.Log.Error("ABCI validator leave: failed to update validator ", zap.String("error", err.Error()))
+		if validator != nil {
+			return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("leave_validator", err, string(validator.PubKey), fmt.Sprintf("%d", validator.Power)))}
+		} else {
+			return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("leave_validator", err, "", ""))}
+		}
 	}
-
-	fmt.Println("ValidatorJoin Validator:", validator.PubKey, validator)
-
-	pubKey, err := txsvc.UnmarshalValidatorPublicKey(string(validator.PubKey))
-	if err != nil {
-		fmt.Println("failed to unmarshal Validator public key", err)
-		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("join_validator", err, "", ""))}
-	}
-	validator.PubKey = pubKey.Bytes()
-
-	// Add validator to the validator set updates
-	valInfo := string(pubKey.Bytes()) + ":" + fmt.Sprintf("%d", validator.Power)
-	app.server.Log.Info("ABCI: adding validator to the validator set updates", zap.String("validator info", valInfo))
-
-	valUpdates := abcitypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
-	app.ValUpdates = append(app.ValUpdates, valUpdates)
-
-	pubkey, err := cryptoenc.PubKeyFromProto(valUpdates.PubKey)
-	if err != nil {
-		app.server.Log.Error("ABCI validator join: failed to get pubkey from proto ", zap.String("error", err.Error()))
-		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("join_validator", err, "", ""))}
-	}
-
-	app.valAddrToPubKeyMap[string(pubkey.Address())] = valUpdates.PubKey
-	app.server.Log.Info("ABCI: added validator to the addr-pubkey map:", zap.String("Addr", string(pubkey.Address())), zap.String("PubKey", string(pubkey.Bytes())))
 
 	// TODO:  Persist these changes to the disk: only if a validator is removed or added (ignore the power updates )
 
@@ -329,6 +310,82 @@ func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.Resp
 	return abcitypes.ResponseDeliverTx{Code: 0, Events: events}
 }
 
+func (app *KwilDbApplication) validator_leave(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
+	var events []abcitypes.Event
+	validator, err := app.validator_update(tx, false)
+	if err != nil {
+		app.server.Log.Error("ABCI validator leave: failed to update validator ", zap.String("error", err.Error()))
+		if validator != nil {
+			return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("leave_validator", err, string(validator.PubKey), fmt.Sprintf("%d", validator.Power)))}
+		} else {
+			return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("leave_validator", err, "", ""))}
+		}
+	}
+
+	// TODO:  Persist these changes to the disk: only if a validator is removed or added (ignore the power updates )
+
+	events = []abcitypes.Event{
+		{
+			Type: "remove_validator",
+			Attributes: []abcitypes.EventAttribute{
+				{Key: "Result", Value: "Success", Index: true},
+				{Key: "ValidatorPubKey", Value: string(validator.PubKey), Index: true},
+				{Key: "ValidatorPower", Value: fmt.Sprintf("%d", validator.Power), Index: true},
+			},
+		},
+	}
+	return abcitypes.ResponseDeliverTx{Code: 0, Events: events}
+}
+
+func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool) (*entity.Validator, error) {
+	validator, err := txsvc.UnmarshalValidator(tx.Payload)
+	if err != nil {
+		app.server.Log.Error("ABCI validator update: failed to unmarshal validator request ", zap.String("error", err.Error()))
+		return nil, err
+	}
+
+	fmt.Println("Validator Info:", validator.PubKey, validator)
+
+	pubKey, err := txsvc.UnmarshalValidatorPublicKey(string(validator.PubKey))
+	if err != nil {
+		fmt.Println("failed to unmarshal Validator public key", err)
+		return validator, err
+	}
+	validator.PubKey = pubKey.Bytes()
+	fmt.Println("Validator Info Pubkey Address:", pubKey.Address().String())
+
+	for k, v := range app.valAddrToPubKeyMap {
+		fmt.Println("Validator Info MAP:", k, v)
+	}
+
+	// Add validator to the validator set updates
+	_, ok := app.valAddrToPubKeyMap[pubKey.Address().String()]
+	if (!is_join) && (validator.Power == 0) && !ok {
+		app.server.Log.Info("ABCI: validator to be removed is not in the current validator set", zap.String("validator info", string(pubKey.Bytes())))
+		return validator, fmt.Errorf("validator to be removed is not in the current validator set")
+	}
+	valInfo := string(pubKey.Bytes()) + ":" + fmt.Sprintf("%d", validator.Power)
+	app.server.Log.Info("ABCI: adding validator changes to the validator set updates", zap.String("validator info", valInfo))
+
+	valUpdates := abcitypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
+	app.ValUpdates = append(app.ValUpdates, valUpdates)
+
+	pubkey, err := cryptoenc.PubKeyFromProto(valUpdates.PubKey)
+	if err != nil {
+		app.server.Log.Error("ABCI remove validator: failed to get pubkey from proto ", zap.String("error", err.Error()))
+		return validator, err
+	}
+
+	if is_join {
+		app.server.Log.Info("ABCI: added validator to the addr-pubkey map:", zap.String("Addr", string(pubkey.Address())), zap.String("PubKey", string(pubkey.Bytes())))
+		app.valAddrToPubKeyMap[pubkey.Address().String()] = valUpdates.PubKey
+	} else {
+		app.server.Log.Info("ABCI: removed validator from the addr-pubkey map:", zap.String("Addr", string(pubkey.Address())), zap.String("PubKey", string(pubkey.Bytes())))
+		delete(app.valAddrToPubKeyMap, pubkey.Address().String())
+	}
+	return validator, nil
+}
+
 func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitypes.ResponseInitChain {
 	app.ValUpdates = append(app.ValUpdates, req.Validators...)
 	for _, val := range req.Validators {
@@ -341,7 +398,7 @@ func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitype
 			fmt.Println("can't encode public key: %w", err)
 		}
 
-		app.valAddrToPubKeyMap[string(pubkey.Address())] = publicKey
+		app.valAddrToPubKeyMap[pubkey.Address().String()] = publicKey
 	}
 	return abcitypes.ResponseInitChain{}
 }
@@ -358,7 +415,7 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 	app.ValUpdates = make([]abcitypes.ValidatorUpdate, 0)
 	// Punish bad validators
 	for _, ev := range req.ByzantineValidators {
-		if ev.Type == types.MisbehaviorType_DUPLICATE_VOTE {
+		if ev.Type == abcitypes.MisbehaviorType_DUPLICATE_VOTE {
 			addr := string(ev.Validator.Address)
 			if pubKey, ok := app.valAddrToPubKeyMap[addr]; ok {
 

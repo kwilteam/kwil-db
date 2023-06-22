@@ -234,7 +234,11 @@ func newCometNode(app abci.Application, txSvc *txsvc.Service) (*nm.Node, error) 
 	validators := valNode.NewApprovedValidators(val_file_path)
 	validators.LoadOrCreateFile(val_file_path)
 
-	nodeReactor := valNode.NewReactor(validators)
+	nw_approved_val_file_path := "/tmp/.kwil/nw_approved_validators.txt"
+	nw_approved_validators := valNode.NewApprovedValidators(nw_approved_val_file_path)
+	nw_approved_validators.LoadOrCreateFile(nw_approved_val_file_path)
+
+	nodeReactor := valNode.NewReactor(validators, nw_approved_validators)
 	txSvc.NodeReactor = nodeReactor
 
 	node, err := nm.NewNode(

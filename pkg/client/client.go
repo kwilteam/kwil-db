@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
@@ -340,4 +341,31 @@ func (c *Client) ValidatorJoin(ctx context.Context, pubKey ed25519.PubKey, power
 
 func (c *Client) validatorJoinTx(ctx context.Context, validator *validator) (*kTx.Transaction, error) {
 	return c.newTx(ctx, kTx.VALIDATOR_JOIN, validator)
+}
+
+func (c *Client) ValidatorLeave(ctx context.Context, pubKey ed25519.PubKey) (*kTx.Receipt, error) {
+	validator := &validator{
+		PubKey: pubKey,
+		Power:  0, // Power is always 0 when leaving or not acting as a validator
+	}
+
+	tx, err := c.validatorLeaveTx(ctx, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.client.ValidatorLeave(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (c *Client) validatorLeaveTx(ctx context.Context, validator *validator) (*kTx.Transaction, error) {
+	return c.newTx(ctx, kTx.VALIDATOR_LEAVE, validator)
+}
+
+func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*txpb.ValidatorJoinStatusResponse, error) {
+	return c.client.ValidatorJoinStatus(ctx, pubKey)
 }
