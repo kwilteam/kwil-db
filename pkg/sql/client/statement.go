@@ -1,7 +1,8 @@
-package sqlite
+package client
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
+	"io"
+
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
 )
 
@@ -9,11 +10,7 @@ type Statement struct {
 	stmt *sqlite.Statement
 }
 
-func NewStatement(stmt *sqlite.Statement) *Statement {
-	return &Statement{stmt: stmt}
-}
-
-func (s *Statement) Execute(args map[string]any) (dto.Result, error) {
+func (s *Statement) Execute(args map[string]any) (io.Reader, error) {
 	res := &sqlite.ResultSet{}
 
 	err := s.stmt.Execute(
@@ -25,7 +22,7 @@ func (s *Statement) Execute(args map[string]any) (dto.Result, error) {
 		return nil, err
 	}
 
-	return res, nil
+	return resultsToReader(res)
 }
 
 func (s *Statement) Close() error {

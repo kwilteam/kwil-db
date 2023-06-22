@@ -2,9 +2,41 @@ package dataset2
 
 import "fmt"
 
-type OpCodeExecution struct {
-	OpCode Instruction
-	Args   []any
+// evaluateInstructions takes a list of instructions and executes them in order.
+func evaluateInstructions(ctx *executionContext, ds *Dataset, ins []*InstructionExecution, values map[string]any) error {
+	procedureCtx := &procedureContext{
+		executionContext: ctx,
+		values:           values,
+	}
+
+	sp, err := ds.db.Savepoint()
+	if err != nil {
+		return fmt.Errorf("failed to create savepoint: %w", err)
+	}
+	defer sp.Rollback()
+
+	for _, instruction := range ins {
+		err = instruction.evaluate(procedureCtx, ds)
+		if err != nil {
+			return fmt.Errorf("failed to evaluate instruction: %w", err)
+		}
+	}
+
+	err = sp.Commit()
+	if err != nil {
+		return fmt.Errorf("failed to commit savepoint: %w", err)
+	}
+
+	return nil
+}
+
+type InstructionExecution struct {
+	Instruction Instruction `json:"instruction"`
+	Args        []any       `json:"args"`
+}
+
+func (ie *InstructionExecution) evaluate(ctx *procedureContext, ds *Dataset) error {
+	return ie.Instruction.evaluate(ctx, ds, ie.Args...)
 }
 
 type Instruction string
@@ -28,7 +60,7 @@ const (
 func (o Instruction) evaluate(ctx *procedureContext, ds *Dataset, args ...any) error {
 	switch o {
 	default:
-		return fmt.Errorf("unknown opcode '%s'", o)
+		return fmt.Errorf("unknown instruction '%s'", o)
 	case OpCodeSetVariable:
 		return evalSetVariable(ctx, ds, args...)
 	case OpCodeDMLPrepare:

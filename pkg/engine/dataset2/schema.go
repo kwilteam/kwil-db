@@ -5,32 +5,32 @@ import "github.com/kwilteam/kwil-db/pkg/engine/dto"
 // TODO: this is a TEST schema to show to Gavin.
 
 type Schema struct {
-	Tables     []*dto.Table       `json:"tables"`
-	Procedures []*Procedure       `json:"procedures"`
-	OnLoad     []*OpCodeExecution `json:"on_load"`
-	OnDeploy   []*OpCodeExecution `json:"on_deploy"`
+	Tables     []*dto.Table            `json:"tables"`
+	Procedures []*Procedure            `json:"procedures"`
+	OnLoad     []*InstructionExecution `json:"on_load"`
+	OnDeploy   []*InstructionExecution `json:"on_deploy"`
 }
 
 var (
 	exampleSchema = &Schema{
 		Tables: []*dto.Table{},
-		OnLoad: []*OpCodeExecution{
+		OnLoad: []*InstructionExecution{
 			{
-				OpCode: OpCodeDMLPrepare,
+				Instruction: OpCodeDMLPrepare,
 				Args: []any{
 					"insert_user",
 					"INSERT INTO users (id, name) VALUES ($id, $name)",
 				},
 			},
 			{
-				OpCode: OpCodeSetVariable,
+				Instruction: OpCodeSetVariable,
 				Args: []any{
 					"!usdc_address",
 					"0x1234",
 				},
 			},
 			{
-				OpCode: OpCodeExtensionInitialize,
+				Instruction: OpCodeExtensionInitialize,
 				Args: []any{
 					"erc20",
 					"usdc",
@@ -46,29 +46,29 @@ var (
 				INSERT INTO users (id, name) VALUES (2, $constructor_name)
 			}
 		*/
-		OnDeploy: []*OpCodeExecution{
+		OnDeploy: []*InstructionExecution{
 			{
-				OpCode: OpCodeDMLPrepare,
+				Instruction: OpCodeDMLPrepare,
 				Args: []any{
 					"!insert_user_1",
 					"INSERT INTO users (id, name) VALUES (1, 'Gavin')",
 				},
 			},
 			{
-				OpCode: OpCodeDMLPrepare,
+				Instruction: OpCodeDMLPrepare,
 				Args: []any{
 					"!insert_user_2",
 					"INSERT INTO users (id, name) VALUES (2, $constructor_name)", // $constructor_name is a variable that must be passed into a constructor
 				},
 			},
 			{
-				OpCode: OpCodeDMLExecute,
+				Instruction: OpCodeDMLExecute,
 				Args: []any{
 					"!insert_user_1",
 				},
 			},
 			{
-				OpCode: OpCodeDMLExecute,
+				Instruction: OpCodeDMLExecute,
 				Args: []any{
 					"!insert_user_2",
 				},
@@ -82,9 +82,9 @@ var (
 					"$name",
 				},
 				Scoping: ProcedureScopingPublic,
-				Body: []*OpCodeExecution{
+				Body: []*InstructionExecution{
 					{
-						OpCode: OpCodeDMLExecute,
+						Instruction: OpCodeDMLExecute,
 						Args: []any{
 							"insert_user",
 						},
@@ -98,16 +98,16 @@ var (
 var (
 	schema2 = &Schema{
 		Tables: []*dto.Table{},
-		OnLoad: []*OpCodeExecution{
+		OnLoad: []*InstructionExecution{
 			{
-				OpCode: OpCodeSetVariable,
+				Instruction: OpCodeSetVariable,
 				Args: []any{
 					"!0xzabxjaska",
 					"0x1234",
 				},
 			},
 			{
-				OpCode: OpCodeExtensionInitialize,
+				Instruction: OpCodeExtensionInitialize,
 				Args: []any{
 					"erc20",
 					"usdc",
@@ -125,16 +125,16 @@ var (
 					"$name",
 				},
 				Scoping: ProcedureScopingPublic,
-				Body: []*OpCodeExecution{
+				Body: []*InstructionExecution{
 					{
-						OpCode: OpCodeSetVariable,
+						Instruction: OpCodeSetVariable,
 						Args: []any{
 							"!wallet_address",
 							"0xabc",
 						},
 					},
 					{
-						OpCode: OpCodeExtensionExecute,
+						Instruction: OpCodeExtensionExecute,
 						Args: []any{
 							"usdc",
 							"balance",
@@ -147,14 +147,14 @@ var (
 						},
 					},
 					{
-						OpCode: OpCodeSetVariable,
+						Instruction: OpCodeSetVariable,
 						Args: []any{
 							"!usdc_address",
 							"0x5678",
 						},
 					},
 					{
-						OpCode: OpCodeExtensionInitialize,
+						Instruction: OpCodeExtensionInitialize,
 						Args: []any{
 							"erc20",
 							"usdc",
