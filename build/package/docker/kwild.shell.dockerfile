@@ -23,4 +23,4 @@ COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/kwild-* ./kwild
 EXPOSE 50051
 EXPOSE 8080
-ENTRYPOINT ["/app/kwild"]
+ENTRYPOINT ["/app/kwild", "start"]

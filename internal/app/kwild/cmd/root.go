@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"syscall"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -30,10 +31,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var RootCmd = &cobra.Command{
+func NewStartCmd() *cobra.Command {
+	return startCmd
+}
+
+var startCmd = &cobra.Command{
 	Use:   "kwild",
 	Short: "kwil grpc server",
-	Long:  "",
+	Long:  "Starts node with Kwild and CometBFT services",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg, err := config.LoadKwildConfig()
@@ -109,7 +114,7 @@ func init() {
 		RootCmd.PersistentFlags().StringVar(&config.ConfigFile, "config", "", fmt.Sprintf("config file to use (default: '%s')", defaultConfigPath))
 	*/
 
-	config.BindFlagsAndEnv(RootCmd.PersistentFlags())
+	config.BindFlagsAndEnv(startCmd.PersistentFlags())
 }
 
 func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.ChainClient, error) {
@@ -161,6 +166,18 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	})
 	ck := registrar.BuildChecker(simple_checker.New(logger))
 	return healthsvc.NewServer(ck)
+}
+
+func NewStopCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the kwild process",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			syscall.Kill(1, syscall.SIGTERM)
+			fmt.Printf("stopping kwild process\n")
+			return nil
+		},
+	}
 }
 
 // from v0, removed 04/03/23
