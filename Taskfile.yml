@@ -84,14 +84,14 @@ tasks:
     deps: [ build:antlr ]
     cmds:
       # pass any args to build debug image, e.g. task docker:kwild -- debug
-      - ./scripts/build/docker kwild  {{.CLI_ARGS}}
+      - ./scripts/build/docker kwild  {{.CLI_ARGS}} -- shell
 
   # ************ dev ************
   dev:up:
     desc: Start the dev environment
     deps:
       - task: build:docker
-        vars: {VARIANT: "shell"}
+        vars: {VARIANT: 'shell'}
     cmds:
       - go test ./test/acceptance/ -timeout 12h -count=1 -dev -v
 

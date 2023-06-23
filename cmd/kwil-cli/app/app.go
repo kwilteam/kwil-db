@@ -6,7 +6,6 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/fund"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/system"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/utils"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/validator"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 
 	"github.com/spf13/cobra"
@@ -27,7 +26,6 @@ func Execute() error {
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),
 		system.NewVersionCmd(),
-		validator.NewCmdValidator(),
 	)
 
 	err := rootCmd.Execute()
