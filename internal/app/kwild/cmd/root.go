@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/cometbft/cometbft/p2p"
@@ -46,10 +47,14 @@ import (
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
-var RootCmd = &cobra.Command{
-	Use:   "kwild",
+func NewStartCmd() *cobra.Command {
+	return startCmd
+}
+
+var startCmd = &cobra.Command{
+	Use:   "start",
 	Short: "kwil grpc server",
-	Long:  "",
+	Long:  "Starts node with Kwild and CometBFT services",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg, err := config.LoadKwildConfig()
@@ -63,7 +68,6 @@ var RootCmd = &cobra.Command{
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-
 		fmt.Printf("Initializing kwil server")
 		srv, txSvc, err := initialize_kwil_server(ctx, cfg, logger)
 		if err != nil {
@@ -89,7 +93,7 @@ var RootCmd = &cobra.Command{
 		txSvc.BcNode = cometNode
 		txSvc.NodeReactor.GetPool().BcNode = cometNode
 
-		go func() {
+		go func(ctx context.Context) {
 			cometNode.Start()
 			defer func() {
 				cometNode.Stop()
@@ -97,17 +101,19 @@ var RootCmd = &cobra.Command{
 			}()
 			fmt.Printf("Waiting for any signals\n")
 			c := make(chan os.Signal, 1)
-			signal.Notify(c, os.Interrupt)
+			signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 			<-c
 			fmt.Printf("Stopping CometBFT node\n")
-		}()
+		}(ctx)
 
+		fmt.Printf("Waiting for any signals - End of main TADA\n")
 		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		fmt.Println("Waiting for any signals - End of main")
 		txSvc.NodeReactor.Wg.Add(1)
-		go txSvc.NodeReactor.JoinRequestRoutine()
+		go txSvc.NodeReactor.JoinRequestRoutine() // TODO: move to node reactor
 		<-c
+		fmt.Printf("Stopping CometBFT node\n")
 		txSvc.NodeReactor.Wg.Wait()
 		return nil
 	}}
@@ -119,7 +125,7 @@ func init() {
 		RootCmd.PersistentFlags().StringVar(&config.ConfigFile, "config", "", fmt.Sprintf("config file to use (default: '%s')", defaultConfigPath))
 	*/
 
-	config.BindFlagsAndEnv(RootCmd.PersistentFlags())
+	config.BindFlagsAndEnv(startCmd.PersistentFlags())
 }
 
 func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger log.Logger) (*server.Server, *txsvc.Service, error) {
@@ -304,6 +310,18 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	})
 	ck := registrar.BuildChecker(simple_checker.New(logger))
 	return healthsvc.NewServer(ck)
+}
+
+func NewStopCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the kwild daemon",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			syscall.Kill(1, syscall.SIGTERM)
+			fmt.Printf("stopping kwild daemon\n")
+			return nil
+		},
+	}
 }
 
 // from v0, removed 04/03/23

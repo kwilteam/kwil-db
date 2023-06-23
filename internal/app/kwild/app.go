@@ -2,9 +2,23 @@ package kwild
 
 import (
 	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd/validator"
+	"github.com/spf13/cobra"
 )
 
+var rootCmd = &cobra.Command{
+	Use:               "kwild",
+	Short:             "kwil command line interface",
+	Long:              "kwil allows you to configure Kwild services",
+	SilenceUsage:      true,
+	DisableAutoGenTag: true,
+}
+
 func Execute() error {
-	cmd.RootCmd.SilenceUsage = true
-	return cmd.RootCmd.Execute()
+	rootCmd.AddCommand(
+		validator.NewCmdValidator(),
+		cmd.NewStartCmd(),
+		cmd.NewStopCmd(),
+	)
+	return rootCmd.Execute()
 }
