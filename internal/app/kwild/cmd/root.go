@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"syscall"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -28,7 +27,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -167,24 +165,6 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	})
 	ck := registrar.BuildChecker(simple_checker.New(logger))
 	return healthsvc.NewServer(ck)
-}
-
-func NewStopCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "stop",
-		Short: "Stop the kwild daemon",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			pid := utils.GetProcessID("kwild")
-			if pid == 0 {
-				return nil
-			}
-			// send SIGTERM to kwild process
-			syscall.Kill(int(pid), syscall.SIGTERM)
-
-			fmt.Printf("stopping kwild daemon\n")
-			return nil
-		},
-	}
 }
 
 // from v0, removed 04/03/23
