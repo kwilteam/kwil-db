@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"syscall"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -35,9 +36,9 @@ func NewStartCmd() *cobra.Command {
 }
 
 var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Starts kwild server",
-	Long:  "Starts node with Kwild services",
+	Use:   "kwild",
+	Short: "kwil grpc server",
+	Long:  "Starts node with Kwild and CometBFT services",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		cfg, err := config.LoadKwildConfig()
@@ -166,6 +167,18 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	})
 	ck := registrar.BuildChecker(simple_checker.New(logger))
 	return healthsvc.NewServer(ck)
+}
+
+func NewStopCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the kwild process",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			syscall.Kill(1, syscall.SIGTERM)
+			fmt.Printf("stopping kwild process\n")
+			return nil
+		},
+	}
 }
 
 // from v0, removed 04/03/23
