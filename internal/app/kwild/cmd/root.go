@@ -28,6 +28,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -171,10 +172,16 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 func NewStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
-		Short: "Stop the kwild process",
+		Short: "Stop the kwild daemon",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			syscall.Kill(1, syscall.SIGTERM)
-			fmt.Printf("stopping kwild process\n")
+			pid := utils.GetProcessID("kwild")
+			if pid == 0 {
+				return nil
+			}
+			// send SIGTERM to kwild process
+			syscall.Kill(int(pid), syscall.SIGTERM)
+
+			fmt.Printf("stopping kwild daemon\n")
 			return nil
 		},
 	}
