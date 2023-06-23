@@ -1,10 +1,8 @@
 package validator
 
 import (
-	"context"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/spf13/cobra"
 )
@@ -20,13 +18,23 @@ func approveCmd() *cobra.Command {
 			// validatorPublicKey = args[0]
 			// Send the validator public key to the server to approve the validator
 			// through an RPC call
-			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
-				err := client.ApproveValidator(ctx, []byte(args[0]))
-				if err != nil {
-					return err
-				}
-				return nil
-			})
+			ctx := cmd.Context()
+			cfg, err := config.LoadKwildConfig()
+			if err != nil {
+				return err
+			}
+			options := []client.ClientOpt{}
+
+			clt, err := client.New(ctx, cfg.GrpcListenAddress, options...)
+			if err != nil {
+				return err
+			}
+
+			err = clt.ApproveValidator(ctx, []byte(args[0]))
+			if err != nil {
+				return err
+			}
+			return nil
 		},
 	}
 	return cmd

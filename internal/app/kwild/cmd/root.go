@@ -68,7 +68,6 @@ var startCmd = &cobra.Command{
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-
 		fmt.Printf("Initializing kwil server")
 		srv, txSvc, err := initialize_kwil_server(ctx, cfg, logger)
 		if err != nil {
@@ -94,7 +93,7 @@ var startCmd = &cobra.Command{
 		txSvc.BcNode = cometNode
 		txSvc.NodeReactor.GetPool().BcNode = cometNode
 
-		go func() {
+		go func(ctx context.Context) {
 			cometNode.Start()
 			defer func() {
 				cometNode.Stop()
@@ -102,17 +101,19 @@ var startCmd = &cobra.Command{
 			}()
 			fmt.Printf("Waiting for any signals\n")
 			c := make(chan os.Signal, 1)
-			signal.Notify(c, os.Interrupt)
+			signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 			<-c
 			fmt.Printf("Stopping CometBFT node\n")
-		}()
+		}(ctx)
 
+		fmt.Printf("Waiting for any signals - End of main TADA\n")
 		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		fmt.Println("Waiting for any signals - End of main")
 		txSvc.NodeReactor.Wg.Add(1)
-		go txSvc.NodeReactor.JoinRequestRoutine()
+		go txSvc.NodeReactor.JoinRequestRoutine() // TODO: move to node reactor
 		<-c
+		fmt.Printf("Stopping CometBFT node\n")
 		txSvc.NodeReactor.Wg.Wait()
 		return nil
 	}}
@@ -331,6 +332,18 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	})
 	ck := registrar.BuildChecker(simple_checker.New(logger))
 	return healthsvc.NewServer(ck)
+}
+
+func NewStopCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop the kwild daemon",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			syscall.Kill(1, syscall.SIGTERM)
+			fmt.Printf("stopping kwild daemon\n")
+			return nil
+		},
+	}
 }
 
 type starter interface {
