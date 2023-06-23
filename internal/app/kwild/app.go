@@ -16,7 +16,6 @@ var rootCmd = &cobra.Command{
 func Execute() error {
 	rootCmd.AddCommand(
 		cmd.NewStartCmd(),
-		cmd.NewStopCmd(),
 	)
 	return rootCmd.Execute()
 }
