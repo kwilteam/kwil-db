@@ -18,6 +18,10 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
+	if !s.executor.GasEnabled() {
+		return &txpb.EstimatePriceResponse{Price: "0"}, nil
+	}
+
 	switch tx.PayloadType {
 	case kTx.DEPLOY_DATABASE:
 		return handlePricing(s.priceDeploy(ctx, tx))
@@ -32,6 +36,11 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 	default:
 		return nil, fmt.Errorf("invalid payload type")
 	}
+}
+
+func (s *Service) GasCosts(ctx context.Context, req *txpb.GasCostsRequest) (*txpb.GasCostsResponse, error) {
+	s.executor.UpdateGasCosts(req.Enabled)
+	return &txpb.GasCostsResponse{}, nil
 }
 
 func handlePricing(price *big.Int, err error) (*txpb.EstimatePriceResponse, error) {

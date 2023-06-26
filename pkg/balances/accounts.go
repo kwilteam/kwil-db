@@ -111,7 +111,7 @@ func (a *AccountStore) spend(spend *Spend) error {
 	if err != nil {
 		return fmt.Errorf("failed to get account: %w", err)
 	}
-
+	fmt.Println("Account :", account.Address, account.Balance, account.Nonce, "\nSpending details :", spend.AccountAddress, spend.Amount, spend.Nonce)
 	if account.Nonce+1 != spend.Nonce {
 		a.log.Debug("tx nonce incorrect", zap.String("address", spend.AccountAddress), zap.Int64("expected", account.Nonce), zap.Int64("actual", spend.Nonce))
 		return ErrInvalidNonce
