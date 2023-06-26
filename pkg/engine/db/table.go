@@ -6,11 +6,6 @@ import (
 
 	sqlddlgenerator "github.com/kwilteam/kwil-db/pkg/engine/db/sql-ddl-generator"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
-	"github.com/mitchellh/mapstructure"
-)
-
-const (
-	tableVersion = 1
 )
 
 // CreateTable creates a new table and persists the metadata to the database
@@ -21,7 +16,7 @@ func (d *DB) CreateTable(ctx context.Context, table *types.Table) error {
 	}
 	defer savepoint.Rollback()
 
-	err = d.deployTable(table)
+	err = d.deployTable(ctx, table)
 	if err != nil {
 		return fmt.Errorf("failed to deploy table: %w", err)
 	}
@@ -35,7 +30,7 @@ func (d *DB) CreateTable(ctx context.Context, table *types.Table) error {
 }
 
 // deployTable deploys a new table to the database
-func (d *DB) deployTable(table *types.Table) error {
+func (d *DB) deployTable(ctx context.Context, table *types.Table) error {
 	ddlStmts, err := sqlddlgenerator.GenerateDDL(table)
 	if err != nil {
 		return err
@@ -48,41 +43,11 @@ func (d *DB) deployTable(table *types.Table) error {
 	defer savepoint.Rollback()
 
 	for _, ddlStmt := range ddlStmts {
-		err = d.sqldb.Execute(ddlStmt)
+		err = d.sqldb.Execute(ctx, ddlStmt, nil)
 		if err != nil {
 			return err
 		}
 	}
 
 	return savepoint.Commit()
-}
-
-// persistTableMetadata persists the metadata for a table to the database
-func (d *DB) persistTableMetadata(ctx context.Context, table *types.Table) error {
-	return d.persistVersionedMetadata(ctx, &versionedMetadata{
-		Version: tableVersion,
-		Data:    table,
-	})
-}
-
-// ListTables lists all tables in the database
-func (d *DB) ListTables(ctx context.Context) ([]*types.Table, error) {
-	meta, err := d.getVersionedMetadata(ctx, metadataTypeTable)
-	if err != nil {
-		return nil, err
-	}
-
-	var tables []*types.Table
-
-	for _, value := range meta {
-		tbl := types.Table{}
-		err = mapstructure.Decode(value.Data, &tbl)
-		if err != nil {
-			return nil, err
-		}
-
-		tables = append(tables, &tbl)
-	}
-
-	return tables, nil
 }
