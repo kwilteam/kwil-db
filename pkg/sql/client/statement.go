@@ -1,7 +1,7 @@
 package client
 
 import (
-	"io"
+	"context"
 
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
 )
@@ -10,19 +10,15 @@ type Statement struct {
 	stmt *sqlite.Statement
 }
 
-func (s *Statement) Execute(args map[string]any) (io.Reader, error) {
-	res := &sqlite.ResultSet{}
-
-	err := s.stmt.Execute(
+func (s *Statement) Execute(ctx context.Context, args map[string]any) ([]map[string]any, error) {
+	results, err := s.stmt.Start(ctx,
 		sqlite.WithNamedArgs(args),
-		sqlite.WithResultSet(res),
 	)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return resultsToReader(res)
+	return NewCursor(results).Export()
 }
 
 func (s *Statement) Close() error {

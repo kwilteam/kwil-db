@@ -12,26 +12,48 @@ import (
 // TODO: This is a stub. Delete it.
 type IDataset interface {
 	Close() error
-	Procedures() []*Procedure
+	Procedures() []*types.Procedure
 	Tables(ctx context.Context) []*types.Table
 	Delete() error
-	Query(ctx context.Context, stmt string, args map[string]any) (io.Reader, error)
-	Execute(ctx context.Context, stmt string, args map[string]any, opts *TxOpts) (io.Reader, error)
+	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
+	Execute(ctx context.Context, procedure string, args []map[string]any, opts *TxOpts) ([]map[string]any, error)
 }
 
 // A dataset is a deployed Kwil database with an underlying data store and engine.
 type Dataset struct {
-	dbid string
-
 	metadata *Metadata
 	db       Datastore
 	engine   Engine
 }
 
-// OpenDataset wraps the database with a Dataset.
-// TODO: Should this be renamed?
-func OpenDataset(ctx context.Context, ds Dataset) (*Dataset, error) {
-	return nil, nil
+// OpenDataset opens a new dataset and loads the metadata from the database
+func OpenDataset(ctx context.Context, ds Datastore) (*Dataset, error) {
+	procedures, err := getProcedureMap(ctx, ds)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Dataset{
+		metadata: &Metadata{
+			Procedures: procedures,
+		},
+		db: ds,
+	}, nil
+}
+
+// getProcedureMap returns a map of procedure names to procedures.
+func getProcedureMap(ctx context.Context, ds Datastore) (map[string]*types.Procedure, error) {
+	procs, err := ds.ListProcedures(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	procMap := make(map[string]*types.Procedure)
+	for _, proc := range procs {
+		procMap[proc.Name] = proc
+	}
+
+	return procMap, nil
 }
 
 // Query executes a ad-hoc, read-only query.
@@ -40,8 +62,8 @@ func (d *Dataset) Query(ctx context.Context, stmt string, args map[string]any) (
 }
 
 // Procedures returns the procedures in the dataset.
-func (d *Dataset) Procedures() []*Procedure {
-	var procs []*Procedure
+func (d *Dataset) Procedures() []*types.Procedure {
+	var procs []*types.Procedure
 	for _, procedure := range d.metadata.Procedures {
 		procs = append(procs, procedure)
 	}

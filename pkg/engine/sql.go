@@ -149,6 +149,7 @@ func (e *engine) listDatasetsByOwner(ctx context.Context, owner string) ([]strin
 	var datasets []string
 
 	results := result.Records()
+
 	for _, r := range results {
 		datasets = append(datasets, r["name"].(string))
 	}
