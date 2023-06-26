@@ -9,6 +9,8 @@ import (
 )
 
 func Test_ForeignKey(t *testing.T) {
+	ctx := context.Background()
+
 	db, td := openRealDB()
 	defer td()
 
@@ -30,10 +32,15 @@ func Test_ForeignKey(t *testing.T) {
 
 	testUsername := "test_user"
 
-	err = insertUserStmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+	result, err := insertUserStmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
 		"$id":       1,
 		"$username": testUsername,
 	}))
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = result.Finish()
 	if err != nil {
 		t.Error(err)
 	}
@@ -44,11 +51,16 @@ func Test_ForeignKey(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = insertPostStmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+	result2, err := insertPostStmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
 		"$id":      1,
 		"$user_id": 1,
 		"$title":   "test_post",
 	}))
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = result2.Finish()
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,7 +71,7 @@ func Test_ForeignKey(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = updateUserStmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+	result3, err := updateUserStmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
 		"$id":       2,
 		"$username": testUsername,
 	}))
@@ -67,14 +79,21 @@ func Test_ForeignKey(t *testing.T) {
 		t.Error(err)
 	}
 
-	ctx := context.Background()
-	var resultSet sqlite.ResultSet
-	err = db.Query(ctx, "SELECT * FROM posts", sqlite.WithResultSet(&resultSet))
+	err = result3.Finish()
 	if err != nil {
 		t.Error(err)
 	}
 
-	res := resultSet.Records()
+	results4, err := db.Query(ctx, "SELECT * FROM posts")
+	if err != nil {
+		t.Error(err)
+	}
+
+	res, err := results4.ExportRecords()
+	if err != nil {
+		t.Error(err)
+	}
+
 	firstPost := res[0]
 	if fmt.Sprint(firstPost["user_id"]) != fmt.Sprint(2) {
 		t.Errorf("expected user_id to be 2, got %v", firstPost["user_id"])
@@ -86,32 +105,42 @@ func Test_ForeignKey(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = deleteUserStmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
+	result5, err := deleteUserStmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
 		"$username": testUsername,
 	}))
 	if err != nil {
 		t.Error(err)
 	}
-	// check that user is deleted
-	var userResults sqlite.ResultSet
-	err = db.Query(ctx, "SELECT * FROM wallets", sqlite.WithResultSet(&userResults))
+
+	err = result5.Finish()
 	if err != nil {
 		t.Error(err)
 	}
 
-	res = userResults.Records()
+	// check that user is deleted
+	results6, err := db.Query(ctx, "SELECT * FROM wallets")
+	if err != nil {
+		t.Error(err)
+	}
+
+	res, err = results6.ExportRecords()
+	if err != nil {
+		t.Error(err)
+	}
 	if len(res) != 0 {
 		t.Errorf("expected 0 user, got %d", len(res))
 	}
 
 	// check if post is deleted
-	var postResults sqlite.ResultSet
-	err = db.Query(ctx, "SELECT * FROM posts", sqlite.WithResultSet(&resultSet))
+	postResults, err := db.Query(ctx, "SELECT * FROM posts")
 	if err != nil {
 		t.Error(err)
 	}
 
-	res = postResults.Records()
+	res, err = postResults.ExportRecords()
+	if err != nil {
+		t.Error(err)
+	}
 	if len(res) != 0 {
 		t.Errorf("expected 0 post, got %d", len(res))
 	}

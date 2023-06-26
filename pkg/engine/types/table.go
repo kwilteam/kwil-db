@@ -7,7 +7,7 @@ import (
 type Table struct {
 	Name        string        `json:"name" clean:"lower"`
 	Columns     []*Column     `json:"columns"`
-	Indexes     []*Index      `json:"indexes"`
+	Indexes     []*Index      `json:"indexes,omitempty"`
 	ForeignKeys []*ForeignKey `json:"foreign_keys"`
 }
 

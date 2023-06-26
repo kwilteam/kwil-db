@@ -18,16 +18,28 @@ func init() {
 	defaultPath = fmt.Sprintf("%s/.kwil/sqlite/", dirname)
 }
 
-type SqliteOpts func(*SqliteClient)
+type options struct {
+	log  log.Logger
+	path string
+	name string
+}
+
+type SqliteOpts func(*options)
 
 func WithPath(path string) SqliteOpts {
-	return func(e *SqliteClient) {
+	return func(e *options) {
 		e.path = path
 	}
 }
 
 func WithLogger(l log.Logger) SqliteOpts {
-	return func(e *SqliteClient) {
+	return func(e *options) {
 		e.log = l
+	}
+}
+
+func WithName(name string) SqliteOpts {
+	return func(e *options) {
+		e.name = name
 	}
 }

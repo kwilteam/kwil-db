@@ -2,10 +2,12 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -195,12 +197,14 @@ func (c *Connection) Execute(stmt string, args ...map[string]any) error {
 
 // execute executes a one-off statement.  It does not use a mutex, unlike Execute.
 func (c *Connection) execute(stmt string, args ...map[string]any) error {
+	cleanedStmt := trimPadding(stmt)
+
 	if len(args) == 0 {
-		return sqlitex.ExecuteTransient(c.conn, stmt, nil)
+		return sqlitex.ExecuteTransient(c.conn, cleanedStmt, nil)
 	}
 
 	for _, arg := range args {
-		err := sqlitex.ExecuteTransient(c.conn, stmt, &sqlitex.ExecOptions{
+		err := sqlitex.ExecuteTransient(c.conn, cleanedStmt, &sqlitex.ExecOptions{
 			Named: arg,
 		})
 		if err != nil {
@@ -267,17 +271,20 @@ func (c *Connection) prepareRead(ctx context.Context, statement string) (stmt *S
 
 	deferFunc = func() error {
 		c.readPool.Put(readConn)
+
+		if stmt == nil {
+			return nil
+		}
+
 		return stmt.stmt.Finalize()
 	}
 
 	innerStmt, trailingBytes, err := readConn.PrepareTransient(trimPadding(statement))
 	if err != nil {
-		c.readPool.Put(readConn)
 		return nil, deferFunc, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 
 	if trailingBytes > 0 {
-		c.readPool.Put(readConn)
 		return nil, deferFunc, fmt.Errorf("trailing bytes after statement: %q", trailingBytes)
 	}
 
@@ -288,30 +295,47 @@ func (c *Connection) prepareRead(ctx context.Context, statement string) (stmt *S
 // It takes a QueryOpts struct, which can contain arguments, a function to manually bind parameters, a function
 // to manually handle each result in between Step() calls, and a struct to store the results in.
 // All of these are optional, and if not provided, the function will return an error
-func (c *Connection) Query(ctx context.Context, statement string, options ...ExecOption) error {
+// TODO: rename this to BeginQuery
+func (c *Connection) Query(ctx context.Context, statement string, options ...ExecOption) (*Results, error) {
 	if c.readPool == nil {
-		return fmt.Errorf("connection is nil")
+		return nil, fmt.Errorf("connection is nil")
 	}
 
-	err := c.query(ctx, statement, options...)
+	results, err := c.query(ctx, statement, removeNilVals(options)...)
 	if err != nil {
 		c.log.Error("failed to execute query", zap.Error(err))
-		return err
+		return nil, err
 	}
 
-	return nil
+	return results, nil
+}
+
+func removeNilVals[T any](vals []T) []T {
+	newVals := make([]T, 0)
+	for _, val := range vals {
+		if !reflect.ValueOf(&val).Elem().IsZero() {
+			newVals = append(newVals, val)
+		}
+	}
+	return newVals
 }
 
 // query executes a query and calls the resultFn for each row returned
 // statementSetterFn is a function that is called to set the arguments for the statement
-func (c *Connection) query(ctx context.Context, statement string, options ...ExecOption) error {
+func (c *Connection) query(ctx context.Context, statement string, options ...ExecOption) (*Results, error) {
 	stmt, deferFunc, err := c.prepareRead(ctx, statement)
 	if err != nil {
-		return fmt.Errorf("error preparing read: %w", err)
+		return nil, errors.Join(fmt.Errorf("error preparing read: %w", err), deferFunc())
 	}
-	defer deferFunc()
 
-	return stmt.execute(options...)
+	results, err := stmt.execute(ctx, options...)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("error executing read: %w", err), deferFunc())
+	}
+
+	results.addCloser(deferFunc)
+
+	return results, nil
 }
 
 func (c *Connection) CheckpointWal() error {
@@ -337,15 +361,35 @@ func (c *Connection) DisableForeignKey() error {
 
 func (c *Connection) ListTables(ctx context.Context) ([]string, error) {
 	tables := make([]string, 0)
-	err := c.Query(ctx, sqlListTables,
-		WithResultFunc(func(stmt *Statement) error {
-			tables = append(tables, stmt.GetText("name"))
-			return nil
-		}),
-	)
-
+	results, err := c.Query(ctx, sqlListTables)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tables: %w", err)
+	}
+	defer results.Finish()
+
+	for {
+		rowReturned, err := results.Next()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next row: %w", err)
+		}
+
+		if !rowReturned {
+			break
+		}
+
+		row := results.GetRecord()
+
+		nameAny, ok := row["name"]
+		if !ok {
+			return nil, fmt.Errorf("failed to get name from row: %w", err)
+		}
+
+		name, ok := nameAny.(string)
+		if !ok {
+			return nil, fmt.Errorf("failed to cast name to string: %w", err)
+		}
+
+		tables = append(tables, name)
 	}
 
 	return tables, nil
@@ -353,17 +397,27 @@ func (c *Connection) ListTables(ctx context.Context) ([]string, error) {
 
 func (c *Connection) TableExists(ctx context.Context, tableName string) (bool, error) {
 	exists := false
-	err := c.Query(ctx, sqlIfTableExists,
-		WithResultFunc(func(stmt *Statement) error {
-			exists = true
-			return nil
-		}),
+	results, err := c.Query(ctx, sqlIfTableExists,
 		WithNamedArgs(map[string]interface{}{
 			"$name": tableName,
 		}),
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if table exists: %w", err)
+	}
+	defer results.Finish()
+
+	for {
+		rowReturned, err := results.Next()
+		if err != nil {
+			return false, fmt.Errorf("failed to get next row: %w", err)
+		}
+
+		if !rowReturned {
+			break
+		}
+
+		exists = true
 	}
 
 	return exists, nil
