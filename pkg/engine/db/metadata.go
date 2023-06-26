@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -22,20 +21,6 @@ const (
 	metadataTypeProcedure  metadataType = "procedure"
 	metadataTypeExtensions metadataType = "extensions"
 )
-
-func getMetadataType(val any) (metadataType, error) {
-	var metaType metadataType
-	switch val.(type) {
-	case *types.Table:
-		metaType = metadataTypeTable
-	case *types.Procedure:
-		metaType = metadataTypeProcedure
-	default:
-		return "", fmt.Errorf("unknown metadata type: %T", val)
-	}
-
-	return metaType, nil
-}
 
 const (
 	metadataTableName            = "metadata"
@@ -70,11 +55,11 @@ func (d *DB) initMetadataTable(ctx context.Context) error {
 		return nil
 	}
 
-	return d.sqldb.Execute(createMetadataTableStatement)
+	return d.sqldb.Execute(ctx, createMetadataTableStatement, nil)
 }
 
 func (d *DB) storeMetadata(ctx context.Context, meta *metadata) error {
-	return d.sqldb.Execute(insertMetadataStatement, map[string]interface{}{
+	return d.sqldb.Execute(ctx, insertMetadataStatement, map[string]interface{}{
 		"$identifier": meta.Identifier,
 		"$type":       meta.Type,
 		"$content":    meta.Content,
@@ -82,18 +67,9 @@ func (d *DB) storeMetadata(ctx context.Context, meta *metadata) error {
 }
 
 func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadata, error) {
-	reader, err := d.sqldb.Query(ctx, selectMetadataStatement, map[string]interface{}{
+	results, err := d.sqldb.Query(ctx, selectMetadataStatement, map[string]interface{}{
 		"$type": metaType,
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	if reader == nil {
-		return nil, nil
-	}
-
-	results, err := ResultsfromReader(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -114,15 +90,9 @@ func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadat
 			return nil, fmt.Errorf("stored metadata missing content")
 		}
 
-		// decode content as base64 string and convert to byte array
-		contentStr, ok := contentAny.(string)
+		content, ok := contentAny.([]byte)
 		if !ok {
 			return nil, fmt.Errorf("stored metadata content is not a byte array")
-		}
-
-		content, err := base64.StdEncoding.DecodeString(contentStr)
-		if err != nil {
-			return nil, err
 		}
 
 		metas = append(metas, &metadata{
@@ -137,8 +107,8 @@ func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadat
 
 // versionedMetadata is a generic that wraps a serializable type with a version
 type versionedMetadata struct {
-	Version int `json:"version"`
-	Data    any `json:"data"`
+	Version int    `json:"version"`
+	Data    []byte `json:"data"`
 }
 
 func (d *DB) getVersionedMetadata(ctx context.Context, metaType metadataType) ([]*versionedMetadata, error) {
@@ -161,44 +131,37 @@ func (d *DB) getVersionedMetadata(ctx context.Context, metaType metadataType) ([
 	return versionedMetas, nil
 }
 
-func (d *DB) persistVersionedMetadata(ctx context.Context, meta *versionedMetadata) error {
+func (d *DB) persistVersionedMetadata(ctx context.Context, identifier string, metaType metadataType, meta *versionedMetadata) error {
 	bts, err := json.Marshal(meta)
 	if err != nil {
 		return err
 	}
 
-	metaType, err := getMetadataType(meta.Data)
-	if err != nil {
-		return err
-	}
-
-	ident, err := getIdentifier(meta.Data)
-	if err != nil {
-		return err
-	}
-
 	return d.storeMetadata(ctx, &metadata{
-		Identifier: ident,
+		Identifier: identifier,
 		Type:       string(metaType),
 		Content:    bts,
 	})
 }
 
-// getIdentifier returns the identifier for a serializable type.
-// this is opposed to using a method on the structs, which requires an extra
-// method in the types package
-func getIdentifier(data any) (string, error) {
-	// we have to use any instead of serializable because you can't type-assert a generic
-	var ident string
+// serializable is an interface and generic that all serializable types must implement
+type serializable interface {
+	types.Table | types.Procedure
+}
 
-	switch dataType := data.(type) {
-	case *types.Table:
-		ident = dataType.Name
-	case *types.Procedure:
-		ident = dataType.Name
-	default:
-		return "", fmt.Errorf("invalid serializable type: %s", data)
+func decodeMetadata[T serializable](meta []*versionedMetadata) ([]*T, error) {
+	var decoded []*T
+
+	for _, value := range meta {
+		tbl := new(T)
+
+		err := json.Unmarshal(value.Data, tbl)
+		if err != nil {
+			return nil, err
+		}
+
+		decoded = append(decoded, tbl)
 	}
 
-	return ident, nil
+	return decoded, nil
 }

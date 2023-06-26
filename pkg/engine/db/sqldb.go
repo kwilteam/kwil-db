@@ -2,15 +2,14 @@ package db
 
 import (
 	"context"
-	"io"
 )
 
 type SqlDB interface {
 	// Execute executes a statement.
-	Execute(stmt string, args ...map[string]any) error
+	Execute(ctx context.Context, stmt string, args map[string]any) error
 
 	// Query executes a query and returns the result.
-	Query(ctx context.Context, query string, args ...map[string]any) (io.Reader, error)
+	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 
 	// Prepare prepares a statement for execution, and returns a Statement.
 	Prepare(stmt string) (Statement, error)
@@ -34,6 +33,6 @@ type Savepoint interface {
 }
 
 type Statement interface {
-	Execute(args map[string]any) (io.Reader, error)
+	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)
 	Close() error
 }

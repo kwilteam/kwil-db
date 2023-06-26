@@ -10,7 +10,6 @@ package db
 
 import (
 	"context"
-	"io"
 )
 
 type DB struct {
@@ -29,7 +28,7 @@ func (d *DB) Prepare(query string) (Statement, error) {
 	return d.sqldb.Prepare(query)
 }
 
-func (d *DB) Query(ctx context.Context, stmt string, args map[string]any) (io.Reader, error) {
+func (d *DB) Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error) {
 	return d.sqldb.Query(ctx, stmt, args)
 }
 
