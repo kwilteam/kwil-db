@@ -14,7 +14,6 @@ interacting with SQLite databases.
 package client
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -31,71 +30,63 @@ type SqliteClient struct {
 
 	// log is self-explanatory.
 	log log.Logger
-
-	// path is the path to the SQLite database.
-	path string
-
-	// name is the name of the SQLite database file.  if it doesn't exist, it will be created.
-	name string
 }
 
 func NewSqliteStore(name string, opts ...SqliteOpts) (*SqliteClient, error) {
-	sqliteDB := &SqliteClient{
+	optns := &options{
 		log:  log.NewNoOp(),
-		name: name,
 		path: defaultPath,
+		name: name,
 	}
 
 	for _, opt := range opts {
-		opt(sqliteDB)
+		opt(optns)
 	}
 
-	var err error
-	sqliteDB.conn, err = sqlite.OpenConn(sqliteDB.name,
-		sqlite.WithPath(sqliteDB.path),
-		sqlite.WithLogger(sqliteDB.log),
+	conn, err := sqlite.OpenConn(optns.name,
+		sqlite.WithPath(optns.path),
+		sqlite.WithLogger(optns.log),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	err = sqliteDB.conn.EnableForeignKey()
+	return WrapSqliteConn(conn, optns.log)
+}
+
+func WrapSqliteConn(conn *sqlite.Connection, logger log.Logger) (*SqliteClient, error) {
+	clnt := &SqliteClient{
+		conn: conn,
+		log:  logger,
+	}
+
+	err := clnt.conn.EnableForeignKey()
 	if err != nil {
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
-	return sqliteDB, nil
+	return clnt, nil
 }
 
 // Execute executes a statement.
-func (s *SqliteClient) Execute(stmt string, args ...map[string]any) error {
-	if len(args) > 1 {
-		return fmt.Errorf("only one set of args is supported") // the sqlite engine can support multiple sets of args, but we don't need that functionality
-	}
-
-	return s.conn.Execute(stmt, args...)
+func (s *SqliteClient) Execute(ctx context.Context, stmt string, args map[string]any) error {
+	return s.conn.Execute(stmt, args)
 }
 
 // Query executes a query and returns the result.
-func (s *SqliteClient) Query(ctx context.Context, query string, args ...map[string]any) (io.Reader, error) {
-	if len(args) > 1 {
-		return nil, fmt.Errorf("only one set of args is supported") // the sqlite engine can support multiple sets of args, but we don't need that functionality
-	}
-	if len(args) == 0 {
-		args = append(args, nil)
+func (s *SqliteClient) Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error) {
+	execOpts := []sqlite.ExecOption{}
+
+	if args != nil {
+		execOpts = append(execOpts, sqlite.WithNamedArgs(args))
 	}
 
-	res := &sqlite.ResultSet{}
-
-	err := s.conn.Query(ctx, query,
-		sqlite.WithNamedArgs(args[0]),
-		sqlite.WithResultSet(res),
-	)
+	results, err := s.conn.Query(ctx, query, execOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	return resultsToReader(res)
+	return NewCursor(results).Export()
 }
 
 // Prepare prepares a statement for execution, and returns a Statement.
@@ -133,15 +124,6 @@ func (s *SqliteClient) Savepoint() (*Savepoint, error) {
 	return &Savepoint{
 		sp: sp,
 	}, nil
-}
-
-func resultsToReader(res *sqlite.ResultSet) (io.Reader, error) {
-	recordBytes, err := json.Marshal(res.Records())
-	if err != nil {
-		return nil, err
-	}
-
-	return bytes.NewBuffer(recordBytes), nil
 }
 
 // ResultsfromReader reads the results from a reader and returns them as an array of maps.
