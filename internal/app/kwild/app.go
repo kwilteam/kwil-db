@@ -18,7 +18,6 @@ func Execute() error {
 	rootCmd.AddCommand(
 		validator.NewCmdValidator(),
 		cmd.NewStartCmd(),
-		cmd.NewStopCmd(),
 	)
 	return rootCmd.Execute()
 }
