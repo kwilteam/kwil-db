@@ -369,3 +369,7 @@ func (c *Client) validatorLeaveTx(ctx context.Context, validator *validator) (*k
 func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*txpb.ValidatorJoinStatusResponse, error) {
 	return c.client.ValidatorJoinStatus(ctx, pubKey)
 }
+
+func (c *Client) UpdateGasCosts(ctx context.Context, gas_enabled bool) error {
+	return c.client.UpdateGasCosts(ctx, gas_enabled)
+}
