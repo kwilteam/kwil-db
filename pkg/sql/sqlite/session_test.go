@@ -52,14 +52,22 @@ func Test_ChangesetApply(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// check that the row is not there
-	var results sqlite.ResultSet
-	err = db.Query(ctx, "SELECT * FROM users", sqlite.WithResultSet(&results))
+	results, err := db.Query(ctx, "SELECT * FROM users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer results.Finish()
+
+	records, err := results.ExportRecords()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(results.Rows) != 0 {
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(records) != 0 {
 		t.Fatal("expected 0 rows")
 	}
 
@@ -70,12 +78,17 @@ func Test_ChangesetApply(t *testing.T) {
 	}
 
 	// check that the row is there
-	err = db.Query(ctx, "SELECT * FROM users", sqlite.WithResultSet(&results))
+	results, err = db.Query(ctx, "SELECT * FROM users")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(results.Rows) != 1 {
+	records, err = results.ExportRecords()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(records) != 1 {
 		t.Fatal("expected 1 row")
 	}
 }
@@ -254,13 +267,17 @@ func Test_SessionPersistence(t *testing.T) {
 	ses.Delete()
 
 	// check that the row is still there
-	var results sqlite.ResultSet
-	err = db.Query(ctx, "SELECT COUNT(*) FROM users", sqlite.WithResultSet(&results))
+	results, err := db.Query(ctx, "SELECT COUNT(*) FROM users")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if results.Rows[0][0].(int64) != 1 {
+	records, err := results.ExportRecords()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(records) != 1 {
 		t.Fatal("expected 1 row")
 	}
 }
