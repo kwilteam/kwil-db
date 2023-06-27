@@ -1,14 +1,18 @@
 package gas
 
 import (
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"fmt"
 
-	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
+	kc "github.com/kwilteam/kwil-db/internal/app/kwild/client"
 	"github.com/spf13/cobra"
 )
 
 // ApproveCmd is used for approving validators
 func enableGasCmd() *cobra.Command {
+	var validatorURL string
+	var privateKey string
+	var ClientChainRPCURL string
 	cmd := &cobra.Command{
 		Use:   "enable",
 		Short: "Enables gas prices on the transactions",
@@ -16,25 +20,38 @@ func enableGasCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cfg, err := config.LoadKwildConfig()
+			cfg := &kc.KwildConfig{
+				GrpcURL:           validatorURL,
+				PrivateKey:        privateKey,
+				ClientChainRPCURL: ClientChainRPCURL,
+			}
+
+			clt, err := kc.NewClient(ctx, cfg)
 			if err != nil {
 				return err
 			}
-			options := []client.ClientOpt{}
 
-			clt, err := client.New(ctx, cfg.GrpcListenAddress, options...)
+			receipt, err := clt.UpdateGasCosts(ctx, true)
 			if err != nil {
-				return err
+				fmt.Println("Error: ", err)
 			}
-
-			err = clt.UpdateGasCosts(ctx, true)
+			fmt.Println("Receipt: ", receipt, "Error: ", err)
+			if receipt != nil {
+				display.PrintTxResponse(receipt)
+			}
 			return err
 		},
 	}
+	cmd.Flags().StringVarP(&validatorURL, "validatorURL", "v", "", "Validator URL that you want to join")
+	cmd.Flags().StringVarP(&privateKey, "privateKey", "k", "", "The private key of the wallet that will be used for signing")
+	cmd.Flags().StringVarP(&ClientChainRPCURL, "clientChainRPCURL", "c", "", "The client chain RPC URL")
 	return cmd
 }
 
 func disableGasCmd() *cobra.Command {
+	var validatorURL string
+	var privateKey string
+	var ClientChainRPCURL string
 	cmd := &cobra.Command{
 		Use:   "disable",
 		Short: "Disables gas prices on the transactions",
@@ -42,20 +59,30 @@ func disableGasCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cfg, err := config.LoadKwildConfig()
+			cfg := &kc.KwildConfig{
+				GrpcURL:           validatorURL,
+				PrivateKey:        privateKey,
+				ClientChainRPCURL: ClientChainRPCURL,
+			}
+
+			clt, err := kc.NewClient(ctx, cfg)
 			if err != nil {
 				return err
 			}
-			options := []client.ClientOpt{}
 
-			clt, err := client.New(ctx, cfg.GrpcListenAddress, options...)
+			receipt, err := clt.UpdateGasCosts(ctx, false)
 			if err != nil {
-				return err
+				fmt.Println("Error: ", err)
 			}
 
-			err = clt.UpdateGasCosts(ctx, false)
+			if receipt != nil {
+				display.PrintTxResponse(receipt)
+			}
 			return err
 		},
 	}
+	cmd.Flags().StringVarP(&validatorURL, "validatorURL", "v", "", "Validator URL that you want to join")
+	cmd.Flags().StringVarP(&privateKey, "privateKey", "k", "", "The private key of the wallet that will be used for signing")
+	cmd.Flags().StringVarP(&ClientChainRPCURL, "clientChainRPCURL", "c", "", "The client chain RPC URL")
 	return cmd
 }

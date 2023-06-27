@@ -12,6 +12,7 @@ const (
 	EXECUTE_ACTION
 	VALIDATOR_JOIN
 	VALIDATOR_LEAVE
+	CONFIG_UPDATE
 	END_PAYLOAD_TYPE
 )
 
@@ -33,6 +34,8 @@ func (x PayloadType) String() string {
 		return "VALIDATOR_JOIN"
 	case VALIDATOR_LEAVE:
 		return "VALIDATOR_LEAVE"
+	case CONFIG_UPDATE:
+		return "CONFIG_UPDATE"
 	default:
 		return fmt.Sprintf("PayloadType(%d)", x)
 	}

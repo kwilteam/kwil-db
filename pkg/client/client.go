@@ -370,6 +370,26 @@ func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*txpb.
 	return c.client.ValidatorJoinStatus(ctx, pubKey)
 }
 
-func (c *Client) UpdateGasCosts(ctx context.Context, gas_enabled bool) error {
-	return c.client.UpdateGasCosts(ctx, gas_enabled)
+func (c *Client) UpdateGasCosts(ctx context.Context, gas_enabled bool) (*kTx.Receipt, error) {
+	config := &configUpdate{
+		GasEnabled: gas_enabled,
+		GasUpdated: true,
+	}
+	fmt.Printf("UpdateGasCosts: %v\n", config)
+	tx, err := c.configUpdateTx(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Payload: ", tx.Payload)
+	res, err := c.client.UpdateGasCosts(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+	//return c.client.UpdateGasCosts(ctx, gas_enabled)
+}
+
+func (c *Client) configUpdateTx(ctx context.Context, config *configUpdate) (*kTx.Transaction, error) {
+	return c.newTx(ctx, kTx.CONFIG_UPDATE, config)
 }

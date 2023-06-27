@@ -24,11 +24,17 @@ import (
 	"go.uber.org/zap"
 )
 
+type ConfigUpdate struct {
+	gas_updated bool
+	gas_enabled bool
+}
+
 type KwilDbApplication struct {
 	server             *server.Server
 	executor           datasets.DatasetUseCaseInterface
 	ValUpdates         []abcitypes.ValidatorUpdate
 	valAddrToPubKeyMap map[string]pc.PublicKey
+	configUpdates      *ConfigUpdate
 }
 
 var _ abcitypes.Application = (*KwilDbApplication)(nil)
@@ -118,6 +124,8 @@ func (app *KwilDbApplication) DeliverTx(req_tx abcitypes.RequestDeliverTx) abcit
 		return app.validator_join(&tx)
 	case kTx.VALIDATOR_LEAVE:
 		return app.validator_leave(&tx)
+	case kTx.CONFIG_UPDATE:
+		return app.config_update(&tx)
 	default:
 		err = fmt.Errorf("unknown payload type: %s", tx.PayloadType)
 	}
@@ -282,6 +290,33 @@ func (app *KwilDbApplication) execute_action(tx *kTx.Transaction) abcitypes.Resp
 	return abcitypes.ResponseDeliverTx{Code: 0, Data: data, Events: events}
 }
 
+func (app *KwilDbApplication) config_update(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
+	var events []abcitypes.Event
+
+	config, err := txsvc.UnmarshalConfigUpdate(tx.Payload)
+	if err != nil {
+		app.server.Log.Error("ABCI config update: failed to unmarshal config update ", zap.String("error", err.Error()))
+		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: events}
+	}
+
+	if config.GasUpdated && config.GasEnabled != app.executor.GasEnabled() {
+		if app.configUpdates == nil {
+			app.configUpdates = &ConfigUpdate{}
+		}
+		app.configUpdates.gas_enabled = config.GasEnabled
+		app.configUpdates.gas_updated = true
+		fmt.Printf("gas enabled: %v\n", config.GasEnabled)
+		events = append(events, abcitypes.Event{
+			Type: "config_update",
+			Attributes: []abcitypes.EventAttribute{
+				{Key: "GasCosts", Value: fmt.Sprintf("%v", config.GasEnabled), Index: true},
+			},
+		})
+	}
+
+	return abcitypes.ResponseDeliverTx{Code: 0, Events: events}
+}
+
 func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
 	var events []abcitypes.Event
 
@@ -432,6 +467,7 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 
 		}
 	}
+	app.configUpdates = nil
 	return abcitypes.ResponseBeginBlock{}
 }
 
@@ -440,6 +476,13 @@ func (app *KwilDbApplication) EndBlock(block abcitypes.RequestEndBlock) abcitype
 }
 
 func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
+	if app.configUpdates != nil {
+		if app.configUpdates.gas_updated {
+			app.executor.UpdateGasCosts(app.configUpdates.gas_enabled)
+			fmt.Println("Updated gas costs", app.executor.GasEnabled())
+		}
+	}
+	app.configUpdates = nil
 	return abcitypes.ResponseCommit{Data: []byte{}}
 }
 

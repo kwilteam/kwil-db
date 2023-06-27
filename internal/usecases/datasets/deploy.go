@@ -26,6 +26,7 @@ func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDa
 	fmt.Printf("Tx fee: %v  Gas Price: %s\n", deployment.Tx.Fee, price)
 	err = u.compareAndSpend(deployment.Tx.Sender, deployment.Tx.Fee, deployment.Tx.Nonce, price)
 	if err != nil {
+		fmt.Printf("Compare and spend failed: %v\n", err)
 		return nil, err
 	}
 
@@ -127,6 +128,7 @@ func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (t
 	fmt.Printf("Tx fee: %v  Gas Price: %s\n", drop.Tx.Fee, price)
 	err = u.compareAndSpend(drop.Tx.Sender, drop.Tx.Fee, drop.Tx.Nonce, price)
 	if err != nil {
+		fmt.Printf("Compare and spend failed: %v\n", err)
 		return nil, err
 	}
 

@@ -23,3 +23,8 @@ type validator struct {
 	PubKey []byte `json:"pubKey"`
 	Power  int64  `json:"power"`
 }
+
+type configUpdate struct {
+	GasEnabled bool `json:"gas_enabled"`
+	GasUpdated bool `json:"gas_updated"`
+}

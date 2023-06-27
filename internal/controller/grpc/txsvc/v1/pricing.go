@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"math/big"
 
+	localClient "github.com/cometbft/cometbft/rpc/client/local"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"go.uber.org/zap"
 )
 
 func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequest) (*txpb.EstimatePriceResponse, error) {
@@ -33,14 +35,65 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		return handlePricing(s.priceValidatorJoin(ctx, tx))
 	case kTx.VALIDATOR_LEAVE:
 		return handlePricing(s.priceValidatorLeave(ctx, tx))
+	case kTx.CONFIG_UPDATE:
+		return handlePricing(s.priceConfigUpdate(ctx, tx))
 	default:
 		return nil, fmt.Errorf("invalid payload type")
 	}
 }
 
 func (s *Service) GasCosts(ctx context.Context, req *txpb.GasCostsRequest) (*txpb.GasCostsResponse, error) {
-	s.executor.UpdateGasCosts(req.Enabled)
-	return &txpb.GasCostsResponse{}, nil
+	// TODO: Create a Tx and pass it to the ABCI app and updates the gas costs at the end of the block commit. [Ensures that the transaction costs are same across all the transactions]
+	//s.executor.UpdateGasCosts(req.Enabled)
+	tx, err := convertTx(req.Tx)
+	if err != nil {
+		fmt.Printf("failed to convert transaction: %v", err)
+		return nil, fmt.Errorf("failed to convert transaction: %w", err)
+	}
+
+	updatedCfg, err := UnmarshalConfigUpdate(tx.Payload)
+	if err != nil {
+		fmt.Printf("failed to unmarshal config update: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal config update: %w", err)
+	}
+	fmt.Println("updatedCfg: ", updatedCfg)
+	fmt.Printf("updatedCfg: %v Current config %v\n", updatedCfg.GasEnabled, s.executor.GasEnabled())
+	if updatedCfg.GasEnabled == s.executor.GasEnabled() {
+		fmt.Printf("gas costs are already %t, no update needed", updatedCfg.GasEnabled)
+		return nil, fmt.Errorf("gas costs are already %t, no update needed", updatedCfg.GasEnabled)
+	}
+
+	bts, err := json.Marshal(tx)
+	if err != nil {
+		fmt.Printf("failed to serialize transaction data: %v", err)
+		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
+	}
+
+	bcClient := localClient.New(s.BcNode)
+	_, err = bcClient.BroadcastTxAsync(ctx, bts)
+	if err != nil {
+		fmt.Printf("failed to broadcast transaction with error:  %v", err)
+		return nil, fmt.Errorf("failed to broadcast transaction with error:  %s", err)
+	}
+
+	s.log.Info("broadcasted transaction ", zap.String("payload_type", tx.PayloadType.String()))
+	return &txpb.GasCostsResponse{
+		Receipt: &txpb.TxReceipt{
+			TxHash: tx.Hash,
+		},
+	}, nil
+}
+
+func UnmarshalConfigUpdate(payload []byte) (*entity.ConfigUpdate, error) {
+	var configUpdate entity.ConfigUpdate
+	fmt.Println("payload: ", string(payload))
+	fmt.Println("payload: ", payload)
+	err := json.Unmarshal(payload, &configUpdate)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("configUpdate: ", configUpdate)
+	return &configUpdate, nil
 }
 
 func handlePricing(price *big.Int, err error) (*txpb.EstimatePriceResponse, error) {
@@ -94,6 +147,10 @@ func (s *Service) priceValidatorJoin(ctx context.Context, tx *kTx.Transaction) (
 }
 
 func (s *Service) priceValidatorLeave(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
+	return big.NewInt(10000000000000), nil
+}
+
+func (s *Service) priceConfigUpdate(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 

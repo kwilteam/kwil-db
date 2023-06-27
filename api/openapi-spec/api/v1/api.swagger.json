@@ -566,13 +566,18 @@
     "txGasCostsRequest": {
       "type": "object",
       "properties": {
-        "enabled": {
-          "type": "boolean"
+        "tx": {
+          "$ref": "#/definitions/txTx"
         }
       }
     },
     "txGasCostsResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "receipt": {
+          "$ref": "#/definitions/txTxReceipt"
+        }
+      }
     },
     "txGetAccountResponse": {
       "type": "object",
