@@ -13,7 +13,6 @@ type DatasetUseCase struct {
 	engine       engine.Engine
 	accountStore AccountStore
 	log          log.Logger
-	gas_enabled  bool
 
 	sqliteFilePath string
 }
@@ -46,8 +45,6 @@ func New(ctx context.Context, opts ...DatasetUseCaseOpt) (DatasetUseCaseInterfac
 			return nil, err
 		}
 	}
-
-	u.gas_enabled = true
 
 	return u, nil
 }
@@ -87,12 +84,4 @@ func (u *DatasetUseCase) GetSchema(dbid string) (*entity.Schema, error) {
 func (u *DatasetUseCase) Close() error {
 	u.accountStore.Close()
 	return u.engine.Close(true)
-}
-
-func (u *DatasetUseCase) UpdateGasCosts(gas_enabled bool) {
-	u.gas_enabled = gas_enabled
-}
-
-func (u *DatasetUseCase) GasEnabled() bool {
-	return u.gas_enabled
 }

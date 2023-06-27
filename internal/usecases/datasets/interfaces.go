@@ -40,12 +40,6 @@ type DatasetUseCaseInterface interface {
 
 	// GetSchema returns the schema of the given database
 	GetSchema(string) (*entity.Schema, error)
-
-	// UpdateGasCosts updates the gas costs of the use case
-	UpdateGasCosts(bool)
-
-	// GasEnabled Checks if gas costs are enabled
-	GasEnabled() bool
 }
 
 type AccountStore interface {
