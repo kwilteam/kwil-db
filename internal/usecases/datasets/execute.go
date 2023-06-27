@@ -22,7 +22,6 @@ func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteActi
 	fmt.Printf("Tx fee: %v  Gas Price: %s\n", action.Tx.Fee, price)
 	err = u.compareAndSpend(action.Tx.Sender, action.Tx.Fee, action.Tx.Nonce, price)
 	if err != nil {
-		fmt.Printf("Compare and spend failed: %v\n", err)
 		return nil, err
 	}
 
@@ -42,7 +41,7 @@ func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteActi
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Println("cherry exec res", res)
 	bts, err := readQueryResult(res)
 	if err != nil {
 		return nil, err

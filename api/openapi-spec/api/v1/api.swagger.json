@@ -194,38 +194,6 @@
         ]
       }
     },
-    "/api/v1/gas_costs": {
-      "post": {
-        "operationId": "TxService_GasCosts",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txGasCostsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/txGasCostsRequest"
-            }
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
     "/api/v1/ping": {
       "get": {
         "operationId": "TxService_Ping",
@@ -562,17 +530,6 @@
           "type": "string"
         }
       }
-    },
-    "txGasCostsRequest": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        }
-      }
-    },
-    "txGasCostsResponse": {
-      "type": "object"
     },
     "txGetAccountResponse": {
       "type": "object",
