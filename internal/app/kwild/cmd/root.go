@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -90,6 +91,12 @@ var startCmd = &cobra.Command{
 		if err != nil {
 			return nil
 		}
+		chainID := cometNode.GenesisDoc().ChainID
+		fmt.Printf("Chain ID: %s\n", chainID)
+		if strings.HasPrefix(chainID, "kwil-chain-gcd-") {
+			txSvc.GetExecutor().UpdateGasCosts(false)
+		}
+
 		txSvc.BcNode = cometNode
 		txSvc.NodeReactor.GetPool().BcNode = cometNode
 

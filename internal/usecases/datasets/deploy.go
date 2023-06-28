@@ -11,10 +11,14 @@ import (
 	"go.uber.org/zap"
 )
 
-func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDatabase) (*tx.Receipt, error) {
-	price, err := u.PriceDeploy(deployment)
-	if err != nil {
-		return nil, err
+func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDatabase) (rec *tx.Receipt, err error) {
+	price := big.NewInt(0)
+
+	if u.gas_enabled {
+		price, err = u.PriceDeploy(deployment)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = u.compareAndSpend(deployment.Tx.Sender, deployment.Tx.Fee, deployment.Tx.Nonce, price)
@@ -67,11 +71,14 @@ func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.In
 func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error) {
 	price := big.NewInt(0)
 
-	price, err := u.PriceDrop(drop)
-	if err != nil {
-		return nil, err
-	}
+	price := big.NewInt(0)
 
+	if u.gas_enabled {
+		price, err = u.PriceDrop(drop)
+		if err != nil {
+			return nil, err
+		}
+	}
 	err = u.compareAndSpend(drop.Tx.Sender, drop.Tx.Fee, drop.Tx.Nonce, price)
 	if err != nil {
 		return nil, err

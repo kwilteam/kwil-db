@@ -10,7 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
-func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteAction) (rec *tx.Receipt, err error) {
+func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (rec *tx.Receipt, err error) {
 	price := big.NewInt(0)
 
 	if u.gas_enabled {
@@ -19,18 +19,13 @@ func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteActi
 			return nil, err
 		}
 	}
-	fmt.Printf("Tx fee: %v  Gas Price: %s\n", action.Tx.Fee, price)
+
 	err = u.compareAndSpend(action.Tx.Sender, action.Tx.Fee, action.Tx.Nonce, price)
 	if err != nil {
 		return nil, err
 	}
 
 	ds, err := u.engine.GetDataset(ctx, action.ExecutionBody.DBID)
-	if err != nil {
-		return nil, err
-	}
-
-	err = u.compareAndSpend(action.Tx.Sender, action.Tx.Fee, action.Tx.Nonce, price)
 	if err != nil {
 		return nil, err
 	}
