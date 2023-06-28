@@ -2,7 +2,6 @@ package eng_test
 
 import (
 	"context"
-	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/eng"
 )
@@ -17,30 +16,15 @@ func (m *mockDatastore) Prepare(query string) (eng.PreparedStatement, error) {
 	return &mockPreparedStatement{}, nil
 }
 
-func (m *mockDatastore) Savepoint() (eng.Savepoint, error) {
-	return &mockSavepoint{}, nil
-}
-
 type mockPreparedStatement struct {
-	returnData io.Reader
 }
 
 func (m *mockPreparedStatement) Close() error {
 	return nil
 }
 
-func (m *mockPreparedStatement) Execute(args map[string]any) (io.Reader, error) {
-	return m.returnData, nil
-}
-
-type mockSavepoint struct{}
-
-func (m *mockSavepoint) Commit() error {
-	return nil
-}
-
-func (m *mockSavepoint) Rollback() error {
-	return nil
+func (m *mockPreparedStatement) Execute(ctx context.Context, args map[string]any) ([]map[string]any, error) {
+	return nil, nil
 }
 
 var (

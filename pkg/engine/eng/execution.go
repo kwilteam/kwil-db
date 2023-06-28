@@ -3,10 +3,9 @@ package eng
 import (
 	"context"
 	"fmt"
-	"io"
 )
 
-func (e *Engine) ExecuteProcedure(ctx context.Context, name string, args []any, opts ...ExecutionOpt) (io.Reader, error) {
+func (e *Engine) ExecuteProcedure(ctx context.Context, name string, args []any, opts ...ExecutionOpt) ([]map[string]any, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

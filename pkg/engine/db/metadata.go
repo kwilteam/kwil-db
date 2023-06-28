@@ -17,9 +17,9 @@ type metadata struct {
 type metadataType string
 
 const (
-	metadataTypeTable      metadataType = "table"
-	metadataTypeProcedure  metadataType = "procedure"
-	metadataTypeExtensions metadataType = "extensions"
+	metadataTypeTable     metadataType = "table"
+	metadataTypeProcedure metadataType = "procedure"
+	metadataTypeExtension metadataType = "extension"
 )
 
 const (
@@ -146,7 +146,7 @@ func (d *DB) persistVersionedMetadata(ctx context.Context, identifier string, me
 
 // serializable is an interface and generic that all serializable types must implement
 type serializable interface {
-	types.Table | types.Procedure
+	types.Table | types.Procedure | types.Extension
 }
 
 func decodeMetadata[T serializable](meta []*versionedMetadata) ([]*T, error) {

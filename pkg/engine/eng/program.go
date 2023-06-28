@@ -22,22 +22,11 @@ func evaluateInstructions(ctx *executionContext, eng *Engine, ins []*Instruction
 		values:           values,
 	}
 
-	sp, err := eng.db.Savepoint()
-	if err != nil {
-		return fmt.Errorf("failed to create savepoint: %w", err)
-	}
-	defer sp.Rollback()
-
 	for _, instruction := range ins {
-		err = instruction.evaluate(procedureCtx, eng)
+		err := instruction.evaluate(procedureCtx, eng)
 		if err != nil {
 			return fmt.Errorf("failed to evaluate instruction: %w", err)
 		}
-	}
-
-	err = sp.Commit()
-	if err != nil {
-		return fmt.Errorf("failed to commit savepoint: %w", err)
 	}
 
 	return nil

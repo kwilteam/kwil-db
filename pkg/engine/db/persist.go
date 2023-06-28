@@ -10,6 +10,7 @@ import (
 const (
 	tableVersion     = 1
 	procedureVersion = 1
+	extensionVersion = 1
 )
 
 // persistTableMetadata persists the metadata for a table to the database
@@ -56,4 +57,27 @@ func (d *DB) ListProcedures(ctx context.Context) ([]*types.Procedure, error) {
 	}
 
 	return decodeMetadata[types.Procedure](meta)
+}
+
+// StoreExtension stores an extension in the database
+func (d *DB) StoreExtension(ctx context.Context, extension *types.Extension) error {
+	bts, err := json.Marshal(extension)
+	if err != nil {
+		return err
+	}
+
+	return d.persistVersionedMetadata(ctx, extension.Name, metadataTypeExtension, &versionedMetadata{
+		Version: extensionVersion,
+		Data:    bts,
+	})
+}
+
+// ListExtensions lists all extensions in the database
+func (d *DB) ListExtensions(ctx context.Context) ([]*types.Extension, error) {
+	meta, err := d.getVersionedMetadata(ctx, metadataTypeExtension)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeMetadata[types.Extension](meta)
 }

@@ -37,12 +37,13 @@ func New(ctx context.Context, datastore Datastore, opts ...MasterOpt) (*MasterDB
 }
 
 type DatasetInfo struct {
+	DBID  string
 	Name  string
 	Owner string
 }
 
 // ListDatasets lists the dbids of all datasets.
-func (d *MasterDB) ListDatasets(ctx context.Context) ([]string, error) {
+func (d *MasterDB) ListDatasets(ctx context.Context) ([]*DatasetInfo, error) {
 	return d.sqlStore.listDatasets(ctx)
 }
 

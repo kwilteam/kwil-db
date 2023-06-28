@@ -37,9 +37,3 @@ func WithLogger(l log.Logger) SqliteOpts {
 		e.log = l
 	}
 }
-
-func WithName(name string) SqliteOpts {
-	return func(e *options) {
-		e.name = name
-	}
-}
