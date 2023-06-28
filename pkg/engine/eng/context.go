@@ -2,7 +2,6 @@ package eng
 
 import (
 	"context"
-	"io"
 )
 
 const (
@@ -23,7 +22,7 @@ type executionContext struct {
 	caller        string
 	action        string
 	datasetID     string
-	lastDmlResult io.Reader
+	lastDmlResult []map[string]any
 }
 
 func (ec *executionContext) contextualVariables() map[string]any {

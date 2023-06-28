@@ -382,7 +382,7 @@ func Test_Database_Wal(t *testing.T) {
 	}
 */
 func openRealDB() (conn *sqlite.Connection, teardown func() error) {
-	conn, td, err := sqlite.OpenDbWithTearDown()
+	conn, td, err := sqlite.OpenDbWithTearDown("testdb_DELETE_ME")
 	if err != nil {
 		panic(err)
 	}
