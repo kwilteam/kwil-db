@@ -6,7 +6,12 @@ import (
 	"strings"
 )
 
-type Extension struct {
+type Extension interface {
+	Connect(ctx context.Context) error
+	CreateInstance(ctx context.Context, metadata map[string]string) (*Instance, error)
+}
+
+type extension struct {
 	name     string
 	endpoint string
 	config   map[string]string
@@ -17,15 +22,15 @@ type Extension struct {
 
 // New connects to the given extension, and attempts to configure it with the given config.
 // If the extension is not available, an error is returned.
-func New(name, endpoint string, config map[string]string) *Extension {
-	return &Extension{
+func New(name, endpoint string, config map[string]string) Extension { // I return the interface here b/c i think it makes the package api cleaner
+	return &extension{
 		name:     name,
 		endpoint: endpoint,
 		config:   config,
 	}
 }
 
-func (e *Extension) Connect(ctx context.Context) error {
+func (e *extension) Connect(ctx context.Context) error {
 	extClient, err := ConnectFunc.Connect(ctx, e.endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to connect to extension %s: %w", e.name, err)
@@ -46,7 +51,7 @@ func (e *Extension) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (e *Extension) loadMethods(ctx context.Context) error {
+func (e *extension) loadMethods(ctx context.Context) error {
 	methodList, err := e.client.ListMethods(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list methods for extension %s: %w", e.name, err)

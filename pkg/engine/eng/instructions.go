@@ -101,7 +101,7 @@ func evalDMLExecute(ctx *procedureContext, eng *Engine, args ...any) error {
 	}
 
 	var err error
-	ctx.lastDmlResult, err = preparedStmt.Execute(ctx.values)
+	ctx.lastDmlResult, err = preparedStmt.Execute(ctx.ctx, ctx.values)
 	if err != nil {
 		return fmt.Errorf("failed to execute statement: %w", err)
 	}

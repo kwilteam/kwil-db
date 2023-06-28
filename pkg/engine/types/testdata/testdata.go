@@ -1,4 +1,4 @@
-package tsts
+package testdata
 
 import (
 	"bytes"

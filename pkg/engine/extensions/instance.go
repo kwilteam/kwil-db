@@ -16,10 +16,10 @@ import (
 type Instance struct {
 	metadata map[string]string
 
-	extenstion *Extension
+	extenstion *extension
 }
 
-func (e *Extension) CreateInstance(ctx context.Context, metadata map[string]string) (*Instance, error) {
+func (e *extension) CreateInstance(ctx context.Context, metadata map[string]string) (*Instance, error) {
 	requiredMetadata, err := e.client.GetMetadata(ctx)
 	if err != nil {
 		return nil, err

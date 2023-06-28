@@ -11,8 +11,8 @@ import (
 
 // OpenTestDB opens a test database for use in unit tests.
 // It returns a SqliteClient, a cleanup function, and an error.
-func OpenTestDB() (connection TestSqliteClient, teardown func() error, err error) {
-	db, closeFunc, err := sqlite.OpenDbWithTearDown()
+func OpenTestDB(name string) (connection TestSqliteClient, teardown func() error, err error) {
+	db, closeFunc, err := sqlite.OpenDbWithTearDown(name)
 	if err != nil {
 		return nil, nil, err
 	}
