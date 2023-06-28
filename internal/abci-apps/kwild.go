@@ -178,6 +178,7 @@ func (app *KwilDbApplication) deploy_database(tx *kTx.Transaction) abcitypes.Res
 				{Key: "TxSender", Value: tx.Sender, Index: true},
 				{Key: "DbName", Value: schema.Name, Index: true},
 				{Key: "DbId", Value: dbid, Index: true},
+				{Key: "GasUsed", Value: resp.Fee, Index: true},
 			},
 		},
 	}
