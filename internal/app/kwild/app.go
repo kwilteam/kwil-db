@@ -2,6 +2,7 @@ package kwild
 
 import (
 	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd/utils"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd/validator"
 	"github.com/spf13/cobra"
 )
@@ -18,6 +19,7 @@ func Execute() error {
 	rootCmd.AddCommand(
 		validator.NewCmdValidator(),
 		cmd.NewStartCmd(),
+		utils.NewCmdGenerator(),
 	)
 	return rootCmd.Execute()
 }
