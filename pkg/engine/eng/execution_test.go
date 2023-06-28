@@ -3,7 +3,6 @@ package eng_test
 import (
 	"context"
 	"errors"
-	"io"
 	"reflect"
 	"testing"
 
@@ -27,7 +26,7 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 		name    string
 		fields  fields
 		args    args
-		want    io.Reader
+		want    []map[string]any
 		wantErr error // if nil, no error is expected
 	}{
 		// Extension tests

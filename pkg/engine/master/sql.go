@@ -13,7 +13,7 @@ const (
 	datasetsTableName       = "datasets"
 	sqlCreateDatasetTable   = "CREATE TABLE IF NOT EXISTS " + datasetsTableName + " (dbid TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, owner TEXT NOT NULL) WITHOUT ROWID, STRICT;"
 	sqlCreateDatasetIndex   = "CREATE UNIQUE INDEX IF NOT EXISTS idx_datasets_owner_name ON " + datasetsTableName + " (owner, name);"
-	sqlListDatasets         = "SELECT dbid FROM " + datasetsTableName + ";"
+	sqlListDatasets         = "SELECT dbid, name, owner FROM " + datasetsTableName + ";"
 	sqlListDatabasesByOwner = "SELECT name FROM " + datasetsTableName + " WHERE owner = $owner COLLATE NOCASE;"
 	sqlDeleteDataset        = "DELETE FROM " + datasetsTableName + " WHERE dbid = $dbid;"
 	sqlCreateDataset        = "INSERT INTO " + datasetsTableName + " (dbid, name, owner) VALUES ($dbid, $name, $owner);"
@@ -74,6 +74,7 @@ func (d *sqlStore) getDataset(ctx context.Context, dbid string) (*DatasetInfo, e
 	}
 
 	return &DatasetInfo{
+		DBID:  dbid,
 		Name:  name,
 		Owner: owner,
 	}, nil
@@ -114,23 +115,37 @@ func (d *sqlStore) deleteDataset(ctx context.Context, dbid string) error {
 	})
 }
 
-func (s *sqlStore) listDatasets(ctx context.Context) ([]string, error) {
+func (s *sqlStore) listDatasets(ctx context.Context) ([]*DatasetInfo, error) {
 	results, err := s.ds.Query(ctx, sqlListDatasets, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var names []string
+	var data []*DatasetInfo
 	for _, result := range results {
-		name, ok := result["dbid"].(string)
+		dbid, ok := result["dbid"].(string)
 		if !ok {
 			return nil, fmt.Errorf("error getting dbid from result set")
 		}
 
-		names = append(names, name)
+		owner, ok := result["owner"].(string)
+		if !ok {
+			return nil, fmt.Errorf("error getting owner from result set")
+		}
+
+		name, ok := result["name"].(string)
+		if !ok {
+			return nil, fmt.Errorf("error getting name from result set")
+		}
+
+		data = append(data, &DatasetInfo{
+			DBID:  dbid,
+			Name:  name,
+			Owner: owner,
+		})
 	}
 
-	return names, nil
+	return data, nil
 }
 
 func (d *sqlStore) Close() error {

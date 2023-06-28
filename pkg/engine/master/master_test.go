@@ -63,7 +63,7 @@ func Test_Master(t *testing.T) {
 			},
 		},
 		{
-			name: "create datasets with same name and different owner",
+			name: "create datasets with same name and same owner",
 			test: func(t *testing.T, m *master.MasterDB) {
 				ctx := context.Background()
 
@@ -147,7 +147,7 @@ func Test_Master(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			db, td, err := sqlTesting.OpenTestDB()
+			db, td, err := sqlTesting.OpenTestDB("test")
 			if err != nil {
 				t.Fatal(err)
 			}

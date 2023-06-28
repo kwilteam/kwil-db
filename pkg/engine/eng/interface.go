@@ -2,7 +2,6 @@ package eng
 
 import (
 	"context"
-	"io"
 )
 
 type InitializedExtension interface {
@@ -16,18 +15,12 @@ type Initializer interface {
 // Datastore is an interface for a datastore, usually a sqlite DB.
 type Datastore interface {
 	Prepare(query string) (PreparedStatement, error)
-	Savepoint() (Savepoint, error)
 }
 
 type PreparedStatement interface {
 	// Execute executes a prepared statement with the given arguments.
-	Execute(args map[string]any) (io.Reader, error)
+	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)
 
 	// Close closes the statement.
 	Close() error
-}
-
-type Savepoint interface {
-	Rollback() error
-	Commit() error
 }
