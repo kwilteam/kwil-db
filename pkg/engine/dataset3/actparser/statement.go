@@ -1,15 +1,7 @@
 package actparser
 
-type StmtType string
-
-const (
-	StmtTypeDML           StmtType = "dml"
-	StmtTypeExtensionCall StmtType = "extension_call"
-	StmtTypeActionCall    StmtType = "action_call"
-)
-
 type ActionStmt interface {
-	StmtType() StmtType
+	StmtType() string
 }
 
 //type CallStmt struct {
@@ -26,22 +18,24 @@ type ExtensionCallStmt struct {
 }
 
 type ActionCallStmt struct {
-	Method string
-	Args   []string
+	Database  string
+	Method    string
+	Args      []string
+	Receivers []string
 }
 
 type DMLStmt struct {
 	Statement string
 }
 
-func (s *ExtensionCallStmt) StmtType() StmtType {
-	return StmtTypeExtensionCall
+func (s *ExtensionCallStmt) StmtType() string {
+	return "extension_call"
 }
 
-func (s *ActionCallStmt) StmtType() StmtType {
-	return StmtTypeActionCall
+func (s *ActionCallStmt) StmtType() string {
+	return "action_call"
 }
 
-func (s *DMLStmt) StmtType() StmtType {
-	return StmtTypeDML
+func (s *DMLStmt) StmtType() string {
+	return "dml"
 }
