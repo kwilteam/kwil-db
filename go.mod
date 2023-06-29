@@ -18,7 +18,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/action-grammar-go v0.0.0-20230626155541-72265621f427
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
-	github.com/kwilteam/kuneiform v0.3.2-0.20230626225516-a9a612defd66
+	github.com/kwilteam/kuneiform v0.3.2-0.20230629145726-18ac4a24a39b
 	github.com/kwilteam/kwil-extensions v0.0.0-20230629052052-5c775af01b03
 	github.com/kwilteam/sql-grammar-go v0.0.2
 	github.com/manifoldco/promptui v0.9.0
