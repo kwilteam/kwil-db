@@ -7,13 +7,13 @@ type Procedure struct {
 	Statements []string `json:"statements"`
 }
 
+func (p *Procedure) Clean() error {
+	return runCleans(
+		cleanIdent(&p.Name),
+		cleanActionParameters(&p.Args),
+	)
+}
+
 func (p *Procedure) Identifier() string {
 	return p.Name
 }
-
-type Publicity uint8
-
-const (
-	PublicityPublic Publicity = iota
-	PublicityPrivate
-)

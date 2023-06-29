@@ -24,7 +24,7 @@ type DatasetUseCaseInterface interface {
 	PriceDrop(*entity.DropDatabase) (*big.Int, error)
 
 	// Execute executes an action on a database
-	Execute(*entity.ExecuteAction) (*tx.Receipt, error)
+	Execute(context.Context, *entity.ExecuteAction) (*tx.Receipt, error)
 
 	// PriceExecute returns the price to execute an action on a database
 	PriceExecute(*entity.ExecuteAction) (*big.Int, error)
@@ -39,7 +39,7 @@ type DatasetUseCaseInterface interface {
 	ListDatabases(context.Context, string) ([]string, error)
 
 	// GetSchema returns the schema of the given database
-	GetSchema(string) (*entity.Schema, error)
+	GetSchema(context.Context, string) (*entity.Schema, error)
 }
 
 type AccountStore interface {

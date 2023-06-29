@@ -1,21 +1,31 @@
 package dataset
 
-type OpenOpt func(*Dataset)
+type TxOpts struct {
+	Caller string
+}
 
-func WithName(name string) OpenOpt {
-	return func(ds *Dataset) {
-		ds.name = name
+type engineOptions struct {
+	initializers map[string]Initializer
+	owner        string
+	name         string
+}
+
+type OpenOpt func(*engineOptions)
+
+func WithAvailableExtensions(exts map[string]Initializer) OpenOpt {
+	return func(opts *engineOptions) {
+		opts.initializers = exts
 	}
 }
 
-func WithOwner(owner string) OpenOpt {
-	return func(ds *Dataset) {
-		ds.owner = owner
+func OwnedBy(owner string) OpenOpt {
+	return func(opts *engineOptions) {
+		opts.owner = owner
 	}
 }
 
-func WithExtensionInitializers(initializers map[string]Initializer) OpenOpt {
-	return func(ds *Dataset) {
-		ds.extensionInitializers = initializers
+func Named(name string) OpenOpt {
+	return func(opts *engineOptions) {
+		opts.name = name
 	}
 }

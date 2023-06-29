@@ -34,7 +34,7 @@ func (a *Procedure) checkAccessControl(opts *executionContext) error {
 	}
 
 	if opts.action == a.Name {
-		return fmt.Errorf("%w: private action cannot be invoked directly", ErrScopingViolation)
+		return fmt.Errorf("%w: private action '%s' cannot be invoked directly", ErrScopingViolation, a.Name)
 	}
 
 	return nil

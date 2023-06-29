@@ -147,7 +147,7 @@ func evalExtensionInitialize(ctx *procedureContext, eng *Engine, args ...any) er
 		}
 	}
 
-	initializedExtension, err := extensionInitializer.Initialize(ctx.ctx, config)
+	initializedExtension, err := extensionInitializer.Initialize(ctx.ctx, newConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize extension: %w", err)
 	}

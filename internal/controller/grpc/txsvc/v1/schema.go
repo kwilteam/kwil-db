@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*txpb.GetSchemaResponse, error) {
-	schema, err := s.executor.GetSchema(req.Dbid)
+	schema, err := s.executor.GetSchema(ctx, req.Dbid)
 	if err != nil {
 		return nil, err
 	}

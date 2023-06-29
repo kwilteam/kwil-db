@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/dto/validation"
+	"github.com/kwilteam/kwil-db/pkg/engine/types/validation"
 )
 
 // runCleans runs a series of clean functions and returns the first error.

@@ -6,11 +6,10 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 )
 
 func (u *DatasetUseCase) Query(ctx context.Context, query *entity.DBQuery) ([]byte, error) {
-	db, err := u.engine.GetDataset(query.DBID)
+	db, err := u.engine.GetDataset(ctx, query.DBID)
 	if err != nil {
 		return nil, fmt.Errorf("dataset not found")
 	}
@@ -28,8 +27,6 @@ func (u *DatasetUseCase) Query(ctx context.Context, query *entity.DBQuery) ([]by
 	return bts, nil
 }
 
-func readQueryResult(res dto.Result) ([]byte, error) {
-	records := res.Records()
-
-	return json.Marshal(records)
+func readQueryResult(res []map[string]any) ([]byte, error) {
+	return json.Marshal(res)
 }
