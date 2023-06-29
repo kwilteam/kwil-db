@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/stretchr/testify/assert"
 )
 

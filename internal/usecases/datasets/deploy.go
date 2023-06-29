@@ -6,9 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/engine"
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
 	"github.com/kwilteam/kwil-db/pkg/tx"
-	"github.com/pkg/errors"
 
 	"go.uber.org/zap"
 )
@@ -46,17 +44,16 @@ func (u *DatasetUseCase) deployDataset(ctx context.Context, deployment *entity.D
 		return err
 	}
 
-	dataset, err := u.engine.NewDataset(ctx,
-		engine.WithTables(tables...),
-		engine.WithActions(actions...),
-		engine.WithOwner(deployment.Tx.Sender),
-		engine.WithName(deployment.Schema.Name),
-	)
+	dbid, err := u.engine.CreateDataset(ctx, deployment.Schema.Name, deployment.Schema.Owner, &engine.Schema{
+		Tables:     tables,
+		Procedures: actions,
+		// TODO: add extensions
+	})
 	if err != nil {
 		return err
 	}
 
-	u.log.Info("database deployed", zap.String("dbid", dataset.Id()), zap.String("deployer address", deployment.Tx.Sender))
+	u.log.Info("database deployed", zap.String("dbid", dbid), zap.String("deployer address", deployment.Tx.Sender))
 
 	return nil
 }
@@ -66,15 +63,6 @@ func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.In
 }
 
 func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error) {
-	// TODO: there are a lot of errors with drop and having potentially orphaned data
-	// this can cause panics.  For now, I will catch panics since we are releasing today
-	defer func() {
-		if r := recover(); r != nil {
-			u.log.Error("recovering from panic in drop", zap.Any("panic", r))
-			err = errors.New("Unexpected internal error. Please report this to the Kwil team.")
-		}
-	}()
-
 	price, err := u.PriceDrop(drop)
 	if err != nil {
 		return nil, err
@@ -85,10 +73,7 @@ func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (t
 		return nil, err
 	}
 
-	err = u.engine.DeleteDataset(ctx, &dto.TxContext{
-		Caller:  drop.Tx.Sender,
-		Dataset: drop.DBID,
-	}, drop.DBID)
+	err = u.engine.DropDataset(ctx, drop.Tx.Sender, drop.DBID)
 	if err != nil {
 		return nil, err
 	}

@@ -1,69 +1,52 @@
+/*
+this package will replace the current top level engine package
+*/
 package engine
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"strings"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
-	"github.com/kwilteam/kwil-db/pkg/engine/extensions"
-	"github.com/kwilteam/kwil-db/pkg/engine/sqldb"
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	"go.uber.org/zap"
+	metadataDB "github.com/kwilteam/kwil-db/pkg/engine/db"
+	"github.com/kwilteam/kwil-db/pkg/engine/master"
 )
 
-type Engine interface {
-	// NewDataset creates a new dataset.
-	// TODO: this should probably be a builder, since many of the options are required.
-	NewDataset(ctx context.Context, opts ...CreateDatasetOpt) (Dataset, error)
-
-	// GetDatastore returns a datastore for the given dataset.
-	GetDataset(dbid string) (Dataset, error)
-
-	// Close closes the engine.
-	// If closeAll is true, it will also close all datasets.
-	Close(closeAll bool) error
-
-	// DeleteDataset deletes a dataset.  The caller of the txCtx must be the owner of the dataset.
-	DeleteDataset(ctx context.Context, txCtx *dto.TxContext, dbid string) error
-
-	// Delete deletes the master database.  If true is passed, it will also delete all deployed datasets.
-	Delete(deleteAll bool) error
-
-	// ListDatasets lists the datasets for the given owner.
+// TODO: this is a stub. delete it
+type IEngine interface {
+	CreateDataset(ctx context.Context, name string, owner string, schema *Schema) (finalErr error)
 	ListDatasets(ctx context.Context, owner string) ([]string, error)
+	Close() error
 }
 
-type engine struct {
-	db          datastore
-	name        string
-	path        string
-	log         log.Logger
-	datasets    map[string]internalDataset
-	wipeOnStart bool
-	extensions  map[string]*extensions.Extension
+type Engine struct {
+	master     MasterDB
+	name       string
+	path       string
+	log        log.Logger
+	datasets   map[string]Dataset
+	extensions map[string]ExtensionInitializer
+
+	opener Opener
 }
 
-func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
-	e := &engine{
-		name:        defaultName,
-		log:         log.NewNoOp(),
-		datasets:    make(map[string]internalDataset),
-		wipeOnStart: false,
-		extensions:  map[string]*extensions.Extension{},
+func Open(ctx context.Context, opts ...EngineOpt) (*Engine, error) {
+	e := &Engine{
+		name:       masterDBName,
+		log:        log.NewNoOp(),
+		datasets:   make(map[string]Dataset),
+		extensions: make(map[string]ExtensionInitializer),
+		opener:     dbOpener,
 	}
 
 	for _, opt := range opts {
 		opt(e)
 	}
 
-	err := e.openMasterDB()
-	if err != nil {
-		return nil, err
-	}
-
-	err = e.initTables(ctx)
+	err := e.openMasterDB(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -73,179 +56,97 @@ func Open(ctx context.Context, opts ...EngineOpt) (Engine, error) {
 		return nil, err
 	}
 
-	err = e.connectExtensions(ctx)
+	return e, nil
+}
+
+func (e *Engine) openDB(name string) (Datastore, error) {
+	return e.opener.Open(name, e.path, e.log)
+}
+
+// openMasterDB opens the master database
+func (e *Engine) openMasterDB(ctx context.Context) error {
+	ds, err := e.openDB(masterDBName)
+	if err != nil {
+		return err
+	}
+
+	e.master, err = master.New(ctx, &masterDbAdapter{ds})
+	return err
+}
+
+// openStoredDatasets opens all of the datasets that are stored in the master
+func (e *Engine) openStoredDatasets(ctx context.Context) error {
+	datasets, err := e.master.ListDatasets(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, datasetInfo := range datasets {
+		datastore, err := e.openDB(datasetInfo.DBID)
+		if err != nil {
+			return err
+		}
+
+		db, err := metadataDB.NewDB(ctx, &metadataDBAdapter{datastore})
+		if err != nil {
+			return err
+		}
+
+		ds, err := dataset.OpenDataset(ctx, &datasetDBAdapter{db},
+			dataset.WithAvailableExtensions(e.getInitializers()),
+			dataset.Named(datasetInfo.Name),
+			dataset.OwnedBy(datasetInfo.Owner),
+		)
+		if err != nil {
+			return err
+		}
+
+		e.datasets[datasetInfo.DBID] = ds
+	}
+
+	return nil
+}
+
+// getInitializers gets all of the initializers for extensions that have been
+// added to the engine.
+func (e *Engine) getInitializers() map[string]dataset.Initializer {
+	initializers := make(map[string]dataset.Initializer)
+	for name, ext := range e.extensions {
+		initializers[name] = &extensionInitializerAdapter{ext}
+	}
+
+	return initializers
+}
+
+func (e *Engine) Close() error {
+	var errs []error
+	for _, ds := range e.datasets {
+		err := ds.Close()
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	err := e.master.Close()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return errors.Join(errs...)
+}
+
+func (e *Engine) ListDatasets(ctx context.Context, owner string) ([]string, error) {
+	dsInfo, err := e.master.ListDatasets(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return e, nil
-}
-
-// openDB opens a database connections and wraps it in a sqldb.DB.
-// This should probably be done in a different package to avoid coupling to sqldb.
-func (e *engine) openDB(name string) (*sqldb.SqliteStore, error) {
-	opts := []sqldb.SqliteOpts{
-		sqldb.WithGlobalVariables(dto.GlobalVars),
-		sqldb.WithLogger(e.log),
-	}
-	if e.path != "" {
-		opts = append(opts, sqldb.WithPath(e.path))
-	}
-
-	return sqldb.NewSqliteStore(name,
-		opts...,
-	)
-}
-
-// openMasterDB opens the master database.
-// if wipeOnStart is true, it will open the database, delete it, and then reopen it.
-func (e *engine) openMasterDB() error {
-	if e.wipeOnStart {
-		db, err := e.openDB(e.name)
-		if err != nil {
-			return err
-		}
-
-		err = db.Delete()
-		if err != nil {
-			return err
+	var datasets []string
+	for _, info := range dsInfo {
+		if strings.EqualFold(info.Owner, owner) {
+			datasets = append(datasets, info.Name)
 		}
 	}
 
-	db, err := e.openDB(e.name)
-	if err != nil {
-		return err
-	}
-
-	e.db = db
-	return nil
-}
-
-func (e *engine) openStoredDatasets(ctx context.Context) error {
-	storedDatasets, err := e.listDatasets(ctx)
-	if err != nil {
-		return err
-	}
-
-	for _, storedDataset := range storedDatasets {
-		dbid := utils.GenerateDBID(storedDataset.name, storedDataset.owner)
-
-		db, err := e.openDB(dbid)
-		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
-		}
-
-		e.datasets[dbid], err = dataset.OpenDataset(ctx, db,
-			dataset.WithName(storedDataset.name),
-			dataset.WithOwner(storedDataset.owner),
-			dataset.WithExtensionInitializers(e.extensionInitializers()),
-		)
-
-		if err != nil {
-			return fmt.Errorf("failed to open dataset: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (e *engine) connectExtensions(ctx context.Context) error {
-	for name, ext := range e.extensions {
-		err := ext.Connect(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to connect extension %s: %w", name, err)
-		}
-	}
-
-	return nil
-}
-
-func (e *engine) Close(closeAll bool) error {
-	if closeAll {
-		for _, ds := range e.datasets {
-			err := ds.Close()
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return e.db.Close()
-}
-
-// GetDataset retrieves a dataset if it exists
-func (e *engine) GetDataset(dbid string) (Dataset, error) {
-	ds, ok := e.datasets[dbid]
-	if !ok {
-		return nil, fmt.Errorf("dataset %s does not exist", dbid)
-	}
-
-	return ds, nil
-}
-
-// DeleteDataset deletes a dataset
-func (e *engine) DeleteDataset(ctx context.Context, txCtx *dto.TxContext, dbid string) error {
-	ds, ok := e.datasets[dbid]
-	if !ok {
-		return fmt.Errorf("dataset %s does not exist", dbid)
-	}
-
-	err := ds.Delete(txCtx)
-	if err != nil {
-		return err
-	}
-
-	err = e.unregisterDataset(ctx, dbid)
-	if err != nil {
-		e.log.Error("failed to unregister dataset after deletion", zap.Error(err), zap.String("dbid", dbid))
-		return err
-	}
-
-	delete(e.datasets, dbid)
-
-	return nil
-}
-
-func (d *engine) Delete(deleteAll bool) error {
-	if deleteAll {
-		for dbid, ds := range d.datasets {
-			err := ds.Delete(&dto.TxContext{
-				Caller: ds.Owner(),
-			})
-			if err != nil {
-				d.log.Error("failed to delete dataset", zap.Error(err), zap.String("dbid", dbid))
-			}
-
-			err = d.unregisterDataset(context.Background(), dbid)
-			if err != nil {
-				d.log.Error("failed to unregister dataset after deletion", zap.Error(err), zap.String("dbid", dbid))
-			}
-
-			delete(d.datasets, dbid)
-		}
-	}
-
-	return d.db.Delete()
-}
-
-func (e *engine) ListDatasets(ctx context.Context, owner string) ([]string, error) {
-	return e.listDatasetsByOwner(ctx, owner)
-}
-
-// function that implements dataset.Initializer
-type extenstionInitializer func(ctx context.Context, metadata map[string]string) (*extensions.Instance, error)
-
-// method for implementing dataset.Initializer
-func (f extenstionInitializer) Initialize(ctx context.Context, metadata map[string]string) (dataset.InitializedExtension, error) {
-	return f(ctx, metadata)
-}
-
-func (e *engine) extensionInitializers() map[string]dataset.Initializer {
-	initializers := make(map[string]dataset.Initializer)
-
-	for name, ext := range e.extensions {
-		initializers[name] = extenstionInitializer(ext.CreateInstance)
-	}
-
-	return initializers
+	return datasets, nil
 }

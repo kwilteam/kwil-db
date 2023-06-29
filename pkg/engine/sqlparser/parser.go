@@ -2,8 +2,9 @@ package sqlparser
 
 import (
 	"fmt"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 

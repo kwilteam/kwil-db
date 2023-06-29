@@ -2,10 +2,13 @@ package config
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/kwil-db/pkg/config"
@@ -26,6 +29,7 @@ type KwildConfig struct {
 	ChainSyncer       ChainSyncerConfig
 	SqliteFilePath    string
 	Log               log.Config
+	Extensions        ExtensionConfigs
 }
 
 type DepositsConfig struct {
@@ -40,8 +44,14 @@ type ChainSyncerConfig struct {
 	ChunkSize int
 }
 
+type ExtensionConfigs struct {
+	ConfigFilePath string
+	Extensions     []*extensions.ExtensionConfig `json:"extensions"`
+}
+
 var (
 	RegisteredVariables = []config.CfgVar{
+		ExtensionConfigFilePath,
 		PrivateKey,
 		GrpcListenAddress,
 		DepositsReconnectionInterval,
@@ -54,6 +64,7 @@ var (
 		LogLevel,
 		LogOutputPaths,
 		HttpListenAddress,
+		//Extensions,
 	}
 )
 
@@ -159,4 +170,68 @@ var (
 		Field:   "HttpListenAddress",
 		Default: ":8080",
 	}
+
+	// TODO: this is a mess.  Gotta fix this
+	ExtensionConfigFilePath = config.CfgVar{
+		EnvName: "EXTENSION_CONFIG_FILE_PATH",
+		Field:   "Extensions",
+		Setter: func(val any) (any, error) {
+			if val == nil {
+				return nil, nil
+			}
+
+			path, err := conv.String(val)
+			if err != nil {
+				return nil, err
+			}
+
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				return nil, err
+			}
+
+			// read the file
+			file, err := os.ReadFile(absPath)
+			if err != nil {
+				return nil, err
+			}
+
+			// unmarshal the file
+			var exts ExtensionConfigs
+			err = json.Unmarshal(file, &exts.Extensions)
+			if err != nil {
+				return nil, err
+			}
+
+			exts.ConfigFilePath = absPath
+
+			return exts, nil
+		},
+	}
+
+	/*
+		Extensions = config.CfgVar{
+			EnvName: "EXTENSIONS",
+			Field:   "Extensions",
+			Setter: func(val any) (any, error) {
+				if val == nil {
+					return nil, nil
+				}
+
+				bts, err := json.Marshal(val)
+				if err != nil {
+					return nil, err
+				}
+
+				var exts ExtensionConfigs
+
+				err = json.Unmarshal(bts, &exts.Extensions)
+				if err != nil {
+					return nil, err
+				}
+
+				return exts, nil
+			},
+
+		}*/
 )

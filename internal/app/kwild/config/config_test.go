@@ -2,10 +2,11 @@ package config_test
 
 import (
 	"fmt"
-	config "github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"os"
 	"testing"
+
+	config "github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
 func Test_Config(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"github.com/kwilteam/kwil-db/pkg/engine/tree"
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
 )
 
@@ -1083,14 +1083,14 @@ func (v *KFSqliteVisitor) VisitParse(ctx *sqlgrammar.ParseContext) interface{} {
 // e.g. if the tree is a ParseContext, then dispatch call VisitParse.
 // Overwrite is needed,
 // refer to https://github.com/antlr/antlr4/pull/1841#issuecomment-576791512
-func (v *KFSqliteVisitor) Visit(tree antlr.ParseTree) interface{} {
+func (v *KFSqliteVisitor) Visit(parseTree antlr.ParseTree) interface{} {
 	//if tree == nil {
 	//	return nil
 	//}
 	if v.trace {
-		fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(tree), tree.GetText())
+		fmt.Printf("visit tree: %v, %s\n", reflect.TypeOf(parseTree), parseTree.GetText())
 	}
-	return tree.Accept(v)
+	return parseTree.Accept(v)
 }
 
 // VisitChildren visits the children of the specified node.
