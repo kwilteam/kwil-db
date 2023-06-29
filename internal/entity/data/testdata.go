@@ -8,31 +8,31 @@ var (
 		Columns: []*entity.Column{
 			{
 				Name: "id",
-				Type: "int",
+				Type: "INT",
 				Attributes: []*entity.Attribute{
 					{
-						Type: "primary_key",
+						Type: "PRIMARY_KEY",
 					},
 					{
-						Type: "not_null",
+						Type: "NOT_NULL",
 					},
 				},
 			},
 			{
 				Name: "name",
-				Type: "text",
+				Type: "TEXT",
 				Attributes: []*entity.Attribute{
 					{
-						Type: "not_null",
+						Type: "NOT_NULL",
 					},
 				},
 			},
 			{
 				Name: "age",
-				Type: "int",
+				Type: "INT",
 				Attributes: []*entity.Attribute{
 					{
-						Type: "not_null",
+						Type: "NOT_NULL",
 					},
 				},
 			},
@@ -41,7 +41,7 @@ var (
 			{
 				Name:    "name_idx",
 				Columns: []string{"name"},
-				Type:    "unique_btree",
+				Type:    "UNIQUE_BTREE",
 			},
 		},
 	}

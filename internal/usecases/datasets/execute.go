@@ -1,20 +1,21 @@
 package datasets
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine/dto"
+	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
-func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, error) {
+func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteAction) (*tx.Receipt, error) {
 	price, err := u.PriceExecute(action)
 	if err != nil {
 		return nil, err
 	}
 
-	ds, err := u.engine.GetDataset(action.ExecutionBody.DBID)
+	ds, err := u.engine.GetDataset(ctx, action.ExecutionBody.DBID)
 	if err != nil {
 		return nil, err
 	}
@@ -24,11 +25,9 @@ func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (*tx.Receipt, err
 		return nil, err
 	}
 
-	res, err := ds.Execute(&dto.TxContext{
-		Caller:  action.Tx.Sender,
-		Action:  action.ExecutionBody.Action,
-		Dataset: action.ExecutionBody.DBID,
-	}, action.ExecutionBody.Params)
+	res, err := ds.Execute(ctx, action.ExecutionBody.Action, action.ExecutionBody.Params, &dataset.TxOpts{
+		Caller: action.Tx.Sender,
+	})
 	if err != nil {
 		return nil, err
 	}

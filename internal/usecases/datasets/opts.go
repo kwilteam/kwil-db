@@ -3,6 +3,7 @@ package datasets
 import (
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/engine"
+	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -40,8 +41,14 @@ func WithSqliteFilePath(path string) DatasetUseCaseOpt {
 	}
 }
 
-func WithEngine(engine engine.Engine) DatasetUseCaseOpt {
+func WithEngine(eng *engine.Engine) DatasetUseCaseOpt {
 	return func(u *DatasetUseCase) {
-		u.engine = engine
+		u.engine = eng
+	}
+}
+
+func WithExtensions(extConfigs ...*extensions.ExtensionConfig) DatasetUseCaseOpt {
+	return func(u *DatasetUseCase) {
+		u.extensionConfigs = extConfigs
 	}
 }

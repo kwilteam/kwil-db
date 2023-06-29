@@ -10,6 +10,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
 )
 
 type DB struct {
@@ -25,7 +27,17 @@ func (d *DB) Delete() error {
 }
 
 func (d *DB) Prepare(query string) (Statement, error) {
-	return d.sqldb.Prepare(query)
+	ast, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+
+	generatedSql, err := ast.ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
+	return d.sqldb.Prepare(generatedSql)
 }
 
 func (d *DB) Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error) {

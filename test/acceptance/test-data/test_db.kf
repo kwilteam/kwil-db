@@ -38,7 +38,7 @@ action delete_user() public {
     WHERE wallet = @caller;
 }
 
-action create_post($id, $title, $content) private {
+action create_post($id, $title, $content) public {
     INSERT INTO posts (id, user_id, title, content)
     VALUES ($id, (
         SELECT id FROM users WHERE wallet = @caller
@@ -60,7 +60,7 @@ action get_user_by_wallet($address) public {
     WHERE wallet = $address;
 }
 
-action list_users() private {
+action list_users() public {
     SELECT *
     FROM users;
 }

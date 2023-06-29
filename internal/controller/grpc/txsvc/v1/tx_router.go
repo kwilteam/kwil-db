@@ -47,7 +47,7 @@ func (s *Service) executeAction(ctx context.Context, tx *kTx.Transaction) (*kTx.
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}
 
-	return s.executor.Execute(&entity.ExecuteAction{
+	return s.executor.Execute(ctx, &entity.ExecuteAction{
 		Tx:            tx,
 		ExecutionBody: executionBody,
 	})
