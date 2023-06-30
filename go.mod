@@ -19,7 +19,7 @@ require (
 	github.com/kwilteam/action-grammar-go v0.0.0-20230626155541-72265621f427
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
 	github.com/kwilteam/kuneiform v0.3.2-0.20230629145726-18ac4a24a39b
-	github.com/kwilteam/kwil-extensions v0.0.0-20230629052052-5c775af01b03
+	github.com/kwilteam/kwil-extensions v0.0.0-20230629204046-d0ba9a5bcf84
 	github.com/kwilteam/sql-grammar-go v0.0.2
 	github.com/manifoldco/promptui v0.9.0
 	github.com/pkg/errors v0.9.1
@@ -104,7 +104,7 @@ require (
 	golang.org/x/crypto v0.1.0 // indirect
 	golang.org/x/exp v0.0.0-20230419192730-864b3d6c5c2c // indirect
 	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/sys v0.7.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect

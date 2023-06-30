@@ -8,7 +8,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -17,21 +16,21 @@ type Service struct {
 
 	log log.Logger
 
-	executor         datasets.DatasetUseCaseInterface
-	cfg              *config.KwildConfig
-	accountStore     *balances.AccountStore
-	sqliteFilePath   string
-	extensionConfigs []*extensions.ExtensionConfig
+	executor       datasets.DatasetUseCaseInterface
+	cfg            *config.KwildConfig
+	accountStore   *balances.AccountStore
+	sqliteFilePath string
+	extensionUrls  []string
 
 	providerAddress string
 }
 
 func NewService(ctx context.Context, config *config.KwildConfig, opts ...TxSvcOpt) (*Service, error) {
 	s := &Service{
-		log:              log.NewNoOp(),
-		cfg:              config,
-		providerAddress:  crypto.AddressFromPrivateKey(config.PrivateKey),
-		extensionConfigs: []*extensions.ExtensionConfig{},
+		log:             log.NewNoOp(),
+		cfg:             config,
+		providerAddress: crypto.AddressFromPrivateKey(config.PrivateKey),
+		extensionUrls:   []string{},
 	}
 
 	for _, opt := range opts {
@@ -64,8 +63,8 @@ func getDatasetUseCaseOpts(s *Service) []datasets.DatasetUseCaseOpt {
 		opts = append(opts, datasets.WithSqliteFilePath(s.sqliteFilePath))
 	}
 
-	if len(s.extensionConfigs) > 0 {
-		opts = append(opts, datasets.WithExtensions(s.extensionConfigs...))
+	if len(s.extensionUrls) > 0 {
+		opts = append(opts, datasets.WithExtensions(s.extensionUrls...))
 	}
 
 	opts = append(opts, datasets.WithLogger(s.log))

@@ -8,11 +8,11 @@ import (
 )
 
 type ExtensionClient interface {
-	Configure(ctx context.Context, config map[string]string) error
-	CallMethod(ctx *types.ExecutionContext, method string, args ...any) ([]any, error)
+	CallMethod(execCtx *types.ExecutionContext, method string, args ...any) ([]any, error)
 	Close() error
-	ListMethods(ctx context.Context) ([]string, error)
 	GetMetadata(ctx context.Context) (map[string]string, error)
+	GetName(ctx context.Context) (string, error)
+	ListMethods(ctx context.Context) ([]string, error)
 }
 
 type Connecter interface {

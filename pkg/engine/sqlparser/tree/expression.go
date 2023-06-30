@@ -478,9 +478,14 @@ func (e *ExpressionArithmetic) ToSQL() string {
 		stmt.WrapParen()
 	}
 
+	// TODO: this should be removed once we handle * properly
+	// right now, * is treated as an ArithmeticOperator, but it should be its own type
+	// if * is passed, left and right are not defined
+
 	stmt.WriteString(e.Left.ToSQL())
 	stmt.WriteString(e.Operator.String())
 	stmt.WriteString(e.Right.ToSQL())
+
 	return stmt.String()
 }
 

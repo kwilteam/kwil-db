@@ -2,7 +2,6 @@ package txsvc
 
 import (
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -26,8 +25,8 @@ func WithSqliteFilePath(path string) TxSvcOpt {
 	}
 }
 
-func WithExtensions(extConfigs ...*extensions.ExtensionConfig) TxSvcOpt {
+func WithExtensions(extConfigs ...string) TxSvcOpt {
 	return func(s *Service) {
-		s.extensionConfigs = extConfigs
+		s.extensionUrls = extConfigs
 	}
 }

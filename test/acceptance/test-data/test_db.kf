@@ -1,5 +1,13 @@
 database testdb;
 
+use math {
+    round: "up"
+} as math_up;
+
+use math {
+    round: "down"
+} as math_down;
+
 table users {
     id int primary notnull,
     username text default("sds"),
@@ -91,4 +99,10 @@ action multi_select() public {
     SELECT * FROM posts;
 
     SELECT * FROM users;
+}
+
+action divide($numerator, $denominator) public {
+    $up = math_up.divide($numerator, $denominator);
+    $down = math_down.divide($numerator, $denominator);
+    select $up AS upper_value, $down AS lower_value;
 }
