@@ -47,6 +47,27 @@ func Test_WriteAndRead(t *testing.T) {
 	}
 }
 
+func Test_CountStar(t *testing.T) {
+	db, cleanup := openTestDB(t)
+	defer cleanup()
+
+	err := createTestSchema(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stmt, err := db.Prepare("SELECT COUNT(*) FROM users;")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = stmt.Execute(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
+
 func Test_MetadataTracking(t *testing.T) {
 	db, cleanup := openTestDB(t)
 	defer cleanup()
