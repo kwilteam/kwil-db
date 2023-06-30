@@ -6,10 +6,17 @@ type DatasetIdentifier struct {
 }
 
 type Schema struct {
-	Owner   string    `json:"owner"`
-	Name    string    `json:"name"`
-	Tables  []*Table  `json:"tables"`
-	Actions []*Action `json:"actions"`
+	Owner      string       `json:"owner"`
+	Name       string       `json:"name"`
+	Tables     []*Table     `json:"tables"`
+	Actions    []*Action    `json:"actions"`
+	Extensions []*Extension `json:"extensions"`
+}
+
+type Extension struct {
+	Name   string            `json:"name"`
+	Config map[string]string `json:"config"`
+	Alias  string            `json:"alias"`
 }
 
 type Table struct {

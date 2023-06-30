@@ -3,7 +3,6 @@ package datasets
 import (
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/engine"
-	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -47,8 +46,8 @@ func WithEngine(eng *engine.Engine) DatasetUseCaseOpt {
 	}
 }
 
-func WithExtensions(extConfigs ...*extensions.ExtensionConfig) DatasetUseCaseOpt {
+func WithExtensions(extUrls ...string) DatasetUseCaseOpt {
 	return func(u *DatasetUseCase) {
-		u.extensionConfigs = extConfigs
+		u.extensionUrls = extUrls
 	}
 }

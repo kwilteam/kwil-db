@@ -1,19 +1,19 @@
 package dataset
 
 import (
+	"context"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset/actparser"
 	"github.com/kwilteam/kwil-db/pkg/engine/eng"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"go.uber.org/zap"
 
 	"encoding/binary"
 	"math/rand"
 	"time"
 )
-
-// TODO: this file is ripe for refactoring.  Seems very bug prone
 
 // randomIdentifier is a hash that can be used and reset.  It is primatily used for generating
 // random names for prepared statements.  it is pseudoprandom, and does not have to be
@@ -57,7 +57,17 @@ func init() {
 	}
 }
 
-func getEngineOpts(procedures []*types.Procedure, extensions []*types.Extension, exts map[string]Initializer) (*eng.EngineOpts, error) {
+func (d *Dataset) getEngineOpts(ctx context.Context, exts map[string]Initializer) (*eng.EngineOpts, error) {
+	procedures, err := d.db.ListProcedures(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	extensions, err := d.db.ListExtensions(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	engineProceduresMap := make(map[string]*eng.Procedure)
 	loaders := []*eng.InstructionExecution{}
 	for _, procedure := range procedures {
@@ -71,6 +81,12 @@ func getEngineOpts(procedures []*types.Procedure, extensions []*types.Extension,
 	}
 
 	for _, extension := range extensions {
+		if _, ok := exts[extension.Name]; !ok {
+			// TODO: write a unit test for this
+			d.options.log.Warn("extension used in persisted dataset not found", zap.String("extension", extension.Name))
+			return nil, ErrExtensionNotFound
+		}
+
 		loaderInstructions, err := getExtensionLoader(extension)
 		if err != nil {
 			return nil, err

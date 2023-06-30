@@ -13,10 +13,10 @@ import (
 )
 
 type DatasetUseCase struct {
-	engine           *engine.Engine
-	accountStore     AccountStore
-	log              log.Logger
-	extensionConfigs []*extensions.ExtensionConfig
+	engine        *engine.Engine
+	accountStore  AccountStore
+	log           log.Logger
+	extensionUrls []string
 
 	sqliteFilePath string
 }
@@ -25,6 +25,7 @@ func New(ctx context.Context, opts ...DatasetUseCaseOpt) (DatasetUseCaseInterfac
 	u := &DatasetUseCase{
 		log:            log.NewNoOp(),
 		sqliteFilePath: "",
+		extensionUrls:  []string{},
 	}
 
 	for _, opt := range opts {
@@ -61,8 +62,8 @@ func (u *DatasetUseCase) engineOpts() []engine.EngineOpt {
 		opts = append(opts, engine.WithPath(u.sqliteFilePath))
 	}
 
-	if len(u.extensionConfigs) > 0 {
-		exts, err := connectExtensions(context.Background(), u.extensionConfigs)
+	if len(u.extensionUrls) > 0 {
+		exts, err := connectExtensions(context.Background(), u.extensionUrls)
 		if err != nil {
 			panic(err)
 		}
@@ -120,17 +121,22 @@ func (u *DatasetUseCase) Close() error {
 	return errors.Join(errs...)
 }
 
-func connectExtensions(ctx context.Context, confs []*extensions.ExtensionConfig) (map[string]*extensions.Extension, error) {
-	exts := make(map[string]*extensions.Extension, len(confs))
+func connectExtensions(ctx context.Context, urls []string) (map[string]*extensions.Extension, error) {
+	exts := make(map[string]*extensions.Extension, len(urls))
 
-	for _, conf := range confs {
-		ext := extensions.New(conf)
+	for _, url := range urls {
+		ext := extensions.New(url)
 		err := ext.Connect(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to connect extension '%s': %w", conf.Name, err)
+			return nil, fmt.Errorf("failed to connect extension '%s': %w", ext.Name(), err)
 		}
 
-		exts[conf.Name] = ext
+		_, ok := exts[ext.Name()]
+		if ok {
+			return nil, fmt.Errorf("duplicate extension name: %s", ext.Name())
+		}
+
+		exts[ext.Name()] = ext
 	}
 
 	return exts, nil

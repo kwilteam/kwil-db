@@ -6,48 +6,45 @@ import (
 	"strings"
 )
 
-type ExtensionConfig struct {
-	Name            string            `json:"name"`
-	Url             string            `json:"url"`
-	ConfigVariables map[string]string `json:"config"`
-}
-
 type Extension struct {
-	config  *ExtensionConfig
+	name    string
+	url     string
 	methods map[string]struct{}
 
 	client ExtensionClient
 }
 
+func (e *Extension) Name() string {
+	return e.name
+}
+
 // New connects to the given extension, and attempts to configure it with the given config.
 // If the extension is not available, an error is returned.
-func New(conf *ExtensionConfig) *Extension { // I return the interface here b/c i think it makes the package api cleaner
+func New(url string) *Extension {
 	return &Extension{
-		config: &ExtensionConfig{
-			Name:            conf.Name,
-			Url:             conf.Url,
-			ConfigVariables: conf.ConfigVariables,
-		},
+		name:    "",
+		url:     url,
 		methods: make(map[string]struct{}),
 	}
 }
 
 func (e *Extension) Connect(ctx context.Context) error {
-	extClient, err := ConnectFunc.Connect(ctx, e.config.Url)
+	extClient, err := ConnectFunc.Connect(ctx, e.url)
 	if err != nil {
-		return fmt.Errorf("failed to connect to extension %s: %w", e.config.Name, err)
+		return fmt.Errorf("failed to connect to extension at %s: %w", e.url, err)
 	}
 
-	err = extClient.Configure(ctx, e.config.ConfigVariables)
+	name, err := extClient.GetName(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to configure extension %s: %w", e.config.Name, err)
+		return fmt.Errorf("failed to get extension name: %w", err)
 	}
 
+	e.name = name
 	e.client = extClient
 
 	err = e.loadMethods(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to load methods for extension %s: %w", e.config.Name, err)
+		return fmt.Errorf("failed to load methods for extension %s: %w", e.name, err)
 	}
 
 	return nil
@@ -56,7 +53,7 @@ func (e *Extension) Connect(ctx context.Context) error {
 func (e *Extension) loadMethods(ctx context.Context) error {
 	methodList, err := e.client.ListMethods(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list methods for extension %s: %w", e.config.Name, err)
+		return fmt.Errorf("failed to list methods for extension '%s' at target '%s': %w", e.name, e.url, err)
 	}
 
 	e.methods = make(map[string]struct{})
@@ -65,7 +62,7 @@ func (e *Extension) loadMethods(ctx context.Context) error {
 
 		_, ok := e.methods[lowerName]
 		if ok {
-			return fmt.Errorf("extension %s has duplicate method %s. this is an issue with the extension", e.config.Name, lowerName)
+			return fmt.Errorf("extension %s has duplicate method %s. this is an issue with the extension", e.name, lowerName)
 		}
 
 		e.methods[lowerName] = struct{}{}

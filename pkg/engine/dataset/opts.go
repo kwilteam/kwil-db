@@ -1,5 +1,7 @@
 package dataset
 
+import "github.com/kwilteam/kwil-db/pkg/log"
+
 type TxOpts struct {
 	Caller string
 }
@@ -8,6 +10,7 @@ type engineOptions struct {
 	initializers map[string]Initializer
 	owner        string
 	name         string
+	log          log.Logger
 }
 
 type OpenOpt func(*engineOptions)
@@ -27,5 +30,11 @@ func OwnedBy(owner string) OpenOpt {
 func Named(name string) OpenOpt {
 	return func(opts *engineOptions) {
 		opts.name = name
+	}
+}
+
+func WithLogger(logger log.Logger) OpenOpt {
+	return func(opts *engineOptions) {
+		opts.log = logger
 	}
 }

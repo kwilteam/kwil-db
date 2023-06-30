@@ -41,9 +41,10 @@ func (i *Instance) Metadata() map[string]string {
 }
 
 func (i *Instance) Name() string {
-	return i.extenstion.config.Name
+	return i.extenstion.name
 }
 
+// TODO: test this for merging default with provided correctly
 func mergeMetadata(required, provided map[string]string) (map[string]string, error) {
 	merged := make(map[string]string)
 
@@ -66,7 +67,7 @@ func (i *Instance) Execute(ctx context.Context, method string, args ...any) ([]a
 	lowerMethod := strings.ToLower(method)
 	_, ok := i.extenstion.methods[lowerMethod]
 	if !ok {
-		return nil, fmt.Errorf("method %s is not available for extension %s", lowerMethod, i.extenstion.config.Name)
+		return nil, fmt.Errorf("method '%s' is not available for extension '%s' at target '%s'", lowerMethod, i.extenstion.name, i.extenstion.url)
 	}
 
 	return i.extenstion.client.CallMethod(&types.ExecutionContext{
