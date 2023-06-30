@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/entity"
 
@@ -50,37 +49,7 @@ func (app *KwilDbApplication) Info(info abcitypes.RequestInfo) abcitypes.Respons
 }
 
 func (app *KwilDbApplication) Query(query abcitypes.RequestQuery) abcitypes.ResponseQuery {
-	var qreq txpb.QueryRequest
-	ctx := context.Background()
-	err := json.Unmarshal(query.Data, &qreq)
-	if err != nil {
-		app.server.Log.Error("failed to unmarshal query request with ", zap.String("error", err.Error()))
-		return abcitypes.ResponseQuery{Code: 1, Log: err.Error()}
-	}
-
-	/* KWIL DB QUERY */
-	bts, err := app.executor.Query(ctx, &entity.DBQuery{
-		DBID:  qreq.Dbid,
-		Query: qreq.Query,
-	})
-	if err != nil {
-		app.server.Log.Error("failed to query database with ", zap.String("error", err.Error()))
-		return abcitypes.ResponseQuery{Code: 1, Log: err.Error()}
-	}
-
-	qresp := &txpb.QueryResponse{
-		Result: bts,
-	}
-	resp := abcitypes.ResponseQuery{Key: query.Data}
-
-	resp.Value, err = json.Marshal(qresp)
-	if err != nil {
-		app.server.Log.Error("failed to marshal query response with ", zap.String("error", err.Error()))
-		return abcitypes.ResponseQuery{Code: 1, Log: err.Error()}
-	}
-	resp.Log = "success"
-	app.server.Log.Info("query response", zap.String("response", string(resp.Value)))
-	return resp
+	return abcitypes.ResponseQuery{}
 }
 
 func (app *KwilDbApplication) CheckTx(req_tx abcitypes.RequestCheckTx) abcitypes.ResponseCheckTx {
@@ -228,6 +197,7 @@ func (app *KwilDbApplication) drop_database(tx *kTx.Transaction) abcitypes.Respo
 				{Key: "DbName", Value: dsIdent.Name, Index: true},
 				{Key: "TxSender", Value: tx.Sender, Index: true},
 				{Key: "DbId", Value: dbid, Index: true},
+				{Key: "GasUsed", Value: resp.Fee, Index: true},
 			},
 		},
 	}
