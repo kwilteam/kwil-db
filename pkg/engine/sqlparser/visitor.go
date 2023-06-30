@@ -2,11 +2,12 @@ package sqlparser
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/kwilteam/kwil-db/pkg/engine/tree"
 	"github.com/kwilteam/sql-grammar-go/sqlgrammar"
-	"reflect"
-	"strings"
 )
 
 // KFSqliteVisitor is visitor that visit Antlr parsed tree and returns the AST.
@@ -216,12 +217,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 			Right:    v.visitExpr(ctx.Expr(1)),
 			Operator: tree.ArithmeticConcat,
 		}
-	case ctx.STAR() != nil:
-		return &tree.ExpressionArithmetic{
-			Left:     v.visitExpr(ctx.Expr(0)),
-			Right:    v.visitExpr(ctx.Expr(1)),
-			Operator: tree.ArithmeticOperatorMultiply,
-		}
+		// TODO: this was where ctx.STAR() != nil was
 	case ctx.DIV() != nil:
 		return &tree.ExpressionArithmetic{
 			Left:     v.visitExpr(ctx.Expr(0)),
@@ -477,6 +473,12 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 			expr.Inputs[i] = v.visitExpr(e)
 		}
 		return expr
+	case ctx.STAR() != nil:
+		return &tree.ExpressionArithmetic{
+			Left:     v.visitExpr(ctx.Expr(0)),
+			Right:    v.visitExpr(ctx.Expr(1)),
+			Operator: tree.ArithmeticOperatorMultiply,
+		}
 	case ctx.CASE_() != nil:
 		whenExprCount := len(ctx.GetWhen_expr())
 		expr := &tree.ExpressionCase{
