@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/pkg/log"
+
 	"github.com/kwilteam/kwil-db/pkg/engine/eng"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
@@ -22,22 +24,18 @@ type Dataset struct {
 func OpenDataset(ctx context.Context, ds Datastore, opts ...OpenOpt) (*Dataset, error) {
 	openOptions := &engineOptions{
 		initializers: make(map[string]Initializer),
+		log:          log.NewNoOp(),
 	}
 	for _, opt := range opts {
 		opt(openOptions)
 	}
 
-	procedures, err := ds.ListProcedures(ctx)
-	if err != nil {
-		return nil, err
+	dataset := &Dataset{
+		db:      ds,
+		options: openOptions,
 	}
 
-	extensions, err := ds.ListExtensions(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	engineOpts, err := getEngineOpts(procedures, extensions, openOptions.initializers)
+	engineOpts, err := dataset.getEngineOpts(ctx, openOptions.initializers)
 	if err != nil {
 		return nil, err
 	}
@@ -47,12 +45,15 @@ func OpenDataset(ctx context.Context, ds Datastore, opts ...OpenOpt) (*Dataset, 
 		return nil, err
 	}
 
-	return &Dataset{
-		metadata: newMetadata(procedures),
-		db:       ds,
-		options:  openOptions,
-		engine:   engine,
-	}, nil
+	procedures, err := ds.ListProcedures(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dataset.engine = engine
+	dataset.metadata = newMetadata(procedures)
+
+	return dataset, nil
 }
 
 func (d *Dataset) execConstructor(ctx context.Context, opts *TxOpts) error {

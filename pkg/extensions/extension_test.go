@@ -17,11 +17,7 @@ var (
 // since this is a prototype, and the package is simple, this is good for now.
 func Test_Extensions(t *testing.T) {
 	ctx := context.Background()
-	ext := extensions.New(&extensions.ExtensionConfig{
-		Name:            "erc20",
-		Url:             "local:80",
-		ConfigVariables: testConfig,
-	})
+	ext := extensions.New("local:8080")
 
 	err := ext.Connect(ctx)
 	if err != nil {

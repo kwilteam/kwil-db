@@ -44,10 +44,12 @@ func (u *DatasetUseCase) deployDataset(ctx context.Context, deployment *entity.D
 		return err
 	}
 
+	extensions := convertExtensionsToDto(deployment.Schema.Extensions)
+
 	dbid, err := u.engine.CreateDataset(ctx, deployment.Schema.Name, deployment.Schema.Owner, &engine.Schema{
 		Tables:     tables,
 		Procedures: actions,
-		// TODO: add extensions
+		Extensions: extensions,
 	})
 	if err != nil {
 		return err

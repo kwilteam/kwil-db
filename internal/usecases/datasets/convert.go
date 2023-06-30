@@ -91,6 +91,19 @@ func convertActionsToDto(actions []*entity.Action) ([]*engineDto.Procedure, erro
 	return entityActions, nil
 }
 
+func convertExtensionsToDto(extensions []*entity.Extension) []*engineDto.Extension {
+	entityExtensions := make([]*engineDto.Extension, len(extensions))
+	for i, extension := range extensions {
+		entityExtensions[i] = &engineDto.Extension{
+			Name:           extension.Name,
+			Initialization: extension.Config,
+			Alias:          extension.Alias,
+		}
+	}
+
+	return entityExtensions
+}
+
 func convertTablesToDto(tables []*entity.Table) ([]*engineDto.Table, error) {
 	entityTables := make([]*engineDto.Table, len(tables))
 	for i, table := range tables {

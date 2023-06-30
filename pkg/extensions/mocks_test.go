@@ -26,8 +26,8 @@ func (m connecterFunc) Connect(ctx context.Context, target string, opts ...clien
 // mockClient implements the ExtensionClient interface
 type mockClient struct{}
 
-func (m *mockClient) Configure(ctx context.Context, config map[string]string) error {
-	return nil
+func (m *mockClient) GetName(ctx context.Context) (string, error) {
+	return "mock", nil
 }
 
 func (m *mockClient) CallMethod(ctx *types.ExecutionContext, method string, args ...any) ([]any, error) {
