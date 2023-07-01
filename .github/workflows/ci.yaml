@@ -126,11 +126,11 @@ jobs:
 
       - name: Pull Docker image
         run: |
-          docker pull kwilbrennan/extensions-math:latest
+          docker pull kwilbrennan/extensions-math:multi-arch
 
       - name: Run the Docker image
         run: |
-          docker run --rm kwilbrennan/extensions-math:latest
+          docker run --rm kwilbrennan/extensions-math:multi-arch
 
       - name: Build kwild image
         id: docker_build_kwild
