@@ -31,17 +31,17 @@ type TContainer struct {
 func (c *TContainer) ShowPortInfo(ctx context.Context) error {
 	exposedEndpoint, err := c.ExposedEndpoint(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not get exposed endpoint: %w", err)
 	}
 
 	unexposedEndpoint, err := c.UnexposedEndpoint(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not get unexposed endpoint: %w", err)
 	}
 
 	name, err := c.Name(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not get container name: %w", err)
 	}
 	fmt.Printf("container %s started, serve at %s, exposed at %s\ns", name, unexposedEndpoint, exposedEndpoint)
 	return nil
