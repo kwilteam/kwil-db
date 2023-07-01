@@ -1,6 +1,6 @@
 module github.com/kwilteam/kwil-db
 
-go 1.19
+go 1.20
 
 require (
 	github.com/alexliesenfeld/health v0.6.0
