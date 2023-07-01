@@ -73,7 +73,9 @@ func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExt
 		require.NoError(t, container.Terminate(ctx), "Could not stop extension container")
 	})
 
-	// err = container.ShowPortInfo(ctx)
-	// require.NoError(t, err)
+	time.Sleep(10 * time.Second)
+
+	err = container.ShowPortInfo(ctx)
+	require.NoError(t, err)
 	return container
 }
