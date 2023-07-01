@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 func Builder() DatasetBuilder {
@@ -12,6 +13,7 @@ func Builder() DatasetBuilder {
 		procedures:         []*types.Procedure{},
 		tables:             []*types.Table{},
 		extensions:         []*types.Extension{},
+		log:                log.NewNoOp(),
 	}
 }
 
@@ -23,6 +25,7 @@ type DatasetBuilder interface {
 	WithExtensions(extensions ...*types.Extension) DatasetBuilder
 	OwnedBy(owner string) DatasetBuilder
 	Named(name string) DatasetBuilder
+	WithLogger(l log.Logger) DatasetBuilder
 	Build(context.Context) (*Dataset, error)
 }
 
@@ -34,6 +37,7 @@ type datasetBuilder struct {
 	extensions         []*types.Extension
 	owner              string
 	name               string
+	log                log.Logger
 }
 
 func (b *datasetBuilder) WithProcedures(procedures ...*types.Procedure) DatasetBuilder {
@@ -68,6 +72,11 @@ func (b *datasetBuilder) OwnedBy(owner string) DatasetBuilder {
 
 func (b *datasetBuilder) Named(name string) DatasetBuilder {
 	b.name = name
+	return b
+}
+
+func (b *datasetBuilder) WithLogger(l log.Logger) DatasetBuilder {
+	b.log = l
 	return b
 }
 
@@ -108,6 +117,7 @@ func (b *datasetBuilder) Build(ctx context.Context) (*Dataset, error) {
 		WithAvailableExtensions(b.avalableExtensions),
 		OwnedBy(b.owner),
 		Named(b.name),
+		WithLogger(b.log),
 	)
 	if err != nil {
 		return nil, err

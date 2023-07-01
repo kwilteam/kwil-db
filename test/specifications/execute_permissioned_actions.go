@@ -17,7 +17,8 @@ const (
 	listUsersQueryName  = "list_users"
 )
 
-// TODO: we can delete this since the meanign of private has changed.
+// TODO: we can delete this since the meaning of private has changed.
+// we should instead test nested private actions
 // this should probably be replaced with testing some sort of gating mechanism using seed data
 func ExecutePermissionedActionSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
 	// create_user is public, list_users is private

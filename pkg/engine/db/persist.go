@@ -66,7 +66,7 @@ func (d *DB) StoreExtension(ctx context.Context, extension *types.Extension) err
 		return err
 	}
 
-	return d.persistVersionedMetadata(ctx, extension.Name, metadataTypeExtension, &versionedMetadata{
+	return d.persistVersionedMetadata(ctx, extension.Alias, metadataTypeExtension, &versionedMetadata{
 		Version: extensionVersion,
 		Data:    bts,
 	})

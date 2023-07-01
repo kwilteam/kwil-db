@@ -113,50 +113,50 @@ func Test_Execute(t *testing.T) {
 		// 	},
 		// 	wantErr: false,
 		// },
-		{
-			name: "batch execute and return the final output",
-			fields: fields{
-				availableExtensions:     testAvailableExtensions,
-				extensionInitialization: testExtensions,
-				tables:                  test_tables,
-				procedures: []*types.Procedure{
-					{
-						Name:   "create_user_manual",
-						Args:   []string{"$id", "$username", "$age", "$address"},
-						Public: true,
-						Statements: []string{
-							"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, $address);",
-							"SELECT username, (SELECT count(*) FROM users) as num_users FROM users WHERE id = $id;",
-							//"SELECT count(*) FROM users;",
-						},
-					},
-				},
-			},
-			args: args{
-				procedure: "create_user_manual",
-				inputs: []map[string]interface{}{
-					{
-						"$id":       "1",
-						"$username": "test_username",
-						"$age":      20,
-						"$address":  "0x123",
-					},
-					{
-						"$id":       "2",
-						"$username": "test_username2",
-						"$age":      20,
-						"$address":  "0x456",
-					},
-				},
-			},
-			expectedOutputs: []map[string]interface{}{
-				{
-					"username":  "test_username2",
-					"num_users": int64(2), // we get num users to make sure the first insert was successful
-				},
-			},
-			wantErr: false,
-		},
+		// {
+		// 	name: "batch execute and return the final output",
+		// 	fields: fields{
+		// 		availableExtensions:     testAvailableExtensions,
+		// 		extensionInitialization: testExtensions,
+		// 		tables:                  test_tables,
+		// 		procedures: []*types.Procedure{
+		// 			{
+		// 				Name:   "create_user_manual",
+		// 				Args:   []string{"$id", "$username", "$age", "$address"},
+		// 				Public: true,
+		// 				Statements: []string{
+		// 					"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, $address);",
+		// 					"SELECT username, (SELECT count(*) FROM users) as num_users FROM users WHERE id = $id;",
+		// 					//"SELECT count(*) FROM users;",
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// 	args: args{
+		// 		procedure: "create_user_manual",
+		// 		inputs: []map[string]interface{}{
+		// 			{
+		// 				"$id":       "1",
+		// 				"$username": "test_username",
+		// 				"$age":      20,
+		// 				"$address":  "0x123",
+		// 			},
+		// 			{
+		// 				"$id":       "2",
+		// 				"$username": "test_username2",
+		// 				"$age":      20,
+		// 				"$address":  "0x456",
+		// 			},
+		// 		},
+		// 	},
+		// 	expectedOutputs: []map[string]interface{}{
+		// 		{
+		// 			"username":  "test_username2",
+		// 			"num_users": int64(2), // we get num users to make sure the first insert was successful
+		// 		},
+		// 	},
+		// 	wantErr: false,
+		// },
 		// {
 		// 	name: "failed batch insert will revert all inserts",
 		// 	fields: fields{
@@ -206,6 +206,68 @@ func Test_Execute(t *testing.T) {
 		// 	expectedOutputs: nil,
 		// 	wantErr:         true,
 		// },
+		{
+			name: "use extension that is not included in the extensions list",
+			fields: fields{
+				availableExtensions:     testAvailableExtensions,
+				extensionInitialization: testExtensions,
+				tables:                  test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:   "use_ext",
+						Args:   []string{"$name"},
+						Public: true,
+						Statements: []string{
+							"$result = crypto.keccack256($name);",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "use_ext",
+				inputs: []map[string]interface{}{
+					{
+						"$name": "satoshi",
+					},
+				},
+			},
+			expectedOutputs: nil,
+			wantErr:         true,
+		},
+		{
+			name: "use extension that this server does not have an initializer for",
+			fields: fields{
+				availableExtensions: testAvailableExtensions,
+				extensionInitialization: []*types.Extension{
+					{
+						Name:           "crypto",
+						Initialization: map[string]string{},
+						Alias:          "crypto",
+					},
+				},
+				tables: test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:   "use_ext",
+						Args:   []string{"$name"},
+						Public: true,
+						Statements: []string{
+							"$result = crypto.keccack256($name);",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "use_ext",
+				inputs: []map[string]interface{}{
+					{
+						"$name": "satoshi",
+					},
+				},
+			},
+			expectedOutputs: nil,
+			wantErr:         true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -83,6 +83,7 @@ func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string,
 		WithExtensions(schema.Extensions...).
 		OwnedBy(owner).
 		Named(name).
+		WithLogger(e.log).
 		Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build dataset: %w", err)

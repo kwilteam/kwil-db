@@ -96,6 +96,8 @@ func (e *Engine) openStoredDatasets(ctx context.Context) error {
 			dataset.WithAvailableExtensions(e.getInitializers()),
 			dataset.Named(datasetInfo.Name),
 			dataset.OwnedBy(datasetInfo.Owner),
+			dataset.OpenWithMissingExtensions(),
+			dataset.WithLogger(e.log),
 		)
 		if err != nil {
 			return err

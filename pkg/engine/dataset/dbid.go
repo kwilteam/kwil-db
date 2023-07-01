@@ -7,5 +7,5 @@ func generateDBID(name, owner string) string {
 }
 
 func (d *Dataset) DBID() string {
-	return generateDBID(d.options.name, d.options.owner)
+	return generateDBID(d.name, d.owner)
 }

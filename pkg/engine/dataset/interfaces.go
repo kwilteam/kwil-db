@@ -3,13 +3,13 @@ package dataset
 import (
 	"context"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/eng"
+	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 type Engine interface {
 	Close() error
-	ExecuteProcedure(ctx context.Context, name string, args []any, opts ...eng.ExecutionOpt) ([]map[string]any, error)
+	ExecuteProcedure(ctx context.Context, name string, args []any, opts ...execution.ExecutionOpt) ([]map[string]any, error)
 }
 
 type InitializedExtension interface {
@@ -48,7 +48,7 @@ type initializerWrapper struct {
 	Initializer
 }
 
-func (i initializerWrapper) Initialize(ctx context.Context, initializeVars map[string]string) (eng.InitializedExtension, error) {
+func (i initializerWrapper) Initialize(ctx context.Context, initializeVars map[string]string) (execution.InitializedExtension, error) {
 	return i.Initializer.Initialize(ctx, initializeVars)
 }
 
@@ -56,6 +56,6 @@ type datastoreWrapper struct {
 	Datastore
 }
 
-func (d datastoreWrapper) Prepare(stmt string) (eng.PreparedStatement, error) {
+func (d datastoreWrapper) Prepare(stmt string) (execution.PreparedStatement, error) {
 	return d.Datastore.Prepare(stmt)
 }
