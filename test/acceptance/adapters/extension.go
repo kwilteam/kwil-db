@@ -37,7 +37,7 @@ func (c *mathExtensionContainer) UnexposedEndpoint(ctx context.Context) (string,
 	return endpoint, nil
 }
 
-func newExtensionMath(ctx context.Context, port string) (*mathExtensionContainer, error) {
+func newExtensionMath(ctx context.Context) (*mathExtensionContainer, error) {
 	req := testcontainers.ContainerRequest{
 		Name:         fmt.Sprintf("math-extension-%d", time.Now().Unix()),
 		Image:        MathExtImage,
@@ -62,14 +62,18 @@ func newExtensionMath(ctx context.Context, port string) (*mathExtensionContainer
 	}}, nil
 }
 
-func StartMathExtensionDockerService(t *testing.T, ctx context.Context, port string) *mathExtensionContainer {
-	container, err := newExtensionMath(ctx, port)
+func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExtensionContainer {
+	container, err := newExtensionMath(ctx)
 	if err != nil {
 		panic(err)
 	}
+	require.NoError(t, err, "Could not start extension container")
+
+	t.Cleanup(func() {
+		require.NoError(t, container.Terminate(ctx), "Could not stop extension container")
+	})
 
 	err = container.ShowPortInfo(ctx)
 	require.NoError(t, err)
-
 	return container
 }
