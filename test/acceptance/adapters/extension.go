@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 const (
@@ -46,7 +45,7 @@ func newExtensionMath(ctx context.Context, port string) (*mathExtensionContainer
 		Files:        []testcontainers.ContainerFile{},
 		ExposedPorts: []string{MathExtPort},
 		//Cmd:          []string{"-h"},
-		WaitingFor: wait.ForListeningPort(MathExtPort),
+		//WaitingFor: wait.ForListeningPort(MathExtPort),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
