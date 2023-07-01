@@ -129,6 +129,7 @@ jobs:
           docker pull kwilbrennan/extensions-math:latest
 
             - name: Run the Docker image
+      - name: Run the Docker image
         run: |
           docker run --rm kwilbrennan/extensions-math:latest
 
