@@ -50,11 +50,11 @@ func (c *TContainer) ShowPortInfo(ctx context.Context) error {
 func (c *TContainer) ExposedEndpoint(ctx context.Context) (string, error) {
 	host, err := c.Host(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("could not get host: %w", err)
 	}
 	hostPort, err := c.MappedPort(context.Background(), nat.Port(c.ContainerPort))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("could not get mapped port: %w", err)
 	}
 	return fmt.Sprintf("%s:%s", host, hostPort.Port()), nil
 }
