@@ -38,7 +38,7 @@ func (c *mathExtensionContainer) UnexposedEndpoint(ctx context.Context) (string,
 	return endpoint, nil
 }
 
-func newExtensionMath(ctx context.Context) (*mathExtensionContainer, error) {
+func newExtensionMath(ctx context.Context, opts ...containerOption) (*mathExtensionContainer, error) {
 	req := testcontainers.ContainerRequest{
 		Name:         fmt.Sprintf("math-extension-%d", time.Now().Unix()),
 		Image:        MathExtImage,
@@ -47,7 +47,10 @@ func newExtensionMath(ctx context.Context) (*mathExtensionContainer, error) {
 		ExposedPorts: []string{MathExtPort},
 		Networks:     []string{kwilTestNetworkName},
 		//Cmd:          []string{"-h"},
-		WaitingFor: wait.ForLog("listening on :50051"),
+	}
+
+	for _, opt := range opts {
+		opt(&req)
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -65,7 +68,11 @@ func newExtensionMath(ctx context.Context) (*mathExtensionContainer, error) {
 }
 
 func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExtensionContainer {
-	container, err := newExtensionMath(ctx)
+	container, err := newExtensionMath(ctx,
+		WithNetwork(kwilTestNetworkName),
+		WithExposedPort(MathExtPort),
+		WithWaitStrategy(wait.ForLog("listening on :50051")),
+	)
 	if err != nil {
 		panic(err)
 	}
