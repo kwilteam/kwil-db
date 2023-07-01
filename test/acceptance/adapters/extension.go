@@ -31,7 +31,7 @@ func (c *mathExtensionContainer) ExposedEndpoint(ctx context.Context) (string, e
 func (c *mathExtensionContainer) UnexposedEndpoint(ctx context.Context) (string, error) {
 	endpoint, err := c.TContainer.UnexposedEndpoint(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("could not get unexposed endpoint for math extension: %w", err)
 	}
 
 	return endpoint, nil
