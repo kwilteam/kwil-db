@@ -2,11 +2,12 @@ package dataset
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset/actparser"
-	"github.com/kwilteam/kwil-db/pkg/engine/eng"
+	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"go.uber.org/zap"
 
@@ -57,7 +58,8 @@ func init() {
 	}
 }
 
-func (d *Dataset) getEngineOpts(ctx context.Context, exts map[string]Initializer) (*eng.EngineOpts, error) {
+// TODO: refactor this.
+func (d *Dataset) getEngineOpts(ctx context.Context, exts map[string]Initializer) (*execution.EngineOpts, error) {
 	procedures, err := d.db.ListProcedures(ctx)
 	if err != nil {
 		return nil, err
@@ -68,8 +70,8 @@ func (d *Dataset) getEngineOpts(ctx context.Context, exts map[string]Initializer
 		return nil, err
 	}
 
-	engineProceduresMap := make(map[string]*eng.Procedure)
-	loaders := []*eng.InstructionExecution{}
+	engineProceduresMap := make(map[string]*execution.Procedure)
+	loaders := []*execution.InstructionExecution{}
 	for _, procedure := range procedures {
 		engineProcedure, loaderInstructions, err := parseAction(procedure)
 		if err != nil {
@@ -81,34 +83,41 @@ func (d *Dataset) getEngineOpts(ctx context.Context, exts map[string]Initializer
 	}
 
 	for _, extension := range extensions {
-		if _, ok := exts[extension.Name]; !ok {
-			// TODO: write a unit test for this
-			d.options.log.Warn("extension used in persisted dataset not found", zap.String("extension", extension.Name))
-			return nil, ErrExtensionNotFound
-		}
+		var loaderInstructions []*execution.InstructionExecution
 
-		loaderInstructions, err := getExtensionLoader(extension)
-		if err != nil {
-			return nil, err
+		if _, ok := exts[extension.Name]; !ok {
+			d.log.Warn("extension used in dataset not found", zap.String("extension", extension.Name), zap.String("DBID", d.DBID()))
+
+			if d.allowMissingExtensions {
+				continue
+			}
+
+			return nil, fmt.Errorf("%w: %s", ErrExtensionNotFound, extension.Name)
+
+		} else {
+			loaderInstructions, err = getExtensionLoader(extension)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		loaders = append(loaders, loaderInstructions...)
 	}
 
-	extensionMap := make(map[string]eng.Initializer)
+	extensionMap := make(map[string]execution.Initializer)
 	for name, initializer := range exts {
 		extensionMap[name] = initializerWrapper{initializer}
 	}
 
-	return &eng.EngineOpts{
+	return &execution.EngineOpts{
 		Extensions: extensionMap,
 		Procedures: engineProceduresMap,
 		LoadCmd:    loaders,
 	}, nil
 }
 
-func getExtensionLoader(extension *types.Extension) ([]*eng.InstructionExecution, error) {
-	var setters []*eng.InstructionExecution
+func getExtensionLoader(extension *types.Extension) ([]*execution.InstructionExecution, error) {
+	var setters []*execution.InstructionExecution
 	configMap := make(map[string]string)
 	for key, val := range extension.Initialization {
 		if isIdent(val) {
@@ -122,8 +131,8 @@ func getExtensionLoader(extension *types.Extension) ([]*eng.InstructionExecution
 		setters = append(setters, loadOp)
 	}
 
-	initializeOp := &eng.InstructionExecution{
-		Instruction: eng.OpExtensionInitialize,
+	initializeOp := &execution.InstructionExecution{
+		Instruction: execution.OpExtensionInitialize,
 		Args: []any{
 			extension.Name,
 			extension.Alias,
@@ -134,9 +143,9 @@ func getExtensionLoader(extension *types.Extension) ([]*eng.InstructionExecution
 	return append(setters, initializeOp), nil
 }
 
-func parseAction(procedure *types.Procedure) (engineProcedure *eng.Procedure, loaderInstructions []*eng.InstructionExecution, err error) {
-	var procedureInstructions []*eng.InstructionExecution
-	loaderInstructions = []*eng.InstructionExecution{}
+func parseAction(procedure *types.Procedure) (engineProcedure *execution.Procedure, loaderInstructions []*execution.InstructionExecution, err error) {
+	var procedureInstructions []*execution.InstructionExecution
+	loaderInstructions = []*execution.InstructionExecution{}
 
 	for _, stmt := range procedure.Statements {
 		parsedStmt, err := actparser.Parse(stmt)
@@ -144,8 +153,8 @@ func parseAction(procedure *types.Procedure) (engineProcedure *eng.Procedure, lo
 			return nil, nil, err
 		}
 
-		var stmtInstructions []*eng.InstructionExecution
-		var stmtLoaderInstructions []*eng.InstructionExecution
+		var stmtInstructions []*execution.InstructionExecution
+		var stmtLoaderInstructions []*execution.InstructionExecution
 
 		switch stmtType := parsedStmt.(type) {
 		case *actparser.DMLStmt:
@@ -163,12 +172,12 @@ func parseAction(procedure *types.Procedure) (engineProcedure *eng.Procedure, lo
 		procedureInstructions = append(procedureInstructions, stmtInstructions...)
 	}
 
-	scoping := eng.ProcedureScopingPrivate
+	scoping := execution.ProcedureScopingPrivate
 	if procedure.Public {
-		scoping = eng.ProcedureScopingPublic
+		scoping = execution.ProcedureScopingPublic
 	}
 
-	return &eng.Procedure{
+	return &execution.Procedure{
 		Name:       procedure.Name,
 		Parameters: procedure.Args,
 		Scoping:    scoping,
@@ -176,29 +185,29 @@ func parseAction(procedure *types.Procedure) (engineProcedure *eng.Procedure, lo
 	}, loaderInstructions, nil
 }
 
-func convertDml(dml *actparser.DMLStmt) (procedureInstructions []*eng.InstructionExecution, loaderInstructions []*eng.InstructionExecution, err error) {
+func convertDml(dml *actparser.DMLStmt) (procedureInstructions []*execution.InstructionExecution, loaderInstructions []*execution.InstructionExecution, err error) {
 	uniqueName := randomHash.getRandomHash()
 
-	loadOp := &eng.InstructionExecution{
-		Instruction: eng.OpDMLPrepare,
+	loadOp := &execution.InstructionExecution{
+		Instruction: execution.OpDMLPrepare,
 		Args: []any{
 			uniqueName,
 			dml.Statement,
 		},
 	}
 
-	procedureOp := &eng.InstructionExecution{
-		Instruction: eng.OpDMLExecute,
+	procedureOp := &execution.InstructionExecution{
+		Instruction: execution.OpDMLExecute,
 		Args: []any{
 			uniqueName,
 		},
 	}
 
-	return []*eng.InstructionExecution{procedureOp}, []*eng.InstructionExecution{loadOp}, nil
+	return []*execution.InstructionExecution{procedureOp}, []*execution.InstructionExecution{loadOp}, nil
 }
 
-func convertExtensionExecute(ext *actparser.ExtensionCallStmt) (procedureInstructions []*eng.InstructionExecution, loaderInstructions []*eng.InstructionExecution, err error) {
-	var setters []*eng.InstructionExecution
+func convertExtensionExecute(ext *actparser.ExtensionCallStmt) (procedureInstructions []*execution.InstructionExecution, loaderInstructions []*execution.InstructionExecution, err error) {
+	var setters []*execution.InstructionExecution
 
 	var args []string
 	for _, arg := range ext.Args {
@@ -213,8 +222,8 @@ func convertExtensionExecute(ext *actparser.ExtensionCallStmt) (procedureInstruc
 		setters = append(setters, loadOp)
 	}
 
-	procedureOp := &eng.InstructionExecution{
-		Instruction: eng.OpExtensionExecute,
+	procedureOp := &execution.InstructionExecution{
+		Instruction: execution.OpExtensionExecute,
 		Args: []any{
 			ext.Extension,
 			ext.Method,
@@ -223,11 +232,11 @@ func convertExtensionExecute(ext *actparser.ExtensionCallStmt) (procedureInstruc
 		},
 	}
 
-	return append(setters, procedureOp), []*eng.InstructionExecution{}, nil
+	return append(setters, procedureOp), []*execution.InstructionExecution{}, nil
 }
 
-func convertProcedureCall(action *actparser.ActionCallStmt) (procedureInstructions []*eng.InstructionExecution, loaderInstructions []*eng.InstructionExecution, err error) {
-	var setters []*eng.InstructionExecution
+func convertProcedureCall(action *actparser.ActionCallStmt) (procedureInstructions []*execution.InstructionExecution, loaderInstructions []*execution.InstructionExecution, err error) {
+	var setters []*execution.InstructionExecution
 
 	var args []string
 	for _, arg := range action.Args {
@@ -242,15 +251,15 @@ func convertProcedureCall(action *actparser.ActionCallStmt) (procedureInstructio
 		setters = append(setters, loadOp)
 	}
 
-	procedureOp := &eng.InstructionExecution{
-		Instruction: eng.OpProcedureExecute,
+	procedureOp := &execution.InstructionExecution{
+		Instruction: execution.OpProcedureExecute,
 		Args: []any{
 			action.Method,
 			args,
 		},
 	}
 
-	return append(setters, procedureOp), []*eng.InstructionExecution{}, nil
+	return append(setters, procedureOp), []*execution.InstructionExecution{}, nil
 }
 
 func isIdent(val string) bool {
@@ -267,10 +276,10 @@ func isIdent(val string) bool {
 
 // newSetter creates a new setter instruction and returns the name of the variable
 // this is useful for anonymous variables that need to be set
-func newSetter(value string) (setter *eng.InstructionExecution, varName string) {
+func newSetter(value string) (setter *execution.InstructionExecution, varName string) {
 	varName = randomHash.getRandomIdent()
-	setter = &eng.InstructionExecution{
-		Instruction: eng.OpSetVariable,
+	setter = &execution.InstructionExecution{
+		Instruction: execution.OpSetVariable,
 		Args: []any{
 			varName,
 			trimQuotes(value),

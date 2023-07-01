@@ -8,7 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/eng"
+	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
@@ -17,30 +17,38 @@ type Dataset struct {
 	metadata *Metadata
 	db       Datastore
 	engine   Engine
-	options  *engineOptions
+	log      log.Logger
+
+	// initializers are the intiialization functions for extensions
+	initializers map[string]Initializer
+	// owner is the owner of the dataset
+	owner string
+	// name is the name of the dataset
+	name string
+	// allowMissingExtensions will let a dataset load, even if required extension initializers are not provided
+	// default is true
+	allowMissingExtensions bool
 }
 
 // OpenDataset opens a new dataset and loads the metadata from the database
 func OpenDataset(ctx context.Context, ds Datastore, opts ...OpenOpt) (*Dataset, error) {
-	openOptions := &engineOptions{
-		initializers: make(map[string]Initializer),
-		log:          log.NewNoOp(),
-	}
-	for _, opt := range opts {
-		opt(openOptions)
-	}
-
 	dataset := &Dataset{
-		db:      ds,
-		options: openOptions,
+		db:                     ds,
+		initializers:           make(map[string]Initializer),
+		log:                    log.NewNoOp(),
+		allowMissingExtensions: false,
 	}
 
-	engineOpts, err := dataset.getEngineOpts(ctx, openOptions.initializers)
+	for _, opt := range opts {
+		opt(dataset)
+	}
+
+	engineOpts, err := dataset.getEngineOpts(ctx, dataset.initializers)
 	if err != nil {
 		return nil, err
 	}
 
-	engine, err := eng.NewEngine(ctx, datastoreWrapper{ds}, engineOpts)
+	engine, err := execution.NewEngine(ctx, datastoreWrapper{ds}, engineOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +130,8 @@ func (d *Dataset) executeOnce(ctx context.Context, proc *types.Procedure, args m
 	}
 
 	return d.engine.ExecuteProcedure(ctx, proc.Name, argArr,
-		eng.WithCaller(opts.Caller),
-		eng.WithDatasetID(d.DBID()),
+		execution.WithCaller(opts.Caller),
+		execution.WithDatasetID(d.DBID()),
 	)
 }
 
@@ -191,5 +199,5 @@ func (d *Dataset) Delete() error {
 
 // Metadata returns the metadata for the dataset.
 func (d *Dataset) Metadata() (name, owner string) {
-	return d.options.name, d.options.owner
+	return d.name, d.owner
 }

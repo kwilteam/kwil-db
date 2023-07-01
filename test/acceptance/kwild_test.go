@@ -85,8 +85,12 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.ExecuteDBUpdateSpecification(ctx, t, driver)
 			specifications.ExecuteDBDeleteSpecification(ctx, t, driver)
 
+			// test that the loaded extensions works
+			specifications.ExecuteExtensionSpecification(ctx, t, driver)
+
 			// and user should be able to drop database
 			specifications.DatabaseDropSpecification(ctx, t, driver)
+
 			close(done)
 		})
 	}

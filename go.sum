@@ -295,10 +295,10 @@ github.com/kwilteam/kuneiform v0.3.2-0.20230629145726-18ac4a24a39b h1:GtX0l2jXQp
 github.com/kwilteam/kuneiform v0.3.2-0.20230629145726-18ac4a24a39b/go.mod h1:HkCiK9czYXJmTD0s6ZFAVVKLztcHELtwbusDbk0T278=
 github.com/kwilteam/kuneiform-grammar-go v0.3.2-0.20230626225210-894cd388c72a h1:WJkJJ2qHwMkEb10Rpma85uhIaoYLe22GJZIq6mlqgPY=
 github.com/kwilteam/kuneiform-grammar-go v0.3.2-0.20230626225210-894cd388c72a/go.mod h1:uki0OHLCXttIQqy/DsJ5X9WaNtRf3HB/OmxCCd+XdZU=
-github.com/kwilteam/kwil-extensions v0.0.0-20230629190428-0fd2db41909c h1:hI+QbHEdqoIF7sL3CjJnfsyQIGXOfOBC6JhmfqlXGRc=
-github.com/kwilteam/kwil-extensions v0.0.0-20230629190428-0fd2db41909c/go.mod h1:IBoDCZLetV2DoyaHGUMqod2tkLT0ozTQylUS4kEqiv8=
 github.com/kwilteam/kwil-extensions v0.0.0-20230629204046-d0ba9a5bcf84 h1:aglTmpNnWodN7Ppwqu4yicMkfXMY/EbrCYL1JlHuJ/c=
 github.com/kwilteam/kwil-extensions v0.0.0-20230629204046-d0ba9a5bcf84/go.mod h1:IBoDCZLetV2DoyaHGUMqod2tkLT0ozTQylUS4kEqiv8=
+github.com/kwilteam/kwil-extensions v0.0.0-20230630232020-c7d4c7c7fdc8 h1:LCPBvGlkm+D+/oRY+qXKWSMvD8SQmGoxxuk3OLxc8Gg=
+github.com/kwilteam/kwil-extensions v0.0.0-20230630232020-c7d4c7c7fdc8/go.mod h1:IBoDCZLetV2DoyaHGUMqod2tkLT0ozTQylUS4kEqiv8=
 github.com/kwilteam/sql-grammar-go v0.0.2 h1:Tg8xo/Pzd72QsO19wwNvFrpw2muuBaERP7XTv21U4Iw=
 github.com/kwilteam/sql-grammar-go v0.0.2/go.mod h1:OqmGyCwHfBZvYv/sYPrQ5Ih290dhlD5AcKOHDlUSS0Y=
 github.com/lib/pq v1.0.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=

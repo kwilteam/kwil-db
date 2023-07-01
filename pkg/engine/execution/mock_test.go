@@ -1,9 +1,9 @@
-package eng_test
+package execution_test
 
 import (
 	"context"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/eng"
+	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 )
 
 // this file contains mocks
@@ -12,7 +12,7 @@ type mockDatastore struct {
 	Identifier string
 }
 
-func (m *mockDatastore) Prepare(query string) (eng.PreparedStatement, error) {
+func (m *mockDatastore) Prepare(query string) (execution.PreparedStatement, error) {
 	return &mockPreparedStatement{}, nil
 }
 
@@ -28,7 +28,7 @@ func (m *mockPreparedStatement) Execute(ctx context.Context, args map[string]any
 }
 
 var (
-	testExtensions = map[string]eng.Initializer{
+	testExtensions = map[string]execution.Initializer{
 		"erc20": &mockInitializer{
 			methodReturns: map[string][]any{
 				"balanceOf": {uint64(100)},
@@ -41,17 +41,17 @@ var (
 		},
 	}
 
-	testProcedures = map[string]*eng.Procedure{
+	testProcedures = map[string]*execution.Procedure{
 		"publicProcedure": {
 			Name: "publicProcedure",
 			Parameters: []string{
 				"$arg1",
 				"$arg2",
 			},
-			Scoping: eng.ProcedureScopingPublic,
-			Body: []*eng.InstructionExecution{
+			Scoping: execution.ProcedureScopingPublic,
+			Body: []*execution.InstructionExecution{
 				{
-					Instruction: eng.OpExtensionExecute,
+					Instruction: execution.OpExtensionExecute,
 					Args: []any{
 						"usdc",
 						"balanceOf",
@@ -60,7 +60,7 @@ var (
 					},
 				},
 				{
-					Instruction: eng.OpDMLExecute,
+					Instruction: execution.OpDMLExecute,
 					Args: []any{
 						"update_balance",
 					},
@@ -73,10 +73,10 @@ var (
 				"$arg1",
 				"$arg2",
 			},
-			Scoping: eng.ProcedureScopingPrivate,
-			Body: []*eng.InstructionExecution{
+			Scoping: execution.ProcedureScopingPrivate,
+			Body: []*execution.InstructionExecution{
 				{
-					Instruction: eng.OpDMLExecute,
+					Instruction: execution.OpDMLExecute,
 					Args: []any{
 						"has_balance",
 					},
@@ -85,21 +85,21 @@ var (
 		},
 	}
 
-	testExecutionOpts = []eng.ExecutionOpt{
-		eng.WithCaller("0xCaller"),
-		eng.WithDatasetID("xDBID"),
+	testExecutionOpts = []execution.ExecutionOpt{
+		execution.WithCaller("0xCaller"),
+		execution.WithDatasetID("xDBID"),
 	}
 
-	testLoadCommand = []*eng.InstructionExecution{
+	testLoadCommand = []*execution.InstructionExecution{
 		{
-			Instruction: eng.OpSetVariable,
+			Instruction: execution.OpSetVariable,
 			Args: []any{
 				"$usdc_address",
 				"0x12345678901",
 			},
 		},
 		{
-			Instruction: eng.OpExtensionInitialize,
+			Instruction: execution.OpExtensionInitialize,
 			Args: []any{
 				"erc20",
 				"usdc",
@@ -109,14 +109,14 @@ var (
 			},
 		},
 		{
-			Instruction: eng.OpDMLPrepare,
+			Instruction: execution.OpDMLPrepare,
 			Args: []any{
 				"update_balance",
 				"UPDATE balances SET balance = $res1 WHERE address = $arg1",
 			},
 		},
 		{
-			Instruction: eng.OpDMLPrepare,
+			Instruction: execution.OpDMLPrepare,
 			Args: []any{
 				"has_balance",
 				"SELECT balance FROM balances WHERE address = $arg1",
@@ -129,7 +129,7 @@ type mockInitializer struct {
 	methodReturns map[string][]any
 }
 
-func (m *mockInitializer) Initialize(ctx context.Context, metadata map[string]string) (eng.InitializedExtension, error) {
+func (m *mockInitializer) Initialize(ctx context.Context, metadata map[string]string) (execution.InitializedExtension, error) {
 	return &mockInitializedExtension{
 		methodReturns: m.methodReturns,
 	}, nil

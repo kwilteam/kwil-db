@@ -1,4 +1,4 @@
-package eng_test
+package execution_test
 
 import (
 	"context"
@@ -6,21 +6,21 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/eng"
+	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 )
 
 func TestEngine_ExecuteProcedure(t *testing.T) {
 	type fields struct {
-		availableExtensions map[string]eng.Initializer
-		procedures          map[string]*eng.Procedure
-		loadCommand         []*eng.InstructionExecution
-		db                  eng.Datastore
+		availableExtensions map[string]execution.Initializer
+		procedures          map[string]*execution.Procedure
+		loadCommand         []*execution.InstructionExecution
+		db                  execution.Datastore
 	}
 	type args struct {
 		ctx  context.Context
 		name string
 		args []any
-		opts []eng.ExecutionOpt
+		opts []execution.ExecutionOpt
 	}
 	tests := []struct {
 		name    string
@@ -44,24 +44,24 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 				opts: testExecutionOpts,
 			},
 			want:    nil,
-			wantErr: eng.ErrUnitializedExtension,
+			wantErr: execution.ErrUnitializedExtension,
 		},
 		{
 			name: "executing an extension with initialization in the procedure should succeed",
 			fields: fields{
 				availableExtensions: testExtensions,
-				procedures: map[string]*eng.Procedure{
+				procedures: map[string]*execution.Procedure{
 					"erc20_procedure": {
 						Name:       "erc20_procedure",
 						Parameters: []string{"$address", "$arg2"},
-						Scoping:    eng.ProcedureScopingPublic,
-						Body: []*eng.InstructionExecution{
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
 							{
-								Instruction: eng.OpExtensionInitialize,
+								Instruction: execution.OpExtensionInitialize,
 								Args:        []any{"erc20", "usdc", map[string]string{"address": "$address"}},
 							},
 							{
-								Instruction: eng.OpExtensionExecute,
+								Instruction: execution.OpExtensionExecute,
 								Args:        []any{"usdc", "balanceOf", []string{"$address"}, []string{"$wallet_balance"}},
 							},
 						},
@@ -81,19 +81,19 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 		{
 			name: "executing an extension with initialization in the procedure should fail if the extension is not available",
 			fields: fields{
-				availableExtensions: map[string]eng.Initializer{},
-				procedures: map[string]*eng.Procedure{
+				availableExtensions: map[string]execution.Initializer{},
+				procedures: map[string]*execution.Procedure{
 					"erc20_procedure": {
 						Name:       "erc20_procedure",
 						Parameters: []string{"$address", "$arg2"},
-						Scoping:    eng.ProcedureScopingPublic,
-						Body: []*eng.InstructionExecution{
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
 							{
-								Instruction: eng.OpExtensionInitialize,
+								Instruction: execution.OpExtensionInitialize,
 								Args:        []any{"erc20", "usdc", map[string]string{"address": "$address"}},
 							},
 							{
-								Instruction: eng.OpExtensionExecute,
+								Instruction: execution.OpExtensionExecute,
 								Args:        []any{"usdc", "balanceOf", []string{"$address"}, []string{"$wallet_balance"}},
 							},
 						},
@@ -108,33 +108,33 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 				opts: testExecutionOpts,
 			},
 			want:    nil,
-			wantErr: eng.ErrUnknownExtension,
+			wantErr: execution.ErrUnknownExtension,
 		},
 		{
 			name: "executing an extension with initialization in the load command should succeed",
 			fields: fields{
 				availableExtensions: testExtensions,
-				procedures: map[string]*eng.Procedure{
+				procedures: map[string]*execution.Procedure{
 					"erc20_procedure": {
 						Name:       "erc20_procedure",
 						Parameters: []string{"$address"},
-						Scoping:    eng.ProcedureScopingPublic,
-						Body: []*eng.InstructionExecution{
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
 							{
-								Instruction: eng.OpExtensionExecute,
+								Instruction: execution.OpExtensionExecute,
 								Args:        []any{"usdc", "balanceOf", []string{"$address"}, []string{"$wallet_balance"}},
 							},
 						},
 					},
 				},
 				db: &mockDatastore{},
-				loadCommand: []*eng.InstructionExecution{
+				loadCommand: []*execution.InstructionExecution{
 					{
-						Instruction: eng.OpSetVariable,
+						Instruction: execution.OpSetVariable,
 						Args:        []any{"!address", "0x123"},
 					},
 					{
-						Instruction: eng.OpExtensionInitialize,
+						Instruction: execution.OpExtensionInitialize,
 						Args:        []any{"erc20", "usdc", map[string]string{"address": "!address"}},
 					},
 				},
@@ -153,14 +153,14 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 			name: "executing a statement without preparing it should fail",
 			fields: fields{
 				availableExtensions: testExtensions,
-				procedures: map[string]*eng.Procedure{
+				procedures: map[string]*execution.Procedure{
 					"dmlProcedure": {
 						Name:       "dmlProcedure",
 						Parameters: []string{"$arg1", "$arg2"},
-						Scoping:    eng.ProcedureScopingPublic,
-						Body: []*eng.InstructionExecution{
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
 							{
-								Instruction: eng.OpDMLExecute,
+								Instruction: execution.OpDMLExecute,
 								Args:        []any{"dml_statement"},
 							},
 						},
@@ -175,24 +175,24 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 				opts: testExecutionOpts,
 			},
 			want:    nil,
-			wantErr: eng.ErrUnknownPreparedStatement,
+			wantErr: execution.ErrUnknownPreparedStatement,
 		},
 		{
 			name: "executing a statement after preparing it should succeed",
 			fields: fields{
 				availableExtensions: testExtensions,
-				procedures: map[string]*eng.Procedure{
+				procedures: map[string]*execution.Procedure{
 					"dmlProcedure": {
 						Name:       "dmlProcedure",
 						Parameters: []string{"$arg1", "$arg2"},
-						Scoping:    eng.ProcedureScopingPublic,
-						Body: []*eng.InstructionExecution{
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
 							{
-								Instruction: eng.OpDMLPrepare,
+								Instruction: execution.OpDMLPrepare,
 								Args:        []any{"dml_statement", "SELECT * FROM users WHERE id = $arg1"},
 							},
 							{
-								Instruction: eng.OpDMLExecute,
+								Instruction: execution.OpDMLExecute,
 								Args:        []any{"dml_statement"},
 							},
 						},
@@ -213,23 +213,23 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 			name: "executing a statement after preparing in the load command should succeed",
 			fields: fields{
 				availableExtensions: testExtensions,
-				procedures: map[string]*eng.Procedure{
+				procedures: map[string]*execution.Procedure{
 					"dmlProcedure": {
 						Name:       "dmlProcedure",
 						Parameters: []string{"$arg1", "$arg2"},
-						Scoping:    eng.ProcedureScopingPublic,
-						Body: []*eng.InstructionExecution{
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
 							{
-								Instruction: eng.OpDMLExecute,
+								Instruction: execution.OpDMLExecute,
 								Args:        []any{"dml_statement"},
 							},
 						},
 					},
 				},
 				db: &mockDatastore{},
-				loadCommand: []*eng.InstructionExecution{
+				loadCommand: []*execution.InstructionExecution{
 					{
-						Instruction: eng.OpDMLPrepare,
+						Instruction: execution.OpDMLPrepare,
 						Args:        []any{"dml_statement", "SELECT * FROM users WHERE id = $arg1"},
 					},
 				},
@@ -259,7 +259,7 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 				opts: testExecutionOpts,
 			},
 			want:    nil,
-			wantErr: eng.ErrIncorrectNumArgs,
+			wantErr: execution.ErrIncorrectNumArgs,
 		},
 		{
 			name: "executing a procedure with the correct number of arguments should succeed",
@@ -293,20 +293,20 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 				opts: testExecutionOpts,
 			},
 			want:    nil,
-			wantErr: eng.ErrScopingViolation,
+			wantErr: execution.ErrScopingViolation,
 		},
 		{
 			name: "executing a private procedure indirectly should succeed",
 			fields: fields{
 				availableExtensions: testExtensions,
-				procedures: map[string]*eng.Procedure{
+				procedures: map[string]*execution.Procedure{
 					"publicProcedure": {
 						Name:       "publicProcedure",
 						Parameters: []string{"$arg1", "$arg2"},
-						Scoping:    eng.ProcedureScopingPublic,
-						Body: []*eng.InstructionExecution{
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
 							{
-								Instruction: eng.OpProcedureExecute,
+								Instruction: execution.OpProcedureExecute,
 								Args:        []any{"privateProcedure", []string{"$arg1", "$arg2"}},
 							},
 						},
@@ -314,10 +314,10 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 					"privateProcedure": {
 						Name:       "privateProcedure",
 						Parameters: []string{"$arg1", "$arg2"},
-						Scoping:    eng.ProcedureScopingPrivate,
-						Body: []*eng.InstructionExecution{
+						Scoping:    execution.ProcedureScopingPrivate,
+						Body: []*execution.InstructionExecution{
 							{
-								Instruction: eng.OpSetVariable,
+								Instruction: execution.OpSetVariable,
 								Args:        []any{"!var1", "hello"},
 							},
 						},
@@ -338,7 +338,7 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e, err := eng.NewEngine(context.Background(), tt.fields.db, &eng.EngineOpts{
+			e, err := execution.NewEngine(context.Background(), tt.fields.db, &execution.EngineOpts{
 				Extensions: tt.fields.availableExtensions,
 				Procedures: tt.fields.procedures,
 				LoadCmd:    tt.fields.loadCommand,
