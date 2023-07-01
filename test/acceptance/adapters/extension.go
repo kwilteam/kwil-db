@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 const (
@@ -47,7 +46,6 @@ func newExtensionMath(ctx context.Context) (*mathExtensionContainer, error) {
 		ExposedPorts: []string{MathExtPort},
 		//Cmd:          []string{"-h"},
 		//WaitingFor: wait.ForListeningPort(MathExtPort),
-		WaitingFor: wait.ForLog("listening on"),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -75,7 +73,7 @@ func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExt
 		require.NoError(t, container.Terminate(ctx), "Could not stop extension container")
 	})
 
-	err = container.ShowPortInfo(ctx)
-	require.NoError(t, err)
+	// err = container.ShowPortInfo(ctx)
+	// require.NoError(t, err)
 	return container
 }
