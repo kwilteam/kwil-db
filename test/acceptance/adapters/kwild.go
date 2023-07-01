@@ -3,9 +3,10 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"github.com/docker/go-connections/nat"
 	"testing"
 	"time"
+
+	"github.com/docker/go-connections/nat"
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -79,6 +80,7 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 
 	err = container.ShowPortInfo(ctx)
 	require.NoError(t, err)
+
 	return container
 }
 
