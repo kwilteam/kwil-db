@@ -102,7 +102,7 @@ action multi_select() public {
 }
 
 action divide($numerator, $denominator) public {
-    $up = math_up.divide($numerator, $denominator);
-    $down = math_down.divide($numerator, $denominator);
+    $up = math_up.div($numerator, $denominator);
+    $down = math_down.div($numerator, $denominator);
     select $up AS upper_value, $down AS lower_value;
 }
