@@ -44,6 +44,7 @@ func newExtensionMath(ctx context.Context) (*mathExtensionContainer, error) {
 		Env:          map[string]string{},
 		Files:        []testcontainers.ContainerFile{},
 		ExposedPorts: []string{MathExtPort},
+		Networks:     []string{kwilTestNetworkName},
 		//Cmd:          []string{"-h"},
 		//WaitingFor: wait.ForListeningPort(MathExtPort),
 	}
@@ -72,8 +73,6 @@ func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExt
 	t.Cleanup(func() {
 		require.NoError(t, container.Terminate(ctx), "Could not stop extension container")
 	})
-
-	time.Sleep(10 * time.Second)
 
 	err = container.ShowPortInfo(ctx)
 	require.NoError(t, err)
