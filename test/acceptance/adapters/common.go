@@ -29,14 +29,14 @@ type TContainer struct {
 }
 
 func (c *TContainer) ShowPortInfo(ctx context.Context) error {
-	unexposedEndpoint, err := c.UnexposedEndpoint(ctx)
-	if err != nil {
-		return fmt.Errorf("could not get unexposed endpoint: %w", err)
-	}
-
 	exposedEndpoint, err := c.ExposedEndpoint(ctx)
 	if err != nil {
 		return fmt.Errorf("could not get exposed endpoint: %w", err)
+	}
+
+	unexposedEndpoint, err := c.UnexposedEndpoint(ctx)
+	if err != nil {
+		return fmt.Errorf("could not get unexposed endpoint: %w", err)
 	}
 
 	name, err := c.Name(ctx)
