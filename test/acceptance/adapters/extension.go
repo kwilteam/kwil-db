@@ -76,6 +76,7 @@ func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExt
 	if err != nil {
 		panic(err)
 	}
+
 	require.NoError(t, err, "Could not start extension container")
 
 	t.Cleanup(func() {
