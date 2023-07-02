@@ -36,7 +36,7 @@ func NewStartCmd() *cobra.Command {
 }
 
 var startCmd = &cobra.Command{
-	Use:   "kwild",
+	Use:   "start",
 	Short: "kwil grpc server",
 	Long:  "Starts node with Kwild and CometBFT services",
 	RunE: func(cmd *cobra.Command, args []string) error {
