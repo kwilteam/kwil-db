@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	MathExtImage = "kwilbrennan/extensions-math:latest"
+	MathExtImage = "kwilbrennan/extensions-math:multi-arch"
 	MathExtPort  = "50051"
 )
 
