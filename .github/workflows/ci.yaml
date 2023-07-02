@@ -130,7 +130,7 @@ jobs:
 
       - name: Run the Docker image
         run: |
-          docker run --rm kwilbrennan/extensions-math:multi-arch --platform linux/amd64
+          docker run --rm kwilbrennan/extensions-math:multi-arch
 
       - name: Build kwild image
         id: docker_build_kwild
