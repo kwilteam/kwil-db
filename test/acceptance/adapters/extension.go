@@ -71,7 +71,7 @@ func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExt
 	container, err := newExtensionMath(ctx,
 		WithNetwork(kwilTestNetworkName),
 		WithExposedPort(MathExtPort),
-		WithWaitStrategy(wait.ForLog("listening on :50051")),
+		WithWaitStrategy(wait.ForExposedPort()),
 	)
 	if err != nil {
 		panic(err)
