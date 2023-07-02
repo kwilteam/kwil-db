@@ -83,5 +83,6 @@ func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExt
 
 	err = container.ShowPortInfo(ctx)
 	require.NoError(t, err)
+
 	return container
 }
