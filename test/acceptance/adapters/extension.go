@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 const (
@@ -70,7 +71,7 @@ func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExt
 	container, err := newExtensionMath(ctx,
 		WithNetwork(kwilTestNetworkName),
 		WithExposedPort(MathExtPort),
-		//WithWaitStrategy(wait.ForLog("listening on :50051")),
+		WithWaitStrategy(wait.ForLog("listening on :50051")),
 	)
 	if err != nil {
 		panic(err)
