@@ -105,7 +105,7 @@ tasks:
     cmds:
       - go test ./test/acceptance/ -v
 
-    test:act:no-build:
+  test:act:no-build:
     desc: Run acceptance tests without building docker image
     cmds:
       - go test ./test/acceptance/ -v
