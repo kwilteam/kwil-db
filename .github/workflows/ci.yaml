@@ -147,7 +147,7 @@ jobs:
 
       - name: Run acceptance test
         run: |
-          task test:act
+          task test:act:no-build
 
       - name: Move cache
         run: |
