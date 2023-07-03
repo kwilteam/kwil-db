@@ -144,7 +144,6 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg,
 	mathExtC := adapters.StartMathExtensionDockerService(t, ctx)
 	unexposedMathRPC, err := mathExtC.UnexposedEndpoint(ctx)
 	require.NoError(t, err, "failed to get exposed endpoint")
-	fmt.Println("expostedMathRPC", unexposedMathRPC)
 
 	// deploy token and escrow contract
 	t.Logf("create chain deployer to %s", exposedChainRPC)

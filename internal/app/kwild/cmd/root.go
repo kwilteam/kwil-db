@@ -126,14 +126,31 @@ func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.C
 	)
 }
 
-func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (*balances.AccountStore, error) {
+func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (AccountStore, error) {
+	if cfg.WithoutAccountStore {
+		return balances.NewEmptyAccountStore(*logger.Named("emptyAccountStore")), nil
+	}
+
 	return balances.NewAccountStore(
 		balances.WithLogger(*logger.Named("accountStore")),
 		balances.WithPath(cfg.SqliteFilePath),
 	)
 }
 
-func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *balances.AccountStore, logger log.Logger) (*chainsyncer.ChainSyncer, error) {
+type AccountStore interface {
+	BatchCredit(creditList []*balances.Credit, chain *balances.ChainConfig) error
+	BatchSpend(spendList []*balances.Spend, chain *balances.ChainConfig) error
+	ChainExists(chainCode int32) (bool, error)
+	Close() error
+	CreateChain(chainCode int32, height int64) error
+	Credit(credit *balances.Credit) error
+	GetAccount(address string) (*balances.Account, error)
+	GetHeight(chainCode int32) (int64, error)
+	SetHeight(chainCode int32, height int64) error
+	Spend(spend *balances.Spend) error
+}
+
+func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as AccountStore, logger log.Logger) (*chainsyncer.ChainSyncer, error) {
 	walletAddress := kwilCrypto.AddressFromPrivateKey(cfg.PrivateKey)
 
 	return chainsyncer.Builder().
@@ -146,7 +163,7 @@ func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as *b
 		Build()
 }
 
-func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as *balances.AccountStore, logger log.Logger) (*txsvc.Service, error) {
+func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as AccountStore, logger log.Logger) (*txsvc.Service, error) {
 	return txsvc.NewService(ctx, cfg,
 		txsvc.WithLogger(*logger.Named("txService")),
 		txsvc.WithAccountStore(as),

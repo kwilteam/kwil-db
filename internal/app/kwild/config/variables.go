@@ -19,14 +19,15 @@ const (
 )
 
 type KwildConfig struct {
-	GrpcListenAddress  string
-	HttpListenAddress  string
-	PrivateKey         *ecdsa.PrivateKey
-	Deposits           DepositsConfig
-	ChainSyncer        ChainSyncerConfig
-	SqliteFilePath     string
-	Log                log.Config
-	ExtensionEndpoints []string
+	GrpcListenAddress   string
+	HttpListenAddress   string
+	PrivateKey          *ecdsa.PrivateKey
+	Deposits            DepositsConfig
+	ChainSyncer         ChainSyncerConfig
+	WithoutAccountStore bool
+	SqliteFilePath      string
+	Log                 log.Config
+	ExtensionEndpoints  []string
 }
 
 type DepositsConfig struct {
@@ -49,6 +50,7 @@ var (
 		DepositsBlockConfirmation,
 		DepositsChainCode,
 		DepositsClientChainRPCURL,
+		WithoutAccountStore,
 		DepositsPoolAddress,
 		ChainSyncerChunkSize,
 		SqliteFilePath,
@@ -182,5 +184,11 @@ var (
 
 			return endpointArr, nil
 		},
+	}
+
+	WithoutAccountStore = config.CfgVar{
+		EnvName: "WITHOUT_ACCOUNT_STORE",
+		Field:   "WithoutAccountStore",
+		Default: false,
 	}
 )

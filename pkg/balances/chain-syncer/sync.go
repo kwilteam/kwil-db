@@ -3,14 +3,15 @@ package chainsyncer
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/chain/contracts"
 	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow"
 	provider "github.com/kwilteam/kwil-db/pkg/chain/provider/dto"
 	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"math/big"
-	"time"
 
 	"go.uber.org/zap"
 )
@@ -124,6 +125,10 @@ func splitBlocks(start, end, chunkSize int64) []chunkRange {
 			chunkEnd = end
 		}
 		chunks = append(chunks, chunkRange{i, chunkEnd - 1})
+	}
+
+	if len(chunks) == 0 {
+		return []chunkRange{{start, end}}
 	}
 
 	if chunks[len(chunks)-1][1] != end {
