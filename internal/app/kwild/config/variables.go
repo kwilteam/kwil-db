@@ -69,6 +69,7 @@ var (
 		Field:   "PrivateKey",
 		Setter: func(val any) (any, error) {
 			if val == nil {
+				fmt.Println("no private key provided, generating a new one...")
 				return crypto.GenerateKey()
 			}
 
