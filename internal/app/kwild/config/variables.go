@@ -105,9 +105,9 @@ var (
 	}
 
 	DepositsPoolAddress = config.CfgVar{
-		EnvName:  "DEPOSITS_POOL_ADDRESS",
-		Field:    "Deposits.PoolAddress",
-		Required: true,
+		EnvName: "DEPOSITS_POOL_ADDRESS",
+		Field:   "Deposits.PoolAddress",
+		Default: "0x0000000000000000000000000000000000000000",
 	}
 
 	ChainSyncerChunkSize = config.CfgVar{
