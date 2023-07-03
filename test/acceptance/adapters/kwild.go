@@ -74,6 +74,9 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 
 	require.NoError(t, err, "Could not start kwil container")
 
+	getLogs := listenToLogs(ctx, container)
+	defer getLogs(t)
+
 	t.Cleanup(func() {
 		require.NoError(t, container.Terminate(ctx), "Could not stop kwil container")
 	})
@@ -82,6 +85,43 @@ func StartKwildDockerService(t *testing.T, ctx context.Context, envs map[string]
 	require.NoError(t, err)
 
 	return container
+}
+
+type TestLogConsumer struct {
+	Msgs []string
+}
+
+func (g *TestLogConsumer) Accept(l testcontainers.Log) {
+	g.Msgs = append(g.Msgs, string(l.Content))
+}
+
+func listenToLogs(ctx context.Context, c testcontainers.Container) func(t *testing.T) error {
+	g := TestLogConsumer{
+		Msgs: []string{},
+	}
+
+	c.FollowOutput(&g) // must be called before StarLogProducer
+
+	err := c.StartLogProducer(ctx)
+	if err != nil {
+		fmt.Printf("could not start log producer: %w", err)
+		return func(t *testing.T) error { return err }
+	}
+
+	return func(t *testing.T) error {
+		err = c.StopLogProducer()
+		if err != nil {
+			t.Errorf("could not stop log producer: %w", err)
+			return err
+		}
+
+		for _, msg := range g.Msgs {
+			t.Logf("kwild log: %s", msg)
+		}
+
+		return nil
+	}
+
 }
 
 func (c *kwildContainer) SecondExposedEndpoint(ctx context.Context) (string, error) {
