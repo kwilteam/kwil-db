@@ -150,7 +150,11 @@ type AccountStore interface {
 	Spend(spend *balances.Spend) error
 }
 
-func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as AccountStore, logger log.Logger) (*chainsyncer.ChainSyncer, error) {
+func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as AccountStore, logger log.Logger) (starter, error) {
+	if cfg.WithoutChainSyncer {
+		return chainsyncer.NewEmptyChainSyncer(), nil
+	}
+
 	walletAddress := kwilCrypto.AddressFromPrivateKey(cfg.PrivateKey)
 
 	return chainsyncer.Builder().
@@ -186,6 +190,10 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	return healthsvc.NewServer(ck)
 }
 
+type starter interface {
+	Start(ctx context.Context) error
+}
+
 func NewStopCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "stop",
@@ -197,82 +205,3 @@ func NewStopCmd() *cobra.Command {
 		},
 	}
 }
-
-// from v0, removed 04/03/23
-/*
-	ctx := cmd.Context()
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return err
-	}
-
-	// build log
-	//log, err := log.NewLogger(cfg.log)
-	logger := log.New(cfg.Log)
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	client, err := sqlclient.Open(cfg.DB.DbUrl(), 60*time.Second)
-	if err != nil {
-		return fmt.Errorf("failed to open sql client: %w", err)
-	}
-
-	//&cfg.Fund.Chain, logger
-	chainClient, err := service.NewChainClient(cfg.Fund.Chain.RpcUrl,
-		service.WithChainCode(chainTypes.ChainCode(cfg.Fund.Chain.ChainCode)),
-		service.WithLogger(logger),
-		service.WithReconnectInterval(cfg.Fund.Chain.ReconnectInterval),
-		service.WithRequiredConfirmations(cfg.Fund.Chain.BlockConfirmation),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build chain client: %w", err)
-	}
-
-	// build repository prepared statement
-	queries, err := repository.Prepare(ctx, client)
-	if err != nil {
-		return fmt.Errorf("failed to prepare queries: %w", err)
-	}
-
-	dps, err := deposits.NewDepositer(cfg.Fund.PoolAddress, client, queries, chainClient, cfg.Fund.Wallet, logger)
-	if err != nil {
-		return fmt.Errorf("failed to build deposits: %w", err)
-	}
-
-	hasuraManager := hasura.NewClient(cfg.Graphql.Addr, logger)
-	go hasura.Initialize(cfg.Graphql.Addr, logger)
-
-	// build executor
-	exec, err := executor.NewExecutor(ctx, client, queries, hasuraManager, logger)
-	if err != nil {
-		return fmt.Errorf("failed to build executor: %w", err)
-	}
-
-	// build config service
-	accSvc := accountsvc.NewService(queries, logger)
-
-	// pricing service
-	prcSvc := pricingsvc.NewService(exec)
-
-	// tx service
-	txService := txsvc.NewService(queries, exec, logger)
-
-	// health service
-	registrar := healthcheck.NewRegistrar(logger)
-	registrar.RegisterAsyncCheck(10*time.Second, 3*time.Second, healthcheck.Check{
-		Name: "dummy",
-		Check: func(ctx context.Context) error {
-			// error make this check fail, nil will make it succeed
-			return nil
-		},
-	})
-	ck := registrar.BuildChecker(simple_checker.New(logger))
-	healthService := healthsvc.NewServer(ck)
-
-	// configuration service
-	cfgService := configsvc.NewService(cfg, logger)
-	// build server
-	svr := server.New(cfg.Server, txService, accSvc, cfgService, healthService, prcSvc, dps, logger)
-	return svr.Start(ctx)
-*/
