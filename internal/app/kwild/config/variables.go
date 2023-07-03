@@ -24,6 +24,7 @@ type KwildConfig struct {
 	PrivateKey          *ecdsa.PrivateKey
 	Deposits            DepositsConfig
 	ChainSyncer         ChainSyncerConfig
+	WithoutChainSyncer  bool
 	WithoutAccountStore bool
 	SqliteFilePath      string
 	Log                 log.Config
@@ -51,6 +52,7 @@ var (
 		DepositsChainCode,
 		DepositsClientChainRPCURL,
 		WithoutAccountStore,
+		WithoutChainSyncer,
 		DepositsPoolAddress,
 		ChainSyncerChunkSize,
 		SqliteFilePath,
@@ -63,10 +65,13 @@ var (
 
 var (
 	PrivateKey = config.CfgVar{
-		EnvName:  "PRIVATE_KEY",
-		Required: true,
-		Field:    "PrivateKey",
+		EnvName: "PRIVATE_KEY",
+		Field:   "PrivateKey",
 		Setter: func(val any) (any, error) {
+			if val == nil {
+				return crypto.GenerateKey()
+			}
+
 			strVal, err := conv.String(val)
 			if err != nil {
 				return nil, err
@@ -189,6 +194,12 @@ var (
 	WithoutAccountStore = config.CfgVar{
 		EnvName: "WITHOUT_ACCOUNT_STORE",
 		Field:   "WithoutAccountStore",
+		Default: false,
+	}
+
+	WithoutChainSyncer = config.CfgVar{
+		EnvName: "WITHOUT_CHAIN_SYNCER",
+		Field:   "WithoutChainSyncer",
 		Default: false,
 	}
 )
