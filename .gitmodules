@@ -4,6 +4,3 @@
 [submodule "sql-grammar"]
 	path = pkg/sql_parser/sql_grammar
 	url = https://github.com/kwilteam/sql-grammar
-[submodule "extensions"]
-	path = extensions
-	url = https://github.com/kwilteam/kwil-extensions
