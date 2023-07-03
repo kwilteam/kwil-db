@@ -87,6 +87,16 @@ tasks:
       - ./scripts/build/docker kwild {{.VARIANT}}
       - task: vendor:clean
 
+  publish:dockerhub:
+    desc: Publish docker image to dockerhub
+    deps: [ pb:compile:v1]
+    cmds: 
+      - task: vendor
+      - TAG={{.TAG}} ./scripts/publish/dockerhub
+      - task: vendor:clean
+    requires:
+      vars: [TAG]
+
   # ************ dev ************
   dev:up:
     desc: Start the dev environment
