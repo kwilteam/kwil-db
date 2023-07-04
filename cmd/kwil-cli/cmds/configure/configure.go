@@ -61,6 +61,7 @@ func promptGRPCURL(conf *config.KwilCliConfig) error {
 	}
 
 	if res == "" {
+		conf.GrpcURL = ""
 		return nil
 	}
 
@@ -80,12 +81,12 @@ func promptPrivateKey(conf *config.KwilCliConfig) error {
 	}
 
 	if res == "" {
+		conf.PrivateKey = nil
 		return nil
 	}
 
 	pk, err := crypto.ECDSAFromHex(res)
 	if err != nil {
-
 		fmt.Println(`invalid private key.  key could not be converted to hex.  received: `, res)
 		promptAskAgain := &common.Prompter{
 			Label: "Would you like to enter another? (y/n)",
@@ -118,6 +119,7 @@ func promptClientChainRPCURL(conf *config.KwilCliConfig) error {
 	}
 
 	if res == "" {
+		conf.ClientChainRPCURL = ""
 		return nil
 	}
 
