@@ -60,6 +60,11 @@ func promptGRPCURL(conf *config.KwilCliConfig) error {
 		return err
 	}
 
+	if res == "" {
+		conf.GrpcURL = ""
+		return nil
+	}
+
 	conf.GrpcURL = res
 
 	return nil
@@ -73,6 +78,11 @@ func promptPrivateKey(conf *config.KwilCliConfig) error {
 	res, err := prompt.Run()
 	if err != nil {
 		return err
+	}
+
+	if res == "" {
+		conf.PrivateKey = nil
+		return nil
 	}
 
 	pk, err := crypto.ECDSAFromHex(res)
@@ -106,6 +116,11 @@ func promptClientChainRPCURL(conf *config.KwilCliConfig) error {
 	res, err := prompt.Run()
 	if err != nil {
 		return err
+	}
+
+	if res == "" {
+		conf.ClientChainRPCURL = ""
+		return nil
 	}
 
 	if containsProtocol(&res) != nil {
