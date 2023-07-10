@@ -17,6 +17,7 @@ type DatabaseDeployDsl interface {
 func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
 	t.Logf("Executing database deploy specification")
 	testDeployFailure(ctx, t, deploy)
+	testInvalidExtensionInit(ctx, t, deploy)
 
 	// Given a valid database schema
 	db := SchemaLoader.Load(t, schema_testdb)
@@ -54,4 +55,16 @@ func testDeployFailure(ctx context.Context, t *testing.T, deploy DatabaseDeployD
 	// And i expect database should exist
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.NoError(t, err)
+}
+
+func testInvalidExtensionInit(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
+	db := SchemaLoader.Load(t, schema_invalidExtensionInit)
+
+	// Deploy faulty database and expect error
+	err := deploy.DeployDatabase(ctx, db)
+	assert.Error(t, err)
+
+	// And i expect database should not exist
+	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
+	assert.Error(t, err)
 }

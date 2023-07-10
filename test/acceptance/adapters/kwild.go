@@ -104,14 +104,14 @@ func listenToLogs(ctx context.Context, c testcontainers.Container) func(t *testi
 
 	err := c.StartLogProducer(ctx)
 	if err != nil {
-		fmt.Printf("could not start log producer: %w", err)
+		fmt.Printf("could not start log producer: %v", err)
 		return func(t *testing.T) error { return err }
 	}
 
 	return func(t *testing.T) error {
 		err = c.StopLogProducer()
 		if err != nil {
-			t.Errorf("could not stop log producer: %w", err)
+			t.Errorf("could not stop log producer: %v", err)
 			return err
 		}
 

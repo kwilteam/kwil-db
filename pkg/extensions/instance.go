@@ -20,18 +20,13 @@ type Instance struct {
 }
 
 func (e *Extension) CreateInstance(ctx context.Context, metadata map[string]string) (*Instance, error) {
-	requiredMetadata, err := e.client.GetMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	mergedMetadata, err := mergeMetadata(requiredMetadata, metadata)
+	newMetadata, err := e.client.Initialize(ctx, metadata)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Instance{
-		metadata:   mergedMetadata,
+		metadata:   newMetadata,
 		extenstion: e,
 	}, nil
 }
@@ -42,25 +37,6 @@ func (i *Instance) Metadata() map[string]string {
 
 func (i *Instance) Name() string {
 	return i.extenstion.name
-}
-
-// TODO: test this for merging default with provided correctly
-func mergeMetadata(required, provided map[string]string) (map[string]string, error) {
-	merged := make(map[string]string)
-
-	for key, defaultValue := range required {
-		userValue, ok := provided[key]
-		if !ok {
-			if defaultValue == "" {
-				return nil, fmt.Errorf("missing required metadata %s", key)
-			}
-			merged[key] = defaultValue
-		} else {
-			merged[key] = userValue
-		}
-	}
-
-	return merged, nil
 }
 
 func (i *Instance) Execute(ctx context.Context, method string, args ...any) ([]any, error) {

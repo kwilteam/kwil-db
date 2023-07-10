@@ -42,9 +42,6 @@ func (m *mockClient) ListMethods(ctx context.Context) ([]string, error) {
 	return []string{"method1", "method2"}, nil
 }
 
-func (m *mockClient) GetMetadata(ctx context.Context) (map[string]string, error) {
-	return map[string]string{
-		"token_address":  "0x1234", // not required
-		"wallet_address": "",       // required
-	}, nil
+func (m *mockClient) Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error) {
+	return metadata, nil
 }
