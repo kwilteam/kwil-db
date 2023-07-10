@@ -25,4 +25,7 @@ var (
 	schema_invalidSQLSyntaxFixed = &testSchema{
 		FileName: "invalid_sql_syntax_fixed",
 	}
+	schema_invalidExtensionInit = &testSchema{
+		FileName: "invalid_extension_init",
+	}
 )
