@@ -195,8 +195,8 @@ func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg, path s
 	fmt.Println("Unexposed chain rpc: ", unexposedChainRPC)
 	err = composeKwild.
 		WithEnv(map[string]string{
-			"uid":                                 dockerComposeId,
-			"KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL": unexposedChainRPC,
+			"uid":    dockerComposeId,
+			"CC_RPC": unexposedChainRPC,
 			// "KWILD_DEPOSITS_POOL_ADDRESS":         escrowAddress.String(),
 			// "KWILD_PRIVATE_KEY":                   "b08786f38934aac966d10f0bc79a72f15067896d3b3beba721b5c235ffc5cc5f",
 			// "KWILD_DEPOSITS_BLOCK_CONFIRMATIONS":  "1",
