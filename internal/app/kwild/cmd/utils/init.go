@@ -1,12 +1,17 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	cfg "github.com/cometbft/cometbft/config"
+	cmtrand "github.com/cometbft/cometbft/libs/rand"
+	"github.com/cometbft/cometbft/privval"
+	"github.com/cometbft/cometbft/types"
+	cmttime "github.com/cometbft/cometbft/types/time"
 )
 
 // InitFilesCmd initializes a fresh CometBFT instance.
@@ -38,5 +43,51 @@ func initFiles(cmd *cobra.Command, args []string) error {
 		_ = os.RemoveAll(outputDir)
 		return err
 	}
-	return InitFilesWithConfig(config)
+	err = InitFilesWithConfig(config)
+	if err != nil {
+		return err
+	}
+	pvKeyFile := filepath.Join(outputDir, config.BaseConfig.PrivValidatorKey)
+	pvStateFile := filepath.Join(outputDir, config.BaseConfig.PrivValidatorState)
+	pv := privval.LoadFilePV(pvKeyFile, pvStateFile)
+
+	pubKey, err := pv.GetPubKey()
+	if err != nil {
+		return fmt.Errorf("failed to get public key: %w", err)
+	}
+
+	genVal := types.GenesisValidator{
+		Address: pubKey.Address(),
+		PubKey:  pubKey,
+		Power:   1,
+		Name:    "node-0",
+	}
+
+	var chainID string
+	if disable_gas {
+		chainID = "kwil-chain-gcd-"
+	} else {
+		chainID = "kwil-chain-gce-"
+	}
+
+	vals := []types.GenesisValidator{genVal}
+
+	genDoc := &types.GenesisDoc{
+		ChainID:         chainID + cmtrand.Str(6),
+		ConsensusParams: types.DefaultConsensusParams(),
+		GenesisTime:     cmttime.Now(),
+		InitialHeight:   initialHeight,
+		Validators:      vals,
+	}
+
+	if err := genDoc.SaveAs(filepath.Join(outputDir, config.BaseConfig.Genesis)); err != nil {
+		_ = os.RemoveAll(outputDir)
+		return err
+	}
+
+	config.P2P.AddrBookStrict = false
+	config.P2P.AllowDuplicateIP = true
+	config.RPC.ListenAddress = "tcp://0.0.0.0:26657"
+	cfg.WriteConfigFile(filepath.Join(outputDir, "config", "config.toml"), config)
+	return nil
 }
