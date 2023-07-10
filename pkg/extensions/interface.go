@@ -10,7 +10,7 @@ import (
 type ExtensionClient interface {
 	CallMethod(execCtx *types.ExecutionContext, method string, args ...any) ([]any, error)
 	Close() error
-	GetMetadata(ctx context.Context) (map[string]string, error)
+	Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error)
 	GetName(ctx context.Context) (string, error)
 	ListMethods(ctx context.Context) ([]string, error)
 }
