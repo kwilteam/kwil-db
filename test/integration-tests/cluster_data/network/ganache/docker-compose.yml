@@ -1,0 +1,15 @@
+version: "3"
+
+services:
+  ganache:
+    container_name: ganache_$uid
+    image: trufflesuite/ganache:v7.7.3
+    ports:
+      - "8545:8545"
+    command:
+      - --wallet.hdPath
+      - m/44'/60'/0'
+      - --wallet.mnemonic
+      - test test test test test test test test test test test junk
+      - --chain.chainId
+      - "5"

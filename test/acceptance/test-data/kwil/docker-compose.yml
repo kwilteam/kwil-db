@@ -1,0 +1,33 @@
+version: "3"
+
+services:
+  k1:
+    container_name: k1_$uid
+    image: kwild:latest
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+      - "26656:26656"
+      - "26657:26657"
+    env_file:
+      - node0/.env
+      - .env
+    environment:
+      - ID=0
+      - LOG=${LOG:-cometbft.log}
+    volumes:
+      - ./node0:/app/config
+      - ./node0:/app/comet-bft
+    networks:
+      kwilnet:
+        ipv4_address: 172.10.100.2
+
+
+
+networks:
+  kwilnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.10.100.0/16

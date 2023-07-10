@@ -39,3 +39,8 @@ Everything is configured in `./ganache/docker-compose.yml`
   * * select one of the kwil instance, choose the GRPC port, this is the Kwil GRPC URL
   * * `userPK` in `./kwil/eth_chain.go` is your Private Key
   * * `KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL` in `./kwil/.env` is Client Chain RPC URL
+
+
+## COMETBFT Config:
+- RPC Server: tcp://0.0.0.0:26657/
+
