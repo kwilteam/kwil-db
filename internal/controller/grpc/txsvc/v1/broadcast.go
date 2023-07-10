@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/cometbft/cometbft/crypto/tmhash"
 	localClient "github.com/cometbft/cometbft/rpc/client/local"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
@@ -22,7 +23,8 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
 	}
-
+	hash := tmhash.Sum(bts)
+	fmt.Printf("Broadcasting transaction with hash %x\n", hash)
 	bcClient := localClient.New(s.BcNode)
 	_, err = bcClient.BroadcastTxAsync(ctx, bts)
 	if err != nil {
@@ -32,24 +34,24 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	s.log.Info("broadcasted transaction ", zap.String("payload_type", tx.PayloadType.String()))
 	return &txpb.BroadcastResponse{
 		Receipt: &txpb.TxReceipt{
-			TxHash: tx.Hash,
+			TxHash: hash,
 		},
 	}, nil
 }
 
-func handleReceipt(r *kTx.Receipt, err error) (*txpb.BroadcastResponse, error) {
-	if err != nil {
-		return nil, err
-	}
+// func handleReceipt(r *kTx.Receipt, err error) (*txpb.BroadcastResponse, error) {
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return &txpb.BroadcastResponse{
-		Receipt: &txpb.TxReceipt{
-			TxHash: r.TxHash,
-			Fee:    r.Fee,
-			Body:   r.Body,
-		},
-	}, nil
-}
+// 	return &txpb.BroadcastResponse{
+// 		Receipt: &txpb.TxReceipt{
+// 			TxHash: r.TxHash,
+// 			Fee:    r.Fee,
+// 			Body:   r.Body,
+// 		},
+// 	}, nil
+// }
 
 func convertTx(incoming *txpb.Tx) (*kTx.Transaction, error) {
 	payloadType := kTx.PayloadType(incoming.PayloadType)

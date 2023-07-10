@@ -61,12 +61,19 @@ func (s *Service) ValidatorJoin(ctx context.Context, req *txpb.ValidatorJoinRequ
 		return nil, fmt.Errorf("failed to convert Tx: %w", err)
 	}
 
+	bts, err := json.Marshal(tx)
+	if err != nil {
+		fmt.Println("failed to marshal Tx", err)
+		return nil, fmt.Errorf("failed to marshal Tx: %w", err)
+	}
+	txHash := tmhash.Sum(bts)
+
 	validator, err := UnmarshalValidator(tx.Payload)
 	if err != nil {
 		fmt.Println("failed to unmarshal Validator", err)
 		return &txpb.ValidatorJoinResponse{
 			Receipt: &txpb.TxReceipt{
-				TxHash: tx.Hash,
+				TxHash: txHash,
 			},
 		}, fmt.Errorf("failed to unmarshal Validator: %w", err)
 	}
@@ -77,25 +84,22 @@ func (s *Service) ValidatorJoin(ctx context.Context, req *txpb.ValidatorJoinRequ
 		fmt.Println("failed to unmarshal Validator public key", err)
 		return &txpb.ValidatorJoinResponse{
 			Receipt: &txpb.TxReceipt{
-				TxHash: tx.Hash,
+				TxHash: txHash,
 			},
 		}, fmt.Errorf("failed to unmarshal Validator public key: %w", err)
-	}
-
-	bts, err := json.Marshal(tx)
-	if err != nil {
-		fmt.Println("failed to marshal Tx", err)
-		return nil, fmt.Errorf("failed to marshal Tx: %w", err)
 	}
 
 	// Check if the validator is already approved by the network, if so, broadcast the tx to the blockchain to add the node as a validator to the network
 	if s.NodeReactor.GetPool().ApprovedNetworkVals.IsValidator(pubKey.Address().String()) {
 		fmt.Println("ValidatorJoin Validator is already approved by the network", pubKey.Address().String())
 		bcClient := localClient.New(s.BcNode)
-		res, err := bcClient.BroadcastTxAsync(context.Background(), bts)
+		_, err := bcClient.BroadcastTxAsync(context.Background(), bts)
+		if err != nil {
+			fmt.Println("failed to broadcast tx", err)
+		}
 		return &txpb.ValidatorJoinResponse{
 			Receipt: &txpb.TxReceipt{
-				TxHash: res.Hash,
+				TxHash: txHash,
 			},
 		}, err
 	}
@@ -108,7 +112,7 @@ func (s *Service) ValidatorJoin(ctx context.Context, req *txpb.ValidatorJoinRequ
 
 	return &txpb.ValidatorJoinResponse{
 		Receipt: &txpb.TxReceipt{
-			TxHash: tmhash.Sum(bts),
+			TxHash: txHash,
 		},
 	}, nil
 }
