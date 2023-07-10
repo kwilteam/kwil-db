@@ -29,12 +29,20 @@ type kwildContainer struct {
 
 // setupKwild creates an instance of the kwild container type
 func setupKwild(ctx context.Context, opts ...containerOption) (*kwildContainer, error) {
+	fmt.Println("Setting up kwild container with Volume Mounts")
 	req := testcontainers.ContainerRequest{
 		Name:         fmt.Sprintf("kwild-%d", time.Now().Unix()),
 		Image:        kwildImage,
 		Env:          map[string]string{},
 		Files:        []testcontainers.ContainerFile{},
 		ExposedPorts: []string{},
+		// Mounts: testcontainers.ContainerMounts{
+		// 	{
+		// 		Source:   testcontainers.GenericBindMountSource{HostPath: "/Users/charithabandi/Desktop/kwil/dev/cb-test/test/acceptance/test-data/kwil"},
+		// 		Target:   "/app/cometbft",
+		// 		ReadOnly: false,
+		// 	},
+		// },
 		//Cmd:          []string{"-h"},
 	}
 

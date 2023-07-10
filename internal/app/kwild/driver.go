@@ -97,6 +97,7 @@ func (d *KwildDriver) DeployDatabase(ctx context.Context, db *schema.Schema) err
 		return fmt.Errorf("error deploying database: %w", err)
 	}
 	time.Sleep(15 * time.Second)
+	fmt.Printf("Cherry: rec.TxHash %v\n", rec.TxHash)
 	res, err := d.bcClt.Tx(ctx, rec.TxHash, false)
 	if err != nil {
 		fmt.Println("Error getting transaction: ", err.Error())
@@ -187,4 +188,56 @@ func GetTransactionResult(attributes []types.EventAttribute) bool {
 		}
 	}
 	return false
+}
+
+func (d *KwildDriver) ApproveNode(ctx context.Context, pubKey []byte) error {
+	err := d.clt.ApproveValidator(ctx, pubKey)
+	return err
+}
+
+func (d *KwildDriver) ValidatorSetCount(ctx context.Context) (int, error) {
+	vals, err := d.bcClt.Validators(ctx, nil, nil, nil)
+	if err != nil {
+		return -1, err
+	}
+	fmt.Println("ValidatorSet count: ", vals.Count)
+	return vals.Count, nil
+}
+
+func (d *KwildDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) error {
+	status, err := d.clt.ValidatorJoinStatus(ctx, pubKey)
+	if err != nil {
+		return fmt.Errorf("error getting validator status: %w", err)
+	}
+	fmt.Printf("Validator Join Status: \n\tapproved: %d\n\trejected: %d\n\trequired: %d\n\tApprovedValidators: %v\n\tRejectedValidators: %v\n\tStatus: %s\n", status.Approved, status.Rejected, status.Pending, status.ApprovedValidators, status.RejectedValidators, status.Status)
+	return err
+}
+
+func (d *KwildDriver) ValidatorNodeJoin(ctx context.Context, pubKey []byte, power int64) error {
+	_, err := d.clt.ValidatorJoin(ctx, pubKey, power)
+	if err != nil {
+		return fmt.Errorf("error joining validator: %w", err)
+	}
+	return nil
+}
+
+func (d *KwildDriver) ValidatorNodeLeave(ctx context.Context, pubKey []byte) error {
+	rec, err := d.clt.ValidatorLeave(ctx, pubKey)
+	if err != nil {
+		return fmt.Errorf("error joining validator: %w", err)
+	}
+
+	time.Sleep(15 * time.Second)
+	res, err := d.bcClt.Tx(ctx, rec.TxHash, false)
+	if err != nil {
+		fmt.Println("Error getting transaction: ", err.Error())
+		return fmt.Errorf("error getting transaction: %w", err)
+	}
+
+	if !GetTransactionResult(res.TxResult.Events[0].Attributes) {
+		return fmt.Errorf("failed to join as a validator")
+	}
+
+	fmt.Println("Join as Validator", res.TxResult.Events[0].Attributes)
+	return nil
 }

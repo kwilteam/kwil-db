@@ -7,6 +7,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// TODO: List all validators and list all approved nodes
+// TODO: If we support revocation, we need to use different way of storing, something like a kv store or something, Also need to remove node from validator set? Only possible in permissioned network
+
 // ApproveCmd is used for approving validators
 func approveCmd() *cobra.Command {
 	cmd := &cobra.Command{

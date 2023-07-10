@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/tonistiigi/go-rosetta"
 
@@ -139,14 +140,14 @@ func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 	return e
 }
 
-func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg, []*testcontainers.DockerContainer, deployer.Deployer) {
+func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg, path string) (TestEnvCfg, []*testcontainers.DockerContainer, deployer.Deployer) {
 	// Create Ganache container
 	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
 	t.Logf("Create ganache container:  %s\n", cfg.ChainCode.ToChainId().String())
 	dockerComposeId := fmt.Sprintf("%d", time.Now().Unix())
 	t.Log("dockerComposeId", dockerComposeId)
-	path := "./cluster_data/ganache/docker-compose.yml"
-	composeG, err := compose.NewDockerCompose(path)
+	pathG := filepath.Join(path, "/ganache/docker-compose.yml")
+	composeG, err := compose.NewDockerCompose(pathG)
 	require.NoError(t, err, "failed to create ganache docker compose")
 	err = composeG.
 		WithEnv(map[string]string{
@@ -156,9 +157,9 @@ func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestE
 		Up(ctx)
 	require.NoError(t, err, "failed to start ganache container")
 	t.Log("Ganache container is up")
-	// t.Cleanup(func() {
-	// 	assert.NoError(t, composeG.Down(context.Background(), compose.RemoveOrphans(true), compose.RemoveImagesLocal), "compose.Down()")
-	// })
+	t.Cleanup(func() {
+		assert.NoError(t, composeG.Down(context.Background(), compose.RemoveOrphans(true), compose.RemoveImagesLocal), "compose.Down()")
+	})
 
 	serviceG := composeG.Services()
 	assert.Contains(t, serviceG, "ganache")
@@ -188,14 +189,15 @@ func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestE
 	time.Sleep(20 * time.Second)
 
 	// Create Kwil cluster container
-	path = "./cluster_data/kwil/docker-compose.yml"
-	composeKwild, err := compose.NewDockerCompose(path)
+	pathK := filepath.Join(path, "/kwil/docker-compose.yml")
+	composeKwild, err := compose.NewDockerCompose(pathK)
 	require.NoError(t, err, "failed to create docker compose object for kwild cluster")
+	fmt.Println("Unexposed chain rpc: ", unexposedChainRPC)
 	err = composeKwild.
 		WithEnv(map[string]string{
-			"uid": dockerComposeId,
+			"uid":                                 dockerComposeId,
+			"KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL": unexposedChainRPC,
 			// "KWILD_DEPOSITS_POOL_ADDRESS":         escrowAddress.String(),
-			// "KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL": unexposedChainRPC,
 			// "KWILD_PRIVATE_KEY":                   "b08786f38934aac966d10f0bc79a72f15067896d3b3beba721b5c235ffc5cc5f",
 			// "KWILD_DEPOSITS_BLOCK_CONFIRMATIONS":  "1",
 			// "KWILD_DEPOSITS_CHAIN_CODE":           "2",
@@ -206,11 +208,10 @@ func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestE
 		WaitForService("k2", wait.NewLogStrategy("grpc server started")).
 		WaitForService("k3", wait.NewLogStrategy("grpc server started")).
 		Up(ctx)
-
-	// require.NoError(t, err, "failed to start kwild cluster container")
-	// t.Cleanup(func() {
-	// 	assert.NoError(t, composeKwild.Down(context.Background(), compose.RemoveOrphans(true), compose.RemoveImagesLocal), "compose.Down()")
-	// })
+	require.NoError(t, err, "failed to start kwild cluster container")
+	t.Cleanup(func() {
+		assert.NoError(t, composeKwild.Down(context.Background(), compose.RemoveOrphans(true), compose.RemoveImagesLocal), "compose.Down()")
+	})
 
 	kwildserviceNames := composeKwild.Services()
 	t.Log("serviceNames", kwildserviceNames)
@@ -253,7 +254,7 @@ func SetupKwildDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, kwildC 
 	)
 	require.NoError(t, err, "failed to create kwil client")
 
-	bcClt, err := rpchttp.New(cometBftURL, "/websocket")
+	bcClt, err := rpchttp.New(cometBftURL, "")
 	require.NoError(t, err, "failed to create comet bft client")
 
 	kwildDriver := kwild.NewKwildDriver(kwilClt, bcClt, cfg.UserPrivateKey, gatewayURL, logger)
@@ -265,8 +266,10 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg,
 	ganacheC := adapters.StartGanacheDockerService(t, ctx, cfg.ChainCode.ToChainId().String())
 	exposedChainRPC, err := ganacheC.ExposedEndpoint(ctx)
 	require.NoError(t, err, "failed to get exposed endpoint")
+	fmt.Println("exposedChainRPC: ", exposedChainRPC)
 	unexposedChainRPC, err := ganacheC.UnexposedEndpoint(ctx)
 	require.NoError(t, err, "failed to get unexposed endpoint")
+	fmt.Println("unexposedChainRPC: ", unexposedChainRPC)
 
 	mathExtC := adapters.StartMathExtensionDockerService(t, ctx)
 	unexposedMathRPC, err := mathExtC.UnexposedEndpoint(ctx)
@@ -288,6 +291,7 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg) (TestEnvCfg,
 		"KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL": unexposedChainRPC,
 		"KWILD_LOG_LEVEL":                     cfg.LogLevel,
 		"KWILD_EXTENSION_ENDPOINTS":           unexposedMathRPC,
+		"COMET_BFT_HOME":                      "/app/comet-bft",
 	}
 	kwildC := adapters.StartKwildDockerService(t, ctx, kwildEnv)
 	exposedKwildEndpoint, err := kwildC.ExposedEndpoint(ctx)
