@@ -13,8 +13,8 @@ services:
       - node0/.env
       - .env
     environment:
-      - ID=0
       - LOG=${LOG:-cometbft.log}
+      - KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL=${CC_RPC}
     volumes:
       - ./node0:/app/config
       - ./node0:/app/comet-bft
@@ -35,6 +35,7 @@ services:
       - .env
     environment:
       - LOG=${LOG:-cometbft.log}
+      - KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL=${CC_RPC}
     volumes:
       - ./node1:/app/config
       - ./node1:/app/comet-bft
@@ -55,6 +56,7 @@ services:
       - .env
     environment:
       - LOG=${LOG:-cometbft.log}
+      - KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL=${CC_RPC}
     volumes:
       - ./node2:/app/config
       - ./node2:/app/comet-bft
@@ -62,11 +64,7 @@ services:
       kwilnet:
         ipv4_address: 172.10.100.4
 
-
 networks:
   kwilnet:
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.10.100.0/16
+    name: kwil-it-net
+    external: true

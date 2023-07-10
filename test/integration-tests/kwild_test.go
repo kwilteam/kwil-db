@@ -39,6 +39,7 @@ func teardownConfig(path string) {
 
 func TestKwildDatabaseIntegration(t *testing.T) {
 	path := "./cluster_data/database/"
+	teardownConfig(path)
 	defer teardownConfig(path)
 
 	tLogger := log.New(log.Config{
@@ -125,6 +126,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 
 func TestKwildNetworkIntegration(t *testing.T) {
 	path := "./cluster_data/network/"
+	teardownConfig(path)
 	defer teardownConfig(path)
 
 	tLogger := log.New(log.Config{
