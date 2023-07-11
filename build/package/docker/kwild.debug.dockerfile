@@ -29,4 +29,4 @@ COPY --from=stage /app/dist/kwild-* ./kwild
 
 EXPOSE 40000 50051 8082
 
-CMD ["/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/app/kwild", "start"]
+CMD ["/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/app/kwild", "server", "start"]
