@@ -6,9 +6,9 @@ import (
 
 var (
 	serverCmd = &cobra.Command{
-		Use:   "start",
-		Short: "kwil grpc server",
-		Long:  "Starts node with Kwild and CometBFT services",
+		Use:   "server",
+		Short: "Kwild Server commands",
+		Long:  "Commands to run Kwild Server",
 	}
 )
 

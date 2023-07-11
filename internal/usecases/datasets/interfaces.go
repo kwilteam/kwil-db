@@ -40,9 +40,15 @@ type DatasetUseCaseInterface interface {
 
 	// GetSchema returns the schema of the given database
 	GetSchema(context.Context, string) (*entity.Schema, error)
-
+	
 	// Call calls a read-only action on a database
 	Call(ctx context.Context, action *entity.ActionCall) ([]map[string]any, error)
+
+	// UpdateGasCosts updates the gas costs of the use case
+	UpdateGasCosts(bool)
+
+	// GasEnabled Checks if gas costs are enabled
+	GasEnabled() bool
 }
 
 type AccountStore interface {

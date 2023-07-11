@@ -43,7 +43,8 @@ func TestKwildAcceptance(t *testing.T) {
 			done := make(chan struct{})
 
 			// setup
-			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger)
+			path := "./test-data/"
+			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger, path)
 			secondDriver := acceptance.NewClient(ctx, t, c.driverType, runningCfg, tLogger)
 
 			// NOTE: only local env test, public network test takes too long

@@ -3,35 +3,54 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
-	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/cometbft/cometbft/p2p"
+	"github.com/cometbft/cometbft/privval"
+	"github.com/cometbft/cometbft/proxy"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
-	"github.com/kwilteam/kwil-db/internal/pkg/gateway/middleware/cors"
-	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
-	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
-	"github.com/kwilteam/kwil-db/pkg/arweave"
-	grpcServer "github.com/kwilteam/kwil-db/pkg/grpc/server"
+
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 	"go.uber.org/zap"
 
 	"google.golang.org/grpc/health/grpc_health_v1"
 
-	"time"
+	abci "github.com/cometbft/cometbft/abci/types"
+	ccfg "github.com/cometbft/cometbft/config"
+	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
 
+	cmtlog "github.com/cometbft/cometbft/libs/log"
+	nm "github.com/cometbft/cometbft/node"
+
+	// shorthand for chain client service
+	"github.com/kwilteam/kwil-db/pkg/arweave"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	chainsyncer "github.com/kwilteam/kwil-db/pkg/balances/chain-syncer"
+	"github.com/kwilteam/kwil-db/pkg/log"
+
+	kwildbapp "github.com/kwilteam/kwil-db/internal/abci-apps"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
+	"github.com/kwilteam/kwil-db/internal/pkg/gateway/middleware/cors"
+	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
+	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
+	grpcServer "github.com/kwilteam/kwil-db/pkg/grpc/server"
+
 	chainClient "github.com/kwilteam/kwil-db/pkg/chain/client"
 	ccService "github.com/kwilteam/kwil-db/pkg/chain/client/service" // shorthand for chain client service
 	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/log"
-
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/spf13/cobra"
 )
 
 func NewStartCmd() *cobra.Command {
@@ -49,65 +68,66 @@ var startCmd = &cobra.Command{
 			return err
 		}
 
+		fmt.Println("Chain client config: ", cfg.Deposits.ClientChainRPCURL)
 		logger := log.New(cfg.Log)
 		logger = *logger.Named("kwild")
 
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-
-		chainclient, err := buildChainClient(cfg, logger)
+		fmt.Printf("Initializing kwil server")
+		srv, txSvc, err := initialize_kwil_server(ctx, cfg, logger)
 		if err != nil {
-			return fmt.Errorf("failed to build chain client: %w", err)
+			return nil
 		}
-
-		accountStore, err := buildAccountRepository(logger, cfg)
+		fmt.Println("Chain client config: ", cfg.Deposits.ClientChainRPCURL)
+		fmt.Printf("Starting kwil server")
+		app, err := kwildbapp.NewKwilDbApplication(srv, txSvc.GetExecutor())
 		if err != nil {
-			return fmt.Errorf("failed to build account repository: %w", err)
+			return nil
 		}
 
-		chainSyncer, err := buildChainSyncer(cfg, chainclient, accountStore, logger)
+		go func(ctx context.Context) {
+			srv.Start(ctx)
+		}(ctx)
+
+		fmt.Printf("Starting Tendermint node\n")
+		// Start the Tendermint node
+		cometNode, err := newCometNode(app, txSvc)
 		if err != nil {
-			return fmt.Errorf("failed to build chain syncer: %w", err)
+			return nil
+		}
+		chainID := cometNode.GenesisDoc().ChainID
+		fmt.Printf("Chain ID: %s\n", chainID)
+		if strings.HasPrefix(chainID, "kwil-chain-gcd-") {
+			txSvc.GetExecutor().UpdateGasCosts(false)
 		}
 
-		txSvc, err := buildTxSvc(ctx, cfg, accountStore, logger)
-		if err != nil {
-			return fmt.Errorf("failed to build tx service: %w", err)
-		}
+		txSvc.BcNode = cometNode
+		txSvc.NodeReactor.GetPool().BcNode = cometNode
 
-		healthSvc := buildHealthSvc(logger)
+		go func(ctx context.Context) {
+			cometNode.Start()
+			defer func() {
+				cometNode.Stop()
+				cometNode.Wait()
+			}()
+			fmt.Printf("Waiting for any signals\n")
+			c := make(chan os.Signal, 1)
+			signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+			<-c
+			fmt.Printf("Stopping CometBFT node\n")
+		}(ctx)
 
-		// kwil gateway
-		gw := server.NewGWServer(runtime.NewServeMux(), cfg, logger)
-
-		if err := gw.SetupGrpcSvc(ctx); err != nil {
-			return err
-		}
-		if err := gw.SetupHTTPSvc(ctx); err != nil {
-			return err
-		}
-
-		gw.AddMiddlewares(
-			// from innermost middleware
-			//auth.MAuth(keyManager, logger),
-			cors.MCors([]string{}),
-		)
-
-		// grpc server
-		grpcServer := grpcServer.New(logger)
-		txpb.RegisterTxServiceServer(grpcServer, txSvc)
-		grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
-
-		// start
-		server := &server.Server{
-			Cfg:         cfg,
-			Log:         logger,
-			ChainSyncer: chainSyncer,
-			Http:        gw,
-			Grpc:        grpcServer,
-		}
-
-		return server.Start(ctx)
+		fmt.Printf("Waiting for any signals - End of main TADA\n")
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		fmt.Println("Waiting for any signals - End of main")
+		txSvc.NodeReactor.Wg.Add(1)
+		go txSvc.NodeReactor.JoinRequestRoutine() // TODO: move to node reactor
+		<-c
+		fmt.Printf("Stopping CometBFT node\n")
+		txSvc.NodeReactor.Wg.Wait()
+		return nil
 	}}
 
 func init() {
@@ -120,7 +140,140 @@ func init() {
 	config.BindFlagsAndEnv(startCmd.PersistentFlags())
 }
 
+func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger log.Logger) (*server.Server, *txsvc.Service, error) {
+	fmt.Printf("Building chain client\n: %v", cfg)
+	fmt.Println("Chain client config: ", cfg.Deposits.ClientChainRPCURL)
+	chainclient, err := buildChainClient(cfg, logger)
+	if err != nil {
+		fmt.Printf("Failed to build chain client: %v", err)
+		return nil, nil, fmt.Errorf("failed to build chain client: %w", err)
+	}
+
+	// TODO: Move to CometBFT later? or are these different accounts?
+	fmt.Printf("Building account repository\n")
+	accountStore, err := buildAccountRepository(logger, cfg)
+	if err != nil {
+		fmt.Printf("Failed to build account repository: %v", err)
+		return nil, nil, fmt.Errorf("failed to build account repository: %w", err)
+	}
+
+	fmt.Printf("Building chain syncer\n")
+	chainSyncer, err := buildChainSyncer(cfg, chainclient, accountStore, logger)
+	if err != nil {
+		fmt.Printf("Failed to build chain syncer: %v", err)
+		return nil, nil, fmt.Errorf("failed to build chain syncer: %w", err)
+	}
+
+	fmt.Printf("Building tx service\n")
+	txSvc, err := buildTxSvc(ctx, cfg, accountStore, logger)
+	if err != nil {
+		fmt.Printf("Failed to build tx service: %v", err)
+		return nil, nil, fmt.Errorf("failed to build tx service: %w", err)
+	}
+
+	fmt.Printf("Building health service\n")
+	healthSvc := buildHealthSvc(logger)
+
+	// Commenting this out as we would be using the CometBFT's endpoint
+	//fmt.Printf("Building gateway server\n")
+	gw := server.NewGWServer(runtime.NewServeMux(), cfg, logger)
+	if err := gw.SetupGrpcSvc(ctx); err != nil {
+		fmt.Printf("Failed to setup grpc service: %v", err)
+		return nil, nil, err
+	}
+	fmt.Printf("Setting up http service\n")
+	if err := gw.SetupHTTPSvc(ctx); err != nil {
+		fmt.Printf("Failed to setup http service: %v", err)
+		return nil, nil, err
+	}
+
+	fmt.Printf("Adding middlewares\n")
+	gw.AddMiddlewares(
+		// from innermost middleware
+		//auth.MAuth(keyManager, logger),
+		cors.MCors([]string{}),
+	)
+
+	//grpc server
+	grpcServer := grpcServer.New(logger)
+	txpb.RegisterTxServiceServer(grpcServer, txSvc)
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
+	fmt.Printf("Registering grpc services\n")
+
+	server := &server.Server{
+		Cfg:         cfg,
+		Log:         logger,
+		ChainSyncer: chainSyncer,
+		Http:        gw,
+		Grpc:        grpcServer,
+	}
+	return server, txSvc, nil
+}
+
+func newCometNode(app abci.Application, txSvc *txsvc.Service) (*nm.Node, error) {
+	config := ccfg.DefaultConfig()
+	CometHomeDir := os.Getenv("COMET_BFT_HOME")
+	fmt.Printf("Home Directory: %v", CometHomeDir)
+	config.SetRoot(CometHomeDir)
+
+	viper.SetConfigFile(fmt.Sprintf("%s/%s", CometHomeDir, "config/config.toml"))
+	if err := viper.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("reading config: %v", err)
+	}
+	if err := viper.Unmarshal(config); err != nil {
+		return nil, fmt.Errorf("decoding config: %v", err)
+	}
+	if err := config.ValidateBasic(); err != nil {
+		return nil, fmt.Errorf("invalid configuration data: %v", err)
+	}
+
+	pv := privval.LoadFilePV(
+		config.PrivValidatorKeyFile(),
+		config.PrivValidatorStateFile(),
+	)
+
+	nodeKey, err := p2p.LoadNodeKey(config.NodeKeyFile())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load node's key: %v", err)
+	}
+
+	logger := cmtlog.NewTMLogger(cmtlog.NewSyncWriter(os.Stdout))
+	logger, err = cmtflags.ParseLogLevel(config.LogLevel, logger, ccfg.DefaultLogLevel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse log level: %v", err)
+	}
+
+	val_file_path := "/tmp/.kwil/validators.txt"
+	validators := valNode.NewApprovedValidators(val_file_path)
+	validators.LoadOrCreateFile(val_file_path)
+
+	nw_approved_val_file_path := "/tmp/.kwil/nw_approved_validators.txt"
+	nw_approved_validators := valNode.NewApprovedValidators(nw_approved_val_file_path)
+	nw_approved_validators.LoadOrCreateFile(nw_approved_val_file_path)
+
+	nodeReactor := valNode.NewReactor(validators, nw_approved_validators)
+	txSvc.NodeReactor = nodeReactor
+
+	node, err := nm.NewNode(
+		config,
+		pv,
+		nodeKey,
+		proxy.NewLocalClientCreator(app), // TODO: NewUnsyncedLocalClientCreator(app) is other option which doesn't take a lock on all the connections to the app
+		nm.DefaultGenesisDocProviderFunc(config),
+		nm.DefaultDBProvider,
+		nm.DefaultMetricsProvider(config.Instrumentation),
+		logger,
+		nm.CustomReactors(map[string]p2p.Reactor{"NODE": nodeReactor}))
+
+	if err != nil {
+		return nil, fmt.Errorf("creating node: %v", err)
+	}
+
+	return node, nil
+}
+
 func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.ChainClient, error) {
+	fmt.Println("Building chain client", cfg.Deposits.ClientChainRPCURL, cfg.Deposits.ChainCode)
 	return ccService.NewChainClient(cfg.Deposits.ClientChainRPCURL,
 		ccService.WithChainCode(chainTypes.ChainCode(cfg.Deposits.ChainCode)),
 		ccService.WithLogger(*logger.Named("chainClient")),

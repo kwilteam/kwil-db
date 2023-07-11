@@ -17,6 +17,7 @@ type DatasetUseCase struct {
 	accountStore  AccountStore
 	log           log.Logger
 	extensionUrls []string
+	gas_enabled   bool
 
 	sqliteFilePath string
 }
@@ -50,7 +51,7 @@ func New(ctx context.Context, opts ...DatasetUseCaseOpt) (DatasetUseCaseInterfac
 			return nil, err
 		}
 	}
-
+	u.gas_enabled = true
 	return u, nil
 }
 
@@ -146,4 +147,12 @@ type extensionInitializeFunc func(ctx context.Context, metadata map[string]strin
 
 func (e extensionInitializeFunc) CreateInstance(ctx context.Context, metadata map[string]string) (engine.ExtensionInstance, error) {
 	return e(ctx, metadata)
+}
+
+func (u *DatasetUseCase) UpdateGasCosts(gas_enabled bool) {
+	u.gas_enabled = gas_enabled
+}
+
+func (u *DatasetUseCase) GasEnabled() bool {
+	return u.gas_enabled
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
@@ -17,6 +18,7 @@ import (
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -240,7 +242,7 @@ func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *datasetIdentifier)
 
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, error) {
 	executionBody := &actionExecution{
 		Action: action,
 		DBID:   dbid,
@@ -249,20 +251,20 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 
 	tx, err := c.executeActionTx(ctx, executionBody)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	res, err := c.client.Broadcast(ctx, tx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	outputs, err := decodeOutputs(res.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return res, outputs, nil
+	/* 	outputs, err := DecodeOutputs(res.Body)
+	   	if err != nil {
+	   		return nil, err
+	   	}
+	*/
+	return res, nil
 }
 
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
@@ -316,7 +318,7 @@ func shouldAuthenticate(privateKey *ecdsa.PrivateKey, enforced *bool) (bool, err
 	return privateKey != nil, nil
 }
 
-func decodeOutputs(bts []byte) ([]map[string]any, error) {
+func DecodeOutputs(bts []byte) ([]map[string]any, error) {
 	if len(bts) == 0 {
 		return []map[string]any{}, nil
 	}
@@ -361,4 +363,60 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 
 func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {
 	return c.client.GetAccount(ctx, address)
+}
+
+func (c *Client) ApproveValidator(ctx context.Context, pubKey []byte) error {
+	return c.client.ApproveValidator(ctx, pubKey)
+}
+
+func (c *Client) ValidatorJoin(ctx context.Context, pubKey ed25519.PubKey, power int64) (*kTx.Receipt, error) {
+	fmt.Println("ValidatorJoin - inside client wrapper")
+	validator := &validator{
+		PubKey: pubKey,
+		Power:  power,
+	}
+
+	tx, err := c.validatorJoinTx(ctx, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("ValidatorJoin - before broadcast: Tx: ", tx)
+	res, err := c.client.ValidatorJoin(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (c *Client) validatorJoinTx(ctx context.Context, validator *validator) (*kTx.Transaction, error) {
+	return c.newTx(ctx, kTx.VALIDATOR_JOIN, validator)
+}
+
+func (c *Client) ValidatorLeave(ctx context.Context, pubKey ed25519.PubKey) (*kTx.Receipt, error) {
+	validator := &validator{
+		PubKey: pubKey,
+		Power:  0, // Power is always 0 when leaving or not acting as a validator
+	}
+
+	tx, err := c.validatorLeaveTx(ctx, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.client.ValidatorLeave(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (c *Client) validatorLeaveTx(ctx context.Context, validator *validator) (*kTx.Transaction, error) {
+	return c.newTx(ctx, kTx.VALIDATOR_LEAVE, validator)
+}
+
+func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*txpb.ValidatorJoinStatusResponse, error) {
+	return c.client.ValidatorJoinStatus(ctx, pubKey)
 }
