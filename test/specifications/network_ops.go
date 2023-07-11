@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/schema"
+	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/stretchr/testify/assert"
 )
 

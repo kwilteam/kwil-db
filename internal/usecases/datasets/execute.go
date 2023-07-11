@@ -10,7 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
-func (u *DatasetUseCase) Execute(action *entity.ExecuteAction) (rec *tx.Receipt, err error) {
+func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteAction) (rec *tx.Receipt, err error) {
 	price := big.NewInt(0)
 
 	if u.gas_enabled {

@@ -207,14 +207,14 @@ func (app *KwilDbApplication) drop_database(tx *kTx.Transaction) abcitypes.Respo
 
 func (app *KwilDbApplication) execute_action(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
 	var events []abcitypes.Event
-
+	ctx := context.Background()
 	action, err := txsvc.UnmarshalActionExecution(tx.Payload)
 	if err != nil {
 		app.server.Log.Error("ABCI execute action: failed to unmarshal action execution ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("execute", err, "", tx.Sender))}
 	}
 
-	resp, err := app.executor.Execute(&entity.ExecuteAction{
+	resp, err := app.executor.Execute(ctx, &entity.ExecuteAction{
 		Tx:            tx,
 		ExecutionBody: action,
 	})

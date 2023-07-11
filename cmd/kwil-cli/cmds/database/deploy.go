@@ -17,9 +17,6 @@ import (
 	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-
-	"github.com/kwilteam/kwil-db/pkg/kuneiform/parser"
-
 	"github.com/spf13/cobra"
 )
 

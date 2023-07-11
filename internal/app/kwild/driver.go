@@ -104,6 +104,10 @@ func (d *KwildDriver) DeployDatabase(ctx context.Context, db *schema.Schema) err
 		return fmt.Errorf("error getting transaction: %w", err)
 	}
 
+	if !GetTransactionResult(res.TxResult.Events[0].Attributes) {
+		return fmt.Errorf("failed to deploy database")
+	}
+
 	fmt.Println("Deployed database", res.TxResult.Events[0])
 	d.logger.Debug("deploy database", zap.String("name", db.Name), zap.String("owner", db.Owner))
 	return nil

@@ -341,30 +341,6 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	return healthsvc.NewServer(ck)
 }
 
-func NewStopCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "stop",
-		Short: "Stop the kwild daemon",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			syscall.Kill(1, syscall.SIGTERM)
-			fmt.Printf("stopping kwild daemon\n")
-			return nil
-		},
-	}
-}
-
 type starter interface {
 	Start(ctx context.Context) error
-}
-
-func NewStopCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "stop",
-		Short: "Stop the kwild process",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			syscall.Kill(1, syscall.SIGTERM)
-			fmt.Printf("stopping kwild process\n")
-			return nil
-		},
-	}
 }

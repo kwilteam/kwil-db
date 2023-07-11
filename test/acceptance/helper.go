@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tonistiigi/go-rosetta"
-
 	//"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
 	"math/big"
 	"runtime"
@@ -292,6 +290,7 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg, path string)
 	mathExtC := adapters.StartMathExtensionDockerService(t, ctx)
 	unexposedMathRPC, err := mathExtC.UnexposedEndpoint(ctx)
 	require.NoError(t, err, "failed to get exposed endpoint")
+	t.Log("unexposedMathRPC", unexposedMathRPC)
 
 	// deploy token and escrow contract
 	t.Logf("create chain deployer to %s", exposedChainRPC)

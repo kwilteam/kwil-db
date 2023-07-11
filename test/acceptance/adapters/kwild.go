@@ -133,7 +133,7 @@ func listenToLogs(ctx context.Context, c testcontainers.Container) func(t *testi
 	}
 }
 
-func StartKwildDockerComposeService(t *testing.T, ctx context.Context, path string, cc_url string, pooladdr string, privKey string) *testcontainers.DockerContainer {
+func StartKwildDockerComposeService(t *testing.T, ctx context.Context, path string, cc_url string, pooladdr string, privKey string, extRPC string) *testcontainers.DockerContainer {
 	composeKwild, err := compose.NewDockerCompose(path)
 	require.NoError(t, err, "failed to create docker compose object for kwild cluster")
 	fmt.Println("Unexposed chain rpc: ", cc_url)
@@ -142,6 +142,7 @@ func StartKwildDockerComposeService(t *testing.T, ctx context.Context, path stri
 			"CC_RPC":                      cc_url,
 			"KWILD_PRIVATE_KEY":           privKey,
 			"KWILD_DEPOSITS_POOL_ADDRESS": pooladdr,
+			"KWILD_EXTENSION_ENDPOINTS":   extRPC,
 		}).
 		WaitForService("kwild", wait.NewLogStrategy("grpc server started")).
 		Up(ctx)

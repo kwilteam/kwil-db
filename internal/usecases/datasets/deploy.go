@@ -71,8 +71,6 @@ func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.In
 func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error) {
 	price := big.NewInt(0)
 
-	price := big.NewInt(0)
-
 	if u.gas_enabled {
 		price, err = u.PriceDrop(drop)
 		if err != nil {
