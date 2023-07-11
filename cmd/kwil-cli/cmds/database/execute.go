@@ -3,11 +3,12 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -49,12 +50,12 @@ OR
 
 				lowerName := strings.ToLower(actionName)
 
-				inputs, err := getInputs(args)
+				inputs, err := GetInputs(args)
 				if err != nil {
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
 
-				receipt, results, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
+				receipt, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
 				if err != nil {
 					return fmt.Errorf("error executing database: %w", err)
 				}
@@ -63,7 +64,7 @@ OR
 				display.PrintTxResponse(receipt)
 
 				// print the results
-				printTableAny(results)
+				// printTableAny(results)
 
 				return nil
 			})
@@ -82,7 +83,7 @@ OR
 
 // inputs will be received as args.  The args will be in the form of
 // $argname:value.  Example $username:satoshi $age:32
-func getInputs(args []string) ([]map[string]any, error) {
+func GetInputs(args []string) ([]map[string]any, error) {
 	inputs := make(map[string]any)
 
 	for _, arg := range args {

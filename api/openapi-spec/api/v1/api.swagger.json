@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/tx/v1/account.proto",
+    "title": "kwil/node/v1/node.proto",
     "version": "version not set"
   },
   "tags": [
@@ -39,6 +39,38 @@
             "in": "path",
             "required": true,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/approve_validator": {
+      "post": {
+        "operationId": "TxService_ApproveValidator",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txValidatorApprovalResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txValidatorApprovalRequest"
+            }
           }
         ],
         "tags": [
@@ -162,6 +194,38 @@
         ]
       }
     },
+    "/api/v1/gas_costs": {
+      "post": {
+        "operationId": "TxService_GasCosts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txGasCostsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txGasCostsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v1/ping": {
       "get": {
         "operationId": "TxService_Ping",
@@ -216,6 +280,101 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/txQueryRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/validator_join": {
+      "post": {
+        "operationId": "TxService_ValidatorJoin",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txValidatorJoinResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txValidatorJoinRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/validator_join_status": {
+      "get": {
+        "operationId": "TxService_ValidatorJoinStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txValidatorJoinStatusResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Pubkey",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "byte"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/validator_leave": {
+      "post": {
+        "operationId": "TxService_ValidatorLeave",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txValidatorLeaveResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txValidatorLeaveRequest"
             }
           }
         ],
@@ -404,6 +563,17 @@
         }
       }
     },
+    "txGasCostsRequest": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "txGasCostsResponse": {
+      "type": "object"
+    },
     "txGetAccountResponse": {
       "type": "object",
       "properties": {
@@ -452,6 +622,17 @@
         }
       }
     },
+    "txJoinStatus": {
+      "type": "string",
+      "enum": [
+        "INITIATED",
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "UNKNOWN"
+      ],
+      "default": "INITIATED"
+    },
     "txListDatabasesResponse": {
       "type": "object",
       "properties": {
@@ -490,6 +671,14 @@
           "format": "byte"
         }
       }
+    },
+    "txRequestStatus": {
+      "type": "string",
+      "enum": [
+        "OK",
+        "ERROR"
+      ],
+      "default": "OK"
     },
     "txSignature": {
       "type": "object",
@@ -567,6 +756,91 @@
         "body": {
           "type": "string",
           "format": "byte"
+        }
+      }
+    },
+    "txValidatorApprovalRequest": {
+      "type": "object",
+      "properties": {
+        "PubKey": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "txValidatorApprovalResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/txRequestStatus"
+        },
+        "log": {
+          "type": "string"
+        }
+      }
+    },
+    "txValidatorJoinRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/txTx"
+        }
+      },
+      "title": "If power is 0, the validator will be removed from the validator set\nIf power is \u003e 0, if the validator is in the approved validator list, validator will be added to the validator set\nBase64 encoded both pubkey and validator power"
+    },
+    "txValidatorJoinResponse": {
+      "type": "object",
+      "properties": {
+        "receipt": {
+          "$ref": "#/definitions/txTxReceipt"
+        }
+      }
+    },
+    "txValidatorJoinStatusResponse": {
+      "type": "object",
+      "properties": {
+        "approved": {
+          "type": "string",
+          "format": "int64"
+        },
+        "rejected": {
+          "type": "string",
+          "format": "int64"
+        },
+        "pending": {
+          "type": "string",
+          "format": "int64"
+        },
+        "approvedValidators": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rejectedValidators": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "$ref": "#/definitions/txJoinStatus"
+        }
+      }
+    },
+    "txValidatorLeaveRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/txTx"
+        }
+      }
+    },
+    "txValidatorLeaveResponse": {
+      "type": "object",
+      "properties": {
+        "receipt": {
+          "$ref": "#/definitions/txTxReceipt"
         }
       }
     }
