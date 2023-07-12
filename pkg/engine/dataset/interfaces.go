@@ -5,6 +5,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type Engine interface {
@@ -21,7 +22,7 @@ type Initializer interface {
 }
 
 type Datastore interface {
-	Prepare(stmt string) (Statement, error)
+	Prepare(stmt string) (sql.Statement, error)
 	CreateTable(ctx context.Context, table *types.Table) error
 	ListTables(ctx context.Context) ([]*types.Table, error)
 	StoreProcedure(ctx context.Context, procedure *types.Procedure) error
@@ -31,7 +32,7 @@ type Datastore interface {
 	Close() error
 	Delete() error
 	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
-	Savepoint() (Savepoint, error)
+	Savepoint() (sql.Savepoint, error)
 }
 
 type Statement interface {

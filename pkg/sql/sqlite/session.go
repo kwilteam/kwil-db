@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/kwilteam/go-sqlite"
 )
@@ -11,6 +12,7 @@ import (
 // Session is a session for a database.
 // It can be used to track changes and make a changeset.
 type Session struct {
+	mu  sync.Mutex
 	ses *sqlite.Session
 }
 
@@ -29,18 +31,33 @@ func (c *Connection) CreateSession() (*Session, error) {
 	}
 
 	return &Session{
+		mu:  sync.Mutex{},
 		ses: ses,
 	}, nil
 }
 
 // Delete deletes the session and associated resources.
-func (s *Session) Delete() {
+func (s *Session) Delete() (err error) {
+	defer func() {
+		// recover from panic if one occured. Set err to nil otherwise.
+		if r := recover(); r != nil {
+			err = fmt.Errorf("error closing session: %v", r)
+		}
+	}()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.ses.Delete()
+
+	return nil
 }
 
 // GenerateChangeset generates a changeset for the session.
 // Ensure that you close the changeset when you are done with it.
 func (s *Session) GenerateChangeset() (*Changeset, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	buf := new(bytes.Buffer)
 	err := s.ses.WriteChangeset(buf)
 	if err != nil {
@@ -71,6 +88,17 @@ func NewChangset(buf *bytes.Buffer) (*Changeset, error) {
 type Changeset struct {
 	buf  *bytes.Buffer
 	iter *sqlite.ChangesetIterator
+}
+
+type ChangesetStub interface {
+	Close() error
+	Export() []byte
+	New(index int) (*Value, error)
+	Next() (rowReturned bool, err error)
+	Old(index int) (*Value, error)
+	Operation() (*ChangesetOperation, error)
+	PrimaryKey() ([]*Value, error)
+	getPrimaryKeyValue(column int) (*Value, error)
 }
 
 // Next returns true if there is another row in the changeset.

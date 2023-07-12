@@ -12,6 +12,7 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type DB struct {
@@ -26,7 +27,7 @@ func (d *DB) Delete() error {
 	return d.sqldb.Delete()
 }
 
-func (d *DB) Prepare(query string) (Statement, error) {
+func (d *DB) Prepare(query string) (sql.Statement, error) {
 	ast, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
@@ -44,7 +45,7 @@ func (d *DB) Query(ctx context.Context, stmt string, args map[string]any) ([]map
 	return d.sqldb.Query(ctx, stmt, args)
 }
 
-func (d *DB) Savepoint() (Savepoint, error) {
+func (d *DB) Savepoint() (sql.Savepoint, error) {
 	return d.sqldb.Savepoint()
 }
 
