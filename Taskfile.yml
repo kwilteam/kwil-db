@@ -84,7 +84,7 @@ tasks:
       # need to run after protobuf is compiled
       - task: vendor
       # pass any args to build debug image, e.g. task docker:kwild -- debug
-      - ./scripts/build/docker kwild {{.VARIANT}}
+      - ./scripts/build/docker kwild {{.CLI_ARGS}} 
       - task: vendor:clean
 
   publish:dockerhub:

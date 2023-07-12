@@ -18,13 +18,18 @@ const (
 	maxJoinRequests = 100 // TODO: make this configurable?
 )
 
+type JoinTX struct {
+	Tx      []byte
+	Pending bool
+}
+
 type Reactor struct {
 	p2p.BaseReactor
 
 	// TODO: add fields for state
 	pool      *JoinRequestPool
 	RequestCh chan JoinRequest // Receives requests from the pool
-	txs       map[string][]byte
+	txs       map[string]JoinTX
 	// LocalABCIClient to send a Validator Join transaction to the ABCI Application
 
 	Wg sync.WaitGroup
@@ -36,7 +41,7 @@ func NewReactor(approvedVals *ApprovedValidators, nwApprovedVals *ApprovedValida
 	nodeR := &Reactor{
 		pool:      pool,
 		RequestCh: requestsCh,
-		txs:       make(map[string][]byte),
+		txs:       make(map[string]JoinTX),
 	}
 	nodeR.BaseReactor = *p2p.NewBaseReactor("Node", nodeR)
 	return nodeR
@@ -120,22 +125,29 @@ func (r *Reactor) ReceiveEnvelope(e p2p.Envelope) {
 		*/
 		fmt.Println("Received vote", "vote", msg.Accepted, "from", e.Src.ID())
 		if r.pool.AddVote(msg.ValidatorAddress, string(e.Src.ID()), msg.Accepted) == Approved {
-			// Send a ValidatorJoin transaction to the ABCI Application
-			fmt.Println("Sending ValidatorJoin transaction to ABCI Application")
-			tx := r.txs[msg.ValidatorAddress]
-			bcClient := localClient.New(r.pool.BcNode)
-			res, err := bcClient.BroadcastTxAsync(context.Background(), tx)
-			if err != nil {
-				fmt.Println("Error broadcasting tx", "err", err, "address", msg.ValidatorAddress)
-				return
+			// Send a ValidatorJoin transaction to the ABCI Application only if it has not been sent already
+			if r.txs[string(msg.ValidatorAddress)].Pending {
+				r.sendJoinTx(string(msg.ValidatorAddress))
 			}
-			fmt.Println("Broadcasted tx to ABCI app", "res", res, "address", msg.ValidatorAddress)
-			r.pool.AddHash(msg.ValidatorAddress, string(res.Hash))
-			r.pool.ApprovedNetworkVals.AddValidator(msg.ValidatorAddress)
 		}
 	default:
 		fmt.Println("Unknown message type", reflect.TypeOf(msg))
 	}
+}
+
+func (r *Reactor) sendJoinTx(address string) {
+	txInfo := r.txs[address]
+	tx := txInfo.Tx
+	bcClient := localClient.New(r.pool.BcNode)
+	res, err := bcClient.BroadcastTxAsync(context.Background(), tx)
+	if err != nil {
+		fmt.Println("Error broadcasting tx", "err", err, "address", address)
+		return
+	}
+	fmt.Println("Broadcasted Validator Join Tx to ABCI app", "res", res, "address", address)
+	txInfo.Pending = false
+	r.pool.AddHash(address, string(res.Hash))
+	r.pool.ApprovedNetworkVals.AddValidator(address)
 }
 
 func (r *Reactor) JoinRequestRoutine() {
@@ -147,20 +159,27 @@ func (r *Reactor) JoinRequestRoutine() {
 		case request := <-r.RequestCh:
 			fmt.Println("Received request to join as a validator", request)
 			address := request.PubKey.Address().String()
-			r.Switch.BroadcastEnvelope(p2p.Envelope{
-				ChannelID: NodeJoinChannel,
-				Message: &ValidatorJoinRequestVote{
-					ValidatorAddress: address,
-				},
-			})
-			fmt.Println("Broadcasting request to join as a validator", "address", address)
-			r.pool.SetStatus(address, Pending)
-			r.txs[address] = request.Tx
+			r.txs[address] = JoinTX{
+				Tx:      request.Tx,
+				Pending: true,
+			}
+			status := r.pool.GetStatus(address)
+			if status.Num_validators == 1 && status.Status == int64(Approved) {
+				r.sendJoinTx(address)
+			} else {
+				r.Switch.BroadcastEnvelope(p2p.Envelope{
+					ChannelID: NodeJoinChannel,
+					Message: &ValidatorJoinRequestVote{
+						ValidatorAddress: address,
+					},
+				})
+				fmt.Println("Broadcasting request to join as a validator", "address", address)
+				r.pool.SetStatus(address, Pending)
+			}
 		case <-r.Quit():
 			fmt.Println("Exit Node Reactor")
 			return
 		}
-
 	}
 }
 
