@@ -13,7 +13,7 @@ import (
 	"github.com/cometbft/cometbft/rpc/jsonrpc/types"
 )
 
-type Status int
+type Status int64
 
 const (
 	Initiated Status = 0
@@ -62,12 +62,17 @@ func NewJoinRequestPool(approvedVals *ApprovedValidators, nwApprovedVals *Approv
 	}
 }
 
+func ValidatorSetCount() int {
+	validators, _ := core.Validators(&types.Context{}, nil, nil, nil)
+	fmt.Println("Received Validators info: ", validators, " Count: ", validators.Count)
+	return validators.Count
+}
+
 func (pool *JoinRequestPool) AddRequest(request JoinRequest) {
 	address := request.PubKey.Address().String()
 	fmt.Println("Received join request from: ", address)
-	validators, _ := core.Validators(&types.Context{}, nil, nil, nil)
-	fmt.Println("Received Validators info: ", validators, " Count: ", validators.Count)
-	numValidators := validators.Count
+
+	numValidators := ValidatorSetCount()
 	delete(pool.Join_requests, address)
 	is_validator := pool.ApprovedVals.IsValidator(address)
 	pool.Join_requests[address] = &JoinRequestStatus{
@@ -91,6 +96,11 @@ func (pool *JoinRequestPool) AddRequest(request JoinRequest) {
 		pool.Join_requests[address].Rejected_validators = append(pool.Join_requests[address].Rejected_validators, address)
 	}
 	fmt.Println(pool.Join_requests[address].Approved_votes, pool.Join_requests[address].Required_votes, pool.Join_requests[address].Approved_validators, pool.Join_requests[address].Rejected_validators)
+
+	if pool.Join_requests[address].Required_votes <= 0 {
+		pool.Join_requests[address].Status = int64(Approved)
+	}
+
 	pool.RequestCh <- request
 	fmt.Println("Added request to requestCh")
 }
