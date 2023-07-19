@@ -1,10 +1,22 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	"errors"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 type GroupBy struct {
 	Expressions []Expression
 	Having      Expression
+}
+
+func (g *GroupBy) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitGroupBy(g),
+		acceptMany(visitor, g.Expressions),
+		accept(visitor, g.Having),
+	)
 }
 
 func (g *GroupBy) ToSQL() string {

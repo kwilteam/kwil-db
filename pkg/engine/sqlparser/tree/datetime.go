@@ -104,6 +104,10 @@ type DateTimeFunction struct {
 	AnySQLFunction
 }
 
+func (d *DateTimeFunction) Accept(visitor Visitor) error {
+	return visitor.VisitDateTimeFunc(d)
+}
+
 var (
 	FunctionSTRFTIME = DateTimeFunction{AnySQLFunction{
 		FunctionName: "strftime",

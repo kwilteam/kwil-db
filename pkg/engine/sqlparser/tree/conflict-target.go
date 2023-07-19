@@ -1,10 +1,21 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	"errors"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 type ConflictTarget struct {
 	IndexedColumns []string
 	Where          Expression
+}
+
+func (c *ConflictTarget) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitConflictTarget(c),
+		accept(visitor, c.Where),
+	)
 }
 
 func (c *ConflictTarget) ToSQL() string {

@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -9,6 +10,14 @@ import (
 type Select struct {
 	CTE        []*CTE
 	SelectStmt *SelectStmt
+}
+
+func (s *Select) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitSelect(s),
+		acceptMany(visitor, s.CTE),
+		accept(visitor, s.SelectStmt),
+	)
 }
 
 func (s *Select) ToSQL() (str string, err error) {
@@ -45,6 +54,15 @@ type SelectStmt struct {
 	Limit       *Limit
 }
 
+func (s *SelectStmt) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitSelectStmt(s),
+		acceptMany(visitor, s.SelectCores),
+		accept(visitor, s.OrderBy),
+		accept(visitor, s.Limit),
+	)
+}
+
 func (s *SelectStmt) ToSQL() (res string) {
 	stmt := sqlwriter.NewWriter()
 	for _, core := range s.SelectCores {
@@ -67,6 +85,17 @@ type SelectCore struct {
 	Where      Expression
 	GroupBy    *GroupBy
 	Compound   *CompoundOperator
+}
+
+func (s *SelectCore) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitSelectCore(s),
+		acceptMany(visitor, s.Columns),
+		accept(visitor, s.From),
+		accept(visitor, s.Where),
+		accept(visitor, s.GroupBy),
+		accept(visitor, s.Compound),
+	)
 }
 
 func (s *SelectCore) ToSQL() string {
@@ -116,6 +145,13 @@ type FromClause struct {
 	JoinClause *JoinClause
 }
 
+func (f *FromClause) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitFromClause(f),
+		accept(visitor, f.JoinClause),
+	)
+}
+
 func (f *FromClause) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 	stmt.Token.From()
@@ -149,6 +185,12 @@ func (c *CompoundOperatorType) ToSQL() string {
 
 type CompoundOperator struct {
 	Operator CompoundOperatorType
+}
+
+func (c *CompoundOperator) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitCompoundOperator(c),
+	)
 }
 
 func (c *CompoundOperator) ToSQL() string {

@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -9,6 +10,14 @@ import (
 type Delete struct {
 	CTE        []*CTE
 	DeleteStmt *DeleteStmt
+}
+
+func (d *Delete) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitDelete(d),
+		acceptMany(visitor, d.CTE),
+		accept(visitor, d.DeleteStmt),
+	)
 }
 
 func (d *Delete) ToSQL() (str string, err error) {
@@ -43,6 +52,15 @@ type DeleteStmt struct {
 	QualifiedTableName *QualifiedTableName
 	Where              Expression
 	Returning          *ReturningClause
+}
+
+func (d *DeleteStmt) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitDeleteStmt(d),
+		accept(visitor, d.QualifiedTableName),
+		accept(visitor, d.Where),
+		accept(visitor, d.Returning),
+	)
 }
 
 func (d *DeleteStmt) ToSQL() string {

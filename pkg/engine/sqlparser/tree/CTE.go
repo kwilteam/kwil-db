@@ -1,11 +1,22 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	"errors"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 type CTE struct {
 	Table   string
 	Columns []string
 	Select  *SelectStmt
+}
+
+func (c *CTE) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitCTE(c),
+		accept(visitor, c.Select),
+	)
 }
 
 func (c *CTE) ToSQL() string {

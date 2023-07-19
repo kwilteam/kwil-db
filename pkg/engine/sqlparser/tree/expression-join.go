@@ -137,7 +137,3 @@ func (e *ExpressionArithmetic) joinable() joinableStatus {
 
 	return joinableStatusInvalid
 }
-
-func (e *ExpressionRaise) joinable() joinableStatus {
-	return joinableStatusInvalid
-}

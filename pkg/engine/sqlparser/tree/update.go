@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -10,6 +11,14 @@ import (
 type Update struct {
 	CTE        []*CTE
 	UpdateStmt *UpdateStmt
+}
+
+func (u *Update) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitUpdate(u),
+		acceptMany(visitor, u.CTE),
+		accept(visitor, u.UpdateStmt),
+	)
 }
 
 func (u *Update) ToSQL() (str string, err error) {
@@ -49,6 +58,17 @@ type UpdateStmt struct {
 	From               *FromClause
 	Where              Expression
 	Returning          *ReturningClause
+}
+
+func (u *UpdateStmt) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitUpdateStmt(u),
+		accept(visitor, u.QualifiedTableName),
+		acceptMany(visitor, u.UpdateSetClause),
+		accept(visitor, u.From),
+		accept(visitor, u.Where),
+		accept(visitor, u.Returning),
+	)
 }
 
 type UpdateOr string

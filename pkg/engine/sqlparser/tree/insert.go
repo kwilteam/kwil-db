@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -9,6 +10,14 @@ import (
 type Insert struct {
 	CTE        []*CTE
 	InsertStmt *InsertStmt
+}
+
+func (ins *Insert) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitInsert(ins),
+		acceptMany(visitor, ins.CTE),
+		accept(visitor, ins.InsertStmt),
+	)
 }
 
 func (ins *Insert) ToSQL() (str string, err error) {
@@ -47,6 +56,23 @@ type InsertStmt struct {
 	Values          [][]Expression
 	Upsert          *Upsert
 	ReturningClause *ReturningClause
+}
+
+func (ins *InsertStmt) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitInsertStmt(ins),
+		func() error {
+			for _, v := range ins.Values {
+				err := acceptMany(visitor, v)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}(),
+		accept(visitor, ins.Upsert),
+		accept(visitor, ins.ReturningClause),
+	)
 }
 
 type InsertType uint8

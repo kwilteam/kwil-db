@@ -1,17 +1,25 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	"errors"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 type ResultColumn interface {
 	resultColumn()
 	ToSQL() string
+	Accept(visitor Visitor) error
 }
 
 type ResultColumnStar struct{}
 
-func (r ResultColumnStar) resultColumn() {}
-func (r ResultColumnStar) ToSQL() string {
+func (r *ResultColumnStar) resultColumn() {}
+func (r *ResultColumnStar) ToSQL() string {
 	return "*"
+}
+func (r *ResultColumnStar) Accept(visitor Visitor) error {
+	return visitor.VisitResultColumnStar(r)
 }
 
 type ResultColumnExpression struct {
@@ -19,8 +27,8 @@ type ResultColumnExpression struct {
 	Alias      string
 }
 
-func (r ResultColumnExpression) resultColumn() {}
-func (r ResultColumnExpression) ToSQL() string {
+func (r *ResultColumnExpression) resultColumn() {}
+func (r *ResultColumnExpression) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(r.Expression.ToSQL())
 	if r.Alias != "" {
@@ -29,16 +37,25 @@ func (r ResultColumnExpression) ToSQL() string {
 	}
 	return stmt.String()
 }
+func (r *ResultColumnExpression) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitResultColumnExpression(r),
+		accept(visitor, r.Expression),
+	)
+}
 
 type ResultColumnTable struct {
 	TableName string
 }
 
-func (r ResultColumnTable) resultColumn() {}
-func (r ResultColumnTable) ToSQL() string {
+func (r *ResultColumnTable) resultColumn() {}
+func (r *ResultColumnTable) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 	stmt.WriteIdent(r.TableName)
 	stmt.Token.Period()
 	stmt.Token.Asterisk()
 	return stmt.String()
+}
+func (r *ResultColumnTable) Accept(visitor Visitor) error {
+	return visitor.VisitResultColumnTable(r)
 }

@@ -9,6 +9,10 @@ type QualifiedTableName struct {
 	NotIndexed bool
 }
 
+func (q *QualifiedTableName) Accept(visitor Visitor) error {
+	return visitor.VisitQualifiedTableName(q)
+}
+
 func (q *QualifiedTableName) ToSQL() string {
 	q.check()
 

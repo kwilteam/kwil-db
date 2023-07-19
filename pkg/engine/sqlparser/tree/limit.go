@@ -1,6 +1,10 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	"errors"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 // Limit is a LIMIT clause.
 // It takes an expression, and can optionally take either an offset or a second expression.
@@ -8,6 +12,16 @@ type Limit struct {
 	Expression       Expression
 	Offset           Expression
 	SecondExpression Expression
+}
+
+// Accept implements the Visitor interface.
+func (l *Limit) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitLimit(l),
+		accept(visitor, l.Expression),
+		accept(visitor, l.Offset),
+		accept(visitor, l.SecondExpression),
+	)
 }
 
 // ToSQL marshals a LIMIT clause into a SQL string.

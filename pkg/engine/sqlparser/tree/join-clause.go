@@ -1,6 +1,7 @@
 package tree
 
 import (
+	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -52,6 +53,14 @@ type JoinClause struct {
 	Joins           []*JoinPredicate
 }
 
+func (j *JoinClause) Accept(v Visitor) error {
+	return errors.Join(
+		v.VisitJoinClause(j),
+		accept(v, j.TableOrSubquery),
+		acceptMany(v, j.Joins),
+	)
+}
+
 func (j *JoinClause) ToSQL() string {
 	if j.TableOrSubquery == nil {
 		panic("join table or subquery cannot be nil")
@@ -70,6 +79,15 @@ type JoinPredicate struct {
 	JoinOperator *JoinOperator
 	Table        TableOrSubquery
 	Constraint   Expression
+}
+
+func (j *JoinPredicate) Accept(v Visitor) error {
+	return errors.Join(
+		v.VisitJoinPredicate(j),
+		accept(v, j.JoinOperator),
+		accept(v, j.Table),
+		accept(v, j.Constraint),
+	)
 }
 
 func (j *JoinPredicate) ToSQL() string {
@@ -99,6 +117,10 @@ type JoinOperator struct {
 	Natural  bool
 	JoinType JoinType
 	Outer    bool
+}
+
+func (j *JoinOperator) Accept(v Visitor) error {
+	return v.VisitJoinOperator(j)
 }
 
 type JoinType uint8

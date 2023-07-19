@@ -76,6 +76,10 @@ type ScalarFunction struct {
 	AnySQLFunction
 }
 
+func (s *ScalarFunction) Accept(visitor Visitor) error {
+	return visitor.VisitScalarFunc(s)
+}
+
 var (
 	FunctionABS = ScalarFunction{AnySQLFunction{
 		FunctionName: "abs",

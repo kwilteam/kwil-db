@@ -1,6 +1,10 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	"errors"
+
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 // TableOrSubquery is any of:
 //   - TableOrSubqueryTable
@@ -9,11 +13,16 @@ import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writ
 type TableOrSubquery interface {
 	ToSQL() string
 	tableOrSubquery()
+	Accept(visitor Visitor) error
 }
 
 type TableOrSubqueryTable struct {
 	Name  string
 	Alias string
+}
+
+func (t *TableOrSubqueryTable) Accept(visitor Visitor) error {
+	return visitor.VisitTableOrSubqueryTable(t)
 }
 
 func (t *TableOrSubqueryTable) ToSQL() string {
@@ -37,6 +46,13 @@ func (t *TableOrSubqueryTable) tableOrSubquery() {}
 type TableOrSubquerySelect struct {
 	Select *SelectStmt
 	Alias  string
+}
+
+func (t *TableOrSubquerySelect) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitTableOrSubquerySelect(t),
+		accept(visitor, t.Select),
+	)
 }
 
 func (t *TableOrSubquerySelect) ToSQL() string {
@@ -65,6 +81,13 @@ type TableOrSubqueryList struct {
 	TableOrSubqueries []TableOrSubquery
 }
 
+func (t *TableOrSubqueryList) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitTableOrSubqueryList(t),
+		acceptMany(visitor, t.TableOrSubqueries),
+	)
+}
+
 func (t *TableOrSubqueryList) ToSQL() string {
 	if len(t.TableOrSubqueries) == 0 {
 		panic("table or subquery list is empty")
@@ -82,6 +105,13 @@ func (t *TableOrSubqueryList) tableOrSubquery() {}
 
 type TableOrSubqueryJoin struct {
 	JoinClause *JoinClause
+}
+
+func (t *TableOrSubqueryJoin) Accept(visitor Visitor) error {
+	return errors.Join(
+		visitor.VisitTableOrSubqueryJoin(t),
+		accept(visitor, t.JoinClause),
+	)
 }
 
 func (t *TableOrSubqueryJoin) tableOrSubquery() {}
