@@ -6,7 +6,6 @@ import (
 	"github.com/cometbft/cometbft/node"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	valNode "github.com/kwilteam/kwil-db/internal/node"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -23,11 +22,9 @@ type Service struct {
 	accountStore   datasets.AccountStore
 	sqliteFilePath string
 	extensionUrls  []string
-	Validators     *valNode.ApprovedValidators
 
 	providerAddress string
 	BcNode          *node.Node
-	NodeReactor     *valNode.Reactor
 	
 	txHook func(*kTx.Transaction) error
 }

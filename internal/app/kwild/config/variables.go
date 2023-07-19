@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/config"
 
+	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	"github.com/cstockton/go-conv"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -30,6 +31,8 @@ type KwildConfig struct {
 	Log                 log.Config
 	ExtensionEndpoints  []string
 	ArweaveConfig       ArweaveConfig
+	BcRpcUrl            string
+	BCPrivateKey        *cmtCrypto.PrivKey
 }
 
 type DepositsConfig struct {
@@ -66,6 +69,7 @@ var (
 		HttpListenAddress,
 		ExtensionEndpoints,
 		ArweaveBundlrURL,
+		BcRpcUrl,
 	}
 )
 
@@ -86,6 +90,12 @@ var (
 
 			return crypto.HexToECDSA(strVal)
 		},
+	}
+
+	BcRpcUrl = config.CfgVar{
+		EnvName: "BC_RPC_URL",
+		Field:   "BcRpcUrl",
+		Default: "tcp://localhost:26657",
 	}
 
 	GrpcListenAddress = config.CfgVar{

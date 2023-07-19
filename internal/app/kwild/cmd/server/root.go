@@ -92,7 +92,7 @@ var startCmd = &cobra.Command{
 
 		fmt.Printf("Starting Tendermint node\n")
 		// Start the Tendermint node
-		cometNode, err := newCometNode(app, txSvc)
+		cometNode, err := newCometNode(app, cfg, txSvc)
 		if err != nil {
 			return nil
 		}
@@ -103,7 +103,6 @@ var startCmd = &cobra.Command{
 		}
 
 		txSvc.BcNode = cometNode
-		txSvc.NodeReactor.GetPool().BcNode = cometNode
 
 		go func(ctx context.Context) {
 			cometNode.Start()
@@ -122,11 +121,9 @@ var startCmd = &cobra.Command{
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 		fmt.Println("Waiting for any signals - End of main")
-		txSvc.NodeReactor.Wg.Add(1)
-		go txSvc.NodeReactor.JoinRequestRoutine() // TODO: move to node reactor
+
 		<-c
 		fmt.Printf("Stopping CometBFT node\n")
-		txSvc.NodeReactor.Wg.Wait()
 		return nil
 	}}
 
@@ -210,7 +207,7 @@ func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger
 	return server, txSvc, nil
 }
 
-func newCometNode(app abci.Application, txSvc *txsvc.Service) (*nm.Node, error) {
+func newCometNode(app abci.Application, cfg *config.KwildConfig, txSvc *txsvc.Service) (*nm.Node, error) {
 	config := ccfg.DefaultConfig()
 	CometHomeDir := os.Getenv("COMET_BFT_HOME")
 	fmt.Printf("Home Directory: %v", CometHomeDir)
@@ -231,7 +228,9 @@ func newCometNode(app abci.Application, txSvc *txsvc.Service) (*nm.Node, error) 
 		config.PrivValidatorKeyFile(),
 		config.PrivValidatorStateFile(),
 	)
+	fmt.Println("PrivateKey: ", pv.Key.PrivKey)
 
+	fmt.Println("PrivateValidator: ", string(pv.Key.PrivKey.Bytes()))
 	nodeKey, err := p2p.LoadNodeKey(config.NodeKeyFile())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load node's key: %v", err)
@@ -243,16 +242,10 @@ func newCometNode(app abci.Application, txSvc *txsvc.Service) (*nm.Node, error) 
 		return nil, fmt.Errorf("failed to parse log level: %v", err)
 	}
 
-	val_file_path := "/tmp/.kwil/validators.txt"
-	validators := valNode.NewApprovedValidators(val_file_path)
-	validators.LoadOrCreateFile(val_file_path)
-
-	nw_approved_val_file_path := "/tmp/.kwil/nw_approved_validators.txt"
-	nw_approved_validators := valNode.NewApprovedValidators(nw_approved_val_file_path)
-	nw_approved_validators.LoadOrCreateFile(nw_approved_val_file_path)
-
-	nodeReactor := valNode.NewReactor(validators, nw_approved_validators)
-	txSvc.NodeReactor = nodeReactor
+	// TODO: Move this to Application init and maybe use some kind of kvstore to store the validators info
+	fmt.Println("Pre RPC Config: ", config.RPC.ListenAddress, " ", cfg.BcRpcUrl)
+	cfg.BcRpcUrl = config.RPC.ListenAddress
+	fmt.Println("Post RPC Config: ", config.RPC.ListenAddress, " ", cfg.BcRpcUrl)
 
 	node, err := nm.NewNode(
 		config,
@@ -263,7 +256,7 @@ func newCometNode(app abci.Application, txSvc *txsvc.Service) (*nm.Node, error) 
 		nm.DefaultDBProvider,
 		nm.DefaultMetricsProvider(config.Instrumentation),
 		logger,
-		nm.CustomReactors(map[string]p2p.Reactor{"NODE": nodeReactor}))
+	)
 
 	if err != nil {
 		return nil, fmt.Errorf("creating node: %v", err)
