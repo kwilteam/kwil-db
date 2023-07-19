@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
@@ -29,8 +30,8 @@ func NewTx(txType PayloadType, data []byte, nonce int64) *Transaction {
 }
 
 func (t *Transaction) Verify() error {
-	if !bytes.Equal(t.Hash, t.generateHash()) {
-		return fmt.Errorf("invalid hash. received %s, expected %s", hex.EncodeToString(t.Hash), hex.EncodeToString(t.generateHash()))
+	if !bytes.Equal(t.Hash, t.GenerateHash()) {
+		return fmt.Errorf("invalid hash. received %s, expected %s", hex.EncodeToString(t.Hash), hex.EncodeToString(t.GenerateHash()))
 	}
 
 	// verify valid payload type
@@ -52,7 +53,7 @@ func (t *Transaction) Verify() error {
 
 // generateHash generates a hash of the transaction
 // it does this by hashing the payload type, payload, fee, and nonce
-func (t *Transaction) generateHash() []byte {
+func (t *Transaction) GenerateHash() []byte {
 	var data []byte
 
 	// convert payload type to bytes
@@ -76,7 +77,7 @@ func (t *Transaction) generateHash() []byte {
 }
 
 func (t *Transaction) Sign(p *ecdsa.PrivateKey) error {
-	hash := t.generateHash()
+	hash := t.GenerateHash()
 	sig, err := kwilCrypto.Sign(hash, p)
 	if err != nil {
 		return fmt.Errorf("failed to sign transaction: %v", err)

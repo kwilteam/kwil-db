@@ -1,45 +1,45 @@
 package validator
 
 import (
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
-	kc "github.com/kwilteam/kwil-db/internal/app/kwild/client"
+	"fmt"
+
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/spf13/cobra"
 )
 
 func leaveCmd() *cobra.Command {
-	var validatorURL string
-	var privateKey string
-	var ClientChainRPCURL string
+	// var validatorURL string
+	// var privateKey string
+	// var ClientChainRPCURL string
 	cmd := &cobra.Command{
-		Use:   "leave [validatorPublicKey]",
-		Short: "Remove the node as a validator",
-		Args:  cobra.ExactArgs(1),
+		Use:   "leave [valPrivateKey] [BcRPCURL]",
+		Short: "Request to leave the network as a validator",
+		Long:  "The leave command is used to request to leave the network as a validator. It requires the Private key of the node attempting to leave as a Validator and the Blockchain RPC URL are required.",
+		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// validatorPublicKey = args[0]
-			// Send the validator public key to the server to approve the validator
-			// through an RPC call
 			ctx := cmd.Context()
-			cfg := &kc.KwildConfig{
-				GrpcURL:           validatorURL,
-				PrivateKey:        privateKey,
-				ClientChainRPCURL: ClientChainRPCURL,
+			cfg, err := config.LoadKwildConfig()
+			if err != nil {
+				return err
 			}
+			options := []client.ClientOpt{client.WithBcRpcUrl(args[1])}
 
-			clt, err := kc.NewClient(ctx, cfg)
+			clt, err := client.New(ctx, cfg.GrpcListenAddress, options...)
 			if err != nil {
 				return err
 			}
 
-			rec, err := clt.ValidatorLeave(ctx, []byte(args[0]))
+			hash, err := clt.ValidatorLeave(ctx, args[0], 0)
 			if err != nil {
 				return err
 			}
-			display.PrintTxResponse(rec)
+			fmt.Println("Transaction hash: ", hash)
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&validatorURL, "validatorURL", "v", "", "Validator URL that you want to join")
-	cmd.Flags().StringVarP(&privateKey, "privateKey", "k", "", "The private key of the wallet that will be used for signing")
-	cmd.Flags().StringVarP(&ClientChainRPCURL, "clientChainRPCURL", "c", "", "The client chain RPC URL")
+	// cmd.Flags().StringVarP(&validatorURL, "validatorURL", "v", "", "Validator URL that you want to join")
+	// cmd.Flags().StringVarP(&privateKey, "privateKey", "k", "", "The private key of the wallet that will be used for signing")
+	// cmd.Flags().StringVarP(&ClientChainRPCURL, "clientChainRPCURL", "c", "", "The client chain RPC URL")
 	return cmd
 }

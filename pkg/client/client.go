@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	cmtCrypto "github.com/cometbft/cometbft/crypto"
+	cmtjson "github.com/cometbft/cometbft/libs/json"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
@@ -17,14 +19,13 @@ import (
 	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-
-	"github.com/cometbft/cometbft/crypto/ed25519"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
 	client           *grpcClient.Client
+	bcClient         *rpchttp.HTTP
 	datasets         map[string]*schema.Schema
 	PrivateKey       *ecdsa.PrivateKey
 	ChainCode        chainCodes.ChainCode
@@ -38,6 +39,7 @@ type Client struct {
 	TokenAddress     string
 	TokenSymbol      string
 	poolContract     escrow.EscrowContract
+	BcRpcUrl         string
 }
 
 // New creates a new client
@@ -52,6 +54,7 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 		chainRpcUrl:      "",
 		TokenAddress:     "",
 		TokenSymbol:      "",
+		BcRpcUrl:         "tcp://localhost:26657",
 	}
 
 	for _, opt := range opts {
@@ -94,6 +97,11 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 	// re-apply opts to override provider config
 	for _, opt := range opts {
 		opt(c)
+	}
+
+	c.bcClient, err = rpchttp.New(c.BcRpcUrl, "")
+	if err != nil {
+		return nil, err
 	}
 
 	return c, nil
@@ -314,58 +322,62 @@ func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Acco
 	return c.client.GetAccount(ctx, address)
 }
 
-func (c *Client) ApproveValidator(ctx context.Context, pubKey []byte) error {
-	return c.client.ApproveValidator(ctx, pubKey)
+func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner string) ([]byte, error) {
+	tx, err := c.NewNodeTx(ctx, kTx.VALIDATOR_APPROVE, joiner, approver)
+	if err != nil {
+		return nil, err
+	}
+
+	bts, err := json.Marshal(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.bcClient.BroadcastTxAsync(ctx, bts)
+	if err != nil {
+		return nil, err
+	}
+	return res.Hash, nil
 }
 
-func (c *Client) ValidatorJoin(ctx context.Context, pubKey ed25519.PubKey, power int64) (*kTx.Receipt, error) {
-	fmt.Println("ValidatorJoin - inside client wrapper")
+func (c *Client) ValidatorJoin(ctx context.Context, joiner string, power int64) ([]byte, error) {
+	return c.ValidatorUpdate(ctx, joiner, power, kTx.VALIDATOR_JOIN)
+}
+
+func (c *Client) ValidatorLeave(ctx context.Context, joiner string, power int64) ([]byte, error) {
+	return c.ValidatorUpdate(ctx, joiner, 0, kTx.VALIDATOR_LEAVE)
+}
+
+func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, power int64, payloadtype kTx.PayloadType) ([]byte, error) {
+	var nodeKey cmtCrypto.PrivKey
+	key := fmt.Sprintf(`{"type":"tendermint/PrivKeyEd25519","value":"%s"}`, joinerPrivKey)
+	err := cmtjson.Unmarshal([]byte(key), &nodeKey)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("Node PublicKey: ", nodeKey.PubKey())
+	bts, _ := json.Marshal(nodeKey.PubKey())
+	fmt.Println("Node PublicKey: ", string(bts))
+
 	validator := &validator{
-		PubKey: pubKey,
+		PubKey: string(bts),
 		Power:  power,
 	}
 
-	tx, err := c.validatorJoinTx(ctx, validator)
+	tx, err := c.NewNodeTx(ctx, payloadtype, validator, joinerPrivKey)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("ValidatorJoin - before broadcast: Tx: ", tx)
-	res, err := c.client.ValidatorJoin(ctx, tx)
+	bts, err = json.Marshal(tx)
 	if err != nil {
 		return nil, err
 	}
 
-	return res, nil
-}
-
-func (c *Client) validatorJoinTx(ctx context.Context, validator *validator) (*kTx.Transaction, error) {
-	return c.newTx(ctx, kTx.VALIDATOR_JOIN, validator)
-}
-
-func (c *Client) ValidatorLeave(ctx context.Context, pubKey ed25519.PubKey) (*kTx.Receipt, error) {
-	validator := &validator{
-		PubKey: pubKey,
-		Power:  0, // Power is always 0 when leaving or not acting as a validator
-	}
-
-	tx, err := c.validatorLeaveTx(ctx, validator)
+	res, err := c.bcClient.BroadcastTxAsync(ctx, bts)
 	if err != nil {
 		return nil, err
 	}
-
-	res, err := c.client.ValidatorLeave(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
-}
-
-func (c *Client) validatorLeaveTx(ctx context.Context, validator *validator) (*kTx.Transaction, error) {
-	return c.newTx(ctx, kTx.VALIDATOR_LEAVE, validator)
-}
-
-func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*txpb.ValidatorJoinStatusResponse, error) {
-	return c.client.ValidatorJoinStatus(ctx, pubKey)
+	return res.Hash, nil
 }

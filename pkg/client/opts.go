@@ -2,6 +2,7 @@ package client
 
 import (
 	"crypto/ecdsa"
+
 	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
 )
 
@@ -46,5 +47,11 @@ func WithoutProvider() ClientOpt {
 func WithoutServiceConfig() ClientOpt {
 	return func(c *Client) {
 		c.withServerConfig = false
+	}
+}
+
+func WithBcRpcUrl(url string) ClientOpt {
+	return func(c *Client) {
+		c.BcRpcUrl = url
 	}
 }
