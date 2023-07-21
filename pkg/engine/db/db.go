@@ -11,6 +11,7 @@ package db
 import (
 	"context"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 )
@@ -27,8 +28,20 @@ func (d *DB) Delete() error {
 	return d.sqldb.Delete()
 }
 
-func (d *DB) Prepare(query string) (sql.Statement, error) {
+func (d *DB) Prepare(ctx context.Context, query string) (sql.Statement, error) {
 	ast, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+
+	tables, err := d.ListTables(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = sqlanalyzer.ApplyRules(ast, sqlanalyzer.DeterministicAggregates, &sqlanalyzer.RuleMetadata{
+		Tables: tables,
+	})
 	if err != nil {
 		return nil, err
 	}

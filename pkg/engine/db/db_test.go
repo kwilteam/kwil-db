@@ -148,3 +148,53 @@ func Test_CreateTables(t *testing.T) {
 		})
 	}
 }
+
+var defaultTables = []*types.Table{
+	&testdata.Table_users,
+	&testdata.Table_posts,
+}
+
+func Test_Prepare(t *testing.T) {
+	type testCase struct {
+		name      string
+		tables    []*types.Table
+		statement string
+		wantErr   bool
+	}
+
+	tests := []testCase{
+		{
+			name:      "valid SELECT statement",
+			tables:    defaultTables,
+			statement: `SELECT * FROM users WHERE id = $id;`,
+			wantErr:   false,
+		},
+		{
+			name:      "invalid group by",
+			tables:    defaultTables,
+			statement: `SELECT * FROM users WHERE id = $id GROUP BY id;`,
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			datastore, teardown, err := test.OpenTestDB(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer datastore.Close()
+			defer teardown()
+
+			for _, tbl := range tt.tables {
+				err := datastore.CreateTable(ctx, tbl)
+				assert.NoError(t, err)
+			}
+
+			_, err = datastore.Prepare(ctx, tt.statement)
+			assert.Equal(t, tt.wantErr, err != nil)
+		})
+	}
+}

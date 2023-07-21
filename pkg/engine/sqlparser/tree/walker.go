@@ -9,7 +9,7 @@ func run(errs ...error) error {
 	return errors.Join(errs...)
 }
 
-type accepter interface {
+type Accepter interface {
 	Accept(Walker) error
 }
 
@@ -26,7 +26,7 @@ func isNil(input interface{}) bool {
 	}
 }
 
-func accept(v Walker, a accepter) error {
+func accept(v Walker, a Accepter) error {
 	if isNil(a) {
 		return nil
 	}
@@ -34,7 +34,7 @@ func accept(v Walker, a accepter) error {
 	return a.Accept(v)
 }
 
-func acceptMany[T accepter](v Walker, as []T) error {
+func acceptMany[T Accepter](v Walker, as []T) error {
 	for _, a := range as {
 		err := accept(v, a)
 		if err != nil {

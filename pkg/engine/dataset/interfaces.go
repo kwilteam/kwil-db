@@ -22,7 +22,7 @@ type Initializer interface {
 }
 
 type Datastore interface {
-	Prepare(stmt string) (sql.Statement, error)
+	Prepare(ctx context.Context, query string) (sql.Statement, error)
 	CreateTable(ctx context.Context, table *types.Table) error
 	ListTables(ctx context.Context) ([]*types.Table, error)
 	StoreProcedure(ctx context.Context, procedure *types.Procedure) error
@@ -57,6 +57,6 @@ type datastoreWrapper struct {
 	Datastore
 }
 
-func (d datastoreWrapper) Prepare(stmt string) (execution.PreparedStatement, error) {
-	return d.Datastore.Prepare(stmt)
+func (d datastoreWrapper) Prepare(ctx context.Context, stmt string) (execution.PreparedStatement, error) {
+	return d.Datastore.Prepare(ctx, stmt)
 }
