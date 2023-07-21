@@ -1,7 +1,6 @@
 package tree
 
 import (
-	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -12,11 +11,12 @@ type Delete struct {
 	DeleteStmt *DeleteStmt
 }
 
-func (d *Delete) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitDelete(d),
-		acceptMany(visitor, d.CTE),
-		accept(visitor, d.DeleteStmt),
+func (d *Delete) Accept(w Walker) error {
+	return run(
+		w.EnterDelete(d),
+		acceptMany(w, d.CTE),
+		accept(w, d.DeleteStmt),
+		w.ExitDelete(d),
 	)
 }
 
@@ -54,12 +54,13 @@ type DeleteStmt struct {
 	Returning          *ReturningClause
 }
 
-func (d *DeleteStmt) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitDeleteStmt(d),
-		accept(visitor, d.QualifiedTableName),
-		accept(visitor, d.Where),
-		accept(visitor, d.Returning),
+func (d *DeleteStmt) Accept(w Walker) error {
+	return run(
+		w.EnterDeleteStmt(d),
+		accept(w, d.QualifiedTableName),
+		accept(w, d.Where),
+		accept(w, d.Returning),
+		w.ExitDeleteStmt(d),
 	)
 }
 

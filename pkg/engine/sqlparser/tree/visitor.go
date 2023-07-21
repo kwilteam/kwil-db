@@ -1,28 +1,6 @@
 package tree
 
-type accepter interface {
-	Accept(Visitor) error
-}
-
-func accept(v Visitor, a accepter) error {
-	if a == nil {
-		return nil
-	}
-
-	return a.Accept(v)
-}
-
-func acceptMany[T accepter](v Visitor, as []T) error {
-	for _, a := range as {
-		err := accept(v, a)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
+/*
 type Visitor interface {
 	VisitAggregateFunc(*AggregateFunc) error
 	VisitConflictTarget(*ConflictTarget) error
@@ -610,3 +588,4 @@ func (b *extendableVisitor) VisitUpsert(p0 *Upsert) error {
 func (b *extendableVisitor) AddVisitor(v Visitor) {
 	b.decorators = append(b.decorators, v)
 }
+*/

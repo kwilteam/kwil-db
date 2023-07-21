@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -11,10 +9,11 @@ type ConflictTarget struct {
 	Where          Expression
 }
 
-func (c *ConflictTarget) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitConflictTarget(c),
-		accept(visitor, c.Where),
+func (c *ConflictTarget) Accept(w Walker) error {
+	return run(
+		w.EnterConflictTarget(c),
+		accept(w, c.Where),
+		w.ExitConflictTarget(c),
 	)
 }
 

@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -10,10 +8,11 @@ type OrderBy struct {
 	OrderingTerms []*OrderingTerm
 }
 
-func (o *OrderBy) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitOrderBy(o),
-		acceptMany(visitor, o.OrderingTerms),
+func (o *OrderBy) Accept(w Walker) error {
+	return run(
+		w.EnterOrderBy(o),
+		acceptMany(w, o.OrderingTerms),
+		w.ExitOrderBy(o),
 	)
 }
 
@@ -40,10 +39,11 @@ type OrderingTerm struct {
 	NullOrdering NullOrderingType
 }
 
-func (o *OrderingTerm) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitOrderingTerm(o),
-		accept(visitor, o.Expression),
+func (o *OrderingTerm) Accept(w Walker) error {
+	return run(
+		w.EnterOrderingTerm(o),
+		accept(w, o.Expression),
+		w.ExitOrderingTerm(o),
 	)
 }
 

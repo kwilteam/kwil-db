@@ -9,8 +9,11 @@ type QualifiedTableName struct {
 	NotIndexed bool
 }
 
-func (q *QualifiedTableName) Accept(visitor Visitor) error {
-	return visitor.VisitQualifiedTableName(q)
+func (q *QualifiedTableName) Accept(w Walker) error {
+	return run(
+		w.EnterQualifiedTableName(q),
+		w.ExitQualifiedTableName(q),
+	)
 }
 
 func (q *QualifiedTableName) ToSQL() string {

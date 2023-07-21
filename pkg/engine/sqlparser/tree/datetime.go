@@ -104,8 +104,11 @@ type DateTimeFunction struct {
 	AnySQLFunction
 }
 
-func (d *DateTimeFunction) Accept(visitor Visitor) error {
-	return visitor.VisitDateTimeFunc(d)
+func (d *DateTimeFunction) Accept(w Walker) error {
+	return run(
+		w.EnterDateTimeFunc(d),
+		w.ExitDateTimeFunc(d),
+	)
 }
 
 var (

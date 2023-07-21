@@ -3,16 +3,16 @@ package join
 import "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 
 type joinVisitor struct {
-	*tree.BaseVisitor
+	tree.Walker
 }
 
-func NewJoinVisitor() tree.Visitor {
+func NewJoinVisitor() tree.Walker {
 	return &joinVisitor{
-		BaseVisitor: tree.NewBaseVisitor(),
+		Walker: tree.NewBaseWalker(),
 	}
 }
 
-func (s *joinVisitor) VisitJoinPredicate(j *tree.JoinPredicate) error {
+func (s *joinVisitor) EnterJoinPredicate(j *tree.JoinPredicate) error {
 	err := checkJoin(j)
 	if err != nil {
 		return err

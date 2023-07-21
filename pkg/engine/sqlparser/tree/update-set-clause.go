@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -14,10 +12,11 @@ type UpdateSetClause struct {
 	Expression Expression
 }
 
-func (u *UpdateSetClause) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitUpdateSetClause(u),
-		accept(visitor, u.Expression),
+func (u *UpdateSetClause) Accept(w Walker) error {
+	return run(
+		w.EnterUpdateSetClause(u),
+		accept(w, u.Expression),
+		w.ExitUpdateSetClause(u),
 	)
 }
 

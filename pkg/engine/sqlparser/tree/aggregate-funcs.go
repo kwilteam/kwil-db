@@ -11,8 +11,11 @@ type AggregateFunc struct {
 	AnySQLFunction
 }
 
-func (s *AggregateFunc) Accept(visitor Visitor) error {
-	return visitor.VisitAggregateFunc(s)
+func (s *AggregateFunc) Accept(w Walker) error {
+	return run(
+		w.EnterAggregateFunc(s),
+		w.ExitAggregateFunc(s),
+	)
 }
 
 // stringDistinct returns the string representation of the function with the

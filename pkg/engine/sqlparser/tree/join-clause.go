@@ -1,7 +1,6 @@
 package tree
 
 import (
-	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -53,11 +52,12 @@ type JoinClause struct {
 	Joins           []*JoinPredicate
 }
 
-func (j *JoinClause) Accept(v Visitor) error {
-	return errors.Join(
-		v.VisitJoinClause(j),
-		accept(v, j.TableOrSubquery),
-		acceptMany(v, j.Joins),
+func (j *JoinClause) Accept(w Walker) error {
+	return run(
+		w.EnterJoinClause(j),
+		accept(w, j.TableOrSubquery),
+		acceptMany(w, j.Joins),
+		w.ExitJoinClause(j),
 	)
 }
 
@@ -81,12 +81,13 @@ type JoinPredicate struct {
 	Constraint   Expression
 }
 
-func (j *JoinPredicate) Accept(v Visitor) error {
-	return errors.Join(
-		v.VisitJoinPredicate(j),
-		accept(v, j.JoinOperator),
-		accept(v, j.Table),
-		accept(v, j.Constraint),
+func (j *JoinPredicate) Accept(w Walker) error {
+	return run(
+		w.EnterJoinPredicate(j),
+		accept(w, j.JoinOperator),
+		accept(w, j.Table),
+		accept(w, j.Constraint),
+		w.ExitJoinPredicate(j),
 	)
 }
 
@@ -119,8 +120,11 @@ type JoinOperator struct {
 	Outer    bool
 }
 
-func (j *JoinOperator) Accept(v Visitor) error {
-	return v.VisitJoinOperator(j)
+func (j *JoinOperator) Accept(w Walker) error {
+	return run(
+		w.EnterJoinOperator(j),
+		w.ExitJoinOperator(j),
+	)
 }
 
 type JoinType uint8

@@ -76,8 +76,11 @@ type ScalarFunction struct {
 	AnySQLFunction
 }
 
-func (s *ScalarFunction) Accept(visitor Visitor) error {
-	return visitor.VisitScalarFunc(s)
+func (s *ScalarFunction) Accept(w Walker) error {
+	return run(
+		w.EnterScalarFunc(s),
+		w.ExitScalarFunc(s),
+	)
 }
 
 var (

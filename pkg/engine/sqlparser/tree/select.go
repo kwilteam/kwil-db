@@ -1,7 +1,6 @@
 package tree
 
 import (
-	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -12,11 +11,12 @@ type Select struct {
 	SelectStmt *SelectStmt
 }
 
-func (s *Select) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitSelect(s),
-		acceptMany(visitor, s.CTE),
-		accept(visitor, s.SelectStmt),
+func (s *Select) Accept(w Walker) error {
+	return run(
+		w.EnterSelect(s),
+		acceptMany(w, s.CTE),
+		accept(w, s.SelectStmt),
+		w.ExitSelect(s),
 	)
 }
 
@@ -54,12 +54,13 @@ type SelectStmt struct {
 	Limit       *Limit
 }
 
-func (s *SelectStmt) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitSelectStmt(s),
-		acceptMany(visitor, s.SelectCores),
-		accept(visitor, s.OrderBy),
-		accept(visitor, s.Limit),
+func (s *SelectStmt) Accept(w Walker) error {
+	return run(
+		w.EnterSelectStmt(s),
+		acceptMany(w, s.SelectCores),
+		accept(w, s.OrderBy),
+		accept(w, s.Limit),
+		w.ExitSelectStmt(s),
 	)
 }
 
@@ -87,14 +88,15 @@ type SelectCore struct {
 	Compound   *CompoundOperator
 }
 
-func (s *SelectCore) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitSelectCore(s),
-		acceptMany(visitor, s.Columns),
-		accept(visitor, s.From),
-		accept(visitor, s.Where),
-		accept(visitor, s.GroupBy),
-		accept(visitor, s.Compound),
+func (s *SelectCore) Accept(w Walker) error {
+	return run(
+		w.EnterSelectCore(s),
+		acceptMany(w, s.Columns),
+		accept(w, s.From),
+		accept(w, s.Where),
+		accept(w, s.GroupBy),
+		accept(w, s.Compound),
+		w.ExitSelectCore(s),
 	)
 }
 
@@ -145,10 +147,11 @@ type FromClause struct {
 	JoinClause *JoinClause
 }
 
-func (f *FromClause) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitFromClause(f),
-		accept(visitor, f.JoinClause),
+func (f *FromClause) Accept(w Walker) error {
+	return run(
+		w.EnterFromClause(f),
+		accept(w, f.JoinClause),
+		w.ExitFromClause(f),
 	)
 }
 
@@ -187,9 +190,10 @@ type CompoundOperator struct {
 	Operator CompoundOperatorType
 }
 
-func (c *CompoundOperator) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitCompoundOperator(c),
+func (c *CompoundOperator) Accept(w Walker) error {
+	return run(
+		w.EnterCompoundOperator(c),
+		w.ExitCompoundOperator(c),
 	)
 }
 

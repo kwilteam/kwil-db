@@ -5,32 +5,30 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
-func NewOrderVisitors() *OrderVisitors {
-	ctx := &orderContext{
-		JoinedTables: make([]*types.Table, 0),
-	}
-
-	return &OrderVisitors{
-		analyzer: &orderAnalyzer{
-			BaseVisitor: tree.NewBaseVisitor(),
-			context:     ctx,
-		},
-		contextualizer: &orderContextualizer{
-			BaseVisitor: tree.NewBaseVisitor(),
-			context:     ctx,
-		},
+func NewOrderWalker(tables []*types.Table) tree.Walker {
+	return &orderAnalyzer{
+		Walker:       tree.NewBaseWalker(),
+		schemaTables: tables,
 	}
 }
 
-type OrderVisitors struct {
-	analyzer       tree.Visitor
-	contextualizer tree.Visitor
+type orderAnalyzer struct {
+	tree.Walker
+	context      *orderContext
+	schemaTables []*types.Table
 }
 
-func (o *OrderVisitors) Analyzer() tree.Visitor {
-	return o.analyzer
+func (o *orderAnalyzer) newScope() {
+	oldCtx := o.context
+	o.context = newOrderContext(oldCtx)
 }
 
-func (o *OrderVisitors) Contextualizer() tree.Visitor {
-	return o.contextualizer
+// oldScope pops the current scope and returns to the parent scope
+// if there is no parent scope, it simply sets the current scope to nil
+func (o *orderAnalyzer) oldScope() {
+	if o.context == nil {
+		return
+	}
+
+	o.context = o.context.Parent
 }

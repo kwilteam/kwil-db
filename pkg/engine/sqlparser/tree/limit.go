@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -15,12 +13,13 @@ type Limit struct {
 }
 
 // Accept implements the Visitor interface.
-func (l *Limit) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitLimit(l),
-		accept(visitor, l.Expression),
-		accept(visitor, l.Offset),
-		accept(visitor, l.SecondExpression),
+func (l *Limit) Accept(w Walker) error {
+	return run(
+		w.EnterLimit(l),
+		accept(w, l.Expression),
+		accept(w, l.Offset),
+		accept(w, l.SecondExpression),
+		w.ExitLimit(l),
 	)
 }
 

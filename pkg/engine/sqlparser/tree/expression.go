@@ -1,7 +1,6 @@
 package tree
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -13,7 +12,7 @@ import (
 type Expression interface {
 	isExpression() // private function to prevent external packages from implementing this interface
 	ToSQL() string
-	Accept(visitor Visitor) error
+	Accept(w Walker) error
 	joinable
 }
 
@@ -29,7 +28,7 @@ func (e *expressionBase) ToSQL() string {
 	panic("expressionBase: ToSQL() must be implemented by child")
 }
 
-func (e *expressionBase) Accept(visitor Visitor) error {
+func (e *expressionBase) Accept(w Walker) error {
 	return fmt.Errorf("expressionBase: Accept() must be implemented by child")
 }
 
@@ -41,8 +40,11 @@ type ExpressionLiteral struct {
 	Value string
 }
 
-func (e *ExpressionLiteral) Accept(visitor Visitor) error {
-	return visitor.VisitExpressionLiteral(e)
+func (e *ExpressionLiteral) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionLiteral(e),
+		w.ExitExpressionLiteral(e),
+	)
 }
 
 func (e *ExpressionLiteral) ToSQL() string {
@@ -92,8 +94,11 @@ type ExpressionBindParameter struct {
 	Parameter string
 }
 
-func (e *ExpressionBindParameter) Accept(visitor Visitor) error {
-	return visitor.VisitExpressionBindParameter(e)
+func (e *ExpressionBindParameter) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionBindParameter(e),
+		w.ExitExpressionBindParameter(e),
+	)
 }
 
 func (e *ExpressionBindParameter) ToSQL() string {
@@ -122,8 +127,11 @@ type ExpressionColumn struct {
 	Column string
 }
 
-func (e *ExpressionColumn) Accept(visitor Visitor) error {
-	return visitor.VisitExpressionColumn(e)
+func (e *ExpressionColumn) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionColumn(e),
+		w.ExitExpressionColumn(e),
+	)
 }
 
 func (e *ExpressionColumn) ToSQL() string {
@@ -153,10 +161,10 @@ type ExpressionUnary struct {
 	Operand  Expression
 }
 
-func (e *ExpressionUnary) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionUnary(e),
-		accept(visitor, e.Operand),
+func (e *ExpressionUnary) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionUnary(e),
+		w.ExitExpressionUnary(e),
 	)
 }
 
@@ -180,11 +188,12 @@ type ExpressionBinaryComparison struct {
 	Right    Expression
 }
 
-func (e *ExpressionBinaryComparison) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionBinaryComparison(e),
-		accept(visitor, e.Left),
-		accept(visitor, e.Right),
+func (e *ExpressionBinaryComparison) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionBinaryComparison(e),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		w.ExitExpressionBinaryComparison(e),
 	)
 }
 
@@ -209,10 +218,11 @@ type ExpressionFunction struct {
 	Distinct bool
 }
 
-func (e *ExpressionFunction) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionFunction(e),
-		acceptMany(visitor, e.Inputs),
+func (e *ExpressionFunction) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionFunction(e),
+		acceptMany(w, e.Inputs),
+		w.ExitExpressionFunction(e),
 	)
 }
 
@@ -245,10 +255,11 @@ type ExpressionList struct {
 	Expressions []Expression
 }
 
-func (e *ExpressionList) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionList(e),
-		acceptMany(visitor, e.Expressions),
+func (e *ExpressionList) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionList(e),
+		acceptMany(w, e.Expressions),
+		w.ExitExpressionList(e),
 	)
 }
 
@@ -277,10 +288,11 @@ type ExpressionCollate struct {
 	Collation  CollationType
 }
 
-func (e *ExpressionCollate) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionCollate(e),
-		accept(visitor, e.Expression),
+func (e *ExpressionCollate) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionCollate(e),
+		accept(w, e.Expression),
+		w.ExitExpressionCollate(e),
 	)
 }
 
@@ -313,12 +325,13 @@ type ExpressionStringCompare struct {
 	Escape   Expression // can only be used with LIKE or NOT LIKE
 }
 
-func (e *ExpressionStringCompare) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionStringCompare(e),
-		accept(visitor, e.Left),
-		accept(visitor, e.Right),
-		accept(visitor, e.Escape),
+func (e *ExpressionStringCompare) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionStringCompare(e),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		accept(w, e.Escape),
+		w.ExitExpressionStringCompare(e),
 	)
 }
 
@@ -350,10 +363,11 @@ type ExpressionIsNull struct {
 	IsNull     bool
 }
 
-func (e *ExpressionIsNull) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionIsNull(e),
-		accept(visitor, e.Expression),
+func (e *ExpressionIsNull) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionIsNull(e),
+		accept(w, e.Expression),
+		w.ExitExpressionIsNull(e),
 	)
 }
 
@@ -385,11 +399,12 @@ type ExpressionDistinct struct {
 	IsNot bool
 }
 
-func (e *ExpressionDistinct) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionDistinct(e),
-		accept(visitor, e.Left),
-		accept(visitor, e.Right),
+func (e *ExpressionDistinct) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionDistinct(e),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		w.ExitExpressionDistinct(e),
 	)
 }
 
@@ -426,12 +441,13 @@ type ExpressionBetween struct {
 	Right      Expression
 }
 
-func (e *ExpressionBetween) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionBetween(e),
-		accept(visitor, e.Expression),
-		accept(visitor, e.Left),
-		accept(visitor, e.Right),
+func (e *ExpressionBetween) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionBetween(e),
+		accept(w, e.Expression),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		w.ExitExpressionBetween(e),
 	)
 }
 
@@ -471,10 +487,11 @@ type ExpressionSelect struct {
 	Select   *SelectStmt
 }
 
-func (e *ExpressionSelect) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionSelect(e),
-		accept(visitor, e.Select),
+func (e *ExpressionSelect) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionSelect(e),
+		accept(w, e.Select),
+		w.ExitExpressionSelect(e),
 	)
 }
 
@@ -522,24 +539,25 @@ type ExpressionCase struct {
 	ElseExpression Expression
 }
 
-func (e *ExpressionCase) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionCase(e),
-		accept(visitor, e.CaseExpression),
+func (e *ExpressionCase) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionCase(e),
+		accept(w, e.CaseExpression),
 		func() error {
 			for _, whenThen := range e.WhenThenPairs {
-				err := accept(visitor, whenThen[0])
+				err := accept(w, whenThen[0])
 				if err != nil {
 					return err
 				}
-				err = accept(visitor, whenThen[1])
+				err = accept(w, whenThen[1])
 				if err != nil {
 					return err
 				}
 			}
 			return nil
 		}(),
-		accept(visitor, e.ElseExpression),
+		accept(w, e.ElseExpression),
+		w.ExitExpressionCase(e),
 	)
 }
 
@@ -583,11 +601,12 @@ type ExpressionArithmetic struct {
 	Right    Expression
 }
 
-func (e *ExpressionArithmetic) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitExpressionArithmetic(e),
-		accept(visitor, e.Left),
-		accept(visitor, e.Right),
+func (e *ExpressionArithmetic) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionArithmetic(e),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		w.ExitExpressionArithmetic(e),
 	)
 }
 

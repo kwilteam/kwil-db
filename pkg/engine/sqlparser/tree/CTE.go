@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -12,10 +10,11 @@ type CTE struct {
 	Select  *SelectStmt
 }
 
-func (c *CTE) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitCTE(c),
-		accept(visitor, c.Select),
+func (c *CTE) Accept(w Walker) error {
+	return run(
+		w.EnterCTE(c),
+		accept(w, c.Select),
+		w.ExitCTE(c),
 	)
 }
 

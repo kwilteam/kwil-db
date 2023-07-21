@@ -1,7 +1,6 @@
 package tree
 
 import (
-	"errors"
 	"fmt"
 
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
@@ -12,11 +11,12 @@ type Insert struct {
 	InsertStmt *InsertStmt
 }
 
-func (ins *Insert) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitInsert(ins),
-		acceptMany(visitor, ins.CTE),
-		accept(visitor, ins.InsertStmt),
+func (ins *Insert) Accept(w Walker) error {
+	return run(
+		w.EnterInsert(ins),
+		acceptMany(w, ins.CTE),
+		accept(w, ins.InsertStmt),
+		w.ExitInsert(ins),
 	)
 }
 
@@ -58,20 +58,21 @@ type InsertStmt struct {
 	ReturningClause *ReturningClause
 }
 
-func (ins *InsertStmt) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitInsertStmt(ins),
+func (ins *InsertStmt) Accept(w Walker) error {
+	return run(
+		w.EnterInsertStmt(ins),
 		func() error {
 			for _, v := range ins.Values {
-				err := acceptMany(visitor, v)
+				err := acceptMany(w, v)
 				if err != nil {
 					return err
 				}
 			}
 			return nil
 		}(),
-		accept(visitor, ins.Upsert),
-		accept(visitor, ins.ReturningClause),
+		accept(w, ins.Upsert),
+		accept(w, ins.ReturningClause),
+		w.ExitInsertStmt(ins),
 	)
 }
 

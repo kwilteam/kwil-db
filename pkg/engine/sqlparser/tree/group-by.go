@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -11,11 +9,12 @@ type GroupBy struct {
 	Having      Expression
 }
 
-func (g *GroupBy) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitGroupBy(g),
-		acceptMany(visitor, g.Expressions),
-		accept(visitor, g.Having),
+func (g *GroupBy) Accept(w Walker) error {
+	return run(
+		w.EnterGroupBy(g),
+		acceptMany(w, g.Expressions),
+		accept(w, g.Having),
+		w.ExitGroupBy(g),
 	)
 }
 

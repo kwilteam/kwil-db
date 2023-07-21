@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -20,12 +18,13 @@ type Upsert struct {
 	Where          Expression
 }
 
-func (u *Upsert) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitUpsert(u),
-		accept(visitor, u.ConflictTarget),
-		acceptMany(visitor, u.Updates),
-		accept(visitor, u.Where),
+func (u *Upsert) Accept(w Walker) error {
+	return run(
+		w.EnterUpsert(u),
+		accept(w, u.ConflictTarget),
+		acceptMany(w, u.Updates),
+		accept(w, u.Where),
+		w.ExitUpsert(u),
 	)
 }
 

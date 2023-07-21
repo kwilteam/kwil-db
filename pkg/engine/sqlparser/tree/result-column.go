@@ -1,15 +1,13 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
 type ResultColumn interface {
 	resultColumn()
 	ToSQL() string
-	Accept(visitor Visitor) error
+	Accept(w Walker) error
 }
 
 type ResultColumnStar struct{}
@@ -18,8 +16,11 @@ func (r *ResultColumnStar) resultColumn() {}
 func (r *ResultColumnStar) ToSQL() string {
 	return "*"
 }
-func (r *ResultColumnStar) Accept(visitor Visitor) error {
-	return visitor.VisitResultColumnStar(r)
+func (r *ResultColumnStar) Accept(w Walker) error {
+	return run(
+		w.EnterResultColumnStar(r),
+		w.ExitResultColumnStar(r),
+	)
 }
 
 type ResultColumnExpression struct {
@@ -37,10 +38,11 @@ func (r *ResultColumnExpression) ToSQL() string {
 	}
 	return stmt.String()
 }
-func (r *ResultColumnExpression) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitResultColumnExpression(r),
-		accept(visitor, r.Expression),
+func (r *ResultColumnExpression) Accept(w Walker) error {
+	return run(
+		w.EnterResultColumnExpression(r),
+		accept(w, r.Expression),
+		w.ExitResultColumnExpression(r),
 	)
 }
 
@@ -56,6 +58,9 @@ func (r *ResultColumnTable) ToSQL() string {
 	stmt.Token.Asterisk()
 	return stmt.String()
 }
-func (r *ResultColumnTable) Accept(visitor Visitor) error {
-	return visitor.VisitResultColumnTable(r)
+func (r *ResultColumnTable) Accept(w Walker) error {
+	return run(
+		w.EnterResultColumnTable(r),
+		w.ExitResultColumnTable(r),
+	)
 }

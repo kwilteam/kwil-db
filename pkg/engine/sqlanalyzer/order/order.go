@@ -19,6 +19,8 @@ import (
 	- Primary keys are given precedence alphabetically (e.g. column "age" will be ordered before column "name")
 	- User provided ordering is given precedence over default ordering
 	- If the user orders a primary key column, it will override the default ordering for that column
+	- If the query is a compound select, then all of the returned terms are ordered, instead of the primary keys.
+	The returned terms are ordered in the order that they are passed
 
 	* From the SQLite docs (https://www.sqlite.org/lang_select.html#orderby)):
 
@@ -52,7 +54,7 @@ import (
 	-	Otherwise, if the ORDER BY expression is any other expression, it is evaluated and the returned value used
 	to order the output rows. If the SELECT statement is a simple SELECT, then an ORDER BY may contain any arbitrary
 	expressions. However, if the SELECT is a compound SELECT, then ORDER BY expressions that are not aliases to output
-	columns must be exactly the same as an expression used as an output column. // TODO: this is a big issue.  see notes from last night for potential solutions.
+	columns must be exactly the same as an expression used as an output column.
 
 	For the purposes of sorting rows, values are compared in the same way as for comparison expressions. The collation
 	sequence used to compare two text values is determined as follows:
@@ -77,9 +79,32 @@ import (
 	different SELECT statements in the compound.
 */
 
+// orderContext is context that is applicable for the entire lifecycle of an order by
 type orderContext struct {
-	MainTable    *types.Table
-	JoinedTables []*types.Table
+	// PrimaryUsedTables are the tables used within a select query
+	// if it is a compound select, then it is only the tables used in the first select core
+	PrimaryUsedTables []*types.Table
+	IsCompound        bool
+	ResultColumns     []tree.ResultColumn
+
+	// currentSelectPosition is the position of the select core in the broader compound select.
+	// starts at 0
+	currentSelectPosition uint8
+
+	Parent *orderContext
+}
+
+func newOrderContext(oldContext *orderContext) *orderContext {
+	return &orderContext{
+		PrimaryUsedTables: []*types.Table{},
+		ResultColumns:     []tree.ResultColumn{},
+		Parent:            oldContext,
+	}
+}
+
+type orderableTerm struct {
+	Table  string
+	Column string
 }
 
 func (o *orderContext) generateOrder(term *orderableTerm) (*tree.OrderingTerm, error) {
@@ -99,11 +124,8 @@ func (o *orderContext) generateOrder(term *orderableTerm) (*tree.OrderingTerm, e
 }
 
 func (o *orderContext) GetTable(name string) (*types.Table, error) {
-	if o.MainTable.Name == name {
-		return o.MainTable, nil
-	}
 
-	for _, tbl := range o.JoinedTables {
+	for _, tbl := range o.PrimaryUsedTables {
 		if tbl.Name == name {
 			return tbl, nil
 		}
@@ -114,7 +136,7 @@ func (o *orderContext) GetTable(name string) (*types.Table, error) {
 
 func (o *orderContext) requiredOrderingTerms() ([]*orderableTerm, error) {
 	orderingTerms := []*orderableTerm{}
-	orderedTables := orderTables(o.JoinedTables)
+	orderedTables := orderTables(o.PrimaryUsedTables)
 	for _, tbl := range orderedTables {
 		required, err := getRequiredOrderingTerms(tbl)
 		if err != nil {
@@ -135,6 +157,14 @@ func orderTables(tables []*types.Table) []*types.Table {
 	return tables
 }
 
+func orderColumns(columns []*types.Column) []*types.Column {
+	sort.Slice(columns, func(i, j int) bool {
+		return columns[i].Name < columns[j].Name
+	})
+
+	return columns
+}
+
 func getRequiredOrderingTerms(tbl *types.Table) ([]*orderableTerm, error) {
 	pks, err := tbl.GetPrimaryKey()
 	if err != nil {
@@ -151,4 +181,46 @@ func getRequiredOrderingTerms(tbl *types.Table) ([]*orderableTerm, error) {
 	}
 
 	return orderingTerms, nil
+}
+
+func (o *orderContext) getReturnedColumnOrderingTerms() []*tree.OrderingTerm {
+	terms := []*tree.OrderingTerm{}
+
+	for _, col := range o.ResultColumns {
+		switch c := col.(type) {
+		case *tree.ResultColumnExpression:
+			var orderingExpr tree.Expression // if aliased, we need to use the alias instead of the expression
+			if c.Alias != "" {
+				orderingExpr = &tree.ExpressionColumn{
+					Column: c.Alias,
+				}
+			} else {
+				orderingExpr = c.Expression
+			}
+
+			terms = append(terms, &tree.OrderingTerm{
+				Expression:   orderingExpr,
+				OrderType:    tree.OrderTypeAsc,
+				NullOrdering: tree.NullOrderingTypeLast,
+			})
+		case *tree.ResultColumnStar, *tree.ResultColumnTable:
+			tables := orderTables(o.PrimaryUsedTables)
+			for _, tbl := range tables {
+				columns := orderColumns(tbl.Columns)
+				for _, col := range columns {
+					terms = append(terms, &tree.OrderingTerm{
+						Expression: &tree.ExpressionColumn{
+							// intentionally leaving out "Table" here
+							// sqlite searches across compounded selects for matching columns
+							Column: col.Name,
+						},
+						OrderType:    tree.OrderTypeAsc,
+						NullOrdering: tree.NullOrderingTypeLast,
+					})
+				}
+			}
+		}
+	}
+
+	return terms
 }

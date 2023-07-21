@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -10,10 +8,11 @@ type ReturningClause struct {
 	Returned []*ReturningClauseColumn
 }
 
-func (r *ReturningClause) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitReturningClause(r),
-		acceptMany(visitor, r.Returned),
+func (r *ReturningClause) Accept(w Walker) error {
+	return run(
+		w.EnterReturningClause(r),
+		acceptMany(w, r.Returned),
+		w.ExitReturningClause(r),
 	)
 }
 
@@ -56,9 +55,10 @@ type ReturningClauseColumn struct {
 	Alias      string
 }
 
-func (r *ReturningClauseColumn) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitReturningClauseColumn(r),
-		accept(visitor, r.Expression),
+func (r *ReturningClauseColumn) Accept(w Walker) error {
+	return run(
+		w.EnterReturningClauseColumn(r),
+		accept(w, r.Expression),
+		w.ExitReturningClauseColumn(r),
 	)
 }

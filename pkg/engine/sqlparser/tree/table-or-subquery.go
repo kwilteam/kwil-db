@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"errors"
-
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -13,7 +11,7 @@ import (
 type TableOrSubquery interface {
 	ToSQL() string
 	tableOrSubquery()
-	Accept(visitor Visitor) error
+	Accept(w Walker) error
 }
 
 type TableOrSubqueryTable struct {
@@ -21,8 +19,11 @@ type TableOrSubqueryTable struct {
 	Alias string
 }
 
-func (t *TableOrSubqueryTable) Accept(visitor Visitor) error {
-	return visitor.VisitTableOrSubqueryTable(t)
+func (t *TableOrSubqueryTable) Accept(w Walker) error {
+	return run(
+		w.EnterTableOrSubqueryTable(t),
+		w.ExitTableOrSubqueryTable(t),
+	)
 }
 
 func (t *TableOrSubqueryTable) ToSQL() string {
@@ -48,10 +49,11 @@ type TableOrSubquerySelect struct {
 	Alias  string
 }
 
-func (t *TableOrSubquerySelect) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitTableOrSubquerySelect(t),
-		accept(visitor, t.Select),
+func (t *TableOrSubquerySelect) Accept(w Walker) error {
+	return run(
+		w.EnterTableOrSubquerySelect(t),
+		accept(w, t.Select),
+		w.ExitTableOrSubquerySelect(t),
 	)
 }
 
@@ -81,10 +83,11 @@ type TableOrSubqueryList struct {
 	TableOrSubqueries []TableOrSubquery
 }
 
-func (t *TableOrSubqueryList) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitTableOrSubqueryList(t),
-		acceptMany(visitor, t.TableOrSubqueries),
+func (t *TableOrSubqueryList) Accept(w Walker) error {
+	return run(
+		w.EnterTableOrSubqueryList(t),
+		acceptMany(w, t.TableOrSubqueries),
+		w.ExitTableOrSubqueryList(t),
 	)
 }
 
@@ -107,10 +110,11 @@ type TableOrSubqueryJoin struct {
 	JoinClause *JoinClause
 }
 
-func (t *TableOrSubqueryJoin) Accept(visitor Visitor) error {
-	return errors.Join(
-		visitor.VisitTableOrSubqueryJoin(t),
-		accept(visitor, t.JoinClause),
+func (t *TableOrSubqueryJoin) Accept(w Walker) error {
+	return run(
+		w.EnterTableOrSubqueryJoin(t),
+		accept(w, t.JoinClause),
+		w.ExitTableOrSubqueryJoin(t),
 	)
 }
 
