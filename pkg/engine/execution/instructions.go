@@ -76,7 +76,7 @@ func evalDMLPrepare(ctx *procedureContext, eng *Engine, args ...any) error {
 		}
 	}
 
-	preparedStmt, err := eng.db.Prepare(stmt)
+	preparedStmt, err := eng.db.Prepare(ctx.ctx, stmt)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %w", err)
 	}

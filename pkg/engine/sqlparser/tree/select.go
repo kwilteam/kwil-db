@@ -11,6 +11,15 @@ type Select struct {
 	SelectStmt *SelectStmt
 }
 
+func (s *Select) Accept(w Walker) error {
+	return run(
+		w.EnterSelect(s),
+		acceptMany(w, s.CTE),
+		accept(w, s.SelectStmt),
+		w.ExitSelect(s),
+	)
+}
+
 func (s *Select) ToSQL() (str string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -45,6 +54,16 @@ type SelectStmt struct {
 	Limit       *Limit
 }
 
+func (s *SelectStmt) Accept(w Walker) error {
+	return run(
+		w.EnterSelectStmt(s),
+		acceptMany(w, s.SelectCores),
+		accept(w, s.OrderBy),
+		accept(w, s.Limit),
+		w.ExitSelectStmt(s),
+	)
+}
+
 func (s *SelectStmt) ToSQL() (res string) {
 	stmt := sqlwriter.NewWriter()
 	for _, core := range s.SelectCores {
@@ -67,6 +86,18 @@ type SelectCore struct {
 	Where      Expression
 	GroupBy    *GroupBy
 	Compound   *CompoundOperator
+}
+
+func (s *SelectCore) Accept(w Walker) error {
+	return run(
+		w.EnterSelectCore(s),
+		acceptMany(w, s.Columns),
+		accept(w, s.From),
+		accept(w, s.Where),
+		accept(w, s.GroupBy),
+		accept(w, s.Compound),
+		w.ExitSelectCore(s),
+	)
 }
 
 func (s *SelectCore) ToSQL() string {
@@ -116,6 +147,14 @@ type FromClause struct {
 	JoinClause *JoinClause
 }
 
+func (f *FromClause) Accept(w Walker) error {
+	return run(
+		w.EnterFromClause(f),
+		accept(w, f.JoinClause),
+		w.ExitFromClause(f),
+	)
+}
+
 func (f *FromClause) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 	stmt.Token.From()
@@ -149,6 +188,13 @@ func (c *CompoundOperatorType) ToSQL() string {
 
 type CompoundOperator struct {
 	Operator CompoundOperatorType
+}
+
+func (c *CompoundOperator) Accept(w Walker) error {
+	return run(
+		w.EnterCompoundOperator(c),
+		w.ExitCompoundOperator(c),
+	)
 }
 
 func (c *CompoundOperator) ToSQL() string {

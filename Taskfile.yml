@@ -83,14 +83,14 @@ tasks:
     cmds:
       # need to run after protobuf is compiled
       - task: vendor
-      # pass any args to build debug image, e.g. task docker:kwild -- debug
-      - ./scripts/build/docker kwild {{.VARIANT}}
+      # pass any args to build flavored image, e.g. task build:docker -- debug
+      - ./scripts/build/docker kwild {{.CLI_ARGS}} {{.VARIANT}}
       - task: vendor:clean
 
   publish:dockerhub:
     desc: Publish docker image to dockerhub
     deps: [ pb:compile:v1]
-    cmds: 
+    cmds:
       - task: vendor
       - TAG={{.TAG}} ./scripts/publish/dockerhub
       - task: vendor:clean

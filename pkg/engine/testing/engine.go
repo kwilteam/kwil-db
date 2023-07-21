@@ -46,7 +46,7 @@ func (t *testDbOpener) Open(name, path string, l log.Logger) (engine.Datastore, 
 
 	t.teardowns = append(t.teardowns, teardown)
 
-	return &datastoreAdapter{ds}, nil
+	return ds, nil
 }
 
 func (t *testDbOpener) Teardown() error {

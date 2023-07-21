@@ -1,11 +1,21 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 type CTE struct {
 	Table   string
 	Columns []string
 	Select  *SelectStmt
+}
+
+func (c *CTE) Accept(w Walker) error {
+	return run(
+		w.EnterCTE(c),
+		accept(w, c.Select),
+		w.ExitCTE(c),
+	)
 }
 
 func (c *CTE) ToSQL() string {

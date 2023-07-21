@@ -70,13 +70,13 @@ func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string,
 		}
 	}()
 
-	db, err := metadataDB.NewDB(ctx, &metadataDBAdapter{datastore})
+	db, err := metadataDB.NewDB(ctx, datastore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metadata db: %w", err)
 	}
 
 	ds, err = dataset.Builder().
-		WithDatastore(&datasetDBAdapter{db}).
+		WithDatastore(db).
 		WithProcedures(schema.Procedures...).
 		WithTables(schema.Tables...).
 		WithInitializers(e.getInitializers()).

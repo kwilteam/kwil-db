@@ -1,6 +1,8 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 // UpdateSetClause is a clause that represents the SET clause in an UPDATE statement.
 // This does NOT include the SET keyword.
@@ -8,6 +10,14 @@ import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writ
 type UpdateSetClause struct {
 	Columns    []string
 	Expression Expression
+}
+
+func (u *UpdateSetClause) Accept(w Walker) error {
+	return run(
+		w.EnterUpdateSetClause(u),
+		accept(w, u.Expression),
+		w.ExitUpdateSetClause(u),
+	)
 }
 
 func (u *UpdateSetClause) ToSQL() string {

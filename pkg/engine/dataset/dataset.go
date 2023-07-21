@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -26,7 +27,6 @@ type Dataset struct {
 	// name is the name of the dataset
 	name string
 	// allowMissingExtensions will let a dataset load, even if required extension initializers are not provided
-	// default is true
 	allowMissingExtensions bool
 }
 
@@ -200,4 +200,8 @@ func (d *Dataset) Delete() error {
 // Metadata returns the metadata for the dataset.
 func (d *Dataset) Metadata() (name, owner string) {
 	return d.name, d.owner
+}
+
+func (d *Dataset) Savepoint() (sql.Savepoint, error) {
+	return d.db.Savepoint()
 }

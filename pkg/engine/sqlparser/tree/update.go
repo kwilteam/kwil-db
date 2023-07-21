@@ -12,6 +12,15 @@ type Update struct {
 	UpdateStmt *UpdateStmt
 }
 
+func (u *Update) Accept(w Walker) error {
+	return run(
+		w.EnterUpdate(u),
+		acceptMany(w, u.CTE),
+		accept(w, u.UpdateStmt),
+		w.ExitUpdate(u),
+	)
+}
+
 func (u *Update) ToSQL() (str string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -49,6 +58,18 @@ type UpdateStmt struct {
 	From               *FromClause
 	Where              Expression
 	Returning          *ReturningClause
+}
+
+func (u *UpdateStmt) Accept(w Walker) error {
+	return run(
+		w.EnterUpdateStmt(u),
+		accept(w, u.QualifiedTableName),
+		acceptMany(w, u.UpdateSetClause),
+		accept(w, u.From),
+		accept(w, u.Where),
+		accept(w, u.Returning),
+		w.ExitUpdateStmt(u),
+	)
 }
 
 type UpdateOr string

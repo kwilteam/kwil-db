@@ -11,6 +11,15 @@ type Insert struct {
 	InsertStmt *InsertStmt
 }
 
+func (ins *Insert) Accept(w Walker) error {
+	return run(
+		w.EnterInsert(ins),
+		acceptMany(w, ins.CTE),
+		accept(w, ins.InsertStmt),
+		w.ExitInsert(ins),
+	)
+}
+
 func (ins *Insert) ToSQL() (str string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -47,6 +56,24 @@ type InsertStmt struct {
 	Values          [][]Expression
 	Upsert          *Upsert
 	ReturningClause *ReturningClause
+}
+
+func (ins *InsertStmt) Accept(w Walker) error {
+	return run(
+		w.EnterInsertStmt(ins),
+		func() error {
+			for _, v := range ins.Values {
+				err := acceptMany(w, v)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}(),
+		accept(w, ins.Upsert),
+		accept(w, ins.ReturningClause),
+		w.ExitInsertStmt(ins),
+	)
 }
 
 type InsertType uint8

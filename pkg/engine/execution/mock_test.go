@@ -12,7 +12,7 @@ type mockDatastore struct {
 	Identifier string
 }
 
-func (m *mockDatastore) Prepare(query string) (execution.PreparedStatement, error) {
+func (m *mockDatastore) Prepare(ctx context.Context, uery string) (execution.PreparedStatement, error) {
 	return &mockPreparedStatement{}, nil
 }
 

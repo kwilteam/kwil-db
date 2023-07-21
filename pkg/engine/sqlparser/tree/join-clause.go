@@ -52,6 +52,15 @@ type JoinClause struct {
 	Joins           []*JoinPredicate
 }
 
+func (j *JoinClause) Accept(w Walker) error {
+	return run(
+		w.EnterJoinClause(j),
+		accept(w, j.TableOrSubquery),
+		acceptMany(w, j.Joins),
+		w.ExitJoinClause(j),
+	)
+}
+
 func (j *JoinClause) ToSQL() string {
 	if j.TableOrSubquery == nil {
 		panic("join table or subquery cannot be nil")
@@ -70,6 +79,16 @@ type JoinPredicate struct {
 	JoinOperator *JoinOperator
 	Table        TableOrSubquery
 	Constraint   Expression
+}
+
+func (j *JoinPredicate) Accept(w Walker) error {
+	return run(
+		w.EnterJoinPredicate(j),
+		accept(w, j.JoinOperator),
+		accept(w, j.Table),
+		accept(w, j.Constraint),
+		w.ExitJoinPredicate(j),
+	)
 }
 
 func (j *JoinPredicate) ToSQL() string {
@@ -99,6 +118,13 @@ type JoinOperator struct {
 	Natural  bool
 	JoinType JoinType
 	Outer    bool
+}
+
+func (j *JoinOperator) Accept(w Walker) error {
+	return run(
+		w.EnterJoinOperator(j),
+		w.ExitJoinOperator(j),
+	)
 }
 
 type JoinType uint8
