@@ -6,7 +6,7 @@ type joinVisitor struct {
 	tree.Walker
 }
 
-func NewJoinVisitor() tree.Walker {
+func NewJoinWalker() tree.Walker {
 	return &joinVisitor{
 		Walker: tree.NewBaseWalker(),
 	}
