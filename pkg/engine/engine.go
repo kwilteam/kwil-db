@@ -15,13 +15,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/master"
 )
 
-// TODO: this is a stub. delete it
-type IEngine interface {
-	CreateDataset(ctx context.Context, name string, owner string, schema *Schema) (finalErr error)
-	ListDatasets(ctx context.Context, owner string) ([]string, error)
-	Close() error
-}
-
 type Engine struct {
 	master     MasterDB
 	name       string
@@ -70,7 +63,7 @@ func (e *Engine) openMasterDB(ctx context.Context) error {
 		return err
 	}
 
-	e.master, err = master.New(ctx, &masterDbAdapter{ds})
+	e.master, err = master.New(ctx, ds)
 	return err
 }
 
@@ -87,12 +80,12 @@ func (e *Engine) openStoredDatasets(ctx context.Context) error {
 			return err
 		}
 
-		db, err := metadataDB.NewDB(ctx, &metadataDBAdapter{datastore})
+		db, err := metadataDB.NewDB(ctx, datastore)
 		if err != nil {
 			return err
 		}
 
-		ds, err := dataset.OpenDataset(ctx, &datasetDBAdapter{db},
+		ds, err := dataset.OpenDataset(ctx, db,
 			dataset.WithAvailableExtensions(e.getInitializers()),
 			dataset.Named(datasetInfo.Name),
 			dataset.OwnedBy(datasetInfo.Owner),

@@ -11,6 +11,13 @@ type AggregateFunc struct {
 	AnySQLFunction
 }
 
+func (s *AggregateFunc) Accept(w Walker) error {
+	return run(
+		w.EnterAggregateFunc(s),
+		w.ExitAggregateFunc(s),
+	)
+}
+
 // stringDistinct returns the string representation of the function with the
 // given arguments, prepended by the DISTINCT keyword.
 func (s *AggregateFunc) stringDistinct(exprs ...Expression) string {

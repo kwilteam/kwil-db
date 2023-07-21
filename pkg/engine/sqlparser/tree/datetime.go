@@ -104,6 +104,13 @@ type DateTimeFunction struct {
 	AnySQLFunction
 }
 
+func (d *DateTimeFunction) Accept(w Walker) error {
+	return run(
+		w.EnterDateTimeFunc(d),
+		w.ExitDateTimeFunc(d),
+	)
+}
+
 var (
 	FunctionSTRFTIME = DateTimeFunction{AnySQLFunction{
 		FunctionName: "strftime",

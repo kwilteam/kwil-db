@@ -2,6 +2,8 @@ package master
 
 import (
 	"context"
+
+	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type Datastore interface {
@@ -10,10 +12,5 @@ type Datastore interface {
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 	TableExists(ctx context.Context, table string) (bool, error)
 	Delete() error
-	Savepoint() (Savepoint, error)
-}
-
-type Savepoint interface {
-	Rollback() error
-	Commit() error
+	Savepoint() (sql.Savepoint, error)
 }

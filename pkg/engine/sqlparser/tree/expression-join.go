@@ -40,7 +40,7 @@ package tree
 
 	Each side of the join condition will be evaluated recursively
 
-	There are 4 states that an expression can be in:
+	There are 3 states that an expression can be in:
 	- Invalid: The expression automatically disqualifies the join
 	- ContainsColumn: The expressions contains a column, and therefore can be used as one side of a join condition
 	- Valid: The expression is a binary comparison where each side is 'ContainsColumn', joined with an "=", and therefore can be used as a join condition
@@ -135,9 +135,5 @@ func (e *ExpressionArithmetic) joinable() joinableStatus {
 		return joinableStatusContainsColumn
 	}
 
-	return joinableStatusInvalid
-}
-
-func (e *ExpressionRaise) joinable() joinableStatus {
 	return joinableStatusInvalid
 }

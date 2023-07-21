@@ -6,15 +6,16 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	"github.com/kwilteam/kwil-db/pkg/engine/master"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type Datastore interface {
 	Close() error
 	Delete() error
 	Execute(ctx context.Context, stmt string, args map[string]any) error
-	Prepare(stmt string) (Statement, error)
+	Prepare(stmt string) (sql.Statement, error)
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
-	Savepoint() (Savepoint, error)
+	Savepoint() (sql.Savepoint, error)
 	TableExists(ctx context.Context, table string) (bool, error)
 }
 
@@ -36,6 +37,7 @@ type Dataset interface {
 	Delete() error
 	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
 	Execute(ctx context.Context, procedure string, args []map[string]any, opts *dataset.TxOpts) ([]map[string]any, error)
+	Savepoint() (sql.Savepoint, error)
 }
 
 type MasterDB interface {

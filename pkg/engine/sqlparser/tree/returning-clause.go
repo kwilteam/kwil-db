@@ -1,9 +1,19 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 type ReturningClause struct {
 	Returned []*ReturningClauseColumn
+}
+
+func (r *ReturningClause) Accept(w Walker) error {
+	return run(
+		w.EnterReturningClause(r),
+		acceptMany(w, r.Returned),
+		w.ExitReturningClause(r),
+	)
 }
 
 func (r *ReturningClause) ToSQL() string {
@@ -43,4 +53,12 @@ type ReturningClauseColumn struct {
 	All        bool
 	Expression Expression
 	Alias      string
+}
+
+func (r *ReturningClauseColumn) Accept(w Walker) error {
+	return run(
+		w.EnterReturningClauseColumn(r),
+		accept(w, r.Expression),
+		w.ExitReturningClauseColumn(r),
+	)
 }

@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
 )
@@ -90,7 +91,7 @@ func (s *SqliteClient) Query(ctx context.Context, query string, args map[string]
 }
 
 // Prepare prepares a statement for execution, and returns a Statement.
-func (s *SqliteClient) Prepare(stmt string) (*Statement, error) {
+func (s *SqliteClient) Prepare(stmt string) (sql.Statement, error) {
 	sqliteStmt, err := s.conn.Prepare(stmt)
 	if err != nil {
 		return nil, err
@@ -115,7 +116,7 @@ func (s *SqliteClient) Delete() error {
 	return s.conn.Delete()
 }
 
-func (s *SqliteClient) Savepoint() (*Savepoint, error) {
+func (s *SqliteClient) Savepoint() (sql.Savepoint, error) {
 	sp, err := s.conn.Savepoint()
 	if err != nil {
 		return nil, err

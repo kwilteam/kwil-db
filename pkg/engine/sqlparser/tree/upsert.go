@@ -1,6 +1,8 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 type UpsertType uint8
 
@@ -14,6 +16,16 @@ type Upsert struct {
 	Type           UpsertType
 	Updates        []*UpdateSetClause
 	Where          Expression
+}
+
+func (u *Upsert) Accept(w Walker) error {
+	return run(
+		w.EnterUpsert(u),
+		accept(w, u.ConflictTarget),
+		acceptMany(w, u.Updates),
+		accept(w, u.Where),
+		w.ExitUpsert(u),
+	)
 }
 
 func (u *Upsert) ToSQL() string {

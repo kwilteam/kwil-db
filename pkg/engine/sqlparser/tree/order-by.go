@@ -1,9 +1,19 @@
 package tree
 
-import sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+import (
+	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
+)
 
 type OrderBy struct {
 	OrderingTerms []*OrderingTerm
+}
+
+func (o *OrderBy) Accept(w Walker) error {
+	return run(
+		w.EnterOrderBy(o),
+		acceptMany(w, o.OrderingTerms),
+		w.ExitOrderBy(o),
+	)
 }
 
 func (o *OrderBy) ToSQL() string {
@@ -27,6 +37,14 @@ type OrderingTerm struct {
 	Collation    CollationType
 	OrderType    OrderType
 	NullOrdering NullOrderingType
+}
+
+func (o *OrderingTerm) Accept(w Walker) error {
+	return run(
+		w.EnterOrderingTerm(o),
+		accept(w, o.Expression),
+		w.ExitOrderingTerm(o),
+	)
 }
 
 func (o *OrderingTerm) ToSQL() string {

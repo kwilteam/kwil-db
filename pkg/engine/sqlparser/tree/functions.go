@@ -76,6 +76,13 @@ type ScalarFunction struct {
 	AnySQLFunction
 }
 
+func (s *ScalarFunction) Accept(w Walker) error {
+	return run(
+		w.EnterScalarFunc(s),
+		w.ExitScalarFunc(s),
+	)
+}
+
 var (
 	FunctionABS = ScalarFunction{AnySQLFunction{
 		FunctionName: "abs",

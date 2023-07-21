@@ -264,7 +264,10 @@ func Test_SessionPersistence(t *testing.T) {
 	}
 
 	// delete the session
-	ses.Delete()
+	err = ses.Delete()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// check that the row is still there
 	results, err := db.Query(ctx, "SELECT COUNT(*) FROM users")

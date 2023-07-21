@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/sql"
 	sqlTesting "github.com/kwilteam/kwil-db/pkg/sql/testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/master"
@@ -168,6 +169,6 @@ type databaseAdapter struct {
 	sqlTesting.TestSqliteClient
 }
 
-func (d *databaseAdapter) Savepoint() (master.Savepoint, error) {
+func (d *databaseAdapter) Savepoint() (sql.Savepoint, error) {
 	return d.TestSqliteClient.Savepoint()
 }

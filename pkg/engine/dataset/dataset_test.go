@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
-	"github.com/kwilteam/kwil-db/pkg/engine/db"
 	"github.com/kwilteam/kwil-db/pkg/engine/db/test"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/stretchr/testify/assert"
@@ -290,7 +289,7 @@ func Test_Execute(t *testing.T) {
 				WithProcedures(tt.fields.procedures...).
 				WithInitializers(availableExtensions).
 				WithExtensions(tt.fields.extensionInitialization...).
-				WithDatastore(databaseWrapper{database}).
+				WithDatastore(database).
 				Named(datasetName).OwnedBy(callerAddress).
 				Build(ctx)
 			if tt.wantBuilderErr {
@@ -321,16 +320,4 @@ func Test_Execute(t *testing.T) {
 			assert.EqualValues(t, tt.expectedOutputs, outputs, fmt.Sprintf("expected %v, got %v", tt.expectedOutputs, outputs))
 		})
 	}
-}
-
-type databaseWrapper struct {
-	*db.DB
-}
-
-func (d databaseWrapper) Prepare(stmt string) (dataset.Statement, error) {
-	return d.DB.Prepare(stmt)
-}
-
-func (d databaseWrapper) Savepoint() (dataset.Savepoint, error) {
-	return d.DB.Savepoint()
 }

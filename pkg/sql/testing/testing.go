@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
 )
@@ -29,11 +30,11 @@ type wrappedSqliteClient struct {
 	*client.SqliteClient
 }
 
-func (w *wrappedSqliteClient) Prepare(query string) (Statement, error) {
+func (w *wrappedSqliteClient) Prepare(query string) (sql.Statement, error) {
 	return w.SqliteClient.Prepare(query)
 }
 
-func (w *wrappedSqliteClient) Savepoint() (Savepoint, error) {
+func (w *wrappedSqliteClient) Savepoint() (sql.Savepoint, error) {
 	return w.SqliteClient.Savepoint()
 }
 
@@ -50,18 +51,8 @@ type TestSqliteClient interface {
 	Close() error
 	Delete() error
 	Execute(context.Context, string, map[string]any) error
-	Prepare(string) (Statement, error)
+	Prepare(string) (sql.Statement, error)
 	Query(context.Context, string, map[string]any) ([]map[string]any, error)
-	Savepoint() (Savepoint, error)
+	Savepoint() (sql.Savepoint, error)
 	TableExists(context.Context, string) (bool, error)
-}
-
-type Statement interface {
-	Close() error
-	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)
-}
-
-type Savepoint interface {
-	Commit() error
-	Rollback() error
 }

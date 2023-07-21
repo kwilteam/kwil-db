@@ -12,26 +12,41 @@ import (
 type Expression interface {
 	isExpression() // private function to prevent external packages from implementing this interface
 	ToSQL() string
+	Accept(w Walker) error
 	joinable
 }
 
-/*
-// Literal, BindParameter, ExpressionSelect
-type InsertExpression interface {
-	Expression
-	// Insert doesn't do anything, but it makes it clear to package consumers what can be used in an INSERT statement
-	Insert()
-}*/
+type expressionBase struct{}
+
+func (e *expressionBase) isExpression() {}
+
+func (e *expressionBase) joinable() joinableStatus {
+	return joinableStatusInvalid
+}
+
+func (e *expressionBase) ToSQL() string {
+	panic("expressionBase: ToSQL() must be implemented by child")
+}
+
+func (e *expressionBase) Accept(w Walker) error {
+	return fmt.Errorf("expressionBase: Accept() must be implemented by child")
+}
 
 type Wrapped bool
 
 type ExpressionLiteral struct {
+	expressionBase
 	Wrapped
 	Value string
 }
 
-func (e *ExpressionLiteral) Insert()       {}
-func (e *ExpressionLiteral) isExpression() {}
+func (e *ExpressionLiteral) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionLiteral(e),
+		w.ExitExpressionLiteral(e),
+	)
+}
+
 func (e *ExpressionLiteral) ToSQL() string {
 	validateIsNonStringLiteral(e.Value)
 	stmt := sqlwriter.NewWriter()
@@ -74,12 +89,18 @@ func validateIsNonStringLiteral(str string) {
 }
 
 type ExpressionBindParameter struct {
+	expressionBase
 	Wrapped
 	Parameter string
 }
 
-func (e *ExpressionBindParameter) Insert()       {}
-func (e *ExpressionBindParameter) isExpression() {}
+func (e *ExpressionBindParameter) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionBindParameter(e),
+		w.ExitExpressionBindParameter(e),
+	)
+}
+
 func (e *ExpressionBindParameter) ToSQL() string {
 	if e.Parameter == "" {
 		panic("ExpressionBindParameter: bind parameter cannot be empty")
@@ -100,13 +121,19 @@ func (e *ExpressionBindParameter) ToSQL() string {
 }
 
 type ExpressionColumn struct {
+	expressionBase
 	Wrapped
 	Table  string
 	Column string
 }
 
-func (e *ExpressionColumn) Insert()       {}
-func (e *ExpressionColumn) isExpression() {}
+func (e *ExpressionColumn) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionColumn(e),
+		w.ExitExpressionColumn(e),
+	)
+}
+
 func (e *ExpressionColumn) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
@@ -128,12 +155,18 @@ func (e *ExpressionColumn) ToSQL() string {
 }
 
 type ExpressionUnary struct {
+	expressionBase
 	Wrapped
 	Operator UnaryOperator
 	Operand  Expression
 }
 
-func (e *ExpressionUnary) isExpression() {}
+func (e *ExpressionUnary) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionUnary(e),
+		w.ExitExpressionUnary(e),
+	)
+}
 
 func (e *ExpressionUnary) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
@@ -148,13 +181,22 @@ func (e *ExpressionUnary) ToSQL() string {
 }
 
 type ExpressionBinaryComparison struct {
+	expressionBase
 	Wrapped
 	Left     Expression
 	Operator BinaryOperator
 	Right    Expression
 }
 
-func (e *ExpressionBinaryComparison) isExpression() {}
+func (e *ExpressionBinaryComparison) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionBinaryComparison(e),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		w.ExitExpressionBinaryComparison(e),
+	)
+}
+
 func (e *ExpressionBinaryComparison) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
@@ -169,14 +211,21 @@ func (e *ExpressionBinaryComparison) ToSQL() string {
 }
 
 type ExpressionFunction struct {
+	expressionBase
 	Wrapped
 	Function SQLFunction
 	Inputs   []Expression
 	Distinct bool
 }
 
-func (e *ExpressionFunction) isExpression() {}
-func (e *ExpressionFunction) Insert()       {}
+func (e *ExpressionFunction) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionFunction(e),
+		acceptMany(w, e.Inputs),
+		w.ExitExpressionFunction(e),
+	)
+}
+
 func (e *ExpressionFunction) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
@@ -201,12 +250,19 @@ func (e *ExpressionFunction) ToSQL() string {
 }
 
 type ExpressionList struct {
+	expressionBase
 	Wrapped
 	Expressions []Expression
 }
 
-func (e *ExpressionList) isExpression() {}
-func (e *ExpressionList) Insert()       {}
+func (e *ExpressionList) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionList(e),
+		acceptMany(w, e.Expressions),
+		w.ExitExpressionList(e),
+	)
+}
+
 func (e *ExpressionList) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
@@ -226,12 +282,20 @@ func (e *ExpressionList) ToSQL() string {
 }
 
 type ExpressionCollate struct {
+	expressionBase
 	Wrapped
 	Expression Expression
 	Collation  CollationType
 }
 
-func (e *ExpressionCollate) isExpression() {}
+func (e *ExpressionCollate) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionCollate(e),
+		accept(w, e.Expression),
+		w.ExitExpressionCollate(e),
+	)
+}
+
 func (e *ExpressionCollate) ToSQL() string {
 	if e.Expression == nil {
 		panic("ExpressionCollate: expression cannot be nil")
@@ -253,6 +317,7 @@ func (e *ExpressionCollate) ToSQL() string {
 }
 
 type ExpressionStringCompare struct {
+	expressionBase
 	Wrapped
 	Left     Expression
 	Operator StringOperator
@@ -260,7 +325,16 @@ type ExpressionStringCompare struct {
 	Escape   Expression // can only be used with LIKE or NOT LIKE
 }
 
-func (e *ExpressionStringCompare) isExpression() {}
+func (e *ExpressionStringCompare) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionStringCompare(e),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		accept(w, e.Escape),
+		w.ExitExpressionStringCompare(e),
+	)
+}
+
 func (e *ExpressionStringCompare) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
@@ -283,12 +357,20 @@ func (e *ExpressionStringCompare) ToSQL() string {
 }
 
 type ExpressionIsNull struct {
+	expressionBase
 	Wrapped
 	Expression Expression
 	IsNull     bool
 }
 
-func (e *ExpressionIsNull) isExpression() {}
+func (e *ExpressionIsNull) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionIsNull(e),
+		accept(w, e.Expression),
+		w.ExitExpressionIsNull(e),
+	)
+}
+
 func (e *ExpressionIsNull) ToSQL() string {
 	if e.Expression == nil {
 		panic("ExpressionIsNull: expression cannot be nil")
@@ -310,13 +392,22 @@ func (e *ExpressionIsNull) ToSQL() string {
 }
 
 type ExpressionDistinct struct {
+	expressionBase
 	Wrapped
 	Left  Expression
 	Right Expression
 	IsNot bool
 }
 
-func (e *ExpressionDistinct) isExpression() {}
+func (e *ExpressionDistinct) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionDistinct(e),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		w.ExitExpressionDistinct(e),
+	)
+}
+
 func (e *ExpressionDistinct) ToSQL() string {
 	if e.Left == nil {
 		panic("ExpressionDistinct: left expression cannot be nil")
@@ -342,6 +433,7 @@ func (e *ExpressionDistinct) ToSQL() string {
 }
 
 type ExpressionBetween struct {
+	expressionBase
 	Wrapped
 	Expression Expression
 	NotBetween bool
@@ -349,7 +441,16 @@ type ExpressionBetween struct {
 	Right      Expression
 }
 
-func (e *ExpressionBetween) isExpression() {}
+func (e *ExpressionBetween) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionBetween(e),
+		accept(w, e.Expression),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		w.ExitExpressionBetween(e),
+	)
+}
+
 func (e *ExpressionBetween) ToSQL() string {
 	if e.Expression == nil {
 		panic("ExpressionBetween: expression cannot be nil")
@@ -379,14 +480,21 @@ func (e *ExpressionBetween) ToSQL() string {
 }
 
 type ExpressionSelect struct {
+	expressionBase
 	Wrapped
 	IsNot    bool
 	IsExists bool
 	Select   *SelectStmt
 }
 
-func (e *ExpressionSelect) Insert()       {}
-func (e *ExpressionSelect) isExpression() {}
+func (e *ExpressionSelect) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionSelect(e),
+		accept(w, e.Select),
+		w.ExitExpressionSelect(e),
+	)
+}
+
 func (e *ExpressionSelect) ToSQL() string {
 	e.check()
 
@@ -424,13 +532,35 @@ func (e *ExpressionSelect) check() {
 }
 
 type ExpressionCase struct {
+	expressionBase
 	Wrapped
 	CaseExpression Expression
 	WhenThenPairs  [][2]Expression
 	ElseExpression Expression
 }
 
-func (e *ExpressionCase) isExpression() {}
+func (e *ExpressionCase) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionCase(e),
+		accept(w, e.CaseExpression),
+		func() error {
+			for _, whenThen := range e.WhenThenPairs {
+				err := accept(w, whenThen[0])
+				if err != nil {
+					return err
+				}
+				err = accept(w, whenThen[1])
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}(),
+		accept(w, e.ElseExpression),
+		w.ExitExpressionCase(e),
+	)
+}
+
 func (e *ExpressionCase) ToSQL() string {
 	if len(e.WhenThenPairs) == 0 {
 		panic("ExpressionCase: must contain at least 1 when-then pair")
@@ -464,13 +594,22 @@ func (e *ExpressionCase) ToSQL() string {
 }
 
 type ExpressionArithmetic struct {
+	expressionBase
 	Wrapped
 	Left     Expression
 	Operator ArithmeticOperator
 	Right    Expression
 }
 
-func (e *ExpressionArithmetic) isExpression() {}
+func (e *ExpressionArithmetic) Accept(w Walker) error {
+	return run(
+		w.EnterExpressionArithmetic(e),
+		accept(w, e.Left),
+		accept(w, e.Right),
+		w.ExitExpressionArithmetic(e),
+	)
+}
+
 func (e *ExpressionArithmetic) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 
@@ -487,98 +626,4 @@ func (e *ExpressionArithmetic) ToSQL() string {
 	stmt.WriteString(e.Right.ToSQL())
 
 	return stmt.String()
-}
-
-// ExpressionRaise is a special expression that is used to raise an error.
-type ExpressionRaise struct {
-	Wrapped
-	Type    RaiseType
-	Message string
-}
-
-func (e *ExpressionRaise) isExpression() {}
-
-func (e *ExpressionRaise) ToSQL() string {
-	err := e.Type.Clean()
-	if err != nil {
-		panic(err)
-	}
-
-	err = e.checkMessage()
-	if err != nil {
-		panic(err)
-	}
-
-	stmt := sqlwriter.NewWriter()
-
-	if e.Wrapped {
-		stmt.WrapParen()
-	}
-
-	stmt.Token.Raise()
-	stmt.Token.Lparen()
-
-	stmt.WriteString(e.Type.String())
-
-	if e.Type != RAISETYPE_IGNORE {
-		stmt.Token.Comma()
-		stmt.WriteString(e.Message)
-	}
-
-	stmt.Token.Rparen()
-
-	return stmt.String()
-}
-
-func (e *ExpressionRaise) checkMessage() error {
-	canHaveMessage := true
-	if e.Type == RAISETYPE_IGNORE {
-		canHaveMessage = false
-	}
-
-	// check that message begins and ends with single quotes
-	if canHaveMessage && !isStringLiteral(e.Message) {
-		return fmt.Errorf("message must be a string literal. received: %s", e.Message)
-	}
-
-	if !canHaveMessage && e.Message != "" {
-		return fmt.Errorf("cannot have message with RaiseType %s", e.Type)
-	}
-
-	return nil
-}
-
-// RaiseType is the type of error to raise.
-// If a RaiseType is IGNORE, then it cannot have a message.
-type RaiseType string
-
-const (
-	RAISETYPE_IGNORE   RaiseType = "IGNORE"
-	RAISETYPE_ROLLBACK RaiseType = "ROLLBACK"
-	RAISETYPE_ABORT    RaiseType = "ABORT"
-	RAISETYPE_FAIL     RaiseType = "FAIL"
-)
-
-func (r RaiseType) String() string {
-	return string(r)
-}
-
-func (r *RaiseType) IsValid() bool {
-	upper := strings.ToUpper(string(*r))
-
-	return upper == RAISETYPE_IGNORE.String() ||
-		upper == RAISETYPE_ROLLBACK.String() ||
-		upper == RAISETYPE_ABORT.String() ||
-		upper == RAISETYPE_FAIL.String()
-}
-
-func (r *RaiseType) Clean() error {
-	upper := strings.ToUpper(string(*r))
-
-	if !r.IsValid() {
-		return fmt.Errorf("invalid RaiseType. received: %s", *r)
-	}
-
-	*r = RaiseType(upper)
-	return nil
 }

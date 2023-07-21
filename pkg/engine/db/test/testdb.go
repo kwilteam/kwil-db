@@ -13,22 +13,10 @@ func OpenTestDB(ctx context.Context) (*db.DB, func() error, error) {
 		return nil, nil, err
 	}
 
-	datastore, err := db.NewDB(ctx, databaseAdapter{testDb})
+	datastore, err := db.NewDB(ctx, testDb)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return datastore, closeFunc, nil
-}
-
-type databaseAdapter struct {
-	sqlTesting.TestSqliteClient
-}
-
-func (d databaseAdapter) Prepare(query string) (db.Statement, error) {
-	return d.TestSqliteClient.Prepare(query)
-}
-
-func (d databaseAdapter) Savepoint() (db.Savepoint, error) {
-	return d.TestSqliteClient.Savepoint()
 }

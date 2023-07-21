@@ -11,6 +11,15 @@ type Delete struct {
 	DeleteStmt *DeleteStmt
 }
 
+func (d *Delete) Accept(w Walker) error {
+	return run(
+		w.EnterDelete(d),
+		acceptMany(w, d.CTE),
+		accept(w, d.DeleteStmt),
+		w.ExitDelete(d),
+	)
+}
+
 func (d *Delete) ToSQL() (str string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -43,6 +52,16 @@ type DeleteStmt struct {
 	QualifiedTableName *QualifiedTableName
 	Where              Expression
 	Returning          *ReturningClause
+}
+
+func (d *DeleteStmt) Accept(w Walker) error {
+	return run(
+		w.EnterDeleteStmt(d),
+		accept(w, d.QualifiedTableName),
+		accept(w, d.Where),
+		accept(w, d.Returning),
+		w.ExitDeleteStmt(d),
+	)
 }
 
 func (d *DeleteStmt) ToSQL() string {
