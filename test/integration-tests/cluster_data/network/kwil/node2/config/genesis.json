@@ -30,15 +30,6 @@
       },
       "power": "1",
       "name": "validator-0"
-    },
-    {
-      "address": "046B6D67EBC04BDD5430562586D4A99F410C7B33",
-      "pub_key": {
-        "type": "tendermint/PubKeyEd25519",
-        "value": "R0gA+mgclmqknbiTJrnVPfE0i9kCgSNoxJkHqpwh4f0="
-      },
-      "power": "1",
-      "name": "validator-1"
     }
   ],
   "app_hash": ""

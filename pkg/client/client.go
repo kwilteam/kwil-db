@@ -25,7 +25,7 @@ import (
 
 type Client struct {
 	client           *grpcClient.Client
-	bcClient         *rpchttp.HTTP
+	BcClient         *rpchttp.HTTP
 	datasets         map[string]*entity.Schema
 	PrivateKey       *ecdsa.PrivateKey
 	ChainCode        chainCodes.ChainCode
@@ -99,7 +99,7 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 		opt(c)
 	}
 
-	c.bcClient, err = rpchttp.New(c.BcRpcUrl, "")
+	c.BcClient, err = rpchttp.New(c.BcRpcUrl, "")
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +384,7 @@ func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner s
 		return nil, err
 	}
 
-	res, err := c.bcClient.BroadcastTxAsync(ctx, bts)
+	res, err := c.BcClient.BroadcastTxAsync(ctx, bts)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +426,7 @@ func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, powe
 		return nil, err
 	}
 
-	res, err := c.bcClient.BroadcastTxAsync(ctx, bts)
+	res, err := c.BcClient.BroadcastTxAsync(ctx, bts)
 	if err != nil {
 		return nil, err
 	}
