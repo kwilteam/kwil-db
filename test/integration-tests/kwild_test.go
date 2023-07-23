@@ -148,9 +148,9 @@ func TestKwildNetworkIntegration(t *testing.T) {
 
 	//time.Sleep(30 * time.Second)
 	// Create Kwil DB clients for each node
-	node1Driver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[0], tLogger)
-	node2Driver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[1], tLogger)
-	//node3Driver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[2], tLogger)
+	node0Driver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[0], tLogger)
+	node1Driver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[1], tLogger)
+	node2Driver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[2], tLogger)
 
 	// Fund both the User accounts
 	err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.InitialFundAmount)
@@ -163,10 +163,10 @@ func TestKwildNetworkIntegration(t *testing.T) {
 
 	// and user pledged fund to validator
 	fmt.Println("Approve token1")
-	specifications.ApproveTokenSpecification(ctx, t, node1Driver)
+	specifications.ApproveTokenSpecification(ctx, t, node0Driver)
 	fmt.Print("Deposit fund1")
 	time.Sleep(15 * time.Second)
-	specifications.DepositFundSpecification(ctx, t, node1Driver)
+	specifications.DepositFundSpecification(ctx, t, node0Driver)
 
 	time.Sleep(cfg.ChainSyncWaitTime)
 
@@ -176,33 +176,46 @@ func TestKwildNetworkIntegration(t *testing.T) {
 		<-done
 	}
 
+	node0PrivKey := "3za9smSSrMoaLUgzJcEncG79gn3dyeYxoYIielhvygIECZfoKhPmiR/RDtr79o/Jxe6jRUxJkVoZoeA/9NHZhQ=="
+	node1PubKey := "R0gA+mgclmqknbiTJrnVPfE0i9kCgSNoxJkHqpwh4f0="
+	node1PrivKey := "6uyWNA9LJNSBp0QNfQpDWZp+RxV+D8wFvll7duhudFhHSAD6aByWaqSduJMmudU98TSL2QKBI2jEmQeqnCHh/Q=="
+	node2PubKey := "9JL8gRIIvit2GgSPOnoCv1ZCTnTC33z9VjOdIi6iwgI="
+
 	// Create a new database and verify that the database exists on other nodes
 	fmt.Printf("Create database")
-	/* No Approvals
-	1. Get Current Validator Set Count
-	2. Join Request for Node2
-	3. Get Validator Status : Rejected
-	4. Get Current Validator Set Count => shld be same as before
+
+	/*
+		Start with Genesis Node0
+		- Node1 requests to join
+		- Requires node0 to approve
 	*/
-	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node2Driver, 2)
-	specifications.NetworkNodeJoinFailureSpecification(ctx, t, node1Driver, []byte("9JL8gRIIvit2GgSPOnoCv1ZCTnTC33z9VjOdIi6iwgI="))
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 1)
+	specifications.NetworkNodeJoinSpecification(ctx, t, node1Driver, node1PubKey)
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 1)
+
+	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, node1PubKey, node0PrivKey)
+	specifications.NetworkNodeDeploySpecification(ctx, t, node0Driver)
 	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node2Driver, 2)
 
 	/* > 2/3rd majority approvals
-	1. Get Current Validator Set Count
-	2. Approve Node2 on Node0 and Node1
-	3. Join Request for Node2
-	4. Get Validator Status : Accepted
-	5. Get Current Validator Set Count => shld be +1
+	1. Node 0 and Node1 are the current validators
+	2. Node2 requests to join
+	3. Node0 and Node1 need to approve for majority approval
 	*/
-	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node2Driver, 2)
-	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, []byte("9JL8gRIIvit2GgSPOnoCv1ZCTnTC33z9VjOdIi6iwgI="))
-	specifications.NetworkNodeApproveSpecification(ctx, t, node2Driver, []byte("9JL8gRIIvit2GgSPOnoCv1ZCTnTC33z9VjOdIi6iwgI="))
+	specifications.NetworkNodeJoinSpecification(ctx, t, node2Driver, node2PubKey)
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 2)
 
-	specifications.NetworkNodeJoinSpecification(ctx, t, node1Driver, []byte("9JL8gRIIvit2GgSPOnoCv1ZCTnTC33z9VjOdIi6iwgI="))
+	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, node2PubKey, node0PrivKey)
+	specifications.NetworkNodeDeploySpecification(ctx, t, node0Driver)
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node1Driver, 2)
+
+	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, node2PubKey, node1PrivKey)
+	specifications.NetworkNodeDeploySpecification(ctx, t, node1Driver)
 	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node2Driver, 3)
 
-	specifications.NetworkNodeLeaveSpecification(ctx, t, node1Driver, []byte("9JL8gRIIvit2GgSPOnoCv1ZCTnTC33z9VjOdIi6iwgI="))
-	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node2Driver, 2)
+	specifications.NetworkNodeLeaveSpecification(ctx, t, node1Driver, node1PubKey)
+	specifications.NetworkNodeDeploySpecification(ctx, t, node1Driver)
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node1Driver, 2)
+
 	close(done)
 }

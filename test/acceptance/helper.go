@@ -23,7 +23,6 @@ import (
 	eth_deployer "github.com/kwilteam/kwil-db/test/acceptance/utils/deployer/eth-deployer"
 	"github.com/kwilteam/kwil-db/test/specifications"
 
-	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -241,6 +240,7 @@ func SetupKwildDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, kwildC 
 	gatewayURL, err := kwildC.PortEndpoint(ctx, "8080", "")
 	require.NoError(t, err)
 	cometBftURL, err := kwildC.PortEndpoint(ctx, "26657", "tcp")
+	fmt.Println("cometBftURL: ", cometBftURL)
 	require.NoError(t, err)
 
 	name, err := kwildC.Name(ctx)
@@ -250,13 +250,11 @@ func SetupKwildDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, kwildC 
 	kwilClt, err := client.New(ctx, nodeURL,
 		client.WithChainRpcUrl(cfg.ChainRPCURL),
 		client.WithPrivateKey(cfg.UserPrivateKey),
+		client.WithBcRpcUrl(cometBftURL),
 	)
 	require.NoError(t, err, "failed to create kwil client")
 
-	bcClt, err := rpchttp.New(cometBftURL, "")
-	require.NoError(t, err, "failed to create comet bft client")
-
-	kwildDriver := kwild.NewKwildDriver(kwilClt, bcClt, cfg.UserPrivateKey, gatewayURL, logger)
+	kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPrivateKey, gatewayURL, logger)
 	return kwildDriver
 }
 
@@ -359,13 +357,10 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 
 	if cfg.NodeURL != "" {
 		t.Logf("create kwild driver to %s, (gateway: %s)", cfg.NodeURL, cfg.GatewayURL)
-		kwilClt, err := client.New(ctx, cfg.NodeURL)
+		kwilClt, err := client.New(ctx, cfg.NodeURL, client.WithBcRpcUrl(cfg.CometBftUrl))
 		require.NoError(t, err, "failed to create kwil client")
 
-		bcClt, err := rpchttp.New(cfg.CometBftUrl, "")
-		require.NoError(t, err, "failed to create comet bft client")
-
-		kwildDriver := kwild.NewKwildDriver(kwilClt, bcClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
+		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
 		return kwildDriver, nil, cfg
 	}
 
@@ -376,13 +371,11 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 	kwilClt, err := client.New(ctx, updatedCfg.NodeURL,
 		client.WithChainRpcUrl(updatedCfg.ChainRPCURL),
 		client.WithPrivateKey(updatedCfg.UserPrivateKey),
+		client.WithBcRpcUrl(updatedCfg.CometBftUrl),
 	)
 	require.NoError(t, err, "failed to create kwil client")
 
-	bcClt, err := rpchttp.New(updatedCfg.CometBftUrl, "")
-	require.NoError(t, err, "failed to create comet bft client")
-
-	kwildDriver := kwild.NewKwildDriver(kwilClt, bcClt, updatedCfg.UserPrivateKey, updatedCfg.GatewayURL, logger)
+	kwildDriver := kwild.NewKwildDriver(kwilClt, updatedCfg.UserPrivateKey, updatedCfg.GatewayURL, logger)
 	return kwildDriver, chainDeployer, updatedCfg
 }
 
@@ -392,12 +385,11 @@ func newGRPCClient(ctx context.Context, t *testing.T, cfg *TestEnvCfg, logger lo
 	kwilClt, err := client.New(ctx, cfg.NodeURL,
 		client.WithChainRpcUrl(cfg.ChainRPCURL),
 		client.WithPrivateKey(cfg.UserPrivateKey),
+		client.WithBcRpcUrl(cfg.CometBftUrl),
 	)
 	require.NoError(t, err, "failed to create kwil client")
 
-	bcClt, err := rpchttp.New(cfg.CometBftUrl, "")
-	require.NoError(t, err, "failed to create comet bft client")
-	kwildDriver := kwild.NewKwildDriver(kwilClt, bcClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
+	kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
 	return kwildDriver
 }
 
