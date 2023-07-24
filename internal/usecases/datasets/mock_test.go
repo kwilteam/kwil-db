@@ -32,3 +32,10 @@ func (m *mockAccountStore) GetAccount(address string) (*balances.Account, error)
 func (m *mockAccountStore) Spend(spend *balances.Spend) error {
 	return nil
 }
+
+func (a *mockAccountStore) UpdateGasCosts(gas_enabled bool) {
+}
+
+func (a *mockAccountStore) GasEnabled() bool {
+	return false
+}
