@@ -8,7 +8,7 @@ import (
 )
 
 // compareAndSpend compares the price to the fee and spends the price if the fee is enough.
-func (u *DatasetUseCase) compareAndSpend(address, fee string, nonce int64, price *big.Int) error {
+func (u *DatasetUseCase) CompareAndSpend(address, fee string, nonce int64, price *big.Int) error {
 	// convert fee to big.Int
 	bigFee, ok := big.NewInt(0).SetString(fee, 10)
 	if !ok {

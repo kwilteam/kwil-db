@@ -2,9 +2,10 @@ package balances
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"math/big"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 
 	"go.uber.org/zap"
 )
@@ -114,6 +115,22 @@ func (a *AccountStore) getAccount(address string) (*Account, error) {
 		Balance: balance,
 		Nonce:   nonce,
 	}, nil
+}
+
+func (a *AccountStore) getOrCreateAccount(address string) (*Account, error) {
+	account, err := a.getAccount(address)
+	if account == nil && err == ErrAccountNotFound {
+		err = a.createAccount(address)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create account: %w", err)
+		}
+		return &Account{
+			Address: address,
+			Balance: big.NewInt(0),
+			Nonce:   0,
+		}, nil
+	}
+	return account, err
 }
 
 const sqlDropAccounts = "DROP TABLE accounts"

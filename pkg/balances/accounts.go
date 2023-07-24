@@ -12,11 +12,13 @@ import (
 )
 
 type AccountStore struct {
-	path string
-	db   *driver.Connection
-	log  log.Logger
-	mu   *sync.Mutex
-	wipe bool
+	path           string
+	db             *driver.Connection
+	log            log.Logger
+	mu             *sync.Mutex
+	wipe           bool
+	gas_enabled    bool
+	nonces_enabled bool
 }
 
 func NewAccountStore(opts ...balancesOpts) (*AccountStore, error) {
@@ -50,6 +52,14 @@ func NewAccountStore(opts ...balancesOpts) (*AccountStore, error) {
 	}
 
 	return ar, nil
+}
+
+func (a *AccountStore) UpdateGasCosts(gas_enabled bool) {
+	a.gas_enabled = gas_enabled
+}
+
+func (a *AccountStore) GasEnabled() bool {
+	return a.gas_enabled
 }
 
 func (a *AccountStore) GetAccount(address string) (*Account, error) {
@@ -107,12 +117,12 @@ func (a *AccountStore) BatchSpend(spendList []*Spend, chain *ChainConfig) error 
 }
 
 func (a *AccountStore) spend(spend *Spend) error {
-	account, err := a.getAccount(spend.AccountAddress)
+	account, err := a.getOrCreateAccount(spend.AccountAddress)
 	if err != nil {
 		return fmt.Errorf("failed to get account: %w", err)
 	}
 
-	if account.Nonce+1 != spend.Nonce {
+	if a.nonces_enabled && account.Nonce+1 != spend.Nonce {
 		a.log.Debug("tx nonce incorrect", zap.String("address", spend.AccountAddress), zap.Int64("expected", account.Nonce), zap.Int64("actual", spend.Nonce))
 		return ErrInvalidNonce
 	}
@@ -127,9 +137,11 @@ func (a *AccountStore) spend(spend *Spend) error {
 		return fmt.Errorf("failed to set balance: %w", err)
 	}
 
-	err = a.setNonce(spend.AccountAddress, spend.Nonce)
-	if err != nil {
-		return fmt.Errorf("failed to set nonce: %w", err)
+	if a.nonces_enabled {
+		err = a.setNonce(spend.AccountAddress, spend.Nonce)
+		if err != nil {
+			return fmt.Errorf("failed to set nonce: %w", err)
+		}
 	}
 
 	return nil
@@ -178,6 +190,7 @@ func (a *AccountStore) BatchCredit(creditList []*Credit, chain *ChainConfig) err
 }
 
 func (a *AccountStore) credit(credit *Credit) error {
+	//TODO:  use getOrCreateAccount here?
 	account, err := a.getAccount(credit.AccountAddress)
 	if err != nil {
 		if err == ErrAccountNotFound {

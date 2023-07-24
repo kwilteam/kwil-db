@@ -32,6 +32,8 @@ type KwildConfig struct {
 	ExtensionEndpoints  []string
 	BcRpcUrl            string
 	BCPrivateKey        *cmtCrypto.PrivKey
+	WithoutGasCosts     bool
+	WithoutNonces       bool
 }
 
 type DepositsConfig struct {
@@ -64,6 +66,8 @@ var (
 		HttpListenAddress,
 		ExtensionEndpoints,
 		BcRpcUrl,
+		WithoutGasCosts,
+		WithoutNonces,
 	}
 )
 
@@ -211,6 +215,18 @@ var (
 	WithoutChainSyncer = config.CfgVar{
 		EnvName: "WITHOUT_CHAIN_SYNCER",
 		Field:   "WithoutChainSyncer",
+		Default: false,
+	}
+
+	WithoutGasCosts = config.CfgVar{
+		EnvName: "WITHOUT_GAS_COSTS",
+		Field:   "WithoutGasCosts",
+		Default: true,
+	}
+
+	WithoutNonces = config.CfgVar{
+		EnvName: "WITHOUT_NONCES",
+		Field:   "WithoutNonces",
 		Default: false,
 	}
 )

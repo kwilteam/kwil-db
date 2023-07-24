@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/entity"
@@ -69,6 +70,8 @@ func (app *KwilDbApplication) CheckTx(req_tx abcitypes.RequestCheckTx) abcitypes
 		app.server.Log.Error("failed to verify CheckTx transaction with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseCheckTx{Code: 1, Log: err.Error()}
 	}
+	//TODO: Move the accounts and nonce verification here:
+
 	app.server.Log.Info("transaction verified", zap.String("tx hash", string(tx.Hash)))
 	return abcitypes.ResponseCheckTx{Code: 0}
 }
@@ -278,6 +281,11 @@ func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.R
 	joinerAddr := joiner.Address().String()
 	approverAddr := approver.Address().String()
 
+	err = app.executor.CompareAndSpend(approverAddr, tx.Fee, tx.Nonce, big.NewInt(0))
+	if err != nil {
+		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error()}
+	}
+
 	// Update the Approved Validators List in the DB
 	app.valInfo.AddApprovedValidator(joinerAddr, approverAddr)
 
@@ -322,6 +330,11 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 	joinPublicKey, err := cryptoenc.PubKeyToProto(joiner)
 	if err != nil {
 		fmt.Println("can't encode public key: %w", err)
+	}
+
+	err = app.executor.CompareAndSpend(joinerAddr, tx.Fee, tx.Nonce, big.NewInt(0))
+	if err != nil {
+		return nil, err
 	}
 
 	if !is_join || app.valInfo.FinalizedValidators[joinerAddr] {

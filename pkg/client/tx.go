@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
+	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 )
@@ -31,7 +33,11 @@ func (c *Client) newTx(ctx context.Context, payloadType kTx.PayloadType, data an
 	// get nonce from address
 	acc, err := c.client.GetAccount(ctx, address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get account config: %w", err)
+		acc = &balances.Account{
+			Address: address,
+			Nonce:   0,
+			Balance: big.NewInt(0),
+		}
 	}
 
 	// build transaction
@@ -70,9 +76,21 @@ func (c *Client) NewNodeTx(ctx context.Context, payloadType kTx.PayloadType, dat
 		return nil, fmt.Errorf("failed to serialize data: %w", err)
 	}
 
+	address := nodeKey.PubKey().Address().String()
+	acc, err := c.client.GetAccount(ctx, address)
+	if err != nil {
+		acc = &balances.Account{
+			Address: address,
+			Nonce:   0,
+			Balance: big.NewInt(0),
+		}
+	}
+
 	// build transaction
-	tx := kTx.NewTx(payloadType, bts, 1)
+	tx := kTx.NewTx(payloadType, bts, acc.Nonce+1)
 	// sign transaction
+	tx.Fee = "0"
+
 	hash := tx.GenerateHash()
 	sign, err := nodeKey.Sign(hash)
 	if err != nil {
@@ -90,6 +108,7 @@ func (c *Client) NewNodeTx(ctx context.Context, payloadType kTx.PayloadType, dat
 	}
 
 	tx.Hash = hash
+
 	keybts, err := json.Marshal(nodeKey.PubKey())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal pubkey: %w", err)
