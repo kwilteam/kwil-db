@@ -70,3 +70,10 @@ func (e *EmptyAccountStore) GetHeight(chainCode int32) (int64, error) {
 func (e *EmptyAccountStore) SetHeight(chainCode int32, height int64) error {
 	return nil
 }
+
+func (a *EmptyAccountStore) UpdateGasCosts(gas_enabled bool) {
+}
+
+func (a *EmptyAccountStore) GasEnabled() bool {
+	return false
+}

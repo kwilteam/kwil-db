@@ -33,6 +33,8 @@ type KwildConfig struct {
 	ArweaveConfig       ArweaveConfig
 	BcRpcUrl            string
 	BCPrivateKey        *cmtCrypto.PrivKey
+	WithoutGasCosts     bool
+	WithoutNonces       bool
 }
 
 type DepositsConfig struct {
@@ -70,6 +72,8 @@ var (
 		ExtensionEndpoints,
 		ArweaveBundlrURL,
 		BcRpcUrl,
+		WithoutGasCosts,
+		WithoutNonces,
 	}
 )
 
@@ -219,10 +223,22 @@ var (
 		Field:   "WithoutChainSyncer",
 		Default: false,
 	}
-
+	
 	ArweaveBundlrURL = config.CfgVar{
 		EnvName: "ARWEAVE_BUNDLR_URL",
 		Field:   "ArweaveConfig.BundlrURL",
 		Default: "",
+	}
+
+	WithoutGasCosts = config.CfgVar{
+		EnvName: "WITHOUT_GAS_COSTS",
+		Field:   "WithoutGasCosts",
+		Default: true,
+	}
+
+	WithoutNonces = config.CfgVar{
+		EnvName: "WITHOUT_NONCES",
+		Field:   "WithoutNonces",
+		Default: false,
 	}
 )

@@ -44,11 +44,7 @@ type DatasetUseCaseInterface interface {
 	// Call calls a read-only action on a database
 	Call(ctx context.Context, action *entity.ActionCall) ([]map[string]any, error)
 
-	// UpdateGasCosts updates the gas costs of the use case
-	UpdateGasCosts(bool)
-
-	// GasEnabled Checks if gas costs are enabled
-	GasEnabled() bool
+	CompareAndSpend(address, fee string, nonce int64, price *big.Int) error
 }
 
 type AccountStore interface {
@@ -56,4 +52,10 @@ type AccountStore interface {
 	Spend(spend *balances.Spend) error
 	BatchCredit(creditList []*balances.Credit, chain *balances.ChainConfig) error
 	Close() error
+
+	// UpdateGasCosts updates the gas costs of the use case
+	UpdateGasCosts(bool)
+
+	// GasEnabled Checks if gas costs are enabled
+	GasEnabled() bool
 }

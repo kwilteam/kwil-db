@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -95,11 +94,6 @@ var startCmd = &cobra.Command{
 		cometNode, err := newCometNode(app, cfg, txSvc)
 		if err != nil {
 			return nil
-		}
-		chainID := cometNode.GenesisDoc().ChainID
-		fmt.Printf("Chain ID: %s\n", chainID)
-		if strings.HasPrefix(chainID, "kwil-chain-gcd-") {
-			txSvc.GetExecutor().UpdateGasCosts(false)
 		}
 
 		txSvc.BcNode = cometNode
@@ -267,6 +261,10 @@ func newCometNode(app abci.Application, cfg *config.KwildConfig, txSvc *txsvc.Se
 
 func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.ChainClient, error) {
 	fmt.Println("Building chain client", cfg.Deposits.ClientChainRPCURL, cfg.Deposits.ChainCode)
+	if cfg.WithoutChainSyncer {
+		return ccService.NewEmptyChainClient(), nil
+	}
+
 	return ccService.NewChainClient(cfg.Deposits.ClientChainRPCURL,
 		ccService.WithChainCode(chainTypes.ChainCode(cfg.Deposits.ChainCode)),
 		ccService.WithLogger(*logger.Named("chainClient")),
@@ -283,6 +281,8 @@ func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (Account
 	return balances.NewAccountStore(
 		balances.WithLogger(*logger.Named("accountStore")),
 		balances.WithPath(cfg.SqliteFilePath),
+		balances.WithGasCosts(!cfg.WithoutGasCosts),
+		balances.WithNonces(!cfg.WithoutNonces),
 	)
 }
 
@@ -297,6 +297,8 @@ type AccountStore interface {
 	GetHeight(chainCode int32) (int64, error)
 	SetHeight(chainCode int32, height int64) error
 	Spend(spend *balances.Spend) error
+	UpdateGasCosts(bool)
+	GasEnabled() bool
 }
 
 func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as AccountStore, logger log.Logger) (starter, error) {

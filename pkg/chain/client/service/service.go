@@ -2,13 +2,14 @@ package service
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/kwilteam/kwil-db/pkg/chain/client"
 	"github.com/kwilteam/kwil-db/pkg/chain/client/dto"
 	"github.com/kwilteam/kwil-db/pkg/chain/contracts"
 	"github.com/kwilteam/kwil-db/pkg/chain/provider"
 	"github.com/kwilteam/kwil-db/pkg/chain/types"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"time"
 )
 
 const (
@@ -35,6 +36,10 @@ type chainClient struct {
 	chainCode             types.ChainCode
 	lastBlock             int64
 	contracts             contracts.Contracter
+}
+
+func NewEmptyChainClient() client.ChainClient {
+	return &chainClient{}
 }
 
 func NewChainClient(chainRpcUrl string, opts ...ChainClientOpts) (client.ChainClient, error) {

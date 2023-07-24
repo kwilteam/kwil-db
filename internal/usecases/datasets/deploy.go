@@ -12,16 +12,12 @@ import (
 )
 
 func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDatabase) (rec *tx.Receipt, err error) {
-	price := big.NewInt(0)
-
-	if u.gas_enabled {
-		price, err = u.PriceDeploy(deployment)
-		if err != nil {
-			return nil, err
-		}
+	price, err := u.PriceDeploy(deployment)
+	if err != nil {
+		return nil, err
 	}
 
-	err = u.compareAndSpend(deployment.Tx.Sender, deployment.Tx.Fee, deployment.Tx.Nonce, price)
+	err = u.CompareAndSpend(deployment.Tx.Sender, deployment.Tx.Fee, deployment.Tx.Nonce, price)
 	if err != nil {
 		return nil, err
 	}
@@ -65,19 +61,19 @@ func (u *DatasetUseCase) deployDataset(ctx context.Context, deployment *entity.D
 }
 
 func (u *DatasetUseCase) PriceDeploy(deployment *entity.DeployDatabase) (*big.Int, error) {
-	return deployPrice, nil
+	if u.accountStore.GasEnabled() {
+		return deployPrice, nil
+	}
+	return big.NewInt(0), nil
 }
 
 func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error) {
-	price := big.NewInt(0)
-
-	if u.gas_enabled {
-		price, err = u.PriceDrop(drop)
-		if err != nil {
-			return nil, err
-		}
+	price, err := u.PriceDrop(drop)
+	if err != nil {
+		return nil, err
 	}
-	err = u.compareAndSpend(drop.Tx.Sender, drop.Tx.Fee, drop.Tx.Nonce, price)
+
+	err = u.CompareAndSpend(drop.Tx.Sender, drop.Tx.Fee, drop.Tx.Nonce, price)
 	if err != nil {
 		return nil, err
 	}
@@ -96,5 +92,8 @@ func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (t
 }
 
 func (u *DatasetUseCase) PriceDrop(drop *entity.DropDatabase) (*big.Int, error) {
-	return dropPrice, nil
+	if u.accountStore.GasEnabled() {
+		return dropPrice, nil
+	}
+	return big.NewInt(0), nil
 }

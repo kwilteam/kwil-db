@@ -13,14 +13,14 @@ import (
 func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteAction) (rec *tx.Receipt, err error) {
 	price := big.NewInt(0)
 
-	if u.gas_enabled {
+	if u.accountStore.GasEnabled() {
 		price, err = u.PriceExecute(action)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err = u.compareAndSpend(action.Tx.Sender, action.Tx.Fee, action.Tx.Nonce, price)
+	err = u.CompareAndSpend(action.Tx.Sender, action.Tx.Fee, action.Tx.Nonce, price)
 	if err != nil {
 		return nil, err
 	}

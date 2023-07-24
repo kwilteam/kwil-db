@@ -18,7 +18,7 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
-	if !s.executor.GasEnabled() {
+	if !s.accountStore.GasEnabled() {
 		return &txpb.EstimatePriceResponse{Price: "0"}, nil
 	}
 

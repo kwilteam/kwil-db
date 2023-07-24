@@ -22,3 +22,15 @@ func WithLogger(logger log.Logger) balancesOpts {
 		ar.log = logger
 	}
 }
+
+func WithGasCosts(gas_enabled bool) balancesOpts {
+	return func(ar *AccountStore) {
+		ar.gas_enabled = gas_enabled
+	}
+}
+
+func WithNonces(nonces_enabled bool) balancesOpts {
+	return func(ar *AccountStore) {
+		ar.nonces_enabled = nonces_enabled
+	}
+}
