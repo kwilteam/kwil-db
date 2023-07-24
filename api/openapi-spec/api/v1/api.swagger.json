@@ -194,38 +194,6 @@
         ]
       }
     },
-    "/api/v1/gas_costs": {
-      "post": {
-        "operationId": "TxService_GasCosts",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txGasCostsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/txGasCostsRequest"
-            }
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
     "/api/v1/ping": {
       "get": {
         "operationId": "TxService_Ping",
@@ -340,7 +308,6 @@
         "parameters": [
           {
             "name": "Pubkey",
-            "description": "ED25519 PubKey",
             "in": "query",
             "required": false,
             "type": "string",
@@ -438,7 +405,6 @@
         "details": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
@@ -521,7 +487,6 @@
         "attributes": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txAttribute"
           }
         }
@@ -539,14 +504,12 @@
         "tables": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txTable"
           }
         },
         "actions": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txAction"
           }
         }
@@ -567,18 +530,6 @@
           "type": "string"
         }
       }
-    },
-    "txGasCostsRequest": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "title": "All nodes should agree on this value (or) Updates should be pushed to all nodes"
-        }
-      }
-    },
-    "txGasCostsResponse": {
-      "type": "object"
     },
     "txGetAccountResponse": {
       "type": "object",
@@ -708,14 +659,12 @@
         "columns": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txColumn"
           }
         },
         "indexes": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txIndex"
           }
         }
@@ -772,8 +721,7 @@
       "properties": {
         "PubKey": {
           "type": "string",
-          "format": "byte",
-          "title": "ED25519 PubKey"
+          "format": "byte"
         }
       }
     },
