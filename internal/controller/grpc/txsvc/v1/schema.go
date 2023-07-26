@@ -88,6 +88,7 @@ func convertActions(actions []*entity.Action) []*txpb.Action {
 		convActions[i] = &txpb.Action{
 			Name:       action.Name,
 			Public:     action.Public,
+			Mutability: action.Mutability,
 			Inputs:     action.Inputs,
 			Statements: action.Statements,
 		}

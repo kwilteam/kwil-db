@@ -265,6 +265,36 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	return res, outputs, nil
 }
 
+// CallAction executes an action.
+// It returns the receipt, as well as outputs which is the decoded body of the receipt.
+func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*Records, error) {
+	// NOTE: should enforce client to get schema json first locally
+	// Or cache the schema json in client side local file system
+	remoteSchema, err := c.GetSchema(ctx, dbid)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, act := range remoteSchema.Actions {
+		if act.Name == action {
+			if act.Mutability == string(schema.MutabilityView) {
+				//TODO check if need signatures
+
+				res, err := c.client.Call(ctx, dbid, action, inputs)
+				if err != nil {
+					return nil, err
+				}
+
+				return NewRecordsFromMaps(res), nil
+			}
+
+			break
+		}
+	}
+
+	return nil, fmt.Errorf("action %s is not found", action)
+}
+
 func decodeOutputs(bts []byte) ([]map[string]any, error) {
 	if len(bts) == 0 {
 		return []map[string]any{}, nil
