@@ -1,8 +1,7 @@
 package sqlite
 
 import (
-	"math/rand"
-	"time"
+	"github.com/kwilteam/kwil-db/pkg/utils/random"
 )
 
 func (c *Connection) Savepoint() (*Savepoint, error) {
@@ -54,9 +53,7 @@ func (sp *Savepoint) Rollback() error {
 var letterRunes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
 var alphanumericRunes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
+var rnd = random.New()
 
 func randomSavepointName(length int) string {
 	if length < 2 {
@@ -65,11 +62,11 @@ func randomSavepointName(length int) string {
 
 	result := make([]rune, length)
 	// First character must be a letter
-	result[0] = letterRunes[rand.Intn(len(letterRunes))]
+	result[0] = letterRunes[rnd.Intn(len(letterRunes))]
 
 	// Rest of the characters can be alphanumeric
 	for i := 1; i < length; i++ {
-		result[i] = alphanumericRunes[rand.Intn(len(alphanumericRunes))]
+		result[i] = alphanumericRunes[rnd.Intn(len(alphanumericRunes))]
 	}
 
 	return string(result)
