@@ -29,6 +29,7 @@ type KwildConfig struct {
 	SqliteFilePath      string
 	Log                 log.Config
 	ExtensionEndpoints  []string
+	ArweaveConfig       ArweaveConfig
 }
 
 type DepositsConfig struct {
@@ -41,6 +42,10 @@ type DepositsConfig struct {
 
 type ChainSyncerConfig struct {
 	ChunkSize int
+}
+
+type ArweaveConfig struct {
+	BundlrURL string
 }
 
 var (
@@ -60,6 +65,7 @@ var (
 		LogOutputPaths,
 		HttpListenAddress,
 		ExtensionEndpoints,
+		ArweaveBundlrURL,
 	}
 )
 
@@ -202,5 +208,11 @@ var (
 		EnvName: "WITHOUT_CHAIN_SYNCER",
 		Field:   "WithoutChainSyncer",
 		Default: false,
+	}
+
+	ArweaveBundlrURL = config.CfgVar{
+		EnvName: "ARWEAVE_BUNDLR_URL",
+		Field:   "ArweaveConfig.BundlrURL",
+		Default: "",
 	}
 )
