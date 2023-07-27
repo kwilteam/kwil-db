@@ -10,11 +10,15 @@ import (
 )
 
 func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallResponse, error) {
-	exec := convertActionCall(req)
+	execBody := convertActionCall(req.Payload)
+	// NOTE: if sender is used, must be validated with signature
+	//sender := req.GetSender()
+	//signature := req.GetSignature()
 
 	// @yaiba Note: should only execute only if the action is `view` action
 	executeResult, err := s.executor.Execute(ctx, &entity.ExecuteAction{
-		ExecutionBody: exec,
+		Tx:            nil,
+		ExecutionBody: execBody,
 	})
 
 	if err != nil {
@@ -26,14 +30,14 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 	}, nil
 }
 
-func convertActionCall(req *txpb.CallRequest) *entity.ActionExecution {
+func convertActionCall(payload *txpb.ActionPayload) *entity.ActionExecution {
 	exec := &entity.ActionExecution{
-		DBID:   req.GetDbid(),
-		Action: req.GetAction(),
-		Params: make([]map[string]any, len(req.GetInputs())),
+		DBID:   payload.GetDbid(),
+		Action: payload.GetAction(),
+		Params: make([]map[string]any, len(payload.GetParams())),
 	}
 
-	for i, input := range req.GetInputs() {
+	for i, input := range payload.GetParams() {
 		exec.Params[i] = make(map[string]any)
 		for k, v := range input.GetInput() {
 			exec.Params[i][k] = v

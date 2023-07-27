@@ -8,21 +8,7 @@ import (
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 )
 
-func (c *Client) Call(ctx context.Context, dbid string, action string, params []map[string]any) ([]map[string]any, error) {
-	req := &txpb.CallRequest{
-		Dbid:   dbid,
-		Action: action,
-		Inputs: make([]*txpb.ActionInput, len(params)),
-	}
-
-	for i, param := range params {
-		input := make(map[string]string)
-		for k, v := range param {
-			input[k] = fmt.Sprintf("%v", v)
-		}
-		req.Inputs[i] = &txpb.ActionInput{Input: input}
-	}
-
+func (c *Client) Call(ctx context.Context, req *txpb.CallRequest) ([]map[string]any, error) {
 	res, err := c.txClient.Call(ctx, req)
 
 	if err != nil {

@@ -89,7 +89,7 @@ action get_user_posts($username) public {
     );
 }
 
-action get_post($id) public {
+action get_post($id) public view mustsign {
     SELECT *
     FROM posts
     WHERE id = $id;

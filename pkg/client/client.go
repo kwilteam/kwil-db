@@ -5,9 +5,11 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 	"strings"
 
-	schema "github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
 	ccs "github.com/kwilteam/kwil-db/pkg/chain/client/service"
@@ -23,7 +25,7 @@ import (
 
 type Client struct {
 	client           *grpcClient.Client
-	datasets         map[string]*schema.Schema
+	datasets         map[string]*entity.Schema
 	PrivateKey       *ecdsa.PrivateKey
 	ChainCode        chainCodes.ChainCode
 	ProviderAddress  string
@@ -41,7 +43,7 @@ type Client struct {
 // New creates a new client
 func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
-		datasets:         make(map[string]*schema.Schema),
+		datasets:         make(map[string]*entity.Schema),
 		ChainCode:        chainCodes.LOCAL,
 		ProviderAddress:  "",
 		PoolAddress:      "",
@@ -166,8 +168,8 @@ func (c *Client) initPoolContract(ctx context.Context) error {
 	return nil
 }
 
-// GetSchema returns the schema of a database
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*schema.Schema, error) {
+// GetSchema returns the entity of a database
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*entity.Schema, error) {
 	ds, ok := c.datasets[dbid]
 	if ok {
 		return ds, nil
@@ -183,7 +185,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*schema.Schema, er
 }
 
 // DeployDatabase deploys a schema
-func (c *Client) DeployDatabase(ctx context.Context, ds *schema.Schema) (*kTx.Receipt, error) {
+func (c *Client) DeployDatabase(ctx context.Context, ds *entity.Schema) (*kTx.Receipt, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
@@ -202,7 +204,7 @@ func (c *Client) DeployDatabase(ctx context.Context, ds *schema.Schema) (*kTx.Re
 }
 
 // deploySchemaTx creates a new transaction to deploy a schema
-func (c *Client) deploySchemaTx(ctx context.Context, ds *schema.Schema) (*kTx.Transaction, error) {
+func (c *Client) deploySchemaTx(ctx context.Context, ds *entity.Schema) (*kTx.Transaction, error) {
 	return c.newTx(ctx, kTx.DEPLOY_DATABASE, ds)
 }
 
@@ -265,30 +267,75 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	return res, outputs, nil
 }
 
-// CallAction executes an action.
-// It returns the receipt, as well as outputs which is the decoded body of the receipt.
+func createActionPayload(dbid string, action string, inputs []map[string]any) *txpb.ActionPayload {
+	payload := &txpb.ActionPayload{
+		Dbid:   dbid,
+		Action: action,
+		Params: make([]*txpb.ActionInput, len(inputs)),
+	}
+
+	for i, param := range inputs {
+		input := make(map[string]string)
+		for k, v := range param {
+			input[k] = fmt.Sprintf("%v", v)
+		}
+		payload.Params[i] = &txpb.ActionInput{Input: input}
+	}
+
+	return payload
+}
+
+// CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
 func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*Records, error) {
-	// NOTE: should enforce client to get schema json first locally
-	// Or cache the schema json in client side local file system
+	// @yaiba
+	// NOTE: not just this RPC, similar RPCs should enforce client to get schema json first locally
+	// Or, cache the schema json in client side local file system, better UX.
 	remoteSchema, err := c.GetSchema(ctx, dbid)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, act := range remoteSchema.Actions {
-		if act.Name == action {
-			if act.Mutability == string(schema.MutabilityView) {
-				//TODO check if need signatures
-
-				res, err := c.client.Call(ctx, dbid, action, inputs)
-				if err != nil {
-					return nil, err
-				}
-
-				return NewRecordsFromMaps(res), nil
+		if act.Name == action && act.Mutability == entity.MutabilityView.String() {
+			// NOTE: here the actionBody to sign is not the same as the actionPayload in the request
+			actionPayloadToSign := &actionExecution{
+				Action: action,
+				DBID:   dbid,
+				Params: inputs,
 			}
 
-			break
+			req := &txpb.CallRequest{
+				Payload: createActionPayload(dbid, action, inputs),
+				Sender:  kwilCrypto.AddressFromPrivateKey(c.PrivateKey),
+			}
+
+			// handle auxiliary setting
+			for _, aux := range act.Auxiliaries {
+				if aux == entity.AuxiliaryTypeMustSign.String() {
+					payloadBytes, err := json.Marshal(actionPayloadToSign)
+					if err != nil {
+						return nil, fmt.Errorf("failed to serialize data: %w", err)
+					}
+
+					payloadHash := kwilCrypto.Sha384(payloadBytes)
+					sig, err := kwilCrypto.Sign(payloadHash, c.PrivateKey)
+					if err != nil {
+						return nil, fmt.Errorf("failed to sign transaction: %v", err)
+					}
+
+					req.Signature = &txpb.Signature{
+						SignatureBytes: sig.Signature,
+						SignatureType:  sig.Type.Int32(),
+					}
+				}
+			}
+
+			res, err := c.client.Call(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+
+			return NewRecordsFromMaps(res), nil
 		}
 	}
 
