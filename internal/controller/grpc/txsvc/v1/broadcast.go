@@ -3,6 +3,7 @@ package txsvc
 import (
 	"context"
 	"fmt"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
@@ -17,6 +18,11 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	err = tx.Verify()
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify transaction: %w", err)
+	}
+
+	err = s.txHook(tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute tx hook: %w", err)
 	}
 
 	switch tx.PayloadType {

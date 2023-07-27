@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 )
 
 type Service struct {
@@ -22,6 +23,8 @@ type Service struct {
 	extensionUrls  []string
 
 	providerAddress string
+
+	txHook func(*kTx.Transaction) error
 }
 
 func NewService(ctx context.Context, config *config.KwildConfig, opts ...TxSvcOpt) (*Service, error) {
@@ -30,6 +33,7 @@ func NewService(ctx context.Context, config *config.KwildConfig, opts ...TxSvcOp
 		cfg:             config,
 		providerAddress: crypto.AddressFromPrivateKey(config.PrivateKey),
 		extensionUrls:   []string{},
+		txHook:          func(*kTx.Transaction) error { return nil },
 	}
 
 	for _, opt := range opts {

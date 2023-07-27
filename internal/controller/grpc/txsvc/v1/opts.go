@@ -3,6 +3,7 @@ package txsvc
 import (
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
 	"github.com/kwilteam/kwil-db/pkg/log"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 )
 
 type TxSvcOpt func(*Service)
@@ -28,5 +29,11 @@ func WithSqliteFilePath(path string) TxSvcOpt {
 func WithExtensions(extConfigs ...string) TxSvcOpt {
 	return func(s *Service) {
 		s.extensionUrls = extConfigs
+	}
+}
+
+func WithTxHook(hook func(*kTx.Transaction) error) TxSvcOpt {
+	return func(s *Service) {
+		s.txHook = hook
 	}
 }
