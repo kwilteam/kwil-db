@@ -42,6 +42,7 @@ type Statement interface {
 type Savepoint interface {
 	Rollback() error
 	Commit() error
+	CommitAndCheckpoint() error
 }
 
 type initializerWrapper struct {

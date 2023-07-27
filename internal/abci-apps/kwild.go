@@ -27,6 +27,7 @@ import (
 )
 
 type KwilDbApplication struct {
+	blockHeight int64
 	server      *server.Server
 	executor    datasets.DatasetUseCaseInterface
 	ValUpdates  []abcitypes.ValidatorUpdate
@@ -479,6 +480,7 @@ func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitype
 
 		app.valInfo.ValAddrToPubKeyMap[pubkey.Address().String()] = publicKey
 	}
+	app.blockHeight = 1
 	return abcitypes.ResponseInitChain{}
 }
 
@@ -511,6 +513,8 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 
 		}
 	}
+
+	app.executor.UpdateBlockHeight(app.blockHeight)
 	return abcitypes.ResponseBeginBlock{}
 }
 
@@ -519,7 +523,13 @@ func (app *KwilDbApplication) EndBlock(block abcitypes.RequestEndBlock) abcitype
 }
 
 func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
-	return abcitypes.ResponseCommit{Data: []byte{}}
+	// Generate app hashes based on the changeset
+	err := app.executor.BlockCommit()
+	if err != nil {
+		app.server.Log.Error("ABCI: failed to commit block with ", zap.String("error", err.Error()))
+	}
+	app.blockHeight += 1
+	return abcitypes.ResponseCommit{Data: []byte("")}
 }
 
 func (app *KwilDbApplication) ListSnapshots(snapshots abcitypes.RequestListSnapshots) abcitypes.ResponseListSnapshots {

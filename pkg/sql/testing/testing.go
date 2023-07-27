@@ -64,4 +64,5 @@ type Statement interface {
 type Savepoint interface {
 	Commit() error
 	Rollback() error
+	CommitAndCheckpoint() error
 }

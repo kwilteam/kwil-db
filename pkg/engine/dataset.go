@@ -126,3 +126,17 @@ func (e *Engine) DropDataset(ctx context.Context, sender, dbid string) error {
 
 	return nil
 }
+
+func (e *Engine) BlockDBSavepoint(dbid string) error {
+	ds, ok := e.datasets[dbid]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrDatasetNotFound, dbid)
+	}
+
+	begin, err := ds.BlockSavepoint(e.curBlockHeight)
+	if begin && err == nil {
+		e.AddDbToModifiedList(dbid)
+		return nil
+	}
+	return err
+}

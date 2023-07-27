@@ -30,6 +30,7 @@ type SqlDB interface {
 type Savepoint interface {
 	Rollback() error
 	Commit() error
+	CommitAndCheckpoint() error
 }
 
 type Statement interface {

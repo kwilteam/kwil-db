@@ -42,6 +42,10 @@ type DatasetUseCaseInterface interface {
 	GetSchema(context.Context, string) (*entity.Schema, error)
 
 	CompareAndSpend(address, fee string, nonce int64, price *big.Int) error
+
+	BlockCommit() error
+
+	UpdateBlockHeight(int64)
 }
 
 type AccountStore interface {
