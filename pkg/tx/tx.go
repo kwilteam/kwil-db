@@ -5,7 +5,9 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
@@ -48,6 +50,10 @@ func (t *Transaction) Verify() error {
 	}
 
 	return nil
+}
+
+func (t *Transaction) Bytes() ([]byte, error) {
+	return json.Marshal(t)
 }
 
 // generateHash generates a hash of the transaction

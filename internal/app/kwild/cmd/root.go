@@ -13,7 +13,10 @@ import (
 	"github.com/kwilteam/kwil-db/internal/pkg/gateway/middleware/cors"
 	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
+	"github.com/kwilteam/kwil-db/pkg/arweave"
 	grpcServer "github.com/kwilteam/kwil-db/pkg/grpc/server"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"go.uber.org/zap"
 
 	"google.golang.org/grpc/health/grpc_health_v1"
 
@@ -168,12 +171,42 @@ func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as Ac
 }
 
 func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as AccountStore, logger log.Logger) (*txsvc.Service, error) {
-	return txsvc.NewService(ctx, cfg,
+	opts := []txsvc.TxSvcOpt{
 		txsvc.WithLogger(*logger.Named("txService")),
 		txsvc.WithAccountStore(as),
 		txsvc.WithSqliteFilePath(cfg.SqliteFilePath),
 		txsvc.WithExtensions(cfg.ExtensionEndpoints...),
-	)
+	}
+
+	if cfg.ArweaveConfig.BundlrURL != "" && cfg.PrivateKey != nil {
+		opts = append(opts, buildArweaveWriter(cfg, logger))
+	}
+
+	return txsvc.NewService(ctx, cfg, opts...)
+}
+
+func buildArweaveWriter(cfg *config.KwildConfig, logger log.Logger) txsvc.TxSvcOpt {
+	bundlrClient, err := arweave.NewBundlrClient(cfg.ArweaveConfig.BundlrURL, cfg.PrivateKey)
+	if err != nil {
+		panic("failed to create arweave bundlr client")
+	}
+
+	return txsvc.WithTxHook(func(tx *kTx.Transaction) error {
+		bts, err := tx.Bytes()
+		if err != nil {
+			return err
+		}
+
+		res, err := bundlrClient.StoreItem(bts)
+		if err != nil {
+			logger.Error("failed to store tx on bundlr", zap.Error(err))
+			return nil
+		}
+
+		logger.Info("tx stored on bundlr", zap.String("txId", res.TxID))
+
+		return nil
+	})
 }
 
 func buildHealthSvc(logger log.Logger) *healthsvc.Server {
