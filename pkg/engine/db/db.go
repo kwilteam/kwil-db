@@ -10,6 +10,7 @@ package db
 
 import (
 	"context"
+	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
 )
@@ -59,4 +60,12 @@ func NewDB(ctx context.Context, sqldb SqlDB) (*DB, error) {
 	}
 
 	return db, nil
+}
+
+func (d *DB) CreateSession() (Session, error) {
+	return d.sqldb.CreateSession()
+}
+
+func (d *DB) ApplyChangeset(changeset io.Reader) error {
+	return d.sqldb.ApplyChangeset(changeset)
 }

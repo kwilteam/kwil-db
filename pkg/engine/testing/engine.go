@@ -3,6 +3,7 @@ package testing
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 
@@ -71,4 +72,12 @@ func (d *datastoreAdapter) Prepare(query string) (engine.Statement, error) {
 
 func (d *datastoreAdapter) Savepoint() (engine.Savepoint, error) {
 	return d.TestSqliteClient.Savepoint()
+}
+
+func (d *datastoreAdapter) CreateSession() (engine.Session, error) {
+	return d.TestSqliteClient.CreateSession()
+}
+
+func (d *datastoreAdapter) ApplyChangeset(changeset io.Reader) error {
+	return d.TestSqliteClient.ApplyChangeset(changeset)
 }

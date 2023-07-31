@@ -3,6 +3,7 @@ package dataset_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
@@ -333,4 +334,12 @@ func (d databaseWrapper) Prepare(stmt string) (dataset.Statement, error) {
 
 func (d databaseWrapper) Savepoint() (dataset.Savepoint, error) {
 	return d.DB.Savepoint()
+}
+
+func (d databaseWrapper) CreateSession() (dataset.Session, error) {
+	return d.DB.CreateSession()
+}
+
+func (d databaseWrapper) ApplyChangeset(changeset io.Reader) error {
+	return d.DB.ApplyChangeset(changeset)
 }

@@ -151,3 +151,18 @@ func ResultsfromReader(reader io.Reader) ([]map[string]any, error) {
 
 	return rows, nil
 }
+
+func (s *SqliteClient) CreateSession() (*SqliteSession, error) {
+	sess, err := s.conn.CreateSession()
+	if err != nil {
+		return nil, err
+	}
+
+	return &SqliteSession{
+		sess: sess,
+	}, nil
+}
+
+func (s *SqliteClient) ApplyChangeset(reader io.Reader) error {
+	return s.conn.ApplyChangeset(reader)
+}

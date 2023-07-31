@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
@@ -46,6 +47,10 @@ func (w *wrappedSqliteClient) Delete() error {
 	return nil
 }
 
+func (w *wrappedSqliteClient) CreateSession() (Session, error) {
+	return w.SqliteClient.CreateSession()
+}
+
 type TestSqliteClient interface {
 	Close() error
 	Delete() error
@@ -54,6 +59,8 @@ type TestSqliteClient interface {
 	Query(context.Context, string, map[string]any) ([]map[string]any, error)
 	Savepoint() (Savepoint, error)
 	TableExists(context.Context, string) (bool, error)
+	CreateSession() (Session, error)
+	ApplyChangeset(io.Reader) error
 }
 
 type Statement interface {
@@ -65,4 +72,9 @@ type Savepoint interface {
 	Commit() error
 	Rollback() error
 	CommitAndCheckpoint() error
+}
+
+type Session interface {
+	GenerateChangeset() ([]byte, error)
+	Delete()
 }

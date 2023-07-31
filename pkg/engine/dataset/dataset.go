@@ -31,6 +31,8 @@ type Dataset struct {
 
 	lastBlockHeight int64
 	blockSavepoint  Savepoint
+	blockSession    Session
+	ChangeSet       []byte
 }
 
 // OpenDataset opens a new dataset and loads the metadata from the database
@@ -221,22 +223,46 @@ func (d *Dataset) BlockSavepoint(height int64) (bool, error) {
 		}
 		d.lastBlockHeight = height
 		d.blockSavepoint = savepoint
-
+		d.blockSession, err = d.db.CreateSession()
+		if err != nil {
+			return true, err
+		}
 		return true, nil
 	}
 	return false, nil
 }
 
-func (d *Dataset) CheckpointAndCommit() error {
-	savepoint := d.GetDbBlockSavePoint()
-	if savepoint != nil {
-		//defer savepoint.Rollback()
-		err := savepoint.CommitAndCheckpoint()
+func (d *Dataset) BlockCommit() error {
+	savepoint := d.blockSavepoint
+	if savepoint != nil && d.blockSession != nil {
+		cs, err := d.blockSession.GenerateChangeset()
 		if err != nil {
 			return err
 		}
+
+		d.ChangeSet = cs
+
+		err = savepoint.Rollback()
+		if err != nil {
+			return err
+		}
+		d.blockSession.Delete()
+		d.blockSavepoint = nil // Reset the save point
+		d.blockSession = nil   // Reset the session
 		return nil
 	}
-	d.blockSavepoint = nil // Reset the save point
+
 	return fmt.Errorf("no savepoint found for %s", d.name)
+}
+
+func (d *Dataset) ApplyChangeset() error {
+	if d.ChangeSet != nil {
+		err := d.db.ApplyChangeset(strings.NewReader(string(d.ChangeSet)))
+		if err != nil {
+			return err
+		}
+		d.ChangeSet = nil
+		return nil
+	}
+	return nil
 }

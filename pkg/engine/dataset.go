@@ -47,7 +47,10 @@ func (e *Engine) CreateDataset(ctx context.Context, name string, owner string, s
 	}
 
 	e.datasets[dbid] = ds
-
+	err = e.BlockDBSavepoint(dbid)
+	if err != nil {
+		return dbid, err
+	}
 	return dbid, nil
 
 }
@@ -132,7 +135,6 @@ func (e *Engine) BlockDBSavepoint(dbid string) error {
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrDatasetNotFound, dbid)
 	}
-
 	begin, err := ds.BlockSavepoint(e.curBlockHeight)
 	if begin && err == nil {
 		e.AddDbToModifiedList(dbid)
