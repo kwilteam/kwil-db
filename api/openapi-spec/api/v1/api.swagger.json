@@ -362,35 +362,6 @@
         }
       }
     },
-    "txActionInput": {
-      "type": "object",
-      "properties": {
-        "input": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          },
-          "title": "NOTE: value is parsed as any at the moment on the server side"
-        }
-      }
-    },
-    "txActionPayload": {
-      "type": "object",
-      "properties": {
-        "dbid": {
-          "type": "string"
-        },
-        "action": {
-          "type": "string"
-        },
-        "params": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/txActionInput"
-          }
-        }
-      }
-    },
     "txAttribute": {
       "type": "object",
       "properties": {
@@ -418,11 +389,28 @@
         }
       }
     },
+    "txCallPayload": {
+      "type": "object",
+      "properties": {
+        "dbid": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/txScalarValue"
+          }
+        }
+      }
+    },
     "txCallRequest": {
       "type": "object",
       "properties": {
         "payload": {
-          "$ref": "#/definitions/txActionPayload"
+          "$ref": "#/definitions/txCallPayload"
         },
         "signature": {
           "$ref": "#/definitions/txSignature"
@@ -581,6 +569,18 @@
         "result": {
           "type": "string",
           "format": "byte"
+        }
+      }
+    },
+    "txScalarValue": {
+      "type": "object",
+      "properties": {
+        "stringValue": {
+          "type": "string"
+        },
+        "intValue": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

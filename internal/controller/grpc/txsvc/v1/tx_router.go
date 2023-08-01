@@ -2,20 +2,14 @@ package txsvc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 )
 
 func (s *Service) deploy(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	var val any
-	err := json.Unmarshal(tx.Payload, &val)
-	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
-	}
-
 	ds, err := unmarshalSchema(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)

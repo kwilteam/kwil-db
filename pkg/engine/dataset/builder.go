@@ -124,7 +124,7 @@ func (b *datasetBuilder) Build(ctx context.Context) (*Dataset, error) {
 	}
 
 	err = ds.execConstructor(ctx, &TxOpts{
-		Caller: "datasetBuilder",
+		Caller: b.owner,
 	})
 	if err != nil {
 		return nil, err

@@ -5,8 +5,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
@@ -267,79 +265,55 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	return res, outputs, nil
 }
 
-func createActionPayload(dbid string, action string, inputs []map[string]any) *txpb.ActionPayload {
-	payload := &txpb.ActionPayload{
-		Dbid:   dbid,
-		Action: action,
-		Params: make([]*txpb.ActionInput, len(inputs)),
-	}
-
-	for i, param := range inputs {
-		input := make(map[string]string)
-		for k, v := range param {
-			input[k] = fmt.Sprintf("%v", v)
-		}
-		payload.Params[i] = &txpb.ActionInput{Input: input}
-	}
-
-	return payload
-}
-
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
-func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*Records, error) {
-	// @yaiba
-	// NOTE: not just this RPC, similar RPCs should enforce client to get schema json first locally
-	// Or, cache the schema json in client side local file system, better UX.
-	remoteSchema, err := c.GetSchema(ctx, dbid)
+func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs map[string]any, opts ...CallOpt) ([]map[string]any, error) {
+	callOpts := &callOptions{}
+
+	for _, opt := range opts {
+		opt(callOpts)
+	}
+
+	payload := &kTx.CallActionPayload{
+		DBID:   dbid,
+		Action: action,
+		Params: inputs,
+	}
+
+	var signedMsg *kTx.SignedMessage[*kTx.CallActionPayload]
+	shouldSign, err := shouldAuthenticate(c.PrivateKey, callOpts.forceAuthenticated)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, act := range remoteSchema.Actions {
-		if act.Name == action && act.Mutability == entity.MutabilityView.String() {
-			// NOTE: here the actionBody to sign is not the same as the actionPayload in the request
-			actionPayloadToSign := &actionExecution{
-				Action: action,
-				DBID:   dbid,
-				Params: inputs,
-			}
-
-			req := &txpb.CallRequest{
-				Payload: createActionPayload(dbid, action, inputs),
-				Sender:  kwilCrypto.AddressFromPrivateKey(c.PrivateKey),
-			}
-
-			// handle auxiliary setting
-			for _, aux := range act.Auxiliaries {
-				if aux == entity.AuxiliaryTypeMustSign.String() {
-					payloadBytes, err := json.Marshal(actionPayloadToSign)
-					if err != nil {
-						return nil, fmt.Errorf("failed to serialize data: %w", err)
-					}
-
-					payloadHash := kwilCrypto.Sha384(payloadBytes)
-					sig, err := kwilCrypto.Sign(payloadHash, c.PrivateKey)
-					if err != nil {
-						return nil, fmt.Errorf("failed to sign transaction: %v", err)
-					}
-
-					req.Signature = &txpb.Signature{
-						SignatureBytes: sig.Signature,
-						SignatureType:  sig.Type.Int32(),
-					}
-				}
-			}
-
-			res, err := c.client.Call(ctx, req)
-			if err != nil {
-				return nil, err
-			}
-
-			return NewRecordsFromMaps(res), nil
-		}
+	if shouldSign {
+		signedMsg, err = kTx.CreateSignedMessage(payload, c.PrivateKey)
+	} else {
+		signedMsg = kTx.CreateEmptySignedMessage(payload)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create signed message: %w", err)
 	}
 
-	return nil, fmt.Errorf("action %s is not found", action)
+	return c.client.Call(ctx, (*kTx.CallActionMessage)(signedMsg))
+}
+
+// shouldAuthenticate decides whether the client should authenticate or not
+// if enforced is not nil, it will be used instead of the default value
+// otherwise, if the private key is not nil, it will authenticate
+func shouldAuthenticate(privateKey *ecdsa.PrivateKey, enforced *bool) (bool, error) {
+	if enforced != nil {
+		if !*enforced {
+			return false, nil
+		}
+
+		if privateKey == nil {
+			return false, fmt.Errorf("private key is nil, but authentication is enforced")
+		}
+
+		return true, nil
+	}
+
+	return privateKey != nil, nil
 }
 
 func decodeOutputs(bts []byte) ([]map[string]any, error) {

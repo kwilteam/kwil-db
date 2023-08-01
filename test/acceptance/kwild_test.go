@@ -82,6 +82,7 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// Then user should be able to execute database
 			specifications.ExecuteDBInsertSpecification(ctx, t, driver)
+			specifications.ExecuteCallSpecification(ctx, t, driver)
 			specifications.ExecuteDBUpdateSpecification(ctx, t, driver)
 			specifications.ExecuteDBDeleteSpecification(ctx, t, driver)
 

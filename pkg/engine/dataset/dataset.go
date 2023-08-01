@@ -67,7 +67,7 @@ func OpenDataset(ctx context.Context, ds Datastore, opts ...OpenOpt) (*Dataset, 
 func (d *Dataset) execConstructor(ctx context.Context, opts *TxOpts) error {
 	for _, procedure := range d.metadata.Procedures {
 		if strings.EqualFold(procedure.Name, constructorName) {
-			_, err := d.executeOnce(ctx, procedure, make(map[string]any), opts)
+			_, err := d.executeOnce(ctx, procedure, make(map[string]any), d.getExecutionOpts(procedure, opts)...)
 			if err != nil {
 				return err
 			}
@@ -79,17 +79,17 @@ func (d *Dataset) execConstructor(ctx context.Context, opts *TxOpts) error {
 	return nil
 }
 
-const constructorName = "constructor"
+const constructorName = "init"
 
 // Execute executes a procedure.
 func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]any, opts *TxOpts) ([]map[string]any, error) {
-	if strings.EqualFold(action, constructorName) {
-		return nil, fmt.Errorf("cannot execute constructor")
+	if opts == nil {
+		opts = &TxOpts{}
 	}
 
-	proc, ok := d.metadata.Procedures[action]
-	if !ok {
-		return nil, fmt.Errorf("procedure %s does not exist", action)
+	proc, err := d.getProcedure(action)
+	if err != nil {
+		return nil, err
 	}
 
 	savepoint, err := d.db.Savepoint()
@@ -104,7 +104,7 @@ func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]
 
 	var result []map[string]any
 	for _, arg := range args {
-		result, err = d.executeOnce(ctx, proc, arg, opts)
+		result, err = d.executeOnce(ctx, proc, arg, d.getExecutionOpts(proc, opts)...)
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +118,58 @@ func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]
 	return result, nil
 }
 
-func (d *Dataset) executeOnce(ctx context.Context, proc *types.Procedure, args map[string]any, opts *TxOpts) ([]map[string]any, error) {
+// Call is like execute, but it is non-mutative.
+func (d *Dataset) Call(ctx context.Context, action string, args map[string]any, opts *TxOpts) ([]map[string]any, error) {
+	if opts == nil {
+		opts = &TxOpts{}
+	}
+
+	proc, err := d.getProcedure(action)
+	if err != nil {
+		return nil, err
+	}
+	if proc.IsMutative() {
+		return nil, fmt.Errorf("cannot call mutative procedure")
+	}
+	if proc.RequiresAuthentication() && opts.Caller == "" {
+		return nil, fmt.Errorf("caller must be set to execute authenticated procedure")
+	}
+
+	return d.executeOnce(ctx, proc, args, d.getExecutionOpts(proc, opts)...)
+}
+
+// getProcedure gets a procedure.  If the procedure is not found, it returns an error.
+// if the procedure is a constructor/init procedure, it returns an error.
+func (d *Dataset) getProcedure(action string) (*types.Procedure, error) {
+	if strings.EqualFold(action, constructorName) {
+		return nil, fmt.Errorf("cannot execute constructor")
+	}
+
+	proc, ok := d.metadata.Procedures[action]
+	if !ok {
+		return nil, fmt.Errorf("procedure %s does not exist", action)
+	}
+
+	return proc, nil
+}
+
+func (d *Dataset) getExecutionOpts(proc *types.Procedure, opts *TxOpts) []execution.ExecutionOpt {
+	execOpts := []execution.ExecutionOpt{
+		execution.WithDatasetID(d.DBID()),
+	}
+
+	if opts.Caller != "" {
+		execOpts = append(execOpts, execution.WithCaller(opts.Caller))
+	}
+
+	if !proc.IsMutative() {
+		execOpts = append(execOpts, execution.NonMutative())
+	}
+
+	return execOpts
+}
+
+func (d *Dataset) executeOnce(ctx context.Context, proc *types.Procedure, args map[string]any, opts ...execution.ExecutionOpt) ([]map[string]any, error) {
 	var argArr []any
 	for _, arg := range proc.Args {
 		val, ok := args[arg]
@@ -129,10 +180,25 @@ func (d *Dataset) executeOnce(ctx context.Context, proc *types.Procedure, args m
 		argArr = append(argArr, val)
 	}
 
-	return d.engine.ExecuteProcedure(ctx, proc.Name, argArr,
-		execution.WithCaller(opts.Caller),
-		execution.WithDatasetID(d.DBID()),
+	sp, err := d.db.Savepoint()
+	if err != nil {
+		return nil, err
+	}
+	defer sp.Rollback()
+
+	results, err := d.engine.ExecuteProcedure(ctx, proc.Name, argArr,
+		opts...,
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = sp.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }
 
 // Query executes a ad-hoc, read-only query.

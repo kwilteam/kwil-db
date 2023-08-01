@@ -3,11 +3,12 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/spf13/cobra"
-	"strings"
 )
 
 func callCmd() *cobra.Command {
@@ -51,13 +52,23 @@ OR
 				if err != nil {
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
+				if len(inputs) == 0 {
+					inputs = append(inputs, map[string]any{})
+				}
 
-				res, err := client.CallAction(ctx, dbId, lowerName, inputs)
+				res, err := client.CallAction(ctx, dbId, lowerName, inputs[0])
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}
 
-				results := res.ExportString()
+				results := make([]map[string]string, len(res))
+				for i, r := range res {
+					results[i] = make(map[string]string)
+					for k, v := range r {
+						results[i][k] = fmt.Sprintf("%v", v)
+					}
+				}
+
 				printTable(results)
 				return nil
 			})
