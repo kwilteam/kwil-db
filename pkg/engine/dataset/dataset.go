@@ -215,6 +215,10 @@ func (d *Dataset) GetDbBlockSavePoint() Savepoint {
 	return d.blockSavepoint
 }
 
+func (d *Dataset) GetChangeset() []byte {
+	return d.ChangeSet
+}
+
 func (d *Dataset) BlockSavepoint(height int64) (bool, error) {
 	if d.GetLastBlockHeight() < height {
 		savepoint, err := d.db.Savepoint()
@@ -232,36 +236,33 @@ func (d *Dataset) BlockSavepoint(height int64) (bool, error) {
 	return false, nil
 }
 
-func (d *Dataset) BlockCommit() error {
+func (d *Dataset) BlockCommit() ([]byte, error) {
 	savepoint := d.blockSavepoint
 	if savepoint != nil && d.blockSession != nil {
 		cs, err := d.blockSession.GenerateChangeset()
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		d.ChangeSet = cs
-
 		err = savepoint.Rollback()
 		if err != nil {
-			return err
+			return cs, err
 		}
 		d.blockSession.Delete()
 		d.blockSavepoint = nil // Reset the save point
 		d.blockSession = nil   // Reset the session
-		return nil
+		return cs, nil
 	}
 
-	return fmt.Errorf("no savepoint found for %s", d.name)
+	return nil, fmt.Errorf("no savepoint found for %s", d.name)
 }
 
-func (d *Dataset) ApplyChangeset() error {
-	if d.ChangeSet != nil {
-		err := d.db.ApplyChangeset(strings.NewReader(string(d.ChangeSet)))
+func (d *Dataset) ApplyChangeset(changeset []byte) error {
+	if changeset != nil {
+		err := d.db.ApplyChangeset(strings.NewReader(string(changeset)))
 		if err != nil {
 			return err
 		}
-		d.ChangeSet = nil
+		//d.ChangeSet = nil
 		return nil
 	}
 	return nil

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/entity"
@@ -22,28 +24,39 @@ import (
 	txsvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 	"github.com/kwilteam/kwil-db/internal/node"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	utilpkg "github.com/kwilteam/kwil-db/pkg/utils"
 	"go.uber.org/zap"
 )
 
 type KwilDbApplication struct {
 	blockHeight int64
+	prevAppHash []byte
 	server      *server.Server
 	executor    datasets.DatasetUseCaseInterface
 	ValUpdates  []abcitypes.ValidatorUpdate
 	valInfo     *node.ValidatorsInfo
 	joinReqPool *node.JoinRequestPool
+	BlockWal    *utilpkg.Wal
 }
 
 var _ abcitypes.Application = (*KwilDbApplication)(nil)
 
 func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseInterface) (*KwilDbApplication, error) {
+	CometHomeDir := os.Getenv("COMET_BFT_HOME")
+	blockWalPath := filepath.Join(CometHomeDir, "data", "BlockWal.txt")
+	wal, err := utilpkg.NewWal(blockWalPath)
+	if err != nil {
+		return nil, err
+	}
 
 	return &KwilDbApplication{
 		server:      srv,
 		executor:    executor,
 		valInfo:     node.NewValidatorsInfo(),
 		joinReqPool: node.NewJoinRequestPool(),
+		BlockWal:    wal,
 	}, nil
 }
 
@@ -481,6 +494,7 @@ func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitype
 		app.valInfo.ValAddrToPubKeyMap[pubkey.Address().String()] = publicKey
 	}
 	app.blockHeight = 1
+	app.prevAppHash = crypto.Sha256([]byte(""))
 	return abcitypes.ResponseInitChain{}
 }
 
@@ -524,12 +538,20 @@ func (app *KwilDbApplication) EndBlock(block abcitypes.RequestEndBlock) abcitype
 
 func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
 	// Generate app hashes based on the changeset
-	err := app.executor.BlockCommit()
+	expectedAppHash, err := app.executor.BlockCommit(app.BlockWal, app.prevAppHash)
 	if err != nil {
 		app.server.Log.Error("ABCI: failed to commit block with ", zap.String("error", err.Error()))
 	}
+
+	err = app.executor.ApplyChangesets(app.BlockWal)
+	if err != nil {
+		app.server.Log.Error("ABCI: failed to apply changesets with ", zap.String("error", err.Error()))
+	}
+
+	app.prevAppHash = expectedAppHash
+
 	app.blockHeight += 1
-	return abcitypes.ResponseCommit{Data: []byte("")}
+	return abcitypes.ResponseCommit{Data: app.prevAppHash}
 }
 
 func (app *KwilDbApplication) ListSnapshots(snapshots abcitypes.RequestListSnapshots) abcitypes.ResponseListSnapshots {

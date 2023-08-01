@@ -30,8 +30,8 @@ type Engine struct {
 	datasets   map[string]Dataset
 	extensions map[string]ExtensionInitializer
 
-	curBlockHeight int64           // Tracks the current block height of the blockchain
-	ModifiedDBs    map[string]bool // Tracks which databases have been modified in the current block, to be reset at the end of the block
+	curBlockHeight int64             // Tracks the current block height of the blockchain
+	ModifiedDBs    map[string][]byte // Tracks which databases have been modified in the current block, to be reset at the end of the block
 
 	opener Opener
 }
@@ -165,5 +165,5 @@ func (e *Engine) GetCurrentBlockHeight() int64 {
 }
 
 func (e *Engine) AddDbToModifiedList(dbid string) {
-	e.ModifiedDBs[dbid] = true
+	e.ModifiedDBs[dbid] = nil
 }

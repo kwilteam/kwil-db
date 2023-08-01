@@ -48,8 +48,8 @@ type Dataset interface {
 	GetLastBlockHeight() int64
 	GetDbBlockSavePoint() dataset.Savepoint
 	BlockSavepoint(height int64) (bool, error)
-	BlockCommit() error
-	ApplyChangeset() error
+	BlockCommit() ([]byte, error)
+	ApplyChangeset([]byte) error
 }
 
 type MasterDB interface {

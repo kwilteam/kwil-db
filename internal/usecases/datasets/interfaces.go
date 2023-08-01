@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/utils"
 )
 
 // DatasetUseCaseInterface is the interface for the dataset use case
@@ -43,9 +44,13 @@ type DatasetUseCaseInterface interface {
 
 	CompareAndSpend(address, fee string, nonce int64, price *big.Int) error
 
-	BlockCommit() error
+	BlockCommit(wal *utils.Wal, prevAppHash []byte) ([]byte, error)
 
 	UpdateBlockHeight(int64)
+
+	ApplyChangesets(wal *utils.Wal) error
+
+	GenerateAppHash(prevAppHash []byte) []byte
 }
 
 type AccountStore interface {
@@ -57,6 +62,6 @@ type AccountStore interface {
 	// UpdateGasCosts updates the gas costs of the use case
 	UpdateGasCosts(bool)
 
-	// GasEnabled Checks if gas costs are enabled
+	// GasEnabled Checks if gas costs are enableds
 	GasEnabled() bool
 }
