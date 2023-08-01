@@ -15,7 +15,6 @@ import (
 
 	abcitypes "github.com/cometbft/cometbft/abci/types"
 	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
-	pc "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	txsvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 	"github.com/kwilteam/kwil-db/internal/node"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
@@ -26,10 +25,10 @@ import (
 )
 
 type KwildState struct {
-	PrevBlockHeight int64                   `json:"prev_block_height"`
-	PrevAppHash     []byte                  `json:"prev_app_hash"`
-	CurValidatorSet map[string]pc.PublicKey `json:"cur_validator_set"`
-	ExecState       string                  `json:"exec_state"`
+	PrevBlockHeight int64             `json:"prev_block_height"`
+	PrevAppHash     []byte            `json:"prev_app_hash"`
+	CurValidatorSet map[string][]byte `json:"cur_validator_set"`
+	ExecState       string            `json:"exec_state"`
 	// "initChain", "precommit", "postcommit", "delivertx"
 }
 
@@ -74,8 +73,8 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 		recoveryMode: false,
 		state: KwildState{
 			PrevBlockHeight: 0,
-			PrevAppHash:     []byte{},
-			CurValidatorSet: make(map[string]pc.PublicKey),
+			PrevAppHash:     nil,
+			CurValidatorSet: make(map[string][]byte),
 			ExecState:       "init",
 		},
 	}
@@ -85,7 +84,7 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 		kwild.recoveryMode = true
 		kwild.state = kwild.RetrieveState()
 	}
-
+	fmt.Println("Kwild State:", kwild.state)
 	return kwild, nil
 }
 
@@ -124,6 +123,7 @@ func (app *KwilDbApplication) CheckTx(req_tx abcitypes.RequestCheckTx) abcitypes
 
 func (app *KwilDbApplication) DeliverTx(req_tx abcitypes.RequestDeliverTx) abcitypes.ResponseDeliverTx {
 	if app.recoveryMode && (app.state.ExecState == "precommit" || app.state.ExecState == "postcommit") {
+		fmt.Println("Replay Mode: Skipping TX", app.state.ExecState)
 		return abcitypes.ResponseDeliverTx{Code: 0, Log: "Replay mode, Txs already executed"}
 	}
 
@@ -350,11 +350,7 @@ func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.R
 		valUpdates := abcitypes.Ed25519ValidatorUpdate(joiner.Bytes(), power)
 		app.ValUpdates = append(app.ValUpdates, valUpdates)
 		app.joinReqPool.RemoveJoinRequest(joinerAddr)
-		joinPublicKey, err := cryptoenc.PubKeyToProto(joiner)
-		if err != nil {
-			fmt.Println("can't encode public key: %w", err)
-		}
-		app.state.CurValidatorSet[joinerAddr] = joinPublicKey
+		app.state.CurValidatorSet[joinerAddr] = tx.Payload
 		fmt.Println("Approve Validator: Validator added to ValUpdates ", joinerAddr, ": ", power)
 	}
 	return abcitypes.ResponseDeliverTx{Code: 0}
@@ -374,10 +370,6 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 		return nil, err
 	}
 	joinerAddr := joiner.Address().String()
-	joinPublicKey, err := cryptoenc.PubKeyToProto(joiner)
-	if err != nil {
-		fmt.Println("can't encode public key: %w", err)
-	}
 
 	err = app.executor.CompareAndSpend(joinerAddr, tx.Fee, tx.Nonce, big.NewInt(0))
 	if err != nil {
@@ -391,7 +383,7 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 			fmt.Println("Join class")
 			if _, ok := app.state.CurValidatorSet[joinerAddr]; !ok {
 				app.ValUpdates = append(app.ValUpdates, valUpdates)
-				app.state.CurValidatorSet[joinerAddr] = joinPublicKey
+				app.state.CurValidatorSet[joinerAddr] = []byte(validator.PubKey)
 			}
 		} else {
 			fmt.Println("Leave class")
@@ -416,7 +408,7 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 					app.ValUpdates = append(app.ValUpdates, valUpdates)
 					app.joinReqPool.RemoveJoinRequest(joinerAddr)
 					app.valInfo.FinalizedValidators[joinerAddr] = true
-					app.state.CurValidatorSet[joinerAddr] = joinPublicKey
+					app.state.CurValidatorSet[joinerAddr] = []byte(validator.PubKey)
 					fmt.Println("Validator Update: Validator added to ValUpdates ", joinerAddr, ": ", validator.Power)
 				}
 			}
@@ -497,15 +489,10 @@ func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitype
 			fmt.Println("can't decode public key: %w", err)
 		}
 		fmt.Println("Pubkey: crypto.PubKey : ", pubkey)
-		publicKey, err := cryptoenc.PubKeyToProto(pubkey)
-		if err != nil {
-			fmt.Println("can't encode public key: %w", err)
-		}
-		fmt.Println("Publickey: pc.PublicKey : ", publicKey)
 
-		app.state.CurValidatorSet[pubkey.Address().String()] = publicKey
+		app.state.CurValidatorSet[pubkey.Address().String()] = pubkey.Bytes()
 	}
-	app.state.PrevBlockHeight = 1
+	// app.state.PrevBlockHeight = 0
 	app.state.PrevAppHash = crypto.Sha256([]byte(""))
 	return abcitypes.ResponseInitChain{}
 }
@@ -528,7 +515,17 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 		if ev.Type == abcitypes.MisbehaviorType_DUPLICATE_VOTE {
 			addr := string(ev.Validator.Address)
 			if pubKey, ok := app.state.CurValidatorSet[addr]; ok {
-				app.ValUpdates = append(app.ValUpdates, abcitypes.ValidatorUpdate{PubKey: pubKey, Power: ev.Validator.Power - 1})
+				PublicKey, err := node.UnmarshalPublicKey([]byte(pubKey))
+				if err != nil {
+					fmt.Println("can't decode public key: %w", err)
+					return abcitypes.ResponseBeginBlock{}
+				}
+				key, err := cryptoenc.PubKeyToProto(PublicKey)
+				if err != nil {
+					fmt.Println("can't encode public key: %w", err)
+					return abcitypes.ResponseBeginBlock{}
+				}
+				app.ValUpdates = append(app.ValUpdates, abcitypes.ValidatorUpdate{PubKey: key, Power: ev.Validator.Power - 1})
 				app.server.Log.Info("Decreased val power by 1 because of the equivocation", zap.String("val", addr))
 				if (ev.Validator.Power - 1) == 0 {
 					app.server.Log.Info("Val power is 0, removing it from the validator set", zap.String("val", addr))
@@ -544,6 +541,8 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 	app.executor.UpdateBlockHeight(app.state.PrevBlockHeight)
 	app.state.ExecState = "delivertx"
 	app.UpdateState()
+
+	// Create an accounts savepoint
 	return abcitypes.ResponseBeginBlock{}
 }
 
