@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	"github.com/kwilteam/kwil-db/pkg/engine/master"
@@ -16,6 +17,13 @@ type Datastore interface {
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 	Savepoint() (Savepoint, error)
 	TableExists(ctx context.Context, table string) (bool, error)
+	CreateSession() (Session, error)
+	ApplyChangeset(changeset io.Reader) error
+}
+
+type Session interface {
+	GenerateChangeset() ([]byte, error)
+	Delete()
 }
 
 type Statement interface {
@@ -26,6 +34,7 @@ type Statement interface {
 type Savepoint interface {
 	Commit() error
 	Rollback() error
+	CommitAndCheckpoint() error
 }
 
 type Dataset interface {
@@ -36,6 +45,11 @@ type Dataset interface {
 	Delete() error
 	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
 	Execute(ctx context.Context, procedure string, args []map[string]any, opts *dataset.TxOpts) ([]map[string]any, error)
+	GetLastBlockHeight() int64
+	GetDbBlockSavePoint() dataset.Savepoint
+	BlockSavepoint(height int64) (bool, error)
+	BlockCommit() ([]byte, error)
+	ApplyChangeset([]byte) error
 }
 
 type MasterDB interface {

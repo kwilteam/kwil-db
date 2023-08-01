@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"io"
 )
 
 type SqlDB interface {
@@ -25,11 +26,24 @@ type SqlDB interface {
 
 	// Savepoint creates a savepoint.
 	Savepoint() (Savepoint, error)
+
+	// DB Session
+	CreateSession() (Session, error)
+
+	// Apply Changeset to the DB
+	ApplyChangeset(changeset io.Reader) error
+}
+
+type Session interface {
+	// Generate Changeset on a given session
+	GenerateChangeset() ([]byte, error)
+	Delete()
 }
 
 type Savepoint interface {
 	Rollback() error
 	Commit() error
+	CommitAndCheckpoint() error
 }
 
 type Statement interface {

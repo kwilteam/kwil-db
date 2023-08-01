@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	metadataDB "github.com/kwilteam/kwil-db/pkg/engine/db"
@@ -48,6 +49,14 @@ func (s *sqliteClientAdapter) Prepare(query string) (Statement, error) {
 	return s.SqliteClient.Prepare(query)
 }
 
+func (s *sqliteClientAdapter) CreateSession() (Session, error) {
+	return s.SqliteClient.CreateSession()
+}
+
+func (s *sqliteClientAdapter) ApplyChangeset(changeset io.Reader) error {
+	return s.SqliteClient.ApplyChangeset(changeset)
+}
+
 type masterDbAdapter struct {
 	Datastore
 }
@@ -68,6 +77,14 @@ func (m metadataDBAdapter) Prepare(query string) (metadataDB.Statement, error) {
 	return m.Datastore.Prepare(query)
 }
 
+func (m metadataDBAdapter) CreateSession() (metadataDB.Session, error) {
+	return m.Datastore.CreateSession()
+}
+
+func (m metadataDBAdapter) ApplyChangeset(changeset io.Reader) error {
+	return m.Datastore.ApplyChangeset(changeset)
+}
+
 type datasetDBAdapter struct {
 	*metadataDB.DB
 }
@@ -76,6 +93,13 @@ func (d datasetDBAdapter) Savepoint() (dataset.Savepoint, error) {
 	return d.DB.Savepoint()
 }
 
+func (d datasetDBAdapter) CreateSession() (dataset.Session, error) {
+	return d.DB.CreateSession()
+}
+
+func (d datasetDBAdapter) ApplyChangeset(changeset io.Reader) error {
+	return d.DB.ApplyChangeset(changeset)
+}
 func (d datasetDBAdapter) Prepare(query string) (dataset.Statement, error) {
 	return d.DB.Prepare(query)
 }

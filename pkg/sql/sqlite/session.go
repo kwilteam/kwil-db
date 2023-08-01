@@ -50,6 +50,16 @@ func (s *Session) GenerateChangeset() (*Changeset, error) {
 	return NewChangset(buf)
 }
 
+func (s *Session) GenerateChangesetBytes() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	err := s.ses.WriteChangeset(buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
 var (
 	ErrForeignKeyConflict = errors.New("foreign key conflict")
 )

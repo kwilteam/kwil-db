@@ -28,6 +28,11 @@ type Dataset struct {
 	// allowMissingExtensions will let a dataset load, even if required extension initializers are not provided
 	// default is true
 	allowMissingExtensions bool
+
+	lastBlockHeight int64
+	blockSavepoint  Savepoint
+	blockSession    Session
+	ChangeSet       []byte
 }
 
 // OpenDataset opens a new dataset and loads the metadata from the database
@@ -200,4 +205,65 @@ func (d *Dataset) Delete() error {
 // Metadata returns the metadata for the dataset.
 func (d *Dataset) Metadata() (name, owner string) {
 	return d.name, d.owner
+}
+
+func (d *Dataset) GetLastBlockHeight() int64 {
+	return d.lastBlockHeight
+}
+
+func (d *Dataset) GetDbBlockSavePoint() Savepoint {
+	return d.blockSavepoint
+}
+
+func (d *Dataset) GetChangeset() []byte {
+	return d.ChangeSet
+}
+
+func (d *Dataset) BlockSavepoint(height int64) (bool, error) {
+	if d.GetLastBlockHeight() < height {
+		savepoint, err := d.db.Savepoint()
+		if err != nil {
+			return true, err
+		}
+		d.lastBlockHeight = height
+		d.blockSavepoint = savepoint
+		d.blockSession, err = d.db.CreateSession()
+		if err != nil {
+			return true, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (d *Dataset) BlockCommit() ([]byte, error) {
+	savepoint := d.blockSavepoint
+	if savepoint != nil && d.blockSession != nil {
+		cs, err := d.blockSession.GenerateChangeset()
+		if err != nil {
+			return nil, err
+		}
+		err = savepoint.Rollback()
+		if err != nil {
+			return cs, err
+		}
+		d.blockSession.Delete()
+		d.blockSavepoint = nil // Reset the save point
+		d.blockSession = nil   // Reset the session
+		return cs, nil
+	}
+
+	return nil, fmt.Errorf("no savepoint found for %s", d.name)
+}
+
+func (d *Dataset) ApplyChangeset(changeset []byte) error {
+	if changeset != nil {
+		err := d.db.ApplyChangeset(strings.NewReader(string(changeset)))
+		if err != nil {
+			return err
+		}
+		//d.ChangeSet = nil
+		return nil
+	}
+	return nil
 }
