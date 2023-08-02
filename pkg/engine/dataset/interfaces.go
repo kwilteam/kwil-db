@@ -3,6 +3,7 @@ package dataset
 import (
 	"context"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/db"
 	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/sql"
@@ -22,7 +23,7 @@ type Initializer interface {
 }
 
 type Datastore interface {
-	Prepare(ctx context.Context, query string) (sql.Statement, error)
+	Prepare(ctx context.Context, query string) (*db.PreparedStatement, error)
 	CreateTable(ctx context.Context, table *types.Table) error
 	ListTables(ctx context.Context) ([]*types.Table, error)
 	StoreProcedure(ctx context.Context, procedure *types.Procedure) error

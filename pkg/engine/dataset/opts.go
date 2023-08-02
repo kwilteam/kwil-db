@@ -1,8 +1,11 @@
 package dataset
 
-import "github.com/kwilteam/kwil-db/pkg/log"
+import (
+	"github.com/kwilteam/kwil-db/pkg/log"
+)
 
 type TxOpts struct {
+	// Caller is the address of the caller of the transaction
 	Caller string
 }
 

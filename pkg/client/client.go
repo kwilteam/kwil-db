@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	schema "github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
 	ccs "github.com/kwilteam/kwil-db/pkg/chain/client/service"
@@ -23,7 +23,7 @@ import (
 
 type Client struct {
 	client           *grpcClient.Client
-	datasets         map[string]*schema.Schema
+	datasets         map[string]*entity.Schema
 	PrivateKey       *ecdsa.PrivateKey
 	ChainCode        chainCodes.ChainCode
 	ProviderAddress  string
@@ -41,7 +41,7 @@ type Client struct {
 // New creates a new client
 func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
-		datasets:         make(map[string]*schema.Schema),
+		datasets:         make(map[string]*entity.Schema),
 		ChainCode:        chainCodes.LOCAL,
 		ProviderAddress:  "",
 		PoolAddress:      "",
@@ -166,8 +166,8 @@ func (c *Client) initPoolContract(ctx context.Context) error {
 	return nil
 }
 
-// GetSchema returns the schema of a database
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*schema.Schema, error) {
+// GetSchema returns the entity of a database
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*entity.Schema, error) {
 	ds, ok := c.datasets[dbid]
 	if ok {
 		return ds, nil
@@ -183,7 +183,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*schema.Schema, er
 }
 
 // DeployDatabase deploys a schema
-func (c *Client) DeployDatabase(ctx context.Context, ds *schema.Schema) (*kTx.Receipt, error) {
+func (c *Client) DeployDatabase(ctx context.Context, ds *entity.Schema) (*kTx.Receipt, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
@@ -202,7 +202,7 @@ func (c *Client) DeployDatabase(ctx context.Context, ds *schema.Schema) (*kTx.Re
 }
 
 // deploySchemaTx creates a new transaction to deploy a schema
-func (c *Client) deploySchemaTx(ctx context.Context, ds *schema.Schema) (*kTx.Transaction, error) {
+func (c *Client) deploySchemaTx(ctx context.Context, ds *entity.Schema) (*kTx.Transaction, error) {
 	return c.newTx(ctx, kTx.DEPLOY_DATABASE, ds)
 }
 
@@ -263,6 +263,57 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	}
 
 	return res, outputs, nil
+}
+
+// CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
+func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs map[string]any, opts ...CallOpt) ([]map[string]any, error) {
+	callOpts := &callOptions{}
+
+	for _, opt := range opts {
+		opt(callOpts)
+	}
+
+	payload := &kTx.CallActionPayload{
+		DBID:   dbid,
+		Action: action,
+		Params: inputs,
+	}
+
+	var signedMsg *kTx.SignedMessage[*kTx.CallActionPayload]
+	shouldSign, err := shouldAuthenticate(c.PrivateKey, callOpts.forceAuthenticated)
+	if err != nil {
+		return nil, err
+	}
+
+	if shouldSign {
+		signedMsg, err = kTx.CreateSignedMessage(payload, c.PrivateKey)
+	} else {
+		signedMsg = kTx.CreateEmptySignedMessage(payload)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create signed message: %w", err)
+	}
+
+	return c.client.Call(ctx, (*kTx.CallActionMessage)(signedMsg))
+}
+
+// shouldAuthenticate decides whether the client should authenticate or not
+// if enforced is not nil, it will be used instead of the default value
+// otherwise, if the private key is not nil, it will authenticate
+func shouldAuthenticate(privateKey *ecdsa.PrivateKey, enforced *bool) (bool, error) {
+	if enforced != nil {
+		if !*enforced {
+			return false, nil
+		}
+
+		if privateKey == nil {
+			return false, fmt.Errorf("private key is nil, but authentication is enforced")
+		}
+
+		return true, nil
+	}
+
+	return privateKey != nil, nil
 }
 
 func decodeOutputs(bts []byte) ([]map[string]any, error) {

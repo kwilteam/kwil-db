@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -9,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ec "github.com/ethereum/go-ethereum/crypto"
 )
+
+var ErrInvalidSignature = errors.New("invalid signature")
 
 type SignatureType int32
 
@@ -36,18 +39,31 @@ type Signature struct {
 	Type      SignatureType `json:"signature_type"`
 }
 
-func Sign(data []byte, k *ecdsa.PrivateKey) (Signature, error) {
+func Sign(data []byte, k *ecdsa.PrivateKey) (*Signature, error) {
 	signature := Signature{
 		Type: PK_SECP256K1_UNCOMPRESSED,
 	}
 	hash := ec.Keccak256Hash(data)
 	sig, err := ec.Sign(hash.Bytes(), k)
 	if err != nil {
-		return signature, err
+		return &signature, err
 	}
 
 	signature.Signature = sig
-	return signature, nil
+	return &signature, nil
+}
+
+func (s *Signature) Check(sender string, data []byte) error {
+	ok, err := CheckSignature(sender, s, data)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return ErrInvalidSignature
+	}
+
+	return nil
 }
 
 func ECDSAFromHex(hex string) (*ecdsa.PrivateKey, error) {
@@ -67,7 +83,7 @@ func HexFromECDSAPrivateKey(key *ecdsa.PrivateKey) string {
 	return hexutil.Encode(ec.FromECDSA(key))[2:]
 }
 
-func CheckSignature(addr string, sig Signature, data []byte) (bool, error) {
+func CheckSignature(addr string, sig *Signature, data []byte) (bool, error) {
 	if addr == "" {
 		return false, fmt.Errorf("transaction does not have a sender address")
 	}

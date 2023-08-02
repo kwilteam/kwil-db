@@ -129,3 +129,7 @@ func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
 func (d *KwildDriver) QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error) {
 	return d.clt.Query(ctx, dbid, query)
 }
+
+func (d *KwildDriver) Call(ctx context.Context, dbid, action string, inputs map[string]any, opts ...client.CallOpt) ([]map[string]any, error) {
+	return d.clt.CallAction(ctx, dbid, action, inputs, opts...)
+}
