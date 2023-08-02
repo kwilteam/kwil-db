@@ -78,6 +78,38 @@
         ]
       }
     },
+    "/api/v1/call": {
+      "post": {
+        "operationId": "TxService_Call",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txCallResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txCallRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v1/config": {
       "get": {
         "operationId": "TxService_GetConfig",
@@ -318,6 +350,15 @@
           "items": {
             "type": "string"
           }
+        },
+        "mutability": {
+          "type": "string"
+        },
+        "auxiliaries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -345,6 +386,46 @@
       "properties": {
         "receipt": {
           "$ref": "#/definitions/txTxReceipt"
+        }
+      }
+    },
+    "txCallPayload": {
+      "type": "object",
+      "properties": {
+        "dbid": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/txScalarValue"
+          }
+        }
+      }
+    },
+    "txCallRequest": {
+      "type": "object",
+      "properties": {
+        "payload": {
+          "$ref": "#/definitions/txCallPayload"
+        },
+        "signature": {
+          "$ref": "#/definitions/txSignature"
+        },
+        "sender": {
+          "type": "string"
+        }
+      }
+    },
+    "txCallResponse": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "type": "string",
+          "format": "byte"
         }
       }
     },
@@ -488,6 +569,18 @@
         "result": {
           "type": "string",
           "format": "byte"
+        }
+      }
+    },
+    "txScalarValue": {
+      "type": "object",
+      "properties": {
+        "stringValue": {
+          "type": "string"
+        },
+        "intValue": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },

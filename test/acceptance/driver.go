@@ -10,4 +10,5 @@ type KwilAcceptanceDriver interface {
 	specifications.ApproveTokenDsl
 	specifications.DepositFundDsl
 	specifications.ExecuteQueryDsl
+	specifications.ExecuteCallDsl
 }

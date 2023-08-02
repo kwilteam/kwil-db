@@ -1,6 +1,9 @@
 package datasets
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/kwilteam/kwil-db/internal/entity"
 	engineDto "github.com/kwilteam/kwil-db/pkg/engine/types"
 )
@@ -73,10 +76,16 @@ func convertIndexes(indexes []*engineDto.Index) []*entity.Index {
 func convertActionsToDto(actions []*entity.Action) ([]*engineDto.Procedure, error) {
 	entityActions := make([]*engineDto.Procedure, len(actions))
 	for i, action := range actions {
+		mods, err := getModifiers(action)
+		if err != nil {
+			return nil, err
+		}
+
 		entityActions[i] = &engineDto.Procedure{
 			Name:       action.Name,
 			Args:       action.Inputs,
 			Public:     action.Public,
+			Modifiers:  mods,
 			Statements: action.Statements,
 		}
 	}
@@ -89,6 +98,25 @@ func convertActionsToDto(actions []*entity.Action) ([]*engineDto.Procedure, erro
 	}
 
 	return entityActions, nil
+}
+
+func getModifiers(action *entity.Action) ([]engineDto.Modifier, error) {
+	mods := make([]engineDto.Modifier, 0)
+
+	if strings.EqualFold(action.Mutability, "view") {
+		mods = append(mods, engineDto.ModifierView)
+	}
+
+	for _, aux := range action.Auxiliaries {
+		switch aux {
+		case "mustsign":
+			mods = append(mods, engineDto.ModifierAuthenticated)
+		default:
+			return nil, fmt.Errorf("modifier %s not supported", aux)
+		}
+	}
+
+	return mods, nil
 }
 
 func convertExtensionsToDto(extensions []*entity.Extension) []*engineDto.Extension {

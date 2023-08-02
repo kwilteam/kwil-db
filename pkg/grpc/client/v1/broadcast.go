@@ -60,11 +60,8 @@ func convertTx(incoming *kTx.Transaction) *txpb.Tx {
 		Payload:     incoming.Payload,
 		Fee:         incoming.Fee,
 		Nonce:       incoming.Nonce,
-		Signature: &txpb.Signature{
-			SignatureBytes: incoming.Signature.Signature,
-			SignatureType:  incoming.Signature.Type.Int32(),
-		},
-		Sender: incoming.Sender,
+		Signature:   convertActionSignature(incoming.Signature),
+		Sender:      incoming.Sender,
 	}
 }
 

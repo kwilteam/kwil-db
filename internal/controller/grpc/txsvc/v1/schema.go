@@ -86,10 +86,12 @@ func convertActions(actions []*entity.Action) []*txpb.Action {
 	convActions := make([]*txpb.Action, len(actions))
 	for i, action := range actions {
 		convActions[i] = &txpb.Action{
-			Name:       action.Name,
-			Public:     action.Public,
-			Inputs:     action.Inputs,
-			Statements: action.Statements,
+			Name:        action.Name,
+			Public:      action.Public,
+			Mutability:  action.Mutability,
+			Auxiliaries: action.Auxiliaries,
+			Inputs:      action.Inputs,
+			Statements:  action.Statements,
 		}
 	}
 

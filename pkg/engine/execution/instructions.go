@@ -100,6 +100,15 @@ func evalDMLExecute(ctx *procedureContext, eng *Engine, args ...any) error {
 		return fmt.Errorf("%w: '%s'", ErrUnknownPreparedStatement, stmtName)
 	}
 
+	ctxMut := ctx.mustBeNonMutative
+	if ctxMut {
+		fmt.Print("mutative")
+	}
+
+	if ctx.mustBeNonMutative && preparedStmt.IsMutative() {
+		return fmt.Errorf("%w: '%s'", ErrMutativeStatement, stmtName)
+	}
+
 	var err error
 	ctx.lastDmlResult, err = preparedStmt.Execute(ctx.ctx, ctx.values)
 	if err != nil {

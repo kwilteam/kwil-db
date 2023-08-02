@@ -12,13 +12,13 @@ import (
 )
 
 type Transaction struct {
-	Hash        []byte               `json:"hash"`
-	PayloadType PayloadType          `json:"payload_type"`
-	Payload     []byte               `json:"payload"`
-	Fee         string               `json:"fee"`
-	Nonce       int64                `json:"nonce"`
-	Signature   kwilCrypto.Signature `json:"signature"`
-	Sender      string               `json:"sender"`
+	Hash        []byte                `json:"hash"`
+	PayloadType PayloadType           `json:"payload_type"`
+	Payload     []byte                `json:"payload"`
+	Fee         string                `json:"fee"`
+	Nonce       int64                 `json:"nonce"`
+	Signature   *kwilCrypto.Signature `json:"signature"`
+	Sender      string                `json:"sender"`
 }
 
 func NewTx(txType PayloadType, data []byte, nonce int64) *Transaction {

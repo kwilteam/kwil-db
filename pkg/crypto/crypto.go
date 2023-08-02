@@ -3,7 +3,6 @@ package crypto
 import (
 	c256 "crypto/sha256"
 	c512 "crypto/sha512"
-
 	"encoding/hex"
 )
 

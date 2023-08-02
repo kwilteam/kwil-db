@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -10,13 +11,7 @@ import (
 
 // runCleans runs a series of clean functions and returns the first error.
 func runCleans(errs ...error) error {
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
 func cleanIdent(ident *string) error {
