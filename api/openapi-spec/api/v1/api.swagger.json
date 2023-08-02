@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "kwil/node/v1/node.proto",
+    "title": "kwil/tx/v1/account.proto",
     "version": "version not set"
   },
   "tags": [
@@ -218,38 +218,6 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/txEstimatePriceRequest"
-            }
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
-    "/api/v1/gas_costs": {
-      "post": {
-        "operationId": "TxService_GasCosts",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txGasCostsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/txGasCostsRequest"
             }
           }
         ],
@@ -648,18 +616,6 @@
           "type": "string"
         }
       }
-    },
-    "txGasCostsRequest": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "title": "All nodes should agree on this value (or) Updates should be pushed to all nodes"
-        }
-      }
-    },
-    "txGasCostsResponse": {
-      "type": "object"
     },
     "txGetAccountResponse": {
       "type": "object",
