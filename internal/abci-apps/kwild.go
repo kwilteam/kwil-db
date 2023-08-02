@@ -56,7 +56,6 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 	if err != nil {
 		return nil, err
 	}
-
 	stateWalPath := filepath.Join(CometHomeDir, "data", "AppState.wal")
 	stateWal, err := utilpkg.NewWal(stateWalPath)
 	if err != nil {
@@ -538,6 +537,7 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 
 		}
 	}
+
 	app.executor.UpdateBlockHeight(app.state.PrevBlockHeight)
 	app.state.ExecState = "delivertx"
 	app.UpdateState()

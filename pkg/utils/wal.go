@@ -117,6 +117,7 @@ func (w *Wal) OverwriteSync(data []byte) error {
 	return nil
 }
 
+
 func (w *Wal) UpdateMaxLineSz(sz int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
