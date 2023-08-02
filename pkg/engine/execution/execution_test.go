@@ -243,6 +243,76 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 			want:    nil,
 			wantErr: nil,
 		},
+		{
+			name: "executing a mutative statement, setting context to immutable should fail",
+			fields: fields{
+				availableExtensions: testExtensions,
+				procedures: map[string]*execution.Procedure{
+					"dmlProcedure": {
+						Name:       "dmlProcedure",
+						Parameters: []string{},
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
+							{
+								Instruction: execution.OpDMLExecute,
+								Args:        []any{"dml_statement"},
+							},
+						},
+					},
+				},
+				db: &mockDatastore{},
+				loadCommand: []*execution.InstructionExecution{
+					{
+						Instruction: execution.OpDMLPrepare,
+						Args:        []any{"dml_statement", "INSERT INTO users (id, username, age) VALUES (1, 'test', 20)"},
+					},
+				},
+			},
+			args: args{
+				ctx:  context.Background(),
+				name: "dmlProcedure",
+				args: []any{},
+				opts: append(testExecutionOpts, execution.NonMutative()),
+			},
+			want:    nil,
+			wantErr: execution.ErrMutativeStatement,
+		},
+		{
+			name: "executing a non-mutative statement, setting context to immutable should succeed",
+			fields: fields{
+				availableExtensions: testExtensions,
+				procedures: map[string]*execution.Procedure{
+					"dmlProcedure": {
+						Name:       "dmlProcedure",
+						Parameters: []string{},
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
+							{
+								Instruction: execution.OpDMLExecute,
+								Args:        []any{"dml_statement"},
+							},
+						},
+					},
+				},
+				db: &mockDatastore{
+					createsNonMutative: true,
+				},
+				loadCommand: []*execution.InstructionExecution{
+					{
+						Instruction: execution.OpDMLPrepare,
+						Args:        []any{"dml_statement", "INSERT INTO users (id, username, age) VALUES (1, 'test', 20)"},
+					},
+				},
+			},
+			args: args{
+				ctx:  context.Background(),
+				name: "dmlProcedure",
+				args: []any{},
+				opts: append(testExecutionOpts, execution.NonMutative()),
+			},
+			want:    nil,
+			wantErr: nil,
+		},
 		// Procedure tests
 		{
 			name: "executing a procedure with the wrong number of arguments should fail",

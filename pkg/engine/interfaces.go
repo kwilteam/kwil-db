@@ -38,6 +38,7 @@ type Dataset interface {
 	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
 	Execute(ctx context.Context, procedure string, args []map[string]any, opts *dataset.TxOpts) ([]map[string]any, error)
 	Savepoint() (sql.Savepoint, error)
+	Call(ctx context.Context, procedure string, args map[string]any, opts *dataset.TxOpts) ([]map[string]any, error)
 }
 
 type MasterDB interface {

@@ -16,6 +16,7 @@ import (
 
 func Test_Execute(t *testing.T) {
 	type fields struct {
+		callerAddress           string
 		availableExtensions     []*testExt
 		extensionInitialization []*types.Extension
 		tables                  []*types.Table
@@ -23,6 +24,7 @@ func Test_Execute(t *testing.T) {
 	}
 
 	defaultFields := fields{
+		callerAddress:           callerAddress,
 		availableExtensions:     testAvailableExtensions,
 		extensionInitialization: testExtensions,
 		tables:                  test_tables,
@@ -41,8 +43,10 @@ func Test_Execute(t *testing.T) {
 		fields          fields
 		args            args
 		expectedOutputs []map[string]interface{}
-		wantErr         bool
-		wantBuilderErr  bool
+		// by default it is Execute(), but if we want to test Call() we can set this to true
+		isCall         bool
+		wantErr        bool
+		wantBuilderErr bool
 	}{
 		{
 			name:   "execute a dml procedure successfully",
@@ -269,6 +273,61 @@ func Test_Execute(t *testing.T) {
 			wantErr:         true,
 			wantBuilderErr:  true,
 		},
+		{
+			name: "execute authenticated procedure without caller address should fail",
+			fields: fields{
+				availableExtensions:     testAvailableExtensions,
+				extensionInitialization: testExtensions,
+				tables:                  test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:      "create_user",
+						Args:      []string{},
+						Public:    true,
+						Modifiers: []types.Modifier{types.ModifierAuthenticated, types.ModifierView},
+						Statements: []string{
+							"SELECT * FROM users WHERE address = @caller;",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "create_user",
+				inputs:    []map[string]interface{}{},
+			},
+			expectedOutputs: nil,
+			isCall:          true,
+			wantErr:         true,
+			wantBuilderErr:  false,
+		},
+		{
+			name: "execute authenticated procedure with caller address should succeed",
+			fields: fields{
+				callerAddress:           callerAddress,
+				availableExtensions:     testAvailableExtensions,
+				extensionInitialization: testExtensions,
+				tables:                  test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:      "create_user",
+						Args:      []string{},
+						Public:    true,
+						Modifiers: []types.Modifier{types.ModifierAuthenticated, types.ModifierView},
+						Statements: []string{
+							"SELECT * FROM users WHERE address = @caller;",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "create_user",
+				inputs:    []map[string]interface{}{},
+			},
+			expectedOutputs: []map[string]interface{}{},
+			isCall:          true,
+			wantErr:         false,
+			wantBuilderErr:  false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -290,7 +349,7 @@ func Test_Execute(t *testing.T) {
 				WithInitializers(availableExtensions).
 				WithExtensions(tt.fields.extensionInitialization...).
 				WithDatastore(database).
-				Named(datasetName).OwnedBy(callerAddress).
+				Named(datasetName).OwnedBy(tt.fields.callerAddress).
 				Build(ctx)
 			if tt.wantBuilderErr {
 				assert.Error(t, err)
@@ -309,9 +368,20 @@ func Test_Execute(t *testing.T) {
 				}
 			}()
 
-			outputs, err := ds.Execute(ctx, tt.args.procedure, tt.args.inputs, &dataset.TxOpts{
-				Caller: callerAddress,
-			})
+			var outputs []map[string]interface{}
+			if tt.isCall {
+				if len(tt.args.inputs) == 0 {
+					tt.args.inputs = []map[string]interface{}{nil}
+				}
+
+				outputs, err = ds.Call(ctx, tt.args.procedure, tt.args.inputs[0], &dataset.TxOpts{
+					Caller: tt.fields.callerAddress,
+				})
+			} else {
+				outputs, err = ds.Execute(ctx, tt.args.procedure, tt.args.inputs, &dataset.TxOpts{
+					Caller: tt.fields.callerAddress,
+				})
+			}
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Dataset.Execute() error = %v, wantErr %v", err, tt.wantErr)
 				return
