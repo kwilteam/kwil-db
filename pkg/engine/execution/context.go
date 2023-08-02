@@ -23,6 +23,10 @@ type executionContext struct {
 	action        string
 	datasetID     string
 	lastDmlResult []map[string]any
+
+	// mustBeNonMutative is true if the execution context must be non-mutative.
+	// if true, execution of mutative statements will fail.
+	mustBeNonMutative bool
 }
 
 func (ec *executionContext) contextualVariables() map[string]any {
@@ -59,6 +63,12 @@ func WithCaller(caller string) ExecutionOpt {
 func WithDatasetID(dataset string) ExecutionOpt {
 	return func(ec *executionContext) {
 		ec.datasetID = dataset
+	}
+}
+
+func NonMutative() ExecutionOpt {
+	return func(ec *executionContext) {
+		ec.mustBeNonMutative = true
 	}
 }
 

@@ -12,4 +12,5 @@ var (
 	ErrIncorrectNumArgs         = errors.New("incorrect number of arguments")
 	ErrIncorrectInputType       = errors.New("incorrect input type")
 	ErrScopingViolation         = errors.New("scoping violation")
+	ErrMutativeStatement        = errors.New("mutative statement")
 )

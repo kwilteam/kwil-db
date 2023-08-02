@@ -23,4 +23,7 @@ type PreparedStatement interface {
 
 	// Close closes the statement.
 	Close() error
+
+	// IsMutative returns true if the statement is mutative.
+	IsMutative() bool
 }

@@ -28,7 +28,7 @@ func (d *DB) Delete() error {
 	return d.sqldb.Delete()
 }
 
-func (d *DB) Prepare(ctx context.Context, query string) (sql.Statement, error) {
+func (d *DB) Prepare(ctx context.Context, query string) (*PreparedStatement, error) {
 	ast, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
@@ -46,12 +46,25 @@ func (d *DB) Prepare(ctx context.Context, query string) (sql.Statement, error) {
 		return nil, err
 	}
 
+	mutativity, err := sqlanalyzer.IsMutative(ast)
+	if err != nil {
+		return nil, err
+	}
+
 	generatedSql, err := ast.ToSQL()
 	if err != nil {
 		return nil, err
 	}
 
-	return d.sqldb.Prepare(generatedSql)
+	prepStmt, err := d.sqldb.Prepare(generatedSql)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PreparedStatement{
+		Statement: prepStmt,
+		mutative:  mutativity,
+	}, nil
 }
 
 func (d *DB) Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error) {

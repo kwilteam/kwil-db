@@ -2,6 +2,7 @@ package execution_test
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 )
@@ -9,14 +10,22 @@ import (
 // this file contains mocks
 
 type mockDatastore struct {
-	Identifier string
+	Identifier         string
+	createsNonMutative bool // default false
 }
 
 func (m *mockDatastore) Prepare(ctx context.Context, uery string) (execution.PreparedStatement, error) {
-	return &mockPreparedStatement{}, nil
+	if m.createsNonMutative {
+		fmt.Print("aa")
+	}
+
+	return &mockPreparedStatement{
+		mutative: !m.createsNonMutative,
+	}, nil
 }
 
 type mockPreparedStatement struct {
+	mutative bool
 }
 
 func (m *mockPreparedStatement) Close() error {
@@ -25,6 +34,10 @@ func (m *mockPreparedStatement) Close() error {
 
 func (m *mockPreparedStatement) Execute(ctx context.Context, args map[string]any) ([]map[string]any, error) {
 	return nil, nil
+}
+
+func (m *mockPreparedStatement) IsMutative() bool {
+	return m.mutative
 }
 
 var (
