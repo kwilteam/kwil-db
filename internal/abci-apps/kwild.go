@@ -11,16 +11,10 @@ import (
 	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/entity"
 
-	//"github.com/kwilteam/kwil-db/pkg/engine/models"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-	//"github.com/kwilteam/kwil-db/pkg/utils/serialize"
-
-	// shorthand for chain client service
 
 	abcitypes "github.com/cometbft/cometbft/abci/types"
-	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
-	cmtjson "github.com/cometbft/cometbft/libs/json"
 	txsvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 	"github.com/kwilteam/kwil-db/internal/node"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
@@ -30,34 +24,67 @@ import (
 	"go.uber.org/zap"
 )
 
+type KwildState struct {
+	PrevBlockHeight int64             `json:"prev_block_height"`
+	PrevAppHash     []byte            `json:"prev_app_hash"`
+	CurValidatorSet map[string][]byte `json:"cur_validator_set"`
+	ExecState       string            `json:"exec_state"`
+	// "initChain", "precommit", "postcommit", "delivertx"
+}
+
 type KwilDbApplication struct {
-	blockHeight int64
-	prevAppHash []byte
-	server      *server.Server
-	executor    datasets.DatasetUseCaseInterface
+	state    KwildState
+	server   *server.Server
+	executor datasets.DatasetUseCaseInterface
+
 	ValUpdates  []abcitypes.ValidatorUpdate
 	valInfo     *node.ValidatorsInfo
 	joinReqPool *node.JoinRequestPool
-	BlockWal    *utilpkg.Wal
+
+	BlockWal *utilpkg.Wal
+	StateWal *utilpkg.Wal
+
+	recoveryMode bool
 }
 
 var _ abcitypes.Application = (*KwilDbApplication)(nil)
 
 func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseInterface) (*KwilDbApplication, error) {
 	CometHomeDir := os.Getenv("COMET_BFT_HOME")
-	blockWalPath := filepath.Join(CometHomeDir, "data", "BlockWal.txt")
+	blockWalPath := filepath.Join(CometHomeDir, "data", "Block.wal")
 	wal, err := utilpkg.NewWal(blockWalPath)
 	if err != nil {
 		return nil, err
 	}
+	stateWalPath := filepath.Join(CometHomeDir, "data", "AppState.wal")
+	stateWal, err := utilpkg.NewWal(stateWalPath)
+	if err != nil {
+		return nil, err
+	}
 
-	return &KwilDbApplication{
-		server:      srv,
-		executor:    executor,
-		valInfo:     node.NewValidatorsInfo(),
-		joinReqPool: node.NewJoinRequestPool(),
-		BlockWal:    wal,
-	}, nil
+	kwild := &KwilDbApplication{
+		server:       srv,
+		executor:     executor,
+		valInfo:      node.NewValidatorsInfo(),
+		joinReqPool:  node.NewJoinRequestPool(),
+		BlockWal:     wal,
+		StateWal:     stateWal,
+		recoveryMode: false,
+		state: KwildState{
+			PrevBlockHeight: 0,
+			PrevAppHash:     nil,
+			CurValidatorSet: make(map[string][]byte),
+			ExecState:       "init",
+		},
+	}
+
+	if !stateWal.IsEmpty() {
+		fmt.Println("Crash Recovery Mode")
+		kwild.recoveryMode = true
+		kwild.state = kwild.RetrieveState()
+	}
+	fmt.Println("Kwild State:", kwild.state)
+	return kwild, nil
 }
 
 func (app *KwilDbApplication) Start(ctx context.Context) error {
@@ -65,7 +92,10 @@ func (app *KwilDbApplication) Start(ctx context.Context) error {
 }
 
 func (app *KwilDbApplication) Info(info abcitypes.RequestInfo) abcitypes.ResponseInfo {
-	return abcitypes.ResponseInfo{}
+	return abcitypes.ResponseInfo{
+		LastBlockHeight:  app.state.PrevBlockHeight,
+		LastBlockAppHash: app.state.PrevAppHash,
+	}
 }
 
 func (app *KwilDbApplication) Query(query abcitypes.RequestQuery) abcitypes.ResponseQuery {
@@ -91,6 +121,11 @@ func (app *KwilDbApplication) CheckTx(req_tx abcitypes.RequestCheckTx) abcitypes
 }
 
 func (app *KwilDbApplication) DeliverTx(req_tx abcitypes.RequestDeliverTx) abcitypes.ResponseDeliverTx {
+	if app.recoveryMode && (app.state.ExecState == "precommit" || app.state.ExecState == "postcommit") {
+		fmt.Println("Replay Mode: Skipping TX", app.state.ExecState)
+		return abcitypes.ResponseDeliverTx{Code: 0, Log: "Replay mode, Txs already executed"}
+	}
+
 	var tx kTx.Transaction
 	err := json.Unmarshal(req_tx.Tx, &tx)
 	if err != nil {
@@ -283,12 +318,12 @@ func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.R
 		Payload: Joiner PubKey
 	*/
 	PrintTx(tx)
-	approver, err := UnmarshalPublicKey([]byte(tx.Sender))
+	approver, err := node.UnmarshalPublicKey([]byte(tx.Sender))
 	if err != nil {
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error()}
 	}
 
-	joiner, err := UnmarshalPublicKey(tx.Payload)
+	joiner, err := node.UnmarshalPublicKey(tx.Payload)
 	if err != nil {
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error()}
 	}
@@ -314,19 +349,14 @@ func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.R
 		valUpdates := abcitypes.Ed25519ValidatorUpdate(joiner.Bytes(), power)
 		app.ValUpdates = append(app.ValUpdates, valUpdates)
 		app.joinReqPool.RemoveJoinRequest(joinerAddr)
-		joinPublicKey, err := cryptoenc.PubKeyToProto(joiner)
-		if err != nil {
-			fmt.Println("can't encode public key: %w", err)
-		}
-		app.valInfo.ValAddrToPubKeyMap[joinerAddr] = joinPublicKey
+		app.state.CurValidatorSet[joinerAddr] = tx.Payload
 		fmt.Println("Approve Validator: Validator added to ValUpdates ", joinerAddr, ": ", power)
 	}
-	fmt.Println("AddrMap:", app.valInfo.ValAddrToPubKeyMap)
 	return abcitypes.ResponseDeliverTx{Code: 0}
 }
 
 func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool) (*entity.Validator, error) {
-	validator, err := UnmarshalValidator(tx.Payload)
+	validator, err := node.UnmarshalValidator(tx.Payload)
 	if err != nil {
 		app.server.Log.Error("ABCI validator update: failed to unmarshal validator request ", zap.String("error", err.Error()))
 		return nil, err
@@ -334,17 +364,11 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 
 	fmt.Println("Validator Info:", validator.PubKey, validator)
 
-	joiner, err := UnmarshalPublicKey([]byte(validator.PubKey))
-	// var joiner cmtCrypto.PubKey
-	// err = cmtjson.Unmarshal([]byte(validator.PubKey), &joiner)
+	joiner, err := node.UnmarshalPublicKey([]byte(validator.PubKey))
 	if err != nil {
 		return nil, err
 	}
 	joinerAddr := joiner.Address().String()
-	joinPublicKey, err := cryptoenc.PubKeyToProto(joiner)
-	if err != nil {
-		fmt.Println("can't encode public key: %w", err)
-	}
 
 	err = app.executor.CompareAndSpend(joinerAddr, tx.Fee, tx.Nonce, big.NewInt(0))
 	if err != nil {
@@ -353,19 +377,18 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 
 	if !is_join || app.valInfo.FinalizedValidators[joinerAddr] {
 		fmt.Println("Validator Update: Validator already finalized or not a joiner", joinerAddr, validator.Power)
-		fmt.Println("AddrMap:", app.valInfo.ValAddrToPubKeyMap)
 		valUpdates := abcitypes.Ed25519ValidatorUpdate(joiner.Bytes(), validator.Power)
 		if is_join {
 			fmt.Println("Join class")
-			if _, ok := app.valInfo.ValAddrToPubKeyMap[joinerAddr]; !ok {
+			if _, ok := app.state.CurValidatorSet[joinerAddr]; !ok {
 				app.ValUpdates = append(app.ValUpdates, valUpdates)
-				app.valInfo.ValAddrToPubKeyMap[joinerAddr] = joinPublicKey
+				app.state.CurValidatorSet[joinerAddr] = []byte(validator.PubKey)
 			}
 		} else {
 			fmt.Println("Leave class")
-			if _, ok := app.valInfo.ValAddrToPubKeyMap[joinerAddr]; ok {
+			if _, ok := app.state.CurValidatorSet[joinerAddr]; ok {
 				app.ValUpdates = append(app.ValUpdates, valUpdates)
-				delete(app.valInfo.ValAddrToPubKeyMap, joinerAddr)
+				delete(app.state.CurValidatorSet, joinerAddr)
 			}
 		}
 	} else {
@@ -384,7 +407,7 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 					app.ValUpdates = append(app.ValUpdates, valUpdates)
 					app.joinReqPool.RemoveJoinRequest(joinerAddr)
 					app.valInfo.FinalizedValidators[joinerAddr] = true
-					app.valInfo.ValAddrToPubKeyMap[joinerAddr] = joinPublicKey
+					app.state.CurValidatorSet[joinerAddr] = []byte(validator.PubKey)
 					fmt.Println("Validator Update: Validator added to ValUpdates ", joinerAddr, ": ", validator.Power)
 				}
 			}
@@ -448,30 +471,6 @@ func (app *KwilDbApplication) validator_leave(tx *kTx.Transaction) abcitypes.Res
 	return abcitypes.ResponseDeliverTx{Code: 0, Events: events}
 }
 
-func UnmarshalValidator(payload []byte) (*entity.Validator, error) {
-	validator := entity.Validator{}
-
-	err := json.Unmarshal(payload, &validator)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal validator: %w", err)
-	}
-
-	return &validator, nil
-}
-
-func UnmarshalPublicKey(addr []byte) (cmtCrypto.PubKey, error) {
-	var publicKey cmtCrypto.PubKey
-	key := fmt.Sprintf(`{"type":"tendermint/PubKeyEd25519","value":%s}`, string(addr))
-	fmt.Println("Key:", key)
-
-	err := cmtjson.Unmarshal([]byte(key), &publicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal validator public key: %w", err)
-	}
-	fmt.Println("publicKey: ", publicKey)
-	return publicKey, nil
-}
-
 func PrintTx(tx *kTx.Transaction) {
 	fmt.Println("Payload type: ", tx.PayloadType)
 	fmt.Println("Tx Sender: ", tx.Sender)
@@ -480,21 +479,20 @@ func PrintTx(tx *kTx.Transaction) {
 }
 
 func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitypes.ResponseInitChain {
+
 	app.ValUpdates = append(app.ValUpdates, req.Validators...)
 	for _, val := range req.Validators {
+		fmt.Println("val.Pubkey: pc/PublicKey : ", val.PubKey)
 		pubkey, err := cryptoenc.PubKeyFromProto(val.PubKey)
 		if err != nil {
 			fmt.Println("can't decode public key: %w", err)
 		}
-		publicKey, err := cryptoenc.PubKeyToProto(pubkey)
-		if err != nil {
-			fmt.Println("can't encode public key: %w", err)
-		}
+		fmt.Println("Pubkey: crypto.PubKey : ", pubkey)
 
-		app.valInfo.ValAddrToPubKeyMap[pubkey.Address().String()] = publicKey
+		app.state.CurValidatorSet[pubkey.Address().String()] = pubkey.Bytes()
 	}
-	app.blockHeight = 1
-	app.prevAppHash = crypto.Sha256([]byte(""))
+	// app.state.PrevBlockHeight = 0
+	app.state.PrevAppHash = crypto.Sha256([]byte(""))
 	return abcitypes.ResponseInitChain{}
 }
 
@@ -507,18 +505,30 @@ func (app *KwilDbApplication) ProcessProposal(proposal abcitypes.RequestProcessP
 }
 
 func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcitypes.ResponseBeginBlock {
+	if app.recoveryMode {
+		return abcitypes.ResponseBeginBlock{}
+	}
 	app.ValUpdates = make([]abcitypes.ValidatorUpdate, 0)
 	// Punish bad validators
 	for _, ev := range req.ByzantineValidators {
 		if ev.Type == abcitypes.MisbehaviorType_DUPLICATE_VOTE {
 			addr := string(ev.Validator.Address)
-			if pubKey, ok := app.valInfo.ValAddrToPubKeyMap[addr]; ok {
-
-				app.ValUpdates = append(app.ValUpdates, abcitypes.ValidatorUpdate{PubKey: pubKey, Power: ev.Validator.Power - 1})
+			if pubKey, ok := app.state.CurValidatorSet[addr]; ok {
+				PublicKey, err := node.UnmarshalPublicKey([]byte(pubKey))
+				if err != nil {
+					fmt.Println("can't decode public key: %w", err)
+					return abcitypes.ResponseBeginBlock{}
+				}
+				key, err := cryptoenc.PubKeyToProto(PublicKey)
+				if err != nil {
+					fmt.Println("can't encode public key: %w", err)
+					return abcitypes.ResponseBeginBlock{}
+				}
+				app.ValUpdates = append(app.ValUpdates, abcitypes.ValidatorUpdate{PubKey: key, Power: ev.Validator.Power - 1})
 				app.server.Log.Info("Decreased val power by 1 because of the equivocation", zap.String("val", addr))
 				if (ev.Validator.Power - 1) == 0 {
 					app.server.Log.Info("Val power is 0, removing it from the validator set", zap.String("val", addr))
-					delete(app.valInfo.ValAddrToPubKeyMap, addr)
+					delete(app.state.CurValidatorSet, addr)
 					// TODO: Persist these updates to the disk ==> Is it possible to save it in the kwil db sql db?
 				}
 			} else {
@@ -528,7 +538,11 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 		}
 	}
 
-	app.executor.UpdateBlockHeight(app.blockHeight)
+	app.executor.UpdateBlockHeight(app.state.PrevBlockHeight)
+	app.state.ExecState = "delivertx"
+	app.UpdateState()
+
+	// Create an accounts savepoint
 	return abcitypes.ResponseBeginBlock{}
 }
 
@@ -537,8 +551,12 @@ func (app *KwilDbApplication) EndBlock(block abcitypes.RequestEndBlock) abcitype
 }
 
 func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
+	// Update state
+	app.state.ExecState = "precommit"
+	app.UpdateState()
+
 	// Generate app hashes based on the changeset
-	expectedAppHash, err := app.executor.BlockCommit(app.BlockWal, app.prevAppHash)
+	expectedAppHash, err := app.executor.BlockCommit(app.BlockWal, app.state.PrevAppHash)
 	if err != nil {
 		app.server.Log.Error("ABCI: failed to commit block with ", zap.String("error", err.Error()))
 	}
@@ -548,10 +566,45 @@ func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
 		app.server.Log.Error("ABCI: failed to apply changesets with ", zap.String("error", err.Error()))
 	}
 
-	app.prevAppHash = expectedAppHash
+	app.state.PrevAppHash = expectedAppHash
 
-	app.blockHeight += 1
-	return abcitypes.ResponseCommit{Data: app.prevAppHash}
+	app.state.PrevBlockHeight += 1
+
+	// Update state
+	app.state.ExecState = "postcommit"
+	app.UpdateState()
+	app.recoveryMode = false
+
+	state := app.RetrieveState() // TODO: remove this
+	fmt.Println("State: ", state)
+	return abcitypes.ResponseCommit{Data: app.state.PrevAppHash}
+}
+
+func (app *KwilDbApplication) UpdateState() {
+	stateBts, err := json.Marshal(app.state)
+	if err != nil {
+		app.server.Log.Error("ABCI: failed to marshal state with ", zap.String("error", err.Error()))
+	}
+	fmt.Println("State: ", app.state, "Bytes: ", stateBts)
+	app.StateWal.OverwriteSync(stateBts)
+}
+
+func (app *KwilDbApplication) RetrieveState() KwildState {
+	if app.StateWal.IsEmpty() {
+		fmt.Println("State is empty")
+		return KwildState{}
+	}
+
+	state := app.StateWal.Read()
+	fmt.Println("State: ", state)
+	var stateObj KwildState
+	err := json.Unmarshal(state, &stateObj)
+	if err != nil {
+		app.server.Log.Error("ABCI: failed to unmarshal state with ", zap.String("error", err.Error()))
+		return KwildState{}
+	}
+	fmt.Println("State: ", stateObj, "appState: ", app.state)
+	return stateObj
 }
 
 func (app *KwilDbApplication) ListSnapshots(snapshots abcitypes.RequestListSnapshots) abcitypes.ResponseListSnapshots {

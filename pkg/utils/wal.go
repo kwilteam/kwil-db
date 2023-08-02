@@ -99,6 +99,25 @@ func (w *Wal) WriteSync(data []byte) error {
 	return nil
 }
 
+func (w *Wal) OverwriteSync(data []byte) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	err := w.Wal.Truncate(0)
+	if err != nil {
+		return err
+	}
+	_, err = w.Wal.Write(data)
+	if err != nil {
+		return err
+	}
+	err = w.Wal.Sync()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+
 func (w *Wal) UpdateMaxLineSz(sz int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -120,4 +139,25 @@ func (w *Wal) NewScanner() *bufio.Scanner {
 	buf := make([]byte, w.maxLineSize)
 	scanner.Buffer(buf, w.maxLineSize)
 	return scanner
+}
+
+func (w *Wal) Read() []byte {
+	bts, err := os.ReadFile(w.Path)
+	if err != nil {
+		return nil
+	}
+	return bts
+}
+
+func (w *Wal) IsEmpty() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	stat, err := w.Wal.Stat()
+	if err != nil {
+		return true
+	}
+	if stat.Size() == 0 {
+		return true
+	}
+	return false
 }
