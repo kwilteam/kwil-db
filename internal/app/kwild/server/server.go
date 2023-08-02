@@ -22,12 +22,11 @@ type starter interface {
 }
 
 type Server struct {
-	Ctx         context.Context
-	Cfg         *config.KwildConfig
-	Log         log.Logger
-	ChainSyncer starter
-	Http        *GWServer
-	Grpc        *grpcServer.Server
+	Ctx  context.Context
+	Cfg  *config.KwildConfig
+	Log  log.Logger
+	Http *GWServer
+	Grpc *grpcServer.Server
 
 	done context.CancelFunc
 }
@@ -64,14 +63,6 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.Http.Serve()
 	})
 	s.Log.Info("http server started", zap.String("address", s.Cfg.HttpListenAddress))
-
-	g.Go(func() error {
-		if err := s.ChainSyncer.Start(gctx); err != nil {
-			return err
-		}
-		s.Log.Info("deposits synced")
-		return nil
-	})
 
 	g.Go(func() error {
 		go func() {

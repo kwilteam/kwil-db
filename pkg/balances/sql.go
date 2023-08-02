@@ -1,13 +1,34 @@
 package balances
 
 import (
+	"context"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/sql/driver"
 	"math/big"
 	"strings"
-
-	"go.uber.org/zap"
 )
+
+type preparedStatements struct {
+	getAccount PreparedStatement
+}
+
+func (p *preparedStatements) Close() error {
+	return p.getAccount.Close()
+}
+
+func (a *AccountStore) prepareStatements() error {
+	if a.stmts == nil {
+		a.stmts = &preparedStatements{}
+	}
+
+	stmt, err := a.db.Prepare(sqlGetAccount)
+	if err != nil {
+		return fmt.Errorf("failed to prepare get account statement: %w", err)
+	}
+
+	a.stmts.getAccount = stmt
+
+	return nil
+}
 
 const (
 	sqlInitTables = `
@@ -30,18 +51,11 @@ func getTableInits() []string {
 	return inits[:len(inits)-1]
 }
 
-func (ar *AccountStore) initTables() error {
+func (ar *AccountStore) initTables(ctx context.Context) error {
 	inits := getTableInits()
 
-	if ar.wipe {
-		err := ar.dropAllTables()
-		if err != nil {
-			return fmt.Errorf("failed to wipe balances: %w", err)
-		}
-	}
-
 	for _, init := range inits {
-		err := ar.db.Execute(init)
+		err := ar.db.Execute(ctx, init, nil)
 		if err != nil {
 			return fmt.Errorf("failed to initialize tables: %w", err)
 		}
@@ -50,63 +64,78 @@ func (ar *AccountStore) initTables() error {
 	return nil
 }
 
-const sqlSetBalance = "UPDATE accounts SET balance = $balance WHERE address = $address"
+const sqlUpdateAccount = "UPDATE accounts SET balance = $balance, nonce = $nonce WHERE address = $address COLLATE NOCASE"
 
-func (a *AccountStore) setBalance(address string, amount *big.Int) error {
-	return a.db.ExecuteNamed(sqlSetBalance, map[string]interface{}{
+func (a *AccountStore) updateAccount(ctx context.Context, address string, amount *big.Int, nonce int64) error {
+	return a.db.Execute(ctx, sqlUpdateAccount, map[string]interface{}{
 		"$address": strings.ToLower(address),
 		"$balance": amount.String(),
-	})
-}
-
-const sqlSetNonce = "UPDATE accounts SET nonce = $nonce WHERE address = $address"
-
-func (a *AccountStore) setNonce(address string, nonce int64) error {
-	return a.db.ExecuteNamed(sqlSetNonce, map[string]interface{}{
-		"$address": strings.ToLower(address),
 		"$nonce":   nonce,
 	})
 }
 
 const sqlCreateAccount = "INSERT INTO accounts (address, balance, nonce) VALUES ($address, $balance, $nonce)"
 
-func (a *AccountStore) createAccount(address string) error {
-	return a.db.ExecuteNamed(sqlCreateAccount, map[string]interface{}{
+// createAccount creates an account with the given address.
+func (a *AccountStore) createAccount(ctx context.Context, address string) error {
+	return a.db.Execute(ctx, sqlCreateAccount, map[string]interface{}{
 		"$address": strings.ToLower(address),
 		"$balance": big.NewInt(0).String(),
 		"$nonce":   0,
 	})
 }
 
-const sqlGetAccount = "SELECT balance, nonce FROM accounts WHERE address = $address"
+const sqlGetAccount = "SELECT balance, nonce FROM accounts WHERE address = $address COLLATE NOCASE"
 
-func (a *AccountStore) getAccount(address string) (*Account, error) {
-	var balance *big.Int
-	var nonce int64
-	exists := false
-	err := a.db.QueryNamed(sqlGetAccount, func(stmt *driver.Statement) error {
-		exists = true
-		var ok bool
-
-		stringBal := stmt.GetText("balance")
-		balance, ok = new(big.Int).SetString(stringBal, 10)
-		if !ok {
-			a.log.Warn("failed to convert stored string balance to big int", zap.String("address", address), zap.String("balance", stringBal))
-			return ErrConvertToBigInt
-		}
-
-		nonce = stmt.GetInt64("nonce")
-
-		return nil
-	}, map[string]interface{}{
+// getAccountReadOnly gets an account using a read-only connection.
+// it will not show uncommitted changes.
+func (a *AccountStore) getAccountReadOnly(ctx context.Context, address string) (*Account, error) {
+	results, err := a.db.Query(ctx, sqlGetAccount, map[string]interface{}{
 		"$address": strings.ToLower(address),
 	})
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
-		a.log.Debug("account not found", zap.String("address", address))
-		return nil, ErrAccountNotFound
+
+	acc, err := accountFromRecords(address, results)
+	if err == errAccountNotFound {
+		return emptyAccount(), nil
+	}
+	return acc, err
+}
+
+// getAccountSynchronous gets an account using a read-write connection.
+// it will show uncommitted changes.
+func (a *AccountStore) getAccountSynchronous(ctx context.Context, address string) (*Account, error) {
+	results, err := a.stmts.getAccount.Execute(ctx, map[string]interface{}{
+		"$address": strings.ToLower(address),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return accountFromRecords(address, results)
+}
+
+// accountFromRecords gets the first account from a list of records.
+func accountFromRecords(address string, results []map[string]interface{}) (*Account, error) {
+	if len(results) == 0 {
+		return nil, errAccountNotFound
+	}
+
+	stringBal, ok := results[0]["balance"].(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert stored string balance to big int")
+	}
+
+	balance, ok := new(big.Int).SetString(stringBal, 10)
+	if !ok {
+		return nil, ErrConvertToBigInt
+	}
+
+	nonce, ok := results[0]["nonce"].(int64)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert stored nonce to int64")
 	}
 
 	return &Account{
@@ -116,90 +145,15 @@ func (a *AccountStore) getAccount(address string) (*Account, error) {
 	}, nil
 }
 
-const sqlDropAccounts = "DROP TABLE accounts"
-const sqlDropChains = "DROP TABLE chains"
-
-func (a *AccountStore) dropAllTables() error {
-	exists, err := a.db.TableExists("accounts")
-	if err != nil {
-		return fmt.Errorf("failed to check if accounts table exists: %w", err)
-	}
-
-	if exists {
-		err = a.db.Execute(sqlDropAccounts)
+// getOrCreateAccount gets an account, creating it if it doesn't exist.
+func (a *AccountStore) getOrCreateAccount(ctx context.Context, address string) (*Account, error) {
+	account, err := a.getAccountSynchronous(ctx, address)
+	if account == nil && err == errAccountNotFound {
+		err = a.createAccount(ctx, address)
 		if err != nil {
-			return fmt.Errorf("failed to drop accounts table: %w", err)
+			return nil, fmt.Errorf("failed to create account: %w", err)
 		}
+		return emptyAccount(), nil
 	}
-
-	exists, err = a.db.TableExists("chains")
-	if err != nil {
-		return fmt.Errorf("failed to check if chains table exists: %w", err)
-	}
-
-	if exists {
-		err = a.db.Execute(sqlDropChains)
-		if err != nil {
-			return fmt.Errorf("failed to drop chains table: %w", err)
-		}
-	}
-
-	return nil
-}
-
-const sqlGetChainHeight = "SELECT height FROM chains WHERE chain_code = $chain_code"
-
-func (a *AccountStore) getChainHeight(chainCode int32) (int64, error) {
-	var height int64
-	exists := false
-	err := a.db.QueryNamed(sqlGetChainHeight, func(stmt *driver.Statement) error {
-		exists = true
-		height = stmt.GetInt64("height")
-		return nil
-	}, map[string]interface{}{
-		"$chain_code": chainCode,
-	})
-	if err != nil {
-		return 0, err
-	}
-	if !exists {
-		return 0, nil
-	}
-
-	return height, nil
-}
-
-const sqlSetChainHeight = "UPDATE chains SET height = $height WHERE chain_code = $chain_code"
-
-func (a *AccountStore) setChainHeight(chainCode int32, height int64) error {
-	return a.db.ExecuteNamed(sqlSetChainHeight, map[string]interface{}{
-		"$chain_code": chainCode,
-		"$height":     height,
-	})
-}
-
-const sqlCreateChain = "INSERT INTO chains (chain_code, height) VALUES ($chain_code, $height)"
-
-func (a *AccountStore) createChain(chainCode int32, height int64) error {
-	return a.db.ExecuteNamed(sqlCreateChain, map[string]interface{}{
-		"$chain_code": chainCode,
-		"$height":     height,
-	})
-}
-
-const sqlChainExists = "SELECT EXISTS(SELECT 1 FROM chains WHERE chain_code = $chain_code)"
-
-func (a *AccountStore) chainExists(chainCode int32) (bool, error) {
-	exists := false
-	err := a.db.QueryNamed(sqlChainExists, func(stmt *driver.Statement) error {
-		exists = stmt.GetBool("EXISTS(SELECT 1 FROM chains WHERE chain_code = $chain_code)")
-		return nil
-	}, map[string]interface{}{
-		"$chain_code": chainCode,
-	})
-	if err != nil {
-		return false, err
-	}
-
-	return exists, nil
+	return account, err
 }
