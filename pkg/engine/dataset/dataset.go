@@ -124,6 +124,10 @@ func (d *Dataset) Call(ctx context.Context, action string, args map[string]any, 
 		opts = &TxOpts{}
 	}
 
+	if len(args) == 0 { // if no args, add an empty arg map so we can execute once
+		args = make(map[string]any)
+	}
+
 	proc, err := d.getProcedure(action)
 	if err != nil {
 		return nil, err

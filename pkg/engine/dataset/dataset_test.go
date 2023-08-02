@@ -43,8 +43,10 @@ func Test_Execute(t *testing.T) {
 		fields          fields
 		args            args
 		expectedOutputs []map[string]interface{}
-		wantErr         bool
-		wantBuilderErr  bool
+		// by default it is Execute(), but if we want to test Call() we can set this to true
+		isCall         bool
+		wantErr        bool
+		wantBuilderErr bool
 	}{
 		{
 			name:   "execute a dml procedure successfully",
@@ -282,9 +284,9 @@ func Test_Execute(t *testing.T) {
 						Name:      "create_user",
 						Args:      []string{},
 						Public:    true,
-						Modifiers: []types.Modifier{types.ModifierAuthenticated},
+						Modifiers: []types.Modifier{types.ModifierAuthenticated, types.ModifierView},
 						Statements: []string{
-							"INSERT INTO users (id, username, age, address) VALUES (5, 'test_username', 20, '0x123');",
+							"SELECT * FROM users WHERE address = @caller;",
 						},
 					},
 				},
@@ -294,6 +296,7 @@ func Test_Execute(t *testing.T) {
 				inputs:    []map[string]interface{}{},
 			},
 			expectedOutputs: nil,
+			isCall:          true,
 			wantErr:         true,
 			wantBuilderErr:  false,
 		},
@@ -309,9 +312,9 @@ func Test_Execute(t *testing.T) {
 						Name:      "create_user",
 						Args:      []string{},
 						Public:    true,
-						Modifiers: []types.Modifier{types.ModifierAuthenticated},
+						Modifiers: []types.Modifier{types.ModifierAuthenticated, types.ModifierView},
 						Statements: []string{
-							"INSERT INTO users (id, username, age, address) VALUES (5, 'test_username', 20, '0x123');",
+							"SELECT * FROM users WHERE address = @caller;",
 						},
 					},
 				},
@@ -321,6 +324,7 @@ func Test_Execute(t *testing.T) {
 				inputs:    []map[string]interface{}{},
 			},
 			expectedOutputs: []map[string]interface{}{},
+			isCall:          true,
 			wantErr:         false,
 			wantBuilderErr:  false,
 		},
@@ -364,9 +368,20 @@ func Test_Execute(t *testing.T) {
 				}
 			}()
 
-			outputs, err := ds.Execute(ctx, tt.args.procedure, tt.args.inputs, &dataset.TxOpts{
-				Caller: tt.fields.callerAddress,
-			})
+			var outputs []map[string]interface{}
+			if tt.isCall {
+				if len(tt.args.inputs) == 0 {
+					tt.args.inputs = []map[string]interface{}{nil}
+				}
+
+				outputs, err = ds.Call(ctx, tt.args.procedure, tt.args.inputs[0], &dataset.TxOpts{
+					Caller: tt.fields.callerAddress,
+				})
+			} else {
+				outputs, err = ds.Execute(ctx, tt.args.procedure, tt.args.inputs, &dataset.TxOpts{
+					Caller: tt.fields.callerAddress,
+				})
+			}
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Dataset.Execute() error = %v, wantErr %v", err, tt.wantErr)
 				return
