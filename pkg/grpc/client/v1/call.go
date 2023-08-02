@@ -23,7 +23,7 @@ func (c *Client) Call(ctx context.Context, req *tx.CallActionMessage) ([]map[str
 		Payload: &txpb.CallPayload{
 			Dbid:   req.Payload.DBID,
 			Action: req.Payload.Action,
-			Params: scalarMap,
+			Args:   scalarMap,
 		},
 		Signature: convertActionSignature(req.Signature),
 		Sender:    req.Sender,

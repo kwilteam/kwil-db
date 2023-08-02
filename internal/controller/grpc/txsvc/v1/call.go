@@ -45,7 +45,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 
 func convertActionCall(req *txpb.CallRequest) (*entity.ActionCall, error) {
 	convertedParams := make(map[string]interface{})
-	for k, v := range req.Payload.Params {
+	for k, v := range req.Payload.Args {
 		var anyVal any
 
 		switch realVal := v.Value.(type) {

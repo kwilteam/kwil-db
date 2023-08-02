@@ -398,7 +398,7 @@
         "action": {
           "type": "string"
         },
-        "params": {
+        "args": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/txScalarValue"
