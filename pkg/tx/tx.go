@@ -41,12 +41,9 @@ func (t *Transaction) Verify() error {
 	}
 
 	// Not returning this function directly since I want specific error messages.
-	ok, err := kwilCrypto.CheckSignature(t.Sender, t.Signature, t.Hash)
+	err := t.Signature.Check(t.Sender, t.Hash)
 	if err != nil {
-		return fmt.Errorf("unexpected error checking signature: %v", err)
-	}
-	if !ok {
-		return fmt.Errorf("invalid signature")
+		return fmt.Errorf("failed to verify signed message: %v", err)
 	}
 
 	return nil
