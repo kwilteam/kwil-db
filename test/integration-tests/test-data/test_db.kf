@@ -53,7 +53,7 @@ action get_user_by_wallet($address) public {
     WHERE wallet = $address;
 }
 
-action list_users() private {
+action list_users() public {
     SELECT *
     FROM users;
 }

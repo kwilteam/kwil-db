@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	utilpkg "github.com/kwilteam/kwil-db/pkg/utils"
+	gowal "github.com/tidwall/wal"
 	"go.uber.org/zap"
 )
 
@@ -40,7 +41,7 @@ type KwilDbApplication struct {
 	valInfo     *node.ValidatorsInfo
 	joinReqPool *node.JoinRequestPool
 
-	BlockWal *utilpkg.Wal
+	BlockWal *gowal.Log
 	StateWal *utilpkg.Wal
 
 	recoveryMode bool
@@ -51,10 +52,14 @@ var _ abcitypes.Application = (*KwilDbApplication)(nil)
 func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseInterface) (*KwilDbApplication, error) {
 	CometHomeDir := os.Getenv("COMET_BFT_HOME")
 	blockWalPath := filepath.Join(CometHomeDir, "data", "Block.wal")
-	wal, err := utilpkg.NewWal(blockWalPath)
+	wal, err := gowal.Open(blockWalPath, nil)
 	if err != nil {
 		return nil, err
 	}
+	// This is done to reset the indexes to 1, [need this to avoid a bug with the truncation of tidwal]
+	wal.Write(1, []byte("no-op"))
+	wal.TruncateBack(1)
+
 	stateWalPath := filepath.Join(CometHomeDir, "data", "AppState.wal")
 	stateWal, err := utilpkg.NewWal(stateWalPath)
 	if err != nil {
@@ -578,8 +583,6 @@ func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
 	app.UpdateState()
 	app.recoveryMode = false
 
-	state := app.RetrieveState() // TODO: remove this
-	fmt.Println("State: ", state)
 	return abcitypes.ResponseCommit{Data: app.state.PrevAppHash}
 }
 
@@ -588,7 +591,6 @@ func (app *KwilDbApplication) UpdateState() {
 	if err != nil {
 		app.server.Log.Error("ABCI: failed to marshal state with ", zap.String("error", err.Error()))
 	}
-	fmt.Println("State: ", app.state, "Bytes: ", stateBts)
 	app.StateWal.OverwriteSync(stateBts)
 }
 
@@ -599,14 +601,12 @@ func (app *KwilDbApplication) RetrieveState() KwildState {
 	}
 
 	state := app.StateWal.Read()
-	fmt.Println("State: ", state)
 	var stateObj KwildState
 	err := json.Unmarshal(state, &stateObj)
 	if err != nil {
 		app.server.Log.Error("ABCI: failed to unmarshal state with ", zap.String("error", err.Error()))
 		return KwildState{}
 	}
-	fmt.Println("State: ", stateObj, "appState: ", app.state)
 	return stateObj
 }
 

@@ -7,14 +7,14 @@ import (
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/tx"
-	"github.com/kwilteam/kwil-db/pkg/utils"
+	gowal "github.com/tidwall/wal"
 )
 
 // DatasetUseCaseInterface is the interface for the dataset use case
 
 type DatasetUseCaseInterface interface {
-	ApplyChangesets(wal *utils.Wal) error
-	BlockCommit(wal *utils.Wal, prevAppHash []byte) ([]byte, error)
+	ApplyChangesets(wal *gowal.Log) error
+	BlockCommit(wal *gowal.Log, prevAppHash []byte) ([]byte, error)
 	Close() error
 	Deploy(ctx context.Context, deployment *entity.DeployDatabase) (rec *tx.Receipt, err error)
 	Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error)
