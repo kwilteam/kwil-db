@@ -21,7 +21,7 @@ type DatasetUseCase struct {
 	sqliteFilePath string
 }
 
-func New(ctx context.Context, opts ...DatasetUseCaseOpt) (DatasetUseCaseInterface, error) {
+func New(ctx context.Context, opts ...DatasetUseCaseOpt) (*DatasetUseCase, error) {
 	u := &DatasetUseCase{
 		log:            log.NewNoOp(),
 		sqliteFilePath: "",
@@ -43,8 +43,10 @@ func New(ctx context.Context, opts ...DatasetUseCaseOpt) (DatasetUseCaseInterfac
 	}
 
 	if u.accountStore == nil {
-		u.accountStore, err = balances.NewAccountStore(
+		u.accountStore, err = balances.NewAccountStore(ctx,
 			balances.WithLogger(u.log),
+			balances.WithNonces(false),
+			balances.WithGasCosts(false),
 		)
 		if err != nil {
 			return nil, err

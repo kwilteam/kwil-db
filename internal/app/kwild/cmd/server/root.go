@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -32,7 +33,6 @@ import (
 	// shorthand for chain client service
 	"github.com/kwilteam/kwil-db/pkg/arweave"
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	chainsyncer "github.com/kwilteam/kwil-db/pkg/balances/chain-syncer"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
 	kwildbapp "github.com/kwilteam/kwil-db/internal/abci-apps"
@@ -49,7 +49,6 @@ import (
 	chainClient "github.com/kwilteam/kwil-db/pkg/chain/client"
 	ccService "github.com/kwilteam/kwil-db/pkg/chain/client/service" // shorthand for chain client service
 	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
-	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
 func NewStartCmd() *cobra.Command {
@@ -132,27 +131,12 @@ func init() {
 }
 
 func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger log.Logger) (*server.Server, *txsvc.Service, error) {
-	fmt.Printf("Building chain client\n: %v", cfg)
-	fmt.Println("Chain client config: ", cfg.Deposits.ClientChainRPCURL)
-	chainclient, err := buildChainClient(cfg, logger)
-	if err != nil {
-		fmt.Printf("Failed to build chain client: %v", err)
-		return nil, nil, fmt.Errorf("failed to build chain client: %w", err)
-	}
-
 	// TODO: Move to CometBFT later? or are these different accounts?
 	fmt.Printf("Building account repository\n")
-	accountStore, err := buildAccountRepository(logger, cfg)
+	accountStore, err := buildAccountRepository(ctx, logger, cfg)
 	if err != nil {
 		fmt.Printf("Failed to build account repository: %v", err)
 		return nil, nil, fmt.Errorf("failed to build account repository: %w", err)
-	}
-
-	fmt.Printf("Building chain syncer\n")
-	chainSyncer, err := buildChainSyncer(cfg, chainclient, accountStore, logger)
-	if err != nil {
-		fmt.Printf("Failed to build chain syncer: %v", err)
-		return nil, nil, fmt.Errorf("failed to build chain syncer: %w", err)
 	}
 
 	fmt.Printf("Building tx service\n")
@@ -192,11 +176,10 @@ func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger
 	fmt.Printf("Registering grpc services\n")
 
 	server := &server.Server{
-		Cfg:         cfg,
-		Log:         logger,
-		ChainSyncer: chainSyncer,
-		Http:        gw,
-		Grpc:        grpcServer,
+		Cfg:  cfg,
+		Log:  logger,
+		Http: gw,
+		Grpc: grpcServer,
 	}
 	return server, txSvc, nil
 }
@@ -273,12 +256,8 @@ func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.C
 	)
 }
 
-func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (AccountStore, error) {
-	if cfg.WithoutAccountStore {
-		return balances.NewEmptyAccountStore(*logger.Named("emptyAccountStore")), nil
-	}
-
-	return balances.NewAccountStore(
+func buildAccountRepository(ctx context.Context, logger log.Logger, cfg *config.KwildConfig) (AccountStore, error) {
+	return balances.NewAccountStore(ctx,
 		balances.WithLogger(*logger.Named("accountStore")),
 		balances.WithPath(cfg.SqliteFilePath),
 		balances.WithGasCosts(!cfg.WithoutGasCosts),
@@ -287,35 +266,12 @@ func buildAccountRepository(logger log.Logger, cfg *config.KwildConfig) (Account
 }
 
 type AccountStore interface {
-	BatchCredit(creditList []*balances.Credit, chain *balances.ChainConfig) error
-	BatchSpend(spendList []*balances.Spend, chain *balances.ChainConfig) error
-	ChainExists(chainCode int32) (bool, error)
+	ApplyChangeset(changeset io.Reader) error
 	Close() error
-	CreateChain(chainCode int32, height int64) error
-	Credit(credit *balances.Credit) error
-	GetAccount(address string) (*balances.Account, error)
-	GetHeight(chainCode int32) (int64, error)
-	SetHeight(chainCode int32, height int64) error
-	Spend(spend *balances.Spend) error
-	UpdateGasCosts(bool)
-	GasEnabled() bool
-}
-
-func buildChainSyncer(cfg *config.KwildConfig, cc chainClient.ChainClient, as AccountStore, logger log.Logger) (starter, error) {
-	if cfg.WithoutChainSyncer {
-		return chainsyncer.NewEmptyChainSyncer(), nil
-	}
-
-	walletAddress := kwilCrypto.AddressFromPrivateKey(cfg.PrivateKey)
-
-	return chainsyncer.Builder().
-		WithLogger(*logger.Named("chainSyncer")).
-		WritesTo(as).
-		ListensTo(cfg.Deposits.PoolAddress).
-		WithChainClient(cc).
-		WithReceiverAddress(walletAddress).
-		WithChunkSize(int64(cfg.ChainSyncer.ChunkSize)).
-		Build()
+	CreateSession() (balances.Session, error)
+	GetAccount(ctx context.Context, address string) (*balances.Account, error)
+	Savepoint() (balances.Savepoint, error)
+	Spend(ctx context.Context, spend *balances.Spend) error
 }
 
 func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as AccountStore, logger log.Logger) (*txsvc.Service, error) {

@@ -25,7 +25,7 @@ func OpenDbWithTearDown(name string) (*Connection, func() error, error) {
 		fmt.Printf("failed to delete temp database while opening %v\n", err)
 	}
 
-	conn2, err := OpenConn(testdbName, WithPath("./tmp/"))
+	conn2, err := OpenConn(name, WithPath("./tmp/"))
 	if err != nil {
 		return nil, nil, err
 	}
