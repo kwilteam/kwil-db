@@ -11,60 +11,30 @@ import (
 )
 
 // DatasetUseCaseInterface is the interface for the dataset use case
+
 type DatasetUseCaseInterface interface {
-	// Deploy deploys a new database
-	Deploy(context.Context, *entity.DeployDatabase) (*tx.Receipt, error)
-
-	//PriceDeploy returns the price to deploy a database
-	PriceDeploy(*entity.DeployDatabase) (*big.Int, error)
-
-	// Drop drops a database
-	Drop(context.Context, *entity.DropDatabase) (*tx.Receipt, error)
-
-	// PriceDrop returns the price to drop a database
-	PriceDrop(*entity.DropDatabase) (*big.Int, error)
-
-	// Execute executes an action on a database
-	Execute(context.Context, *entity.ExecuteAction) (*tx.Receipt, error)
-
-	// PriceExecute returns the price to execute an action on a database
-	PriceExecute(*entity.ExecuteAction) (*big.Int, error)
-
-	// Query queries a database
-	Query(context.Context, *entity.DBQuery) ([]byte, error)
-
-	// GetAccount returns the account of the given address
-	GetAccount(string) (*entity.Account, error)
-
-	// ListDatabases returns a list of all databases deployed by the given address
-	ListDatabases(context.Context, string) ([]string, error)
-
-	// GetSchema returns the schema of the given database
-	GetSchema(context.Context, string) (*entity.Schema, error)
-	
+	ApplyChangesets(wal *utils.Wal) error
+	BlockCommit(wal *utils.Wal, prevAppHash []byte) ([]byte, error)
+	Close() error
+	Deploy(ctx context.Context, deployment *entity.DeployDatabase) (rec *tx.Receipt, err error)
+	Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error)
+	Execute(ctx context.Context, action *entity.ExecuteAction) (rec *tx.Receipt, err error)
+	GenerateAppHash(prevAppHash []byte) []byte
+	GetAccount(ctx context.Context, address string) (*entity.Account, error)
+	GetSchema(ctx context.Context, dbid string) (*entity.Schema, error)
+	ListDatabases(ctx context.Context, owner string) ([]string, error)
+	PriceDeploy(deployment *entity.DeployDatabase) (*big.Int, error)
+	PriceDrop(drop *entity.DropDatabase) (*big.Int, error)
+	PriceExecute(action *entity.ExecuteAction) (*big.Int, error)
+	Query(ctx context.Context, query *entity.DBQuery) ([]byte, error)
+	UpdateBlockHeight(height int64)
 	// Call calls a read-only action on a database
 	Call(ctx context.Context, action *entity.ActionCall) ([]map[string]any, error)
-
-	CompareAndSpend(address, fee string, nonce int64, price *big.Int) error
-
-	BlockCommit(wal *utils.Wal, prevAppHash []byte) ([]byte, error)
-
-	UpdateBlockHeight(int64)
-
-	ApplyChangesets(wal *utils.Wal) error
-
-	GenerateAppHash(prevAppHash []byte) []byte
+	Spend(ctx context.Context, address string, amount string, nonce int64) error
 }
 
 type AccountStore interface {
-	GetAccount(address string) (*balances.Account, error)
-	Spend(spend *balances.Spend) error
-	BatchCredit(creditList []*balances.Credit, chain *balances.ChainConfig) error
+	GetAccount(ctx context.Context, address string) (*balances.Account, error)
+	Spend(ctx context.Context, spend *balances.Spend) error
 	Close() error
-
-	// UpdateGasCosts updates the gas costs of the use case
-	UpdateGasCosts(bool)
-
-	// GasEnabled Checks if gas costs are enableds
-	GasEnabled() bool
 }

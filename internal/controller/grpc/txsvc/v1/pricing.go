@@ -18,10 +18,6 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
-	if !s.accountStore.GasEnabled() {
-		return &txpb.EstimatePriceResponse{Price: "0"}, nil
-	}
-
 	switch tx.PayloadType {
 	case kTx.DEPLOY_DATABASE:
 		return handlePricing(s.priceDeploy(ctx, tx))

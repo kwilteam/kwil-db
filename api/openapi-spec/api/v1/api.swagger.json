@@ -340,7 +340,6 @@
         "parameters": [
           {
             "name": "Pubkey",
-            "description": "ED25519 PubKey",
             "in": "query",
             "required": false,
             "type": "string",
@@ -438,7 +437,6 @@
         "details": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
@@ -570,7 +568,6 @@
         "attributes": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txAttribute"
           }
         }
@@ -588,14 +585,12 @@
         "tables": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txTable"
           }
         },
         "actions": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txAction"
           }
         }
@@ -757,14 +752,12 @@
         "columns": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txColumn"
           }
         },
         "indexes": {
           "type": "array",
           "items": {
-            "type": "object",
             "$ref": "#/definitions/txIndex"
           }
         }
@@ -821,8 +814,7 @@
       "properties": {
         "PubKey": {
           "type": "string",
-          "format": "byte",
-          "title": "ED25519 PubKey"
+          "format": "byte"
         }
       }
     },

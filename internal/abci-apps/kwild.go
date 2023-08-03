@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 
@@ -313,6 +312,7 @@ func (app *KwilDbApplication) execute_action(tx *kTx.Transaction) abcitypes.Resp
 }
 
 func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
+	ctx := context.Background()
 	/*
 		Tx Sender: Approver Pubkey
 		Payload: Joiner PubKey
@@ -330,7 +330,8 @@ func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.R
 	joinerAddr := joiner.Address().String()
 	approverAddr := approver.Address().String()
 
-	err = app.executor.CompareAndSpend(approverAddr, tx.Fee, tx.Nonce, big.NewInt(0))
+	// TODO: this should not spend here.  This is something that should be included in use case, or use case should include here
+	err = app.executor.Spend(ctx, approverAddr, tx.Fee, tx.Nonce)
 	if err != nil {
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error()}
 	}
@@ -356,6 +357,8 @@ func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.R
 }
 
 func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool) (*entity.Validator, error) {
+	ctx := context.Background()
+
 	validator, err := node.UnmarshalValidator(tx.Payload)
 	if err != nil {
 		app.server.Log.Error("ABCI validator update: failed to unmarshal validator request ", zap.String("error", err.Error()))
@@ -370,7 +373,7 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 	}
 	joinerAddr := joiner.Address().String()
 
-	err = app.executor.CompareAndSpend(joinerAddr, tx.Fee, tx.Nonce, big.NewInt(0))
+	err = app.executor.Spend(ctx, joinerAddr, tx.Fee, tx.Nonce)
 	if err != nil {
 		return nil, err
 	}

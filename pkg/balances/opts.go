@@ -2,35 +2,34 @@ package balances
 
 import "github.com/kwilteam/kwil-db/pkg/log"
 
-type balancesOpts func(*AccountStore)
+type AccountStoreOpts func(*AccountStore)
 
-func WithPath(path string) balancesOpts {
+func WithPath(path string) AccountStoreOpts {
 	return func(ar *AccountStore) {
 		ar.path = path
 	}
 }
 
-// Wipe will delete the database file and recreate it
-func Wipe() balancesOpts {
-	return func(ar *AccountStore) {
-		ar.wipe = true
-	}
-}
-
-func WithLogger(logger log.Logger) balancesOpts {
+func WithLogger(logger log.Logger) AccountStoreOpts {
 	return func(ar *AccountStore) {
 		ar.log = logger
 	}
 }
 
-func WithGasCosts(gas_enabled bool) balancesOpts {
+func WithGasCosts(gas_enabled bool) AccountStoreOpts {
 	return func(ar *AccountStore) {
-		ar.gas_enabled = gas_enabled
+		ar.gasEnabled = gas_enabled
 	}
 }
 
-func WithNonces(nonces_enabled bool) balancesOpts {
+func WithNonces(nonces_enabled bool) AccountStoreOpts {
 	return func(ar *AccountStore) {
-		ar.nonces_enabled = nonces_enabled
+		ar.noncesEnabled = nonces_enabled
+	}
+}
+
+func WithDatastore(db Datastore) AccountStoreOpts {
+	return func(ar *AccountStore) {
+		ar.db = db
 	}
 }
