@@ -7,13 +7,13 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 )
 
-func (u *DatasetUseCase) Call(ctx context.Context, action *entity.ActionCall) ([]map[string]any, error) {
-	ds, err := u.engine.GetDataset(ctx, action.Message.Payload.DBID)
+func (u *DatasetUseCase) Call(ctx context.Context, action *entity.CallAction) ([]map[string]any, error) {
+	ds, err := u.engine.GetDataset(ctx, action.Payload.DBID)
 	if err != nil {
 		return nil, err
 	}
 
-	return ds.Call(ctx, action.Message.Payload.Action, action.Message.Payload.Params, &dataset.TxOpts{
+	return ds.Call(ctx, action.Payload.Action, action.Payload.Params, &dataset.TxOpts{
 		Caller: action.Message.Sender,
 	})
 }

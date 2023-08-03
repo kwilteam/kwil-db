@@ -383,8 +383,8 @@ github.com/kwilteam/action-grammar-go v0.0.0-20230626155541-72265621f427 h1:MYJu
 github.com/kwilteam/action-grammar-go v0.0.0-20230626155541-72265621f427/go.mod h1:2KYz1ittMk7BbKRJSnSnRSysrgDUUtNB1Ha47ZMdc6M=
 github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421 h1:TewJpDtkIU8ZsIoWMqTcWmZKZS6i4AeuBylgogQ1dRI=
 github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421/go.mod h1:urRZ5yExms/OcYQHq0IAPLkNoudEbfUuQdlNvhcfrKI=
-github.com/kwilteam/kuneiform v0.4.2-0.20230727223543-9936fe66d639 h1:SWb/dGbivDmD0zLUZY7n3pd/7ckQHtJNvzjk/uz/fGA=
-github.com/kwilteam/kuneiform v0.4.2-0.20230727223543-9936fe66d639/go.mod h1:nml7f8UA4MQbbV7bcoek8AkgjMXC/X9Ie2Mt4RGKYoQ=
+github.com/kwilteam/kuneiform v0.4.2-0.20230803190249-fa8a902b3465 h1:U5SOkvAsm9CavR5NFCV2uNS3uFxE6mAIOe59xpCgLhI=
+github.com/kwilteam/kuneiform v0.4.2-0.20230803190249-fa8a902b3465/go.mod h1:nml7f8UA4MQbbV7bcoek8AkgjMXC/X9Ie2Mt4RGKYoQ=
 github.com/kwilteam/kuneiform-grammar-go v0.4.1-0.20230727221325-6535cb9a21f9 h1:VYqLGUAP68gQg6qpvU0A3kl/LySfa4lJMbnIuaPn82s=
 github.com/kwilteam/kuneiform-grammar-go v0.4.1-0.20230727221325-6535cb9a21f9/go.mod h1:uki0OHLCXttIQqy/DsJ5X9WaNtRf3HB/OmxCCd+XdZU=
 github.com/kwilteam/kwil-extensions v0.0.0-20230710163303-bfa03f64ff82 h1:pA0ya2WrncGSxxXB0g3dVq1jZZSm1HO6Qp0/yYn4qks=

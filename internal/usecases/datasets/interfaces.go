@@ -42,7 +42,7 @@ type DatasetUseCaseInterface interface {
 	GetSchema(context.Context, string) (*entity.Schema, error)
 
 	// Call calls a read-only action on a database
-	Call(ctx context.Context, action *entity.ActionCall) ([]map[string]any, error)
+	Call(ctx context.Context, action *entity.CallAction) ([]map[string]any, error)
 }
 
 type AccountStore interface {
