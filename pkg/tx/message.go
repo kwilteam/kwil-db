@@ -20,6 +20,10 @@ type Serializable interface {
 	Bytes() ([]byte, error)
 }
 
+type Verifiable interface {
+	Verify() error
+}
+
 func (s *SignedMessage[T]) generateHash() ([]byte, error) {
 	data, err := s.Payload.Bytes()
 	if err != nil {
@@ -81,4 +85,17 @@ type CallActionPayload struct {
 
 func (c *CallActionPayload) Bytes() ([]byte, error) {
 	return json.Marshal(c)
+}
+
+type JsonPayload []byte
+
+func (j JsonPayload) Bytes() ([]byte, error) {
+	return j, nil
+}
+
+// ExecuteActionPayload is a struct that represents the action execution
+type ExecuteActionPayload struct {
+	Action string           `json:"action"`
+	DBID   string           `json:"dbid"`
+	Params []map[string]any `json:"params"`
 }

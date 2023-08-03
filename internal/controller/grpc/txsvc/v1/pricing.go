@@ -76,8 +76,8 @@ func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.In
 	})
 }
 
-func unmarshalActionExecution(payload []byte) (*entity.ActionExecution, error) {
-	exec := entity.ActionExecution{}
+func unmarshalActionExecution(payload []byte) (*kTx.ExecuteActionPayload, error) {
+	exec := kTx.ExecuteActionPayload{}
 
 	err := json.Unmarshal(payload, &exec)
 	if err != nil {
