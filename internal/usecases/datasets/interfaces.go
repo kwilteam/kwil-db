@@ -29,8 +29,8 @@ type DatasetUseCaseInterface interface {
 	Query(ctx context.Context, query *entity.DBQuery) ([]byte, error)
 	UpdateBlockHeight(height int64)
 	// Call calls a read-only action on a database
-	Call(ctx context.Context, action *entity.ActionCall) ([]map[string]any, error)
 	Spend(ctx context.Context, address string, amount string, nonce int64) error
+	Call(ctx context.Context, action *entity.CallAction) ([]map[string]any, error)
 }
 
 type AccountStore interface {

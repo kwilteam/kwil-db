@@ -516,28 +516,12 @@
         }
       }
     },
-    "txCallPayload": {
-      "type": "object",
-      "properties": {
-        "dbid": {
-          "type": "string"
-        },
-        "action": {
-          "type": "string"
-        },
-        "args": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/txScalarValue"
-          }
-        }
-      }
-    },
     "txCallRequest": {
       "type": "object",
       "properties": {
         "payload": {
-          "$ref": "#/definitions/txCallPayload"
+          "type": "string",
+          "format": "byte"
         },
         "signature": {
           "$ref": "#/definitions/txSignature"
@@ -717,18 +701,6 @@
         "ERROR"
       ],
       "default": "OK"
-    },
-    "txScalarValue": {
-      "type": "object",
-      "properties": {
-        "stringValue": {
-          "type": "string"
-        },
-        "intValue": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
     },
     "txSignature": {
       "type": "object",

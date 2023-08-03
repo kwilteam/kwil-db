@@ -15,9 +15,9 @@
 			"buckets": [
 				69
 			],
-			"attempts": 11,
+			"attempts": 15,
 			"bucket_type": 1,
-			"last_attempt": "2023-08-03T17:46:14.111970712Z",
+			"last_attempt": "2023-08-04T15:53:05.819613168Z",
 			"last_success": "0001-01-01T00:00:00Z",
 			"last_ban_time": "0001-01-01T00:00:00Z"
 		},
@@ -35,9 +35,9 @@
 			"buckets": [
 				69
 			],
-			"attempts": 11,
+			"attempts": 15,
 			"bucket_type": 1,
-			"last_attempt": "2023-08-03T17:46:44.117974378Z",
+			"last_attempt": "2023-08-04T15:53:35.812952126Z",
 			"last_success": "0001-01-01T00:00:00Z",
 			"last_ban_time": "0001-01-01T00:00:00Z"
 		}

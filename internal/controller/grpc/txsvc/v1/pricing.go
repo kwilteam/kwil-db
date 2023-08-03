@@ -88,8 +88,8 @@ func (s *Service) priceValidatorLeave(ctx context.Context, tx *kTx.Transaction) 
 	return big.NewInt(10000000000000), nil
 }
 
-func UnmarshalActionExecution(payload []byte) (*entity.ActionExecution, error) {
-	exec := entity.ActionExecution{}
+func UnmarshalActionExecution(payload []byte) (*kTx.ExecuteActionPayload, error) {
+	exec := kTx.ExecuteActionPayload{}
 
 	err := json.Unmarshal(payload, &exec)
 	if err != nil {
