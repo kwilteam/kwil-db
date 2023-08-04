@@ -52,3 +52,16 @@ func (p *Procedure) IsOwnerOnly() bool {
 
 	return false
 }
+
+func (p *Procedure) EnsureContainsModifier(mod Modifier) {
+	contains := false
+	for _, m := range p.Modifiers {
+		if m == mod {
+			contains = true
+		}
+	}
+
+	if !contains {
+		p.Modifiers = append(p.Modifiers, mod)
+	}
+}
