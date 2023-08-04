@@ -3,32 +3,29 @@ package txsvc
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
 func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallResponse, error) {
 
-	execBody, err := convertActionCall(req)
+	body, msg, err := convertActionCall(req)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to convert action call: %s", err.Error())
 	}
 
-	if execBody.Message.Sender != "" {
-		fmt.Println(execBody.Message.Sender)
-		err = execBody.Message.Verify()
+	if msg.Sender != "" {
+		err = msg.Verify()
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to verify signed message: %s", err.Error())
 		}
 	}
 
-	executeResult, err := s.executor.Call(ctx, execBody)
+	executeResult, err := s.engine.Call(ctx, body, msg)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to execution action: %s", err.Error())
 	}
@@ -43,30 +40,25 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 	}, nil
 }
 
-func convertActionCall(req *txpb.CallRequest) (*entity.CallAction, error) {
+func convertActionCall(req *txpb.CallRequest) (*tx.CallActionPayload, *tx.SignedMessage[tx.JsonPayload], error) {
 	var actionPayload *tx.CallActionPayload
 	err := json.Unmarshal(req.Payload, &actionPayload)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "failed to unmarshal payload: %s", err.Error())
+		return nil, nil, err
 	}
 
 	convSignature, err := convertSignature(req.Signature)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	exec := &entity.CallAction{
-		Message: &tx.SignedMessage[tx.JsonPayload]{
-			Payload:   tx.JsonPayload(req.Payload),
-			Signature: convSignature,
-			Sender:    req.Sender,
-		},
-		Payload: &tx.CallActionPayload{
+	return &tx.CallActionPayload{
 			Action: actionPayload.Action,
 			DBID:   actionPayload.DBID,
 			Params: actionPayload.Params,
-		},
-	}
-
-	return exec, nil
+		}, &tx.SignedMessage[tx.JsonPayload]{
+			Payload:   tx.JsonPayload(req.Payload),
+			Signature: convSignature,
+			Sender:    req.Sender,
+		}, nil
 }

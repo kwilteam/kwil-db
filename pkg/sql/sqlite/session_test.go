@@ -209,6 +209,69 @@ func Test_ChangesetIgnoresIntermediateOperations(t *testing.T) {
 		counter++
 	}
 }
+func Test_DELETEME(t *testing.T) {
+	db, td := openRealDB()
+	defer td()
+
+	// insert some rows
+	err := insertUsers(db, []*user{
+		{
+			id:   1,
+			name: "John",
+			age:  20,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ses, err := db.CreateSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ses.Delete()
+
+	// update one
+	err = db.Execute("UPDATE users SET name = $name, age = $age WHERE id = $id", map[string]interface{}{
+		"$age":  21,
+		"$name": "Jill",
+		"$id":   1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cs, err := ses.GenerateChangeset()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	for {
+		rowReturned, err := cs.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !rowReturned {
+			break
+		}
+
+		val1, _ := cs.New(1)
+		val2, _ := cs.New(2)
+		val3, _ := cs.New(3)
+
+		if !val1.Changed() {
+			t.Errorf("expected val1 to be changed")
+		}
+		if !val2.Changed() {
+			t.Errorf("expected val2 to be changed")
+		}
+		if val3.Changed() {
+			t.Errorf("expected val3 to not be changed")
+		}
+	}
+}
 
 type user struct {
 	id   int

@@ -2,16 +2,18 @@ package txsvc
 
 import (
 	"context"
+	"encoding/json"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/internal/entity"
 )
 
 func (s *Service) Query(ctx context.Context, req *txpb.QueryRequest) (*txpb.QueryResponse, error) {
-	bts, err := s.executor.Query(ctx, &entity.DBQuery{
-		DBID:  req.Dbid,
-		Query: req.Query,
-	})
+	result, err := s.engine.Query(ctx, req.Dbid, req.Query)
+	if err != nil {
+		return nil, err
+	}
+
+	bts, err := json.Marshal(result)
 	if err != nil {
 		return nil, err
 	}

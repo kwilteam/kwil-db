@@ -2,14 +2,15 @@ package txsvc
 
 import (
 	"context"
+	"math/big"
 
-	"github.com/cometbft/cometbft/node"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
+	"github.com/cometbft/cometbft/types"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/balances"
+	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
 type Service struct {
@@ -17,65 +18,43 @@ type Service struct {
 
 	log log.Logger
 
-	executor       datasets.DatasetUseCaseInterface
-	cfg            *config.KwildConfig
-	accountStore   datasets.AccountStore
-	sqliteFilePath string
-	extensionUrls  []string
+	engine       EngineReader
+	accountStore AccountReader
 
-	providerAddress string
-	BcNode          *node.Node
-	
-	txHook func(*kTx.Transaction) error
+	cometBftClient BlockchainBroadcaster
 }
 
-func NewService(ctx context.Context, config *config.KwildConfig, opts ...TxSvcOpt) (*Service, error) {
+func NewService(engine EngineReader, accountStore AccountReader, cometBftClient BlockchainBroadcaster, opts ...TxSvcOpt) *Service {
 	s := &Service{
-		log:             log.NewNoOp(),
-		cfg:             config,
-		providerAddress: crypto.AddressFromPrivateKey(config.PrivateKey),
-		extensionUrls:   []string{},
-		txHook:          func(*kTx.Transaction) error { return nil },
+		log:            log.NewNoOp(),
+		engine:         engine,
+		accountStore:   accountStore,
+		cometBftClient: cometBftClient,
 	}
 
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	dataSetOpts := getDatasetUseCaseOpts(s)
-
-	var err error
-	s.executor, err = datasets.New(ctx,
-		dataSetOpts...,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return s, nil
+	return s
 }
 
-func getDatasetUseCaseOpts(s *Service) []datasets.DatasetUseCaseOpt {
-	opts := make([]datasets.DatasetUseCaseOpt, 0)
-	if s.accountStore != nil {
-		// if an account store is provided, use it
-		// otherwise, the dataset use case will create its own
-		opts = append(opts, datasets.WithAccountStore(s.accountStore))
-	}
-	if s.sqliteFilePath != "" {
-		// if a sqlite file path is provided, use it
-		// otherwise, the dataset use case will create its own
-		opts = append(opts, datasets.WithSqliteFilePath(s.sqliteFilePath))
-	}
-
-	if len(s.extensionUrls) > 0 {
-		opts = append(opts, datasets.WithExtensions(s.extensionUrls...))
-	}
-
-	opts = append(opts, datasets.WithLogger(s.log))
-	return opts
+type EngineReader interface {
+	Call(ctx context.Context, call *tx.CallActionPayload, msg *tx.SignedMessage[tx.JsonPayload]) ([]map[string]any, error)
+	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
+	ListOwnedDatabases(ctx context.Context, owner string) ([]string, error)
+	PriceDeploy(ctx context.Context, schema *engineTypes.Schema) (price *big.Int, err error)
+	PriceDrop(ctx context.Context, dbid string) (price *big.Int, err error)
+	PriceExecute(ctx context.Context, dbid string, action string, params []map[string]any) (price *big.Int, err error)
+	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
 }
 
-func (s *Service) GetExecutor() datasets.DatasetUseCaseInterface {
-	return s.executor
+type AccountReader interface {
+	GetAccount(ctx context.Context, address string) (*balances.Account, error)
+}
+
+type BlockchainBroadcaster interface {
+	// TODO: this should be refactored to: BroadcastTxAsync(ctx context.Context, tx tx.Transaction) error
+	// this will remove abci and cometbft as a dependency from this package, and functionally works the same
+	BroadcastTxAsync(ctx context.Context, tx types.Tx) (*ctypes.ResultBroadcastTx, error)
 }

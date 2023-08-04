@@ -10,74 +10,32 @@ import (
 	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
-	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
-	ccs "github.com/kwilteam/kwil-db/pkg/chain/client/service"
-	"github.com/kwilteam/kwil-db/pkg/chain/contracts/escrow"
-	"github.com/kwilteam/kwil-db/pkg/chain/contracts/token"
-	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
-	client           *grpcClient.Client
-	BcClient         *rpchttp.HTTP
-	datasets         map[string]*entity.Schema
-	PrivateKey       *ecdsa.PrivateKey
-	ChainCode        chainCodes.ChainCode
-	ProviderAddress  string
-	PoolAddress      string
-	usingProvider    bool
-	withServerConfig bool
-	chainRpcUrl      string
-	chainClient      cc.ChainClient
-	tokenContract    token.TokenContract
-	TokenAddress     string
-	TokenSymbol      string
-	poolContract     escrow.EscrowContract
-	BcRpcUrl         string
+	client         *grpcClient.Client
+	CometBftClient *rpchttp.HTTP
+	datasets       map[string]*serialize.Schema
+	PrivateKey     *ecdsa.PrivateKey
+
+	cometBftRpcUrl string
 }
 
 // New creates a new client
 func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
-		datasets:         make(map[string]*entity.Schema),
-		ChainCode:        chainCodes.LOCAL,
-		ProviderAddress:  "",
-		PoolAddress:      "",
-		usingProvider:    true,
-		withServerConfig: true,
-		chainRpcUrl:      "",
-		TokenAddress:     "",
-		TokenSymbol:      "",
-		BcRpcUrl:         "tcp://localhost:26657",
+		datasets:       make(map[string]*serialize.Schema),
+		cometBftRpcUrl: "tcp://localhost:26657",
 	}
 
 	for _, opt := range opts {
 		opt(c)
-	}
-
-	defer func(c *Client) {
-		if c.chainRpcUrl != "" {
-			tempErr := c.initChainClient(ctx)
-			if tempErr != nil {
-				err = tempErr
-			}
-		}
-	}(c)
-
-	if !c.usingProvider {
-		if c.chainRpcUrl != "" {
-			e := c.initChainClient(ctx)
-			if err != nil {
-				err = e
-			}
-		}
-		return c, nil
 	}
 
 	c.client, err = grpcClient.New(target, grpc.WithTransportCredentials(
@@ -87,19 +45,7 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 		return nil, err
 	}
 
-	if c.withServerConfig {
-		err = c.loadServerConfig(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// re-apply opts to override provider config
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	c.BcClient, err = rpchttp.New(c.BcRpcUrl, "")
+	c.CometBftClient, err = rpchttp.New(c.cometBftRpcUrl, "")
 	if err != nil {
 		return nil, err
 	}
@@ -107,77 +53,8 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 	return c, nil
 }
 
-func (c *Client) loadServerConfig(ctx context.Context) error {
-	config, err := c.GetConfig(ctx)
-	if err != nil {
-		return err
-	}
-	c.ProviderAddress = config.ProviderAddress
-	c.PoolAddress = config.PoolAddress
-	c.ChainCode = chainCodes.ChainCode(config.ChainCode)
-
-	return nil
-}
-
-func (c *Client) initChainClient(ctx context.Context) error {
-	if c.chainRpcUrl == "" {
-		return fmt.Errorf("chain rpc url is not set")
-	}
-
-	var err error
-	c.chainClient, err = ccs.NewChainClient(c.chainRpcUrl,
-		ccs.WithChainCode(c.ChainCode),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create chain client: %w", err)
-	}
-
-	return nil
-}
-
-func (c *Client) initTokenContract(ctx context.Context) error {
-	if c.chainClient == nil {
-		return fmt.Errorf("chain client is not initialized")
-	}
-	if c.TokenAddress == "" {
-		err := c.initPoolContract(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to init pool contract to get token address: %w", err)
-		}
-	}
-
-	var err error
-	c.tokenContract, err = c.chainClient.Contracts().Token(c.TokenAddress)
-	if err != nil {
-		return fmt.Errorf("failed to create token contract: %w", err)
-	}
-
-	c.TokenSymbol = c.tokenContract.Symbol()
-
-	return nil
-}
-
-func (c *Client) initPoolContract(ctx context.Context) error {
-	if c.chainClient == nil {
-		return fmt.Errorf("chain client is not initialized")
-	}
-	if c.PoolAddress == "" {
-		return fmt.Errorf("pool address is not set")
-	}
-
-	var err error
-	c.poolContract, err = c.chainClient.Contracts().Escrow(c.PoolAddress)
-	if err != nil {
-		return fmt.Errorf("failed to create escrow contract: %w", err)
-	}
-
-	c.TokenAddress = c.poolContract.TokenAddress()
-
-	return nil
-}
-
 // GetSchema returns the entity of a database
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*entity.Schema, error) {
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*serialize.Schema, error) {
 	ds, ok := c.datasets[dbid]
 	if ok {
 		return ds, nil
@@ -193,7 +70,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*entity.Schema, er
 }
 
 // DeployDatabase deploys a schema
-func (c *Client) DeployDatabase(ctx context.Context, ds *entity.Schema) (*kTx.Receipt, error) {
+func (c *Client) DeployDatabase(ctx context.Context, ds *serialize.Schema) (*kTx.Receipt, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
@@ -212,7 +89,7 @@ func (c *Client) DeployDatabase(ctx context.Context, ds *entity.Schema) (*kTx.Re
 }
 
 // deploySchemaTx creates a new transaction to deploy a schema
-func (c *Client) deploySchemaTx(ctx context.Context, ds *entity.Schema) (*kTx.Transaction, error) {
+func (c *Client) deploySchemaTx(ctx context.Context, ds *serialize.Schema) (*kTx.Transaction, error) {
 	return c.newTx(ctx, kTx.DEPLOY_DATABASE, ds)
 }
 
@@ -304,7 +181,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		return nil, fmt.Errorf("failed to create signed message: %w", err)
 	}
 
-	return c.client.Call(ctx, (*kTx.CallActionMessage)(signedMsg))
+	return c.client.Call(ctx, signedMsg)
 }
 
 // shouldAuthenticate decides whether the client should authenticate or not
@@ -384,7 +261,7 @@ func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner s
 		return nil, err
 	}
 
-	res, err := c.BcClient.BroadcastTxAsync(ctx, bts)
+	res, err := c.CometBftClient.BroadcastTxAsync(ctx, bts)
 	if err != nil {
 		return nil, err
 	}
@@ -411,12 +288,12 @@ func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, powe
 	bts, _ := json.Marshal(nodeKey.PubKey())
 	fmt.Println("Node PublicKey: ", string(bts))
 
-	validator := &validator{
+	vldtr := &validator{
 		PubKey: string(bts),
 		Power:  power,
 	}
 
-	tx, err := c.NewNodeTx(ctx, payloadtype, validator, joinerPrivKey)
+	tx, err := c.NewNodeTx(ctx, payloadtype, vldtr, joinerPrivKey)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +303,7 @@ func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, powe
 		return nil, err
 	}
 
-	res, err := c.BcClient.BroadcastTxAsync(ctx, bts)
+	res, err := c.CometBftClient.BroadcastTxAsync(ctx, bts)
 	if err != nil {
 		return nil, err
 	}
