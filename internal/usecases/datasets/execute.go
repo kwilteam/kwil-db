@@ -26,11 +26,6 @@ func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteActi
 		return nil, err
 	}
 
-	err = u.engine.BlockDBSavepoint(action.ExecutionBody.DBID)
-	if err != nil {
-		return nil, err
-	}
-
 	res, err := ds.Execute(ctx, action.ExecutionBody.Action, action.ExecutionBody.Params, &dataset.TxOpts{
 		Caller: action.Tx.Sender,
 	})

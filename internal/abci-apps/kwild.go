@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	utilpkg "github.com/kwilteam/kwil-db/pkg/utils"
+	gowal "github.com/tidwall/wal"
 	"go.uber.org/zap"
 )
 
@@ -40,7 +41,7 @@ type KwilDbApplication struct {
 	valInfo     *node.ValidatorsInfo
 	joinReqPool *node.JoinRequestPool
 
-	BlockWal *utilpkg.Wal
+	BlockWal *gowal.Log
 	StateWal *utilpkg.Wal
 
 	recoveryMode bool
@@ -51,10 +52,14 @@ var _ abcitypes.Application = (*KwilDbApplication)(nil)
 func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseInterface) (*KwilDbApplication, error) {
 	CometHomeDir := os.Getenv("COMET_BFT_HOME")
 	blockWalPath := filepath.Join(CometHomeDir, "data", "Block.wal")
-	wal, err := utilpkg.NewWal(blockWalPath)
+	wal, err := gowal.Open(blockWalPath, nil)
 	if err != nil {
 		return nil, err
 	}
+	// This is done to reset the indexes to 1, [need this to avoid a bug with the truncation of tidwal]
+	wal.Write(1, []byte("no-op"))
+	wal.TruncateBack(1)
+
 	stateWalPath := filepath.Join(CometHomeDir, "data", "AppState.wal")
 	stateWal, err := utilpkg.NewWal(stateWalPath)
 	if err != nil {
@@ -71,7 +76,7 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 		recoveryMode: false,
 		state: KwildState{
 			PrevBlockHeight: 0,
-			PrevAppHash:     nil,
+			PrevAppHash:     crypto.Sha256([]byte("")), // TODO: Initialize this with the genesis hash
 			CurValidatorSet: make(map[string][]byte),
 			ExecState:       "init",
 		},
@@ -82,7 +87,7 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 		kwild.recoveryMode = true
 		kwild.state = kwild.RetrieveState()
 	}
-	fmt.Println("Kwild State:", kwild.state)
+	kwild.executor.InitalizeAppHash(kwild.state.PrevAppHash)
 	return kwild, nil
 }
 
@@ -494,8 +499,6 @@ func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitype
 
 		app.state.CurValidatorSet[pubkey.Address().String()] = pubkey.Bytes()
 	}
-	// app.state.PrevBlockHeight = 0
-	app.state.PrevAppHash = crypto.Sha256([]byte(""))
 	return abcitypes.ResponseInitChain{}
 }
 
@@ -532,16 +535,14 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 				if (ev.Validator.Power - 1) == 0 {
 					app.server.Log.Info("Val power is 0, removing it from the validator set", zap.String("val", addr))
 					delete(app.state.CurValidatorSet, addr)
-					// TODO: Persist these updates to the disk ==> Is it possible to save it in the kwil db sql db?
 				}
 			} else {
 				app.server.Log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
 			}
-
 		}
 	}
 
-	app.executor.UpdateBlockHeight(app.state.PrevBlockHeight)
+	app.executor.StartBlockSession()
 	app.state.ExecState = "delivertx"
 	app.UpdateState()
 
@@ -558,28 +559,18 @@ func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
 	app.state.ExecState = "precommit"
 	app.UpdateState()
 
-	// Generate app hashes based on the changeset
-	expectedAppHash, err := app.executor.BlockCommit(app.BlockWal, app.state.PrevAppHash)
+	appHash, err := app.executor.EndBlockSession()
 	if err != nil {
-		app.server.Log.Error("ABCI: failed to commit block with ", zap.String("error", err.Error()))
+		app.server.Log.Error("ABCI: failed to end block session with ", zap.String("error", err.Error()))
+		return abcitypes.ResponseCommit{Data: app.state.PrevAppHash}
 	}
-
-	err = app.executor.ApplyChangesets(app.BlockWal)
-	if err != nil {
-		app.server.Log.Error("ABCI: failed to apply changesets with ", zap.String("error", err.Error()))
-	}
-
-	app.state.PrevAppHash = expectedAppHash
 
 	app.state.PrevBlockHeight += 1
-
-	// Update state
+	app.state.PrevAppHash = appHash
 	app.state.ExecState = "postcommit"
-	app.UpdateState()
 	app.recoveryMode = false
+	app.UpdateState()
 
-	state := app.RetrieveState() // TODO: remove this
-	fmt.Println("State: ", state)
 	return abcitypes.ResponseCommit{Data: app.state.PrevAppHash}
 }
 
@@ -588,7 +579,6 @@ func (app *KwilDbApplication) UpdateState() {
 	if err != nil {
 		app.server.Log.Error("ABCI: failed to marshal state with ", zap.String("error", err.Error()))
 	}
-	fmt.Println("State: ", app.state, "Bytes: ", stateBts)
 	app.StateWal.OverwriteSync(stateBts)
 }
 
@@ -599,14 +589,12 @@ func (app *KwilDbApplication) RetrieveState() KwildState {
 	}
 
 	state := app.StateWal.Read()
-	fmt.Println("State: ", state)
 	var stateObj KwildState
 	err := json.Unmarshal(state, &stateObj)
 	if err != nil {
 		app.server.Log.Error("ABCI: failed to unmarshal state with ", zap.String("error", err.Error()))
 		return KwildState{}
 	}
-	fmt.Println("State: ", stateObj, "appState: ", app.state)
 	return stateObj
 }
 

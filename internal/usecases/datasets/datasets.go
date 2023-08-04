@@ -13,11 +13,11 @@ import (
 )
 
 type DatasetUseCase struct {
-	engine        *engine.Engine
-	accountStore  AccountStore
-	log           log.Logger
-	extensionUrls []string
-
+	engine         *engine.Engine
+	accountStore   AccountStore
+	log            log.Logger
+	extensionUrls  []string
+	sessionMgr     *SessionMgr
 	sqliteFilePath string
 }
 
@@ -52,6 +52,12 @@ func New(ctx context.Context, opts ...DatasetUseCaseOpt) (*DatasetUseCase, error
 			return nil, err
 		}
 	}
+
+	u.sessionMgr, err = NewSessionMgr(nil)
+	if err != nil {
+		return nil, err
+	}
+
 	return u, nil
 }
 

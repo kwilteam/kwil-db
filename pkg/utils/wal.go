@@ -28,8 +28,6 @@ func NewWal(path string) (*Wal, error) {
 }
 
 func (w *Wal) Write(data []byte) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	_, err := w.Wal.Write(data)
 	if err != nil {
 		return err
@@ -38,8 +36,6 @@ func (w *Wal) Write(data []byte) error {
 }
 
 func (w *Wal) Close() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	err := w.Wal.Close()
 	if err != nil {
 		return err
@@ -48,21 +44,6 @@ func (w *Wal) Close() error {
 }
 
 func (w *Wal) Truncate() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	err := w.Wal.Truncate(0)
-	if err != nil {
-		return err
-	}
-	err = w.Wal.Sync()
-	if err != nil {
-		return err
-	}
-	w.maxLineSize = 0
-	return nil
-}
-
-func (w *Wal) TruncateUnSafe() error {
 	err := w.Wal.Truncate(0)
 	if err != nil {
 		return err
@@ -76,8 +57,6 @@ func (w *Wal) TruncateUnSafe() error {
 }
 
 func (w *Wal) Sync() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	err := w.Wal.Sync()
 	if err != nil {
 		return err
@@ -86,8 +65,6 @@ func (w *Wal) Sync() error {
 }
 
 func (w *Wal) WriteSync(data []byte) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	_, err := w.Wal.Write(data)
 	if err != nil {
 		return err
@@ -100,8 +77,6 @@ func (w *Wal) WriteSync(data []byte) error {
 }
 
 func (w *Wal) OverwriteSync(data []byte) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	err := w.Wal.Truncate(0)
 	if err != nil {
 		return err
@@ -117,10 +92,7 @@ func (w *Wal) OverwriteSync(data []byte) error {
 	return nil
 }
 
-
 func (w *Wal) UpdateMaxLineSz(sz int) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	if sz > w.maxLineSize {
 		w.maxLineSize = sz
 	}
@@ -135,9 +107,11 @@ func (w *Wal) Unlock() {
 }
 
 func (w *Wal) NewScanner() *bufio.Scanner {
+	w.Wal.Seek(0, 0)
 	scanner := bufio.NewScanner(w.Wal)
 	buf := make([]byte, w.maxLineSize)
 	scanner.Buffer(buf, w.maxLineSize)
+	scanner.Split(bufio.ScanLines)
 	return scanner
 }
 
@@ -150,8 +124,6 @@ func (w *Wal) Read() []byte {
 }
 
 func (w *Wal) IsEmpty() bool {
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	stat, err := w.Wal.Stat()
 	if err != nil {
 		return true

@@ -26,7 +26,6 @@ func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDa
 	if err != nil {
 		return nil, err
 	}
-
 	return &tx.Receipt{
 		TxHash: deployment.Tx.Hash,
 		Fee:    price.String(),
@@ -51,6 +50,11 @@ func (u *DatasetUseCase) deployDataset(ctx context.Context, deployment *entity.D
 		Procedures: actions,
 		Extensions: extensions,
 	})
+	if err != nil {
+		return err
+	}
+
+	err = u.createDbSession(dbid)
 	if err != nil {
 		return err
 	}
@@ -81,6 +85,7 @@ func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (t
 	}
 
 	u.log.Info("database dropped", zap.String("dbid", drop.DBID), zap.String("dropper address", drop.Tx.Sender))
+	u.removeDbSession(drop.DBID)
 
 	return &tx.Receipt{
 		TxHash: drop.Tx.Hash,

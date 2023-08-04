@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -28,11 +29,6 @@ type Dataset struct {
 	name string
 	// allowMissingExtensions will let a dataset load, even if required extension initializers are not provided
 	allowMissingExtensions bool
-
-	lastBlockHeight int64
-	blockSavepoint  sql.Savepoint
-	blockSession    sql.Session
-	ChangeSet       []byte
 }
 
 // OpenDataset opens a new dataset and loads the metadata from the database
@@ -281,63 +277,10 @@ func (d *Dataset) Savepoint() (sql.Savepoint, error) {
 	return d.db.Savepoint()
 }
 
-func (d *Dataset) GetLastBlockHeight() int64 {
-	return d.lastBlockHeight
+func (d *Dataset) CreateSession() (sql.Session, error) {
+	return d.db.CreateSession()
 }
 
-func (d *Dataset) GetDbBlockSavePoint() sql.Savepoint {
-	return d.blockSavepoint
-}
-
-func (d *Dataset) GetChangeset() []byte {
-	return d.ChangeSet
-}
-
-func (d *Dataset) BlockSavepoint(height int64) (bool, error) {
-	if d.GetLastBlockHeight() < height {
-		savepoint, err := d.db.Savepoint()
-		if err != nil {
-			return true, err
-		}
-		d.lastBlockHeight = height
-		d.blockSavepoint = savepoint
-		d.blockSession, err = d.db.CreateSession()
-		if err != nil {
-			return true, err
-		}
-		return true, nil
-	}
-	return false, nil
-}
-
-func (d *Dataset) BlockCommit() ([]byte, error) {
-	savepoint := d.blockSavepoint
-	if savepoint != nil && d.blockSession != nil {
-		cs, err := d.blockSession.GenerateChangeset()
-		if err != nil {
-			return nil, err
-		}
-		err = savepoint.Rollback()
-		if err != nil {
-			return cs, err
-		}
-		d.blockSession.Delete()
-		d.blockSavepoint = nil // Reset the save point
-		d.blockSession = nil   // Reset the session
-		return cs, nil
-	}
-
-	return nil, fmt.Errorf("no savepoint found for %s", d.name)
-}
-
-func (d *Dataset) ApplyChangeset(changeset []byte) error {
-	if changeset != nil {
-		err := d.db.ApplyChangeset(strings.NewReader(string(changeset)))
-		if err != nil {
-			return err
-		}
-		//d.ChangeSet = nil
-		return nil
-	}
-	return nil
+func (d *Dataset) ApplyChangeset(changeset io.Reader) error {
+	return d.db.ApplyChangeset(changeset)
 }
