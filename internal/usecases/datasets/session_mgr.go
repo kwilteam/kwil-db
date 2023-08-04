@@ -143,7 +143,10 @@ func (u *DatasetUseCase) createDbSession(dbid string) error {
 }
 
 func (u *DatasetUseCase) removeDbSession(dbid string) error {
-	delete(u.sessionMgr.dbSession, dbid)
+	if sess, ok := u.sessionMgr.dbSession[dbid]; ok {
+		defer delete(u.sessionMgr.dbSession, dbid)
+		return sess.session.Delete()
+	}
 	return nil
 }
 
