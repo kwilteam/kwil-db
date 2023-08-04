@@ -13,6 +13,9 @@ const (
 
 	// Authenticated requires that the caller is identified.
 	ModifierAuthenticated Modifier = "AUTHENTICATED"
+
+	// Owner requires that the caller is the owner of the database.
+	ModifierOwner Modifier = "OWNER"
 )
 
 func (m *Modifier) IsValid() bool {

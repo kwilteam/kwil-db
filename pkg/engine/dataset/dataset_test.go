@@ -328,6 +328,34 @@ func Test_Execute(t *testing.T) {
 			wantErr:         false,
 			wantBuilderErr:  false,
 		},
+		{
+			name: "execute owner only procedure with non-owner caller address should fail",
+			fields: fields{
+				callerAddress:           "0xnotowner",
+				availableExtensions:     testAvailableExtensions,
+				extensionInitialization: testExtensions,
+				tables:                  test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:      "create_user",
+						Args:      []string{},
+						Public:    true,
+						Modifiers: []types.Modifier{types.ModifierOwner},
+						Statements: []string{
+							"INSERT INTO users (id, username, age, address) VALUES (1, 'test_username', 20, @caller);",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "create_user",
+				inputs:    []map[string]interface{}{},
+			},
+			expectedOutputs: nil,
+			isCall:          false,
+			wantErr:         true,
+			wantBuilderErr:  false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

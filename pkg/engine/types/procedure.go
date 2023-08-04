@@ -42,3 +42,13 @@ func (p *Procedure) RequiresAuthentication() bool {
 
 	return false
 }
+
+func (p *Procedure) IsOwnerOnly() bool {
+	for _, m := range p.Modifiers {
+		if m == ModifierOwner {
+			return true
+		}
+	}
+
+	return false
+}
