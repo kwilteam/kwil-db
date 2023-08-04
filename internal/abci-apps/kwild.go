@@ -76,7 +76,7 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 		recoveryMode: false,
 		state: KwildState{
 			PrevBlockHeight: 0,
-			PrevAppHash:     nil,
+			PrevAppHash:     crypto.Sha256([]byte("")), // TODO: Initialize this with the genesis hash
 			CurValidatorSet: make(map[string][]byte),
 			ExecState:       "init",
 		},
@@ -87,7 +87,7 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 		kwild.recoveryMode = true
 		kwild.state = kwild.RetrieveState()
 	}
-	fmt.Println("Kwild State:", kwild.state)
+	kwild.executor.InitalizeAppHash(kwild.state.PrevAppHash)
 	return kwild, nil
 }
 
@@ -499,8 +499,6 @@ func (app *KwilDbApplication) InitChain(req abcitypes.RequestInitChain) abcitype
 
 		app.state.CurValidatorSet[pubkey.Address().String()] = pubkey.Bytes()
 	}
-	// app.state.PrevBlockHeight = 0
-	app.state.PrevAppHash = crypto.Sha256([]byte(""))
 	return abcitypes.ResponseInitChain{}
 }
 

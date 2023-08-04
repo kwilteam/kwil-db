@@ -3,6 +3,7 @@ package datasets
 //Manages Block Sessions for all the sql databases
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -48,7 +49,12 @@ func NewSessionMgr(appHash []byte) (*SessionMgr, error) {
 	return &SessionMgr{
 		shadowWal:   wal,
 		prevAppHash: appHash,
+		dbSession:   make(map[string]*DbSession),
 	}, nil
+}
+
+func (u *DatasetUseCase) InitalizeAppHash(appHash []byte) {
+	u.sessionMgr.prevAppHash = appHash
 }
 
 func (u *DatasetUseCase) StartBlockSession() error {
@@ -86,7 +92,9 @@ func (u *DatasetUseCase) EndBlockSession() ([]byte, error) {
 		return nil, err
 	}
 	u.sessionMgr.prevAppHash = appHash
-	return nil, nil
+	u.sessionMgr.accountSession = nil
+	u.sessionMgr.dbSession = make(map[string]*DbSession)
+	return appHash, nil
 }
 
 func (u *DatasetUseCase) accountSessionStart() error {
@@ -148,7 +156,10 @@ func (u *DatasetUseCase) persistChangesets() error {
 	if err != nil {
 		return err
 	}
-	sessMgr.writeChangeset("accounts", sessMgr.accountSession.changeset, idx)
+	idx, err = sessMgr.writeChangeset("accounts", sessMgr.accountSession.changeset, idx)
+	if err != nil {
+		return err
+	}
 
 	// TODO: Governance store changesets
 
@@ -158,7 +169,10 @@ func (u *DatasetUseCase) persistChangesets() error {
 		if err != nil {
 			return err
 		}
-		sessMgr.writeChangeset(dbid, sessMgr.dbSession[dbid].changeset, idx)
+		idx, err = sessMgr.writeChangeset(dbid, sessMgr.dbSession[dbid].changeset, idx)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -211,8 +225,10 @@ func (u *DatasetUseCase) applyChangesets() error {
 
 		switch string(name) {
 		case "accounts":
+			fmt.Println("Account store changeset: ", string(cs))
 			err = u.accountStore.ApplyChangeset(strings.NewReader(string(cs)))
 			if err != nil {
+				fmt.Println("Error in applying acctstore changeset: ", err)
 				return err
 			}
 		case "governance":
@@ -222,17 +238,23 @@ func (u *DatasetUseCase) applyChangesets() error {
 			if err != nil {
 				return err
 			}
+			fmt.Println("Datastore changeset: ", string(name), "   ", string(cs))
 			err = ds.ApplyChangeset(strings.NewReader(string(cs)))
 			if err != nil {
+				fmt.Println("Error in applying changeset: ", err)
 				return err
 			}
 		}
 		idx += 2
 	}
+	wal.TruncateBack(firstIdx)
 	return nil
 }
 
 func (s *SessionMgr) writeChangeset(dbid string, cs []byte, idx uint64) (uint64, error) {
+	if cs == nil {
+		return idx, nil
+	}
 	batch := new(gowal.Batch)
 	batch.Write(idx, []byte(dbid))
 	batch.Write(idx+1, cs)
@@ -269,6 +291,10 @@ func (s *SessionMgr) generateAppHash() []byte {
 		for _, dbid := range dbids {
 			cumulativeCS += string(s.dbSession[dbid].changeset)
 		}
+	}
+
+	if cumulativeCS == "" {
+		return s.prevAppHash
 	}
 
 	dbHash := crypto.Sha256([]byte(cumulativeCS))

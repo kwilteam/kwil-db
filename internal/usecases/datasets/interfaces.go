@@ -29,6 +29,7 @@ type DatasetUseCaseInterface interface {
 	Call(ctx context.Context, action *entity.CallAction) ([]map[string]any, error)
 	StartBlockSession() error
 	EndBlockSession() ([]byte, error)
+	InitalizeAppHash(appHash []byte)
 }
 
 type AccountStore interface {
