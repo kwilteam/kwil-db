@@ -12,10 +12,26 @@ func convertActions(actions []*engineDto.Procedure) []*entity.Action {
 	entityActions := make([]*entity.Action, len(actions))
 	for i, action := range actions {
 		entityActions[i] = &entity.Action{
-			Name:       action.Name,
-			Inputs:     action.Args,
-			Public:     action.Public,
-			Statements: action.Statements,
+			Name:        action.Name,
+			Inputs:      action.Args,
+			Public:      action.Public,
+			Statements:  action.Statements,
+			Auxiliaries: []string{},
+		}
+
+		// NOTE: better not put non-modifiers to modifiers
+		if action.IsMutative() {
+			entityActions[i].Mutability = entity.MutabilityUpdate.String()
+		} else {
+			entityActions[i].Mutability = entity.MutabilityView.String()
+		}
+
+		if action.RequiresAuthentication() {
+			entityActions[i].Auxiliaries = append(entityActions[i].Auxiliaries, entity.AuxiliaryTypeMustSign.String())
+		}
+
+		if action.IsOwnerOnly() {
+			entityActions[i].Auxiliaries = append(entityActions[i].Auxiliaries, entity.AuxiliaryTypeOwner.String())
 		}
 	}
 
