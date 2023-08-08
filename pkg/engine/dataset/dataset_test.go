@@ -16,6 +16,7 @@ import (
 
 func Test_Execute(t *testing.T) {
 	type fields struct {
+		ownerAddress            string
 		callerAddress           string
 		availableExtensions     []*testExt
 		extensionInitialization []*types.Extension
@@ -24,6 +25,7 @@ func Test_Execute(t *testing.T) {
 	}
 
 	defaultFields := fields{
+		ownerAddress:            callerAddress,
 		callerAddress:           callerAddress,
 		availableExtensions:     testAvailableExtensions,
 		extensionInitialization: testExtensions,
@@ -303,6 +305,7 @@ func Test_Execute(t *testing.T) {
 		{
 			name: "execute authenticated procedure with caller address should succeed",
 			fields: fields{
+				ownerAddress:            callerAddress,
 				callerAddress:           callerAddress,
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
@@ -331,6 +334,7 @@ func Test_Execute(t *testing.T) {
 		{
 			name: "execute owner only procedure with non-owner caller address should fail",
 			fields: fields{
+				ownerAddress:            callerAddress,
 				callerAddress:           "0xnotowner",
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
@@ -377,7 +381,7 @@ func Test_Execute(t *testing.T) {
 				WithInitializers(availableExtensions).
 				WithExtensions(tt.fields.extensionInitialization...).
 				WithDatastore(database).
-				Named(datasetName).OwnedBy(tt.fields.callerAddress).
+				Named(datasetName).OwnedBy(tt.fields.ownerAddress).
 				Build(ctx)
 			if tt.wantBuilderErr {
 				assert.Error(t, err)
