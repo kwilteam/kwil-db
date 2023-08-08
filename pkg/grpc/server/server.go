@@ -7,6 +7,8 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"net"
 )
 
@@ -19,8 +21,8 @@ func New(logger log.Logger, opts ...Option) *Server {
 	l := *logger.Named("grpcServer").WithOptions(zap.WithCaller(false))
 
 	recoveryFunc := func(p interface{}) error {
-		l.Error("grpc: panic serving", zap.Any("panic", p))
-		return nil
+		l.Error("panic triggered", zap.Any("panic", p))
+		return status.Errorf(codes.Unknown, "unknown error")
 	}
 	recoveryOpts := []recovery.Option{
 		recovery.WithRecoveryHandler(recoveryFunc),
