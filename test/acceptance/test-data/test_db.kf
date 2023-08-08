@@ -112,3 +112,7 @@ action divide($numerator, $denominator) public {
     $down = math_down.div($numerator, $denominator);
     select $up AS upper_value, $down AS lower_value;
 }
+
+action owner_only() public owner {
+    select 'owner only';
+}

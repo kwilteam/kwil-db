@@ -22,7 +22,8 @@ func (m *Modifier) IsValid() bool {
 	upper := strings.ToUpper(m.String())
 
 	return upper == ModifierView.String() ||
-		upper == ModifierAuthenticated.String()
+		upper == ModifierAuthenticated.String() ||
+		upper == ModifierOwner.String()
 }
 
 func (m *Modifier) Clean() error {

@@ -111,6 +111,8 @@ func getModifiers(action *entity.Action) ([]engineDto.Modifier, error) {
 		switch aux {
 		case "mustsign":
 			mods = append(mods, engineDto.ModifierAuthenticated)
+		case "owner":
+			mods = append(mods, engineDto.ModifierOwner)
 		default:
 			return nil, fmt.Errorf("modifier %s not supported", aux)
 		}

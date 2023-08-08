@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -95,7 +96,9 @@ func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]
 	if proc.RequiresAuthentication() && opts.Caller == "" {
 		return nil, ErrCallerNotAuthenticated
 	}
-	if proc.IsOwnerOnly() && strings.EqualFold(opts.Caller, d.owner) {
+
+	if proc.IsOwnerOnly() && !strings.EqualFold(opts.Caller, d.owner) {
+		d.log.Debug("caller is not owner", zap.String("caller", opts.Caller), zap.String("owner", d.owner))
 		return nil, ErrCallerNotOwner
 	}
 
