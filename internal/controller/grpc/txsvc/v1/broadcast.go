@@ -3,6 +3,8 @@ package txsvc
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
@@ -12,17 +14,17 @@ import (
 func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*txpb.BroadcastResponse, error) {
 	tx, err := convertTx(req.Tx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert transaction: %w", err)
+		return nil, status.Errorf(codes.Internal, "failed to convert transaction: %s", err)
 	}
 
 	err = tx.Verify()
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify transaction: %w", err)
+		return nil, status.Errorf(codes.Unauthenticated, "failed to verify transaction: %s", err)
 	}
 
 	err = s.txHook(tx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute tx hook: %w", err)
+		return nil, fmt.Errorf("failed to prepare tx: %s", err)
 	}
 
 	switch tx.PayloadType {
@@ -33,13 +35,13 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	case kTx.EXECUTE_ACTION:
 		return handleReceipt(s.executeAction(ctx, tx))
 	default:
-		return nil, fmt.Errorf("invalid payload type")
+		return nil, status.Errorf(codes.InvalidArgument, "payload %s not supported", tx.PayloadType)
 	}
 }
 
 func handleReceipt(r *kTx.Receipt, err error) (*txpb.BroadcastResponse, error) {
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "failed to execute transaction: %s", err)
 	}
 
 	return &txpb.BroadcastResponse{

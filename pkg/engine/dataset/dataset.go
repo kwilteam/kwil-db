@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -92,6 +93,15 @@ func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]
 		return nil, err
 	}
 
+	if proc.RequiresAuthentication() && opts.Caller == "" {
+		return nil, ErrCallerNotAuthenticated
+	}
+
+	if proc.IsOwnerOnly() && !strings.EqualFold(opts.Caller, d.owner) {
+		d.log.Debug("caller is not owner", zap.String("caller", opts.Caller), zap.String("owner", d.owner))
+		return nil, ErrCallerNotOwner
+	}
+
 	savepoint, err := d.db.Savepoint()
 	if err != nil {
 		return nil, err
@@ -133,10 +143,13 @@ func (d *Dataset) Call(ctx context.Context, action string, args map[string]any, 
 		return nil, err
 	}
 	if proc.IsMutative() {
-		return nil, fmt.Errorf("cannot call mutative procedure")
+		return nil, ErrCallMutativeProcedure
 	}
 	if proc.RequiresAuthentication() && opts.Caller == "" {
-		return nil, fmt.Errorf("caller must be set to execute authenticated procedure")
+		return nil, ErrCallerNotAuthenticated
+	}
+	if proc.IsOwnerOnly() && strings.EqualFold(opts.Caller, d.owner) {
+		return nil, ErrCallerNotOwner
 	}
 
 	return d.executeOnce(ctx, proc, args, d.getExecutionOpts(proc, opts)...)

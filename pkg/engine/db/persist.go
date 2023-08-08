@@ -9,7 +9,7 @@ import (
 
 const (
 	tableVersion     = 1
-	procedureVersion = 1
+	procedureVersion = 2
 	extensionVersion = 1
 )
 
@@ -20,7 +20,7 @@ func (d *DB) persistTableMetadata(ctx context.Context, table *types.Table) error
 		return err
 	}
 
-	return d.persistVersionedMetadata(ctx, table.Name, metadataTypeTable, &versionedMetadata{
+	return d.persistVersionedMetadata(ctx, table.Name, metadataTypeTable, &VersionedMetadata{
 		Version: tableVersion,
 		Data:    bts,
 	})
@@ -43,7 +43,7 @@ func (d *DB) StoreProcedure(ctx context.Context, procedure *types.Procedure) err
 		return err
 	}
 
-	return d.persistVersionedMetadata(ctx, procedure.Name, metadataTypeProcedure, &versionedMetadata{
+	return d.persistVersionedMetadata(ctx, procedure.Name, metadataTypeProcedure, &VersionedMetadata{
 		Version: procedureVersion,
 		Data:    bts,
 	})
@@ -56,7 +56,7 @@ func (d *DB) ListProcedures(ctx context.Context) ([]*types.Procedure, error) {
 		return nil, err
 	}
 
-	return decodeMetadata[types.Procedure](meta)
+	return decodeVersionedProcedures(meta)
 }
 
 // StoreExtension stores an extension in the database
@@ -66,7 +66,7 @@ func (d *DB) StoreExtension(ctx context.Context, extension *types.Extension) err
 		return err
 	}
 
-	return d.persistVersionedMetadata(ctx, extension.Alias, metadataTypeExtension, &versionedMetadata{
+	return d.persistVersionedMetadata(ctx, extension.Alias, metadataTypeExtension, &VersionedMetadata{
 		Version: extensionVersion,
 		Data:    bts,
 	})
