@@ -46,7 +46,7 @@ const (
 )
 
 func (d *DB) initMetadataTable(ctx context.Context) error {
-	exists, err := d.sqldb.TableExists(ctx, metadataTableName)
+	exists, err := d.Sqldb.TableExists(ctx, metadataTableName)
 	if err != nil {
 		return err
 	}
@@ -55,11 +55,11 @@ func (d *DB) initMetadataTable(ctx context.Context) error {
 		return nil
 	}
 
-	return d.sqldb.Execute(ctx, createMetadataTableStatement, nil)
+	return d.Sqldb.Execute(ctx, createMetadataTableStatement, nil)
 }
 
 func (d *DB) storeMetadata(ctx context.Context, meta *metadata) error {
-	return d.sqldb.Execute(ctx, insertMetadataStatement, map[string]interface{}{
+	return d.Sqldb.Execute(ctx, insertMetadataStatement, map[string]interface{}{
 		"$identifier": meta.Identifier,
 		"$type":       meta.Type,
 		"$content":    meta.Content,
@@ -67,7 +67,7 @@ func (d *DB) storeMetadata(ctx context.Context, meta *metadata) error {
 }
 
 func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadata, error) {
-	results, err := d.sqldb.Query(ctx, selectMetadataStatement, map[string]interface{}{
+	results, err := d.Sqldb.Query(ctx, selectMetadataStatement, map[string]interface{}{
 		"$type": metaType,
 	})
 	if err != nil {
@@ -105,21 +105,21 @@ func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadat
 	return metas, nil
 }
 
-// versionedMetadata is a generic that wraps a serializable type with a version
-type versionedMetadata struct {
+// VersionedMetadata is a generic that wraps a serializable type with a version
+type VersionedMetadata struct {
 	Version int    `json:"version"`
 	Data    []byte `json:"data"`
 }
 
-func (d *DB) getVersionedMetadata(ctx context.Context, metaType metadataType) ([]*versionedMetadata, error) {
+func (d *DB) getVersionedMetadata(ctx context.Context, metaType metadataType) ([]*VersionedMetadata, error) {
 	metas, err := d.getMetadata(ctx, metaType)
 	if err != nil {
 		return nil, err
 	}
 
-	var versionedMetas []*versionedMetadata
+	var versionedMetas []*VersionedMetadata
 	for _, meta := range metas {
-		versionedMeta := &versionedMetadata{}
+		versionedMeta := &VersionedMetadata{}
 		err = json.Unmarshal(meta.Content, versionedMeta)
 		if err != nil {
 			return nil, err
@@ -131,7 +131,7 @@ func (d *DB) getVersionedMetadata(ctx context.Context, metaType metadataType) ([
 	return versionedMetas, nil
 }
 
-func (d *DB) persistVersionedMetadata(ctx context.Context, identifier string, metaType metadataType, meta *versionedMetadata) error {
+func (d *DB) persistVersionedMetadata(ctx context.Context, identifier string, metaType metadataType, meta *VersionedMetadata) error {
 	bts, err := json.Marshal(meta)
 	if err != nil {
 		return err
@@ -149,7 +149,7 @@ type serializable interface {
 	types.Table | types.Procedure | types.Extension
 }
 
-func decodeMetadata[T serializable](meta []*versionedMetadata) ([]*T, error) {
+func decodeMetadata[T serializable](meta []*VersionedMetadata) ([]*T, error) {
 	var decoded []*T
 
 	for _, value := range meta {

@@ -47,9 +47,11 @@ var (
 	}
 
 	ActionInsertUser = &entity.Action{
-		Name:       "insert_user",
-		Inputs:     []string{"$id", "$name", "$age"},
-		Statements: []string{"INSERT INTO users (id, name, age) VALUES ($id, $name, $age);"},
-		Public:     true,
+		Name:        "insert_user",
+		Inputs:      []string{"$id", "$name", "$age"},
+		Statements:  []string{"INSERT INTO users (id, name, age) VALUES ($id, $name, $age);"},
+		Public:      true,
+		Mutability:  entity.MutabilityView.String(),
+		Auxiliaries: []string{entity.AuxiliaryTypeMustSign.String()},
 	}
 )

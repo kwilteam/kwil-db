@@ -11,13 +11,12 @@ import (
 // DatabaseDeployDsl is dsl for database deployment specification
 type DatabaseDeployDsl interface {
 	DeployDatabase(ctx context.Context, db *schema.Schema) error
+	// TODO: verify more than just existence, check schema structure
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 
 func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
 	t.Logf("Executing database deploy specification")
-	testDeployFailure(ctx, t, deploy)
-	testInvalidExtensionInit(ctx, t, deploy)
 
 	// Given a valid database schema
 	db := SchemaLoader.Load(t, schema_testdb)
@@ -26,7 +25,7 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 	err := deploy.DeployDatabase(ctx, db)
 
 	// Then i expect success
-	assert.NoError(t, err)
+	assert.NoError(t, err, "failed to deploy database")
 
 	// And i expect database should exist
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
@@ -34,7 +33,9 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 
 }
 
-func testDeployFailure(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
+func DatabaseDeployInvalidSqlSpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
+	t.Logf("Executing database deploy invalid SQL specification")
+
 	db := SchemaLoader.LoadWithoutValidation(t, schema_invalidSQLSyntax)
 
 	// Deploy faulty database and expect error
@@ -57,7 +58,9 @@ func testDeployFailure(ctx context.Context, t *testing.T, deploy DatabaseDeployD
 	assert.NoError(t, err)
 }
 
-func testInvalidExtensionInit(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
+func DatabaseDeployInvalidExtensionSpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
+	t.Logf("Executing database deploy invalid Extension init specification")
+
 	db := SchemaLoader.Load(t, schema_invalidExtensionInit)
 
 	// Deploy faulty database and expect error
