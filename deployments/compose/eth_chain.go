@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/kwilteam/kwil-db/test/acceptance"
@@ -55,6 +56,7 @@ func keepMiningBlocks(chainDeployer deployer.Deployer) {
 }
 
 func main() {
+	fmt.Println("eth_chain PID:", os.Getpid())
 	chainDeployer := getChainDeployer()
 	initContract(chainDeployer)
 	keepMiningBlocks(chainDeployer)

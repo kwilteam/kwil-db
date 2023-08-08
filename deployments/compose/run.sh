@@ -9,18 +9,17 @@ start() {
 
   # start ganache
   docker compose -f ganache/docker-compose.yml up -d
-  printf "done ganache"
+  printf "done ganache\n"
 
   # deploy contracts and fund default user, and mine blocks
   go run eth_chain.go &
   sleep 10
-  printf "will start kwild"
+  printf "will start kwild\n"
 
   # start kwild
 
-  printf "brining up kwild"
+  printf "brining up kwild\n"
   
-
   cp -r ./kwil/k1/node0-cpy/ ./kwil/k1/node0
   cp -r ./kwil/k2/node1-cpy/ ./kwil/k2/node1
   cp -r ./kwil/k3/node2-cpy/ ./kwil/k3/node2
