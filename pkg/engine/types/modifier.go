@@ -13,13 +13,17 @@ const (
 
 	// Authenticated requires that the caller is identified.
 	ModifierAuthenticated Modifier = "AUTHENTICATED"
+
+	// Owner requires that the caller is the owner of the database.
+	ModifierOwner Modifier = "OWNER"
 )
 
 func (m *Modifier) IsValid() bool {
 	upper := strings.ToUpper(m.String())
 
 	return upper == ModifierView.String() ||
-		upper == ModifierAuthenticated.String()
+		upper == ModifierAuthenticated.String() ||
+		upper == ModifierOwner.String()
 }
 
 func (m *Modifier) Clean() error {

@@ -91,98 +91,232 @@
           ],
           "type": "unique_btree"
         }
+      ],
+      "foreign_keys": [
+        {
+          "child_keys": [
+            "user_id"
+          ],
+          "parent_keys": [
+            "id"
+          ],
+          "parent_table": "users",
+          "actions": [
+            {
+              "on": "DELETE",
+              "do": "CASCADE"
+            },
+            {
+              "on": "UPDATE",
+              "do": "CASCADE"
+            }
+          ]
+        }
       ]
     }
   ],
   "actions": [
     {
       "name": "create_user",
-      "public": true,
       "inputs": [
         "$id",
         "$username",
         "$age"
       ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "INSERT INTO users( id , username , age , wallet ) VALUES ( $id , $username , $age , @caller )"
+        "INSERT INTO users (id, username, age, wallet)\n    VALUES ($id, $username, $age, @caller);"
+      ]
+    },
+    {
+      "name": "update_user",
+      "inputs": [
+        "$id",
+        "$username",
+        "$age"
+      ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
+      "statements": [
+        "UPDATE users\n    SET id = $id, username = $username, age = $age\n    WHERE wallet = @caller;"
       ]
     },
     {
       "name": "update_username",
-      "public": true,
       "inputs": [
         "$username"
       ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "UPDATE users SET username = $username WHERE wallet = @caller"
+        "UPDATE users\n    SET username = $username\n    WHERE wallet = @caller;"
       ]
     },
     {
       "name": "delete_user",
+      "inputs": null,
       "public": true,
-      "inputs": [],
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "DELETE FROM users WHERE wallet = @caller"
+        "DELETE FROM users\n    WHERE wallet = @caller;"
       ]
     },
     {
       "name": "create_post",
-      "public": false,
       "inputs": [
         "$id",
         "$title",
         "$content"
       ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "INSERT INTO posts( id , user_id , title , content ) VALUES ( $id , ( SELECT id FROM users WHERE wallet = @caller ) , $title , $content )"
+        "INSERT INTO posts (id, user_id, title, content)\n    VALUES ($id, (\n        SELECT id FROM users WHERE wallet = @caller\n    ), $title, $content);"
       ]
     },
     {
       "name": "delete_post",
-      "public": true,
       "inputs": [
         "$id"
       ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "DELETE FROM posts WHERE id = $id AND user_id =( SELECT id FROM users WHERE wallet = @caller )"
+        "DELETE FROM posts\n    WHERE id = $id AND user_id = (\n        SELECT id\n        FROM users\n        WHERE wallet = @caller\n    );"
       ]
     },
     {
       "name": "get_user_by_wallet",
-      "public": true,
       "inputs": [
         "$address"
       ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "SELECT * FROM users WHERE wallet = $address"
+        "SELECT *\n    FROM users\n    WHERE wallet = $address;"
       ]
     },
     {
       "name": "list_users",
-      "public": false,
-      "inputs": [],
+      "inputs": null,
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "SELECT * FROM users"
+        "SELECT *\n    FROM users;"
+      ]
+    },
+    {
+      "name": "get_user_posts_by_userid",
+      "inputs": [
+        "$id"
+      ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
+      "statements": [
+        "SELECT title, content\n    FROM posts\n    WHERE user_id = $id;"
       ]
     },
     {
       "name": "get_user_posts",
-      "public": true,
       "inputs": [
         "$username"
       ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "SELECT title , content FROM posts WHERE user_id =( SELECT id FROM users WHERE username = $username )"
+        "SELECT title, content\n    FROM posts\n    WHERE user_id = (\n        SELECT id\n        FROM users\n        WHERE username = $username\n    );"
+      ]
+    },
+    {
+      "name": "get_post_authenticated",
+      "inputs": [
+        "$id"
+      ],
+      "public": true,
+      "mutability": "view",
+      "auxiliaries": [
+        "mustsign"
+      ],
+      "statements": [
+        "SELECT *\n    FROM posts\n    WHERE id = $id;"
+      ]
+    },
+    {
+      "name": "get_post_unauthenticated",
+      "inputs": [
+        "$id"
+      ],
+      "public": true,
+      "mutability": "view",
+      "auxiliaries": null,
+      "statements": [
+        "SELECT *\n    FROM posts\n    WHERE id = $id;"
       ]
     },
     {
       "name": "multi_select",
+      "inputs": null,
       "public": true,
-      "inputs": [],
+      "mutability": "update",
+      "auxiliaries": null,
       "statements": [
-        "SELECT * FROM posts",
-        "SELECT * FROM users"
+        "SELECT * FROM posts;",
+        "SELECT * FROM users;"
       ]
+    },
+    {
+      "name": "divide",
+      "inputs": [
+        "$numerator",
+        "$denominator"
+      ],
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": null,
+      "statements": [
+        "$up=math_up.div($numerator,$denominator);",
+        "$down=math_down.div($numerator,$denominator);",
+        "select $up AS upper_value, $down AS lower_value;"
+      ]
+    },
+    {
+      "name": "owner_only",
+      "inputs": null,
+      "public": true,
+      "mutability": "update",
+      "auxiliaries": [
+        "owner"
+      ],
+      "statements": [
+        "select 'owner only';"
+      ]
+    }
+  ],
+  "extensions": [
+    {
+      "name": "math",
+      "config": {
+        "round": "\"up\""
+      },
+      "alias": "math_up"
+    },
+    {
+      "name": "math",
+      "config": {
+        "round": "\"down\""
+      },
+      "alias": "math_down"
     }
   ]
 }

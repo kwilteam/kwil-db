@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/db/test"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/engine/types/testdata"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -197,4 +198,35 @@ func Test_Prepare(t *testing.T) {
 			assert.Equal(t, tt.wantErr, err != nil)
 		})
 	}
+}
+
+type baseMockDatastore struct {
+}
+
+func (b *baseMockDatastore) Close() error {
+	return nil
+}
+
+func (b *baseMockDatastore) Delete() error {
+	return nil
+}
+
+func (b *baseMockDatastore) Execute(ctx context.Context, stmt string, args map[string]any) error {
+	return nil
+}
+
+func (b *baseMockDatastore) Prepare(stmt string) (sql.Statement, error) {
+	return nil, nil
+}
+
+func (b *baseMockDatastore) Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error) {
+	return nil, nil
+}
+
+func (b *baseMockDatastore) Savepoint() (sql.Savepoint, error) {
+	return nil, nil
+}
+
+func (b *baseMockDatastore) TableExists(ctx context.Context, table string) (bool, error) {
+	return false, nil
 }

@@ -6,7 +6,8 @@ import (
 )
 
 var envTemplage = `
-KWILD_URL=%s
+RPC_URL=%s
+KWIL_PROVIDER=%s
 KGW_URL=%s
 TEST_USER_PK=%s
 TEST_USER_ADDR=%s
@@ -16,6 +17,7 @@ TEST_DEPLOYER_ADDR=%s
 
 func DumpEnv(cfg *TestEnvCfg) {
 	content := fmt.Sprintf(envTemplage,
+		cfg.ChainRPCURL,
 		cfg.NodeURL, cfg.GatewayURL,
 		cfg.UserPrivateKeyString, cfg.UserAddr,
 		cfg.DatabaseDeployerPrivateKeyString, cfg.DeployerAddr,

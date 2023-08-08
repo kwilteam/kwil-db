@@ -16,6 +16,7 @@ import (
 
 func Test_Execute(t *testing.T) {
 	type fields struct {
+		ownerAddress            string
 		callerAddress           string
 		availableExtensions     []*testExt
 		extensionInitialization []*types.Extension
@@ -24,6 +25,7 @@ func Test_Execute(t *testing.T) {
 	}
 
 	defaultFields := fields{
+		ownerAddress:            callerAddress,
 		callerAddress:           callerAddress,
 		availableExtensions:     testAvailableExtensions,
 		extensionInitialization: testExtensions,
@@ -303,6 +305,7 @@ func Test_Execute(t *testing.T) {
 		{
 			name: "execute authenticated procedure with caller address should succeed",
 			fields: fields{
+				ownerAddress:            callerAddress,
 				callerAddress:           callerAddress,
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
@@ -328,6 +331,35 @@ func Test_Execute(t *testing.T) {
 			wantErr:         false,
 			wantBuilderErr:  false,
 		},
+		{
+			name: "execute owner only procedure with non-owner caller address should fail",
+			fields: fields{
+				ownerAddress:            callerAddress,
+				callerAddress:           "0xnotowner",
+				availableExtensions:     testAvailableExtensions,
+				extensionInitialization: testExtensions,
+				tables:                  test_tables,
+				procedures: []*types.Procedure{
+					{
+						Name:      "create_user",
+						Args:      []string{},
+						Public:    true,
+						Modifiers: []types.Modifier{types.ModifierOwner},
+						Statements: []string{
+							"INSERT INTO users (id, username, age, address) VALUES (1, 'test_username', 20, @caller);",
+						},
+					},
+				},
+			},
+			args: args{
+				procedure: "create_user",
+				inputs:    []map[string]interface{}{},
+			},
+			expectedOutputs: nil,
+			isCall:          false,
+			wantErr:         true,
+			wantBuilderErr:  false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -349,7 +381,7 @@ func Test_Execute(t *testing.T) {
 				WithInitializers(availableExtensions).
 				WithExtensions(tt.fields.extensionInitialization...).
 				WithDatastore(database).
-				Named(datasetName).OwnedBy(tt.fields.callerAddress).
+				Named(datasetName).OwnedBy(tt.fields.ownerAddress).
 				Build(ctx)
 			if tt.wantBuilderErr {
 				assert.Error(t, err)
