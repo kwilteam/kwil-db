@@ -105,6 +105,12 @@ tasks:
         vars: {VARIANT: 'shell'}
     cmds:
       - go test ./test/acceptance/ -timeout 12h -dev -v
+
+  dev:up:no-build:
+    desc: Start the dev environment without rebuilding docker image
+    cmds:
+      - go test ./test/acceptance/ -timeout 12h -dev -v
+
   # ************ test ************
   test:act:
     desc: Run acceptance tests

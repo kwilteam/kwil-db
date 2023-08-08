@@ -10,7 +10,7 @@ import (
 
 // CreateTable creates a new table and persists the metadata to the database
 func (d *DB) CreateTable(ctx context.Context, table *types.Table) error {
-	savepoint, err := d.sqldb.Savepoint()
+	savepoint, err := d.Sqldb.Savepoint()
 	if err != nil {
 		return fmt.Errorf("failed to create savepoint: %w", err)
 	}
@@ -36,14 +36,14 @@ func (d *DB) deployTable(ctx context.Context, table *types.Table) error {
 		return err
 	}
 
-	savepoint, err := d.sqldb.Savepoint()
+	savepoint, err := d.Sqldb.Savepoint()
 	if err != nil {
 		return err
 	}
 	defer savepoint.Rollback()
 
 	for _, ddlStmt := range ddlStmts {
-		err = d.sqldb.Execute(ctx, ddlStmt, nil)
+		err = d.Sqldb.Execute(ctx, ddlStmt, nil)
 		if err != nil {
 			return err
 		}

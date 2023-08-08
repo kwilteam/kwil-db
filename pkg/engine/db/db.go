@@ -17,15 +17,15 @@ import (
 )
 
 type DB struct {
-	sqldb SqlDB
+	Sqldb SqlDB
 }
 
 func (d *DB) Close() error {
-	return d.sqldb.Close()
+	return d.Sqldb.Close()
 }
 
 func (d *DB) Delete() error {
-	return d.sqldb.Delete()
+	return d.Sqldb.Delete()
 }
 
 func (d *DB) Prepare(ctx context.Context, query string) (*PreparedStatement, error) {
@@ -56,7 +56,7 @@ func (d *DB) Prepare(ctx context.Context, query string) (*PreparedStatement, err
 		return nil, err
 	}
 
-	prepStmt, err := d.sqldb.Prepare(generatedSql)
+	prepStmt, err := d.Sqldb.Prepare(generatedSql)
 	if err != nil {
 		return nil, err
 	}
@@ -68,16 +68,16 @@ func (d *DB) Prepare(ctx context.Context, query string) (*PreparedStatement, err
 }
 
 func (d *DB) Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error) {
-	return d.sqldb.Query(ctx, stmt, args)
+	return d.Sqldb.Query(ctx, stmt, args)
 }
 
 func (d *DB) Savepoint() (sql.Savepoint, error) {
-	return d.sqldb.Savepoint()
+	return d.Sqldb.Savepoint()
 }
 
 func NewDB(ctx context.Context, sqldb SqlDB) (*DB, error) {
 	db := &DB{
-		sqldb: sqldb,
+		Sqldb: sqldb,
 	}
 
 	err := db.initMetadataTable(ctx)
