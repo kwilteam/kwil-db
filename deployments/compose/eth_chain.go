@@ -1,5 +1,7 @@
 package main
 
+/*xxx
+
 import (
 	"context"
 	"fmt"
@@ -61,3 +63,7 @@ func main() {
 	initContract(chainDeployer)
 	keepMiningBlocks(chainDeployer)
 }
+
+*/
+
+func main() {}

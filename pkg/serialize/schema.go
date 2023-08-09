@@ -1,6 +1,7 @@
 package serialize
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -344,4 +345,22 @@ func convertIndexesToDto(indexes []*Index) []*engineTypes.Index {
 	}
 
 	return entityIndexes
+}
+
+func UnmarshalSchema(b []byte) (*Schema, error) {
+	var schema Schema
+	err := json.Unmarshal(b, &schema)
+	if err != nil {
+		return nil, err
+	}
+	return &schema, nil
+}
+
+func UnmarshalDatasetIdentifier(b []byte) (*DatasetIdentifier, error) {
+	var dsIdent DatasetIdentifier
+	err := json.Unmarshal(b, &dsIdent)
+	if err != nil {
+		return nil, err
+	}
+	return &dsIdent, nil
 }

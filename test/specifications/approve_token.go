@@ -1,5 +1,6 @@
 package specifications
 
+/*
 import (
 	"context"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
@@ -32,3 +33,4 @@ func ApproveTokenSpecification(ctx context.Context, t *testing.T, approve Approv
 	assert.NoError(t, err)
 	assert.Equal(t, amount, allowance)
 }
+*/

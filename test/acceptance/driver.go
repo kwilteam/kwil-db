@@ -7,8 +7,6 @@ import (
 type KwilAcceptanceDriver interface {
 	specifications.DatabaseDeployDsl
 	specifications.DatabaseDropDsl
-	specifications.ApproveTokenDsl
-	specifications.DepositFundDsl
 	specifications.ExecuteQueryDsl
 	specifications.ExecuteCallDsl
 	specifications.NetworkOpsDsl

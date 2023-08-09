@@ -1,9 +1,7 @@
 package client
 
 import (
-	"context"
 	"errors"
-	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql"
@@ -13,7 +11,7 @@ import (
 
 // OpenTestDB opens a test database for use in unit tests.
 // It returns a SqliteClient, a cleanup function, and an error.
-func OpenTestDB(name string) (connection TestSqliteClient, teardown func() error, err error) {
+func OpenTestDB(name string) (connection *wrappedSqliteClient, teardown func() error, err error) {
 	db, closeFunc, err := sqlite.OpenDbWithTearDown(name)
 	if err != nil {
 		return nil, nil, err
@@ -39,27 +37,6 @@ func (w *wrappedSqliteClient) Savepoint() (sql.Savepoint, error) {
 	return w.SqliteClient.Savepoint()
 }
 
-// we need to get rid of close and delete since the teardown function will handle that
-func (w *wrappedSqliteClient) Close() error {
-	return nil
-}
-
-func (w *wrappedSqliteClient) Delete() error {
-	return nil
-}
-
 func (w *wrappedSqliteClient) CreateSession() (sql.Session, error) {
 	return w.SqliteClient.CreateSession()
-}
-
-type TestSqliteClient interface {
-	Close() error
-	Delete() error
-	Execute(context.Context, string, map[string]any) error
-	Prepare(string) (sql.Statement, error)
-	Query(context.Context, string, map[string]any) ([]map[string]any, error)
-	Savepoint() (sql.Savepoint, error)
-	TableExists(context.Context, string) (bool, error)
-	CreateSession() (sql.Session, error)
-	ApplyChangeset(io.Reader) error
 }
