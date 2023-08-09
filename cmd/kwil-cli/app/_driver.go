@@ -13,12 +13,15 @@ import (
 	"strings"
 	"time"
 
-	schema "github.com/kwilteam/kwil-db/internal/entity"
-
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	big2 "github.com/kwilteam/kwil-db/pkg/utils/numbers/big"
+	"gorm.io/gorm/schema"
 )
+
+/*
+	This has been removed from the build since it is not used for now.
+*/
 
 func MustRun(cmd *exec.Cmd) error {
 	cmd.Stderr = os.Stderr
