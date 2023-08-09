@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/sql"
 )
@@ -27,4 +28,10 @@ type SqlDB interface {
 
 	// Savepoint creates a savepoint.
 	Savepoint() (sql.Savepoint, error)
+
+	// DB Session
+	CreateSession() (sql.Session, error)
+
+	// Apply Changeset to the DB
+	ApplyChangeset(changeset io.Reader) error
 }

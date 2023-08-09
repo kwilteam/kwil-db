@@ -2,6 +2,7 @@ package dataset
 
 import (
 	"context"
+	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/db"
 	"github.com/kwilteam/kwil-db/pkg/engine/execution"
@@ -34,16 +35,8 @@ type Datastore interface {
 	Delete() error
 	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
 	Savepoint() (sql.Savepoint, error)
-}
-
-type Statement interface {
-	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)
-	Close() error
-}
-
-type Savepoint interface {
-	Rollback() error
-	Commit() error
+	CreateSession() (sql.Session, error)
+	ApplyChangeset(changeset io.Reader) error
 }
 
 type initializerWrapper struct {

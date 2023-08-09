@@ -3,13 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
+	"net/http"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/controller/http/swagger"
 	"github.com/kwilteam/kwil-db/internal/controller/http/v1/health"
 	"github.com/kwilteam/kwil-db/internal/pkg/gateway/middleware"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go.uber.org/zap"

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"go.uber.org/zap"
+	"io"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -287,4 +288,12 @@ func (d *Dataset) Metadata() (name, owner string) {
 
 func (d *Dataset) Savepoint() (sql.Savepoint, error) {
 	return d.db.Savepoint()
+}
+
+func (d *Dataset) CreateSession() (sql.Session, error) {
+	return d.db.CreateSession()
+}
+
+func (d *Dataset) ApplyChangeset(changeset io.Reader) error {
+	return d.db.ApplyChangeset(changeset)
 }

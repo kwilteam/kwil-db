@@ -48,7 +48,7 @@ OR
 
 				lowerName := strings.ToLower(actionName)
 
-				inputs, err := getInputs(args)
+				inputs, err := GetInputs(args)
 				if err != nil {
 					return fmt.Errorf("error getting inputs: %w", err)
 				}

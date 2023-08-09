@@ -1,34 +1,18 @@
 package client
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/sql"
+	// "github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
 )
 
-type Session struct {
-	ses *sqlite.Session
+type SqliteSession struct {
+	sess *sqlite.Session
 }
 
-func (c *SqliteClient) BeginSession() (sql.Session, error) {
-	ses, err := c.conn.CreateSession()
-	if err != nil {
-		return nil, err
-	}
-
-	return &Session{
-		ses: ses,
-	}, nil
+func (s *SqliteSession) GenerateChangeset() ([]byte, error) {
+	return s.sess.GenerateChangesetBytes()
 }
 
-func (c *Session) Delete() error {
-	return c.ses.Delete()
-}
-
-func (c *Session) GenerateChangeset() ([]byte, error) {
-	cs, err := c.ses.GenerateChangeset()
-	if err != nil {
-		return nil, err
-	}
-
-	return cs.Export(), nil
+func (s *SqliteSession) Delete() error {
+	return s.sess.Delete()
 }

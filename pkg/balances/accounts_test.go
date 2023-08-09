@@ -1,224 +1,177 @@
 package balances_test
 
 import (
-	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/balances"
+	"context"
+	"errors"
 	"math/big"
-	"os"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/balances"
+	accountTesting "github.com/kwilteam/kwil-db/pkg/balances/testing"
+	"github.com/stretchr/testify/assert"
 )
 
-var testPath string
+const (
+	account1 = "account1"
+	account2 = "account2"
+)
 
-func init() {
-	dirname, err := os.UserHomeDir()
-	if err != nil {
-		dirname = "/tmp"
+func Test_Accounts(t *testing.T) {
+	type testCase struct {
+		name          string
+		spends        []*balances.Spend
+		gasOn         bool
+		noncesOn      bool
+		finalBalances map[string]*balances.Account
+		// the error must be triggered once
+		err error
 	}
 
-	testPath = fmt.Sprintf("%s/.kwil_test/sqlite/", dirname)
-}
-
-func Test_AccountStore(t *testing.T) {
-	as, err := balances.NewAccountStore(balances.Wipe(), balances.WithPath(testPath))
-	if err != nil {
-		t.Errorf("error creating account store: %v", err)
-	}
-	defer as.Close()
-
-	// try to get an account that doesn't exist
-	_, err = as.GetAccount("0x123")
-	if err == nil {
-		t.Errorf("expected error getting non-existent account")
-	}
-
-	// spend for an account that doesn't exist
-	spend := balances.Spend{
-		AccountAddress: "0x123",
-		Amount:         big.NewInt(100),
-		Nonce:          1,
-	}
-
-	err = as.Spend(&spend)
-	if err == nil {
-		t.Errorf("expected error spending from non-existent account")
-	}
-
-	// credit an account
-	credit := balances.Credit{
-		AccountAddress: "0x123",
-		Amount:         big.NewInt(100),
-	}
-
-	err = as.Credit(&credit)
-	if err != nil {
-		t.Errorf("error crediting account: %v", err)
-	}
-
-	// get the account
-	account, err := as.GetAccount("0x123")
-	if err != nil {
-		t.Errorf("error getting account: %v", err)
-	}
-
-	// check the balance
-	if account.Balance.Cmp(big.NewInt(100)) != 0 {
-		t.Errorf("expected balance of 100, got %v", account.Balance)
-	}
-
-	// check the nonce
-	if account.Nonce != 0 {
-		t.Errorf("expected nonce of 0, got %v", account.Nonce)
-	}
-
-	// spend from the account
-	err = as.Spend(&spend)
-	if err != nil {
-		t.Errorf("error spending from account: %v", err)
-	}
-
-	// get the account
-	account, err = as.GetAccount("0x123")
-	if err != nil {
-		t.Errorf("error getting account: %v", err)
-	}
-
-	// check the balance
-	if account.Balance.Cmp(big.NewInt(0)) != 0 {
-		t.Errorf("expected balance of 0, got %v", account.Balance)
-	}
-
-	// check the nonce
-	if account.Nonce != 1 {
-		t.Errorf("expected nonce of 1, got %v", account.Nonce)
-	}
-}
-
-func Test_BatchSpendAndCredit(t *testing.T) {
-	as, err := balances.NewAccountStore(balances.Wipe(), balances.WithPath(testPath))
-	if err != nil {
-		t.Errorf("error creating account store: %v", err)
-	}
-	defer as.Close()
-
-	// batch of spends
-	spendList := []*balances.Spend{
+	// once we have a way to increase balances in accounts, we will have to add tests
+	// for spending a valid amount
+	testCases := []testCase{
 		{
-			AccountAddress: "0x123",
-			Amount:         big.NewInt(100),
-			Nonce:          1,
+			name: "gas off, nonces on",
+			spends: []*balances.Spend{
+				newSpend(account1, 100, 1),
+				newSpend(account1, 100, 2),
+				newSpend(account2, -100, 1),
+			},
+			gasOn:    false,
+			noncesOn: true,
+			finalBalances: map[string]*balances.Account{
+				account1: newAccount(account1, 0, 2),
+				account2: newAccount(account2, 0, 1),
+			},
+			err: nil,
 		},
 		{
-			AccountAddress: "0x456",
-			Amount:         big.NewInt(100),
-			Nonce:          1,
+			name: "gas and nonces off",
+			spends: []*balances.Spend{
+				newSpend(account1, 100, 1),
+				newSpend(account1, 100, 2),
+				newSpend(account2, -100, 1),
+			},
+			gasOn:    false,
+			noncesOn: false,
+			finalBalances: map[string]*balances.Account{
+				account1: newAccount(account1, 0, 0),
+				account2: newAccount(account2, 0, 0),
+			},
+			err: nil,
 		},
 		{
-			AccountAddress: "0x123",
-			Amount:         big.NewInt(100),
-			Nonce:          2,
+			name: "gas and nonces on",
+			spends: []*balances.Spend{
+				newSpend(account1, 100, 1),
+			},
+			gasOn:         true,
+			noncesOn:      true,
+			finalBalances: map[string]*balances.Account{},
+			err:           balances.ErrInsufficientFunds,
+		},
+		{
+			name:     "no account",
+			spends:   []*balances.Spend{},
+			gasOn:    false,
+			noncesOn: false,
+			finalBalances: map[string]*balances.Account{
+				account1: newAccount(account1, 0, 0),
+			},
+			err: nil,
+		},
+		{
+			name: "invalid nonce",
+			spends: []*balances.Spend{
+				newSpend(account1, 100, 1),
+				newSpend(account1, 100, 3),
+				newSpend(account2, -100, 1),
+			},
+			gasOn:    false,
+			noncesOn: true,
+			finalBalances: map[string]*balances.Account{
+				account1: newAccount(account1, 0, 1),
+				account2: newAccount(account2, 0, 1),
+			},
+			err: balances.ErrInvalidNonce,
 		},
 	}
 
-	// batch of credits
-	creditList := []*balances.Credit{
-		{
-			AccountAddress: "0x123",
-			Amount:         big.NewInt(100),
-		},
-		{
-			AccountAddress: "0x456",
-			Amount:         big.NewInt(100),
-		},
-		{
-			AccountAddress: "0x123",
-			Amount:         big.NewInt(200),
-		},
-	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
 
-	// start chain at height 0
-	const someChainCode = 0
-	err = as.CreateChain(someChainCode, 0)
-	if err != nil {
-		t.Errorf("error setting height: %v", err)
-	}
+			ar, td, err := accountTesting.NewTestAccountStore(ctx, balances.WithGasCosts(tc.gasOn), balances.WithNonces(tc.noncesOn))
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			defer td()
 
-	chainConifg := &balances.ChainConfig{
-		ChainCode: someChainCode,
-		Height:    1,
-	}
+			sp, err := ar.Savepoint()
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
+			defer sp.Rollback()
 
-	// try spend
-	err = as.BatchSpend(spendList, chainConifg)
-	if err == nil {
-		t.Errorf("expected error spending from non-existent accounts")
-	}
+			errs := []error{}
+			for _, spend := range tc.spends {
+				err := ar.Spend(ctx, spend)
+				if err != nil {
+					errs = append(errs, err)
+				}
+			}
+			assertErr(t, errs, tc.err)
 
-	// try credit
-	err = as.BatchCredit(creditList, chainConifg)
-	if err != nil {
-		t.Errorf("error crediting accounts: %v", err)
-	}
+			err = sp.Commit()
+			if err != nil {
+				t.Fatalf("unexpected error: %s", err)
+			}
 
-	// try spend
-	err = as.BatchSpend(spendList, nil)
-	if err != nil {
-		t.Errorf("error spending from accounts: %v", err)
-	}
+			for address, expectedBalance := range tc.finalBalances {
+				account, err := ar.GetAccount(ctx, address)
+				if err != nil {
+					t.Fatalf("unexpected error: %s", err)
+				}
 
-	// get the accounts
-	account1, err := as.GetAccount("0x123")
-	if err != nil {
-		t.Errorf("error getting account: %v", err)
-	}
-
-	account2, err := as.GetAccount("0x456")
-	if err != nil {
-		t.Errorf("error getting account: %v", err)
-	}
-
-	// check the balances
-	if account1.Balance.Cmp(big.NewInt(100)) != 0 {
-		t.Errorf("expected balance of 100, got %v", account1.Balance)
-	}
-
-	if account2.Balance.Cmp(big.NewInt(0)) != 0 {
-		t.Errorf("expected balance of 0, got %v", account2.Balance)
-	}
-
-	// check the nonces
-	if account1.Nonce != 2 {
-		t.Errorf("expected nonce of 2, got %v", account1.Nonce)
-	}
-
-	if account2.Nonce != 1 {
-		t.Errorf("expected nonce of 1, got %v", account2.Nonce)
-	}
-
-	// check the height
-	height, err := as.GetHeight(someChainCode)
-	if err != nil {
-		t.Errorf("error getting height: %v", err)
-	}
-
-	if height != 1 {
-		t.Errorf("expected height of 1, got %v", height)
+				assert.Equal(t, expectedBalance.Balance, account.Balance, "expected balance %s, got %s", expectedBalance, account.Balance)
+				assert.Equal(t, expectedBalance.Nonce, account.Nonce, "expected nonce %d, got %d", expectedBalance.Nonce, account.Nonce)
+			}
+		})
 	}
 }
 
-func Test_NonexistentChain(t *testing.T) {
-	as, err := balances.NewAccountStore(balances.Wipe(), balances.WithPath(testPath))
-	if err != nil {
-		t.Errorf("error creating account store: %v", err)
+func newSpend(address string, amount int64, nonce int64) *balances.Spend {
+	return &balances.Spend{
+		AccountAddress: address,
+		Amount:         big.NewInt(amount),
+		Nonce:          nonce,
 	}
-	defer as.Close()
+}
 
-	height, err := as.GetHeight(0)
-	if err != nil {
-		t.Errorf("nonexistent chain should return height of 0, got error: %v", err)
+func newAccount(address string, balance int64, nonce int64) *balances.Account {
+	return &balances.Account{
+		Address: address,
+		Balance: big.NewInt(balance),
+		Nonce:   nonce,
+	}
+}
+
+func assertErr(t *testing.T, errs []error, target error) {
+	if target == nil {
+		if len(errs) > 0 {
+			t.Fatalf("expected no error, got %s", errs)
+		}
+		return
 	}
 
-	if height != 0 {
-		t.Errorf("expected height of 0, got %v", height)
+	contains := false
+	for _, err := range errs {
+		if errors.Is(err, target) {
+			contains = true
+		}
+	}
+
+	if !contains {
+		t.Fatalf("expected error %s, got %s", target, errs)
 	}
 }

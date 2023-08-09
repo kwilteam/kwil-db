@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"context"
+	"io"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
@@ -10,44 +11,32 @@ import (
 )
 
 // DatasetUseCaseInterface is the interface for the dataset use case
+
 type DatasetUseCaseInterface interface {
-	// Deploy deploys a new database
-	Deploy(context.Context, *entity.DeployDatabase) (*tx.Receipt, error)
-
-	//PriceDeploy returns the price to deploy a database
-	PriceDeploy(*entity.DeployDatabase) (*big.Int, error)
-
-	// Drop drops a database
-	Drop(context.Context, *entity.DropDatabase) (*tx.Receipt, error)
-
-	// PriceDrop returns the price to drop a database
-	PriceDrop(*entity.DropDatabase) (*big.Int, error)
-
-	// Execute executes an action on a database
-	Execute(context.Context, *entity.ExecuteAction) (*tx.Receipt, error)
-
-	// PriceExecute returns the price to execute an action on a database
-	PriceExecute(*entity.ExecuteAction) (*big.Int, error)
-
-	// Query queries a database
-	Query(context.Context, *entity.DBQuery) ([]byte, error)
-
-	// GetAccount returns the account of the given address
-	GetAccount(string) (*entity.Account, error)
-
-	// ListDatabases returns a list of all databases deployed by the given address
-	ListDatabases(context.Context, string) ([]string, error)
-
-	// GetSchema returns the schema of the given database
-	GetSchema(context.Context, string) (*entity.Schema, error)
-
+	Close() error
+	Deploy(ctx context.Context, deployment *entity.DeployDatabase) (rec *tx.Receipt, err error)
+	Drop(ctx context.Context, drop *entity.DropDatabase) (txReceipt *tx.Receipt, err error)
+	Execute(ctx context.Context, action *entity.ExecuteAction) (rec *tx.Receipt, err error)
+	GetAccount(ctx context.Context, address string) (*entity.Account, error)
+	GetSchema(ctx context.Context, dbid string) (*entity.Schema, error)
+	ListDatabases(ctx context.Context, owner string) ([]string, error)
+	PriceDeploy(deployment *entity.DeployDatabase) (*big.Int, error)
+	PriceDrop(drop *entity.DropDatabase) (*big.Int, error)
+	PriceExecute(action *entity.ExecuteAction) (*big.Int, error)
+	Query(ctx context.Context, query *entity.DBQuery) ([]byte, error)
 	// Call calls a read-only action on a database
+	Spend(ctx context.Context, address string, amount string, nonce int64) error
 	Call(ctx context.Context, action *entity.CallAction) ([]map[string]any, error)
+	StartBlockSession() error
+	EndBlockSession() ([]byte, error)
+	InitalizeAppHash(appHash []byte)
 }
 
 type AccountStore interface {
-	GetAccount(address string) (*balances.Account, error)
-	Spend(spend *balances.Spend) error
-	BatchCredit(creditList []*balances.Credit, chain *balances.ChainConfig) error
+	GetAccount(ctx context.Context, address string) (*balances.Account, error)
+	Spend(ctx context.Context, spend *balances.Spend) error
 	Close() error
+	Savepoint() (balances.Savepoint, error)
+	CreateSession() (balances.Session, error)
+	ApplyChangeset(changeset io.Reader) error
 }

@@ -3,10 +3,12 @@ package db_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/db"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -155,6 +157,14 @@ func (m procedureStore) Query(ctx context.Context, query string, args map[string
 	}
 
 	return returnVals, nil
+}
+
+func (m *procedureStore) ApplyChangeset(cs io.Reader) error {
+	return nil
+}
+
+func (m *procedureStore) CreateSession() (sql.Session, error) {
+	return nil, nil
 }
 
 type versionedProcedure struct {

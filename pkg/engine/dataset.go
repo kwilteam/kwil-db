@@ -47,7 +47,6 @@ func (e *Engine) CreateDataset(ctx context.Context, name string, owner string, s
 	}
 
 	e.datasets[dbid] = ds
-
 	return dbid, nil
 
 }

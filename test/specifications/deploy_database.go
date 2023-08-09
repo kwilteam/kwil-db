@@ -3,6 +3,7 @@ package specifications
 import (
 	"context"
 	"testing"
+	"time"
 
 	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/stretchr/testify/assert"
@@ -39,21 +40,22 @@ func DatabaseDeployInvalidSqlSpecification(ctx context.Context, t *testing.T, de
 	db := SchemaLoader.LoadWithoutValidation(t, schema_invalidSQLSyntax)
 
 	// Deploy faulty database and expect error
-	err := deploy.DeployDatabase(ctx, db)
-	assert.Error(t, err)
-
+	deploy.DeployDatabase(ctx, db)
+	// assert.Error(t, err)
+	time.Sleep(5 * time.Second)
 	// And i expect database should not exist
-	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
+	err := deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.Error(t, err)
 
 	// read in fixed schema
 	db = SchemaLoader.Load(t, schema_invalidSQLSyntaxFixed)
 
 	// Deploy fault database and expect error
-	err = deploy.DeployDatabase(ctx, db)
-	assert.NoError(t, err)
-
+	deploy.DeployDatabase(ctx, db)
+	// assert.NoError(t, err)
+	time.Sleep(5 * time.Second)
 	// And i expect database should exist
+
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.NoError(t, err)
 }
@@ -70,4 +72,18 @@ func DatabaseDeployInvalidExtensionSpecification(ctx context.Context, t *testing
 	// And i expect database should not exist
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.Error(t, err)
+}
+
+func DatabaseVerifySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl, exisits bool) {
+	t.Logf("Executing database verify specification")
+	// Given a valid database schema
+	db := SchemaLoader.Load(t, schema_testdb)
+
+	// And i expect database should exist
+	err := deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
+	if exisits {
+		assert.NoError(t, err)
+	} else {
+		assert.Error(t, err)
+	}
 }

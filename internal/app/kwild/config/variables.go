@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/config"
 
+	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	"github.com/cstockton/go-conv"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -30,6 +31,10 @@ type KwildConfig struct {
 	Log                 log.Config
 	ExtensionEndpoints  []string
 	ArweaveConfig       ArweaveConfig
+	BcRpcUrl            string
+	BCPrivateKey        *cmtCrypto.PrivKey
+	WithoutGasCosts     bool
+	WithoutNonces       bool
 }
 
 type DepositsConfig struct {
@@ -66,6 +71,9 @@ var (
 		HttpListenAddress,
 		ExtensionEndpoints,
 		ArweaveBundlrURL,
+		BcRpcUrl,
+		WithoutGasCosts,
+		WithoutNonces,
 	}
 )
 
@@ -86,6 +94,12 @@ var (
 
 			return crypto.HexToECDSA(strVal)
 		},
+	}
+
+	BcRpcUrl = config.CfgVar{
+		EnvName: "BC_RPC_URL",
+		Field:   "BcRpcUrl",
+		Default: "tcp://localhost:26657",
 	}
 
 	GrpcListenAddress = config.CfgVar{
@@ -209,10 +223,22 @@ var (
 		Field:   "WithoutChainSyncer",
 		Default: false,
 	}
-
+	
 	ArweaveBundlrURL = config.CfgVar{
 		EnvName: "ARWEAVE_BUNDLR_URL",
 		Field:   "ArweaveConfig.BundlrURL",
 		Default: "",
+	}
+
+	WithoutGasCosts = config.CfgVar{
+		EnvName: "WITHOUT_GAS_COSTS",
+		Field:   "WithoutGasCosts",
+		Default: true,
+	}
+
+	WithoutNonces = config.CfgVar{
+		EnvName: "WITHOUT_NONCES",
+		Field:   "WithoutNonces",
+		Default: false,
 	}
 )

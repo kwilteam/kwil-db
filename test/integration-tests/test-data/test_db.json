@@ -1,0 +1,188 @@
+{
+  "owner": "",
+  "name": "testdb",
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        {
+          "name": "id",
+          "type": "int",
+          "attributes": [
+            {
+              "type": "primary_key"
+            },
+            {
+              "type": "not_null"
+            }
+          ]
+        },
+        {
+          "name": "username",
+          "type": "text",
+          "attributes": [
+            {
+              "type": "default",
+              "value": "\"sds\""
+            }
+          ]
+        },
+        {
+          "name": "age",
+          "type": "int",
+          "attributes": [
+            {
+              "type": "min",
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "name": "wallet",
+          "type": "text",
+          "attributes": [
+            {
+              "type": "unique"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "posts",
+      "columns": [
+        {
+          "name": "id",
+          "type": "int",
+          "attributes": [
+            {
+              "type": "primary_key"
+            },
+            {
+              "type": "not_null"
+            }
+          ]
+        },
+        {
+          "name": "user_id",
+          "type": "int"
+        },
+        {
+          "name": "title",
+          "type": "text"
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "attributes": [
+            {
+              "type": "max_length",
+              "value": "1000"
+            }
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "unique_index",
+          "columns": [
+            "user_id",
+            "title"
+          ],
+          "type": "unique_btree"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "name": "create_user",
+      "public": true,
+      "inputs": [
+        "$id",
+        "$username",
+        "$age"
+      ],
+      "statements": [
+        "INSERT INTO users( id , username , age , wallet ) VALUES ( $id , $username , $age , @caller )"
+      ]
+    },
+    {
+      "name": "update_username",
+      "public": true,
+      "inputs": [
+        "$username"
+      ],
+      "statements": [
+        "UPDATE users SET username = $username WHERE wallet = @caller"
+      ]
+    },
+    {
+      "name": "delete_user",
+      "public": true,
+      "inputs": [],
+      "statements": [
+        "DELETE FROM users WHERE wallet = @caller"
+      ]
+    },
+    {
+      "name": "create_post",
+      "public": false,
+      "inputs": [
+        "$id",
+        "$title",
+        "$content"
+      ],
+      "statements": [
+        "INSERT INTO posts( id , user_id , title , content ) VALUES ( $id , ( SELECT id FROM users WHERE wallet = @caller ) , $title , $content )"
+      ]
+    },
+    {
+      "name": "delete_post",
+      "public": true,
+      "inputs": [
+        "$id"
+      ],
+      "statements": [
+        "DELETE FROM posts WHERE id = $id AND user_id =( SELECT id FROM users WHERE wallet = @caller )"
+      ]
+    },
+    {
+      "name": "get_user_by_wallet",
+      "public": true,
+      "inputs": [
+        "$address"
+      ],
+      "statements": [
+        "SELECT * FROM users WHERE wallet = $address"
+      ]
+    },
+    {
+      "name": "list_users",
+      "public": false,
+      "inputs": [],
+      "statements": [
+        "SELECT * FROM users"
+      ]
+    },
+    {
+      "name": "get_user_posts",
+      "public": true,
+      "inputs": [
+        "$username"
+      ],
+      "statements": [
+        "SELECT title , content FROM posts WHERE user_id =( SELECT id FROM users WHERE username = $username )"
+      ]
+    },
+    {
+      "name": "multi_select",
+      "public": true,
+      "inputs": [],
+      "statements": [
+        "SELECT * FROM posts",
+        "SELECT * FROM users"
+      ]
+    }
+  ]
+}
