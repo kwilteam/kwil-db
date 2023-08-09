@@ -12,21 +12,15 @@ import (
 	"go.uber.org/zap"
 )
 
-type Schema struct {
-	Extensions []*types.Extension
-	Tables     []*types.Table
-	Procedures []*types.Procedure
-}
-
 // CreateDataset creates a new dataset
-func (e *Engine) CreateDataset(ctx context.Context, name string, owner string, schema *Schema) (dbid string, finalErr error) {
-	dbid = GenerateDBID(name, owner)
+func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema) (dbid string, finalErr error) {
+	dbid = GenerateDBID(schema.Name, schema.Owner)
 	_, ok := e.datasets[dbid]
 	if ok {
 		return dbid, fmt.Errorf("%w: %s", ErrDatasetExists, dbid)
 	}
 
-	err := e.master.RegisterDataset(ctx, name, owner)
+	err := e.master.RegisterDataset(ctx, schema.Name, schema.Owner)
 	if err != nil {
 		return dbid, fmt.Errorf("failed to register dataset: %w", err)
 	}
@@ -41,7 +35,7 @@ func (e *Engine) CreateDataset(ctx context.Context, name string, owner string, s
 		}
 	}()
 
-	ds, err := e.buildNewDataset(ctx, name, owner, schema)
+	ds, err := e.buildNewDataset(ctx, schema.Name, schema.Owner, schema)
 	if err != nil {
 		return dbid, fmt.Errorf("failed to build new dataset: %w", err)
 	}
@@ -52,7 +46,7 @@ func (e *Engine) CreateDataset(ctx context.Context, name string, owner string, s
 }
 
 // buildNewDataset builds a new datastore, and puts it in a dataset
-func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string, schema *Schema) (ds *dataset.Dataset, finalErr error) {
+func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string, schema *types.Schema) (ds *dataset.Dataset, finalErr error) {
 	dbid := GenerateDBID(name, owner)
 	datastore, err := e.openDB(dbid)
 	if err != nil {

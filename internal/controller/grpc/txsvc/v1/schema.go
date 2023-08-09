@@ -5,30 +5,39 @@ import (
 	"fmt"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/internal/entity"
+	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*txpb.GetSchemaResponse, error) {
-	schema, err := s.executor.GetSchema(ctx, req.Dbid)
+	schema, err := s.engine.GetSchema(ctx, req.Dbid)
+	if err != nil {
+		return nil, err
+	}
+
+	txSchema, err := convertSchema(schema)
 	if err != nil {
 		return nil, err
 	}
 
 	return &txpb.GetSchemaResponse{
-		Dataset: convertSchema(schema),
+		Dataset: txSchema,
 	}, nil
 }
 
-func convertSchema(schema *entity.Schema) *txpb.Dataset {
+func convertSchema(schema *engineTypes.Schema) (*txpb.Dataset, error) {
+	actions, err := convertActions(schema.Procedures)
+	if err != nil {
+		return nil, err
+	}
 	return &txpb.Dataset{
 		Owner:   schema.Owner,
 		Name:    schema.Name,
 		Tables:  convertTables(schema.Tables),
-		Actions: convertActions(schema.Actions),
-	}
+		Actions: actions,
+	}, nil
 }
 
-func convertTables(tables []*entity.Table) []*txpb.Table {
+func convertTables(tables []*engineTypes.Table) []*txpb.Table {
 	convTables := make([]*txpb.Table, len(tables))
 	for i, table := range tables {
 		convTable := &txpb.Table{
@@ -42,12 +51,12 @@ func convertTables(tables []*entity.Table) []*txpb.Table {
 	return convTables
 }
 
-func convertColumns(columns []*entity.Column) []*txpb.Column {
+func convertColumns(columns []*engineTypes.Column) []*txpb.Column {
 	convColumns := make([]*txpb.Column, len(columns))
 	for i, column := range columns {
 		convColumn := &txpb.Column{
 			Name:       column.Name,
-			Type:       column.Type,
+			Type:       column.Type.String(),
 			Attributes: convertAttributes(column.Attributes),
 		}
 		convColumns[i] = convColumn
@@ -56,11 +65,11 @@ func convertColumns(columns []*entity.Column) []*txpb.Column {
 	return convColumns
 }
 
-func convertAttributes(attributes []*entity.Attribute) []*txpb.Attribute {
+func convertAttributes(attributes []*engineTypes.Attribute) []*txpb.Attribute {
 	convAttributes := make([]*txpb.Attribute, len(attributes))
 	for i, attribute := range attributes {
 		convAttribute := &txpb.Attribute{
-			Type:  attribute.Type,
+			Type:  attribute.Type.String(),
 			Value: fmt.Sprint(attribute.Value),
 		}
 		convAttributes[i] = convAttribute
@@ -69,31 +78,55 @@ func convertAttributes(attributes []*entity.Attribute) []*txpb.Attribute {
 	return convAttributes
 }
 
-func convertIndexes(indexes []*entity.Index) []*txpb.Index {
+func convertIndexes(indexes []*engineTypes.Index) []*txpb.Index {
 	convIndexes := make([]*txpb.Index, len(indexes))
 	for i, index := range indexes {
 		convIndexes[i] = &txpb.Index{
 			Name:    index.Name,
 			Columns: index.Columns,
-			Type:    index.Type,
+			Type:    index.Type.String(),
 		}
 	}
 
 	return convIndexes
 }
 
-func convertActions(actions []*entity.Action) []*txpb.Action {
+func convertActions(actions []*engineTypes.Procedure) ([]*txpb.Action, error) {
+
 	convActions := make([]*txpb.Action, len(actions))
 	for i, action := range actions {
+		mutability, auxiliaries, err := convertModifiers(action.Modifiers)
+		if err != nil {
+			return nil, err
+		}
+
 		convActions[i] = &txpb.Action{
 			Name:        action.Name,
 			Public:      action.Public,
-			Mutability:  action.Mutability,
-			Auxiliaries: action.Auxiliaries,
-			Inputs:      action.Inputs,
+			Mutability:  mutability,
+			Auxiliaries: auxiliaries,
+			Inputs:      action.Args,
 			Statements:  action.Statements,
 		}
 	}
 
-	return convActions
+	return convActions, nil
+}
+
+func convertModifiers(mods []engineTypes.Modifier) (mutability string, auxiliaries []string, err error) {
+	auxiliaries = make([]string, 0)
+	mutability = "UPDATE"
+	for _, mod := range mods {
+		switch mod {
+		case engineTypes.ModifierAuthenticated:
+			auxiliaries = append(auxiliaries, "AUTHENTICATED")
+		case engineTypes.ModifierView:
+			mutability = "VIEW"
+		// TODO: add modifier owner once merged
+		default:
+			return "", nil, fmt.Errorf("unknown modifier type: %v", mod)
+		}
+	}
+
+	return mutability, auxiliaries, nil
 }

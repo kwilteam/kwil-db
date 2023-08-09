@@ -5,7 +5,6 @@ import (
 	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
-	"github.com/kwilteam/kwil-db/pkg/engine/master"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 )
@@ -41,6 +40,7 @@ type Savepoint interface {
 type Dataset interface {
 	Close() error
 	ListProcedures() []*types.Procedure
+	ListExtensions(ctx context.Context) ([]*types.Extension, error)
 	ListTables(ctx context.Context) ([]*types.Table, error)
 	Metadata() (name, owner string)
 	Delete() error
@@ -54,7 +54,7 @@ type Dataset interface {
 
 type MasterDB interface {
 	Close() error
-	ListDatasets(ctx context.Context) ([]*master.DatasetInfo, error)
+	ListDatasets(ctx context.Context) ([]*types.DatasetInfo, error)
 	ListDatasetsByOwner(ctx context.Context, owner string) ([]string, error)
 	RegisterDataset(ctx context.Context, name, owner string) error
 	UnregisterDataset(ctx context.Context, dbid string) error

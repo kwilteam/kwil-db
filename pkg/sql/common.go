@@ -14,5 +14,16 @@ type Savepoint interface {
 
 type Session interface {
 	Delete() error
-	GenerateChangeset() ([]byte, error)
+	GenerateChangeset() (Changeset, error)
+}
+
+type Changeset interface {
+	// Export gets the changeset as a byte array.
+	Export() ([]byte, error)
+
+	// ID generates a deterministic ID for the changeset.
+	// TODO: this is not deterministic yet
+	ID() ([]byte, error)
+
+	Close() error
 }

@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	client "github.com/kwilteam/kwil-db/pkg/sql/client"
@@ -81,13 +82,26 @@ func Test_Session(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results, err := ses.GenerateChangeset()
+	changeset, err := ses.GenerateChangeset()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(results) != 26 {
-		t.Fatalf("expected 26 result, got %d", len(results))
+	exported, err := changeset.Export()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, err := changeset.ID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// TODO: this ordering is not deterministic
+	fmt.Println("id", id)
+
+	if len(exported) != 26 {
+		t.Fatalf("expected 26 result, got %d", len(exported))
 	}
 }
 

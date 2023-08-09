@@ -32,7 +32,7 @@ func joinCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			options := []client.ClientOpt{client.WithBcRpcUrl(args[2])}
+			options := []client.ClientOpt{client.WithCometBftUrl(args[2])}
 
 			clt, err := client.New(ctx, cfg.GrpcListenAddress, options...)
 			if err != nil {

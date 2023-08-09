@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/cometbft/cometbft/crypto/tmhash"
-	localClient "github.com/cometbft/cometbft/rpc/client/local"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
@@ -26,19 +26,13 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, status.Errorf(codes.Unauthenticated, "failed to verify transaction: %s", err)
 	}
 
-	err = s.txHook(tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare tx: %s", err)
-	}
-
 	bts, err := json.Marshal(tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
 	}
 	hash := tmhash.Sum(bts)
-	fmt.Printf("Broadcasting transaction with hash %x\n", hash)
-	bcClient := localClient.New(s.BcNode)
-	_, err = bcClient.BroadcastTxAsync(ctx, bts)
+
+	_, err = s.cometBftClient.BroadcastTxAsync(ctx, bts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to broadcast transaction with error:  %s", err)
 	}

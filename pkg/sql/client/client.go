@@ -167,3 +167,7 @@ func (s *SqliteClient) CreateSession() (sql.Session, error) {
 func (s *SqliteClient) ApplyChangeset(reader io.Reader) error {
 	return s.conn.ApplyChangeset(reader)
 }
+
+func (s *SqliteClient) CheckpointWal() error {
+	return s.conn.CheckpointWal()
+}

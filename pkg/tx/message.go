@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 // SignedMessage is a signed message.
@@ -74,7 +75,8 @@ func CreateEmptySignedMessage[T Serializable](payload T) *SignedMessage[T] {
 	}
 }
 
-type CallActionMessage SignedMessage[*CallActionPayload]
+// AccountTransaction is a struct that is used when a signed message should alter the state of an account
+type AccountTransaction[T any] struct{}
 
 // CallActionPayload is a struct that represents the action call
 type CallActionPayload struct {
@@ -98,4 +100,23 @@ type ExecuteActionPayload struct {
 	Action string           `json:"action"`
 	DBID   string           `json:"dbid"`
 	Params []map[string]any `json:"params"`
+}
+
+func (e *ExecuteActionPayload) Bytes() ([]byte, error) {
+	return json.Marshal(e)
+}
+
+type DatasetIdentifierPayload struct {
+	Owner string `json:"owner"`
+	Name  string `json:"name"`
+}
+
+func (d *DatasetIdentifierPayload) Bytes() ([]byte, error) {
+	return json.Marshal(d)
+}
+
+type DeployDatabasePayload types.Schema
+
+func (d *DeployDatabasePayload) Bytes() ([]byte, error) {
+	return json.Marshal(d)
 }

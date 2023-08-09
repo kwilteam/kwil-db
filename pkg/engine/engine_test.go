@@ -46,7 +46,9 @@ func Test_Open(t *testing.T) {
 	}
 	defer teardown()
 
-	_, err = e.CreateDataset(ctx, "testdb1", "0xSatoshi", &engine.Schema{
+	_, err = e.CreateDataset(ctx, &types.Schema{
+		Name:       "testdb1",
+		Owner:      "0xSatoshi",
 		Extensions: testInitializedExtensions,
 		Tables:     testTables,
 		Procedures: testProcedures,
@@ -97,34 +99,27 @@ func Test_Open(t *testing.T) {
 }
 
 func Test_CreateDataset(t *testing.T) {
-	type dbStruct struct {
-		dbName string
-		owner  string
-		schema *engine.Schema
-	}
 	tests := []struct {
 		name     string
-		database dbStruct
+		database *types.Schema
 		wantErr  bool
 	}{
 		{
 			name: "create a dataset with a variety of statements",
-			database: dbStruct{
-				dbName: "test_db",
-				owner:  "test_owner",
-				schema: &engine.Schema{
-					Extensions: testInitializedExtensions,
-					Tables:     testTables,
-					Procedures: []*types.Procedure{
-						{
-							Name:   "create_user",
-							Args:   []string{"$id", "$username", "$age"},
-							Public: true,
-							Statements: []string{
-								"$current_bal = usdc.balanceOf(@caller);",
-								"SELECT case when $current_bal < 100 then ERROR('not enough balance') end;",
-								"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
-							},
+			database: &types.Schema{
+				Name:       "test_db",
+				Owner:      "test_owner",
+				Extensions: testInitializedExtensions,
+				Tables:     testTables,
+				Procedures: []*types.Procedure{
+					{
+						Name:   "create_user",
+						Args:   []string{"$id", "$username", "$age"},
+						Public: true,
+						Statements: []string{
+							"$current_bal = usdc.balanceOf(@caller);",
+							"SELECT case when $current_bal < 100 then ERROR('not enough balance') end;",
+							"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
 						},
 					},
 				},
@@ -133,20 +128,18 @@ func Test_CreateDataset(t *testing.T) {
 		},
 		{
 			name: "create a dataset with invalid dml",
-			database: dbStruct{
-				dbName: "test_db",
-				owner:  "test_owner",
-				schema: &engine.Schema{
-					Extensions: testInitializedExtensions,
-					Tables:     testTables,
-					Procedures: []*types.Procedure{
-						{
-							Name:   "create_user",
-							Args:   []string{"$id", "$username", "$age"},
-							Public: true,
-							Statements: []string{
-								"INSERT INTO the table users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
-							},
+			database: &types.Schema{
+				Name:       "test_db",
+				Owner:      "test_owner",
+				Extensions: testInitializedExtensions,
+				Tables:     testTables,
+				Procedures: []*types.Procedure{
+					{
+						Name:   "create_user",
+						Args:   []string{"$id", "$username", "$age"},
+						Public: true,
+						Statements: []string{
+							"INSERT INTO the table users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
 						},
 					},
 				},
@@ -167,15 +160,18 @@ func Test_CreateDataset(t *testing.T) {
 			}
 			defer teardown()
 
-			_, err = e.CreateDataset(ctx, tt.database.dbName, tt.database.owner, tt.database.schema)
+			_, err = e.CreateDataset(ctx, tt.database)
 			hasErr := err != nil
 			if hasErr != tt.wantErr {
 				t.Errorf("Engine.CreateDataset() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			if hasErr {
+				return
+			}
 
 			// check if the dataset was created
-			_, err = e.GetDataset(ctx, utils.GenerateDBID(tt.database.dbName, tt.database.owner))
+			_, err = e.GetDataset(ctx, utils.GenerateDBID(tt.database.Name, tt.database.Owner))
 			if hasErr {
 				assert.Error(t, err)
 			} else {
