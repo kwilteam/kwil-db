@@ -34,7 +34,7 @@ reads in a file from the specified directory, and executes the action in bulk.
 The execution is treated as a single transaction, and will either succeed or fail.`,
 		Args: cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return err

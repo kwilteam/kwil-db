@@ -40,7 +40,7 @@ OR
 
 '$name:satoshi' '$age:32' --dbid=x1234 --action=create_user `,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				dbId, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return fmt.Errorf("target database not properly specified: %w", err)

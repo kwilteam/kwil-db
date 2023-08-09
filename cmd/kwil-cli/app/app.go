@@ -3,7 +3,6 @@ package app
 import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/configure"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/fund"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/system"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/utils"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -21,7 +20,6 @@ var rootCmd = &cobra.Command{
 
 func Execute() error {
 	rootCmd.AddCommand(
-		fund.NewCmdFund(),
 		configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),
