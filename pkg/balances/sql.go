@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type preparedStatements struct {
-	getAccount PreparedStatement
+	getAccount sql.Statement
 }
 
 func (p *preparedStatements) Close() error {

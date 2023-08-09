@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
-func (c *Client) Call(ctx context.Context, req *tx.CallActionMessage) ([]map[string]any, error) {
+func (c *Client) Call(ctx context.Context, req *tx.SignedMessage[*tx.CallActionPayload]) ([]map[string]any, error) {
 	payload, err := req.Payload.Bytes()
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert payload to bytes: %w", err)

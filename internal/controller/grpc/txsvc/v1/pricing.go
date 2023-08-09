@@ -2,13 +2,11 @@ package txsvc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/big"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 )
 
@@ -18,25 +16,24 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
+	var price *big.Int
+
 	switch tx.PayloadType {
 	case kTx.DEPLOY_DATABASE:
-		return handlePricing(s.priceDeploy(ctx, tx))
+		price, err = s.priceDeploy(ctx, tx)
 	case kTx.DROP_DATABASE:
-		return handlePricing(s.priceDrop(ctx, tx))
+		price, err = s.priceDrop(ctx, tx)
 	case kTx.EXECUTE_ACTION:
-		return handlePricing(s.priceAction(ctx, tx))
+		price, err = s.priceAction(ctx, tx)
 	case kTx.VALIDATOR_JOIN:
-		return handlePricing(s.priceValidatorJoin(ctx, tx))
+		price, err = s.priceValidatorJoin(ctx, tx)
 	case kTx.VALIDATOR_LEAVE:
-		return handlePricing(s.priceValidatorLeave(ctx, tx))
+		price, err = s.priceValidatorLeave(ctx, tx)
 	default:
-		return nil, fmt.Errorf("invalid payload type")
+		price, err = nil, fmt.Errorf("invalid payload type")
 	}
-}
-
-func handlePricing(price *big.Int, err error) (*txpb.EstimatePriceResponse, error) {
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}
 
 	return &txpb.EstimatePriceResponse{
@@ -45,39 +42,30 @@ func handlePricing(price *big.Int, err error) (*txpb.EstimatePriceResponse, erro
 }
 
 func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	ds, err := UnmarshalSchema(tx.Payload)
+	ds, err := serialize.DeserializeSchema(tx.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
+		return nil, fmt.Errorf("failed to deserialize schema: %w", err)
 	}
 
-	return s.executor.PriceDeploy(&entity.DeployDatabase{
-		Tx:     tx,
-		Schema: ds,
-	})
+	return s.engine.PriceDeploy(ctx, ds)
 }
 
 func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	dsIdent, err := UnmarshalDatasetIdentifier(tx.Payload)
+	dbid, err := serialize.DeserializeDBID(tx.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize dataset identifier: %w", err)
+		return nil, fmt.Errorf("failed to deserialize DBID: %w", err)
 	}
 
-	return s.executor.PriceDrop(&entity.DropDatabase{
-		DBID: utils.GenerateDBID(dsIdent.Name, dsIdent.Owner),
-		Tx:   tx,
-	})
+	return s.engine.PriceDrop(ctx, dbid)
 }
 
 func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	executionBody, err := UnmarshalActionExecution(tx.Payload)
+	executionBody, err := serialize.DeserializeActionPaload(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}
 
-	return s.executor.PriceExecute(&entity.ExecuteAction{
-		Tx:            tx,
-		ExecutionBody: executionBody,
-	})
+	return s.engine.PriceExecute(ctx, executionBody.DBID, executionBody.Action, executionBody.Params)
 }
 
 func (s *Service) priceValidatorJoin(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
@@ -86,37 +74,4 @@ func (s *Service) priceValidatorJoin(ctx context.Context, tx *kTx.Transaction) (
 
 func (s *Service) priceValidatorLeave(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
-}
-
-func UnmarshalActionExecution(payload []byte) (*kTx.ExecuteActionPayload, error) {
-	exec := kTx.ExecuteActionPayload{}
-
-	err := json.Unmarshal(payload, &exec)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal action execution: %w", err)
-	}
-
-	return &exec, nil
-}
-
-func UnmarshalSchema(payload []byte) (*entity.Schema, error) {
-	schema := entity.Schema{}
-
-	err := json.Unmarshal(payload, &schema)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal schema: %w", err)
-	}
-
-	return &schema, nil
-}
-
-func UnmarshalDatasetIdentifier(payload []byte) (*entity.DatasetIdentifier, error) {
-	dsIdent := entity.DatasetIdentifier{}
-
-	err := json.Unmarshal(payload, &dsIdent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal dataset identifier: %w", err)
-	}
-
-	return &dsIdent, nil
 }

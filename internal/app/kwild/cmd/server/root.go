@@ -18,6 +18,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 
+	"github.com/kwilteam/kwil-db/pkg/sql"
+
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -41,10 +43,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
 	grpcServer "github.com/kwilteam/kwil-db/pkg/grpc/server"
-
-	chainClient "github.com/kwilteam/kwil-db/pkg/chain/client"
-	ccService "github.com/kwilteam/kwil-db/pkg/chain/client/service" // shorthand for chain client service
-	chainTypes "github.com/kwilteam/kwil-db/pkg/chain/types"
 )
 
 func NewStartCmd() *cobra.Command {
@@ -62,19 +60,14 @@ var startCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Println("Chain client config: ", cfg.Deposits.ClientChainRPCURL)
-		logger := log.New(cfg.Log)
-		logger = *logger.Named("kwild")
-
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-		fmt.Printf("Initializing kwil server")
+
 		srv, txSvc, err := initialize_kwil_server(ctx, cfg, logger)
 		if err != nil {
 			return nil
 		}
-		fmt.Println("Chain client config: ", cfg.Deposits.ClientChainRPCURL)
-		fmt.Printf("Starting kwil server")
+
 		app, err := kwildbapp.NewKwilDbApplication(srv, txSvc.GetExecutor())
 		if err != nil {
 			return nil
@@ -238,20 +231,6 @@ func newCometNode(app abci.Application, cfg *config.KwildConfig, txSvc *txsvc.Se
 	return node, nil
 }
 
-func buildChainClient(cfg *config.KwildConfig, logger log.Logger) (chainClient.ChainClient, error) {
-	fmt.Println("Building chain client", cfg.Deposits.ClientChainRPCURL, cfg.Deposits.ChainCode)
-	if cfg.WithoutChainSyncer {
-		return ccService.NewEmptyChainClient(), nil
-	}
-
-	return ccService.NewChainClient(cfg.Deposits.ClientChainRPCURL,
-		ccService.WithChainCode(chainTypes.ChainCode(cfg.Deposits.ChainCode)),
-		ccService.WithLogger(*logger.Named("chainClient")),
-		ccService.WithReconnectInterval(int64(cfg.Deposits.ReconnectionInterval)),
-		ccService.WithRequiredConfirmations(int64(cfg.Deposits.BlockConfirmations)),
-	)
-}
-
 func buildAccountRepository(ctx context.Context, logger log.Logger, cfg *config.KwildConfig) (AccountStore, error) {
 	return balances.NewAccountStore(ctx,
 		balances.WithLogger(*logger.Named("accountStore")),
@@ -264,9 +243,9 @@ func buildAccountRepository(ctx context.Context, logger log.Logger, cfg *config.
 type AccountStore interface {
 	ApplyChangeset(changeset io.Reader) error
 	Close() error
-	CreateSession() (balances.Session, error)
+	CreateSession() (sql.Session, error)
 	GetAccount(ctx context.Context, address string) (*balances.Account, error)
-	Savepoint() (balances.Savepoint, error)
+	Savepoint() (sql.Savepoint, error)
 	Spend(ctx context.Context, spend *balances.Spend) error
 }
 

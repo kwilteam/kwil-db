@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -59,7 +58,7 @@ func (s *Session) GenerateChangeset() (*Changeset, error) {
 	defer s.mu.Unlock()
 
 	buf := new(bytes.Buffer)
-	err := s.ses.WriteChangeset(buf)
+	err := s.ses.WritePatchset(buf)
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +76,6 @@ func (s *Session) GenerateChangesetBytes() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-var (
-	ErrForeignKeyConflict = errors.New("foreign key conflict")
-)
-
 // NewChangset creates a new changeset from bytes.
 func NewChangset(buf *bytes.Buffer) (*Changeset, error) {
 	iter, err := sqlite.NewChangesetIterator(buf)
@@ -96,24 +91,17 @@ func NewChangset(buf *bytes.Buffer) (*Changeset, error) {
 
 // Changeset is a changeset generated from a session.
 type Changeset struct {
+	mu   sync.Mutex
 	buf  *bytes.Buffer
 	iter *sqlite.ChangesetIterator
-}
-
-type ChangesetStub interface {
-	Close() error
-	Export() []byte
-	New(index int) (*Value, error)
-	Next() (rowReturned bool, err error)
-	Old(index int) (*Value, error)
-	Operation() (*ChangesetOperation, error)
-	PrimaryKey() ([]*Value, error)
-	getPrimaryKeyValue(column int) (*Value, error)
 }
 
 // Next returns true if there is another row in the changeset.
 // If there is a foreign key conflict, it will return false and ErrForeignKeyConflict.
 func (c *Changeset) Next() (rowReturned bool, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	rowReturned, err = c.iter.Next()
 	if err != nil {
 		return false, fmt.Errorf("Changeset.Next(): failed to get next row: %w", err)
@@ -124,11 +112,29 @@ func (c *Changeset) Next() (rowReturned bool, err error) {
 
 // Close closes the changeset.
 func (c *Changeset) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.close()
+}
+
+// close closes the changeset.
+// this should only be called when the mutex is already locked.
+func (c *Changeset) close() error {
 	return c.iter.Close()
 }
 
 // Operation returns the operation of the current row.
 func (c *Changeset) Operation() (*ChangesetOperation, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.operation()
+}
+
+// Operation returns the operation of the current row.
+// it does not block
+func (c *Changeset) operation() (*ChangesetOperation, error) {
 	innerOperation, err := c.iter.Operation()
 	if err != nil {
 		return nil, err
@@ -149,7 +155,28 @@ func (c *Changeset) Operation() (*ChangesetOperation, error) {
 
 // Export exports the changeset to bytes
 func (c *Changeset) Export() []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	return c.buf.Bytes()
+}
+
+// Reset resets the changeset iterator to the beginning.
+func (c *Changeset) Reset() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	err := c.close()
+	if err != nil {
+		return err
+	}
+
+	c.iter, err = sqlite.NewChangesetIterator(c.buf)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ChangesetOperation returns the operation of the current row.
@@ -184,7 +211,17 @@ var innerOpTypeMap = map[sqlite.OpType]OpType{
 // Old returns the value of the old column at the given index.
 // It can only be called if the operation is OpUpdate or OpDelete.
 func (c *Changeset) Old(index int) (*Value, error) {
-	op, err := c.Operation()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.old(index)
+}
+
+// Old returns the value of the old column at the given index.
+// It can only be called if the operation is OpUpdate or OpDelete.
+// It does not block.
+func (c *Changeset) old(index int) (*Value, error) {
+	op, err := c.operation()
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +243,17 @@ func (c *Changeset) Old(index int) (*Value, error) {
 // New returns the value of the new column at the given index.
 // It can only be called if the operation is OpUpdate or OpInsert.
 func (c *Changeset) New(index int) (*Value, error) {
-	op, err := c.Operation()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.new(index)
+}
+
+// New returns the value of the new column at the given index.
+// It can only be called if the operation is OpUpdate or OpInsert.
+// It does not block.
+func (c *Changeset) new(index int) (*Value, error) {
+	op, err := c.operation()
 	if err != nil {
 		return nil, err
 	}
@@ -227,6 +274,9 @@ func (c *Changeset) New(index int) (*Value, error) {
 
 // PrimaryKey returns the values of the primary key columns in order.
 func (c *Changeset) PrimaryKey() ([]*Value, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	pkCols, err := c.iter.PrimaryKey()
 	if err != nil {
 		return nil, err
@@ -252,15 +302,15 @@ func (c *Changeset) PrimaryKey() ([]*Value, error) {
 // this should only be used for primary key columns; it can be used for any, but the result
 // will not be helpful, as you should use New() or Old() for non-primary key columns.
 func (c *Changeset) getPrimaryKeyValue(column int) (*Value, error) {
-	op, err := c.Operation()
+	op, err := c.operation()
 	if err != nil {
 		return nil, err
 	}
 
 	if op.Type == OpInsert || op.Type == OpUpdate {
-		return c.New(column)
+		return c.new(column)
 	} else if op.Type == OpDelete {
-		return c.Old(column)
+		return c.old(column)
 	} else {
 		return nil, fmt.Errorf("Changeset.getPrimaryKeyValue(): operation is not OpInsert, OpUpdate, or OpDelete. received: %v", op.Type)
 	}
@@ -291,9 +341,11 @@ func (v *Value) Blob() []byte {
 	return v.val.Blob()
 }
 
-// NoChange returns true if the value has not changed.
-func (v *Value) NoChange() bool {
-	return v.val.NoChange()
+// Changed returns true if the value was changed.
+func (v *Value) Changed() bool {
+	// the sqlite NoChange method does not actually work as intended.
+	// here, we simply check if the type is Null
+	return v.val.Type() != sqlite.TypeNull
 }
 
 // Type returns the type of the value.
