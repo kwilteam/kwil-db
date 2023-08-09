@@ -4,10 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/specifications"
 
@@ -17,10 +19,19 @@ import (
 var remote = flag.Bool("remote", false, "run tests against remote environment")
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
+func teardownConfig(path string) {
+	utils.ResetAll(filepath.Join(path, "data"), filepath.Join(path, "config/addrbook.json"),
+		filepath.Join(path, "config/priv_validator_key.json"),
+		filepath.Join(path, "data/priv_validator_state.json"))
+}
+
 func TestKwildAcceptance(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	path := "./test-data/"
+	teardownConfig(filepath.Join(path, "kwil/node0"))
+	defer teardownConfig(filepath.Join(path, "kwil/node0"))
 
 	tLogger := log.New(log.Config{
 		Level:       "info",
@@ -43,7 +54,7 @@ func TestKwildAcceptance(t *testing.T) {
 			done := make(chan struct{})
 
 			// setup
-			path := "./test-data/"
+
 			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger, path)
 			secondDriver := acceptance.NewClient(ctx, t, c.driverType, runningCfg, tLogger)
 
