@@ -6,6 +6,7 @@ import (
 
 	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 )
 
 type ValidatorsInfo struct {
@@ -35,9 +36,8 @@ func (vInfo *ValidatorsInfo) IsJoinerApproved(joiner string, approver string) bo
 	return false
 }
 
-func UnmarshalValidator(payload []byte) (*entity.Validator, error) {
-	validator := entity.Validator{}
-
+func UnmarshalValidator(payload []byte) (*serialize.Validator, error) {
+	var validator serialize.Validator
 	err := json.Unmarshal(payload, &validator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal validator: %w", err)

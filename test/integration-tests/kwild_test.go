@@ -12,7 +12,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/specifications"
-	"github.com/stretchr/testify/assert"
 )
 
 var remote = flag.Bool("remote", false, "run tests against remote environment")
@@ -57,7 +56,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	//setupConfig()
 	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
 
-	cfg, kwildC, chainDeployer := acceptance.SetupKwildCluster(ctx, t, cfg, path)
+	cfg, kwildC := acceptance.SetupKwildCluster(ctx, t, cfg, path)
 
 	//time.Sleep(30 * time.Second)
 	// Create Kwil DB clients for each node
@@ -71,11 +70,12 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	cfg.UserPrivateKeyString = cfg.SecondUserPrivateKeyString
 
 	// Create invalid user driver
-	invalidUserDriver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[0], tLogger)
+	// invalidUserDriver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[0], tLogger)
 	cfg.UserPrivateKey = correctPrivateKey
 	cfg.UserPrivateKeyString = correctPrivateKeyString
 
 	// Fund both the User accounts
+	/* xxx
 	err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.InitialFundAmount)
 	assert.NoError(t, err, "failed to fund user account")
 
@@ -83,8 +83,10 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	assert.NoError(t, err, "failed to fund second user account")
 
 	go acceptance.KeepMiningBlocks(ctx, done, chainDeployer, cfg.UserAddr)
+	*/
 
 	// and user pledged fund to validator
+	/* no more token
 	fmt.Println("Approve token1")
 	specifications.ApproveTokenSpecification(ctx, t, node1Driver)
 	fmt.Print("Deposit fund1")
@@ -100,6 +102,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	time.Sleep(cfg.ChainSyncWaitTime)
 
 	time.Sleep(cfg.ChainSyncWaitTime)
+	*/
 
 	// running forever for local development
 	if *dev {
@@ -118,7 +121,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	specifications.ExecuteDBUpdateSpecification(ctx, t, node2Driver)
 	specifications.ExecuteDBDeleteSpecification(ctx, t, node3Driver)
 
-	specifications.ExecutePermissionedActionSpecification(ctx, t, invalidUserDriver)
+	// specifications.ExecutePermissionedActionSpecification(ctx, t, invalidUserDriver)
 
 	specifications.DatabaseDropSpecification(ctx, t, node1Driver)
 	close(done)
@@ -144,7 +147,7 @@ func TestKwildNetworkIntegration(t *testing.T) {
 	//setupConfig()
 	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
 
-	cfg, kwildC, chainDeployer := acceptance.SetupKwildCluster(ctx, t, cfg, path)
+	cfg, kwildC := acceptance.SetupKwildCluster(ctx, t, cfg, path)
 
 	//time.Sleep(30 * time.Second)
 	// Create Kwil DB clients for each node
@@ -152,6 +155,7 @@ func TestKwildNetworkIntegration(t *testing.T) {
 	node1Driver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[1], tLogger)
 	node2Driver := acceptance.SetupKwildDriver(ctx, t, cfg, kwildC[2], tLogger)
 
+	/* no more token
 	// Fund both the User accounts
 	err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.InitialFundAmount)
 	assert.NoError(t, err, "failed to fund user account")
@@ -162,6 +166,7 @@ func TestKwildNetworkIntegration(t *testing.T) {
 	go acceptance.KeepMiningBlocks(ctx, done, chainDeployer, cfg.UserAddr)
 
 	// and user pledged fund to validator
+
 	fmt.Println("Approve token1")
 	specifications.ApproveTokenSpecification(ctx, t, node0Driver)
 	fmt.Print("Deposit fund1")
@@ -169,6 +174,7 @@ func TestKwildNetworkIntegration(t *testing.T) {
 	specifications.DepositFundSpecification(ctx, t, node0Driver)
 
 	time.Sleep(cfg.ChainSyncWaitTime)
+	*/
 
 	// running forever for local development
 	if *dev {

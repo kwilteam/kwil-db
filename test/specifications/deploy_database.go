@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	schema "github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/stretchr/testify/assert"
 )
 
 // DatabaseDeployDsl is dsl for database deployment specification
 type DatabaseDeployDsl interface {
-	DeployDatabase(ctx context.Context, db *schema.Schema) error
+	DeployDatabase(ctx context.Context, db *serialize.Schema) error
 	// TODO: verify more than just existence, check schema structure
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }

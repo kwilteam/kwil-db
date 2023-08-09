@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/sql"
 	sqlTesting "github.com/kwilteam/kwil-db/pkg/sql/testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/master"
@@ -154,7 +153,7 @@ func Test_Master(t *testing.T) {
 			}
 			defer td()
 
-			datastore, err := master.New(ctx, &databaseAdapter{db})
+			datastore, err := master.New(ctx, db)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -163,12 +162,4 @@ func Test_Master(t *testing.T) {
 			test.test(t, datastore)
 		})
 	}
-}
-
-type databaseAdapter struct {
-	sqlTesting.TestSqliteClient
-}
-
-func (d *databaseAdapter) Savepoint() (sql.Savepoint, error) {
-	return d.TestSqliteClient.Savepoint()
 }

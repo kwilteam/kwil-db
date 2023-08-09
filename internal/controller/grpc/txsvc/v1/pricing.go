@@ -60,7 +60,7 @@ func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int,
 }
 
 func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	executionBody, err := serialize.DeserializeActionPaload(tx.Payload)
+	executionBody, err := serialize.DeserializeActionPayload(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}

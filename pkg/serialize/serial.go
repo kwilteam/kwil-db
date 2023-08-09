@@ -34,7 +34,7 @@ func DeserializeDBID(bts []byte) (string, error) {
 	return utils.GenerateDBID(di.Name, di.Owner), nil
 }
 
-func DeserializeActionPaload(payload []byte) (*tx.ExecuteActionPayload, error) {
+func DeserializeActionPayload(payload []byte) (*tx.ExecuteActionPayload, error) {
 	exec := tx.ExecuteActionPayload{}
 
 	err := json.Unmarshal(payload, &exec)

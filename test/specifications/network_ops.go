@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	schema "github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,7 +16,7 @@ type NetworkOpsDsl interface {
 	ValidatorNodeLeave(ctx context.Context, pubKey string) error
 	// ValidatorJoinStatus(ctx context.Context, pubKey []byte) error
 	ValidatorSetCount(ctx context.Context) (int, error)
-	DeployDatabase(ctx context.Context, db *schema.Schema) error
+	DeployDatabase(ctx context.Context, db *serialize.Schema) error
 	DropDatabase(ctx context.Context, dbName string) error
 }
 
