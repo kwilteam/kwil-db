@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"strings"
 
+	cmtCrypto "github.com/cometbft/cometbft/crypto"
+	cmtjson "github.com/cometbft/cometbft/libs/json"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	cc "github.com/kwilteam/kwil-db/pkg/chain/client"
@@ -16,13 +19,13 @@ import (
 	chainCodes "github.com/kwilteam/kwil-db/pkg/chain/types"
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
 	client           *grpcClient.Client
+	BcClient         *rpchttp.HTTP
 	datasets         map[string]*entity.Schema
 	PrivateKey       *ecdsa.PrivateKey
 	ChainCode        chainCodes.ChainCode
@@ -36,6 +39,7 @@ type Client struct {
 	TokenAddress     string
 	TokenSymbol      string
 	poolContract     escrow.EscrowContract
+	BcRpcUrl         string
 }
 
 // New creates a new client
@@ -50,6 +54,7 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 		chainRpcUrl:      "",
 		TokenAddress:     "",
 		TokenSymbol:      "",
+		BcRpcUrl:         "tcp://localhost:26657",
 	}
 
 	for _, opt := range opts {
@@ -92,6 +97,11 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 	// re-apply opts to override provider config
 	for _, opt := range opts {
 		opt(c)
+	}
+
+	c.BcClient, err = rpchttp.New(c.BcRpcUrl, "")
+	if err != nil {
+		return nil, err
 	}
 
 	return c, nil
@@ -240,7 +250,7 @@ func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *datasetIdentifier)
 
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, error) {
 	executionBody := &actionExecution{
 		Action: action,
 		DBID:   dbid,
@@ -249,20 +259,20 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 
 	tx, err := c.executeActionTx(ctx, executionBody)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	res, err := c.client.Broadcast(ctx, tx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	outputs, err := decodeOutputs(res.Body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return res, outputs, nil
+	/* 	outputs, err := DecodeOutputs(res.Body)
+	   	if err != nil {
+	   		return nil, err
+	   	}
+	*/
+	return res, nil
 }
 
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
@@ -316,7 +326,7 @@ func shouldAuthenticate(privateKey *ecdsa.PrivateKey, enforced *bool) (bool, err
 	return privateKey != nil, nil
 }
 
-func decodeOutputs(bts []byte) ([]map[string]any, error) {
+func DecodeOutputs(bts []byte) ([]map[string]any, error) {
 	if len(bts) == 0 {
 		return []map[string]any{}, nil
 	}
@@ -361,4 +371,64 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 
 func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {
 	return c.client.GetAccount(ctx, address)
+}
+
+func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner string) ([]byte, error) {
+	tx, err := c.NewNodeTx(ctx, kTx.VALIDATOR_APPROVE, joiner, approver)
+	if err != nil {
+		return nil, err
+	}
+
+	bts, err := json.Marshal(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.BcClient.BroadcastTxAsync(ctx, bts)
+	if err != nil {
+		return nil, err
+	}
+	return res.Hash, nil
+}
+
+func (c *Client) ValidatorJoin(ctx context.Context, joiner string, power int64) ([]byte, error) {
+	return c.ValidatorUpdate(ctx, joiner, power, kTx.VALIDATOR_JOIN)
+}
+
+func (c *Client) ValidatorLeave(ctx context.Context, joiner string, power int64) ([]byte, error) {
+	return c.ValidatorUpdate(ctx, joiner, 0, kTx.VALIDATOR_LEAVE)
+}
+
+func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, power int64, payloadtype kTx.PayloadType) ([]byte, error) {
+	var nodeKey cmtCrypto.PrivKey
+	key := fmt.Sprintf(`{"type":"tendermint/PrivKeyEd25519","value":"%s"}`, joinerPrivKey)
+	err := cmtjson.Unmarshal([]byte(key), &nodeKey)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("Node PublicKey: ", nodeKey.PubKey())
+	bts, _ := json.Marshal(nodeKey.PubKey())
+	fmt.Println("Node PublicKey: ", string(bts))
+
+	validator := &validator{
+		PubKey: string(bts),
+		Power:  power,
+	}
+
+	tx, err := c.NewNodeTx(ctx, payloadtype, validator, joinerPrivKey)
+	if err != nil {
+		return nil, err
+	}
+
+	bts, err = json.Marshal(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := c.BcClient.BroadcastTxAsync(ctx, bts)
+	if err != nil {
+		return nil, err
+	}
+	return res.Hash, nil
 }

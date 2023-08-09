@@ -59,7 +59,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 					return fmt.Errorf("error building inputs: %w", err)
 				}
 
-				receipt, _, err := client.ExecuteAction(ctx, dbid, strings.ToLower(action), inputs)
+				receipt, err := client.ExecuteAction(ctx, dbid, strings.ToLower(action), inputs)
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}

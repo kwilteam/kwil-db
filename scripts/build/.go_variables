@@ -69,3 +69,5 @@ export SOURCE="github.com/kwilteam/kwil-db/cmd/${BINARY}"
 
 GO_GCFLAGS="${GO_GCFLAGS:-}"
 export GO_GCFLAGS="$GO_GCFLAGS"
+
+export GOWORK=off

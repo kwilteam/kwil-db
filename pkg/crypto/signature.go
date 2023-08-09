@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	cmtCrypto "github.com/cometbft/cometbft/crypto"
+	cmtjson "github.com/cometbft/cometbft/libs/json"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -20,6 +22,7 @@ const (
 	PK_SECP256K1_UNCOMPRESSED
 	ACCOUNT_SECP256K1_UNCOMPRESSED
 	ACCOUNT_SECP256K1_UNCOMPRESSED_STRUCTURED_v1
+	PK_ED25519
 	END_SIGNATURE_TYPE
 )
 
@@ -92,8 +95,29 @@ func CheckSignature(addr string, sig *Signature, data []byte) (bool, error) {
 		return checkSignaturePkSECP256k1Uncompressed(addr, sig.Signature, data)
 	case ACCOUNT_SECP256K1_UNCOMPRESSED:
 		return checkSignatureAccountSECP256k1Uncompressed(addr, sig.Signature, data)
+	case PK_ED25519:
+		return checkSignatureED25519(addr, sig.Signature, data)
 	default:
 		return false, fmt.Errorf("unknown signature indicator: %d", sig.Type)
+	}
+}
+
+func checkSignatureED25519(addr string, sig []byte, data []byte) (bool, error) {
+	var publicKey cmtCrypto.PubKey
+	key := fmt.Sprintf(`{"type":"tendermint/PubKeyEd25519","value":%s}`, addr)
+	fmt.Println("Key:", key)
+
+	err := cmtjson.Unmarshal([]byte(key), &publicKey)
+	if err != nil {
+		return false, fmt.Errorf("failed to unmarshal validator public key: %w", err)
+	}
+	fmt.Println("publicKey: ", publicKey)
+
+	valid := publicKey.VerifySignature(data, sig)
+	if valid {
+		return true, nil
+	} else {
+		return false, fmt.Errorf("signature verification failed")
 	}
 }
 

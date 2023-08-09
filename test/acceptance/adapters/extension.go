@@ -69,7 +69,7 @@ func newExtensionMath(ctx context.Context, opts ...containerOption) (*mathExtens
 
 func StartMathExtensionDockerService(t *testing.T, ctx context.Context) *mathExtensionContainer {
 	container, err := newExtensionMath(ctx,
-		WithNetwork(kwilTestNetworkName),
+		WithNetwork("kwil-it-net"),
 		WithExposedPort(MathExtPort),
 		WithWaitStrategy(wait.ForExposedPort()),
 	)

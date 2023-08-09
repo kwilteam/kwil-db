@@ -4,13 +4,11 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 
 	common "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-
+	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/spf13/viper"
 )
 
@@ -62,7 +60,7 @@ func PersistConfig(conf *KwilCliConfig) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	file, err := createOrOpenFile(DefaultConfigFile)
+	file, err := utils.CreateOrOpenFile(DefaultConfigFile, os.O_CREATE|os.O_RDWR)
 	if err != nil {
 		return fmt.Errorf("failed to create or open config file: %w", err)
 	}
@@ -80,45 +78,8 @@ func PersistConfig(conf *KwilCliConfig) error {
 	return nil
 }
 
-func createDirIfNeeded(path string) error {
-	dir := filepath.Dir(path)
-	return os.MkdirAll(dir, os.ModePerm)
-}
-
-func readOrCreateFile(path string) ([]byte, error) {
-	if err := createDirIfNeeded(path); err != nil {
-		return nil, err
-	}
-
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func createOrOpenFile(path string) (*os.File, error) {
-	if err := createDirIfNeeded(path); err != nil {
-		return nil, err
-	}
-
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
-}
-
 func LoadPersistedConfig() (*KwilCliConfig, error) {
-	bts, err := readOrCreateFile(DefaultConfigFile)
+	bts, err := utils.ReadOrCreateFile(DefaultConfigFile, os.O_CREATE|os.O_RDWR)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create or open config file: %w", err)
 	}

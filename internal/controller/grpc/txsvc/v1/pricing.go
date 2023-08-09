@@ -25,6 +25,10 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		return handlePricing(s.priceDrop(ctx, tx))
 	case kTx.EXECUTE_ACTION:
 		return handlePricing(s.priceAction(ctx, tx))
+	case kTx.VALIDATOR_JOIN:
+		return handlePricing(s.priceValidatorJoin(ctx, tx))
+	case kTx.VALIDATOR_LEAVE:
+		return handlePricing(s.priceValidatorLeave(ctx, tx))
 	default:
 		return nil, fmt.Errorf("invalid payload type")
 	}
@@ -41,7 +45,7 @@ func handlePricing(price *big.Int, err error) (*txpb.EstimatePriceResponse, erro
 }
 
 func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	ds, err := unmarshalSchema(tx.Payload)
+	ds, err := UnmarshalSchema(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
 	}
@@ -53,7 +57,7 @@ func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.In
 }
 
 func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	dsIdent, err := unmarshalDatasetIdentifier(tx.Payload)
+	dsIdent, err := UnmarshalDatasetIdentifier(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset identifier: %w", err)
 	}
@@ -65,7 +69,7 @@ func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int,
 }
 
 func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	executionBody, err := unmarshalActionExecution(tx.Payload)
+	executionBody, err := UnmarshalActionExecution(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}
@@ -76,7 +80,15 @@ func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.In
 	})
 }
 
-func unmarshalActionExecution(payload []byte) (*kTx.ExecuteActionPayload, error) {
+func (s *Service) priceValidatorJoin(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
+	return big.NewInt(10000000000000), nil
+}
+
+func (s *Service) priceValidatorLeave(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
+	return big.NewInt(10000000000000), nil
+}
+
+func UnmarshalActionExecution(payload []byte) (*kTx.ExecuteActionPayload, error) {
 	exec := kTx.ExecuteActionPayload{}
 
 	err := json.Unmarshal(payload, &exec)
@@ -87,7 +99,7 @@ func unmarshalActionExecution(payload []byte) (*kTx.ExecuteActionPayload, error)
 	return &exec, nil
 }
 
-func unmarshalSchema(payload []byte) (*entity.Schema, error) {
+func UnmarshalSchema(payload []byte) (*entity.Schema, error) {
 	schema := entity.Schema{}
 
 	err := json.Unmarshal(payload, &schema)
@@ -98,7 +110,7 @@ func unmarshalSchema(payload []byte) (*entity.Schema, error) {
 	return &schema, nil
 }
 
-func unmarshalDatasetIdentifier(payload []byte) (*entity.DatasetIdentifier, error) {
+func UnmarshalDatasetIdentifier(payload []byte) (*entity.DatasetIdentifier, error) {
 	dsIdent := entity.DatasetIdentifier{}
 
 	err := json.Unmarshal(payload, &dsIdent)

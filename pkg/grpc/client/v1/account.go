@@ -3,9 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	"math/big"
 )
 
 func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {

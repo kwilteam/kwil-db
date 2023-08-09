@@ -7,7 +7,7 @@ import (
 
 // this file contains sql initialization
 
-var DefaultPath string
+var defaultPath string
 
 func init() {
 	dirname, err := os.UserHomeDir()
@@ -15,7 +15,7 @@ func init() {
 		dirname = "/tmp"
 	}
 
-	DefaultPath = fmt.Sprintf("%s/.kwil/sqlite/", dirname)
+	defaultPath = fmt.Sprintf("%s/.kwil/sqlite/", dirname)
 }
 
 const (
