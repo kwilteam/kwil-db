@@ -18,9 +18,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 
-	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-	"go.uber.org/zap"
-
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -31,7 +28,6 @@ import (
 	nm "github.com/cometbft/cometbft/node"
 
 	// shorthand for chain client service
-	"github.com/kwilteam/kwil-db/pkg/arweave"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
@@ -282,35 +278,7 @@ func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as AccountStore, l
 		txsvc.WithExtensions(cfg.ExtensionEndpoints...),
 	}
 
-	if cfg.ArweaveConfig.BundlrURL != "" && cfg.PrivateKey != nil {
-		opts = append(opts, buildArweaveWriter(cfg, logger))
-	}
-
 	return txsvc.NewService(ctx, cfg, opts...)
-}
-
-func buildArweaveWriter(cfg *config.KwildConfig, logger log.Logger) txsvc.TxSvcOpt {
-	bundlrClient, err := arweave.NewBundlrClient(cfg.ArweaveConfig.BundlrURL, cfg.PrivateKey)
-	if err != nil {
-		panic("failed to create arweave bundlr client")
-	}
-
-	return txsvc.WithTxHook(func(tx *kTx.Transaction) error {
-		bts, err := tx.Bytes()
-		if err != nil {
-			return err
-		}
-
-		res, err := bundlrClient.StoreItem(bts)
-		if err != nil {
-			logger.Error("failed to store tx on bundlr", zap.Error(err))
-			return nil
-		}
-
-		logger.Info("tx stored on bundlr", zap.String("txId", res.TxID))
-
-		return nil
-	})
 }
 
 func buildHealthSvc(logger log.Logger) *healthsvc.Server {

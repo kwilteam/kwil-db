@@ -90,9 +90,9 @@ func NewDB(ctx context.Context, sqldb SqlDB) (*DB, error) {
 }
 
 func (d *DB) CreateSession() (sql.Session, error) {
-	return d.sqldb.CreateSession()
+	return d.Sqldb.CreateSession()
 }
 
 func (d *DB) ApplyChangeset(changeset io.Reader) error {
-	return d.sqldb.ApplyChangeset(changeset)
+	return d.Sqldb.ApplyChangeset(changeset)
 }

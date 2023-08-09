@@ -25,15 +25,11 @@ type DatasetUseCaseInterface interface {
 	PriceExecute(action *entity.ExecuteAction) (*big.Int, error)
 	Query(ctx context.Context, query *entity.DBQuery) ([]byte, error)
 	// Call calls a read-only action on a database
-<<<<<<< HEAD
-	Call(ctx context.Context, action *entity.CallAction) ([]map[string]any, error)
-=======
 	Spend(ctx context.Context, address string, amount string, nonce int64) error
 	Call(ctx context.Context, action *entity.CallAction) ([]map[string]any, error)
 	StartBlockSession() error
 	EndBlockSession() ([]byte, error)
 	InitalizeAppHash(appHash []byte)
->>>>>>> dc1f6266 (added ABCI to handle all mutative interactions (deploy, drop, execute).)
 }
 
 type AccountStore interface {
