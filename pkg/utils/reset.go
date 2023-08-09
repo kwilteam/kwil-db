@@ -9,17 +9,9 @@ import (
 	"github.com/cometbft/cometbft/privval"
 )
 
-var keepAddrBook bool
-
 // resetAll removes address book files plus all data, and resets the privValdiator data.
 func ResetAll(dbDir, addrBookFile, privValKeyFile, privValStateFile string) error {
-	fmt.Println("ResetALLLLL: ", dbDir, addrBookFile, privValKeyFile, privValStateFile)
-	if keepAddrBook {
-		fmt.Println("The address book remains intact")
-	} else {
-		fmt.Println("addrBookFile: ", addrBookFile)
-		RemoveAddrBook(addrBookFile)
-	}
+	RemoveAddrBook(addrBookFile)
 
 	if err := os.RemoveAll(dbDir); err == nil {
 		fmt.Println("Removed all blockchain history", "dir", dbDir)
