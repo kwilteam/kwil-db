@@ -12,12 +12,8 @@ import (
 type Datastore interface {
 	Savepoint() (sql.Savepoint, error)
 	Close() error
-	// Execute executes a statement.
 	Execute(ctx context.Context, stmt string, args map[string]any) error
-
-	// Query executes a query and returns the result.
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
-	TableExists(ctx context.Context, table string) (bool, error)
 	Prepare(stmt string) (sql.Statement, error)
 	ApplyChangeset(reader io.Reader) error
 	CreateSession() (sql.Session, error)

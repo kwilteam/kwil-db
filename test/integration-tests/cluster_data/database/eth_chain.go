@@ -1,4 +1,8 @@
+//go:build ignore
+
 package main
+
+/* xxx
 
 import (
 	"context"
@@ -59,3 +63,7 @@ func main() {
 	initContract(chainDeployer)
 	keepMiningBlocks(chainDeployer)
 }
+
+*/
+
+func main() {}

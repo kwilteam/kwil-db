@@ -6,20 +6,20 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kuneiform/kfparser"
-	schema "github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 )
 
 type DatabaseSchemaLoader interface {
-	Load(t *testing.T, targetSchema *testSchema) *schema.Schema
-	LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *schema.Schema
+	Load(t *testing.T, targetSchema *testSchema) *serialize.Schema
+	LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *serialize.Schema
 }
 
 type FileDatabaseSchemaLoader struct {
-	Modifier func(db *schema.Schema)
+	Modifier func(db *serialize.Schema)
 }
 
-func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) *schema.Schema {
+func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) *serialize.Schema {
 	t.Helper()
 
 	d, err := os.ReadFile(targetSchema.GetFilePath())
@@ -37,7 +37,7 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("failed to marshal schema: %w", err)
 	}
 
-	var db *schema.Schema
+	var db *serialize.Schema
 	err = json.Unmarshal(schemaJson, &db)
 	if err != nil {
 		t.Fatal("failed to unmarshal schema json: %w", err)
@@ -47,7 +47,7 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 	return db
 }
 
-func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *schema.Schema {
+func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSchema *testSchema) *serialize.Schema {
 	t.Helper()
 
 	d, err := os.ReadFile(targetSchema.GetFilePath())
@@ -66,7 +66,7 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 		t.Fatal("failed to marshal schema: %w", err)
 	}
 
-	var db *schema.Schema
+	var db *serialize.Schema
 	err = json.Unmarshal(schemaJson, &db)
 	if err != nil {
 		t.Fatal("failed to unmarshal schema json: %w", err)
