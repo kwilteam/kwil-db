@@ -6,17 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/kwilteam/kuneiform/kfparser"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/kwilteam/kuneiform/kfparser"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +29,7 @@ func deployCmd() *cobra.Command {
 		Short: "Deploy databases",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), common.WithoutServiceConfig, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				// read in the file
 				file, err := os.Open(filePath)
 				if err != nil {
@@ -36,7 +37,7 @@ func deployCmd() *cobra.Command {
 				}
 				defer file.Close()
 
-				var db *entity.Schema
+				var db *serialize.Schema
 				if fileType == "kf" {
 					db, err = UnmarshalKf(file)
 				} else if fileType == "json" {
@@ -67,7 +68,7 @@ func deployCmd() *cobra.Command {
 	return cmd
 }
 
-func UnmarshalKf(file *os.File) (*entity.Schema, error) {
+func UnmarshalKf(file *os.File) (*serialize.Schema, error) {
 	source, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
@@ -83,7 +84,7 @@ func UnmarshalKf(file *os.File) (*entity.Schema, error) {
 		return nil, fmt.Errorf("failed to marshal schema: %w", err)
 	}
 
-	var db entity.Schema
+	var db serialize.Schema
 	err = json.Unmarshal(schemaJson, &db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal schema json: %w", err)
@@ -92,13 +93,13 @@ func UnmarshalKf(file *os.File) (*entity.Schema, error) {
 	return &db, nil
 }
 
-func UnmarshalJson(file *os.File) (*entity.Schema, error) {
+func UnmarshalJson(file *os.File) (*serialize.Schema, error) {
 	bts, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var db entity.Schema
+	var db serialize.Schema
 	err = json.Unmarshal(bts, &db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal file: %w", err)
