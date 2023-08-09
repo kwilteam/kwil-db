@@ -3,24 +3,26 @@ package abci_apps
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 
-	"github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
-	"github.com/kwilteam/kwil-db/pkg/serialize"
-	"github.com/kwilteam/kwil-db/pkg/tx"
-
-	kTx "github.com/kwilteam/kwil-db/pkg/tx"
-
 	abcitypes "github.com/cometbft/cometbft/abci/types"
 	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
-	node "github.com/kwilteam/kwil-db/internal/_node"
 
-	// "github.com/kwilteam/kwil-db/internal/usecases/datasets"
+	node "github.com/kwilteam/kwil-db/internal/_node"
+	"github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
+	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
+
 	"github.com/kwilteam/kwil-db/pkg/crypto"
+	etypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/tx"
+	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 	utilpkg "github.com/kwilteam/kwil-db/pkg/utils"
 	gowal "github.com/tidwall/wal"
 	"go.uber.org/zap"
@@ -48,9 +50,9 @@ type KwilExecutor interface {
 	InitializeAppHash(appHash []byte)
 
 	// "wrong place" methods for a future encapsulated tx executor type
-	Spend(ctx context.Context, address string, amount string, nonce int64) error
+	Spend(ctx context.Context, spend *balances.Spend) error
 
-	Deploy(ctx context.Context, schema *serialize.Schema, tx *tx.Transaction) (*tx.ExecutionResponse, error)
+	Deploy(ctx context.Context, schema *etypes.Schema, tx *tx.Transaction) (*tx.ExecutionResponse, error)
 	Drop(ctx context.Context, dbid string, tx *tx.Transaction) (*tx.ExecutionResponse, error)
 	Execute(ctx context.Context, dbid string, action string, params []map[string]any, tx *tx.Transaction) (*tx.ExecutionResponse, error)
 }
@@ -193,7 +195,7 @@ func addFailedEvent(eventType string, err error, owner string, sender string) ab
 func (app *KwilDbApplication) deploy_database(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
 	var events []abcitypes.Event
 	ctx := context.Background()
-	schema, err := serialize.UnmarshalSchema(tx.Payload)
+	schema, err := serialize.DeserializeSchema(tx.Payload)
 	if err != nil {
 		app.log.Error("ABCI: failed to unmarshal database schema ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("deploy", err, "", tx.Sender))}
@@ -347,7 +349,15 @@ func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.R
 	approverAddr := approver.Address().String()
 
 	// TODO: this should not spend here.  This is something that should be included in use case, or use case should include here
-	err = app.executor.Spend(ctx, approverAddr, tx.Fee, tx.Nonce)
+	fee, ok := big.NewInt(0).SetString(tx.Fee, 10)
+	if !ok {
+		return abcitypes.ResponseDeliverTx{Code: 1, Log: "invalid fee"}
+	}
+	err = app.executor.Spend(ctx, &balances.Spend{
+		AccountAddress: approverAddr,
+		Amount:         fee,
+		Nonce:          tx.Nonce,
+	})
 	if err != nil {
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error()}
 	}
@@ -389,7 +399,15 @@ func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool
 	}
 	joinerAddr := joiner.Address().String()
 
-	err = app.executor.Spend(ctx, joinerAddr, tx.Fee, tx.Nonce)
+	fee, ok := big.NewInt(0).SetString(tx.Fee, 10)
+	if !ok {
+		return nil, errors.New("invalid fee")
+	}
+	err = app.executor.Spend(ctx, &balances.Spend{
+		AccountAddress: joinerAddr,
+		Amount:         fee,
+		Nonce:          tx.Nonce,
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -20,6 +21,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 
+	"github.com/kwilteam/kwil-db/pkg/engine"
+	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -54,6 +57,15 @@ func NewStartCmd() *cobra.Command {
 	return startCmd
 }
 
+type dummyExecutor struct {
+	*datasets.DatasetModule
+	*balances.AccountStore
+}
+
+func (de *dummyExecutor) StartBlockSession() error         { return nil }
+func (de *dummyExecutor) EndBlockSession() ([]byte, error) { return []byte{}, nil }
+func (de *dummyExecutor) InitializeAppHash([]byte)         {}
+
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "kwil grpc server",
@@ -71,12 +83,18 @@ var startCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		// *** JUST TO BUILD
-		var data kwildbapp.KwilExecutor
-		var acct txsvc.AccountReader
-		// ***
+		engine, err := engine.Open(ctx)
+		if err != nil {
+			return err
+		}
+		accts, err := buildAccountRepository(ctx, logger, cfg)
+		if err != nil {
+			return err
+		}
 
-		app, err := kwildbapp.NewKwilDbApplication(logger, data /*, validatorStore*/)
+		data := datasets.NewDatasetModule(engine, accts, datasets.WithLogger(logger))
+
+		app, err := kwildbapp.NewKwilDbApplication(logger, &dummyExecutor{data, accts} /*, validatorStore*/)
 		if err != nil {
 			return err
 		}
@@ -89,7 +107,7 @@ var startCmd = &cobra.Command{
 
 		fmt.Printf("Initializing kwil server")
 		nodeClient := cmtlocal.New(cometNode) // for txsvc to broadcast
-		srv, err := initializeKwilServer(ctx, cfg, data, acct, nodeClient, logger)
+		srv, err := initializeKwilServer(ctx, cfg, data, accts, nodeClient, logger)
 		if err != nil {
 			return err
 		}
@@ -222,10 +240,12 @@ func initializeKwilServer(ctx context.Context, cfg *config.KwildConfig, engine t
 func newCometNode(app abci.Application, cfg *config.KwildConfig) (*nm.Node, error) {
 	config := cmtcfg.DefaultConfig()
 	CometHomeDir := os.Getenv("COMET_BFT_HOME")
-	fmt.Printf("Home Directory: %v", CometHomeDir)
+	fmt.Printf("Home Directory: %v\n", CometHomeDir)
 	config.SetRoot(CometHomeDir)
 
-	viper.SetConfigFile(fmt.Sprintf("%s/%s", CometHomeDir, "config/config.toml"))
+	cfgPath := filepath.Join(CometHomeDir, "config/config.toml")
+	fmt.Printf("Config file: %v\n", cfgPath)
+	viper.SetConfigFile(cfgPath)
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading config: %v", err)
 	}
@@ -240,9 +260,9 @@ func newCometNode(app abci.Application, cfg *config.KwildConfig) (*nm.Node, erro
 		config.PrivValidatorKeyFile(),
 		config.PrivValidatorStateFile(),
 	)
-	fmt.Println("PrivateKey: ", pv.Key.PrivKey)
+	fmt.Printf("PrivateKey: %x\n", pv.Key.PrivKey.Bytes())
 
-	fmt.Println("PrivateValidator: ", string(pv.Key.PrivKey.Bytes()))
+	fmt.Printf("PrivateValidator: %x\n", pv.Key.PrivKey.Bytes())
 	nodeKey, err := p2p.LoadNodeKey(config.NodeKeyFile())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load node's key: %v", err)
@@ -277,7 +297,7 @@ func newCometNode(app abci.Application, cfg *config.KwildConfig) (*nm.Node, erro
 	return node, nil
 }
 
-func buildAccountRepository(ctx context.Context, logger log.Logger, cfg *config.KwildConfig) (AccountStore, error) {
+func buildAccountRepository(ctx context.Context, logger log.Logger, cfg *config.KwildConfig) (*balances.AccountStore, error) {
 	return balances.NewAccountStore(ctx,
 		balances.WithLogger(*logger.Named("accountStore")),
 		balances.WithPath(cfg.SqliteFilePath),

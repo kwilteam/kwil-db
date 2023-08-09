@@ -347,15 +347,6 @@ func convertIndexesToDto(indexes []*Index) []*engineTypes.Index {
 	return entityIndexes
 }
 
-func UnmarshalSchema(b []byte) (*Schema, error) {
-	var schema Schema
-	err := json.Unmarshal(b, &schema)
-	if err != nil {
-		return nil, err
-	}
-	return &schema, nil
-}
-
 func UnmarshalDatasetIdentifier(b []byte) (*DatasetIdentifier, error) {
 	var dsIdent DatasetIdentifier
 	err := json.Unmarshal(b, &dsIdent)
