@@ -69,3 +69,10 @@ func Authenticated(shouldSign bool) CallOpt {
 		o.forceAuthenticated = &copied
 	}
 }
+
+func WithBcRpcUrl(url string) ClientOpt {
+	return func(c *Client) {
+		c.BcRpcUrl = url
+	}
+}
+

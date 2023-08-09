@@ -10,7 +10,7 @@ import (
 )
 
 func (c *Client) Broadcast(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	pbTx := convertTx(tx)
+	pbTx := ConvertTx(tx)
 	res, err := c.txClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
 	if err != nil {
 		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: %w", err)
@@ -20,7 +20,7 @@ func (c *Client) Broadcast(ctx context.Context, tx *kTx.Transaction) (*kTx.Recei
 		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: receipt is nil")
 	}
 
-	txRes := convertReceipt(res.Receipt)
+	txRes := ConvertReceipt(res.Receipt)
 
 	return txRes, nil
 }
@@ -36,7 +36,7 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 
 func (c *Client) EstimateCost(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
 	// convert transaction to proto
-	pbTx := convertTx(tx)
+	pbTx := ConvertTx(tx)
 
 	res, err := c.txClient.EstimatePrice(ctx, &txpb.EstimatePriceRequest{
 		Tx: pbTx,
@@ -50,10 +50,11 @@ func (c *Client) EstimateCost(ctx context.Context, tx *kTx.Transaction) (*big.In
 		return nil, fmt.Errorf("failed to convert price to big.Int")
 	}
 
+	fmt.Println("Estimated cost:", bigCost)
 	return bigCost, nil
 }
 
-func convertTx(incoming *kTx.Transaction) *txpb.Tx {
+func ConvertTx(incoming *kTx.Transaction) *txpb.Tx {
 	return &txpb.Tx{
 		Hash:        incoming.Hash,
 		PayloadType: incoming.PayloadType.Int32(),
@@ -65,7 +66,7 @@ func convertTx(incoming *kTx.Transaction) *txpb.Tx {
 	}
 }
 
-func convertReceipt(incoming *txpb.TxReceipt) *kTx.Receipt {
+func ConvertReceipt(incoming *txpb.TxReceipt) *kTx.Receipt {
 	return &kTx.Receipt{
 		TxHash: incoming.TxHash,
 		Fee:    incoming.Fee,

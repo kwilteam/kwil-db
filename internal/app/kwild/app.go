@@ -1,7 +1,9 @@
 package kwild
 
 import (
-	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd/server"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd/utils"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd/validator"
 	"github.com/spf13/cobra"
 )
 
@@ -15,8 +17,9 @@ var rootCmd = &cobra.Command{
 
 func Execute() error {
 	rootCmd.AddCommand(
-		cmd.NewStartCmd(),
-		cmd.NewStopCmd(),
+		validator.NewCmdValidator(),
+		server.NewServerCmd(),
+		utils.NewCmdGenerator(),
 	)
 	return rootCmd.Execute()
 }

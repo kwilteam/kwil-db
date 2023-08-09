@@ -22,8 +22,7 @@ type Engine struct {
 	log        log.Logger
 	datasets   map[string]Dataset
 	extensions map[string]ExtensionInitializer
-
-	opener Opener
+	opener     Opener
 }
 
 func Open(ctx context.Context, opts ...EngineOpt) (*Engine, error) {
@@ -128,6 +127,15 @@ func (e *Engine) Close() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func (e *Engine) GetAllDatasets() ([]string, error) {
+	var datasets []string
+	for dbid := range e.datasets {
+		datasets = append(datasets, dbid)
+	}
+
+	return datasets, nil
 }
 
 func (e *Engine) ListDatasets(ctx context.Context, owner string) ([]string, error) {

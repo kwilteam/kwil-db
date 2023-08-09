@@ -18,3 +18,8 @@ type actionExecution struct {
 	DBID   string           `json:"dbid"`
 	Params []map[string]any `json:"params"`
 }
+
+type validator struct {
+	PubKey string `json:"pubKey"`
+	Power  int64  `json:"power"`
+}

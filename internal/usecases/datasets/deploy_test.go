@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/entity"
 	"github.com/kwilteam/kwil-db/internal/entity/data"
 	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
+	accountTesting "github.com/kwilteam/kwil-db/pkg/balances/testing"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	engineTesting "github.com/kwilteam/kwil-db/pkg/engine/testing"
 	"github.com/kwilteam/kwil-db/pkg/tx"
@@ -64,9 +65,15 @@ func TestDatasetUseCase_Deploy(t *testing.T) {
 			}
 			defer teardown()
 
+			accountStore, td, err := accountTesting.NewTestAccountStore(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer td()
+
 			u, err := datasets.New(ctx,
 				datasets.WithEngine(eng),
-				datasets.WithAccountStore(&mockAccountStore{}),
+				datasets.WithAccountStore(accountStore),
 			)
 			if err != nil {
 				t.Fatal(err)

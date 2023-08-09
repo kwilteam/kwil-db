@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func printTableAny(data []map[string]any) {
+func PrintTableAny(data []map[string]any) {
 	conv := make([]map[string]string, len(data))
 	for i, row := range data {
 		conv[i] = make(map[string]string)

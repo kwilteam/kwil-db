@@ -61,14 +61,22 @@ func (t *testDbOpener) Teardown() error {
 	return errors.Join(errs...)
 }
 
-type datastoreAdapter struct {
-	sqlTesting.TestSqliteClient
-}
+// type datastoreAdapter struct {
+// 	sqlTesting.TestSqliteClient
+// }
 
-func (d *datastoreAdapter) Prepare(query string) (engine.Statement, error) {
-	return d.TestSqliteClient.Prepare(query)
-}
+// func (d *datastoreAdapter) Prepare(query string) (engine.Statement, error) {
+// 	return d.TestSqliteClient.Prepare(query)
+// }
 
-func (d *datastoreAdapter) Savepoint() (engine.Savepoint, error) {
-	return d.TestSqliteClient.Savepoint()
-}
+// func (d *datastoreAdapter) Savepoint() (engine.Savepoint, error) {
+// 	return d.TestSqliteClient.Savepoint()
+// }
+
+// func (d *datastoreAdapter) CreateSession() (engine.Session, error) {
+// 	return d.TestSqliteClient.CreateSession()
+// }
+
+// func (d *datastoreAdapter) ApplyChangeset(changeset io.Reader) error {
+// 	return d.TestSqliteClient.ApplyChangeset(changeset)
+// }

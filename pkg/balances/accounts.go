@@ -1,30 +1,30 @@
 package balances
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/sql/driver"
-
-	"go.uber.org/zap"
 )
 
 type AccountStore struct {
-	path string
-	db   *driver.Connection
-	log  log.Logger
-	mu   *sync.Mutex
-	wipe bool
+	path          string
+	db            Datastore
+	log           log.Logger
+	rw            sync.RWMutex
+	gasEnabled    bool
+	noncesEnabled bool
+	stmts         *preparedStatements
 }
 
-func NewAccountStore(opts ...balancesOpts) (*AccountStore, error) {
+func NewAccountStore(ctx context.Context, opts ...AccountStoreOpts) (*AccountStore, error) {
 	ar := &AccountStore{
-		path: DefaultPath,
+		path: defaultPath,
 		log:  log.NewNoOp(),
-		mu:   &sync.Mutex{},
-		wipe: false,
 	}
 
 	for _, opt := range opts {
@@ -32,30 +32,31 @@ func NewAccountStore(opts ...balancesOpts) (*AccountStore, error) {
 	}
 	ar.log.Named("account_store")
 
-	db, err := driver.OpenConn(accountDBName, driver.WithPath(ar.path))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open account connection: %w", err)
+	var err error
+	if ar.db == nil {
+		ar.db, err = dbOpener.Open(accountDBName, ar.path, ar.log)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open account connection: %w", err)
+		}
 	}
 
-	err = db.AcquireLock()
-	if err != nil {
-		return nil, fmt.Errorf("failed to acquire lock: %w", err)
-	}
-
-	ar.db = db
-
-	err = ar.initTables()
+	err = ar.initTables(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize tables: %w", err)
 	}
 
+	err = ar.prepareStatements()
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare statements: %w", err)
+	}
+
 	return ar, nil
 }
+func (a *AccountStore) GetAccount(ctx context.Context, address string) (*Account, error) {
+	a.rw.RLock()
+	defer a.rw.RUnlock()
 
-func (a *AccountStore) GetAccount(address string) (*Account, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.getAccount(address)
+	return a.getAccountReadOnly(ctx, address)
 }
 
 type Spend struct {
@@ -64,145 +65,78 @@ type Spend struct {
 	Nonce          int64
 }
 
-type ChainConfig struct {
-	ChainCode int32
-	Height    int64
-}
+// Spend spends an amount from an account. It blocks until the spend is written to the database.
+func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
+	a.rw.Lock()
+	defer a.rw.Unlock()
 
-// Spend spends an amount from an account.
-func (a *AccountStore) Spend(spend *Spend) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	return a.spend(spend)
-}
-
-// BatchSpend spends a list of spends in a single transaction.  It can optionally
-// update the chain height, however nil can be passed to skip this.
-func (a *AccountStore) BatchSpend(spendList []*Spend, chain *ChainConfig) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	sp, err := a.db.Begin()
+	balance, nonce, err := a.checkSpend(ctx, spend)
 	if err != nil {
-		return fmt.Errorf("failed to create Begin: %w", err)
-	}
-	defer sp.Rollback()
-
-	for _, spend := range spendList {
-		err := a.spend(spend)
-		if err != nil {
-			return fmt.Errorf("failed to spend: %w", err)
-		}
+		return fmt.Errorf("failed to check spend: %w", err)
 	}
 
-	if chain != nil {
-		err := a.setChainHeight(chain.ChainCode, chain.Height)
-		if err != nil {
-			return fmt.Errorf("failed to set chain height: %w", err)
-		}
-	}
-
-	return sp.Commit()
-}
-
-func (a *AccountStore) spend(spend *Spend) error {
-	account, err := a.getAccount(spend.AccountAddress)
+	err = a.updateAccount(ctx, spend.AccountAddress, balance, nonce)
 	if err != nil {
-		return fmt.Errorf("failed to get account: %w", err)
-	}
-
-	if account.Nonce+1 != spend.Nonce {
-		a.log.Debug("tx nonce incorrect", zap.String("address", spend.AccountAddress), zap.Int64("expected", account.Nonce), zap.Int64("actual", spend.Nonce))
-		return ErrInvalidNonce
-	}
-
-	newBal := new(big.Int).Sub(account.Balance, spend.Amount)
-	if newBal.Cmp(big.NewInt(0)) < 0 {
-		return ErrInsufficientFunds
-	}
-
-	err = a.setBalance(spend.AccountAddress, newBal)
-	if err != nil {
-		return fmt.Errorf("failed to set balance: %w", err)
-	}
-
-	err = a.setNonce(spend.AccountAddress, spend.Nonce)
-	if err != nil {
-		return fmt.Errorf("failed to set nonce: %w", err)
+		return fmt.Errorf("failed to update account: %w", err)
 	}
 
 	return nil
 }
 
-type Credit struct {
-	AccountAddress string
-	Amount         *big.Int
-}
-
-// Credit credits an account.
-func (a *AccountStore) Credit(credit *Credit) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	return a.credit(credit)
-}
-
-// BatchCredit credits a list of credits in a single transaction.  It can optionally
-// update the chain height, however nil can be passed to skip this.
-func (a *AccountStore) BatchCredit(creditList []*Credit, chain *ChainConfig) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	sp, err := a.db.Begin()
+// checkSpend checks that a spend is valid.  If gas costs are enabled, it checks that the account has enough gas to pay for the spend.
+// If nonces are enabled, it checks that the nonce is correct.  It returns the new balance and nonce if the spend is valid. It returns an
+// error if the spend is invalid.
+func (a *AccountStore) checkSpend(ctx context.Context, spend *Spend) (*big.Int, int64, error) {
+	account, err := a.getOrCreateAccount(ctx, spend.AccountAddress)
 	if err != nil {
-		return fmt.Errorf("failed to create Begin: %w", err)
+		return nil, 0, fmt.Errorf("failed to get account: %w", err)
 	}
-	defer sp.Rollback()
 
-	for _, credit := range creditList {
-		err := a.credit(credit)
+	nonce := account.Nonce
+	if a.noncesEnabled {
+		err = account.validateNonce(spend.Nonce)
 		if err != nil {
-			return fmt.Errorf("failed to credit: %w", err)
+			return nil, 0, fmt.Errorf("failed to validate nonce: %w", err)
+		}
+
+		nonce = spend.Nonce
+	}
+
+	balance := account.Balance
+	if a.gasEnabled {
+		balance, err = account.validateSpend(spend.Amount)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to subtract gas: %w", err)
 		}
 	}
 
-	if chain != nil {
-		err := a.setChainHeight(chain.ChainCode, chain.Height)
-		if err != nil {
-			return fmt.Errorf("failed to set chain height: %w", err)
-		}
-	}
-
-	return sp.Commit()
+	return balance, nonce, nil
 }
 
-func (a *AccountStore) credit(credit *Credit) error {
-	account, err := a.getAccount(credit.AccountAddress)
-	if err != nil {
-		if err == ErrAccountNotFound {
-			err = a.createAccount(credit.AccountAddress)
-			account = &Account{
-				Address: credit.AccountAddress,
-				Balance: big.NewInt(0),
-				Nonce:   0,
-			}
+func (a *AccountStore) ApplyChangeset(changeset io.Reader) error {
+	a.rw.Lock()
+	defer a.rw.Unlock()
+	return a.db.ApplyChangeset(changeset)
+}
 
-			if err != nil {
-				return fmt.Errorf("failed to create account: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to get account: %w", err)
-		}
-	}
+func (a *AccountStore) CreateSession() (Session, error) {
+	a.rw.Lock()
+	defer a.rw.Unlock()
+	return a.db.CreateSession()
+}
 
-	a.log.Info("crediting account", zap.String("address", account.Address), zap.String("amount", credit.Amount.String()))
-	newBal := new(big.Int).Add(account.Balance, credit.Amount)
-	return a.setBalance(credit.AccountAddress, newBal)
+func (a *AccountStore) Savepoint() (Savepoint, error) {
+	a.rw.Lock()
+	defer a.rw.Unlock()
+	return a.db.Savepoint()
 }
 
 func (a *AccountStore) Close() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.db.Close()
+	a.rw.Lock()
+	defer a.rw.Unlock()
+
+	return errors.Join(
+		a.stmts.Close(),
+		a.db.Close(),
+	)
 }

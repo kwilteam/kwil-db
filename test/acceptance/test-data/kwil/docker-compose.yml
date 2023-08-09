@@ -1,0 +1,30 @@
+version: "3"
+
+services:
+  kwild:
+    container_name: kwild
+    image: kwild:latest
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+      - "26656:26656"
+      - "26657:26657"
+    environment:
+      - KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL=${CC_RPC}
+      - KWILD_PRIVATE_KEY=${KWILD_PRIVATE_KEY}
+      - KWILD_DEPOSITS_BLOCK_CONFIRMATIONS=1
+      - KWILD_DEPOSITS_CHAIN_CODE=2
+      - KWILD_DEPOSITS_POOL_ADDRESS=${KWILD_DEPOSITS_POOL_ADDRESS}
+      - KWILD_LOG_LEVEL=debug
+      - KWILD_EXTENSION_ENDPOINTS=${KWILD_EXTENSION_ENDPOINTS}
+      - COMET_BFT_HOME=/app/comet-bft
+    volumes:
+      - ./node0:/app/comet-bft
+    networks:
+      kwilnet:
+        ipv4_address: 172.10.100.2
+
+networks:
+  kwilnet:
+    name: kwil-it-net
+    external: true
