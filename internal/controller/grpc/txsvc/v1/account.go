@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (*txpb.GetAccountResponse, error) {
-	acc, err := s.executor.GetAccount(ctx, req.Address)
+	acc, err := s.accountStore.GetAccount(ctx, req.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -16,7 +16,7 @@ func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (
 		Account: &txpb.Account{
 			Address: acc.Address,
 			Nonce:   acc.Nonce,
-			Balance: acc.Balance,
+			Balance: acc.Balance.String(),
 		},
 	}, nil
 }

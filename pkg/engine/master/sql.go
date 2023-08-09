@@ -3,6 +3,8 @@ package master
 import (
 	"context"
 	"fmt"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 type sqlStore struct {
@@ -52,7 +54,7 @@ func (d *sqlStore) init(ctx context.Context) error {
 	return sp.Commit()
 }
 
-func (d *sqlStore) getDataset(ctx context.Context, dbid string) (*DatasetInfo, error) {
+func (d *sqlStore) getDataset(ctx context.Context, dbid string) (*types.DatasetInfo, error) {
 	results, err := d.ds.Query(ctx, sqlGetDataset, map[string]any{
 		"$dbid": dbid,
 	})
@@ -73,7 +75,7 @@ func (d *sqlStore) getDataset(ctx context.Context, dbid string) (*DatasetInfo, e
 		return nil, fmt.Errorf("error getting dataset owner fromr result set")
 	}
 
-	return &DatasetInfo{
+	return &types.DatasetInfo{
 		DBID:  dbid,
 		Name:  name,
 		Owner: owner,
@@ -115,13 +117,13 @@ func (d *sqlStore) deleteDataset(ctx context.Context, dbid string) error {
 	})
 }
 
-func (s *sqlStore) listDatasets(ctx context.Context) ([]*DatasetInfo, error) {
+func (s *sqlStore) listDatasets(ctx context.Context) ([]*types.DatasetInfo, error) {
 	results, err := s.ds.Query(ctx, sqlListDatasets, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var data []*DatasetInfo
+	var data []*types.DatasetInfo
 	for _, result := range results {
 		dbid, ok := result["dbid"].(string)
 		if !ok {
@@ -138,7 +140,7 @@ func (s *sqlStore) listDatasets(ctx context.Context) ([]*DatasetInfo, error) {
 			return nil, fmt.Errorf("error getting name from result set")
 		}
 
-		data = append(data, &DatasetInfo{
+		data = append(data, &types.DatasetInfo{
 			DBID:  dbid,
 			Name:  name,
 			Owner: owner,

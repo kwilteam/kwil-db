@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type AccountStore struct {
@@ -119,13 +120,13 @@ func (a *AccountStore) ApplyChangeset(changeset io.Reader) error {
 	return a.db.ApplyChangeset(changeset)
 }
 
-func (a *AccountStore) CreateSession() (Session, error) {
+func (a *AccountStore) CreateSession() (sql.Session, error) {
 	a.rw.Lock()
 	defer a.rw.Unlock()
 	return a.db.CreateSession()
 }
 
-func (a *AccountStore) Savepoint() (Savepoint, error) {
+func (a *AccountStore) Savepoint() (sql.Savepoint, error) {
 	a.rw.Lock()
 	defer a.rw.Unlock()
 	return a.db.Savepoint()

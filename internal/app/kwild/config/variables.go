@@ -20,33 +20,17 @@ const (
 )
 
 type KwildConfig struct {
-	GrpcListenAddress   string
-	HttpListenAddress   string
-	PrivateKey          *ecdsa.PrivateKey
-	Deposits            DepositsConfig
-	ChainSyncer         ChainSyncerConfig
-	WithoutChainSyncer  bool
-	WithoutAccountStore bool
-	SqliteFilePath      string
-	Log                 log.Config
-	ExtensionEndpoints  []string
-	ArweaveConfig       ArweaveConfig
-	BcRpcUrl            string
-	BCPrivateKey        *cmtCrypto.PrivKey
-	WithoutGasCosts     bool
-	WithoutNonces       bool
-}
-
-type DepositsConfig struct {
-	ReconnectionInterval int
-	BlockConfirmations   int
-	ChainCode            int
-	ClientChainRPCURL    string
-	PoolAddress          string
-}
-
-type ChainSyncerConfig struct {
-	ChunkSize int
+	GrpcListenAddress  string
+	HttpListenAddress  string
+	PrivateKey         *ecdsa.PrivateKey
+	SqliteFilePath     string
+	Log                log.Config
+	ExtensionEndpoints []string
+	ArweaveConfig      ArweaveConfig
+	BcRpcUrl           string
+	BCPrivateKey       cmtCrypto.PrivKey
+	WithoutGasCosts    bool
+	WithoutNonces      bool
 }
 
 type ArweaveConfig struct {
@@ -57,21 +41,13 @@ var (
 	RegisteredVariables = []config.CfgVar{
 		PrivateKey,
 		GrpcListenAddress,
-		DepositsReconnectionInterval,
-		DepositsBlockConfirmation,
-		DepositsChainCode,
-		DepositsClientChainRPCURL,
-		WithoutAccountStore,
-		WithoutChainSyncer,
-		DepositsPoolAddress,
-		ChainSyncerChunkSize,
 		SqliteFilePath,
 		LogLevel,
 		LogOutputPaths,
 		HttpListenAddress,
 		ExtensionEndpoints,
 		ArweaveBundlrURL,
-		BcRpcUrl,
+		CometBftRPCUrl,
 		WithoutGasCosts,
 		WithoutNonces,
 	}
@@ -96,8 +72,8 @@ var (
 		},
 	}
 
-	BcRpcUrl = config.CfgVar{
-		EnvName: "BC_RPC_URL",
+	CometBftRPCUrl = config.CfgVar{
+		EnvName: "COMETBFT_RPC_URL",
 		Field:   "BcRpcUrl",
 		Default: "tcp://localhost:26657",
 	}
@@ -106,42 +82,6 @@ var (
 		EnvName: "GRPC_LISTEN_ADDRESS",
 		Field:   "GrpcListenAddress",
 		Default: ":50051",
-	}
-
-	DepositsReconnectionInterval = config.CfgVar{
-		EnvName: "DEPOSITS_RECONNECTION_INTERVAL",
-		Field:   "Deposits.ReconnectionInterval",
-		Default: 30,
-	}
-
-	DepositsBlockConfirmation = config.CfgVar{
-		EnvName: "DEPOSITS_BLOCK_CONFIRMATIONS",
-		Field:   "Deposits.BlockConfirmations",
-		Default: 12,
-	}
-
-	DepositsChainCode = config.CfgVar{
-		EnvName: "DEPOSITS_CHAIN_CODE",
-		Field:   "Deposits.ChainCode",
-		Default: 0,
-	}
-
-	DepositsClientChainRPCURL = config.CfgVar{
-		EnvName: "DEPOSITS_CLIENT_CHAIN_RPC_URL",
-		Field:   "Deposits.ClientChainRPCURL",
-		Default: "http://localhost:8545",
-	}
-
-	DepositsPoolAddress = config.CfgVar{
-		EnvName: "DEPOSITS_POOL_ADDRESS",
-		Field:   "Deposits.PoolAddress",
-		Default: "0x0000000000000000000000000000000000000000",
-	}
-
-	ChainSyncerChunkSize = config.CfgVar{
-		EnvName: "CHAIN_SYNCER_CHUNK_SIZE",
-		Field:   "ChainSyncer.ChunkSize",
-		Default: 100000,
 	}
 
 	SqliteFilePath = config.CfgVar{
@@ -212,18 +152,6 @@ var (
 		},
 	}
 
-	WithoutAccountStore = config.CfgVar{
-		EnvName: "WITHOUT_ACCOUNT_STORE",
-		Field:   "WithoutAccountStore",
-		Default: false,
-	}
-
-	WithoutChainSyncer = config.CfgVar{
-		EnvName: "WITHOUT_CHAIN_SYNCER",
-		Field:   "WithoutChainSyncer",
-		Default: false,
-	}
-	
 	ArweaveBundlrURL = config.CfgVar{
 		EnvName: "ARWEAVE_BUNDLR_URL",
 		Field:   "ArweaveConfig.BundlrURL",

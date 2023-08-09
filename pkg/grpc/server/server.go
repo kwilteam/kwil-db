@@ -1,7 +1,8 @@
 package server
 
 import (
-	"context"
+	"net"
+
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -9,15 +10,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"net"
 )
 
 type Server struct {
-	server *grpc.Server
-	logger log.Logger
+	server   *grpc.Server
+	logger   log.Logger
+	listener net.Listener
 }
 
-func New(logger log.Logger, opts ...Option) *Server {
+func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 	l := *logger.Named("grpcServer").WithOptions(zap.WithCaller(false))
 
 	recoveryFunc := func(p interface{}) error {
@@ -40,8 +41,9 @@ func New(logger log.Logger, opts ...Option) *Server {
 	)
 
 	s := &Server{
-		server: server,
-		logger: l,
+		server:   server,
+		logger:   l,
+		listener: lis,
 	}
 
 	for _, opt := range opts {
@@ -55,13 +57,8 @@ func (s *Server) RegisterService(sd *grpc.ServiceDesc, ss interface{}) {
 	s.server.RegisterService(sd, ss)
 }
 
-func (s *Server) Serve(ctx context.Context, addr string) error {
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-
-	return s.server.Serve(lis)
+func (s *Server) Start() error {
+	return s.server.Serve(s.listener)
 }
 
 func (s *Server) Stop() {

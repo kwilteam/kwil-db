@@ -5,11 +5,12 @@ import (
 	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
 )
 
 type Datastore interface {
-	Savepoint() (Savepoint, error)
+	Savepoint() (sql.Savepoint, error)
 	Close() error
 	// Execute executes a statement.
 	Execute(ctx context.Context, stmt string, args map[string]any) error
@@ -17,14 +18,9 @@ type Datastore interface {
 	// Query executes a query and returns the result.
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 	TableExists(ctx context.Context, table string) (bool, error)
-	Prepare(stmt string) (PreparedStatement, error)
+	Prepare(stmt string) (sql.Statement, error)
 	ApplyChangeset(reader io.Reader) error
-	CreateSession() (Session, error)
-}
-
-type Savepoint interface {
-	Rollback() error
-	Commit() error
+	CreateSession() (sql.Session, error)
 }
 
 // Opener is an interface that opens a database.
@@ -49,34 +45,5 @@ var dbOpener Opener = openerFunc(func(name, path string, log log.Logger) (Datast
 		return nil, err
 	}
 
-	return &dbAdapter{clnt}, nil
+	return clnt, nil
 })
-
-// TODO: this should get deleted once we merge in main
-
-type dbAdapter struct {
-	*client.SqliteClient
-}
-
-func (s *dbAdapter) Savepoint() (Savepoint, error) {
-	return s.SqliteClient.Savepoint()
-}
-
-func (s *dbAdapter) Prepare(stmt string) (PreparedStatement, error) {
-	return s.SqliteClient.Prepare(stmt)
-}
-
-func (s *dbAdapter) CreateSession() (Session, error) {
-	return s.SqliteClient.CreateSession()
-}
-
-// Session is a session that can be used to execute multiple statements.
-type Session interface {
-	GenerateChangeset() ([]byte, error)
-	Delete() error
-}
-
-type PreparedStatement interface {
-	Close() error
-	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)
-}
