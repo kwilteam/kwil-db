@@ -14,13 +14,11 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	schema "github.com/kwilteam/kwil-db/internal/entity"
-	"github.com/kwilteam/kwil-db/pkg/chain/types"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/kwilteam/kwil-db/test/acceptance/adapters"
 	"github.com/kwilteam/kwil-db/test/acceptance/utils/deployer"
-	eth_deployer "github.com/kwilteam/kwil-db/test/acceptance/utils/deployer/eth-deployer"
 	"github.com/kwilteam/kwil-db/test/specifications"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -58,15 +56,15 @@ type TestEnvCfg struct {
 	SecondUserPrivateKeyString       string
 	DatabaseDeployerPrivateKeyString string
 	DBSchemaFilePath                 string
-	NodeURL                          string // kwild address
+	NodeURL                          string // kwild address -- rm?
 	GatewayURL                       string // kgw address
 	ChainRPCURL                      string
-	ChainSyncWaitTime                time.Duration
-	ChainCode                        types.ChainCode
-	InitialFundAmount                int64
-	denomination                     *big.Int
-	LogLevel                         string
-	CometBftUrl                      string
+	// ChainSyncWaitTime                time.Duration
+	// ChainCode                        types.ChainCode
+	InitialFundAmount int64
+	denomination      *big.Int
+	LogLevel          string
+	CometBftUrl       string
 
 	// Math extension
 	MathExtensionPort string
@@ -111,11 +109,11 @@ func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 			NodeURL:                          os.Getenv("TEST_KWILD_ADDR"),
 			GatewayURL:                       os.Getenv("TEST_KGW_ADDR"),
 			ChainRPCURL:                      os.Getenv("TEST_PROVIDER"),
-			ChainSyncWaitTime:                15 * time.Second,
-			ChainCode:                        types.GOERLI,
-			InitialFundAmount:                1,
-			denomination:                     big.NewInt(10000),
-			LogLevel:                         "debug",
+			// ChainSyncWaitTime:                15 * time.Second,
+			// ChainCode:                        types.GOERLI,
+			InitialFundAmount: 1,
+			denomination:      big.NewInt(10000),
+			LogLevel:          "debug",
 		}
 	} else {
 		e = TestEnvCfg{
@@ -126,11 +124,11 @@ func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 			NodeURL:                          "",
 			GatewayURL:                       "",
 			ChainRPCURL:                      "",
-			ChainSyncWaitTime:                2 * time.Second,
-			ChainCode:                        types.GOERLI,
-			InitialFundAmount:                100,
-			denomination:                     big.NewInt(1000000000000000000),
-			LogLevel:                         "debug",
+			// ChainSyncWaitTime:                2 * time.Second,
+			// ChainCode:                        types.GOERLI,
+			InitialFundAmount: 100,
+			denomination:      big.NewInt(1000000000000000000),
+			LogLevel:          "debug",
 		}
 	}
 
@@ -138,10 +136,10 @@ func GetTestEnvCfg(t *testing.T, remote bool) TestEnvCfg {
 	return e
 }
 
-func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg, path string) (TestEnvCfg, []*testcontainers.DockerContainer, deployer.Deployer) {
+func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg, path string) (TestEnvCfg, []*testcontainers.DockerContainer) {
 	// Create Ganache container
 	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
-	t.Logf("Create ganache container:  %s\n", cfg.ChainCode.ToChainId().String())
+	// t.Logf("Create ganache container:  %s\n", cfg.ChainCode.ToChainId().String())
 	dockerComposeId := fmt.Sprintf("%d", time.Now().Unix())
 	t.Log("dockerComposeId", dockerComposeId)
 	pathG := filepath.Join(path, "/ganache/docker-compose.yml")
@@ -174,6 +172,7 @@ func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg, path s
 	t.Log("unexposedChainRPC", unexposedChainRPC)
 
 	// Deploy contracts
+	/* xxx
 	chainDeployer := GetDeployer("eth", exposedChainRPC, cfg.DatabaseDeployerPrivateKeyString, cfg.denomination)
 	tokenAddress, err := chainDeployer.DeployToken(ctx)
 	require.NoError(t, err, "failed to deploy token")
@@ -185,6 +184,7 @@ func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg, path s
 	t.Log("create Kwil cluster container")
 	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
 	time.Sleep(20 * time.Second)
+	*/
 
 	// Create Kwil cluster container
 	pathK := filepath.Join(path, "/kwil/docker-compose.yml")
@@ -229,7 +229,7 @@ func SetupKwildCluster(ctx context.Context, t *testing.T, cfg TestEnvCfg, path s
 		require.NoError(t, err, "failed to get gateway url for service %s", name)
 		t.Logf("gatewayURL: %s for container name: %s", gatewayURL, name) */
 	}
-	return cfg, kwildC, chainDeployer
+	return cfg, kwildC
 }
 
 func SetupKwildDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, kwildC *testcontainers.DockerContainer, logger log.Logger) KwilAcceptanceDriver {
@@ -248,7 +248,7 @@ func SetupKwildDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, kwildC 
 
 	t.Logf("nodeURL: %s gatewayURL: %s for container name: %s", nodeURL, gatewayURL, name)
 	kwilClt, err := client.New(ctx, nodeURL,
-		client.WithChainRpcUrl(cfg.ChainRPCURL),
+		client.WithCometBftUrl(cfg.ChainRPCURL),
 		client.WithPrivateKey(cfg.UserPrivateKey),
 		client.WithCometBftUrl(cometBftURL),
 	)
@@ -258,7 +258,7 @@ func SetupKwildDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, kwildC 
 	return kwildDriver
 }
 
-func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg, path string) (TestEnvCfg, deployer.Deployer) {
+func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg, path string) TestEnvCfg {
 	// ganache container
 	pathG := filepath.Join(path, "/ganache/docker-compose.yml")
 	composeG, err := compose.NewDockerCompose(pathG)
@@ -291,15 +291,18 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg, path string)
 	t.Log("unexposedMathRPC", unexposedMathRPC)
 
 	// deploy token and escrow contract
+	/* xxx
 	t.Logf("create chain deployer to %s", exposedChainRPC)
 	chainDeployer := GetDeployer("eth", exposedChainRPC, cfg.DatabaseDeployerPrivateKeyString, cfg.denomination)
 	tokenAddress, err := chainDeployer.DeployToken(ctx)
 	require.NoError(t, err, "failed to deploy token")
 	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress.String())
 	require.NoError(t, err, "failed to deploy escrow")
+	*/
 
 	pathK := filepath.Join(path, "/kwil/docker-compose.yml")
-	kwildC := adapters.StartKwildDockerComposeService(t, ctx, pathK, unexposedChainRPC, escrowAddress.String(), cfg.DatabaseDeployerPrivateKeyString, unexposedMathRPC)
+	kwildC := adapters.StartKwildDockerComposeService(t, ctx, pathK, unexposedChainRPC, "",
+		cfg.DatabaseDeployerPrivateKeyString, unexposedMathRPC)
 	exposedKwildEndpoint, err := kwildC.PortEndpoint(ctx, "50051", "")
 	require.NoError(t, err)
 	exposedKgwEndpoint, err := kwildC.PortEndpoint(ctx, "8080", "")
@@ -312,7 +315,7 @@ func setupCommon(ctx context.Context, t *testing.T, cfg TestEnvCfg, path string)
 	cfg.NodeURL = exposedKwildEndpoint
 	cfg.GatewayURL = exposedKgwEndpoint
 	cfg.CometBftUrl = cometBftUrl
-	return cfg, chainDeployer
+	return cfg
 }
 
 func arch() string {
@@ -326,7 +329,7 @@ func arch() string {
 func setSchemaLoader(cfg TestEnvCfg) {
 	specifications.SetSchemaLoader(
 		&specifications.FileDatabaseSchemaLoader{
-			Modifier: func(db *schema.Schema) {
+			Modifier: func(db *serialize.Schema) {
 				db.Owner = cfg.UserAddr
 				// NOTE: this is a hack to make sure the db name is temporary unique
 				db.Name = fmt.Sprintf("%s_%s", db.Name, time.Now().Format("20160102"))
@@ -352,7 +355,7 @@ func setupCliDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger lo
 	return cliDriver, chainDeployer
 }*/
 
-func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger, path string) (KwilAcceptanceDriver, deployer.Deployer, TestEnvCfg) {
+func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger log.Logger, path string) (KwilAcceptanceDriver, TestEnvCfg) {
 	setSchemaLoader(cfg)
 
 	if cfg.NodeURL != "" {
@@ -361,29 +364,29 @@ func setupGrpcDriver(ctx context.Context, t *testing.T, cfg TestEnvCfg, logger l
 		require.NoError(t, err, "failed to create kwil client")
 
 		kwildDriver := kwild.NewKwildDriver(kwilClt, cfg.UserPrivateKey, cfg.GatewayURL, logger)
-		return kwildDriver, nil, cfg
+		return kwildDriver, cfg
 	}
 
-	updatedCfg, chainDeployer := setupCommon(ctx, t, cfg, path)
+	updatedCfg := setupCommon(ctx, t, cfg, path)
 
 	t.Logf("create kwild driver to %s, (gateway: %s)", updatedCfg.NodeURL, updatedCfg.GatewayURL)
 
 	kwilClt, err := client.New(ctx, updatedCfg.NodeURL,
-		client.WithChainRpcUrl(updatedCfg.ChainRPCURL),
+		client.WithCometBftUrl(updatedCfg.ChainRPCURL),
 		client.WithPrivateKey(updatedCfg.UserPrivateKey),
 		client.WithCometBftUrl(updatedCfg.CometBftUrl),
 	)
 	require.NoError(t, err, "failed to create kwil client")
 
 	kwildDriver := kwild.NewKwildDriver(kwilClt, updatedCfg.UserPrivateKey, updatedCfg.GatewayURL, logger)
-	return kwildDriver, chainDeployer, updatedCfg
+	return kwildDriver, updatedCfg
 }
 
 // NewClient creates a new client that is a KwilAcceptanceDriver
 // this can be used to simulate several "wallets" in the same test
 func newGRPCClient(ctx context.Context, t *testing.T, cfg *TestEnvCfg, logger log.Logger) KwilAcceptanceDriver {
 	kwilClt, err := client.New(ctx, cfg.NodeURL,
-		client.WithChainRpcUrl(cfg.ChainRPCURL),
+		client.WithCometBftUrl(cfg.ChainRPCURL),
 		client.WithPrivateKey(cfg.UserPrivateKey),
 		client.WithCometBftUrl(cfg.CometBftUrl),
 	)
@@ -393,7 +396,7 @@ func newGRPCClient(ctx context.Context, t *testing.T, cfg *TestEnvCfg, logger lo
 	return kwildDriver
 }
 
-func GetDriver(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger, path string) (KwilAcceptanceDriver, deployer.Deployer, TestEnvCfg) {
+func GetDriver(ctx context.Context, t *testing.T, driverType string, cfg TestEnvCfg, logger log.Logger, path string) (KwilAcceptanceDriver, TestEnvCfg) {
 	switch driverType {
 	//case "cli":
 	//	return setupCliDriver(ctx, t, cfg, logger)
@@ -418,6 +421,7 @@ func NewClient(ctx context.Context, t *testing.T, driverType string, cfg TestEnv
 	}
 }
 
+/*
 func GetDeployer(deployerType string, rpcURL string, privateKeyStr string, domination *big.Int) deployer.Deployer {
 	switch deployerType {
 	case "eth":
@@ -426,3 +430,4 @@ func GetDeployer(deployerType string, rpcURL string, privateKeyStr string, domin
 		panic("unknown deployer type")
 	}
 }
+*/

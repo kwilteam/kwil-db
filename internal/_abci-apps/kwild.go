@@ -7,18 +7,20 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
-	"github.com/kwilteam/kwil-db/internal/entity"
+	"github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
+	"github.com/kwilteam/kwil-db/pkg/tx"
 
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 
 	abcitypes "github.com/cometbft/cometbft/abci/types"
 	cryptoenc "github.com/cometbft/cometbft/crypto/encoding"
-	txsvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
-	"github.com/kwilteam/kwil-db/internal/node"
-	"github.com/kwilteam/kwil-db/internal/usecases/datasets"
+	node "github.com/kwilteam/kwil-db/internal/_node"
+
+	// "github.com/kwilteam/kwil-db/internal/usecases/datasets"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	utilpkg "github.com/kwilteam/kwil-db/pkg/utils"
 	gowal "github.com/tidwall/wal"
 	"go.uber.org/zap"
@@ -32,10 +34,32 @@ type KwildState struct {
 	// "initChain", "precommit", "postcommit", "delivertx"
 }
 
+// KwilExecutor is the interface to a Kwil dataset execution engine. This is a
+// subset of the full DatasetUseCase method set.
+//
+// TODO: KwilDbApplication methods themselves don't need this *directly*; Kwil
+// database business can be encapsulated in a separate type.
+type KwilExecutor interface {
+	txsvc.EngineReader
+
+	// methods for state, apphash, consensus...
+	StartBlockSession() error
+	EndBlockSession() ([]byte, error)
+	InitializeAppHash(appHash []byte)
+
+	// "wrong place" methods for a future encapsulated tx executor type
+	Spend(ctx context.Context, address string, amount string, nonce int64) error
+
+	Deploy(ctx context.Context, schema *serialize.Schema, tx *tx.Transaction) (*tx.ExecutionResponse, error)
+	Drop(ctx context.Context, dbid string, tx *tx.Transaction) (*tx.ExecutionResponse, error)
+	Execute(ctx context.Context, dbid string, action string, params []map[string]any, tx *tx.Transaction) (*tx.ExecutionResponse, error)
+}
+
 type KwilDbApplication struct {
-	state    KwildState
-	server   *server.Server
-	executor datasets.DatasetUseCaseInterface
+	state KwildState
+
+	log      log.Logger
+	executor KwilExecutor
 
 	ValUpdates  []abcitypes.ValidatorUpdate
 	valInfo     *node.ValidatorsInfo
@@ -49,7 +73,7 @@ type KwilDbApplication struct {
 
 var _ abcitypes.Application = (*KwilDbApplication)(nil)
 
-func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseInterface) (*KwilDbApplication, error) {
+func NewKwilDbApplication(log log.Logger, executor KwilExecutor) (*KwilDbApplication, error) {
 	CometHomeDir := os.Getenv("COMET_BFT_HOME")
 	blockWalPath := filepath.Join(CometHomeDir, "data", "Block.wal")
 	wal, err := gowal.Open(blockWalPath, nil)
@@ -67,7 +91,7 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 	}
 
 	kwild := &KwilDbApplication{
-		server:       srv,
+		log:          log,
 		executor:     executor,
 		valInfo:      node.NewValidatorsInfo(),
 		joinReqPool:  node.NewJoinRequestPool(),
@@ -87,12 +111,8 @@ func NewKwilDbApplication(srv *server.Server, executor datasets.DatasetUseCaseIn
 		kwild.recoveryMode = true
 		kwild.state = kwild.RetrieveState()
 	}
-	kwild.executor.InitalizeAppHash(kwild.state.PrevAppHash)
+	kwild.executor.InitializeAppHash(kwild.state.PrevAppHash)
 	return kwild, nil
-}
-
-func (app *KwilDbApplication) Start(ctx context.Context) error {
-	return app.server.Start(ctx)
 }
 
 func (app *KwilDbApplication) Info(info abcitypes.RequestInfo) abcitypes.ResponseInfo {
@@ -110,17 +130,17 @@ func (app *KwilDbApplication) CheckTx(req_tx abcitypes.RequestCheckTx) abcitypes
 	var tx kTx.Transaction
 	err := json.Unmarshal(req_tx.Tx, &tx)
 	if err != nil {
-		app.server.Log.Error("failed to unmarshal CheckTx transaction with ", zap.String("error", err.Error()))
+		app.log.Error("failed to unmarshal CheckTx transaction with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseCheckTx{Code: 1, Log: err.Error()}
 	}
 	err = tx.Verify()
 	if err != nil {
-		app.server.Log.Error("failed to verify CheckTx transaction with ", zap.String("error", err.Error()))
+		app.log.Error("failed to verify CheckTx transaction with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseCheckTx{Code: 1, Log: err.Error()}
 	}
 	//TODO: Move the accounts and nonce verification here:
 
-	app.server.Log.Info("transaction verified", zap.String("tx hash", string(tx.Hash)))
+	app.log.Info("transaction verified", zap.String("tx hash", string(tx.Hash)))
 	return abcitypes.ResponseCheckTx{Code: 0}
 }
 
@@ -133,7 +153,7 @@ func (app *KwilDbApplication) DeliverTx(req_tx abcitypes.RequestDeliverTx) abcit
 	var tx kTx.Transaction
 	err := json.Unmarshal(req_tx.Tx, &tx)
 	if err != nil {
-		app.server.Log.Error("failed to unmarshal DeliverTx transaction with ", zap.String("error", err.Error()))
+		app.log.Error("failed to unmarshal DeliverTx transaction with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error()}
 	}
 
@@ -154,7 +174,7 @@ func (app *KwilDbApplication) DeliverTx(req_tx abcitypes.RequestDeliverTx) abcit
 		err = fmt.Errorf("unknown payload type: %s", tx.PayloadType)
 	}
 
-	app.server.Log.Error("failed to deliver transaction with ", zap.String("error", err.Error()))
+	app.log.Error("failed to deliver transaction with ", zap.String("error", err.Error()))
 	return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error()}
 }
 
@@ -173,30 +193,27 @@ func addFailedEvent(eventType string, err error, owner string, sender string) ab
 func (app *KwilDbApplication) deploy_database(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
 	var events []abcitypes.Event
 	ctx := context.Background()
-	schema, err := txsvc.UnmarshalSchema(tx.Payload)
+	schema, err := serialize.UnmarshalSchema(tx.Payload)
 	if err != nil {
-		app.server.Log.Error("ABCI: failed to unmarshal database schema ", zap.String("error", err.Error()))
+		app.log.Error("ABCI: failed to unmarshal database schema ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("deploy", err, "", tx.Sender))}
 	}
 
 	if schema.Owner != tx.Sender {
 		err = fmt.Errorf("sender is not the owner of the dataset")
-		app.server.Log.Error("ABCI: failed to deploy database with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI: failed to deploy database with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: "Sender is not the owner of the dataset", Events: append(events, addFailedEvent("deploy", err, schema.Owner, tx.Sender))}
 	}
 
-	resp, err := app.executor.Deploy(ctx, &entity.DeployDatabase{
-		Schema: schema,
-		Tx:     tx,
-	})
+	resp, err := app.executor.Deploy(ctx, schema, tx)
 	if err != nil {
-		app.server.Log.Error("ABCI: failed to deploy database with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI: failed to deploy database with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("deploy", err, schema.Owner, tx.Sender))}
 	}
 
 	data, err := json.Marshal(resp)
 	if err != nil {
-		app.server.Log.Error("ABCI: failed to marshal deploy database response with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI: failed to marshal deploy database response with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("deploy", err, schema.Owner, tx.Sender))}
 	}
 
@@ -210,44 +227,41 @@ func (app *KwilDbApplication) deploy_database(tx *kTx.Transaction) abcitypes.Res
 				{Key: "TxSender", Value: tx.Sender, Index: true},
 				{Key: "DbName", Value: schema.Name, Index: true},
 				{Key: "DbId", Value: dbid, Index: true},
-				{Key: "GasUsed", Value: resp.Fee, Index: true},
+				{Key: "GasUsed", Value: resp.Fee.String(), Index: true},
 			},
 		},
 	}
 
-	app.server.Log.Info("ABCI: deployed database", zap.String("db id", dbid), zap.String("db name", schema.Name), zap.String("db owner", schema.Owner), zap.String("tx sender", tx.Sender))
+	app.log.Info("ABCI: deployed database", zap.String("db id", dbid), zap.String("db name", schema.Name), zap.String("db owner", schema.Owner), zap.String("tx sender", tx.Sender))
 	return abcitypes.ResponseDeliverTx{Code: 0, Data: data, Log: "Deployed", Events: events}
 }
 
 func (app *KwilDbApplication) drop_database(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
 	var events []abcitypes.Event
 	ctx := context.Background()
-	dsIdent, err := txsvc.UnmarshalDatasetIdentifier(tx.Payload)
+	dsIdent, err := serialize.UnmarshalDatasetIdentifier(tx.Payload)
 	if err != nil {
-		app.server.Log.Error("ABCI Drop database: failed to unmarshal dataset identifier ", zap.String("error", err.Error()))
+		app.log.Error("ABCI Drop database: failed to unmarshal dataset identifier ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("drop", err, "", tx.Sender))}
 	}
-	app.server.Log.Info("ABCI Drop database: dropping database", zap.String("db name", dsIdent.Name), zap.String("db owner", dsIdent.Owner), zap.String("tx sender", tx.Sender))
+	app.log.Info("ABCI Drop database: dropping database", zap.String("db name", dsIdent.Name), zap.String("db owner", dsIdent.Owner), zap.String("tx sender", tx.Sender))
 
 	if dsIdent.Owner != tx.Sender {
 		err = fmt.Errorf("sender is not the owner of the dataset")
-		app.server.Log.Error("ABCI Drop database: failed to drop database with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI Drop database: failed to drop database with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: "Sender is not the owner of the dataset", Events: append(events, addFailedEvent("drop", err, dsIdent.Owner, tx.Sender))}
 	}
 
 	dbid := utils.GenerateDBID(dsIdent.Name, dsIdent.Owner)
-	resp, err := app.executor.Drop(ctx, &entity.DropDatabase{
-		DBID: dbid,
-		Tx:   tx,
-	})
+	resp, err := app.executor.Drop(ctx, dbid, tx)
 	if err != nil {
-		app.server.Log.Error("ABCI Drop database: failed to drop database with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI Drop database: failed to drop database with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("drop", err, dsIdent.Owner, tx.Sender))}
 	}
 
 	data, err := json.Marshal(resp)
 	if err != nil {
-		app.server.Log.Error("ABCI Drop database: failed to marshal drop database response with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI Drop database: failed to marshal drop database response with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("drop", err, dsIdent.Owner, tx.Sender))}
 	}
 
@@ -260,35 +274,32 @@ func (app *KwilDbApplication) drop_database(tx *kTx.Transaction) abcitypes.Respo
 				{Key: "DbName", Value: dsIdent.Name, Index: true},
 				{Key: "TxSender", Value: tx.Sender, Index: true},
 				{Key: "DbId", Value: dbid, Index: true},
-				{Key: "GasUsed", Value: resp.Fee, Index: true},
+				{Key: "GasUsed", Value: resp.Fee.String(), Index: true},
 			},
 		},
 	}
-	app.server.Log.Info("ABCI: dropped database", zap.String("db id", dbid), zap.String("db name", dsIdent.Name), zap.String("db owner", dsIdent.Owner), zap.String("tx sender", tx.Sender))
+	app.log.Info("ABCI: dropped database", zap.String("db id", dbid), zap.String("db name", dsIdent.Name), zap.String("db owner", dsIdent.Owner), zap.String("tx sender", tx.Sender))
 	return abcitypes.ResponseDeliverTx{Code: 0, Data: data, Events: events}
 }
 
 func (app *KwilDbApplication) execute_action(tx *kTx.Transaction) abcitypes.ResponseDeliverTx {
 	var events []abcitypes.Event
 	ctx := context.Background()
-	action, err := txsvc.UnmarshalActionExecution(tx.Payload)
+	action, err := kTx.UnmarshalExecuteAction(tx.Payload)
 	if err != nil {
-		app.server.Log.Error("ABCI execute action: failed to unmarshal action execution ", zap.String("error", err.Error()))
+		app.log.Error("ABCI execute action: failed to unmarshal action execution ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("execute", err, "", tx.Sender))}
 	}
 
-	resp, err := app.executor.Execute(ctx, &entity.ExecuteAction{
-		Tx:            tx,
-		ExecutionBody: action,
-	})
+	resp, err := app.executor.Execute(ctx, action.DBID, action.Action, action.Params, tx)
 	if err != nil {
-		app.server.Log.Error("ABCI execute action: failed to execute ", zap.String("action", action.Action), zap.String("error", err.Error()))
+		app.log.Error("ABCI execute action: failed to execute ", zap.String("action", action.Action), zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("execute", err, "", tx.Sender))}
 	}
 
 	data, err := json.Marshal(resp)
 	if err != nil {
-		app.server.Log.Error("ABCI execute action: failed to marshal execute action response with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI execute action: failed to marshal execute action response with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("execute", err, "", tx.Sender))}
 	}
 
@@ -298,7 +309,7 @@ func (app *KwilDbApplication) execute_action(tx *kTx.Transaction) abcitypes.Resp
 			params += fmt.Sprintf("%v:%v,", k, v)
 		}
 	}
-	app.server.Log.Info("ABCI: executed action", zap.String("db id", action.DBID), zap.String("action", action.Action), zap.String("params", params), zap.String("tx sender", tx.Sender))
+	app.log.Info("ABCI: executed action", zap.String("db id", action.DBID), zap.String("action", action.Action), zap.String("params", params), zap.String("tx sender", tx.Sender))
 	events = []abcitypes.Event{
 		{
 			Type: "execute",
@@ -308,8 +319,8 @@ func (app *KwilDbApplication) execute_action(tx *kTx.Transaction) abcitypes.Resp
 				{Key: "DbId", Value: action.DBID, Index: true},
 				{Key: "Action", Value: action.Action, Index: true},
 				{Key: "Params", Value: params, Index: true},
-				{Key: "Fee", Value: resp.Fee, Index: true},
-				{Key: "TxHash", Value: string(resp.TxHash), Index: true},
+				{Key: "Fee", Value: resp.Fee.String(), Index: true},
+				// {Key: "TxHash", Value: string(resp.TxHash), Index: true},
 			},
 		},
 	}
@@ -361,12 +372,12 @@ func (app *KwilDbApplication) validator_approve(tx *kTx.Transaction) abcitypes.R
 	return abcitypes.ResponseDeliverTx{Code: 0}
 }
 
-func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool) (*entity.Validator, error) {
+func (app *KwilDbApplication) validator_update(tx *kTx.Transaction, is_join bool) (*serialize.Validator, error) {
 	ctx := context.Background()
 
 	validator, err := node.UnmarshalValidator(tx.Payload)
 	if err != nil {
-		app.server.Log.Error("ABCI validator update: failed to unmarshal validator request ", zap.String("error", err.Error()))
+		app.log.Error("ABCI validator update: failed to unmarshal validator request ", zap.String("error", err.Error()))
 		return nil, err
 	}
 
@@ -429,7 +440,7 @@ func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.Resp
 
 	validator, err := app.validator_update(tx, true)
 	if err != nil {
-		app.server.Log.Error("ABCI validator leave: failed to update validator ", zap.String("error", err.Error()))
+		app.log.Error("ABCI validator leave: failed to update validator ", zap.String("error", err.Error()))
 		if validator != nil {
 			return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("leave_validator", err, string(validator.PubKey), fmt.Sprintf("%d", validator.Power)))}
 		} else {
@@ -444,7 +455,7 @@ func (app *KwilDbApplication) validator_join(tx *kTx.Transaction) abcitypes.Resp
 			Type: "validator_join",
 			Attributes: []abcitypes.EventAttribute{
 				{Key: "Result", Value: "Success", Index: true},
-				{Key: "ValidatorPubKey", Value: string(validator.PubKey), Index: true},
+				{Key: "ValidatorPubKey", Value: validator.PubKey, Index: true},
 				{Key: "ValidatorPower", Value: fmt.Sprintf("%d", validator.Power), Index: true},
 			},
 		},
@@ -456,7 +467,7 @@ func (app *KwilDbApplication) validator_leave(tx *kTx.Transaction) abcitypes.Res
 	var events []abcitypes.Event
 	validator, err := app.validator_update(tx, false)
 	if err != nil {
-		app.server.Log.Error("ABCI validator leave: failed to update validator ", zap.String("error", err.Error()))
+		app.log.Error("ABCI validator leave: failed to update validator ", zap.String("error", err.Error()))
 		if validator != nil {
 			return abcitypes.ResponseDeliverTx{Code: 1, Log: err.Error(), Events: append(events, addFailedEvent("leave_validator", err, string(validator.PubKey), fmt.Sprintf("%d", validator.Power)))}
 		} else {
@@ -471,7 +482,7 @@ func (app *KwilDbApplication) validator_leave(tx *kTx.Transaction) abcitypes.Res
 			Type: "remove_validator",
 			Attributes: []abcitypes.EventAttribute{
 				{Key: "Result", Value: "Success", Index: true},
-				{Key: "ValidatorPubKey", Value: string(validator.PubKey), Index: true},
+				{Key: "ValidatorPubKey", Value: validator.PubKey, Index: true},
 				{Key: "ValidatorPower", Value: fmt.Sprintf("%d", validator.Power), Index: true},
 			},
 		},
@@ -531,13 +542,13 @@ func (app *KwilDbApplication) BeginBlock(req abcitypes.RequestBeginBlock) abcity
 					return abcitypes.ResponseBeginBlock{}
 				}
 				app.ValUpdates = append(app.ValUpdates, abcitypes.ValidatorUpdate{PubKey: key, Power: ev.Validator.Power - 1})
-				app.server.Log.Info("Decreased val power by 1 because of the equivocation", zap.String("val", addr))
+				app.log.Info("Decreased val power by 1 because of the equivocation", zap.String("val", addr))
 				if (ev.Validator.Power - 1) == 0 {
-					app.server.Log.Info("Val power is 0, removing it from the validator set", zap.String("val", addr))
+					app.log.Info("Val power is 0, removing it from the validator set", zap.String("val", addr))
 					delete(app.state.CurValidatorSet, addr)
 				}
 			} else {
-				app.server.Log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
+				app.log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
 			}
 		}
 	}
@@ -561,7 +572,7 @@ func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
 
 	appHash, err := app.executor.EndBlockSession()
 	if err != nil {
-		app.server.Log.Error("ABCI: failed to end block session with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI: failed to end block session with ", zap.String("error", err.Error()))
 		return abcitypes.ResponseCommit{Data: app.state.PrevAppHash}
 	}
 
@@ -577,7 +588,7 @@ func (app *KwilDbApplication) Commit() abcitypes.ResponseCommit {
 func (app *KwilDbApplication) UpdateState() {
 	stateBts, err := json.Marshal(app.state)
 	if err != nil {
-		app.server.Log.Error("ABCI: failed to marshal state with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI: failed to marshal state with ", zap.String("error", err.Error()))
 	}
 	app.StateWal.OverwriteSync(stateBts)
 }
@@ -592,7 +603,7 @@ func (app *KwilDbApplication) RetrieveState() KwildState {
 	var stateObj KwildState
 	err := json.Unmarshal(state, &stateObj)
 	if err != nil {
-		app.server.Log.Error("ABCI: failed to unmarshal state with ", zap.String("error", err.Error()))
+		app.log.Error("ABCI: failed to unmarshal state with ", zap.String("error", err.Error()))
 		return KwildState{}
 	}
 	return stateObj

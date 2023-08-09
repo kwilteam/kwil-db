@@ -108,5 +108,5 @@ type sqlResult interface {
 
 	GetRecord() map[string]any
 
-	Reset() error
+	// Reset() error
 }

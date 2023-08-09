@@ -1,5 +1,6 @@
 package eth_deployer
 
+/*
 import (
 	"context"
 	"crypto/ecdsa"
@@ -258,3 +259,4 @@ func (d *EthDeployer) getAccountAuth(ctx context.Context) (*bind.TransactOpts, e
 
 	return d.auth, err
 }
+*/

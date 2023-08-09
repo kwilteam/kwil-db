@@ -1,15 +1,6 @@
 package main
 
-import (
-	"context"
-	"fmt"
-	"log"
-	"math/big"
-	"time"
-
-	"github.com/kwilteam/kwil-db/test/acceptance"
-	"github.com/kwilteam/kwil-db/test/acceptance/utils/deployer"
-)
+/* xxx
 
 var (
 	chainRpc    = "http://127.0.0.1:8545"
@@ -59,3 +50,7 @@ func main() {
 	initContract(chainDeployer)
 	keepMiningBlocks(chainDeployer)
 }
+
+*/
+
+func main() {}

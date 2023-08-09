@@ -22,6 +22,8 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 	}
 
 	options := []client.ClientOpt{}
+	
+	// We were previously mixing up the eth rpc url with the cometBFT RPC url.  Do we need to set it here?
 
 	if flags&WithoutPrivateKey == 0 {
 		// this means it needs to use the private key

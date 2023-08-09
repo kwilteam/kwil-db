@@ -16,7 +16,7 @@ type KwildConfig struct {
 func NewClient(ctx context.Context, cfg *KwildConfig) (*client.Client, error) {
 	options := []client.ClientOpt{}
 	if cfg.ClientChainRPCURL != "" {
-		options = append(options, client.WithChainRpcUrl(cfg.ClientChainRPCURL))
+		options = append(options, client.WithCometBftUrl(cfg.ClientChainRPCURL))
 	}
 	if cfg.PrivateKey != "" {
 		key, _ := crypto.ECDSAFromHex(cfg.PrivateKey)

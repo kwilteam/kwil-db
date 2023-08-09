@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,17 +25,14 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	abci "github.com/cometbft/cometbft/abci/types"
-	ccfg "github.com/cometbft/cometbft/config"
-	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
 
-	cmtlog "github.com/cometbft/cometbft/libs/log"
 	nm "github.com/cometbft/cometbft/node"
 
 	// shorthand for chain client service
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
-	kwildbapp "github.com/kwilteam/kwil-db/internal/abci-apps"
+	kwildbapp "github.com/kwilteam/kwil-db/internal/_abci-apps"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -43,6 +42,12 @@ import (
 	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
 	grpcServer "github.com/kwilteam/kwil-db/pkg/grpc/server"
+
+	cmtcfg "github.com/cometbft/cometbft/config"
+	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
+	cmtlog "github.com/cometbft/cometbft/libs/log"
+	cmtclient "github.com/cometbft/cometbft/rpc/client"
+	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 )
 
 func NewStartCmd() *cobra.Command {
@@ -60,54 +65,73 @@ var startCmd = &cobra.Command{
 			return err
 		}
 
+		logger := log.New(cfg.Log)
+		logger = *logger.Named("kwild")
+
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		srv, txSvc, err := initialize_kwil_server(ctx, cfg, logger)
+		// *** JUST TO BUILD
+		var data kwildbapp.KwilExecutor
+		var acct txsvc.AccountReader
+		// ***
+
+		app, err := kwildbapp.NewKwilDbApplication(logger, data /*, validatorStore*/)
 		if err != nil {
-			return nil
+			return err
 		}
 
-		app, err := kwildbapp.NewKwilDbApplication(srv, txSvc.GetExecutor())
+		// Make the Tendermint node
+		cometNode, err := newCometNode(app, cfg)
 		if err != nil {
-			return nil
+			return err
 		}
 
-		go func(ctx context.Context) {
-			srv.Start(ctx)
-		}(ctx)
+		fmt.Printf("Initializing kwil server")
+		nodeClient := cmtlocal.New(cometNode) // for txsvc to broadcast
+		srv, err := initializeKwilServer(ctx, cfg, data, acct, nodeClient, logger)
+		if err != nil {
+			return err
+		}
+
+		var wg sync.WaitGroup
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-c
+			fmt.Println("Shutting down...")
+			cancel()
+		}()
+
+		fmt.Printf("Starting kwil server")
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := srv.Start(ctx); err != nil && ctx.Err() == nil {
+				fmt.Printf("Server died unexpectedly: %v\n", err)
+				cancel()
+			}
+		}()
 
 		fmt.Printf("Starting Tendermint node\n")
-		// Start the Tendermint node
-		cometNode, err := newCometNode(app, cfg, txSvc)
-		if err != nil {
-			return nil
-		}
-
-		txSvc.BcNode = cometNode
-
-		go func(ctx context.Context) {
-			cometNode.Start()
-			defer func() {
-				cometNode.Stop()
-				cometNode.Wait()
-			}()
-			fmt.Printf("Waiting for any signals\n")
-			c := make(chan os.Signal, 1)
-			signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-			<-c
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cometNode.Start() // it's RPC and env will be working here
+			<-ctx.Done()
 			fmt.Printf("Stopping CometBFT node\n")
-		}(ctx)
+			cometNode.Stop()
+			cometNode.Wait()
+		}()
 
-		fmt.Printf("Waiting for any signals - End of main TADA\n")
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-		fmt.Println("Waiting for any signals - End of main")
+		wg.Wait()
 
-		<-c
-		fmt.Printf("Stopping CometBFT node\n")
 		return nil
-	}}
+	},
+}
 
 func init() {
 	/*
@@ -119,21 +143,39 @@ func init() {
 	config.BindFlagsAndEnv(startCmd.PersistentFlags())
 }
 
-func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger log.Logger) (*server.Server, *txsvc.Service, error) {
-	// TODO: Move to CometBFT later? or are these different accounts?
+/*
+func makeDataStores(ctx context.Context, cfg *config.KwildConfig, logger log.Logger) (*datasets.DatasetUseCase, error) {
 	fmt.Printf("Building account repository\n")
-	accountStore, err := buildAccountRepository(ctx, logger, cfg)
+	accountStore, err := buildAccountRepository(ctx, logger, cfg) // any use outside of txSvc?
 	if err != nil {
-		fmt.Printf("Failed to build account repository: %v", err)
-		return nil, nil, fmt.Errorf("failed to build account repository: %w", err)
+		return nil, fmt.Errorf("failed to build account repository: %w", err)
 	}
 
-	fmt.Printf("Building tx service\n")
-	txSvc, err := buildTxSvc(ctx, cfg, accountStore, logger)
+	// buildValidatorStore
+
+	datastores, err := buildDatastores(ctx, logger, cfg, accountStore)
 	if err != nil {
-		fmt.Printf("Failed to build tx service: %v", err)
-		return nil, nil, fmt.Errorf("failed to build tx service: %w", err)
+		return nil, fmt.Errorf("failed to build data stores: %w", err)
 	}
+	return datastores, nil
+	}
+*/
+
+// initializeKwilServer creates the tx and health gRPC services, returning a
+// Server that must be started.
+func initializeKwilServer(ctx context.Context, cfg *config.KwildConfig, engine txsvc.EngineReader,
+	acct txsvc.AccountReader, nodeClient cmtclient.Client, logger log.Logger) (*server.Server, error) {
+	// TODO: Move to CometBFT later? or are these different accounts?
+	fmt.Printf("Building tx service\n")
+	txSvc := buildTxSvc(engine, acct, nodeClient, logger)
+
+	// TODO: Move to CometBFT later? or are these different accounts?
+	// fmt.Printf("Building account repository\n")
+	// accountStore, err := buildAccountRepository(ctx, logger, cfg)
+	// if err != nil {
+	// 	fmt.Printf("Failed to build account repository: %v", err)
+	// 	return nil, fmt.Errorf("failed to build account repository: %w", err)
+	// }
 
 	fmt.Printf("Building health service\n")
 	healthSvc := buildHealthSvc(logger)
@@ -143,12 +185,12 @@ func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger
 	gw := server.NewGWServer(runtime.NewServeMux(), cfg, logger)
 	if err := gw.SetupGrpcSvc(ctx); err != nil {
 		fmt.Printf("Failed to setup grpc service: %v", err)
-		return nil, nil, err
+		return nil, err
 	}
 	fmt.Printf("Setting up http service\n")
 	if err := gw.SetupHTTPSvc(ctx); err != nil {
 		fmt.Printf("Failed to setup http service: %v", err)
-		return nil, nil, err
+		return nil, err
 	}
 
 	fmt.Printf("Adding middlewares\n")
@@ -159,7 +201,11 @@ func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger
 	)
 
 	//grpc server
-	grpcServer := grpcServer.New(logger)
+	ln, err := net.Listen("tcp", cfg.GrpcListenAddress)
+	if err != nil {
+		return nil, err
+	}
+	grpcServer := grpcServer.New(logger, ln)
 	txpb.RegisterTxServiceServer(grpcServer, txSvc)
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthSvc)
 	fmt.Printf("Registering grpc services\n")
@@ -170,11 +216,11 @@ func initialize_kwil_server(ctx context.Context, cfg *config.KwildConfig, logger
 		Http: gw,
 		Grpc: grpcServer,
 	}
-	return server, txSvc, nil
+	return server, nil
 }
 
-func newCometNode(app abci.Application, cfg *config.KwildConfig, txSvc *txsvc.Service) (*nm.Node, error) {
-	config := ccfg.DefaultConfig()
+func newCometNode(app abci.Application, cfg *config.KwildConfig) (*nm.Node, error) {
+	config := cmtcfg.DefaultConfig()
 	CometHomeDir := os.Getenv("COMET_BFT_HOME")
 	fmt.Printf("Home Directory: %v", CometHomeDir)
 	config.SetRoot(CometHomeDir)
@@ -203,7 +249,7 @@ func newCometNode(app abci.Application, cfg *config.KwildConfig, txSvc *txsvc.Se
 	}
 
 	logger := cmtlog.NewTMLogger(cmtlog.NewSyncWriter(os.Stdout))
-	logger, err = cmtflags.ParseLogLevel(config.LogLevel, logger, ccfg.DefaultLogLevel)
+	logger, err = cmtflags.ParseLogLevel(config.LogLevel, logger, cfg.Log.Level)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse log level: %v", err)
 	}
@@ -249,15 +295,13 @@ type AccountStore interface {
 	Spend(ctx context.Context, spend *balances.Spend) error
 }
 
-func buildTxSvc(ctx context.Context, cfg *config.KwildConfig, as AccountStore, logger log.Logger) (*txsvc.Service, error) {
+func buildTxSvc(engine txsvc.EngineReader, acct txsvc.AccountReader,
+	nodeClient cmtclient.Client, logger log.Logger) *txsvc.Service {
 	opts := []txsvc.TxSvcOpt{
 		txsvc.WithLogger(*logger.Named("txService")),
-		txsvc.WithAccountStore(as),
-		txsvc.WithSqliteFilePath(cfg.SqliteFilePath),
-		txsvc.WithExtensions(cfg.ExtensionEndpoints...),
 	}
 
-	return txsvc.NewService(ctx, cfg, opts...)
+	return txsvc.NewService(engine, acct, nodeClient, opts...)
 }
 
 func buildHealthSvc(logger log.Logger) *healthsvc.Server {
@@ -272,10 +316,6 @@ func buildHealthSvc(logger log.Logger) *healthsvc.Server {
 	})
 	ck := registrar.BuildChecker(simple_checker.New(logger))
 	return healthsvc.NewServer(ck)
-}
-
-type starter interface {
-	Start(ctx context.Context) error
 }
 
 func NewStopCmd() *cobra.Command {

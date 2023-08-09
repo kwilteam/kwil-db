@@ -17,12 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type starter interface {
-	Start(ctx context.Context) error
-}
-
 type Server struct {
-	Ctx  context.Context
 	Cfg  *config.KwildConfig
 	Log  log.Logger
 	Http *GWServer
@@ -71,7 +66,7 @@ func (s *Server) Start(ctx context.Context) error {
 			s.Grpc.Stop()
 		}()
 
-		return s.Grpc.Serve(ctx, s.Cfg.GrpcListenAddress)
+		return s.Grpc.Start()
 	})
 	s.Log.Info("grpc server started", zap.String("address", s.Cfg.GrpcListenAddress))
 

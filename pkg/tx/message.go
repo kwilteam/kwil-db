@@ -106,6 +106,15 @@ func (e *ExecuteActionPayload) Bytes() ([]byte, error) {
 	return json.Marshal(e)
 }
 
+func UnmarshalExecuteAction(b []byte) (*ExecuteActionPayload, error) {
+	var exec ExecuteActionPayload
+	err := json.Unmarshal(b, &exec)
+	if err != nil {
+		return nil, err
+	}
+	return &exec, nil
+}
+
 type DatasetIdentifierPayload struct {
 	Owner string `json:"owner"`
 	Name  string `json:"name"`
