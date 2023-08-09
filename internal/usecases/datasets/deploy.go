@@ -11,13 +11,13 @@ import (
 	"go.uber.org/zap"
 )
 
-func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDatabase) (*tx.Receipt, error) {
+func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDatabase) (rec *tx.Receipt, err error) {
 	price, err := u.PriceDeploy(deployment)
 	if err != nil {
 		return nil, err
 	}
 
-	err = u.compareAndSpend(deployment.Tx.Sender, deployment.Tx.Fee, deployment.Tx.Nonce, price)
+	err = u.spend(ctx, deployment.Tx.Sender, price, deployment.Tx.Nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,6 @@ func (u *DatasetUseCase) Deploy(ctx context.Context, deployment *entity.DeployDa
 	if err != nil {
 		return nil, err
 	}
-
 	return &tx.Receipt{
 		TxHash: deployment.Tx.Hash,
 		Fee:    price.String(),
@@ -55,6 +54,11 @@ func (u *DatasetUseCase) deployDataset(ctx context.Context, deployment *entity.D
 		return err
 	}
 
+	err = u.createDbSession(dbid)
+	if err != nil {
+		return err
+	}
+
 	u.log.Info("database deployed", zap.String("dbid", dbid), zap.String("deployer address", deployment.Tx.Sender))
 
 	return nil
@@ -70,7 +74,7 @@ func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (t
 		return nil, err
 	}
 
-	err = u.compareAndSpend(drop.Tx.Sender, drop.Tx.Fee, drop.Tx.Nonce, price)
+	err = u.spend(ctx, drop.Tx.Sender, price, drop.Tx.Nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +85,7 @@ func (u *DatasetUseCase) Drop(ctx context.Context, drop *entity.DropDatabase) (t
 	}
 
 	u.log.Info("database dropped", zap.String("dbid", drop.DBID), zap.String("dropper address", drop.Tx.Sender))
+	u.removeDbSession(drop.DBID)
 
 	return &tx.Receipt{
 		TxHash: drop.Tx.Hash,

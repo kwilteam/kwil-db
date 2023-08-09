@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 
+	cmtCrypto "github.com/cometbft/cometbft/crypto"
+	cmtjson "github.com/cometbft/cometbft/libs/json"
+	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
 )
 
+// Transaction signed by the client
 func (c *Client) newTx(ctx context.Context, payloadType kTx.PayloadType, data any) (*kTx.Transaction, error) {
 	if c.PrivateKey == nil {
 		return nil, fmt.Errorf("private key is nil")
@@ -28,7 +33,11 @@ func (c *Client) newTx(ctx context.Context, payloadType kTx.PayloadType, data an
 	// get nonce from address
 	acc, err := c.client.GetAccount(ctx, address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get account config: %w", err)
+		acc = &balances.Account{
+			Address: address,
+			Nonce:   0,
+			Balance: big.NewInt(0),
+		}
 	}
 
 	// build transaction
@@ -48,6 +57,69 @@ func (c *Client) newTx(ctx context.Context, payloadType kTx.PayloadType, data an
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
+
+	return tx, nil
+}
+
+// Tx Signed by the Validator Node
+func (c *Client) NewNodeTx(ctx context.Context, payloadType kTx.PayloadType, data any, privKey string) (*kTx.Transaction, error) {
+	var nodeKey cmtCrypto.PrivKey
+	key := fmt.Sprintf(`{"type":"tendermint/PrivKeyEd25519","value":"%s"}`, privKey)
+	err := cmtjson.Unmarshal([]byte(key), &nodeKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// serialize data
+	bts, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize data: %w", err)
+	}
+
+	address := nodeKey.PubKey().Address().String()
+	acc, err := c.client.GetAccount(ctx, address)
+	if err != nil {
+		acc = &balances.Account{
+			Address: address,
+			Nonce:   0,
+			Balance: big.NewInt(0),
+		}
+	}
+
+	// build transaction
+	tx := kTx.NewTx(payloadType, bts, acc.Nonce+1)
+	// sign transaction
+	tx.Fee = "0"
+
+	hash := tx.GenerateHash()
+	sign, err := nodeKey.Sign(hash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign tx: %w", err)
+	}
+
+	var keytype crypto.SignatureType
+	if nodeKey.Type() == "ed25519" {
+		keytype = crypto.PK_ED25519
+	}
+
+	tx.Signature = &crypto.Signature{
+		Signature: sign,
+		Type:      keytype,
+	}
+
+	tx.Hash = hash
+
+	keybts, err := json.Marshal(nodeKey.PubKey())
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal pubkey: %w", err)
+	}
+
+	tx.Sender = string(keybts)
+	fmt.Println("tx hash", tx.Hash)
+	fmt.Println("tx sender", tx.Sender)
+	fmt.Println("tx signature", tx.Signature)
+	fmt.Println("tx payload", tx.Payload)
+	fmt.Println("tx payload type", tx.PayloadType)
 
 	return tx, nil
 }

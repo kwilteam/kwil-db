@@ -1,9 +1,13 @@
 package datasets
 
-import "github.com/kwilteam/kwil-db/internal/entity"
+import (
+	"context"
 
-func (u *DatasetUseCase) GetAccount(address string) (*entity.Account, error) {
-	acc, err := u.accountStore.GetAccount(address)
+	"github.com/kwilteam/kwil-db/internal/entity"
+)
+
+func (u *DatasetUseCase) GetAccount(ctx context.Context, address string) (*entity.Account, error) {
+	acc, err := u.accountStore.GetAccount(ctx, address)
 	if err != nil {
 		return nil, err
 	}

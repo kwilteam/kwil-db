@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Service) deploy(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	ds, err := unmarshalSchema(tx.Payload)
+	ds, err := UnmarshalSchema(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset: %w", err)
 	}
@@ -26,7 +26,7 @@ func (s *Service) deploy(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt
 }
 
 func (s *Service) drop(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	dsIdent, err := unmarshalDatasetIdentifier(tx.Payload)
+	dsIdent, err := UnmarshalDatasetIdentifier(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize dataset identifier: %w", err)
 	}
@@ -42,7 +42,7 @@ func (s *Service) drop(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, 
 }
 
 func (s *Service) executeAction(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	executionBody, err := unmarshalActionExecution(tx.Payload)
+	executionBody, err := UnmarshalActionExecution(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
 	}

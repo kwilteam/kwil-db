@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/internal/entity"
@@ -9,18 +10,18 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
-func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteAction) (*tx.Receipt, error) {
+func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteAction) (rec *tx.Receipt, err error) {
 	price, err := u.PriceExecute(action)
 	if err != nil {
 		return nil, err
 	}
 
-	ds, err := u.engine.GetDataset(ctx, action.ExecutionBody.DBID)
+	err = u.spend(ctx, action.Tx.Sender, price, action.Tx.Nonce)
 	if err != nil {
 		return nil, err
 	}
 
-	err = u.compareAndSpend(action.Tx.Sender, action.Tx.Fee, action.Tx.Nonce, price)
+	ds, err := u.engine.GetDataset(ctx, action.ExecutionBody.DBID)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +32,7 @@ func (u *DatasetUseCase) Execute(ctx context.Context, action *entity.ExecuteActi
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Println("cherry exec res", res)
 	bts, err := readQueryResult(res)
 	if err != nil {
 		return nil, err

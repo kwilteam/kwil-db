@@ -62,7 +62,7 @@ func Test_Session(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ses, err := db.BeginSession()
+	ses, err := db.CreateSession()
 	if err != nil {
 		t.Fatal(err)
 	}
