@@ -1,13 +1,14 @@
 package tx
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type PayloadType int32
 
 const (
 	INVALID_PAYLOAD_TYPE PayloadType = iota + 100
 	DEPLOY_DATABASE
-	MODIFY_DATABASE
 	DROP_DATABASE
 	EXECUTE_ACTION
 	VALIDATOR_JOIN
@@ -22,8 +23,6 @@ func (x PayloadType) String() string {
 		return "INVALID_PAYLOAD_TYPE"
 	case DEPLOY_DATABASE:
 		return "DEPLOY_DATABASE"
-	case MODIFY_DATABASE:
-		return "MODIFY_DATABASE"
 	case DROP_DATABASE:
 		return "DROP_DATABASE"
 	case EXECUTE_ACTION:

@@ -7,6 +7,8 @@ import (
 	sqlTesting "github.com/kwilteam/kwil-db/pkg/sql/testing"
 )
 
+// NewTestAccountStore creates a new account store for testing.
+// It returns an account store, a function to tear down the database, and an error.
 func NewTestAccountStore(ctx context.Context, opts ...balances.AccountStoreOpts) (*balances.AccountStore, func() error, error) {
 	ds, td, err := sqlTesting.OpenTestDB("test_account_store")
 	if err != nil {
@@ -14,29 +16,11 @@ func NewTestAccountStore(ctx context.Context, opts ...balances.AccountStoreOpts)
 	}
 
 	accStore, err := balances.NewAccountStore(ctx,
-		append(opts, balances.WithDatastore(&dbAdapter{ds}))...,
+		append(opts, balances.WithDatastore(ds))...,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return accStore, td, nil
-}
-
-// TODO: adapter should get deleted once we merge in main
-
-type dbAdapter struct {
-	sqlTesting.TestSqliteClient
-}
-
-func (s *dbAdapter) Savepoint() (balances.Savepoint, error) {
-	return s.TestSqliteClient.Savepoint()
-}
-
-func (s *dbAdapter) Prepare(stmt string) (balances.PreparedStatement, error) {
-	return s.TestSqliteClient.Prepare(stmt)
-}
-
-func (s *dbAdapter) CreateSession() (balances.Session, error) {
-	return s.TestSqliteClient.CreateSession()
 }

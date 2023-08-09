@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 )
 
@@ -36,14 +37,8 @@ func New(ctx context.Context, datastore Datastore, opts ...MasterOpt) (*MasterDB
 	return m, nil
 }
 
-type DatasetInfo struct {
-	DBID  string
-	Name  string
-	Owner string
-}
-
 // ListDatasets lists the dbids of all datasets.
-func (d *MasterDB) ListDatasets(ctx context.Context) ([]*DatasetInfo, error) {
+func (d *MasterDB) ListDatasets(ctx context.Context) ([]*types.DatasetInfo, error) {
 	return d.sqlStore.listDatasets(ctx)
 }
 

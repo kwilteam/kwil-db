@@ -239,6 +239,11 @@ func (d *Dataset) ListTables(ctx context.Context) ([]*types.Table, error) {
 	return d.db.ListTables(ctx)
 }
 
+// ListExtensions returns the extensions in the dataset.
+func (d *Dataset) ListExtensions(ctx context.Context) ([]*types.Extension, error) {
+	return d.db.ListExtensions(ctx)
+}
+
 // Close closes the dataset.
 func (d *Dataset) Close() error {
 	var errs []string
