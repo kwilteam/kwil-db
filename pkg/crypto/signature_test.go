@@ -2,12 +2,13 @@ package crypto_test
 
 import (
 	"bytes"
-	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"crypto/ecdsa"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ec "github.com/ethereum/go-ethereum/crypto"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
 func TestSign(t *testing.T) {
@@ -28,6 +29,24 @@ func TestSign(t *testing.T) {
 
 	if !bytes.Equal(sig.Signature, expected) {
 		t.Errorf("expected %s, got %s", expected, sig.Signature)
+	}
+}
+
+// signPrefixedLegacy emulates how an account wallet such as MetaMask would
+// prefix the message with a pre-determined string to prevent tx signing in
+// malicious phishing attempts. This function is only used to test
+// CheckSignature with the ACCOUNT_SECP256K1_UNCOMPRESSED Type.
+func signPrefixedLegacy(t *testing.T, msg []byte, pk *ecdsa.PrivateKey) *crypto.Signature {
+	hash := accounts.TextHash(msg)
+	sig, err := ec.Sign(hash[:], pk)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	sig[ec.RecoveryIDOffset] += 27
+
+	return &crypto.Signature{
+		Type:      crypto.ACCOUNT_SECP256K1_UNCOMPRESSED,
+		Signature: sig,
 	}
 }
 
@@ -53,7 +72,47 @@ func TestCheckSignature(t *testing.T) {
 		t.Errorf("expected signature to be valid")
 	}
 
-	fmt.Println(ok)
+	// permit case variation from EIP55
+	ok, err = crypto.CheckSignature("0x995d95245698212D4Af52C8031F614C3D3127994", sig, msg)
+	if err != nil {
+		t.Errorf("failed to check signature: %d", err)
+	}
+
+	if !ok {
+		t.Errorf("expected signature to be valid")
+	}
+
+	// no prefix OK
+	ok, err = crypto.CheckSignature("995d95245698212D4Af52C8031F614C3D3127994", sig, msg)
+	if err != nil {
+		t.Errorf("failed to check signature: %d", err)
+	}
+
+	if !ok {
+		t.Errorf("expected signature to be valid")
+	}
+
+	// Test ACCOUNT_SECP256K1_UNCOMPRESSED i.e. text signature with auto-prefix and
+	sig = signPrefixedLegacy(t, msg, pk)
+
+	ok, err = crypto.CheckSignature("0x995d95245698212D4Af52c8031F614C3D3127994", sig, msg)
+	if err != nil {
+		t.Errorf("failed to check signature: %d", err)
+	}
+
+	if !ok {
+		t.Errorf("expected signature to be valid")
+	}
+
+	// "account uncompressed" with string case deviation from EIP 55.
+	ok, err = crypto.CheckSignature("0x995d95245698212D4Af52C8031F614C3D3127994", sig, msg)
+	if err != nil {
+		t.Errorf("failed to check signature: %d", err)
+	}
+
+	if !ok {
+		t.Errorf("expected signature to be valid")
+	}
 }
 
 func TestMiscCrypto(t *testing.T) {
