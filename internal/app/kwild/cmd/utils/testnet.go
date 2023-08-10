@@ -24,7 +24,6 @@ var netFlags = struct {
 	configFile              string
 	outputDir               string
 	nodeDirPrefix           string
-	disableGas              bool
 	populatePersistentPeers bool
 	hostnamePrefix          string
 	hostnameSuffix          string
@@ -118,15 +117,10 @@ func initTestnet(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	var chainID string
-	if netFlags.disableGas {
-		chainID = "kwil-chain-gcd-"
-	} else {
-		chainID = "kwil-chain-gce-"
-	}
+	chainIDPrefix := "kwil-chain-"
 
 	genDoc := &types.GenesisDoc{
-		ChainID:         chainID + cmtrand.Str(6),
+		ChainID:         chainIDPrefix + cmtrand.Str(6),
 		ConsensusParams: types.DefaultConsensusParams(),
 		GenesisTime:     cmttime.Now(),
 		InitialHeight:   netFlags.initialHeight,
@@ -298,8 +292,6 @@ func NewTestnetCmd() *cobra.Command {
 	testnetCmd.Flags().StringVar(&netFlags.nodeDirPrefix, "node-dir-prefix", "node", "prefix the directory name for each node with (node results in node0, node1, ...)")
 
 	testnetCmd.Flags().Int64Var(&netFlags.initialHeight, "initial-height", 0, "initial height of the first block")
-
-	testnetCmd.Flags().BoolVar(&netFlags.disableGas, "disable-gas", false, "Disables gas costs on all transactions and once the network is initialized, it can't be changed")
 
 	testnetCmd.Flags().BoolVar(&netFlags.populatePersistentPeers, "populate-persistent-peers", true,
 		"update config of each node with the list of persistent peers build using either"+

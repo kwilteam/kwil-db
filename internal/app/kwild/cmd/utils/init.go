@@ -17,7 +17,6 @@ import (
 var initFlags = struct {
 	initialHeight int64
 	homeDir       string
-	disableGas    bool
 }{}
 
 // InitFilesCmd initializes a fresh CometBFT instance.
@@ -31,8 +30,6 @@ func InitFilesCmd() *cobra.Command {
 	if initFlags.homeDir == "" {
 		initFlags.homeDir = os.Getenv("COMET_BFT_HOME")
 	}
-	initFilesCmd.Flags().BoolVar(&initFlags.disableGas, "disable-gas", false,
-		"Disables gas costs on all transactions and once the network is initialized, it can't be changed")
 	initFilesCmd.Flags().Int64Var(&initFlags.initialHeight, "initial-height", 0, "initial height of the first block")
 
 	return initFilesCmd
@@ -71,17 +68,12 @@ func initFiles(cmd *cobra.Command, args []string) error {
 		Name:    "node-0",
 	}
 
-	var chainID string
-	if initFlags.disableGas {
-		chainID = "kwil-chain-gcd-"
-	} else {
-		chainID = "kwil-chain-gce-"
-	}
+	chainIDPrefix := "kwil-chain-"
 
 	vals := []types.GenesisValidator{genVal}
 
 	genDoc := &types.GenesisDoc{
-		ChainID:         chainID + cmtrand.Str(6),
+		ChainID:         chainIDPrefix + cmtrand.Str(6),
 		ConsensusParams: types.DefaultConsensusParams(),
 		GenesisTime:     cmttime.Now(),
 		InitialHeight:   initFlags.initialHeight,
