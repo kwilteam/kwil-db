@@ -13,11 +13,16 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewAbciApp(database DatasetsModule, validators ValidatorModule, committer AtomicCommitter, opts ...AbciOpt) *AbciApp {
+func NewAbciApp(database DatasetsModule, validators ValidatorModule, committer AtomicCommitter,
+	snapshotter SnapshotModule,
+	bootstrapper DBBootstrapModule,
+	opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
-		database:   database,
-		validators: validators,
-		committer:  committer,
+		database:     database,
+		validators:   validators,
+		committer:    committer,
+		snapshotter:  snapshotter,
+		bootstrapper: bootstrapper,
 
 		log: log.NewNoOp(),
 
@@ -41,6 +46,10 @@ type AbciApp struct {
 	// committer is the atomic committer that handles atomic commits across multiple stores
 	committer AtomicCommitter
 
+	snapshotter SnapshotModule
+
+	bootstrapper DBBootstrapModule
+
 	log log.Logger
 
 	// commitWaiter is a waitgroup that waits for the commit to finish
@@ -51,7 +60,22 @@ type AbciApp struct {
 }
 
 func (a *AbciApp) ApplySnapshotChunk(p0 abciTypes.RequestApplySnapshotChunk) abciTypes.ResponseApplySnapshotChunk {
-	panic("TODO")
+	refetch_chunks, err := a.bootstrapper.ApplySnapshotChunk(p0.Chunk, p0.Index)
+	if err != nil {
+		return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_UNKNOWN, RefetchChunks: refetch_chunks}
+	}
+
+	if a.bootstrapper.IsDBRestored() {
+		/*
+			TODO: Update the app hash & app height here once we introduce app specific state.
+			Comet uses ABCIInfo to query & verify the app hash and app height at the end of the state sync process.
+			If the app hash and app height are not updated here, Comet will do block sync.
+
+			TODO: Check how ABCI Init is called in state sync vs block sync.
+		*/
+		a.log.Info("Bootstrapped database successfully")
+	}
+	return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}
 }
 
 // BeginBlock begins a block.
@@ -90,7 +114,7 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	}
 
 	return abciTypes.ResponseCommit{
-		// TODO: is this where appHash belongs?
+		// TODO: is this where appHash belongs? >>> Correct
 		Data: appHash,
 	}
 }
@@ -193,15 +217,34 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 }
 
 func (a *AbciApp) ListSnapshots(p0 abciTypes.RequestListSnapshots) abciTypes.ResponseListSnapshots {
-	panic("TODO")
+	snapshots, err := a.snapshotter.ListSnapshots()
+	if err != nil {
+		return abciTypes.ResponseListSnapshots{Snapshots: nil}
+	}
+
+	var res []*abciTypes.Snapshot
+	for _, snapshot := range snapshots {
+		abcisnapshot, err := convertToABCISnapshot(&snapshot)
+		if err != nil {
+			return abciTypes.ResponseListSnapshots{Snapshots: nil}
+		}
+		res = append(res, abcisnapshot)
+	}
+	return abciTypes.ResponseListSnapshots{Snapshots: res}
 }
 
 func (a *AbciApp) LoadSnapshotChunk(p0 abciTypes.RequestLoadSnapshotChunk) abciTypes.ResponseLoadSnapshotChunk {
-	panic("TODO")
+	chunk := a.snapshotter.LoadSnapshotChunk(p0.Height, p0.Format, p0.Chunk)
+	return abciTypes.ResponseLoadSnapshotChunk{Chunk: chunk}
 }
 
 func (a *AbciApp) OfferSnapshot(p0 abciTypes.RequestOfferSnapshot) abciTypes.ResponseOfferSnapshot {
-	panic("TODO")
+	snapshot := convertABCISnapshots(p0.Snapshot)
+	if (a.bootstrapper.OfferSnapshot(snapshot)) != nil {
+		return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}
+	}
+	return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_ACCEPT}
+
 }
 func (a *AbciApp) PrepareProposal(p0 abciTypes.RequestPrepareProposal) abciTypes.ResponsePrepareProposal {
 	panic("TODO")
