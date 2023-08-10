@@ -37,6 +37,9 @@ deployments/helm/*/charts/
 
 dist/*
 
+# kwild
+.testnet
+
 # IDE
 .run
 
