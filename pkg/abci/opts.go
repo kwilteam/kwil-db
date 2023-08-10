@@ -1,6 +1,8 @@
 package abci
 
-import "github.com/kwilteam/kwil-db/pkg/log"
+import (
+	"github.com/kwilteam/kwil-db/pkg/log"
+)
 
 type AbciOpt func(*AbciApp)
 
