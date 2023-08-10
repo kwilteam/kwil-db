@@ -13,7 +13,7 @@ import (
 // It returns the result of the call.
 // If a message caller is specified, then it will check the signature of the message and use the caller as the caller of the action.
 func (u *DatasetModule) Call(ctx context.Context, call *transaction.CallActionPayload, msg *transaction.SignedMessage[transaction.JsonPayload]) ([]map[string]any, error) {
-	executionOpts := []engine.ExecutionOpts{
+	executionOpts := []engine.ExecutionOpt{
 		engine.ReadOnly(true),
 	}
 	if msg.Sender != "" {

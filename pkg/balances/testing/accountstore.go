@@ -16,7 +16,7 @@ func NewTestAccountStore(ctx context.Context, opts ...balances.AccountStoreOpts)
 	}
 
 	accStore, err := balances.NewAccountStore(ctx,
-		append(opts, balances.WithDatastore(ds))...,
+		ds,
 	)
 	if err != nil {
 		return nil, nil, err
