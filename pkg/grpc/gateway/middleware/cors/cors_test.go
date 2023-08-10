@@ -1,11 +1,12 @@
 package cors
 
 import (
-	http2 "github.com/kwilteam/kwil-db/internal/pkg/test/http"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	http2 "github.com/kwilteam/kwil-db/pkg/grpc/gateway/middleware/http-dummy"
 )
 
 func TestCors_ServeHTTP(t *testing.T) {

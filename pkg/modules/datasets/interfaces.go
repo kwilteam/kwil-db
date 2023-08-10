@@ -15,7 +15,7 @@ type AccountStore interface {
 type Engine interface {
 	CreateDataset(ctx context.Context, schema *engineTypes.Schema) (dbid string, finalErr error)
 	DropDataset(ctx context.Context, sender, dbid string) error
-	Execute(ctx context.Context, dbid string, procedure string, args []map[string]any, opts ...engine.ExecutionOpts) ([]map[string]any, error)
+	Execute(ctx context.Context, dbid string, procedure string, args []map[string]any, opts ...engine.ExecutionOpt) ([]map[string]any, error)
 	ListDatasets(ctx context.Context, owner string) ([]string, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)

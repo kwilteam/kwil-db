@@ -7,7 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
-type DatabaseModule interface {
+type DatasetsModule interface {
 	Deploy(ctx context.Context, schema *types.Schema, tx *tx.Transaction) (*tx.ExecutionResponse, error)
 	Drop(ctx context.Context, dbid string, tx *tx.Transaction) (*tx.ExecutionResponse, error)
 	Execute(ctx context.Context, dbid string, action string, params []map[string]any, tx *tx.Transaction) (*tx.ExecutionResponse, error)
