@@ -4,8 +4,6 @@ import (
 	"context"
 	"math/big"
 
-	ctypes "github.com/cometbft/cometbft/rpc/core/types"
-	"github.com/cometbft/cometbft/types"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -21,15 +19,15 @@ type Service struct {
 	engine       EngineReader
 	accountStore AccountReader
 
-	cometBftClient BlockchainBroadcaster
+	chainClient BlockchainBroadcaster
 }
 
-func NewService(engine EngineReader, accountStore AccountReader, cometBftClient BlockchainBroadcaster, opts ...TxSvcOpt) *Service {
+func NewService(engine EngineReader, accountStore AccountReader, chainClient BlockchainBroadcaster, opts ...TxSvcOpt) *Service {
 	s := &Service{
-		log:            log.NewNoOp(),
-		engine:         engine,
-		accountStore:   accountStore,
-		cometBftClient: cometBftClient,
+		log:          log.NewNoOp(),
+		engine:       engine,
+		accountStore: accountStore,
+		chainClient:  chainClient,
 	}
 
 	for _, opt := range opts {
@@ -54,7 +52,5 @@ type AccountReader interface {
 }
 
 type BlockchainBroadcaster interface {
-	// TODO: this should be refactored to: BroadcastTxAsync(ctx context.Context, tx tx.Transaction) error
-	// this will remove abci and cometbft as a dependency from this package, and functionally works the same
-	BroadcastTxAsync(ctx context.Context, tx types.Tx) (*ctypes.ResultBroadcastTx, error)
+	BroadcastTxAsync(ctx context.Context, tx *tx.Transaction) (hash []byte, err error)
 }
