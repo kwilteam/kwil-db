@@ -1,12 +1,15 @@
 package abci
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtos "github.com/cometbft/cometbft/libs/os"
 	"github.com/cometbft/cometbft/privval"
+	"github.com/kwilteam/kwil-db/pkg/snapshots"
 )
 
 // resetAll removes address book files plus all data, and resets the privValdiator data.
@@ -100,4 +103,36 @@ func RemoveAddrBook(addrBookFile string) {
 	} else if !os.IsNotExist(err) {
 		fmt.Println("Error removing address book", "file", addrBookFile, "err", err)
 	}
+}
+
+func convertABCISnapshots(req *abciTypes.Snapshot) *snapshots.Snapshot {
+	var metadata snapshots.SnapshotMetadata
+	err := json.Unmarshal(req.Metadata, &metadata)
+	if err != nil {
+		return nil
+	}
+
+	snapshot := &snapshots.Snapshot{
+		Height:     req.Height,
+		Format:     req.Format,
+		ChunkCount: req.Chunks,
+		Hash:       req.Hash,
+		Metadata:   metadata,
+	}
+	return snapshot
+}
+
+func convertToABCISnapshot(snapshot *snapshots.Snapshot) (*abciTypes.Snapshot, error) {
+	metadata, err := json.Marshal(snapshot.Metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &abciTypes.Snapshot{
+		Height:   snapshot.Height,
+		Format:   snapshot.Format,
+		Chunks:   snapshot.ChunkCount,
+		Hash:     snapshot.Hash,
+		Metadata: metadata,
+	}, nil
 }
