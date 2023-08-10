@@ -10,88 +10,98 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	grpcServer "github.com/kwilteam/kwil-db/pkg/grpc/server"
+	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
+	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
 	"github.com/kwilteam/kwil-db/pkg/log"
-
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
-type Server struct {
-	Cfg  *config.KwildConfig
-	Log  log.Logger
-	Http *GWServer
-	Grpc *grpcServer.Server
+// comet bft node has a gross and confusing interface, so we use this to make it more clear
+type StartStopper interface {
+	Start() error
+	Stop() error
+}
 
-	done context.CancelFunc
+type Server struct {
+	grpcServer   *grpc.Server
+	gateway      *gateway.GatewayServer
+	cometBftNode StartStopper
+	log          log.Logger
+
+	cfg *config.KwildConfig
+
+	cancelCtxFunc context.CancelFunc
 }
 
 func (s *Server) Start(ctx context.Context) error {
 	defer func() {
 		if err := recover(); err != nil {
-			s.Log.Error("kwild server panic", zap.Any("error", err))
+			s.log.Error("kwild server panic", zap.Any("error", err))
 		}
 	}()
 
-	s.Log.Info("starting server...")
+	s.log.Info("starting server...")
 
 	// graceful shutdown when receive signal
 	gracefulShutdown := make(chan os.Signal, 1)
 	signal.Notify(gracefulShutdown, syscall.SIGINT, syscall.SIGTERM)
 
 	cancelCtx, done := context.WithCancel(ctx)
-	s.done = done
-	g, gctx := errgroup.WithContext(cancelCtx)
+	s.cancelCtxFunc = done
 
-	g.Go(func() error {
+	group, groupCtx := errgroup.WithContext(cancelCtx)
+
+	group.Go(func() error {
 		go func() {
-			<-gctx.Done()
-			s.Log.Info("stop http server")
+			<-groupCtx.Done()
+			s.log.Info("stop http server")
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer func() {
 				cancel()
 			}()
-			if err := s.Http.Shutdown(ctx); err != nil {
-				s.Log.Error("http server shutdown error", zap.Error(err))
+			if err := s.gateway.Shutdown(ctx); err != nil {
+				s.log.Error("http server shutdown error", zap.Error(err))
 			}
 		}()
-		return s.Http.Serve()
-	})
-	s.Log.Info("http server started", zap.String("address", s.Cfg.HttpListenAddress))
 
-	g.Go(func() error {
+		s.log.Info("http server started", zap.String("address", s.cfg.HttpListenAddress))
+		return s.gateway.Start()
+	})
+
+	group.Go(func() error {
 		go func() {
-			<-gctx.Done()
-			s.Log.Info("stop grpc server")
-			s.Grpc.Stop()
+			<-groupCtx.Done()
+			s.log.Info("stop grpc server")
+			s.grpcServer.Stop()
 		}()
 
-		return s.Grpc.Start()
+		return s.grpcServer.Start()
 	})
-	s.Log.Info("grpc server started", zap.String("address", s.Cfg.GrpcListenAddress))
+	s.log.Info("grpc server started", zap.String("address", s.cfg.GrpcListenAddress))
 
-	g.Go(func() error {
+	group.Go(func() error {
 		select {
-		case <-gctx.Done():
-			s.Log.Info("close signal goroutine", zap.Error(gctx.Err()))
-			return gctx.Err()
+		case <-groupCtx.Done():
+			s.log.Info("close signal goroutine", zap.Error(groupCtx.Err()))
+			return groupCtx.Err()
 		case sig := <-gracefulShutdown:
-			s.Log.Warn("received signal", zap.String("signal", sig.String()))
+			s.log.Warn("received signal", zap.String("signal", sig.String()))
 			s.Stop()
 		}
 		return nil
 	})
-	s.Log.Info("signal watcher started")
+	s.log.Info("signal watcher started")
 
-	err := g.Wait()
+	err := group.Wait()
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			s.Log.Info("server context is canceled")
+			s.log.Info("server context is canceled")
 			return nil
 		} else if errors.Is(err, http.ErrServerClosed) {
-			s.Log.Info("http server is closed")
+			s.log.Info("http server is closed")
 		} else {
-			s.Log.Error("server error", zap.Error(err))
+			s.log.Error("server error", zap.Error(err))
 		}
 	}
 
@@ -99,6 +109,6 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) Stop() {
-	s.Log.Warn("stop kwild services")
-	s.done()
+	s.log.Warn("stop kwild services")
+	s.cancelCtxFunc()
 }

@@ -10,24 +10,10 @@ const (
 
 type EngineOpt func(*Engine)
 
-// WithPath specifies the file path to which all sqlite databases will be written.
-func WithPath(path string) EngineOpt {
-	return func(e *Engine) {
-		e.path = path
-	}
-}
-
 // WithLogger allows the caller to specify a custom logger for the engine.
 func WithLogger(l log.Logger) EngineOpt {
 	return func(e *Engine) {
 		e.log = l
-	}
-}
-
-// WithMasterDBName allows the caller to specify a custom name for the master database file.
-func WithMasterDBName(name string) EngineOpt {
-	return func(e *Engine) {
-		e.name = name
 	}
 }
 
@@ -46,16 +32,8 @@ func WithExtensions(exts map[string]ExtensionInitializer) EngineOpt {
 	}
 }
 
-// WithOpener allows the caller to specify a custom sqlite opener for the engine.
-// This is mostly useful for testing, where we want to teardown the database
-func WithOpener(opener Opener) EngineOpt {
-	return func(e *Engine) {
-		e.opener = opener
-	}
-}
-
-// ExecutionOpts are used to configure database execution.
-type ExecutionOpts func(*executionConfig)
+// ExecutionOpt are used to configure database execution.
+type ExecutionOpt func(*executionConfig)
 
 type executionConfig struct {
 	// Sender is the address of the action caller.
@@ -66,14 +44,14 @@ type executionConfig struct {
 }
 
 // WithCaller sets the caller of the execution.
-func WithCaller(caller string) ExecutionOpts {
+func WithCaller(caller string) ExecutionOpt {
 	return func(cfg *executionConfig) {
 		cfg.Sender = caller
 	}
 }
 
 // ReadOnly sets the execution to read-only.
-func ReadOnly(isReadOnly bool) ExecutionOpts {
+func ReadOnly(isReadOnly bool) ExecutionOpt {
 	return func(cfg *executionConfig) {
 		cfg.ReadOnly = isReadOnly
 	}

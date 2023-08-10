@@ -48,7 +48,7 @@ func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema) (dbid 
 // buildNewDataset builds a new datastore, and puts it in a dataset
 func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string, schema *types.Schema) (ds *dataset.Dataset, finalErr error) {
 	dbid := GenerateDBID(name, owner)
-	datastore, err := e.openDB(dbid)
+	datastore, err := e.opener.Open(dbid, e.log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

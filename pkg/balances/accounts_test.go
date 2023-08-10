@@ -107,12 +107,6 @@ func Test_Accounts(t *testing.T) {
 			}
 			defer td()
 
-			sp, err := ar.Savepoint()
-			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
-			}
-			defer sp.Rollback()
-
 			errs := []error{}
 			for _, spend := range tc.spends {
 				err := ar.Spend(ctx, spend)
@@ -121,11 +115,6 @@ func Test_Accounts(t *testing.T) {
 				}
 			}
 			assertErr(t, errs, tc.err)
-
-			err = sp.Commit()
-			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
-			}
 
 			for address, expectedBalance := range tc.finalBalances {
 				account, err := ar.GetAccount(ctx, address)
