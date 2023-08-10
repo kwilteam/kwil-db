@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -24,16 +25,19 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/sql"
+	"github.com/kwilteam/kwil-db/pkg/tx"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	txSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 
 	cmtcfg "github.com/cometbft/cometbft/config"
+	"github.com/cometbft/cometbft/crypto/tmhash"
 	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
 	cmtlog "github.com/cometbft/cometbft/libs/log"
 	nm "github.com/cometbft/cometbft/node"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
+	cmttypes "github.com/cometbft/cometbft/types"
 )
 
 // BuildKwildServer builds the kwild server
@@ -62,6 +66,25 @@ func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
 	return buildServer(deps), nil
 }
 
+// wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster
+// interface, hiding the details of cometBFT.
+type wrappedCometBFTClient struct {
+	*cmtlocal.Local
+}
+
+func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx *tx.Transaction) ([]byte, error) {
+	bts, err := json.Marshal(tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
+	}
+	hash := tmhash.Sum(bts)
+	_, err = wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(bts))
+	if err != nil {
+		return nil, err
+	}
+	return hash, err
+}
+
 func buildServer(d *coreDependencies) *Server {
 	// engine
 	e := buildEngine(d)
@@ -83,7 +106,7 @@ func buildServer(d *coreDependencies) *Server {
 	cometBftClient := buildCometBftClient(cometBftNode)
 
 	// tx service
-	txsvc := buildTxSvc(d, datasetsModule, accs, cometBftClient)
+	txsvc := buildTxSvc(d, datasetsModule, accs, &wrappedCometBFTClient{cometBftClient})
 
 	// grpc server
 	grpcServer := buildGrpcServer(d, txsvc)
@@ -103,7 +126,8 @@ type coreDependencies struct {
 	opener sql.Opener
 }
 
-func buildAbci(d *coreDependencies, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule, atomicCommitter abci.AtomicCommitter) *abci.AbciApp {
+func buildAbci(d *coreDependencies, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
+	atomicCommitter abci.AtomicCommitter) *abci.AbciApp {
 	return abci.NewAbciApp(
 		datasetsModule,
 		validatorModule,
@@ -112,8 +136,8 @@ func buildAbci(d *coreDependencies, datasetsModule abci.DatasetsModule, validato
 	)
 }
 
-func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.AccountReader, cometBftClient txSvc.BlockchainBroadcaster) *txSvc.Service {
-	// TODO: update blockchain broadcaster to use the interface mentioned in txSvc.NewService
+func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.AccountReader,
+	cometBftClient txSvc.BlockchainBroadcaster) *txSvc.Service {
 	return txSvc.NewService(txsvc, accs, cometBftClient,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
 	)
@@ -176,7 +200,7 @@ func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *grpc.Serv
 	txpb.RegisterTxServiceServer(grpcServer, txsvc)
 	grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
 
-	return nil
+	return grpcServer
 }
 
 func buildHealthSvc(d *coreDependencies) *healthsvc.Server {
@@ -210,7 +234,7 @@ func buildCometBftClient(cometBftNode *nm.Node) *cmtlocal.Local {
 	return cmtlocal.New(cometBftNode)
 }
 
-// TODO: clean this up
+// TODO: clean this up --> @jchappelow
 // it seems some of this should be handled in ABCI package if we do not provide it as a package
 func newCometNode(app *abci.AbciApp, cfg *config.KwildConfig) (*nm.Node, error) {
 	config := cmtcfg.DefaultConfig()

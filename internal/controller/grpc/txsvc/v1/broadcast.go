@@ -2,13 +2,11 @@ package txsvc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/cometbft/cometbft/crypto/tmhash"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	kTx "github.com/kwilteam/kwil-db/pkg/tx"
@@ -26,13 +24,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, status.Errorf(codes.Unauthenticated, "failed to verify transaction: %s", err)
 	}
 
-	bts, err := json.Marshal(tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
-	}
-	hash := tmhash.Sum(bts)
-
-	_, err = s.cometBftClient.BroadcastTxAsync(ctx, bts)
+	hash, err := s.chainClient.BroadcastTxAsync(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to broadcast transaction with error:  %s", err)
 	}
