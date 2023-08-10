@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/tx"
 )
 
@@ -23,4 +24,18 @@ type ValidatorModule interface {
 type AtomicCommitter interface {
 	Begin(ctx context.Context) error
 	Commit(ctx context.Context, applyCallback func(error)) (commitId []byte, err error)
+}
+
+type SnapshotModule interface {
+	IsSnapshotDue(height uint64) bool
+	CreateSnapshot(height uint64) error
+	ListSnapshots() ([]snapshots.Snapshot, error)
+	LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) []byte
+}
+
+type DBBootstrapModule interface {
+	//(ctx context.Context, snapshot []Snapshot) error
+	ApplySnapshotChunk(chunk []byte, index uint32) ([]uint32, error)
+	OfferSnapshot(snapshot *snapshots.Snapshot) error
+	IsDBRestored() bool
 }

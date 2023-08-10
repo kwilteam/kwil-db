@@ -23,6 +23,7 @@ import (
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	"github.com/kwilteam/kwil-db/pkg/modules/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -72,8 +73,11 @@ func buildServer(d *coreDependencies) *Server {
 	// datasets module
 	datasetsModule := buildDatasetsModule(d, e, accs)
 
+	snapshotModule := buildSnapshotModule(d)
+
+	bootstrapperModule := buildBootstrapModule(d)
 	// TODO: add validator module and atomic committer
-	abciApp := buildAbci(d, datasetsModule, nil, nil)
+	abciApp := buildAbci(d, datasetsModule, nil, nil, snapshotModule, bootstrapperModule)
 
 	cometBftNode, err := newCometNode(abciApp, d.cfg)
 	if err != nil {
@@ -103,11 +107,14 @@ type coreDependencies struct {
 	opener sql.Opener
 }
 
-func buildAbci(d *coreDependencies, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule, atomicCommitter abci.AtomicCommitter) *abci.AbciApp {
+func buildAbci(d *coreDependencies, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
+	atomicCommitter abci.AtomicCommitter, snapshotter abci.SnapshotModule, bootstrapper abci.DBBootstrapModule) *abci.AbciApp {
 	return abci.NewAbciApp(
 		datasetsModule,
 		validatorModule,
 		atomicCommitter,
+		snapshotter,
+		bootstrapper,
 		abci.WithLogger(*d.log.Named("abci")),
 	)
 }
@@ -206,6 +213,20 @@ func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {
 	return gw
 }
 
+func buildSnapshotModule(d *coreDependencies) *snapshots.SnapshotStore {
+	return snapshots.NewSnapshotStore(snapshots.WithEnabled(d.cfg.SnapshotConfig.Enabled),
+		snapshots.WithDatabaseDir(d.cfg.SqliteFilePath),
+		snapshots.WithSnapshotDir(d.cfg.SnapshotConfig.SnapshotDir),
+		snapshots.WithMaxSnapshots(d.cfg.SnapshotConfig.MaxSnapshots),
+		snapshots.WithRecurringHeight(d.cfg.SnapshotConfig.RecurringHeight),
+		snapshots.WithLogger(*d.log.Named("snapshotStore")),
+		snapshots.WithSnapshotter(),
+	)
+}
+
+func buildBootstrapModule(d *coreDependencies) *snapshots.Bootstrapper {
+	return snapshots.NewBootstrapper(d.cfg.SqliteFilePath, d.cfg.BootstrapperConfig.SnapshotDir)
+}
 func buildCometBftClient(cometBftNode *nm.Node) *cmtlocal.Local {
 	return cmtlocal.New(cometBftNode)
 }

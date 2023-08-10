@@ -31,10 +31,23 @@ type KwildConfig struct {
 	BCPrivateKey       cmtCrypto.PrivKey
 	WithoutGasCosts    bool
 	WithoutNonces      bool
+	SnapshotConfig     SnapshotConfig
+	BootstrapperConfig BootstrapperConfig
 }
 
 type ArweaveConfig struct {
 	BundlrURL string
+}
+
+type SnapshotConfig struct {
+	Enabled         bool
+	RecurringHeight uint64
+	MaxSnapshots    uint8
+	SnapshotDir     string
+}
+
+type BootstrapperConfig struct {
+	SnapshotDir string
 }
 
 var (
@@ -50,6 +63,11 @@ var (
 		CometBftRPCUrl,
 		WithoutGasCosts,
 		WithoutNonces,
+		SnapshotEnabled,
+		SnapshotRecurringHeight,
+		MaxSnapshots,
+		SnapshotDir,
+		BootstrapSnapshotDir,
 	}
 )
 
@@ -168,5 +186,35 @@ var (
 		EnvName: "WITHOUT_NONCES",
 		Field:   "WithoutNonces",
 		Default: false,
+	}
+
+	SnapshotEnabled = config.CfgVar{
+		EnvName: "SNAPSHOT_ENABLED",
+		Field:   "SnapshotConfig.Enabled",
+		Default: false,
+	}
+
+	SnapshotRecurringHeight = config.CfgVar{
+		EnvName: "SNAPSHOT_RECURRING_HEIGHT",
+		Field:   "SnapshotConfig.RecurringHeight",
+		Default: uint64(10000), // 12-14 hrs at 1 block per 5 seconds speed
+	}
+
+	MaxSnapshots = config.CfgVar{
+		EnvName: "MAX_SNAPSHOTS",
+		Field:   "SnapshotConfig.MaxSnapshots",
+		Default: uint8(2),
+	}
+
+	SnapshotDir = config.CfgVar{
+		EnvName: "SNAPSHOT_DIR",
+		Field:   "SnapshotConfig.SnapshotDir",
+		Default: "/tmp/kwil/snapshots",
+	}
+
+	BootstrapSnapshotDir = config.CfgVar{
+		EnvName: "BOOTSTRAP_SNAPSHOT_DIR",
+		Field:   "BootstrapperConfig.SnapshotDir",
+		Default: "/tmp/kwil/bootstrap_db",
 	}
 )
