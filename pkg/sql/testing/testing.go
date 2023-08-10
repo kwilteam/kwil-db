@@ -40,3 +40,12 @@ func (w *wrappedSqliteClient) Savepoint() (sql.Savepoint, error) {
 func (w *wrappedSqliteClient) CreateSession() (sql.Session, error) {
 	return w.SqliteClient.CreateSession()
 }
+
+// we need to get rid of close and delete since the teardown function will handle that
+func (w *wrappedSqliteClient) Close() error {
+	return nil
+}
+
+func (w *wrappedSqliteClient) Delete() error {
+	return nil
+}

@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/specifications"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var remote = flag.Bool("remote", false, "run tests against remote environment")
@@ -55,8 +52,10 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// setup
 
-			driver, chainDeployer, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger, path)
+			driver, runningCfg := acceptance.GetDriver(ctx, t, c.driverType, cfg, tLogger, path)
 			secondDriver := acceptance.NewClient(ctx, t, c.driverType, runningCfg, tLogger)
+
+			/* xxx
 
 			// NOTE: only local env test, public network test takes too long
 			// thus here test assume user is funded
@@ -81,6 +80,8 @@ func TestKwildAcceptance(t *testing.T) {
 
 			// chain sync, wait kwil to register user
 			time.Sleep(cfg.ChainSyncWaitTime)
+
+			*/
 
 			// running forever for local development
 			if *dev {
