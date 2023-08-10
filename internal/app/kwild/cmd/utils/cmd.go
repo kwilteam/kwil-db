@@ -25,5 +25,6 @@ func NewCmdGenerator() *cobra.Command {
 		NewResetPrivValidatorCmd(),
 	)
 
+	// NOTE: could add global flags here (home, etc)
 	return genCmd
 }
