@@ -96,19 +96,15 @@ func buildServer(d *coreDependencies) *Server {
 	// datasets module
 	datasetsModule := buildDatasetsModule(d, e, accs)
 
+	snapshotModule := buildSnapshotModule(d)
+
+	bootstrapperModule := buildBootstrapModule(d)
 	// validator updater and store
 	vstore := buildValidatorManager(d)
 
 	// validator module
 	validatorModule := buildValidatorModule(d, accs, vstore)
 
-	// Snapshots module
-	snapshotModule := buildSnapshotModule(d)
-
-	// Bootstrapper module
-	bootstrapperModule := buildBootstrapModule(d)
-
-	// TODO: add validator module and atomic committer
 	abciApp := buildAbci(d, datasetsModule, validatorModule, nil, snapshotModule, bootstrapperModule)
 
 	cometBftNode, err := newCometNode(abciApp, d.cfg)
