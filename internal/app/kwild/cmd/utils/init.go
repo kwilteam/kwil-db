@@ -14,6 +14,11 @@ import (
 	cmttime "github.com/cometbft/cometbft/types/time"
 )
 
+var initFlags = struct {
+	initialHeight int64
+	homeDir       string
+}{}
+
 // InitFilesCmd initializes a fresh CometBFT instance.
 func InitFilesCmd() *cobra.Command {
 	var initFilesCmd = &cobra.Command{
@@ -21,34 +26,34 @@ func InitFilesCmd() *cobra.Command {
 		Short: "Initializes files required for a kwil node",
 		RunE:  initFiles,
 	}
-	initFilesCmd.Flags().StringVar(&outputDir, "home", "", "comet home directory")
-	if outputDir == "" {
-		outputDir = os.Getenv("COMET_BFT_HOME")
+	initFilesCmd.Flags().StringVar(&initFlags.homeDir, "home", "", "comet home directory")
+	if initFlags.homeDir == "" {
+		initFlags.homeDir = os.Getenv("COMET_BFT_HOME")
 	}
-	initFilesCmd.Flags().BoolVar(&disable_gas, "disable-gas", false,
-		"Disables gas costs on all transactions and once the network is initialized, it can't be changed")
+	initFilesCmd.Flags().Int64Var(&initFlags.initialHeight, "initial-height", 0, "initial height of the first block")
+
 	return initFilesCmd
 }
 func initFiles(cmd *cobra.Command, args []string) error {
 	config := cfg.DefaultConfig()
-	config.SetRoot(outputDir)
-	err := os.MkdirAll(filepath.Join(outputDir, "config"), nodeDirPerm)
+	config.SetRoot(initFlags.homeDir)
+	err := os.MkdirAll(filepath.Join(initFlags.homeDir, "config"), nodeDirPerm)
 	if err != nil {
-		_ = os.RemoveAll(outputDir)
+		_ = os.RemoveAll(initFlags.homeDir)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(outputDir, "data"), nodeDirPerm)
+	err = os.MkdirAll(filepath.Join(initFlags.homeDir, "data"), nodeDirPerm)
 	if err != nil {
-		_ = os.RemoveAll(outputDir)
+		_ = os.RemoveAll(initFlags.homeDir)
 		return err
 	}
 	err = InitFilesWithConfig(config)
 	if err != nil {
 		return err
 	}
-	pvKeyFile := filepath.Join(outputDir, config.BaseConfig.PrivValidatorKey)
-	pvStateFile := filepath.Join(outputDir, config.BaseConfig.PrivValidatorState)
+	pvKeyFile := filepath.Join(initFlags.homeDir, config.BaseConfig.PrivValidatorKey)
+	pvStateFile := filepath.Join(initFlags.homeDir, config.BaseConfig.PrivValidatorState)
 	pv := privval.LoadFilePV(pvKeyFile, pvStateFile)
 
 	pubKey, err := pv.GetPubKey()
@@ -63,31 +68,26 @@ func initFiles(cmd *cobra.Command, args []string) error {
 		Name:    "node-0",
 	}
 
-	var chainID string
-	if disable_gas {
-		chainID = "kwil-chain-gcd-"
-	} else {
-		chainID = "kwil-chain-gce-"
-	}
+	chainIDPrefix := "kwil-chain-"
 
 	vals := []types.GenesisValidator{genVal}
 
 	genDoc := &types.GenesisDoc{
-		ChainID:         chainID + cmtrand.Str(6),
+		ChainID:         chainIDPrefix + cmtrand.Str(6),
 		ConsensusParams: types.DefaultConsensusParams(),
 		GenesisTime:     cmttime.Now(),
-		InitialHeight:   initialHeight,
+		InitialHeight:   initFlags.initialHeight,
 		Validators:      vals,
 	}
 
-	if err := genDoc.SaveAs(filepath.Join(outputDir, config.BaseConfig.Genesis)); err != nil {
-		_ = os.RemoveAll(outputDir)
+	if err := genDoc.SaveAs(filepath.Join(initFlags.homeDir, config.BaseConfig.Genesis)); err != nil {
+		_ = os.RemoveAll(initFlags.homeDir)
 		return err
 	}
 
 	config.P2P.AddrBookStrict = false
 	config.P2P.AllowDuplicateIP = true
 	config.RPC.ListenAddress = "tcp://0.0.0.0:26657"
-	cfg.WriteConfigFile(filepath.Join(outputDir, "config", "config.toml"), config)
+	cfg.WriteConfigFile(filepath.Join(initFlags.homeDir, "config", "config.toml"), config)
 	return nil
 }
