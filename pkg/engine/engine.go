@@ -9,6 +9,9 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sql"
+
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	metadataDB "github.com/kwilteam/kwil-db/pkg/engine/db"
@@ -26,9 +29,6 @@ type Engine struct {
 	// name is the file name of the master database
 	name string
 
-	// path is the file path to which all sqlite databases will be written
-	path string
-
 	// log is the logger for the engine
 	log log.Logger
 
@@ -37,12 +37,14 @@ type Engine struct {
 
 	// extensions is a map of all of the extensions that have been added to the engine
 	extensions map[string]ExtensionInitializer
-	opener     Opener
+
+	// opener is the function that is used to open sqlite databases
+	opener sql.Opener
 }
 
 // Open opens a new engine with the provided options.
 // It will also open any stored datasets.
-func Open(ctx context.Context, opts ...EngineOpt) (*Engine, error) {
+func Open(ctx context.Context, dbOpener sql.Opener, opts ...EngineOpt) (*Engine, error) {
 	e := &Engine{
 		name:       masterDBName,
 		log:        log.NewNoOp(),
@@ -68,15 +70,9 @@ func Open(ctx context.Context, opts ...EngineOpt) (*Engine, error) {
 	return e, nil
 }
 
-// openDB opens a database with the provided name.
-// if a database with the provided name does not exist, it will be created.
-func (e *Engine) openDB(name string) (Datastore, error) {
-	return e.opener.Open(name, e.path, e.log)
-}
-
 // openMasterDB opens the master database
 func (e *Engine) openMasterDB(ctx context.Context) error {
-	ds, err := e.openDB(masterDBName)
+	ds, err := e.opener.Open(e.name, e.log)
 	if err != nil {
 		return err
 	}
@@ -93,7 +89,7 @@ func (e *Engine) openStoredDatasets(ctx context.Context) error {
 	}
 
 	for _, datasetInfo := range datasets {
-		datastore, err := e.openDB(datasetInfo.DBID)
+		datastore, err := e.opener.Open(datasetInfo.DBID, e.log)
 		if err != nil {
 			return err
 		}
@@ -134,7 +130,7 @@ func (e *Engine) getInitializers() map[string]dataset.Initializer {
 // Execute executes a procedure on a database.
 // It returns the result of the procedure.
 // It takes a context, the database id, the procedure name, the arguments, and optionally some options.
-func (e *Engine) Execute(ctx context.Context, dbid string, procedure string, args []map[string]any, opts ...ExecutionOpts) ([]map[string]any, error) {
+func (e *Engine) Execute(ctx context.Context, dbid string, procedure string, args []map[string]any, opts ...ExecutionOpt) ([]map[string]any, error) {
 	options := &executionConfig{}
 	for _, opt := range opts {
 		opt(options)
@@ -241,4 +237,16 @@ func (e *Engine) GetSchema(ctx context.Context, dbid string) (*types.Schema, err
 		Extensions: extensions,
 		Procedures: ds.ListProcedures(),
 	}, nil
+}
+
+func (e *Engine) PriceDeploy(ctx context.Context, schema *types.Schema) (price *big.Int, err error) {
+	return big.NewInt(0), nil
+}
+
+func (e *Engine) PriceDrop(ctx context.Context, dbid string) (price *big.Int, err error) {
+	return big.NewInt(0), nil
+}
+
+func (e *Engine) PriceExecute(ctx context.Context, dbid string, action string, params []map[string]any) (price *big.Int, err error) {
+	return big.NewInt(0), nil
 }

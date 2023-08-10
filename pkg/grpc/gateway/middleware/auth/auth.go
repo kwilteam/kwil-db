@@ -2,10 +2,11 @@ package auth
 
 import (
 	"context"
-	"github.com/kwilteam/kwil-db/internal/pkg/gateway/middleware"
+	"net/http"
+
+	"github.com/kwilteam/kwil-db/pkg/grpc/gateway/middleware"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 const ApiKeyHeader = "X-Api-Key"
@@ -13,8 +14,14 @@ const MessageUnauthorized = `{"message": "request unauthorized"}`
 
 type User struct{}
 
+type Key string
+
+const (
+	userKey Key = "userkey"
+)
+
 func setUser(r *http.Request, u *User) *http.Request {
-	ctxWithUser := context.WithValue(r.Context(), "userkey", u)
+	ctxWithUser := context.WithValue(r.Context(), userKey, u)
 	return r.WithContext(ctxWithUser)
 }
 
