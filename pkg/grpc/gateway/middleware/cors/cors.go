@@ -1,8 +1,9 @@
 package cors
 
 import (
-	"github.com/kwilteam/kwil-db/internal/pkg/gateway/middleware"
 	"net/http"
+
+	"github.com/kwilteam/kwil-db/pkg/grpc/gateway/middleware"
 )
 
 const (

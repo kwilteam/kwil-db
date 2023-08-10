@@ -1,6 +1,28 @@
 package sql
 
-import "context"
+import (
+	"context"
+	"io"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
+)
+
+type Opener interface {
+	Open(fileName string, logger log.Logger) (Database, error)
+}
+
+type Database interface {
+	ApplyChangeset(reader io.Reader) error
+	CheckpointWal() error
+	Close() error
+	CreateSession() (Session, error)
+	Delete() error
+	Execute(ctx context.Context, stmt string, args map[string]any) error
+	Prepare(stmt string) (Statement, error)
+	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
+	Savepoint() (Savepoint, error)
+	TableExists(ctx context.Context, table string) (bool, error)
+}
 
 type Statement interface {
 	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)

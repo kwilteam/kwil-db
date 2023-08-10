@@ -2,18 +2,14 @@ package balances
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type AccountStore struct {
-	path          string
 	db            Datastore
 	log           log.Logger
 	rw            sync.RWMutex
@@ -22,26 +18,17 @@ type AccountStore struct {
 	stmts         *preparedStatements
 }
 
-func NewAccountStore(ctx context.Context, opts ...AccountStoreOpts) (*AccountStore, error) {
+func NewAccountStore(ctx context.Context, datastore Datastore, opts ...AccountStoreOpts) (*AccountStore, error) {
 	ar := &AccountStore{
-		path: defaultPath,
-		log:  log.NewNoOp(),
+		log: log.NewNoOp(),
+		db:  datastore,
 	}
 
 	for _, opt := range opts {
 		opt(ar)
 	}
-	ar.log.Named("account_store")
 
-	var err error
-	if ar.db == nil {
-		ar.db, err = dbOpener.Open(accountDBName, ar.path, ar.log)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open account connection: %w", err)
-		}
-	}
-
-	err = ar.initTables(ctx)
+	err := ar.initTables(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize tables: %w", err)
 	}
@@ -112,32 +99,4 @@ func (a *AccountStore) checkSpend(ctx context.Context, spend *Spend) (*big.Int, 
 	}
 
 	return balance, nonce, nil
-}
-
-func (a *AccountStore) ApplyChangeset(changeset io.Reader) error {
-	a.rw.Lock()
-	defer a.rw.Unlock()
-	return a.db.ApplyChangeset(changeset)
-}
-
-func (a *AccountStore) CreateSession() (sql.Session, error) {
-	a.rw.Lock()
-	defer a.rw.Unlock()
-	return a.db.CreateSession()
-}
-
-func (a *AccountStore) Savepoint() (sql.Savepoint, error) {
-	a.rw.Lock()
-	defer a.rw.Unlock()
-	return a.db.Savepoint()
-}
-
-func (a *AccountStore) Close() error {
-	a.rw.Lock()
-	defer a.rw.Unlock()
-
-	return errors.Join(
-		a.stmts.Close(),
-		a.db.Close(),
-	)
 }

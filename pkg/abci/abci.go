@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewAbciApp(database DatabaseModule, validators ValidatorModule, committer AtomicCommitter, opts ...AbciOpt) *AbciApp {
+func NewAbciApp(database DatasetsModule, validators ValidatorModule, committer AtomicCommitter, opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
 		database:   database,
 		validators: validators,
@@ -30,7 +30,7 @@ func NewAbciApp(database DatabaseModule, validators ValidatorModule, committer A
 
 type AbciApp struct {
 	// database is the database module that handles database deployment, dropping, and execution
-	database DatabaseModule
+	database DatasetsModule
 
 	// validators is the validators module that handles joining and approving validators
 	validators ValidatorModule

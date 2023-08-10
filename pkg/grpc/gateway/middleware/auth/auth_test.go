@@ -1,13 +1,14 @@
 package auth
 
 import (
-	http2 "github.com/kwilteam/kwil-db/internal/pkg/test/http"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	http2 "github.com/kwilteam/kwil-db/pkg/grpc/gateway/middleware/http-dummy"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 func TestAuth_ServeHTTP(t *testing.T) {
