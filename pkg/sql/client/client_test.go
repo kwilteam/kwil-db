@@ -1,6 +1,7 @@
 package client_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -161,9 +162,86 @@ func openTestDB(t *testing.T) (*client.SqliteClient, func()) {
 	}
 
 	return db, func() {
+		fmt.Println("deleting")
 		err = db.Delete()
 		if err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func testSession(ctx context.Context, t *testing.T) []byte {
+	db, cleanup := openTestDB(t)
+	defer cleanup()
+
+	err := db.Execute(ctx, "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT) STRICT, WITHOUT ROWID;", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ses, err := db.CreateSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ses.Delete()
+
+	insertStmt, err := db.Prepare("INSERT INTO test (id, name) VALUES ($id, $name);")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updateStmt, err := db.Prepare("UPDATE test SET name = $name WHERE id = $id;")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = insertStmt.Execute(ctx, map[string]interface{}{
+		"$id":   1,
+		"$name": "test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = insertStmt.Execute(ctx, map[string]interface{}{
+		"$id":   2,
+		"$name": "testsd",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = updateStmt.Execute(ctx, map[string]interface{}{
+		"$id":   1,
+		"$name": "test2",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	changeset, err := ses.GenerateChangeset()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, err := changeset.ID()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return id
+}
+
+func Test_Session_Changesets(t *testing.T) {
+	ctx := context.Background()
+
+	base_id := testSession(ctx, t)
+
+	for idx := 0; idx < 10; idx++ {
+		id := testSession(ctx, t)
+		if len(id) != len(base_id) || !bytes.Equal(base_id, id) {
+			t.Fatal("expected ids to be equal")
+		}
+
 	}
 }
