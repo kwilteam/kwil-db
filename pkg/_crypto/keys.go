@@ -12,7 +12,7 @@ type PrivateKey interface {
 type PublicKey interface {
 	Bytes() []byte
 	Type() KeyType
-	Verify(sig *Signature, data []byte) error
+	Verify(sig *Signature2, data []byte) error
 	Address() Address
 }
 

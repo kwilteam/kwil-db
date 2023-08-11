@@ -50,7 +50,7 @@ func (s *Secp256k1PublicKey) Type() KeyType {
 	return Secp256k1
 }
 
-func (s *Secp256k1PublicKey) Verify(sig *Signature, data []byte) error {
+func (s *Secp256k1PublicKey) Verify(sig *Signature2, data []byte) error {
 	// TODO: implement
 	panic("TODO")
 }

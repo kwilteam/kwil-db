@@ -5,10 +5,8 @@ transactions and signed messages.
 package transactions
 
 import (
-	"bytes"
-	"math/big"
-
 	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/serialize/rlp"
 )
 
 // SignedMessage is any message that has been signed by a private key
@@ -16,7 +14,8 @@ import (
 // should be the hash of the payload.
 type SignedMessage struct {
 	Signature *crypto.Signature
-	Message   Serializable
+	Message   rlp.SerializedData
+	Sender    crypto.PublicKey
 }
 
 // Verify verifies the authenticity of a signed message.
@@ -24,32 +23,5 @@ type SignedMessage struct {
 // it to the message in the signature.
 // It then uses the public key in the signature to verify the signature.
 func (s *SignedMessage) Verify() error {
-	messageBytes, err := s.Message.Bytes()
-	if err != nil {
-		return err
-	}
-
-	if !bytes.Equal(s.Signature.Message, crypto.Sha256(messageBytes)) {
-		return ErrFailedHashReconstruction
-	}
-
-	return s.Verify()
+	return s.Sender.Verify(s.Signature, s.Message)
 }
-
-// Serializable is any message that can be hashed
-// This hash is used to both sign the message, as well as reconstruct the
-// hash (if we are checking the message) to verify the signature
-type Serializable interface {
-	Bytes() ([]byte, error)
-}
-
-// TransactionMessageis the payload of a transaction
-// It contains information on the nonce, fee, and the transaction payload
-// The type of the transaction can be derived from the payload
-type TransactionMessage struct {
-	Nonce int64
-	Fee   *big.Int
-}
-
-// AuthenticatedMessage is a message that has been signed by a private key
-// it is not a valid blockchain transaction, but can be used to authenticate

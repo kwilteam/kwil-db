@@ -6,6 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+type SerializedData []byte
+
 type encodingType uint16
 
 const (
@@ -16,7 +18,7 @@ const (
 
 var currentEncodingType = encodingTypeRLP
 
-func Encode(val any) ([]byte, error) {
+func Encode(val any) (SerializedData, error) {
 	var btsVal []byte
 	var err error
 	switch currentEncodingType {
@@ -35,7 +37,7 @@ func Encode(val any) ([]byte, error) {
 	})
 }
 
-func Decode[T any](bts []byte) (*T, error) {
+func Decode[T any](bts SerializedData) (*T, error) {
 	encVal, err := deserializeEncodedValue(bts)
 	if err != nil {
 		return nil, err

@@ -41,7 +41,7 @@ func (s *Ed25519PublicKey) Type() KeyType {
 	return Ed25519
 }
 
-func (s *Ed25519PublicKey) Verify(sig *Signature, data []byte) error {
+func (s *Ed25519PublicKey) Verify(sig *Signature2, data []byte) error {
 	panic("implement me")
 }
 

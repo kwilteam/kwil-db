@@ -1,38 +1,38 @@
-package types_test
+package transactions_test
 
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/types"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/stretchr/testify/assert"
 )
 
-type serializable interface {
-	Bytes() ([]byte, error)
-	FromBytes([]byte) error
+type marshallable interface {
+	MarshalBinary() ([]byte, error)
+	UnmarshalBinary([]byte) error
 }
 
 // this simply test that they all serialize and comply with RLP
 func Test_Types(t *testing.T) {
 	type testCase struct {
 		name string
-		obj  serializable
+		obj  marshallable
 	}
 
 	testCases := []testCase{
 		{
 			name: "schema",
-			obj: &types.Schema{
+			obj: &transactions.Schema{
 				Owner: "user",
 				Name:  "test_schema",
-				Tables: []*types.Table{
+				Tables: []*transactions.Table{
 					{
 						Name: "users",
-						Columns: []*types.Column{
+						Columns: []*transactions.Column{
 							{
 								Name: "id",
 								Type: "integer",
-								Attributes: []*types.Attribute{
+								Attributes: []*transactions.Attribute{
 									{
 										Type:  "primary_key",
 										Value: "true",
@@ -40,12 +40,12 @@ func Test_Types(t *testing.T) {
 								},
 							},
 						},
-						ForeignKeys: []*types.ForeignKey{
+						ForeignKeys: []*transactions.ForeignKey{
 							{
 								ChildKeys:   []string{"child_id"},
 								ParentKeys:  []string{"parent_id"},
 								ParentTable: "parent_table",
-								Actions: []*types.ForeignKeyAction{
+								Actions: []*transactions.ForeignKeyAction{
 									{
 										On: "delete",
 										Do: "cascade",
@@ -53,7 +53,7 @@ func Test_Types(t *testing.T) {
 								},
 							},
 						},
-						Indexes: []*types.Index{
+						Indexes: []*transactions.Index{
 							{
 								Name:    "index_name",
 								Columns: []string{"id", "name"},
@@ -62,20 +62,20 @@ func Test_Types(t *testing.T) {
 						},
 					},
 				},
-				Actions: []*types.Action{
+				Actions: []*transactions.Action{
 					{
 						Name:        "get_user",
 						Inputs:      []string{"user_id"},
-						Mutability:  types.MutabilityUpdate.String(),
-						Auxiliaries: []string{types.AuxiliaryTypeMustSign.String()},
+						Mutability:  transactions.MutabilityUpdate.String(),
+						Auxiliaries: []string{transactions.AuxiliaryTypeMustSign.String()},
 						Public:      true,
 						Statements:  []string{"SELECT * FROM users WHERE id = $user_id"},
 					},
 				},
-				Extensions: []*types.Extension{
+				Extensions: []*transactions.Extension{
 					{
 						Name: "auth",
-						Config: []*types.ExtensionConfig{
+						Config: []*transactions.ExtensionConfig{
 							{
 								Argument: "token",
 								Value:    "abc123",
@@ -88,7 +88,7 @@ func Test_Types(t *testing.T) {
 		},
 		{
 			name: "action_execution",
-			obj: &types.ActionExecution{
+			obj: &transactions.ActionExecution{
 				DBID:   "db_id",
 				Action: "action",
 				Arguments: [][]string{
@@ -105,7 +105,7 @@ func Test_Types(t *testing.T) {
 		},
 		{
 			name: "action_call",
-			obj: &types.ActionCall{
+			obj: &transactions.ActionCall{
 				DBID:   "db_id",
 				Action: "action",
 				Arguments: []string{
@@ -114,28 +114,37 @@ func Test_Types(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "drop_schema",
+			obj: &transactions.DropSchema{
+				Owner: "user",
+				Name:  "test_schema",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			bts, err := tc.obj.Bytes()
+			bts, err := tc.obj.MarshalBinary()
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			var obj serializable
+			var obj marshallable
 			switch tc.obj.(type) {
-			case *types.Schema:
-				obj = &types.Schema{}
-			case *types.ActionExecution:
-				obj = &types.ActionExecution{}
-			case *types.ActionCall:
-				obj = &types.ActionCall{}
+			case *transactions.Schema:
+				obj = &transactions.Schema{}
+			case *transactions.ActionExecution:
+				obj = &transactions.ActionExecution{}
+			case *transactions.ActionCall:
+				obj = &transactions.ActionCall{}
+			case *transactions.DropSchema:
+				obj = &transactions.DropSchema{}
 			default:
 				t.Fatal("unknown type")
 			}
 
-			if err := obj.FromBytes(bts); err != nil {
+			if err := obj.UnmarshalBinary(bts); err != nil {
 				t.Fatal(err)
 			}
 

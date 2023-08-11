@@ -1,6 +1,19 @@
-package types
+package transactions
 
-import "github.com/kwilteam/kwil-db/pkg/serialize/rlp"
+import (
+	"encoding"
+
+	"github.com/kwilteam/kwil-db/pkg/serialize/rlp"
+)
+
+type PayloadType string
+
+const (
+	PayloadTypeDeploySchema  PayloadType = "deploy_schema"
+	PayloadTypeDropSchema    PayloadType = "drop_schema"
+	PayloadTypeExecuteAction PayloadType = "execute_action"
+	PayloadTypeCallAction    PayloadType = "call_action"
+)
 
 type Schema struct {
 	Owner      string
@@ -10,11 +23,14 @@ type Schema struct {
 	Extensions []*Extension
 }
 
-func (s *Schema) Bytes() ([]byte, error) {
+var _ encoding.BinaryMarshaler = (*Schema)(nil)
+var _ encoding.BinaryUnmarshaler = (*Schema)(nil)
+
+func (s *Schema) MarshalBinary() ([]byte, error) {
 	return rlp.Encode(s)
 }
 
-func (s *Schema) FromBytes(b []byte) error {
+func (s *Schema) UnmarshalBinary(b []byte) error {
 	result, err := rlp.Decode[Schema](b)
 	if err != nil {
 		return err
@@ -131,11 +147,14 @@ type DropSchema struct {
 	Name  string
 }
 
-func (s *DropSchema) Bytes() ([]byte, error) {
+var _ encoding.BinaryMarshaler = (*DropSchema)(nil)
+var _ encoding.BinaryUnmarshaler = (*DropSchema)(nil)
+
+func (s *DropSchema) MarshalBinary() ([]byte, error) {
 	return rlp.Encode(s)
 }
 
-func (s *DropSchema) FromBytes(b []byte) error {
+func (s *DropSchema) UnmarshalBinary(b []byte) error {
 	res, err := rlp.Decode[DropSchema](b)
 	if err != nil {
 		return err
@@ -143,5 +162,51 @@ func (s *DropSchema) FromBytes(b []byte) error {
 
 	*s = *res
 
+	return nil
+}
+
+type ActionExecution struct {
+	DBID      string
+	Action    string
+	Arguments [][]string
+}
+
+var _ encoding.BinaryMarshaler = (*ActionExecution)(nil)
+var _ encoding.BinaryUnmarshaler = (*ActionExecution)(nil)
+
+func (a *ActionExecution) MarshalBinary() ([]byte, error) {
+	return rlp.Encode(a)
+}
+
+func (s *ActionExecution) UnmarshalBinary(b []byte) error {
+	res, err := rlp.Decode[ActionExecution](b)
+	if err != nil {
+		return err
+	}
+
+	*s = *res
+	return nil
+}
+
+type ActionCall struct {
+	DBID      string
+	Action    string
+	Arguments []string
+}
+
+var _ encoding.BinaryMarshaler = (*ActionCall)(nil)
+var _ encoding.BinaryUnmarshaler = (*ActionCall)(nil)
+
+func (a *ActionCall) MarshalBinary() ([]byte, error) {
+	return rlp.Encode(a)
+}
+
+func (s *ActionCall) UnmarshalBinary(b []byte) error {
+	res, err := rlp.Decode[ActionCall](b)
+	if err != nil {
+		return err
+	}
+
+	*s = *res
 	return nil
 }
