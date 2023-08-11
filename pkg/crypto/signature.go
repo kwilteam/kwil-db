@@ -9,7 +9,6 @@ import (
 	cmtjson "github.com/cometbft/cometbft/libs/json"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -19,6 +18,12 @@ type SignatureType int32
 
 const (
 	SIGNATURE_TYPE_INVALID SignatureType = iota
+
+	// all of these different SECP256k1 signatures should
+	// be revisited.  If they are warranted, then at the very least
+	// they should be renamed to be more descriptive
+	// it could also be worth giving them string representations,
+	// instead of just numbers
 	PK_SECP256K1_UNCOMPRESSED
 	ACCOUNT_SECP256K1_UNCOMPRESSED
 	ACCOUNT_SECP256K1_UNCOMPRESSED_STRUCTURED_v1
@@ -38,9 +43,20 @@ func (s SignatureType) Int32() int32 {
 }
 
 type Signature struct {
-	Signature []byte        `json:"signature_bytes"`
+	Message   []byte `json:"message"`
+	Signature []byte `json:"signature_bytes"`
+	Sender    PublicKey
 	Type      SignatureType `json:"signature_type"`
 }
+
+func (s *Signature) Verify() error {
+	return s.Sender.Verify(s)
+}
+
+/*
+	everything below this is considered "deprecated", and is only left for backwards compatibility
+	while the new signature is being implemented
+*/
 
 func Sign(data []byte, k *ecdsa.PrivateKey) (*Signature, error) {
 	signature := Signature{
@@ -56,6 +72,7 @@ func Sign(data []byte, k *ecdsa.PrivateKey) (*Signature, error) {
 	return &signature, nil
 }
 
+// Deprecated: use Verify instead
 func (s *Signature) Check(sender string, data []byte) error {
 	ok, err := CheckSignature(sender, s, data)
 	if err != nil {
@@ -67,23 +84,6 @@ func (s *Signature) Check(sender string, data []byte) error {
 	}
 
 	return nil
-}
-
-func ECDSAFromHex(hex string) (*ecdsa.PrivateKey, error) {
-	return ec.HexToECDSA(hex)
-}
-
-func AddressFromPrivateKey(key *ecdsa.PrivateKey) string {
-	caddr := ec.PubkeyToAddress(key.PublicKey)
-	return caddr.Hex()
-}
-
-func IsValidAddress(addr string) bool {
-	return common.IsHexAddress(addr)
-}
-
-func HexFromECDSAPrivateKey(key *ecdsa.PrivateKey) string {
-	return hexutil.Encode(ec.FromECDSA(key))[2:]
 }
 
 func CheckSignature(addr string, sig *Signature, data []byte) (bool, error) {
