@@ -17,6 +17,7 @@ func NewTestAccountStore(ctx context.Context, opts ...balances.AccountStoreOpts)
 
 	accStore, err := balances.NewAccountStore(ctx,
 		ds,
+		opts...,
 	)
 	if err != nil {
 		return nil, nil, err
