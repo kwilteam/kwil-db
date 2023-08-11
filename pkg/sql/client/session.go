@@ -95,10 +95,12 @@ func (c *Changeset) ID() ([]byte, error) {
 			return nil, err
 		}
 
-		idents.Add(&identifiedRecord{
+		record := &identifiedRecord{
 			primaryKey: concatenatePrimaryKeys(primaryKeys),
-			values:     recordValues,
-		})
+			values:     RecordValues(recordValues),
+		}
+
+		idents.Add(record)
 	}
 
 	hash := []byte{}
@@ -113,6 +115,16 @@ func (c *Changeset) ID() ([]byte, error) {
 	}
 
 	return c.id, nil
+}
+
+func RecordValues(records [][]byte) [][]byte {
+	RecordValues := make([][]byte, len(records))
+	for i, value := range records {
+		Val := make([]byte, len(value))
+		copy(Val, value)
+		RecordValues[i] = Val
+	}
+	return RecordValues
 }
 
 /*
@@ -131,6 +143,7 @@ func getRecordValues(c *sqlite.Changeset) ([][]byte, error) {
 	switch operation.Type {
 	case sqlite.OpInsert:
 		bts := make([][]byte, 0)
+
 		for i := 0; i < operation.NumColumns; i++ {
 			value, err := c.New(i)
 			if err != nil {
@@ -193,11 +206,6 @@ func concatenatePrimaryKeys(primaryKeys []*sqlite.Value) []byte {
 // identifiers is used for logn ordering times for identifiers
 type identifiers struct {
 	data []*identifiedRecord
-}
-
-// newIdentifiers initializes a new Identifiers struct
-func newIdentifiers() *identifiers {
-	return &identifiers{}
 }
 
 // Add method to add a new Identifier alphabetically
