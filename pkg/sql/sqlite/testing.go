@@ -1,12 +1,7 @@
 package sqlite
 
 import (
-	"fmt"
 	"os"
-)
-
-const (
-	testdbName = "test_temp_db_DELETE_ME"
 )
 
 // OpenDbWithTearDown opens a connection to the database with the given name.
@@ -20,19 +15,9 @@ func OpenDbWithTearDown(name string) (*Connection, func() error, error) {
 		return nil, nil, err
 	}
 
-	err = conn.Delete()
-	if err != nil {
-		fmt.Printf("failed to delete temp database while opening %v\n", err)
-	}
-
-	conn2, err := OpenConn(name, WithPath("./tmp/"))
-	if err != nil {
-		return nil, nil, err
-	}
-
 	closeFunc := func() error {
 
-		err = conn2.Delete()
+		err = conn.Delete()
 		if err != nil {
 			return err
 		}
@@ -41,5 +26,5 @@ func OpenDbWithTearDown(name string) (*Connection, func() error, error) {
 		return os.RemoveAll(path)
 	}
 
-	return conn2, closeFunc, nil
+	return conn, closeFunc, nil
 }
