@@ -125,3 +125,23 @@ const (
 	// AuxiliaryTypeMustSign is used to specify that an action need signature, it is used for `view` action.
 	AuxiliaryTypeMustSign AuxiliaryType = "mustsign"
 )
+
+type DropSchema struct {
+	Owner string
+	Name  string
+}
+
+func (s *DropSchema) Bytes() ([]byte, error) {
+	return rlp.Encode(s)
+}
+
+func (s *DropSchema) FromBytes(b []byte) error {
+	res, err := rlp.Decode[DropSchema](b)
+	if err != nil {
+		return err
+	}
+
+	*s = *res
+
+	return nil
+}
