@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 
 	"github.com/spf13/cobra"
@@ -33,15 +32,12 @@ func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) (string, e
 			return address, fmt.Errorf("no address provided")
 		}
 
-		if !crypto.IsValidAddress(address) {
-			return address, fmt.Errorf("invalid address provided: %s", address)
-		}
 	} else {
 		if conf.PrivateKey == nil {
 			return address, fmt.Errorf("no address provided")
 		}
 
-		address = crypto.AddressFromPrivateKey(conf.PrivateKey)
+		address = conf.PrivateKey.PubKey().Address().String()
 	}
 
 	return address, nil

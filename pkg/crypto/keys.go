@@ -7,6 +7,7 @@ type PrivateKey interface {
 	Type() KeyType
 	Sign(msg []byte) (*Signature, error)
 	PubKey() PublicKey
+	Hex() string
 }
 
 type PublicKey interface {

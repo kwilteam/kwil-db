@@ -16,7 +16,6 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/spf13/cobra"
 )
@@ -49,7 +48,7 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
-				db.Owner = crypto.AddressFromPrivateKey(conf.PrivateKey)
+				db.Owner = conf.PrivateKey.PubKey().Address().String()
 
 				res, err := client.DeployDatabase(ctx, db)
 				if err != nil {

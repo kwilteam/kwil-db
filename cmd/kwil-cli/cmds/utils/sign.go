@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 
 	"github.com/spf13/cobra"
 )
@@ -26,7 +25,7 @@ func signCmd() *cobra.Command {
 			}
 
 			// generate signature
-			sig, err := crypto.Sign([]byte(args[0]), conf.PrivateKey)
+			sig, err := conf.PrivateKey.Sign([]byte(args[0]))
 			if err != nil {
 				return fmt.Errorf("error generating signature: %w", err)
 			}
