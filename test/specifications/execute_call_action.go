@@ -9,7 +9,7 @@ import (
 )
 
 type ExecuteCallDsl interface {
-	Call(ctx context.Context, dbid, action string, inputs map[string]any, opts ...client.CallOpt) ([]map[string]any, error)
+	Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) ([]map[string]any, error)
 }
 
 func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl) {
@@ -18,8 +18,8 @@ func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteC
 	db := SchemaLoader.Load(t, schema_testdb)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
 
-	getPostInput := map[string]any{
-		"$id": 1111,
+	getPostInput := []any{
+		[]any{1111},
 	}
 
 	results, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput)
