@@ -10,13 +10,9 @@ ARG git_commit
 WORKDIR /app
 RUN apk update && apk add git openssh
 
-RUN echo -e "[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/" >> /root/.gitconfig
-RUN cat /root/.gitconfig
-RUN mkdir /root/.ssh && echo "StrictHostKeyChecking no " > /root/.ssh/config
-
 COPY . .
-# use `go mod vendor` to speed up build for CI & access private deps
-#RUN go mod download
+RUN test -f go.work && rm go.work || true
+
 RUN GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time GO_GCFLAGS="all=-N -l" CGO_ENABLED=0 TARGET="/app/dist" ./scripts/build/binary kwild
 RUN chmod +x /app/dist/kwild-*
 
