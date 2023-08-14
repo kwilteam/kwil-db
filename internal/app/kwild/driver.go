@@ -2,7 +2,6 @@ package kwild
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -19,29 +18,39 @@ import (
 
 // KwildDriver is a grpc driver for  integration tests
 type KwildDriver struct {
-	clt         *client.Client
-	pk          *ecdsa.PrivateKey
-	gatewayAddr string // to ignore the gatewayAddr returned by the config.service
-
+	clt    *client.Client
 	logger log.Logger
 }
 
-func NewKwildDriver(clt *client.Client, pk *ecdsa.PrivateKey, gatewayAddr string, logger log.Logger) *KwildDriver {
-	return &KwildDriver{
-		clt:         clt,
-		pk:          pk,
-		gatewayAddr: gatewayAddr,
-		logger:      logger,
+type GrpcDriverOpt func(*KwildDriver)
+
+func WithLogger(logger log.Logger) GrpcDriverOpt {
+	return func(d *KwildDriver) {
+		d.logger = logger
 	}
 }
 
+func NewKwildDriver(clt *client.Client, opts ...GrpcDriverOpt) *KwildDriver {
+	driver := &KwildDriver{
+		clt:    clt,
+		logger: log.New(log.Config{}),
+	}
+
+	for _, opt := range opts {
+		opt(driver)
+	}
+
+	return driver
+}
+
 func (d *KwildDriver) GetUserAddress() string {
-	return ec.PubkeyToAddress(d.pk.PublicKey).Hex()
+	return ec.PubkeyToAddress(d.clt.PrivateKey.PublicKey).Hex()
 }
 
 // TODO: this likely needs to change; the old Kwild driver is not compatible, since deploy, drop, and execute are asynchronous
 
 func (d *KwildDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) error {
+	db.Owner = d.GetUserAddress()
 	rec, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {
 		fmt.Println("Error deploying database: ", err.Error())
