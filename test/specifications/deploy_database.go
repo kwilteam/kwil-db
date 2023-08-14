@@ -2,16 +2,16 @@ package specifications
 
 import (
 	"context"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/stretchr/testify/assert"
 )
 
 // DatabaseDeployDsl is dsl for database deployment specification
 type DatabaseDeployDsl interface {
-	DeployDatabase(ctx context.Context, db *serialize.Schema) error
+	DeployDatabase(ctx context.Context, db *transactions.Schema) error
 	// TODO: verify more than just existence, check schema structure
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
