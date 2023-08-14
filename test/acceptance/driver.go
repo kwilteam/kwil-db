@@ -9,4 +9,5 @@ type KwilAcceptanceDriver interface {
 	specifications.DatabaseDropDsl
 	specifications.ExecuteQueryDsl
 	specifications.ExecuteCallDsl
+	specifications.NetworkOpsDsl
 }

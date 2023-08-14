@@ -106,23 +106,10 @@ tasks:
     cmds:
       - go test ./test/acceptance/ -timeout 12h -dev -v
 
-  dev:up:nb:
+  dev:up:no-build:
     desc: Start the dev environment without rebuilding docker image
     cmds:
       - go test ./test/acceptance/ -timeout 12h -dev -v
-
-  dev:testnet:up:
-    desc: Start the dev environment(with testnet)
-    deps:
-      - task: build:docker
-        vars: { VARIANT: 'shell' }
-    cmds:
-      - go test ./test/integration/ -timeout 12h -dev -v
-
-  dev:testnet:up:nb:
-    desc: Start the dev environment(with testnet) without rebuilding docker image
-    cmds:
-      - go test ./test/integration/ -timeout 12h -dev -v
 
   # ************ test ************
   test:act:
@@ -133,7 +120,7 @@ tasks:
     cmds:
       - go test ./test/acceptance/ -v
 
-  test:act:nb:
+  test:act:no-build:
     desc: Run acceptance tests without building docker image
     cmds:
       - go test ./test/acceptance/ -count=1 -v
@@ -149,4 +136,4 @@ tasks:
     desc: Run integration tests
     #deps: [ build:docker ]
     cmds:
-      - go test -count=1 -timeout 0 ./test/integration/ -v
+      - go test -count=1 -timeout 0 ./test/integration-tests/ -v
