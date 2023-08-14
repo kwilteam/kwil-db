@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"strings"
+
+	"go.uber.org/zap"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql"
@@ -69,7 +70,7 @@ func OpenDataset(ctx context.Context, ds Datastore, opts ...OpenOpt) (*Dataset, 
 func (d *Dataset) execConstructor(ctx context.Context, opts *TxOpts) error {
 	for _, procedure := range d.metadata.Procedures {
 		if strings.EqualFold(procedure.Name, constructorName) {
-			_, err := d.executeOnce(ctx, procedure, make(map[string]any), d.getExecutionOpts(procedure, opts)...)
+			_, err := d.executeOnce(ctx, procedure, []any{}, d.getExecutionOpts(procedure, opts)...)
 			if err != nil {
 				return err
 			}
@@ -84,7 +85,7 @@ func (d *Dataset) execConstructor(ctx context.Context, opts *TxOpts) error {
 const constructorName = "init"
 
 // Execute executes a procedure.
-func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]any, opts *TxOpts) ([]map[string]any, error) {
+func (d *Dataset) Execute(ctx context.Context, action string, args [][]any, opts *TxOpts) ([]map[string]any, error) {
 	if opts == nil {
 		opts = &TxOpts{}
 	}
@@ -110,7 +111,7 @@ func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]
 	defer savepoint.Rollback()
 
 	if len(args) == 0 { // if no args, add an empty arg map so we can execute once
-		args = append(args, make(map[string]any))
+		args = append(args, []any{})
 	}
 
 	var result []map[string]any
@@ -130,13 +131,9 @@ func (d *Dataset) Execute(ctx context.Context, action string, args []map[string]
 }
 
 // Call is like execute, but it is non-mutative.
-func (d *Dataset) Call(ctx context.Context, action string, args map[string]any, opts *TxOpts) ([]map[string]any, error) {
+func (d *Dataset) Call(ctx context.Context, action string, args []any, opts *TxOpts) ([]map[string]any, error) {
 	if opts == nil {
 		opts = &TxOpts{}
-	}
-
-	if len(args) == 0 { // if no args, add an empty arg map so we can execute once
-		args = make(map[string]any)
 	}
 
 	proc, err := d.getProcedure(action)
@@ -187,15 +184,9 @@ func (d *Dataset) getExecutionOpts(proc *types.Procedure, opts *TxOpts) []execut
 	return execOpts
 }
 
-func (d *Dataset) executeOnce(ctx context.Context, proc *types.Procedure, args map[string]any, opts ...execution.ExecutionOpt) ([]map[string]any, error) {
-	var argArr []any
-	for _, arg := range proc.Args {
-		val, ok := args[arg]
-		if !ok {
-			return nil, fmt.Errorf("missing argument %s", arg)
-		}
-
-		argArr = append(argArr, val)
+func (d *Dataset) executeOnce(ctx context.Context, proc *types.Procedure, args []any, opts ...execution.ExecutionOpt) ([]map[string]any, error) {
+	if len(args) != len(proc.Args) {
+		return nil, fmt.Errorf("expected %d args, got %d", len(proc.Args), len(args))
 	}
 
 	sp, err := d.db.Savepoint()
@@ -204,7 +195,7 @@ func (d *Dataset) executeOnce(ctx context.Context, proc *types.Procedure, args m
 	}
 	defer sp.Rollback()
 
-	results, err := d.engine.ExecuteProcedure(ctx, proc.Name, argArr,
+	results, err := d.engine.ExecuteProcedure(ctx, proc.Name, args,
 		opts...,
 	)
 	if err != nil {

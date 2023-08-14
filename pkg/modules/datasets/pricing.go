@@ -24,7 +24,7 @@ func (d *DatasetModule) PriceDrop(ctx context.Context, dbid string) (price *big.
 }
 
 // PriceExecute returns the price of executing an action.
-func (d *DatasetModule) PriceExecute(ctx context.Context, dbid string, action string, params []map[string]any) (price *big.Int, err error) {
+func (d *DatasetModule) PriceExecute(ctx context.Context, dbid string, action string, args [][]any) (price *big.Int, err error) {
 	return d.applyFeeMultiplier(defaultExecutePrice), nil
 }
 

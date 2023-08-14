@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -25,19 +24,16 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/sql"
-	"github.com/kwilteam/kwil-db/pkg/tx"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	txSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 
 	cmtcfg "github.com/cometbft/cometbft/config"
-	"github.com/cometbft/cometbft/crypto/tmhash"
 	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
 	cmtlog "github.com/cometbft/cometbft/libs/log"
 	nm "github.com/cometbft/cometbft/node"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
-	cmttypes "github.com/cometbft/cometbft/types"
 )
 
 // BuildKwildServer builds the kwild server
@@ -64,25 +60,6 @@ func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
 	}
 
 	return buildServer(deps), nil
-}
-
-// wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster
-// interface, hiding the details of cometBFT.
-type wrappedCometBFTClient struct {
-	*cmtlocal.Local
-}
-
-func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx *tx.Transaction) ([]byte, error) {
-	bts, err := json.Marshal(tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
-	}
-	hash := tmhash.Sum(bts)
-	_, err = wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(bts))
-	if err != nil {
-		return nil, err
-	}
-	return hash, err
 }
 
 func buildServer(d *coreDependencies) *Server {

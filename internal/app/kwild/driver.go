@@ -10,8 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/serialize"
-	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 
 	types "github.com/cometbft/cometbft/abci/types"
 	ec "github.com/ethereum/go-ethereum/crypto"
@@ -42,14 +41,15 @@ func (d *KwildDriver) GetUserAddress() string {
 
 // TODO: this likely needs to change; the old Kwild driver is not compatible, since deploy, drop, and execute are asynchronous
 
-func (d *KwildDriver) DeployDatabase(ctx context.Context, db *serialize.Schema) error {
+func (d *KwildDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) error {
 	rec, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {
 		fmt.Println("Error deploying database: ", err.Error())
 		return fmt.Errorf("error deploying database: %w", err)
 	}
 
-	res, err := d.clt.CometBftClient.Tx(ctx, rec.TxHash, false)
+	// this likely does not work; cometbft uses its own transaction hash, not the one generated from Kwil
+	res, err := d.clt.CometBftClient.Tx(ctx, rec.ID, false)
 	if err != nil {
 		return fmt.Errorf("error getting transaction: %w", err)
 	}
@@ -76,31 +76,27 @@ func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, db
 	return fmt.Errorf("database does not exist")
 }
 
-func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs []map[string]any) (*kTx.Receipt, []map[string]any, error) {
-	rec, err := d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs)
+func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (*transactions.TransactionStatus, error) {
+	rec, err := d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs...)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error executing query: %w", err)
+		return nil, fmt.Errorf("error executing query: %w", err)
 	}
 
-	res, err := d.clt.CometBftClient.Tx(ctx, rec.TxHash, false)
+	// this likely does not work; cometbft uses its own transaction hash, not the one generated from Kwil
+	res, err := d.clt.CometBftClient.Tx(ctx, rec.ID, false)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error getting transaction: %w", err)
+		return nil, fmt.Errorf("error getting transaction: %w", err)
 	}
 
 	data := res.TxResult.Data
-	var updated_rec *kTx.Receipt
+	var updated_rec *transactions.TransactionStatus
 	err = json.Unmarshal(data, &updated_rec)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	outputs, err := client.DecodeOutputs(updated_rec.Body)
-	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	d.logger.Debug("execute action", zap.String("database", dbid), zap.String("action", actionName))
-	return rec, outputs, nil
+	return rec, nil
 }
 
 func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
@@ -109,7 +105,8 @@ func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
 		return fmt.Errorf("error dropping database: %w", err)
 	}
 
-	res, err := d.clt.CometBftClient.Tx(ctx, rec.TxHash, false)
+	// this likely does not work; cometbft uses its own transaction hash, not the one generated from Kwil
+	res, err := d.clt.CometBftClient.Tx(ctx, rec.ID, false)
 	if err != nil {
 		return fmt.Errorf("error getting transaction: %w", err)
 	}
@@ -126,7 +123,7 @@ func (d *KwildDriver) QueryDatabase(ctx context.Context, dbid, query string) (*c
 	return d.clt.Query(ctx, dbid, query)
 }
 
-func (d *KwildDriver) Call(ctx context.Context, dbid, action string, inputs map[string]any, opts ...client.CallOpt) ([]map[string]any, error) {
+func (d *KwildDriver) Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) ([]map[string]any, error) {
 	return d.clt.CallAction(ctx, dbid, action, inputs, opts...)
 }
 

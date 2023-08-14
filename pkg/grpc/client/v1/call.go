@@ -6,20 +6,15 @@ import (
 	"fmt"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
-func (c *Client) Call(ctx context.Context, req *tx.SignedMessage[*tx.CallActionPayload]) ([]map[string]any, error) {
-	payload, err := req.Payload.Bytes()
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert payload to bytes: %w", err)
-	}
+func (c *Client) Call(ctx context.Context, req *transactions.SignedMessage) ([]map[string]any, error) {
 
 	grpcMsg := &txpb.CallRequest{
-		Payload:   payload,
+		Payload:   req.Message,
 		Signature: convertActionSignature(req.Signature),
-		Sender:    req.Sender,
+		Sender:    req.Sender.Bytes(),
 	}
 
 	res, err := c.txClient.Call(ctx, grpcMsg)
@@ -35,17 +30,4 @@ func (c *Client) Call(ctx context.Context, req *tx.SignedMessage[*tx.CallActionP
 	}
 
 	return result, nil
-}
-
-func convertActionSignature(oldSig *crypto.Signature) *txpb.Signature {
-	if oldSig == nil {
-		return &txpb.Signature{}
-	}
-
-	newSig := &txpb.Signature{
-		SignatureBytes: oldSig.Signature,
-		SignatureType:  oldSig.Type.Int32(),
-	}
-
-	return newSig
 }
