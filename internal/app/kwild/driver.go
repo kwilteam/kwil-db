@@ -12,7 +12,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 
 	types "github.com/cometbft/cometbft/abci/types"
-	ec "github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
 )
 
@@ -44,7 +43,7 @@ func NewKwildDriver(clt *client.Client, opts ...GrpcDriverOpt) *KwildDriver {
 }
 
 func (d *KwildDriver) GetUserAddress() string {
-	return ec.PubkeyToAddress(d.clt.PrivateKey.PublicKey).Hex()
+	return d.clt.PrivateKey.PubKey().Address().String()
 }
 
 // TODO: this likely needs to change; the old Kwild driver is not compatible, since deploy, drop, and execute are asynchronous
