@@ -2,10 +2,10 @@ package specifications
 
 import (
 	"context"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,7 +16,7 @@ type NetworkOpsDsl interface {
 	ValidatorNodeLeave(ctx context.Context, pubKey string) error
 	// ValidatorJoinStatus(ctx context.Context, pubKey []byte) error
 	ValidatorSetCount(ctx context.Context) (int, error)
-	DeployDatabase(ctx context.Context, db *serialize.Schema) error
+	DeployDatabase(ctx context.Context, db *transactions.Schema) error
 	DropDatabase(ctx context.Context, dbName string) error
 }
 

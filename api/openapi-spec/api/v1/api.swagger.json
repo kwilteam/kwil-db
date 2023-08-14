@@ -415,40 +415,6 @@
     }
   },
   "definitions": {
-    "ExtensionsExtensionConfig": {
-      "type": "object",
-      "properties": {
-        "argument": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      }
-    },
-    "TransactionBody": {
-      "type": "object",
-      "properties": {
-        "payload": {
-          "type": "string",
-          "format": "byte"
-        },
-        "payloadType": {
-          "type": "string"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "nonce": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "salt": {
-          "type": "string",
-          "format": "byte"
-        }
-      }
-    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -538,15 +504,15 @@
       "type": "object",
       "properties": {
         "tx": {
-          "$ref": "#/definitions/txTransaction"
+          "$ref": "#/definitions/txTx"
         }
       }
     },
     "txBroadcastResponse": {
       "type": "object",
       "properties": {
-        "status": {
-          "$ref": "#/definitions/txTransactionStatus"
+        "receipt": {
+          "$ref": "#/definitions/txTxReceipt"
         }
       }
     },
@@ -561,8 +527,7 @@
           "$ref": "#/definitions/txSignature"
         },
         "sender": {
-          "type": "string",
-          "format": "byte"
+          "type": "string"
         }
       }
     },
@@ -592,11 +557,34 @@
         }
       }
     },
+    "txDataset": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/txTable"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/txAction"
+          }
+        }
+      }
+    },
     "txEstimatePriceRequest": {
       "type": "object",
       "properties": {
         "tx": {
-          "$ref": "#/definitions/txTransaction"
+          "$ref": "#/definitions/txTx"
         }
       }
     },
@@ -604,23 +592,6 @@
       "type": "object",
       "properties": {
         "price": {
-          "type": "string"
-        }
-      }
-    },
-    "txExtensions": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "initialization": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ExtensionsExtensionConfig"
-          }
-        },
-        "alias": {
           "type": "string"
         }
       }
@@ -651,8 +622,8 @@
     "txGetSchemaResponse": {
       "type": "object",
       "properties": {
-        "schema": {
-          "$ref": "#/definitions/txSchema"
+        "dataset": {
+          "$ref": "#/definitions/txDataset"
         }
       }
     },
@@ -731,35 +702,6 @@
       ],
       "default": "OK"
     },
-    "txSchema": {
-      "type": "object",
-      "properties": {
-        "owner": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "tables": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/txTable"
-          }
-        },
-        "actions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/txAction"
-          }
-        },
-        "extensions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/txExtensions"
-          }
-        }
-      }
-    },
     "txSignature": {
       "type": "object",
       "properties": {
@@ -793,39 +735,49 @@
         }
       }
     },
-    "txTransaction": {
+    "txTx": {
       "type": "object",
       "properties": {
-        "body": {
-          "$ref": "#/definitions/TransactionBody"
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        },
+        "payload_type": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
         },
         "signature": {
           "$ref": "#/definitions/txSignature"
         },
+        "fee": {
+          "type": "string"
+        },
         "sender": {
-          "type": "string",
-          "format": "byte"
+          "type": "string"
         }
       }
     },
-    "txTransactionStatus": {
+    "txTxReceipt": {
       "type": "object",
       "properties": {
-        "id": {
+        "txHash": {
           "type": "string",
           "format": "byte"
         },
         "fee": {
           "type": "string"
         },
-        "status": {
-          "type": "string"
-        },
-        "errors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "body": {
+          "type": "string",
+          "format": "byte"
         }
       }
     },
@@ -853,16 +805,16 @@
       "type": "object",
       "properties": {
         "tx": {
-          "$ref": "#/definitions/txTransaction"
+          "$ref": "#/definitions/txTx"
         }
       },
-      "title": "TODO: these should not wrap Transactions; all of these should just get forwarded to the broadcast endpoint"
+      "title": "If power is 0, the validator will be removed from the validator set\nIf power is \u003e 0, if the validator is in the approved validator list, validator will be added to the validator set\nBase64 encoded both pubkey and validator power"
     },
     "txValidatorJoinResponse": {
       "type": "object",
       "properties": {
         "receipt": {
-          "$ref": "#/definitions/txTransactionStatus"
+          "$ref": "#/definitions/txTxReceipt"
         }
       }
     },
@@ -902,7 +854,7 @@
       "type": "object",
       "properties": {
         "tx": {
-          "$ref": "#/definitions/txTransaction"
+          "$ref": "#/definitions/txTx"
         }
       }
     },
@@ -910,7 +862,7 @@
       "type": "object",
       "properties": {
         "receipt": {
-          "$ref": "#/definitions/txTransactionStatus"
+          "$ref": "#/definitions/txTxReceipt"
         }
       }
     }
