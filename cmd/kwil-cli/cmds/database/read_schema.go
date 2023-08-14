@@ -40,7 +40,7 @@ func readSchemaCmd() *cobra.Command {
 						fmt.Printf("      Type: %s\n", c.Type)
 						for _, a := range c.Attributes {
 							fmt.Printf("      %s\n", a.Type)
-							if a.Value != nil {
+							if a.Value != "" {
 								fmt.Printf("        %s\n", fmt.Sprint(a.Value))
 							}
 						}

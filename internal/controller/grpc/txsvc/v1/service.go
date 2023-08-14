@@ -8,7 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 type Service struct {
@@ -38,12 +38,12 @@ func NewService(engine EngineReader, accountStore AccountReader, chainClient Blo
 }
 
 type EngineReader interface {
-	Call(ctx context.Context, call *tx.CallActionPayload, msg *tx.SignedMessage[tx.JsonPayload]) ([]map[string]any, error)
+	Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.SignedMessage) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
 	ListOwnedDatabases(ctx context.Context, owner string) ([]string, error)
 	PriceDeploy(ctx context.Context, schema *engineTypes.Schema) (price *big.Int, err error)
 	PriceDrop(ctx context.Context, dbid string) (price *big.Int, err error)
-	PriceExecute(ctx context.Context, dbid string, action string, params []map[string]any) (price *big.Int, err error)
+	PriceExecute(ctx context.Context, dbid string, action string, args [][]any) (price *big.Int, err error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
 }
 
@@ -52,5 +52,5 @@ type AccountReader interface {
 }
 
 type BlockchainBroadcaster interface {
-	BroadcastTxAsync(ctx context.Context, tx *tx.Transaction) (hash []byte, err error)
+	BroadcastTxAsync(ctx context.Context, tx *transactions.Transaction) (err error)
 }

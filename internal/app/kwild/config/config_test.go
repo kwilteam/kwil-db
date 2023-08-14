@@ -1,12 +1,10 @@
 package config_test
 
 import (
-	"fmt"
 	"os"
 	"testing"
 
 	config "github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
 func Test_Config(t *testing.T) {
@@ -14,11 +12,8 @@ func Test_Config(t *testing.T) {
 	os.Setenv("KWILD_PORT", "8081")
 	os.Setenv("KWILD_DEPOSITS_POOL_ADDRESS", "0xabc")
 	os.Setenv("KWILD_EXTENSION_ENDPOINTS", "localhost:8080,localhost:8081,    localhost:8082")
-	cfg, err := config.LoadKwildConfig()
+	_, err := config.LoadKwildConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	addr := crypto.AddressFromPrivateKey(cfg.PrivateKey)
-	fmt.Println(addr)
 }
