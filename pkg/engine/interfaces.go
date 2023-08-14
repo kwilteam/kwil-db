@@ -45,11 +45,11 @@ type Dataset interface {
 	Metadata() (name, owner string)
 	Delete() error
 	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
-	Execute(ctx context.Context, procedure string, args []map[string]any, opts *dataset.TxOpts) ([]map[string]any, error)
+	Execute(ctx context.Context, procedure string, args [][]any, opts *dataset.TxOpts) ([]map[string]any, error)
 	ApplyChangeset(changeset io.Reader) error
 	Savepoint() (sql.Savepoint, error)
 	CreateSession() (sql.Session, error)
-	Call(ctx context.Context, procedure string, args map[string]any, opts *dataset.TxOpts) ([]map[string]any, error)
+	Call(ctx context.Context, procedure string, args []any, opts *dataset.TxOpts) ([]map[string]any, error)
 }
 
 type MasterDB interface {

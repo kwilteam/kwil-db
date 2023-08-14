@@ -2,18 +2,20 @@ package client
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/cstockton/go-conv"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 
 	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/kwilteam/kwil-db/pkg/balances"
+	engineUtils "github.com/kwilteam/kwil-db/pkg/engine/utils"
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
-	"github.com/kwilteam/kwil-db/pkg/serialize"
-	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -21,8 +23,8 @@ import (
 type Client struct {
 	client         *grpcClient.Client
 	CometBftClient *rpchttp.HTTP
-	datasets       map[string]*serialize.Schema
-	PrivateKey     *ecdsa.PrivateKey
+	datasets       map[string]*transactions.Schema
+	PrivateKey     crypto.PrivateKey
 
 	cometBftRpcUrl string
 }
@@ -30,7 +32,7 @@ type Client struct {
 // New creates a new client
 func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
-		datasets:       make(map[string]*serialize.Schema),
+		datasets:       make(map[string]*transactions.Schema),
 		cometBftRpcUrl: "tcp://localhost:26657",
 	}
 
@@ -54,7 +56,7 @@ func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err 
 }
 
 // GetSchema returns the entity of a database
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*serialize.Schema, error) {
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
 	ds, ok := c.datasets[dbid]
 	if ok {
 		return ds, nil
@@ -70,7 +72,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*serialize.Schema,
 }
 
 // DeployDatabase deploys a schema
-func (c *Client) DeployDatabase(ctx context.Context, ds *serialize.Schema) (*kTx.Receipt, error) {
+func (c *Client) DeployDatabase(ctx context.Context, ds *transactions.Schema) (*transactions.TransactionStatus, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
@@ -80,7 +82,7 @@ func (c *Client) DeployDatabase(ctx context.Context, ds *serialize.Schema) (*kTx
 		return nil, fmt.Errorf("dataset owner is not the same as the address")
 	}
 
-	tx, err := c.deploySchemaTx(ctx, ds)
+	tx, err := c.newTx(ctx, ds)
 	if err != nil {
 		return nil, err
 	}
@@ -88,24 +90,18 @@ func (c *Client) DeployDatabase(ctx context.Context, ds *serialize.Schema) (*kTx
 	return c.client.Broadcast(ctx, tx)
 }
 
-// deploySchemaTx creates a new transaction to deploy a schema
-func (c *Client) deploySchemaTx(ctx context.Context, ds *serialize.Schema) (*kTx.Transaction, error) {
-	return c.newTx(ctx, kTx.DEPLOY_DATABASE, ds)
-}
-
 // DropDatabase drops a database
-func (c *Client) DropDatabase(ctx context.Context, name string) (*kTx.Receipt, error) {
+func (c *Client) DropDatabase(ctx context.Context, name string) (*transactions.TransactionStatus, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
 	}
 
-	identifier := &datasetIdentifier{
-		Owner: address,
-		Name:  name,
+	identifier := &transactions.DropSchema{
+		DBID: engineUtils.GenerateDBID(address, name),
 	}
 
-	tx, err := c.dropDatabaseTx(ctx, identifier)
+	tx, err := c.newTx(ctx, identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -115,26 +111,27 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (*kTx.Receipt, e
 		return nil, err
 	}
 
-	delete(c.datasets, identifier.Dbid())
+	delete(c.datasets, identifier.DBID)
 
 	return res, nil
-}
-
-// dropDatabaseTx creates a new transaction to drop a database
-func (c *Client) dropDatabaseTx(ctx context.Context, dbIdent *datasetIdentifier) (*kTx.Transaction, error) {
-	return c.newTx(ctx, kTx.DROP_DATABASE, dbIdent)
 }
 
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, inputs []map[string]any) (*kTx.Receipt, error) {
-	executionBody := &actionExecution{
-		Action: action,
-		DBID:   dbid,
-		Params: inputs,
+// It can take any number of inputs, and if multiple tuples of inputs are passed, it will execute them transactionally.
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples ...[]any) (*transactions.TransactionStatus, error) {
+	stringTuples, err := convertTuples(tuples)
+	if err != nil {
+		return nil, err
 	}
 
-	tx, err := c.executeActionTx(ctx, executionBody)
+	executionBody := &transactions.ActionExecution{
+		Action:    action,
+		DBID:      dbid,
+		Arguments: stringTuples,
+	}
+
+	tx, err := c.newTx(ctx, executionBody)
 	if err != nil {
 		return nil, err
 	}
@@ -144,41 +141,45 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		return nil, err
 	}
 
-	/* 	outputs, err := DecodeOutputs(res.Body)
-	   	if err != nil {
-	   		return nil, err
-	   	}
-	*/
 	return res, nil
 }
 
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
-func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs map[string]any, opts ...CallOpt) ([]map[string]any, error) {
+func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any, opts ...CallOpt) ([]map[string]any, error) {
 	callOpts := &callOptions{}
 
 	for _, opt := range opts {
 		opt(callOpts)
 	}
 
-	payload := &kTx.CallActionPayload{
-		DBID:   dbid,
-		Action: action,
-		Params: inputs,
+	stringInputs, err := convertTuple(inputs)
+	if err != nil {
+		return nil, err
 	}
 
-	var signedMsg *kTx.SignedMessage[*kTx.CallActionPayload]
+	payload := &transactions.ActionCall{
+		DBID:      dbid,
+		Action:    action,
+		Arguments: stringInputs,
+	}
+
+	var signedMsg *transactions.SignedMessage
 	shouldSign, err := shouldAuthenticate(c.PrivateKey, callOpts.forceAuthenticated)
 	if err != nil {
 		return nil, err
 	}
 
-	if shouldSign {
-		signedMsg, err = kTx.CreateSignedMessage(payload, c.PrivateKey)
-	} else {
-		signedMsg = kTx.CreateEmptySignedMessage(payload)
-	}
+	msg, err := transactions.CreateSignedMessage(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signed message: %w", err)
+	}
+
+	if shouldSign {
+		err = msg.Sign(c.PrivateKey)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to create signed message: %w", err)
+		}
 	}
 
 	return c.client.Call(ctx, signedMsg)
@@ -187,7 +188,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 // shouldAuthenticate decides whether the client should authenticate or not
 // if enforced is not nil, it will be used instead of the default value
 // otherwise, if the private key is not nil, it will authenticate
-func shouldAuthenticate(privateKey *ecdsa.PrivateKey, enforced *bool) (bool, error) {
+func shouldAuthenticate(privateKey crypto.PrivateKey, enforced *bool) (bool, error) {
 	if enforced != nil {
 		if !*enforced {
 			return false, nil
@@ -217,16 +218,6 @@ func DecodeOutputs(bts []byte) ([]map[string]any, error) {
 	return outputs, nil
 }
 
-// executeActionTx creates a new transaction to execute an action
-func (c *Client) executeActionTx(ctx context.Context, executionBody *actionExecution) (*kTx.Transaction, error) {
-	return c.newTx(ctx, kTx.EXECUTE_ACTION, executionBody)
-}
-
-// GetConfig returns the provider config
-func (c *Client) GetConfig(ctx context.Context) (*grpcClient.SvcConfig, error) {
-	return c.client.GetConfig(ctx)
-}
-
 // Query executes a query
 func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records, error) {
 	res, err := c.client.Query(ctx, dbid, query)
@@ -251,7 +242,8 @@ func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Acco
 }
 
 func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner string) ([]byte, error) {
-	tx, err := c.NewNodeTx(ctx, kTx.VALIDATOR_APPROVE, joiner, approver)
+	// TODO: change this PayloadTypeExecuteAction to just be a validator update payload (or some equivalent)
+	tx, err := c.NewNodeTx(ctx, transactions.PayloadTypeExecuteAction, joiner, approver)
 	if err != nil {
 		return nil, err
 	}
@@ -268,15 +260,17 @@ func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner s
 	return res.Hash, nil
 }
 
+// TODO: update once validator module is included
 func (c *Client) ValidatorJoin(ctx context.Context, joiner string, power int64) ([]byte, error) {
-	return c.ValidatorUpdate(ctx, joiner, power, kTx.VALIDATOR_JOIN)
+	return c.ValidatorUpdate(ctx, joiner, power, transactions.PayloadTypeValidatorJoin)
 }
 
+// TODO: update once validator module is included
 func (c *Client) ValidatorLeave(ctx context.Context, joiner string, power int64) ([]byte, error) {
-	return c.ValidatorUpdate(ctx, joiner, 0, kTx.VALIDATOR_LEAVE)
+	return c.ValidatorUpdate(ctx, joiner, 0, transactions.PayloadTypeValidatorApprove)
 }
 
-func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, power int64, payloadtype kTx.PayloadType) ([]byte, error) {
+func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, power int64, payloadtype transactions.PayloadType) ([]byte, error) {
 	var nodeKey cmtCrypto.PrivKey
 	key := fmt.Sprintf(`{"type":"tendermint/PrivKeyEd25519","value":"%s"}`, joinerPrivKey)
 	err := cmtjson.Unmarshal([]byte(key), &nodeKey)
@@ -284,16 +278,18 @@ func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, powe
 		return nil, err
 	}
 
-	fmt.Println("Node PublicKey: ", nodeKey.PubKey())
-	bts, _ := json.Marshal(nodeKey.PubKey())
-	fmt.Println("Node PublicKey: ", string(bts))
+	bts, err := json.Marshal(nodeKey.PubKey())
+	if err != nil {
+		return nil, err
+	}
 
 	vldtr := &validator{
 		PubKey: string(bts),
 		Power:  power,
 	}
 
-	tx, err := c.NewNodeTx(ctx, payloadtype, vldtr, joinerPrivKey)
+	// TODO: change this PayloadTypeExecuteAction to just be a validator update payload (or some equivalent)
+	tx, err := c.NewNodeTx(ctx, transactions.PayloadTypeExecuteAction, vldtr, joinerPrivKey)
 	if err != nil {
 		return nil, err
 	}
@@ -308,4 +304,35 @@ func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, powe
 		return nil, err
 	}
 	return res.Hash, nil
+}
+
+// convertTuples converts user passed tuples to strings.
+// this is necessary for RLP encoding
+func convertTuples(tuples [][]any) ([][]string, error) {
+	ins := [][]string{}
+	for _, tuple := range tuples {
+		stringTuple, err := convertTuple(tuple)
+		if err != nil {
+			return nil, err
+		}
+		ins = append(ins, stringTuple)
+	}
+
+	return ins, nil
+}
+
+// convertTuple converts user passed tuple to strings.
+func convertTuple(tuple []any) ([]string, error) {
+	stringTuple := []string{}
+	for _, val := range tuple {
+
+		stringVal, err := conv.String(val)
+		if err != nil {
+			return nil, err
+		}
+
+		stringTuple = append(stringTuple, stringVal)
+	}
+
+	return stringTuple, nil
 }

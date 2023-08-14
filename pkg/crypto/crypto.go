@@ -1,9 +1,12 @@
 package crypto
 
 import (
+	"crypto/ecdsa"
 	c256 "crypto/sha256"
 	c512 "crypto/sha512"
 	"encoding/hex"
+
+	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
 // Sha384 returns the sha384 hash of the data.
@@ -35,4 +38,20 @@ func Sha256(data []byte) []byte {
 
 func Sha256Hex(data []byte) string {
 	return hex.EncodeToString(Sha256(data))
+}
+
+func PublicKeyFromBytes(key []byte) (PublicKey, error) {
+	panic("not implemented")
+}
+
+func PrivateKeyFromHex(h string) (PrivateKey, error) {
+	panic("not implemented")
+}
+
+func PrivateKeyFromBytes(key []byte) (PrivateKey, error) {
+	panic("not implemented")
+}
+
+func ECDSAFromHex(hex string) (*ecdsa.PrivateKey, error) {
+	return ec.HexToECDSA(hex)
 }

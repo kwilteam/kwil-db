@@ -130,7 +130,7 @@ func (e *Engine) getInitializers() map[string]dataset.Initializer {
 // Execute executes a procedure on a database.
 // It returns the result of the procedure.
 // It takes a context, the database id, the procedure name, the arguments, and optionally some options.
-func (e *Engine) Execute(ctx context.Context, dbid string, procedure string, args []map[string]any, opts ...ExecutionOpt) ([]map[string]any, error) {
+func (e *Engine) Execute(ctx context.Context, dbid string, procedure string, args [][]any, opts ...ExecutionOpt) ([]map[string]any, error) {
 	options := &executionConfig{}
 	for _, opt := range opts {
 		opt(options)
@@ -141,10 +141,11 @@ func (e *Engine) Execute(ctx context.Context, dbid string, procedure string, arg
 		return nil, ErrDatasetNotFound
 	}
 
+	if len(args) == 0 {
+		args = append(args, []any{})
+	}
+
 	if options.ReadOnly {
-		if len(args) == 0 {
-			args = append(args, make(map[string]any))
-		}
 
 		return ds.Call(ctx, procedure, args[0], &dataset.TxOpts{
 			Caller: options.Sender,

@@ -1,14 +1,19 @@
 package client
 
-import (
-	"crypto/ecdsa"
-)
+import "github.com/kwilteam/kwil-db/pkg/crypto"
 
 type ClientOpt func(*Client)
 
-func WithPrivateKey(key *ecdsa.PrivateKey) ClientOpt {
+func WithPrivateKey(key crypto.PrivateKey) ClientOpt {
 	return func(c *Client) {
 		c.PrivateKey = key
+	}
+}
+
+// TODO: replace this, since we should not be using cometBFT RPCs
+func WithCometBftUrl(url string) ClientOpt {
+	return func(c *Client) {
+		c.cometBftRpcUrl = url
 	}
 }
 
@@ -29,11 +34,5 @@ func Authenticated(shouldSign bool) CallOpt {
 	return func(o *callOptions) {
 		copied := shouldSign
 		o.forceAuthenticated = &copied
-	}
-}
-
-func WithCometBftUrl(url string) ClientOpt {
-	return func(c *Client) {
-		c.cometBftRpcUrl = url
 	}
 }

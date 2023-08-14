@@ -1,7 +1,6 @@
 package config
 
 import (
-	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,14 +12,14 @@ import (
 )
 
 type KwilCliConfig struct {
-	PrivateKey        *ecdsa.PrivateKey
+	PrivateKey        crypto.PrivateKey
 	GrpcURL           string
 	ClientChainRPCURL string
 }
 
 func (c *KwilCliConfig) ToPeristedConfig() *kwilCliPersistedConfig {
 	return &kwilCliPersistedConfig{
-		PrivateKey:        crypto.HexFromECDSAPrivateKey(c.PrivateKey),
+		PrivateKey:        c.PrivateKey.Hex(),
 		GrpcURL:           c.GrpcURL,
 		ClientChainRPCURL: c.ClientChainRPCURL,
 	}
@@ -42,7 +41,7 @@ func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 		ClientChainRPCURL: c.ClientChainRPCURL,
 	}
 
-	privateKey, err := crypto.ECDSAFromHex(c.PrivateKey)
+	privateKey, err := crypto.PrivateKeyFromHex(c.PrivateKey)
 	if err != nil {
 		return kwilConfig, nil
 	}

@@ -73,7 +73,7 @@ func promptGRPCURL(conf *config.KwilCliConfig) error {
 func promptPrivateKey(conf *config.KwilCliConfig) error {
 	prompt := &common.Prompter{
 		Label:   "Private Key",
-		Default: crypto.HexFromECDSAPrivateKey(conf.PrivateKey),
+		Default: conf.PrivateKey.Hex(),
 	}
 	res, err := prompt.Run()
 	if err != nil {
@@ -85,7 +85,7 @@ func promptPrivateKey(conf *config.KwilCliConfig) error {
 		return nil
 	}
 
-	pk, err := crypto.ECDSAFromHex(res)
+	pk, err := crypto.PrivateKeyFromHex(res)
 	if err != nil {
 		fmt.Println(`invalid private key.  key could not be converted to hex.  received: `, res)
 		promptAskAgain := &common.Prompter{

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 func (c *Client) ApproveValidator(ctx context.Context, pubKey []byte) error {
@@ -23,8 +23,8 @@ func (c *Client) ApproveValidator(ctx context.Context, pubKey []byte) error {
 	return nil
 }
 
-func (c *Client) ValidatorJoin(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	pbTx := ConvertTx(tx)
+func (c *Client) ValidatorJoin(ctx context.Context, tx *transactions.Transaction) (*transactions.TransactionStatus, error) {
+	pbTx := convertTx(tx)
 	fmt.Println("Broadcasting ValidatorJoin transaction")
 	resp, err := c.txClient.ValidatorJoin(ctx, &txpb.ValidatorJoinRequest{Tx: pbTx})
 	if err != nil {
@@ -37,12 +37,11 @@ func (c *Client) ValidatorJoin(ctx context.Context, tx *kTx.Transaction) (*kTx.R
 		return nil, fmt.Errorf("TxServiceClient failed to join Validator: receipt is nil")
 	}
 
-	txRes := ConvertReceipt(resp.Receipt)
-	return txRes, nil
+	return convertTransactionStatus(resp.Receipt)
 }
 
-func (c *Client) ValidatorLeave(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	pbTx := ConvertTx(tx)
+func (c *Client) ValidatorLeave(ctx context.Context, tx *transactions.Transaction) (*transactions.TransactionStatus, error) {
+	pbTx := convertTx(tx)
 	fmt.Println("Broadcasting ValidatorLeave transaction")
 	resp, err := c.txClient.ValidatorLeave(ctx, &txpb.ValidatorLeaveRequest{Tx: pbTx})
 	if err != nil {
@@ -55,8 +54,7 @@ func (c *Client) ValidatorLeave(ctx context.Context, tx *kTx.Transaction) (*kTx.
 		return nil, fmt.Errorf("TxServiceClient failed to leave Validator: receipt is nil")
 	}
 
-	txRes := ConvertReceipt(resp.Receipt)
-	return txRes, nil
+	return convertTransactionStatus(resp.Receipt)
 }
 
 func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*txpb.ValidatorJoinStatusResponse, error) {
