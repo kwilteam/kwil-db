@@ -2,10 +2,11 @@ package config_test
 
 import (
 	"crypto/ecdsa"
-	"github.com/kwilteam/kwil-db/pkg/config"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/kwilteam/kwil-db/pkg/config"
 
 	"github.com/cstockton/go-conv"
 )
@@ -133,7 +134,7 @@ var (
 				return nil, err
 			}
 
-			return crypto.ECDSAFromHex(strVal)
+			return crypto.HexToECDSA(strVal) // TODO: we should rethink this since we support ed25519 now
 		},
 		Required: true,
 	}

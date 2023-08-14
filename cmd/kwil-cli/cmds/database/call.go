@@ -12,7 +12,7 @@ import (
 )
 
 func callCmd() *cobra.Command {
-	var actionName string
+	var action string
 
 	cmd := &cobra.Command{
 		Use:   "call",
@@ -41,22 +41,33 @@ OR
 '$name:satoshi' '$age:32' --dbid=x1234 --action=create_user `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
-				dbId, err := getSelectedDbid(cmd, conf)
+				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return fmt.Errorf("target database not properly specified: %w", err)
 				}
 
-				lowerName := strings.ToLower(actionName)
+				lowerName := strings.ToLower(action)
 
-				inputs, err := GetInputs(args)
+				inputs, err := parseInputs(args)
 				if err != nil {
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
-				if len(inputs) == 0 {
-					inputs = append(inputs, map[string]any{})
+
+				actionStructure, err := getAction(ctx, client, dbid, lowerName)
+				if err != nil {
+					return fmt.Errorf("error getting action: %w", err)
 				}
 
-				res, err := client.CallAction(ctx, dbId, lowerName, inputs[0])
+				tuples, err := createActionInputs(inputs, actionStructure)
+				if err != nil {
+					return fmt.Errorf("error creating action inputs: %w", err)
+				}
+
+				if len(tuples) == 0 {
+					tuples = append(tuples, []any{})
+				}
+
+				res, err := client.CallAction(ctx, dbid, lowerName, tuples[0])
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}
@@ -78,7 +89,7 @@ OR
 	cmd.Flags().StringP(nameFlag, "n", "", "the database name")
 	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
-	cmd.Flags().StringVarP(&actionName, actionNameFlag, "a", "", "the action name (required)")
+	cmd.Flags().StringVarP(&action, actionNameFlag, "a", "", "the action name (required)")
 
 	cmd.MarkFlagRequired(actionNameFlag)
 	return cmd

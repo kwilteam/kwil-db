@@ -4,19 +4,19 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
-	"github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 type DatasetsModule interface {
-	Deploy(ctx context.Context, schema *types.Schema, tx *tx.Transaction) (*tx.ExecutionResponse, error)
-	Drop(ctx context.Context, dbid string, tx *tx.Transaction) (*tx.ExecutionResponse, error)
-	Execute(ctx context.Context, dbid string, action string, params []map[string]any, tx *tx.Transaction) (*tx.ExecutionResponse, error)
+	Deploy(ctx context.Context, schema *types.Schema, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
+	Drop(ctx context.Context, dbid string, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
+	Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
 }
 
 // Should be implemented in pkg/modules/validators
 type ValidatorModule interface {
-	ValidatorJoin(ctx context.Context, address string, tx *tx.Transaction) (*tx.ExecutionResponse, error)
-	ValidatorApprove(ctx context.Context, address string, approvedBy string, tx *tx.Transaction) (*tx.ExecutionResponse, error)
+	ValidatorJoin(ctx context.Context, address string, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
+	ValidatorApprove(ctx context.Context, address string, approvedBy string, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
 }
 
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores

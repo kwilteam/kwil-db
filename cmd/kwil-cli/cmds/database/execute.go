@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 
 	"github.com/spf13/cobra"
 )
@@ -50,12 +51,17 @@ OR
 
 				lowerName := strings.ToLower(actionName)
 
-				inputs, err := GetInputs(args)
+				actionStructure, err := getAction(ctx, client, dbId, lowerName)
+				if err != nil {
+					return fmt.Errorf("error getting action: %w", err)
+				}
+
+				inputs, err := GetInputs(args, actionStructure)
 				if err != nil {
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
 
-				receipt, err := client.ExecuteAction(ctx, dbId, lowerName, inputs)
+				receipt, err := client.ExecuteAction(ctx, dbId, lowerName, inputs...)
 				if err != nil {
 					return fmt.Errorf("error executing database: %w", err)
 				}
@@ -83,7 +89,7 @@ OR
 
 // inputs will be received as args.  The args will be in the form of
 // $argname:value.  Example $username:satoshi $age:32
-func GetInputs(args []string) ([]map[string]any, error) {
+func parseInputs(args []string) ([]map[string]any, error) {
 	inputs := make(map[string]any)
 
 	for _, arg := range args {
@@ -99,6 +105,36 @@ func GetInputs(args []string) ([]map[string]any, error) {
 	}
 
 	return []map[string]any{inputs}, nil
+}
+
+func GetInputs(args []string, action *transactions.Action) ([][]any, error) {
+	inputs, err := parseInputs(args)
+	if err != nil {
+		return nil, fmt.Errorf("error getting inputs: %w", err)
+	}
+
+	return createActionInputs(inputs, action)
+}
+
+// createActionInputs takes a []map[string]any and an action, and converts it to [][]any
+func createActionInputs(inputs []map[string]any, action *transactions.Action) ([][]any, error) {
+
+	tuples := [][]any{}
+	for _, input := range inputs {
+		newTuple := []any{}
+		for _, inputField := range action.Inputs {
+			value, ok := input[inputField]
+			if !ok {
+				return nil, fmt.Errorf("missing input: %s", inputField)
+			}
+
+			newTuple = append(newTuple, value)
+		}
+
+		tuples = append(tuples, newTuple)
+	}
+
+	return tuples, nil
 }
 
 func printActionResults(results []map[string]any) {

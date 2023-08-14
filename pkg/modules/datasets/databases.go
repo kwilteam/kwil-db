@@ -1,6 +1,8 @@
 package datasets
 
-import "github.com/kwilteam/kwil-db/pkg/log"
+import (
+	"github.com/kwilteam/kwil-db/pkg/log"
+)
 
 type DatasetModule struct {
 	engine       Engine

@@ -6,33 +6,27 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
-	transaction "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 // Call executes a call action on a database.  It is a read-only action.
 // It returns the result of the call.
 // If a message caller is specified, then it will check the signature of the message and use the caller as the caller of the action.
-func (u *DatasetModule) Call(ctx context.Context, call *transaction.CallActionPayload, msg *transaction.SignedMessage[transaction.JsonPayload]) ([]map[string]any, error) {
+// TODO: this should not use the action payload type
+func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.SignedMessage) ([]map[string]any, error) {
 	executionOpts := []engine.ExecutionOpt{
 		engine.ReadOnly(true),
 	}
-	if msg.Sender != "" {
+	if msg.Sender != nil {
 		err := msg.Verify()
 		if err != nil {
 			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
 		}
 
-		executionOpts = append(executionOpts, engine.WithCaller(msg.Sender))
+		executionOpts = append(executionOpts, engine.WithCaller(msg.Sender.Address().String()))
 	}
 
-	params := []map[string]any{}
-	if call.Params != nil {
-		params = append(params, call.Params)
-	} else {
-		params = append(params, map[string]any{})
-	}
-
-	return u.engine.Execute(ctx, call.DBID, call.Action, params, executionOpts...)
+	return u.engine.Execute(ctx, dbid, action, [][]any{args}, executionOpts...)
 }
 
 // Query executes an ad-hoc query on a database.  It is a read-only action.
