@@ -2,13 +2,12 @@ package acceptance
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/joho/godotenv"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
 	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/test/runner"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
@@ -29,16 +28,16 @@ type ActTestCfg struct {
 
 	AliceRawPK string // Alice is the owner
 	BobRawPK   string
-	AlicePK    *ecdsa.PrivateKey
-	BobPk      *ecdsa.PrivateKey
+	AlicePK    crypto.PrivateKey
+	BobPk      crypto.PrivateKey
 }
 
 func (e *ActTestCfg) AliceAddr() string {
-	return crypto.PubkeyToAddress(e.AlicePK.PublicKey).Hex()
+	return e.AlicePK.PubKey().Address().String()
 }
 
 func (e *ActTestCfg) BobAddr() string {
-	return crypto.PubkeyToAddress(e.BobPk.PublicKey).Hex()
+	return e.BobPk.PubKey().Address().String()
 }
 
 func (e *ActTestCfg) IsRemote() bool {
@@ -102,13 +101,13 @@ func (r *ActHelper) LoadConfig() {
 	}
 
 	var err error
-	cfg.AlicePK, err = crypto.HexToECDSA(cfg.AliceRawPK)
+	cfg.AlicePK, err = crypto.PrivateKeyFromHex(cfg.AliceRawPK)
 	require.NoError(r.t, err, "invalid alice private key")
 	//if err != nil {
 	//	return nil, fmt.Errorf("invalid alice private key: %v", err)
 	//}
 
-	cfg.BobPk, err = crypto.HexToECDSA(cfg.BobRawPK)
+	cfg.BobPk, err = crypto.PrivateKeyFromHex(cfg.BobRawPK)
 	require.NoError(r.t, err, "invalid bob private key")
 	r.cfg = cfg
 

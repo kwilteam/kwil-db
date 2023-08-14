@@ -3,11 +3,11 @@ package integration
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/joho/godotenv"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
 	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/runner"
 	"github.com/stretchr/testify/require"
@@ -85,10 +85,10 @@ func (r *IntHelper) LoadConfig() {
 	cfg.NValidator, err = strconv.Atoi(nodeNum)
 	require.NoError(r.t, err, "invalid node number")
 
-	cfg.AlicePK, err = crypto.HexToECDSA(cfg.AliceRawPK)
+	cfg.AlicePK, err = crypto.PrivateKeyFromHex(cfg.AliceRawPK)
 	require.NoError(r.t, err, "invalid alice private key")
 
-	cfg.BobPk, err = crypto.HexToECDSA(cfg.BobRawPK)
+	cfg.BobPk, err = crypto.PrivateKeyFromHex(cfg.BobRawPK)
 	require.NoError(r.t, err, "invalid bob private key")
 	r.cfg = cfg
 
