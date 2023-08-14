@@ -1,9 +1,9 @@
-package rlp_test
+package serialize_test
 
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/serialize/rlp"
+	serialize "github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -61,7 +61,7 @@ func Test_Encoding(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output, err := rlp.Encode(tc.input)
+			output, err := serialize.Encode(tc.input)
 			if tc.encodingErr && err == nil {
 				t.Errorf("Expected error, got nil")
 			}
@@ -72,7 +72,7 @@ func Test_Encoding(t *testing.T) {
 				return
 			}
 
-			decoded, err := rlp.Decode[any](output)
+			decoded, err := serialize.Decode[any](output)
 			if err != nil {
 				t.Errorf("Expected no error, got %v", err)
 			}

@@ -36,7 +36,7 @@ func Test_Execute(t *testing.T) {
 
 	type args struct {
 		procedure string
-		inputs    []map[string]interface{}
+		inputs    [][]any
 		finisher  func(*dataset.Dataset) error
 	}
 
@@ -55,11 +55,11 @@ func Test_Execute(t *testing.T) {
 			fields: defaultFields,
 			args: args{
 				procedure: "create_user",
-				inputs: []map[string]interface{}{
+				inputs: [][]any{
 					{
-						"$id":       "1",
-						"$username": "test_username",
-						"$age":      20,
+						"1",
+						"test_username",
+						20,
 					},
 				},
 			},
@@ -71,7 +71,7 @@ func Test_Execute(t *testing.T) {
 			fields: defaultFields,
 			args: args{
 				procedure: "get_time",
-				inputs:    []map[string]interface{}{},
+				inputs:    [][]any{},
 			},
 			expectedOutputs: nil,
 			wantErr:         false,
@@ -81,12 +81,12 @@ func Test_Execute(t *testing.T) {
 			fields: defaultFields,
 			args: args{
 				procedure: "create_post",
-				inputs: []map[string]interface{}{
+				inputs: [][]any{
 					{
-						"$id":        "1",
-						"$title":     "test_title",
-						"$content":   "test_content",
-						"$author_id": "20485",
+						"1",
+						"test_title",
+						"test_content",
+						"20485",
 					},
 				},
 			},
@@ -98,14 +98,14 @@ func Test_Execute(t *testing.T) {
 			fields: defaultFields,
 			args: args{
 				procedure: "create_post_and_user",
-				inputs: []map[string]interface{}{
+				inputs: [][]any{
 					{
-						"$id":        "1",
-						"$title":     "test_title",
-						"$content":   "test_content",
-						"$author_id": "1",
-						"$username":  "test_username",
-						"$age":       20,
+						"1",
+						"test_title",
+						"test_content",
+						"1",
+						"test_username",
+						20,
 					},
 				},
 			},
@@ -140,18 +140,18 @@ func Test_Execute(t *testing.T) {
 			},
 			args: args{
 				procedure: "create_user_manual",
-				inputs: []map[string]interface{}{
+				inputs: [][]any{
 					{
-						"$id":       "1",
-						"$username": "test_username",
-						"$age":      20,
-						"$address":  "0x123",
+						"1",
+						"test_username",
+						20,
+						"0x123",
 					},
 					{
-						"$id":       "2",
-						"$username": "test_username2",
-						"$age":      20,
-						"$address":  "0x456",
+						"2",
+						"test_username2",
+						20,
+						"0x456",
 					},
 				},
 			},
@@ -182,18 +182,18 @@ func Test_Execute(t *testing.T) {
 			},
 			args: args{
 				procedure: "create_user_manual",
-				inputs: []map[string]interface{}{
+				inputs: [][]any{
 					{
-						"$id":       "1",
-						"$username": "test_username",
-						"$age":      20,
-						"$address":  "0x123",
+						"1",
+						"test_username",
+						20,
+						"0x123",
 					},
 					{
-						"$id":       "2abc", // this will fail
-						"$username": "test_username2",
-						"$age":      20,
-						"$address":  "0x456",
+						"2abc", // this will fail
+						"test_username2",
+						20,
+						"0x456",
 					},
 				},
 				finisher: func(database *dataset.Dataset) error {
@@ -231,9 +231,9 @@ func Test_Execute(t *testing.T) {
 			},
 			args: args{
 				procedure: "use_ext",
-				inputs: []map[string]interface{}{
+				inputs: [][]any{
 					{
-						"$name": "satoshi",
+						"satoshi",
 					},
 				},
 			},
@@ -265,9 +265,9 @@ func Test_Execute(t *testing.T) {
 			},
 			args: args{
 				procedure: "use_ext",
-				inputs: []map[string]interface{}{
+				inputs: [][]any{
 					{
-						"$name": "satoshi",
+						"satoshi",
 					},
 				},
 			},
@@ -295,7 +295,7 @@ func Test_Execute(t *testing.T) {
 			},
 			args: args{
 				procedure: "create_user",
-				inputs:    []map[string]interface{}{},
+				inputs:    [][]any{},
 			},
 			expectedOutputs: nil,
 			isCall:          true,
@@ -324,7 +324,7 @@ func Test_Execute(t *testing.T) {
 			},
 			args: args{
 				procedure: "create_user",
-				inputs:    []map[string]interface{}{},
+				inputs:    [][]any{},
 			},
 			expectedOutputs: []map[string]interface{}{},
 			isCall:          true,
@@ -353,7 +353,7 @@ func Test_Execute(t *testing.T) {
 			},
 			args: args{
 				procedure: "create_user",
-				inputs:    []map[string]interface{}{},
+				inputs:    [][]any{},
 			},
 			expectedOutputs: nil,
 			isCall:          false,
@@ -403,7 +403,7 @@ func Test_Execute(t *testing.T) {
 			var outputs []map[string]interface{}
 			if tt.isCall {
 				if len(tt.args.inputs) == 0 {
-					tt.args.inputs = []map[string]interface{}{nil}
+					tt.args.inputs = append(tt.args.inputs, []any{})
 				}
 
 				outputs, err = ds.Call(ctx, tt.args.procedure, tt.args.inputs[0], &dataset.TxOpts{

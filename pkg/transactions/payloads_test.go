@@ -7,16 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type marshallable interface {
-	MarshalBinary() ([]byte, error)
-	UnmarshalBinary([]byte) error
-}
-
 // this simply test that they all serialize and comply with RLP
 func Test_Types(t *testing.T) {
 	type testCase struct {
 		name string
-		obj  marshallable
+		obj  transactions.Payload
 	}
 
 	testCases := []testCase{
@@ -117,8 +112,7 @@ func Test_Types(t *testing.T) {
 		{
 			name: "drop_schema",
 			obj: &transactions.DropSchema{
-				Owner: "user",
-				Name:  "test_schema",
+				DBID: "db_id",
 			},
 		},
 	}
@@ -130,7 +124,7 @@ func Test_Types(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			var obj marshallable
+			var obj transactions.Payload
 			switch tc.obj.(type) {
 			case *transactions.Schema:
 				obj = &transactions.Schema{}

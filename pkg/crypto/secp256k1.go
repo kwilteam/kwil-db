@@ -23,7 +23,7 @@ func (s *Secp256k1PrivateKey) PubKey() PublicKey {
 	}
 }
 
-func (s *Secp256k1PrivateKey) Sign(msg []byte, signatureType SignatureType) ([]byte, error) {
+func (s *Secp256k1PrivateKey) Sign(msg []byte) (*Signature, error) {
 	// TODO: implement
 	panic("TODO")
 }

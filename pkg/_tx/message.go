@@ -1,7 +1,7 @@
 package tx
 
 import (
-	"crypto/ecdsa"
+	"crypto"
 	"encoding/json"
 
 	kwilCrypto "github.com/kwilteam/kwil-db/pkg/crypto"
@@ -44,7 +44,7 @@ func (s *SignedMessage[T]) Verify() error {
 }
 
 // CreateSignedMessage creates and signs a SignedMessage
-func CreateSignedMessage[T Serializable](message T, privateKey *ecdsa.PrivateKey) (*SignedMessage[T], error) {
+func CreateSignedMessage[T Serializable](message T, privateKey crypto.PrivateKey) (*SignedMessage[T], error) {
 	msg := &SignedMessage[T]{
 		Payload: message,
 	}

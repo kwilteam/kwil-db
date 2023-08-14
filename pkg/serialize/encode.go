@@ -1,4 +1,4 @@
-package rlp
+package serialize
 
 import (
 	"fmt"
@@ -31,23 +31,20 @@ func Encode(val any) (SerializedData, error) {
 		return nil, err
 	}
 
-	return serializeEncodedValue(&encodedValue{
-		EncodingType: currentEncodingType,
-		Data:         btsVal,
-	})
+	return addSerializedTypePrefix(currentEncodingType, btsVal)
 }
 
 func Decode[T any](bts SerializedData) (*T, error) {
-	encVal, err := deserializeEncodedValue(bts)
+	encType, val, err := removeSerializedTypePrefix(bts)
 	if err != nil {
 		return nil, err
 	}
 
-	switch encVal.EncodingType {
+	switch encType {
 	case encodingTypeRLP:
-		return decodeRLP[T](encVal.Data)
+		return decodeRLP[T](val)
 	default:
-		return nil, fmt.Errorf("invalid encoding type: %d", encVal.EncodingType)
+		return nil, fmt.Errorf("invalid encoding type: %d", val)
 	}
 }
 

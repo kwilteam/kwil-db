@@ -1,20 +1,46 @@
 package transactions
 
 import (
-	"encoding"
-
-	"github.com/kwilteam/kwil-db/pkg/serialize/rlp"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 )
 
+// PayloadType is the type of payload
 type PayloadType string
 
+func (p PayloadType) String() string {
+	return string(p)
+}
+
+func (p PayloadType) Valid() bool {
+	switch p {
+	case PayloadTypeDeploySchema,
+		PayloadTypeDropSchema,
+		PayloadTypeExecuteAction,
+		PayloadTypeCallAction:
+		return true
+	default:
+		return false
+	}
+}
+
 const (
-	PayloadTypeDeploySchema  PayloadType = "deploy_schema"
-	PayloadTypeDropSchema    PayloadType = "drop_schema"
-	PayloadTypeExecuteAction PayloadType = "execute_action"
-	PayloadTypeCallAction    PayloadType = "call_action"
+	PayloadTypeDeploySchema     PayloadType = "deploy_schema"
+	PayloadTypeDropSchema       PayloadType = "drop_schema"
+	PayloadTypeExecuteAction    PayloadType = "execute_action"
+	PayloadTypeCallAction       PayloadType = "call_action"
+	PayloadTypeValidatorJoin    PayloadType = "validator_join"
+	PayloadTypeValidatorApprove PayloadType = "validator_approve"
 )
 
+// Payload is the interface that all payloads must implement
+// Implementations should use Kwil's serialization package to encode and decode themselves
+type Payload interface {
+	MarshalBinary() (serialize.SerializedData, error)
+	UnmarshalBinary(serialize.SerializedData) error
+	Type() PayloadType
+}
+
+// Schema is the payload that is used to deploy a schema
 type Schema struct {
 	Owner      string
 	Name       string
@@ -23,21 +49,24 @@ type Schema struct {
 	Extensions []*Extension
 }
 
-var _ encoding.BinaryMarshaler = (*Schema)(nil)
-var _ encoding.BinaryUnmarshaler = (*Schema)(nil)
+var _ Payload = (*Schema)(nil)
 
-func (s *Schema) MarshalBinary() ([]byte, error) {
-	return rlp.Encode(s)
+func (s *Schema) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(s)
 }
 
-func (s *Schema) UnmarshalBinary(b []byte) error {
-	result, err := rlp.Decode[Schema](b)
+func (s *Schema) UnmarshalBinary(b serialize.SerializedData) error {
+	result, err := serialize.Decode[Schema](b)
 	if err != nil {
 		return err
 	}
 
 	*s = *result
 	return nil
+}
+
+func (s *Schema) Type() PayloadType {
+	return PayloadTypeDeploySchema
 }
 
 type Extension struct {
@@ -142,20 +171,19 @@ const (
 	AuxiliaryTypeMustSign AuxiliaryType = "mustsign"
 )
 
+// DropSchema is the payload that is used to drop a schema
 type DropSchema struct {
-	Owner string
-	Name  string
+	DBID string
 }
 
-var _ encoding.BinaryMarshaler = (*DropSchema)(nil)
-var _ encoding.BinaryUnmarshaler = (*DropSchema)(nil)
+var _ Payload = (*DropSchema)(nil)
 
-func (s *DropSchema) MarshalBinary() ([]byte, error) {
-	return rlp.Encode(s)
+func (s *DropSchema) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(s)
 }
 
-func (s *DropSchema) UnmarshalBinary(b []byte) error {
-	res, err := rlp.Decode[DropSchema](b)
+func (s *DropSchema) UnmarshalBinary(b serialize.SerializedData) error {
+	res, err := serialize.Decode[DropSchema](b)
 	if err != nil {
 		return err
 	}
@@ -165,21 +193,25 @@ func (s *DropSchema) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
+func (s *DropSchema) Type() PayloadType {
+	return PayloadTypeDropSchema
+}
+
+// ActionExecution is the payload that is used to execute an action
 type ActionExecution struct {
 	DBID      string
 	Action    string
 	Arguments [][]string
 }
 
-var _ encoding.BinaryMarshaler = (*ActionExecution)(nil)
-var _ encoding.BinaryUnmarshaler = (*ActionExecution)(nil)
+var _ Payload = (*ActionExecution)(nil)
 
-func (a *ActionExecution) MarshalBinary() ([]byte, error) {
-	return rlp.Encode(a)
+func (a *ActionExecution) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(a)
 }
 
-func (s *ActionExecution) UnmarshalBinary(b []byte) error {
-	res, err := rlp.Decode[ActionExecution](b)
+func (s *ActionExecution) UnmarshalBinary(b serialize.SerializedData) error {
+	res, err := serialize.Decode[ActionExecution](b)
 	if err != nil {
 		return err
 	}
@@ -188,25 +220,33 @@ func (s *ActionExecution) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
+func (a *ActionExecution) Type() PayloadType {
+	return PayloadTypeExecuteAction
+}
+
+// ActionCall is the payload that is used to call an action
 type ActionCall struct {
 	DBID      string
 	Action    string
 	Arguments []string
 }
 
-var _ encoding.BinaryMarshaler = (*ActionCall)(nil)
-var _ encoding.BinaryUnmarshaler = (*ActionCall)(nil)
+var _ Payload = (*ActionCall)(nil)
 
-func (a *ActionCall) MarshalBinary() ([]byte, error) {
-	return rlp.Encode(a)
+func (a *ActionCall) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(a)
 }
 
-func (s *ActionCall) UnmarshalBinary(b []byte) error {
-	res, err := rlp.Decode[ActionCall](b)
+func (s *ActionCall) UnmarshalBinary(b serialize.SerializedData) error {
+	res, err := serialize.Decode[ActionCall](b)
 	if err != nil {
 		return err
 	}
 
 	*s = *res
 	return nil
+}
+
+func (a *ActionCall) Type() PayloadType {
+	return PayloadTypeCallAction
 }

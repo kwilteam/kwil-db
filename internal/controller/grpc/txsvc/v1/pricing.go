@@ -6,31 +6,31 @@ import (
 	"math/big"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/pkg/serialize"
-	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequest) (*txpb.EstimatePriceResponse, error) {
-	tx, err := convertTx(req.Tx)
+	tx, err := convertTransaction(req.Tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
 	var price *big.Int
 
-	switch tx.PayloadType {
-	case kTx.DEPLOY_DATABASE:
+	switch tx.Body.PayloadType {
+	case transactions.PayloadTypeDeploySchema:
 		price, err = s.priceDeploy(ctx, tx)
-	case kTx.DROP_DATABASE:
+	case transactions.PayloadTypeDropSchema:
 		price, err = s.priceDrop(ctx, tx)
-	case kTx.EXECUTE_ACTION:
+	case transactions.PayloadTypeExecuteAction:
 		price, err = s.priceAction(ctx, tx)
-	case kTx.VALIDATOR_JOIN:
+	case transactions.PayloadTypeValidatorJoin:
 		price, err = s.priceValidatorJoin(ctx, tx)
-	case kTx.VALIDATOR_LEAVE:
+	case transactions.PayloadTypeValidatorApprove:
 		price, err = s.priceValidatorLeave(ctx, tx)
 	default:
-		price, err = nil, fmt.Errorf("invalid payload type")
+		price, err = nil, fmt.Errorf("invalid transaction payload type %s", tx.Body.PayloadType)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
@@ -41,37 +41,55 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 	}, nil
 }
 
-func (s *Service) priceDeploy(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	ds, err := serialize.DeserializeSchema(tx.Payload)
+func (s *Service) priceDeploy(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+	schema := &transactions.Schema{}
+	err := schema.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize schema: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal schema: %w", err)
 	}
 
-	return s.engine.PriceDeploy(ctx, ds)
-}
-
-func (s *Service) priceDrop(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	dbid, err := serialize.DeserializeDBID(tx.Payload)
+	convertedSchema, err := datasets.ConvertSchemaToEngine(schema)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize DBID: %w", err)
+		return nil, fmt.Errorf("failed to convert schema: %w", err)
 	}
 
-	return s.engine.PriceDrop(ctx, dbid)
+	return s.engine.PriceDeploy(ctx, convertedSchema)
 }
 
-func (s *Service) priceAction(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
-	executionBody, err := serialize.DeserializeActionPayload(tx.Payload)
+func (s *Service) priceDrop(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+	dropSchema := &transactions.DropSchema{}
+	err := dropSchema.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize action execution: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal drop schema: %w", err)
 	}
 
-	return s.engine.PriceExecute(ctx, executionBody.DBID, executionBody.Action, executionBody.Params)
+	return s.engine.PriceDrop(ctx, dropSchema.DBID)
 }
 
-func (s *Service) priceValidatorJoin(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
+func (s *Service) priceAction(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+	executionBody := &transactions.ActionExecution{}
+	err := executionBody.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal action execution: %w", err)
+	}
+
+	var tuples [][]any
+	for _, tuple := range executionBody.Arguments {
+		newTuple := make([]any, len(tuple))
+		for i, arg := range tuple {
+			newTuple[i] = arg
+		}
+
+		tuples = append(tuples, newTuple)
+	}
+
+	return s.engine.PriceExecute(ctx, executionBody.DBID, executionBody.Action, tuples)
+}
+
+func (s *Service) priceValidatorJoin(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
-func (s *Service) priceValidatorLeave(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
+func (s *Service) priceValidatorLeave(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }

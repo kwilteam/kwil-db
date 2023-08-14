@@ -1,9 +1,5 @@
 package crypto
 
-import (
-	oasisEd25519 "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-)
-
 const Ed25519 KeyType = "Ed25519"
 
 type Ed25519PrivateKey struct {
@@ -18,8 +14,8 @@ func (s *Ed25519PrivateKey) PubKey() PublicKey {
 	panic("implement me")
 }
 
-func (s *Ed25519PrivateKey) Sign(msg []byte, signatureType SignatureType) ([]byte, error) {
-	return oasisEd25519.Sign(oasisEd25519.PrivateKey(s.privateKey), msg), nil
+func (s *Ed25519PrivateKey) Sign(msg []byte) (*Signature, error) {
+	panic("implement me")
 }
 
 func (s *Ed25519PrivateKey) Type() KeyType {

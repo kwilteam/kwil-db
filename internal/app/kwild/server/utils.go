@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 
+	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
+	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 var defaultFilePath string
@@ -82,4 +85,24 @@ func (s *sqliteOpener) Open(fileName string, logger log.Logger) (sql.Database, e
 		client.WithLogger(logger),
 		client.WithPath(s.sqliteFilePath),
 	)
+}
+
+// wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster
+// interface, hiding the details of cometBFT.
+type wrappedCometBFTClient struct {
+	*cmtlocal.Local
+}
+
+func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx *transactions.Transaction) error {
+	bts, err := tx.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("failed to serialize transaction data: %w", err)
+	}
+
+	_, err = wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(bts))
+	if err != nil {
+		return err
+	}
+
+	return err
 }

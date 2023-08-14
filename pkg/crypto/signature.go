@@ -8,6 +8,8 @@ type SignatureType int32
 
 const (
 	SIGNATURE_TYPE_INVALID SignatureType = iota
+	SIGNATURE_TYPE_EMPTY
+	SIGNATURE_TYPE_ED25519
 	END_SIGNATURE_TYPE
 )
 

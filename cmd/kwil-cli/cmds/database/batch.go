@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/csv"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 
 	"github.com/spf13/cobra"
 )
@@ -59,7 +60,17 @@ The execution is treated as a single transaction, and will either succeed or fai
 					return fmt.Errorf("error building inputs: %w", err)
 				}
 
-				receipt, err := client.ExecuteAction(ctx, dbid, strings.ToLower(action), inputs)
+				actionStructure, err := getAction(ctx, client, dbid, action)
+				if err != nil {
+					return fmt.Errorf("error getting action: %w", err)
+				}
+
+				tuples, err := createActionInputs(inputs, actionStructure)
+				if err != nil {
+					return fmt.Errorf("error creating action inputs: %w", err)
+				}
+
+				receipt, err := client.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples...)
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}
@@ -83,6 +94,21 @@ The execution is treated as a single transaction, and will either succeed or fai
 	cmd.MarkFlagRequired("path")
 	cmd.MarkFlagRequired("action")
 	return cmd
+}
+
+func getAction(ctx context.Context, c *client.Client, dbid, action string) (*transactions.Action, error) {
+	schema, err := c.GetSchema(context.Background(), dbid)
+	if err != nil {
+		return nil, fmt.Errorf("error getting schema: %w", err)
+	}
+
+	for _, a := range schema.Actions {
+		if a.Name == action {
+			return a, nil
+		}
+	}
+
+	return nil, fmt.Errorf("action not found: %s", action)
 }
 
 // buildInputs builds the inputs for the file

@@ -17,7 +17,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/serialize"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +37,7 @@ func deployCmd() *cobra.Command {
 				}
 				defer file.Close()
 
-				var db *serialize.Schema
+				var db *transactions.Schema
 				if fileType == "kf" {
 					db, err = UnmarshalKf(file)
 				} else if fileType == "json" {
@@ -68,7 +68,7 @@ func deployCmd() *cobra.Command {
 	return cmd
 }
 
-func UnmarshalKf(file *os.File) (*serialize.Schema, error) {
+func UnmarshalKf(file *os.File) (*transactions.Schema, error) {
 	source, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read Kuneiform source file: %w", err)
@@ -84,7 +84,7 @@ func UnmarshalKf(file *os.File) (*serialize.Schema, error) {
 		return nil, fmt.Errorf("failed to marshal schema: %w", err)
 	}
 
-	var db serialize.Schema
+	var db transactions.Schema
 	err = json.Unmarshal(schemaJson, &db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal schema json: %w", err)
@@ -93,13 +93,13 @@ func UnmarshalKf(file *os.File) (*serialize.Schema, error) {
 	return &db, nil
 }
 
-func UnmarshalJson(file *os.File) (*serialize.Schema, error) {
+func UnmarshalJson(file *os.File) (*transactions.Schema, error) {
 	bts, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var db serialize.Schema
+	var db transactions.Schema
 	err = json.Unmarshal(bts, &db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal file: %w", err)

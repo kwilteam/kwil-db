@@ -6,21 +6,24 @@ import (
 	"math/big"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	kTx "github.com/kwilteam/kwil-db/pkg/tx"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
-func (c *Client) Broadcast(ctx context.Context, tx *kTx.Transaction) (*kTx.Receipt, error) {
-	pbTx := ConvertTx(tx)
+func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) (*transactions.TransactionStatus, error) {
+	pbTx := convertTx(tx)
 	res, err := c.txClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
 	if err != nil {
 		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: %w", err)
 	}
 
-	if res.Receipt == nil {
+	if res.Status == nil {
 		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: receipt is nil")
 	}
 
-	txRes := ConvertReceipt(res.Receipt)
+	txRes, err := convertTransactionStatus(res.Status)
+	if err != nil {
+		return nil, fmt.Errorf("TxServiceClient failed to convert transaction status: %w", err)
+	}
 
 	return txRes, nil
 }
@@ -34,9 +37,9 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 	return res.Message, nil
 }
 
-func (c *Client) EstimateCost(ctx context.Context, tx *kTx.Transaction) (*big.Int, error) {
+func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
 	// convert transaction to proto
-	pbTx := ConvertTx(tx)
+	pbTx := convertTx(tx)
 
 	res, err := c.txClient.EstimatePrice(ctx, &txpb.EstimatePriceRequest{
 		Tx: pbTx,
@@ -52,24 +55,4 @@ func (c *Client) EstimateCost(ctx context.Context, tx *kTx.Transaction) (*big.In
 
 	fmt.Println("Estimated cost:", bigCost)
 	return bigCost, nil
-}
-
-func ConvertTx(incoming *kTx.Transaction) *txpb.Tx {
-	return &txpb.Tx{
-		Hash:        incoming.Hash,
-		PayloadType: incoming.PayloadType.Int32(),
-		Payload:     incoming.Payload,
-		Fee:         incoming.Fee,
-		Nonce:       incoming.Nonce,
-		Signature:   convertActionSignature(incoming.Signature),
-		Sender:      incoming.Sender,
-	}
-}
-
-func ConvertReceipt(incoming *txpb.TxReceipt) *kTx.Receipt {
-	return &kTx.Receipt{
-		TxHash: incoming.TxHash,
-		Fee:    incoming.Fee,
-		Body:   incoming.Body,
-	}
 }
