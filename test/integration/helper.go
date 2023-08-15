@@ -21,6 +21,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+const DefaultContainerWaitTimeout = 10 * time.Second
+
 type IntTestConfig struct {
 	acceptance.ActTestCfg
 
@@ -136,11 +138,16 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
 	err = dc.
 		WithEnv(envs).
-		WaitForService("ext1", wait.NewLogStrategy("listening on")).
-		WaitForService("k1", wait.NewLogStrategy("grpc server started")).
-		WaitForService("k2", wait.NewLogStrategy("grpc server started")).
-		WaitForService("k3", wait.NewLogStrategy("grpc server started")).
+		WaitForService("ext1",
+			wait.NewLogStrategy("listening on").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		WaitForService("k1",
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		WaitForService("k2",
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		WaitForService("k3",
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
 		Up(ctx)
+	r.t.Log("docker compose up")
 
 	r.teardown = append(r.teardown, func() {
 		r.t.Log("teardown docker compose")

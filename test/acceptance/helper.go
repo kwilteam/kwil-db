@@ -18,6 +18,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+const DefaultContainerWaitTimeout = 10 * time.Second
+
 type ActTestCfg struct {
 	GWEndpoint    string // gateway endpoint
 	GrpcEndpoint  string
@@ -147,9 +149,14 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	require.NoError(r.t, err, "failed to create docker compose object for single kwild node")
 	err = dc.
 		WithEnv(envs).
-		WaitForService("kwild", wait.NewLogStrategy("grpc server started")).
-		WaitForService("ext", wait.NewLogStrategy("listening on")).
+		WaitForService(
+			"ext",
+			wait.NewLogStrategy("listening on").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		WaitForService(
+			"kwild",
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
 		Up(ctx)
+	r.t.Log("docker compose up")
 
 	r.teardown = append(r.teardown, func() {
 		r.t.Logf("teardown docker compose")

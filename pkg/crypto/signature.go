@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"fmt"
+	ethAccount "github.com/ethereum/go-ethereum/accounts"
 )
 
 type SignatureType int32
@@ -9,14 +10,27 @@ type SignatureType int32
 const (
 	SIGNATURE_TYPE_INVALID SignatureType = iota
 	SIGNATURE_TYPE_EMPTY
+	SIGNATURE_TYPE_SECP256K1_COMETBFT
+	SIGNATURE_TYPE_SECP256K1_PERSONAL // ethereum EIP-191 personal_sign
 	SIGNATURE_TYPE_ED25519
 	END_SIGNATURE_TYPE
+)
+
+const (
+	SIGNATURE_SECP256K1_COMETBFT_LENGTH = 64
+	SIGNATURE_SECP256K1_PERSONAL_LENGTH = 65
+)
+
+var (
+	errInvalidSignature          = fmt.Errorf("invalid signature")
+	errVerifySignatureFailed     = fmt.Errorf("verify signature failed")
+	errNotSupportedSignatureType = fmt.Errorf("not supported signature type")
 )
 
 // IsValid returns an error if the signature type is invalid.
 func (s *SignatureType) IsValid() error {
 	if *s < SIGNATURE_TYPE_INVALID || *s >= END_SIGNATURE_TYPE {
-		return fmt.Errorf("invalid signature type '%d'", *s)
+		return fmt.Errorf("%w: %d", errNotSupportedSignatureType, *s)
 	}
 	return nil
 }
@@ -33,6 +47,26 @@ type Signature struct {
 }
 
 // Verify verifies the signature against the given public key and data.
-func (s *Signature) Verify(publicKey PublicKey, data []byte) error {
-	return publicKey.Verify(s, data)
+func (s *Signature) Verify(publicKey PublicKey, msg []byte) error {
+	switch s.Type {
+	case SIGNATURE_TYPE_SECP256K1_PERSONAL:
+		if len(s.Signature) != SIGNATURE_SECP256K1_PERSONAL_LENGTH {
+			return errInvalidSignature
+		}
+		hash := ethAccount.TextHash(msg)
+		// Remove recovery ID
+		sig := s.Signature[:len(s.Signature)-1]
+		return publicKey.Verify(sig, hash)
+	case SIGNATURE_TYPE_SECP256K1_COMETBFT:
+		if len(s.Signature) != SIGNATURE_SECP256K1_COMETBFT_LENGTH {
+			return errInvalidSignature
+		}
+		// cometbft using sha256 and 64 bytes signature(no recovery ID 'v')
+		hash := Sha256(msg)
+		return publicKey.Verify(s.Signature, hash)
+	case SIGNATURE_TYPE_ED25519:
+		panic("not implemented")
+	default:
+		return fmt.Errorf("%w: %d", errNotSupportedSignatureType, s.Type)
+	}
 }

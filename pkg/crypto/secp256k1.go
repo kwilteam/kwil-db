@@ -2,7 +2,8 @@ package crypto
 
 import (
 	"crypto/ecdsa"
-
+	"encoding/hex"
+	ethAccount "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 )
@@ -17,15 +18,33 @@ func (s *Secp256k1PrivateKey) Bytes() []byte {
 	return ethCrypto.FromECDSA(s.privateKey)
 }
 
+func (s *Secp256k1PrivateKey) Hex() string {
+	return hex.EncodeToString(s.Bytes())
+}
+
 func (s *Secp256k1PrivateKey) PubKey() PublicKey {
 	return &Secp256k1PublicKey{
 		publicKey: &s.privateKey.PublicKey,
 	}
 }
 
-func (s *Secp256k1PrivateKey) Sign(msg []byte) (*Signature, error) {
-	// TODO: implement
-	panic("TODO")
+// SignMsg signs the given message(not hashed) according to EIP-191 personal_sign.
+// This is default signature type for sec256k1.
+func (s *Secp256k1PrivateKey) SignMsg(msg []byte) (*Signature, error) {
+	hash := ethAccount.TextHash(msg)
+	sig, err := s.Sign(hash)
+	if err != nil {
+		return nil, err
+	}
+	return &Signature{
+		Signature: sig,
+		Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
+	}, nil
+}
+
+// Sign signs the given hash utilizing go-ethereum's Sign function.
+func (s *Secp256k1PrivateKey) Sign(hash []byte) ([]byte, error) {
+	return ethCrypto.Sign(hash, s.privateKey)
 }
 
 func (s *Secp256k1PrivateKey) Type() KeyType {
@@ -50,9 +69,19 @@ func (s *Secp256k1PublicKey) Type() KeyType {
 	return Secp256k1
 }
 
-func (s *Secp256k1PublicKey) Verify(sig *Signature, data []byte) error {
-	// TODO: implement
-	panic("TODO")
+// Verify verifies the given signature against the given message according to EIP-191
+// personal sign.
+func (s *Secp256k1PublicKey) Verify(sig []byte, hash []byte) error {
+	if len(sig) != 64 {
+		return errInvalidSignature
+	}
+
+	// signature should have the 64 byte [R || S] format
+	if !ethCrypto.VerifySignature(s.Bytes(), hash, sig) {
+		return errVerifySignatureFailed
+	}
+
+	return nil
 }
 
 type Secp256k1Address struct {
@@ -68,5 +97,5 @@ func (s *Secp256k1Address) Type() KeyType {
 }
 
 func (s *Secp256k1Address) String() string {
-	return s.address.String()
+	return s.address.Hex()
 }
