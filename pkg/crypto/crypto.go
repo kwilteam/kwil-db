@@ -6,7 +6,7 @@ import (
 	c512 "crypto/sha512"
 	"encoding/hex"
 
-	ec "github.com/ethereum/go-ethereum/crypto"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 )
 
 // Sha384 returns the sha384 hash of the data.
@@ -41,11 +41,29 @@ func Sha256Hex(data []byte) string {
 }
 
 func PublicKeyFromBytes(key []byte) (PublicKey, error) {
-	panic("not implemented")
+	// TODO: detect different types of keys
+	return loadSecp256k1PublicKeyFromByte(key)
 }
 
-func PrivateKeyFromHex(h string) (PrivateKey, error) {
-	panic("not implemented")
+func PrivateKeyFromHex(key string) (PrivateKey, error) {
+	// TODO: detect different types of keys
+	return loadSecp256k1PrivateKeyFromHex(key)
+}
+
+func loadSecp256k1PublicKeyFromByte(key []byte) (*Secp256k1PublicKey, error) {
+	pk, err := ethCrypto.UnmarshalPubkey(key)
+	if err != nil {
+		return nil, err
+	}
+	return &Secp256k1PublicKey{publicKey: pk}, nil
+}
+
+func loadSecp256k1PrivateKeyFromHex(key string) (*Secp256k1PrivateKey, error) {
+	pk, err := ethCrypto.HexToECDSA(key)
+	if err != nil {
+		return nil, err
+	}
+	return &Secp256k1PrivateKey{privateKey: pk}, nil
 }
 
 func PrivateKeyFromBytes(key []byte) (PrivateKey, error) {
@@ -53,5 +71,5 @@ func PrivateKeyFromBytes(key []byte) (PrivateKey, error) {
 }
 
 func ECDSAFromHex(hex string) (*ecdsa.PrivateKey, error) {
-	return ec.HexToECDSA(hex)
+	return ethCrypto.HexToECDSA(hex)
 }

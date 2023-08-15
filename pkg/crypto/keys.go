@@ -5,7 +5,7 @@ type KeyType string
 type PrivateKey interface {
 	Bytes() []byte
 	Type() KeyType
-	Sign(msg []byte) (*Signature, error)
+	Sign(msg []byte) ([]byte, error)
 	PubKey() PublicKey
 	Hex() string
 }
@@ -13,7 +13,7 @@ type PrivateKey interface {
 type PublicKey interface {
 	Bytes() []byte
 	Type() KeyType
-	Verify(sig *Signature, data []byte) error
+	Verify(sig []byte, hash []byte) error
 	Address() Address
 }
 
