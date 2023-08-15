@@ -2,6 +2,7 @@ package snapshots
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -18,13 +19,13 @@ type Snapshotter struct {
 	Snapshot         *Snapshot
 }
 
-func NewSnapshotter(snapshotDir string, databaseDir string, snapshotFileType string) *Snapshotter {
+func NewSnapshotter(snapshotDir string, databaseDir string, snapshotFileType string, chunkSz uint64) *Snapshotter {
 	return &Snapshotter{
 		SnapshotDir:      snapshotDir,
 		SnapshotFileType: snapshotFileType,
 		DatabaseDir:      databaseDir,
 		Snapshot:         nil,
-		ChunkSize:        16 * 1024 * 1024,
+		ChunkSize:        chunkSz,
 		SnapshotFailed:   false,
 	}
 }
@@ -153,7 +154,7 @@ func (s *Snapshotter) createChunk(reader *os.File, chunkIdx uint32) error {
 
 	chunker := NewChunker(reader, writer, int64(s.ChunkSize))
 	err = chunker.chunkFile()
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return err
 	}
 
@@ -174,7 +175,7 @@ func (s *Snapshotter) ListSnapshots() ([]Snapshot, error) {
 
 	var snapshots []Snapshot
 	for _, snapshotFile := range snapshotFiles {
-		snapshot, err := s.readSnapshotFile(snapshotFile)
+		snapshot, err := s.ReadSnapshotFile(snapshotFile)
 		if err != nil {
 			return nil, err
 		}

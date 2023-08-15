@@ -1,11 +1,10 @@
-<<<<<<< HEAD
-=======
 package snapshots
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -14,7 +13,6 @@ import (
 )
 
 // Receives snapshot chunks from the network and writes them to disk & restore the DB from the snapshot chunks
-
 type Bootstrapper struct {
 	tempDir       string
 	dbDir         string
@@ -42,9 +40,10 @@ func NewBootstrapper(tempDir string, dbDir string) *Bootstrapper {
 }
 
 func (b *Bootstrapper) IsDBRestored() bool {
-	if b.dbRestored {
+	if b.dbRestored || b.activeSession.restoreFailed {
 		b.endBootstrapSession()
 	}
+
 	return b.dbRestored
 }
 
@@ -105,15 +104,15 @@ func (b *Bootstrapper) validateChunk(chunk []byte, index uint32, format uint32) 
 		return fmt.Errorf("invalid bootstrap session")
 	}
 
-	if len(chunk) != 0 || len(chunk) < snapshots.BoundaryLen {
+	if len(chunk) == 0 || len(chunk) < snapshots.BoundaryLen {
 		return fmt.Errorf("invalid chunk length")
 	}
 
-	if bytes.Equal(chunk[:snapshots.BeginLen], snapshots.ChunkBegin) {
+	if !bytes.Equal(chunk[:snapshots.BeginLen], snapshots.ChunkBegin) {
 		return fmt.Errorf("invalid chunk begin")
 	}
 
-	if bytes.Equal(chunk[len(chunk)-snapshots.EndLen:], snapshots.ChunkEnd) {
+	if !bytes.Equal(chunk[len(chunk)-snapshots.EndLen:], snapshots.ChunkEnd) {
 		return fmt.Errorf("invalid chunk end")
 	}
 
@@ -122,7 +121,7 @@ func (b *Bootstrapper) validateChunk(chunk []byte, index uint32, format uint32) 
 	if !ok {
 		return fmt.Errorf("invalid chunk info")
 	}
-	if bytes.Equal(hash[:], chunkHash) {
+	if !bytes.Equal(hash[:], chunkHash) {
 		return fmt.Errorf("invalid chunk hash")
 	}
 
@@ -132,6 +131,12 @@ func (b *Bootstrapper) validateChunk(chunk []byte, index uint32, format uint32) 
 func (b *Bootstrapper) beginBootstrapSession(snapshot *snapshots.Snapshot) error {
 	if b.activeSession != nil {
 		return fmt.Errorf("bootstrap session already active")
+	}
+
+	// create temp dir
+	err := utils.CreateDirIfNeeded(b.tempDir)
+	if err != nil {
+		return err
 	}
 
 	b.activeSession = &BootstrapSession{
@@ -156,6 +161,12 @@ func (b *Bootstrapper) endBootstrapSession() error {
 		return fmt.Errorf("no active bootstrap session")
 	}
 	b.activeSession = nil
+
+	// delete temp dir
+	err := os.RemoveAll(b.tempDir)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -179,13 +190,14 @@ func (b *Bootstrapper) restoreDB() ([]uint32, error) {
 			err := b.restoreDBFile(fileName)
 			if err != nil {
 				b.activeSession.restoreFailed = true
+				os.Remove(filepath.Join(b.dbDir, fileName))
 			}
 		}(fileName)
 	}
 	wg.Wait()
 
 	if b.activeSession.restoreFailed {
-		return b.refetchChunks(), fmt.Errorf("db restore failure")
+		return nil, fmt.Errorf("db restore failure")
 	}
 	b.dbRestored = true
 	return nil, nil
@@ -210,7 +222,7 @@ func (b *Bootstrapper) restoreDBFile(fileName string) error {
 	}
 
 	if !bytes.Equal(fileHash, fileInfo.Hash) {
-		b.refetchFileChunks(fileName)
+		//b.refetchFileChunks(fileName)
 		return fmt.Errorf("invalid file hash")
 	}
 	return nil
@@ -242,14 +254,3 @@ func (b *Bootstrapper) refetchFileChunks(filename string) {
 		b.activeSession.refetchChunks[i] = true
 	}
 }
-<<<<<<< HEAD
-
-func (b *Bootstrapper) IsDBRestored() bool {
-	if b.dbRestored {
-		b.endBootstrapSession()
-	}
-	return b.dbRestored
-}
->>>>>>> 87c66d01 (Dependecy Injections & ABCI Interfaces for Snapshots)
-=======
->>>>>>> c61d7587 (Snapshots & DB Bootstrapper)

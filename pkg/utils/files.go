@@ -12,6 +12,10 @@ func CreateDirIfNeeded(path string) error {
 	return os.MkdirAll(dir, os.ModePerm)
 }
 
+func DeleteDir(path string) error {
+	return os.RemoveAll(path)
+}
+
 func ReadOrCreateFile(path string, permissions int) ([]byte, error) {
 	if err := CreateDirIfNeeded(path); err != nil {
 		return nil, err
@@ -68,7 +72,7 @@ func ReadFile(path string) ([]byte, error) {
 }
 
 func WriteFile(path string, data []byte) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -98,4 +102,12 @@ func HashFile(path string) ([]byte, error) {
 	}
 
 	return hash.Sum(nil), nil
+}
+
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return true
 }

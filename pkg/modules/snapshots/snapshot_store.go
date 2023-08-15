@@ -14,6 +14,7 @@ type SnapshotStore struct {
 	maxSnapshots    uint8
 	snapshotDir     string
 	databaseDir     string
+	chunkSize       uint64
 
 	databaseType string
 	numSnapshots uint8
@@ -26,6 +27,7 @@ func NewSnapshotStore(opts ...SnapshotStoreOpts) *SnapshotStore {
 		enabled:      false,
 		databaseType: ".sqlite",
 		numSnapshots: 0,
+		chunkSize:    16 * 1024 * 1024,
 	}
 
 	for _, opt := range opts {
@@ -72,7 +74,13 @@ func WithRecurringHeight(recurringHeight uint64) SnapshotStoreOpts {
 
 func WithSnapshotter() SnapshotStoreOpts {
 	return func(s *SnapshotStore) {
-		s.snapshotter = snapshots.NewSnapshotter(s.snapshotDir, s.databaseDir, s.databaseType)
+		s.snapshotter = snapshots.NewSnapshotter(s.snapshotDir, s.databaseDir, s.databaseType, s.chunkSize)
+	}
+}
+
+func WithChunkSize(chunkSize uint64) SnapshotStoreOpts {
+	return func(s *SnapshotStore) {
+		s.chunkSize = chunkSize
 	}
 }
 
@@ -98,7 +106,7 @@ func (s *SnapshotStore) CreateSnapshot(height uint64) error {
 	}
 
 	if s.snapshotter == nil {
-		s.snapshotter = snapshots.NewSnapshotter(s.snapshotDir, s.databaseDir, s.databaseType)
+		s.snapshotter = snapshots.NewSnapshotter(s.snapshotDir, s.databaseDir, s.databaseType, s.chunkSize)
 	}
 
 	// Initialize snapshot session
@@ -129,6 +137,10 @@ func (s *SnapshotStore) CreateSnapshot(height uint64) error {
 
 func (s *SnapshotStore) ListSnapshots() ([]snapshots.Snapshot, error) {
 	return s.snapshotter.ListSnapshots()
+}
+
+func (s *SnapshotStore) NumSnapshots() uint8 {
+	return s.numSnapshots
 }
 
 func (s *SnapshotStore) LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) []byte {

@@ -20,7 +20,7 @@ func (s *Snapshotter) writeSnapshotFile() error {
 	return utils.WriteFile(metadataFilePath, metadata)
 }
 
-func (s *Snapshotter) readSnapshotFile(filePath string) (*Snapshot, error) {
+func (s *Snapshotter) ReadSnapshotFile(filePath string) (*Snapshot, error) {
 	bts, err := utils.ReadFile(filePath)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,11 @@ func (s *Snapshotter) numChunks(filePath string) (uint64, uint32, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	return uint64(fInfo.Size()), uint32(uint64(fInfo.Size()) / s.ChunkSize), nil
+	chunks := uint32(uint64(fInfo.Size()) / s.ChunkSize)
+	if uint64(fInfo.Size())%s.ChunkSize != 0 {
+		chunks++
+	}
+	return uint64(fInfo.Size()), chunks, nil
 }
 
 func (s *Snapshotter) CreateChunkFile(chunkID uint32) (*os.File, error) {

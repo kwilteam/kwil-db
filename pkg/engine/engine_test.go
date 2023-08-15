@@ -35,7 +35,6 @@ var (
 	}
 )
 
-// TODO: this test is not passing
 func Test_Open(t *testing.T) {
 	ctx := context.Background()
 
@@ -59,8 +58,6 @@ func Test_Open(t *testing.T) {
 	}
 
 	// close the engine
-	// TODO: close does not work here because our sqlite test's close does not do anything.  this causes the test to fail
-	// we likely need some more tests regarding this, as well as orphaned records.
 	err = e.Close()
 	if err != nil {
 		t.Fatal(err)
