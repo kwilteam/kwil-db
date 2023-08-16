@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	cfg "github.com/cometbft/cometbft/config"
-	"github.com/kwilteam/kwil-db/pkg/utils"
+	"github.com/kwilteam/kwil-db/pkg/abci"
 )
 
 // ResetAllCmd removes the database of this CometBFT core
@@ -30,7 +30,7 @@ func NewResetAllCmd() *cobra.Command {
 				return err
 			}
 
-			return utils.ResetAll(
+			return abci.ResetAll(
 				config.DBDir(),
 				config.P2P.AddrBookFile(),
 				config.PrivValidatorKeyFile(),
@@ -62,7 +62,7 @@ func NewResetStateCmd() *cobra.Command {
 				return err
 			}
 
-			return utils.ResetState(conf.DBDir())
+			return abci.ResetState(conf.DBDir())
 		},
 	}
 
@@ -89,7 +89,7 @@ func NewResetPrivValidatorCmd() *cobra.Command {
 				return err
 			}
 
-			utils.ResetFilePV(config.PrivValidatorKeyFile(), config.PrivValidatorStateFile())
+			abci.ResetFilePV(config.PrivValidatorKeyFile(), config.PrivValidatorStateFile())
 			return nil
 		},
 	}
