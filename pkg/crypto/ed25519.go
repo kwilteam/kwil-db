@@ -67,7 +67,7 @@ func (pub *Ed25519PublicKey) Type() KeyType {
 
 // Verify verifies the given signature against the given message(not hashed).
 func (pub *Ed25519PublicKey) Verify(sig []byte, msg []byte) error {
-	if len(sig) != ed25519.SignatureSize || len(msg) == 0 {
+	if len(sig) != ed25519.SignatureSize {
 		return errInvalidSignature
 	}
 
