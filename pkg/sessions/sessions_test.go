@@ -139,8 +139,13 @@ func Test_Session(t *testing.T) {
 					return err
 				}
 
+				id, err = committer.ID(ctx)
+				if err != nil {
+					return err
+				}
+
 				applyErr := make(chan error)
-				id, err = committer.Commit(ctx, func(err error) {
+				err = committer.Commit(ctx, func(err error) {
 					applyErr <- err
 				})
 				if err != nil {

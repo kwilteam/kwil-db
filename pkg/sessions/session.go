@@ -15,12 +15,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
-	"fmt"
 	"io"
-	"sort"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/utils/order"
 	"go.uber.org/zap"
 )
 
@@ -96,30 +95,31 @@ func (a *AtomicCommitter) Begin(ctx context.Context) (err error) {
 
 // Commit commits the atomic session.
 // It aggregates all commit ids from the committables and returns them as a single Sha256 hash.
-// It can be given a callback function to handle any errors that occur during the apply phase (which proceeds asynchronously) after this function returns.
-func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error)) (commitId []byte, err error) {
+// It can be given a callback function to handle any errors that occur during the apply phase (which procedes asynchronously) after this function returns.
+func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error)) (err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	defer a.handleErr(ctx, &err)
 
 	if !a.inProgress {
-		return nil, ErrNoSessionInProgress
+		return ErrNoSessionInProgress
 	}
+	a.inProgress = false
 
 	err = a.wal.Begin(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	commitId, err = a.endCommit(ctx)
+	err = a.endCommit(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = a.wal.Commit(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	go func() {
@@ -127,7 +127,22 @@ func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error))
 		applyCallback(err2)
 	}()
 
-	return commitId, nil
+	return nil
+}
+
+// ID returns a deterministic identifier representative of all state changes that have occurred in the session.
+// It can only be called in between Begin and Commit.
+func (a *AtomicCommitter) ID(ctx context.Context) (id []byte, err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	defer a.handleErr(context.Background(), &err)
+
+	if !a.inProgress {
+		return nil, ErrNoSessionInProgress
+	}
+
+	return a.id(ctx)
 }
 
 // Apply applies the atomic session.
@@ -271,27 +286,17 @@ func (a *AtomicCommitter) beginCommit(ctx context.Context) error {
 
 // endCommit calls EndCommit on all committables.
 // it orders the committables alphabetically by their unique identifier, to ensure that the commit id is deterministic.
-func (a *AtomicCommitter) endCommit(ctx context.Context) ([]byte, error) {
-	orderedCommittables := orderAlphabetically(a.committables)
-
-	hash := sha256.New()
-	for _, c := range orderedCommittables {
-		commitId, err := c.committable.EndCommit(ctx, func(b []byte) error {
-			return a.wal.WriteChangeset(ctx, c.id, b)
+func (a *AtomicCommitter) endCommit(ctx context.Context) error {
+	for id, c := range a.committables {
+		err := c.EndCommit(ctx, func(b []byte) error {
+			return a.wal.WriteChangeset(ctx, id, b)
 		})
 		if err != nil {
-			return nil, wrapError(ErrEndCommit, err)
-		}
-
-		fmt.Println("commitId", commitId)
-
-		_, err = hash.Write(commitId)
-		if err != nil {
-			return nil, wrapError(ErrEndCommit, err)
+			return wrapError(ErrEndCommit, err)
 		}
 	}
 
-	return hash.Sum(nil), nil
+	return nil
 }
 
 // beginApply calls BeginApply on all committables.
@@ -306,6 +311,26 @@ func (a *AtomicCommitter) endApply(ctx context.Context) error {
 	return a.callAll(ErrEndApply, func(c Committable) error {
 		return c.EndApply(ctx)
 	})
+}
+
+// id calls ID on all committables.
+// it orders the committables alphabetically by their unique identifier, to ensure that the commit id is deterministic.
+func (a *AtomicCommitter) id(ctx context.Context) (id []byte, err error) {
+	hash := sha256.New()
+
+	for _, c := range order.OrderMapLexicographically[CommittableId, Committable](a.committables) {
+		commitId, err := c.Value.ID(ctx)
+		if err != nil {
+			return nil, wrapError(ErrID, err)
+		}
+
+		_, err = hash.Write(commitId)
+		if err != nil {
+			return nil, wrapError(ErrID, err)
+		}
+	}
+
+	return hash.Sum(nil), nil
 }
 
 func (a *AtomicCommitter) callAll(errType error, f func(Committable) error) error {
@@ -323,36 +348,4 @@ func (a *AtomicCommitter) callAll(errType error, f func(Committable) error) erro
 	}
 
 	return nil
-}
-
-// orderAlphabetically orders the committables alphabetically by their unique identifier.
-func orderAlphabetically(commitableMap map[CommittableId]Committable) []*struct {
-	id          CommittableId
-	committable Committable
-} {
-	// Extracting keys
-	keys := make([]string, 0, len(commitableMap))
-	for k := range commitableMap {
-		keys = append(keys, k.String())
-	}
-
-	// Sorting keys
-	sort.Strings(keys)
-
-	// Creating output slice
-	datasets := make([]*struct {
-		id          CommittableId
-		committable Committable
-	}, 0)
-
-	for _, k := range keys {
-		datasets = append(datasets, &struct {
-			id          CommittableId
-			committable Committable
-		}{
-			id:          CommittableId(k),
-			committable: commitableMap[CommittableId(k)],
-		})
-	}
-	return datasets
 }

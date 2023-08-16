@@ -13,6 +13,7 @@ var (
 	ErrBeginApply          = errors.New("error beginning apply")
 	ErrApply               = errors.New("error applying changes")
 	ErrEndApply            = errors.New("error ending apply")
+	ErrID                  = errors.New("error generating session ID")
 )
 
 // wrapError wraps an error with a message.

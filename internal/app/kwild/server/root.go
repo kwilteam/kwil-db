@@ -141,6 +141,7 @@ func buildAbci(d *coreDependencies, datasetsModule abci.DatasetsModule, validato
 	return abci.NewAbciApp(
 		datasetsModule,
 		validatorModule,
+		nil, // TODO: add kv store
 		atomicCommitter,
 		snapshotter,
 		bootstrapper,

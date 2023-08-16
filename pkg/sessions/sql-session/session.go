@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sessions"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"go.uber.org/zap"
 )
@@ -20,6 +21,8 @@ type SqlCommitable struct {
 
 	log log.Logger
 }
+
+var _ sessions.Committable = (*SqlCommitable)(nil)
 
 // NewSqlCommitable creates a new SqlCommitable.
 func NewSqlCommitable(db SqlDB, opts ...SqlCommittableOpt) *SqlCommitable {
@@ -62,34 +65,29 @@ func (s *SqlCommitable) BeginCommit(ctx context.Context) error {
 }
 
 // EndCommit ends the current session and commits the changes.
-func (s *SqlCommitable) EndCommit(ctx context.Context, appender func([]byte) error) (commitId []byte, err error) {
+func (s *SqlCommitable) EndCommit(ctx context.Context, appender func([]byte) error) (err error) {
 	if s.session == nil {
-		return nil, fmt.Errorf("session not started")
+		return fmt.Errorf("session not started")
 	}
 	if s.savepoint == nil {
-		return nil, fmt.Errorf("savepoint not active")
+		return fmt.Errorf("savepoint not active")
 	}
 
 	defer s.savepoint.Rollback()
 
 	changes, err := s.session.GenerateChangeset()
 	if err != nil {
-		return nil, err
-	}
-
-	id, err := changes.ID()
-	if err != nil {
-		return nil, err
+		return err
 	}
 
 	data, err := changes.Export()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = appender(data)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	errs := []error{}
@@ -105,7 +103,7 @@ func (s *SqlCommitable) EndCommit(ctx context.Context, appender func([]byte) err
 
 	s.session = nil
 
-	return id, errors.Join(errs...)
+	return errors.Join(errs...)
 }
 
 // BeginApply starts a new savepoint for applying changes.
@@ -164,6 +162,23 @@ func (s *SqlCommitable) Cancel(ctx context.Context) {
 	if len(errs) > 0 {
 		s.log.Error("errors while cancelling session", zap.Error(errors.Join(errs...)))
 	}
+}
+
+// ID returns the ID of the current session.
+func (s *SqlCommitable) ID(ctx context.Context) ([]byte, error) {
+	if s.session == nil {
+		return nil, fmt.Errorf("session not started")
+	}
+	if s.savepoint == nil {
+		return nil, fmt.Errorf("savepoint not active")
+	}
+
+	changes, err := s.session.GenerateChangeset()
+	if err != nil {
+		return nil, err
+	}
+
+	return changes.ID()
 }
 
 type SqlCommittableOpt func(*SqlCommitable)

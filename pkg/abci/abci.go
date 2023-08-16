@@ -3,6 +3,7 @@ package abci
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
+	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -46,16 +49,17 @@ type appState struct { // TODO
 	prevAppHash     []byte
 }
 
-func NewAbciApp(database DatasetsModule, validators ValidatorModule, committer AtomicCommitter,
-	snapshotter SnapshotModule,
-	bootstrapper DBBootstrapModule,
-	opts ...AbciOpt) *AbciApp {
+func NewAbciApp(database DatasetsModule, vldtrs ValidatorModule, kv KVStore, committer AtomicCommitter, snapshotter SnapshotModule,
+	bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
-		database:     database,
-		validators:   validators,
-		committer:    committer,
-		snapshotter:  snapshotter,
+		database:   database,
+		validators: vldtrs,
+		committer:  committer,
+		metadataStore: &metadataStore{
+			kv: kv,
+		},
 		bootstrapper: bootstrapper,
+		snapshotter:  snapshotter,
 
 		log: log.NewNoOp(),
 
@@ -102,7 +106,8 @@ type AbciApp struct {
 	snapshotter SnapshotModule
 
 	// bootstrapper is the bootstrapper module that handles bootstrapping the database
-	bootstrapper DBBootstrapModule
+	bootstrapper  DBBootstrapModule
+	metadataStore *metadataStore
 
 	log log.Logger
 
@@ -117,69 +122,8 @@ type AbciApp struct {
 	// Expected AppState after bootstrapping the node with a given snapshot,
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
-}
 
-func (a *AbciApp) ApplySnapshotChunk(p0 abciTypes.RequestApplySnapshotChunk) abciTypes.ResponseApplySnapshotChunk {
-	refetchChunks, status, err := a.bootstrapper.ApplySnapshotChunk(p0.Chunk, p0.Index)
-	if err != nil {
-		return abciTypes.ResponseApplySnapshotChunk{Result: abciStatus(status), RefetchChunks: refetchChunks}
-	}
-
-	if a.bootstrapper.IsDBRestored() {
-		a.state.prevAppHash = a.bootupState.prevAppHash
-		a.state.prevBlockHeight = a.bootupState.prevBlockHeight
-		a.log.Info("Bootstrapped database successfully")
-	}
-	return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}
-}
-
-func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
-	// Load the current validator set from our store.
-	vals, err := a.validators.CurrentSet(context.Background())
-	if err != nil { // TODO error return
-		panic(newFatalError("Info", &p0, fmt.Sprintf("failed to load current validators: %v", err)))
-	}
-	// NOTE: We can check against cometbft/rpc/core.Validators(), but that only
-	// works with an *in-process* node and after the node is started.
-
-	// Prepare the validator addr=>pubkey map.
-	a.valAddrToKey = make(map[string][]byte, len(vals))
-	for _, vi := range vals {
-		addr, err := pubkeyToAddr(vi.PubKey)
-		if err != nil {
-			panic(newFatalError("Info", &p0, fmt.Sprintf("invalid validator pubkey: %v", err)))
-		}
-		a.valAddrToKey[addr] = vi.PubKey
-	}
-
-	return abciTypes.ResponseInfo{
-		LastBlockHeight:  a.state.prevBlockHeight, // otherwise comet will restart and InitChain!
-		LastBlockAppHash: a.state.prevAppHash,
-	}
-}
-
-func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseInitChain {
-	// Initialize the validator module with the genesis validators.
-	vs := make([]*validators.Validator, len(p0.Validators))
-	for i := range p0.Validators {
-		vi := &p0.Validators[i]
-		// pk := vi.PubKey.GetEd25519()
-		// if pk == nil { panic("only ed25519 validator keys are supported") }
-		pk, err := vi.PubKey.Marshal()
-		if err != nil {
-			panic(fmt.Sprintf("invalid validator pubkey: %v", err))
-		}
-		vs[i] = &validators.Validator{
-			PubKey: pk,
-			Power:  vi.Power,
-		}
-	}
-
-	if err := a.validators.GenesisInit(context.Background(), vs); err != nil {
-		panic(fmt.Sprintf("GenesisInit failed: %v", err))
-	}
-
-	return abciTypes.ResponseInitChain{} // no change to validators
+	applicationVersion uint64
 }
 
 // BeginBlock begins a block.
@@ -221,12 +165,26 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 	return abciTypes.ResponseBeginBlock{}
 }
 
-func (a *AbciApp) CheckTx(p0 abciTypes.RequestCheckTx) abciTypes.ResponseCheckTx {
-	panic("TODO")
+func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseCheckTx {
+	tx := &transactions.Transaction{}
+	err := tx.UnmarshalBinary(incoming.Tx)
+	if err != nil {
+		a.log.Error("failed to unmarshal transaction", zap.Error(err))
+		return abciTypes.ResponseCheckTx{Code: 1, Log: err.Error()}
+	}
+
+	err = tx.Verify()
+	if err != nil {
+		a.log.Error("failed to verify transaction", zap.Error(err))
+		return abciTypes.ResponseCheckTx{Code: 1, Log: err.Error()}
+	}
+
+	return abciTypes.ResponseCheckTx{Code: 0}
 }
 
 // pubkeys in event attributes returned to comet as strings are base64 encoded,
 // apparently.
+// TODO: move this somewhere else in the file
 func encodeBase64(b []byte) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
@@ -377,7 +335,9 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 	}
 }
 
-func (a *AbciApp) EndBlock(_ abciTypes.RequestEndBlock) abciTypes.ResponseEndBlock {
+func (a *AbciApp) EndBlock(e abciTypes.RequestEndBlock) abciTypes.ResponseEndBlock {
+	a.log.Info("end block", zap.Int64("height", e.Height))
+
 	a.valUpdates = a.validators.Finalize(context.Background())
 
 	valUpdates := make([]abciTypes.ValidatorUpdate, len(a.valUpdates))
@@ -387,15 +347,41 @@ func (a *AbciApp) EndBlock(_ abciTypes.RequestEndBlock) abciTypes.ResponseEndBlo
 
 	return abciTypes.ResponseEndBlock{
 		ValidatorUpdates: valUpdates,
-		// will include AppHash in v0.38
+		ConsensusParamUpdates: &tendermintTypes.ConsensusParams{
+			// we can include evidence in here for malicious actors, but this is not important this release
+			Version: &tendermintTypes.VersionParams{
+				App: a.applicationVersion,
+			},
+			Validator: &tendermintTypes.ValidatorParams{
+				PubKeyTypes: []string{"ed25519"},
+			},
+		},
 	}
 }
 
-// Commit commits a block.
-// It will commit all changes to a wal, and then asynchronously apply the changes to the database.
 func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	ctx := context.Background()
-	appHash, err := a.committer.Commit(ctx, func(err error) {
+
+	// generate the unique id for all changes occurred thus far
+	id, err := a.committer.ID(ctx)
+	if err != nil {
+		a.log.Error("failed to get committer id", zap.Error(err))
+		return abciTypes.ResponseCommit{}
+	}
+
+	appHash, err := a.createNewAppHash(ctx, id)
+	if err != nil {
+		a.log.Error("failed to create new app hash", zap.Error(err))
+		return abciTypes.ResponseCommit{}
+	}
+
+	err = a.metadataStore.IncrementBlockHeight(ctx)
+	if err != nil {
+		a.log.Error("failed to increment block height", zap.Error(err))
+		return abciTypes.ResponseCommit{}
+	}
+
+	err = a.committer.Commit(ctx, func(err error) {
 		if err != nil {
 			a.log.Error("failed to apply atomic commit", zap.Error(err))
 		}
@@ -417,13 +403,16 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	}
 	a.valUpdates = nil
 
-	a.state.prevBlockHeight++
-	a.state.prevAppHash = appHash
+	// snapshotting
+	height, err := a.metadataStore.GetBlockHeight(ctx)
+	if err != nil {
+		a.log.Error("failed to get block height", zap.Error(err))
+		return abciTypes.ResponseCommit{}
+	}
 
-	height := uint64(a.state.prevBlockHeight)
-	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(height) {
+	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(uint64(height)) {
 		// TODO: Lock all DBs
-		err = a.snapshotter.CreateSnapshot(height)
+		err = a.snapshotter.CreateSnapshot(uint64(height))
 		if err != nil {
 			a.log.Error("snapshot creation failed", zap.Error(err))
 		}
@@ -431,8 +420,110 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	}
 
 	return abciTypes.ResponseCommit{
-		Data: appHash, // will be in ResponseFinalizeBlock in v0.38
+		Data: appHash,
 	}
+}
+
+func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
+	ctx := context.Background()
+
+	// Load the current validator set from our store.
+	vals, err := a.validators.CurrentSet(ctx)
+	if err != nil { // TODO error return
+		panic(newFatalError("Info", &p0, fmt.Sprintf("failed to load current validators: %v", err)))
+	}
+	// NOTE: We can check against cometbft/rpc/core.Validators(), but that only
+	// works with an *in-process* node and after the node is started.
+
+	// Prepare the validator addr=>pubkey map.
+	a.valAddrToKey = make(map[string][]byte, len(vals))
+	for _, vi := range vals {
+		addr, err := pubkeyToAddr(vi.PubKey)
+		if err != nil {
+			panic(newFatalError("Info", &p0, fmt.Sprintf("invalid validator pubkey: %v", err)))
+		}
+		a.valAddrToKey[addr] = vi.PubKey
+	}
+
+	height, err := a.metadataStore.GetBlockHeight(ctx)
+	if err != nil {
+		a.log.Error("failed to get block height", zap.Error(err))
+		return abciTypes.ResponseInfo{
+			AppVersion: a.applicationVersion,
+		}
+	}
+
+	appHash, err := a.metadataStore.GetAppHash(ctx)
+	if err != nil {
+		a.log.Error("failed to get app hash", zap.Error(err))
+		return abciTypes.ResponseInfo{
+			LastBlockHeight: height,
+			AppVersion:      a.applicationVersion,
+		}
+	}
+
+	return abciTypes.ResponseInfo{
+		LastBlockHeight:  height,
+		LastBlockAppHash: appHash,
+		AppVersion:       a.applicationVersion,
+	}
+}
+
+func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseInitChain {
+	ctx := context.Background()
+
+	// Initialize the validator module with the genesis validators.
+	vldtrs := make([]*validators.Validator, len(p0.Validators))
+	for i := range p0.Validators {
+		vi := &p0.Validators[i]
+		// pk := vi.PubKey.GetEd25519()
+		// if pk == nil { panic("only ed25519 validator keys are supported") }
+		pk, err := vi.PubKey.Marshal()
+		if err != nil {
+			panic(fmt.Sprintf("invalid validator pubkey: %v", err))
+		}
+		vldtrs[i] = &validators.Validator{
+			PubKey: pk,
+			Power:  vi.Power,
+		}
+	}
+
+	if err := a.validators.GenesisInit(context.Background(), vldtrs); err != nil {
+		panic(fmt.Sprintf("GenesisInit failed: %v", err))
+	}
+
+	valUpdates := make([]abciTypes.ValidatorUpdate, len(vldtrs))
+	for i, validator := range vldtrs {
+		valUpdates[i] = abciTypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
+	}
+
+	apphash, err := a.metadataStore.GetAppHash(ctx)
+	if err != nil {
+		a.log.Error("failed to get app hash", zap.Error(err))
+
+		// TODO: should we initialize with a genesis hash instead if it fails
+		// TODO: apparently InitChain is only genesis, so yes it should only be genesis hash
+		apphash = []byte{}
+	}
+
+	return abciTypes.ResponseInitChain{
+		Validators: valUpdates,
+		AppHash:    apphash,
+	}
+}
+
+func (a *AbciApp) ApplySnapshotChunk(p0 abciTypes.RequestApplySnapshotChunk) abciTypes.ResponseApplySnapshotChunk {
+	refetchChunks, status, err := a.bootstrapper.ApplySnapshotChunk(p0.Chunk, p0.Index)
+	if err != nil {
+		return abciTypes.ResponseApplySnapshotChunk{Result: abciStatus(status), RefetchChunks: refetchChunks}
+	}
+
+	if a.bootstrapper.IsDBRestored() {
+		a.state.prevAppHash = a.bootupState.prevAppHash
+		a.state.prevBlockHeight = a.bootupState.prevBlockHeight
+		a.log.Info("Bootstrapped database successfully")
+	}
+	return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}
 }
 
 func (a *AbciApp) ListSnapshots(p0 abciTypes.RequestListSnapshots) abciTypes.ResponseListSnapshots {
@@ -467,7 +558,7 @@ func (a *AbciApp) LoadSnapshotChunk(p0 abciTypes.RequestLoadSnapshotChunk) abciT
 
 func (a *AbciApp) OfferSnapshot(p0 abciTypes.RequestOfferSnapshot) abciTypes.ResponseOfferSnapshot {
 	snapshot := convertABCISnapshots(p0.Snapshot)
-	if (a.bootstrapper.OfferSnapshot(snapshot)) != nil {
+	if a.bootstrapper.OfferSnapshot(snapshot) != nil {
 		return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}
 	}
 	a.bootupState.prevAppHash = p0.Snapshot.Hash
@@ -476,15 +567,29 @@ func (a *AbciApp) OfferSnapshot(p0 abciTypes.RequestOfferSnapshot) abciTypes.Res
 }
 
 func (a *AbciApp) PrepareProposal(p0 abciTypes.RequestPrepareProposal) abciTypes.ResponsePrepareProposal {
-	panic("TODO")
+	return abciTypes.ResponsePrepareProposal{}
 }
 
 func (a *AbciApp) ProcessProposal(p0 abciTypes.RequestProcessProposal) abciTypes.ResponseProcessProposal {
-	panic("TODO")
+	return abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}
 }
 
 func (a *AbciApp) Query(p0 abciTypes.RequestQuery) abciTypes.ResponseQuery {
-	panic("TODO")
+	return abciTypes.ResponseQuery{}
+}
+
+// updateAppHash updates the app hash with the given app hash.
+// It persists the app hash to the metadata store.
+func (a *AbciApp) createNewAppHash(ctx context.Context, addition []byte) ([]byte, error) {
+	oldHash, err := a.metadataStore.GetAppHash(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	newHash := crypto.Sha256(append(oldHash, addition...))
+
+	err = a.metadataStore.SetAppHash(ctx, newHash)
+	return newHash, err
 }
 
 // convertArgs converts the string args to type any.
@@ -498,4 +603,46 @@ func convertArgs(args [][]string) [][]any {
 	}
 
 	return converted
+}
+
+var (
+	appHashKey     = []byte("appHash")
+	blockHeightKey = []byte("blockHeight")
+)
+
+type metadataStore struct {
+	kv KVStore
+}
+
+func (m *metadataStore) GetAppHash(ctx context.Context) ([]byte, error) {
+	return m.kv.Get(ctx, appHashKey)
+}
+
+func (m *metadataStore) SetAppHash(ctx context.Context, appHash []byte) error {
+	return m.kv.Set(ctx, appHashKey, appHash)
+}
+
+func (m *metadataStore) GetBlockHeight(ctx context.Context) (int64, error) {
+	height, err := m.kv.Get(ctx, blockHeightKey)
+	if err != nil {
+		return 0, err
+	}
+
+	return int64(binary.BigEndian.Uint64(height)), nil
+}
+
+func (m *metadataStore) SetBlockHeight(ctx context.Context, height int64) error {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(height))
+
+	return m.kv.Set(ctx, blockHeightKey, buf)
+}
+
+func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
+	height, err := m.GetBlockHeight(ctx)
+	if err != nil {
+		return err
+	}
+
+	return m.SetBlockHeight(ctx, height+1)
 }

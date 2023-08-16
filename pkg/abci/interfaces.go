@@ -55,7 +55,15 @@ type ValidatorModule interface {
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
 type AtomicCommitter interface {
 	Begin(ctx context.Context) error
-	Commit(ctx context.Context, applyCallback func(error)) (commitID []byte, err error)
+	ID(ctx context.Context) ([]byte, error)
+	Commit(ctx context.Context, applyCallback func(error)) error
+}
+
+// KVStore is an interface for a basic key-value store
+type KVStore interface {
+	Get(ctx context.Context, key []byte) ([]byte, error)
+	Set(ctx context.Context, key []byte, value []byte) error
+	Delete(ctx context.Context, key []byte) error
 }
 
 // SnapshotModule is an interface for a struct that implements snapshotting

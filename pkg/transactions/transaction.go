@@ -112,6 +112,9 @@ func (t *Transaction) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(t)
 }
 
+// TODO: I am not sure if this will actually work, since it is unserializing into an interface
+// I am quite sure it wont; an alternative is to decode into a struct where public key is bytes, and
+// create the public key from there
 func (t *Transaction) UnmarshalBinary(data serialize.SerializedData) error {
 	res, err := serialize.Decode[Transaction](data)
 	if err != nil {
