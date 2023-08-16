@@ -35,17 +35,11 @@ func (a *AccountStore) prepareStatements() error {
 const (
 	sqlInitTables = `
 CREATE TABLE IF NOT EXISTS accounts (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	address TEXT NOT NULL UNIQUE,
+	address TEXT PRIMARY KEY,
 	balance TEXT NOT NULL,
 	nonce INTEGER NOT NULL
-	);
-
-CREATE TABLE IF NOT EXISTS chains (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	chain_code INTEGER NOT NULL UNIQUE,
-	height INTEGER NOT NULL
-);`
+	) WITHOUT ROWID, STRICT;
+	`
 )
 
 func getTableInits() []string {
