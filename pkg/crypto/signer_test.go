@@ -20,7 +20,7 @@ func TestComebftSecp256k1Signer_SignMsg(t *testing.T) {
 	assert.Equal(t, sigHex, hex.EncodeToString(cometBfgSecp256k1Sig), "signature mismatch")
 
 	// use the cometbft signer to sign the message
-	kwilCometBftKey, _ := loadSecp256k1PrivateKeyFromHex(pvKeyHex)
+	kwilCometBftKey, _ := Secp256k1PrivateKeyFromHex(pvKeyHex)
 	cometBfgSigner := &ComebftSecp256k1Signer{
 		key: kwilCometBftKey,
 	}

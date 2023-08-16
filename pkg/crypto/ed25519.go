@@ -1,51 +1,89 @@
 package crypto
 
+import (
+	"crypto/ed25519"
+	"encoding/hex"
+)
+
 const Ed25519 KeyType = "Ed25519"
 
 type Ed25519PrivateKey struct {
-	privateKey []byte
+	key ed25519.PrivateKey
 }
 
-func (s *Ed25519PrivateKey) Bytes() []byte {
-	return s.privateKey
+func (pv *Ed25519PrivateKey) Bytes() []byte {
+	return pv.key
 }
 
-func (s *Ed25519PrivateKey) PubKey() PublicKey {
-	panic("implement me")
+func (pv *Ed25519PrivateKey) PubKey() PublicKey {
+	publicKey := make([]byte, ed25519.PublicKeySize)
+	copy(publicKey, pv.key[32:])
+	return &Ed25519PublicKey{
+		key: publicKey,
+	}
 }
 
-func (s *Ed25519PrivateKey) Sign(msg []byte) (*Signature, error) {
-	panic("implement me")
+func (pv *Ed25519PrivateKey) Hex() string {
+	return hex.EncodeToString(pv.Bytes())
 }
 
-func (s *Ed25519PrivateKey) Type() KeyType {
+// SignMsg signs the given message(not hashed), no need to hash the message here.
+// Implements the Signer interface.
+func (pv *Ed25519PrivateKey) SignMsg(msg []byte) (*Signature, error) {
+	sig, err := pv.Sign(msg)
+	if err != nil {
+		return nil, err
+	}
+	return &Signature{
+		Signature: sig,
+		Type:      SIGNATURE_TYPE_ED25519,
+	}, nil
+}
+
+// Sign signs the given message(not hashed).
+func (pv *Ed25519PrivateKey) Sign(msg []byte) ([]byte, error) {
+	return ed25519.Sign(pv.key, msg), nil
+}
+
+func (pv *Ed25519PrivateKey) Type() KeyType {
 	return Ed25519
 }
 
 type Ed25519PublicKey struct {
+	key ed25519.PublicKey
 }
 
-func (s *Ed25519PublicKey) Address() Address {
-	panic("implement me")
+func (pub *Ed25519PublicKey) Address() Address {
+	return &Ed25519Address{publicKey: pub.key}
 }
 
-func (s *Ed25519PublicKey) Bytes() []byte {
-	panic("implement me")
+func (pub *Ed25519PublicKey) Bytes() []byte {
+	return pub.key
 }
 
-func (s *Ed25519PublicKey) Type() KeyType {
+func (pub *Ed25519PublicKey) Type() KeyType {
 	return Ed25519
 }
 
-func (s *Ed25519PublicKey) Verify(sig *Signature, data []byte) error {
-	panic("implement me")
+// Verify verifies the given signature against the given message(not hashed).
+func (pub *Ed25519PublicKey) Verify(sig []byte, msg []byte) error {
+	if len(sig) != ed25519.SignatureSize || len(msg) == 0 {
+		return errInvalidSignature
+	}
+
+	ok := ed25519.Verify(pub.key, msg, sig)
+	if !ok {
+		return errVerifySignatureFailed
+	}
+	return nil
 }
 
 type Ed25519Address struct {
+	publicKey []byte
 }
 
 func (s *Ed25519Address) Bytes() []byte {
-	panic("implement me")
+	return s.publicKey[:20]
 }
 
 func (s *Ed25519Address) Type() KeyType {
@@ -53,5 +91,6 @@ func (s *Ed25519Address) Type() KeyType {
 }
 
 func (s *Ed25519Address) String() string {
-	panic("implement me")
+	// TODO: need an address format
+	return hex.EncodeToString(s.Bytes())
 }
