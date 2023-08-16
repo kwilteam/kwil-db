@@ -31,7 +31,7 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 			return fmt.Errorf("private key not provided")
 		}
 
-		options = append(options, client.WithPrivateKey(conf.PrivateKey))
+		options = append(options, client.WithSigner(conf.PrivateKey))
 	}
 
 	if conf.GrpcURL == "" {

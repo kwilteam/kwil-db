@@ -29,9 +29,9 @@ var (
 )
 
 // IsValid returns an error if the signature type is invalid.
-func (s *SignatureType) IsValid() error {
-	if *s < SIGNATURE_TYPE_INVALID || *s >= END_SIGNATURE_TYPE {
-		return fmt.Errorf("%w: %d", errNotSupportedSignatureType, *s)
+func (s SignatureType) IsValid() error {
+	if s < SIGNATURE_TYPE_INVALID || s >= END_SIGNATURE_TYPE {
+		return fmt.Errorf("%w: %d", errNotSupportedSignatureType, s)
 	}
 	return nil
 }
@@ -39,6 +39,17 @@ func (s *SignatureType) IsValid() error {
 // Int32 returns the signature type as an int32.
 func (s SignatureType) Int32() int32 {
 	return int32(s)
+}
+
+func (s SignatureType) KeyType() KeyType {
+	switch s {
+	case SIGNATURE_TYPE_SECP256K1_COMETBFT, SIGNATURE_TYPE_SECP256K1_PERSONAL:
+		return Secp256k1
+	case SIGNATURE_TYPE_ED25519:
+		return Ed25519
+	default:
+		panic("not supported signature type")
+	}
 }
 
 // Signature is a cryptographic signature.

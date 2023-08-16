@@ -46,7 +46,7 @@ func Sha256Hex(data []byte) string {
 	return hex.EncodeToString(Sha256(data))
 }
 
-func Secp256k1PublicKeyFromByte(key []byte) (*Secp256k1PublicKey, error) {
+func Secp256k1PublicKeyFromBytes(key []byte) (*Secp256k1PublicKey, error) {
 	pk, err := ethCrypto.UnmarshalPubkey(key)
 	if err != nil {
 		return nil, err
@@ -74,9 +74,31 @@ func Ed25519PrivateKeyFromHex(key string) (*Ed25519PrivateKey, error) {
 	return &Ed25519PrivateKey{key: pkBytes}, nil
 }
 
-func Ed25519PublicKeyFromByte(key []byte) (*Ed25519PublicKey, error) {
+func Ed25519PublicKeyFromBytes(key []byte) (*Ed25519PublicKey, error) {
 	if len(key) != ed25519.PublicKeySize {
 		return nil, errInvalidPublicKey
 	}
 	return &Ed25519PublicKey{key: key}, nil
+}
+
+func PrivateKeyFromHex(keyType KeyType, key string) (PrivateKey, error) {
+	switch keyType {
+	case Secp256k1:
+		return Secp256k1PrivateKeyFromHex(key)
+	case Ed25519:
+		return Ed25519PrivateKeyFromHex(key)
+	default:
+		return nil, fmt.Errorf("invalid key type: %s", keyType)
+	}
+}
+
+func PublicKeyFromBytes(keyType KeyType, key []byte) (PublicKey, error) {
+	switch keyType {
+	case Secp256k1:
+		return Secp256k1PublicKeyFromBytes(key)
+	case Ed25519:
+		return Ed25519PublicKeyFromBytes(key)
+	default:
+		return nil, fmt.Errorf("invalid key type %s", keyType)
+	}
 }

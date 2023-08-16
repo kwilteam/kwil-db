@@ -48,7 +48,7 @@ func TestEd25519PublicKey_Verify(t *testing.T) {
 	keyBytes, err := hex.DecodeString(key)
 	require.NoError(t, err, "error decode public key")
 
-	pubKey, err := crypto.Ed25519PublicKeyFromByte(keyBytes)
+	pubKey, err := crypto.Ed25519PublicKeyFromBytes(keyBytes)
 	require.NoError(t, err, "error parse public key")
 
 	msg := []byte("foo")
@@ -98,7 +98,7 @@ func TestEd25519PublicKey_Address(t *testing.T) {
 	keyBytes, err := hex.DecodeString(key)
 	require.NoError(t, err, "error decode public key")
 
-	pubKey, err := crypto.Ed25519PublicKeyFromByte(keyBytes)
+	pubKey, err := crypto.Ed25519PublicKeyFromBytes(keyBytes)
 	require.NoError(t, err, "error parse public key")
 
 	eq := pubKey.Address().String() == "0aa611bf555596912bc6f9a9f169f8785918e7ba"

@@ -13,7 +13,7 @@ func TestSignature_Verify(t *testing.T) {
 	// secp256k1
 	secp256k1PubKeyHex := "04812bef44f6e7b2a19c0b01c2dca5e54ba1935a1890ffdcb93abd0c534b209c21e4f6176823fef493f7b5afaa456f31d5293363d8f801c540ebcc061812890cba"
 	secp256k1PubKeyBytes, _ := hex.DecodeString(secp256k1PubKeyHex)
-	secp256k1PublicKey, _ := Secp256k1PublicKeyFromByte(secp256k1PubKeyBytes)
+	secp256k1PublicKey, _ := Secp256k1PublicKeyFromBytes(secp256k1PubKeyBytes)
 
 	personalSignSig := "cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e253475800"
 	personalSignSigBytes, _ := hex.DecodeString(personalSignSig)
@@ -24,7 +24,7 @@ func TestSignature_Verify(t *testing.T) {
 	// ed25519
 	ed25519PubKeyHex := "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
 	ed25519PubKeyBytes, _ := hex.DecodeString(ed25519PubKeyHex)
-	ed25519PublicKey, _ := Ed25519PublicKeyFromByte(ed25519PubKeyBytes)
+	ed25519PublicKey, _ := Ed25519PublicKeyFromBytes(ed25519PubKeyBytes)
 	ed25519Sig := "59b2db2d1e4ce6f8771453cfc78d1f943723528f00fa14adf574600f15c601d591fa2ba29c94d9ed694db324f9e8671bdfbcba4b8e10f6a8733682fa3d115f0c"
 	ed25519SigBytes, _ := hex.DecodeString(ed25519Sig)
 

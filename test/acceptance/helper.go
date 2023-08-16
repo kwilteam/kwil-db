@@ -32,8 +32,8 @@ type ActTestCfg struct {
 
 	AliceRawPK string // Alice is the owner
 	BobRawPK   string
-	AlicePK    crypto.PrivateKey
-	BobPk      crypto.PrivateKey
+	AlicePK    crypto.Signer
+	BobPk      crypto.Signer
 }
 
 func (e *ActTestCfg) AliceAddr() string {
@@ -105,13 +105,13 @@ func (r *ActHelper) LoadConfig() {
 	}
 
 	var err error
-	cfg.AlicePK, err = crypto.PrivateKeyFromHex(cfg.AliceRawPK)
+	cfg.AlicePK, err = crypto.Secp256k1PrivateKeyFromHex(cfg.AliceRawPK)
 	require.NoError(r.t, err, "invalid alice private key")
 	//if err != nil {
 	//	return nil, fmt.Errorf("invalid alice private key: %v", err)
 	//}
 
-	cfg.BobPk, err = crypto.PrivateKeyFromHex(cfg.BobRawPK)
+	cfg.BobPk, err = crypto.Secp256k1PrivateKeyFromHex(cfg.BobRawPK)
 	require.NoError(r.t, err, "invalid bob private key")
 	r.cfg = cfg
 
@@ -185,7 +185,7 @@ func (r *ActHelper) Teardown() {
 
 func (r *ActHelper) GetAliceDriver(ctx context.Context) KwilAcceptanceDriver {
 	kwilClt, err := client.New(ctx, r.cfg.GrpcEndpoint,
-		client.WithPrivateKey(r.cfg.AlicePK),
+		client.WithSigner(r.cfg.AlicePK),
 		client.WithCometBftUrl(r.cfg.ChainEndpoint),
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
@@ -195,7 +195,7 @@ func (r *ActHelper) GetAliceDriver(ctx context.Context) KwilAcceptanceDriver {
 
 func (r *ActHelper) GetBobDriver(ctx context.Context) KwilAcceptanceDriver {
 	kwilClt, err := client.New(ctx, r.cfg.GrpcEndpoint,
-		client.WithPrivateKey(r.cfg.BobPk),
+		client.WithSigner(r.cfg.BobPk),
 		client.WithCometBftUrl(r.cfg.ChainEndpoint),
 	)
 	require.NoError(r.t, err, "failed to create kwil client")

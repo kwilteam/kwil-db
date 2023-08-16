@@ -4,9 +4,9 @@ import "github.com/kwilteam/kwil-db/pkg/crypto"
 
 type ClientOpt func(*Client)
 
-func WithPrivateKey(key crypto.PrivateKey) ClientOpt {
+func WithSigner(signer crypto.Signer) ClientOpt {
 	return func(c *Client) {
-		c.PrivateKey = key
+		c.Signer = signer
 	}
 }
 

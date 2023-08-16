@@ -24,7 +24,7 @@ func NewClient(ctx context.Context, cfg *KwildConfig) (*client.Client, error) {
 			return nil, err
 		}
 
-		options = append(options, client.WithPrivateKey(key))
+		options = append(options, client.WithSigner(key))
 	}
 	clt, err := client.New(ctx, cfg.GrpcURL, options...)
 	if err != nil {

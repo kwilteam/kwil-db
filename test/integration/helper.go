@@ -33,7 +33,7 @@ type IntTestConfig struct {
 //// this can be used to simulate several "wallets" in the same test
 //func newGRPCClient(ctx context.Context, t *testing.T, cfg *IntTestConfig) KwilIntDriver {
 //	kwilClt, err := client.New(ctx, cfg.GrpcEndpoint,
-//		client.WithPrivateKey(cfg.AlicePK),
+//		client.WithSigner(cfg.AlicePK),
 //		client.WithCometBftUrl(cfg.ChainEndpoint),
 //	)
 //	require.NoError(t, err, "failed to create kwil client")
@@ -89,10 +89,10 @@ func (r *IntHelper) LoadConfig() {
 	cfg.NValidator, err = strconv.Atoi(nodeNum)
 	require.NoError(r.t, err, "invalid node number")
 
-	cfg.AlicePK, err = crypto.PrivateKeyFromHex(cfg.AliceRawPK)
+	cfg.AlicePK, err = crypto.Secp256k1PrivateKeyFromHex(cfg.AliceRawPK)
 	require.NoError(r.t, err, "invalid alice private key")
 
-	cfg.BobPk, err = crypto.PrivateKeyFromHex(cfg.BobRawPK)
+	cfg.BobPk, err = crypto.Secp256k1PrivateKeyFromHex(cfg.BobRawPK)
 	require.NoError(r.t, err, "invalid bob private key")
 	r.cfg = cfg
 
@@ -197,7 +197,7 @@ func (r *IntHelper) getDriver(ctx context.Context, ctr *testcontainers.DockerCon
 
 	r.t.Logf("nodeURL: %s gatewayURL: %s for container name: %s", nodeURL, gatewayURL, name)
 	kwilClt, err := client.New(ctx, r.cfg.GrpcEndpoint,
-		client.WithPrivateKey(r.cfg.AlicePK),
+		client.WithSigner(r.cfg.AlicePK),
 		client.WithCometBftUrl(r.cfg.ChainEndpoint),
 	)
 	require.NoError(r.t, err, "failed to create kwil client")

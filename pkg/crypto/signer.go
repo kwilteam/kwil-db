@@ -2,6 +2,7 @@ package crypto
 
 type Signer interface {
 	SignMsg(msg []byte) (*Signature, error)
+	PubKey() PublicKey
 }
 
 type Eip712Signer struct {
@@ -13,7 +14,11 @@ func (e *Eip712Signer) SignMsg(msg []byte) (*Signature, error) {
 }
 
 type ComebftSecp256k1Signer struct {
-	key PrivateKey
+	key *Secp256k1PrivateKey
+}
+
+func (c *ComebftSecp256k1Signer) PublicKey() PublicKey {
+	return c.key.PubKey()
 }
 
 func (c *ComebftSecp256k1Signer) SignMsg(msg []byte) (*Signature, error) {

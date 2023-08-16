@@ -49,7 +49,7 @@ func TestSecp256k1PublicKey_Verify(t *testing.T) {
 	keyBytes, err := hex.DecodeString(key)
 	require.NoError(t, err, "error decode key")
 
-	pubKey, err := Secp256k1PublicKeyFromByte(keyBytes)
+	pubKey, err := Secp256k1PublicKeyFromBytes(keyBytes)
 	require.NoError(t, err, "error parse public key")
 
 	msg := []byte("foo")
@@ -94,7 +94,7 @@ func TestSecp256k1PublicKey_Address(t *testing.T) {
 	keyBytes, err := hex.DecodeString(key)
 	require.NoError(t, err, "error decode key")
 
-	pubKey, err := Secp256k1PublicKeyFromByte(keyBytes)
+	pubKey, err := Secp256k1PublicKeyFromBytes(keyBytes)
 	require.NoError(t, err, "error parse public key")
 
 	eq := pubKey.Address().String() == "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7"

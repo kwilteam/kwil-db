@@ -21,14 +21,14 @@ func convertTransaction(incoming *txpb.Transaction) (*transactions.Transaction, 
 		return nil, fmt.Errorf("transaction signature cannot be nil")
 	}
 
-	sender, err := crypto.PublicKeyFromBytes(incoming.Sender)
-	if err != nil {
-		return nil, fmt.Errorf("invalid sender public key: %s", err.Error())
-	}
-
 	convSignature, err := convertSignature(incoming.Signature)
 	if err != nil {
 		return nil, err
+	}
+
+	sender, err := crypto.PublicKeyFromBytes(convSignature.Type.KeyType(), incoming.Sender)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sender public key: %s", err.Error())
 	}
 
 	bigFee, ok := big.NewInt(0).SetString(incoming.Body.Fee, 10)

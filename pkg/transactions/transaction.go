@@ -56,23 +56,22 @@ func (t *Transaction) Verify() error {
 		return err
 	}
 
-	return t.Sender.Verify(t.Signature, data)
+	return t.Signature.Verify(t.Sender, data)
 }
 
-func (t *Transaction) Sign(privateKey crypto.PrivateKey) error {
+func (t *Transaction) Sign(signer crypto.Signer) error {
 	data, err := t.Body.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
-	// TODO: we need to figure out if we hash the payload before or after signing
-	signature, err := privateKey.Sign(data)
+	signature, err := signer.SignMsg(data)
 	if err != nil {
 		return err
 	}
 
 	t.Signature = signature
-	t.Sender = privateKey.PubKey()
+	t.Sender = signer.PubKey()
 
 	return nil
 }
