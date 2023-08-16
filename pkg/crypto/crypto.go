@@ -1,12 +1,18 @@
 package crypto
 
 import (
-	"crypto/ecdsa"
+	"crypto/ed25519"
 	c256 "crypto/sha256"
 	c512 "crypto/sha512"
 	"encoding/hex"
+	"fmt"
 
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+)
+
+var (
+	errInvalidPrivateKey = fmt.Errorf("invalid private key")
+	errInvalidPublicKey  = fmt.Errorf("invalid public key")
 )
 
 // Sha384 returns the sha384 hash of the data.
@@ -40,17 +46,7 @@ func Sha256Hex(data []byte) string {
 	return hex.EncodeToString(Sha256(data))
 }
 
-func PublicKeyFromBytes(key []byte) (PublicKey, error) {
-	// TODO: detect different types of keys
-	return loadSecp256k1PublicKeyFromByte(key)
-}
-
-func PrivateKeyFromHex(key string) (PrivateKey, error) {
-	// TODO: detect different types of keys
-	return loadSecp256k1PrivateKeyFromHex(key)
-}
-
-func loadSecp256k1PublicKeyFromByte(key []byte) (*Secp256k1PublicKey, error) {
+func Secp256k1PublicKeyFromByte(key []byte) (*Secp256k1PublicKey, error) {
 	pk, err := ethCrypto.UnmarshalPubkey(key)
 	if err != nil {
 		return nil, err
@@ -58,18 +54,29 @@ func loadSecp256k1PublicKeyFromByte(key []byte) (*Secp256k1PublicKey, error) {
 	return &Secp256k1PublicKey{publicKey: pk}, nil
 }
 
-func loadSecp256k1PrivateKeyFromHex(key string) (*Secp256k1PrivateKey, error) {
+func Secp256k1PrivateKeyFromHex(key string) (*Secp256k1PrivateKey, error) {
 	pk, err := ethCrypto.HexToECDSA(key)
 	if err != nil {
 		return nil, err
 	}
-	return &Secp256k1PrivateKey{privateKey: pk}, nil
+	return &Secp256k1PrivateKey{key: pk}, nil
 }
 
-func PrivateKeyFromBytes(key []byte) (PrivateKey, error) {
-	panic("not implemented")
+func Ed25519PrivateKeyFromHex(key string) (*Ed25519PrivateKey, error) {
+	if len(key) != ed25519.PrivateKeySize*2 {
+		return nil, errInvalidPrivateKey
+	}
+
+	pkBytes, err := hex.DecodeString(key)
+	if err != nil {
+		return nil, err
+	}
+	return &Ed25519PrivateKey{key: pkBytes}, nil
 }
 
-func ECDSAFromHex(hex string) (*ecdsa.PrivateKey, error) {
-	return ethCrypto.HexToECDSA(hex)
+func Ed25519PublicKeyFromByte(key []byte) (*Ed25519PublicKey, error) {
+	if len(key) != ed25519.PublicKeySize {
+		return nil, errInvalidPublicKey
+	}
+	return &Ed25519PublicKey{key: key}, nil
 }

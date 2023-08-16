@@ -9,7 +9,7 @@ import (
 
 func TestSecp256k1PrivateKey_Sign(t *testing.T) {
 	key := "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
-	pk, err := loadSecp256k1PrivateKeyFromHex(key)
+	pk, err := Secp256k1PrivateKeyFromHex(key)
 	require.NoError(t, err, "error parse private key")
 
 	msg := []byte("foo")
@@ -25,7 +25,7 @@ func TestSecp256k1PrivateKey_Sign(t *testing.T) {
 
 func TestSecp256k1PrivateKey_SignMsg(t *testing.T) {
 	key := "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
-	pk, err := loadSecp256k1PrivateKeyFromHex(key)
+	pk, err := Secp256k1PrivateKeyFromHex(key)
 	require.NoError(t, err, "error parse private key")
 
 	msg := []byte("foo")
@@ -49,7 +49,7 @@ func TestSecp256k1PublicKey_Verify(t *testing.T) {
 	keyBytes, err := hex.DecodeString(key)
 	require.NoError(t, err, "error decode key")
 
-	pubKey, err := loadSecp256k1PublicKeyFromByte(keyBytes)
+	pubKey, err := Secp256k1PublicKeyFromByte(keyBytes)
 	require.NoError(t, err, "error parse public key")
 
 	msg := []byte("foo")
@@ -75,7 +75,7 @@ func TestSecp256k1PublicKey_Verify(t *testing.T) {
 			wantErr:  errInvalidSignature,
 		},
 		{
-			name:     "invalid signature",
+			name:     "wrong signature",
 			sigBytes: sigBytes[1:],
 			wantErr:  errVerifySignatureFailed,
 		},
@@ -94,7 +94,7 @@ func TestSecp256k1PublicKey_Address(t *testing.T) {
 	keyBytes, err := hex.DecodeString(key)
 	require.NoError(t, err, "error decode key")
 
-	pubKey, err := loadSecp256k1PublicKeyFromByte(keyBytes)
+	pubKey, err := Secp256k1PublicKeyFromByte(keyBytes)
 	require.NoError(t, err, "error parse public key")
 
 	eq := pubKey.Address().String() == "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7"

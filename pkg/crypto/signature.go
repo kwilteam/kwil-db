@@ -19,6 +19,7 @@ const (
 const (
 	SIGNATURE_SECP256K1_COMETBFT_LENGTH = 64
 	SIGNATURE_SECP256K1_PERSONAL_LENGTH = 65
+	SIGNATURE_ED25519_LENGTH            = 64
 )
 
 var (
@@ -65,7 +66,11 @@ func (s *Signature) Verify(publicKey PublicKey, msg []byte) error {
 		hash := Sha256(msg)
 		return publicKey.Verify(s.Signature, hash)
 	case SIGNATURE_TYPE_ED25519:
-		panic("not implemented")
+		if len(s.Signature) != SIGNATURE_ED25519_LENGTH {
+			return errInvalidSignature
+		}
+		// hash(sha512) is handled by downstream library
+		return publicKey.Verify(s.Signature, msg)
 	default:
 		return fmt.Errorf("%w: %d", errNotSupportedSignatureType, s.Type)
 	}
