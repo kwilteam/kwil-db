@@ -54,7 +54,7 @@ type Ed25519PublicKey struct {
 }
 
 func (pub *Ed25519PublicKey) Address() Address {
-	return &Ed25519Address{publicKey: pub.key}
+	return Ed25519Address(pub.key[:20])
 }
 
 func (pub *Ed25519PublicKey) Bytes() []byte {
@@ -78,19 +78,17 @@ func (pub *Ed25519PublicKey) Verify(sig []byte, msg []byte) error {
 	return nil
 }
 
-type Ed25519Address struct {
-	publicKey []byte
+type Ed25519Address [20]byte
+
+func (s Ed25519Address) Bytes() []byte {
+	return s[:]
 }
 
-func (s *Ed25519Address) Bytes() []byte {
-	return s.publicKey[:20]
-}
-
-func (s *Ed25519Address) Type() KeyType {
+func (s Ed25519Address) Type() KeyType {
 	return Ed25519
 }
 
-func (s *Ed25519Address) String() string {
+func (s Ed25519Address) String() string {
 	// TODO: need an address format
 	return hex.EncodeToString(s.Bytes())
 }
