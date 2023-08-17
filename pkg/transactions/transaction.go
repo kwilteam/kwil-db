@@ -43,10 +43,14 @@ type Transaction struct {
 
 	// Sender is the public key of the sender
 	// It is not included in the signature
-	Sender crypto.PublicKey
+	Sender []byte
 
 	// hash of the transaction that is signed.  it is kept here as a cache
 	hash []byte
+}
+
+func (t *Transaction) GetSenderPubKey() (crypto.PublicKey, error) {
+	return crypto.PublicKeyFromBytes(t.Signature.Type.KeyType(), t.Sender)
 }
 
 // Verify verifies the signature of the transaction
@@ -56,7 +60,8 @@ func (t *Transaction) Verify() error {
 		return err
 	}
 
-	return t.Signature.Verify(t.Sender, data)
+	pubkey, err := crypto.PublicKeyFromBytes(t.Signature.Type.KeyType(), t.Sender)
+	return t.Signature.Verify(pubkey, data)
 }
 
 func (t *Transaction) Sign(signer crypto.Signer) error {
@@ -71,7 +76,7 @@ func (t *Transaction) Sign(signer crypto.Signer) error {
 	}
 
 	t.Signature = signature
-	t.Sender = signer.PubKey()
+	t.Sender = signer.PubKey().Bytes()
 
 	return nil
 }

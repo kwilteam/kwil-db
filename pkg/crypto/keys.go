@@ -2,6 +2,8 @@ package crypto
 
 type KeyType string
 
+const UnknownKeyType KeyType = "unknown"
+
 type PrivateKey interface {
 	Bytes() []byte
 	Type() KeyType

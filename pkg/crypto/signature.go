@@ -72,7 +72,7 @@ func (s SignatureType) KeyType() KeyType {
 	case SIGNATURE_TYPE_ED25519:
 		return Ed25519
 	default:
-		panic("not supported signature type")
+		return UnknownKeyType
 	}
 }
 
@@ -87,6 +87,10 @@ func (s SignatureType) String() string {
 type Signature struct {
 	Signature []byte        `json:"signature_bytes"`
 	Type      SignatureType `json:"signature_type"`
+}
+
+func (s *Signature) KeyType() KeyType {
+	return s.Type.KeyType()
 }
 
 // Verify verifies the signature against the given public key and data.
