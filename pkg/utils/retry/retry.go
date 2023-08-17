@@ -3,8 +3,9 @@ package retry
 import (
 	"context"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"time"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/jpillora/backoff"
 	"go.uber.org/zap"

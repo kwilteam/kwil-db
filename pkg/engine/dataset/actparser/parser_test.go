@@ -2,8 +2,9 @@ package actparser
 
 import (
 	"flag"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var trace = flag.Bool("trace", false, "run tests with tracing")

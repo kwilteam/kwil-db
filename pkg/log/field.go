@@ -1,9 +1,10 @@
 package log
 
 import (
-	"go.uber.org/zap"
 	"runtime/debug"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Field = zap.Field

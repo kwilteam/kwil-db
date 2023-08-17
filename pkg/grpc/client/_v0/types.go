@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+
 	"github.com/kwilteam/kwil-db/pkg/accounts"
 	"github.com/kwilteam/kwil-db/pkg/databases"
 	"github.com/kwilteam/kwil-db/pkg/databases/executables"

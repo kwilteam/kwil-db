@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+
 	accountspb "github.com/kwilteam/kwil-db/api/protobuf/accounts/v0"
 	cfgpb "github.com/kwilteam/kwil-db/api/protobuf/config/v0"
 	pricingpb "github.com/kwilteam/kwil-db/api/protobuf/pricing/v0"

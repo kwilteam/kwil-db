@@ -1,14 +1,15 @@
 package system
 
 import (
-	"github.com/kwilteam/kwil-db/internal/pkg/build"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/tonistiigi/go-rosetta"
 	"html/template"
 	"os"
 	"runtime"
 	"text/tabwriter"
+
+	"github.com/kwilteam/kwil-db/internal/pkg/build"
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"github.com/tonistiigi/go-rosetta"
 )
 
 var versionTemplate = `

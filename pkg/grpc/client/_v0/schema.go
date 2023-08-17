@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+
 	commonpb "github.com/kwilteam/kwil-db/api/protobuf/common/v0"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
 	"github.com/kwilteam/kwil-db/pkg/databases"

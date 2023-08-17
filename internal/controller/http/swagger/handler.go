@@ -3,9 +3,10 @@ package swagger
 import (
 	"bytes"
 	_ "embed"
-	swagger "github.com/kwilteam/kwil-db/api/openapi-spec/api"
 	"net/http"
 	"time"
+
+	swagger "github.com/kwilteam/kwil-db/api/openapi-spec/api"
 )
 
 func GWSwaggerJSONV0Handler(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {

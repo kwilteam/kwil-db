@@ -2,12 +2,13 @@ package specifications
 
 import (
 	"encoding/json"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"os"
 	"testing"
 
-	"github.com/kwilteam/kuneiform/kfparser"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
+
+	"github.com/kwilteam/kuneiform/kfparser"
 )
 
 type DatabaseSchemaLoader interface {
