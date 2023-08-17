@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+
 	"github.com/kwilteam/kwil-db/pkg/log"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"go.uber.org/zap"
 )
 

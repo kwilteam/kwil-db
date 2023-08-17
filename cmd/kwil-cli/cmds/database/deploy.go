@@ -109,7 +109,8 @@ func UnmarshalJson(file *os.File) (*transactions.Schema, error) {
 
 // parseComments parses the comments from the file
 // and returns the bytes of the file without the comments
-func parseComments(file *os.File) ([]byte, error) {
+// @brennanjs remove?
+func parseComments(file *os.File) ([]byte, error) { //nolint:unused
 	reader := bufio.NewReader(file)
 	var result bytes.Buffer
 	for {
@@ -132,7 +133,8 @@ func parseComments(file *os.File) ([]byte, error) {
 }
 
 // removeComments removes the comments from the line
-func removeComments(line string) string {
+// @brennanjs remove?
+func removeComments(line string) string { //nolint:unused
 	// Check if the line contains a comment
 	if idx := strings.Index(line, "//"); idx != -1 {
 		// Check if the comment is within a string (either single, double, or backtick quotes)

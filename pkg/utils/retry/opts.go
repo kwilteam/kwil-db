@@ -2,8 +2,9 @@ package retry
 
 import (
 	"context"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"time"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 type RetryOpt func(*retrier)

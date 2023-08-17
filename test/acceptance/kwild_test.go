@@ -3,15 +3,15 @@ package acceptance_test
 import (
 	"context"
 	"flag"
-	"github.com/kwilteam/kwil-db/test/acceptance"
-	"github.com/kwilteam/kwil-db/test/specifications"
 	"os"
 	"os/signal"
 	"syscall"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/test/acceptance"
+	"github.com/kwilteam/kwil-db/test/specifications"
 )
 
-var remote = flag.Bool("remote", false, "run tests against remote environment")
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
 func TestKwildGrpcAcceptance(t *testing.T) {

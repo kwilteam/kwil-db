@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+
 	cfgpb "github.com/kwilteam/kwil-db/api/protobuf/config/v0"
 )
 

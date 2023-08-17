@@ -3,11 +3,13 @@ package simple_checker
 import (
 	"context"
 	"fmt"
-	"github.com/alexliesenfeld/health"
-	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
+
+	"github.com/alexliesenfeld/health"
 )
 
 func TestSimpleChecker_Check(t *testing.T) {

@@ -2,8 +2,9 @@ package utils
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"reflect"
+
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 
 	"github.com/spf13/cobra"
 )

@@ -3,20 +3,22 @@ package integration
 import (
 	"context"
 	"fmt"
-	"github.com/joho/godotenv"
+	"os"
+	"strconv"
+	"testing"
+
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/test/acceptance"
 	"github.com/kwilteam/kwil-db/test/runner"
+
+	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"os"
-	"strconv"
-	"testing"
 )
 
 type IntTestConfig struct {

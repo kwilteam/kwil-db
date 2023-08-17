@@ -38,7 +38,7 @@ func (c *Connection) CreateSession() (*Session, error) {
 // Delete deletes the session and associated resources.
 func (s *Session) Delete() (err error) {
 	defer func() {
-		// recover from panic if one occured. Set err to nil otherwise.
+		// recover from panic if one occurred. Set err to nil otherwise.
 		if r := recover(); r != nil {
 			err = fmt.Errorf("error closing session: %v", r)
 		}

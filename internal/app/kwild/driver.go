@@ -159,7 +159,7 @@ func (d *KwildDriver) ValidatorSetCount(ctx context.Context) (int, error) {
 }
 
 func (d *KwildDriver) ValidatorNodeJoin(ctx context.Context, joiner string, power int64) error {
-	_, err := d.clt.ValidatorJoin(ctx, string(joiner), power)
+	_, err := d.clt.ValidatorJoin(ctx, joiner, power)
 	if err != nil {
 		return fmt.Errorf("error joining validator: %w", err)
 	}
