@@ -60,9 +60,9 @@ type AbciApp struct {
 }
 
 func (a *AbciApp) ApplySnapshotChunk(p0 abciTypes.RequestApplySnapshotChunk) abciTypes.ResponseApplySnapshotChunk {
-	refetch_chunks, err := a.bootstrapper.ApplySnapshotChunk(p0.Chunk, p0.Index)
+	refetchChunks, status, err := a.bootstrapper.ApplySnapshotChunk(p0.Chunk, p0.Index)
 	if err != nil {
-		return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_UNKNOWN, RefetchChunks: refetch_chunks}
+		return abciTypes.ResponseApplySnapshotChunk{Result: abciStatus(status), RefetchChunks: refetchChunks}
 	}
 
 	if a.bootstrapper.IsDBRestored() {
@@ -113,8 +113,18 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 		return abciTypes.ResponseCommit{}
 	}
 
+	height := uint64(0) // TODO: Replace it with the updated height from the statestore
+	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(height) {
+		// TODO: Lock all the DBs
+		err = a.snapshotter.CreateSnapshot(height)
+		if err != nil {
+			// It's not a panic, its okay for a snapshot to fail, probably disk space issue - to be monitored and take action
+			a.log.Error("Snapshot creation failed")
+		}
+		// TODO: Unlock all the DBs
+	}
 	return abciTypes.ResponseCommit{
-		// TODO: is this where appHash belongs? >>> Correct
+		// TODO: is this where appHash belongs?
 		Data: appHash,
 	}
 }
@@ -217,6 +227,10 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 }
 
 func (a *AbciApp) ListSnapshots(p0 abciTypes.RequestListSnapshots) abciTypes.ResponseListSnapshots {
+	if a.snapshotter == nil {
+		return abciTypes.ResponseListSnapshots{Snapshots: nil}
+	}
+
 	snapshots, err := a.snapshotter.ListSnapshots()
 	if err != nil {
 		return abciTypes.ResponseListSnapshots{Snapshots: nil}
@@ -234,6 +248,10 @@ func (a *AbciApp) ListSnapshots(p0 abciTypes.RequestListSnapshots) abciTypes.Res
 }
 
 func (a *AbciApp) LoadSnapshotChunk(p0 abciTypes.RequestLoadSnapshotChunk) abciTypes.ResponseLoadSnapshotChunk {
+	if a.snapshotter == nil {
+		return abciTypes.ResponseLoadSnapshotChunk{Chunk: nil}
+	}
+
 	chunk := a.snapshotter.LoadSnapshotChunk(p0.Height, p0.Format, p0.Chunk)
 	return abciTypes.ResponseLoadSnapshotChunk{Chunk: chunk}
 }

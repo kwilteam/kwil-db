@@ -136,3 +136,16 @@ func convertToABCISnapshot(snapshot *snapshots.Snapshot) (*abciTypes.Snapshot, e
 		Metadata: metadata,
 	}, nil
 }
+
+func abciStatus(status snapshots.Status) abciTypes.ResponseApplySnapshotChunk_Result {
+	switch status {
+	case snapshots.ACCEPT:
+		return abciTypes.ResponseApplySnapshotChunk_ACCEPT
+	case snapshots.REJECT:
+		return abciTypes.ResponseApplySnapshotChunk_REJECT_SNAPSHOT
+	case snapshots.RETRY:
+		return abciTypes.ResponseApplySnapshotChunk_RETRY
+	default:
+		return abciTypes.ResponseApplySnapshotChunk_UNKNOWN
+	}
+}

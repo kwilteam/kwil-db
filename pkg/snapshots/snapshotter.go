@@ -11,24 +11,22 @@ import (
 )
 
 type Snapshotter struct {
-	SnapshotDir      string
-	SnapshotFileType string
-	DatabaseDir      string
-	ChunkSize        uint64
-	SnapshotFailed   bool
-	SnapshotError    error
-	Snapshot         *Snapshot
+	SnapshotDir    string // Directory to store snapshots
+	DatabaseDir    string // Directory to be snapshotted
+	ChunkSize      uint64 // Chunk sizes of snapshots
+	SnapshotFailed bool
+	SnapshotError  error
+	Snapshot       *Snapshot // Current snapshot info
 }
 
-func NewSnapshotter(snapshotDir string, databaseDir string, snapshotFileType string, chunkSz uint64) *Snapshotter {
+func NewSnapshotter(snapshotDir string, databaseDir string, chunkSz uint64) *Snapshotter {
 	return &Snapshotter{
-		SnapshotDir:      snapshotDir,
-		SnapshotFileType: snapshotFileType,
-		DatabaseDir:      databaseDir,
-		Snapshot:         nil,
-		ChunkSize:        chunkSz,
-		SnapshotFailed:   false,
-		SnapshotError:    nil,
+		SnapshotDir:    snapshotDir,
+		DatabaseDir:    databaseDir,
+		Snapshot:       nil,
+		ChunkSize:      chunkSz,
+		SnapshotFailed: false,
+		SnapshotError:  nil,
 	}
 }
 
@@ -116,6 +114,7 @@ func (s *Snapshotter) CreateSnapshot() error {
 	return nil
 }
 
+// Divides given file into chunks of max size 16MB with chunkID starting from ChunkIdx
 func (s *Snapshotter) createFileSnaphshot(file string, startIdx uint32) error {
 	reader, err := os.Open(file)
 	if err != nil {
@@ -171,6 +170,7 @@ func (s *Snapshotter) createChunk(reader *os.File, chunkIdx uint32) error {
 	return nil
 }
 
+// Returns the list of snapshot metadata of all snapshots stored in the snapshot store
 func (s *Snapshotter) ListSnapshots() ([]Snapshot, error) {
 	pathRegex := filepath.Join(s.SnapshotDir, "*", "metadata.json")
 	snapshotFiles, err := filepath.Glob(pathRegex)
@@ -190,6 +190,7 @@ func (s *Snapshotter) ListSnapshots() ([]Snapshot, error) {
 	return snapshots, nil
 }
 
+// Returns the chunk of index chunkID from snapshot at given height
 func (s *Snapshotter) LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) ([]byte, error) {
 	chunkFile := s.chunkFilePath(chunkID)
 	chunk, err := utils.ReadFile(chunkFile)

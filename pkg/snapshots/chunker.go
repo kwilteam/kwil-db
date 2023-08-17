@@ -71,7 +71,7 @@ func (c *Chunker) endChunk() error {
 	return err
 }
 
-func CopyChunkFile(srcFile string, dstFile string) error {
+func copyChunkFile(srcFile string, dstFile string) error {
 	src, err := os.Open(srcFile)
 	if err != nil {
 		return err

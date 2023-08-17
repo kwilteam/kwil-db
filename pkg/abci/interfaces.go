@@ -27,15 +27,26 @@ type AtomicCommitter interface {
 }
 
 type SnapshotModule interface {
+	// Checks if databases are to be snapshotted at a particular height
 	IsSnapshotDue(height uint64) bool
+
+	// Starts the snapshotting process, Locking databases need to be handled outside this fn
 	CreateSnapshot(height uint64) error
+
+	// Lists all the available snapshots in the snapshotstore and returns the snapshot metadata
 	ListSnapshots() ([]snapshots.Snapshot, error)
+
+	// Returns the snapshot chunk of index chunkId at a given height
 	LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) []byte
 }
 
 type DBBootstrapModule interface {
-	//(ctx context.Context, snapshot []Snapshot) error
-	ApplySnapshotChunk(chunk []byte, index uint32) ([]uint32, error)
+	// Offers a snapshot (metadata) to the bootstrapper and decides whether to accept the snapshot or not
 	OfferSnapshot(snapshot *snapshots.Snapshot) error
+
+	// Offers a snapshot Chunk to the bootstrapper, once all the chunks corresponding to the snapshot are received, the databases are restored from the chunks
+	ApplySnapshotChunk(chunk []byte, index uint32) ([]uint32, snapshots.Status, error)
+
+	// Signifies the end of the db restoration
 	IsDBRestored() bool
 }

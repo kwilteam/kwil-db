@@ -10,15 +10,9 @@ import (
 
 func Test_SnapshotStore_Create(t *testing.T) {
 	tempDir := t.TempDir()
-	ss := snapshots.NewSnapshotStore(snapshots.WithEnabled(true),
-		snapshots.WithSnapshotDir(filepath.Join(tempDir, "snapshots")),
-		snapshots.WithDatabaseDir("./test_data/dir1/"),
-		snapshots.WithDatabaseType("sqlite"),
-		snapshots.WithMaxSnapshots(1),
-		snapshots.WithRecurringHeight(1),
-		snapshots.WithChunkSize(1*1024*1024),
-		snapshots.WithSnapshotter(),
-	)
+	ss := snapshots.NewSnapshotStore("../../snapshots/test_data/dir1/",
+		filepath.Join(tempDir, "snapshots"),
+		1, 1)
 
 	assert.NotNil(t, ss, "Snapshot store was not created")
 
