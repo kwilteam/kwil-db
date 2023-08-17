@@ -2,8 +2,9 @@ package bytes_test
 
 import (
 	"encoding/binary"
-	"github.com/kwilteam/kwil-db/pkg/utils/numbers/bytes"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/utils/numbers/bytes"
 )
 
 func Test_Bytes(t *testing.T) {

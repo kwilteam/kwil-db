@@ -96,7 +96,7 @@ func (a *AtomicCommitter) Begin(ctx context.Context) (err error) {
 
 // Commit commits the atomic session.
 // It aggregates all commit ids from the committables and returns them as a single Sha256 hash.
-// It can be given a callback function to handle any errors that occur during the apply phase (which procedes asynchronously) after this function returns.
+// It can be given a callback function to handle any errors that occur during the apply phase (which proceeds asynchronously) after this function returns.
 func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error)) (commitId []byte, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

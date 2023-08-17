@@ -3,12 +3,13 @@ package txsvc
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v0"
 	accountTypes "github.com/kwilteam/kwil-db/pkg/accounts"
 	"github.com/kwilteam/kwil-db/pkg/databases"
 	"github.com/kwilteam/kwil-db/pkg/databases/convert"
 	"github.com/kwilteam/kwil-db/pkg/utils/serialize"
-	"strings"
 )
 
 func (s *Service) handleDeployDatabase(ctx context.Context, tx *accountTypes.Transaction) (*txpb.BroadcastResponse, error) {

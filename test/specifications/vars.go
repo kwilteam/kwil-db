@@ -2,8 +2,9 @@ package specifications
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"time"
+
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 var (

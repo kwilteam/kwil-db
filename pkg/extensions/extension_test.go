@@ -7,12 +7,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/extensions"
 )
 
-var (
-	testConfig = map[string]string{
-		"eth_provider": "wss://infura.io",
-	}
-)
-
 // TODO: these tests are pretty bad.
 // since this is a prototype, and the package is simple, this is good for now.
 func Test_Extensions(t *testing.T) {

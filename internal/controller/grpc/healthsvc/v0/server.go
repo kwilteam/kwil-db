@@ -2,6 +2,7 @@ package healthsvc
 
 import (
 	"context"
+
 	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 
 	"google.golang.org/grpc/health/grpc_health_v1"

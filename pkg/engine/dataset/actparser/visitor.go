@@ -2,10 +2,11 @@ package actparser
 
 import (
 	"fmt"
-	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"github.com/kwilteam/action-grammar-go/actgrammar"
 	"reflect"
 	"strings"
+
+	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
+	"github.com/kwilteam/action-grammar-go/actgrammar"
 )
 
 type KFActionVisitor struct {

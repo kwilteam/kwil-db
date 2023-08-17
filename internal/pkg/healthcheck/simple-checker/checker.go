@@ -2,9 +2,11 @@ package simple_checker
 
 import (
 	"context"
-	"github.com/alexliesenfeld/health"
+
 	healthcheck2 "github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	"github.com/kwilteam/kwil-db/pkg/log"
+
+	"github.com/alexliesenfeld/health"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
