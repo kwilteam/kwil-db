@@ -17,7 +17,7 @@ func ValidateIdentifier(name string) error {
 
 	ok := validNameRegex.MatchString(name)
 	if !ok {
-		return fmt.Errorf("name must start with letter, only contain letters, numbers, and underscores, and be lowercase.  recieved: %s", name)
+		return fmt.Errorf("name must start with letter, only contain letters, numbers, and underscores, and be lowercase.  received: %s", name)
 	}
 
 	if IsKeyword(name) {

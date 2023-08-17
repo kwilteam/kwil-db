@@ -10,9 +10,10 @@ tasks:
       - task -l
 
   install:deps:
+    aliases: [tools]
     desc: Install tools required to build this app
     cmds:
-      - cat tools.go | grep _ | awk -F'"' '{print $2}' | xargs -tI % go install %
+      - grep _ tools.txt | awk -F'"' '{print $2}' | xargs -tI % go install %
 
   vendor:
     desc: Generate vendor
@@ -42,6 +43,17 @@ tasks:
     cmds:
       - go mod download
 
+  fmt:
+    desc: Format the code
+    cmds:
+      - goimports -format-only -w .
+
+  lint:
+    desc: Lint with golangci-lint
+    deps: [pb:compile:v1]
+    cmds:
+        - golangci-lint run -c .golangci.yml 
+
   build:
     desc: Build cli & kwild
     cmds:
@@ -63,18 +75,6 @@ tasks:
       - ./scripts/build/binary kwild #-mod=mod
     generates:
       - .build/kwild
-
-  build:abi:
-    desc: Builds Golang bindings for EVM contract ABIs
-    internal: true
-    cmds:
-      - abigen --abi ./pkg/chain/contracts/escrow/evm/abi/escrow.json --bin ./pkg/chain/contracts/escrow/evm/abi/escrow.bin --pkg abi --type Escrow --out ./pkg/chain/contracts/escrow/evm/abi/escrow.go
-      - abigen --abi ./pkg/chain/contracts/token/evm/abi/erc20.json --bin ./pkg/chain/contracts/token/evm/abi/erc20.bin --pkg abi --type Erc20 --out ./pkg/chain/contracts/token/evm/abi/erc20.go
-    sources:
-      - ./pkg/chain/contracts/*/evm/abi/*.json
-      - ./pkg/chain/contracts/*/evm/abi/*.bin
-    generates:
-      - ./pkg/chain/contracts/*/evm/abi/*.go
 
   # ************ docker ************
   build:docker:

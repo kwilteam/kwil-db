@@ -3,10 +3,11 @@ package retry_test
 import (
 	"context"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	retry "github.com/kwilteam/kwil-db/pkg/utils/retry"
 	"testing"
 	"time"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
+	retry "github.com/kwilteam/kwil-db/pkg/utils/retry"
 )
 
 func Test_Retry(t *testing.T) {

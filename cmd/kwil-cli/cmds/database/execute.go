@@ -137,7 +137,8 @@ func createActionInputs(inputs []map[string]any, action *transactions.Action) ([
 	return tuples, nil
 }
 
-func printActionResults(results []map[string]any) {
+// @brennanjs unused, remove, comment, or leave the nolint tag?
+func printActionResults(results []map[string]any) { //nolint:unused
 	for _, row := range results {
 		for k, v := range row {
 			fmt.Printf("%s: %v", k, v)

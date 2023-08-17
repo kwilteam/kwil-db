@@ -3,10 +3,11 @@ package accountsvc
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	accountspb "github.com/kwilteam/kwil-db/api/protobuf/accounts/v0"
 	commonpb "github.com/kwilteam/kwil-db/api/protobuf/common/v0"
 	"github.com/kwilteam/kwil-db/pkg/sql/errors"
-	"strings"
 )
 
 func (s *Service) GetAccount(ctx context.Context, req *accountspb.GetAccountRequest) (*accountspb.GetAccountResponse, error) {

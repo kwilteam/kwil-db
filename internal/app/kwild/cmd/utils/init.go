@@ -1,9 +1,10 @@
 package utils
 
 import (
+	"os"
+
 	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 var initFlags nodecfg.NodeGenerateConfig
