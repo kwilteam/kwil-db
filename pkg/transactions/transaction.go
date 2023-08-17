@@ -50,7 +50,7 @@ type Transaction struct {
 }
 
 func (t *Transaction) GetSenderPubKey() (crypto.PublicKey, error) {
-	return crypto.PublicKeyFromBytes(t.Signature.Type.KeyType(), t.Sender)
+	return crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
 }
 
 // Verify verifies the signature of the transaction
@@ -60,8 +60,13 @@ func (t *Transaction) Verify() error {
 		return err
 	}
 
-	pubkey, err := crypto.PublicKeyFromBytes(t.Signature.Type.KeyType(), t.Sender)
-	return t.Signature.Verify(pubkey, data)
+	var pubKey crypto.PublicKey
+	pubKey, err = crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
+	if err != nil {
+		return err
+	}
+
+	return t.Signature.Verify(pubKey, data)
 }
 
 func (t *Transaction) Sign(signer crypto.Signer) error {

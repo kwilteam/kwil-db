@@ -68,7 +68,7 @@ func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transa
 
 	// TODO: not sure should we parse PublicKey based on Signature.Type or not
 
-	sender, err := crypto.PublicKeyFromBytes(convSignature.Type.KeyType(), req.Sender)
+	sender, err := crypto.PublicKeyFromBytes(convSignature.KeyType(), req.Sender)
 	if err != nil {
 		return nil, nil, err
 	}

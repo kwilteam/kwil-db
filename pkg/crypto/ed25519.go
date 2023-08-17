@@ -45,6 +45,10 @@ func (pv *Ed25519PrivateKey) Sign(msg []byte) ([]byte, error) {
 	return ed25519.Sign(pv.key, msg), nil
 }
 
+func (pv *Ed25519PrivateKey) Signer() Signer {
+	return pv
+}
+
 func (pv *Ed25519PrivateKey) Type() KeyType {
 	return Ed25519
 }

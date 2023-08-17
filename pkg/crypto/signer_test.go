@@ -2,9 +2,10 @@ package crypto
 
 import (
 	"encoding/hex"
+	"testing"
+
 	"github.com/cometbft/cometbft/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestComebftSecp256k1Signer_SignMsg(t *testing.T) {

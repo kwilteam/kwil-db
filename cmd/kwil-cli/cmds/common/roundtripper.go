@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	// this is a wire flag
 	// WithoutPrivateKey is a flag that can be passed to DialClient to indicate that the client should not use the private key in the config
 	WithoutPrivateKey uint8 = 1 << iota
 )
@@ -31,7 +32,7 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 			return fmt.Errorf("private key not provided")
 		}
 
-		options = append(options, client.WithSigner(conf.PrivateKey))
+		options = append(options, client.WithSigner(conf.PrivateKey.Signer()))
 	}
 
 	if conf.GrpcURL == "" {

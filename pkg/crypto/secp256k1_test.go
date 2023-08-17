@@ -2,9 +2,10 @@ package crypto
 
 import (
 	"encoding/hex"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestSecp256k1PrivateKey_Sign(t *testing.T) {

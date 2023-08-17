@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+
 	ethAccount "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
@@ -46,6 +47,10 @@ func (pv *Secp256k1PrivateKey) SignMsg(msg []byte) (*Signature, error) {
 // Sign signs the given hash utilizing go-ethereum's Sign function.
 func (pv *Secp256k1PrivateKey) Sign(hash []byte) ([]byte, error) {
 	return ethCrypto.Sign(hash, pv.key)
+}
+
+func (pv *Secp256k1PrivateKey) Signer() Signer {
+	return pv
 }
 
 func (pv *Secp256k1PrivateKey) Type() KeyType {

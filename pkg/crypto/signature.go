@@ -2,8 +2,9 @@ package crypto
 
 import (
 	"fmt"
-	ethAccount "github.com/ethereum/go-ethereum/accounts"
 	"strings"
+
+	ethAccount "github.com/ethereum/go-ethereum/accounts"
 )
 
 type SignatureType int32

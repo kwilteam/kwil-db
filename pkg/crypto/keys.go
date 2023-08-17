@@ -11,6 +11,7 @@ type PrivateKey interface {
 	Sign(data []byte) ([]byte, error)
 	PubKey() PublicKey
 	Hex() string
+	Signer() Signer
 }
 
 type PublicKey interface {

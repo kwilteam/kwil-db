@@ -5,14 +5,6 @@ type Signer interface {
 	PubKey() PublicKey
 }
 
-type Eip712Signer struct {
-	key PrivateKey
-}
-
-func (e *Eip712Signer) SignMsg(msg []byte) (*Signature, error) {
-	panic("not implemented")
-}
-
 type ComebftSecp256k1Signer struct {
 	key *Secp256k1PrivateKey
 }

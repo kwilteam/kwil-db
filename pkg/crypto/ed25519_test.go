@@ -2,10 +2,11 @@ package crypto_test
 
 import (
 	"encoding/hex"
+	"testing"
+
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestEd25519PrivateKey_Sign(t *testing.T) {

@@ -1,9 +1,10 @@
 package crypto_test
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"reflect"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
 func TestPrivateKeyFromHex(t *testing.T) {
