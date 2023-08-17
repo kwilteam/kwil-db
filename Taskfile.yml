@@ -142,6 +142,13 @@ tasks:
     cmds:
       - go test $(go list ./... | grep -v /kwil-db\/test/) -count=1
 
+  test:unit:race:
+      desc: Run unit tests with race
+      cmds:
+        - task vendor
+        - go test `go list ./... | grep -v /kwil-db\/test/` -count=1 -race
+        - task vendor:clean
+  
   test:it:
     desc: Run integration tests
     deps:
