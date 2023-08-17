@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
 	"os"
+
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/app"
 )
 
 func main() {

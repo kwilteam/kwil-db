@@ -2,9 +2,11 @@ package actparser
 
 import (
 	"fmt"
+
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
 	"github.com/kwilteam/action-grammar-go/actgrammar"
-	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
 )
 
 // Parse parses a action statement string and returns a ActionStmt

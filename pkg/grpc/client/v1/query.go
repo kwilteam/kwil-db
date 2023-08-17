@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 )
 

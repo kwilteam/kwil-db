@@ -1,9 +1,10 @@
 package polynomial_test
 
 import (
-	poly "github.com/kwilteam/kwil-db/pkg/utils/numbers/polynomial"
 	"math/big"
 	"testing"
+
+	poly "github.com/kwilteam/kwil-db/pkg/utils/numbers/polynomial"
 )
 
 func Test_Polynomial(t *testing.T) {

@@ -32,7 +32,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.20.0'
+          go-version: '1.20'
           cache: true
 
       - name: Install dependencies
@@ -47,6 +47,18 @@ jobs:
       - name: Compile Protobuf
         run: |
           task pb:compile:v1
+
+      - name: Compile all packages
+        run: |
+          go build ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          install-mode: "binary"
+          version: "latest"
+          skip-pkg-cache: true
+          # args: --timeout=30m --config=.golangci.yml --issues-exit-code=0 
 
       - name: Generate go vendor
         #for faster builds and private repos, need to run this after pb:compile:v1
@@ -80,7 +92,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.20.0'
+          go-version: '1.20'
           cache: true
 
       - name: Install dependencies

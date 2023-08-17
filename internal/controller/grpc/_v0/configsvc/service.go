@@ -2,6 +2,7 @@ package configsvc
 
 import (
 	"context"
+
 	pb "github.com/kwilteam/kwil-db/api/protobuf/config/v0"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/log"

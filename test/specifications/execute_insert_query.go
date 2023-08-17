@@ -2,10 +2,10 @@ package specifications
 
 import (
 	"context"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 
 	"github.com/stretchr/testify/assert"
 )

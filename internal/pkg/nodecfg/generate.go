@@ -2,19 +2,20 @@ package nodecfg
 
 import (
 	"fmt"
-	cmtCfg "github.com/cometbft/cometbft/config"
-	cmtos "github.com/cometbft/cometbft/libs/os"
-	"github.com/cometbft/cometbft/p2p"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 
+	cmtCfg "github.com/cometbft/cometbft/config"
+	cmtos "github.com/cometbft/cometbft/libs/os"
 	cmtrand "github.com/cometbft/cometbft/libs/rand"
+	"github.com/cometbft/cometbft/p2p"
 	"github.com/cometbft/cometbft/privval"
 	"github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
+
 	"github.com/spf13/viper"
-	"os"
-	"path/filepath"
 )
 
 const (
