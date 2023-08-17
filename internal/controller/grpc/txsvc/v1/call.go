@@ -19,7 +19,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 		return nil, status.Errorf(codes.InvalidArgument, "failed to convert action call: %s", err.Error())
 	}
 
-	if msg.Sender == nil {
+	if msg.Sender != nil {
 		err = msg.Verify()
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to verify signed message: %s", err.Error())
@@ -53,12 +53,22 @@ func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transa
 		return nil, nil, err
 	}
 
-	sender, err := crypto.PublicKeyFromBytes(req.Sender)
+	if req.GetSignature() == nil {
+		return &actionPayload, &transactions.SignedMessage{
+			Signature: nil,
+			Message:   nil,
+			Sender:    nil,
+		}, nil
+	}
+
+	convSignature, err := convertSignature(req.Signature)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	convSignature, err := convertSignature(req.Signature)
+	// TODO: not sure should we parse PublicKey based on Signature.Type or not
+
+	sender, err := crypto.PublicKeyFromBytes(convSignature.KeyType(), req.Sender)
 	if err != nil {
 		return nil, nil, err
 	}

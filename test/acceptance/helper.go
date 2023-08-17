@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
@@ -18,6 +19,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+const DefaultContainerWaitTimeout = 10 * time.Second
+
 type ActTestCfg struct {
 	GWEndpoint    string // gateway endpoint
 	GrpcEndpoint  string
@@ -30,8 +33,8 @@ type ActTestCfg struct {
 
 	AliceRawPK string // Alice is the owner
 	BobRawPK   string
-	AlicePK    crypto.PrivateKey
-	BobPk      crypto.PrivateKey
+	AlicePK    crypto.Signer
+	BobPk      crypto.Signer
 }
 
 func (e *ActTestCfg) AliceAddr() string {
@@ -103,13 +106,13 @@ func (r *ActHelper) LoadConfig() {
 	}
 
 	var err error
-	cfg.AlicePK, err = crypto.PrivateKeyFromHex(cfg.AliceRawPK)
+	cfg.AlicePK, err = crypto.Secp256k1PrivateKeyFromHex(cfg.AliceRawPK)
 	require.NoError(r.t, err, "invalid alice private key")
 	//if err != nil {
 	//	return nil, fmt.Errorf("invalid alice private key: %v", err)
 	//}
 
-	cfg.BobPk, err = crypto.PrivateKeyFromHex(cfg.BobRawPK)
+	cfg.BobPk, err = crypto.Secp256k1PrivateKeyFromHex(cfg.BobRawPK)
 	require.NoError(r.t, err, "invalid bob private key")
 	r.cfg = cfg
 
@@ -145,11 +148,6 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 
 	dc, err := compose.NewDockerCompose(r.cfg.DockerComposeFile)
 	require.NoError(r.t, err, "failed to create docker compose object for single kwild node")
-	err = dc.
-		WithEnv(envs).
-		WaitForService("kwild", wait.NewLogStrategy("grpc server started")).
-		WaitForService("ext", wait.NewLogStrategy("listening on")).
-		Up(ctx)
 
 	r.teardown = append(r.teardown, func() {
 		r.t.Logf("teardown docker compose")
@@ -159,6 +157,17 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	r.t.Cleanup(func() {
 		r.Teardown()
 	})
+
+	err = dc.
+		WithEnv(envs).
+		WaitForService(
+			"ext",
+			wait.NewLogStrategy("listening on").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		WaitForService(
+			"kwild",
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		Up(ctx)
+	r.t.Log("docker compose up")
 
 	require.NoError(r.t, err, "failed to start kwild node")
 
@@ -178,7 +187,7 @@ func (r *ActHelper) Teardown() {
 
 func (r *ActHelper) GetAliceDriver(ctx context.Context) KwilAcceptanceDriver {
 	kwilClt, err := client.New(ctx, r.cfg.GrpcEndpoint,
-		client.WithPrivateKey(r.cfg.AlicePK),
+		client.WithSigner(r.cfg.AlicePK),
 		client.WithCometBftUrl(r.cfg.ChainEndpoint),
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
@@ -188,7 +197,7 @@ func (r *ActHelper) GetAliceDriver(ctx context.Context) KwilAcceptanceDriver {
 
 func (r *ActHelper) GetBobDriver(ctx context.Context) KwilAcceptanceDriver {
 	kwilClt, err := client.New(ctx, r.cfg.GrpcEndpoint,
-		client.WithPrivateKey(r.cfg.BobPk),
+		client.WithSigner(r.cfg.BobPk),
 		client.WithCometBftUrl(r.cfg.ChainEndpoint),
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
