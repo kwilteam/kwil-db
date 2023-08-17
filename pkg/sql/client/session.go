@@ -193,7 +193,7 @@ func (i *identifiedRecord) Hash() []byte {
 
 // concatenatePrimaryKeys concatenates the primary keys into a byte array
 func concatenatePrimaryKeys(primaryKeys []*sqlite.Value) []byte {
-	pks := make([][]byte, len(primaryKeys))
+	pks := make([][]byte, 0, len(primaryKeys))
 	for _, primaryKey := range primaryKeys {
 		pks = append(pks, primaryKey.Blob())
 	}
