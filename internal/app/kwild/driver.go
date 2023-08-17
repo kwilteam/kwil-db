@@ -43,7 +43,7 @@ func NewKwildDriver(clt *client.Client, opts ...GrpcDriverOpt) *KwildDriver {
 }
 
 func (d *KwildDriver) GetUserAddress() string {
-	return d.clt.PrivateKey.PubKey().Address().String()
+	return d.clt.Signer.PubKey().Address().String()
 }
 
 // TODO: this likely needs to change; the old Kwild driver is not compatible, since deploy, drop, and execute are asynchronous

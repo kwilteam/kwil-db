@@ -41,7 +41,7 @@ func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 		ClientChainRPCURL: c.ClientChainRPCURL,
 	}
 
-	privateKey, err := crypto.PrivateKeyFromHex(c.PrivateKey)
+	privateKey, err := crypto.Secp256k1PrivateKeyFromHex(c.PrivateKey)
 	if err != nil {
 		return kwilConfig, nil
 	}

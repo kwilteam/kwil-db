@@ -59,7 +59,13 @@ func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.
 		return failure(tx, price, err)
 	}
 
-	err = u.engine.DropDataset(ctx, tx.Sender.Address().String(), dbid)
+	senderPubKey, err := tx.GetSenderPubKey()
+	// NOTE: This should never happen, since the transaction is already validated
+	if err != nil {
+		return failure(tx, price, fmt.Errorf("failed to parse sender: %w", err))
+	}
+
+	err = u.engine.DropDataset(ctx, senderPubKey.Address().String(), dbid)
 	if err != nil {
 		return failure(tx, price, fmt.Errorf("failed to drop dataset: %w", err))
 	}
@@ -83,8 +89,14 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 		return failure(tx, price, err)
 	}
 
+	senderPubKey, err := tx.GetSenderPubKey()
+	// NOTE: This should never happen, since the transaction is already validated
+	if err != nil {
+		return failure(tx, price, fmt.Errorf("failed to parse sender: %w", err))
+	}
+
 	_, err = u.engine.Execute(ctx, dbid, action, args,
-		engine.WithCaller(tx.Sender.Address().String()),
+		engine.WithCaller(senderPubKey.Address().String()),
 	)
 	if err != nil {
 		return failure(tx, price, fmt.Errorf("failed to execute action: %w", err))
@@ -95,13 +107,18 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 
 // compareAndSpend compares the calculated price to the transaction's fee, and spends the price if the fee is sufficient.
 func (u *DatasetModule) compareAndSpend(ctx context.Context, price *big.Int, tx *transactions.Transaction) error {
-
 	if tx.Body.Fee.Cmp(price) < 0 {
 		return fmt.Errorf(`%w: fee %s is less than price %s`, ErrInsufficientFee, tx.Body.Fee.String(), price.String())
 	}
 
+	senderPubKey, err := tx.GetSenderPubKey()
+	// NOTE: This should never happen, since the transaction is already validated
+	if err != nil {
+		return fmt.Errorf("failed to parse sender: %w", err)
+	}
+
 	return u.accountStore.Spend(ctx, &balances.Spend{
-		AccountAddress: tx.Sender.Address().String(),
+		AccountAddress: senderPubKey.Address().String(),
 		Amount:         price,
 		Nonce:          int64(tx.Body.Nonce),
 	})
