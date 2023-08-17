@@ -768,8 +768,7 @@
           "format": "byte"
         },
         "signature_type": {
-          "type": "integer",
-          "format": "int32"
+          "type": "string"
         }
       }
     },

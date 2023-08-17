@@ -24,7 +24,7 @@ type Client struct {
 	client         *grpcClient.Client
 	CometBftClient *rpchttp.HTTP
 	datasets       map[string]*transactions.Schema
-	PrivateKey     crypto.PrivateKey
+	Signer         crypto.Signer
 
 	cometBftRpcUrl string
 }
@@ -164,7 +164,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 	}
 
 	var signedMsg *transactions.SignedMessage
-	shouldSign, err := shouldAuthenticate(c.PrivateKey, callOpts.forceAuthenticated)
+	shouldSign, err := shouldAuthenticate(c.Signer, callOpts.forceAuthenticated)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 	}
 
 	if shouldSign {
-		err = msg.Sign(c.PrivateKey)
+		err = msg.Sign(c.Signer)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signed message: %w", err)
@@ -188,20 +188,20 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 // shouldAuthenticate decides whether the client should authenticate or not
 // if enforced is not nil, it will be used instead of the default value
 // otherwise, if the private key is not nil, it will authenticate
-func shouldAuthenticate(privateKey crypto.PrivateKey, enforced *bool) (bool, error) {
+func shouldAuthenticate(signer crypto.Signer, enforced *bool) (bool, error) {
 	if enforced != nil {
 		if !*enforced {
 			return false, nil
 		}
 
-		if privateKey == nil {
+		if signer == nil {
 			return false, fmt.Errorf("private key is nil, but authentication is enforced")
 		}
 
 		return true, nil
 	}
 
-	return privateKey != nil, nil
+	return signer != nil, nil
 }
 
 func DecodeOutputs(bts []byte) ([]map[string]any, error) {

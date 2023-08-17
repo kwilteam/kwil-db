@@ -19,7 +19,7 @@ func convertTx(incoming *transactions.Transaction) *txpb.Transaction {
 			Salt:        incoming.Body.Salt,
 		},
 		Signature: convertActionSignature(incoming.Signature),
-		Sender:    incoming.Sender.Bytes(),
+		Sender:    incoming.Sender,
 	}
 }
 
@@ -30,7 +30,7 @@ func convertActionSignature(oldSig *crypto.Signature) *txpb.Signature {
 
 	newSig := &txpb.Signature{
 		SignatureBytes: oldSig.Signature,
-		SignatureType:  oldSig.Type.Int32(),
+		SignatureType:  oldSig.Type.String(),
 	}
 
 	return newSig

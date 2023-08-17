@@ -11,7 +11,7 @@ import (
 
 // Transaction signed by the client
 func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transactions.Transaction, error) {
-	if c.PrivateKey == nil {
+	if c.Signer == nil {
 		return nil, fmt.Errorf("private key is nil")
 	}
 
@@ -46,7 +46,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transac
 	tx.Body.Fee = price
 
 	// sign transaction
-	err = tx.Sign(c.PrivateKey)
+	err = tx.Sign(c.Signer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
@@ -122,9 +122,9 @@ func (c *Client) NewNodeTx(ctx context.Context, payloadType transactions.Payload
 }
 
 func (c *Client) getAddress() (string, error) {
-	if c.PrivateKey == nil {
+	if c.Signer == nil {
 		return "", fmt.Errorf("private key is nil")
 	}
 
-	return c.PrivateKey.PubKey().Address().String(), nil
+	return c.Signer.PubKey().Address().String(), nil
 }
