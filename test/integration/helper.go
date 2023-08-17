@@ -136,6 +136,16 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 
 	dc, err := compose.NewDockerCompose(r.cfg.DockerComposeFile)
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
+
+	r.teardown = append(r.teardown, func() {
+		r.t.Log("teardown docker compose")
+		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
+	})
+
+	r.t.Cleanup(func() {
+		r.Teardown()
+	})
+
 	err = dc.
 		WithEnv(envs).
 		WaitForService("ext1",
@@ -148,15 +158,6 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
 		Up(ctx)
 	r.t.Log("docker compose up")
-
-	r.teardown = append(r.teardown, func() {
-		r.t.Log("teardown docker compose")
-		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
-	})
-
-	r.t.Cleanup(func() {
-		r.Teardown()
-	})
 
 	require.NoError(r.t, err, "failed to start kwild cluster")
 

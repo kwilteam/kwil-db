@@ -30,7 +30,7 @@ func convertActionSignature(oldSig *crypto.Signature) *txpb.Signature {
 
 	newSig := &txpb.Signature{
 		SignatureBytes: oldSig.Signature,
-		SignatureType:  oldSig.Type.Int32(),
+		SignatureType:  oldSig.Type.String(),
 	}
 
 	return newSig

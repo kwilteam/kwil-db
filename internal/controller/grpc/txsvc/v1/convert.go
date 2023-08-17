@@ -62,7 +62,7 @@ func convertSignature(sig *txpb.Signature) (*crypto.Signature, error) {
 		}, nil
 	}
 
-	sigType := crypto.SignatureType(sig.SignatureType)
+	sigType := crypto.SignatureLookUp(sig.SignatureType)
 	if err := sigType.IsValid(); err != nil {
 		return nil, err
 	}
