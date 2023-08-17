@@ -14,8 +14,6 @@ import (
 	"github.com/kwilteam/kwil-db/test/specifications"
 )
 
-// @yaiba remove unused remote?
-var remote = flag.Bool("remote", false, "run tests against remote environment") //nolint:unused
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
 func TestKwildDatabaseIntegration(t *testing.T) {

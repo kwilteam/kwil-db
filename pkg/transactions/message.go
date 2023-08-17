@@ -36,16 +36,16 @@ type SignedMessage struct {
 // it to the message in the signature.
 // It then uses the public key in the signature to verify the signature.
 func (s *SignedMessage) Verify() error {
-	return s.Sender.Verify(s.Signature, s.Message)
+	return s.Signature.Verify(s.Sender, s.Message)
 }
 
 // Sign signs a message with a private key.
-func (s *SignedMessage) Sign(privateKey crypto.PrivateKey) error {
-	signature, err := privateKey.Sign(s.Message)
+func (s *SignedMessage) Sign(signer crypto.Signer) error {
+	signature, err := signer.SignMsg(s.Message)
 	if err != nil {
 		return err
 	}
 	s.Signature = signature
-	s.Sender = privateKey.PubKey()
+	s.Sender = signer.PubKey()
 	return nil
 }
