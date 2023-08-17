@@ -24,6 +24,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/modules/snapshots"
+	snapshotPkg "github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -214,18 +215,24 @@ func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {
 }
 
 func buildSnapshotModule(d *coreDependencies) *snapshots.SnapshotStore {
-	return snapshots.NewSnapshotStore(snapshots.WithEnabled(d.cfg.SnapshotConfig.Enabled),
-		snapshots.WithDatabaseDir(d.cfg.SqliteFilePath),
-		snapshots.WithSnapshotDir(d.cfg.SnapshotConfig.SnapshotDir),
-		snapshots.WithMaxSnapshots(d.cfg.SnapshotConfig.MaxSnapshots),
-		snapshots.WithRecurringHeight(d.cfg.SnapshotConfig.RecurringHeight),
+	if !d.cfg.SnapshotConfig.Enabled {
+		return nil
+	}
+
+	return snapshots.NewSnapshotStore(d.cfg.SqliteFilePath,
+		d.cfg.SnapshotConfig.SnapshotDir,
+		d.cfg.SnapshotConfig.RecurringHeight,
+		d.cfg.SnapshotConfig.MaxSnapshots,
 		snapshots.WithLogger(*d.log.Named("snapshotStore")),
-		snapshots.WithSnapshotter(),
 	)
 }
 
-func buildBootstrapModule(d *coreDependencies) *snapshots.Bootstrapper {
-	return snapshots.NewBootstrapper(d.cfg.SqliteFilePath, d.cfg.BootstrapperConfig.SnapshotDir)
+func buildBootstrapModule(d *coreDependencies) *snapshotPkg.Bootstrapper {
+	bootstrapper, err := snapshotPkg.NewBootstrapper(d.cfg.SqliteFilePath)
+	if err != nil {
+		failBuild(err, "Bootstrap module initialization failure")
+	}
+	return bootstrapper
 }
 func buildCometBftClient(cometBftNode *nm.Node) *cmtlocal.Local {
 	return cmtlocal.New(cometBftNode)

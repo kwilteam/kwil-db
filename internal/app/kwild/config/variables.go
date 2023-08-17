@@ -32,7 +32,6 @@ type KwildConfig struct {
 	WithoutGasCosts    bool
 	WithoutNonces      bool
 	SnapshotConfig     SnapshotConfig
-	BootstrapperConfig BootstrapperConfig
 }
 
 type ArweaveConfig struct {
@@ -44,10 +43,6 @@ type SnapshotConfig struct {
 	RecurringHeight uint64
 	MaxSnapshots    uint64
 	SnapshotDir     string
-}
-
-type BootstrapperConfig struct {
-	SnapshotDir string
 }
 
 var (
@@ -67,7 +62,6 @@ var (
 		SnapshotRecurringHeight,
 		MaxSnapshots,
 		SnapshotDir,
-		BootstrapSnapshotDir,
 	}
 )
 
@@ -210,11 +204,5 @@ var (
 		EnvName: "SNAPSHOT_DIR",
 		Field:   "SnapshotConfig.SnapshotDir",
 		Default: "/tmp/kwil/snapshots",
-	}
-
-	BootstrapSnapshotDir = config.CfgVar{
-		EnvName: "BOOTSTRAP_SNAPSHOT_DIR",
-		Field:   "BootstrapperConfig.SnapshotDir",
-		Default: "/tmp/kwil/bootstrap_db",
 	}
 )

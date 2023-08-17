@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/utils"
 )
 
@@ -24,30 +23,46 @@ type BootstrapSession struct {
 	ready            bool
 	totalChunks      uint32
 	chunksReceived   uint32
-	snapshotMetadata *snapshots.Snapshot
+	snapshotMetadata *Snapshot
 	chunkInfo        map[uint32]bool
 	refetchChunks    map[uint32]bool
 	restoreFailed    bool
 }
 
-func NewBootstrapper(tempDir string, dbDir string) *Bootstrapper {
+type Status int
+
+const (
+	ACCEPT Status = iota
+	REJECT
+	RETRY
+	UNKNOWN
+)
+
+func NewBootstrapper(dbDir string) (*Bootstrapper, error) {
+	// Create a temporary directory in the dbDir to store the snapshots
+	tempDir := filepath.Join(dbDir, ".tmp/rcvdSnaps/")
+	err := utils.CreateDirIfNeeded(tempDir)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Bootstrapper{
 		tempDir:       tempDir,
 		dbDir:         dbDir,
 		activeSession: nil,
 		dbRestored:    false,
-	}
+	}, nil
 }
 
 func (b *Bootstrapper) IsDBRestored() bool {
-	if b.dbRestored || b.activeSession.restoreFailed {
-		b.endBootstrapSession()
-	}
-
 	return b.dbRestored
 }
 
-func (b *Bootstrapper) OfferSnapshot(snapshot *snapshots.Snapshot) error {
+/*
+Receives snapshot metadata and validates and decides if the snapshot to be applied
+If snapshot is accepted, it starts the bootstrap session
+*/
+func (b *Bootstrapper) OfferSnapshot(snapshot *Snapshot) error {
 	if b.validateSnapshot(snapshot) != nil {
 		return fmt.Errorf("invalid snapshot")
 	}
@@ -55,41 +70,48 @@ func (b *Bootstrapper) OfferSnapshot(snapshot *snapshots.Snapshot) error {
 }
 
 /*
-Validates the chunk and writes it to disk & When all chunks are received, it restores the DB from the snapshot chunks
+	    This has 2 functions:
+		- Validate Chunks received and keep track of chunks
+		- Start the DB restoration process once all the chunks are received
+
+		> If failures occur during the chunk validation, it probably due to data corruption
+		   in which case, we would reject this chunk and request to refetch the chunk
+		> If any failures occur during the db restoration phase, the snapshot is rejected
+		   and cometbft has to find another snapshot and startover the db restoration process
 */
-func (b *Bootstrapper) ApplySnapshotChunk(chunk []byte, index uint32) ([]uint32, error) {
+func (b *Bootstrapper) ApplySnapshotChunk(chunk []byte, index uint32) ([]uint32, Status, error) {
 	b.clearRefetchChunks()
 	if b.activeSession == nil {
-		return nil, fmt.Errorf("no active bootstrap session")
+		return nil, UNKNOWN, fmt.Errorf("no active bootstrap session")
 	}
 
 	// If chunk is already accepted or if in db restore process, return
 	if b.activeSession.chunkInfo[index] || b.activeSession.ready {
-		return nil, nil
+		return nil, ACCEPT, nil
 	}
 
 	format := b.activeSession.snapshotMetadata.Format
 	err := b.validateChunk(chunk, index, format)
 	if err != nil {
 		b.activeSession.refetchChunks[index] = true
-		return b.refetchChunks(), err
+		return b.refetchChunks(), RETRY, err
 	}
 
 	err = b.writeChunk(chunk, index, format)
 	if err != nil {
-		return nil, err
+		return nil, UNKNOWN, err
 	}
 	b.activeSession.chunksReceived++
 	b.activeSession.chunkInfo[index] = true
 
 	if !b.readyToBootstrap() {
-		return nil, nil
+		return nil, ACCEPT, nil
 	}
 
 	return b.restoreDB()
 }
 
-func (b *Bootstrapper) validateSnapshot(snapshot *snapshots.Snapshot) error {
+func (b *Bootstrapper) validateSnapshot(snapshot *Snapshot) error {
 	// TODO: What's a valid snapshot?
 	return nil
 }
@@ -104,15 +126,15 @@ func (b *Bootstrapper) validateChunk(chunk []byte, index uint32, format uint32) 
 		return fmt.Errorf("invalid bootstrap session")
 	}
 
-	if len(chunk) == 0 || len(chunk) < snapshots.BoundaryLen {
+	if len(chunk) == 0 || len(chunk) < BoundaryLen {
 		return fmt.Errorf("invalid chunk length")
 	}
 
-	if !bytes.Equal(chunk[:snapshots.BeginLen], snapshots.ChunkBegin) {
+	if !bytes.Equal(chunk[:BeginLen], ChunkBegin) {
 		return fmt.Errorf("invalid chunk begin")
 	}
 
-	if !bytes.Equal(chunk[len(chunk)-snapshots.EndLen:], snapshots.ChunkEnd) {
+	if !bytes.Equal(chunk[len(chunk)-EndLen:], ChunkEnd) {
 		return fmt.Errorf("invalid chunk end")
 	}
 
@@ -128,11 +150,11 @@ func (b *Bootstrapper) validateChunk(chunk []byte, index uint32, format uint32) 
 	return nil
 }
 
-func (b *Bootstrapper) beginBootstrapSession(snapshot *snapshots.Snapshot) error {
+func (b *Bootstrapper) beginBootstrapSession(snapshot *Snapshot) error {
 	if b.activeSession != nil {
 		return fmt.Errorf("bootstrap session already active")
 	}
-
+	b.dbRestored = false
 	// create temp dir
 	err := utils.CreateDirIfNeeded(b.tempDir)
 	if err != nil {
@@ -156,18 +178,14 @@ func (b *Bootstrapper) beginBootstrapSession(snapshot *snapshots.Snapshot) error
 	return nil
 }
 
-func (b *Bootstrapper) endBootstrapSession() error {
+func (b *Bootstrapper) endBootstrapSession() {
 	if b.activeSession == nil {
-		return fmt.Errorf("no active bootstrap session")
+		return
 	}
 	b.activeSession = nil
 
 	// delete temp dir
-	err := os.RemoveAll(b.tempDir)
-	if err != nil {
-		return err
-	}
-	return nil
+	os.RemoveAll(filepath.Join(b.dbDir, ".tmp"))
 }
 
 func (b *Bootstrapper) readyToBootstrap() bool {
@@ -179,7 +197,7 @@ func (b *Bootstrapper) readyToBootstrap() bool {
 }
 
 // TODO: Maintain a list of chunks to be refetched: hash mismatch, chunk not received
-func (b *Bootstrapper) restoreDB() ([]uint32, error) {
+func (b *Bootstrapper) restoreDB() ([]uint32, Status, error) {
 	// Go through each file in snapshot and read its chunks, restore the file, validate its hash
 	fileInfo := b.activeSession.snapshotMetadata.Metadata.FileInfo
 	var wg sync.WaitGroup
@@ -197,10 +215,12 @@ func (b *Bootstrapper) restoreDB() ([]uint32, error) {
 	wg.Wait()
 
 	if b.activeSession.restoreFailed {
-		return nil, fmt.Errorf("db restore failure")
+		b.endBootstrapSession()
+		return nil, REJECT, fmt.Errorf("DB Restore failure")
 	}
 	b.dbRestored = true
-	return nil, nil
+	b.endBootstrapSession()
+	return nil, ACCEPT, nil
 }
 
 func (b *Bootstrapper) restoreDBFile(fileName string) error {
@@ -210,7 +230,7 @@ func (b *Bootstrapper) restoreDBFile(fileName string) error {
 
 	for i := beginIdx; i <= endIdx; i++ {
 		chunkfile := filepath.Join(b.tempDir, fmt.Sprintf("Chunk_%d_%d", b.activeSession.snapshotMetadata.Format, i))
-		err := snapshots.CopyChunkFile(chunkfile, filepath.Join(b.dbDir, fileName))
+		err := copyChunkFile(chunkfile, filepath.Join(b.dbDir, fileName))
 		if err != nil {
 			return err
 		}
@@ -233,10 +253,12 @@ func (b *Bootstrapper) writeChunk(chunk []byte, index uint32, format uint32) err
 	return utils.WriteFile(chunkFile, chunk)
 }
 
+// Returns the list of chunks to be refetched
 func (b *Bootstrapper) refetchChunks() []uint32 {
 	var chunks []uint32
 	for chunk := range b.activeSession.refetchChunks {
 		chunks = append(chunks, chunk)
+
 	}
 	return chunks
 }
@@ -245,12 +267,12 @@ func (b *Bootstrapper) clearRefetchChunks() {
 	b.activeSession.refetchChunks = make(map[uint32]bool)
 }
 
-func (b *Bootstrapper) refetchFileChunks(filename string) {
-	fileInfo := b.activeSession.snapshotMetadata.Metadata.FileInfo[filename]
-	beginIdx := fileInfo.BeginIdx
-	endIdx := fileInfo.EndIdx
+// func (b *Bootstrapper) refetchFileChunks(filename string) {
+// 	fileInfo := b.activeSession.snapshotMetadata.Metadata.FileInfo[filename]
+// 	beginIdx := fileInfo.BeginIdx
+// 	endIdx := fileInfo.EndIdx
 
-	for i := beginIdx; i <= endIdx; i++ {
-		b.activeSession.refetchChunks[i] = true
-	}
-}
+// 	for i := beginIdx; i <= endIdx; i++ {
+// 		b.activeSession.refetchChunks[i] = true
+// 	}
+// }

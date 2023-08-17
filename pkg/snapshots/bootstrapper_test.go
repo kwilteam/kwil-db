@@ -2,11 +2,9 @@ package snapshots_test
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"path/filepath"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/modules/snapshots"
 	snapPkg "github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/stretchr/testify/assert"
@@ -85,23 +83,23 @@ var (
 
 func Test_Chunk_Validation(t *testing.T) {
 	tempDir := t.TempDir()
-	rcdvSnaps := filepath.Join(tempDir, "rcvdsnaps")
 	dbDir := filepath.Join(tempDir, "db")
-	bootstrapper := snapshots.NewBootstrapper(rcdvSnaps, dbDir)
+	bootstrapper, err := snapPkg.NewBootstrapper(dbDir)
+	assert.NoError(t, err)
 	utils.CreateDirIfNeeded(dbDir)
-	err := bootstrapper.OfferSnapshot(ValidSnapshot)
+	err = bootstrapper.OfferSnapshot(ValidSnapshot)
 	assert.NoError(t, err)
 
 	InvalidChunk := []byte("InvalidChunk")
-	idx, err := bootstrapper.ApplySnapshotChunk(InvalidChunk, 0)
-	fmt.Println(idx, err)
+	idx, status, err := bootstrapper.ApplySnapshotChunk(InvalidChunk, 0)
 	assert.Error(t, err)
+	assert.Equal(t, status, snapPkg.RETRY, "Invalid chunk accepted")
 	assert.NotEqual(t, len(idx), 0, "Expected refetch indexes")
 
 	InvalidChunk2 := []byte("CK_BEG::sample chunk dataCK_END")
-	idx, err = bootstrapper.ApplySnapshotChunk(InvalidChunk2, 0)
-	fmt.Println(idx, err)
+	idx, status, err = bootstrapper.ApplySnapshotChunk(InvalidChunk2, 0)
 	assert.Error(t, err)
+	assert.Equal(t, status, snapPkg.RETRY, "Invalid chunk accepted")
 	assert.NotEqual(t, len(idx), 0, "Expected refetch indexes")
 
 	db_restored := bootstrapper.IsDBRestored()
@@ -114,22 +112,22 @@ func Test_Chunk_Validation(t *testing.T) {
 
 func Test_ValidSnapshot(t *testing.T) {
 	tempDir := t.TempDir()
-	fmt.Println(tempDir)
-	rcvdSnaps := filepath.Join(tempDir, "rcvdsnaps")
-	fmt.Println(rcvdSnaps)
+
 	dbDir := filepath.Join(tempDir, "db")
-	fmt.Println(dbDir)
-	bootstrapper := snapshots.NewBootstrapper(rcvdSnaps, dbDir)
+	rcvdSnaps := filepath.Join(dbDir, ".tmp/rcvdSnaps")
+	bootstrapper, err := snapPkg.NewBootstrapper(dbDir)
+	assert.NoError(t, err)
 	utils.CreateDirIfNeeded(dbDir)
 
-	err := bootstrapper.OfferSnapshot(ValidSnapshot)
+	err = bootstrapper.OfferSnapshot(ValidSnapshot)
 	assert.NoError(t, err)
 
 	exists := utils.FileExists(rcvdSnaps)
 	assert.True(t, exists, "Expected snapshot to be written")
 
-	idx, err := bootstrapper.ApplySnapshotChunk(sampleChunk, 0)
+	idx, status, err := bootstrapper.ApplySnapshotChunk(sampleChunk, 0)
 	assert.NoError(t, err)
+	assert.Equal(t, snapPkg.ACCEPT, status, "Invalid chunk accepted")
 	assert.Equal(t, len(idx), 0, "Expected no refetch indexes")
 
 	db_restored := bootstrapper.IsDBRestored()
@@ -142,16 +140,17 @@ func Test_ValidSnapshot(t *testing.T) {
 
 func Test_InValidSnapshot(t *testing.T) {
 	tempDir := t.TempDir()
-	rcdvSnaps := filepath.Join(tempDir, "rcvdsnaps")
 	dbDir := filepath.Join(tempDir, "db")
-	bootstrapper := snapshots.NewBootstrapper(rcdvSnaps, dbDir)
+	bootstrapper, err := snapPkg.NewBootstrapper(dbDir)
+	assert.NoError(t, err)
 	utils.CreateDirIfNeeded(dbDir)
 
-	err := bootstrapper.OfferSnapshot(InvalidSnapshot)
+	err = bootstrapper.OfferSnapshot(InvalidSnapshot)
 	assert.Nil(t, err)
 
-	_, err = bootstrapper.ApplySnapshotChunk(sampleChunk, 0)
+	_, status, err := bootstrapper.ApplySnapshotChunk(sampleChunk, 0)
 	assert.Error(t, err)
+	assert.Equal(t, snapPkg.REJECT, status, "Invalid chunk accepted")
 
 	db_restored := bootstrapper.IsDBRestored()
 	assert.False(t, db_restored, "Expected DB to not be restored")

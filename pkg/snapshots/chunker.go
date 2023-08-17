@@ -71,7 +71,7 @@ func (c *Chunker) endChunk() error {
 	return err
 }
 
-func CopyChunkFile(srcFile string, dstFile string) error {
+func copyChunkFile(srcFile string, dstFile string) error {
 	src, err := os.Open(srcFile)
 	if err != nil {
 		return err
@@ -90,6 +90,6 @@ func CopyChunkFile(srcFile string, dstFile string) error {
 	defer dst.Close()
 
 	src.Seek(int64(BeginLen), 0)
-	_, err = io.CopyN(dst, src, int64(ChunkSize)-int64(BoundaryLen))
+	_, err = io.CopyN(dst, src, ChunkSize-int64(BoundaryLen))
 	return err
 }
