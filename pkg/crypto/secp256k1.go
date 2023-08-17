@@ -44,7 +44,7 @@ func (pv *Secp256k1PrivateKey) SignMsg(msg []byte) (*Signature, error) {
 	}, nil
 }
 
-// Sign signs the given hash utilizing go-ethereum's Sign function.
+// Sign signs the given hash directly utilizing go-ethereum's Sign function.
 func (pv *Secp256k1PrivateKey) Sign(hash []byte) ([]byte, error) {
 	return ethCrypto.Sign(hash, pv.key)
 }
@@ -75,8 +75,8 @@ func (pub *Secp256k1PublicKey) Type() KeyType {
 	return Secp256k1
 }
 
-// Verify verifies the signature against the given hash according to EIP-191
-// personal sign.
+// Verify verifies the signature against the given hash.
+// e.g. this verify able to verify multi-signature-schema like personal_sign, eip712, cometbft, etc.
 func (pub *Secp256k1PublicKey) Verify(sig []byte, hash []byte) error {
 	if len(sig) != 64 {
 		return errInvalidSignature

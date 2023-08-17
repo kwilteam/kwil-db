@@ -27,7 +27,7 @@ func (pv *Ed25519PrivateKey) Hex() string {
 	return hex.EncodeToString(pv.Bytes())
 }
 
-// SignMsg signs the given message(not hashed), no need to hash the message here.
+// SignMsg signs the given message(not hashed). ed25519 is kind special that hashing is took care already.
 // Implements the Signer interface.
 func (pv *Ed25519PrivateKey) SignMsg(msg []byte) (*Signature, error) {
 	sig, err := pv.Sign(msg)
@@ -40,7 +40,7 @@ func (pv *Ed25519PrivateKey) SignMsg(msg []byte) (*Signature, error) {
 	}, nil
 }
 
-// Sign signs the given message(not hashed).
+// Sign signs the given message(not hashed). This is only to keep the interface consistent.
 func (pv *Ed25519PrivateKey) Sign(msg []byte) ([]byte, error) {
 	return ed25519.Sign(pv.key, msg), nil
 }
