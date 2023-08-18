@@ -1,6 +1,8 @@
 package transactions
 
 import (
+	"encoding"
+
 	"github.com/kwilteam/kwil-db/pkg/serialize"
 )
 
@@ -29,6 +31,7 @@ const (
 	PayloadTypeExecuteAction    PayloadType = "execute_action"
 	PayloadTypeCallAction       PayloadType = "call_action"
 	PayloadTypeValidatorJoin    PayloadType = "validator_join"
+	PayloadTypeValidatorLeave   PayloadType = "validator_leave"
 	PayloadTypeValidatorApprove PayloadType = "validator_approve"
 )
 
@@ -210,13 +213,13 @@ func (a *ActionExecution) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(a)
 }
 
-func (s *ActionExecution) UnmarshalBinary(b serialize.SerializedData) error {
+func (a *ActionExecution) UnmarshalBinary(b serialize.SerializedData) error {
 	res, err := serialize.Decode[ActionExecution](b)
 	if err != nil {
 		return err
 	}
 
-	*s = *res
+	*a = *res
 	return nil
 }
 
@@ -237,16 +240,77 @@ func (a *ActionCall) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(a)
 }
 
-func (s *ActionCall) UnmarshalBinary(b serialize.SerializedData) error {
+func (a *ActionCall) UnmarshalBinary(b serialize.SerializedData) error {
 	res, err := serialize.Decode[ActionCall](b)
 	if err != nil {
 		return err
 	}
 
-	*s = *res
+	*a = *res
 	return nil
 }
 
+var _ encoding.BinaryUnmarshaler = (*ActionCall)(nil)
+var _ encoding.BinaryMarshaler = (*ActionCall)(nil)
+
 func (a *ActionCall) Type() PayloadType {
 	return PayloadTypeCallAction
+}
+
+type ValidatorJoin struct {
+	Candidate []byte
+	Power     uint64
+}
+
+func (v *ValidatorJoin) Type() PayloadType {
+	return PayloadTypeValidatorJoin
+}
+
+var _ encoding.BinaryUnmarshaler = (*ValidatorJoin)(nil)
+var _ encoding.BinaryMarshaler = (*ValidatorJoin)(nil)
+
+func (v *ValidatorJoin) UnmarshalBinary(b []byte) error {
+	return serialize.DecodeInto(b, v)
+}
+
+func (v *ValidatorJoin) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(v)
+}
+
+type ValidatorApprove struct {
+	Candidate []byte
+}
+
+func (v *ValidatorApprove) Type() PayloadType {
+	return PayloadTypeValidatorApprove
+}
+
+var _ encoding.BinaryUnmarshaler = (*ValidatorApprove)(nil)
+var _ encoding.BinaryMarshaler = (*ValidatorApprove)(nil)
+
+func (v *ValidatorApprove) UnmarshalBinary(b []byte) error {
+	return serialize.DecodeInto(b, v)
+}
+
+func (v *ValidatorApprove) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(v)
+}
+
+type ValidatorLeave struct {
+	Validator []byte
+}
+
+func (v *ValidatorLeave) Type() PayloadType {
+	return PayloadTypeValidatorLeave
+}
+
+var _ encoding.BinaryUnmarshaler = (*ValidatorLeave)(nil)
+var _ encoding.BinaryMarshaler = (*ValidatorLeave)(nil)
+
+func (v *ValidatorLeave) UnmarshalBinary(b []byte) error {
+	return serialize.DecodeInto(b, v)
+}
+
+func (v *ValidatorLeave) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(v)
 }
