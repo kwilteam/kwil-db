@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type SerializedData []byte
+type SerializedData = []byte
 
 type encodingType uint16
 
@@ -60,4 +60,18 @@ func decodeRLP[T any](bts []byte) (*T, error) {
 	}
 
 	return &val, nil
+}
+
+func DecodeInto(bts []byte, v any) error {
+	encType, val, err := removeSerializedTypePrefix(bts)
+	if err != nil {
+		return err
+	}
+
+	switch encType {
+	case encodingTypeRLP:
+		return rlp.DecodeBytes(val, v)
+	default:
+		return fmt.Errorf("invalid encoding type: %d", val)
+	}
 }
