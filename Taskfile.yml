@@ -140,9 +140,7 @@ tasks:
   test:unit:
     desc: Run unit tests
     cmds:
-      - task vendor
-      - go test `go list ./... | grep -v /kwil-db\/test/` -count=1
-      - task vendor:clean
+      - go test $(go list ./... | grep -v /kwil-db\/test/) -count=1
 
   test:it:
     desc: Run integration tests
