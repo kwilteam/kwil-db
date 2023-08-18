@@ -7,12 +7,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/cometbft/cometbft/p2p"
-	"github.com/cometbft/cometbft/privval"
-	"github.com/cometbft/cometbft/proxy"
+	// kwil-db
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
+	txSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
 	"github.com/kwilteam/kwil-db/pkg/abci"
@@ -23,17 +22,22 @@ import (
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	"github.com/kwilteam/kwil-db/pkg/modules/validators"
 	"github.com/kwilteam/kwil-db/pkg/sql"
-	"github.com/spf13/viper"
-	"google.golang.org/grpc/health/grpc_health_v1"
+	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
 
-	txSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
-
+	// CometBFT
 	cmtcfg "github.com/cometbft/cometbft/config"
 	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
 	cmtlog "github.com/cometbft/cometbft/libs/log"
 	nm "github.com/cometbft/cometbft/node"
+	"github.com/cometbft/cometbft/p2p"
+	"github.com/cometbft/cometbft/privval"
+	"github.com/cometbft/cometbft/proxy"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
+
+	"github.com/spf13/viper"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // BuildKwildServer builds the kwild server
@@ -62,6 +66,24 @@ func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
 	return buildServer(deps), nil
 }
 
+type nodeWrapper struct {
+	n *nm.Node
+}
+
+func (nw *nodeWrapper) Start() error {
+	return nw.n.Start()
+}
+
+func (nw *nodeWrapper) Stop() error {
+	if err := nw.n.Stop(); err != nil {
+		return err
+	}
+	nw.n.Wait()
+	return nil
+}
+
+var _ (startStopper) = (*nodeWrapper)(nil)
+
 func buildServer(d *coreDependencies) *Server {
 	// engine
 	e := buildEngine(d)
@@ -72,8 +94,13 @@ func buildServer(d *coreDependencies) *Server {
 	// datasets module
 	datasetsModule := buildDatasetsModule(d, e, accs)
 
-	// TODO: add validator module and atomic committer
-	abciApp := buildAbci(d, datasetsModule, nil, nil)
+	// validator updater and store
+	vstore := buildValidatorManager(d)
+
+	// validator module
+	validatorModule := buildValidatorModule(d, accs, vstore)
+
+	abciApp := buildAbci(d, datasetsModule, validatorModule, nil)
 
 	cometBftNode, err := newCometNode(abciApp, d.cfg)
 	if err != nil {
@@ -91,11 +118,11 @@ func buildServer(d *coreDependencies) *Server {
 	return &Server{
 		grpcServer:   grpcServer,
 		gateway:      buildGatewayServer(d),
-		cometBftNode: cometBftNode,
+		cometBftNode: &nodeWrapper{cometBftNode},
 	}
 }
 
-// coreDependies holds dependencies that are widely used
+// coreDependencies holds dependencies that are widely used
 type coreDependencies struct {
 	ctx    context.Context
 	cfg    *config.KwildConfig
@@ -165,6 +192,28 @@ func buildAccountRepository(d *coreDependencies) *balances.AccountStore {
 	}
 
 	return b
+}
+
+func buildValidatorManager(d *coreDependencies) *vmgr.ValidatorMgr {
+	db, err := d.opener.Open("validator_db", *d.log.Named("validator-store"))
+	if err != nil {
+		failBuild(err, "failed to open validator db")
+	}
+
+	v, err := vmgr.NewValidatorMgr(d.ctx, db,
+		vmgr.WithLogger(*d.log.Named("validatorStore")),
+	)
+	if err != nil {
+		failBuild(err, "failed to build validator store")
+	}
+
+	return v
+}
+
+func buildValidatorModule(d *coreDependencies, accs datasets.AccountStore,
+	vals validators.ValidatorMgr) *validators.ValidatorModule {
+	return validators.NewValidatorModule(vals, accs, abci.Addresser,
+		validators.WithLogger(*d.log.Named("validator-module")))
 }
 
 func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *grpc.Server {

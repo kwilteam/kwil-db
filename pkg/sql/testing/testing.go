@@ -17,7 +17,7 @@ func OpenTestDB(name string) (connection *wrappedSqliteClient, teardown func() e
 		return nil, nil, err
 	}
 
-	clnt, err := client.WrapSqliteConn(db, log.NewNoOp())
+	clnt, err := client.WrapSqliteConn(db, log.NewStdOut(log.DebugLevel))
 	if err != nil {
 		return nil, nil, errors.Join(closeFunc(), err)
 	}

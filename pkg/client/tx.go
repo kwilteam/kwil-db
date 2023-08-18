@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
+	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
@@ -55,70 +57,58 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transac
 }
 
 // Tx Signed by the Validator Node
-// TODO: this needs to be updated once validator store (containing the validator payload) is merged in
-func (c *Client) NewNodeTx(ctx context.Context, payloadType transactions.PayloadType, data any, privKey string) (*transactions.TransactionStatus, error) {
-	panic("implement me")
-	/*
-		var nodeKey cmtCrypto.PrivKey
-		key := fmt.Sprintf(`{"type":"tendermint/PrivKeyEd25519","value":"%s"}`, privKey)
-		err := cmtjson.Unmarshal([]byte(key), &nodeKey)
-		if err != nil {
-			return nil, err
+//
+// In the transaction, both the signature and sender are set differently than if
+// the usual Sign method were used:
+//   - Signature is an Ed25519 signature
+//   - Sender is the base64-encoded *pubkey*, not an address.
+func (c *Client) NewNodeTx(ctx context.Context, payload transactions.Payload, privKey []byte) (*transactions.Transaction, error) {
+
+	nodeKey := cmtEd.PrivKey(privKey)
+
+	pubKey := nodeKey.PubKey()
+	address := pubKey.Address().String()
+	acc, err := c.client.GetAccount(ctx, address)
+	if err != nil {
+		acc = &balances.Account{
+			Address: address,
+			Nonce:   0,
+			Balance: big.NewInt(0),
 		}
+	}
 
-		// serialize data
-		bts, err := json.Marshal(data)
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize data: %w", err)
-		}
+	// build transaction
+	tx, err := transactions.CreateTransaction(payload, uint64(acc.Nonce+1))
+	if err != nil {
+		return nil, err
+	}
 
-		address := nodeKey.PubKey().Address().String()
-		acc, err := c.client.GetAccount(ctx, address)
-		if err != nil {
-			acc = &balances.Account{
-				Address: address,
-				Nonce:   0,
-				Balance: big.NewInt(0),
-			}
-		}
+	// sign transaction
+	hash, err := tx.SetHash()
+	if err != nil {
+		return nil, err
+	}
 
-		// build transaction
-		tx := kTx.NewTx(payloadType, bts, acc.Nonce+1)
-		// sign transaction
-		tx.Fee = "0"
+	// Sender is not in the hash. Move this if that changes.
+	tx.Sender = pubKey.Bytes()
 
-		hash := tx.GenerateHash()
-		sign, err := nodeKey.Sign(hash)
-		if err != nil {
-			return nil, fmt.Errorf("failed to sign tx: %w", err)
-		}
+	sign, err := nodeKey.Sign(hash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign tx: %w", err)
+	}
 
-		var keytype crypto.SignatureType
-		if nodeKey.Type() == "ed25519" {
-			keytype = crypto.SIGNATURE_TYPE_ED25519
-		}
+	tx.Signature = &crypto.Signature{
+		Signature: sign,
+		Type:      crypto.SIGNATURE_TYPE_ED25519,
+	}
 
-		tx.Signature = &crypto.Signature{
-			Signature: sign,
-			Type:      keytype,
-		}
+	fmt.Println("tx hash", hash)
+	fmt.Println("tx sender", tx.Sender)
+	fmt.Println("tx signature", tx.Signature)
+	fmt.Println("tx payload", tx.Body.Payload)
+	fmt.Println("tx payload type", tx.Body.PayloadType)
 
-		tx.Hash = hash
-
-		keybts, err := json.Marshal(nodeKey.PubKey())
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal pubkey: %w", err)
-		}
-
-		tx.Sender = string(keybts)
-		fmt.Println("tx hash", tx.Hash)
-		fmt.Println("tx sender", tx.Sender)
-		fmt.Println("tx signature", tx.Signature)
-		fmt.Println("tx payload", tx.Payload)
-		fmt.Println("tx payload type", tx.PayloadType)
-
-		return tx, nil
-	*/
+	return tx, nil
 }
 
 func (c *Client) getAddress() (string, error) {

@@ -115,6 +115,25 @@ func Test_Types(t *testing.T) {
 				DBID: "db_id",
 			},
 		},
+		{
+			name: "validator_approve",
+			obj: &transactions.ValidatorApprove{
+				Candidate: []byte("asdfadsf"),
+			},
+		},
+		{
+			name: "validator_join",
+			obj: &transactions.ValidatorJoin{
+				Candidate: []byte("asdfadsf"),
+				Power:     1,
+			},
+		},
+		{
+			name: "validator_leave",
+			obj: &transactions.ValidatorLeave{
+				Validator: []byte("asdfadsf"),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -134,6 +153,12 @@ func Test_Types(t *testing.T) {
 				obj = &transactions.ActionCall{}
 			case *transactions.DropSchema:
 				obj = &transactions.DropSchema{}
+			case *transactions.ValidatorApprove:
+				obj = &transactions.ValidatorApprove{}
+			case *transactions.ValidatorJoin:
+				obj = &transactions.ValidatorJoin{}
+			case *transactions.ValidatorLeave:
+				obj = &transactions.ValidatorLeave{}
 			default:
 				t.Fatal("unknown type")
 			}
