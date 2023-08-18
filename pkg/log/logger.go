@@ -2,6 +2,7 @@ package log
 
 import (
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // Logger is a wrapper around zap.Logger, which adds some additional fields to critical log messages.
@@ -75,7 +76,7 @@ type Config struct {
 }
 
 func New(config Config) Logger {
-	fields := make([]zap.Field, 0, 10)
+	fields := make([]zap.Field, 0, 10) // ?
 
 	// poor man's config
 	cfg := zap.NewProductionConfig()
@@ -99,6 +100,25 @@ func New(config Config) Logger {
 	// skip the logger wrapper
 	logger = logger.WithOptions(zap.AddCallerSkip(1))
 	return Logger{L: logger}
+}
+
+type Level = zapcore.Level
+
+const (
+	DebugLevel  Level = zap.DebugLevel
+	InfoLevel         = zap.InfoLevel
+	WarnLevel         = zap.WarnLevel
+	ErrorLevel        = zap.ErrorLevel
+	DPanicLevel       = zap.DPanicLevel
+	PanicLevel        = zap.PanicLevel
+	FatalLevel        = zap.FatalLevel
+)
+
+func NewStdOut(level Level) Logger {
+	return New(Config{
+		Level:       level.String(),
+		OutputPaths: []string{"stdout"},
+	})
 }
 
 // NoOp is a logger that does nothing.
