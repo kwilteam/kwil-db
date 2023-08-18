@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"sync"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/sessions"
@@ -140,18 +139,15 @@ func Test_Session(t *testing.T) {
 					return err
 				}
 
-				wg := sync.WaitGroup{}
-				wg.Add(1)
-				id, err = committer.Commit(ctx, func(err2 error) {
-					wg.Done()
-					err = err2
+				applyErr := make(chan error)
+				id, err = committer.Commit(ctx, func(err error) {
+					applyErr <- err
 				})
 				if err != nil {
 					return err
 				}
 
-				wg.Wait()
-
+				err = <-applyErr
 				if err != nil {
 					return err
 				}
