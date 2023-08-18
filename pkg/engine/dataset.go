@@ -48,10 +48,11 @@ func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema) (dbid 
 // buildNewDataset builds a new datastore, and puts it in a dataset
 func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string, schema *types.Schema) (ds *dataset.Dataset, finalErr error) {
 	dbid := GenerateDBID(name, owner)
-	datastore, err := e.opener.Open(dbid, e.log)
+	datastore, err := e.open(ctx, dbid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
 	defer func() {
 		if err != nil {
 			err2 := datastore.Delete()

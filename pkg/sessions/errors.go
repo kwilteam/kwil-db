@@ -14,6 +14,8 @@ var (
 	ErrApply               = errors.New("error applying changes")
 	ErrEndApply            = errors.New("error ending apply")
 	ErrID                  = errors.New("error generating session ID")
+	ErrAlreadyRegistered   = errors.New("committable already registered")
+	ErrUnknownCommittable  = errors.New("unknown committable")
 )
 
 // wrapError wraps an error with a message.

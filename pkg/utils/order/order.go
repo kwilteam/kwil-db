@@ -1,11 +1,15 @@
 package order
 
-import "sort"
+import (
+	"sort"
+
+	"golang.org/x/exp/constraints"
+)
 
 // OrderMapLexicographically orders a map lexicographically by its keys.
 // It permits any map with keys that are generically orderable.
-// TODO: once upgraded to go 1.21, an equivalent is in the standard library
-func OrderMapLexicographically[S Ordered, T any](m map[S]T) []*struct {
+// TODO: once upgraded to go 1.21, I believe 'Ordered' is in the standard library
+func OrderMapLexicographically[S constraints.Ordered, T any](m map[S]T) []*struct {
 	Id    S
 	Value T
 } {
@@ -34,24 +38,4 @@ func OrderMapLexicographically[S Ordered, T any](m map[S]T) []*struct {
 	}
 
 	return result
-}
-
-type Ordered interface {
-	Integer | Float | ~string
-}
-
-type Float interface {
-	~float32 | ~float64
-}
-
-type Integer interface {
-	Signed | Unsigned
-}
-
-type Unsigned interface {
-	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
-}
-
-type Signed interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64
 }

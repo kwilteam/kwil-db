@@ -15,6 +15,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 
@@ -107,7 +108,7 @@ func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error))
 	}
 	a.inProgress = false
 
-	err = a.wal.Begin(ctx)
+	err = a.wal.WriteBegin(ctx)
 	if err != nil {
 		return err
 	}
@@ -117,7 +118,7 @@ func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error))
 		return err
 	}
 
-	err = a.wal.Commit(ctx)
+	err = a.wal.WriteCommit(ctx)
 	if err != nil {
 		return err
 	}
@@ -201,11 +202,14 @@ func (a *AtomicCommitter) cancel(ctx context.Context) {
 	}
 }
 
-// handleErr checks if an error is nil or not.  If it is not nil, it logs it, and notifies the committables that the session has been cancelled.
+// handleErr checks if an error is nil or not.
+// If it is not nil, it logs it, and notifies the committables that the session has been cancelled.
+// It then sets the session state to not in progress.
 func (a *AtomicCommitter) handleErr(ctx context.Context, err *error) {
 	if *err != nil {
 		a.log.Error("error during atomic commit", zap.Error(*err))
 		a.cancel(ctx)
+		a.inProgress = false
 	}
 }
 
@@ -345,6 +349,55 @@ func (a *AtomicCommitter) callAll(errType error, f func(Committable) error) erro
 	err := errors.Join(errs...)
 	if err != nil {
 		return wrapError(errType, err)
+	}
+
+	return nil
+}
+
+// TODO: we need to test register and unregister
+
+// Register registers a committable with the atomic committer.
+// If a session is already in progress, the newly registered committer will be added to the session,
+// and BeginCommit will immediately be called on the committable.
+// If BeginCommit fails, the entire session will be cancelled.
+func (a *AtomicCommitter) Register(ctx context.Context, id string, committable Committable) (err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	_, ok := a.committables[CommittableId(id)]
+	if ok {
+		return ErrAlreadyRegistered
+	}
+	a.committables[CommittableId(id)] = committable
+
+	if !a.inProgress {
+		return nil
+	}
+
+	defer a.handleErr(ctx, &err)
+
+	err = committable.BeginApply(ctx)
+	if err != nil {
+		return wrapError(ErrBeginApply, err)
+	}
+
+	return nil
+}
+
+// Unregister unregisters a committable from the atomic committer.
+// If a session is already in progress, Cancel will immediately be called on the committable.
+func (a *AtomicCommitter) Unregister(ctx context.Context, id string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	committable, ok := a.committables[CommittableId(id)]
+	if !ok {
+		return wrapError(ErrUnknownCommittable, fmt.Errorf("committable id: %s", id))
+	}
+	delete(a.committables, CommittableId(id))
+
+	if a.inProgress {
+		committable.Cancel(ctx)
 	}
 
 	return nil

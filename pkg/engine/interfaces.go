@@ -59,3 +59,12 @@ type MasterDB interface {
 	RegisterDataset(ctx context.Context, name, owner string) error
 	UnregisterDataset(ctx context.Context, dbid string) error
 }
+
+// CommitRegister is an interface for registering atomically committable data stores
+// Any database registered to this will be atomically synced in a 2pc transaction
+type CommitRegister interface {
+	// Register registers a database to the commit register
+	Register(ctx context.Context, name string, db sql.Database) error
+	// Unregister unregisters a database from the commit register
+	Unregister(ctx context.Context, name string) error
+}
