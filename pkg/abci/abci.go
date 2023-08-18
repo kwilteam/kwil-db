@@ -14,6 +14,7 @@ import (
 	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/kv"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
@@ -473,10 +474,7 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 		vi := &p0.Validators[i]
 		// pk := vi.PubKey.GetEd25519()
 		// if pk == nil { panic("only ed25519 validator keys are supported") }
-		pk, err := vi.PubKey.Marshal()
-		if err != nil {
-			panic(fmt.Sprintf("invalid validator pubkey: %v", err))
-		}
+		pk := vi.PubKey.GetEd25519()
 		vldtrs[i] = &validators.Validator{
 			PubKey: pk,
 			Power:  vi.Power,
@@ -619,15 +617,22 @@ type metadataStore struct {
 }
 
 func (m *metadataStore) GetAppHash(ctx context.Context) ([]byte, error) {
-	return m.kv.Get(ctx, appHashKey)
+	res, err := m.kv.Get(appHashKey)
+	if err == kv.ErrKeyNotFound {
+		return nil, nil
+	}
+	return res, err
 }
 
 func (m *metadataStore) SetAppHash(ctx context.Context, appHash []byte) error {
-	return m.kv.Set(ctx, appHashKey, appHash)
+	return m.kv.Set(appHashKey, appHash)
 }
 
 func (m *metadataStore) GetBlockHeight(ctx context.Context) (int64, error) {
-	height, err := m.kv.Get(ctx, blockHeightKey)
+	height, err := m.kv.Get(blockHeightKey)
+	if err == kv.ErrKeyNotFound {
+		return 0, nil
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -639,7 +644,7 @@ func (m *metadataStore) SetBlockHeight(ctx context.Context, height int64) error 
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(height))
 
-	return m.kv.Set(ctx, blockHeightKey, buf)
+	return m.kv.Set(blockHeightKey, buf)
 }
 
 func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {

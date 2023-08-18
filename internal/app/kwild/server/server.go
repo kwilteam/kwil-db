@@ -58,9 +58,9 @@ func (s *Server) Start(ctx context.Context) error {
 		go func() {
 			<-groupCtx.Done()
 			s.log.Info("stop http server")
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx2, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := s.gateway.Shutdown(ctx); err != nil {
+			if err := s.gateway.Shutdown(ctx2); err != nil {
 				s.log.Error("http server shutdown error", zap.Error(err))
 			}
 		}()

@@ -61,9 +61,9 @@ type AtomicCommitter interface {
 
 // KVStore is an interface for a basic key-value store
 type KVStore interface {
-	Get(ctx context.Context, key []byte) ([]byte, error)
-	Set(ctx context.Context, key []byte, value []byte) error
-	Delete(ctx context.Context, key []byte) error
+	Get(key []byte) ([]byte, error)
+	Set(key []byte, value []byte) error
+	Delete(key []byte) error
 }
 
 // SnapshotModule is an interface for a struct that implements snapshotting

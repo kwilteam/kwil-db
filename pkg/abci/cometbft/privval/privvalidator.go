@@ -43,7 +43,7 @@ func NewValidatorSigner(ed25519Key []byte, storer AtomicReadWriter) (*ValidatorS
 	}
 
 	return &ValidatorSigner{
-		privateKey:      cometEd25519.PrivKey(ed25519Key),
+		privateKey:      cometEd25519.PrivKey(KEY),
 		lastSignedState: lss,
 	}, nil
 }

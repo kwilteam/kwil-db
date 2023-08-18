@@ -9,34 +9,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
-type Datastore interface {
-	Close() error
-	Delete() error
-	Execute(ctx context.Context, stmt string, args map[string]any) error
-	Prepare(stmt string) (sql.Statement, error)
-	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
-	Savepoint() (sql.Savepoint, error)
-	TableExists(ctx context.Context, table string) (bool, error)
-	CreateSession() (sql.Session, error)
-	ApplyChangeset(changeset io.Reader) error
-}
-
-type Session interface {
-	GenerateChangeset() ([]byte, error)
-	Delete()
-}
-
-type Statement interface {
-	Close() error
-	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)
-}
-
-type Savepoint interface {
-	Commit() error
-	Rollback() error
-	CommitAndCheckpoint() error
-}
-
 type Dataset interface {
 	Close() error
 	ListProcedures() []*types.Procedure

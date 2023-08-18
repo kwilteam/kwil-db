@@ -106,7 +106,13 @@ func (e *Engine) DropDataset(ctx context.Context, sender, dbid string) error {
 		return fmt.Errorf("%w: %s", ErrDatasetNotOwned, dbid)
 	}
 
-	err := ds.Delete()
+	// we call unregister first so the session can be canceled, before the database is deleted
+	err := e.commitRegister.Unregister(ctx, dbid)
+	if err != nil {
+		return fmt.Errorf("failed to unregister dataset: %w", err)
+	}
+
+	err = ds.Delete()
 	if err != nil {
 		return fmt.Errorf("failed to close dataset: %w", err)
 	}

@@ -16,7 +16,7 @@ import (
 )
 
 type CometBftNode struct {
-	node *cometNodes.Node
+	Node *cometNodes.Node
 }
 
 // NewCometBftNode creates a new CometBFT node.
@@ -51,16 +51,16 @@ func NewCometBftNode(app abciTypes.Application, privateKey []byte, atomicStore p
 	}
 
 	return &CometBftNode{
-		node: node,
+		Node: node,
 	}, nil
 }
 
 // Start starts the CometBFT node.
 func (n *CometBftNode) Start() error {
-	return n.node.Start()
+	return n.Node.Start()
 }
 
 // Stop stops the CometBFT node.
 func (n *CometBftNode) Stop() error {
-	return n.node.Stop()
+	return n.Node.Stop()
 }

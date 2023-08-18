@@ -7,10 +7,13 @@ import (
 
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	cmttypes "github.com/cometbft/cometbft/types"
+	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/kv"
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sessions"
+	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -116,6 +119,8 @@ type atomicReadWriter struct {
 	key []byte
 }
 
+var _ privval.AtomicReadWriter = (*atomicReadWriter)(nil)
+
 func (a *atomicReadWriter) Read() ([]byte, error) {
 	res, err := a.kv.Get(a.key)
 	if err == kv.ErrKeyNotFound {
@@ -130,4 +135,29 @@ func (a *atomicReadWriter) Read() ([]byte, error) {
 
 func (a *atomicReadWriter) Write(val []byte) error {
 	return a.kv.Set(a.key, val)
+}
+
+// sqlCommittableRegister allows dynamic registration of SQL committables
+type sqlCommittableRegister struct {
+	commiter *sessions.AtomicCommitter
+	log      log.Logger
+}
+
+var _ engine.CommitRegister = (*sqlCommittableRegister)(nil)
+
+func (s *sqlCommittableRegister) Register(ctx context.Context, name string, db sql.Database) error {
+	return registerSQL(ctx, s.commiter, db, name, s.log)
+}
+
+func (s *sqlCommittableRegister) Unregister(ctx context.Context, name string) error {
+	return s.commiter.Unregister(ctx, name)
+}
+
+// registerSQL is a helper function to register a SQL committable to the atomic committer.
+func registerSQL(ctx context.Context, ac *sessions.AtomicCommitter, db sql.Database, name string, logger log.Logger) error {
+	return ac.Register(ctx, name,
+		sqlSessions.NewSqlCommitable(db,
+			sqlSessions.WithLogger(*logger.Named(name + "-committable")),
+		),
+	)
 }
