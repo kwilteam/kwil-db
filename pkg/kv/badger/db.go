@@ -9,13 +9,19 @@ import (
 
 // NewBadgerDB creates a new BadgerDB.
 // It takes a path, like path/to/db, where the database will be stored.
-func NewBadgerDB(path string) (*BadgerDB, error) {
-	opts := badger.DefaultOptions(path)
-	opts.Logger = nil
-	db, err := badger.Open(opts)
+func NewBadgerDB(path string, options *Options) (*BadgerDB, error) {
+	badgerOpts := badger.DefaultOptions(path)
+
+	if options != nil {
+		options.apply(&badgerOpts)
+	}
+
+	badgerOpts.Logger = nil
+	db, err := badger.Open(badgerOpts)
 	if err != nil {
 		return nil, err
 	}
+
 	return &BadgerDB{db: db}, nil
 }
 
@@ -113,4 +119,19 @@ func (t *Transaction) Get(key []byte) ([]byte, error) {
 	}
 	val, err = item.ValueCopy(nil)
 	return val, err
+}
+
+// Options are options for the BadgerDB.
+// These get translated into Badger's options.
+// We provide this abstraction layer since Badger has a lot of options,
+// and I don't want future users of this to worry about all of them.
+type Options struct {
+	// GuaranteeFSync guarantees that all writes to the wal are fsynced before
+	// attemtping to be written to the LSM tree.
+	GuaranteeFSync bool
+}
+
+// apply applies the options to the badger options.
+func (o *Options) apply(opts *badger.Options) {
+	opts.SyncWrites = o.GuaranteeFSync
 }

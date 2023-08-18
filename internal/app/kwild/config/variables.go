@@ -1,18 +1,16 @@
 package config
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/kwil-db/pkg/config"
 
-	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	"github.com/cstockton/go-conv"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -22,13 +20,12 @@ const (
 type KwildConfig struct {
 	GrpcListenAddress  string
 	HttpListenAddress  string
-	PrivateKey         *ecdsa.PrivateKey
+	PrivateKey         *crypto.Ed25519PrivateKey
 	SqliteFilePath     string
 	Log                log.Config
 	ExtensionEndpoints []string
 	ArweaveConfig      ArweaveConfig
 	BcRpcUrl           string
-	BCPrivateKey       cmtCrypto.PrivKey
 	WithoutGasCosts    bool
 	WithoutNonces      bool
 	SnapshotConfig     SnapshotConfig
@@ -68,7 +65,7 @@ var (
 		Setter: func(val any) (any, error) {
 			if val == nil {
 				fmt.Println("no private key provided, generating a new one...")
-				return crypto.GenerateKey()
+				return crypto.GenerateEd25519Key()
 			}
 
 			strVal, err := conv.String(val)
@@ -76,7 +73,7 @@ var (
 				return nil, err
 			}
 
-			return crypto.HexToECDSA(strVal)
+			return crypto.Ed25519PrivateKeyFromHex(strVal)
 		},
 	}
 

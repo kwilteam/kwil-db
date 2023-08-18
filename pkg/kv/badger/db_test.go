@@ -1,0 +1,26 @@
+package badger_test
+
+import (
+	"testing"
+
+	badgerTesting "github.com/kwilteam/kwil-db/pkg/kv/badger/testing"
+)
+
+// testing double write does not produce an error
+func Test_BadgerKV(t *testing.T) {
+	db, td, err := badgerTesting.NewTestBadgerDB("test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer td()
+
+	err = db.Set([]byte("key"), []byte("value"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = db.Set([]byte("key"), []byte("value2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+}

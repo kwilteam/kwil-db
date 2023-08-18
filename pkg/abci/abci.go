@@ -31,12 +31,22 @@ type FatalError struct {
 	Message   string
 }
 
+// appState is an in-memory representation of the state of the application.
+type appState struct {
+	height  int64
+	appHash []byte
+}
+
 func (fe FatalError) String() string {
 	return fmt.Sprintf("Application Method: %s\nError: %s\nRequest (%T): %v",
 		fe.AppMethod, fe.Message, fe.Request, fe.Request)
 }
 
 func newFatalError(method string, request fmt.Stringer, message string) FatalError {
+	if request == nil {
+		request = nilStringer{}
+	}
+
 	return FatalError{
 		AppMethod: method,
 		Request:   request,
@@ -44,9 +54,10 @@ func newFatalError(method string, request fmt.Stringer, message string) FatalErr
 	}
 }
 
-type appState struct { // TODO
-	prevBlockHeight int64
-	prevAppHash     []byte
+type nilStringer struct{}
+
+func (ds nilStringer) String() string {
+	return "no message"
 }
 
 func NewAbciApp(database DatasetsModule, vldtrs ValidatorModule, kv KVStore, committer AtomicCommitter, snapshotter SnapshotModule,
@@ -60,6 +71,9 @@ func NewAbciApp(database DatasetsModule, vldtrs ValidatorModule, kv KVStore, com
 		},
 		bootstrapper: bootstrapper,
 		snapshotter:  snapshotter,
+
+		valAddrToKey: make(map[string][]byte),
+		valUpdates:   make([]*validators.Validator, 0),
 
 		log: log.NewNoOp(),
 
@@ -117,14 +131,14 @@ type AbciApp struct {
 	// when a commit is finished, the commitWaiter is decremented
 	commitWaiter sync.WaitGroup
 
-	state appState
-
 	// Expected AppState after bootstrapping the node with a given snapshot,
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
 
 	applicationVersion uint64
 }
+
+var _ abciTypes.Application = &AbciApp{}
 
 // BeginBlock begins a block.
 // If the previous commit is not finished, it will wait for the previous commit to finish.
@@ -137,8 +151,7 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 
 	err := a.committer.Begin(context.Background())
 	if err != nil {
-		a.log.Error("failed to begin atomic commit", zap.Error(err))
-		return abciTypes.ResponseBeginBlock{}
+		panic(newFatalError("BeginBlock", &req, err.Error()))
 	}
 
 	// Punish bad validators.
@@ -153,12 +166,12 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 		// This is why we need the addr=>pubkey map. Why, comet, why?
 		pubkey, ok := a.valAddrToKey[addr]
 		if !ok {
-			panic(fmt.Sprintf("unknown validator address %v", addr))
+			panic(newFatalError("BeginBlock", &req, fmt.Sprintf("unknown validator address %v", addr)))
 		}
 		const punishDelta = 1
 		newPower := ev.Validator.Power - punishDelta
 		if err = a.validators.Punish(context.Background(), pubkey, newPower); err != nil {
-			panic(fmt.Sprintf("failed to punish validator %v: %v", addr, err))
+			panic(newFatalError("BeginBlock", &req, fmt.Sprintf("failed to punish validator %v", addr)))
 		}
 	}
 
@@ -180,13 +193,6 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	}
 
 	return abciTypes.ResponseCheckTx{Code: 0}
-}
-
-// pubkeys in event attributes returned to comet as strings are base64 encoded,
-// apparently.
-// TODO: move this somewhere else in the file
-func encodeBase64(b []byte) string {
-	return base64.StdEncoding.EncodeToString(b)
 }
 
 func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDeliverTx {
@@ -365,32 +371,28 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	// generate the unique id for all changes occurred thus far
 	id, err := a.committer.ID(ctx)
 	if err != nil {
-		a.log.Error("failed to get committer id", zap.Error(err))
-		return abciTypes.ResponseCommit{}
+		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to get commit id: %v", err)))
 	}
 
 	appHash, err := a.createNewAppHash(ctx, id)
 	if err != nil {
-		a.log.Error("failed to create new app hash", zap.Error(err))
-		return abciTypes.ResponseCommit{}
+		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to create new app hash: %v", err)))
 	}
 
 	err = a.metadataStore.IncrementBlockHeight(ctx)
 	if err != nil {
-		a.log.Error("failed to increment block height", zap.Error(err))
-		return abciTypes.ResponseCommit{}
+		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to increment block height: %v", err)))
 	}
 
 	err = a.committer.Commit(ctx, func(err error) {
 		if err != nil {
-			a.log.Error("failed to apply atomic commit", zap.Error(err))
+			panic(newFatalError("Commit", nil, fmt.Sprintf("failed to commit atomic commit: %v", err)))
 		}
 
 		a.commitWaiter.Done()
 	})
 	if err != nil {
-		a.log.Error("failed to commit atomic commit", zap.Error(err))
-		return abciTypes.ResponseCommit{}
+		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to commit atomic commit: %v", err)))
 	}
 
 	// Update the validator address=>pubkey map used by Penalize.
@@ -447,19 +449,12 @@ func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
 
 	height, err := a.metadataStore.GetBlockHeight(ctx)
 	if err != nil {
-		a.log.Error("failed to get block height", zap.Error(err))
-		return abciTypes.ResponseInfo{
-			AppVersion: a.applicationVersion,
-		}
+		panic(newFatalError("Info", &p0, fmt.Sprintf("failed to get block height: %v", err)))
 	}
 
 	appHash, err := a.metadataStore.GetAppHash(ctx)
 	if err != nil {
-		a.log.Error("failed to get app hash", zap.Error(err))
-		return abciTypes.ResponseInfo{
-			LastBlockHeight: height,
-			AppVersion:      a.applicationVersion,
-		}
+		panic(newFatalError("Info", &p0, fmt.Sprintf("failed to get app hash: %v", err)))
 	}
 
 	return abciTypes.ResponseInfo{
@@ -499,11 +494,10 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 
 	apphash, err := a.metadataStore.GetAppHash(ctx)
 	if err != nil {
-		a.log.Error("failed to get app hash", zap.Error(err))
-
+		panic(fmt.Sprintf("failed to get app hash: %v", err))
 		// TODO: should we initialize with a genesis hash instead if it fails
 		// TODO: apparently InitChain is only genesis, so yes it should only be genesis hash
-		apphash = []byte{}
+		// in fact, I don't think we should be getting it from this store at all
 	}
 
 	return abciTypes.ResponseInitChain{
@@ -518,9 +512,19 @@ func (a *AbciApp) ApplySnapshotChunk(p0 abciTypes.RequestApplySnapshotChunk) abc
 		return abciTypes.ResponseApplySnapshotChunk{Result: abciStatus(status), RefetchChunks: refetchChunks}
 	}
 
+	ctx := context.Background()
+
 	if a.bootstrapper.IsDBRestored() {
-		a.state.prevAppHash = a.bootupState.prevAppHash
-		a.state.prevBlockHeight = a.bootupState.prevBlockHeight
+		err = a.metadataStore.SetAppHash(ctx, a.bootupState.appHash)
+		if err != nil {
+			return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT, RefetchChunks: nil}
+		}
+
+		err = a.metadataStore.SetBlockHeight(ctx, a.bootupState.height)
+		if err != nil {
+			return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT, RefetchChunks: nil}
+		}
+
 		a.log.Info("Bootstrapped database successfully")
 	}
 	return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}
@@ -561,8 +565,8 @@ func (a *AbciApp) OfferSnapshot(p0 abciTypes.RequestOfferSnapshot) abciTypes.Res
 	if a.bootstrapper.OfferSnapshot(snapshot) != nil {
 		return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}
 	}
-	a.bootupState.prevAppHash = p0.Snapshot.Hash
-	a.bootupState.prevBlockHeight = int64(snapshot.Height)
+	a.bootupState.appHash = p0.Snapshot.Hash
+	a.bootupState.height = int64(snapshot.Height)
 	return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_ACCEPT}
 }
 
@@ -606,8 +610,8 @@ func convertArgs(args [][]string) [][]any {
 }
 
 var (
-	appHashKey     = []byte("appHash")
-	blockHeightKey = []byte("blockHeight")
+	appHashKey     = []byte("a")
+	blockHeightKey = []byte("b")
 )
 
 type metadataStore struct {
@@ -645,4 +649,10 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	}
 
 	return m.SetBlockHeight(ctx, height+1)
+}
+
+// pubkeys in event attributes returned to comet as strings are base64 encoded,
+// apparently.
+func encodeBase64(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
 }

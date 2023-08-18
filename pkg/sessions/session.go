@@ -71,7 +71,7 @@ func NewAtomicCommitter(ctx context.Context, committables map[string]Committable
 		opt(a)
 	}
 
-	err := a.flushWal(ctx)
+	err := a.applyWal(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (a *AtomicCommitter) Begin(ctx context.Context) (err error) {
 
 // Commit commits the atomic session.
 // It aggregates all commit ids from the committables and returns them as a single Sha256 hash.
-// It can be given a callback function to handle any errors that occur during the apply phase (which procedes asynchronously) after this function returns.
+// It can be given a callback function to handle any errors that occur during the apply phase (which proceeds asynchronously) after this function returns.
 func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error)) (err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -209,11 +209,11 @@ func (a *AtomicCommitter) handleErr(ctx context.Context, err *error) {
 	}
 }
 
-// flushWal will try to apply all changes in the WAL to the committables.
+// applyWal will try to apply all changes in the WAL to the committables.
 // If the wal does not contain a commit record, it will delete all changes in the WAL.
 // If the wal contains a commit record, it will apply all changes in the WAL to the committables.
 // If the wal contains a commit record, but the commit fails, it will return an error.
-func (a *AtomicCommitter) flushWal(ctx context.Context) (err error) {
+func (a *AtomicCommitter) applyWal(ctx context.Context) (err error) {
 	beginRecord, err := a.wal.ReadNext(ctx)
 	if err == io.EOF {
 		return a.wal.Truncate(ctx)

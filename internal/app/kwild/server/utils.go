@@ -9,6 +9,7 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/extensions"
+	"github.com/kwilteam/kwil-db/pkg/kv"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
@@ -105,4 +106,28 @@ func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx *trans
 	}
 
 	return err
+}
+
+// atomicReadWriter implements the CometBFt AtomicReadWriter interface.
+// This should probably be done with a file instead of a KV store,
+// but we already have a good implementation of an atomic KV store.
+type atomicReadWriter struct {
+	kv  kv.KVStore
+	key []byte
+}
+
+func (a *atomicReadWriter) Read() ([]byte, error) {
+	res, err := a.kv.Get(a.key)
+	if err == kv.ErrKeyNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (a *atomicReadWriter) Write(val []byte) error {
+	return a.kv.Set(a.key, val)
 }

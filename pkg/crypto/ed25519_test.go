@@ -105,3 +105,12 @@ func TestEd25519PublicKey_Address(t *testing.T) {
 	eq := pubKey.Address().String() == "0aa611bf555596912bc6f9a9f169f8785918e7ba"
 	assert.True(t, eq, "mismatch address")
 }
+
+func Test_GenerateEd25518PrivateKey(t *testing.T) {
+	pk, err := crypto.GenerateEd25519Key()
+	require.NoError(t, err, "error generate key")
+
+	if len(pk.Bytes()) != 64 {
+		t.Errorf("invalid private key length: %d", len(pk.Bytes()))
+	}
+}

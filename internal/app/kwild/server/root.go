@@ -15,11 +15,13 @@ import (
 	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
 	"github.com/kwilteam/kwil-db/pkg/abci"
+	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway/middleware/cors"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
+	"github.com/kwilteam/kwil-db/pkg/kv/badger"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/modules/snapshots"
@@ -28,7 +30,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
 
-	// CometBFT
+	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtcfg "github.com/cometbft/cometbft/config"
 	cmtflags "github.com/cometbft/cometbft/libs/cli/flags"
 	cmtlog "github.com/cometbft/cometbft/libs/log"
@@ -288,6 +290,32 @@ func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {
 
 func buildCometBftClient(cometBftNode *nm.Node) *cmtlocal.Local {
 	return cmtlocal.New(cometBftNode)
+}
+
+func buildCometNode(d *coreDependencies, abciApp abciTypes.Application) *cometbft.CometBftNode {
+	// TODO: a lot of the filepaths and logging here are hardcoded.  This should be cleaned up
+	// with a config
+
+	// for now, I'm just using a KV store for my atomic commit.  This probably is not ideal; a file may be better
+	// I'm simply using this because we know it fsyncs the data to disk
+	db, err := badger.NewBadgerDB("abci/signing", &badger.Options{
+		GuaranteeFSync: true,
+	})
+	if err != nil {
+		failBuild(err, "failed to build comet node")
+	}
+
+	readWriter := &atomicReadWriter{
+		kv:  db,
+		key: []byte("az"), // any key here will work
+	}
+
+	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.PrivateKey.Bytes(), readWriter, "abci/data", "debug")
+	if err != nil {
+		failBuild(err, "failed to build comet node")
+	}
+
+	return node
 }
 
 // TODO: clean this up --> @jchappelow

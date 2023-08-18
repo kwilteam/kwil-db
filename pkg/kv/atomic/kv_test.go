@@ -12,6 +12,7 @@ import (
 
 // tests basic KV functionality; anything that is not the sessions.Committable interface
 func Test_BasicKV(t *testing.T) {
+	dbType := kvTesting.TestKVFlagInMemory
 	type testCase struct {
 		name     string
 		testFunc func(t *testing.T, db *atomic.AtomicKV)
@@ -146,7 +147,7 @@ func Test_BasicKV(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, td, err := kvTesting.OpenTestKv("kv_test", kvTesting.TestKVFlagInMemory)
+			db, td, err := kvTesting.OpenTestKv("kv_test", dbType)
 			if err != nil {
 				t.Fatal(err)
 			}

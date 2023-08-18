@@ -96,3 +96,15 @@ func (s Ed25519Address) String() string {
 	// TODO: need an address format
 	return hex.EncodeToString(s.Bytes())
 }
+
+// GenerateEd25519Key generates a new ed25519 key pair.
+func GenerateEd25519Key() (*Ed25519PrivateKey, error) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Ed25519PrivateKey{
+		key: priv,
+	}, nil
+}
