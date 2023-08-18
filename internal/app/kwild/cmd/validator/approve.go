@@ -17,7 +17,7 @@ func approveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "approve [JoinerPublicKey] [ApproverPrivateKey] [BcRPCURL]",
 		Short: "Add the validator to the list of approved validators",
-		Long:  "The approve command is used by the Validator node to issue a Approve Transaction to approve a joining node as a validator. It requires the public key of the joining node, the private key of the approving node and the blockchain RPC URL",
+		Long:  "The approve command is used by the Validator node to issue a Approve Transaction to approve a joining node as a validator. It requires the public key of the joining node, the private key of the approving node and the blockchain RPC URL. Both keys are base64.",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			/*

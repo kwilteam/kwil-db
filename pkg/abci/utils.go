@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	cmtos "github.com/cometbft/cometbft/libs/os"
 	"github.com/cometbft/cometbft/privval"
 )
@@ -100,4 +101,21 @@ func RemoveAddrBook(addrBookFile string) {
 	} else if !os.IsNotExist(err) {
 		fmt.Println("Error removing address book", "file", addrBookFile, "err", err)
 	}
+}
+
+func cometAddrFromPubKey(pubkey []byte) string {
+	publicKey := ed25519.PubKey(pubkey)
+	return publicKey.Address().String()
+}
+
+// Addresser is the ABCI application's pubkey-to-address converter. This is
+// different from Kwil addresses, as CometBFT has both different keys and a
+// different address format that it uses internally, most notably for
+// validators.
+var Addresser cometAddresser
+
+type cometAddresser struct{}
+
+func (ca cometAddresser) Address(pubkey []byte) string {
+	return cometAddrFromPubKey(pubkey)
 }
