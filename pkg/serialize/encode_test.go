@@ -83,6 +83,15 @@ func Test_Encoding(t *testing.T) {
 			if *decoded == tc.output {
 				assert.Equal(t, tc.output, *decoded)
 			}
+
+			var v any
+			err = serialize.DecodeInto(output, &v)
+			if err != nil {
+				t.Errorf("Expected no error, got %v", err)
+			}
+			if err != nil {
+				return
+			}
 		})
 	}
 }
