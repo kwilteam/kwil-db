@@ -8,9 +8,8 @@ import (
 )
 
 func Test_Config(t *testing.T) {
-	os.Setenv("KWILD_PRIVATE_KEY", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e")
+	os.Setenv("KWILD_PRIVATE_KEY", "f2d82d73ba03a7e843443f2b3179a01398144baa4a23d40d1e8a3a8e4fb217d0484d59f4de46b2174ebce66ac3afa7989b444244323c19a74b683f54cf33227c")
 	os.Setenv("KWILD_PORT", "8081")
-	os.Setenv("KWILD_DEPOSITS_POOL_ADDRESS", "0xabc")
 	os.Setenv("KWILD_EXTENSION_ENDPOINTS", "localhost:8080,localhost:8081,    localhost:8082")
 	_, err := config.LoadKwildConfig()
 	if err != nil {

@@ -2,14 +2,11 @@ package privval_test
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
-	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cometbft/cometbft/types"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
@@ -18,22 +15,6 @@ import (
 
 const defaultChainID = "test-chain"
 const defaultPrivateKey = "7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
-
-func Test_C(t *testing.T) {
-	pk := cometEd25519.PrivKey(defaultPrivateKey)
-	fmt.Println(base64.StdEncoding.EncodeToString(pk.Bytes()))
-	fmt.Println(base64.StdEncoding.EncodeToString(pk.PubKey().Bytes()))
-	panic("")
-}
-
-func Test_D(t *testing.T) {
-	pk := cometEd25519.GenPrivKey()
-	fmt.Println(hex.DecodeString("7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"))
-	fmt.Println(hex.EncodeToString(pk.Bytes()))
-	fmt.Println(base64.StdEncoding.EncodeToString(pk.PubKey().Bytes()))
-	fmt.Println(base64.StdEncoding.EncodeToString(pk.PubKey().Address()))
-	panic("")
-}
 
 func Test_PrivValidatorVote(t *testing.T) {
 	type testCase struct {

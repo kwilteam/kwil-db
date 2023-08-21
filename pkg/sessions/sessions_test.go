@@ -13,6 +13,8 @@ import (
 )
 
 // TODO: test calling things like begin, end, apply, etc. out of order / multiple times
+// TODO: test register and unregister; and try calling them at different times
+// e.g. calling register after begin, or unregister after end, etc.
 
 func Test_Session(t *testing.T) {
 	type fields struct {
@@ -125,7 +127,9 @@ func Test_Session(t *testing.T) {
 			var id []byte
 			outErr := func() error {
 				ctx := context.Background()
-				committer, err := sessions.NewAtomicCommitter(ctx, tt.fields.committables, tt.fields.wal)
+				committer := sessions.NewAtomicCommitter(ctx, tt.fields.committables, tt.fields.wal)
+				defer committer.Close()
+				err := committer.ClearWal(ctx)
 				if err != nil {
 					return err
 				}
@@ -340,7 +344,8 @@ func Test_ExistingWal(t *testing.T) {
 
 			ctx := context.Background()
 
-			_, err := sessions.NewAtomicCommitter(ctx, commitableMap, tt.fields.wal)
+			committer := sessions.NewAtomicCommitter(ctx, commitableMap, tt.fields.wal)
+			err := committer.ClearWal(ctx)
 			assertError(t, err, tt.err)
 			if tt.err != nil {
 				assertAllCanceled(t, commitableMap)

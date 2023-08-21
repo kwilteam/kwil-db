@@ -430,6 +430,11 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
 	ctx := context.Background()
 
+	err := a.committer.ClearWal(ctx)
+	if err != nil {
+		panic(newFatalError("Info", &p0, fmt.Sprintf("failed to clear WAL: %v", err)))
+	}
+
 	// Load the current validator set from our store.
 	vals, err := a.validators.CurrentSet(ctx)
 	if err != nil { // TODO error return

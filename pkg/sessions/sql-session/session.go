@@ -73,37 +73,27 @@ func (s *SqlCommitable) EndCommit(ctx context.Context, appender func([]byte) err
 		return fmt.Errorf("savepoint not active")
 	}
 
-	defer s.savepoint.Rollback()
+	defer func() {
+		err = errors.Join(s.savepoint.Rollback(), s.session.Delete())
+		s.savepoint = nil
+		s.session = nil
+		if err != nil {
+			s.log.Error("failed to rollback savepoint", zap.Error(err))
+		}
+	}()
 
 	changes, err := s.session.GenerateChangeset()
 	if err != nil {
 		return err
 	}
+	defer changes.Close()
 
 	data, err := changes.Export()
 	if err != nil {
 		return err
 	}
 
-	err = appender(data)
-	if err != nil {
-		return err
-	}
-
-	errs := []error{}
-	err = changes.Close()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	err = s.session.Delete()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	s.session = nil
-
-	return errors.Join(errs...)
+	return appender(data)
 }
 
 // BeginApply starts a new savepoint for applying changes.
@@ -177,6 +167,7 @@ func (s *SqlCommitable) ID(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer changes.Close()
 
 	return changes.ID()
 }

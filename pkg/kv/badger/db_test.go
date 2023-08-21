@@ -1,6 +1,7 @@
 package badger_test
 
 import (
+	"context"
 	"testing"
 
 	badgerTesting "github.com/kwilteam/kwil-db/pkg/kv/badger/testing"
@@ -8,7 +9,7 @@ import (
 
 // testing double write does not produce an error
 func Test_BadgerKV(t *testing.T) {
-	db, td, err := badgerTesting.NewTestBadgerDB("test", nil)
+	db, td, err := badgerTesting.NewTestBadgerDB(context.Background(), "test", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

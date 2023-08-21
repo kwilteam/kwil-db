@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"path/filepath"
+	"sync"
 	"time"
 
 	// kwil-db
@@ -61,24 +64,30 @@ func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
 		opener: newSqliteOpener(cfg.SqliteFilePath),
 	}
 
-	return buildServer(deps), nil
+	closers := &closeFuncs{
+		closers: make([]func() error, 0),
+	}
+
+	return buildServer(deps, closers), nil
 }
 
-func buildServer(d *coreDependencies) *Server {
+func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// atomic committer
 	ac := buildAtomicCommitter(d)
+	closers.addCloser(ac.Close)
 
 	// engine
 	e := buildEngine(d, ac)
+	closers.addCloser(e.Close)
 
 	// account store
-	accs := buildAccountRepository(d, ac)
+	accs := buildAccountRepository(d, closers, ac)
 
 	// datasets module
 	datasetsModule := buildDatasetsModule(d, e, accs)
 
 	// validator updater and store
-	vstore := buildValidatorManager(d, ac)
+	vstore := buildValidatorManager(d, closers, ac)
 
 	// validator module
 	validatorModule := buildValidatorModule(d, accs, vstore)
@@ -87,9 +96,9 @@ func buildServer(d *coreDependencies) *Server {
 
 	bootstrapperModule := buildBootstrapModule(d)
 
-	abciApp := buildAbci(d, datasetsModule, validatorModule, ac)
+	abciApp := buildAbci(d, closers, datasetsModule, validatorModule, ac)
 
-	cometBftNode := buildCometNode(d, abciApp)
+	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
@@ -104,6 +113,7 @@ func buildServer(d *coreDependencies) *Server {
 		gateway:      buildGatewayServer(d),
 		cometBftNode: cometBftNode,
 		log:          *d.log.Named("kwild-server"),
+		closers:      closers,
 		cfg:          d.cfg,
 	}
 }
@@ -116,14 +126,53 @@ type coreDependencies struct {
 	opener sql.Opener
 }
 
-func buildAbci(d *coreDependencies, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
+// closeFuncs holds a list of closers
+// it is used to close all resources on shutdown
+type closeFuncs struct {
+	closers []func() error
+}
+
+func (c *closeFuncs) addCloser(f func() error) {
+	c.closers = append(c.closers, f)
+}
+
+// closeAll concurrently closes all closers
+func (c *closeFuncs) closeAll() error {
+	errs := make([]error, 0)
+	errCh := make(chan error, len(c.closers))
+	wg := sync.WaitGroup{}
+
+	for _, f := range c.closers {
+		wg.Add(1)
+		go func(f func() error) {
+			err := f()
+			if err != nil {
+				errCh <- err
+			}
+			wg.Done()
+		}(f)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		errs = append(errs, err)
+	}
+
+	return errors.Join(errs...)
+}
+
+func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
 	atomicCommitter *sessions.AtomicCommitter) *abci.AbciApp {
-	badgerKv, err := badger.NewBadgerDB("tmp/kwil/kv", &badger.Options{
+	badgerKv, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, "abci/info"), &badger.Options{
 		GuaranteeFSync: true,
+		Logger:         *d.log.Named("abci-kv-store"),
 	})
 	if err != nil {
 		failBuild(err, "failed to open badger")
 	}
+	closer.addCloser(badgerKv.Close)
 
 	atomicKv, err := atomic.NewAtomicKV(badgerKv)
 	if err != nil {
@@ -188,11 +237,12 @@ func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engin
 	return e
 }
 
-func buildAccountRepository(d *coreDependencies, ac *sessions.AtomicCommitter) *balances.AccountStore {
+func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.AtomicCommitter) *balances.AccountStore {
 	db, err := d.opener.Open("accounts_db", *d.log.Named("account-store"))
 	if err != nil {
 		failBuild(err, "failed to open accounts db")
 	}
+	closer.addCloser(db.Close)
 
 	err = registerSQL(d.ctx, ac, db, "accounts_db", d.log)
 	if err != nil {
@@ -211,11 +261,12 @@ func buildAccountRepository(d *coreDependencies, ac *sessions.AtomicCommitter) *
 	return b
 }
 
-func buildValidatorManager(d *coreDependencies, ac *sessions.AtomicCommitter) *vmgr.ValidatorMgr {
+func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions.AtomicCommitter) *vmgr.ValidatorMgr {
 	db, err := d.opener.Open("validator_db", *d.log.Named("validator-store"))
 	if err != nil {
 		failBuild(err, "failed to open validator db")
 	}
+	closer.addCloser(db.Close)
 
 	err = registerSQL(d.ctx, ac, db, "validator_db", d.log)
 	if err != nil {
@@ -303,24 +354,26 @@ func buildCometBftClient(cometBftNode *cometbft.CometBftNode) *cmtlocal.Local {
 	return cmtlocal.New(cometBftNode.Node)
 }
 
-func buildCometNode(d *coreDependencies, abciApp abciTypes.Application) *cometbft.CometBftNode {
+func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.Application) *cometbft.CometBftNode {
 	// TODO: a lot of the filepaths, as well as cometbft logging level, are hardcoded.  This should be cleaned up with a config
 
 	// for now, I'm just using a KV store for my atomic commit.  This probably is not ideal; a file may be better
 	// I'm simply using this because we know it fsyncs the data to disk
-	db, err := badger.NewBadgerDB("tmp/abci/signing", &badger.Options{
+	db, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, "signing"), &badger.Options{
 		GuaranteeFSync: true,
+		Logger:         *d.log.Named("private-validator-signature-store"),
 	})
 	if err != nil {
 		failBuild(err, "failed to build comet node")
 	}
+	closer.addCloser(db.Close)
 
 	readWriter := &atomicReadWriter{
 		kv:  db,
 		key: []byte("az"), // any key here will work
 	}
 
-	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.PrivateKey.Bytes(), readWriter, "tmp/abci", "debug")
+	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.PrivateKey.Bytes(), readWriter, filepath.Join(d.cfg.RootDir, "abci"), "debug")
 	if err != nil {
 		failBuild(err, "failed to build comet node")
 	}
@@ -329,18 +382,13 @@ func buildCometNode(d *coreDependencies, abciApp abciTypes.Application) *cometbf
 }
 
 func buildAtomicCommitter(d *coreDependencies) *sessions.AtomicCommitter {
-	twoPCWal, err := wal.OpenWal("tmp/kwil/wal")
+	twoPCWal, err := wal.OpenWal(filepath.Join(d.cfg.RootDir, "application/wal"))
 	if err != nil {
 		failBuild(err, "failed to open 2pc wal")
 	}
 
 	// we are actually registering all committables ad-hoc, so we can pass nil here
-	c, err := sessions.NewAtomicCommitter(d.ctx, nil, twoPCWal, sessions.WithLogger(*d.log.Named("atomic-committer")))
-	if err != nil {
-		failBuild(err, "failed to build atomic committer")
-	}
-
-	return c
+	return sessions.NewAtomicCommitter(d.ctx, nil, twoPCWal, sessions.WithLogger(*d.log.Named("atomic-committer")))
 }
 
 func failBuild(err error, msg string) {

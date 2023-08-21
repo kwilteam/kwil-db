@@ -147,7 +147,7 @@ func Test_BasicKV(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, td, err := kvTesting.OpenTestKv("kv_test", dbType)
+			db, td, err := kvTesting.OpenTestKv(context.Background(), "kv_test", dbType)
 			if err != nil {
 				t.Fatal(err)
 			}

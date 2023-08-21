@@ -43,7 +43,7 @@ func NewValidatorSigner(ed25519Key []byte, storer AtomicReadWriter) (*ValidatorS
 	}
 
 	return &ValidatorSigner{
-		privateKey:      cometEd25519.PrivKey(KEY),
+		privateKey:      cometEd25519.PrivKey(ed25519Key),
 		lastSignedState: lss,
 	}, nil
 }
@@ -171,7 +171,7 @@ func (v *ValidatorSigner) signAndPersist(height int64, round int32, step int8, s
 	return signature, nil
 }
 
-// last signState tracks the most recent signature
+// LastSignState tracks the most recent signature
 // made by this validator.  It is atomically committed to disk
 // before it is used for anything else, and can be reloaded in case
 // of a crash

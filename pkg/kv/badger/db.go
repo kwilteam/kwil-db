@@ -1,35 +1,58 @@
 package badger
 
 import (
+	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
 	"github.com/kwilteam/kwil-db/pkg/kv"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"go.uber.org/zap"
 )
 
 // NewBadgerDB creates a new BadgerDB.
 // It takes a path, like path/to/db, where the database will be stored.
-func NewBadgerDB(path string, options *Options) (*BadgerDB, error) {
+func NewBadgerDB(ctx context.Context, path string, options *Options) (*BadgerDB, error) {
+	b := &BadgerDB{
+		logger:     log.NewNoOp(),
+		gcInterval: 5 * time.Minute,
+	}
+
 	badgerOpts := badger.DefaultOptions(path)
 
 	if options != nil {
-		options.apply(&badgerOpts)
+		options.applyToBadgerOpts(&badgerOpts)
+		options.applyToDB(b)
 	}
 
-	badgerOpts.Logger = nil
-	db, err := badger.Open(badgerOpts)
+	badgerOpts.Logger = &badgerLogger{log: b.logger}
+
+	var err error
+	b.db, err = badger.Open(badgerOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	return &BadgerDB{db: db}, nil
+	go b.runGC(ctx)
+
+	return b, nil
 }
 
 // BadgerDB is a basic threadsafe key-value store.
 type BadgerDB struct {
+	// db is the underlying badger database.
 	db *badger.DB
 
+	// mu is a mutex to protect the database.
 	mu sync.Mutex
+
+	// gcInterval is the interval at which the database is garbage collected.
+	gcInterval time.Duration
+
+	// logger is the logger for the database.
+	logger log.Logger
 }
 
 var _ kv.KVStore = (*BadgerDB)(nil)
@@ -38,6 +61,8 @@ var _ kv.KVStore = (*BadgerDB)(nil)
 func (d *BadgerDB) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+
+	d.logger.Info("closing KV store")
 
 	return d.db.Close()
 }
@@ -60,6 +85,27 @@ func (d *BadgerDB) Get(key []byte) ([]byte, error) {
 		return err
 	})
 	return val, err
+}
+
+func (d *BadgerDB) runGC(ctx context.Context) {
+	ticker := time.NewTicker(d.gcInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			err := d.db.RunValueLogGC(0.5)
+			if err == badger.ErrNoRewrite {
+				d.logger.Debug("no GC required")
+				continue
+			}
+			if err != nil {
+				d.logger.Error("error running GC", zap.Error(err))
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // Set sets a value in the database.
@@ -129,9 +175,47 @@ type Options struct {
 	// GuaranteeFSync guarantees that all writes to the wal are fsynced before
 	// attemtping to be written to the LSM tree.
 	GuaranteeFSync bool
+
+	// GarbageCollectionInterval is the interval at which the garbage collector
+	// runs.
+	GarbageCollectionInterval time.Duration
+
+	// Logger is the logger to use for the database.
+	Logger log.Logger
 }
 
-// apply applies the options to the badger options.
-func (o *Options) apply(opts *badger.Options) {
+// applyToBadgerOpts applies the options to the badger options.
+func (o *Options) applyToBadgerOpts(opts *badger.Options) {
 	opts.SyncWrites = o.GuaranteeFSync
+}
+
+func (o *Options) applyToDB(db *BadgerDB) {
+	if o.Logger.L != nil {
+		db.logger = o.Logger
+	}
+
+	if o.GarbageCollectionInterval != 0 {
+		db.gcInterval = o.GarbageCollectionInterval
+	}
+}
+
+// badgerLogger implements the badger.Logger interface.
+type badgerLogger struct {
+	log log.Logger
+}
+
+func (b *badgerLogger) Debugf(p0 string, p1 ...any) {
+	b.log.Debug(fmt.Sprintf(p0, p1...))
+}
+
+func (b *badgerLogger) Errorf(p0 string, p1 ...any) {
+	b.log.Error(fmt.Sprintf(p0, p1...))
+}
+
+func (b *badgerLogger) Infof(p0 string, p1 ...any) {
+	b.log.Info(fmt.Sprintf(p0, p1...))
+}
+
+func (b *badgerLogger) Warningf(p0 string, p1 ...any) {
+	b.log.Warn(fmt.Sprintf(p0, p1...))
 }
