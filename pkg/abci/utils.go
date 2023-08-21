@@ -86,6 +86,8 @@ func ResetState(dbDir string) error {
 	return nil
 }
 
+// TODO: we will have to get rid of this if we use our own private keys from CometBFT
+// Resetting the privValStateFile is ok, however we don't persist Comet's private key
 func ResetFilePV(privValKeyFile, privValStateFile string) {
 	if _, err := os.Stat(privValKeyFile); err == nil {
 		pv := privval.LoadFilePVEmptyState(privValKeyFile, privValStateFile)

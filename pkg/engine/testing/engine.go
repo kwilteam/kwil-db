@@ -11,10 +11,10 @@ import (
 	sqlTesting "github.com/kwilteam/kwil-db/pkg/sql/testing"
 )
 
-func NewTestEngine(ctx context.Context, opts ...engine.EngineOpt) (*engine.Engine, func() error, error) {
+func NewTestEngine(ctx context.Context, ec engine.CommitRegister, opts ...engine.EngineOpt) (*engine.Engine, func() error, error) {
 	opener := newTestDBOpener()
 
-	e, err := engine.Open(ctx, opener,
+	e, err := engine.Open(ctx, opener, ec,
 		opts...,
 	)
 	if err != nil {

@@ -3,13 +3,15 @@ package engine
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sessions"
 	"github.com/kwilteam/kwil-db/pkg/sql"
+	"github.com/kwilteam/kwil-db/pkg/utils/order"
 	"go.uber.org/zap"
 )
 
@@ -18,6 +20,8 @@ type EngineSession struct {
 
 	log log.Logger
 }
+
+var _ sessions.Committable = (*EngineSession)(nil)
 
 // BeginCommit begins a session for each of the datasets that are being tracked by this engineSession.
 func (e *EngineSession) BeginCommit(ctx context.Context) (err error) {
@@ -52,7 +56,7 @@ func (e *EngineSession) BeginCommit(ctx context.Context) (err error) {
 
 // EndCommit commits the changes for each of the sessions that were created by this engineSession.
 // It will rollback all of the savepoints and delete all of the sessions.
-func (e *EngineSession) EndCommit(ctx context.Context, appender func([]byte) error) (commitId []byte, err error) {
+func (e *EngineSession) EndCommit(ctx context.Context, appender func([]byte) error) (err error) {
 	defer func() {
 		err2 := e.deleteAndRollbackAll()
 		if err2 != nil {
@@ -60,24 +64,16 @@ func (e *EngineSession) EndCommit(ctx context.Context, appender func([]byte) err
 		}
 	}()
 
-	var idContent []byte
-
 	for dbid, ds := range e.trackedDatasets {
 		changeset, err := ds.session.GenerateChangeset()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		defer changeset.Close()
 
-		id, err := changeset.ID()
-		if err != nil {
-			return nil, err
-		}
-		idContent = append(idContent, id...)
-
 		data, err := changeset.Export()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		bts, err := serializeEngineChangeset(&engineChangeset{
@@ -85,16 +81,16 @@ func (e *EngineSession) EndCommit(ctx context.Context, appender func([]byte) err
 			changeset: data,
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		err = appender(bts)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return crypto.Sha256(idContent), nil
+	return nil
 }
 
 // BeginApply begins a session for each of the datasets that are being tracked by this engineSession.
@@ -155,6 +151,29 @@ func (e *EngineSession) Cancel(ctx context.Context) {
 	if err != nil {
 		e.log.Error("error untracking all while cancelling engine session", zap.Error(err))
 	}
+}
+
+func (e *EngineSession) ID(ctx context.Context) ([]byte, error) {
+	hash := sha256.New()
+	for _, d := range order.OrderMapLexicographically[string, *trackedDataset](e.trackedDatasets) {
+		changeset, err := d.Value.session.GenerateChangeset()
+		if err != nil {
+			return nil, err
+		}
+		defer changeset.Close()
+
+		id, err := changeset.ID()
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = hash.Write(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return hash.Sum(nil), nil
 }
 
 // untrackAll deletes all of the sessions and rollsback all savepoints that were created by this engineSession.

@@ -17,10 +17,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"sync"
+	"time"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/utils/order"
 	"go.uber.org/zap"
 )
 
@@ -42,6 +43,15 @@ type AtomicCommitter struct {
 
 	// State to indicate whether the session is in progress or not
 	inProgress bool
+
+	// closed is set to true when the committer is closed.
+	// this is to protect against AtomicCommitter consumers
+	// from calling methods on a closed committer, which could
+	// lead to an inconsistent state.
+	closed bool
+
+	// timeout is the amount of time to wait on shutdown
+	timeout time.Duration
 }
 
 // CommittableId is the unique identifier for a committable.
@@ -56,78 +66,134 @@ func (id CommittableId) Bytes() []byte {
 }
 
 // NewAtomicCommitter creates a new atomic session.
-func NewAtomicCommitter(ctx context.Context, committables map[string]Committable, wal Wal, opts ...CommiterOpt) (*AtomicCommitter, error) {
-	committablesMap := make(map[CommittableId]Committable)
-	for id, committable := range committables {
-		committablesMap[CommittableId(id)] = committable
-	}
-
+func NewAtomicCommitter(ctx context.Context, wal Wal, opts ...CommiterOpt) *AtomicCommitter {
 	a := &AtomicCommitter{
-		committables: committablesMap,
+		committables: make(map[CommittableId]Committable),
 		wal:          &sessionWal{wal},
 		log:          log.NewNoOp(),
+		timeout:      5 * time.Second,
 	}
 
 	for _, opt := range opts {
 		opt(a)
 	}
 
-	err := a.flushWal(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return a, nil
+	return a
 }
 
+// ClearWal clears the wal.  This method will check if there are values in the WAL.
+// If so, it will attempt to commit them.  If no commit record is found, then it will
+// discard the WAL.
+// This should be called on startup or recovery.
+func (a *AtomicCommitter) ClearWal(ctx context.Context) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.closed {
+		return ErrClosed
+	}
+
+	if a.inProgress {
+		return ErrSessionInProgress
+	}
+
+	return a.applyWal(ctx)
+}
+
+// Begin begins a new session.
+// It will signal to all committables that a session has begun.
 func (a *AtomicCommitter) Begin(ctx context.Context) (err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	defer a.handleErr(ctx, &err)
+	if a.closed {
+		return ErrClosed
+	}
 
 	if a.inProgress {
 		return ErrSessionInProgress
 	}
 	a.inProgress = true
 
+	// we handle errors after checking to see if a session
+	// is in progress because, if begin is called while a session
+	// is in progress, it will cancel the session.
+	defer a.handleErr(ctx, &err)
+
 	return a.beginCommit(ctx)
 }
 
 // Commit commits the atomic session.
-// It aggregates all commit ids from the committables and returns them as a single Sha256 hash.
 // It can be given a callback function to handle any errors that occur during the apply phase (which proceeds asynchronously) after this function returns.
-func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error)) (commitId []byte, err error) {
+func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error)) (err error) {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 
+	// if no session in progress, then return without cancelling
+	if !a.inProgress {
+		a.mu.Unlock()
+		return ErrNoSessionInProgress
+	}
+	a.inProgress = false
+
+	// if error, cancel the session
 	defer a.handleErr(ctx, &err)
 
-	if !a.inProgress {
-		return nil, ErrNoSessionInProgress
+	// if session is in progress but the committer is closed, then cancel the session
+	if a.closed {
+		a.mu.Unlock()
+		return ErrClosed
 	}
 
-	err = a.wal.Begin(ctx)
+	// begin the commit in the WAL
+	err = a.wal.WriteBegin(ctx)
 	if err != nil {
-		return nil, err
+		a.mu.Unlock()
+		return err
 	}
 
-	commitId, err = a.endCommit(ctx)
+	// tell all committables to finish phase 1, and submit
+	// any changes to the WAL
+	err = a.endCommit(ctx)
 	if err != nil {
-		return nil, err
+		a.mu.Unlock()
+		return err
 	}
 
-	err = a.wal.Commit(ctx)
+	// commit the WAL
+	err = a.wal.WriteCommit(ctx)
 	if err != nil {
-		return nil, err
+		a.mu.Unlock()
+		return err
 	}
 
 	go func() {
 		err2 := a.apply(ctx)
 		applyCallback(err2)
+		a.mu.Unlock()
 	}()
 
-	return commitId, nil
+	return nil
+}
+
+// ID returns a deterministic identifier representative of all state changes that have occurred in the session.
+// It can only be called in between Begin and Commit.
+func (a *AtomicCommitter) ID(ctx context.Context) (id []byte, err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if !a.inProgress {
+		return nil, ErrNoSessionInProgress
+	}
+
+	// this comes after checking if a session is in progress because
+	// we do not want to call cancel if a session is not in progress.
+	defer a.handleErr(ctx, &err)
+
+	if a.closed {
+		return nil, ErrClosed
+	}
+
+	return a.id(ctx)
 }
 
 // Apply applies the atomic session.
@@ -186,19 +252,22 @@ func (a *AtomicCommitter) cancel(ctx context.Context) {
 	}
 }
 
-// handleErr checks if an error is nil or not.  If it is not nil, it logs it, and notifies the committables that the session has been cancelled.
+// handleErr checks if an error is nil or not.
+// If it is not nil, it logs it, and notifies the committables that the session has been cancelled.
+// It then sets the session state to not in progress.
 func (a *AtomicCommitter) handleErr(ctx context.Context, err *error) {
 	if *err != nil {
 		a.log.Error("error during atomic commit", zap.Error(*err))
 		a.cancel(ctx)
+		a.inProgress = false
 	}
 }
 
-// flushWal will try to apply all changes in the WAL to the committables.
+// applyWal will try to apply all changes in the WAL to the committables.
 // If the wal does not contain a commit record, it will delete all changes in the WAL.
 // If the wal contains a commit record, it will apply all changes in the WAL to the committables.
 // If the wal contains a commit record, but the commit fails, it will return an error.
-func (a *AtomicCommitter) flushWal(ctx context.Context) (err error) {
+func (a *AtomicCommitter) applyWal(ctx context.Context) (err error) {
 	beginRecord, err := a.wal.ReadNext(ctx)
 	if err == io.EOF {
 		return a.wal.Truncate(ctx)
@@ -243,7 +312,10 @@ func (a *AtomicCommitter) flushWal(ctx context.Context) (err error) {
 			break
 		}
 
-		committable := a.committables[record.CommittableId]
+		committable, ok := a.committables[record.CommittableId]
+		if !ok {
+			a.log.Error("cannot find target data store for wal record", zap.String("committable_id", record.CommittableId.String()))
+		}
 		err = committable.Apply(ctx, record.Data)
 		if err != nil {
 			applyErrs = append(applyErrs, err)
@@ -271,27 +343,17 @@ func (a *AtomicCommitter) beginCommit(ctx context.Context) error {
 
 // endCommit calls EndCommit on all committables.
 // it orders the committables alphabetically by their unique identifier, to ensure that the commit id is deterministic.
-func (a *AtomicCommitter) endCommit(ctx context.Context) ([]byte, error) {
-	orderedCommittables := orderAlphabetically(a.committables)
-
-	hash := sha256.New()
-	for _, c := range orderedCommittables {
-		commitId, err := c.committable.EndCommit(ctx, func(b []byte) error {
-			return a.wal.WriteChangeset(ctx, c.id, b)
+func (a *AtomicCommitter) endCommit(ctx context.Context) error {
+	for id, c := range a.committables {
+		err := c.EndCommit(ctx, func(b []byte) error {
+			return a.wal.WriteChangeset(ctx, id, b)
 		})
 		if err != nil {
-			return nil, wrapError(ErrEndCommit, err)
-		}
-
-		fmt.Println("commitId", commitId)
-
-		_, err = hash.Write(commitId)
-		if err != nil {
-			return nil, wrapError(ErrEndCommit, err)
+			return wrapError(ErrEndCommit, err)
 		}
 	}
 
-	return hash.Sum(nil), nil
+	return nil
 }
 
 // beginApply calls BeginApply on all committables.
@@ -306,6 +368,26 @@ func (a *AtomicCommitter) endApply(ctx context.Context) error {
 	return a.callAll(ErrEndApply, func(c Committable) error {
 		return c.EndApply(ctx)
 	})
+}
+
+// id calls ID on all committables.
+// it orders the committables alphabetically by their unique identifier, to ensure that the commit id is deterministic.
+func (a *AtomicCommitter) id(ctx context.Context) (id []byte, err error) {
+	hash := sha256.New()
+
+	for _, c := range order.OrderMapLexicographically[CommittableId, Committable](a.committables) {
+		commitId, err := c.Value.ID(ctx)
+		if err != nil {
+			return nil, wrapError(ErrID, err)
+		}
+
+		_, err = hash.Write(commitId)
+		if err != nil {
+			return nil, wrapError(ErrID, err)
+		}
+	}
+
+	return hash.Sum(nil), nil
 }
 
 func (a *AtomicCommitter) callAll(errType error, f func(Committable) error) error {
@@ -325,34 +407,75 @@ func (a *AtomicCommitter) callAll(errType error, f func(Committable) error) erro
 	return nil
 }
 
-// orderAlphabetically orders the committables alphabetically by their unique identifier.
-func orderAlphabetically(commitableMap map[CommittableId]Committable) []*struct {
-	id          CommittableId
-	committable Committable
-} {
-	// Extracting keys
-	keys := make([]string, 0, len(commitableMap))
-	for k := range commitableMap {
-		keys = append(keys, k.String())
+// TODO: we need to test register and unregister
+
+// Register registers a committable with the atomic committer.
+// If a session is already in progress, the newly registered committer will be added to the session,
+// and BeginCommit will immediately be called on the committable.
+// If BeginCommit fails, the entire session will be cancelled.
+func (a *AtomicCommitter) Register(ctx context.Context, id string, committable Committable) (err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	_, ok := a.committables[CommittableId(id)]
+	if ok {
+		return ErrAlreadyRegistered
+	}
+	a.committables[CommittableId(id)] = committable
+
+	if !a.inProgress {
+		return nil
 	}
 
-	// Sorting keys
-	sort.Strings(keys)
+	defer a.handleErr(ctx, &err)
 
-	// Creating output slice
-	datasets := make([]*struct {
-		id          CommittableId
-		committable Committable
-	}, 0)
-
-	for _, k := range keys {
-		datasets = append(datasets, &struct {
-			id          CommittableId
-			committable Committable
-		}{
-			id:          CommittableId(k),
-			committable: commitableMap[CommittableId(k)],
-		})
+	err = committable.BeginApply(ctx)
+	if err != nil {
+		return wrapError(ErrBeginApply, err)
 	}
-	return datasets
+
+	return nil
+}
+
+// Unregister unregisters a committable from the atomic committer.
+// If a session is already in progress, Cancel will immediately be called on the committable.
+func (a *AtomicCommitter) Unregister(ctx context.Context, id string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	committable, ok := a.committables[CommittableId(id)]
+	if !ok {
+		return wrapError(ErrUnknownCommittable, fmt.Errorf("committable id: %s", id))
+	}
+	delete(a.committables, CommittableId(id))
+
+	if a.inProgress {
+		committable.Cancel(ctx)
+	}
+
+	return nil
+}
+
+// Close closes the atomic committer.
+// If a session is in progress, it will cancel the session.
+// If a session is not in progress, it will close immediately.
+// We only have to worry about this being called outside of a session,
+// or in the middle of phase 1.  Since the committer mutex is locked
+// from the end of phase1 to the end of phase2, we know that this
+// function will not be called in the middle of phase 2.
+func (a *AtomicCommitter) Close() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.log.Info("closing atomic committer")
+
+	if !a.inProgress {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
+	defer cancel()
+
+	a.cancel(ctx)
+	return nil
 }

@@ -40,17 +40,21 @@ type Engine struct {
 
 	// opener is the function that is used to open sqlite databases
 	opener sql.Opener
+
+	// commitRegister is the commit register that is used to register commits
+	commitRegister CommitRegister
 }
 
 // Open opens a new engine with the provided options.
 // It will also open any stored datasets.
-func Open(ctx context.Context, dbOpener sql.Opener, opts ...EngineOpt) (*Engine, error) {
+func Open(ctx context.Context, dbOpener sql.Opener, commitRegister CommitRegister, opts ...EngineOpt) (*Engine, error) {
 	e := &Engine{
-		name:       masterDBName,
-		log:        log.NewNoOp(),
-		datasets:   make(map[string]Dataset),
-		extensions: make(map[string]ExtensionInitializer),
-		opener:     dbOpener,
+		name:           masterDBName,
+		log:            log.NewNoOp(),
+		datasets:       make(map[string]Dataset),
+		extensions:     make(map[string]ExtensionInitializer),
+		opener:         dbOpener,
+		commitRegister: commitRegister,
 	}
 
 	for _, opt := range opts {
@@ -70,15 +74,30 @@ func Open(ctx context.Context, dbOpener sql.Opener, opts ...EngineOpt) (*Engine,
 	return e, nil
 }
 
-// openMasterDB opens the master database
+// openMasterDB opens the master database and registers it with the commit register
 func (e *Engine) openMasterDB(ctx context.Context) error {
-	ds, err := e.opener.Open(e.name, e.log)
+	ds, err := e.open(ctx, e.name)
 	if err != nil {
 		return err
 	}
 
 	e.master, err = master.New(ctx, ds)
 	return err
+}
+
+// open opens a database with the given DBID.  It also registers the database with the commit register
+func (e *Engine) open(ctx context.Context, dbid string) (sql.Database, error) {
+	ds, err := e.opener.Open(dbid, e.log)
+	if err != nil {
+		return nil, err
+	}
+
+	err = e.commitRegister.Register(ctx, dbid, ds)
+	if err != nil {
+		return nil, err
+	}
+
+	return ds, nil
 }
 
 // openStoredDatasets opens all of the datasets that are stored in the master
@@ -89,7 +108,7 @@ func (e *Engine) openStoredDatasets(ctx context.Context) error {
 	}
 
 	for _, datasetInfo := range datasets {
-		datastore, err := e.opener.Open(datasetInfo.DBID, e.log)
+		datastore, err := e.open(ctx, datasetInfo.DBID)
 		if err != nil {
 			return err
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/engine/types/testdata"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -39,7 +40,7 @@ var (
 func Test_Open(t *testing.T) {
 	ctx := context.Background()
 
-	e, teardown, err := engineTesting.NewTestEngine(ctx,
+	e, teardown, err := engineTesting.NewTestEngine(ctx, newMockRegister(),
 		engine.WithExtensions(testExtensions),
 	)
 	if err != nil {
@@ -66,7 +67,7 @@ func Test_Open(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e2, teardown2, err := engineTesting.NewTestEngine(ctx,
+	e2, teardown2, err := engineTesting.NewTestEngine(ctx, newMockRegister(),
 		engine.WithExtensions(testExtensions),
 	)
 	if err != nil {
@@ -155,7 +156,7 @@ func Test_CreateDataset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			e, teardown, err := engineTesting.NewTestEngine(ctx,
+			e, teardown, err := engineTesting.NewTestEngine(ctx, newMockRegister(),
 				engine.WithExtensions(testExtensions),
 			)
 			if err != nil {
@@ -225,4 +226,36 @@ var testExtensions = map[string]engine.ExtensionInitializer{
 			"balanceOf",
 		},
 	},
+}
+
+func newMockRegister() *mockRegister {
+	return &mockRegister{
+		datasets: make(map[string]sql.Database),
+	}
+}
+
+type mockRegister struct {
+	datasets map[string]sql.Database
+}
+
+func (m *mockRegister) Register(ctx context.Context, name string, db sql.Database) error {
+	_, ok := m.datasets[name]
+	if ok {
+		return errors.New("dataset already registered")
+	}
+
+	m.datasets[name] = db
+
+	return nil
+}
+
+func (m *mockRegister) Unregister(ctx context.Context, name string) error {
+	_, ok := m.datasets[name]
+	if !ok {
+		return errors.New("dataset not registered")
+	}
+
+	delete(m.datasets, name)
+
+	return nil
 }

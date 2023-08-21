@@ -1,6 +1,11 @@
 package server
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 
 	// shorthand for chain client service
@@ -20,12 +25,23 @@ var startCmd = &cobra.Command{
 	Long:  "Starts node with Kwild and CometBFT services",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
+
+		signalChan := make(chan os.Signal, 1)
+		signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+		ctx, cancel := context.WithCancel(ctx)
+
+		go func() {
+			<-signalChan
+			cancel()
+		}()
+
 		svr, err := server.BuildKwildServer(ctx)
 		if err != nil {
 			return err
 		}
 
 		return svr.Start(ctx)
+
 	},
 }
 
