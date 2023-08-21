@@ -31,10 +31,18 @@ type KwildConfig struct {
 	BCPrivateKey       cmtCrypto.PrivKey
 	WithoutGasCosts    bool
 	WithoutNonces      bool
+	SnapshotConfig     SnapshotConfig
 }
 
 type ArweaveConfig struct {
 	BundlrURL string
+}
+
+type SnapshotConfig struct {
+	Enabled         bool
+	RecurringHeight uint64
+	MaxSnapshots    uint64
+	SnapshotDir     string
 }
 
 var (
@@ -168,5 +176,29 @@ var (
 		EnvName: "WITHOUT_NONCES",
 		Field:   "WithoutNonces",
 		Default: false,
+	}
+
+	SnapshotEnabled = config.CfgVar{
+		EnvName: "SNAPSHOT_ENABLED",
+		Field:   "SnapshotConfig.Enabled",
+		Default: false,
+	}
+
+	SnapshotRecurringHeight = config.CfgVar{
+		EnvName: "SNAPSHOT_RECURRING_HEIGHT",
+		Field:   "SnapshotConfig.RecurringHeight",
+		Default: uint64(10000), // 12-14 hrs at 1 block per 5 seconds speed
+	}
+
+	MaxSnapshots = config.CfgVar{
+		EnvName: "MAX_SNAPSHOTS",
+		Field:   "SnapshotConfig.MaxSnapshots",
+		Default: 2,
+	}
+
+	SnapshotDir = config.CfgVar{
+		EnvName: "SNAPSHOT_DIR",
+		Field:   "SnapshotConfig.SnapshotDir",
+		Default: "/tmp/kwil/snapshots",
 	}
 )

@@ -1,13 +1,16 @@
 package abci
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	cmtos "github.com/cometbft/cometbft/libs/os"
 	"github.com/cometbft/cometbft/privval"
+	"github.com/kwilteam/kwil-db/pkg/snapshots"
 )
 
 // resetAll removes address book files plus all data, and resets the privValdiator data.
@@ -118,4 +121,49 @@ type cometAddresser struct{}
 
 func (ca cometAddresser) Address(pubkey []byte) string {
 	return cometAddrFromPubKey(pubkey)
+}
+
+func convertABCISnapshots(req *abciTypes.Snapshot) *snapshots.Snapshot {
+	var metadata snapshots.SnapshotMetadata
+	err := json.Unmarshal(req.Metadata, &metadata)
+	if err != nil {
+		return nil
+	}
+
+	snapshot := &snapshots.Snapshot{
+		Height:     req.Height,
+		Format:     req.Format,
+		ChunkCount: req.Chunks,
+		Hash:       req.Hash,
+		Metadata:   metadata,
+	}
+	return snapshot
+}
+
+func convertToABCISnapshot(snapshot *snapshots.Snapshot) (*abciTypes.Snapshot, error) {
+	metadata, err := json.Marshal(snapshot.Metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &abciTypes.Snapshot{
+		Height:   snapshot.Height,
+		Format:   snapshot.Format,
+		Chunks:   snapshot.ChunkCount,
+		Hash:     snapshot.Hash,
+		Metadata: metadata,
+	}, nil
+}
+
+func abciStatus(status snapshots.Status) abciTypes.ResponseApplySnapshotChunk_Result {
+	switch status {
+	case snapshots.ACCEPT:
+		return abciTypes.ResponseApplySnapshotChunk_ACCEPT
+	case snapshots.REJECT:
+		return abciTypes.ResponseApplySnapshotChunk_REJECT_SNAPSHOT
+	case snapshots.RETRY:
+		return abciTypes.ResponseApplySnapshotChunk_RETRY
+	default:
+		return abciTypes.ResponseApplySnapshotChunk_UNKNOWN
+	}
 }

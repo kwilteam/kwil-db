@@ -46,11 +46,16 @@ type appState struct { // TODO
 	prevAppHash     []byte
 }
 
-func NewAbciApp(database DatasetsModule, validators ValidatorModule, committer AtomicCommitter, opts ...AbciOpt) *AbciApp {
+func NewAbciApp(database DatasetsModule, validators ValidatorModule, committer AtomicCommitter,
+	snapshotter SnapshotModule,
+	bootstrapper DBBootstrapModule,
+	opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
-		database:   database,
-		validators: validators,
-		committer:  committer,
+		database:     database,
+		validators:   validators,
+		committer:    committer,
+		snapshotter:  snapshotter,
+		bootstrapper: bootstrapper,
 
 		log: log.NewNoOp(),
 
@@ -93,6 +98,12 @@ type AbciApp struct {
 	// committer is the atomic committer that handles atomic commits across multiple stores
 	committer AtomicCommitter
 
+	// snapshotter is the snapshotter module that handles snapshotting
+	snapshotter SnapshotModule
+
+	// bootstrapper is the bootstrapper module that handles bootstrapping the database
+	bootstrapper DBBootstrapModule
+
 	log log.Logger
 
 	// commitWaiter is a waitgroup that waits for the commit to finish
@@ -102,10 +113,24 @@ type AbciApp struct {
 	commitWaiter sync.WaitGroup
 
 	state appState
+
+	// Expected AppState after bootstrapping the node with a given snapshot,
+	// state gets updated with the bootupState after bootstrapping
+	bootupState appState
 }
 
 func (a *AbciApp) ApplySnapshotChunk(p0 abciTypes.RequestApplySnapshotChunk) abciTypes.ResponseApplySnapshotChunk {
-	panic("TODO")
+	refetchChunks, status, err := a.bootstrapper.ApplySnapshotChunk(p0.Chunk, p0.Index)
+	if err != nil {
+		return abciTypes.ResponseApplySnapshotChunk{Result: abciStatus(status), RefetchChunks: refetchChunks}
+	}
+
+	if a.bootstrapper.IsDBRestored() {
+		a.state.prevAppHash = a.bootupState.prevAppHash
+		a.state.prevBlockHeight = a.bootupState.prevBlockHeight
+		a.log.Info("Bootstrapped database successfully")
+	}
+	return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ACCEPT, RefetchChunks: nil}
 }
 
 func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
@@ -395,22 +420,61 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	a.state.prevBlockHeight++
 	a.state.prevAppHash = appHash
 
+	height := uint64(a.state.prevBlockHeight)
+	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(height) {
+		// TODO: Lock all DBs
+		err = a.snapshotter.CreateSnapshot(height)
+		if err != nil {
+			a.log.Error("snapshot creation failed", zap.Error(err))
+		}
+		// Unlock all the DBs
+	}
+
 	return abciTypes.ResponseCommit{
 		Data: appHash, // will be in ResponseFinalizeBlock in v0.38
 	}
 }
 
 func (a *AbciApp) ListSnapshots(p0 abciTypes.RequestListSnapshots) abciTypes.ResponseListSnapshots {
-	panic("TODO")
+	if a.snapshotter == nil {
+		return abciTypes.ResponseListSnapshots{Snapshots: nil}
+	}
+
+	snapshots, err := a.snapshotter.ListSnapshots()
+	if err != nil {
+		return abciTypes.ResponseListSnapshots{Snapshots: nil}
+	}
+
+	var res []*abciTypes.Snapshot
+	for _, snapshot := range snapshots {
+		abcisnapshot, err := convertToABCISnapshot(&snapshot)
+		if err != nil {
+			return abciTypes.ResponseListSnapshots{Snapshots: nil}
+		}
+		res = append(res, abcisnapshot)
+	}
+	return abciTypes.ResponseListSnapshots{Snapshots: res}
 }
 
 func (a *AbciApp) LoadSnapshotChunk(p0 abciTypes.RequestLoadSnapshotChunk) abciTypes.ResponseLoadSnapshotChunk {
-	panic("TODO")
+	if a.snapshotter == nil {
+		return abciTypes.ResponseLoadSnapshotChunk{Chunk: nil}
+	}
+
+	chunk := a.snapshotter.LoadSnapshotChunk(p0.Height, p0.Format, p0.Chunk)
+	return abciTypes.ResponseLoadSnapshotChunk{Chunk: chunk}
 }
 
 func (a *AbciApp) OfferSnapshot(p0 abciTypes.RequestOfferSnapshot) abciTypes.ResponseOfferSnapshot {
-	panic("TODO")
+	snapshot := convertABCISnapshots(p0.Snapshot)
+	if (a.bootstrapper.OfferSnapshot(snapshot)) != nil {
+		return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}
+	}
+	a.bootupState.prevAppHash = p0.Snapshot.Hash
+	a.bootupState.prevBlockHeight = int64(snapshot.Height)
+	return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_ACCEPT}
 }
+
 func (a *AbciApp) PrepareProposal(p0 abciTypes.RequestPrepareProposal) abciTypes.ResponsePrepareProposal {
 	panic("TODO")
 }
