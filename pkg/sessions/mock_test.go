@@ -121,12 +121,12 @@ func (m *mockCommittable) BeginCommit(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockCommittable) EndCommit(ctx context.Context, appender func([]byte) error) (commitId []byte, err error) {
+func (m *mockCommittable) EndCommit(ctx context.Context, appender func([]byte) error) (err error) {
 	if !m.isInCommit {
-		return nil, fmt.Errorf("not in commit")
+		return fmt.Errorf("not in commit")
 	}
 	if m.isInApply {
-		return nil, fmt.Errorf("cannot end commit while in apply")
+		return fmt.Errorf("cannot end commit while in apply")
 	}
 
 	m.isInCommit = false
@@ -137,16 +137,16 @@ func (m *mockCommittable) EndCommit(ctx context.Context, appender func([]byte) e
 			Value: value,
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		err = appender(bts)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	return m.commitId, nil
+	return nil
 }
 
 func (m *mockCommittable) BeginApply(ctx context.Context) error {
@@ -200,6 +200,10 @@ func (m *mockCommittable) Cancel(ctx context.Context) {
 	m.canceled = true
 }
 
+func (m *mockCommittable) ID(ctx context.Context) ([]byte, error) {
+	return m.commitId, nil
+}
+
 type mockCommittableWithErrors struct {
 	*mockCommittable
 
@@ -223,17 +227,17 @@ func (m *mockCommittableWithErrors) BeginCommit(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockCommittableWithErrors) EndCommit(ctx context.Context, appender func([]byte) error) (commitId []byte, err error) {
-	commitId, err = m.mockCommittable.EndCommit(ctx, appender)
+func (m *mockCommittableWithErrors) EndCommit(ctx context.Context, appender func([]byte) error) (err error) {
+	err = m.mockCommittable.EndCommit(ctx, appender)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if m.errInEndCommit {
-		return nil, fmt.Errorf("error in EndCommit")
+		return fmt.Errorf("error in EndCommit")
 	}
 
-	return commitId, nil
+	return nil
 }
 
 func (m *mockCommittableWithErrors) BeginApply(ctx context.Context) error {

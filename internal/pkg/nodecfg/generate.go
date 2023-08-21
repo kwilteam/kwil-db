@@ -9,8 +9,9 @@ import (
 
 	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtos "github.com/cometbft/cometbft/libs/os"
-	cmtrand "github.com/cometbft/cometbft/libs/rand"
 	"github.com/cometbft/cometbft/p2p"
+
+	cmtrand "github.com/cometbft/cometbft/libs/rand"
 	"github.com/cometbft/cometbft/privval"
 	"github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
@@ -42,6 +43,8 @@ type TestnetGenerateConfig struct {
 	P2pPort                 int
 }
 
+// TODO: if we use our own keys for cosmos, this will not work
+// privval.LoadFilePV will need to be replacew with something else
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	cfg := cmtCfg.DefaultConfig()
 	cfg.SetRoot(genCfg.HomeDir)
@@ -210,6 +213,8 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	return nil
 }
 
+// TODO: we definitely want to get rid of this, or at least make it more understandable / move it
+// It generates private keys, which we should not leave up to Comet
 func initFilesWithConfig(cfg *cmtCfg.Config) error {
 	// private validator
 	privValKeyFile := cfg.PrivValidatorKeyFile()

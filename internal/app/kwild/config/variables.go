@@ -1,18 +1,17 @@
 package config
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/kwil-db/pkg/config"
 
-	cmtCrypto "github.com/cometbft/cometbft/crypto"
 	"github.com/cstockton/go-conv"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -22,20 +21,15 @@ const (
 type KwildConfig struct {
 	GrpcListenAddress  string
 	HttpListenAddress  string
-	PrivateKey         *ecdsa.PrivateKey
+	PrivateKey         *crypto.Ed25519PrivateKey
 	SqliteFilePath     string
 	Log                log.Config
 	ExtensionEndpoints []string
-	ArweaveConfig      ArweaveConfig
 	BcRpcUrl           string
-	BCPrivateKey       cmtCrypto.PrivKey
 	WithoutGasCosts    bool
 	WithoutNonces      bool
 	SnapshotConfig     SnapshotConfig
-}
-
-type ArweaveConfig struct {
-	BundlrURL string
+	RootDir            string
 }
 
 type SnapshotConfig struct {
@@ -54,10 +48,10 @@ var (
 		LogOutputPaths,
 		HttpListenAddress,
 		ExtensionEndpoints,
-		ArweaveBundlrURL,
 		CometBftRPCUrl,
 		WithoutGasCosts,
 		WithoutNonces,
+		RootDir,
 	}
 )
 
@@ -68,7 +62,7 @@ var (
 		Setter: func(val any) (any, error) {
 			if val == nil {
 				fmt.Println("no private key provided, generating a new one...")
-				return crypto.GenerateKey()
+				return crypto.GenerateEd25519Key()
 			}
 
 			strVal, err := conv.String(val)
@@ -76,7 +70,7 @@ var (
 				return nil, err
 			}
 
-			return crypto.HexToECDSA(strVal)
+			return crypto.Ed25519PrivateKeyFromHex(strVal)
 		},
 	}
 
@@ -160,12 +154,6 @@ var (
 		},
 	}
 
-	ArweaveBundlrURL = config.CfgVar{
-		EnvName: "ARWEAVE_BUNDLR_URL",
-		Field:   "ArweaveConfig.BundlrURL",
-		Default: "",
-	}
-
 	WithoutGasCosts = config.CfgVar{
 		EnvName: "WITHOUT_GAS_COSTS",
 		Field:   "WithoutGasCosts",
@@ -200,5 +188,22 @@ var (
 		EnvName: "SNAPSHOT_DIR",
 		Field:   "SnapshotConfig.SnapshotDir",
 		Default: "/tmp/kwil/snapshots",
+	}
+
+	RootDir = config.CfgVar{
+		EnvName: "ROOT_DIR",
+		Field:   "RootDir",
+		Setter: func(val any) (any, error) {
+			if val == nil {
+				return filepath.Clean("~/.kwil"), nil
+			}
+
+			str, err := conv.String(val)
+			if err != nil {
+				return nil, err
+			}
+
+			return filepath.Clean(str), nil
+		},
 	}
 )

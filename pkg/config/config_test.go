@@ -1,12 +1,11 @@
 package config_test
 
 import (
-	"crypto/ecdsa"
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/kwilteam/kwil-db/pkg/config"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 
 	"github.com/cstockton/go-conv"
 )
@@ -16,7 +15,6 @@ var (
 )
 
 func Test_Config(t *testing.T) {
-
 	// TEST 1: load config with no private key, should fail
 	testCfg := &TestConfig{
 		Inner: InnerTestConfig{
@@ -29,7 +27,7 @@ func Test_Config(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	os.Setenv("KWIL_TEST_PRIVATE_KEY", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e")
+	os.Setenv("KWIL_TEST_PRIVATE_KEY", "f2d82d73ba03a7e843443f2b3179a01398144baa4a23d40d1e8a3a8e4fb217d0484d59f4de46b2174ebce66ac3afa7989b444244323c19a74b683f54cf33227c")
 
 	// TEST 2: load config with private key, should succeed
 	err = config.LoadConfig(RegisteredVariables, envPrefix, testCfg)
@@ -105,7 +103,7 @@ func Test_Failures(t *testing.T) {
 }
 
 type TestConfig struct {
-	PrivateKey *ecdsa.PrivateKey
+	PrivateKey crypto.PrivateKey
 	Inner      InnerTestConfig
 }
 
@@ -134,7 +132,7 @@ var (
 				return nil, err
 			}
 
-			return crypto.HexToECDSA(strVal) // TODO: we should rethink this since we support ed25519 now
+			return crypto.Ed25519PrivateKeyFromHex(strVal)
 		},
 		Required: true,
 	}
