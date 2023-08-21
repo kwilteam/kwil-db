@@ -149,6 +149,7 @@ func abciStatus(status snapshots.Status) abciTypes.ResponseApplySnapshotChunk_Re
 	default:
 		return abciTypes.ResponseApplySnapshotChunk_UNKNOWN
 	}
+}
 
 func cometAddrFromPubKey(pubkey []byte) string {
 	publicKey := ed25519.PubKey(pubkey)
