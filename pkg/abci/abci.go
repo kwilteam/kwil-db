@@ -253,14 +253,15 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	a.state.prevBlockHeight++
 	a.state.prevAppHash = appHash
 
-  if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(a.state.prevBlockHeight) {
-    // TODO: Lock all DBs
-    err = a.snapshotter.CreateSnapshot(a.state.prevBlockHeight)
-    if err != nil {
-      a.log.Error("snapshot creation failed", zap.Error(err))
-    }
-    // Unlock all the DBs
-  }
+    height := uint64(a.state.prevBlockHeight)
+  	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(height) {
+    	// TODO: Lock all DBs
+    	err = a.snapshotter.CreateSnapshot(height)
+    	if err != nil {
+      	a.log.Error("snapshot creation failed", zap.Error(err))
+    	}
+    	// Unlock all the DBs
+  	}
   
 	return abciTypes.ResponseCommit{
 		Data: appHash, // will be in ResponseFinalizeBlock in v0.38
