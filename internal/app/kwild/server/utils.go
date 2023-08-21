@@ -138,19 +138,20 @@ func (a *atomicReadWriter) Write(val []byte) error {
 }
 
 // sqlCommittableRegister allows dynamic registration of SQL committables
+// it implements engine.CommitRegister
 type sqlCommittableRegister struct {
-	commiter *sessions.AtomicCommitter
-	log      log.Logger
+	committer *sessions.AtomicCommitter
+	log       log.Logger
 }
 
 var _ engine.CommitRegister = (*sqlCommittableRegister)(nil)
 
 func (s *sqlCommittableRegister) Register(ctx context.Context, name string, db sql.Database) error {
-	return registerSQL(ctx, s.commiter, db, name, s.log)
+	return registerSQL(ctx, s.committer, db, name, s.log)
 }
 
 func (s *sqlCommittableRegister) Unregister(ctx context.Context, name string) error {
-	return s.commiter.Unregister(ctx, name)
+	return s.committer.Unregister(ctx, name)
 }
 
 // registerSQL is a helper function to register a SQL committable to the atomic committer.

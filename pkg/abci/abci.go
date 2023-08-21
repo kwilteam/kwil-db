@@ -70,8 +70,8 @@ func NewAbciApp(database DatasetsModule, vldtrs ValidatorModule, kv KVStore, com
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
-		bootstrapper: bootstrapper,
-		snapshotter:  snapshotter,
+		bootstrapper: nil,
+		snapshotter:  nil,
 
 		valAddrToKey: make(map[string][]byte),
 		valUpdates:   make([]*validators.Validator, 0),

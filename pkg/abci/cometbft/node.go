@@ -20,7 +20,6 @@ type CometBftNode struct {
 }
 
 // NewCometBftNode creates a new CometBFT node.
-// I don't love this constructor function signature; I can definitely make it better
 func NewCometBftNode(app abciTypes.Application, privateKey []byte, atomicStore privval.AtomicReadWriter, directory string, logLevel string) (*CometBftNode, error) {
 	conf := cometConfig.DefaultConfig().SetRoot(directory)
 	logger := cometLog.NewTMLogger(cometLog.NewSyncWriter(os.Stdout))

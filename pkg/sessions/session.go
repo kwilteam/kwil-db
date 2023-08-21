@@ -66,14 +66,9 @@ func (id CommittableId) Bytes() []byte {
 }
 
 // NewAtomicCommitter creates a new atomic session.
-func NewAtomicCommitter(ctx context.Context, committables map[string]Committable, wal Wal, opts ...CommiterOpt) *AtomicCommitter {
-	committablesMap := make(map[CommittableId]Committable)
-	for id, committable := range committables {
-		committablesMap[CommittableId(id)] = committable
-	}
-
+func NewAtomicCommitter(ctx context.Context, wal Wal, opts ...CommiterOpt) *AtomicCommitter {
 	a := &AtomicCommitter{
-		committables: committablesMap,
+		committables: make(map[CommittableId]Committable),
 		wal:          &sessionWal{wal},
 		log:          log.NewNoOp(),
 		timeout:      5 * time.Second,

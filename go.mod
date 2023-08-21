@@ -1,6 +1,6 @@
 module github.com/kwilteam/kwil-db
 
-go 1.20
+go 1.21
 
 require (
 	github.com/alexliesenfeld/health v0.6.0
@@ -235,7 +235,7 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.12.0 // indirect
-	golang.org/x/exp v0.0.0-20230724220655-d98519c11495
+	golang.org/x/exp v0.0.0-20230724220655-d98519c11495 // indirect
 	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect

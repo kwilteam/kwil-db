@@ -26,11 +26,10 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/kv/badger"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
-	"github.com/kwilteam/kwil-db/pkg/modules/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/modules/validators"
 	"github.com/kwilteam/kwil-db/pkg/sessions"
 	"github.com/kwilteam/kwil-db/pkg/sessions/wal"
-	snapshotPkg "github.com/kwilteam/kwil-db/pkg/snapshots"
+	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
 
@@ -72,7 +71,7 @@ func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
 
 func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// atomic committer
-	ac := buildAtomicCommitter(d)
+	ac := buildAtomicCommitter(d, closers)
 	closers.addCloser(ac.Close)
 
 	// engine
@@ -91,11 +90,11 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// validator module
 	validatorModule := buildValidatorModule(d, accs, vstore)
 
-	snapshotModule := buildSnapshotModule(d)
+	snapshotModule := buildSnapshotter(d)
 
-	bootstrapperModule := buildBootstrapModule(d)
+	bootstrapperModule := buildBootstrapper(d)
 
-	abciApp := buildAbci(d, closers, datasetsModule, validatorModule, ac)
+	abciApp := buildAbci(d, closers, datasetsModule, validatorModule, ac, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
@@ -149,7 +148,7 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
-	atomicCommitter *sessions.AtomicCommitter) *abci.AbciApp {
+	atomicCommitter *sessions.AtomicCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
 	badgerKv, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, "abci/info"), &badger.Options{
 		GuaranteeFSync: true,
 		Logger:         *d.log.Named("abci-kv-store"),
@@ -206,8 +205,8 @@ func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engin
 	}
 
 	sqlCommitRegister := &sqlCommittableRegister{
-		commiter: a,
-		log:      *d.log.Named("sqlite-committable"),
+		committer: a,
+		log:       *d.log.Named("sqlite-committable"),
 	}
 
 	e, err := engine.Open(d.ctx, d.opener,
@@ -274,7 +273,7 @@ func buildValidatorModule(d *coreDependencies, accs datasets.AccountStore,
 		validators.WithLogger(*d.log.Named("validator-module")))
 }
 
-func buildSnapshotModule(d *coreDependencies) *snapshots.SnapshotStore {
+func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {
 	if !d.cfg.SnapshotConfig.Enabled {
 		return nil
 	}
@@ -287,8 +286,8 @@ func buildSnapshotModule(d *coreDependencies) *snapshots.SnapshotStore {
 	)
 }
 
-func buildBootstrapModule(d *coreDependencies) *snapshotPkg.Bootstrapper {
-	bootstrapper, err := snapshotPkg.NewBootstrapper(d.cfg.SqliteFilePath)
+func buildBootstrapper(d *coreDependencies) *snapshots.Bootstrapper {
+	bootstrapper, err := snapshots.NewBootstrapper(d.cfg.SqliteFilePath)
 	if err != nil {
 		failBuild(err, "Bootstrap module initialization failure")
 	}
@@ -366,14 +365,18 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	return node
 }
 
-func buildAtomicCommitter(d *coreDependencies) *sessions.AtomicCommitter {
+func buildAtomicCommitter(d *coreDependencies, closers *closeFuncs) *sessions.AtomicCommitter {
 	twoPCWal, err := wal.OpenWal(filepath.Join(d.cfg.RootDir, "application/wal"))
 	if err != nil {
 		failBuild(err, "failed to open 2pc wal")
 	}
 
 	// we are actually registering all committables ad-hoc, so we can pass nil here
-	return sessions.NewAtomicCommitter(d.ctx, nil, twoPCWal, sessions.WithLogger(*d.log.Named("atomic-committer")))
+	s := sessions.NewAtomicCommitter(d.ctx, twoPCWal, sessions.WithLogger(*d.log.Named("atomic-committer")))
+	// we need atomic committer to close before 2pc wal
+	closers.addCloser(s.Close)
+	closers.addCloser(twoPCWal.Close)
+	return s
 }
 
 func failBuild(err error, msg string) {
