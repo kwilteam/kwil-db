@@ -173,7 +173,7 @@ func (t *Transaction) Get(key []byte) ([]byte, error) {
 // and I don't want future users of this to worry about all of them.
 type Options struct {
 	// GuaranteeFSync guarantees that all writes to the wal are fsynced before
-	// attemtping to be written to the LSM tree.
+	// attempting to be written to the LSM tree.
 	GuaranteeFSync bool
 
 	// GarbageCollectionInterval is the interval at which the garbage collector
