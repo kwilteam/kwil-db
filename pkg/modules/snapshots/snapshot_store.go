@@ -6,17 +6,19 @@ import (
 )
 
 type SnapshotStoreOpts func(*SnapshotStore)
-type SnapshotStore struct {
-	enabled         bool
-	recurringHeight uint64
-	maxSnapshots    uint64
-	snapshotDir     string
-	databaseDir     string
-	chunkSize       uint64
 
-	numSnapshots uint64
+// SnapshotStore handles the creation/deletion/loading snapshots
+type SnapshotStore struct {
+	enabled         bool      // Enables snapshotting
+	recurringHeight uint64    // Snapshots are taken after every recurringHeight
+	maxSnapshots    uint64    // maximum snapshots to store
+	snapshotDir     string    // Snapshots directory
+	databaseDir     string    // Database location to snapshot
+	chunkSize       uint64    // snapshots are stored in chunks of size chunksize
+
+	numSnapshots uint64       // current number of snapshots
 	log          log.Logger
-	snapshotter  Snapshotter
+	snapshotter  Snapshotter  // Snapshotter instance to create a snapshot, instantiated at the beginning of snapshot process
 }
 
 func NewSnapshotStore(databaseDir string, snapshotDir string, height uint64, maxSnapshots uint64, opts ...SnapshotStoreOpts) *SnapshotStore {
@@ -91,6 +93,7 @@ func (s *SnapshotStore) CreateSnapshot(height uint64) error {
 	return nil
 }
 
+// Lists the snapshot metadata of all the existing snapshots
 func (s *SnapshotStore) ListSnapshots() ([]snapshots.Snapshot, error) {
 	return s.snapshotter.ListSnapshots()
 }
@@ -99,6 +102,7 @@ func (s *SnapshotStore) NumSnapshots() uint64 {
 	return s.numSnapshots
 }
 
+// Loads snapshotChunk of snapshot at given height and chunkIndex
 func (s *SnapshotStore) LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) []byte {
 	chunk, err := s.snapshotter.LoadSnapshotChunk(height, format, chunkID)
 	if err != nil {
