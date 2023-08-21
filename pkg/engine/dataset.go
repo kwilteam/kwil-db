@@ -48,10 +48,11 @@ func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema) (dbid 
 // buildNewDataset builds a new datastore, and puts it in a dataset
 func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string, schema *types.Schema) (ds *dataset.Dataset, finalErr error) {
 	dbid := GenerateDBID(name, owner)
-	datastore, err := e.opener.Open(dbid, e.log)
+	datastore, err := e.open(ctx, dbid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
 	defer func() {
 		if err != nil {
 			err2 := datastore.Delete()
@@ -105,7 +106,13 @@ func (e *Engine) DropDataset(ctx context.Context, sender, dbid string) error {
 		return fmt.Errorf("%w: %s", ErrDatasetNotOwned, dbid)
 	}
 
-	err := ds.Delete()
+	// we call unregister first so the session can be canceled, before the database is deleted
+	err := e.commitRegister.Unregister(ctx, dbid)
+	if err != nil {
+		return fmt.Errorf("failed to unregister dataset: %w", err)
+	}
+
+	err = ds.Delete()
 	if err != nil {
 		return fmt.Errorf("failed to close dataset: %w", err)
 	}

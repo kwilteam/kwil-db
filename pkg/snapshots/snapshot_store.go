@@ -2,7 +2,6 @@ package snapshots
 
 import (
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/snapshots"
 )
 
 type SnapshotStoreOpts func(*SnapshotStore)
@@ -18,11 +17,11 @@ type SnapshotStore struct {
 
 	numSnapshots uint64 // current number of snapshots
 	log          log.Logger
-	snapshotter  Snapshotter // Snapshotter instance to create a snapshot, instantiated at the beginning of snapshot process
+	snapshotter  *Snapshotter // Snapshotter instance to create a snapshot, instantiated at the beginning of snapshot process
 }
 
 func NewSnapshotStore(databaseDir string, snapshotDir string, height uint64, maxSnapshots uint64, opts ...SnapshotStoreOpts) *SnapshotStore {
-	snapshotter := snapshots.NewSnapshotter(snapshotDir, databaseDir, 16*1024*1024)
+	snapshotter := NewSnapshotter(snapshotDir, databaseDir, 16*1024*1024)
 	ss := &SnapshotStore{
 		enabled:      true,
 		numSnapshots: 0,
@@ -64,7 +63,7 @@ func (s *SnapshotStore) CreateSnapshot(height uint64) error {
 	}
 
 	if s.snapshotter == nil {
-		s.snapshotter = snapshots.NewSnapshotter(s.snapshotDir, s.databaseDir, s.chunkSize)
+		s.snapshotter = NewSnapshotter(s.snapshotDir, s.databaseDir, s.chunkSize)
 	}
 
 	// Initialize snapshot session
@@ -94,7 +93,7 @@ func (s *SnapshotStore) CreateSnapshot(height uint64) error {
 }
 
 // Lists the snapshot metadata of all the existing snapshots
-func (s *SnapshotStore) ListSnapshots() ([]snapshots.Snapshot, error) {
+func (s *SnapshotStore) ListSnapshots() ([]Snapshot, error) {
 	return s.snapshotter.ListSnapshots()
 }
 
