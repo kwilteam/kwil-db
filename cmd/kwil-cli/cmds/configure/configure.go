@@ -85,7 +85,7 @@ func promptPrivateKey(conf *config.KwilCliConfig) error {
 		return nil
 	}
 
-	pk, err := crypto.PrivateKeyFromHex(res)
+	pk, err := crypto.Secp256k1PrivateKeyFromHex(res)
 	if err != nil {
 		fmt.Println(`invalid private key.  key could not be converted to hex.  received: `, res)
 		promptAskAgain := &common.Prompter{

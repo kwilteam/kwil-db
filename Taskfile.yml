@@ -104,7 +104,7 @@ tasks:
       - task: build:docker
         vars: {VARIANT: 'shell'}
     cmds:
-      - go test ./test/acceptance/ -timeout 12h -dev -v
+      - task dev:up:nb
 
   dev:up:nb:
     desc: Start the dev environment without rebuilding docker image
@@ -117,7 +117,7 @@ tasks:
       - task: build:docker
         vars: { VARIANT: 'shell' }
     cmds:
-      - go test ./test/integration/ -timeout 12h -dev -v
+      - task dev:testnet:up:nb
 
   dev:testnet:up:nb:
     desc: Start the dev environment(with testnet) without rebuilding docker image
@@ -127,11 +127,10 @@ tasks:
   # ************ test ************
   test:act:
     desc: Run acceptance tests
-    # deps:
-    #   - task: build:docker
-    #     vars: { VARIANT: 'shell' }
+    deps:
+      - task: build:docker
     cmds:
-      - go test ./test/acceptance/ -v
+      - task test:act:nb
 
   test:act:nb:
     desc: Run acceptance tests without building docker image
@@ -141,12 +140,16 @@ tasks:
   test:unit:
     desc: Run unit tests
     cmds:
-      - task vendor
-      - go test `go list ./... | grep -v /kwil-db\/test/` -count=1
-      - task vendor:clean
+      - go test $(go list ./... | grep -v /kwil-db\/test/) -count=1
 
   test:it:
     desc: Run integration tests
-    #deps: [ build:docker ]
+    deps:
+      - task: build:docker
+    cmds:
+      - task test:it:nb
+
+  test:it:nb:
+    desc: Run integration tests
     cmds:
       - go test -count=1 -timeout 0 ./test/integration/ -v

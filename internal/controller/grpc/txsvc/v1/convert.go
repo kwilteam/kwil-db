@@ -21,11 +21,6 @@ func convertTransaction(incoming *txpb.Transaction) (*transactions.Transaction, 
 		return nil, fmt.Errorf("transaction signature cannot be nil")
 	}
 
-	sender, err := crypto.PublicKeyFromBytes(incoming.Sender)
-	if err != nil {
-		return nil, fmt.Errorf("invalid sender public key: %s", err.Error())
-	}
-
 	convSignature, err := convertSignature(incoming.Signature)
 	if err != nil {
 		return nil, err
@@ -45,7 +40,7 @@ func convertTransaction(incoming *txpb.Transaction) (*transactions.Transaction, 
 			Fee:         bigFee,
 			Salt:        incoming.Body.Salt,
 		},
-		Sender: sender,
+		Sender: incoming.Sender,
 	}, nil
 }
 
@@ -62,7 +57,7 @@ func convertSignature(sig *txpb.Signature) (*crypto.Signature, error) {
 		}, nil
 	}
 
-	sigType := crypto.SignatureType(sig.SignatureType)
+	sigType := crypto.SignatureLookUp(sig.SignatureType)
 	if err := sigType.IsValid(); err != nil {
 		return nil, err
 	}

@@ -19,7 +19,7 @@ func convertTx(incoming *transactions.Transaction) *txpb.Transaction {
 			Salt:        incoming.Body.Salt,
 		},
 		Signature: convertActionSignature(incoming.Signature),
-		Sender:    incoming.Sender.Bytes(),
+		Sender:    incoming.Sender,
 	}
 }
 

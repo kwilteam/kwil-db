@@ -5,77 +5,38 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
 )
 
-// TODO: Logger
-
 type SnapshotStoreOpts func(*SnapshotStore)
-type SnapshotStore struct {
-	enabled         bool
-	recurringHeight uint64
-	maxSnapshots    uint64
-	snapshotDir     string
-	databaseDir     string
-	chunkSize       uint64
 
-	databaseType string
-	numSnapshots uint64
+// SnapshotStore handles the creation/deletion/loading snapshots
+type SnapshotStore struct {
+	enabled         bool   // Enables snapshotting
+	recurringHeight uint64 // Snapshots are taken after every recurringHeight
+	maxSnapshots    uint64 // maximum snapshots to store
+	snapshotDir     string // Snapshots directory
+	databaseDir     string // Database location to snapshot
+	chunkSize       uint64 // snapshots are stored in chunks of size chunksize
+
+	numSnapshots uint64 // current number of snapshots
 	log          log.Logger
-	snapshotter  Snapshotter
+	snapshotter  Snapshotter // Snapshotter instance to create a snapshot, instantiated at the beginning of snapshot process
 }
 
-func NewSnapshotStore(opts ...SnapshotStoreOpts) *SnapshotStore {
+func NewSnapshotStore(databaseDir string, snapshotDir string, height uint64, maxSnapshots uint64, opts ...SnapshotStoreOpts) *SnapshotStore {
+	snapshotter := snapshots.NewSnapshotter(snapshotDir, databaseDir, 16*1024*1024)
 	ss := &SnapshotStore{
-		enabled:      false,
-		databaseType: ".sqlite",
+		enabled:      true,
 		numSnapshots: 0,
 		chunkSize:    16 * 1024 * 1024,
+		maxSnapshots: maxSnapshots,
+		snapshotDir:  snapshotDir,
+		databaseDir:  databaseDir,
+		snapshotter:  snapshotter,
 	}
 
 	for _, opt := range opts {
 		opt(ss)
 	}
 	return ss
-}
-
-func WithEnabled(enabled bool) SnapshotStoreOpts {
-	return func(s *SnapshotStore) {
-		s.enabled = enabled
-	}
-}
-
-func WithSnapshotDir(snapshotDir string) SnapshotStoreOpts {
-	return func(s *SnapshotStore) {
-		s.snapshotDir = snapshotDir
-	}
-}
-
-func WithDatabaseDir(databaseDir string) SnapshotStoreOpts {
-	return func(s *SnapshotStore) {
-		s.databaseDir = databaseDir
-	}
-}
-
-func WithDatabaseType(databaseType string) SnapshotStoreOpts {
-	return func(s *SnapshotStore) {
-		s.databaseType = databaseType
-	}
-}
-
-func WithMaxSnapshots(maxSnapshots uint64) SnapshotStoreOpts {
-	return func(s *SnapshotStore) {
-		s.maxSnapshots = maxSnapshots
-	}
-}
-
-func WithRecurringHeight(recurringHeight uint64) SnapshotStoreOpts {
-	return func(s *SnapshotStore) {
-		s.recurringHeight = recurringHeight
-	}
-}
-
-func WithSnapshotter() SnapshotStoreOpts {
-	return func(s *SnapshotStore) {
-		s.snapshotter = snapshots.NewSnapshotter(s.snapshotDir, s.databaseDir, s.databaseType, s.chunkSize)
-	}
 }
 
 func WithChunkSize(chunkSize uint64) SnapshotStoreOpts {
@@ -91,10 +52,7 @@ func WithLogger(logger log.Logger) SnapshotStoreOpts {
 }
 
 func (s *SnapshotStore) IsSnapshotDue(height uint64) bool {
-	if !s.enabled || (height%s.recurringHeight) != 0 {
-		return false
-	}
-	return true
+	return (height % s.recurringHeight) == 0
 }
 
 // Snapshot store Operations
@@ -106,7 +64,7 @@ func (s *SnapshotStore) CreateSnapshot(height uint64) error {
 	}
 
 	if s.snapshotter == nil {
-		s.snapshotter = snapshots.NewSnapshotter(s.snapshotDir, s.databaseDir, s.databaseType, s.chunkSize)
+		s.snapshotter = snapshots.NewSnapshotter(s.snapshotDir, s.databaseDir, s.chunkSize)
 	}
 
 	// Initialize snapshot session
@@ -135,6 +93,7 @@ func (s *SnapshotStore) CreateSnapshot(height uint64) error {
 	return nil
 }
 
+// Lists the snapshot metadata of all the existing snapshots
 func (s *SnapshotStore) ListSnapshots() ([]snapshots.Snapshot, error) {
 	return s.snapshotter.ListSnapshots()
 }
@@ -143,6 +102,7 @@ func (s *SnapshotStore) NumSnapshots() uint64 {
 	return s.numSnapshots
 }
 
+// Loads snapshotChunk of snapshot at given height and chunkIndex
 func (s *SnapshotStore) LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) []byte {
 	chunk, err := s.snapshotter.LoadSnapshotChunk(height, format, chunkID)
 	if err != nil {

@@ -2,15 +2,16 @@ package client
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 
-	cmtCrypto "github.com/cometbft/cometbft/crypto"
-	cmtjson "github.com/cometbft/cometbft/libs/json"
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	engineUtils "github.com/kwilteam/kwil-db/pkg/engine/utils"
@@ -24,13 +25,14 @@ type Client struct {
 	client         *grpcClient.Client
 	CometBftClient *rpchttp.HTTP
 	datasets       map[string]*transactions.Schema
-	PrivateKey     crypto.PrivateKey
+	Signer         crypto.Signer
 
 	cometBftRpcUrl string
 }
 
 // New creates a new client
-func New(ctx context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
+// TODO: remove the Context param. Requests pass it.
+func New(_ context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
 		datasets:       make(map[string]*transactions.Schema),
 		cometBftRpcUrl: "tcp://localhost:26657",
@@ -164,7 +166,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 	}
 
 	var signedMsg *transactions.SignedMessage
-	shouldSign, err := shouldAuthenticate(c.PrivateKey, callOpts.forceAuthenticated)
+	shouldSign, err := shouldAuthenticate(c.Signer, callOpts.forceAuthenticated)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +177,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 	}
 
 	if shouldSign {
-		err = msg.Sign(c.PrivateKey)
+		err = msg.Sign(c.Signer)
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signed message: %w", err)
@@ -188,20 +190,20 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 // shouldAuthenticate decides whether the client should authenticate or not
 // if enforced is not nil, it will be used instead of the default value
 // otherwise, if the private key is not nil, it will authenticate
-func shouldAuthenticate(privateKey crypto.PrivateKey, enforced *bool) (bool, error) {
+func shouldAuthenticate(signer crypto.Signer, enforced *bool) (bool, error) {
 	if enforced != nil {
 		if !*enforced {
 			return false, nil
 		}
 
-		if privateKey == nil {
+		if signer == nil {
 			return false, fmt.Errorf("private key is nil, but authentication is enforced")
 		}
 
 		return true, nil
 	}
 
-	return privateKey != nil, nil
+	return signer != nil, nil
 }
 
 func DecodeOutputs(bts []byte) ([]map[string]any, error) {
@@ -242,13 +244,23 @@ func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Acco
 }
 
 func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner string) ([]byte, error) {
-	// TODO: change this PayloadTypeExecuteAction to just be a validator update payload (or some equivalent)
-	tx, err := c.NewNodeTx(ctx, transactions.PayloadTypeExecuteAction, joiner, approver)
+	approverB, err := base64.StdEncoding.DecodeString(approver)
+	if err != nil {
+		return nil, err
+	}
+	joinerB, err := base64.StdEncoding.DecodeString(joiner)
+	if err != nil {
+		return nil, err
+	}
+	payload := &transactions.ValidatorApprove{
+		Candidate: joinerB,
+	}
+	tx, err := c.NewNodeTx(ctx, payload, approverB)
 	if err != nil {
 		return nil, err
 	}
 
-	bts, err := json.Marshal(tx)
+	bts, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -260,41 +272,44 @@ func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner s
 	return res.Hash, nil
 }
 
-// TODO: update once validator module is included
 func (c *Client) ValidatorJoin(ctx context.Context, joiner string, power int64) ([]byte, error) {
-	return c.ValidatorUpdate(ctx, joiner, power, transactions.PayloadTypeValidatorJoin)
+	return c.ValidatorUpdate(ctx, joiner, power)
 }
 
-// TODO: update once validator module is included
-func (c *Client) ValidatorLeave(ctx context.Context, joiner string, power int64) ([]byte, error) {
-	return c.ValidatorUpdate(ctx, joiner, 0, transactions.PayloadTypeValidatorApprove)
+func (c *Client) ValidatorLeave(ctx context.Context, joiner string) ([]byte, error) {
+	return c.ValidatorUpdate(ctx, joiner, 0)
 }
 
-func (c *Client) ValidatorUpdate(ctx context.Context, joinerPrivKey string, power int64, payloadtype transactions.PayloadType) ([]byte, error) {
-	var nodeKey cmtCrypto.PrivKey
-	key := fmt.Sprintf(`{"type":"tendermint/PrivKeyEd25519","value":"%s"}`, joinerPrivKey)
-	err := cmtjson.Unmarshal([]byte(key), &nodeKey)
+func (c *Client) ValidatorUpdate(ctx context.Context, privKeyB64 string, power int64) ([]byte, error) {
+	privKeyB, err := base64.StdEncoding.DecodeString(privKeyB64)
+	if err != nil {
+		return nil, err
+	}
+	if len(privKeyB) != ed25519.PrivateKeySize {
+		return nil, errors.New("invalid joiner private key")
+	}
+	privKey := ed25519.PrivKey(privKeyB)
+	pubKey := privKey.PubKey().Bytes()
+	fmt.Printf("Node PublicKey: %s\n", pubKey)
+
+	var payload transactions.Payload
+	if power <= 0 {
+		payload = &transactions.ValidatorLeave{
+			Validator: pubKey,
+		}
+	} else {
+		payload = &transactions.ValidatorJoin{
+			Candidate: pubKey,
+			Power:     uint64(power),
+		}
+	}
+
+	tx, err := c.NewNodeTx(ctx, payload, privKeyB)
 	if err != nil {
 		return nil, err
 	}
 
-	bts, err := json.Marshal(nodeKey.PubKey())
-	if err != nil {
-		return nil, err
-	}
-
-	vldtr := &validator{
-		PubKey: string(bts),
-		Power:  power,
-	}
-
-	// TODO: change this PayloadTypeExecuteAction to just be a validator update payload (or some equivalent)
-	tx, err := c.NewNodeTx(ctx, transactions.PayloadTypeExecuteAction, vldtr, joinerPrivKey)
-	if err != nil {
-		return nil, err
-	}
-
-	bts, err = json.Marshal(tx)
+	bts, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}

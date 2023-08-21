@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
@@ -21,6 +22,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+const DefaultContainerWaitTimeout = 10 * time.Second
+
 type IntTestConfig struct {
 	acceptance.ActTestCfg
 
@@ -31,7 +34,7 @@ type IntTestConfig struct {
 //// this can be used to simulate several "wallets" in the same test
 //func newGRPCClient(ctx context.Context, t *testing.T, cfg *IntTestConfig) KwilIntDriver {
 //	kwilClt, err := client.New(ctx, cfg.GrpcEndpoint,
-//		client.WithPrivateKey(cfg.AlicePK),
+//		client.WithSigner(cfg.AlicePK),
 //		client.WithCometBftUrl(cfg.ChainEndpoint),
 //	)
 //	require.NoError(t, err, "failed to create kwil client")
@@ -87,10 +90,10 @@ func (r *IntHelper) LoadConfig() {
 	cfg.NValidator, err = strconv.Atoi(nodeNum)
 	require.NoError(r.t, err, "invalid node number")
 
-	cfg.AlicePK, err = crypto.PrivateKeyFromHex(cfg.AliceRawPK)
+	cfg.AlicePK, err = crypto.Secp256k1PrivateKeyFromHex(cfg.AliceRawPK)
 	require.NoError(r.t, err, "invalid alice private key")
 
-	cfg.BobPk, err = crypto.PrivateKeyFromHex(cfg.BobRawPK)
+	cfg.BobPk, err = crypto.Secp256k1PrivateKeyFromHex(cfg.BobRawPK)
 	require.NoError(r.t, err, "invalid bob private key")
 	r.cfg = cfg
 
@@ -134,13 +137,6 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 
 	dc, err := compose.NewDockerCompose(r.cfg.DockerComposeFile)
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
-	err = dc.
-		WithEnv(envs).
-		WaitForService("ext1", wait.NewLogStrategy("listening on")).
-		WaitForService("k1", wait.NewLogStrategy("grpc server started")).
-		WaitForService("k2", wait.NewLogStrategy("grpc server started")).
-		WaitForService("k3", wait.NewLogStrategy("grpc server started")).
-		Up(ctx)
 
 	r.teardown = append(r.teardown, func() {
 		r.t.Log("teardown docker compose")
@@ -150,6 +146,19 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 	r.t.Cleanup(func() {
 		r.Teardown()
 	})
+
+	err = dc.
+		WithEnv(envs).
+		WaitForService("ext1",
+			wait.NewLogStrategy("listening on").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		WaitForService("k1",
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		WaitForService("k2",
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		WaitForService("k3",
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+		Up(ctx)
+	r.t.Log("docker compose up")
 
 	require.NoError(r.t, err, "failed to start kwild cluster")
 
@@ -190,7 +199,7 @@ func (r *IntHelper) getDriver(ctx context.Context, ctr *testcontainers.DockerCon
 
 	r.t.Logf("nodeURL: %s gatewayURL: %s for container name: %s", nodeURL, gatewayURL, name)
 	kwilClt, err := client.New(ctx, r.cfg.GrpcEndpoint,
-		client.WithPrivateKey(r.cfg.AlicePK),
+		client.WithSigner(r.cfg.AlicePK),
 		client.WithCometBftUrl(r.cfg.ChainEndpoint),
 	)
 	require.NoError(r.t, err, "failed to create kwil client")

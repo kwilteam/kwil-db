@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	cmtos "github.com/cometbft/cometbft/libs/os"
 	"github.com/cometbft/cometbft/privval"
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
@@ -135,4 +136,34 @@ func convertToABCISnapshot(snapshot *snapshots.Snapshot) (*abciTypes.Snapshot, e
 		Hash:     snapshot.Hash,
 		Metadata: metadata,
 	}, nil
+}
+
+func abciStatus(status snapshots.Status) abciTypes.ResponseApplySnapshotChunk_Result {
+	switch status {
+	case snapshots.ACCEPT:
+		return abciTypes.ResponseApplySnapshotChunk_ACCEPT
+	case snapshots.REJECT:
+		return abciTypes.ResponseApplySnapshotChunk_REJECT_SNAPSHOT
+	case snapshots.RETRY:
+		return abciTypes.ResponseApplySnapshotChunk_RETRY
+	default:
+		return abciTypes.ResponseApplySnapshotChunk_UNKNOWN
+	}
+}
+
+func cometAddrFromPubKey(pubkey []byte) string {
+	publicKey := ed25519.PubKey(pubkey)
+	return publicKey.Address().String()
+}
+
+// Addresser is the ABCI application's pubkey-to-address converter. This is
+// different from Kwil addresses, as CometBFT has both different keys and a
+// different address format that it uses internally, most notably for
+// validators.
+var Addresser cometAddresser
+
+type cometAddresser struct{}
+
+func (ca cometAddresser) Address(pubkey []byte) string {
+	return cometAddrFromPubKey(pubkey)
 }

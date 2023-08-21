@@ -30,7 +30,7 @@ func leaveCmd() *cobra.Command {
 				return err
 			}
 
-			hash, err := clt.ValidatorLeave(ctx, args[0], 0)
+			hash, err := clt.ValidatorLeave(ctx, args[0])
 			if err != nil {
 				return err
 			}
