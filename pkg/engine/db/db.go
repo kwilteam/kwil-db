@@ -40,7 +40,7 @@ func (d *DB) Prepare(ctx context.Context, query string) (*PreparedStatement, err
 		return nil, err
 	}
 
-	err = sqlanalyzer.ApplyRules(ast, sqlanalyzer.DeterministicAggregates, &sqlanalyzer.RuleMetadata{
+	err = sqlanalyzer.ApplyRules(ast, sqlanalyzer.AllRules, &sqlanalyzer.RuleMetadata{
 		Tables: tables,
 	})
 	if err != nil {

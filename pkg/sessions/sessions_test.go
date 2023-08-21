@@ -13,6 +13,8 @@ import (
 )
 
 // TODO: test calling things like begin, end, apply, etc. out of order / multiple times
+// TODO: test register and unregister; and try calling them at different times
+// e.g. calling register after begin, or unregister after end, etc.
 
 func Test_Session(t *testing.T) {
 	type fields struct {
@@ -125,7 +127,17 @@ func Test_Session(t *testing.T) {
 			var id []byte
 			outErr := func() error {
 				ctx := context.Background()
-				committer, err := sessions.NewAtomicCommitter(ctx, tt.fields.committables, tt.fields.wal)
+				committer := sessions.NewAtomicCommitter(ctx, tt.fields.wal)
+
+				for id, committable := range tt.fields.committables {
+					err := committer.Register(ctx, id, committable)
+					if err != nil {
+						return err
+					}
+				}
+
+				defer committer.Close()
+				err := committer.ClearWal(ctx)
 				if err != nil {
 					return err
 				}
@@ -139,8 +151,13 @@ func Test_Session(t *testing.T) {
 					return err
 				}
 
+				id, err = committer.ID(ctx)
+				if err != nil {
+					return err
+				}
+
 				applyErr := make(chan error)
-				id, err = committer.Commit(ctx, func(err error) {
+				err = committer.Commit(ctx, func(err error) {
 					applyErr <- err
 				})
 				if err != nil {
@@ -239,16 +256,16 @@ func Test_ExistingWal(t *testing.T) {
 		wal sessions.Wal
 	}
 
-	type commitableData struct {
-		id         string
-		commitable sessions.Committable
-		resultData map[string]any
+	type committableData struct {
+		id          string
+		committable sessions.Committable
+		resultData  map[string]any
 	}
 
 	type testCase struct {
 		name           string
 		fields         fields
-		commitableData []commitableData
+		commitableData []committableData
 		err            error
 	}
 
@@ -262,16 +279,16 @@ func Test_ExistingWal(t *testing.T) {
 					walRecordCs2,
 				}...),
 			},
-			commitableData: []commitableData{
+			commitableData: []committableData{
 				{
-					id:         "c1",
-					commitable: mockCommittable1(),
-					resultData: map[string]any{},
+					id:          "c1",
+					committable: mockCommittable1(),
+					resultData:  map[string]any{},
 				},
 				{
-					id:         "c2",
-					commitable: mockCommittable2(),
-					resultData: map[string]any{},
+					id:          "c2",
+					committable: mockCommittable2(),
+					resultData:  map[string]any{},
 				},
 			},
 		},
@@ -285,17 +302,17 @@ func Test_ExistingWal(t *testing.T) {
 					walRecordCommit,
 				}...),
 			},
-			commitableData: []commitableData{
+			commitableData: []committableData{
 				{
-					id:         "c1",
-					commitable: mockCommittable1(),
+					id:          "c1",
+					committable: mockCommittable1(),
 					resultData: map[string]any{
 						"key1": "c1_changeset_1",
 					},
 				},
 				{
-					id:         "c2",
-					commitable: mockCommittable2(),
+					id:          "c2",
+					committable: mockCommittable2(),
 					resultData: map[string]any{
 						"key1": "c2_changeset_1",
 					},
@@ -311,16 +328,16 @@ func Test_ExistingWal(t *testing.T) {
 					walRecordCommit,
 				}...),
 			},
-			commitableData: []commitableData{
+			commitableData: []committableData{
 				{
-					id:         "c1",
-					commitable: mockCommittable1(),
-					resultData: map[string]any{},
+					id:          "c1",
+					committable: mockCommittable1(),
+					resultData:  map[string]any{},
 				},
 				{
-					id:         "c2",
-					commitable: mockCommittable2(),
-					resultData: map[string]any{},
+					id:          "c2",
+					committable: mockCommittable2(),
+					resultData:  map[string]any{},
 				},
 			},
 		},
@@ -330,12 +347,19 @@ func Test_ExistingWal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			commitableMap := map[string]sessions.Committable{}
 			for _, data := range tt.commitableData {
-				commitableMap[data.id] = data.commitable
+				commitableMap[data.id] = data.committable
 			}
 
 			ctx := context.Background()
 
-			_, err := sessions.NewAtomicCommitter(ctx, commitableMap, tt.fields.wal)
+			committer := sessions.NewAtomicCommitter(ctx, tt.fields.wal)
+			for id, committable := range commitableMap {
+				err := committer.Register(ctx, id, committable)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := committer.ClearWal(ctx)
 			assertError(t, err, tt.err)
 			if tt.err != nil {
 				assertAllCanceled(t, commitableMap)
@@ -349,7 +373,7 @@ func Test_ExistingWal(t *testing.T) {
 			}
 
 			for _, data := range tt.commitableData {
-				for key, value := range data.commitable.(*mockCommittable).appliedData {
+				for key, value := range data.committable.(*mockCommittable).appliedData {
 					if value != data.resultData[key] {
 						t.Fatalf("expected value %v, got %v", data.resultData[key], value)
 					}

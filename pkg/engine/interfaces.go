@@ -9,34 +9,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
-type Datastore interface {
-	Close() error
-	Delete() error
-	Execute(ctx context.Context, stmt string, args map[string]any) error
-	Prepare(stmt string) (sql.Statement, error)
-	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
-	Savepoint() (sql.Savepoint, error)
-	TableExists(ctx context.Context, table string) (bool, error)
-	CreateSession() (sql.Session, error)
-	ApplyChangeset(changeset io.Reader) error
-}
-
-type Session interface {
-	GenerateChangeset() ([]byte, error)
-	Delete()
-}
-
-type Statement interface {
-	Close() error
-	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)
-}
-
-type Savepoint interface {
-	Commit() error
-	Rollback() error
-	CommitAndCheckpoint() error
-}
-
 type Dataset interface {
 	Close() error
 	ListProcedures() []*types.Procedure
@@ -58,4 +30,13 @@ type MasterDB interface {
 	ListDatasetsByOwner(ctx context.Context, owner string) ([]string, error)
 	RegisterDataset(ctx context.Context, name, owner string) error
 	UnregisterDataset(ctx context.Context, dbid string) error
+}
+
+// CommitRegister is an interface for registering atomically committable data stores
+// Any database registered to this will be atomically synced in a 2pc transaction
+type CommitRegister interface {
+	// Register registers a database to the commit register
+	Register(ctx context.Context, name string, db sql.Database) error
+	// Unregister unregisters a database from the commit register
+	Unregister(ctx context.Context, name string) error
 }

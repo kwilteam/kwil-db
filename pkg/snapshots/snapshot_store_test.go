@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/modules/snapshots"
+	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/stretchr/testify/assert"
 )
 

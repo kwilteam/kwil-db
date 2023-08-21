@@ -11,8 +11,8 @@ type sessionWal struct {
 	wal Wal
 }
 
-// Begin writes a begin record to the WAL.  This should be called before any changes are written to the WAL.
-func (w *sessionWal) Begin(ctx context.Context) error {
+// WriteBegin writes a begin record to the WAL.  This should be called before any changes are written to the WAL.
+func (w *sessionWal) WriteBegin(ctx context.Context) error {
 	bts, err := SerializeWalRecord(&WalRecord{
 		Type: WalRecordTypeBegin,
 	})
@@ -23,11 +23,25 @@ func (w *sessionWal) Begin(ctx context.Context) error {
 	return w.wal.Append(ctx, bts)
 }
 
-// Commit writes a commit record to the WAL.
+// WriteCommit writes a commit record to the WAL.
 // This should be called after all changes have been written to the WAL.
-func (w *sessionWal) Commit(ctx context.Context) error {
+func (w *sessionWal) WriteCommit(ctx context.Context) error {
 	bts, err := SerializeWalRecord(&WalRecord{
 		Type: WalRecordTypeCommit,
+	})
+	if err != nil {
+		return err
+	}
+
+	return w.wal.Append(ctx, bts)
+}
+
+// WriteChangeset writes a changeset for a specific comittableId to the WAL
+func (w *sessionWal) WriteChangeset(ctx context.Context, committable CommittableId, changeset []byte) error {
+	bts, err := SerializeWalRecord(&WalRecord{
+		Type:          WalRecordTypeChangeset,
+		CommittableId: committable,
+		Data:          changeset,
 	})
 	if err != nil {
 		return err
@@ -53,20 +67,6 @@ func (w *sessionWal) ReadNext(ctx context.Context) (*WalRecord, error) {
 // Truncate truncates the WAL, deleting all entries
 func (w *sessionWal) Truncate(ctx context.Context) error {
 	return w.wal.Truncate(ctx)
-}
-
-// WriteChangeset writes a changeset for a specific comittableId to the WAL
-func (w *sessionWal) WriteChangeset(ctx context.Context, committable CommittableId, changeset []byte) error {
-	bts, err := SerializeWalRecord(&WalRecord{
-		Type:          WalRecordTypeChangeset,
-		CommittableId: committable,
-		Data:          changeset,
-	})
-	if err != nil {
-		return err
-	}
-
-	return w.wal.Append(ctx, bts)
 }
 
 type WalRecordType uint8

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/abci"
+	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -15,17 +16,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// comet bft node has a gross and confusing interface, so we use this to make it more clear
-type startStopper interface {
-	Start() error
-	Stop() error
-}
-
 // Server controls the gRPC server and http gateway.
 type Server struct {
 	grpcServer   *grpc.Server
 	gateway      *gateway.GatewayServer
-	cometBftNode startStopper
+	cometBftNode *cometbft.CometBftNode
+	closers      *closeFuncs
 	log          log.Logger
 
 	cfg *config.KwildConfig
@@ -34,6 +30,12 @@ type Server struct {
 }
 
 func (s *Server) Start(ctx context.Context) error {
+	defer func() {
+		err := s.closers.closeAll()
+		if err != nil {
+			s.log.Error("failed to close resource:", zap.Error(err))
+		}
+	}()
 	defer func() {
 		if err := recover(); err != nil {
 			switch et := err.(type) {
@@ -58,9 +60,9 @@ func (s *Server) Start(ctx context.Context) error {
 		go func() {
 			<-groupCtx.Done()
 			s.log.Info("stop http server")
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx2, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := s.gateway.Shutdown(ctx); err != nil {
+			if err := s.gateway.Shutdown(ctx2); err != nil {
 				s.log.Error("http server shutdown error", zap.Error(err))
 			}
 		}()
@@ -94,6 +96,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.log.Info("comet node started")
 
 	err := group.Wait()
+
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			s.log.Info("server context is canceled")
