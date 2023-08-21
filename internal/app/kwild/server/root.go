@@ -22,7 +22,9 @@ import (
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	"github.com/kwilteam/kwil-db/pkg/modules/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/modules/validators"
+	snapshotPkg "github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
 
@@ -100,7 +102,11 @@ func buildServer(d *coreDependencies) *Server {
 	// validator module
 	validatorModule := buildValidatorModule(d, accs, vstore)
 
-	abciApp := buildAbci(d, datasetsModule, validatorModule, nil)
+	snapshotModule := buildSnapshotModule(d)
+
+	bootstrapperModule := buildBootstrapModule(d)
+
+	abciApp := buildAbci(d, datasetsModule, validatorModule, nil, snapshotModule, bootstrapperModule)
 
 	cometBftNode, err := newCometNode(abciApp, d.cfg)
 	if err != nil {
@@ -131,11 +137,13 @@ type coreDependencies struct {
 }
 
 func buildAbci(d *coreDependencies, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
-	atomicCommitter abci.AtomicCommitter) *abci.AbciApp {
+	atomicCommitter abci.AtomicCommitter, snapshotter abci.SnapshotModule, bootstrapper abci.DBBootstrapModule) *abci.AbciApp {
 	return abci.NewAbciApp(
 		datasetsModule,
 		validatorModule,
 		atomicCommitter,
+		snapshotter,
+		bootstrapper,
 		abci.WithLogger(*d.log.Named("abci")),
 	)
 }
@@ -214,6 +222,27 @@ func buildValidatorModule(d *coreDependencies, accs datasets.AccountStore,
 	vals validators.ValidatorMgr) *validators.ValidatorModule {
 	return validators.NewValidatorModule(vals, accs, abci.Addresser,
 		validators.WithLogger(*d.log.Named("validator-module")))
+}
+
+func buildSnapshotModule(d *coreDependencies) *snapshots.SnapshotStore {
+	if !d.cfg.SnapshotConfig.Enabled {
+		return nil
+	}
+
+	return snapshots.NewSnapshotStore(d.cfg.SqliteFilePath,
+		d.cfg.SnapshotConfig.SnapshotDir,
+		d.cfg.SnapshotConfig.RecurringHeight,
+		d.cfg.SnapshotConfig.MaxSnapshots,
+		snapshots.WithLogger(*d.log.Named("snapshotStore")),
+	)
+}
+
+func buildBootstrapModule(d *coreDependencies) *snapshotPkg.Bootstrapper {
+	bootstrapper, err := snapshotPkg.NewBootstrapper(d.cfg.SqliteFilePath)
+	if err != nil {
+		failBuild(err, "Bootstrap module initialization failure")
+	}
+	return bootstrapper
 }
 
 func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *grpc.Server {
