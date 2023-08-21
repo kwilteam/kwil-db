@@ -31,6 +31,12 @@ type Server struct {
 
 func (s *Server) Start(ctx context.Context) error {
 	defer func() {
+		err := s.closers.closeAll()
+		if err != nil {
+			s.log.Error("failed to close resource:", zap.Error(err))
+		}
+	}()
+	defer func() {
 		if err := recover(); err != nil {
 			switch et := err.(type) {
 			case abci.FatalError:
@@ -40,12 +46,6 @@ func (s *Server) Start(ctx context.Context) error {
 			default:
 				s.log.Error("kwild server panic", zap.Any("error", err))
 			}
-		}
-	}()
-	defer func() {
-		err := s.closers.closeAll()
-		if err != nil {
-			s.log.Error("failed to close resource:", zap.Error(err))
 		}
 	}()
 
