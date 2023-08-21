@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
-	"sync"
 	"time"
 
 	// kwil-db
@@ -136,28 +135,14 @@ func (c *closeFuncs) addCloser(f func() error) {
 	c.closers = append(c.closers, f)
 }
 
-// closeAll concurrently closes all closers
+// closeAll closeps all closers, in the order they were added
 func (c *closeFuncs) closeAll() error {
 	errs := make([]error, 0)
-	errCh := make(chan error, len(c.closers))
-	wg := sync.WaitGroup{}
-
-	for _, f := range c.closers {
-		wg.Add(1)
-		go func(f func() error) {
-			err := f()
-			if err != nil {
-				errCh <- err
-			}
-			wg.Done()
-		}(f)
-	}
-
-	wg.Wait()
-	close(errCh)
-
-	for err := range errCh {
-		errs = append(errs, err)
+	for _, closer := range c.closers {
+		err := closer()
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	return errors.Join(errs...)
