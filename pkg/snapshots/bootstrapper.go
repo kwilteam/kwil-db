@@ -13,20 +13,21 @@ import (
 
 // Receives snapshot chunks from the network and writes them to disk & restore the DB from the snapshot chunks
 type Bootstrapper struct {
-	tempDir       string
-	dbDir         string
-	activeSession *BootstrapSession
-	dbRestored    bool
+	tempDir       string                 // Directory to store the valid chunks offered by the cometbft
+	dbDir         string                 //  Location at which the database to be restored
+	activeSession *BootstrapSession      // Tracks the active bootstrapping session
+	dbRestored    bool                   // Indicates if the db is restored
 }
 
+// Placeholder for managing the Bootstrap session
 type BootstrapSession struct {
-	ready            bool
-	totalChunks      uint32
-	chunksReceived   uint32
-	snapshotMetadata *Snapshot
-	chunkInfo        map[uint32]bool
-	refetchChunks    map[uint32]bool
-	restoreFailed    bool
+	ready            bool               // Indicates that all the snapshot chunks are received and ready to restore the db
+	totalChunks      uint32             // Total number of chunks to be received by the cometbft
+	chunksReceived   uint32             // Number of chunks received till now
+	snapshotMetadata *Snapshot          // Snapshot metadata
+	chunkInfo        map[uint32]bool    // Identifies the chunks received
+	refetchChunks    map[uint32]bool    // Chunks to be refetched
+	restoreFailed    bool               // Failures during the restoration of the database
 }
 
 type Status int
@@ -150,6 +151,9 @@ func (b *Bootstrapper) validateChunk(chunk []byte, index uint32, format uint32) 
 	return nil
 }
 
+/*
+	Creates Bootstrapping session based on the accepted snapshot 
+*/
 func (b *Bootstrapper) beginBootstrapSession(snapshot *Snapshot) error {
 	if b.activeSession != nil {
 		return fmt.Errorf("bootstrap session already active")
