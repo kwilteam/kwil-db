@@ -16,8 +16,9 @@ import (
 // It takes a path, like path/to/db, where the database will be stored.
 func NewBadgerDB(ctx context.Context, path string, options *Options) (*BadgerDB, error) {
 	b := &BadgerDB{
-		logger:     log.NewNoOp(),
-		gcInterval: 5 * time.Minute,
+		logger:         log.NewNoOp(),
+		gcInterval:     5 * time.Minute,
+		gcDiscardRatio: 0.5,
 	}
 
 	badgerOpts := badger.DefaultOptions(path)
@@ -50,6 +51,9 @@ type BadgerDB struct {
 
 	// gcInterval is the interval at which the database is garbage collected.
 	gcInterval time.Duration
+
+	// gcDiscardRatio is the ratio of discarded keys to total keys.
+	gcDiscardRatio float64
 
 	// logger is the logger for the database.
 	logger log.Logger
@@ -182,11 +186,18 @@ type Options struct {
 
 	// Logger is the logger to use for the database.
 	Logger log.Logger
+
+	// GarbageCollectionDiscardRatio is the ratio at which the garbage collector discards
+	// old versions of a value.  It must be between 0 and 1.
+	// Lower values will have a higher performance hit, but will use less disk space.
+	GarbageCollectionDiscardRatio float64
 }
 
 // applyToBadgerOpts applies the options to the badger options.
 func (o *Options) applyToBadgerOpts(opts *badger.Options) {
 	opts.SyncWrites = o.GuaranteeFSync
+	opts.CompactL0OnClose = true
+	opts.NumCompactors = 2
 }
 
 func (o *Options) applyToDB(db *BadgerDB) {
@@ -197,6 +208,11 @@ func (o *Options) applyToDB(db *BadgerDB) {
 	if o.GarbageCollectionInterval != 0 {
 		db.gcInterval = o.GarbageCollectionInterval
 	}
+
+	if o.GarbageCollectionDiscardRatio != 0 {
+		db.gcDiscardRatio = o.GarbageCollectionDiscardRatio
+	}
+
 }
 
 // badgerLogger implements the badger.Logger interface.

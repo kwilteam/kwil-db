@@ -42,6 +42,12 @@ func (s *Server) Start(ctx context.Context) error {
 			}
 		}
 	}()
+	defer func() {
+		err := s.closers.closeAll()
+		if err != nil {
+			s.log.Error("failed to close resource:", zap.Error(err))
+		}
+	}()
 
 	s.log.Info("starting server...")
 
@@ -90,13 +96,6 @@ func (s *Server) Start(ctx context.Context) error {
 	s.log.Info("comet node started")
 
 	err := group.Wait()
-
-	defer func() {
-		err := s.closers.closeAll()
-		if err != nil {
-			s.log.Error("failed to close resource:", zap.Error(err))
-		}
-	}()
 
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
