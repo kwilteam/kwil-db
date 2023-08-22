@@ -22,6 +22,7 @@ type CometBftNode struct {
 // NewCometBftNode creates a new CometBFT node.
 func NewCometBftNode(app abciTypes.Application, privateKey []byte, atomicStore privval.AtomicReadWriter, directory string, logLevel string) (*CometBftNode, error) {
 	conf := cometConfig.DefaultConfig().SetRoot(directory)
+	conf.RPC.ListenAddress = "tcp://0.0.0.0:26657" // TODO: use value from KWILD config, this is tmp hack
 	logger := cometLog.NewTMLogger(cometLog.NewSyncWriter(os.Stdout))
 	logger, err := cometFlags.ParseLogLevel(conf.LogLevel, logger, logLevel)
 	if err != nil {

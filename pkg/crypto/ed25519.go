@@ -36,7 +36,7 @@ func (pv *Ed25519PrivateKey) SignMsg(msg []byte) (*Signature, error) {
 	}
 	return &Signature{
 		Signature: sig,
-		Type:      SIGNATURE_TYPE_ED25519,
+		Type:      SignatureTypeEd25519,
 	}, nil
 }
 

@@ -20,7 +20,7 @@ func TestSecp256k1PrivateKey_Sign(t *testing.T) {
 	require.NoError(t, err, "error sign")
 
 	expectSig := "19a4aced02d5b9142b4f622b06442b1904445e16bd25409e6b0ff357ccc021d001d0e7824654b695b4b6e0991cb7507f487b82be4b2ed713d1e3e2cbc3d2518d01"
-	require.Equal(t, SIGNATURE_SECP256K1_PERSONAL_LENGTH, len(sig), "invalid signature length")
+	require.Equal(t, SignatureSecp256k1PersonalLength, len(sig), "invalid signature length")
 	require.EqualValues(t, hex.EncodeToString(sig), expectSig, "invalid signature")
 }
 
@@ -39,7 +39,7 @@ func TestSecp256k1PrivateKey_SignMsg(t *testing.T) {
 
 	expectSig := &Signature{
 		Signature: expectSignatureBytes,
-		Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
+		Type:      SignatureTypeSecp256k1Personal,
 	}
 
 	assert.EqualValues(t, expectSig, sig, "unexpect signature")
@@ -58,7 +58,7 @@ func TestSecp256k1PublicKey_Verify(t *testing.T) {
 
 	sig := "19a4aced02d5b9142b4f622b06442b1904445e16bd25409e6b0ff357ccc021d001d0e7824654b695b4b6e0991cb7507f487b82be4b2ed713d1e3e2cbc3d2518d01"
 	sigBytes, _ := hex.DecodeString(sig)
-	require.Equal(t, SIGNATURE_SECP256K1_PERSONAL_LENGTH, len(sigBytes), "invalid signature length")
+	require.Equal(t, SignatureSecp256k1PersonalLength, len(sigBytes), "invalid signature length")
 
 	tests := []struct {
 		name     string

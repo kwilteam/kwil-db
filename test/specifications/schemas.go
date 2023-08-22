@@ -15,17 +15,17 @@ func (s *testSchema) GetFilePath() string {
 }
 
 var (
-	schema_testdb = &testSchema{
+	schemaTestDB = &testSchema{
 		FileName: "test_db",
 	}
-	schema_invalidSQLSyntax = &testSchema{
+	schemaInvalidSqlSyntax = &testSchema{
 		FileName: "invalid_sql_syntax",
 	}
 
-	schema_invalidSQLSyntaxFixed = &testSchema{
+	schemaInvalidSqlSyntaxFixed = &testSchema{
 		FileName: "invalid_sql_syntax_fixed",
 	}
-	schema_invalidExtensionInit = &testSchema{
+	schemaInvalidExtensionInit = &testSchema{
 		FileName: "invalid_extension_init",
 	}
 )

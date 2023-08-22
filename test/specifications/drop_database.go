@@ -16,7 +16,7 @@ type DatabaseDropDsl interface {
 func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseDropDsl) {
 	t.Logf("Executing database drop specification")
 	// Given a valid database schema
-	db := SchemaLoader.Load(t, schema_testdb)
+	db := SchemaLoader.Load(t, schemaTestDB)
 
 	// When i drop the database, it should success
 	err := drop.DropDatabase(ctx, db.Name)

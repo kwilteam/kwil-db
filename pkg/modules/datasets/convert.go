@@ -144,9 +144,10 @@ func convertModifiersToEngine(mutability string, auxiliaries []string) ([]engine
 	default:
 		return nil, fmt.Errorf("unknown mutability type: %v", mutability)
 	}
+
 	for i, aux := range auxiliaries {
-		switch aux {
-		case "AUTHENTICATED":
+		switch strings.ToUpper(aux) {
+		case "MUSTSIGN":
 			mods[i+1] = engineTypes.ModifierAuthenticated
 		case "OWNER":
 			mods[i+1] = engineTypes.ModifierOwner

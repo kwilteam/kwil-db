@@ -40,7 +40,7 @@ func (pv *Secp256k1PrivateKey) SignMsg(msg []byte) (*Signature, error) {
 	}
 	return &Signature{
 		Signature: sig,
-		Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
+		Type:      SignatureTypeSecp256k1Personal,
 	}, nil
 }
 

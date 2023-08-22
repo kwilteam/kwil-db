@@ -8,6 +8,10 @@ import (
 	"fmt"
 	"strings"
 
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"go.uber.org/zap"
+
 	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 
@@ -26,21 +30,23 @@ type Client struct {
 	CometBftClient *rpchttp.HTTP
 	datasets       map[string]*transactions.Schema
 	Signer         crypto.Signer
-
-	cometBftRpcUrl string
+	logger         log.Logger
 }
 
 // New creates a new client
-// TODO: remove the Context param. Requests pass it.
-func New(_ context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
+func New(target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
-		datasets:       make(map[string]*transactions.Schema),
-		cometBftRpcUrl: "tcp://localhost:26657",
+		datasets: make(map[string]*transactions.Schema),
+		logger:   log.NewStdOut(log.InfoLevel),
 	}
 
 	for _, opt := range opts {
 		opt(c)
 	}
+
+	c.logger = *c.logger.Named("client").With(
+		zap.String("target", target),
+		zap.String("from", c.Signer.PubKey().Address().String()))
 
 	c.client, err = grpcClient.New(target, grpc.WithTransportCredentials(
 		insecure.NewCredentials(), // TODO: should add client configuration for secure transport
@@ -49,10 +55,10 @@ func New(_ context.Context, target string, opts ...ClientOpt) (c *Client, err er
 		return nil, err
 	}
 
-	c.CometBftClient, err = rpchttp.New(c.cometBftRpcUrl, "")
-	if err != nil {
-		return nil, err
-	}
+	//c.CometBftClient, err = rpchttp.New(c.cometBftRpcUrl, "")
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	return c, nil
 }
@@ -74,26 +80,30 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 }
 
 // DeployDatabase deploys a schema
-func (c *Client) DeployDatabase(ctx context.Context, ds *transactions.Schema) (*transactions.TransactionStatus, error) {
+func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema) (transactions.TxHash, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
 	}
 
-	if ds.Owner != address {
+	if payload.Owner != address {
 		return nil, fmt.Errorf("dataset owner is not the same as the address")
 	}
 
-	tx, err := c.newTx(ctx, ds)
+	tx, err := c.newTx(ctx, payload)
 	if err != nil {
 		return nil, err
 	}
+
+	c.logger.Debug("deploying database",
+		zap.String("signature_type", tx.Signature.Type.String()),
+		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
 	return c.client.Broadcast(ctx, tx)
 }
 
 // DropDatabase drops a database
-func (c *Client) DropDatabase(ctx context.Context, name string) (*transactions.TransactionStatus, error) {
+func (c *Client) DropDatabase(ctx context.Context, name string) (transactions.TxHash, error) {
 	address, err := c.getAddress()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
@@ -108,6 +118,10 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (*transactions.T
 		return nil, err
 	}
 
+	c.logger.Debug("deploying database",
+		zap.String("signature_type", tx.Signature.Type.String()),
+		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
+
 	res, err := c.client.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
@@ -121,7 +135,7 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (*transactions.T
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 // It can take any number of inputs, and if multiple tuples of inputs are passed, it will execute them transactionally.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples ...[]any) (*transactions.TransactionStatus, error) {
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples ...[]any) (transactions.TxHash, error) {
 	stringTuples, err := convertTuples(tuples)
 	if err != nil {
 		return nil, err
@@ -138,12 +152,11 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		return nil, err
 	}
 
-	res, err := c.client.Broadcast(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
+	c.logger.Debug("deploying database",
+		zap.String("signature_type", tx.Signature.Type.String()),
+		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	return res, nil
+	return c.client.Broadcast(ctx, tx)
 }
 
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
@@ -350,4 +363,14 @@ func convertTuple(tuple []any) ([]string, error) {
 	}
 
 	return stringTuple, nil
+}
+
+// TxQuery get transaction by hash
+func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*txpb.TransactionResult, error) {
+	res, err := c.client.TxQuery(ctx, txHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.TxResult, nil
 }

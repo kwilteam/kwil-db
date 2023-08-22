@@ -306,16 +306,22 @@
   "extensions": [
     {
       "name": "math",
-      "config": {
-        "round": "\"up\""
-      },
+      "config": [
+        {
+          "argument": "\"round\"",
+          "value": "\"up\""
+        }
+      ],
       "alias": "math_up"
     },
     {
       "name": "math",
-      "config": {
-        "round": "\"down\""
-      },
+      "config": [
+        {
+          "argument": "\"round\"",
+          "value": "\"down\""
+        }
+      ],
       "alias": "math_down"
     }
   ]

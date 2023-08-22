@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/pkg/transactions"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,13 +12,13 @@ const (
 )
 
 type ExecuteExtensionDsl interface {
-	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (*transactions.TransactionStatus, error)
+	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
 }
 
 func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute ExecuteExtensionDsl) {
 	t.Logf("Executing insert action specification")
 
-	db := SchemaLoader.Load(t, schema_testdb)
+	db := SchemaLoader.Load(t, schemaTestDB)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
 
 	receipt, err := execute.ExecuteAction(ctx, dbID, divideActionName, []any{

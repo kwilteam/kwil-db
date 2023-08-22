@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 
+	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
+
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
+
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/kv"
@@ -97,18 +100,22 @@ type wrappedCometBFTClient struct {
 	*cmtlocal.Local
 }
 
-func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx *transactions.Transaction) error {
+func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
 	bts, err := tx.MarshalBinary()
 	if err != nil {
-		return fmt.Errorf("failed to serialize transaction data: %w", err)
+		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
 	}
 
-	_, err = wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(bts))
+	result, err := wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(bts))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return err
+	return result.Hash.Bytes(), nil
+}
+
+func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error) {
+	return wc.Local.Tx(ctx, hash, prove)
 }
 
 // atomicReadWriter implements the CometBFt AtomicReadWriter interface.

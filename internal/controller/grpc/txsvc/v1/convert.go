@@ -11,14 +11,14 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
-func convertTransaction(incoming *txpb.Transaction) (*transactions.Transaction, error) {
+func convertTransaction(incoming *txpb.Transaction, allowEmptySignature bool) (*transactions.Transaction, error) {
 	payloadType := transactions.PayloadType(incoming.Body.PayloadType)
 	if !payloadType.Valid() {
 		return nil, fmt.Errorf("invalid payload type: %s", incoming.Body.PayloadType)
 	}
 
-	if incoming.Signature == nil {
-		return nil, fmt.Errorf("transaction signature cannot be nil")
+	if !allowEmptySignature && incoming.Signature == nil {
+		return nil, fmt.Errorf("transaction signature not given")
 	}
 
 	convSignature, err := convertSignature(incoming.Signature)
@@ -45,7 +45,7 @@ func convertTransaction(incoming *txpb.Transaction) (*transactions.Transaction, 
 }
 
 func newEmptySignature() (bytes []byte, sigType crypto.SignatureType) {
-	return []byte{}, crypto.SIGNATURE_TYPE_EMPTY
+	return []byte{}, crypto.SignatureTypeEmpty
 }
 
 func convertSignature(sig *txpb.Signature) (*crypto.Signature, error) {
@@ -57,11 +57,7 @@ func convertSignature(sig *txpb.Signature) (*crypto.Signature, error) {
 		}, nil
 	}
 
-	sigType := crypto.SignatureLookUp(sig.SignatureType)
-	if err := sigType.IsValid(); err != nil {
-		return nil, err
-	}
-
+	sigType := crypto.SignatureTypeLookUp(sig.SignatureType)
 	return &crypto.Signature{
 		Signature: sig.SignatureBytes,
 		Type:      sigType,

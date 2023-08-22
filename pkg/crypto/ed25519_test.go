@@ -38,7 +38,7 @@ func TestEd25519PrivateKey_SignMsg(t *testing.T) {
 
 	expectSig := &crypto.Signature{
 		Signature: expectSignatureBytes,
-		Type:      crypto.SIGNATURE_TYPE_ED25519,
+		Type:      crypto.SignatureTypeEd25519,
 	}
 
 	assert.EqualValues(t, expectSig, sig, "unexpect signature")

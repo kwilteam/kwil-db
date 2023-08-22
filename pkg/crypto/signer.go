@@ -21,6 +21,6 @@ func (c *ComebftSecp256k1Signer) SignMsg(msg []byte) (*Signature, error) {
 	}
 	return &Signature{
 		Signature: sig[:len(sig)-1],
-		Type:      SIGNATURE_TYPE_SECP256K1_COMETBFT,
+		Type:      SignatureTypeSecp256k1Cometbft,
 	}, nil
 }

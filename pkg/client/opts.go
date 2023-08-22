@@ -1,19 +1,21 @@
 package client
 
-import "github.com/kwilteam/kwil-db/pkg/crypto"
+import (
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/log"
+)
 
 type ClientOpt func(*Client)
+
+func WithLogger(logger log.Logger) ClientOpt {
+	return func(c *Client) {
+		c.logger = logger
+	}
+}
 
 func WithSigner(signer crypto.Signer) ClientOpt {
 	return func(c *Client) {
 		c.Signer = signer
-	}
-}
-
-// TODO: replace this, since we should not be using cometBFT RPCs
-func WithCometBftUrl(url string) ClientOpt {
-	return func(c *Client) {
-		c.cometBftRpcUrl = url
 	}
 }
 

@@ -41,7 +41,7 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		return fmt.Errorf("kwil grpc url is required")
 	}
 
-	clt, err := client.New(ctx, conf.GrpcURL,
+	clt, err := client.New(conf.GrpcURL,
 		options...,
 	)
 	if err != nil {

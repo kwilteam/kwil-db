@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"math/big"
 
+	"go.uber.org/zap"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequest) (*txpb.EstimatePriceResponse, error) {
-	tx, err := convertTransaction(req.Tx)
+	tx, err := convertTransaction(req.Tx, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert transaction: %w", err)
 	}
 
+	s.log.Debug("Estimating price", zap.String("payload_type", tx.Body.PayloadType.String()))
 	var price *big.Int
 
 	switch tx.Body.PayloadType {
