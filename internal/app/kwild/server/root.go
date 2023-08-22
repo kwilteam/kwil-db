@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -32,6 +34,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
+	"go.uber.org/zap"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
@@ -298,10 +301,52 @@ func buildBootstrapper(d *coreDependencies) *snapshots.Bootstrapper {
 	return bootstrapper
 }
 
+func fileExists(name string) bool {
+	_, err := os.Stat(name)
+	return !os.IsNotExist(err)
+}
+
+func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, error) {
+	keyExists, certExists := fileExists(keyFile), fileExists(certFile)
+	if certExists != keyExists { // one but not both
+		return nil, fmt.Errorf("missing a key/cert pair file")
+
+	}
+	if !keyExists {
+		// Auto-generate a new key/cert pair using any provided host name in the
+		// "Subject Alternate Name" section of the certificate (either IP or a
+		// hostname like kwild23.applicationX.org).
+		if err := genCertPair(certFile, keyFile, []string{hostname}); err != nil {
+			return nil, fmt.Errorf("failed to generate TLS key pair: %v", err)
+		}
+		// TODO: generate a separate CA certificate. Browsers don't like that
+		// the site certificate is also a CA, but Go clients are fine with it.
+	}
+	keyPair, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load TLS key pair: %v", err)
+	}
+	return &keyPair, nil
+}
+
 func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *grpc.Server {
 	lis, err := net.Listen("tcp", d.cfg.GrpcListenAddress)
 	if err != nil {
 		failBuild(err, "failed to build grpc server")
+	}
+	if d.cfg.TLSKeyFile != "" {
+		d.log.Debug("loading TLS key pair for gRPC server", zap.String("key_file", "d.cfg.TLSKeyFile"),
+			zap.String("cert_file", "d.cfg.TLSCertFile")) // wtf why can't we log yet?
+		fmt.Println("*********** loading TLS key pair ***********")
+		keyPair, err := loadTLSCertificate(d.cfg.TLSKeyFile, d.cfg.TLSCertFile, d.cfg.Hostname)
+		if err != nil {
+			failBuild(err, "loadTLSCertificate")
+		}
+		lis = tls.NewListener(lis, &tls.Config{
+			// ServerName:   d.cfg.HostName,
+			Certificates: []tls.Certificate{*keyPair},
+			MinVersion:   tls.VersionTLS12,
+		})
 	}
 
 	grpcServer := grpc.New(*d.log.Named("grpc-server"), lis)

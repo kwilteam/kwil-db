@@ -9,6 +9,7 @@ require (
 	github.com/cometbft/cometbft v0.37.2
 	github.com/cosmos/gogoproto v1.4.10
 	github.com/cstockton/go-conv v1.0.0
+	github.com/decred/dcrd/certgen v1.1.2
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5

@@ -10,6 +10,12 @@ func WithSigner(signer crypto.Signer) ClientOpt {
 	}
 }
 
+func WithTLSCert(certFile string) ClientOpt {
+	return func(c *Client) {
+		c.certFile = certFile
+	}
+}
+
 // TODO: replace this, since we should not be using cometBFT RPCs
 func WithCometBftUrl(url string) ClientOpt {
 	return func(c *Client) {
