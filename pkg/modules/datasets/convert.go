@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"fmt"
+	"strings"
 
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -135,7 +136,7 @@ func convertActionsToEngine(actions []*transactions.Action) ([]*engineTypes.Proc
 
 func convertModifiersToEngine(mutability string, auxiliaries []string) ([]engineTypes.Modifier, error) {
 	mods := make([]engineTypes.Modifier, len(auxiliaries)+1)
-	switch mutability {
+	switch strings.ToUpper(mutability) {
 	case "UPDATE":
 		break
 	case "VIEW":
