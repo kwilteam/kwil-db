@@ -8,6 +8,12 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
+type ExecutionResponse struct {
+	// Fee is the amount of tokens spent on the execution
+	Fee     *big.Int
+	GasUsed int64
+}
+
 // Join/Leave/Approve required a spend. There is currently no pricing associated
 // with the actions, although there probably should be for Join.
 
@@ -22,7 +28,7 @@ func (vm *ValidatorModule) spend(ctx context.Context, acctAddr string,
 
 // Join creates a join request for a prospective validator.
 func (vm *ValidatorModule) Join(ctx context.Context, joiner []byte, power int64,
-	txn *transactions.Transaction) (*transactions.TransactionStatus, error) {
+	txn *transactions.Transaction) (*ExecutionResponse, error) {
 	joinerAddr := vm.addr.Address(joiner)
 	// comet-aware way:
 	// candidateAddr, _ := pubkeyToAddr(joiner)
@@ -36,14 +42,15 @@ func (vm *ValidatorModule) Join(ctx context.Context, joiner []byte, power int64,
 		return nil, err
 	}
 
-	return &transactions.TransactionStatus{
-		Fee: txn.Body.Fee,
+	return &ExecutionResponse{
+		Fee:     txn.Body.Fee,
+		GasUsed: 0,
 	}, nil
 }
 
 // Leave creates a leave request for a current validator.
 func (vm *ValidatorModule) Leave(ctx context.Context, leaver []byte,
-	txn *transactions.Transaction) (*transactions.TransactionStatus, error) {
+	txn *transactions.Transaction) (*ExecutionResponse, error) {
 	leaverAddr := vm.addr.Address(leaver)
 
 	err := vm.spend(ctx, leaverAddr, txn.Body.Fee, txn.Body.Nonce)
@@ -55,8 +62,9 @@ func (vm *ValidatorModule) Leave(ctx context.Context, leaver []byte,
 		return nil, err
 	}
 
-	return &transactions.TransactionStatus{
-		Fee: txn.Body.Fee,
+	return &ExecutionResponse{
+		Fee:     txn.Body.Fee,
+		GasUsed: 0,
 	}, nil
 }
 
@@ -65,7 +73,7 @@ func (vm *ValidatorModule) Leave(ctx context.Context, leaver []byte,
 // ISSUE: The approver is the tx Sender, with the BIG special case that Sender
 // is the base64-encoded pubkey, not an address as with most other Kwil txns.
 func (vm *ValidatorModule) Approve(ctx context.Context, joiner []byte,
-	txn *transactions.Transaction) (*transactions.TransactionStatus, error) {
+	txn *transactions.Transaction) (*ExecutionResponse, error) {
 	approver := txn.Sender
 	approverAddr := vm.addr.Address(approver)
 
@@ -78,7 +86,8 @@ func (vm *ValidatorModule) Approve(ctx context.Context, joiner []byte,
 		return nil, err
 	}
 
-	return &transactions.TransactionStatus{
-		Fee: txn.Body.Fee,
+	return &ExecutionResponse{
+		Fee:     txn.Body.Fee,
+		GasUsed: 0,
 	}, nil
 }

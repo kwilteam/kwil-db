@@ -48,7 +48,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "test secp256k1 personal_sign",
 			fields: fields{
 				Signature: personalSignSigBytes,
-				Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
+				Type:      SignatureTypeSecp256k1Personal,
 			},
 			args: args{
 				publicKey: secp256k1PublicKey,
@@ -60,7 +60,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "test secp256k1 personal_sign invalid signature",
 			fields: fields{
 				Signature: personalSignSigBytes[1:],
-				Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
+				Type:      SignatureTypeSecp256k1Personal,
 			},
 			args: args{
 				publicKey: secp256k1PublicKey,
@@ -72,7 +72,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "test secp256k1 personal_sign wrong signature",
 			fields: fields{
 				Signature: personalSignSigBytes,
-				Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
+				Type:      SignatureTypeSecp256k1Personal,
 			},
 			args: args{
 				publicKey: secp256k1PublicKey,
@@ -84,7 +84,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "test secp256k1 cometbft",
 			fields: fields{
 				Signature: cometbftSecp256k1SigBytes,
-				Type:      SIGNATURE_TYPE_SECP256K1_COMETBFT,
+				Type:      SignatureTypeSecp256k1Cometbft,
 			},
 			args: args{
 				publicKey: secp256k1PublicKey,
@@ -96,7 +96,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "test secp256k1 cometbft invalid signature",
 			fields: fields{
 				Signature: cometbftSecp256k1SigBytes[1:],
-				Type:      SIGNATURE_TYPE_SECP256K1_COMETBFT,
+				Type:      SignatureTypeSecp256k1Cometbft,
 			},
 			args: args{
 				publicKey: secp256k1PublicKey,
@@ -108,7 +108,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "test secp256k1 cometbft wrong signature",
 			fields: fields{
 				Signature: cometbftSecp256k1SigBytes,
-				Type:      SIGNATURE_TYPE_SECP256K1_COMETBFT,
+				Type:      SignatureTypeSecp256k1Cometbft,
 			},
 			args: args{
 				publicKey: secp256k1PublicKey,
@@ -120,7 +120,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "ed25519",
 			fields: fields{
 				Signature: ed25519SigBytes,
-				Type:      SIGNATURE_TYPE_ED25519,
+				Type:      SignatureTypeEd25519,
 			},
 			args: args{
 				publicKey: ed25519PublicKey,
@@ -132,7 +132,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "ed25519 invalid signature",
 			fields: fields{
 				Signature: ed25519SigBytes[1:],
-				Type:      SIGNATURE_TYPE_ED25519,
+				Type:      SignatureTypeEd25519,
 			},
 			args: args{
 				publicKey: ed25519PublicKey,
@@ -144,7 +144,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "ed25519 wrong signature",
 			fields: fields{
 				Signature: ed25519SigBytes,
-				Type:      SIGNATURE_TYPE_ED25519,
+				Type:      SignatureTypeEd25519,
 			},
 			args: args{
 				publicKey: ed25519PublicKey,
@@ -156,7 +156,7 @@ func TestSignature_Verify(t *testing.T) {
 			name: "unsupported signature type",
 			fields: fields{
 				Signature: nil,
-				Type:      SIGNATURE_TYPE_INVALID,
+				Type:      SignatureTypeInvalid,
 			},
 			args: args{
 				publicKey: secp256k1PublicKey,

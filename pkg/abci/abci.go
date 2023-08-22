@@ -16,7 +16,8 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/kv"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	modDataset "github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	modVal "github.com/kwilteam/kwil-db/pkg/modules/validators"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/kwilteam/kwil-db/pkg/validators"
 	"go.uber.org/zap"
@@ -185,6 +186,10 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 		return abciTypes.ResponseCheckTx{Code: 1, Log: err.Error()}
 	}
 
+	a.log.Debug("check tx",
+		zap.String("sender", tx.GetSenderAddress()),
+		zap.String("PayloadType", tx.Body.PayloadType.String()))
+
 	err = tx.Verify()
 	if err != nil {
 		a.log.Error("failed to verify transaction", zap.Error(err))
@@ -206,25 +211,38 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 	}
 
-	var res *transactions.TransactionStatus
 	var events []abciTypes.Event
-	var gasUsed int64 // for error path
+	gasUsed := int64(0)
+	txCode := CodeOk
+
+	a.log.Debug("deliver tx",
+		zap.String("sender", tx.GetSenderAddress()),
+		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	switch tx.Body.PayloadType {
 	case transactions.PayloadTypeDeploySchema:
 		var schemaPayload transactions.Schema
 		err = schemaPayload.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
 		var schema *engineTypes.Schema
-		schema, err = datasets.ConvertSchemaToEngine(&schemaPayload)
+		schema, err = modDataset.ConvertSchemaToEngine(&schemaPayload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modDataset.ExecutionResponse
 		res, err = a.database.Deploy(ctx, schema, tx)
+		if err != nil {
+			txCode = CodeUnknownError
+			break
+		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeDropSchema:
 		drop := &transactions.DropSchema{}
 		err = drop.UnmarshalBinary(tx.Body.Payload)
@@ -232,7 +250,14 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
+		var res *modDataset.ExecutionResponse
 		res, err = a.database.Drop(ctx, drop.DBID, tx)
+		if err != nil {
+			txCode = CodeUnknownError
+			break
+		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeExecuteAction:
 		execution := &transactions.ActionExecution{}
 		// Concept:
@@ -244,19 +269,30 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 
 		err = execution.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modDataset.ExecutionResponse
 		res, err = a.database.Execute(ctx, execution.DBID, execution.Action, convertArgs(execution.Arguments), tx)
+		if err != nil {
+			txCode = CodeUnknownError
+			break
+		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeValidatorJoin:
 		var join transactions.ValidatorJoin
 		err = join.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modVal.ExecutionResponse
 		res, err = a.validators.Join(ctx, join.Candidate, int64(join.Power), tx)
 		if err != nil {
+			txCode = CodeUnknownError
 			break
 		}
 		// Concept:
@@ -276,15 +312,20 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				},
 			},
 		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeValidatorLeave:
 		var leave transactions.ValidatorLeave
 		err = leave.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modVal.ExecutionResponse
 		res, err = a.validators.Leave(ctx, leave.Validator, tx)
 		if err != nil {
+			txCode = CodeUnknownError
 			break
 		}
 
@@ -298,15 +339,20 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				},
 			},
 		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeValidatorApprove:
 		var approve transactions.ValidatorApprove
 		err = approve.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modVal.ExecutionResponse
 		res, err = a.validators.Approve(ctx, approve.Candidate, tx)
 		if err != nil {
+			txCode = CodeUnknownError
 			break
 		}
 
@@ -320,12 +366,15 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				},
 			},
 		}
+
+		gasUsed = res.GasUsed
 	default:
 		err = fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
 	if err != nil {
+		a.log.Warn("failed to deliver tx", zap.Error(err))
 		return abciTypes.ResponseDeliverTx{
-			Code: 1,
+			Code: txCode.Uint32(),
 			Log:  err.Error(),
 			// NOTE: some execution that returned an error may still have used
 			// gas. What is the meaning of the "Code"?
@@ -335,7 +384,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 
 	return abciTypes.ResponseDeliverTx{
 		Code:    abciTypes.CodeTypeOK,
-		GasUsed: res.Fee.Int64(),
+		GasUsed: gasUsed,
 		Events:  events,
 	}
 }

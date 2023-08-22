@@ -17,12 +17,12 @@ type NetworkOpsDsl interface {
 	ValidatorNodeLeave(ctx context.Context, pubKey string) error
 	// ValidatorJoinStatus(ctx context.Context, pubKey []byte) error
 	ValidatorSetCount(ctx context.Context) (int, error)
-	DeployDatabase(ctx context.Context, db *transactions.Schema) error
+	DeployDatabase(ctx context.Context, db *transactions.Schema) (txHash []byte, err error)
 	DropDatabase(ctx context.Context, dbName string) error
 }
 
 func NetworkNodeDeploySpecification(ctx context.Context, t *testing.T, netops NetworkOpsDsl) {
-	netops.DeployDatabase(ctx, SchemaLoader.Load(t, schema_testdb))
+	netops.DeployDatabase(ctx, SchemaLoader.Load(t, schemaTestDB))
 	time.Sleep(15 * time.Second)
 }
 

@@ -45,7 +45,7 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		options = append(options, client.WithTLSCert(conf.TLSCertFile))
 	}
 
-	clt, err := client.New(ctx, conf.GrpcURL,
+	clt, err := client.New(conf.GrpcURL,
 		options...,
 	)
 	if err != nil {

@@ -17,9 +17,9 @@ func TestComebftSecp256k1Signer_SignMsg(t *testing.T) {
 	expectSignatureBytes, _ := hex.DecodeString(expectSignatureHex)
 	expectSig := &Signature{
 		Signature: expectSignatureBytes,
-		Type:      SIGNATURE_TYPE_SECP256K1_COMETBFT,
+		Type:      SignatureTypeSecp256k1Cometbft,
 	}
-	require.Equal(t, SIGNATURE_SECP256K1_COMETBFT_LENGTH, len(expectSignatureBytes), "invalid signature length")
+	require.Equal(t, SignatureSecp256k1CometbftLength, len(expectSignatureBytes), "invalid signature length")
 
 	// comebft secp256k1 private key, and signature
 	pvKeyBytes, _ := hex.DecodeString(pvKeyHex)
@@ -48,9 +48,9 @@ func TestEthPersonalSecp256k1Signer_SignMsg(t *testing.T) {
 	expectSignatureBytes, _ := hex.DecodeString(expectSignatureHex)
 	expectSig := &Signature{
 		Signature: expectSignatureBytes,
-		Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
+		Type:      SignatureTypeSecp256k1Personal,
 	}
-	require.Equal(t, SIGNATURE_SECP256K1_PERSONAL_LENGTH, len(expectSignatureBytes), "invalid signature length")
+	require.Equal(t, SignatureSecp256k1PersonalLength, len(expectSignatureBytes), "invalid signature length")
 
 	pk, err := Secp256k1PrivateKeyFromHex(pvKeyHex)
 	require.NoError(t, err, "error parse private pvKeyHex")
@@ -72,9 +72,9 @@ func TestStdEd25519Signer_SignMsg(t *testing.T) {
 	expectSignatureBytes, _ := hex.DecodeString(expectSignature)
 	expectSig := &Signature{
 		Signature: expectSignatureBytes,
-		Type:      SIGNATURE_TYPE_ED25519,
+		Type:      SignatureTypeEd25519,
 	}
-	require.Equal(t, SIGNATURE_ED25519_LENGTH, len(expectSignatureBytes), "invalid signature length")
+	require.Equal(t, SignatureEd25519Length, len(expectSignatureBytes), "invalid signature length")
 
 	pk, err := Ed25519PrivateKeyFromHex(pvKeyHex)
 	require.NoError(t, err, "error parse private key")

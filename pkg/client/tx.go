@@ -99,7 +99,7 @@ func (c *Client) NewNodeTx(ctx context.Context, payload transactions.Payload, pr
 
 	tx.Signature = &crypto.Signature{
 		Signature: sign,
-		Type:      crypto.SIGNATURE_TYPE_ED25519,
+		Type:      crypto.SignatureTypeEd25519,
 	}
 
 	fmt.Println("tx hash", hash)

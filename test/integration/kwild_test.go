@@ -3,12 +3,10 @@ package integration_test
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/kwilteam/kwil-db/test/integration"
 	"github.com/kwilteam/kwil-db/test/specifications"
@@ -43,9 +41,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	node2Driver := drivers[2]
 
 	// Create a new database and verify that the database exists on other nodes
-	fmt.Printf("Create database")
 	specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
-	time.Sleep(30 * time.Second)
 	specifications.DatabaseVerifySpecification(ctx, t, node1Driver, true)
 	specifications.DatabaseVerifySpecification(ctx, t, node2Driver, true)
 
