@@ -251,11 +251,5 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace (
-	// for testcontainers-go
-	github.com/cucumber/godog => github.com/laurazard/godog v0.0.0-20220922095256-4c4b17abdae7
-
-	// what are these for?
-	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
-	golang.org/x/oauth2 => golang.org/x/oauth2 v0.1.0
-)
+// This is required by testcontainers-go, docker-compose feature
+replace github.com/cucumber/godog => github.com/laurazard/godog v0.0.0-20220922095256-4c4b17abdae7
