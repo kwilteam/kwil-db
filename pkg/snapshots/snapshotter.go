@@ -200,7 +200,7 @@ func (s *Snapshotter) ListSnapshots() ([]Snapshot, error) {
 // Returns the chunk of index chunkID from snapshot at given height
 func (s *Snapshotter) LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) ([]byte, error) {
 	chunkFile := s.chunkFilePath(chunkID)
-	chunk, err := utils.ReadFile(chunkFile)
+	chunk, err := os.ReadFile(chunkFile)
 	if err != nil {
 		return nil, err
 	}
