@@ -35,6 +35,7 @@ type Queue struct {
 	// waiters is a map of callers that are waiting in the queue
 	waiters map[*struct{}]chan struct{}
 
+	// running is a channel for the current caller to signal that they are done processing
 	running chan struct{}
 
 	// mutex is used to protect the queueChannel
