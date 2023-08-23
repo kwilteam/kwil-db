@@ -71,7 +71,7 @@ func (s *Snapshotter) EndSnapshotSession() error {
 }
 
 /*
-List all the files in the database directory in sorted order (for ordering chunks)
+List all the sqlite files in the database directory in sorted order (for ordering chunks)
 Divide each file into chunks of 16 MB max
 Hash each chunk and the entire file
 Store chunk mapping to file in the snapshot metadata for restoring the DB from chunks
@@ -80,7 +80,7 @@ func (s *Snapshotter) CreateSnapshot() error {
 	var wg sync.WaitGroup
 	startIdx := uint32(0)
 
-	filesToSnapshot, err := s.listFilesAlphbetically(s.DatabaseDir + "/*")
+	filesToSnapshot, err := s.listFilesAlphbetically(s.DatabaseDir + "/*.sqlite")
 	if err != nil {
 		s.SnapshotFailed = true
 		s.SnapshotError = err
