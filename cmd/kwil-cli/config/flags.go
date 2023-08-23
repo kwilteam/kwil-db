@@ -1,8 +1,8 @@
 package config
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -24,9 +24,9 @@ func init() {
 		dirname = "/tmp"
 	}
 
-	configPath := fmt.Sprintf("%s/.kwil_cli/", dirname)
+	configPath := filepath.Join(dirname, ".kwil_cli")
 
-	DefaultConfigFile = fmt.Sprintf("%s/config.json", configPath)
+	DefaultConfigFile = filepath.Join(configPath, "config.json")
 
 	viper.AddConfigPath(configPath)
 	viper.AutomaticEnv()
