@@ -20,7 +20,7 @@ func printConfigCmd() *cobra.Command {
 				return err
 			}
 
-			printStruct(cfg.ToPeristedConfig())
+			printStruct(cfg.ToPersistedConfig())
 			return nil
 		},
 	}
