@@ -12,16 +12,18 @@ import (
 )
 
 type KwilCliConfig struct {
-	PrivateKey        crypto.PrivateKey
-	GrpcURL           string
-	ClientChainRPCURL string
+	PrivateKey crypto.PrivateKey
+	GrpcURL    string
 }
 
-func (c *KwilCliConfig) ToPeristedConfig() *kwilCliPersistedConfig {
+func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
+	var privKeyHex string
+	if c.PrivateKey != nil {
+		privKeyHex = c.PrivateKey.Hex()
+	}
 	return &kwilCliPersistedConfig{
-		PrivateKey:        c.PrivateKey.Hex(),
-		GrpcURL:           c.GrpcURL,
-		ClientChainRPCURL: c.ClientChainRPCURL,
+		PrivateKey: privKeyHex,
+		GrpcURL:    c.GrpcURL,
 	}
 }
 
@@ -30,15 +32,13 @@ func (c *KwilCliConfig) Store() error {
 }
 
 type kwilCliPersistedConfig struct {
-	PrivateKey        string `json:"private_key"`
-	GrpcURL           string `json:"grpc_url"`
-	ClientChainRPCURL string `json:"client_chain_rpc_url"`
+	PrivateKey string `json:"private_key"`
+	GrpcURL    string `json:"grpc_url"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 	kwilConfig := &KwilCliConfig{
-		GrpcURL:           c.GrpcURL,
-		ClientChainRPCURL: c.ClientChainRPCURL,
+		GrpcURL: c.GrpcURL,
 	}
 
 	privateKey, err := crypto.Secp256k1PrivateKeyFromHex(c.PrivateKey)
@@ -52,7 +52,7 @@ func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 }
 
 func PersistConfig(conf *KwilCliConfig) error {
-	persistable := conf.ToPeristedConfig()
+	persistable := conf.ToPersistedConfig()
 
 	jsonBytes, err := json.Marshal(persistable)
 	if err != nil {
@@ -108,9 +108,8 @@ func LoadCliConfig() (*KwilCliConfig, error) {
 	}
 
 	innerConf := &kwilCliPersistedConfig{
-		PrivateKey:        viper.GetString("private_key"),
-		GrpcURL:           viper.GetString("grpc_url"),
-		ClientChainRPCURL: viper.GetString("client_chain_rpc_url"),
+		PrivateKey: viper.GetString("private_key"),
+		GrpcURL:    viper.GetString("grpc_url"),
 	}
 	return innerConf.toKwilCliConfig()
 }
