@@ -84,7 +84,8 @@ var (
 func Test_Chunk_Validation(t *testing.T) {
 	tempDir := t.TempDir()
 	dbDir := filepath.Join(tempDir, "db")
-	bootstrapper, err := snapPkg.NewBootstrapper(dbDir)
+	rcvdSnaps := filepath.Join(tempDir, "rcvdSnaps")
+	bootstrapper, err := snapPkg.NewBootstrapper(dbDir, rcvdSnaps)
 	assert.NoError(t, err)
 	utils.CreateDirIfNeeded(dbDir)
 	err = bootstrapper.OfferSnapshot(ValidSnapshot)
@@ -114,8 +115,8 @@ func Test_ValidSnapshot(t *testing.T) {
 	tempDir := t.TempDir()
 
 	dbDir := filepath.Join(tempDir, "db")
-	rcvdSnaps := filepath.Join(dbDir, ".tmp/rcvdSnaps")
-	bootstrapper, err := snapPkg.NewBootstrapper(dbDir)
+	rcvdSnaps := filepath.Join(tempDir, "rcvdSnaps")
+	bootstrapper, err := snapPkg.NewBootstrapper(dbDir, rcvdSnaps)
 	assert.NoError(t, err)
 	utils.CreateDirIfNeeded(dbDir)
 
@@ -141,7 +142,8 @@ func Test_ValidSnapshot(t *testing.T) {
 func Test_InValidSnapshot(t *testing.T) {
 	tempDir := t.TempDir()
 	dbDir := filepath.Join(tempDir, "db")
-	bootstrapper, err := snapPkg.NewBootstrapper(dbDir)
+	rcvdSnaps := filepath.Join(tempDir, "rcvdSnaps")
+	bootstrapper, err := snapPkg.NewBootstrapper(dbDir, rcvdSnaps)
 	assert.NoError(t, err)
 	utils.CreateDirIfNeeded(dbDir)
 

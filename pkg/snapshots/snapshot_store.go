@@ -23,13 +23,14 @@ type SnapshotStore struct {
 func NewSnapshotStore(databaseDir string, snapshotDir string, height uint64, maxSnapshots uint64, opts ...SnapshotStoreOpts) *SnapshotStore {
 	snapshotter := NewSnapshotter(snapshotDir, databaseDir, 16*1024*1024)
 	ss := &SnapshotStore{
-		enabled:      true,
-		numSnapshots: 0,
-		chunkSize:    16 * 1024 * 1024,
-		maxSnapshots: maxSnapshots,
-		snapshotDir:  snapshotDir,
-		databaseDir:  databaseDir,
-		snapshotter:  snapshotter,
+		enabled:         true,
+		numSnapshots:    0,
+		chunkSize:       16 * 1024 * 1024,
+		recurringHeight: height,
+		maxSnapshots:    maxSnapshots,
+		snapshotDir:     snapshotDir,
+		databaseDir:     databaseDir,
+		snapshotter:     snapshotter,
 	}
 
 	for _, opt := range opts {

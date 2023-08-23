@@ -52,6 +52,10 @@ var (
 		WithoutGasCosts,
 		WithoutNonces,
 		RootDir,
+		SnapshotEnabled,
+		SnapshotRecurringHeight,
+		MaxSnapshots,
+		SnapshotDir,
 	}
 )
 
