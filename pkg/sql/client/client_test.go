@@ -87,6 +87,7 @@ func Test_Session(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer changeset.Close()
 
 	exported, err := changeset.Export()
 	if err != nil {
@@ -162,7 +163,6 @@ func openTestDB(t *testing.T) (*client.SqliteClient, func()) {
 	}
 
 	return db, func() {
-		fmt.Println("deleting")
 		err = db.Delete()
 		if err != nil {
 			t.Fatal(err)
@@ -223,6 +223,7 @@ func testSession(ctx context.Context, t *testing.T) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer changeset.Close()
 
 	id, err := changeset.ID()
 	if err != nil {

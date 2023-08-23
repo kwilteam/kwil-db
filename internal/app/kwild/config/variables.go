@@ -199,7 +199,13 @@ var (
 		Field:   "RootDir",
 		Setter: func(val any) (any, error) {
 			if val == nil {
-				return filepath.Clean("~/.kwil"), nil
+				home, err := os.UserHomeDir()
+				if err != nil {
+					// if `home` env(depends on OS) is not set, complain
+					// we can use '/tmp/.kwil' or '.kwil' in this case, but it's not a good idea
+					return "", err
+				}
+				return filepath.Join(home, ".kwil"), err
 			}
 
 			str, err := conv.String(val)
