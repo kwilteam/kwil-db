@@ -21,7 +21,7 @@ func (s *Snapshotter) writeSnapshotFile() error {
 }
 
 func (s *Snapshotter) ReadSnapshotFile(filePath string) (*Snapshot, error) {
-	bts, err := utils.ReadFile(filePath)
+	bts, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
