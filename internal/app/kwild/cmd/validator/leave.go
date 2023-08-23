@@ -3,15 +3,12 @@ package validator
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/spf13/cobra"
 )
 
 func leaveCmd() *cobra.Command {
-	// var validatorURL string
-	// var privateKey string
-	// var ClientChainRPCURL string
+	var appGRPCListenAddr string
 	cmd := &cobra.Command{
 		Use:   "leave [valPrivateKey] [BcRPCURL]",
 		Short: "Request to leave the network as a validator",
@@ -19,14 +16,11 @@ func leaveCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cfg, err := config.LoadKwildConfig()
-			if err != nil {
-				return err
-			}
 			//options := []client.ClientOpt{client.WithCometBftUrl(args[1])}
+			// TODO: Use cometbft client
 			options := []client.ClientOpt{}
 
-			clt, err := client.New(cfg.GrpcListenAddress, options...)
+			clt, err := client.New(appGRPCListenAddr, options...)
 			if err != nil {
 				return err
 			}
@@ -39,8 +33,6 @@ func leaveCmd() *cobra.Command {
 			return nil
 		},
 	}
-	// cmd.Flags().StringVarP(&validatorURL, "validatorURL", "v", "", "Validator URL that you want to join")
-	// cmd.Flags().StringVarP(&privateKey, "privateKey", "k", "", "The private key of the wallet that will be used for signing")
-	// cmd.Flags().StringVarP(&ClientChainRPCURL, "clientChainRPCURL", "c", "", "The client chain RPC URL")
+	cmd.Flags().StringVar(&appGRPCListenAddr, "app.grpc_laddr", "localhost:50051", "Address to listen for gRPC connections for the application")
 	return cmd
 }

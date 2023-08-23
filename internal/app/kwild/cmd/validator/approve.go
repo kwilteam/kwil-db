@@ -3,7 +3,6 @@ package validator
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 
 	"github.com/spf13/cobra"
@@ -14,6 +13,7 @@ import (
 
 // ApproveCmd is used for approving validators
 func approveCmd() *cobra.Command {
+	var appGRPCListenAddr string
 	cmd := &cobra.Command{
 		Use:   "approve [JoinerPublicKey] [ApproverPrivateKey] [BcRPCURL]",
 		Short: "Add the validator to the list of approved validators",
@@ -28,16 +28,10 @@ func approveCmd() *cobra.Command {
 			*/
 
 			ctx := cmd.Context()
-			cfg, err := config.LoadKwildConfig()
-			if err != nil {
-				return err
-			}
-			fmt.Println("Arg1: ", args[0], "Arg2: ", args[1])
-			fmt.Println(cfg, "BcRPCURL: ", cfg.BcRpcUrl, "GrpcListenAddress: ", cfg.GrpcListenAddress)
 			//options := []client.ClientOpt{client.WithCometBftUrl(args[2])}
 			options := []client.ClientOpt{}
 
-			clt, err := client.New(cfg.GrpcListenAddress, options...)
+			clt, err := client.New(appGRPCListenAddr, options...)
 			if err != nil {
 				return err
 			}
@@ -50,5 +44,7 @@ func approveCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&appGRPCListenAddr, "app.grpc_laddr", "localhost:50051", "Address to listen for gRPC connections for the application")
 	return cmd
 }
