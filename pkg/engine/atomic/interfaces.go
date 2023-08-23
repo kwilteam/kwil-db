@@ -15,6 +15,7 @@ type Database interface {
 	Execute(ctx context.Context, stmt string, args map[string]any) error
 	TableExists(ctx context.Context, table string) (bool, error)
 	ApplyChangeset(reader io.Reader) error
+	CheckpointWal() error
 }
 
 type DatabaseOpener interface {

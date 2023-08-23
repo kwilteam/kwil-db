@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/atomic/queue"
 	sqlddlgenerator "github.com/kwilteam/kwil-db/pkg/engine/atomic/sql-ddl-generator"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/sql"
@@ -26,7 +27,7 @@ type AtomicEngine struct {
 	// requestQueue is a queue of requests that are waiting to be processed
 	// this guarantees that all requests are processed in order
 	// linearizability is extremely important to make the engine deterministic
-	requestQueue chan struct{}
+	requestQueue *queue.Queue
 
 	// changeTracker is the change tracker that is used to track changes
 	changeTracker changeTracker
@@ -38,22 +39,29 @@ type AtomicEngine struct {
 	// encoder is used to encode and decode arbitrary structs deterministically
 	encoder DeterministicEncoderDecoder
 
-	// inSession tracks whether or not we are currently in a session
-	inSession bool
+	// session holds information for the current session
+	session *sessionInfo
 
 	commitPhase commitPhase
 
-	waiter Waiter
+	// applyFinisher is a function that should be called at the end
+	// of the apply phase.  it should either be called in Cancel or EndApply
+	applyFinisher func()
 }
 
-// getDatabase gets a database from the underlying engine
-// TODO: add LRU cache for database connections.  we do not want to handle this in the opener,
-// since we need the same database connection across an entire session to guarantee atomicity
-// we need to figure out how we can use the same db connection so that we can use sessions and changesets
-func (s *AtomicEngine) getDatabase(ctx context.Context, dbid string) (Database, error) {
+// getDatabase gets a database connection for the provided dbid.
+// if the database is already used in the session, it will get the connection from the session cache.
+func (s *AtomicEngine) openDatabase(ctx context.Context, dbid string) (Database, error) {
 	_, ok := s.deployedDatasets[dbid]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrDatasetNotFound, dbid)
+	}
+
+	if s.commitPhase.inSession() {
+		db, ok := s.usedDatabases[dbid]
+		if ok {
+			return db, nil
+		}
 	}
 
 	db, err := s.datasetOpener.OpenDatabase(ctx, dbid)
@@ -61,31 +69,40 @@ func (s *AtomicEngine) getDatabase(ctx context.Context, dbid string) (Database, 
 		return nil, fmt.Errorf("%w: %s", ErrOpeningDataset, dbid)
 	}
 
+	if s.commitPhase.inSession() {
+		err = s.session.RegisterDatabase(ctx, dbid, db)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return db, nil
 }
 
-func (s *AtomicEngine) ApplyChanges(changes []byte) error {
-	s.requestQueue <- struct{}{}
-	defer func() { <-s.requestQueue }()
-
-	panic("TODO")
-}
-
+// CreateDataset creates a dataset on the underlying engine
+// It also registers the dataset with the session
 func (a *AtomicEngine) CreateDataset(ctx context.Context, dbid string) error {
-	a.requestQueue <- struct{}{}
-	defer func() { <-a.requestQueue }()
+	done, err := a.requestQueue.Wait(ctx)
+	if err != nil {
+		return err
+	}
+	defer done()
 
 	_, ok := a.deployedDatasets[dbid]
 	if ok {
 		return fmt.Errorf("%w: %s", ErrDatasetExists, dbid)
 	}
 
-	_, err := a.datasetOpener.OpenDatabase(ctx, dbid)
+	db, err := a.datasetOpener.OpenDatabase(ctx, dbid)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrOpeningDataset, dbid)
 	}
 
-	// TODO: add the db to an active dataset cache
+	err = a.session.RegisterDatabase(ctx, dbid, db)
+	if err != nil {
+		return err
+	}
+
 	a.deployedDatasets[dbid] = struct{}{}
 
 	a.changeTracker.TrackChange(&change{
@@ -98,15 +115,19 @@ func (a *AtomicEngine) CreateDataset(ctx context.Context, dbid string) error {
 }
 
 func (a *AtomicEngine) DropDataset(ctx context.Context, dbid string) error {
-	a.requestQueue <- struct{}{}
-	defer func() { <-a.requestQueue }()
+	done, err := a.requestQueue.Wait(ctx)
+	if err != nil {
+		return err
+	}
+	defer done()
 
 	_, ok := a.deployedDatasets[dbid]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrDatasetNotFound, dbid)
 	}
 
-	if !a.inSession {
+	// if not in session, delete immediately
+	if !a.commitPhase.inSession() {
 		err := a.datasetOpener.DeleteDatabase(ctx, dbid)
 		if err != nil {
 			return err
@@ -127,10 +148,13 @@ func (a *AtomicEngine) DropDataset(ctx context.Context, dbid string) error {
 // CreateTable creates a table on the specified database
 // If the table already exists, it returns an error
 func (a *AtomicEngine) CreateTable(ctx context.Context, dbid string, table *types.Table) error {
-	a.requestQueue <- struct{}{}
-	defer func() { <-a.requestQueue }()
+	done, err := a.requestQueue.Wait(ctx)
+	if err != nil {
+		return err
+	}
+	defer done()
 
-	db, err := a.getDatabase(ctx, dbid)
+	db, err := a.openDatabase(ctx, dbid)
 	if err != nil {
 		return err
 	}
@@ -166,10 +190,13 @@ func (a *AtomicEngine) CreateTable(ctx context.Context, dbid string, table *type
 // Execute executes a statement on the underlying engine
 // It should only be used for executing DML statements
 func (a *AtomicEngine) Execute(ctx context.Context, dbid string, sqlStatement string, args map[string]any) ([]map[string]any, error) {
-	a.requestQueue <- struct{}{}
-	defer func() { <-a.requestQueue }()
+	done, err := a.requestQueue.Wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer done()
 
-	db, err := a.getDatabase(ctx, dbid)
+	db, err := a.openDatabase(ctx, dbid)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +270,7 @@ func (a *AtomicEngine) applyChange(ctx context.Context, change *change) error {
 		delete(a.deployedDatasets, change.DBID)
 		return a.datasetOpener.DeleteDatabase(ctx, change.DBID)
 	case ctCreateTable:
-		db, err := a.getDatabase(ctx, change.DBID)
+		db, err := a.openDatabase(ctx, change.DBID)
 		if err != nil {
 			return err
 		}
@@ -270,7 +297,7 @@ func (a *AtomicEngine) applyChange(ctx context.Context, change *change) error {
 
 		return sp.Commit()
 	case ctExecuteStatement:
-		db, err := a.getDatabase(ctx, change.DBID)
+		db, err := a.openDatabase(ctx, change.DBID)
 		if err != nil {
 			return err
 		}
@@ -305,8 +332,12 @@ func (a *AtomicEngine) prepareStatement(db Database, statement string) (sql.Stat
 }
 
 func (a *AtomicEngine) BeginCommit(ctx context.Context) error {
-	a.requestQueue <- struct{}{}
-	defer func() { <-a.requestQueue }()
+	done, err := a.requestQueue.Wait(ctx)
+	if err != nil {
+		return err
+	}
+	defer done()
+
 	panic("TODO")
 }
 
@@ -318,40 +349,63 @@ func (a *AtomicEngine) EndCommit(ctx context.Context, appender func([]byte) erro
 // BeginApply begins an apply session
 // It will block the request queue until EndApply or Cancel is called
 func (a *AtomicEngine) BeginApply(ctx context.Context) error {
-	done, err := a.waiter.Wait(ctx)
+	done, err := a.requestQueue.Wait(ctx)
 	if err != nil {
 		return err
 	}
-	defer done()
-}
+	a.applyFinisher = done
 
-type Waiter interface {
-	// Wait waits until it is the callers turn to apply changes
-	// It is returned an error if the context times out or if the buffer is full
-	// it returns a function to signal that it is done
-	Wait(ctx context.Context) (func(), error)
+	panic("TODO")
 }
 
 // Apply applies a set of changes to the underlying engine
 // it does not block, and therefore should only be called after BeginApply
 func (a *AtomicEngine) Apply(ctx context.Context, changes []byte) error {
+
 	panic("TODO")
 }
 
+// cleanupApply cleans up the apply phase finisher, if necessary
+func (a *AtomicEngine) cleanupApply() {
+	if a.applyFinisher != nil {
+		// preventing race condition where we call the applyFinisher
+		// and it gets called again before we set it to nil
+		fn := a.applyFinisher
+		a.applyFinisher = nil
+		fn()
+	}
+}
+
+// if EndApply is successful, it will call the applyFinisher
+// if not, it will not call the applyFinisher, as it will be called in Cancel
 func (a *AtomicEngine) EndApply(ctx context.Context) error {
 	if a.commitPhase != commitPhaseApply {
-		return fmt.Errorf("%w: %s", ErrInvalidCommitPhase, a.commitPhase)
+		return fmt.Errorf("%w: current phase: %s.  expected: ", ErrInvalidCommitPhase, a.commitPhase, commitPhaseApply)
 	}
 
+	// TODO: implement
+
+	// at the end:
+	a.cleanupApply()
+	return nil
 }
 
 func (a *AtomicEngine) Cancel(ctx context.Context) {
+	// if we are in the apply phase, we need to call the applyFinisher
 	if a.commitPhase == commitPhaseApply {
-		defer func() { <-a.requestQueue }()
+		a.cleanupApply()
 	}
+
+	// TODO: implement
 }
 
 func (a *AtomicEngine) ID(ctx context.Context) ([]byte, error) {
+	done, err := a.requestQueue.Wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer done()
+
 	panic("TODO")
 }
 
@@ -362,6 +416,11 @@ const (
 	commitPhaseCommit
 	commitPhaseApply
 )
+
+// inSession returns true if the engine is currently in a session
+func (c commitPhase) inSession() bool {
+	return c != commitPhaseNone
+}
 
 // createTable creates a table on the provided database
 // if it already exists, it returns an ErrTableExists error
