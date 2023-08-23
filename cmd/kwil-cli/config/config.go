@@ -59,7 +59,7 @@ func PersistConfig(conf *KwilCliConfig) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	file, err := utils.CreateOrOpenFile(DefaultConfigFile, os.O_CREATE|os.O_RDWR)
+	file, err := utils.CreateOrOpenFile(DefaultConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to create or open config file: %w", err)
 	}
@@ -78,7 +78,7 @@ func PersistConfig(conf *KwilCliConfig) error {
 }
 
 func LoadPersistedConfig() (*KwilCliConfig, error) {
-	bts, err := utils.ReadOrCreateFile(DefaultConfigFile, os.O_CREATE|os.O_RDWR)
+	bts, err := utils.ReadOrCreateFile(DefaultConfigFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create or open config file: %w", err)
 	}
