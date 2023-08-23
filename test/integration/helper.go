@@ -1,3 +1,9 @@
+// package integration is a package for integration tests.
+// For now this package has a lot duplicated code from acceptance package because they share similar but same setup,
+// this will be refactored in the future.
+//
+// This package also deliberately use different environment variables for configuration from acceptance package.
+
 package integration
 
 import (
@@ -25,12 +31,8 @@ import (
 )
 
 // envFile is the default env file path
-// it will pass values among different stages of the test setup
+// It will pass values among different stages of the test setup
 var envFile = runner.GetEnv("KINT_ENV_FILE", "./.env")
-
-func init() {
-	os.OpenFile(envFile, os.O_RDWR|os.O_CREATE, 0666)
-}
 
 type IntTestConfig struct {
 	acceptance.ActTestCfg
@@ -51,9 +53,15 @@ func NewIntHelper(t *testing.T) *IntHelper {
 	}
 }
 
+// LoadConfig loads config from system env and .env file.
+// Envs defined in envFile will not overwrite existing env vars.
 func (r *IntHelper) LoadConfig() {
-	err := godotenv.Load(envFile)
-	require.NoError(r.t, err, "failed to parse .env file")
+	ef, err := os.OpenFile(envFile, os.O_RDWR|os.O_CREATE, 0666)
+	require.NoError(r.t, err, "failed to open env file")
+	defer ef.Close()
+
+	err = godotenv.Load(envFile)
+	require.NoError(r.t, err, "failed to parse env file")
 
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'

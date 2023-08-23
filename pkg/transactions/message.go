@@ -36,10 +36,6 @@ type SignedMessage struct {
 // it to the message in the signature.
 // It then uses the public key in the signature to verify the signature.
 func (s *SignedMessage) Verify() error {
-	if err := s.Signature.Type.IsValid(); err != nil {
-		return err
-	}
-
 	return s.Signature.Verify(s.Sender, s.Message)
 }
 

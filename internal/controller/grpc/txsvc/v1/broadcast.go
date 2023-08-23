@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*txpb.BroadcastResponse, error) {
-	tx, err := convertTransaction(req.Tx, false)
+	tx, err := convertTransaction(req.Tx)
 	if err != nil {
 		s.log.Warn("failed to convert transaction", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to convert transaction: %s", err)
