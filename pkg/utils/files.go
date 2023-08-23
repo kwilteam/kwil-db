@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 func CreateDirIfNeeded(path string) error {
-	return os.MkdirAll(path, os.ModePerm)
+	return os.MkdirAll(path, 0755)
 }
 
 func DeleteDir(path string) error {
@@ -15,7 +16,8 @@ func DeleteDir(path string) error {
 }
 
 func ReadOrCreateFile(path string, permissions int) ([]byte, error) {
-	if err := CreateDirIfNeeded(path); err != nil {
+	dir := filepath.Dir(path)
+	if err := CreateDirIfNeeded(dir); err != nil {
 		return nil, err
 	}
 
@@ -34,7 +36,8 @@ func ReadOrCreateFile(path string, permissions int) ([]byte, error) {
 }
 
 func CreateOrOpenFile(path string, permissions int) (*os.File, error) {
-	if err := CreateDirIfNeeded(path); err != nil {
+	dir := filepath.Dir(path)
+	if err := CreateDirIfNeeded(dir); err != nil {
 		return nil, err
 	}
 
@@ -104,8 +107,5 @@ func HashFile(path string) ([]byte, error) {
 
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
-	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
+	return !os.IsNotExist(err)
 }
