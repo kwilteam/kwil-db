@@ -51,7 +51,6 @@ func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
 	if err != nil {
 		return nil, err
 	}
-
 	logger := log.New(cfg.Log)
 	logger = *logger.Named("kwild")
 
@@ -168,12 +167,16 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.Data
 		failBuild(err, "failed to register atomic kv")
 	}
 
+	var sh abci.SnapshotModule
+	if snapshotter != nil {
+		sh = snapshotter
+	}
 	return abci.NewAbciApp(
 		datasetsModule,
 		validatorModule,
 		atomicKv,
 		atomicCommitter,
-		snapshotter,
+		sh,
 		bootstrapper,
 		abci.WithLogger(*d.log.Named("abci")),
 	)
@@ -287,7 +290,8 @@ func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {
 }
 
 func buildBootstrapper(d *coreDependencies) *snapshots.Bootstrapper {
-	bootstrapper, err := snapshots.NewBootstrapper(d.cfg.SqliteFilePath)
+	rcvdSnapsDir := filepath.Join(d.cfg.RootDir, "rcvdSnaps")
+	bootstrapper, err := snapshots.NewBootstrapper(d.cfg.SqliteFilePath, rcvdSnapsDir)
 	if err != nil {
 		failBuild(err, "Bootstrap module initialization failure")
 	}

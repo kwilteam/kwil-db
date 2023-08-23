@@ -39,16 +39,15 @@ const (
 	UNKNOWN
 )
 
-func NewBootstrapper(dbDir string) (*Bootstrapper, error) {
+func NewBootstrapper(dbDir string, rcvdSnapsDir string) (*Bootstrapper, error) {
 	// Create a temporary directory in the dbDir to store the snapshots
-	tempDir := filepath.Join(dbDir, ".tmp/rcvdSnaps/")
-	err := utils.CreateDirIfNeeded(tempDir)
+	err := utils.CreateDirIfNeeded(rcvdSnapsDir)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Bootstrapper{
-		tempDir:       tempDir,
+		tempDir:       rcvdSnapsDir,
 		dbDir:         dbDir,
 		activeSession: nil,
 		dbRestored:    false,
