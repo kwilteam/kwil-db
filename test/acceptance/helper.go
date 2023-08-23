@@ -28,10 +28,6 @@ import (
 // it will pass values among different stages of the test setup
 var envFile = runner.GetEnv("KACT_ENV_FILE", "./.env")
 
-func init() {
-	os.OpenFile(envFile, os.O_RDWR|os.O_CREATE, 0666)
-}
-
 type ActTestCfg struct {
 	GWEndpoint    string // gateway endpoint
 	GrpcEndpoint  string
@@ -104,11 +100,15 @@ func (r *ActHelper) GetConfig() *ActTestCfg {
 	return r.cfg
 }
 
-// LoadConfig loads config from env.
+// LoadConfig loads config from system env and env file.
 // Envs defined in envFile will not overwrite existing env vars.
 func (r *ActHelper) LoadConfig() {
-	err := godotenv.Load(envFile)
-	require.NoError(r.t, err, "failed to parse .env file")
+	ef, err := os.OpenFile(envFile, os.O_RDWR|os.O_CREATE, 0666)
+	require.NoError(r.t, err, "failed to open env file")
+	defer ef.Close()
+
+	err = godotenv.Load(envFile)
+	require.NoError(r.t, err, "failed to parse env file")
 
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'

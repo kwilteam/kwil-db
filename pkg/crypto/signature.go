@@ -16,7 +16,7 @@ const (
 	// SignatureTypeInvalid invalid signature type
 	SignatureTypeInvalid SignatureType = "invalid"
 	//
-	SignatureTypeSecp256k1Cometbft SignatureType = "secp256k1_ct" // secp256k1 cometbft
+	SignatureTypeSecp256k1Cometbft SignatureType = "secp256k1_cmt" // secp256k1 cometbft
 	SignatureTypeEd25519           SignatureType = "ed25519"
 	SignatureTypeSecp256k1Personal SignatureType = "secp256k1_ep" // secp256k1 ethereum personal_sign
 )
@@ -28,9 +28,9 @@ const (
 )
 
 var SignatureTypeFromName = map[string]SignatureType{
-	"secp256k1_ct": SignatureTypeSecp256k1Cometbft, // secp256k1 cometbft
-	"ed25519":      SignatureTypeEd25519,           // ed25519 standard
-	"secp256k1_ep": SignatureTypeSecp256k1Personal, // secp256k1 ethereum personal_sign
+	"secp256k1_cmt": SignatureTypeSecp256k1Cometbft, // secp256k1 cometbft
+	"ed25519":       SignatureTypeEd25519,           // ed25519 standard, any better name?
+	"secp256k1_ep":  SignatureTypeSecp256k1Personal, // secp256k1 ethereum personal_sign
 }
 
 var (
@@ -45,16 +45,6 @@ func SignatureTypeLookUp(name string) SignatureType {
 		return t
 	}
 	return SignatureTypeInvalid
-}
-
-// IsValid returns an error if the signature type is invalid.
-func (s SignatureType) IsValid() error {
-	if s == SignatureTypeSecp256k1Personal ||
-		s == SignatureTypeSecp256k1Cometbft ||
-		s == SignatureTypeEd25519 {
-		return nil
-	}
-	return fmt.Errorf("invalid signature type: %s", s)
 }
 
 func (s SignatureType) KeyType() KeyType {

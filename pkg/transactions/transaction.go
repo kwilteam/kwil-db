@@ -65,10 +65,6 @@ func (t *Transaction) GetSenderAddress() string {
 
 // Verify verifies the signature of the transaction
 func (t *Transaction) Verify() error {
-	if err := t.Signature.Type.IsValid(); err != nil {
-		return err
-	}
-
 	data, err := t.Body.MarshalBinary()
 	if err != nil {
 		return err

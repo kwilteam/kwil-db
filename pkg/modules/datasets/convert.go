@@ -136,20 +136,20 @@ func convertActionsToEngine(actions []*transactions.Action) ([]*engineTypes.Proc
 
 func convertModifiersToEngine(mutability string, auxiliaries []string) ([]engineTypes.Modifier, error) {
 	mods := make([]engineTypes.Modifier, len(auxiliaries)+1)
-	switch strings.ToUpper(mutability) {
-	case "UPDATE":
+	switch strings.ToLower(mutability) {
+	case transactions.MutabilityUpdate.String():
 		break
-	case "VIEW":
+	case transactions.MutabilityView.String():
 		mods[0] = engineTypes.ModifierView
 	default:
 		return nil, fmt.Errorf("unknown mutability type: %v", mutability)
 	}
 
 	for i, aux := range auxiliaries {
-		switch strings.ToUpper(aux) {
-		case "MUSTSIGN":
+		switch strings.ToLower(aux) {
+		case transactions.AuxiliaryTypeMustSign.String():
 			mods[i+1] = engineTypes.ModifierAuthenticated
-		case "OWNER":
+		case transactions.AuxiliaryTypeOwner.String():
 			mods[i+1] = engineTypes.ModifierOwner
 		default:
 			return nil, fmt.Errorf("unknown auxiliary type: %v", aux)

@@ -11,13 +11,13 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
-func convertTransaction(incoming *txpb.Transaction, allowEmptySignature bool) (*transactions.Transaction, error) {
+func convertTransaction(incoming *txpb.Transaction) (*transactions.Transaction, error) {
 	payloadType := transactions.PayloadType(incoming.Body.PayloadType)
 	if !payloadType.Valid() {
 		return nil, fmt.Errorf("invalid payload type: %s", incoming.Body.PayloadType)
 	}
 
-	if !allowEmptySignature && incoming.Signature == nil {
+	if incoming.Signature == nil {
 		return nil, fmt.Errorf("transaction signature not given")
 	}
 
