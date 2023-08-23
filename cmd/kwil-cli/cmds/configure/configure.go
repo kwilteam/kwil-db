@@ -2,7 +2,6 @@ package configure
 
 import (
 	"fmt"
-	"strings"
 
 	common "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -25,7 +24,6 @@ func NewCmdConfigure() *cobra.Command {
 			err = runErrs(conf,
 				promptGRPCURL,
 				promptPrivateKey,
-				promptClientChainRPCURL,
 			)
 			if err != nil {
 				return err
@@ -71,9 +69,13 @@ func promptGRPCURL(conf *config.KwilCliConfig) error {
 }
 
 func promptPrivateKey(conf *config.KwilCliConfig) error {
+	var defaultPrivKeyHex string
+	if conf.PrivateKey != nil {
+		defaultPrivKeyHex = conf.PrivateKey.Hex()
+	}
 	prompt := &common.Prompter{
 		Label:   "Private Key",
-		Default: conf.PrivateKey.Hex(),
+		Default: defaultPrivKeyHex,
 	}
 	res, err := prompt.Run()
 	if err != nil {
@@ -87,7 +89,7 @@ func promptPrivateKey(conf *config.KwilCliConfig) error {
 
 	pk, err := crypto.Secp256k1PrivateKeyFromHex(res)
 	if err != nil {
-		fmt.Println(`invalid private key.  key could not be converted to hex.  received: `, res)
+		fmt.Printf("invalid private key: %v\n", err)
 		promptAskAgain := &common.Prompter{
 			Label: "Would you like to enter another? (y/n)",
 		}
@@ -106,37 +108,4 @@ func promptPrivateKey(conf *config.KwilCliConfig) error {
 	conf.PrivateKey = pk
 
 	return nil
-}
-
-func promptClientChainRPCURL(conf *config.KwilCliConfig) error {
-	prompt := &common.Prompter{
-		Label:   "Client Chain RPC URL",
-		Default: conf.ClientChainRPCURL,
-	}
-	res, err := prompt.Run()
-	if err != nil {
-		return err
-	}
-
-	if res == "" {
-		conf.ClientChainRPCURL = ""
-		return nil
-	}
-
-	if containsProtocol(&res) != nil {
-		fmt.Println(`url must contain http:// , https:// , ws:// , or wss://.  received: `, res)
-		return promptClientChainRPCURL(conf)
-	}
-
-	conf.ClientChainRPCURL = res
-
-	return nil
-}
-
-// containsProtocol should check if the url contains http:// or https://
-func containsProtocol(url *string) error {
-	if strings.Contains(*url, "http://") || strings.Contains(*url, "https://") || strings.Contains(*url, "ws://") || strings.Contains(*url, "wss://") {
-		return nil
-	}
-	return fmt.Errorf("url must contain http:// or https://")
 }
