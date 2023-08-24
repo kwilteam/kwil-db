@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/hex"
 )
 
@@ -99,7 +100,7 @@ func (s Ed25519Address) String() string {
 
 // GenerateEd25519Key generates a new ed25519 key pair.
 func GenerateEd25519Key() (*Ed25519PrivateKey, error) {
-	_, priv, err := ed25519.GenerateKey(nil)
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
 	}
