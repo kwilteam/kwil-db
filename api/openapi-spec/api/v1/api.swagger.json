@@ -372,6 +372,7 @@
         "parameters": [
           {
             "name": "Pubkey",
+            "description": "ED25519 PubKey",
             "in": "query",
             "required": false,
             "type": "string",
@@ -503,6 +504,7 @@
         "details": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
@@ -620,6 +622,7 @@
         "attributes": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/txAttribute"
           }
         }
@@ -650,6 +653,7 @@
         "initialization": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/ExtensionsExtensionConfig"
           }
         },
@@ -776,18 +780,21 @@
         "tables": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/txTable"
           }
         },
         "actions": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/txAction"
           }
         },
         "extensions": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/txExtensions"
           }
         }
@@ -814,12 +821,14 @@
         "columns": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/txColumn"
           }
         },
         "indexes": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/txIndex"
           }
         }
@@ -860,7 +869,8 @@
         },
         "data": {
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "description": "Data contains the output of the transaction."
         },
         "events": {
           "type": "array",
@@ -926,7 +936,8 @@
       "properties": {
         "PubKey": {
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "title": "ED25519 PubKey"
         }
       }
     },
