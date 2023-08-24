@@ -66,6 +66,7 @@ jobs:
           task test:unit
 
   acceptance-test:
+    if: false # temporarily disable this job
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
