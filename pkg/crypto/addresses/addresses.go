@@ -71,16 +71,9 @@ func CreateCosmosAddress(pub crypto.PublicKey) (*CosmosAddress, error) {
 			return nil, fmt.Errorf("invalid secp256k1 public key size for generating cosmos address: public key length %d", len(pub.Bytes()))
 		}
 
-		hasherSHA256 := sha256.New()
-		_, err := hasherSHA256.Write(publicKeyBytes[:])
-		if err != nil {
-			return nil, err
-		}
-
-		sha := hasherSHA256.Sum(nil)
-
+		sha := sha256.Sum256(publicKeyBytes[:])
 		hasherRIPEMD160 := ripemd160.New()
-		_, err = hasherRIPEMD160.Write(sha)
+		_, err := hasherRIPEMD160.Write(sha[:])
 		if err != nil {
 			return nil, err
 		}
