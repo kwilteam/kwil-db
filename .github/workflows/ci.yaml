@@ -20,9 +20,9 @@ jobs:
           token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v2
         with:
-          version: '3.x'
+          version: '23.4'
           repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Taskfile
@@ -33,8 +33,8 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.20'
-          cache: true
+          go-version: '1.21'
+          check-latest: true
 
       - name: Install dependencies
         env:
@@ -45,13 +45,17 @@ jobs:
           task install:deps
           go mod download
 
-      - name: Compile Protobuf
+      - name: Check tidiness of go.mod and go.sum
         run: |
-          task pb:compile:v1
+          ./scripts/mods/check_tidy
+
+      - name: Ensure generated protobuf Go source is up-to-date
+        run: |
+          ./scripts/proto/check_up
 
       - name: Compile packages, apps, and specs
         run: |
-          go build ./pkg/... ./cmd/... ./test/specifications/...
+          go build -mod=readonly ./pkg/... ./cmd/... ./test/specifications/...
 
       - name: Lint
         uses: golangci/golangci-lint-action@v3
@@ -76,9 +80,9 @@ jobs:
           token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+        uses: arduino/setup-protoc@v2
         with:
-          version: '3.x'
+          version: '23.4'
           repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Install Taskfile
@@ -87,10 +91,10 @@ jobs:
           repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
-          go-version: '1.20'
-          cache: true
+          go-version: '1.21'
+          check-latest: true
 
       - name: Install dependencies
         env:
