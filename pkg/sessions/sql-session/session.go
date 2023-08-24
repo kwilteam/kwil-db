@@ -78,7 +78,7 @@ func (s *SqlCommitable) EndCommit(ctx context.Context, appender func([]byte) err
 		s.savepoint = nil
 		s.session = nil
 		if err != nil {
-			s.log.Error("failed to rollback savepoint", zap.Error(err))
+			s.log.Error("failed to clean up sql committable", zap.Error(err))
 		}
 	}()
 
