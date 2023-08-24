@@ -34,19 +34,19 @@ func Test_Addresses(t *testing.T) {
 			},
 		},
 		{
-			name:   "cosmos_secp256k1",
+			name:   "comet_secp256k1",
 			key:    secpKey,
 			output: "6E741B9E60A1DFB6FE40B53069CFBD00A6C1FC88",
 			fn: func(pk crypto.PrivateKey) (crypto.Address, error) {
-				return addresses.CreateCosmosAddress(pk.PubKey())
+				return addresses.CreateCometBFTAddress(pk.PubKey())
 			},
 		},
 		{
-			name:   "cosmos_ed25519",
+			name:   "comet_ed25519",
 			key:    edKey,
 			output: "E7620EFA925B10DBE5DDFA8D68B404AB338E98EC",
 			fn: func(pk crypto.PrivateKey) (crypto.Address, error) {
-				return addresses.CreateCosmosAddress(pk.PubKey())
+				return addresses.CreateCometBFTAddress(pk.PubKey())
 			},
 		},
 		{

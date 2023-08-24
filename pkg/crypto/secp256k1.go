@@ -9,17 +9,6 @@ import (
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 )
 
-const (
-
-	// secpPubKeyCompressedEven is the identifier prefix byte for a public key
-	// whose Y coordinate is even.  This is a Secp256k1 standard.
-	secpPubKeyCompressedEven byte = 0x02
-
-	// secpPubKeyCompressedOdd is the identifier prefix byte for a public key
-	// whose Y coordinate is odd.  This is a Secp256k1 standard.
-	secpPubKeyCompressedOdd byte = 0x03
-)
-
 const Secp256k1 KeyType = "secp256k1"
 
 type Secp256k1PrivateKey struct {
@@ -83,21 +72,8 @@ func (pub *Secp256k1PublicKey) Bytes() []byte {
 }
 
 // CompressedBytes returns the compressed bytes of the public key.
-func (pub *Secp256k1PublicKey) CompressedBytes() [33]byte {
-	format := secpPubKeyCompressedEven
-	if pub.publicKey.Y.Bit(0) != 0 {
-		// y is odd
-		format = secpPubKeyCompressedOdd
-	}
-
-	var compressed [33]byte
-	compressed[0] = format
-
-	uncompressedBytes := ethCrypto.FromECDSAPub(pub.publicKey)
-
-	copy(compressed[1:], uncompressedBytes[1:33])
-
-	return compressed
+func (pub *Secp256k1PublicKey) CompressedBytes() []byte {
+	return ethCrypto.CompressPubkey(pub.publicKey)
 }
 
 func (pub *Secp256k1PublicKey) Type() KeyType {

@@ -38,6 +38,7 @@ func CreateEthereumAddress(pub *crypto.Secp256k1PublicKey) (*EthereumAddress, er
 	}, nil
 }
 
+// EthereumAddress is an address for Ethereum
 type EthereumAddress struct {
 	address common.Address
 }
@@ -54,8 +55,8 @@ func (addr *EthereumAddress) String() string {
 	return addr.address.Hex()
 }
 
-// CreateCosmosAddress returns the cosmos address of the given public key.
-func CreateCosmosAddress(pub crypto.PublicKey) (*CosmosAddress, error) {
+// CreateCometBFTAddress returns the cosmos address of the given public key.
+func CreateCometBFTAddress(pub crypto.PublicKey) (*CometBFTAddress, error) {
 	switch pub.Type() {
 	default:
 		return nil, fmt.Errorf("unsupported public key type: %s", pub.Type())
@@ -78,7 +79,7 @@ func CreateCosmosAddress(pub crypto.PublicKey) (*CosmosAddress, error) {
 			return nil, err
 		}
 
-		return &CosmosAddress{
+		return &CometBFTAddress{
 			address: cometCrypto.Address(hasherRIPEMD160.Sum(nil)),
 		}, nil
 	case crypto.Ed25519:
@@ -86,27 +87,29 @@ func CreateCosmosAddress(pub crypto.PublicKey) (*CosmosAddress, error) {
 			return nil, fmt.Errorf("invalid ed25519 public key size for generating cosmos address: %d", len(pub.Bytes()))
 		}
 
-		return &CosmosAddress{
+		return &CometBFTAddress{
 			address: cometCrypto.Address(tmhash.SumTruncated(pub.Bytes())),
 			keyType: crypto.Ed25519,
 		}, nil
 	}
 }
 
-type CosmosAddress struct {
+// CometBFTAddress is an address for CometBFT
+// It is distinctly different from Cosmos addresses, and is only used for CometBFT
+type CometBFTAddress struct {
 	address cometCrypto.Address
 	keyType crypto.KeyType
 }
 
-func (c *CosmosAddress) Bytes() []byte {
+func (c *CometBFTAddress) Bytes() []byte {
 	return c.address.Bytes()
 }
 
-func (c *CosmosAddress) String() string {
+func (c *CometBFTAddress) String() string {
 	return c.address.String()
 }
 
-func (c *CosmosAddress) Type() crypto.KeyType {
+func (c *CometBFTAddress) Type() crypto.KeyType {
 	return c.keyType
 }
 
@@ -119,6 +122,8 @@ func CreateNearAddress(pub *crypto.Ed25519PublicKey) (*NEARAddress, error) {
 	}, nil
 }
 
+// NEARAddress is an address for NEAR protocol
+// It generates the implicit address from the public key
 type NEARAddress struct {
 	address []byte
 }

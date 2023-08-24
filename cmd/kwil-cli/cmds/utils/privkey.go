@@ -160,7 +160,7 @@ func nearAddr(pk crypto.PublicKey) (crypto.Address, error) {
 
 // cosmosAddr is an addressCreatorFunc that creates a Cosmos address from a public key.
 func cosmosAddr(pk crypto.PublicKey) (crypto.Address, error) {
-	return addresses.CreateCosmosAddress(pk)
+	return addresses.CreateCometBFTAddress(pk)
 }
 
 // ethereumAddr is an addressCreatorFunc that creates an Ethereum address from a public key.
