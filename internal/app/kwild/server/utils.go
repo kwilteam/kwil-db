@@ -19,7 +19,6 @@ import (
 	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 var defaultFilePath string
@@ -100,13 +99,8 @@ type wrappedCometBFTClient struct {
 	*cmtlocal.Local
 }
 
-func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
-	bts, err := tx.MarshalBinary()
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize transaction data: %w", err)
-	}
-
-	result, err := wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(bts))
+func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx []byte) ([]byte, error) {
+	result, err := wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(tx))
 	if err != nil {
 		return nil, err
 	}

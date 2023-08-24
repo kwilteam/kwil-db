@@ -54,6 +54,6 @@ type AccountReader interface {
 }
 
 type BlockchainBroadcaster interface {
-	BroadcastTxAsync(ctx context.Context, tx *transactions.Transaction) (txHash []byte, err error)
+	BroadcastTxAsync(ctx context.Context, tx []byte) (txHash []byte, err error)
 	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error)
 }

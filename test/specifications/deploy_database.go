@@ -37,7 +37,7 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 
 	//// Then i expect success
 	var status strings.Builder
-	require.Eventually(t, func() bool {
+	assert.Eventually(t, func() bool {
 		// prevent appending to the prior invocation(s)
 		status.Reset()
 		if err := deploy.TxSuccess(ctx, txHash); err == nil {
@@ -50,7 +50,7 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 
 	// And i expect database should exist
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 }
 
 func DatabaseDeployInvalidSqlSpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {

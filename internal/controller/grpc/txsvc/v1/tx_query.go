@@ -2,32 +2,44 @@ package txsvc
 
 import (
 	"context"
-	"fmt"
+	"encoding/hex"
+	"strings"
+
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.TxQueryResponse, error) {
+	logger := s.log.With(zap.String("rpc", "TxQuery"),
+		zap.String("TxHash", strings.ToUpper(hex.EncodeToString(req.TxHash))))
+	logger.Debug("query transaction")
+
 	cmtResult, err := s.chainClient.TxQuery(ctx, req.TxHash, false)
 	if err != nil {
-		s.log.Error("failed to query tx", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, "failed to query transaction: %s", err)
+		logger.Error("failed to query tx", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to query transaction")
 	}
 
 	if cmtResult.Height < 0 {
-		s.log.Debug("transaction not found",
+		logger.Debug("transaction not found",
 			zap.ByteString("TxHash", req.TxHash), zap.Int64("Height", cmtResult.Height))
-		return nil, status.Errorf(codes.NotFound, "transaction not found")
+		return nil, status.Error(codes.NotFound, "transaction not found")
 	}
 
-	var tx *txpb.Transaction
-	if err := proto.Unmarshal(cmtResult.Tx, tx); err != nil {
-		s.log.Error("failed to deserialize transaction", zap.Error(err))
-		return nil, fmt.Errorf("failed to deserialize transaction: %w", err)
+	originalTx := &transactions.Transaction{}
+	if err := originalTx.UnmarshalBinary(cmtResult.Tx); err != nil {
+		logger.Error("failed to deserialize transaction", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to deserialize transaction")
+	}
+
+	tx, err := convertFromAbciTx(originalTx)
+	if err != nil {
+		logger.Warn("failed to convert transaction", zap.Error(err))
+		return nil, status.Error(codes.Internal, "failed to convert transaction")
 	}
 
 	txResult := &txpb.TransactionResult{

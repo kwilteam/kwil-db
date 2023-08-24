@@ -69,7 +69,9 @@ func (d *KwildDriver) DeployDatabase(ctx context.Context, db *transactions.Schem
 		return nil, fmt.Errorf("error deploying database: %w", err)
 	}
 
-	d.logger.Debug("deployed database", zap.String("name", db.Name), zap.String("owner", db.Owner))
+	d.logger.Debug("deployed database",
+		zap.String("name", db.Name), zap.String("owner", db.Owner),
+		zap.String("TxHash", rec.Hex()))
 	return rec, nil
 }
 

@@ -3,6 +3,7 @@ package transactions
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/serialize"
@@ -188,5 +189,5 @@ func generateRandomSalt() ([8]byte, error) {
 type TxHash []byte
 
 func (h TxHash) Hex() string {
-	return fmt.Sprintf("%x", h)
+	return strings.ToUpper(fmt.Sprintf("%x", h))
 }

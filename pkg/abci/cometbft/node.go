@@ -26,6 +26,11 @@ func NewCometBftNode(app abciTypes.Application, privateKey []byte, atomicStore p
 
 	// TODO: this is temporary hack, we need to use KWILD config
 	//conf.LogLevel = "debug"
+	// create blocks every 5 seconds
+	//conf.Consensus.CreateEmptyBlocks = true
+	//conf.Consensus.TimeoutCommit = 5 * time.Second
+	// create blocks every 5 seconds or when txs are received
+	conf.Consensus.CreateEmptyBlocks = false
 	conf.Consensus.CreateEmptyBlocksInterval = 5 * time.Second
 	conf.RPC.ListenAddress = "tcp://0.0.0.0:26657"
 	fmt.Printf("conf: %+v\n", conf)
