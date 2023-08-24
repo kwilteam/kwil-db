@@ -9,6 +9,17 @@ import (
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 )
 
+const (
+
+	// secpPubKeyCompressedEven is the identifier prefix byte for a public key
+	// whose Y coordinate is even.  This is a Secp256k1 standard.
+	secpPubKeyCompressedEven byte = 0x02
+
+	// secpPubKeyCompressedOdd is the identifier prefix byte for a public key
+	// whose Y coordinate is odd.  This is a Secp256k1 standard.
+	secpPubKeyCompressedOdd byte = 0x03
+)
+
 const Secp256k1 KeyType = "secp256k1"
 
 type Secp256k1PrivateKey struct {
@@ -71,6 +82,24 @@ func (pub *Secp256k1PublicKey) Bytes() []byte {
 	return ethCrypto.FromECDSAPub(pub.publicKey)
 }
 
+// CompressedBytes returns the compressed bytes of the public key.
+func (pub *Secp256k1PublicKey) CompressedBytes() [33]byte {
+	format := secpPubKeyCompressedEven
+	if pub.publicKey.Y.Bit(0) != 0 {
+		// y is odd
+		format = secpPubKeyCompressedOdd
+	}
+
+	var compressed [33]byte
+	compressed[0] = format
+
+	uncompressedBytes := ethCrypto.FromECDSAPub(pub.publicKey)
+
+	copy(compressed[1:], uncompressedBytes[1:33])
+
+	return compressed
+}
+
 func (pub *Secp256k1PublicKey) Type() KeyType {
 	return Secp256k1
 }
@@ -104,4 +133,15 @@ func (addr *Secp256k1Address) Type() KeyType {
 
 func (addr *Secp256k1Address) String() string {
 	return addr.address.Hex()
+}
+
+// GenerateSecp256k1Key generates a new secp256k1 private key.
+func GenerateSecp256k1Key() (*Secp256k1PrivateKey, error) {
+	key, err := ethCrypto.GenerateKey()
+	if err != nil {
+		return nil, err
+	}
+	return &Secp256k1PrivateKey{
+		key: key,
+	}, nil
 }
