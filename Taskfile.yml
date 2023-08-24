@@ -33,7 +33,12 @@ tasks:
       - git submodule update --init
 
   git:sync:
-    desc: Sync git submodules
+    desc: Sync git submodules to required revisions
+    cmds:
+      - git submodule update
+
+  git:advance:
+    desc: Advance git submodules to latest main revision
     cmds:
       - git submodule update --remote
 
