@@ -71,6 +71,11 @@ func (pub *Secp256k1PublicKey) Bytes() []byte {
 	return ethCrypto.FromECDSAPub(pub.publicKey)
 }
 
+// CompressedBytes returns the compressed bytes of the public key.
+func (pub *Secp256k1PublicKey) CompressedBytes() []byte {
+	return ethCrypto.CompressPubkey(pub.publicKey)
+}
+
 func (pub *Secp256k1PublicKey) Type() KeyType {
 	return Secp256k1
 }
@@ -104,4 +109,15 @@ func (addr *Secp256k1Address) Type() KeyType {
 
 func (addr *Secp256k1Address) String() string {
 	return addr.address.Hex()
+}
+
+// GenerateSecp256k1Key generates a new secp256k1 private key.
+func GenerateSecp256k1Key() (*Secp256k1PrivateKey, error) {
+	key, err := ethCrypto.GenerateKey()
+	if err != nil {
+		return nil, err
+	}
+	return &Secp256k1PrivateKey{
+		key: key,
+	}, nil
 }
