@@ -44,9 +44,14 @@ import (
 
 // BuildKwildServer builds the kwild server
 func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
+	closers := &closeFuncs{
+		closers: make([]func() error, 0),
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic while building kwild: %v", r)
+			closers.closeAll()
 		}
 	}()
 
@@ -62,10 +67,6 @@ func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
 		cfg:    cfg,
 		log:    logger,
 		opener: newSqliteOpener(cfg.SqliteFilePath),
-	}
-
-	closers := &closeFuncs{
-		closers: make([]func() error, 0),
 	}
 
 	return buildServer(deps, closers), nil

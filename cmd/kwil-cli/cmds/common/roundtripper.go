@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 const (
@@ -23,7 +24,11 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		return err
 	}
 
-	options := []client.ClientOpt{}
+	options := []client.ClientOpt{
+		client.WithLogger(log.New(log.Config{
+			Level: "error", // TODO: the log package should change this to take an enum instead of a string
+		})),
+	}
 
 	if flags&WithoutPrivateKey == 0 {
 		// this means it needs to use the private key

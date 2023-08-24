@@ -14,6 +14,7 @@ import (
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
@@ -72,7 +73,7 @@ func newTLSConfig(certFile string) (*tls.Config, error) {
 func New(host string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
 		datasets: make(map[string]*transactions.Schema),
-		logger:   log.NewStdOut(log.InfoLevel),
+		logger:   log.NewNoOp(), // by default we do not want to force client to log anything
 	}
 
 	for _, opt := range opts {
@@ -92,9 +93,14 @@ func New(host string, opts ...ClientOpt) (c *Client, err error) {
 
 	c.client, err = grpcClient.New(host, grpc.WithTransportCredentials(transOpt))
 
-	c.logger = *c.logger.Named("client").With(
+	zapFields := []zapcore.Field{
 		zap.String("host", host),
-		zap.String("from", c.Signer.PubKey().Address().String()))
+	}
+	if c.Signer != nil {
+		zapFields = append(zapFields, zap.String("from", c.Signer.PubKey().Address().String()))
+	}
+
+	c.logger = *c.logger.Named("client").With(zapFields...)
 
 	if err != nil {
 		return nil, err
