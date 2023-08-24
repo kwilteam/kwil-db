@@ -102,6 +102,24 @@ func (s *SqliteClient) Prepare(stmt string) (sql.Statement, error) {
 	}, nil
 }
 
+// QueryUnsafe executes q uery against the database.
+// It SHOULD be read-only, but there is nothing forcing it to be. use with caution
+// This should get deleted once we redo the engine
+func (w *SqliteClient) QueryUnsafe(ctx context.Context, query string, args map[string]any) ([]map[string]any, error) {
+
+	stmt, err := w.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	if args == nil {
+		args = make(map[string]any)
+	}
+
+	return stmt.Execute(ctx, args)
+}
+
 // TableExists checks if a table exists.
 func (s *SqliteClient) TableExists(ctx context.Context, table string) (bool, error) {
 	return s.conn.TableExists(ctx, table)

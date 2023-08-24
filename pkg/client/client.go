@@ -11,6 +11,7 @@ import (
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
@@ -37,16 +38,21 @@ type Client struct {
 func New(target string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
 		datasets: make(map[string]*transactions.Schema),
-		logger:   log.NewStdOut(log.InfoLevel),
+		logger:   log.NewNoOp(), // by default we do not want to force client to log anything
 	}
 
 	for _, opt := range opts {
 		opt(c)
 	}
 
-	c.logger = *c.logger.Named("client").With(
+	zapFields := []zapcore.Field{
 		zap.String("target", target),
-		zap.String("from", c.Signer.PubKey().Address().String()))
+	}
+	if c.Signer != nil {
+		zapFields = append(zapFields, zap.String("from", c.Signer.PubKey().Address().String()))
+	}
+
+	c.logger = *c.logger.Named("client").With(zapFields...)
 
 	c.client, err = grpcClient.New(target, grpc.WithTransportCredentials(
 		insecure.NewCredentials(), // TODO: should add client configuration for secure transport

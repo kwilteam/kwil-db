@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
 const (
@@ -22,7 +23,11 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		return err
 	}
 
-	options := []client.ClientOpt{}
+	options := []client.ClientOpt{
+		client.WithLogger(log.New(log.Config{
+			Level: "error", // TODO: the log package should change this to take an enum instead of a string
+		})),
+	}
 
 	// We were previously mixing up the eth rpc url with the cometBFT RPC url.  Do we need to set it here?
 
