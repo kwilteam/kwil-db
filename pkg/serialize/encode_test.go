@@ -30,87 +30,99 @@ type StructUnexportedField struct {
 
 func Test_Encoding(t *testing.T) {
 	type testCase struct {
-		name        string
-		input       any
-		output      any
-		encodingErr bool
+		name string
+		testable
 	}
 
 	testCases := []testCase{
 		{
 			name: "valid struct",
-			input: TestStruct1{
-				Val1: 1,
-				Val3: []byte("test"),
-				Val2: "test",
-				Val4: true,
-			},
-			output: TestStruct1{
-				Val1: 1,
-				Val2: "test",
-				Val3: []byte("test"),
-				Val4: true,
+			testable: genericTestCase[TestStruct1]{
+				input: TestStruct1{
+					Val1: 1,
+					Val3: []byte("test"),
+					Val2: "test",
+					Val4: true,
+				},
+				output: TestStruct1{
+					Val1: 1,
+					Val2: "test",
+					Val3: []byte("test"),
+					Val4: true,
+				},
 			},
 		},
 		{
 			name: "unexported field",
-			input: StructUnexportedField{
-				val1: 1,
-				Val2: "test",
-			},
-			output: StructUnexportedField{
-				Val2: "test",
+			testable: genericTestCase[StructUnexportedField]{
+				input: StructUnexportedField{
+					val1: 1,
+					Val2: "test",
+				},
+				output: StructUnexportedField{
+					Val2: "test",
+				},
 			},
 		},
 		{
 			name: "invalid struct - signed int",
-			input: InvalidStructSignedInt{
-				Val1: -1,
+			testable: genericTestCase[InvalidStructSignedInt]{
+				input: InvalidStructSignedInt{
+					Val1: -1,
+				},
+				encodingErr: true,
 			},
-			encodingErr: true,
 		},
 		{
 			name: "invalid struct - map",
-			input: InvalidStructMap{
-				Val1: map[string]string{
-					"test": "test",
+			testable: genericTestCase[InvalidStructMap]{
+				input: InvalidStructMap{
+					Val1: map[string]string{
+						"test": "test",
+					},
 				},
+				encodingErr: true,
 			},
-			encodingErr: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output, err := serialize.Encode(tc.input)
-			if tc.encodingErr && err == nil {
-				t.Errorf("Expected error, got nil")
-			}
-			if !tc.encodingErr && err != nil {
-				t.Errorf("Expected no error, got %v", err)
-			}
-			if tc.encodingErr {
-				return
-			}
-
-			_, err = serialize.Decode[any](output)
-			if err != nil {
-				t.Errorf("Expected no error, got %v", err)
-			}
-			if err != nil {
-				t.Errorf("Expected no error, got %v", err)
-			}
-
-			var v any
-			err = serialize.DecodeInto(output, &v)
-			if err != nil {
-				t.Errorf("Expected no error, got %v", err)
-			}
-			if err != nil {
-				return
-			}
+			tc.testable.runTest(t)
 		})
 	}
+}
+
+type testable interface {
+	runTest(t *testing.T)
+}
+
+type genericTestCase[T any] struct {
+	input       T
+	output      T
+	encodingErr bool
+}
+
+func (g genericTestCase[T]) runTest(t *testing.T) {
+	output, err := serialize.Encode(g.input)
+	if g.encodingErr && err == nil {
+		t.Errorf("Expected error, got nil")
+	}
+	if !g.encodingErr && err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if g.encodingErr {
+		return
+	}
+
+	result := new(T)
+	err = serialize.DecodeInto(output, result)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	assert.EqualValuesf(t, g.output, *result, "Expected result to be %v, got %v", g.output, *result)
+
 }
 
 func Test_EncodeSlice(t *testing.T) {
@@ -194,10 +206,6 @@ func Test_EncodeSlice(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.testFunc.runTest)
 	}
-}
-
-type testable interface {
-	runTest(t *testing.T)
 }
 
 type genericSliceTestCase[T any] struct {
