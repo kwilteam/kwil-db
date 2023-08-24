@@ -32,8 +32,10 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 	//err := deploy.DeployDatabase(ctx, db)
 
 	txHash, err := deploy.DeployDatabase(ctx, db)
+	require.NoError(t, err, "failed to deploy database")
 	t.Logf("txHash: %s", hex.EncodeToString(txHash))
 
+	//// Then i expect success
 	var status strings.Builder
 	require.Eventually(t, func() bool {
 		// prevent appending to the prior invocation(s)
@@ -45,9 +47,6 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 			return false
 		}
 	}, time.Second*15, time.Second*2, "deploy database failed: %s", status.String())
-
-	//// Then i expect success
-	require.NoError(t, err, "failed to deploy database")
 
 	// And i expect database should exist
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
@@ -87,7 +86,9 @@ func DatabaseDeployInvalidExtensionSpecification(ctx context.Context, t *testing
 
 	// Deploy faulty database and expect error
 	txHash, err := deploy.DeployDatabase(ctx, db)
+	require.NoError(t, err, "failed to deploy database")
 
+	// And i expect success
 	var status strings.Builder
 	require.Eventually(t, func() bool {
 		// prevent appending to the prior invocation(s)
