@@ -7,8 +7,8 @@
 **/tmp/
 **/finished_logs/
 **/.kwal/
-cmd/kwil-cosmos/cmd/kwild/kwild
-cmd/kwil-cosmos/cmd/kwild/exe
+cmd/kwild/kwild
+cmd/kwil-cli/kwil-cli
 keys/cosmos
 keys/ethereum.pem
 .kwilbadger/
@@ -20,13 +20,12 @@ cmd/cmd
 .build/
 .task/
 **/__debug_bin.exe
-**/__debug_bin
+**/__debug_bin*
 .pgdata/
 .DS_Store
 **/**/node_modules
 _ignore
 .local_env
-api/protobuf
 api/openapi-spec/api/v0/api.swagger.json
 .goreleaser.yaml
 .env
