@@ -28,26 +28,9 @@ func (pv *Ed25519PrivateKey) Hex() string {
 	return hex.EncodeToString(pv.Bytes())
 }
 
-// SignMsg signs the given message(not hashed). ed25519 is kind special that hashing is took care already.
-// Implements the Signer interface.
-func (pv *Ed25519PrivateKey) SignMsg(msg []byte) (*Signature, error) {
-	sig, err := pv.Sign(msg)
-	if err != nil {
-		return nil, err
-	}
-	return &Signature{
-		Signature: sig,
-		Type:      SIGNATURE_TYPE_ED25519,
-	}, nil
-}
-
-// Sign signs the given message(not hashed). This is only to keep the interface consistent.
+// Sign signs the given message(not hashed). This returns a standard ed25519 signature, 64 bytes long.
 func (pv *Ed25519PrivateKey) Sign(msg []byte) ([]byte, error) {
 	return ed25519.Sign(pv.key, msg), nil
-}
-
-func (pv *Ed25519PrivateKey) Signer() Signer {
-	return pv
 }
 
 func (pv *Ed25519PrivateKey) Type() KeyType {
@@ -71,6 +54,7 @@ func (pub *Ed25519PublicKey) Type() KeyType {
 }
 
 // Verify verifies the given signature against the given message(not hashed).
+// This expects a standard ed25519 signature, 64 bytes long.
 func (pub *Ed25519PublicKey) Verify(sig []byte, msg []byte) error {
 	if len(sig) != ed25519.SignatureSize {
 		return errInvalidSignature

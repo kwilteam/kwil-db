@@ -90,13 +90,15 @@ func (r *IntHelper) LoadConfig() {
 	cfg.NValidator, err = strconv.Atoi(nodeNum)
 	require.NoError(r.t, err, "invalid node number")
 
-	cfg.AlicePK, err = crypto.Secp256k1PrivateKeyFromHex(cfg.AliceRawPK)
+	alicePk, err := crypto.Secp256k1PrivateKeyFromHex(cfg.AliceRawPK)
 	require.NoError(r.t, err, "invalid alice private key")
+	cfg.AlicePK = crypto.DefaultSigner(alicePk)
 
-	cfg.BobPk, err = crypto.Secp256k1PrivateKeyFromHex(cfg.BobRawPK)
+	bobPk, err := crypto.Secp256k1PrivateKeyFromHex(cfg.BobRawPK)
 	require.NoError(r.t, err, "invalid bob private key")
-	r.cfg = cfg
+	cfg.BobPk = crypto.DefaultSigner(bobPk)
 
+	r.cfg = cfg
 	cfg.DumpToEnv()
 }
 

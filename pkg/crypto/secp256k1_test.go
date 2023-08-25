@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Note: all the tests below are using same key pair and message
+
 func TestSecp256k1PrivateKey_Sign(t *testing.T) {
 	key := "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
 	pk, err := Secp256k1PrivateKeyFromHex(key)
@@ -20,29 +22,8 @@ func TestSecp256k1PrivateKey_Sign(t *testing.T) {
 	require.NoError(t, err, "error sign")
 
 	expectSig := "19a4aced02d5b9142b4f622b06442b1904445e16bd25409e6b0ff357ccc021d001d0e7824654b695b4b6e0991cb7507f487b82be4b2ed713d1e3e2cbc3d2518d01"
-	require.Equal(t, SIGNATURE_SECP256K1_PERSONAL_LENGTH, len(sig), "invalid signature length")
+	require.Equal(t, 65, len(sig), "invalid signature length")
 	require.EqualValues(t, hex.EncodeToString(sig), expectSig, "invalid signature")
-}
-
-func TestSecp256k1PrivateKey_SignMsg(t *testing.T) {
-	key := "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
-	pk, err := Secp256k1PrivateKeyFromHex(key)
-	require.NoError(t, err, "error parse private key")
-
-	msg := []byte("foo")
-
-	sig, err := pk.SignMsg(msg)
-	require.NoError(t, err, "error sign msg")
-
-	expectSignature := "cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e253475800"
-	expectSignatureBytes, _ := hex.DecodeString(expectSignature)
-
-	expectSig := &Signature{
-		Signature: expectSignatureBytes,
-		Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
-	}
-
-	assert.EqualValues(t, expectSig, sig, "unexpect signature")
 }
 
 func TestSecp256k1PublicKey_Verify(t *testing.T) {
@@ -58,7 +39,7 @@ func TestSecp256k1PublicKey_Verify(t *testing.T) {
 
 	sig := "19a4aced02d5b9142b4f622b06442b1904445e16bd25409e6b0ff357ccc021d001d0e7824654b695b4b6e0991cb7507f487b82be4b2ed713d1e3e2cbc3d2518d01"
 	sigBytes, _ := hex.DecodeString(sig)
-	require.Equal(t, SIGNATURE_SECP256K1_PERSONAL_LENGTH, len(sigBytes), "invalid signature length")
+	require.Equal(t, 65, len(sigBytes), "invalid signature length")
 
 	tests := []struct {
 		name     string
@@ -66,14 +47,14 @@ func TestSecp256k1PublicKey_Verify(t *testing.T) {
 		wantErr  error
 	}{
 		{
-			name:     "verify success",
-			sigBytes: sigBytes[:len(sigBytes)-1],
+			name:     "verify success with 65 bytes signature",
+			sigBytes: sigBytes[:],
 			wantErr:  nil,
 		},
 		{
-			name:     "invalid signature length",
-			sigBytes: sigBytes,
-			wantErr:  errInvalidSignature,
+			name:     "verify success with 64 bytes signature(no recovery ID 'v')",
+			sigBytes: sigBytes[:len(sigBytes)-1],
+			wantErr:  nil,
 		},
 		{
 			name:     "wrong signature",
