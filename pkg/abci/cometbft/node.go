@@ -25,7 +25,7 @@ func NewCometBftNode(app abciTypes.Application, privateKey []byte, atomicStore p
 	conf := cometConfig.DefaultConfig().SetRoot(directory)
 
 	// TODO: this is temporary hack, we need to use KWILD config
-	//conf.LogLevel = "debug"
+	conf.LogLevel = "debug"
 	// create blocks every 5 seconds
 	//conf.Consensus.CreateEmptyBlocks = true
 	//conf.Consensus.TimeoutCommit = 5 * time.Second

@@ -48,6 +48,9 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 		}
 	}, time.Second*15, time.Second*2, "deploy database failed: %s", status.String())
 
+	// TODO: even with this wait, `GetSchema` below is not querying in the same block as the deploy, it still fails
+	time.Sleep(15 * time.Second)
+
 	// And i expect database should exist
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.NoError(t, err)

@@ -15,6 +15,7 @@ import (
 func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*txpb.BroadcastResponse, error) {
 	logger := s.log.With(zap.String("rpc", "Broadcast"),
 		zap.String("PayloadType", req.Tx.Body.PayloadType))
+	logger.Debug("incoming transaction")
 
 	tx, err := convertToAbciTx(req.Tx)
 	if err != nil {
@@ -23,7 +24,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, status.Errorf(codes.Internal, "failed to convert transaction")
 	}
 
-	logger.Debug("incoming transaction", zap.String("from", tx.GetSenderAddress()))
+	logger = logger.With(zap.String("from", tx.GetSenderAddress()))
 
 	err = tx.Verify()
 	if err != nil {

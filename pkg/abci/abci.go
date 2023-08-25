@@ -147,7 +147,9 @@ var _ abciTypes.Application = &AbciApp{}
 // BeginBlock begins a block.
 // If the previous commit is not finished, it will wait for the previous commit to finish.
 func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.ResponseBeginBlock {
-	a.log.Debug("begin block", zap.Int64("height", req.Header.Height))
+	logger := a.log.With(zap.String("stage", "ABCI BeginBlock"), zap.Int("height", int(req.Header.Height)))
+	logger.Debug("begin block")
+
 	a.commitSemaphore <- struct{}{} // peg in (until Commit is applied), there will only be at most one waiter
 
 	err := a.committer.Begin(context.Background())
@@ -162,16 +164,18 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 		// 	a.log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
 		// 	continue
 		// }
-		a.log.Info("punish validator", zap.String("addr", addr))
+		logger.Info("punish validator", zap.String("addr", addr))
 
 		// This is why we need the addr=>pubkey map. Why, comet, why?
 		pubkey, ok := a.valAddrToKey[addr]
 		if !ok {
+			logger.Error("unknown validator address", zap.String("addr", addr))
 			panic(newFatalError("BeginBlock", &req, fmt.Sprintf("unknown validator address %v", addr)))
 		}
 		const punishDelta = 1
 		newPower := ev.Validator.Power - punishDelta
 		if err = a.validators.Punish(context.Background(), pubkey, newPower); err != nil {
+			logger.Error("failed to punish validator", zap.Error(err))
 			panic(newFatalError("BeginBlock", &req, fmt.Sprintf("failed to punish validator %v", addr)))
 		}
 	}
@@ -181,6 +185,8 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 
 func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseCheckTx {
 	logger := a.log.With(zap.String("stage", "ABCI CheckTx"))
+	logger.Debug("check tx")
+
 	tx := &transactions.Transaction{}
 	err := tx.UnmarshalBinary(incoming.Tx)
 	if err != nil {
@@ -203,8 +209,8 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 
 func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDeliverTx {
 	logger := a.log.With(zap.String("stage", "ABCI DeliverTx"))
-	ctx := context.Background()
 
+	ctx := context.Background()
 	tx := &transactions.Transaction{}
 	err := tx.UnmarshalBinary(req.Tx)
 	if err != nil {
