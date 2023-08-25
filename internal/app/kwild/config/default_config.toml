@@ -3,7 +3,9 @@
 
 # NOTE: Any path below can be absolute (e.g. "/var/myawesomeapp/data") or
 # relative to the root directory (e.g. "data"). The root directory is
-# "$HOME/.kwil" by default, but could be changed via $KWILD_ROOT_DIR env variable
+# "$HOME/.kwild" by default, but could be changed via $KWILD_HOME env variable
+# or via --home command line flag.
+# Order of preference: command line flag, env variable, default value.
 
 # Root Directory Structure:
 # RootDir/
@@ -31,13 +33,13 @@
 
 [app]
 # Node's Private key
-private_key = "f2d82d73ba03a7e843443f2b3179a01398144baa4a23d40d1e8a3a8e4fb217d0484d59f4de46b2174ebce66ac3afa7989b444244323c19a74b683f54cf33227c"
+private_key = ""
 
 # TCP or UNIX socket address for the KWILD App's GRPC server to listen on
-grpc_laddr = "localhost:50051"
+grpc_listen_addr = "localhost:50051"
 
 # TCP or UNIX socket address for the KWILD App's HTTP server to listen on
-http_laddr = "localhost:8080"
+http_listen_addr = "localhost:8080"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = []
@@ -66,7 +68,8 @@ tls_cert_file = ""
 # Otherwise, HTTP server is run.
 tls_key_file = ""
 
-
+# Kwild Server hostname
+hostname = ""
 
 #######################################################################
 ###                Snapshot store Config Options                    ###
@@ -106,7 +109,7 @@ log_format = "plain"
 #######################################################################
 [chain]
 # A custom human readable name for this node
-moniker = "CAF80E6A4EBD1148"
+moniker = "validator-node-0"
 
 #######################################################################
 ###                 Advanced Configuration Options                  ###
@@ -119,14 +122,6 @@ moniker = "CAF80E6A4EBD1148"
 
 # TCP or UNIX socket address for the RPC server to listen on
 laddr = "tcp://0.0.0.0:26657"
-
-# Maximum number of simultaneous connections (including WebSocket).
-# If you want to accept a larger number than the default, make sure
-# you increase your OS limits.
-# 0 - unlimited.
-# Should be < {ulimit -Sn} - {MaxNumInboundPeers} - {MaxNumOutboundPeers} - {N of wal, db and other open files}
-# 1024 - 40 - 10 - 50 = 924 = ~900
-max_open_connections = 900
 
 # How long to wait for a tx to be committed during /broadcast_tx_commit.
 # WARNING: Using a value larger than 10s will result in increasing the
@@ -164,11 +159,9 @@ laddr = "tcp://0.0.0.0:26656"
 # example: 159.89.10.97:26656
 external_address = ""
 
-# Comma separated list of seed nodes to connect to
-seeds = ""
-
 # Comma separated list of nodes to keep persistent connections to (used for bootstrapping)
-persistent_peers = "d128266b8b9f64c313de466cf29e0a6182dba54d@172.10.100.2:26656,9440f4a8059cf7ff31454973c4f9c68de65fe526@172.10.100.3:26656,87ee0b2008459ad73e3e8df4f4614265507a7085@172.10.100.4:26656"
+# Example: "d128266b8b9f64c313de466cf29e0a6182dba54d@172.10.100.2:26656,9440f4a8059cf7ff31454973c4f9c68de65fe526@172.10.100.3:26656"
+persistent_peers = ""
 
 # UPNP port forwarding
 upnp = false
@@ -185,30 +178,6 @@ max_num_outbound_peers = 10
   
 # List of node IDs, to which a connection will be (re)established ignoring any existing limits
 unconditional_peer_ids = ""
-
-# Time to wait before flushing messages out on the connection
-flush_throttle_timeout = "100ms"
-
-# Maximum size of a message packet payload, in bytes
-max_packet_msg_payload_size = 1024
-
-# Rate at which packets can be sent, in bytes/second
-send_rate = 5120000
-
-# Rate at which packets can be received, in bytes/second
-recv_rate = 5120000
-
-# Set true to enable the peer-exchange reactor
-pex = true
-
-# Seed mode, in which node constantly crawls the network and looks for
-# peers. If another node asks it for addresses, it responds and disconnects.
-#
-# Does not work if the peer-exchange reactor is disabled.
-seed_mode = false
-
-# Comma separated list of peer IDs to keep private (will not be gossiped to other peers)
-private_peer_ids = ""
 
 # Toggle to disable guard against peers connecting from the same ip.
 allow_duplicate_ip = true
@@ -257,17 +226,3 @@ discovery_time = "15s"
 # The timeout duration before re-requesting a chunk, possibly from a different
 # peer (default: 1 minute).
 chunk_request_timeout = "10s"
-
-#######################################################
-###       Instrumentation Configuration Options     ###
-#######################################################
-[chain.instrumentation]
-
-# When true, Prometheus metrics are served under /metrics on
-# PrometheusListenAddr.
-# Check out the documentation for the list of available metrics.
-prometheus = false
-
-# Address to listen for Prometheus collector(s) connections
-prometheus_listen_addr = ":26660"
-

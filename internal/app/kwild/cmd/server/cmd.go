@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/spf13/cobra"
 )
 
@@ -12,9 +13,9 @@ var (
 	}
 )
 
-func NewServerCmd() *cobra.Command {
+func NewServerCmd(cfg *config.KwildConfig) *cobra.Command {
 	serverCmd.AddCommand(
-		NewStartCmd(),
+		NewStartCmd(cfg),
 	)
 
 	return serverCmd

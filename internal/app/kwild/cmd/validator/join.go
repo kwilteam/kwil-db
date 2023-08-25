@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/spf13/cobra"
 )
 
 // ApproveCmd is used for approving validators
-func joinCmd() *cobra.Command {
+func joinCmd(cfg *config.KwildConfig) *cobra.Command {
 	var appGRPCListenAddr string
 	cmd := &cobra.Command{
 		Use:   "join [JoinerPrivateKey][power] [BcRPCURL]",
@@ -41,6 +42,6 @@ func joinCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&appGRPCListenAddr, "app.grpc_laddr", "localhost:50051", "Address to listen for gRPC connections for the application")
+	cmd.Flags().StringVar(&appGRPCListenAddr, "grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Address to listen for gRPC connections for the application")
 	return cmd
 }

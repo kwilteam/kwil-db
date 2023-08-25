@@ -8,14 +8,16 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+
 	cmtos "github.com/cometbft/cometbft/libs/os"
-	"github.com/cometbft/cometbft/p2p"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	cmtrand "github.com/cometbft/cometbft/libs/rand"
+	"github.com/cometbft/cometbft/p2p"
 	"github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+
 	"github.com/spf13/viper"
 )
 
@@ -54,7 +56,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	}
 
 	cfg.ChainCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
-	WriteConfigFile(filepath.Join(genCfg.HomeDir, "abci/config", "config.toml"), cfg)
+	writeConfigFile(filepath.Join(genCfg.HomeDir, "abci/config", "config.toml"), cfg)
 	return nil
 }
 
@@ -158,17 +160,10 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	}
 
 	// Gather persistent peers addresses
-	var (
-		persistentPeers string
-		err             error
-	)
+	var persistentPeers string
 
 	if genCfg.PopulatePersistentPeers {
-		persistentPeers, err = persistentPeersString(cfg, genCfg, privateKeys)
-		if err != nil {
-			_ = os.RemoveAll(genCfg.OutputDir)
-			return err
-		}
+		persistentPeers = persistentPeersString(cfg, genCfg, privateKeys)
 	}
 
 	// Overwrite default config
@@ -181,10 +176,10 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		if genCfg.PopulatePersistentPeers {
 			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
 		}
-		WriteConfigFile(filepath.Join(nodeDir, "abci", "config", "config.toml"), cfg)
+		writeConfigFile(filepath.Join(nodeDir, "abci", "config", "config.toml"), cfg)
 	}
 
-	fmt.Printf("Successfully initialized %d node directories\n", genCfg.NValidators)
+	fmt.Printf("Successfully initialized %d node directories\n", genCfg.NValidators+genCfg.NNonValidators)
 
 	return nil
 }
@@ -210,8 +205,8 @@ func initFilesWithConfig(cfg *config.KwildConfig, nodeIdx int) error {
 	pub := priv.PubKey().(ed25519.PubKey)
 	addr := pub.Address()
 	cfg.AppCfg.PrivateKey = hex.EncodeToString(priv[:])
-	NodeID := p2p.ID(hex.EncodeToString(addr))
-	fmt.Println("NodeID for node-", nodeIdx, NodeID)
+	nodeID := (&p2p.NodeKey{PrivKey: priv}).ID()
+	fmt.Printf("Node Id for node-%d: %v\n", nodeIdx, nodeID)
 
 	// genesis file
 	genFile := cfg.ChainCfg.GenesisFile()
@@ -253,22 +248,19 @@ func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {
 		os.Exit(1)
 	}
 
-	for j := 0; j < i; j++ {
-		ip[3]++
-	}
+	ip[3] += byte(i)
 	return ip.String()
 }
 
-func persistentPeersString(cfg *config.KwildConfig, genCfg *TestnetGenerateConfig, PrivKeys []ed25519.PrivKey) (string, error) {
+func persistentPeersString(cfg *config.KwildConfig, genCfg *TestnetGenerateConfig, PrivKeys []ed25519.PrivKey) string {
 	persistentPeers := make([]string, genCfg.NValidators+genCfg.NNonValidators)
 	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
 		cfg.RootDir = nodeDir
 		cfg.ChainCfg.SetRoot(filepath.Join(nodeDir, "abci"))
-		pub := PrivKeys[i].PubKey().(ed25519.PubKey)
-		addr := pub.Address()
-		nodeID := p2p.ID(hex.EncodeToString(addr))
+		nodeKey := p2p.NodeKey{PrivKey: PrivKeys[i]}
+		nodeID := nodeKey.ID()
 		persistentPeers[i] = p2p.IDAddressString(nodeID, fmt.Sprintf("%s:%d", hostnameOrIP(genCfg, i), genCfg.P2pPort))
 	}
-	return strings.Join(persistentPeers, ","), nil
+	return strings.Join(persistentPeers, ",")
 }

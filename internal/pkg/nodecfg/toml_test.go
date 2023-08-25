@@ -1,30 +1,29 @@
-package nodecfg_test
+package nodecfg
 
 import (
 	"os"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
 )
 
 func Test_Generate_TOML(t *testing.T) {
 	cfg := config.DefaultConfig()
 
 	cfg.AppCfg.SqliteFilePath = "sqlite.db/randomPath"
-	cfg.AppCfg.GrpcListenAddress = "192.168.5.6"
+	cfg.AppCfg.GrpcListenAddress = "localhost:9000"
 
-	nodecfg.WriteConfigFile("test.toml", cfg)
+	writeConfigFile("test.toml", cfg)
 
 }
 
 func Test_GenerateNodeCfg(t *testing.T) {
-	genCfg := nodecfg.NodeGenerateConfig{
+	genCfg := NodeGenerateConfig{
 		InitialHeight: 0,
 		HomeDir:       "test/trybuild/",
 	}
 
-	err := nodecfg.GenerateNodeConfig(&genCfg)
+	err := GenerateNodeConfig(&genCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,18 +31,18 @@ func Test_GenerateNodeCfg(t *testing.T) {
 	os.RemoveAll(genCfg.HomeDir)
 }
 
-func Test_GenerateTestnet(t *testing.T) {
-	genCfg := nodecfg.TestnetGenerateConfig{
+func Test_GenerateTestnetConfig(t *testing.T) {
+	genCfg := TestnetGenerateConfig{
 		NValidators:             2,
 		NNonValidators:          1,
 		InitialHeight:           0,
 		OutputDir:               "test/testnet/",
-		StartingIPAddress:       "192.168.1.4",
+		StartingIPAddress:       "192.168.12.12",
 		PopulatePersistentPeers: true,
 		P2pPort:                 26656,
 	}
 
-	err := nodecfg.GenerateTestnetConfig(&genCfg)
+	err := GenerateTestnetConfig(&genCfg)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,35 +3,32 @@ package nodecfg
 import (
 	"bytes"
 	"os"
-	"strings"
 	"text/template"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 )
 
-const DefaultDirPerm = 0755
+const defaultDirPerm = 0755
 
 var configTemplate *template.Template
 
 func init() {
 	var err error
-	tmpl := template.New("configFileTemplate").Funcs(template.FuncMap{
-		"StringsJoin": strings.Join,
-	})
+	tmpl := template.New("configFileTemplate")
 	if configTemplate, err = tmpl.Parse(defaultConfigTemplate); err != nil {
 		panic(err)
 	}
 }
 
 // kwildTemplateConfig
-func WriteConfigFile(configFilePath string, cfg *config.KwildConfig) {
+func writeConfigFile(configFilePath string, cfg *config.KwildConfig) {
 	var buffer bytes.Buffer
 
 	if err := configTemplate.Execute(&buffer, cfg); err != nil {
 		panic(err)
 	}
 
-	os.WriteFile(configFilePath, buffer.Bytes(), DefaultDirPerm)
+	os.WriteFile(configFilePath, buffer.Bytes(), defaultDirPerm)
 }
 
 const defaultConfigTemplate = `
@@ -40,7 +37,9 @@ const defaultConfigTemplate = `
 
 # NOTE: Any path below can be absolute (e.g. "/var/myawesomeapp/data") or
 # relative to the root directory (e.g. "data"). The root directory is
-# "$HOME/.kwil" by default, but could be changed via $KWILD_ROOT_DIR env variable
+# "$HOME/.kwild" by default, but could be changed via $KWILD_HOME env variable
+# or via --home command line flag.
+# Order of preference: command line flag, env variable, default value.
 
 # Root Directory Structure:
 # RootDir/
@@ -71,10 +70,10 @@ const defaultConfigTemplate = `
 private_key = "{{ .AppCfg.PrivateKey }}"
 
 # TCP or UNIX socket address for the KWILD App's GRPC server to listen on
-grpc_laddr = "{{ .AppCfg.GrpcListenAddress }}"
+grpc_listen_addr = "{{ .AppCfg.GrpcListenAddress }}"
 
 # TCP or UNIX socket address for the KWILD App's HTTP server to listen on
-http_laddr = "{{ .AppCfg.HttpListenAddress }}"
+http_listen_addr = "{{ .AppCfg.HttpListenAddress }}"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = "{{ .AppCfg.ExtensionEndpoints }}"
@@ -103,7 +102,8 @@ tls_cert_file = "{{ .AppCfg.TLSCertFile }}}"
 # Otherwise, HTTP server is run.
 tls_key_file = "{{ .AppCfg.TLSKeyFile }}"
 
-
+# Kwild Server hostname
+hostname = ""
 
 #######################################################################
 ###                Snapshot store Config Options                    ###
@@ -157,14 +157,6 @@ moniker = "{{ .ChainCfg.Moniker }}"
 # TCP or UNIX socket address for the RPC server to listen on
 laddr = "{{ .ChainCfg.RPC.ListenAddress }}"
 
-# Maximum number of simultaneous connections (including WebSocket).
-# If you want to accept a larger number than the default, make sure
-# you increase your OS limits.
-# 0 - unlimited.
-# Should be < {ulimit -Sn} - {MaxNumInboundPeers} - {MaxNumOutboundPeers} - {N of wal, db and other open files}
-# 1024 - 40 - 10 - 50 = 924 = ~900
-max_open_connections = "{{ .ChainCfg.RPC.MaxOpenConnections }}"
-
 # How long to wait for a tx to be committed during /broadcast_tx_commit.
 # WARNING: Using a value larger than 10s will result in increasing the
 # global HTTP write timeout, which applies to all connections and endpoints.
@@ -204,14 +196,9 @@ laddr = "{{ .ChainCfg.P2P.ListenAddress }}"
 # example: 159.89.10.97:26656
 external_address = "{{ .ChainCfg.P2P.ExternalAddress }}"
 
-# Comma separated list of seed nodes to connect to
-seeds = "{{ .ChainCfg.P2P.Seeds }}"
-
 # Comma separated list of nodes to keep persistent connections to (used for bootstrapping)
+# Example: "d128266b8b9f64c313de466cf29e0a6182dba54d@172.10.100.2:26656,9440f4a8059cf7ff31454973c4f9c68de65fe526@172.10.100.3:26656"
 persistent_peers = "{{ .ChainCfg.P2P.PersistentPeers }}"
-
-# UPNP port forwarding
-upnp = "{{ .ChainCfg.P2P.UPNP }}"
 
 # Set true for strict address routability rules
 # Set false for private or local networks
@@ -225,30 +212,6 @@ max_num_outbound_peers = "{{ .ChainCfg.P2P.MaxNumOutboundPeers }}"
   
 # List of node IDs, to which a connection will be (re)established ignoring any existing limits
 unconditional_peer_ids = "{{ .ChainCfg.P2P.UnconditionalPeerIDs }}"
-
-# Time to wait before flushing messages out on the connection
-flush_throttle_timeout = "{{ .ChainCfg.P2P.FlushThrottleTimeout }}"
-
-# Maximum size of a message packet payload, in bytes
-max_packet_msg_payload_size = "{{ .ChainCfg.P2P.MaxPacketMsgPayloadSize }}"
-
-# Rate at which packets can be sent, in bytes/second
-send_rate = "{{ .ChainCfg.P2P.SendRate }}"
-
-# Rate at which packets can be received, in bytes/second
-recv_rate = "{{ .ChainCfg.P2P.RecvRate }}"
-
-# Set true to enable the peer-exchange reactor
-pex = "{{ .ChainCfg.P2P.PexReactor }}"
-
-# Seed mode, in which node constantly crawls the network and looks for
-# peers. If another node asks it for addresses, it responds and disconnects.
-#
-# Does not work if the peer-exchange reactor is disabled.
-seed_mode = "{{ .ChainCfg.P2P.SeedMode }}"
-
-# Comma separated list of peer IDs to keep private (will not be gossiped to other peers)
-private_peer_ids = "{{ .ChainCfg.P2P.PrivatePeerIDs }}"
 
 # Toggle to disable guard against peers connecting from the same ip.
 allow_duplicate_ip = "{{ .ChainCfg.P2P.AllowDuplicateIP }}"
@@ -297,17 +260,4 @@ discovery_time = "{{ .ChainCfg.StateSync.DiscoveryTime }}"
 # The timeout duration before re-requesting a chunk, possibly from a different
 # peer (default: 1 minute).
 chunk_request_timeout = "{{ .ChainCfg.StateSync.ChunkRequestTimeout }}"
-
-#######################################################
-###       Instrumentation Configuration Options     ###
-#######################################################
-[chain.instrumentation]
-
-# When true, Prometheus metrics are served under /metrics on
-# PrometheusListenAddr.
-# Check out the documentation for the list of available metrics.
-prometheus = "{{ .ChainCfg.Instrumentation.Prometheus }}"
-
-# Address to listen for Prometheus collector(s) connections
-prometheus_listen_addr = "{{ .ChainCfg.Instrumentation.PrometheusListenAddr }}"
 `

@@ -3,6 +3,7 @@ package validator
 import (
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 
 	"github.com/spf13/cobra"
@@ -12,7 +13,7 @@ import (
 // TODO: If we support revocation, we need to use different way of storing, something like a kv store or something, Also need to remove node from validator set? Only possible in permissioned network
 
 // ApproveCmd is used for approving validators
-func approveCmd() *cobra.Command {
+func approveCmd(cfg *config.KwildConfig) *cobra.Command {
 	var appGRPCListenAddr string
 	cmd := &cobra.Command{
 		Use:   "approve [JoinerPublicKey] [ApproverPrivateKey] [BcRPCURL]",
@@ -45,6 +46,6 @@ func approveCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&appGRPCListenAddr, "app.grpc_laddr", "localhost:50051", "Address to listen for gRPC connections for the application")
+	cmd.Flags().StringVar(&appGRPCListenAddr, "grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Address to listen for gRPC connections for the application")
 	return cmd
 }

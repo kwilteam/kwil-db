@@ -3,11 +3,12 @@ package validator
 import (
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/spf13/cobra"
 )
 
-func leaveCmd() *cobra.Command {
+func leaveCmd(cfg *config.KwildConfig) *cobra.Command {
 	var appGRPCListenAddr string
 	cmd := &cobra.Command{
 		Use:   "leave [valPrivateKey] [BcRPCURL]",
@@ -33,6 +34,6 @@ func leaveCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&appGRPCListenAddr, "app.grpc_laddr", "localhost:50051", "Address to listen for gRPC connections for the application")
+	cmd.Flags().StringVar(&appGRPCListenAddr, "grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Address to listen for gRPC connections for the application")
 	return cmd
 }

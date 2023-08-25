@@ -16,13 +16,10 @@ func NewCmdGenerator() *cobra.Command {
 	genCmd.AddCommand(
 		NewTestnetCmd(),
 		InitFilesCmd(),
-		GenValidatorCmd(),
-		GenNodeKeyCmd(),
 		ShowNodeIDCmd(),
-		ShowValidatorCmd(),
-		NewResetAllCmd(),
+		NewResetAllCmd(), // TODO: Redo this according to the current files and dir structure
 		NewResetStateCmd(),
-		NewResetPrivValidatorCmd(),
+		NewGenesisHashCmd(),
 	)
 
 	// NOTE: could add global flags here (home, etc)

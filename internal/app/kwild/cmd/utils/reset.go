@@ -73,34 +73,6 @@ func NewResetStateCmd() *cobra.Command {
 	return cmd
 }
 
-// ResetPrivValidatorCmd resets the private validator files.
-func NewResetPrivValidatorCmd() *cobra.Command {
-	var homeDir string
-
-	// XXX: this is totally unsafe.
-	// it's only suitable for testnets.
-	cmd := &cobra.Command{
-		Use:     "unsafe-reset-priv-validator",
-		Aliases: []string{"unsafe_reset_priv_validator"},
-		Short:   "(unsafe) Reset this node's validator to genesis state, for testing purposes only",
-		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			config, err := ParseConfig(cmd, homeDir)
-			if err != nil {
-				return err
-			}
-
-			abci.ResetFilePV(config.PrivValidatorKeyFile(), config.PrivValidatorStateFile())
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&homeDir, "home", "", "comet home directory")
-	if homeDir == "" {
-		homeDir = os.Getenv("COMET_BFT_HOME")
-	}
-	return cmd
-}
-
 func ParseConfig(cmd *cobra.Command, homeDir string) (*cfg.Config, error) {
 	conf := cfg.DefaultConfig()
 	conf.SetRoot(homeDir)

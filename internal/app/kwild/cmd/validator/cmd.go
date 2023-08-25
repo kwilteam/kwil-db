@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/spf13/cobra"
 )
 
@@ -13,12 +14,12 @@ var (
 	}
 )
 
-func NewCmdValidator() *cobra.Command {
+func NewCmdValidator(cfg *config.KwildConfig) *cobra.Command {
 	rootCmd.AddCommand(
-		approveCmd(),
-		joinCmd(),
-		leaveCmd(),
-		statusCmd(),
+		approveCmd(cfg),
+		joinCmd(cfg),
+		leaveCmd(cfg),
+		statusCmd(cfg),
 	)
 
 	return rootCmd

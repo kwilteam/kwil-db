@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	cometCfg "github.com/cometbft/cometbft/config"
@@ -16,7 +17,7 @@ type KwildConfig struct {
 
 	AppCfg   *AppConfig       `mapstructure:"app"`
 	ChainCfg *cometCfg.Config `mapstructure:"chain"`
-	Logging  Logging          `mapstructure:"log"`
+	Logging  *Logging         `mapstructure:"log"`
 }
 
 type Logging struct {
@@ -26,8 +27,8 @@ type Logging struct {
 }
 
 type AppConfig struct {
-	GrpcListenAddress  string         `mapstructure:"grpc_laddr"`
-	HttpListenAddress  string         `mapstructure:"http_laddr"`
+	GrpcListenAddress  string         `mapstructure:"grpc_listen_addr"`
+	HttpListenAddress  string         `mapstructure:"http_listen_addr"`
 	PrivateKey         string         `mapstructure:"private_key"`
 	SqliteFilePath     string         `mapstructure:"sqlite_file_path"`
 	ExtensionEndpoints []string       `mapstructure:"extension_endpoints"`
@@ -47,19 +48,23 @@ type SnapshotConfig struct {
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
 }
 
-func (cfg *KwildConfig) LoadKwildConfig(rootDir string) error {
-	cfg.RootDir = rootDir
-	cfg.ChainCfg.RootDir = rootDir
+func (cfg *KwildConfig) LoadKwildConfig() error {
+	err := cfg.rootDirPath()
+	if err != nil {
+		return err
+	}
+
+	rootDir := cfg.RootDir
 	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
 
-	cfgFile := filepath.Join(rootDir, "abci/config/config.toml")
-	err := cfg.ParseConfig(cfgFile)
+	cfgFile := filepath.Join(cfg.ChainCfg.RootDir, "config", "config.toml")
+	err = cfg.ParseConfig(cfgFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %v", err)
 	}
 
-	cfg.ConfigureLogging()
-	cfg.ConfigureCerts()
+	cfg.configureLogging()
+	cfg.configureCerts()
 	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
 	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
 
@@ -67,6 +72,11 @@ func (cfg *KwildConfig) LoadKwildConfig(rootDir string) error {
 		return fmt.Errorf("invalid chain configuration data: %v", err)
 	}
 
+	privateKey, err := crypto.Ed25519PrivateKeyFromHex(cfg.AppCfg.PrivateKey)
+	if err != nil {
+		return err
+	}
+	cfg.PrivateKey = privateKey
 	return nil
 }
 
@@ -82,25 +92,39 @@ func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
 }
 
 func DefaultConfig() *KwildConfig {
-	cfg := &KwildConfig{}
-	cfg.ChainCfg = cometCfg.DefaultConfig()
-	cfg.AppCfg = &AppConfig{
-		GrpcListenAddress: "localhost:50051",
-		HttpListenAddress: "localhost:8081",
-		SqliteFilePath:    "data/kwil.db",
-		WithoutGasCosts:   true,
-		WithoutNonces:     false,
-		SnapshotConfig: SnapshotConfig{
-			Enabled:         false,
-			RecurringHeight: uint64(10000),
-			MaxSnapshots:    3,
-			SnapshotDir:     "snapshots",
+	cfg := &KwildConfig{
+		ChainCfg: cometCfg.DefaultConfig(),
+		AppCfg: &AppConfig{
+			GrpcListenAddress: "localhost:50051",
+			HttpListenAddress: "localhost:8081",
+			SqliteFilePath:    "data/kwil.db",
+			WithoutGasCosts:   true,
+			WithoutNonces:     false,
+			SnapshotConfig: SnapshotConfig{
+				Enabled:         false,
+				RecurringHeight: uint64(10000),
+				MaxSnapshots:    3,
+				SnapshotDir:     "snapshots",
+			},
+		},
+		Logging: &Logging{
+			LogLevel:    "info",
+			LogFormat:   "plain",
+			OutputPaths: []string{"stdout"},
 		},
 	}
+
+	cfg.ChainCfg = cometCfg.DefaultConfig()
+	cfg.ChainCfg.P2P.SeedMode = true
+	/*
+	 As all we are validating are tx signatures, no need to go through Validation again
+	 To be set to true when we have Validations based on gas, nonces, account balance, etc.
+	*/
+	cfg.ChainCfg.Mempool.Recheck = false
 	return cfg
 }
 
-func (cfg *KwildConfig) ConfigureLogging() {
+func (cfg *KwildConfig) configureLogging() {
 	// App Logging
 	cfg.AppCfg.Log.Level = cfg.Logging.LogLevel
 	cfg.AppCfg.Log.OutputPaths = cfg.Logging.OutputPaths
@@ -108,10 +132,9 @@ func (cfg *KwildConfig) ConfigureLogging() {
 	// Chain Logging
 	cfg.ChainCfg.LogLevel = cfg.Logging.LogLevel
 	cfg.ChainCfg.LogFormat = cfg.Logging.LogFormat
-
 }
 
-func (cfg *KwildConfig) ConfigureCerts() {
+func (cfg *KwildConfig) configureCerts() {
 	if cfg.AppCfg.TLSCertFile != "" {
 		cfg.AppCfg.TLSCertFile = rootify(cfg.AppCfg.TLSCertFile, cfg.RootDir)
 		cfg.ChainCfg.RPC.TLSCertFile = cfg.AppCfg.TLSCertFile
@@ -128,4 +151,26 @@ func rootify(path, rootDir string) string {
 		return path
 	}
 	return filepath.Join(rootDir, path)
+}
+
+func (cfg *KwildConfig) rootDirPath() error {
+	// if `home` flag is set, use it
+	if cfg.RootDir != "" {
+		return nil
+	}
+
+	homeDir := os.Getenv("KWILD_HOME")
+	if homeDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			// if `home` env(depends on OS) is not set, complain
+			// we can use '/tmp/.kwil' or '.kwil' in this case, but it's not a good idea
+			return err
+		}
+		cfg.RootDir = filepath.Join(home, ".kwild")
+		return nil
+	}
+
+	cfg.RootDir = homeDir
+	return nil
 }
