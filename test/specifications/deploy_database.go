@@ -37,7 +37,7 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 
 	//// Then i expect success
 	var status strings.Builder
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		// prevent appending to the prior invocation(s)
 		status.Reset()
 		if err := deploy.TxSuccess(ctx, txHash); err == nil {
@@ -46,14 +46,14 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 			status.WriteString(err.Error())
 			return false
 		}
-	}, time.Second*15, time.Second*2, "deploy database failed: %s", status.String())
+	}, time.Second*15, time.Second*1, "deploy database failed: %s", status.String())
 
 	// TODO: even with this wait, `GetSchema` below is not querying in the same block as the deploy, it still fails
 	time.Sleep(15 * time.Second)
 
 	// And i expect database should exist
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func DatabaseDeployInvalidSqlSpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {

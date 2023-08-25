@@ -51,9 +51,10 @@ func (d *KwildDriver) TxSuccess(ctx context.Context, txHash []byte) error {
 		return fmt.Errorf("failed to query: %w", err)
 	}
 
+	d.logger.Info("tx result", zap.Any("result", res))
 	// TODO: get full list of code
 	if res.Code != 0 {
-		return fmt.Errorf("transaction not ok")
+		return fmt.Errorf("transaction not ok, %s", res.Log)
 	}
 
 	return nil

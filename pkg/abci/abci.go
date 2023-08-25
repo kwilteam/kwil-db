@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -227,7 +229,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 	txCode := CodeOk
 
 	a.log.Debug("",
-		zap.String("sender", tx.GetSenderAddress()),
+		zap.String("Sender", tx.GetSenderAddress()),
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	switch tx.Body.PayloadType {
@@ -253,7 +255,18 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
+		dbID := utils.GenerateDBID(schema.Owner, schema.Name)
 		gasUsed = res.GasUsed
+		events = []abciTypes.Event{
+			{
+				Type: transactions.PayloadTypeDeploySchema.String(),
+				Attributes: []abciTypes.EventAttribute{
+					{Key: "Sender", Value: tx.GetSenderAddress(), Index: true},
+					{Key: "Result", Value: "Success", Index: true},
+					{Key: "DBID", Value: dbID, Index: true},
+				},
+			},
+		}
 	case transactions.PayloadTypeDropSchema:
 		drop := &transactions.DropSchema{}
 		err = drop.UnmarshalBinary(tx.Body.Payload)
@@ -397,6 +410,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		Code:    abciTypes.CodeTypeOK,
 		GasUsed: gasUsed,
 		Events:  events,
+		Log:     "success",
 	}
 }
 

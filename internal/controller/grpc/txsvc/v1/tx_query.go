@@ -48,7 +48,10 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 		GasUsed:   cmtResult.TxResult.GasUsed,
 		GasWanted: cmtResult.TxResult.GasWanted,
 		//Data: cmtResult.TxResult.Data,
+		//Events: cmtResult.TxResult.Events,
 	}
+
+	logger.Debug("tx query result", zap.Any("result", txResult))
 
 	return &txpb.TxQueryResponse{
 		Hash:     cmtResult.Hash.Bytes(),
