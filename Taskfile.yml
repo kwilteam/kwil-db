@@ -40,7 +40,7 @@ tasks:
   git:advance:
     desc: Advance git submodules to latest main revision
     cmds:
-      - git submodule update --remote
+      - git submodule update
 
   init:
     desc: Initialize the project
@@ -57,7 +57,7 @@ tasks:
     desc: Lint with golangci-lint
     deps: [pb:compile:v1]
     cmds:
-        - golangci-lint run -c .golangci.yml 
+        - golangci-lint run -c .golangci.yml --skip-dirs ./api/protobuf
 
   build:
     desc: Build cli & kwild
@@ -153,7 +153,7 @@ tasks:
         - task vendor
         - go test `go list ./... | grep -v /kwil-db\/test/` -count=1 -race
         - task vendor:clean
-  
+
   test:it:
     desc: Run integration tests
     deps:

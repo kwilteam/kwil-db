@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 
-	ethAccount "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 )
@@ -29,28 +28,10 @@ func (pv *Secp256k1PrivateKey) PubKey() PublicKey {
 	}
 }
 
-// SignMsg signs the given message(not hashed) according to EIP-191 personal_sign.
-// This is default signature type for sec256k1.
-// Implements the Signer interface.
-func (pv *Secp256k1PrivateKey) SignMsg(msg []byte) (*Signature, error) {
-	hash := ethAccount.TextHash(msg)
-	sig, err := pv.Sign(hash)
-	if err != nil {
-		return nil, err
-	}
-	return &Signature{
-		Signature: sig,
-		Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
-	}, nil
-}
-
 // Sign signs the given hash directly utilizing go-ethereum's Sign function.
+// This returns a standard secp256k1 signature, in [R || S || V] format where V is 0 or 1, 65 bytes long.
 func (pv *Secp256k1PrivateKey) Sign(hash []byte) ([]byte, error) {
 	return ethCrypto.Sign(hash, pv.key)
-}
-
-func (pv *Secp256k1PrivateKey) Signer() Signer {
-	return pv
 }
 
 func (pv *Secp256k1PrivateKey) Type() KeyType {
@@ -80,14 +61,28 @@ func (pub *Secp256k1PublicKey) Type() KeyType {
 	return Secp256k1
 }
 
-// Verify verifies the signature against the given hash.
-// e.g. this verify able to verify multi-signature-schema like personal_sign, eip712, cometbft, etc.
+// Verify verifies the standard secp256k1 signature against the given hash.
+// Caller of this function should make sure the signature is in one of the following two formats:
+// - 65 bytes, [R || S || V] format. This is the standard format.
+// - 64 bytes, [R || S] format.
+//
+// Since `Verify` suppose to verify the signature produced from `Sign` function, it expects the signature to be
+// 65 bytes long, and in [R || S || V] format where V is 0 or 1.
+// In this implementation, we use `VerifySignature`, which doesn't care about the recovery ID, so it can
+// also support 64 bytes [R || S] format signature like cometbft.
+// e.g. this `Verify` function is able to verify multi-signature-schema like personal_sign, eip712, cometbft, etc.,
+// as long as the given signature is in supported format.
 func (pub *Secp256k1PublicKey) Verify(sig []byte, hash []byte) error {
+	if len(sig) == 65 {
+		// we choose `VerifySignature` since it doesn't care recovery ID
+		// it expects signature in 64 byte [R || S] format
+		sig = sig[:len(sig)-1]
+	}
+
 	if len(sig) != 64 {
 		return errInvalidSignature
 	}
 
-	// signature should have the 64 byte [R || S] format
 	if !ethCrypto.VerifySignature(pub.Bytes(), hash, sig) {
 		return errVerifySignatureFailed
 	}
