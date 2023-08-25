@@ -61,6 +61,7 @@ func (cfg *KwildConfig) LoadKwildConfig(rootDir string) error {
 	cfg.ConfigureLogging()
 	cfg.ConfigureCerts()
 	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
+	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
 
 	if err := cfg.ChainCfg.ValidateBasic(); err != nil {
 		return fmt.Errorf("invalid chain configuration data: %v", err)
@@ -91,9 +92,9 @@ func DefaultConfig() *KwildConfig {
 		WithoutNonces:     false,
 		SnapshotConfig: SnapshotConfig{
 			Enabled:         false,
-			RecurringHeight: 0,
-			MaxSnapshots:    0,
-			SnapshotDir:     "data/snapshots",
+			RecurringHeight: uint64(10000),
+			MaxSnapshots:    3,
+			SnapshotDir:     "snapshots",
 		},
 	}
 	return cfg

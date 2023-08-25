@@ -1,21 +1,21 @@
 package nodecfg
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 
-	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtos "github.com/cometbft/cometbft/libs/os"
 	"github.com/cometbft/cometbft/p2p"
 
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	cmtrand "github.com/cometbft/cometbft/libs/rand"
-	"github.com/cometbft/cometbft/privval"
 	"github.com/cometbft/cometbft/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
-
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/spf13/viper"
 )
 
@@ -31,6 +31,7 @@ type NodeGenerateConfig struct {
 
 type TestnetGenerateConfig struct {
 	NValidators             int
+	NNonValidators          int
 	InitialHeight           int64
 	ConfigFile              string
 	OutputDir               string
@@ -43,74 +44,34 @@ type TestnetGenerateConfig struct {
 	P2pPort                 int
 }
 
-// TODO: if we use our own keys for cosmos, this will not work
-// privval.LoadFilePV will need to be replacew with something else
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
+	cfg := config.DefaultConfig()
+	cfg.RootDir = genCfg.HomeDir
 
-	cfg := cmtCfg.DefaultConfig()
-	cfg.SetRoot(genCfg.HomeDir)
-	err := os.MkdirAll(filepath.Join(genCfg.HomeDir, "config"), nodeDirPerm)
-	if err != nil {
-		_ = os.RemoveAll(genCfg.HomeDir)
-		return err
-	}
-
-	err = os.MkdirAll(filepath.Join(genCfg.HomeDir, "data"), nodeDirPerm)
-	if err != nil {
-		_ = os.RemoveAll(genCfg.HomeDir)
-		return err
-	}
-	err = initFilesWithConfig(cfg)
+	err := initFilesWithConfig(cfg, 0)
 	if err != nil {
 		return err
 	}
-	pvKeyFile := filepath.Join(genCfg.HomeDir, cfg.BaseConfig.PrivValidatorKey)
-	pvStateFile := filepath.Join(genCfg.HomeDir, cfg.BaseConfig.PrivValidatorState)
-	pv := privval.LoadFilePV(pvKeyFile, pvStateFile)
 
-	pubKey, err := pv.GetPubKey()
-	if err != nil {
-		return fmt.Errorf("failed to get public key: %w", err)
-	}
-
-	genVal := types.GenesisValidator{
-		Address: pubKey.Address(),
-		PubKey:  pubKey,
-		Power:   1,
-		Name:    "node-0",
-	}
-
-	vals := []types.GenesisValidator{genVal}
-
-	genDoc := &types.GenesisDoc{
-		ChainID:         chainIDPrefix + cmtrand.Str(6),
-		ConsensusParams: types.DefaultConsensusParams(),
-		GenesisTime:     cmttime.Now(),
-		InitialHeight:   genCfg.InitialHeight,
-		Validators:      vals,
-	}
-
-	if err := genDoc.SaveAs(filepath.Join(genCfg.HomeDir, cfg.BaseConfig.Genesis)); err != nil {
-		_ = os.RemoveAll(genCfg.HomeDir)
-		return err
-	}
-
-	cfg.P2P.AddrBookStrict = false
-	cfg.P2P.AllowDuplicateIP = true
-	cfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
-	cmtCfg.WriteConfigFile(filepath.Join(genCfg.HomeDir, "config", "config.toml"), cfg)
+	cfg.ChainCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
+	WriteConfigFile(filepath.Join(genCfg.HomeDir, "abci/config", "config.toml"), cfg)
 	return nil
 }
 
 func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
-	if len(genCfg.Hostnames) > 0 && len(genCfg.Hostnames) != (genCfg.NValidators) {
+	if len(genCfg.Hostnames) > 0 && len(genCfg.Hostnames) != (genCfg.NValidators+genCfg.NNonValidators) {
 		return fmt.Errorf(
-			"testnet needs precisely %d hostnames (number of validators) if --hostname parameter is used",
-			genCfg.NValidators,
+			"testnet needs precisely %d hostnames (number of validators plus nonValidators) if --hostname parameter is used",
+			genCfg.NValidators+genCfg.NNonValidators,
 		)
 	}
 
-	cfg := cmtCfg.DefaultConfig()
+	privateKeys := make([]ed25519.PrivKey, genCfg.NValidators+genCfg.NNonValidators)
+	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
+		privateKeys[i] = ed25519.GenPrivKey()
+	}
+
+	cfg := config.DefaultConfig()
 
 	// overwrite default config if set and valid
 	if genCfg.ConfigFile != "" {
@@ -121,7 +82,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		if err := viper.Unmarshal(cfg); err != nil {
 			return err
 		}
-		if err := cfg.ValidateBasic(); err != nil {
+		if err := cfg.ChainCfg.ValidateBasic(); err != nil {
 			return err
 		}
 	}
@@ -131,38 +92,51 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	for i := 0; i < genCfg.NValidators; i++ {
 		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i)
 		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
-		cfg.SetRoot(nodeDir)
+		cfg.RootDir = nodeDir
+		cfg.ChainCfg.SetRoot(filepath.Join(nodeDir, "abci"))
 
-		err := os.MkdirAll(filepath.Join(nodeDir, "config"), nodeDirPerm)
+		err := os.MkdirAll(filepath.Join(nodeDir, "abci", "config"), nodeDirPerm)
 		if err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
 			return err
 		}
 
-		err = os.MkdirAll(filepath.Join(nodeDir, "data"), nodeDirPerm)
+		err = os.MkdirAll(filepath.Join(nodeDir, "abci", "data"), nodeDirPerm)
 		if err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
 			return err
 		}
+		priv := privateKeys[i]
+		cfg.AppCfg.PrivateKey = hex.EncodeToString(priv[:])
+		pub := priv.PubKey().(ed25519.PubKey)
+		addr := pub.Address()
 
-		if err := initFilesWithConfig(cfg); err != nil {
-			return err
-		}
-
-		pvKeyFile := filepath.Join(nodeDir, cfg.BaseConfig.PrivValidatorKey)
-		pvStateFile := filepath.Join(nodeDir, cfg.BaseConfig.PrivValidatorState)
-		pv := privval.LoadFilePV(pvKeyFile, pvStateFile)
-
-		pubKey, err := pv.GetPubKey()
-		if err != nil {
-			return fmt.Errorf("failed to get public key: %w", err)
-		}
+		cfg.ChainCfg.P2P.AddrBookStrict = false
+		cfg.ChainCfg.P2P.AllowDuplicateIP = true
 
 		genVals[i] = types.GenesisValidator{
-			Address: pubKey.Address(),
-			PubKey:  pubKey,
+			Address: addr,
+			PubKey:  pub,
 			Power:   1,
 			Name:    fmt.Sprintf("validator-%d", i),
+		}
+	}
+
+	for i := 0; i < genCfg.NNonValidators; i++ {
+		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i+genCfg.NValidators)
+		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
+		cfg.RootDir = nodeDir
+
+		err := os.MkdirAll(filepath.Join(nodeDir, "abci", "config"), nodeDirPerm)
+		if err != nil {
+			_ = os.RemoveAll(nodeDir)
+			return err
+		}
+
+		err = os.MkdirAll(filepath.Join(nodeDir, "abci", "data"), nodeDirPerm)
+		if err != nil {
+			_ = os.RemoveAll(nodeDir)
+			return err
 		}
 	}
 
@@ -175,9 +149,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	}
 
 	// write genesis file
-	for i := 0; i < genCfg.NValidators; i++ {
+	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
-		if err := genDoc.SaveAs(filepath.Join(nodeDir, cfg.BaseConfig.Genesis)); err != nil {
+		if err := genDoc.SaveAs(filepath.Join(nodeDir, "abci", "config", "genesis.json")); err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
 			return err
 		}
@@ -190,7 +164,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	)
 
 	if genCfg.PopulatePersistentPeers {
-		persistentPeers, err = persistentPeersString(cfg, genCfg)
+		persistentPeers, err = persistentPeersString(cfg, genCfg, privateKeys)
 		if err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
 			return err
@@ -198,15 +172,16 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	}
 
 	// Overwrite default config
-	for i := 0; i < genCfg.NValidators; i++ {
+	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
-		cfg.SetRoot(nodeDir)
-		cfg.P2P.AddrBookStrict = false
-		cfg.P2P.AllowDuplicateIP = true
+		cfg.RootDir = nodeDir
+		cfg.ChainCfg.SetRoot(nodeDir)
+		cfg.ChainCfg.P2P.AddrBookStrict = false
+		cfg.ChainCfg.P2P.AllowDuplicateIP = true
 		if genCfg.PopulatePersistentPeers {
-			cfg.P2P.PersistentPeers = persistentPeers
+			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
 		}
-		cmtCfg.WriteConfigFile(filepath.Join(nodeDir, "config", "config.toml"), cfg)
+		WriteConfigFile(filepath.Join(nodeDir, "abci", "config", "config.toml"), cfg)
 	}
 
 	fmt.Printf("Successfully initialized %d node directories\n", genCfg.NValidators)
@@ -214,82 +189,54 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	return nil
 }
 
-// TODO: we definitely want to get rid of this, or at least make it more understandable / move it
 // It generates private keys, which we should not leave up to Comet
-func initFilesWithConfig(cfg *cmtCfg.Config) error {
-	// private validator
-	privValKeyFile := cfg.PrivValidatorKeyFile()
-	privValStateFile := cfg.PrivValidatorStateFile()
-	var pv *privval.FilePV
-	if cmtos.FileExists(privValKeyFile) {
-		pv = privval.LoadFilePV(privValKeyFile, privValStateFile)
-		fmt.Printf("Found private validator keyfile %v \n		Statefile: %v\n",
-			privValKeyFile, privValStateFile)
-	} else {
-		pv = privval.GenFilePV(privValKeyFile, privValStateFile)
-		pv.Save()
-		fmt.Printf("Generated private validator keyfile %v \n		Statefile: %v\n",
-			privValKeyFile, privValStateFile)
+func initFilesWithConfig(cfg *config.KwildConfig, nodeIdx int) error {
+	cfg.ChainCfg.SetRoot(filepath.Join(cfg.RootDir, "abci"))
+	err := os.MkdirAll(filepath.Join(cfg.RootDir, "abci", "config"), nodeDirPerm)
+	if err != nil {
+		_ = os.RemoveAll(cfg.RootDir)
+		return err
 	}
 
-	nodeKeyFile := cfg.NodeKeyFile()
-	if cmtos.FileExists(nodeKeyFile) {
-		fmt.Printf("Found node keyfile %v\n", nodeKeyFile)
-	} else {
-		if _, err := p2p.LoadOrGenNodeKey(nodeKeyFile); err != nil {
-			return err
-		}
-		fmt.Printf("Generated node keyfile %v\n", nodeKeyFile)
+	err = os.MkdirAll(filepath.Join(cfg.RootDir, "abci", "data"), nodeDirPerm)
+	if err != nil {
+		_ = os.RemoveAll(cfg.RootDir)
+		return err
 	}
+	cfg.ChainCfg.P2P.AddrBookStrict = false
+	cfg.ChainCfg.P2P.AllowDuplicateIP = true
+
+	priv := ed25519.GenPrivKey()
+	pub := priv.PubKey().(ed25519.PubKey)
+	addr := pub.Address()
+	cfg.AppCfg.PrivateKey = hex.EncodeToString(priv[:])
+	NodeID := p2p.ID(hex.EncodeToString(addr))
+	fmt.Println("NodeID for node-", nodeIdx, NodeID)
 
 	// genesis file
-	genFile := cfg.GenesisFile()
+	genFile := cfg.ChainCfg.GenesisFile()
 	if cmtos.FileExists(genFile) {
 		fmt.Printf("Found genesis file %v\n", genFile)
 	} else {
 		genDoc := types.GenesisDoc{
-			ChainID:         fmt.Sprintf("test-chain-%v", cmtrand.Str(6)),
+			ChainID:         chainIDPrefix + cmtrand.Str(6),
 			GenesisTime:     cmttime.Now(),
 			ConsensusParams: types.DefaultConsensusParams(),
 		}
-		pubKey, err := pv.GetPubKey()
-		if err != nil {
-			return fmt.Errorf("can't get pubkey: %w", err)
-		}
 		genDoc.Validators = []types.GenesisValidator{{
-			Address: pubKey.Address(),
-			PubKey:  pubKey,
-			Power:   10,
+			Address: addr,
+			PubKey:  pub,
+			Power:   1,
+			Name:    fmt.Sprintf("validator-%d", nodeIdx),
 		}}
 
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err
 		}
+
 		fmt.Printf("Generated genesis file %v\n", genFile)
 	}
-
-	envFile := rootify(".env", cfg.RootDir)
-	if cmtos.FileExists(envFile) {
-		fmt.Printf("Found .env file %v\n", envFile)
-	} else {
-		data := generateEnv()
-		if err := os.WriteFile(envFile, []byte(data), 0644); err != nil {
-			return err
-		}
-	}
-
 	return nil
-}
-
-func generateEnv() string {
-	data := "#KWILD_PRIVATE_KEY=\n"
-	data += "#KWILD_DEPOSITS_BLOCK_CONFIRMATIONS=1\n"
-	data += "#KWILD_DEPOSITS_CHAIN_CODE=2\n"
-	data += "#COMET_BFT_HOME = '/app/comet-bft/'\n"
-	data += "#KWILD_LOG_LEVEL=debug\n"
-	data += "#KWILD_DEPOSITS_CLIENT_CHAIN_RPC_URL=# Example: ws://192.168.1.70:8545\n"
-	data += "#KWILD_DEPOSITS_POOL_ADDRESS=# Example: 0xF2Df0b975c0C9eFa2f8CA0491C2d1685104d2488"
-	return data
 }
 
 func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {
@@ -312,23 +259,16 @@ func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {
 	return ip.String()
 }
 
-func rootify(path, root string) string {
-	if filepath.IsAbs(path) {
-		return path
-	}
-	return filepath.Join(root, path)
-}
-
-func persistentPeersString(cfg *cmtCfg.Config, genCfg *TestnetGenerateConfig) (string, error) {
-	persistentPeers := make([]string, genCfg.NValidators)
-	for i := 0; i < genCfg.NValidators; i++ {
+func persistentPeersString(cfg *config.KwildConfig, genCfg *TestnetGenerateConfig, PrivKeys []ed25519.PrivKey) (string, error) {
+	persistentPeers := make([]string, genCfg.NValidators+genCfg.NNonValidators)
+	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
-		cfg.SetRoot(nodeDir)
-		nodeKey, err := p2p.LoadNodeKey(cfg.NodeKeyFile())
-		if err != nil {
-			return "", err
-		}
-		persistentPeers[i] = p2p.IDAddressString(nodeKey.ID(), fmt.Sprintf("%s:%d", hostnameOrIP(genCfg, i), genCfg.P2pPort))
+		cfg.RootDir = nodeDir
+		cfg.ChainCfg.SetRoot(filepath.Join(nodeDir, "abci"))
+		pub := PrivKeys[i].PubKey().(ed25519.PubKey)
+		addr := pub.Address()
+		nodeID := p2p.ID(hex.EncodeToString(addr))
+		persistentPeers[i] = p2p.IDAddressString(nodeID, fmt.Sprintf("%s:%d", hostnameOrIP(genCfg, i), genCfg.P2pPort))
 	}
 	return strings.Join(persistentPeers, ","), nil
 }

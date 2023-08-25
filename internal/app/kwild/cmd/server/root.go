@@ -67,7 +67,7 @@ func init() {
 }
 
 func RootDir() (string, error) {
-	val := os.Getenv("KWIL_ROOT_DIR")
+	val := os.Getenv("KWILD_ROOT_DIR")
 	if val == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

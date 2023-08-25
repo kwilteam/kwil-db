@@ -1,3 +1,40 @@
+package nodecfg
+
+import (
+	"bytes"
+	"os"
+	"strings"
+	"text/template"
+
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+)
+
+const DefaultDirPerm = 0755
+
+var configTemplate *template.Template
+
+func init() {
+	var err error
+	tmpl := template.New("configFileTemplate").Funcs(template.FuncMap{
+		"StringsJoin": strings.Join,
+	})
+	if configTemplate, err = tmpl.Parse(defaultConfigTemplate); err != nil {
+		panic(err)
+	}
+}
+
+// kwildTemplateConfig
+func WriteConfigFile(configFilePath string, cfg *config.KwildConfig) {
+	var buffer bytes.Buffer
+
+	if err := configTemplate.Execute(&buffer, cfg); err != nil {
+		panic(err)
+	}
+
+	os.WriteFile(configFilePath, buffer.Bytes(), DefaultDirPerm)
+}
+
+const defaultConfigTemplate = `
 # This is a TOML config file.
 # For more information, see https://github.com/toml-lang/toml
 
@@ -31,25 +68,25 @@
 
 [app]
 # Node's Private key
-private_key = "f2d82d73ba03a7e843443f2b3179a01398144baa4a23d40d1e8a3a8e4fb217d0484d59f4de46b2174ebce66ac3afa7989b444244323c19a74b683f54cf33227c"
+private_key = "{{ .AppCfg.PrivateKey }}"
 
 # TCP or UNIX socket address for the KWILD App's GRPC server to listen on
-grpc_laddr = "localhost:50051"
+grpc_laddr = "{{ .AppCfg.GrpcListenAddress }}"
 
 # TCP or UNIX socket address for the KWILD App's HTTP server to listen on
-http_laddr = "localhost:8080"
+http_laddr = "{{ .AppCfg.HttpListenAddress }}"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
-extension_endpoints = []
+extension_endpoints = "{{ .AppCfg.ExtensionEndpoints }}"
 
 # Toggle to enable gas costs for transactions and queries
-without_gas_costs = true
+without_gas_costs = "{{ .AppCfg.WithoutGasCosts }}"
 
 # Toggle to disable nonces for transactions and queries
-without_nonces = false
+without_nonces = "{{ .AppCfg.WithoutNonces }}"
 
 # KWILD Sqlite database file path
-sqlite_file_path = "data/kwil.db"
+sqlite_file_path = "{{ .AppCfg.SqliteFilePath }}"
 
 # The path to a file containing certificate that is used to create the HTTPS server.
 # Might be either absolute path or path related to the kwild root directory.
@@ -58,13 +95,13 @@ sqlite_file_path = "data/kwil.db"
 # and the CA's certificate.
 # NOTE: both tls_cert_file and tls_key_file must be present for CometBFT to create HTTPS server.
 # Otherwise, HTTP server is run.
-tls_cert_file = ""
+tls_cert_file = "{{ .AppCfg.TLSCertFile }}}"
 
 # The path to a file containing matching private key that is used to create the HTTPS server.
 # Might be either absolute path or path related to the kwild root directory.
 # NOTE: both tls_cert_file and tls_key_file must be present for CometBFT to create HTTPS server.
 # Otherwise, HTTP server is run.
-tls_key_file = ""
+tls_key_file = "{{ .AppCfg.TLSKeyFile }}"
 
 
 
@@ -76,37 +113,37 @@ tls_key_file = ""
 # This would snapshot the application state at every snapshot_heights blocks
 # and keep max_snapshots number of snapshots in the snapshot_dir
 # Application state includes the databases deployed, accounts and the Validators db
-enabled = false
+enabled = "{{ .AppCfg.SnapshotConfig.Enabled }}"
 
 # The height at which the snapshot is taken
-snapshot_heights = 100000
+snapshot_heights = "{{ .AppCfg.SnapshotConfig.RecurringHeight }}"
 
 # Maximum number of snapshots to be kept in the snapshot_dir.
 # If max limit is reached, the oldest would be deleted and replaced by the latest snapshot
-max_snapshots = 3
+max_snapshots = "{{ .AppCfg.SnapshotConfig.MaxSnapshots}}"
 
 # The directory where the snapshots are stored. Can be absolute or relative to the kwild root directory
-snapshot_dir = "snapshots"
+snapshot_dir = "{{ .AppCfg.SnapshotConfig.SnapshotDir }}"
 
 #######################################################################
 ###                    Logging Config Options                       ###
 #######################################################################
 [log]
 # Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
-log_level = "info" 
+log_level = "{{ .Logging.LogLevel }}"
 
 # Output paths for the logger, can be stdout or a file path
-output_paths = ["stdout"]
+output_paths = "{{ .Logging.OutputPaths }}"
 
 # Output format: 'plain' or 'json'
-log_format = "plain"
+log_format = "{{ .Logging.LogFormat }}"
 
 #######################################################################
 ###                 Chain  Main Base Config Options                 ###
 #######################################################################
 [chain]
 # A custom human readable name for this node
-moniker = "CAF80E6A4EBD1148"
+moniker = "{{ .ChainCfg.Moniker }}"
 
 #######################################################################
 ###                 Advanced Configuration Options                  ###
@@ -118,7 +155,7 @@ moniker = "CAF80E6A4EBD1148"
 [chain.rpc]
 
 # TCP or UNIX socket address for the RPC server to listen on
-laddr = "tcp://0.0.0.0:26657"
+laddr = "{{ .ChainCfg.RPC.ListenAddress }}"
 
 # Maximum number of simultaneous connections (including WebSocket).
 # If you want to accept a larger number than the default, make sure
@@ -126,28 +163,31 @@ laddr = "tcp://0.0.0.0:26657"
 # 0 - unlimited.
 # Should be < {ulimit -Sn} - {MaxNumInboundPeers} - {MaxNumOutboundPeers} - {N of wal, db and other open files}
 # 1024 - 40 - 10 - 50 = 924 = ~900
-max_open_connections = 900
+max_open_connections = "{{ .ChainCfg.RPC.MaxOpenConnections }}"
 
 # How long to wait for a tx to be committed during /broadcast_tx_commit.
 # WARNING: Using a value larger than 10s will result in increasing the
 # global HTTP write timeout, which applies to all connections and endpoints.
 # See https://github.com/tendermint/tendermint/issues/3435
-timeout_broadcast_tx_commit = "10s"
+timeout_broadcast_tx_commit = "{{ .ChainCfg.RPC.TimeoutBroadcastTxCommit }}"
 
 #######################################################
 ###         Consensus Configuration Options         ###
 #######################################################
 [chain.consensus]
 # How long we wait for a proposal block before prevoting nil
-timeout_propose = "3s"
+timeout_propose = "{{ .ChainCfg.Consensus.TimeoutPropose }}"
+
 # How long we wait after receiving +2/3 prevotes for “anything” (ie. not a single block or nil)
-timeout_prevote = "1s"
+timeout_prevote = "{{ .ChainCfg.Consensus.TimeoutPrevote }}"
+
 # How long we wait after receiving +2/3 precommits for “anything” (ie. not a single block or nil)
-timeout_precommit = "1s"
+timeout_precommit = "{{ .ChainCfg.Consensus.TimeoutPrecommit }}"
+
 # How long we wait after committing a block, before starting on the new
 # height (this gives us a chance to receive some more precommits, even
 # though we already have +2/3).
-timeout_commit = "1s"
+timeout_commit = "{{ .ChainCfg.Consensus.TimeoutCommit }}"
 
 #######################################################
 ###           P2P Configuration Options             ###
@@ -155,78 +195,78 @@ timeout_commit = "1s"
 [chain.p2p]
 
 # Address to listen for incoming connections
-laddr = "tcp://0.0.0.0:26656"
+laddr = "{{ .ChainCfg.P2P.ListenAddress }}"
 
 # Address to advertise to peers for them to dial
 # If empty, will use the same port as the laddr,
 # and will introspect on the listener or use UPnP
 # to figure out the address. ip and port are required
 # example: 159.89.10.97:26656
-external_address = ""
+external_address = "{{ .ChainCfg.P2P.ExternalAddress }}"
 
 # Comma separated list of seed nodes to connect to
-seeds = ""
+seeds = "{{ .ChainCfg.P2P.Seeds }}"
 
 # Comma separated list of nodes to keep persistent connections to (used for bootstrapping)
-persistent_peers = "d128266b8b9f64c313de466cf29e0a6182dba54d@172.10.100.2:26656,9440f4a8059cf7ff31454973c4f9c68de65fe526@172.10.100.3:26656,87ee0b2008459ad73e3e8df4f4614265507a7085@172.10.100.4:26656"
+persistent_peers = "{{ .ChainCfg.P2P.PersistentPeers }}"
 
 # UPNP port forwarding
-upnp = false
+upnp = "{{ .ChainCfg.P2P.UPNP }}"
 
 # Set true for strict address routability rules
 # Set false for private or local networks
-addr_book_strict = false
+addr_book_strict = "{{ .ChainCfg.P2P.AddrBookStrict }}"
 
 # Maximum number of inbound peers
-max_num_inbound_peers = 40
+max_num_inbound_peers = "{{ .ChainCfg.P2P.MaxNumInboundPeers }}"
 
 # Maximum number of outbound peers to connect to, excluding persistent peers
-max_num_outbound_peers = 10
+max_num_outbound_peers = "{{ .ChainCfg.P2P.MaxNumOutboundPeers }}"
   
 # List of node IDs, to which a connection will be (re)established ignoring any existing limits
-unconditional_peer_ids = ""
+unconditional_peer_ids = "{{ .ChainCfg.P2P.UnconditionalPeerIDs }}"
 
 # Time to wait before flushing messages out on the connection
-flush_throttle_timeout = "100ms"
+flush_throttle_timeout = "{{ .ChainCfg.P2P.FlushThrottleTimeout }}"
 
 # Maximum size of a message packet payload, in bytes
-max_packet_msg_payload_size = 1024
+max_packet_msg_payload_size = "{{ .ChainCfg.P2P.MaxPacketMsgPayloadSize }}"
 
 # Rate at which packets can be sent, in bytes/second
-send_rate = 5120000
+send_rate = "{{ .ChainCfg.P2P.SendRate }}"
 
 # Rate at which packets can be received, in bytes/second
-recv_rate = 5120000
+recv_rate = "{{ .ChainCfg.P2P.RecvRate }}"
 
 # Set true to enable the peer-exchange reactor
-pex = true
+pex = "{{ .ChainCfg.P2P.PexReactor }}"
 
 # Seed mode, in which node constantly crawls the network and looks for
 # peers. If another node asks it for addresses, it responds and disconnects.
 #
 # Does not work if the peer-exchange reactor is disabled.
-seed_mode = false
+seed_mode = "{{ .ChainCfg.P2P.SeedMode }}"
 
 # Comma separated list of peer IDs to keep private (will not be gossiped to other peers)
-private_peer_ids = ""
+private_peer_ids = "{{ .ChainCfg.P2P.PrivatePeerIDs }}"
 
 # Toggle to disable guard against peers connecting from the same ip.
-allow_duplicate_ip = true
+allow_duplicate_ip = "{{ .ChainCfg.P2P.AllowDuplicateIP }}"
 
 #######################################################
 ###          Mempool Configuration Options          ###
 #######################################################
 [chain.mempool]
 # Maximum number of transactions in the mempool
-size = 5000
+size = "{{ .ChainCfg.Mempool.Size }}"
 
 # Limit the total size of all txs in the mempool.
 # This only accounts for raw transactions (e.g. given 1MB transactions and
 # max_txs_bytes=5MB, mempool will only accept 5 transactions).
-max_txs_bytes = 1073741824
+max_txs_bytes = "{{ .ChainCfg.Mempool.MaxTxsBytes }}"
 
 # Size of the cache (used to filter transactions we saw earlier) in transactions
-cache_size = 10000
+cache_size = "{{ .ChainCfg.Mempool.CacheSize }}"
 
 #######################################################
 ###         State Sync Configuration Options        ###
@@ -237,7 +277,7 @@ cache_size = 10000
 # the network to take and serve state machine snapshots. State sync is not attempted if the node
 # has any local state (LastBlockHeight > 0). The node will have a truncated block history,
 # starting from the height of the snapshot.
-enable = false
+enable = "{{ .ChainCfg.StateSync.Enable }}"
 
 # RPC servers (comma-separated) for light client verification of the synced state machine and
 # retrieval of state data for node bootstrapping. Also needs a trusted height and corresponding
@@ -245,18 +285,18 @@ enable = false
 #
 # For Cosmos SDK-based chains, trust_period should usually be about 2/3 of the unbonding time (~2
 # weeks) during which they can be financially punished (slashed) for misbehavior.
-rpc_servers = ""
+rpc_servers = "{{ .ChainCfg.StateSync.RPCServers }}"
 
 # Temporary directory for state sync snapshot chunks, defaults to the OS tempdir (typically /tmp).
 # Will create a new, randomly named directory within, and remove it when done.
-temp_dir = ""
+temp_dir = "{{ .ChainCfg.StateSync.TempDir }}"
 
 # Time to spend discovering snapshots before initiating a restore.
-discovery_time = "15s"
+discovery_time = "{{ .ChainCfg.StateSync.DiscoveryTime }}"
 
 # The timeout duration before re-requesting a chunk, possibly from a different
 # peer (default: 1 minute).
-chunk_request_timeout = "10s"
+chunk_request_timeout = "{{ .ChainCfg.StateSync.ChunkRequestTimeout }}"
 
 #######################################################
 ###       Instrumentation Configuration Options     ###
@@ -266,8 +306,8 @@ chunk_request_timeout = "10s"
 # When true, Prometheus metrics are served under /metrics on
 # PrometheusListenAddr.
 # Check out the documentation for the list of available metrics.
-prometheus = false
+prometheus = "{{ .ChainCfg.Instrumentation.Prometheus }}"
 
 # Address to listen for Prometheus collector(s) connections
-prometheus_listen_addr = ":26660"
-
+prometheus_listen_addr = "{{ .ChainCfg.Instrumentation.PrometheusListenAddr }}"
+`
