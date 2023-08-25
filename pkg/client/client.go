@@ -35,9 +35,7 @@ type Client struct {
 	CometBftClient *rpchttp.HTTP
 	datasets       map[string]*transactions.Schema
 	Signer         crypto.Signer
-
 	logger         log.Logger
-	cometBftRpcUrl string
 	certFile       string // the TLS certificate for the grpc Client
 }
 
