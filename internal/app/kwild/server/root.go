@@ -409,7 +409,8 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 		key: []byte("az"), // any key here will work
 	}
 
-	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.ChainCfg, privateKey.Bytes(), readWriter, d.cfg.ChainCfg.LogLevel)
+	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.ChainCfg, privateKey.Bytes(),
+		readWriter, &d.log)
 	if err != nil {
 		failBuild(err, "failed to build comet node")
 	}
