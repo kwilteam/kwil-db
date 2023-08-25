@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -40,9 +41,9 @@ var SignatureTypeFromName = map[string]SignatureType{
 }
 
 var (
-	errInvalidSignature          = fmt.Errorf("invalid signature")
-	errVerifySignatureFailed     = fmt.Errorf("verify signature failed")
-	errNotSupportedSignatureType = fmt.Errorf("not supported signature type")
+	errInvalidSignature          = errors.New("invalid signature format")
+	errVerifySignatureFailed     = errors.New("verify signature failed")
+	errNotSupportedSignatureType = errors.New("not supported signature type")
 )
 
 func SignatureLookUp(name string) SignatureType {
@@ -98,18 +99,17 @@ func (s *Signature) KeyType() KeyType {
 func (s *Signature) Verify(publicKey PublicKey, msg []byte) error {
 	switch s.Type {
 	case SIGNATURE_TYPE_SECP256K1_PERSONAL:
+		// signature is 65 bytes, [R || S || V] format
 		if len(s.Signature) != SIGNATURE_SECP256K1_PERSONAL_LENGTH {
 			return errInvalidSignature
 		}
 		hash := ethAccount.TextHash(msg)
-		// Remove recovery ID
-		sig := s.Signature[:len(s.Signature)-1]
-		return publicKey.Verify(sig, hash)
+		return publicKey.Verify(s.Signature, hash)
 	case SIGNATURE_TYPE_SECP256K1_COMETBFT:
+		// signature is 64 bytes, [R || S] format
 		if len(s.Signature) != SIGNATURE_SECP256K1_COMETBFT_LENGTH {
 			return errInvalidSignature
 		}
-		// cometbft using sha256 and 64 bytes signature(no recovery ID 'v')
 		hash := Sha256(msg)
 		return publicKey.Verify(s.Signature, hash)
 	case SIGNATURE_TYPE_ED25519:

@@ -23,27 +23,6 @@ func TestEd25519PrivateKey_Sign(t *testing.T) {
 	assert.Equal(t, expectSignature, hex.EncodeToString(sig), "unexpect signature")
 }
 
-func TestEd25519PrivateKey_SignMsg(t *testing.T) {
-	key := "7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
-	pk, err := crypto.Ed25519PrivateKeyFromHex(key)
-	require.NoError(t, err, "error parse private key")
-
-	msg := []byte("foo")
-
-	sig, err := pk.SignMsg(msg)
-	require.NoError(t, err, "error sign")
-
-	expectSignature := "59b2db2d1e4ce6f8771453cfc78d1f943723528f00fa14adf574600f15c601d591fa2ba29c94d9ed694db324f9e8671bdfbcba4b8e10f6a8733682fa3d115f0c"
-	expectSignatureBytes, _ := hex.DecodeString(expectSignature)
-
-	expectSig := &crypto.Signature{
-		Signature: expectSignatureBytes,
-		Type:      crypto.SIGNATURE_TYPE_ED25519,
-	}
-
-	assert.EqualValues(t, expectSig, sig, "unexpect signature")
-}
-
 func TestEd25519PublicKey_Verify(t *testing.T) {
 	key := "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
 	keyBytes, err := hex.DecodeString(key)

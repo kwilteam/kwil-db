@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
 const (
@@ -30,7 +31,8 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 			return fmt.Errorf("private key not provided")
 		}
 
-		options = append(options, client.WithSigner(conf.PrivateKey.Signer()))
+		signer := crypto.DefaultSigner(conf.PrivateKey)
+		options = append(options, client.WithSigner(signer))
 	}
 
 	if conf.GrpcURL == "" {
