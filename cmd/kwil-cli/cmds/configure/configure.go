@@ -24,6 +24,7 @@ func NewCmdConfigure() *cobra.Command {
 			err = runErrs(conf,
 				promptGRPCURL,
 				promptPrivateKey,
+				promptTLSCertFile,
 			)
 			if err != nil {
 				return err
@@ -58,12 +59,22 @@ func promptGRPCURL(conf *config.KwilCliConfig) error {
 		return err
 	}
 
-	if res == "" {
-		conf.GrpcURL = ""
-		return nil
+	conf.GrpcURL = res
+
+	return nil
+}
+
+func promptTLSCertFile(conf *config.KwilCliConfig) error {
+	prompt := &common.Prompter{
+		Label:   "Kwil RPC TLS certificate path",
+		Default: conf.TLSCertFile,
+	}
+	res, err := prompt.Run()
+	if err != nil {
+		return err
 	}
 
-	conf.GrpcURL = res
+	conf.TLSCertFile = res
 
 	return nil
 }
