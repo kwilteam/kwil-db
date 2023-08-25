@@ -2,10 +2,13 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/cstockton/go-conv"
@@ -18,7 +21,8 @@ import (
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	grpcCreds "google.golang.org/grpc/credentials"
+	grpcInsecure "google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
@@ -28,11 +32,40 @@ type Client struct {
 	Signer         crypto.Signer
 
 	cometBftRpcUrl string
+	certFile       string // the TLS certificate for the grpc Client
+}
+
+func newTLSConfig(certFile string) (*tls.Config, error) {
+	rootCAs, _ := x509.SystemCertPool()
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+	// NOTE: we're testing a special case of "-" meaning use TLS, but just use
+	// system CAs without appending a known server certificate. We may change
+	// this or formally document it.
+	if certFile != "-" {
+		b, err := os.ReadFile(certFile)
+		if err != nil {
+			return nil, err
+		}
+		if !rootCAs.AppendCertsFromPEM(b) {
+			return nil, fmt.Errorf("credentials: failed to append certificates")
+		}
+	}
+	return &tls.Config{
+		// For proper verification of the server-provided certificate chain
+		// during the TLS handshake, the root CAs, which may contain a custom
+		// certificate we appended above, are used by the client tls.Conn. If we
+		// disable verification with InsecureSkipVerify, the connection is still
+		// encrypted, but we cannot ensure the server is who they claim to be.
+		RootCAs:    rootCAs,
+		MinVersion: tls.VersionTLS12,
+	}, nil
 }
 
 // New creates a new client
 // TODO: remove the Context param. Requests pass it.
-func New(_ context.Context, target string, opts ...ClientOpt) (c *Client, err error) {
+func New(_ context.Context, host string, opts ...ClientOpt) (c *Client, err error) {
 	c = &Client{
 		datasets:       make(map[string]*transactions.Schema),
 		cometBftRpcUrl: "tcp://localhost:26657",
@@ -42,9 +75,18 @@ func New(_ context.Context, target string, opts ...ClientOpt) (c *Client, err er
 		opt(c)
 	}
 
-	c.client, err = grpcClient.New(target, grpc.WithTransportCredentials(
-		insecure.NewCredentials(), // TODO: should add client configuration for secure transport
-	))
+	var transOpt grpcCreds.TransportCredentials
+	if c.certFile == "" {
+		transOpt = grpcInsecure.NewCredentials()
+	} else {
+		tlsConfig, err := newTLSConfig(c.certFile)
+		if err != nil {
+			return nil, err
+		}
+		transOpt = grpcCreds.NewTLS(tlsConfig)
+	}
+
+	c.client, err = grpcClient.New(host, grpc.WithTransportCredentials(transOpt))
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +97,10 @@ func New(_ context.Context, target string, opts ...ClientOpt) (c *Client, err er
 	}
 
 	return c, nil
+}
+
+func (c *Client) Close() error {
+	return c.client.Close()
 }
 
 // GetSchema returns the entity of a database

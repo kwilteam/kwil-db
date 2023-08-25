@@ -24,8 +24,6 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 
 	options := []client.ClientOpt{}
 
-	// We were previously mixing up the eth rpc url with the cometBFT RPC url.  Do we need to set it here?
-
 	if flags&WithoutPrivateKey == 0 {
 		// this means it needs to use the private key
 		if conf.PrivateKey == nil {
@@ -41,12 +39,17 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		return fmt.Errorf("kwil grpc url is required")
 	}
 
+	if conf.TLSCertFile != "" {
+		options = append(options, client.WithTLSCert(conf.TLSCertFile))
+	}
+
 	clt, err := client.New(ctx, conf.GrpcURL,
 		options...,
 	)
 	if err != nil {
 		return err
 	}
+	defer clt.Close()
 
 	pong, err := clt.Ping(ctx)
 	if err != nil {
