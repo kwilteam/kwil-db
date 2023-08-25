@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"os"
 
-	common "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/utils"
+
 	"github.com/spf13/viper"
 )
 
 type KwilCliConfig struct {
-	PrivateKey crypto.PrivateKey
-	GrpcURL    string
+	PrivateKey  crypto.PrivateKey
+	GrpcURL     string
+	TLSCertFile string
 }
 
 func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
@@ -22,8 +24,9 @@ func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
 		privKeyHex = c.PrivateKey.Hex()
 	}
 	return &kwilCliPersistedConfig{
-		PrivateKey: privKeyHex,
-		GrpcURL:    c.GrpcURL,
+		PrivateKey:  privKeyHex,
+		GrpcURL:     c.GrpcURL,
+		TLSCertFile: c.TLSCertFile,
 	}
 }
 
@@ -32,13 +35,15 @@ func (c *KwilCliConfig) Store() error {
 }
 
 type kwilCliPersistedConfig struct {
-	PrivateKey string `json:"private_key"`
-	GrpcURL    string `json:"grpc_url"`
+	PrivateKey  string `json:"private_key"`
+	GrpcURL     string `json:"grpc_url"`
+	TLSCertFile string `json:"tls_cert_file"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 	kwilConfig := &KwilCliConfig{
-		GrpcURL: c.GrpcURL,
+		GrpcURL:     c.GrpcURL,
+		TLSCertFile: c.TLSCertFile,
 	}
 
 	privateKey, err := crypto.Secp256k1PrivateKeyFromHex(c.PrivateKey)
@@ -108,14 +113,15 @@ func LoadCliConfig() (*KwilCliConfig, error) {
 	}
 
 	innerConf := &kwilCliPersistedConfig{
-		PrivateKey: viper.GetString("private_key"),
-		GrpcURL:    viper.GetString("grpc_url"),
+		PrivateKey:  viper.GetString("private_key"),
+		GrpcURL:     viper.GetString("grpc_url"),
+		TLSCertFile: viper.GetString("tls_cert_file"),
 	}
 	return innerConf.toKwilCliConfig()
 }
 
 func askAndDeleteConfig() {
-	askDelete := &common.Prompter{
+	askDelete := &prompt.Prompter{
 		Label: fmt.Sprintf("Would you like to delete the corrupted config file at %s? (y/n) ", viper.ConfigFileUsed()),
 	}
 
