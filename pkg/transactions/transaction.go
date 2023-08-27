@@ -3,6 +3,7 @@ package transactions
 import (
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/serialize"
@@ -51,6 +52,16 @@ type Transaction struct {
 
 func (t *Transaction) GetSenderPubKey() (crypto.PublicKey, error) {
 	return crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
+}
+
+func (t *Transaction) GetSenderAddress() string {
+	var pubKey crypto.PublicKey
+	pubKey, err := crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
+	if err != nil {
+		return "unknown"
+	}
+
+	return pubKey.Address().String()
 }
 
 // Verify verifies the signature of the transaction
@@ -174,26 +185,9 @@ func generateRandomSalt() ([8]byte, error) {
 	return s, nil
 }
 
-// TransactionStatus is used to show the status of a transaction
-// It is returned to the client after a tx is submitted,
-// and can also be used for querying the status of a tx
-type TransactionStatus struct {
-	ID     []byte
-	Fee    *big.Int
-	Status Status
-	Errors []string
+// TxHash is the hash of a transaction that could be used to query the transaction
+type TxHash []byte
+
+func (h TxHash) Hex() string {
+	return strings.ToUpper(fmt.Sprintf("%x", h))
 }
-
-// Status is the status of a transaction
-type Status string
-
-func (s Status) String() string {
-	return string(s)
-}
-
-// we can add / modify these as needed
-const (
-	StatusPending Status = "pending"
-	StatusSuccess Status = "success"
-	StatusFailed  Status = "failed"
-)

@@ -5,30 +5,30 @@ import (
 	"fmt"
 	"math/big"
 
+	"go.uber.org/zap"
+
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequest) (*txpb.EstimatePriceResponse, error) {
-	tx, err := convertTransaction(req.Tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert transaction: %w", err)
-	}
-
+	tx := req.Tx
+	s.log.Debug("Estimating price", zap.String("payload_type", tx.Body.PayloadType))
 	var price *big.Int
+	var err error
 
 	switch tx.Body.PayloadType {
-	case transactions.PayloadTypeDeploySchema:
-		price, err = s.priceDeploy(ctx, tx)
-	case transactions.PayloadTypeDropSchema:
-		price, err = s.priceDrop(ctx, tx)
-	case transactions.PayloadTypeExecuteAction:
-		price, err = s.priceAction(ctx, tx)
-	case transactions.PayloadTypeValidatorJoin:
-		price, err = s.priceValidatorJoin(ctx, tx)
-	case transactions.PayloadTypeValidatorApprove:
-		price, err = s.priceValidatorLeave(ctx, tx)
+	case transactions.PayloadTypeDeploySchema.String():
+		price, err = s.priceDeploy(ctx, tx.Body)
+	case transactions.PayloadTypeDropSchema.String():
+		price, err = s.priceDrop(ctx, tx.Body)
+	case transactions.PayloadTypeExecuteAction.String():
+		price, err = s.priceAction(ctx, tx.Body)
+	case transactions.PayloadTypeValidatorJoin.String():
+		price, err = s.priceValidatorJoin(ctx, tx.Body)
+	case transactions.PayloadTypeValidatorApprove.String():
+		price, err = s.priceValidatorLeave(ctx, tx.Body)
 	default:
 		price, err = nil, fmt.Errorf("invalid transaction payload type %s", tx.Body.PayloadType)
 	}
@@ -41,9 +41,9 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 	}, nil
 }
 
-func (s *Service) priceDeploy(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (s *Service) priceDeploy(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
 	schema := &transactions.Schema{}
-	err := schema.UnmarshalBinary(tx.Body.Payload)
+	err := schema.UnmarshalBinary(txBody.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal schema: %w", err)
 	}
@@ -56,9 +56,9 @@ func (s *Service) priceDeploy(ctx context.Context, tx *transactions.Transaction)
 	return s.engine.PriceDeploy(ctx, convertedSchema)
 }
 
-func (s *Service) priceDrop(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (s *Service) priceDrop(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
 	dropSchema := &transactions.DropSchema{}
-	err := dropSchema.UnmarshalBinary(tx.Body.Payload)
+	err := dropSchema.UnmarshalBinary(txBody.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal drop schema: %w", err)
 	}
@@ -66,9 +66,9 @@ func (s *Service) priceDrop(ctx context.Context, tx *transactions.Transaction) (
 	return s.engine.PriceDrop(ctx, dropSchema.DBID)
 }
 
-func (s *Service) priceAction(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (s *Service) priceAction(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
 	executionBody := &transactions.ActionExecution{}
-	err := executionBody.UnmarshalBinary(tx.Body.Payload)
+	err := executionBody.UnmarshalBinary(txBody.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal action execution: %w", err)
 	}
@@ -86,10 +86,10 @@ func (s *Service) priceAction(ctx context.Context, tx *transactions.Transaction)
 	return s.engine.PriceExecute(ctx, executionBody.DBID, executionBody.Action, tuples)
 }
 
-func (s *Service) priceValidatorJoin(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (s *Service) priceValidatorJoin(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
-func (s *Service) priceValidatorLeave(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (s *Service) priceValidatorLeave(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }

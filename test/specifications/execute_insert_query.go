@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,14 +21,14 @@ type userTable struct {
 
 type ExecuteQueryDsl interface {
 	// ExecuteAction executes QUERY to a database
-	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (*transactions.TransactionStatus, error)
+	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
 	QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error)
 }
 
 func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
 	t.Logf("Executing insert action specification")
 	// Given a valid database schema
-	db := SchemaLoader.Load(t, schema_testdb)
+	db := SchemaLoader.Load(t, schemaTestDB)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
 
 	// When i execute action to database
@@ -126,6 +124,7 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	//	_, ok := userRow1["age"]
 	//	assert.True(t, ok)
 	//
+
 	//	_, ok = userRow1["content"]
 	//	assert.False(t, ok)
 }

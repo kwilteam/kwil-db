@@ -67,7 +67,7 @@ func (d *DB) storeMetadata(ctx context.Context, meta *metadata) error {
 }
 
 func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadata, error) {
-	results, err := d.Sqldb.Query(ctx, selectMetadataStatement, map[string]interface{}{
+	results, err := d.Sqldb.QueryUnsafe(ctx, selectMetadataStatement, map[string]interface{}{
 		"$type": metaType,
 	})
 	if err != nil {

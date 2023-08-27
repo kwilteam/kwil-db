@@ -1,3 +1,9 @@
+// package integration is a package for integration tests.
+// For now this package has a lot duplicated code from acceptance package because they share similar but same setup,
+// this will be refactored in the future.
+//
+// This package also deliberately use different environment variables for configuration from acceptance package.
+
 package integration
 
 import (
@@ -7,6 +13,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
@@ -22,40 +30,15 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const DefaultContainerWaitTimeout = 10 * time.Second
+// envFile is the default env file path
+// It will pass values among different stages of the test setup
+var envFile = runner.GetEnv("KINT_ENV_FILE", "./.env")
 
 type IntTestConfig struct {
 	acceptance.ActTestCfg
 
 	NValidator int
 }
-
-//// NewClient creates a new client that is a KwilAcceptanceDriver
-//// this can be used to simulate several "wallets" in the same test
-//func newGRPCClient(ctx context.Context, t *testing.T, cfg *IntTestConfig) KwilIntDriver {
-//	kwilClt, err := client.New(ctx, cfg.GrpcEndpoint,
-//		client.WithSigner(cfg.AlicePK),
-//		client.WithCometBftUrl(cfg.ChainEndpoint),
-//	)
-//	require.NoError(t, err, "failed to create kwil client")
-//
-//	kwildDriver := kwild.NewKwildDriver(kwilClt)
-//	return kwildDriver
-//}
-//
-//func NewClient(ctx context.Context, t *testing.T, driverType string, cfg *IntTestConfig) KwilIntDriver {
-//	// sort of hacky, but we want to use the second user's private key
-//	cfg.AliceRawPK = cfg.BobRawPK
-//	cfg.AlicePK = cfg.BobPk
-//	switch driverType {
-//	//case "cli":fs
-//	//	return setupCliDriver(ctx, t, cfg, logger)
-//	case "grpc":
-//		return newGRPCClient(ctx, t, cfg)
-//	default:
-//		panic("unknown driver type")
-//	}
-//}
 
 type IntHelper struct {
 	t          *testing.T
@@ -70,7 +53,16 @@ func NewIntHelper(t *testing.T) *IntHelper {
 	}
 }
 
+// LoadConfig loads config from system env and .env file.
+// Envs defined in envFile will not overwrite existing env vars.
 func (r *IntHelper) LoadConfig() {
+	ef, err := os.OpenFile(envFile, os.O_RDWR|os.O_CREATE, 0666)
+	require.NoError(r.t, err, "failed to open env file")
+	defer ef.Close()
+
+	err = godotenv.Load(envFile)
+	require.NoError(r.t, err, "failed to parse env file")
+
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'
 	cfg := &IntTestConfig{
@@ -78,15 +70,18 @@ func (r *IntHelper) LoadConfig() {
 			AliceRawPK:        runner.GetEnv("KINT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
 			BobRawPK:          runner.GetEnv("KINT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 			SchemaFile:        runner.GetEnv("KINT_SCHEMA", "./test-data/test_db.kf"),
-			LogLevel:          runner.GetEnv("KINT_CHAIN_ENDPOINT", "http://localhost:26657"),
-			GWEndpoint:        runner.GetEnv("KINT_GRPC_ENDPOINT", "localhost:9090"),
-			GrpcEndpoint:      runner.GetEnv("KINT_GATEWAY_ENDPOINT", "localhost:8080"),
+			LogLevel:          runner.GetEnv("KINT_LOG_LEVEL", "debug"),
+			GWEndpoint:        runner.GetEnv("KINT_GATEWAY_ENDPOINT", "localhost:8080"),
+			GrpcEndpoint:      runner.GetEnv("KINT_GRPC_ENDPOINT", "localhost:50051"),
 			DockerComposeFile: runner.GetEnv("KINT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		},
 	}
 
-	var err error
-	nodeNum := runner.GetEnv("KWIL_INT_VALIDATOR_NUM", "3")
+	waitTimeout := runner.GetEnv("KACT_WAIT_TIMEOUT", "10s")
+	cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
+	require.NoError(r.t, err, "invalid wait timeout")
+
+	nodeNum := runner.GetEnv("KINT_VALIDATOR_NUM", "3")
 	cfg.NValidator, err = strconv.Atoi(nodeNum)
 	require.NoError(r.t, err, "invalid node number")
 
@@ -102,16 +97,22 @@ func (r *IntHelper) LoadConfig() {
 	cfg.DumpToEnv()
 }
 
+func (r *IntHelper) updateGeneratedConfigHome(home string) {
+	envs, err := godotenv.Read(envFile)
+	require.NoError(r.t, err, "failed to read env file")
+
+	envs["KWIL_HOME"] = home
+
+	err = godotenv.Write(envs, envFile)
+	require.NoError(r.t, err, "failed to write env vars to file")
+}
+
 func (r *IntHelper) generateNodeConfig() {
-	r.t.Logf("generate node config")
+	r.t.Logf("generate testnet config")
 	tmpPath := r.t.TempDir()
 	r.t.Logf("create test temp directory: %s", tmpPath)
-	envVars, err := godotenv.Unmarshal("KWIL_HOME=" + tmpPath)
-	require.NoError(r.t, err, "failed to unmarshal env vars")
-	err = godotenv.Write(envVars, "./.env")
-	require.NoError(r.t, err, "failed to write env vars to file")
 
-	err = nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
+	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		NValidators:             r.cfg.NValidator,
 		InitialHeight:           0,
 		ConfigFile:              "",
@@ -124,6 +125,8 @@ func (r *IntHelper) generateNodeConfig() {
 		P2pPort:                 26656,
 	})
 	require.NoError(r.t, err, "failed to generate testnet config")
+
+	r.updateGeneratedConfigHome(tmpPath)
 }
 
 func (r *IntHelper) runDockerCompose(ctx context.Context) {
@@ -131,10 +134,7 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 
 	//setSchemaLoader(r.cfg.AliceAddr())
 
-	fEnv, err := os.Open("./.env")
-	require.NoError(r.t, err, "failed to open .env file")
-
-	envs, err := godotenv.Parse(fEnv)
+	envs, err := godotenv.Read(envFile)
 	require.NoError(r.t, err, "failed to parse .env file")
 
 	dc, err := compose.NewDockerCompose(r.cfg.DockerComposeFile)
@@ -152,13 +152,13 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 	err = dc.
 		WithEnv(envs).
 		WaitForService("ext1",
-			wait.NewLogStrategy("listening on").WithStartupTimeout(DefaultContainerWaitTimeout)).
+			wait.NewLogStrategy("listening on").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService("k1",
-			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService("k2",
-			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService("k3",
-			wait.NewLogStrategy("grpc server started").WithStartupTimeout(DefaultContainerWaitTimeout)).
+			wait.NewLogStrategy("grpc server started").WithStartupTimeout(r.cfg.WaitTimeout)).
 		Up(ctx)
 	r.t.Log("docker compose up")
 
@@ -167,6 +167,10 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 	serviceNames := dc.Services()
 	r.t.Log("serviceNames", serviceNames)
 	for _, name := range serviceNames {
+		// skip ext1
+		if name == "ext1" {
+			continue
+		}
 		container, err := dc.ServiceContainer(ctx, name)
 		require.NoError(r.t, err, "failed to get container for service %s", name)
 		r.containers = append(r.containers, container)
@@ -200,9 +204,11 @@ func (r *IntHelper) getDriver(ctx context.Context, ctr *testcontainers.DockerCon
 	require.NoError(r.t, err, "failed to get container name")
 
 	r.t.Logf("nodeURL: %s gatewayURL: %s for container name: %s", nodeURL, gatewayURL, name)
-	kwilClt, err := client.New(ctx, r.cfg.GrpcEndpoint,
+
+	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+	kwilClt, err := client.New(r.cfg.GrpcEndpoint,
 		client.WithSigner(r.cfg.AlicePK),
-		client.WithCometBftUrl(r.cfg.ChainEndpoint),
+		client.WithLogger(logger),
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
 

@@ -62,7 +62,7 @@ func (c *CometbftSecp256k1Signer) SignMsg(msg []byte) (*Signature, error) {
 	}
 	return &Signature{
 		Signature: sig[:len(sig)-1],
-		Type:      SIGNATURE_TYPE_SECP256K1_COMETBFT,
+		Type:      SignatureTypeSecp256k1Cometbft,
 	}, nil
 }
 
@@ -95,7 +95,7 @@ func (e *EthPersonalSecp256k1Signer) SignMsg(msg []byte) (*Signature, error) {
 	}
 	return &Signature{
 		Signature: sig,
-		Type:      SIGNATURE_TYPE_SECP256K1_PERSONAL,
+		Type:      SignatureTypeSecp256k1Personal,
 	}, nil
 }
 
@@ -123,7 +123,7 @@ func (e *StdEd25519Signer) SignMsg(msg []byte) (*Signature, error) {
 	}
 	return &Signature{
 		Signature: sig,
-		Type:      SIGNATURE_TYPE_ED25519,
+		Type:      SignatureTypeEd25519,
 	}, nil
 }
 

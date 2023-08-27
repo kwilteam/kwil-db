@@ -31,7 +31,7 @@ jobs:
           repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.21'
           check-latest: true
@@ -104,10 +104,6 @@ jobs:
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           task install:deps
           go mod download
-
-      - name: Compile Protobuf
-        run: |
-          task pb:compile:v1
 
       - name: Generate go vendor
         #for faster builds and private repos, need to run this after pb:compile:v1
