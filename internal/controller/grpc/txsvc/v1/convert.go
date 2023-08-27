@@ -11,14 +11,15 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
-func convertTransaction(incoming *txpb.Transaction) (*transactions.Transaction, error) {
+// convertToAbciTx converts a protobuf transaction to an abci transaction
+func convertToAbciTx(incoming *txpb.Transaction) (*transactions.Transaction, error) {
 	payloadType := transactions.PayloadType(incoming.Body.PayloadType)
 	if !payloadType.Valid() {
 		return nil, fmt.Errorf("invalid payload type: %s", incoming.Body.PayloadType)
 	}
 
 	if incoming.Signature == nil {
-		return nil, fmt.Errorf("transaction signature cannot be nil")
+		return nil, fmt.Errorf("transaction signature not given")
 	}
 
 	convSignature, err := convertSignature(incoming.Signature)
@@ -44,8 +45,30 @@ func convertTransaction(incoming *txpb.Transaction) (*transactions.Transaction, 
 	}, nil
 }
 
+// convertFromAbciTx converts an abci transaction(encoded) to a protobuf transaction
+func convertFromAbciTx(tx *transactions.Transaction) (*txpb.Transaction, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("transaction is nil")
+	}
+
+	return &txpb.Transaction{
+		Body: &txpb.Transaction_Body{
+			Payload:     tx.Body.Payload,
+			PayloadType: tx.Body.PayloadType.String(),
+			Fee:         tx.Body.Fee.String(),
+			Nonce:       tx.Body.Nonce,
+			Salt:        tx.Body.Salt,
+		},
+		Signature: &txpb.Signature{
+			SignatureBytes: tx.Signature.Signature,
+			SignatureType:  tx.Signature.Type.String(),
+		},
+		Sender: tx.Sender,
+	}, nil
+}
+
 func newEmptySignature() (bytes []byte, sigType crypto.SignatureType) {
-	return []byte{}, crypto.SIGNATURE_TYPE_EMPTY
+	return []byte{}, crypto.SignatureTypeEmpty
 }
 
 func convertSignature(sig *txpb.Signature) (*crypto.Signature, error) {
@@ -57,11 +80,7 @@ func convertSignature(sig *txpb.Signature) (*crypto.Signature, error) {
 		}, nil
 	}
 
-	sigType := crypto.SignatureLookUp(sig.SignatureType)
-	if err := sigType.IsValid(); err != nil {
-		return nil, err
-	}
-
+	sigType := crypto.SignatureTypeLookUp(sig.SignatureType)
 	return &crypto.Signature{
 		Signature: sig.SignatureBytes,
 		Type:      sigType,
@@ -159,15 +178,15 @@ func convertActionsFromEngine(actions []*engineTypes.Procedure) ([]*txpb.Action,
 
 func convertModifiersFromEngine(mods []engineTypes.Modifier) (mutability string, auxiliaries []string, err error) {
 	auxiliaries = make([]string, 0)
-	mutability = "UPDATE"
+	mutability = transactions.MutabilityUpdate.String()
 	for _, mod := range mods {
 		switch mod {
 		case engineTypes.ModifierAuthenticated:
-			auxiliaries = append(auxiliaries, "AUTHENTICATED")
+			auxiliaries = append(auxiliaries, transactions.AuxiliaryTypeMustSign.String())
 		case engineTypes.ModifierView:
-			mutability = "VIEW"
+			mutability = transactions.MutabilityView.String()
 		case engineTypes.ModifierOwner:
-			auxiliaries = append(auxiliaries, "OWNER")
+			auxiliaries = append(auxiliaries, transactions.AuxiliaryTypeOwner.String())
 		default:
 			return "", nil, fmt.Errorf("unknown modifier type: %v", mod)
 		}

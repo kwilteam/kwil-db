@@ -43,10 +43,6 @@ jobs:
           task install:deps
           go mod download
 
-      - name: Compile Protobuf
-        run: |
-          task pb:compile:v1
-
       - name: Generate go vendor
         #for faster builds and private repos, need to run this after pb:compile:v1
         run: |

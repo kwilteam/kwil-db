@@ -3,17 +3,12 @@ package display
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
-func PrintTxResponse(res *transactions.TransactionStatus) {
-	if res.ID != nil {
-		fmt.Println("Success!")
-	}
+func PrintTxResponse(res transactions.TxHash) {
 	fmt.Println("Response:")
-	fmt.Println("  Hash:", hexutil.Encode(res.ID))
-	fmt.Println("  Fee:", res.Fee)
+	fmt.Println("  Hash:", res.Hex())
 }
 
 type ClientChainResponse struct {

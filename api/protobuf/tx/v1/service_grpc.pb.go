@@ -32,6 +32,7 @@ const (
 	TxService_ValidatorLeave_FullMethodName      = "/tx.TxService/ValidatorLeave"
 	TxService_ValidatorJoinStatus_FullMethodName = "/tx.TxService/ValidatorJoinStatus"
 	TxService_Call_FullMethodName                = "/tx.TxService/Call"
+	TxService_TxQuery_FullMethodName             = "/tx.TxService/TxQuery"
 )
 
 // TxServiceClient is the client API for TxService service.
@@ -51,6 +52,7 @@ type TxServiceClient interface {
 	ValidatorLeave(ctx context.Context, in *ValidatorLeaveRequest, opts ...grpc.CallOption) (*ValidatorLeaveResponse, error)
 	ValidatorJoinStatus(ctx context.Context, in *ValidatorJoinStatusRequest, opts ...grpc.CallOption) (*ValidatorJoinStatusResponse, error)
 	Call(ctx context.Context, in *CallRequest, opts ...grpc.CallOption) (*CallResponse, error)
+	TxQuery(ctx context.Context, in *TxQueryRequest, opts ...grpc.CallOption) (*TxQueryResponse, error)
 }
 
 type txServiceClient struct {
@@ -178,6 +180,15 @@ func (c *txServiceClient) Call(ctx context.Context, in *CallRequest, opts ...grp
 	return out, nil
 }
 
+func (c *txServiceClient) TxQuery(ctx context.Context, in *TxQueryRequest, opts ...grpc.CallOption) (*TxQueryResponse, error) {
+	out := new(TxQueryResponse)
+	err := c.cc.Invoke(ctx, TxService_TxQuery_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TxServiceServer is the server API for TxService service.
 // All implementations must embed UnimplementedTxServiceServer
 // for forward compatibility
@@ -195,6 +206,7 @@ type TxServiceServer interface {
 	ValidatorLeave(context.Context, *ValidatorLeaveRequest) (*ValidatorLeaveResponse, error)
 	ValidatorJoinStatus(context.Context, *ValidatorJoinStatusRequest) (*ValidatorJoinStatusResponse, error)
 	Call(context.Context, *CallRequest) (*CallResponse, error)
+	TxQuery(context.Context, *TxQueryRequest) (*TxQueryResponse, error)
 	mustEmbedUnimplementedTxServiceServer()
 }
 
@@ -240,6 +252,9 @@ func (UnimplementedTxServiceServer) ValidatorJoinStatus(context.Context, *Valida
 }
 func (UnimplementedTxServiceServer) Call(context.Context, *CallRequest) (*CallResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Call not implemented")
+}
+func (UnimplementedTxServiceServer) TxQuery(context.Context, *TxQueryRequest) (*TxQueryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TxQuery not implemented")
 }
 func (UnimplementedTxServiceServer) mustEmbedUnimplementedTxServiceServer() {}
 
@@ -488,6 +503,24 @@ func _TxService_Call_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TxService_TxQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TxQueryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).TxQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TxService_TxQuery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).TxQuery(ctx, req.(*TxQueryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TxService_ServiceDesc is the grpc.ServiceDesc for TxService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -546,6 +579,10 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Call",
 			Handler:    _TxService_Call_Handler,
+		},
+		{
+			MethodName: "TxQuery",
+			Handler:    _TxService_TxQuery_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

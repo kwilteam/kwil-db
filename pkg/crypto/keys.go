@@ -2,6 +2,10 @@ package crypto
 
 type KeyType string
 
+func (kt KeyType) String() string {
+	return string(kt)
+}
+
 const UnknownKeyType KeyType = "unknown"
 
 type PrivateKey interface {

@@ -10,11 +10,9 @@ tasks:
     desc: Compiles v0 protobuf
     internal: true
     deps: [update]
-    # TODO: enforce after github action supprort new versionning scheme
-    #    version above 3.21 is not supported by github actions,
-    #    preconditions:
-    #      - sh: a="libprotoc 3.21.12";b=`protoc --version`;test "$a" = "$b"
-    #        msg: "Protobuf compiler version is not 3.21.12, please install the correct version"
+    preconditions:
+      - sh: a="libprotoc 23.4";b=`protoc --version`;test "$a" = "$b"
+        msg: "Protobuf compiler version is not 23.4, please install the correct version"
     cmds:
       - |
         protoc -I ./proto \
@@ -31,6 +29,9 @@ tasks:
 
   compile:v1:
     desc: Compiles v1 protobuf
+    preconditions:
+      - sh: a="libprotoc 23.4";b=`protoc --version`;test "$a" = "$b"
+        msg: "Protobuf compiler version is not 23.4, please install the correct version"
     cmds:
       - |
         protoc -I ./proto \

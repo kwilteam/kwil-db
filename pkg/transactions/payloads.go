@@ -172,6 +172,8 @@ func (t AuxiliaryType) String() string {
 const (
 	// AuxiliaryTypeMustSign is used to specify that an action need signature, it is used for `view` action.
 	AuxiliaryTypeMustSign AuxiliaryType = "mustsign"
+	// AuxiliaryTypeOwner is used to specify that an action caller must be the owner of the database.
+	AuxiliaryTypeOwner AuxiliaryType = "owner"
 )
 
 // DropSchema is the payload that is used to drop a schema

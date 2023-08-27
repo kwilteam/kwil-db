@@ -10,7 +10,7 @@ import (
 func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
 	t.Logf("Executing update action specification")
 	// Given a valid database schema
-	db := SchemaLoader.Load(t, schema_testdb)
+	db := SchemaLoader.Load(t, schemaTestDB)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
 	actionName := "update_user"
 	userQ := userTable{

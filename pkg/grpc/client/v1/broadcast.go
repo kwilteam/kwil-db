@@ -9,23 +9,14 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
-func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) (*transactions.TransactionStatus, error) {
+func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) (transactions.TxHash, error) {
 	pbTx := convertTx(tx)
 	res, err := c.txClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
 	if err != nil {
 		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: %w", err)
 	}
 
-	if res.Status == nil {
-		return nil, fmt.Errorf("TxServiceClient failed to Broadcast transaction: receipt is nil")
-	}
-
-	txRes, err := convertTransactionStatus(res.Status)
-	if err != nil {
-		return nil, fmt.Errorf("TxServiceClient failed to convert transaction status: %w", err)
-	}
-
-	return txRes, nil
+	return res.GetTxHash(), nil
 }
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
@@ -53,6 +44,5 @@ func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction)
 		return nil, fmt.Errorf("failed to convert price to big.Int")
 	}
 
-	fmt.Println("Estimated cost:", bigCost)
 	return bigCost, nil
 }
