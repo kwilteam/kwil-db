@@ -46,6 +46,7 @@ type TestnetGenerateConfig struct {
 // TODO: if we use our own keys for cosmos, this will not work
 // privval.LoadFilePV will need to be replacew with something else
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
+
 	cfg := cmtCfg.DefaultConfig()
 	cfg.SetRoot(genCfg.HomeDir)
 	err := os.MkdirAll(filepath.Join(genCfg.HomeDir, "config"), nodeDirPerm)

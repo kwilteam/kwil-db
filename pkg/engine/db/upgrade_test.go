@@ -159,6 +159,10 @@ func (m procedureStore) Query(ctx context.Context, query string, args map[string
 	return returnVals, nil
 }
 
+func (m *procedureStore) QueryUnsafe(ctx context.Context, query string, args map[string]any) ([]map[string]any, error) {
+	return m.Query(ctx, query, args)
+}
+
 func (m *procedureStore) ApplyChangeset(cs io.Reader) error {
 	return nil
 }

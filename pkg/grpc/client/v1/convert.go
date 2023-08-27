@@ -1,9 +1,6 @@
 package client
 
 import (
-	"fmt"
-	"math/big"
-
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -34,17 +31,4 @@ func convertActionSignature(oldSig *crypto.Signature) *txpb.Signature {
 	}
 
 	return newSig
-}
-
-func convertTransactionStatus(incoming *txpb.TransactionStatus) (*transactions.TransactionStatus, error) {
-	bigFee, ok := big.NewInt(0).SetString(incoming.Fee, 10)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert fee to big.Int")
-	}
-
-	return &transactions.TransactionStatus{
-		ID:     incoming.Id,
-		Fee:    bigFee,
-		Status: transactions.Status(incoming.Status),
-	}, nil
 }

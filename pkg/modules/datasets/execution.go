@@ -18,91 +18,92 @@ import (
 // ExecutionResponse is the response from any interaction that modifies state.
 type ExecutionResponse struct {
 	// Fee is the amount of tokens spent on the execution
-	Fee *big.Int
+	Fee     *big.Int
+	GasUsed int64
 }
 
 // Deploy deploys a database.
-func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, tx *transactions.Transaction) (*transactions.TransactionStatus, error) {
+func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, tx *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := u.PriceDeploy(ctx, schema)
 	if err != nil {
 		if price == nil {
 			price = big.NewInt(0)
 		}
-		return failure(tx, price, err)
+		return resp(price), err
 	}
 
 	err = u.compareAndSpend(ctx, price, tx)
 	if err != nil {
-		return failure(tx, price, err)
+		return resp(price), err
 	}
 
 	_, err = u.engine.CreateDataset(ctx, schema)
 	if err != nil {
-		return failure(tx, price, fmt.Errorf("failed to create dataset: %w", err))
+		return resp(price), fmt.Errorf("failed to create dataset: %w", err)
 	}
 
-	return success(tx, price)
+	return resp(price), nil
 }
 
 // Drop drops a database.
-func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.Transaction) (*transactions.TransactionStatus, error) {
+func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := u.PriceDrop(ctx, dbid)
 	if err != nil {
 		if price == nil {
 			price = big.NewInt(0)
 		}
-		return failure(tx, price, err)
+		return resp(price), err
 	}
 
 	err = u.compareAndSpend(ctx, price, tx)
 	if err != nil {
-		return failure(tx, price, err)
+		return resp(price), err
 	}
 
 	senderPubKey, err := tx.GetSenderPubKey()
 	// NOTE: This should never happen, since the transaction is already validated
 	if err != nil {
-		return failure(tx, price, fmt.Errorf("failed to parse sender: %w", err))
+		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
 	}
 
 	err = u.engine.DropDataset(ctx, senderPubKey.Address().String(), dbid)
 	if err != nil {
-		return failure(tx, price, fmt.Errorf("failed to drop dataset: %w", err))
+		return resp(price), fmt.Errorf("failed to drop dataset: %w", err)
 	}
 
-	return success(tx, price)
+	return resp(price), nil
 }
 
 // Execute executes an action against a database.
 // TODO: I think args should be [][]any, not [][]string
-func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*transactions.TransactionStatus, error) {
+func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := u.PriceExecute(ctx, dbid, action, args)
 	if err != nil {
 		if price == nil {
 			price = big.NewInt(0)
 		}
-		return failure(tx, price, err)
+		return resp(price), err
 	}
 
 	err = u.compareAndSpend(ctx, price, tx)
 	if err != nil {
-		return failure(tx, price, err)
+		return resp(price), err
 	}
 
 	senderPubKey, err := tx.GetSenderPubKey()
 	// NOTE: This should never happen, since the transaction is already validated
 	if err != nil {
-		return failure(tx, price, fmt.Errorf("failed to parse sender: %w", err))
+		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
 	}
 
 	_, err = u.engine.Execute(ctx, dbid, action, args,
 		engine.WithCaller(senderPubKey.Address().String()),
 	)
 	if err != nil {
-		return failure(tx, price, fmt.Errorf("failed to execute action: %w", err))
+		return resp(price), fmt.Errorf("failed to execute action: %w", err)
 	}
 
-	return success(tx, price)
+	return resp(price), nil
 }
 
 // compareAndSpend compares the calculated price to the transaction's fee, and spends the price if the fee is sufficient.
@@ -124,34 +125,9 @@ func (u *DatasetModule) compareAndSpend(ctx context.Context, price *big.Int, tx 
 	})
 }
 
-func success(tx *transactions.Transaction, fee *big.Int) (*transactions.TransactionStatus, error) {
-	txid, err := tx.GetHash()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tx hash: %w", err)
+func resp(fee *big.Int) *ExecutionResponse {
+	return &ExecutionResponse{
+		Fee:     fee,
+		GasUsed: 0,
 	}
-
-	return &transactions.TransactionStatus{
-		ID:     txid,
-		Fee:    fee,
-		Status: transactions.StatusSuccess,
-	}, nil
-}
-
-func failure(tx *transactions.Transaction, fee *big.Int, errs ...error) (*transactions.TransactionStatus, error) {
-	txid, err := tx.GetHash()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tx hash: %w", err)
-	}
-
-	var errStrings []string
-	for _, err := range errs {
-		errStrings = append(errStrings, err.Error())
-	}
-
-	return &transactions.TransactionStatus{
-		ID:     txid,
-		Fee:    fee,
-		Status: transactions.StatusFailed,
-		Errors: errStrings,
-	}, nil
 }
