@@ -41,8 +41,8 @@ type AtomicCommitter struct {
 	// Mutex to ensure thread safety when checking session state
 	mu sync.Mutex
 
-	// State to indicate whether the session is in progress or not
-	inProgress bool
+	// phase is the current phase of the session.
+	phase CommitPhase
 
 	// closed is set to true when the committer is closed.
 	// this is to protect against AtomicCommitter consumers
@@ -72,6 +72,7 @@ func NewAtomicCommitter(ctx context.Context, wal Wal, opts ...CommiterOpt) *Atom
 		wal:          &sessionWal{wal},
 		log:          log.NewNoOp(),
 		timeout:      5 * time.Second,
+		phase:        CommitPhaseNone,
 	}
 
 	for _, opt := range opts {
@@ -93,7 +94,7 @@ func (a *AtomicCommitter) ClearWal(ctx context.Context) error {
 		return ErrClosed
 	}
 
-	if a.inProgress {
+	if a.phase.InSession() {
 		return ErrSessionInProgress
 	}
 
@@ -110,10 +111,10 @@ func (a *AtomicCommitter) Begin(ctx context.Context) (err error) {
 		return ErrClosed
 	}
 
-	if a.inProgress {
+	if a.phase.InSession() {
 		return ErrSessionInProgress
 	}
-	a.inProgress = true
+	a.phase = CommitPhaseCommit
 
 	// we handle errors after checking to see if a session
 	// is in progress because, if begin is called while a session
@@ -129,11 +130,11 @@ func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error))
 	a.mu.Lock()
 
 	// if no session in progress, then return without cancelling
-	if !a.inProgress {
+	if a.phase != CommitPhaseCommit {
 		a.mu.Unlock()
-		return ErrNoSessionInProgress
+		return phaseError("Commit", CommitPhaseCommit, a.phase)
 	}
-	a.inProgress = false
+	a.phase = CommitPhaseApply
 
 	// if error, cancel the session
 	defer a.handleErr(ctx, &err)
@@ -169,6 +170,7 @@ func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error))
 	go func() {
 		err2 := a.apply(ctx)
 		applyCallback(err2)
+		a.phase = CommitPhaseNone
 		a.mu.Unlock()
 	}()
 
@@ -181,7 +183,7 @@ func (a *AtomicCommitter) ID(ctx context.Context) (id []byte, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if !a.inProgress {
+	if !a.phase.InSession() {
 		return nil, ErrNoSessionInProgress
 	}
 
@@ -259,7 +261,7 @@ func (a *AtomicCommitter) handleErr(ctx context.Context, err *error) {
 	if *err != nil {
 		a.log.Error("error during atomic commit", zap.Error(*err))
 		a.cancel(ctx)
-		a.inProgress = false
+		a.phase = CommitPhaseNone
 	}
 }
 
@@ -407,7 +409,7 @@ func (a *AtomicCommitter) callAll(errType error, f func(Committable) error) erro
 	return nil
 }
 
-// TODO: we need to test register and unregister
+// TODO: we need to test register and unregister being used in different phases
 
 // Register registers a committable with the atomic committer.
 // If a session is already in progress, the newly registered committer will be added to the session,
@@ -423,15 +425,24 @@ func (a *AtomicCommitter) Register(ctx context.Context, id string, committable C
 	}
 	a.committables[CommittableId(id)] = committable
 
-	if !a.inProgress {
-		return nil
-	}
-
+	// we need to call commit if in phase 1, and apply if in phase 2
+	// right now we only call apply
 	defer a.handleErr(ctx, &err)
-
-	err = committable.BeginApply(ctx)
-	if err != nil {
-		return wrapError(ErrBeginApply, err)
+	switch a.phase {
+	default:
+		panic(fmt.Sprintf("unknown phase: %d", a.phase))
+	case CommitPhaseNone:
+		return nil
+	case CommitPhaseCommit:
+		err = committable.BeginCommit(ctx)
+		if err != nil {
+			return wrapError(ErrBeginCommit, err)
+		}
+	case CommitPhaseApply:
+		err = committable.BeginApply(ctx)
+		if err != nil {
+			return wrapError(ErrBeginApply, err)
+		}
 	}
 
 	return nil
@@ -449,7 +460,7 @@ func (a *AtomicCommitter) Unregister(ctx context.Context, id string) error {
 	}
 	delete(a.committables, CommittableId(id))
 
-	if a.inProgress {
+	if a.phase.InSession() {
 		committable.Cancel(ctx)
 	}
 
@@ -469,7 +480,7 @@ func (a *AtomicCommitter) Close() error {
 
 	a.log.Info("closing atomic committer")
 
-	if !a.inProgress {
+	if !a.phase.InSession() {
 		return nil
 	}
 
@@ -478,4 +489,38 @@ func (a *AtomicCommitter) Close() error {
 
 	a.cancel(ctx)
 	return nil
+}
+
+type CommitPhase uint8
+
+const (
+	// Signals that no session is in progress.
+	CommitPhaseNone CommitPhase = iota
+	// Signals that the session is in between Begin and Commit.
+	CommitPhaseCommit
+	// Signals that the session is in between Commit and BeginApply.
+	CommitPhaseApply
+)
+
+// InSession returns true if the committer is in a session.
+func (c CommitPhase) InSession() bool {
+	return c != CommitPhaseNone
+}
+
+func (c CommitPhase) String() string {
+	switch c {
+	case CommitPhaseNone:
+		return "none"
+	case CommitPhaseCommit:
+		return "commit"
+	case CommitPhaseApply:
+		return "apply"
+	default:
+		return fmt.Sprintf("unknown phase: %d", c)
+	}
+}
+
+// phaseError returns an error indicating that a method was called in the wrong phase.
+func phaseError(method string, desiredPhase CommitPhase, actual CommitPhase) error {
+	return fmt.Errorf("%w, method '%s' can only be called in '%s' phase, but was called in '%s'", ErrCommitPhase, method, desiredPhase, actual)
 }

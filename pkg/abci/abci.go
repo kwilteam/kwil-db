@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -16,7 +18,8 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/kv"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	modDataset "github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	modVal "github.com/kwilteam/kwil-db/pkg/modules/validators"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/kwilteam/kwil-db/pkg/validators"
 	"go.uber.org/zap"
@@ -146,6 +149,9 @@ var _ abciTypes.Application = &AbciApp{}
 // BeginBlock begins a block.
 // If the previous commit is not finished, it will wait for the previous commit to finish.
 func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.ResponseBeginBlock {
+	logger := a.log.With(zap.String("stage", "ABCI BeginBlock"), zap.Int("height", int(req.Header.Height)))
+	logger.Debug("begin block")
+
 	a.commitSemaphore <- struct{}{} // peg in (until Commit is applied), there will only be at most one waiter
 
 	err := a.committer.Begin(context.Background())
@@ -160,16 +166,18 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 		// 	a.log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
 		// 	continue
 		// }
-		a.log.Info("punish validator", zap.String("addr", addr))
+		logger.Info("punish validator", zap.String("addr", addr))
 
 		// This is why we need the addr=>pubkey map. Why, comet, why?
 		pubkey, ok := a.valAddrToKey[addr]
 		if !ok {
+			logger.Error("unknown validator address", zap.String("addr", addr))
 			panic(newFatalError("BeginBlock", &req, fmt.Sprintf("unknown validator address %v", addr)))
 		}
 		const punishDelta = 1
 		newPower := ev.Validator.Power - punishDelta
 		if err = a.validators.Punish(context.Background(), pubkey, newPower); err != nil {
+			logger.Error("failed to punish validator", zap.Error(err))
 			panic(newFatalError("BeginBlock", &req, fmt.Sprintf("failed to punish validator %v", addr)))
 		}
 	}
@@ -178,16 +186,23 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 }
 
 func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseCheckTx {
+	logger := a.log.With(zap.String("stage", "ABCI CheckTx"))
+	logger.Debug("check tx")
+
 	tx := &transactions.Transaction{}
 	err := tx.UnmarshalBinary(incoming.Tx)
 	if err != nil {
-		a.log.Error("failed to unmarshal transaction", zap.Error(err))
+		logger.Error("failed to unmarshal transaction", zap.Error(err))
 		return abciTypes.ResponseCheckTx{Code: 1, Log: err.Error()}
 	}
 
+	logger.Debug("",
+		zap.String("sender", tx.GetSenderAddress()),
+		zap.String("PayloadType", tx.Body.PayloadType.String()))
+
 	err = tx.Verify()
 	if err != nil {
-		a.log.Error("failed to verify transaction", zap.Error(err))
+		logger.Error("failed to verify transaction", zap.Error(err))
 		return abciTypes.ResponseCheckTx{Code: 1, Log: err.Error()}
 	}
 
@@ -195,36 +210,63 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 }
 
 func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDeliverTx {
-	ctx := context.Background()
+	logger := a.log.With(zap.String("stage", "ABCI DeliverTx"))
 
+	ctx := context.Background()
 	tx := &transactions.Transaction{}
 	err := tx.UnmarshalBinary(req.Tx)
 	if err != nil {
+		logger.Error("failed to unmarshal transaction",
+			zap.Error(err))
 		return abciTypes.ResponseDeliverTx{
-			Code: 1,
+			Code: CodeEncodingError.Uint32(),
 			Log:  err.Error(),
 		}
 	}
 
-	var res *transactions.TransactionStatus
 	var events []abciTypes.Event
-	var gasUsed int64 // for error path
+	gasUsed := int64(0)
+	txCode := CodeOk
+
+	a.log.Debug("",
+		zap.String("Sender", tx.GetSenderAddress()),
+		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	switch tx.Body.PayloadType {
 	case transactions.PayloadTypeDeploySchema:
 		var schemaPayload transactions.Schema
 		err = schemaPayload.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
 		var schema *engineTypes.Schema
-		schema, err = datasets.ConvertSchemaToEngine(&schemaPayload)
+		schema, err = modDataset.ConvertSchemaToEngine(&schemaPayload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modDataset.ExecutionResponse
 		res, err = a.database.Deploy(ctx, schema, tx)
+		if err != nil {
+			txCode = CodeUnknownError
+			break
+		}
+
+		dbID := utils.GenerateDBID(schema.Owner, schema.Name)
+		gasUsed = res.GasUsed
+		events = []abciTypes.Event{
+			{
+				Type: transactions.PayloadTypeDeploySchema.String(),
+				Attributes: []abciTypes.EventAttribute{
+					{Key: "Sender", Value: tx.GetSenderAddress(), Index: true},
+					{Key: "Result", Value: "Success", Index: true},
+					{Key: "DBID", Value: dbID, Index: true},
+				},
+			},
+		}
 	case transactions.PayloadTypeDropSchema:
 		drop := &transactions.DropSchema{}
 		err = drop.UnmarshalBinary(tx.Body.Payload)
@@ -232,7 +274,14 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
+		var res *modDataset.ExecutionResponse
 		res, err = a.database.Drop(ctx, drop.DBID, tx)
+		if err != nil {
+			txCode = CodeUnknownError
+			break
+		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeExecuteAction:
 		execution := &transactions.ActionExecution{}
 		// Concept:
@@ -244,19 +293,30 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 
 		err = execution.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modDataset.ExecutionResponse
 		res, err = a.database.Execute(ctx, execution.DBID, execution.Action, convertArgs(execution.Arguments), tx)
+		if err != nil {
+			txCode = CodeUnknownError
+			break
+		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeValidatorJoin:
 		var join transactions.ValidatorJoin
 		err = join.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modVal.ExecutionResponse
 		res, err = a.validators.Join(ctx, join.Candidate, int64(join.Power), tx)
 		if err != nil {
+			txCode = CodeUnknownError
 			break
 		}
 		// Concept:
@@ -276,15 +336,20 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				},
 			},
 		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeValidatorLeave:
 		var leave transactions.ValidatorLeave
 		err = leave.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modVal.ExecutionResponse
 		res, err = a.validators.Leave(ctx, leave.Validator, tx)
 		if err != nil {
+			txCode = CodeUnknownError
 			break
 		}
 
@@ -298,15 +363,20 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				},
 			},
 		}
+
+		gasUsed = res.GasUsed
 	case transactions.PayloadTypeValidatorApprove:
 		var approve transactions.ValidatorApprove
 		err = approve.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
+			txCode = CodeEncodingError
 			break
 		}
 
+		var res *modVal.ExecutionResponse
 		res, err = a.validators.Approve(ctx, approve.Candidate, tx)
 		if err != nil {
+			txCode = CodeUnknownError
 			break
 		}
 
@@ -320,12 +390,15 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				},
 			},
 		}
+
+		gasUsed = res.GasUsed
 	default:
 		err = fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
 	if err != nil {
+		a.log.Warn("failed to deliver tx", zap.Error(err))
 		return abciTypes.ResponseDeliverTx{
-			Code: 1,
+			Code: txCode.Uint32(),
 			Log:  err.Error(),
 			// NOTE: some execution that returned an error may still have used
 			// gas. What is the meaning of the "Code"?
@@ -335,13 +408,15 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 
 	return abciTypes.ResponseDeliverTx{
 		Code:    abciTypes.CodeTypeOK,
-		GasUsed: res.Fee.Int64(),
+		GasUsed: gasUsed,
 		Events:  events,
+		Log:     "success",
 	}
 }
 
 func (a *AbciApp) EndBlock(e abciTypes.RequestEndBlock) abciTypes.ResponseEndBlock {
-	a.log.Info("end block", zap.Int64("height", e.Height))
+	logger := a.log.With(zap.String("stage", "ABCI EndBlock"), zap.Int("height", int(e.Height)))
+	logger.Debug("", zap.Int64("height", e.Height))
 
 	a.valUpdates = a.validators.Finalize(context.Background())
 
@@ -365,6 +440,8 @@ func (a *AbciApp) EndBlock(e abciTypes.RequestEndBlock) abciTypes.ResponseEndBlo
 }
 
 func (a *AbciApp) Commit() abciTypes.ResponseCommit {
+	logger := a.log.With(zap.String("stage", "ABCI Commit"))
+	logger.Debug("start commit")
 	ctx := context.Background()
 
 	// generate the unique id for all changes occurred thus far
@@ -468,6 +545,9 @@ func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
 }
 
 func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseInitChain {
+	logger := a.log.With(zap.String("stage", "ABCI InitChain"), zap.Int64("height", p0.InitialHeight))
+	logger.Debug("", zap.String("ChainId", p0.ChainId))
+
 	ctx := context.Background()
 
 	// Initialize the validator module with the genesis validators.
@@ -571,10 +651,26 @@ func (a *AbciApp) OfferSnapshot(p0 abciTypes.RequestOfferSnapshot) abciTypes.Res
 }
 
 func (a *AbciApp) PrepareProposal(p0 abciTypes.RequestPrepareProposal) abciTypes.ResponsePrepareProposal {
-	return abciTypes.ResponsePrepareProposal{}
+	a.log.Debug("",
+		zap.String("stage", "ABCI PrepareProposal"),
+		zap.Int64("height", p0.Height),
+		zap.Int("txs", len(p0.Txs)))
+
+	// TODO: do something with the txs?
+
+	return abciTypes.ResponsePrepareProposal{
+		Txs: p0.Txs,
+	}
 }
 
 func (a *AbciApp) ProcessProposal(p0 abciTypes.RequestProcessProposal) abciTypes.ResponseProcessProposal {
+	a.log.Debug("",
+		zap.String("stage", "ABCI ProcessProposal"),
+		zap.Int64("height", p0.Height),
+		zap.Int("txs", len(p0.Txs)))
+
+	// TODO: do something with the txs?
+
 	return abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}
 }
 

@@ -22,6 +22,8 @@ type Database interface {
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 	Savepoint() (Savepoint, error)
 	TableExists(ctx context.Context, table string) (bool, error)
+	// this should get deleted once we fix the engine
+	QueryUnsafe(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 }
 
 type Statement interface {

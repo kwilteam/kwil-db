@@ -14,6 +14,10 @@ type SqlDB interface {
 	// Query executes a query and returns the result.
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 
+	// QuerySafe executes a query and returns the result.
+	// this should get deleted
+	QueryUnsafe(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
+
 	// Prepare prepares a statement for execution, and returns a Statement.
 	Prepare(stmt string) (sql.Statement, error)
 

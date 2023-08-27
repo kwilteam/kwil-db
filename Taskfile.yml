@@ -51,7 +51,7 @@ tasks:
   fmt:
     desc: Format the code
     cmds:
-      - goimports -format-only -w .
+      - goimports -format-only -w ./cmd ./internal ./pkg ./test
 
   lint:
     desc: Lint with golangci-lint

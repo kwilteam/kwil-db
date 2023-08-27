@@ -15,7 +15,7 @@ type ExecuteCallDsl interface {
 func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl) {
 	t.Logf("Executing ExecuteCallSpecification")
 
-	db := SchemaLoader.Load(t, schema_testdb)
+	db := SchemaLoader.Load(t, schemaTestDB)
 	dbID := GenerateSchemaId(db.Owner, db.Name)
 
 	getPostInput := []any{

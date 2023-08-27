@@ -7,6 +7,7 @@ import (
 var (
 	ErrSessionInProgress   = errors.New("session already in progress")
 	ErrNoSessionInProgress = errors.New("no session in progress, cannot commit")
+	ErrCommitPhase         = errors.New("incorrect commit phase")
 	ErrMissingBegin        = errors.New("missing begin record")
 	ErrBeginCommit         = errors.New("error beginning atomic commit")
 	ErrEndCommit           = errors.New("error ending atomic commit")

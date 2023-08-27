@@ -30,7 +30,7 @@ func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 	}
 
 	loggingOpts := []logging.Option{
-		logging.WithLogOnEvents(logging.StartCall),
+		logging.WithLogOnEvents(logging.StartCall, logging.FinishCall),
 	}
 
 	server := grpc.NewServer(

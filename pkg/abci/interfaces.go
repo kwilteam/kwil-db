@@ -3,6 +3,9 @@ package abci
 import (
 	"context"
 
+	modDataset "github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	modVal "github.com/kwilteam/kwil-db/pkg/modules/validators"
+
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -10,9 +13,9 @@ import (
 )
 
 type DatasetsModule interface {
-	Deploy(ctx context.Context, schema *types.Schema, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
-	Drop(ctx context.Context, dbid string, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
-	Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
+	Deploy(ctx context.Context, schema *types.Schema, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
+	Drop(ctx context.Context, dbid string, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
+	Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
 }
 
 // ValidatorModule handles the processing of validator approve/join/leave
@@ -38,12 +41,12 @@ type ValidatorModule interface {
 	Punish(ctx context.Context, validator []byte, power int64) error
 
 	// Join creates a join request for a prospective validator.
-	Join(ctx context.Context, joiner []byte, power int64, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
+	Join(ctx context.Context, joiner []byte, power int64, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
 	// Leave processes a leave request for a validator.
-	Leave(ctx context.Context, joiner []byte, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
+	Leave(ctx context.Context, joiner []byte, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
 	// Approve records an approval transaction from a current validator. The
 	// approver is the tx Sender.
-	Approve(ctx context.Context, joiner []byte, tx *transactions.Transaction) (*transactions.TransactionStatus, error)
+	Approve(ctx context.Context, joiner []byte, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
 
 	// Finalize is used at the end of block processing to retrieve the validator
 	// updates to be provided to the consensus client for the next block. This

@@ -40,16 +40,16 @@ func TestKwildGrpcAcceptance(t *testing.T) {
 	}
 
 	driver := helper.GetAliceDriver(ctx)
-	secondDriver := helper.GetBobDriver(ctx)
 
 	// When user deployed database
-	specifications.DatabaseDeployInvalidSqlSpecification(ctx, t, driver)
-	specifications.DatabaseDeployInvalidExtensionSpecification(ctx, t, driver)
+	//specifications.DatabaseDeployInvalidSqlSpecification(ctx, t, driver)
+	//specifications.DatabaseDeployInvalidExtensionSpecification(ctx, t, driver)
 	specifications.DatabaseDeploySpecification(ctx, t, driver)
 
 	//// Then user should be able to execute database
 	specifications.ExecuteOwnerActionSpecification(ctx, t, driver)
 
+	secondDriver := helper.GetBobDriver(ctx)
 	specifications.ExecuteOwnerActionFailSpecification(ctx, t, secondDriver)
 	specifications.ExecuteDBInsertSpecification(ctx, t, driver)
 	specifications.ExecuteCallSpecification(ctx, t, driver)

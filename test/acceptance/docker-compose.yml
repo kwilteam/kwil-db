@@ -12,17 +12,21 @@ services:
     env_file:
       - .env
     environment:
-      - LOG=${LOG:-cometbft.log}
-      - COMET_BFT_HOME=${LOG:-/app/comet-bft}
-      - COMETBFT_RPC_URL=${COMETBFT_RPC_URL:-tcp://0.0.0.0:26657}
-      - KWILD_EXTENSION_ENDPOINTS=${KWILD_EXTENSION_ENDPOINTS:-ext:50051}
+      - LOG=cometbft.log
+      - COMET_BFT_HOME=/app/comet-bft
+      - KWILD_EXTENSION_ENDPOINTS=ext:50051
+      - KWILD_COMETBFT_RPC_URL=${KWILD_COMETBFT_RPC_URL:-tcp://0.0.0.0:26657}
+      - KWILD_ROOT_DIR=/app
+      - KWILD_LOG_LEVEL=${KWILD_LOG_LEVEL:-info}
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnode}
-        target: /app/config
-      - type: bind
-        source: ${KWIL_HOME:-./.testnode}
-        target: /app/comet-bft
+        target: /app/abci # this just hack the config folder
+#        target: /app/config
+#      - type: bind
+#        source: ${KWIL_HOME:-./.testnode}
+#        target: /app/comet-bft
+
     depends_on:
       - ext
     networks:
