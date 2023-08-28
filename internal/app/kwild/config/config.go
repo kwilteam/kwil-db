@@ -72,6 +72,10 @@ func (cfg *KwildConfig) LoadKwildConfig() error {
 		return fmt.Errorf("invalid chain configuration data: %v", err)
 	}
 
+	if cfg.AppCfg.PrivateKey == "" {
+		return fmt.Errorf("private key is not set")
+	}
+
 	privateKey, err := crypto.Ed25519PrivateKeyFromHex(cfg.AppCfg.PrivateKey)
 	if err != nil {
 		return err

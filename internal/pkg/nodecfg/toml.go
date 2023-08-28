@@ -2,7 +2,9 @@ package nodecfg
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -14,10 +16,21 @@ var configTemplate *template.Template
 
 func init() {
 	var err error
-	tmpl := template.New("configFileTemplate")
+	tmpl := template.New("configFileTemplate").Funcs(template.FuncMap{
+		"arrayFormatter": arrayFormatter,
+	})
 	if configTemplate, err = tmpl.Parse(defaultConfigTemplate); err != nil {
 		panic(err)
 	}
+}
+
+// arrayFormatter is a template function that formats a array of strings in to `["str1", "str2", ...]` in toml file.
+func arrayFormatter(items []string) string {
+	var formattedStrings []string
+	for _, word := range items {
+		formattedStrings = append(formattedStrings, fmt.Sprintf(`"%s"`, word))
+	}
+	return "[" + strings.Join(formattedStrings, ", ") + "]"
 }
 
 // kwildTemplateConfig
@@ -76,7 +89,7 @@ grpc_listen_addr = "{{ .AppCfg.GrpcListenAddress }}"
 http_listen_addr = "{{ .AppCfg.HttpListenAddress }}"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
-extension_endpoints = [{{range .AppCfg.ExtensionEndpoints}} "{{.}}" {{end}}]
+extension_endpoints = {{arrayFormatter .AppCfg.ExtensionEndpoints}}
 
 # Toggle to enable gas costs for transactions and queries
 without_gas_costs = "{{ .AppCfg.WithoutGasCosts }}"
@@ -133,7 +146,7 @@ snapshot_dir = "{{ .AppCfg.SnapshotConfig.SnapshotDir }}"
 log_level = "{{ .Logging.LogLevel }}"
 
 # Output paths for the logger, can be stdout or a file path
-output_paths = [{{range .Logging.OutputPaths }} "{{.}}" {{end}}]
+output_paths = {{arrayFormatter .Logging.OutputPaths }}
 
 # Output format: 'plain' or 'json'
 log_format = "{{ .Logging.LogFormat }}"
@@ -248,7 +261,7 @@ enable = "{{ .ChainCfg.StateSync.Enable }}"
 #
 # For Cosmos SDK-based chains, trust_period should usually be about 2/3 of the unbonding time (~2
 # weeks) during which they can be financially punished (slashed) for misbehavior.
-rpc_servers = [{{range .ChainCfg.StateSync.RPCServers }} "{{.}}" {{end}}]
+rpc_servers = {{arrayFormatter .ChainCfg.StateSync.RPCServers }}
 
 # Temporary directory for state sync snapshot chunks, defaults to the OS tempdir (typically /tmp).
 # Will create a new, randomly named directory within, and remove it when done.
