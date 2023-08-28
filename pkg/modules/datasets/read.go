@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine"
@@ -22,7 +23,7 @@ func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, ar
 			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
 		}
 
-		executionOpts = append(executionOpts, engine.WithCaller(msg.Sender.Address().String()))
+		executionOpts = append(executionOpts, engine.WithCaller(hex.EncodeToString(msg.Sender.Bytes())))
 	}
 
 	return u.engine.Execute(ctx, dbid, action, [][]any{args}, executionOpts...)
@@ -39,7 +40,7 @@ func (u *DatasetModule) GetSchema(ctx context.Context, dbid string) (*engineType
 	return u.engine.GetSchema(ctx, dbid)
 }
 
-// ListOwnedDatabase returns a list of databases owned by an account.
+// ListOwnedDatabase returns a list of databases owned by a public key.
 func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner string) ([]string, error) {
 	return u.engine.ListDatasets(ctx, owner)
 }

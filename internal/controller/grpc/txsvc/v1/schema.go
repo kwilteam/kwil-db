@@ -2,6 +2,7 @@ package txsvc
 
 import (
 	"context"
+	"errors"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -17,7 +18,7 @@ func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*t
 	if err != nil {
 		logger.Error("failed to get schema", zap.Error(err))
 
-		if err == engine.ErrDatasetNotFound {
+		if errors.Is(err, engine.ErrDatasetNotFound) {
 			return nil, status.Error(codes.NotFound, "dataset not found")
 		}
 
