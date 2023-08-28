@@ -50,10 +50,10 @@ const defaultConfigTemplate = `
 #   |   |   |- addrbook.json  (peer routable addresses for the kwild node)
 #   |   |- data/
 #   |   |   |- blockchain db files/dir (blockstore.db, state.db, etc)
-#   |   |- info/            
-#   |- application/wal      
+#   |   |- info/
+#   |- application/wal
 #   |- data
-#   |   |- kwild.db/    
+#   |   |- kwild.db/
 #   |- snapshots/
 #   |- signing/
 #   |- rcvdSnaps/   (includes the chunks rcvd from the state sync module during db restoration process, its a temp dir)
@@ -76,7 +76,7 @@ grpc_listen_addr = "{{ .AppCfg.GrpcListenAddress }}"
 http_listen_addr = "{{ .AppCfg.HttpListenAddress }}"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
-extension_endpoints = "{{ .AppCfg.ExtensionEndpoints }}"
+extension_endpoints = [{{range .AppCfg.ExtensionEndpoints}} "{{.}}" {{end}}]
 
 # Toggle to enable gas costs for transactions and queries
 without_gas_costs = "{{ .AppCfg.WithoutGasCosts }}"
@@ -133,7 +133,7 @@ snapshot_dir = "{{ .AppCfg.SnapshotConfig.SnapshotDir }}"
 log_level = "{{ .Logging.LogLevel }}"
 
 # Output paths for the logger, can be stdout or a file path
-output_paths = "{{ .Logging.OutputPaths }}"
+output_paths = [{{range .Logging.OutputPaths }} "{{.}}" {{end}}]
 
 # Output format: 'plain' or 'json'
 log_format = "{{ .Logging.LogFormat }}"
@@ -209,7 +209,7 @@ max_num_inbound_peers = "{{ .ChainCfg.P2P.MaxNumInboundPeers }}"
 
 # Maximum number of outbound peers to connect to, excluding persistent peers
 max_num_outbound_peers = "{{ .ChainCfg.P2P.MaxNumOutboundPeers }}"
-  
+
 # List of node IDs, to which a connection will be (re)established ignoring any existing limits
 unconditional_peer_ids = "{{ .ChainCfg.P2P.UnconditionalPeerIDs }}"
 
@@ -248,7 +248,7 @@ enable = "{{ .ChainCfg.StateSync.Enable }}"
 #
 # For Cosmos SDK-based chains, trust_period should usually be about 2/3 of the unbonding time (~2
 # weeks) during which they can be financially punished (slashed) for misbehavior.
-rpc_servers = "{{ .ChainCfg.StateSync.RPCServers }}"
+rpc_servers = [{{range .ChainCfg.StateSync.RPCServers }} "{{.}}" {{end}}]
 
 # Temporary directory for state sync snapshot chunks, defaults to the OS tempdir (typically /tmp).
 # Will create a new, randomly named directory within, and remove it when done.
