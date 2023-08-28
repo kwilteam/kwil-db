@@ -37,6 +37,14 @@ func init() {
 
 func extractKwildConfig(cmd *cobra.Command, args []string) error {
 	viper.BindPFlags(cmd.Flags())
+
+	// skip loading config if the parent command has the annotation
+	if val, ok := cmd.Parent().Annotations["skip_load_config"]; ok {
+		if val == "true" {
+			return nil
+		}
+	}
+
 	err := kwildCfg.LoadKwildConfig()
 	if err != nil {
 		fmt.Println("Failed to load config: ", err)
