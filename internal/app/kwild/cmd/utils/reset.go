@@ -1,12 +1,13 @@
 package utils
 
 import (
-	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	cfg "github.com/cometbft/cometbft/config"
+	//cfg "github.com/cometbft/cometbft/config"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/abci"
 )
 
@@ -24,16 +25,19 @@ func NewResetAllCmd() *cobra.Command {
 		Short:   "(unsafe) Remove all the blockchain's data and WAL, reset this node's validator to genesis state, for testing purposes only",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			homeDir := viper.GetString("home")
-			config, err := ParseConfig(cmd, homeDir)
+			configFile := filepath.Join(homeDir, "abci", "config", "config.toml")
+			cfg := config.DefaultConfig()
+			err = cfg.ParseConfig(configFile)
 			if err != nil {
 				return err
 			}
 
+			// TODO: this probably will fail since we no longer have those key files.
 			return abci.ResetAll(
-				config.DBDir(),
-				config.P2P.AddrBookFile(),
-				config.PrivValidatorKeyFile(),
-				config.PrivValidatorStateFile(),
+				cfg.ChainCfg.DBDir(),
+				cfg.ChainCfg.P2P.AddrBookFile(),
+				cfg.ChainCfg.PrivValidatorKeyFile(),
+				cfg.ChainCfg.PrivValidatorStateFile(),
 			)
 		},
 	}
@@ -50,30 +54,15 @@ func NewResetStateCmd() *cobra.Command {
 		Short:   "(unsafe) Remove all the data and WAL, for testing purposes only",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			homeDir := viper.GetString("home")
-			conf, err := ParseConfig(cmd, homeDir)
+			configFile := filepath.Join(homeDir, "abci", "config", "config.toml")
+			cfg := config.DefaultConfig()
+			err = cfg.ParseConfig(configFile)
 			if err != nil {
 				return err
 			}
-
-			return abci.ResetState(conf.DBDir())
+			return abci.ResetState(cfg.ChainCfg.DBDir())
 		},
 	}
 
 	return cmd
-}
-
-func ParseConfig(cmd *cobra.Command, homeDir string) (*cfg.Config, error) {
-	conf := cfg.DefaultConfig()
-	conf.SetRoot(homeDir)
-	cfg.EnsureRoot(conf.RootDir)
-
-	if err := conf.ValidateBasic(); err != nil {
-		return nil, fmt.Errorf("error in config file: %v", err)
-	}
-	if warnings := conf.CheckDeprecated(); len(warnings) > 0 {
-		for _, warning := range warnings {
-			fmt.Println("deprecated usage found in configuration file", "usage", warning)
-		}
-	}
-	return conf, nil
 }
