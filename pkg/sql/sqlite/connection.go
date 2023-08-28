@@ -83,8 +83,12 @@ func (c *Connection) getFilePath() string {
 	return c.formatFilePath(c.name)
 }
 
+func formatFilePath(path, fileName string) string {
+	return filepath.Join(path, fileName+".sqlite")
+}
+
 func (c *Connection) formatFilePath(fileName string) string {
-	return fmt.Sprintf("%s.sqlite", filepath.Join(c.path, fileName))
+	return formatFilePath(c.path, fileName)
 }
 
 func (c *Connection) openConn() error {
