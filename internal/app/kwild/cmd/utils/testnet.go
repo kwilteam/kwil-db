@@ -28,13 +28,13 @@ func initTestnet(cmd *cobra.Command, args []string) error {
 }
 
 func NewTestnetCmd() *cobra.Command {
-	testnetCmd.Flags().IntVar(&netFlags.NValidators, "v", 4, "number of validators to initialize the testnet with")
+	testnetCmd.Flags().IntVarP(&netFlags.NValidators, "validator-num", "v", 4, "number of validators to initialize the testnet with")
 
-	testnetCmd.Flags().IntVar(&netFlags.NNonValidators, "n", 4, "number of non validators to initialize the testnet with")
+	testnetCmd.Flags().IntVarP(&netFlags.NNonValidators, "non-validator-num", "n", 4, "number of non validators to initialize the testnet with")
 
 	testnetCmd.Flags().StringVar(&netFlags.ConfigFile, "config", "", "config file to use (note some options may be overwritten)")
 
-	testnetCmd.Flags().StringVar(&netFlags.OutputDir, "o", ".testnet", "directory to store initialization data for the testnet")
+	testnetCmd.Flags().StringVarP(&netFlags.OutputDir, "output-dir", "o", ".testnet", "directory to store initialization data for the testnet")
 
 	testnetCmd.Flags().StringVar(&netFlags.NodeDirPrefix, "node-dir-prefix", "node", "prefix the directory name for each node with (node results in node0, node1, ...)")
 
