@@ -43,7 +43,7 @@ import (
 )
 
 // BuildKwildServer builds the kwild server
-func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
+func BuildKwildServer(ctx context.Context, cfg *config.KwildConfig) (svr *Server, err error) {
 	closers := &closeFuncs{
 		closers: make([]func() error, 0),
 	}
@@ -55,18 +55,14 @@ func BuildKwildServer(ctx context.Context) (svr *Server, err error) {
 		}
 	}()
 
-	cfg, err := config.LoadKwildConfig()
-	if err != nil {
-		return nil, err
-	}
-	logger := log.New(cfg.Log)
+	logger := log.New(cfg.AppCfg.Log)
 	logger = *logger.Named("kwild")
 
 	deps := &coreDependencies{
 		ctx:    ctx,
 		cfg:    cfg,
 		log:    logger,
-		opener: newSqliteOpener(cfg.SqliteFilePath),
+		opener: newSqliteOpener(cfg.AppCfg.SqliteFilePath),
 	}
 
 	return buildServer(deps, closers), nil
@@ -195,7 +191,7 @@ func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.Accoun
 
 func buildDatasetsModule(d *coreDependencies, eng datasets.Engine, accs datasets.AccountStore) *datasets.DatasetModule {
 	feeMultiplier := 1
-	if d.cfg.WithoutGasCosts {
+	if d.cfg.AppCfg.WithoutGasCosts {
 		feeMultiplier = 0
 	}
 
@@ -206,7 +202,7 @@ func buildDatasetsModule(d *coreDependencies, eng datasets.Engine, accs datasets
 }
 
 func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engine {
-	extensions, err := connectExtensions(d.ctx, d.cfg.ExtensionEndpoints)
+	extensions, err := connectExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
 	if err != nil {
 		failBuild(err, "failed to connect to extensions")
 	}
@@ -242,8 +238,8 @@ func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *session
 
 	b, err := balances.NewAccountStore(d.ctx, db,
 		balances.WithLogger(*d.log.Named("accountStore")),
-		balances.WithNonces(!d.cfg.WithoutNonces),
-		balances.WithGasCosts(!d.cfg.WithoutGasCosts),
+		balances.WithNonces(!d.cfg.AppCfg.WithoutNonces),
+		balances.WithGasCosts(!d.cfg.AppCfg.WithoutGasCosts),
 	)
 	if err != nil {
 		failBuild(err, "failed to build account store")
@@ -281,21 +277,22 @@ func buildValidatorModule(d *coreDependencies, accs datasets.AccountStore,
 }
 
 func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {
-	if !d.cfg.SnapshotConfig.Enabled {
+	cfg := d.cfg.AppCfg
+	if !cfg.SnapshotConfig.Enabled {
 		return nil
 	}
 
-	return snapshots.NewSnapshotStore(d.cfg.SqliteFilePath,
-		d.cfg.SnapshotConfig.SnapshotDir,
-		d.cfg.SnapshotConfig.RecurringHeight,
-		d.cfg.SnapshotConfig.MaxSnapshots,
+	return snapshots.NewSnapshotStore(cfg.SqliteFilePath,
+		cfg.SnapshotConfig.SnapshotDir,
+		cfg.SnapshotConfig.RecurringHeight,
+		cfg.SnapshotConfig.MaxSnapshots,
 		snapshots.WithLogger(*d.log.Named("snapshotStore")),
 	)
 }
 
 func buildBootstrapper(d *coreDependencies) *snapshots.Bootstrapper {
 	rcvdSnapsDir := filepath.Join(d.cfg.RootDir, "rcvdSnaps")
-	bootstrapper, err := snapshots.NewBootstrapper(d.cfg.SqliteFilePath, rcvdSnapsDir)
+	bootstrapper, err := snapshots.NewBootstrapper(d.cfg.AppCfg.SqliteFilePath, rcvdSnapsDir)
 	if err != nil {
 		failBuild(err, "Bootstrap module initialization failure")
 	}
@@ -331,15 +328,15 @@ func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, e
 }
 
 func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *grpc.Server {
-	lis, err := net.Listen("tcp", d.cfg.GrpcListenAddress)
+	lis, err := net.Listen("tcp", d.cfg.AppCfg.GrpcListenAddress)
 	if err != nil {
 		failBuild(err, "failed to build grpc server")
 	}
-	if d.cfg.TLSKeyFile != "" {
+	if d.cfg.AppCfg.TLSKeyFile != "" {
 		d.log.Debug("loading TLS key pair for gRPC server", zap.String("key_file", "d.cfg.TLSKeyFile"),
 			zap.String("cert_file", "d.cfg.TLSCertFile")) // wtf why can't we log yet?
 		fmt.Println("*********** loading TLS key pair ***********")
-		keyPair, err := loadTLSCertificate(d.cfg.TLSKeyFile, d.cfg.TLSCertFile, d.cfg.Hostname)
+		keyPair, err := loadTLSCertificate(d.cfg.AppCfg.TLSKeyFile, d.cfg.AppCfg.TLSCertFile, d.cfg.AppCfg.Hostname)
 		if err != nil {
 			failBuild(err, "loadTLSCertificate")
 		}
@@ -372,10 +369,10 @@ func buildHealthSvc(d *coreDependencies) *healthsvc.Server {
 }
 
 func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {
-	gw, err := gateway.NewGateway(d.ctx, d.cfg.HttpListenAddress,
+	gw, err := gateway.NewGateway(d.ctx, d.cfg.AppCfg.HttpListenAddress,
 		gateway.WithLogger(d.log),
 		gateway.WithMiddleware(cors.MCors([]string{})),
-		gateway.WithGrpcService(d.cfg.GrpcListenAddress, txpb.RegisterTxServiceHandlerFromEndpoint),
+		gateway.WithGrpcService(d.cfg.AppCfg.GrpcListenAddress, txpb.RegisterTxServiceHandlerFromEndpoint),
 	)
 	if err != nil {
 		failBuild(err, "failed to build gateway server")
@@ -407,7 +404,7 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 		key: []byte("az"), // any key here will work
 	}
 
-	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.PrivateKey.Bytes(), readWriter, filepath.Join(d.cfg.RootDir, "abci"), "debug")
+	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.ChainCfg, d.cfg.PrivateKey.Bytes(), readWriter, d.cfg.ChainCfg.LogLevel)
 	if err != nil {
 		failBuild(err, "failed to build comet node")
 	}
