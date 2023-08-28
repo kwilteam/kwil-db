@@ -2,12 +2,14 @@ package txsvc
 
 import (
 	"context"
+	"errors"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/pkg/engine"
 )
 
 func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*txpb.GetSchemaResponse, error) {
@@ -15,6 +17,11 @@ func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*t
 	schema, err := s.engine.GetSchema(ctx, req.Dbid)
 	if err != nil {
 		logger.Error("failed to get schema", zap.Error(err))
+
+		if errors.Is(err, engine.ErrDatasetNotFound) {
+			return nil, status.Error(codes.NotFound, "dataset not found")
+		}
+
 		return nil, status.Error(codes.Internal, "failed to get schema")
 	}
 
