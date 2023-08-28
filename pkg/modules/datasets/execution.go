@@ -37,6 +37,13 @@ func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, 
 		return resp(price), err
 	}
 
+	senderPubKey, err := tx.GetSenderPubKey()
+	// NOTE: This should never happen, since the transaction is already validated
+	if err != nil {
+		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
+	}
+	schema.Owner = senderPubKey.Address().String()
+
 	_, err = u.engine.CreateDataset(ctx, schema)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to create dataset: %w", err)

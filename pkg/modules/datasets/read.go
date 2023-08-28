@@ -12,7 +12,6 @@ import (
 // Call executes a call action on a database.  It is a read-only action.
 // It returns the result of the call.
 // If a message caller is specified, then it will check the signature of the message and use the caller as the caller of the action.
-// TODO: this should not use the action payload type
 func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.SignedMessage) ([]map[string]any, error) {
 	executionOpts := []engine.ExecutionOpt{
 		engine.ReadOnly(true),

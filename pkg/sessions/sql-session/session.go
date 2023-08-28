@@ -102,37 +102,37 @@ func (s *SqlCommitable) BeginApply(ctx context.Context) error {
 		return fmt.Errorf("savepoint already active")
 	}
 
-	savepoint, err := s.db.Savepoint()
-	if err != nil {
-		return err
-	}
+	// savepoint, err := s.db.Savepoint()
+	// if err != nil {
+	// 	return err
+	// }
 
-	s.savepoint = savepoint
+	// s.savepoint = savepoint
 
 	return nil
 }
 
 // Apply applies a change to the database.
 func (s *SqlCommitable) Apply(ctx context.Context, changes []byte) error {
-	if s.savepoint == nil {
-		return fmt.Errorf("savepoint not active")
-	}
+	// if s.savepoint == nil {
+	// 	return fmt.Errorf("savepoint not active")
+	// }
 
 	return s.db.ApplyChangeset(bytes.NewReader(changes))
 }
 
 // EndApply ends the current savepoint.
 func (s *SqlCommitable) EndApply(ctx context.Context) error {
-	if s.savepoint == nil {
-		return fmt.Errorf("savepoint not active")
-	}
+	// if s.savepoint == nil {
+	// 	return fmt.Errorf("savepoint not active")
+	// }
 
-	err := s.savepoint.Commit()
-	if err != nil {
-		return err
-	}
+	// err := s.savepoint.Commit()
+	// if err != nil {
+	// 	return err
+	// }
 
-	s.savepoint = nil
+	// s.savepoint = nil
 
 	return s.db.CheckpointWal()
 }
