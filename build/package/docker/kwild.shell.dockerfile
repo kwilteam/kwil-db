@@ -17,6 +17,5 @@ FROM alpine:3.17
 WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/kwild-* ./kwild
-EXPOSE 50051
-EXPOSE 8080
+EXPOSE 50051 8080 26656 26657
 ENTRYPOINT ["/app/kwild", "server", "start"]

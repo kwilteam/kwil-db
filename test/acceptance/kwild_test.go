@@ -13,6 +13,7 @@ import (
 )
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
+var remote = flag.Bool("remote", false, "test against remote node")
 
 func TestKwildGrpcAcceptance(t *testing.T) {
 	if testing.Short() {
@@ -23,8 +24,11 @@ func TestKwildGrpcAcceptance(t *testing.T) {
 
 	helper := acceptance.NewActHelper(t)
 	helper.LoadConfig()
-	helper.Setup(ctx)
-	defer helper.Teardown()
+
+	if !*remote {
+		helper.Setup(ctx)
+		defer helper.Teardown()
+	}
 
 	// running forever for local development
 	if *dev {
