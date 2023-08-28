@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/cometbft/cometbft/p2p"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-
-	"github.com/spf13/cobra"
 )
 
 // ShowNodeIDCmd dumps node's ID to the standard output.
@@ -27,6 +26,10 @@ func ShowNodeIDCmd() *cobra.Command {
 			err := cfg.ParseConfig(configFile)
 			if err != nil {
 				return err
+			}
+
+			if cfg.AppCfg.PrivateKey == "" {
+				return fmt.Errorf("private key is not set")
 			}
 
 			priv := ed25519.PrivKey(decodeHexString(cfg.AppCfg.PrivateKey))
