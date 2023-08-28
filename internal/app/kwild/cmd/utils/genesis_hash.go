@@ -26,7 +26,7 @@ If genesis file is not provided, only the genesis hash is printed to stdout.`,
 var genesisFile string
 
 func NewGenesisHashCmd() *cobra.Command {
-	testnetCmd.Flags().StringVar(&genesisFile, "genesis-file", "", "genesis file to update the app_hash in")
+	genesisHashCmd.Flags().StringVar(&genesisFile, "genesis-file", "", "genesis file to update the app_hash in")
 	return genesisHashCmd
 }
 
