@@ -28,7 +28,7 @@ const (
 
 type NodeGenerateConfig struct {
 	InitialHeight int64
-	HomeDir       string
+	OutputDir     string
 }
 
 type TestnetGenerateConfig struct {
@@ -48,7 +48,7 @@ type TestnetGenerateConfig struct {
 
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	cfg := config.DefaultConfig()
-	cfg.RootDir = genCfg.HomeDir
+	cfg.RootDir = genCfg.OutputDir
 
 	err := initFilesWithConfig(cfg, 0)
 	if err != nil {
@@ -56,7 +56,9 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	}
 
 	cfg.ChainCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
-	writeConfigFile(filepath.Join(genCfg.HomeDir, "abci/config", "config.toml"), cfg)
+	writeConfigFile(filepath.Join(genCfg.OutputDir, "abci/config", "config.toml"), cfg)
+
+	fmt.Println("Successfully initialized node directory: ", genCfg.OutputDir)
 	return nil
 }
 
@@ -179,7 +181,8 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		writeConfigFile(filepath.Join(nodeDir, "abci", "config", "config.toml"), cfg)
 	}
 
-	fmt.Printf("Successfully initialized %d node directories\n", genCfg.NValidators+genCfg.NNonValidators)
+	fmt.Printf("Successfully initialized %d node directories: %s\n",
+		genCfg.NValidators+genCfg.NNonValidators, genCfg.OutputDir)
 
 	return nil
 }
