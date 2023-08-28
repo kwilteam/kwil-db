@@ -228,8 +228,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 	gasUsed := int64(0)
 	txCode := CodeOk
 
-	a.log.Debug("",
-		zap.String("Sender", tx.GetSenderAddress()),
+	logger = logger.With(zap.String("Sender", tx.GetSenderAddress()),
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	switch tx.Body.PayloadType {
@@ -248,6 +247,9 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
+		dbID := utils.GenerateDBID(schema.Name, schema.Owner)
+		logger.Debug("deploy schema", zap.String("DBID", dbID))
+
 		var res *modDataset.ExecutionResponse
 		res, err = a.database.Deploy(ctx, schema, tx)
 		if err != nil {
@@ -255,7 +257,6 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
-		dbID := utils.GenerateDBID(schema.Owner, schema.Name)
 		gasUsed = res.GasUsed
 		events = []abciTypes.Event{
 			{
@@ -273,6 +274,8 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		if err != nil {
 			break
 		}
+
+		logger.Debug("drop database", zap.String("DBID", drop.DBID))
 
 		var res *modDataset.ExecutionResponse
 		res, err = a.database.Drop(ctx, drop.DBID, tx)
@@ -297,6 +300,10 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
+		logger.Debug("execute action",
+			zap.String("DBID", execution.DBID), zap.String("Action", execution.Action),
+			zap.Any("Args", execution.Arguments))
+
 		var res *modDataset.ExecutionResponse
 		res, err = a.database.Execute(ctx, execution.DBID, execution.Action, convertArgs(execution.Arguments), tx)
 		if err != nil {
@@ -312,6 +319,10 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			txCode = CodeEncodingError
 			break
 		}
+
+		logger.Debug("join validator",
+			zap.String("pubkey", hex.EncodeToString(join.Candidate)),
+			zap.Int64("power", int64(join.Power)))
 
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Join(ctx, join.Candidate, int64(join.Power), tx)
@@ -346,6 +357,8 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
+		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(leave.Validator)))
+
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Leave(ctx, leave.Validator, tx)
 		if err != nil {
@@ -372,6 +385,8 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			txCode = CodeEncodingError
 			break
 		}
+
+		logger.Debug("approve validator", zap.String("pubkey", hex.EncodeToString(approve.Candidate)))
 
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Approve(ctx, approve.Candidate, tx)

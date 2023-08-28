@@ -32,7 +32,7 @@ import (
 
 // envFile is the default env file path
 // It will pass values among different stages of the test setup
-var envFile = runner.GetEnv("KINT_ENV_FILE", "./.env")
+var envFile = runner.GetEnv("KIT_ENV_FILE", "./.env")
 
 type IntTestConfig struct {
 	acceptance.ActTestCfg
@@ -67,21 +67,21 @@ func (r *IntHelper) LoadConfig() {
 	// default wallet hd path : m/44'/60'/0'
 	cfg := &IntTestConfig{
 		ActTestCfg: acceptance.ActTestCfg{
-			AliceRawPK:        runner.GetEnv("KINT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
-			BobRawPK:          runner.GetEnv("KINT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
-			SchemaFile:        runner.GetEnv("KINT_SCHEMA", "./test-data/test_db.kf"),
-			LogLevel:          runner.GetEnv("KINT_LOG_LEVEL", "debug"),
-			GWEndpoint:        runner.GetEnv("KINT_GATEWAY_ENDPOINT", "localhost:8080"),
-			GrpcEndpoint:      runner.GetEnv("KINT_GRPC_ENDPOINT", "localhost:50051"),
-			DockerComposeFile: runner.GetEnv("KINT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
+			AliceRawPK:        runner.GetEnv("KIT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
+			BobRawPK:          runner.GetEnv("KIT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
+			SchemaFile:        runner.GetEnv("KIT_SCHEMA", "./test-data/test_db.kf"),
+			LogLevel:          runner.GetEnv("KIT_LOG_LEVEL", "debug"),
+			GWEndpoint:        runner.GetEnv("KIT_GATEWAY_ENDPOINT", "localhost:8080"),
+			GrpcEndpoint:      runner.GetEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
+			DockerComposeFile: runner.GetEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		},
 	}
 
-	waitTimeout := runner.GetEnv("KACT_WAIT_TIMEOUT", "10s")
+	waitTimeout := runner.GetEnv("KIT_WAIT_TIMEOUT", "10s")
 	cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
 	require.NoError(r.t, err, "invalid wait timeout")
 
-	nodeNum := runner.GetEnv("KINT_VALIDATOR_NUM", "3")
+	nodeNum := runner.GetEnv("KIT_VALIDATOR_NUM", "3")
 	cfg.NValidator, err = strconv.Atoi(nodeNum)
 	require.NoError(r.t, err, "invalid node number")
 
@@ -154,11 +154,11 @@ func (r *IntHelper) runDockerCompose(ctx context.Context) {
 		WaitForService("ext1",
 			wait.NewLogStrategy("listening on").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService("k1",
-			wait.NewLogStrategy("grpc server started").WithStartupTimeout(r.cfg.WaitTimeout)).
+			wait.NewLogStrategy("Starting Node service").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService("k2",
-			wait.NewLogStrategy("grpc server started").WithStartupTimeout(r.cfg.WaitTimeout)).
+			wait.NewLogStrategy("Starting Node service").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService("k3",
-			wait.NewLogStrategy("grpc server started").WithStartupTimeout(r.cfg.WaitTimeout)).
+			wait.NewLogStrategy("Starting Node service").WithStartupTimeout(r.cfg.WaitTimeout)).
 		Up(ctx)
 	r.t.Log("docker compose up")
 
