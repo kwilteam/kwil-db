@@ -1,10 +1,11 @@
 package validator
 
 import (
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/spf13/cobra"
 )
 
-func statusCmd() *cobra.Command {
+func statusCmd(cfg *config.KwildConfig) *cobra.Command {
 	// var validatorURL string
 	// var privateKey string
 	// var ClientChainRPCURL string
