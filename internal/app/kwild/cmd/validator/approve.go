@@ -13,7 +13,8 @@ import (
 // TODO: If we support revocation, we need to use different way of storing, something like a kv store or something, Also need to remove node from validator set? Only possible in permissioned network
 
 // ApproveCmd is used for approving validators
-func approveCmd() *cobra.Command {
+func approveCmd(cfg *config.KwildConfig) *cobra.Command {
+	var appGRPCListenAddr string
 	cmd := &cobra.Command{
 		Use:   "approve [JoinerPublicKey] [ApproverPrivateKey] [BcRPCURL]",
 		Short: "Add the validator to the list of approved validators",
@@ -28,16 +29,10 @@ func approveCmd() *cobra.Command {
 			*/
 
 			ctx := cmd.Context()
-			cfg, err := config.LoadKwildConfig()
-			if err != nil {
-				return err
-			}
-			fmt.Println("Arg1: ", args[0], "Arg2: ", args[1])
-			fmt.Println(cfg, "BcRPCURL: ", cfg.BcRpcUrl, "GrpcListenAddress: ", cfg.GrpcListenAddress)
 			//options := []client.ClientOpt{client.WithCometBftUrl(args[2])}
 			options := []client.ClientOpt{}
 
-			clt, err := client.New(cfg.GrpcListenAddress, options...)
+			clt, err := client.New(appGRPCListenAddr, options...)
 			if err != nil {
 				return err
 			}
@@ -50,5 +45,7 @@ func approveCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(&appGRPCListenAddr, "grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Address to listen for gRPC connections for the application")
 	return cmd
 }

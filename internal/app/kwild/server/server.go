@@ -67,7 +67,7 @@ func (s *Server) Start(ctx context.Context) error {
 			}
 		}()
 
-		s.log.Info("http server started", zap.String("address", s.cfg.HttpListenAddress))
+		s.log.Info("http server started", zap.String("address", s.cfg.AppCfg.HttpListenAddress))
 		return s.gateway.Start()
 	})
 
@@ -80,7 +80,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 		return s.grpcServer.Start()
 	})
-	s.log.Info("grpc server started", zap.String("address", s.cfg.GrpcListenAddress))
+	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.GrpcListenAddress))
 
 	group.Go(func() error {
 		go func() {
