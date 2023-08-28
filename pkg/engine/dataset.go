@@ -48,7 +48,11 @@ func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema) (dbid 
 // buildNewDataset builds a new datastore, and puts it in a dataset
 func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string, schema *types.Schema) (ds *dataset.Dataset, finalErr error) {
 	dbid := GenerateDBID(name, owner)
-	datastore, err := e.open(ctx, dbid)
+
+	// we do not use the private open method since that registers the dataset
+	// this is because we need to execute all ddl before registering the dataset
+	// this needs to get fixed in the new engine upgrade.
+	datastore, err := e.opener.Open(dbid, e.log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -81,6 +85,12 @@ func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string,
 		Build(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build dataset: %w", err)
+	}
+
+	// now we register
+	err = e.commitRegister.Register(ctx, dbid, datastore)
+	if err != nil {
+		return nil, err
 	}
 
 	return ds, nil
