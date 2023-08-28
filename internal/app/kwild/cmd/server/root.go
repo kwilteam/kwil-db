@@ -64,26 +64,26 @@ func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 	cmd.Flags().StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "Kwild Server hostname")
 
 	// APP logging
-	cmd.Flags().StringVar(&cfg.Logging.LogLevel, "log_level", cfg.Logging.LogLevel, "Kwild app log level")
+	cmd.Flags().StringVar(&cfg.Logging.LogLevel, "log.log_level", cfg.Logging.LogLevel, "Kwild app log level")
 
-	cmd.Flags().StringVar(&cfg.Logging.LogFormat, "log_format", cfg.Logging.LogFormat, "Kwild app log format")
+	cmd.Flags().StringVar(&cfg.Logging.LogFormat, "log.log_format", cfg.Logging.LogFormat, "Kwild app log format")
 
-	cmd.Flags().StringSliceVar(&cfg.Logging.OutputPaths, "log_output_paths", cfg.Logging.OutputPaths, "Kwild app log output paths")
+	cmd.Flags().StringSliceVar(&cfg.Logging.OutputPaths, "log.log_output_paths", cfg.Logging.OutputPaths, "Kwild app log output paths")
 
 	// Extension endpoints flags
-	cmd.Flags().StringSliceVar(&cfg.AppCfg.ExtensionEndpoints, "extension_endpoints", cfg.AppCfg.ExtensionEndpoints, "Kwild app extension endpoints")
+	cmd.Flags().StringSliceVar(&cfg.AppCfg.ExtensionEndpoints, "app.extension_endpoints", cfg.AppCfg.ExtensionEndpoints, "Kwild app extension endpoints")
 
 	// Snapshot Config flags
-	cmd.Flags().BoolVar(&cfg.AppCfg.SnapshotConfig.Enabled, "snapshots.enabled", cfg.AppCfg.SnapshotConfig.Enabled, "Enable snapshots")
+	cmd.Flags().BoolVar(&cfg.AppCfg.SnapshotConfig.Enabled, "app.snapshots.enabled", cfg.AppCfg.SnapshotConfig.Enabled, "Enable snapshots")
 
-	cmd.Flags().Uint64Var(&cfg.AppCfg.SnapshotConfig.RecurringHeight, "snapshots.recurring_height", cfg.AppCfg.SnapshotConfig.RecurringHeight, "Recurring snapshot height")
+	cmd.Flags().Uint64Var(&cfg.AppCfg.SnapshotConfig.RecurringHeight, "app.snapshots.recurring_height", cfg.AppCfg.SnapshotConfig.RecurringHeight, "Recurring snapshot height")
 
-	cmd.Flags().Uint64Var(&cfg.AppCfg.SnapshotConfig.MaxSnapshots, "snapshots.max_snapshots", cfg.AppCfg.SnapshotConfig.MaxSnapshots, "Maximum snapshots")
+	cmd.Flags().Uint64Var(&cfg.AppCfg.SnapshotConfig.MaxSnapshots, "app.snapshots.max_snapshots", cfg.AppCfg.SnapshotConfig.MaxSnapshots, "Maximum snapshots")
 
-	cmd.Flags().StringVar(&cfg.AppCfg.SnapshotConfig.SnapshotDir, "snapshots.snapshot_dir", cfg.AppCfg.SnapshotConfig.SnapshotDir, "Snapshot directory path")
+	cmd.Flags().StringVar(&cfg.AppCfg.SnapshotConfig.SnapshotDir, "app.snapshots.snapshot_dir", cfg.AppCfg.SnapshotConfig.SnapshotDir, "Snapshot directory path")
 
 	//  Basic Chain Config flags
-	cmd.Flags().StringVar(&cfg.ChainCfg.Moniker, "moniker", cfg.ChainCfg.Moniker, "Chain moniker")
+	cmd.Flags().StringVar(&cfg.ChainCfg.Moniker, "chain.moniker", cfg.ChainCfg.Moniker, "Chain moniker")
 
 	// Chain RPC flags
 	cmd.Flags().StringVar(&cfg.ChainCfg.RPC.ListenAddress, "chain.rpc_laddr", cfg.ChainCfg.RPC.ListenAddress, "Chain RPC listen address")
