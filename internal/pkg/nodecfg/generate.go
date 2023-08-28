@@ -56,7 +56,23 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	}
 
 	cfg.ChainCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
-	writeConfigFile(filepath.Join(genCfg.OutputDir, "abci/config", "config.toml"), cfg)
+
+	outputPath := genCfg.OutputDir
+	// this only works on linux
+	if strings.HasPrefix(genCfg.OutputDir, "~/") {
+		dirname, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		outputPath = filepath.Join(dirname, genCfg.OutputDir[2:])
+	}
+
+	writeConfigFile(filepath.Join(
+		outputPath,
+		"abci",
+		"config",
+		"config.toml"),
+		cfg)
 
 	fmt.Println("Successfully initialized node directory: ", genCfg.OutputDir)
 	return nil
