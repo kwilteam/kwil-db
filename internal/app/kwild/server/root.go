@@ -56,6 +56,7 @@ func BuildKwildServer(ctx context.Context, cfg *config.KwildConfig) (svr *Server
 	}()
 
 	logger := log.New(cfg.AppCfg.Log)
+
 	logger = *logger.Named("kwild")
 
 	deps := &coreDependencies{

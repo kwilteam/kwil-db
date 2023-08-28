@@ -29,8 +29,6 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 	db := SchemaLoader.Load(t, schemaTestDB)
 
 	// When i deploy the database
-	//err := deploy.DeployDatabase(ctx, db)
-
 	txHash, err := deploy.DeployDatabase(ctx, db)
 	require.NoError(t, err, "failed to deploy database")
 	t.Logf("txHash: %s", hex.EncodeToString(txHash))
@@ -46,10 +44,7 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 			status.WriteString(err.Error())
 			return false
 		}
-	}, time.Second*15, time.Second*1, "deploy database failed: %s", status.String())
-
-	// TODO: even with this wait, `GetSchema` below is not querying in the same block as the deploy, it still fails
-	time.Sleep(15 * time.Second)
+	}, time.Second*10, time.Second*1, "deploy database failed: %s", status.String())
 
 	// And i expect database should exist
 	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
