@@ -10,10 +10,8 @@ import (
 )
 
 // ApproveCmd is used for approving validators
-func joinCmd() *cobra.Command {
-	// var validatorURL string
-	// var privateKey string
-	// var ClientChainRPCURL string
+func joinCmd(cfg *config.KwildConfig) *cobra.Command {
+	var appGRPCListenAddr string
 	cmd := &cobra.Command{
 		Use:   "join [JoinerPrivateKey][power] [BcRPCURL]",
 		Short: "Request to join the network as a validator",
@@ -28,14 +26,10 @@ func joinCmd() *cobra.Command {
 			fmt.Println("Power:", power, "Pubkey:", args[0])
 
 			ctx := cmd.Context()
-			cfg, err := config.LoadKwildConfig()
-			if err != nil {
-				return err
-			}
-			//options := []client.ClientOpt{client.WithCometBftUrl(args[2])}
+			// options := []client.ClientOpt{client.WithCometBftUrl(args[2])}
+			// TODO: Use cometbft client
 			options := []client.ClientOpt{}
-
-			clt, err := client.New(cfg.GrpcListenAddress, options...)
+			clt, err := client.New(appGRPCListenAddr, options...)
 			if err != nil {
 				return err
 			}
@@ -48,8 +42,6 @@ func joinCmd() *cobra.Command {
 			return nil
 		},
 	}
-	// cmd.Flags().StringVarP(&validatorURL, "validatorURL", "v", "", "Validator URL that you want to join")
-	// cmd.Flags().StringVarP(&privateKey, "privateKey", "k", "", "The private key of the wallet that will be used for signing")
-	// cmd.Flags().StringVarP(&ClientChainRPCURL, "clientChainRPCURL", "c", "", "The client chain RPC URL")
+	cmd.Flags().StringVar(&appGRPCListenAddr, "grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Address to listen for gRPC connections for the application")
 	return cmd
 }

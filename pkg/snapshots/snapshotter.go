@@ -80,7 +80,7 @@ func (s *Snapshotter) CreateSnapshot() error {
 	var wg sync.WaitGroup
 	startIdx := uint32(0)
 
-	filesToSnapshot, err := s.listFilesAlphbetically(s.DatabaseDir + "/*.sqlite")
+	filesToSnapshot, err := s.listFilesAlphabetically(s.DatabaseDir + "/*.sqlite")
 	if err != nil {
 		s.SnapshotFailed = true
 		s.SnapshotError = err

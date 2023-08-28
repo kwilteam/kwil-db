@@ -35,7 +35,7 @@ func (s *Snapshotter) ReadSnapshotFile(filePath string) (*Snapshot, error) {
 	return &snapshot, nil
 }
 
-func (s *Snapshotter) listFilesAlphbetically(filePath string) ([]string, error) {
+func (s *Snapshotter) listFilesAlphabetically(filePath string) ([]string, error) {
 	files, err := filepath.Glob(filePath)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func (s *Snapshotter) listFilesAlphbetically(filePath string) ([]string, error) 
 }
 
 func (s *Snapshotter) oldestSnapshotDir() (string, error) {
-	files, err := s.listFilesAlphbetically(s.SnapshotDir + "/*")
+	files, err := s.listFilesAlphabetically(s.SnapshotDir + "/*")
 	if err != nil {
 		return "", err
 	}

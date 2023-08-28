@@ -50,8 +50,8 @@ func OpenConn(name string, opts ...ConnectionOption) (*Connection, error) {
 		opt(connection)
 	}
 	if !connection.isMemory {
-		err := connection.mkPathDir()
-		if err != nil {
+		err := os.MkdirAll(connection.path, os.ModePerm)
+		if err != nil && !os.IsExist(err) {
 			return nil, fmt.Errorf("failed to create path dir: %w", err)
 		}
 	}
@@ -84,7 +84,7 @@ func (c *Connection) getFilePath() string {
 }
 
 func (c *Connection) formatFilePath(fileName string) string {
-	return fmt.Sprintf("%s%s.sqlite", c.path, fileName)
+	return fmt.Sprintf("%s.sqlite", filepath.Join(c.path, fileName))
 }
 
 func (c *Connection) openConn() error {
@@ -173,11 +173,6 @@ const sqlAttach = `ATTACH DATABASE '%s' AS %s;`
 // It includes a read only flag
 func (c *Connection) formatURI(fileName string) string {
 	return fmt.Sprintf("file:%s?mode=ro", c.formatFilePath(fileName))
-}
-
-func (c *Connection) mkPathDir() error {
-	dir := filepath.Dir(c.path)
-	return os.MkdirAll(dir, os.ModePerm)
 }
 
 // execute executes a statement on the write connection.
