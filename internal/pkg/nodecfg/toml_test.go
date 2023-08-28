@@ -20,7 +20,7 @@ func Test_Generate_TOML(t *testing.T) {
 func Test_GenerateNodeCfg(t *testing.T) {
 	genCfg := NodeGenerateConfig{
 		InitialHeight: 0,
-		HomeDir:       "test/trybuild/",
+		OutputDir:     "test/trybuild/",
 	}
 
 	err := GenerateNodeConfig(&genCfg)
@@ -28,7 +28,7 @@ func Test_GenerateNodeCfg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	os.RemoveAll(genCfg.HomeDir)
+	os.RemoveAll(genCfg.OutputDir)
 }
 
 func Test_GenerateTestnetConfig(t *testing.T) {
