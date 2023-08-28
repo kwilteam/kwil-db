@@ -3,8 +3,9 @@ package utils
 import (
 	"encoding/hex"
 	"fmt"
-	"os"
 	"path/filepath"
+
+	"github.com/spf13/viper"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/cometbft/cometbft/p2p"
@@ -15,13 +16,12 @@ import (
 
 // ShowNodeIDCmd dumps node's ID to the standard output.
 func ShowNodeIDCmd() *cobra.Command {
-	var homeDir string
-
 	cmd := cobra.Command{
 		Use:     "show-node-id",
 		Aliases: []string{"show_node_id"},
 		Short:   "Show this node's ID",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			homeDir := viper.GetString("home")
 			configFile := filepath.Join(homeDir, "abci", "config", "config.toml")
 			cfg := config.DefaultConfig()
 			err := cfg.ParseConfig(configFile)
@@ -37,11 +37,6 @@ func ShowNodeIDCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&homeDir, "home", os.ExpandEnv("KWILD_HOME"), "kwild home directory")
-	// TODO: let viper handle this
-	if homeDir == "" {
-		homeDir = os.Getenv("KWILD_HOME")
-	}
 	return &cmd
 }
 

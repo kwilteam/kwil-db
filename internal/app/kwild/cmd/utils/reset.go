@@ -2,9 +2,9 @@ package utils
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	cfg "github.com/cometbft/cometbft/config"
 	"github.com/kwilteam/kwil-db/pkg/abci"
@@ -16,8 +16,6 @@ import (
 var keepAddrBook bool
 
 func NewResetAllCmd() *cobra.Command {
-	var homeDir string
-
 	// XXX: this is totally unsafe.
 	// it's only suitable for testnets.
 	cmd := &cobra.Command{
@@ -25,6 +23,7 @@ func NewResetAllCmd() *cobra.Command {
 		Aliases: []string{"unsafe_reset_all"},
 		Short:   "(unsafe) Remove all the blockchain's data and WAL, reset this node's validator to genesis state, for testing purposes only",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			homeDir := viper.GetString("home")
 			config, err := ParseConfig(cmd, homeDir)
 			if err != nil {
 				return err
@@ -39,24 +38,18 @@ func NewResetAllCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&homeDir, "home", "", "comet home directory")
-	// TODO: let viper handle this
-	if homeDir == "" {
-		homeDir = os.Getenv("COMET_BFT_HOME")
-	}
 	cmd.Flags().BoolVar(&keepAddrBook, "keep-addr-book", false, "keep the address book intact")
 	return cmd
 }
 
 // ResetStateCmd removes the database of the specified CometBFT core instance.
 func NewResetStateCmd() *cobra.Command {
-	var homeDir string
-
 	cmd := &cobra.Command{
 		Use:     "reset-state",
 		Aliases: []string{"reset_state"},
 		Short:   "(unsafe) Remove all the data and WAL, for testing purposes only",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			homeDir := viper.GetString("home")
 			conf, err := ParseConfig(cmd, homeDir)
 			if err != nil {
 				return err
@@ -66,10 +59,6 @@ func NewResetStateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&homeDir, "home", "", "comet home directory")
-	if homeDir == "" {
-		homeDir = os.Getenv("COMET_BFT_HOME")
-	}
 	return cmd
 }
 
