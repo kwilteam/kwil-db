@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine"
@@ -12,7 +13,6 @@ import (
 // Call executes a call action on a database.  It is a read-only action.
 // It returns the result of the call.
 // If a message caller is specified, then it will check the signature of the message and use the caller as the caller of the action.
-// TODO: this should not use the action payload type
 func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.SignedMessage) ([]map[string]any, error) {
 	executionOpts := []engine.ExecutionOpt{
 		engine.ReadOnly(true),
@@ -23,7 +23,7 @@ func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, ar
 			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
 		}
 
-		executionOpts = append(executionOpts, engine.WithCaller(msg.Sender.Address().String()))
+		executionOpts = append(executionOpts, engine.WithCaller(hex.EncodeToString(msg.Sender.Bytes())))
 	}
 
 	return u.engine.Execute(ctx, dbid, action, [][]any{args}, executionOpts...)
@@ -40,7 +40,7 @@ func (u *DatasetModule) GetSchema(ctx context.Context, dbid string) (*engineType
 	return u.engine.GetSchema(ctx, dbid)
 }
 
-// ListOwnedDatabase returns a list of databases owned by an account.
+// ListOwnedDatabase returns a list of databases owned by a public key.
 func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner string) ([]string, error) {
 	return u.engine.ListDatasets(ctx, owner)
 }

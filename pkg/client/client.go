@@ -163,7 +163,7 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (transactions.Tx
 	}
 
 	identifier := &transactions.DropSchema{
-		DBID: engineUtils.GenerateDBID(address, name),
+		DBID: engineUtils.GenerateDBID(name, address),
 	}
 
 	tx, err := c.newTx(ctx, identifier)

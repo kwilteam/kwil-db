@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -37,6 +38,13 @@ func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, 
 		return resp(price), err
 	}
 
+	senderPubKey, err := tx.GetSenderPubKey()
+	// NOTE: This should never happen, since the transaction is already validated
+	if err != nil {
+		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
+	}
+	schema.Owner = hex.EncodeToString(senderPubKey.Bytes())
+
 	_, err = u.engine.CreateDataset(ctx, schema)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to create dataset: %w", err)
@@ -66,7 +74,7 @@ func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.
 		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
 	}
 
-	err = u.engine.DropDataset(ctx, senderPubKey.Address().String(), dbid)
+	err = u.engine.DropDataset(ctx, hex.EncodeToString(senderPubKey.Bytes()), dbid)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to drop dataset: %w", err)
 	}
@@ -97,7 +105,7 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 	}
 
 	_, err = u.engine.Execute(ctx, dbid, action, args,
-		engine.WithCaller(senderPubKey.Address().String()),
+		engine.WithCaller(hex.EncodeToString(senderPubKey.Bytes())),
 	)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to execute action: %w", err)
