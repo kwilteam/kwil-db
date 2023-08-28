@@ -50,7 +50,7 @@ func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string,
 	dbid := GenerateDBID(name, owner)
 
 	// we do not use the private open method since that registers the dataset
-	// this is because we need to execute all dll before registering the dataset
+	// this is because we need to execute all ddl before registering the dataset
 	// this needs to get fixed in the new engine upgrade.
 	datastore, err := e.opener.Open(dbid, e.log)
 	if err != nil {

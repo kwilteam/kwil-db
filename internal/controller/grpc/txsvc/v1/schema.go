@@ -21,7 +21,7 @@ func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*t
 			return nil, status.Error(codes.NotFound, "dataset not found")
 		}
 
-		return nil, status.Error(codes.Unknown, "failed to get schema")
+		return nil, status.Error(codes.Internal, "failed to get schema")
 	}
 
 	txSchema, err := convertSchemaFromEngine(schema)
