@@ -11,26 +11,22 @@ services:
       - "26657:26657"
     env_file:
       - .env
-    environment:
-      - LOG=cometbft.log
-      - COMET_BFT_HOME=/app/comet-bft
-      - KWILD_EXTENSION_ENDPOINTS=ext:50051
-      - KWILD_COMETBFT_RPC_URL=${KWILD_COMETBFT_RPC_URL:-tcp://0.0.0.0:26657}
-      - KWILD_ROOT_DIR=/app
-      - KWILD_LOG_LEVEL=${KWILD_LOG_LEVEL:-info}
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnode}
-        target: /app/abci # this just hack the config folder
-#        target: /app/config
-#      - type: bind
-#        source: ${KWIL_HOME:-./.testnode}
-#        target: /app/comet-bft
-
+        target: /app/kwil
     depends_on:
       - ext
     networks:
       - kwil-act-testnet
+    command: |
+      --home=/app/kwil
+      --log.log_level=${LOG_LEVEL:-info}
+      --app.extension_endpoints=ext:50051
+      --app.grpc_listen_addr=:50051
+      --app.http_listen_addr=:8080
+      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --chain.rpc_laddr=tcp://0.0.0.0:26657
 
   ext:
     container_name: math_ext
