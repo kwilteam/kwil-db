@@ -92,10 +92,10 @@ http_listen_addr = "{{ .AppCfg.HttpListenAddress }}"
 extension_endpoints = {{arrayFormatter .AppCfg.ExtensionEndpoints}}
 
 # Toggle to enable gas costs for transactions and queries
-without_gas_costs = "{{ .AppCfg.WithoutGasCosts }}"
+without_gas_costs = {{ .AppCfg.WithoutGasCosts }}
 
 # Toggle to disable nonces for transactions and queries
-without_nonces = "{{ .AppCfg.WithoutNonces }}"
+without_nonces = {{ .AppCfg.WithoutNonces }}
 
 # KWILD Sqlite database file path
 sqlite_file_path = "{{ .AppCfg.SqliteFilePath }}"
@@ -107,7 +107,7 @@ sqlite_file_path = "{{ .AppCfg.SqliteFilePath }}"
 # and the CA's certificate.
 # NOTE: both tls_cert_file and tls_key_file must be present for CometBFT to create HTTPS server.
 # Otherwise, HTTP server is run.
-tls_cert_file = "{{ .AppCfg.TLSCertFile }}}"
+tls_cert_file = "{{ .AppCfg.TLSCertFile }}"
 
 # The path to a file containing matching private key that is used to create the HTTPS server.
 # Might be either absolute path or path related to the kwild root directory.
@@ -126,14 +126,14 @@ hostname = ""
 # This would snapshot the application state at every snapshot_heights blocks
 # and keep max_snapshots number of snapshots in the snapshot_dir
 # Application state includes the databases deployed, accounts and the Validators db
-enabled = "{{ .AppCfg.SnapshotConfig.Enabled }}"
+enabled = {{ .AppCfg.SnapshotConfig.Enabled }}
 
 # The height at which the snapshot is taken
-snapshot_heights = "{{ .AppCfg.SnapshotConfig.RecurringHeight }}"
+snapshot_heights = {{ .AppCfg.SnapshotConfig.RecurringHeight }}
 
 # Maximum number of snapshots to be kept in the snapshot_dir.
 # If max limit is reached, the oldest would be deleted and replaced by the latest snapshot
-max_snapshots = "{{ .AppCfg.SnapshotConfig.MaxSnapshots}}"
+max_snapshots = {{ .AppCfg.SnapshotConfig.MaxSnapshots}}
 
 # The directory where the snapshots are stored. Can be absolute or relative to the kwild root directory
 snapshot_dir = "{{ .AppCfg.SnapshotConfig.SnapshotDir }}"
@@ -215,34 +215,34 @@ persistent_peers = "{{ .ChainCfg.P2P.PersistentPeers }}"
 
 # Set true for strict address routability rules
 # Set false for private or local networks
-addr_book_strict = "{{ .ChainCfg.P2P.AddrBookStrict }}"
+addr_book_strict = {{ .ChainCfg.P2P.AddrBookStrict }}
 
 # Maximum number of inbound peers
-max_num_inbound_peers = "{{ .ChainCfg.P2P.MaxNumInboundPeers }}"
+max_num_inbound_peers = {{ .ChainCfg.P2P.MaxNumInboundPeers }}
 
 # Maximum number of outbound peers to connect to, excluding persistent peers
-max_num_outbound_peers = "{{ .ChainCfg.P2P.MaxNumOutboundPeers }}"
+max_num_outbound_peers = {{ .ChainCfg.P2P.MaxNumOutboundPeers }}
 
 # List of node IDs, to which a connection will be (re)established ignoring any existing limits
 unconditional_peer_ids = "{{ .ChainCfg.P2P.UnconditionalPeerIDs }}"
 
 # Toggle to disable guard against peers connecting from the same ip.
-allow_duplicate_ip = "{{ .ChainCfg.P2P.AllowDuplicateIP }}"
+allow_duplicate_ip = {{ .ChainCfg.P2P.AllowDuplicateIP }}
 
 #######################################################
 ###          Mempool Configuration Options          ###
 #######################################################
 [chain.mempool]
 # Maximum number of transactions in the mempool
-size = "{{ .ChainCfg.Mempool.Size }}"
+size = {{ .ChainCfg.Mempool.Size }}
 
 # Limit the total size of all txs in the mempool.
 # This only accounts for raw transactions (e.g. given 1MB transactions and
 # max_txs_bytes=5MB, mempool will only accept 5 transactions).
-max_txs_bytes = "{{ .ChainCfg.Mempool.MaxTxsBytes }}"
+max_txs_bytes = {{ .ChainCfg.Mempool.MaxTxsBytes }}
 
 # Size of the cache (used to filter transactions we saw earlier) in transactions
-cache_size = "{{ .ChainCfg.Mempool.CacheSize }}"
+cache_size = {{ .ChainCfg.Mempool.CacheSize }}
 
 #######################################################
 ###         State Sync Configuration Options        ###
@@ -253,7 +253,7 @@ cache_size = "{{ .ChainCfg.Mempool.CacheSize }}"
 # the network to take and serve state machine snapshots. State sync is not attempted if the node
 # has any local state (LastBlockHeight > 0). The node will have a truncated block history,
 # starting from the height of the snapshot.
-enable = "{{ .ChainCfg.StateSync.Enable }}"
+enable = {{ .ChainCfg.StateSync.Enable }}
 
 # RPC servers (comma-separated) for light client verification of the synced state machine and
 # retrieval of state data for node bootstrapping. Also needs a trusted height and corresponding
