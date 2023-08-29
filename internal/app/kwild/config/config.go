@@ -6,14 +6,12 @@ import (
 	"path/filepath"
 
 	cometCfg "github.com/cometbft/cometbft/config"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/spf13/viper"
 )
 
 type KwildConfig struct {
-	RootDir    string
-	PrivateKey *crypto.Ed25519PrivateKey
+	RootDir string
 
 	AppCfg   *AppConfig       `mapstructure:"app"`
 	ChainCfg *cometCfg.Config `mapstructure:"chain"`
@@ -72,22 +70,20 @@ func (cfg *KwildConfig) LoadKwildConfig() error {
 		return fmt.Errorf("invalid chain configuration data: %v", err)
 	}
 
-	if cfg.AppCfg.PrivateKey == "" {
-		return fmt.Errorf("private key is not set")
-	}
-
-	privateKey, err := crypto.Ed25519PrivateKeyFromHex(cfg.AppCfg.PrivateKey)
-	if err != nil {
-		return err
-	}
-	cfg.PrivateKey = privateKey
 	return nil
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
 func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
-	viper.SetConfigFile(cfgFile)
-	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("reading config: %v", err)
+	if fileExists(cfgFile) {
+		viper.SetConfigFile(cfgFile)
+		if err := viper.ReadInConfig(); err != nil {
+			return fmt.Errorf("reading config: %v", err)
+		}
 	}
 	if err := viper.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("decoding config: %v", err)

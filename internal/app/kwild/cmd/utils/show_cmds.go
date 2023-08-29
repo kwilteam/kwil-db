@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
@@ -12,6 +13,28 @@ import (
 	"github.com/cometbft/cometbft/p2p"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 )
+
+func KeyInfoCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "key-info privateKeyHex",
+		Aliases: []string{"key_info"},
+		Args:    cobra.ExactArgs(1),
+		Short:   "Show the pubkey, CometBFT address, and node ID for an Ed25519 private key.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			priv := ed25519.PrivKey(decodeHexString(args[0]))
+			pub := priv.PubKey().(ed25519.PubKey)
+			nodeID := p2p.PubKeyToID(pub)
+
+			fmt.Printf("Private key (hex): %x\n", priv.Bytes())                                       // KWILD_PRIVATE_KEY ?
+			fmt.Printf("Private key (base64): %s\n", base64.StdEncoding.EncodeToString(priv.Bytes())) // "value" in abci/config/node_key.json ?
+			fmt.Printf("Public key (base64): %s\n", base64.StdEncoding.EncodeToString(pub.Bytes()))   // "validators.pub_key.value" in abci/config/genesis.json ?
+			fmt.Printf("Public key (cometized hex): %v\n", pub.String())                              // for reference with come cometbft logs
+			fmt.Printf("Address (string): %s\n", pub.Address().String())                              // "validators.address" in abci/config/genesis.json ?
+			fmt.Printf("Node ID: %v\n", nodeID)
+			return nil
+		},
+	}
+}
 
 // ShowNodeIDCmd dumps node's ID to the standard output.
 func ShowNodeIDCmd() *cobra.Command {
