@@ -11,14 +11,24 @@ var testnetCmd = &cobra.Command{
 	Use:     "testnet",
 	Aliases: []string{"net"},
 	Short:   "Initializes the files required for a kwil test network",
-	Long: `testnet will create "v" number of directories and populate each with
+	Long: `testnet will create "v + n" number of directories and populate each with
 necessary files (private validator, genesis, config, env etc.).
+
+genesis file includes list of v validators under the validators section
 
 Note, strict routability for addresses is turned off in the config file.
 Optionally, it will fill in persistent_peers list in config file using either hostnames or IPs.
 
 Example:
-	kwild testnet --v 4 --o ./output --populate-persistent-peers --starting-ip-address 192.168.10.2
+	kwild testnet -v 4 -o ./output --populate-persistent-peers --starting-ip-address 192.168.10.2
+
+	(or)
+
+	kwild testnet -v 4 -o ./output --populate-persistent-peers --hostname 192.168.10.2 --hostname 192.168.10.4
+
+	(or)
+
+	kwild testnet -v 4 -n 2 --o ./output --populate-persistent-peers --starting-ip-address 192.168.10.2
 	`,
 	RunE: initTestnet,
 }
