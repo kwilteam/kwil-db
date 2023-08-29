@@ -114,7 +114,6 @@ func DefaultConfig() *KwildConfig {
 		},
 	}
 
-	cfg.ChainCfg = cometCfg.DefaultConfig()
 	cfg.ChainCfg.P2P.SeedMode = true
 	/*
 	 As all we are validating are tx signatures, no need to go through Validation again
