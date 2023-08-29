@@ -23,10 +23,10 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transac
 	}
 
 	// get nonce from address
-	acc, err := c.client.GetAccount(ctx, pub.Bytes())
+	acc, err := c.client.GetAccount(ctx, pub.Address().String())
 	if err != nil {
 		acc = &balances.Account{
-			Address: address,
+			Address: pub.Address().String(),
 			Nonce:   0,
 			Balance: big.NewInt(0),
 		}

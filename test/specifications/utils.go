@@ -8,12 +8,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kwilteam/kuneiform/kfparser"
 )
+
+type DatabaseIdentifier interface {
+	DBID(name string) string
+}
+
+type DatabaseExister interface {
+	DatabaseExists(ctx context.Context, dbid string) error
+}
 
 type DatabaseSchemaLoader interface {
 	Load(t *testing.T, targetSchema *testSchema) *transactions.Schema
@@ -80,10 +87,6 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 	l.Modifier(db)
 
 	return db
-}
-
-func GenerateSchemaId(owner, name string) string {
-	return utils.GenerateDBID(name, owner)
 }
 
 func expectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) func() {

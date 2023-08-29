@@ -15,7 +15,7 @@ func ExecuteOwnerActionSpecification(ctx context.Context, t *testing.T, execute 
 	t.Logf("Executing owner action specification")
 
 	db := SchemaLoader.Load(t, schemaTestDB)
-	dbID := GenerateSchemaId(db.Owner, db.Name)
+	dbID := execute.DBID(db.Name)
 
 	actionInputs := []any{}
 	_, err := execute.ExecuteAction(ctx, dbID, ownerOnlyActionName, actionInputs)
@@ -26,7 +26,7 @@ func ExecuteOwnerActionFailSpecification(ctx context.Context, t *testing.T, exec
 	t.Logf("Executing owner action fail specification")
 
 	db := SchemaLoader.Load(t, schemaTestDB)
-	dbID := GenerateSchemaId(db.Owner, db.Name)
+	dbID := execute.DBID(db.Name)
 
 	actionInputs := []any{}
 

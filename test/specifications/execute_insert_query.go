@@ -20,6 +20,7 @@ type userTable struct {
 }
 
 type ExecuteQueryDsl interface {
+	DatabaseIdentifier
 	// ExecuteAction executes QUERY to a database
 	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
 	QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error)
@@ -29,7 +30,7 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing insert action specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t, schemaTestDB)
-	dbID := GenerateSchemaId(db.Owner, db.Name)
+	dbID := execute.DBID(db.Name)
 
 	// When i execute action to database
 

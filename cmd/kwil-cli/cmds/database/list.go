@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -28,7 +27,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 					return err
 				}
 
-				dbs, err := client.ListDatabases(ctx, strings.ToLower(owner))
+				dbs, err := client.ListDatabases(ctx, owner)
 				if err != nil {
 					return fmt.Errorf("failed to list databases: %w", err)
 				}

@@ -9,6 +9,7 @@ import (
 )
 
 type ExecuteCallDsl interface {
+	DatabaseIdentifier
 	Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) ([]map[string]any, error)
 }
 
@@ -16,7 +17,7 @@ func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteC
 	t.Logf("Executing ExecuteCallSpecification")
 
 	db := SchemaLoader.Load(t, schemaTestDB)
-	dbID := GenerateSchemaId(db.Owner, db.Name)
+	dbID := caller.DBID(db.Name)
 
 	getPostInput := []any{
 		[]any{1111},

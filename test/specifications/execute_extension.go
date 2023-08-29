@@ -12,6 +12,7 @@ const (
 )
 
 type ExecuteExtensionDsl interface {
+	DatabaseIdentifier
 	ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error)
 }
 
@@ -19,7 +20,7 @@ func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute Ex
 	t.Logf("Executing insert action specification")
 
 	db := SchemaLoader.Load(t, schemaTestDB)
-	dbID := GenerateSchemaId(db.Owner, db.Name)
+	dbID := execute.DBID(db.Name)
 
 	receipt, err := execute.ExecuteAction(ctx, dbID, divideActionName, []any{
 		[]any{3, 2},

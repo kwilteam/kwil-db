@@ -438,7 +438,8 @@
             "name": "owner",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "byte"
           }
         ],
         "tags": [
@@ -772,7 +773,8 @@
       "type": "object",
       "properties": {
         "owner": {
-          "type": "string"
+          "type": "string",
+          "format": "byte"
         },
         "name": {
           "type": "string"

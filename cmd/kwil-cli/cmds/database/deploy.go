@@ -48,8 +48,6 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
-				db.Owner = conf.PrivateKey.PubKey().Address().String()
-
 				res, err := client.DeployDatabase(ctx, db)
 				if err != nil {
 					return err

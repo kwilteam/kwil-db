@@ -65,33 +65,36 @@ func (d *KwildDriver) TxSuccess(ctx context.Context, txHash []byte) error {
 	return nil
 }
 
+func (d *KwildDriver) DBID(name string) string {
+	return utils.GenerateDBID(name, d.clt.Signer.PubKey().Bytes())
+}
+
+// TODO: this likely needs to change; the old Kwild driver is not compatible, since deploy, drop, and execute are asynchronous
+
 func (d *KwildDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) ([]byte, error) {
-	db.Owner = d.GetUserAddress()
 	rec, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {
 		return nil, fmt.Errorf("error deploying database: %w", err)
 	}
 
-	d.logger.Info("deployed database",
-		zap.String("name", db.Name), zap.String("owner", db.Owner),
+	d.logger.Debug("deployed database",
+		zap.String("name", db.Name), zap.Binary("owner", d.clt.Signer.PubKey().Bytes()),
 		zap.String("TxHash", rec.Hex()))
 	return rec, nil
 }
 
-func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, dbName string) error {
-	dbid := utils.GenerateDBID(dbName, owner)
+func (d *KwildDriver) DatabaseExists(ctx context.Context, dbid string) error {
 
 	dbSchema, err := d.clt.GetSchema(ctx, dbid)
 	if err != nil {
 		return fmt.Errorf("failed to get database schema: %w", err)
 	}
 
-	if strings.EqualFold(dbSchema.Owner, owner) && strings.EqualFold(dbSchema.Name, dbName) {
-		return nil
+	if dbSchema == nil {
+		return fmt.Errorf("database schema is nil")
 	}
 
-	// TODO: verify more than just existence, check schema structure
-	return fmt.Errorf("database does not exist")
+	return nil
 }
 
 func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error) {
