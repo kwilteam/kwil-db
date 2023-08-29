@@ -194,6 +194,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		if genCfg.PopulatePersistentPeers {
 			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
 		}
+		cfg.AppCfg.PrivateKey = hex.EncodeToString(privateKeys[i])
 		writeConfigFile(filepath.Join(nodeDir, "abci", "config", "config.toml"), cfg)
 	}
 
