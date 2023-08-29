@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_Generate_TOML(t *testing.T) {
@@ -12,9 +13,18 @@ func Test_Generate_TOML(t *testing.T) {
 
 	cfg.AppCfg.SqliteFilePath = "sqlite.db/randomPath"
 	cfg.AppCfg.GrpcListenAddress = "localhost:9000"
-
+	cfg.AppCfg.ExtensionEndpoints = []string{"localhost:9001", "localhost:9002"}
+	cfg.Logging.OutputPaths = []string{"stdout", "file"}
 	writeConfigFile("test.toml", cfg)
+	defer os.Remove("test.toml")
 
+	updatedcfg := config.DefaultConfig()
+	err := updatedcfg.ParseConfig("test.toml")
+	assert.NoError(t, err)
+	assert.Equal(t, cfg.AppCfg.SqliteFilePath, updatedcfg.AppCfg.SqliteFilePath)
+	assert.Equal(t, cfg.AppCfg.GrpcListenAddress, updatedcfg.AppCfg.GrpcListenAddress)
+	assert.Equal(t, cfg.AppCfg.ExtensionEndpoints, updatedcfg.AppCfg.ExtensionEndpoints)
+	assert.Equal(t, cfg.Logging.OutputPaths, updatedcfg.Logging.OutputPaths)
 }
 
 func Test_GenerateNodeCfg(t *testing.T) {
