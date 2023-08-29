@@ -16,7 +16,7 @@ func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*t
 	logger := s.log.With(zap.String("rpc", "GetSchema"), zap.String("dbid", req.Dbid))
 	schema, err := s.engine.GetSchema(ctx, req.Dbid)
 	if err != nil {
-		logger.Error("failed to get schema", zap.Error(err))
+		logger.Debug("failed to get schema", zap.Error(err))
 
 		if errors.Is(err, engine.ErrDatasetNotFound) {
 			return nil, status.Error(codes.NotFound, "dataset not found")

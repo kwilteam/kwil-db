@@ -96,7 +96,7 @@ func DefaultConfig() *KwildConfig {
 		ChainCfg: cometCfg.DefaultConfig(),
 		AppCfg: &AppConfig{
 			GrpcListenAddress: "localhost:50051",
-			HttpListenAddress: "localhost:8081",
+			HttpListenAddress: "localhost:8080",
 			SqliteFilePath:    "data/kwil.db",
 			WithoutGasCosts:   true,
 			WithoutNonces:     false,

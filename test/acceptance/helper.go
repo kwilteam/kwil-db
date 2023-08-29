@@ -2,14 +2,11 @@ package acceptance
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/cometbft/cometbft/privval"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
@@ -153,22 +150,6 @@ func (r *ActHelper) updateGeneratedConfig(ks, vs []string) {
 	require.NoError(r.t, err, "failed to write env vars to file")
 }
 
-//func (r *ActHelper) updateGeneratedConfigHome(home string) {
-//	envs, err := godotenv.Read(envFile)
-//	require.NoError(r.t, err, "failed to read env file")
-//
-//	envs["KWIL_HOME"] = home
-//
-//	err = godotenv.Write(envs, envFile)
-//	require.NoError(r.t, err, "failed to write env vars to file")
-//}
-
-func (r *ActHelper) loadValidatorPvBytes(tmpHome string) []byte {
-	pvKeyFile := filepath.Join(tmpHome, "config", "priv_validator_key.json")
-	pv := privval.LoadFilePVEmptyState(pvKeyFile, "pvStateFile")
-	return pv.Key.PrivKey.Bytes()
-}
-
 func (r *ActHelper) generateNodeConfig() {
 	r.t.Logf("generate node config")
 	tmpPath := r.t.TempDir()
@@ -180,13 +161,9 @@ func (r *ActHelper) generateNodeConfig() {
 	})
 	require.NoError(r.t, err, "failed to generate node config")
 
-	// TODO: after we update `kwild utils` subcmd, we should not need to do this
-	// TODO: load from generated priv_key.json, pass it as env var
-	validatorPvBytes := r.loadValidatorPvBytes(tmpPath)
-
 	r.updateGeneratedConfig(
-		[]string{"KWIL_HOME", "KWILD_PRIVATE_KEY"},
-		[]string{tmpPath, hex.EncodeToString(validatorPvBytes)})
+		[]string{"KWIL_HOME"},
+		[]string{tmpPath})
 }
 
 func (r *ActHelper) runDockerCompose(ctx context.Context) {
@@ -216,12 +193,11 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 			wait.NewLogStrategy("listening on").WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService(
 			"kwild",
-			wait.NewLogStrategy("grpc server started").WithStartupTimeout(r.cfg.WaitTimeout)).
+			wait.NewLogStrategy("Starting Node service").WithStartupTimeout(r.cfg.WaitTimeout)).
 		Up(ctx)
 	r.t.Log("docker compose up")
 
 	require.NoError(r.t, err, "failed to start kwild node")
-
 }
 
 func (r *ActHelper) Setup(ctx context.Context) {

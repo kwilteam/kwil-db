@@ -12,30 +12,23 @@ services:
       - "26657:26657"
     env_file:
       - .env
-    environment:
-      - LOG=cometbft.log
-      - COMET_BFT_HOME=/app/comet-bft
-      - KWILD_EXTENSION_ENDPOINTS=ext1:50051
-      - KWILD_ROOT_DIR=/app
-      - KWILD_LOG_LEVEL=${KWILD_LOG_LEVEL:-info}
     volumes:
       - type: bind
-        source: ${KWIL_HOME:-./.testnet}/node0 # this will be changed to a tmp folder when testing
-        target: /app/abci
-#        target: /app/config
-#      - type: bind
-#        source: ${KWIL_HOME:-./.testnet}/node0 # this will be changed to a tmp folder when testing
-#        target: /app/comet-bft
+        source: ${KWIL_HOME:-./.testnet}/node0
+        target: /app/kwil
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.100.2
     depends_on:
       - ext1
-#    healthcheck:
-#      test: [ "CMD", "nc", "-v", "ext1", "50151" ]
-#      interval: 5s
-#      timeout: 3s
-#      retries: 3
+    command: |
+      --home=/app/kwil
+      --log.log_level=${LOG_LEVEL:-debug}
+      --app.extension_endpoints=ext1:50051
+      --app.grpc_listen_addr=:50051
+      --app.http_listen_addr=:8080
+      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --chain.rpc_laddr=tcp://0.0.0.0:26657
 
   k2:
     container_name: k2
@@ -47,26 +40,23 @@ services:
       - "26667:26657"
     env_file:
       - .env
-    environment:
-      - LOG=cometbft.log
-      - COMET_BFT_HOME=/app/comet-bft
-      - KWILD_EXTENSION_ENDPOINTS=ext1:50051
-      - KWILD_ROOT_DIR=/app
-      - KWILD_LOG_LEVEL=${KWILD_LOG_LEVEL:-info}
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node1
-        target: /app/abci
-#        target: /app/config
-#      - type: bind
-#        source: ${KWIL_HOME:-./.testnet}/node1
-#        target: /app/comet-bft
+        target: /app/kwil
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.100.3
     depends_on:
       - ext1
-
+    command: |
+      --home=/app/kwil
+      --log.log_level=${LOG_LEVEL:-info}
+      --app.extension_endpoints=ext1:50051
+      --app.grpc_listen_addr=:50051
+      --app.http_listen_addr=:8080
+      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --chain.rpc_laddr=tcp://0.0.0.0:26657
 
   k3:
     container_name: k3
@@ -78,26 +68,23 @@ services:
       - "26677:26657"
     env_file:
       - .env
-    environment:
-      - LOG=cometbft.log
-      - COMET_BFT_HOME=/app/comet-bft
-      - KWILD_EXTENSION_ENDPOINTS=ext1:50051
-      - KWILD_ROOT_DIR=/app
-      - KWILD_LOG_LEVEL=${KWILD_LOG_LEVEL:-info}
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node2
-        target: /app/abci
-#        target: /app/config
-#      - type: bind
-#        source: ${KWIL_HOME:-./.testnet}/node2
-#        target: /app/comet-bft
+        target: /app/kwil
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.100.4
     depends_on:
       - ext1
-
+    command: |
+      --home=/app/kwil
+      --log.log_level=${LOG_LEVEL:-info}
+      --app.extension_endpoints=ext1:50051
+      --app.grpc_listen_addr=:50051
+      --app.http_listen_addr=:8080
+      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --chain.rpc_laddr=tcp://0.0.0.0:26657
 
   # this ext is shared by all nodes
   # we can make a separate ext for each node if we want
