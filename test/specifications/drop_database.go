@@ -5,11 +5,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // DatabaseDropDsl is dsl for database drop specification
 type DatabaseDropDsl interface {
-	DropDatabase(ctx context.Context, dbName string) error
+	TxQueryDsl
+	DropDatabase(ctx context.Context, dbName string) (txHash []byte, err error)
 	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
 }
 
@@ -18,15 +20,21 @@ func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseD
 	// Given a valid database schema
 	db := SchemaLoader.Load(t, schemaTestDB)
 
-	// When i drop the database, it should success
-	err := drop.DropDatabase(ctx, db.Name)
-	assert.NoError(t, err)
+	// When i drop the database
+	txHash, err := drop.DropDatabase(ctx, db.Name)
+	require.NoError(t, err, "failed to send drop database tx")
 
-	// Drop again should fail
-	err = drop.DropDatabase(ctx, db.Name)
-	assert.Error(t, err)
+	// Then i expect success
+	expectTxSuccess(t, drop, ctx, txHash, defaultTxQueryTimeout)()
 
 	// And i expect database should not exist
 	err = drop.DatabaseShouldExists(ctx, db.Owner, db.Name)
 	assert.Error(t, err)
+
+	// Drop again
+	txHash, err = drop.DropDatabase(ctx, db.Name)
+	require.NoError(t, err, "failed to send drop database tx")
+
+	// Then i expect tx failure
+	expectTxFail(t, drop, ctx, txHash, defaultTxQueryTimeout)()
 }
