@@ -89,26 +89,26 @@ func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 	cmd.Flags().StringVar(&cfg.ChainCfg.Moniker, "chain.moniker", cfg.ChainCfg.Moniker, "Chain moniker")
 
 	// Chain RPC flags
-	cmd.Flags().StringVar(&cfg.ChainCfg.RPC.ListenAddress, "chain.rpc_laddr", cfg.ChainCfg.RPC.ListenAddress, "Chain RPC listen address")
+	cmd.Flags().StringVar(&cfg.ChainCfg.RPC.ListenAddress, "chain.rpc.laddr", cfg.ChainCfg.RPC.ListenAddress, "Chain RPC listen address")
 
 	cmd.Flags().DurationVar(&cfg.ChainCfg.RPC.TimeoutBroadcastTxCommit, "chain.timeout_broadcast_tx_commit", cfg.ChainCfg.RPC.TimeoutBroadcastTxCommit, "chain timeout broadcast tx commit")
 
 	// Chain P2P flags
-	cmd.Flags().StringVar(&cfg.ChainCfg.P2P.ListenAddress, "chain.p2p.listen_addr", cfg.ChainCfg.P2P.ListenAddress, "chain P2P listen address")
+	cmd.Flags().StringVar(&cfg.ChainCfg.P2P.ListenAddress, "chain.p2p.laddr", cfg.ChainCfg.P2P.ListenAddress, "chain P2P listen address")
 
 	cmd.Flags().StringVar(&cfg.ChainCfg.P2P.ExternalAddress, "chain.p2p.external_address", cfg.ChainCfg.P2P.ExternalAddress, "chain P2P external address")
 
 	cmd.Flags().StringVar(&cfg.ChainCfg.P2P.PersistentPeers, "chain.p2p.persistent_peers", cfg.ChainCfg.P2P.PersistentPeers, "chain P2P persistent peers")
 
-	cmd.Flags().BoolVar(&cfg.ChainCfg.P2P.AddrBookStrict, "chain.addr_book_strict", cfg.ChainCfg.P2P.AddrBookStrict, "chain P2P address book strict")
+	cmd.Flags().BoolVar(&cfg.ChainCfg.P2P.AddrBookStrict, "chain.p2p.addr_book_strict", cfg.ChainCfg.P2P.AddrBookStrict, "chain P2P address book strict")
 
-	cmd.Flags().StringVar(&cfg.ChainCfg.P2P.UnconditionalPeerIDs, "chain.unconditional_peer_ids", cfg.ChainCfg.P2P.UnconditionalPeerIDs, "chain P2P unconditional peer IDs")
+	cmd.Flags().StringVar(&cfg.ChainCfg.P2P.UnconditionalPeerIDs, "chain.p2p.unconditional_peer_ids", cfg.ChainCfg.P2P.UnconditionalPeerIDs, "chain P2P unconditional peer IDs")
 
-	cmd.Flags().IntVar(&cfg.ChainCfg.P2P.MaxNumInboundPeers, "chain.max_num_inbound_peers", cfg.ChainCfg.P2P.MaxNumInboundPeers, "chain P2P maximum number of inbound peers")
+	cmd.Flags().IntVar(&cfg.ChainCfg.P2P.MaxNumInboundPeers, "chain.p2p.max_num_inbound_peers", cfg.ChainCfg.P2P.MaxNumInboundPeers, "chain P2P maximum number of inbound peers")
 
-	cmd.Flags().IntVar(&cfg.ChainCfg.P2P.MaxNumOutboundPeers, "chain.max_num_outbound_peers", cfg.ChainCfg.P2P.MaxNumOutboundPeers, "chain P2P maximum number of outbound peers")
+	cmd.Flags().IntVar(&cfg.ChainCfg.P2P.MaxNumOutboundPeers, "chain.p2p.max_num_outbound_peers", cfg.ChainCfg.P2P.MaxNumOutboundPeers, "chain P2P maximum number of outbound peers")
 
-	cmd.Flags().BoolVar(&cfg.ChainCfg.P2P.AllowDuplicateIP, "chain.allow_duplicate_ip", cfg.ChainCfg.P2P.AllowDuplicateIP, "chain P2P allow duplicate IP")
+	cmd.Flags().BoolVar(&cfg.ChainCfg.P2P.AllowDuplicateIP, "chain.p2p.allow_duplicate_ip", cfg.ChainCfg.P2P.AllowDuplicateIP, "chain P2P allow duplicate IP")
 
 	// Chain Mempool flags
 	cmd.Flags().IntVar(&cfg.ChainCfg.Mempool.Size, "chain.mempool.size", cfg.ChainCfg.Mempool.Size, "chain mempool size")
