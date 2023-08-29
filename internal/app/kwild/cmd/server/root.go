@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -19,6 +20,9 @@ func NewStartCmd(cfg *config.KwildConfig) *cobra.Command {
 		Short: "kwil grpc server",
 		Long:  "Starts node with Kwild and CometBFT services",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cfg.PrivateKey == nil {
+				return fmt.Errorf("private key is not set")
+			}
 			ctx := cmd.Context()
 
 			signalChan := make(chan os.Signal, 1)
