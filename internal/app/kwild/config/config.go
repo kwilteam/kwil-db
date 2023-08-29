@@ -72,22 +72,28 @@ func (cfg *KwildConfig) LoadKwildConfig() error {
 		return fmt.Errorf("invalid chain configuration data: %v", err)
 	}
 
-	if cfg.AppCfg.PrivateKey == "" {
-		return fmt.Errorf("private key is not set")
+	if cfg.AppCfg.PrivateKey != "" {
+		privateKey, err := crypto.Ed25519PrivateKeyFromHex(cfg.AppCfg.PrivateKey)
+		if err != nil {
+			return err
+		}
+		cfg.PrivateKey = privateKey
 	}
 
-	privateKey, err := crypto.Ed25519PrivateKeyFromHex(cfg.AppCfg.PrivateKey)
-	if err != nil {
-		return err
-	}
-	cfg.PrivateKey = privateKey
 	return nil
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
 func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
-	viper.SetConfigFile(cfgFile)
-	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("reading config: %v", err)
+	if fileExists(cfgFile) {
+		viper.SetConfigFile(cfgFile)
+		if err := viper.ReadInConfig(); err != nil {
+			return fmt.Errorf("reading config: %v", err)
+		}
 	}
 	if err := viper.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("decoding config: %v", err)
