@@ -20,6 +20,7 @@ func NewCmdGenerator() *cobra.Command {
 		NewTestnetCmd(),
 		InitFilesCmd(),
 		ShowNodeIDCmd(),
+		GenPrivateKeyCmd(),
 		KeyInfoCmd(),
 		NewResetAllCmd(), // TODO: Redo this according to the current files and dir structure
 		NewResetStateCmd(),
