@@ -2,8 +2,11 @@ package kwild
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
+
+	"github.com/kwilteam/kwil-db/pkg/abci"
 
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
@@ -46,31 +49,30 @@ func (d *KwildDriver) GetUserAddress() string {
 }
 
 func (d *KwildDriver) TxSuccess(ctx context.Context, txHash []byte) error {
-	res, err := d.clt.TxQuery(ctx, txHash)
+	resp, err := d.clt.TxQuery(ctx, txHash)
 	if err != nil {
 		return fmt.Errorf("failed to query: %w", err)
 	}
 
-	d.logger.Info("tx result", zap.Any("result", res))
-	// TODO: get full list of code
-	if res.Code != 0 {
-		return fmt.Errorf("transaction not ok, %s", res.Log)
+	d.logger.Info("tx info", zap.Uint64("height", resp.Height),
+		zap.String("txHash", strings.ToUpper(hex.EncodeToString(txHash))),
+		zap.Any("result", resp.TxResult))
+
+	if resp.TxResult.Code != abci.CodeOk.Uint32() {
+		return fmt.Errorf("transaction not ok, %s", resp.TxResult.Log)
 	}
 
 	return nil
 }
 
-// TODO: this likely needs to change; the old Kwild driver is not compatible, since deploy, drop, and execute are asynchronous
-
 func (d *KwildDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) ([]byte, error) {
 	db.Owner = d.GetUserAddress()
 	rec, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {
-		fmt.Println("Error deploying database: ", err.Error())
 		return nil, fmt.Errorf("error deploying database: %w", err)
 	}
 
-	d.logger.Debug("deployed database",
+	d.logger.Info("deployed database",
 		zap.String("name", db.Name), zap.String("owner", db.Owner),
 		zap.String("TxHash", rec.Hex()))
 	return rec, nil
@@ -87,6 +89,8 @@ func (d *KwildDriver) DatabaseShouldExists(ctx context.Context, owner string, db
 	if strings.EqualFold(dbSchema.Owner, owner) && strings.EqualFold(dbSchema.Name, dbName) {
 		return nil
 	}
+
+	// TODO: verify more than just existence, check schema structure
 	return fmt.Errorf("database does not exist")
 }
 
@@ -98,24 +102,15 @@ func (d *KwildDriver) ExecuteAction(ctx context.Context, dbid string, actionName
 	return rec, nil
 }
 
-func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) error {
-	//rec, err := d.clt.DropDatabase(ctx, dbName)
-	//if err != nil {
-	//	return fmt.Errorf("error dropping database: %w", err)
-	//}
-	//
-	//// this likely does not work; cometbft uses its own transaction hash, not the one generated from Kwil
-	//res, err := d.clt.CometBftClient.Tx(ctx, rec.ID, false)
-	//if err != nil {
-	//	return fmt.Errorf("error getting transaction: %w", err)
-	//}
-	//
-	//if !GetTransactionResult(res.TxResult.Events[0].Attributes) {
-	//	return fmt.Errorf("failed to drop database")
-	//}
-	//
-	//d.logger.Debug("drop database", zap.String("name", dbName), zap.String("owner", d.GetUserAddress()))
-	return nil
+func (d *KwildDriver) DropDatabase(ctx context.Context, dbName string) ([]byte, error) {
+	rec, err := d.clt.DropDatabase(ctx, dbName)
+	if err != nil {
+		return nil, fmt.Errorf("error dropping database: %w", err)
+	}
+
+	d.logger.Info("drop database", zap.String("name", dbName), zap.String("owner", d.GetUserAddress()),
+		zap.String("TxHash", rec.Hex()))
+	return rec, nil
 }
 
 func (d *KwildDriver) QueryDatabase(ctx context.Context, dbid, query string) (*client.Records, error) {
@@ -134,6 +129,8 @@ func GetTransactionResult(attributes []types.EventAttribute) bool {
 	}
 	return false
 }
+
+//// Validator related methods
 
 // NOTE: The keys in these validator related methods are base64-encoded.
 

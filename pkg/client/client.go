@@ -419,11 +419,11 @@ func convertTuple(tuple []any) ([]string, error) {
 }
 
 // TxQuery get transaction by hash
-func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*txpb.TransactionResult, error) {
+func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*txpb.TxQueryResponse, error) {
 	res, err := c.client.TxQuery(ctx, txHash)
 	if err != nil {
 		return nil, err
 	}
 
-	return res.TxResult, nil
+	return res, nil
 }

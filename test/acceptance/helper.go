@@ -220,7 +220,7 @@ func (r *ActHelper) GetAliceDriver(ctx context.Context) KwilAcceptanceDriver {
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return kwild.NewKwildDriver(kwilClt)
+	return kwild.NewKwildDriver(kwilClt, kwild.WithLogger(logger))
 }
 
 func (r *ActHelper) GetBobDriver(ctx context.Context) KwilAcceptanceDriver {
@@ -231,5 +231,5 @@ func (r *ActHelper) GetBobDriver(ctx context.Context) KwilAcceptanceDriver {
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return kwild.NewKwildDriver(kwilClt)
+	return kwild.NewKwildDriver(kwilClt, kwild.WithLogger(logger))
 }

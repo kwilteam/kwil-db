@@ -1,12 +1,16 @@
 package specifications
 
 import (
+	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/stretchr/testify/require"
 
 	"github.com/kwilteam/kuneiform/kfparser"
 )
@@ -80,4 +84,36 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 
 func GenerateSchemaId(owner, name string) string {
 	return utils.GenerateDBID(name, owner)
+}
+
+func expectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) func() {
+	return func() {
+		var status strings.Builder
+		require.Eventually(t, func() bool {
+			// prevent appending to the prior invocation(s)
+			status.Reset()
+			if err := spec.TxSuccess(ctx, txHash); err == nil {
+				return true
+			} else {
+				status.WriteString(err.Error())
+				return false
+			}
+		}, waitFor, time.Second*1, "tx failed: %s", status.String())
+	}
+}
+
+func expectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) func() {
+	return func() {
+		var status strings.Builder
+		require.Eventually(t, func() bool {
+			// prevent appending to the prior invocation(s)
+			status.Reset()
+			if err := spec.TxSuccess(ctx, txHash); err == nil {
+				return false
+			} else {
+				status.WriteString(err.Error())
+				return true
+			}
+		}, waitFor, time.Second*1, "tx should fail", status.String())
+	}
 }
