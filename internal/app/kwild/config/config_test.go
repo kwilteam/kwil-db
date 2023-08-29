@@ -20,5 +20,6 @@ func Test_Config_Toml(t *testing.T) {
 	assert.Equal(t, "localhost:50052", cfg.AppCfg.ExtensionEndpoints[0])
 	assert.Equal(t, "localhost:50053", cfg.AppCfg.ExtensionEndpoints[1])
 
+	assert.Equal(t, true, cfg.AppCfg.WithoutGasCosts)
 	// TODO: Add bunch of other validations for different types
 }
