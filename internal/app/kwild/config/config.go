@@ -6,14 +6,12 @@ import (
 	"path/filepath"
 
 	cometCfg "github.com/cometbft/cometbft/config"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/spf13/viper"
 )
 
 type KwildConfig struct {
-	RootDir    string
-	PrivateKey *crypto.Ed25519PrivateKey
+	RootDir string
 
 	AppCfg   *AppConfig       `mapstructure:"app"`
 	ChainCfg *cometCfg.Config `mapstructure:"chain"`
