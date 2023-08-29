@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/spf13/cobra"
 )
 
@@ -20,14 +22,18 @@ func NewStartCmd(cfg *config.KwildConfig) *cobra.Command {
 		Short: "kwil grpc server",
 		Long:  "Starts node with Kwild and CometBFT services",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if cfg.PrivateKey == nil {
-				return fmt.Errorf("private key is not set")
+			if cfg.AppCfg.PrivateKey == "" {
+				return errors.New("private key is not set")
 			}
-			ctx := cmd.Context()
+			var err error
+			cfg.PrivateKey, err = crypto.Ed25519PrivateKeyFromHex(cfg.AppCfg.PrivateKey)
+			if err != nil {
+				return fmt.Errorf("failed to parse private key: %w", err)
+			}
 
 			signalChan := make(chan os.Signal, 1)
-			signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-			ctx, cancel := context.WithCancel(ctx)
+			signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+			ctx, cancel := context.WithCancel(cmd.Context())
 
 			go func() {
 				<-signalChan
