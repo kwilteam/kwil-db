@@ -202,6 +202,21 @@ var (
 		Min:          1,
 		Max:          1,
 	}}
+	FunctionEthAddress = ScalarFunction{AnySQLFunction{
+		FunctionName: "eth_address",
+		Min:          1,
+		Max:          1,
+	}}
+	FunctionCosmosAddress = ScalarFunction{AnySQLFunction{
+		FunctionName: "cosmos_address",
+		Min:          1,
+		Max:          1,
+	}}
+	FunctionNEARAddress = ScalarFunction{AnySQLFunction{
+		FunctionName: "near_address",
+		Min:          1,
+		Max:          1,
+	}}
 )
 
 // SQLFunctions is a map of all functions of all types
@@ -231,6 +246,11 @@ var SQLFunctions = map[string]SQLFunction{
 	"unhex":    &FunctionUNHEX,
 	"unicode":  &FunctionUNICODE,
 	"upper":    &FunctionUPPER,
+
+	// address functions
+	"eth_address":    &FunctionEthAddress,
+	"cosmos_address": &FunctionCosmosAddress,
+	"near_address":   &FunctionNEARAddress,
 	// DateTime functions
 	"date":      &FunctionDATE,
 	"time":      &FunctionTIME,

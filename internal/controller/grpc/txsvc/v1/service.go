@@ -42,7 +42,7 @@ func NewService(engine EngineReader, accountStore AccountReader, chainClient Blo
 type EngineReader interface {
 	Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.SignedMessage) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
-	ListOwnedDatabases(ctx context.Context, owner string) ([]string, error)
+	ListOwnedDatabases(ctx context.Context, owner []byte) ([]string, error)
 	PriceDeploy(ctx context.Context, schema *engineTypes.Schema) (price *big.Int, err error)
 	PriceDrop(ctx context.Context, dbid string) (price *big.Int, err error)
 	PriceExecute(ctx context.Context, dbid string, action string, args [][]any) (price *big.Int, err error)

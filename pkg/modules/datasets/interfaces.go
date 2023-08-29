@@ -13,10 +13,10 @@ type AccountStore interface {
 }
 
 type Engine interface {
-	CreateDataset(ctx context.Context, schema *engineTypes.Schema) (dbid string, finalErr error)
-	DropDataset(ctx context.Context, sender, dbid string) error
+	CreateDataset(ctx context.Context, schema *engineTypes.Schema, caller engineTypes.UserIdentifier) (dbid string, finalErr error)
+	DropDataset(ctx context.Context, dbid string, sender engineTypes.UserIdentifier) error
 	Execute(ctx context.Context, dbid string, procedure string, args [][]any, opts ...engine.ExecutionOpt) ([]map[string]any, error)
-	ListDatasets(ctx context.Context, owner string) ([]string, error)
+	ListDatasets(ctx context.Context, owner []byte) ([]string, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
 }

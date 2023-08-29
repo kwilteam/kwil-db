@@ -17,13 +17,13 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transac
 		return nil, fmt.Errorf("private key is nil")
 	}
 
-	address, err := c.getAddress()
+	pub, err := c.getPublicKey()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
 	}
 
 	// get nonce from address
-	acc, err := c.client.GetAccount(ctx, address)
+	acc, err := c.client.GetAccount(ctx, pub.Bytes())
 	if err != nil {
 		acc = &balances.Account{
 			Address: address,
@@ -110,11 +110,10 @@ func (c *Client) NewNodeTx(ctx context.Context, payload transactions.Payload, pr
 
 	return tx, nil
 }
-
-func (c *Client) getAddress() (string, error) {
+func (c *Client) getPublicKey() (crypto.PublicKey, error) {
 	if c.Signer == nil {
-		return "", fmt.Errorf("private key is nil")
+		return nil, fmt.Errorf("private key is nil")
 	}
 
-	return c.Signer.PubKey().Address().String(), nil
+	return c.Signer.PubKey(), nil
 }

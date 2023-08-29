@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	engine "github.com/kwilteam/kwil-db/pkg/engine"
 	engineTesting "github.com/kwilteam/kwil-db/pkg/engine/testing"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -13,6 +15,22 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/stretchr/testify/assert"
 )
+
+const testPrivateKey = "4a3142b366011d28c2a3ca33a678ff753c978c685178d4168bad4474ea480cc9"
+
+func newTestUser() types.UserIdentifier {
+	pk, err := crypto.Secp256k1PrivateKeyFromHex(testPrivateKey)
+	if err != nil {
+		panic(err)
+	}
+
+	ident, err := addresses.CreateKeyIdentifier(pk.PubKey(), addresses.AddressFormatEthereum)
+	if err != nil {
+		panic(err)
+	}
+
+	return ident
+}
 
 var (
 	testTables = []*types.Table{
@@ -39,6 +57,7 @@ var (
 // TODO: this test is not passing
 func Test_Open(t *testing.T) {
 	ctx := context.Background()
+	user := newTestUser()
 
 	e, teardown, err := engineTesting.NewTestEngine(ctx, newMockRegister(),
 		engine.WithExtensions(testExtensions),
@@ -50,17 +69,15 @@ func Test_Open(t *testing.T) {
 
 	_, err = e.CreateDataset(ctx, &types.Schema{
 		Name:       "testdb1",
-		Owner:      "0xSatoshi",
 		Extensions: testInitializedExtensions,
 		Tables:     testTables,
 		Procedures: testProcedures,
-	})
+	}, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// close the engine
-	// TODO: close does not work here because our sqlite test's close does not do anything.  this causes the test to fail
 	// we likely need some more tests regarding this, as well as orphaned records.
 	err = e.Close()
 	if err != nil {
@@ -75,8 +92,13 @@ func Test_Open(t *testing.T) {
 	}
 	defer teardown2()
 
+	pubkey, err := user.PubKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// check if the dataset was created
-	dataset, err := e2.GetDataset(ctx, utils.GenerateDBID("testdb1", "0xSatoshi"))
+	dataset, err := e2.GetDataset(ctx, utils.GenerateDBID("testdb1", pubkey.Bytes()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +115,13 @@ func Test_Open(t *testing.T) {
 	procs := dataset.ListProcedures()
 	assert.ElementsMatch(t, testProcedures, procs)
 
+	pub, err := user.PubKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// list the datasets
-	datasets, err := e2.ListDatasets(ctx, "0xSatoshi")
+	datasets, err := e2.ListDatasets(ctx, pub.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +139,6 @@ func Test_CreateDataset(t *testing.T) {
 			name: "create a dataset with a variety of statements",
 			database: &types.Schema{
 				Name:       "test_db",
-				Owner:      "test_owner",
 				Extensions: testInitializedExtensions,
 				Tables:     testTables,
 				Procedures: []*types.Procedure{
@@ -134,7 +160,6 @@ func Test_CreateDataset(t *testing.T) {
 			name: "create a dataset with invalid dml",
 			database: &types.Schema{
 				Name:       "test_db",
-				Owner:      "test_owner",
 				Extensions: testInitializedExtensions,
 				Tables:     testTables,
 				Procedures: []*types.Procedure{
@@ -164,7 +189,7 @@ func Test_CreateDataset(t *testing.T) {
 			}
 			defer teardown()
 
-			_, err = e.CreateDataset(ctx, tt.database)
+			_, err = e.CreateDataset(ctx, tt.database, newTestUser())
 			hasErr := err != nil
 			if hasErr != tt.wantErr {
 				t.Errorf("Engine.CreateDataset() error = %v, wantErr %v", err, tt.wantErr)

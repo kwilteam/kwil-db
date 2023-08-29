@@ -2,8 +2,8 @@ package types
 
 type Schema struct {
 	Name string
-	// Owner is the hex encoded public key of the owner of the dataset
-	Owner      string
+	// Owner is the public key of the owner of the schema
+	Owner      []byte
 	Extensions []*Extension
 	Tables     []*Table
 	Procedures []*Procedure

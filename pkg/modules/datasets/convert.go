@@ -25,7 +25,6 @@ func ConvertSchemaToEngine(old *transactions.Schema) (*engineTypes.Schema, error
 	}
 
 	return &engineTypes.Schema{
-		Owner:      old.Owner,
 		Name:       old.Name,
 		Tables:     tables,
 		Procedures: procedures,
