@@ -8,6 +8,10 @@ import (
 )
 
 var (
+	defaultTxQueryTimeout = time.Second * 5
+)
+
+var (
 	SchemaLoader DatabaseSchemaLoader = &FileDatabaseSchemaLoader{
 		Modifier: func(db *transactions.Schema) {
 			// NOTE: this is a hack to make sure the db name is temporary unique
