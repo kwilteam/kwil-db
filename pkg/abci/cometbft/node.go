@@ -1,31 +1,78 @@
 package cometbft
 
 import (
+	"errors"
 	"fmt"
-	"os"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cometConfig "github.com/cometbft/cometbft/config"
 	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
-	cometFlags "github.com/cometbft/cometbft/libs/cli/flags"
 	cometLog "github.com/cometbft/cometbft/libs/log"
 	cometNodes "github.com/cometbft/cometbft/node"
 	"github.com/cometbft/cometbft/p2p"
 	"github.com/cometbft/cometbft/proxy"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"go.uber.org/zap"
 )
+
+type LogWrapper struct {
+	log *log.Logger
+}
+
+func NewLogWrapper(log *log.Logger) *LogWrapper {
+	log = log.WithOptions(zap.AddCallerSkip(1))
+	return &LogWrapper{log}
+}
+
+func (lw *LogWrapper) Debug(msg string, kvs ...any) {
+	lw.log.Debug(msg, keyValsToFields(kvs)...)
+}
+
+func (lw *LogWrapper) Info(msg string, kvs ...any) {
+	lw.log.Info(msg, keyValsToFields(kvs)...)
+}
+
+func (lw *LogWrapper) Error(msg string, kvs ...any) {
+	lw.log.Error(msg, keyValsToFields(kvs)...)
+}
+
+func (lw *LogWrapper) With(kvs ...any) cometLog.Logger {
+	fields := keyValsToFields(kvs)
+	return NewLogWrapper(lw.log.With(fields...))
+}
+
+func keyValsToFields(kvs []any) []zap.Field {
+	if len(kvs)%2 != 0 {
+		kvs = append(kvs, errors.New("missing value"))
+	}
+	n := len(kvs) / 2
+	fields := make([]zap.Field, 0, n)
+	for i := 0; i < n; i += 2 {
+		fields = append(fields, zap.Any(toString(kvs[i]), kvs[i+1]))
+	}
+	return fields
+}
+
+func toString(x any) string {
+	switch xt := x.(type) {
+	case string:
+		return xt
+	case fmt.Stringer:
+		return xt.String()
+	}
+	return fmt.Sprintf("%v", x)
+}
 
 type CometBftNode struct {
 	Node *cometNodes.Node
 }
 
 // NewCometBftNode creates a new CometBFT node.
-func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privateKey []byte, atomicStore privval.AtomicReadWriter, logLevel string) (*CometBftNode, error) {
-	logger := cometLog.NewTMLogger(cometLog.NewSyncWriter(os.Stdout))
-	logger, err := cometFlags.ParseLogLevel(conf.LogLevel, logger, logLevel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse log level: %v", err)
-	}
+func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privateKey []byte,
+	atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
+
+	logger := NewLogWrapper(log)
 
 	privateValidator, err := privval.NewValidatorSigner(privateKey, atomicStore)
 	if err != nil {
