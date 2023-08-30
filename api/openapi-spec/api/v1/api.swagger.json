@@ -468,7 +468,7 @@
           "type": "string",
           "format": "byte"
         },
-        "payloadType": {
+        "payload_type": {
           "type": "string"
         },
         "fee": {
@@ -582,7 +582,7 @@
     "txBroadcastResponse": {
       "type": "object",
       "properties": {
-        "txHash": {
+        "tx_hash": {
           "type": "string",
           "format": "byte"
         }
@@ -863,11 +863,11 @@
         "log": {
           "type": "string"
         },
-        "gasUsed": {
+        "gas_used": {
           "type": "string",
           "format": "int64"
         },
-        "gasWanted": {
+        "gas_wanted": {
           "type": "string",
           "format": "int64"
         },
@@ -910,7 +910,7 @@
     "txTxQueryRequest": {
       "type": "object",
       "properties": {
-        "txHash": {
+        "tx_hash": {
           "type": "string",
           "format": "byte"
         }
@@ -930,7 +930,7 @@
         "tx": {
           "$ref": "#/definitions/txTransaction"
         },
-        "txResult": {
+        "tx_result": {
           "$ref": "#/definitions/txTransactionResult"
         }
       }
@@ -988,13 +988,13 @@
           "type": "string",
           "format": "int64"
         },
-        "approvedValidators": {
+        "approved_validators": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
-        "rejectedValidators": {
+        "rejected_validators": {
           "type": "array",
           "items": {
             "type": "string"
