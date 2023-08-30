@@ -40,7 +40,7 @@ tasks:
   git:advance:
     desc: Advance git submodules to latest main revision
     cmds:
-      - git submodule update
+      - git submodule update --remote
 
   init:
     desc: Initialize the project

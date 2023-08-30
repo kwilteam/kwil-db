@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -20,7 +21,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway/middleware/cors"
@@ -38,6 +38,7 @@ import (
 	"go.uber.org/zap"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -388,10 +389,11 @@ func buildCometBftClient(cometBftNode *cometbft.CometBftNode) *cmtlocal.Local {
 }
 
 func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.Application) *cometbft.CometBftNode {
-	privateKey, err := crypto.Ed25519PrivateKeyFromHex(d.cfg.AppCfg.PrivateKey)
+	privB, err := hex.DecodeString(d.cfg.AppCfg.PrivateKey)
 	if err != nil {
 		failBuild(err, "failed to parse private key")
 	}
+	privateKey := ed25519.PrivKey(privB)
 
 	// for now, I'm just using a KV store for my atomic commit.  This probably is not ideal; a file may be better
 	// I'm simply using this because we know it fsyncs the data to disk
@@ -409,7 +411,7 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 		key: []byte("az"), // any key here will work
 	}
 
-	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.ChainCfg, privateKey.Bytes(),
+	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.ChainCfg, privateKey,
 		readWriter, &d.log)
 	if err != nil {
 		failBuild(err, "failed to build comet node")
