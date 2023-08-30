@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -134,15 +133,6 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 
 // DeployDatabase deploys a schema
 func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema) (transactions.TxHash, error) {
-	address, err := c.getAddress()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get address from private key: %w", err)
-	}
-
-	if payload.Owner != address {
-		return nil, fmt.Errorf("dataset owner is not the same as the address")
-	}
-
 	tx, err := c.newTx(ctx, payload)
 	if err != nil {
 		return nil, err
@@ -157,13 +147,13 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 
 // DropDatabase drops a database
 func (c *Client) DropDatabase(ctx context.Context, name string) (transactions.TxHash, error) {
-	address, err := c.getAddress()
+	pub, err := c.getPublicKey()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get address from private key: %w", err)
 	}
 
 	identifier := &transactions.DropSchema{
-		DBID: engineUtils.GenerateDBID(name, address),
+		DBID: engineUtils.GenerateDBID(name, pub.Bytes()),
 	}
 
 	tx, err := c.newTx(ctx, identifier)
@@ -231,7 +221,6 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		Arguments: stringInputs,
 	}
 
-	var signedMsg *transactions.SignedMessage
 	shouldSign, err := shouldAuthenticate(c.Signer, callOpts.forceAuthenticated)
 	if err != nil {
 		return nil, err
@@ -250,7 +239,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		}
 	}
 
-	return c.client.Call(ctx, signedMsg)
+	return c.client.Call(ctx, msg)
 }
 
 // shouldAuthenticate decides whether the client should authenticate or not
@@ -296,17 +285,16 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records
 	return NewRecordsFromMaps(res), nil
 }
 
-func (c *Client) ListDatabases(ctx context.Context, owner string) ([]string, error) {
-	owner = strings.ToLower(owner)
-	return c.client.ListDatabases(ctx, owner)
+func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error) {
+	return c.client.ListDatabases(ctx, ownerPubKey)
 }
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
 	return c.client.Ping(ctx)
 }
 
-func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {
-	return c.client.GetAccount(ctx, address)
+func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*balances.Account, error) {
+	return c.client.GetAccount(ctx, pubKey)
 }
 
 func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner string) ([]byte, error) {

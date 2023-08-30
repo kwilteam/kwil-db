@@ -43,27 +43,27 @@ func TestKwildGrpcAcceptance(t *testing.T) {
 		return
 	}
 
-	driver := helper.GetAliceDriver(ctx)
+	aliceDriver := helper.GetAliceDriver(ctx)
+	bobDriver := helper.GetBobDriver(ctx)
 
 	// When user deployed database
 	//specifications.DatabaseDeployInvalidSqlSpecification(ctx, t, driver)
 	//specifications.DatabaseDeployInvalidExtensionSpecification(ctx, t, driver)
-	specifications.DatabaseDeploySpecification(ctx, t, driver)
+	specifications.DatabaseDeploySpecification(ctx, t, aliceDriver)
 
 	//// Then user should be able to execute database
-	specifications.ExecuteOwnerActionSpecification(ctx, t, driver)
+	specifications.ExecuteOwnerActionSpecification(ctx, t, aliceDriver)
 
-	secondDriver := helper.GetBobDriver(ctx)
-	specifications.ExecuteOwnerActionFailSpecification(ctx, t, secondDriver)
-	specifications.ExecuteDBInsertSpecification(ctx, t, driver)
-	specifications.ExecuteCallSpecification(ctx, t, driver)
+	specifications.ExecuteOwnerActionFailSpecification(ctx, t, bobDriver)
+	specifications.ExecuteDBInsertSpecification(ctx, t, aliceDriver)
+	specifications.ExecuteCallSpecification(ctx, t, aliceDriver)
 
-	specifications.ExecuteDBUpdateSpecification(ctx, t, driver)
-	specifications.ExecuteDBDeleteSpecification(ctx, t, driver)
+	specifications.ExecuteDBUpdateSpecification(ctx, t, aliceDriver)
+	specifications.ExecuteDBDeleteSpecification(ctx, t, aliceDriver)
 
 	// test that the loaded extensions works
-	specifications.ExecuteExtensionSpecification(ctx, t, driver)
+	specifications.ExecuteExtensionSpecification(ctx, t, aliceDriver)
 
 	// and user should be able to drop database
-	specifications.DatabaseDropSpecification(ctx, t, driver)
+	specifications.DatabaseDropSpecification(ctx, t, aliceDriver)
 }

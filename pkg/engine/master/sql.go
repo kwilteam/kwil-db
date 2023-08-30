@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
@@ -13,10 +14,10 @@ type sqlStore struct {
 
 const (
 	datasetsTableName       = "datasets"
-	sqlCreateDatasetTable   = "CREATE TABLE IF NOT EXISTS " + datasetsTableName + " (dbid TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, owner TEXT NOT NULL) WITHOUT ROWID, STRICT;"
+	sqlCreateDatasetTable   = "CREATE TABLE IF NOT EXISTS " + datasetsTableName + " (dbid TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, owner BLOB NOT NULL) WITHOUT ROWID, STRICT;"
 	sqlCreateDatasetIndex   = "CREATE UNIQUE INDEX IF NOT EXISTS idx_datasets_owner_name ON " + datasetsTableName + " (owner, name);"
 	sqlListDatasets         = "SELECT dbid, name, owner FROM " + datasetsTableName + ";"
-	sqlListDatabasesByOwner = "SELECT name FROM " + datasetsTableName + " WHERE owner = $owner COLLATE NOCASE;"
+	sqlListDatabasesByOwner = "SELECT name FROM " + datasetsTableName + " WHERE public_key(owner) = $owner;"
 	sqlDeleteDataset        = "DELETE FROM " + datasetsTableName + " WHERE dbid = $dbid;"
 	sqlCreateDataset        = "INSERT INTO " + datasetsTableName + " (dbid, name, owner) VALUES ($dbid, $name, $owner);"
 	sqlGetDataset           = "SELECT name, owner FROM " + datasetsTableName + " WHERE dbid = $dbid;"
@@ -70,9 +71,15 @@ func (d *sqlStore) getDataset(ctx context.Context, dbid string) (*types.DatasetI
 		return nil, fmt.Errorf("error getting dataset name from result set")
 	}
 
-	owner, ok := results[0]["owner"].(string)
+	ownerBts, ok := results[0]["owner"].([]byte)
 	if !ok {
 		return nil, fmt.Errorf("error getting dataset owner fromr result set")
+	}
+
+	owner := &addresses.KeyIdentifier{}
+	err = owner.UnmarshalBinary(ownerBts)
+	if err != nil {
+		return nil, err
 	}
 
 	return &types.DatasetInfo{
@@ -82,9 +89,9 @@ func (d *sqlStore) getDataset(ctx context.Context, dbid string) (*types.DatasetI
 	}, nil
 }
 
-func (d *sqlStore) listDatasetsByOwner(ctx context.Context, owner string) ([]string, error) {
+func (d *sqlStore) listDatasetsByOwner(ctx context.Context, ownerPubKey []byte) ([]string, error) {
 	results, err := d.ds.Query(ctx, sqlListDatabasesByOwner, map[string]any{
-		"$owner": owner,
+		"$owner": ownerPubKey,
 	})
 	if err != nil {
 		return nil, err
@@ -103,11 +110,16 @@ func (d *sqlStore) listDatasetsByOwner(ctx context.Context, owner string) ([]str
 	return names, nil
 }
 
-func (d *sqlStore) createDataset(ctx context.Context, dbid, name, owner string) error {
+func (d *sqlStore) createDataset(ctx context.Context, dbid, name string, owner types.UserIdentifier) error {
+	ownerBts, err := owner.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
 	return d.ds.Execute(ctx, sqlCreateDataset, map[string]any{
 		"$dbid":  dbid,
 		"$name":  name,
-		"$owner": owner,
+		"$owner": ownerBts,
 	})
 }
 
@@ -130,9 +142,15 @@ func (s *sqlStore) listDatasets(ctx context.Context) ([]*types.DatasetInfo, erro
 			return nil, fmt.Errorf("error getting dbid from result set")
 		}
 
-		owner, ok := result["owner"].(string)
+		ownerBts, ok := result["owner"].([]byte)
 		if !ok {
 			return nil, fmt.Errorf("error getting owner from result set")
+		}
+
+		owner := &addresses.KeyIdentifier{}
+		err = owner.UnmarshalBinary(ownerBts)
+		if err != nil {
+			return nil, err
 		}
 
 		name, ok := result["name"].(string)

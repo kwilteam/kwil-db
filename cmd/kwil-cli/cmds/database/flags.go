@@ -1,6 +1,7 @@
 package database
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -18,29 +19,33 @@ const (
 
 // getSelectedOwner is used to get the owner flag.  Since the owner flag is usually optional,
 // it will check to see if it was passed.  If it was not passed, it will attempt to
-// get the user's address from the configuration file.
-func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) (string, error) {
-	var address string
+// get the user's public key from the configuration file.
+func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, error) {
+	var publicKey []byte
 	if cmd.Flags().Changed(ownerFlag) {
-		var err error
-		address, err = cmd.Flags().GetString(ownerFlag)
+		pubHex, err := cmd.Flags().GetString(ownerFlag)
 		if err != nil {
-			return address, fmt.Errorf("failed to get address from flag: %w", err)
+			return nil, fmt.Errorf("failed to get public key from flag: %w", err)
 		}
 
-		if address == "" {
-			return address, fmt.Errorf("no address provided")
+		if pubHex == "" {
+			return nil, fmt.Errorf("no public key provided")
+		}
+
+		publicKey, err = hex.DecodeString(pubHex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode public key: %w", err)
 		}
 
 	} else {
 		if conf.PrivateKey == nil {
-			return address, fmt.Errorf("no address provided")
+			return nil, fmt.Errorf("no public key provided")
 		}
 
-		address = conf.PrivateKey.PubKey().Address().String()
+		publicKey = conf.PrivateKey.PubKey().Bytes()
 	}
 
-	return address, nil
+	return publicKey, nil
 }
 
 // getSelectedDbid returns the Dbid selected by the user.

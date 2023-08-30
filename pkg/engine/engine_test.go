@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	engine "github.com/kwilteam/kwil-db/pkg/engine"
 	engineTesting "github.com/kwilteam/kwil-db/pkg/engine/testing"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -13,6 +15,22 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/stretchr/testify/assert"
 )
+
+const testPrivateKey = "4a3142b366011d28c2a3ca33a678ff753c978c685178d4168bad4474ea480cc9"
+
+func newTestUser() types.UserIdentifier {
+	pk, err := crypto.Secp256k1PrivateKeyFromHex(testPrivateKey)
+	if err != nil {
+		panic(err)
+	}
+
+	ident, err := addresses.CreateKeyIdentifier(pk.PubKey(), addresses.AddressFormatEthereum)
+	if err != nil {
+		panic(err)
+	}
+
+	return ident
+}
 
 var (
 	testTables = []*types.Table{
@@ -39,6 +57,7 @@ var (
 // TODO: this test is not passing
 func Test_Open(t *testing.T) {
 	ctx := context.Background()
+	user := newTestUser()
 
 	e, teardown, err := engineTesting.NewTestEngine(ctx, newMockRegister(),
 		engine.WithExtensions(testExtensions),
@@ -50,17 +69,15 @@ func Test_Open(t *testing.T) {
 
 	_, err = e.CreateDataset(ctx, &types.Schema{
 		Name:       "testdb1",
-		Owner:      "0xSatoshi",
 		Extensions: testInitializedExtensions,
 		Tables:     testTables,
 		Procedures: testProcedures,
-	})
+	}, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// close the engine
-	// TODO: close does not work here because our sqlite test's close does not do anything.  this causes the test to fail
 	// we likely need some more tests regarding this, as well as orphaned records.
 	err = e.Close()
 	if err != nil {
@@ -75,8 +92,13 @@ func Test_Open(t *testing.T) {
 	}
 	defer teardown2()
 
+	pubkey, err := user.PubKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// check if the dataset was created
-	dataset, err := e2.GetDataset(ctx, utils.GenerateDBID("testdb1", "0xSatoshi"))
+	dataset, err := e2.GetDataset(ctx, utils.GenerateDBID("testdb1", pubkey.Bytes()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +115,13 @@ func Test_Open(t *testing.T) {
 	procs := dataset.ListProcedures()
 	assert.ElementsMatch(t, testProcedures, procs)
 
+	pub, err := user.PubKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// list the datasets
-	datasets, err := e2.ListDatasets(ctx, "0xSatoshi")
+	datasets, err := e2.ListDatasets(ctx, pub.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,16 +130,21 @@ func Test_Open(t *testing.T) {
 }
 
 func Test_CreateDataset(t *testing.T) {
+	type execution struct {
+		procedure string
+		args      []any
+	}
+
 	tests := []struct {
 		name     string
 		database *types.Schema
+		exec     []*execution
 		wantErr  bool
 	}{
 		{
 			name: "create a dataset with a variety of statements",
 			database: &types.Schema{
 				Name:       "test_db",
-				Owner:      "test_owner",
 				Extensions: testInitializedExtensions,
 				Tables:     testTables,
 				Procedures: []*types.Procedure{
@@ -134,7 +166,6 @@ func Test_CreateDataset(t *testing.T) {
 			name: "create a dataset with invalid dml",
 			database: &types.Schema{
 				Name:       "test_db",
-				Owner:      "test_owner",
 				Extensions: testInitializedExtensions,
 				Tables:     testTables,
 				Procedures: []*types.Procedure{
@@ -150,6 +181,58 @@ func Test_CreateDataset(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "ensure procedures, tables, columns, extensions are case insensitive",
+			database: &types.Schema{
+				Name: "test_db",
+				Extensions: []*types.Extension{
+					{
+						Name: "eRC20",
+						Initialization: map[string]string{
+							"address": "0x1234", // initializations should not be case insensitive
+						},
+						Alias: "usDc",
+					},
+				},
+				Tables: []*types.Table{
+					{
+						Name: "usERs",
+						Columns: []*types.Column{
+							{
+								Name: "iD",
+								Type: types.INT,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.PRIMARY_KEY,
+									},
+								},
+							},
+							{
+								Name: "useRName",
+								Type: types.TEXT,
+							},
+						},
+					},
+				},
+				Procedures: []*types.Procedure{
+					{
+						Name:   "creAte_User",
+						Args:   []string{"$id", "$username"},
+						Public: true,
+						Statements: []string{
+							"$cuRRent_bal = uSdc.balanceOf(@caller);",
+							"INSERT INTO Users (id, uSername) VALUES ($id, $username);",
+						},
+					},
+				},
+			},
+			exec: []*execution{
+				{
+					procedure: "create_user",
+					args:      []any{1, "test"},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -164,7 +247,7 @@ func Test_CreateDataset(t *testing.T) {
 			}
 			defer teardown()
 
-			_, err = e.CreateDataset(ctx, tt.database)
+			_, err = e.CreateDataset(ctx, tt.database, newTestUser())
 			hasErr := err != nil
 			if hasErr != tt.wantErr {
 				t.Errorf("Engine.CreateDataset() error = %v, wantErr %v", err, tt.wantErr)
@@ -176,9 +259,10 @@ func Test_CreateDataset(t *testing.T) {
 
 			// check if the dataset was created
 			_, err = e.GetDataset(ctx, utils.GenerateDBID(tt.database.Name, tt.database.Owner))
-			if hasErr {
-				assert.Error(t, err)
-			} else {
+			assert.NoError(t, err)
+
+			for _, exec := range tt.exec {
+				_, err = e.Execute(ctx, utils.GenerateDBID(tt.database.Name, tt.database.Owner), exec.procedure, [][]any{exec.args})
 				assert.NoError(t, err)
 			}
 
@@ -210,7 +294,7 @@ type testExtensionInstance struct {
 func (t *testExtensionInstance) Execute(ctx context.Context, method string, args ...any) ([]any, error) {
 	for _, m := range t.methods {
 		if m == method {
-			return []any{}, nil
+			return []any{1}, nil
 		}
 	}
 

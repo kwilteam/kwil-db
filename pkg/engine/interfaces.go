@@ -10,25 +10,30 @@ import (
 )
 
 type Dataset interface {
-	Close() error
-	ListProcedures() []*types.Procedure
-	ListExtensions(ctx context.Context) ([]*types.Extension, error)
-	ListTables(ctx context.Context) ([]*types.Table, error)
-	Metadata() (name, owner string)
-	Delete() error
-	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
-	Execute(ctx context.Context, procedure string, args [][]any, opts *dataset.TxOpts) ([]map[string]any, error)
 	ApplyChangeset(changeset io.Reader) error
-	Savepoint() (sql.Savepoint, error)
+	Call(ctx context.Context, action string, args []any, opts *dataset.TxOpts) ([]map[string]any, error)
+	Close() error
 	CreateSession() (sql.Session, error)
-	Call(ctx context.Context, procedure string, args []any, opts *dataset.TxOpts) ([]map[string]any, error)
+	DBID() string
+	Delete() error
+	Execute(ctx context.Context, action string, args [][]any, opts *dataset.TxOpts) ([]map[string]any, error)
+	ListExtensions(ctx context.Context) ([]*types.Extension, error)
+	ListProcedures() []*types.Procedure
+	ListTables(ctx context.Context) ([]*types.Table, error)
+	Metadata() (name string, owner dataset.User)
+	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
+	Savepoint() (sql.Savepoint, error)
 }
 
 type MasterDB interface {
 	Close() error
 	ListDatasets(ctx context.Context) ([]*types.DatasetInfo, error)
-	ListDatasetsByOwner(ctx context.Context, owner string) ([]string, error)
-	RegisterDataset(ctx context.Context, name, owner string) error
+	// ListDatasetsByOwner lists all datasets owned by the given owner.
+	// It identifies the owner by public key.
+	ListDatasetsByOwner(ctx context.Context, owner []byte) ([]string, error)
+	// RegisterDataset registers a dataset to the master database
+	// It tracks the desired address of the deployer, which can be used later
+	RegisterDataset(ctx context.Context, name string, owner types.UserIdentifier) error
 	UnregisterDataset(ctx context.Context, dbid string) error
 }
 
@@ -39,4 +44,36 @@ type CommitRegister interface {
 	Register(ctx context.Context, name string, db sql.Database) error
 	// Unregister unregisters a database from the commit register
 	Unregister(ctx context.Context, name string) error
+}
+
+func newDatasetUser(u types.UserIdentifier) (*datasetUser, error) {
+	bts, err := u.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	pub, err := u.PubKey()
+	if err != nil {
+		return nil, err
+	}
+
+	return &datasetUser{
+		pubkeyBts:     pub.Bytes(),
+		marshalledBts: bts,
+	}, nil
+}
+
+// implements datasets.UserIdentifier
+type datasetUser struct {
+	pubkeyBts []byte
+	// marshalledBts are the marshalled bytes of the user
+	marshalledBts []byte
+}
+
+func (u *datasetUser) Bytes() []byte {
+	return u.marshalledBts
+}
+
+func (u *datasetUser) PubKey() []byte {
+	return u.pubkeyBts
 }

@@ -189,3 +189,11 @@ func (s *SqliteClient) ApplyChangeset(reader io.Reader) error {
 func (s *SqliteClient) CheckpointWal() error {
 	return s.conn.CheckpointWal()
 }
+
+func (s *SqliteClient) DisableForeignKey() error {
+	return s.conn.DisableForeignKey()
+}
+
+func (s *SqliteClient) EnableForeignKey() error {
+	return s.conn.EnableForeignKey()
+}

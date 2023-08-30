@@ -1,10 +1,10 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	metadataDB "github.com/kwilteam/kwil-db/pkg/engine/db"
@@ -13,14 +13,26 @@ import (
 )
 
 // CreateDataset creates a new dataset
-func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema) (dbid string, finalErr error) {
+func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema, owner types.UserIdentifier) (dbid string, finalErr error) {
+	user, err := newDatasetUser(owner)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user: %w", err)
+	}
+
+	err = schema.Clean()
+	if err != nil {
+		return "", fmt.Errorf("failed to clean schema: %w", err)
+	}
+
+	schema.Owner = user.PubKey()
+
 	dbid = GenerateDBID(schema.Name, schema.Owner)
 	_, ok := e.datasets[dbid]
 	if ok {
 		return dbid, fmt.Errorf("%w: %s", ErrDatasetExists, dbid)
 	}
 
-	err := e.master.RegisterDataset(ctx, schema.Name, schema.Owner)
+	err = e.master.RegisterDataset(ctx, schema.Name, owner)
 	if err != nil {
 		return dbid, fmt.Errorf("failed to register dataset: %w", err)
 	}
@@ -35,7 +47,7 @@ func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema) (dbid 
 		}
 	}()
 
-	ds, err := e.buildNewDataset(ctx, schema.Name, schema.Owner, schema)
+	ds, err := e.buildNewDataset(ctx, schema.Name, user, schema)
 	if err != nil {
 		return dbid, fmt.Errorf("failed to build new dataset: %w", err)
 	}
@@ -46,8 +58,9 @@ func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema) (dbid 
 }
 
 // buildNewDataset builds a new datastore, and puts it in a dataset
-func (e *Engine) buildNewDataset(ctx context.Context, name string, owner string, schema *types.Schema) (ds *dataset.Dataset, finalErr error) {
-	dbid := GenerateDBID(name, owner)
+func (e *Engine) buildNewDataset(ctx context.Context, name string, owner *datasetUser, schema *types.Schema) (ds *dataset.Dataset, finalErr error) {
+
+	dbid := GenerateDBID(name, owner.PubKey())
 
 	// we do not use the private open method since that registers the dataset
 	// this is because we need to execute all ddl before registering the dataset
@@ -105,19 +118,24 @@ func (e *Engine) GetDataset(ctx context.Context, dbid string) (Dataset, error) {
 	return ds, nil
 }
 
-func (e *Engine) DropDataset(ctx context.Context, sender, dbid string) error {
+func (e *Engine) DropDataset(ctx context.Context, dbid string, sender types.UserIdentifier) error {
 	ds, ok := e.datasets[dbid]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrDatasetNotFound, dbid)
 	}
 
+	senderPub, err := sender.PubKey()
+	if err != nil {
+		return fmt.Errorf("failed to get sender public key: %w", err)
+	}
+
 	_, owner := ds.Metadata()
-	if !strings.EqualFold(owner, sender) {
+	if !bytes.Equal(owner.PubKey(), senderPub.Bytes()) {
 		return fmt.Errorf("%w: %s", ErrDatasetNotOwned, dbid)
 	}
 
 	// we call unregister first so the session can be canceled, before the database is deleted
-	err := e.commitRegister.Unregister(ctx, dbid)
+	err = e.commitRegister.Unregister(ctx, dbid)
 	if err != nil {
 		return fmt.Errorf("failed to unregister dataset: %w", err)
 	}

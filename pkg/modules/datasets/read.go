@@ -2,7 +2,6 @@ package datasets
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine"
@@ -23,7 +22,12 @@ func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, ar
 			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
 		}
 
-		executionOpts = append(executionOpts, engine.WithCaller(hex.EncodeToString(msg.Sender.Bytes())))
+		identifier, err := getUserIdentifier(msg.Sender)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user identifier: %w", err)
+		}
+
+		executionOpts = append(executionOpts, engine.WithCaller(identifier))
 	}
 
 	return u.engine.Execute(ctx, dbid, action, [][]any{args}, executionOpts...)
@@ -41,6 +45,6 @@ func (u *DatasetModule) GetSchema(ctx context.Context, dbid string) (*engineType
 }
 
 // ListOwnedDatabase returns a list of databases owned by a public key.
-func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner string) ([]string, error) {
+func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner []byte) ([]string, error) {
 	return u.engine.ListDatasets(ctx, owner)
 }

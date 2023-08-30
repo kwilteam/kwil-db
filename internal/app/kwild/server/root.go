@@ -275,7 +275,7 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 
 func buildValidatorModule(d *coreDependencies, accs datasets.AccountStore,
 	vals validators.ValidatorMgr) *validators.ValidatorModule {
-	return validators.NewValidatorModule(vals, accs, abci.Addresser,
+	return validators.NewValidatorModule(vals, accs,
 		validators.WithLogger(*d.log.Named("validator-module")))
 }
 

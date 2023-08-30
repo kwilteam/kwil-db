@@ -13,7 +13,6 @@ import "github.com/kwilteam/kwil-db/pkg/log"
 type ValidatorModule struct {
 	mgr   ValidatorMgr
 	accts Spender
-	addr  Addresser
 
 	log log.Logger
 }
@@ -22,11 +21,10 @@ type ValidatorModule struct {
 // the details of computing validator updates to be included in a block, while
 // the Spender provides handles account balance updates when processing the
 // transactions.
-func NewValidatorModule(mgr ValidatorMgr, accts Spender, addr Addresser, opts ...ValidatorModuleOpt) *ValidatorModule {
+func NewValidatorModule(mgr ValidatorMgr, accts Spender, opts ...ValidatorModuleOpt) *ValidatorModule {
 	d := &ValidatorModule{
 		mgr:   mgr,
 		accts: accts,
-		addr:  addr,
 	}
 
 	for _, opt := range opts {
