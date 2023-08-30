@@ -10,7 +10,7 @@ import (
 // KeyIdentifier identifies a public key type, the key itself,
 // and the desired address format.
 type KeyIdentifier struct {
-	KeyType       KeyType
+	KeyType       keyType
 	AddressFormat AddressFormat
 	PublicKey     []byte
 }
@@ -18,18 +18,18 @@ type KeyIdentifier struct {
 // CreateKeyIdentifier creates a KeyIdentifier from a public key and address format.
 // It will check to make sure the address format is compatible with the key type.
 func CreateKeyIdentifier(pubkey crypto.PublicKey, format AddressFormat) (*KeyIdentifier, error) {
-	var keyType KeyType
+	var kt keyType
 	switch pubkey.Type() {
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrInvalidKeyType, pubkey.Type())
 	case crypto.Secp256k1:
-		keyType = Secp256k1
+		kt = Secp256k1
 	case crypto.Ed25519:
-		keyType = Ed25519
+		kt = Ed25519
 	}
 
 	k := &KeyIdentifier{
-		KeyType:       keyType,
+		KeyType:       kt,
 		AddressFormat: format,
 		PublicKey:     pubkey.Bytes(),
 	}
@@ -68,7 +68,7 @@ func (k *KeyIdentifier) UnmarshalBinary(data []byte) error {
 		return fmt.Errorf("invalid data length: %d", len(data))
 	}
 
-	k.KeyType = KeyType(data[0])
+	k.KeyType = keyType(data[0])
 	k.AddressFormat = AddressFormat(data[1])
 	k.PublicKey = data[2:]
 
@@ -101,17 +101,17 @@ func (k *KeyIdentifier) Check() error {
 
 // PubKey returns a public key from the KeyIdentifier
 func (k *KeyIdentifier) PubKey() (crypto.PublicKey, error) {
-	var keyType crypto.KeyType
+	var kt crypto.KeyType
 	switch k.KeyType {
 	default:
 		return nil, fmt.Errorf("%w: %d", ErrInvalidKeyType, k.KeyType)
 	case Secp256k1:
-		keyType = crypto.Secp256k1
+		kt = crypto.Secp256k1
 	case Ed25519:
-		keyType = crypto.Ed25519
+		kt = crypto.Ed25519
 	}
 
-	return crypto.PublicKeyFromBytes(keyType, k.PublicKey)
+	return crypto.PublicKeyFromBytes(kt, k.PublicKey)
 }
 
 // Address returns the address of the KeyIdentifier.
@@ -124,20 +124,20 @@ func (k *KeyIdentifier) Address() (crypto.Address, error) {
 	return GenerateAddress(pubKey, k.AddressFormat)
 }
 
-// KeyType is a uint8 representation of key types.
+// keyType is a uint8 representation of key types.
 // Since this is commonly duplicated data in a database,
 // we use a uint8 to save space.
-type KeyType uint8
+type keyType uint8
 
 const (
 	// Secp256k1 is the key type for secp256k1 keys.
-	Secp256k1 KeyType = iota
+	Secp256k1 keyType = iota
 	// Ed25519 is the key type for ed25519 keys.
 	Ed25519
 )
 
 // Valid returns an error if the key type is an invalid enum
-func (k KeyType) Valid() error {
+func (k keyType) Valid() error {
 	switch k {
 	default:
 		return fmt.Errorf("%w: %d", ErrInvalidKeyType, k)

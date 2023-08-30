@@ -23,7 +23,6 @@ const (
 func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, error) {
 	var publicKey []byte
 	if cmd.Flags().Changed(ownerFlag) {
-		var err error
 		pubHex, err := cmd.Flags().GetString(ownerFlag)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get public key from flag: %w", err)

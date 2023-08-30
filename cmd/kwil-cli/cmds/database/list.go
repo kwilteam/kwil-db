@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
@@ -33,12 +32,10 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 					return fmt.Errorf("failed to list databases: %w", err)
 				}
 
-				hexOwner := hex.EncodeToString(owner)
-
 				if len(dbs) == 0 {
-					fmt.Printf("No databases found for address '%s'.\n", hexOwner)
+					fmt.Printf("No databases found for address '%x'.\n", owner)
 				} else {
-					fmt.Printf("Databases belonging to '%s':\n", hexOwner)
+					fmt.Printf("Databases belonging to '%x':\n", owner)
 				}
 				for _, db := range dbs {
 					fmt.Println(" - " + db + "   (dbid:" + utils.GenerateDBID(db, owner) + ")")

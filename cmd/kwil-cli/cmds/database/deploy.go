@@ -48,11 +48,6 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
-				for _, tbl := range db.Tables {
-					fmt.Println(tbl.Name)
-					fmt.Println(tbl.ForeignKeys)
-				}
-
 				res, err := client.DeployDatabase(ctx, db)
 				if err != nil {
 					return err

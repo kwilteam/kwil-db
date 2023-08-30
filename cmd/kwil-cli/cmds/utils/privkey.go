@@ -75,13 +75,7 @@ func privateKeyCmd() *cobra.Command {
 					return fmt.Errorf("error checking file: %w", err)
 				}
 
-				file, err := os.Create(filePath)
-				if err != nil {
-					return fmt.Errorf("error creating file: %w", err)
-				}
-				defer file.Close()
-
-				_, err = fmt.Fprint(file, privKeyStr)
+				err = os.WriteFile(filePath, []byte(privKeyStr), 0600)
 				if err != nil {
 					return fmt.Errorf("error writing to file: %w", err)
 				}
