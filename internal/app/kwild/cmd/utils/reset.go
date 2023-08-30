@@ -31,14 +31,10 @@ func NewResetAllCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			cfg.RootDir = homeDir
+			cfg.ChainCfg.SetRoot(filepath.Join(homeDir, "abci"))
 
-			// TODO: this probably will fail since we no longer have those key files.
-			return abci.ResetAll(
-				cfg.ChainCfg.DBDir(),
-				cfg.ChainCfg.P2P.AddrBookFile(),
-				cfg.ChainCfg.PrivValidatorKeyFile(),
-				cfg.ChainCfg.PrivValidatorStateFile(),
-			)
+			return abci.ResetAll(cfg)
 		},
 	}
 
@@ -60,6 +56,8 @@ func NewResetStateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			cfg.ChainCfg.SetRoot(filepath.Join(homeDir, "abci"))
+
 			return abci.ResetState(cfg.ChainCfg.DBDir())
 		},
 	}

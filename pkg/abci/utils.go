@@ -9,14 +9,15 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	cmtos "github.com/cometbft/cometbft/libs/os"
-	"github.com/cometbft/cometbft/privval"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
 )
 
-// resetAll removes address book files plus all data, and resets the privValdiator data.
-func ResetAll(dbDir, addrBookFile, privValKeyFile, privValStateFile string) error {
-	RemoveAddrBook(addrBookFile)
+// resetAll removes address book files plus all data
+func ResetAll(cfg *config.KwildConfig) error {
+	RemoveAddrBook(cfg.ChainCfg.P2P.AddrBookFile())
 
+	dbDir := cfg.ChainCfg.DBDir()
 	if err := os.RemoveAll(dbDir); err == nil {
 		fmt.Println("Removed all blockchain history", "dir", dbDir)
 	} else {
@@ -27,8 +28,33 @@ func ResetAll(dbDir, addrBookFile, privValKeyFile, privValStateFile string) erro
 		fmt.Println("Error recreating dbDir", "dir", dbDir, "err", err)
 	}
 
-	// recreate the dbDir since the privVal state needs to live there
-	ResetFilePV(privValKeyFile, privValStateFile)
+	infoDir := filepath.Join(cfg.ChainCfg.RootDir, "info")
+	if err := os.RemoveAll(infoDir); err == nil {
+		fmt.Println("Removed all info", "dir", infoDir)
+	} else {
+		fmt.Println("Error removing all info", "dir", infoDir, "err", err)
+	}
+
+	appDir := filepath.Join(cfg.RootDir, "application")
+	if err := os.RemoveAll(appDir); err == nil {
+		fmt.Println("Removed all application", "dir", appDir)
+	} else {
+		fmt.Println("Error removing all application", "dir", appDir, "err", err)
+	}
+
+	sigDir := filepath.Join(cfg.RootDir, "signing")
+	if err := os.RemoveAll(sigDir); err == nil {
+		fmt.Println("Removed all signing", "dir", sigDir)
+	} else {
+		fmt.Println("Error removing all signing", "dir", sigDir, "err", err)
+	}
+
+	if err := os.RemoveAll(cfg.AppCfg.SqliteFilePath); err == nil {
+		fmt.Println("Removed all sqlite files", "dir", cfg.AppCfg.SqliteFilePath)
+	} else {
+		fmt.Println("Error removing all sqlite files", "dir", cfg.AppCfg.SqliteFilePath, "err", err)
+	}
+
 	return nil
 }
 
@@ -84,20 +110,6 @@ func ResetState(dbDir string) error {
 		fmt.Println("unable to recreate dbDir", "err", err)
 	}
 	return nil
-}
-
-// TODO: we will have to get rid of this if we use our own private keys from CometBFT
-// Resetting the privValStateFile is ok, however we don't persist Comet's private key
-func ResetFilePV(privValKeyFile, privValStateFile string) {
-	if _, err := os.Stat(privValKeyFile); err == nil {
-		pv := privval.LoadFilePVEmptyState(privValKeyFile, privValStateFile)
-		pv.Reset()
-		fmt.Println("Reset private validator file to genesis state", "keyFile", privValKeyFile, "stateFile", privValStateFile)
-	} else {
-		pv := privval.GenFilePV(privValKeyFile, privValStateFile)
-		pv.Save()
-		fmt.Println("Generated private validator file", "keyFile", privValKeyFile, "stateFile", privValStateFile)
-	}
 }
 
 func RemoveAddrBook(addrBookFile string) {
