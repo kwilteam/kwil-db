@@ -29,9 +29,6 @@ func (vm *ValidatorModule) spend(ctx context.Context, acctPubKey []byte,
 // Join creates a join request for a prospective validator.
 func (vm *ValidatorModule) Join(ctx context.Context, joiner []byte, power int64,
 	txn *transactions.Transaction) (*ExecutionResponse, error) {
-	// comet-aware way:
-	// candidateAddr, _ := pubkeyToAddr(joiner)
-	// @jchappelow the above comment is no longer relative, right?
 
 	err := vm.spend(ctx, joiner, txn.Body.Fee, txn.Body.Nonce)
 	if err != nil {
@@ -67,10 +64,7 @@ func (vm *ValidatorModule) Leave(ctx context.Context, leaver []byte,
 	}, nil
 }
 
-// Approve records an approval transaction from a current validator.
-//
-// ISSUE: The approver is the tx Sender, with the BIG special case that Sender
-// is the base64-encoded pubkey, not an address as with most other Kwil txns.
+// Approve records an approval transaction from a current validator..
 func (vm *ValidatorModule) Approve(ctx context.Context, joiner []byte,
 	txn *transactions.Transaction) (*ExecutionResponse, error) {
 	approver := txn.Sender
