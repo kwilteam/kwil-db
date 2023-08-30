@@ -5,6 +5,6 @@ import (
 )
 
 // GenerateDBID generates a DBID from a name and owner
-func GenerateDBID(name, owner string) string {
+func GenerateDBID(name string, owner []byte) string {
 	return utils.GenerateDBID(name, owner)
 }

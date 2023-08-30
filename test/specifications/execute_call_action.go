@@ -6,9 +6,11 @@ import (
 
 	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/stretchr/testify/assert"
 )
 
 type ExecuteCallDsl interface {
+	DatabaseIdentifier
 	Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) ([]map[string]any, error)
 }
 
@@ -16,11 +18,9 @@ func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteC
 	t.Logf("Executing ExecuteCallSpecification")
 
 	db := SchemaLoader.Load(t, schemaTestDB)
-	dbID := GenerateSchemaId(db.Owner, db.Name)
+	dbID := caller.DBID(db.Name)
 
-	getPostInput := []any{
-		[]any{1111},
-	}
+	getPostInput := []any{1111}
 
 	results, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput)
 	if err != nil {
@@ -38,6 +38,19 @@ func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteC
 		t.Fatalf("error calling action: %s", err.Error())
 	}
 	checkGetPostResults(t, results)
+
+	// try calling mutable action, should fail
+	_, err = caller.Call(ctx, dbID, "delete_user", nil, client.Authenticated(true))
+	assert.Error(t, err, "expected error calling mutable action")
+
+	// test that modifiers "public owner view" enforces authentication
+	// the caller here is the correct owner, but not authenticated
+	_, err = caller.Call(ctx, dbID, "owner_only", nil, client.Authenticated(false))
+	assert.Error(t, err, "expected error calling owner only action without authentication")
+
+	// and test that authenticating works
+	_, err = caller.Call(ctx, dbID, "owner_only", nil, client.Authenticated(true))
+	assert.NoError(t, err, "expected no error calling owner only action with authentication")
 }
 
 func checkGetPostResults(t *testing.T, results []map[string]any) {

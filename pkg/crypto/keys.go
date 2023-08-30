@@ -26,8 +26,5 @@ type PublicKey interface {
 }
 
 type Address interface {
-	Bytes() []byte
 	String() string
-	// do we need to know the key type?
-	Type() KeyType
 }

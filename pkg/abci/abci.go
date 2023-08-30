@@ -247,9 +247,6 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
-		dbID := utils.GenerateDBID(schema.Name, schema.Owner)
-		logger.Debug("deploy schema", zap.String("DBID", dbID))
-
 		var res *modDataset.ExecutionResponse
 		res, err = a.database.Deploy(ctx, schema, tx)
 		if err != nil {
@@ -257,6 +254,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
+		dbID := utils.GenerateDBID(schema.Name, tx.Sender)
 		gasUsed = res.GasUsed
 		events = []abciTypes.Event{
 			{

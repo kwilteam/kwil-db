@@ -9,9 +9,9 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/balances"
 )
 
-func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {
+func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*balances.Account, error) {
 	res, err := c.txClient.GetAccount(ctx, &txpb.GetAccountRequest{
-		Address: address,
+		PublicKey: pubKey,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account: %w", err)
@@ -23,9 +23,9 @@ func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Acco
 	}
 
 	acc := &balances.Account{
-		Address: res.Account.Address,
-		Balance: bigBal,
-		Nonce:   res.Account.Nonce,
+		PublicKey: res.Account.PublicKey,
+		Balance:   bigBal,
+		Nonce:     res.Account.Nonce,
 	}
 
 	return acc, nil

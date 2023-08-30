@@ -35,7 +35,7 @@ func (a *AccountStore) prepareStatements() error {
 const (
 	sqlInitTables = `
 CREATE TABLE IF NOT EXISTS accounts (
-	address TEXT PRIMARY KEY,
+	public_key BLOB PRIMARY KEY,
 	balance TEXT NOT NULL,
 	nonce INTEGER NOT NULL
 	) WITHOUT ROWID, STRICT;
@@ -60,40 +60,40 @@ func (ar *AccountStore) initTables(ctx context.Context) error {
 	return nil
 }
 
-const sqlUpdateAccount = "UPDATE accounts SET balance = $balance, nonce = $nonce WHERE address = $address COLLATE NOCASE"
+const sqlUpdateAccount = "UPDATE accounts SET balance = $balance, nonce = $nonce WHERE public_key = $public_key COLLATE NOCASE"
 
-func (a *AccountStore) updateAccount(ctx context.Context, address string, amount *big.Int, nonce int64) error {
+func (a *AccountStore) updateAccount(ctx context.Context, pubKey []byte, amount *big.Int, nonce int64) error {
 	return a.db.Execute(ctx, sqlUpdateAccount, map[string]interface{}{
-		"$address": strings.ToLower(address),
-		"$balance": amount.String(),
-		"$nonce":   nonce,
+		"$public_key": pubKey,
+		"$balance":    amount.String(),
+		"$nonce":      nonce,
 	})
 }
 
-const sqlCreateAccount = "INSERT INTO accounts (address, balance, nonce) VALUES ($address, $balance, $nonce)"
+const sqlCreateAccount = "INSERT INTO accounts (public_key, balance, nonce) VALUES ($public_key, $balance, $nonce)"
 
-// createAccount creates an account with the given address.
-func (a *AccountStore) createAccount(ctx context.Context, address string) error {
+// createAccount creates an account with the given public_key.
+func (a *AccountStore) createAccount(ctx context.Context, pubKey []byte) error {
 	return a.db.Execute(ctx, sqlCreateAccount, map[string]interface{}{
-		"$address": strings.ToLower(address),
-		"$balance": big.NewInt(0).String(),
-		"$nonce":   0,
+		"$public_key": pubKey,
+		"$balance":    big.NewInt(0).String(),
+		"$nonce":      0,
 	})
 }
 
-const sqlGetAccount = "SELECT balance, nonce FROM accounts WHERE address = $address COLLATE NOCASE"
+const sqlGetAccount = "SELECT balance, nonce FROM accounts WHERE public_key = $public_key COLLATE NOCASE"
 
 // getAccountReadOnly gets an account using a read-only connection.
 // it will not show uncommitted changes.
-func (a *AccountStore) getAccountReadOnly(ctx context.Context, address string) (*Account, error) {
+func (a *AccountStore) getAccountReadOnly(ctx context.Context, pubKey []byte) (*Account, error) {
 	results, err := a.db.Query(ctx, sqlGetAccount, map[string]interface{}{
-		"$address": strings.ToLower(address),
+		"$public_key": pubKey,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	acc, err := accountFromRecords(address, results)
+	acc, err := accountFromRecords(pubKey, results)
 	if err == errAccountNotFound {
 		return emptyAccount(), nil
 	}
@@ -102,19 +102,19 @@ func (a *AccountStore) getAccountReadOnly(ctx context.Context, address string) (
 
 // getAccountSynchronous gets an account using a read-write connection.
 // it will show uncommitted changes.
-func (a *AccountStore) getAccountSynchronous(ctx context.Context, address string) (*Account, error) {
+func (a *AccountStore) getAccountSynchronous(ctx context.Context, pubKey []byte) (*Account, error) {
 	results, err := a.stmts.getAccount.Execute(ctx, map[string]interface{}{
-		"$address": strings.ToLower(address),
+		"$public_key": pubKey,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return accountFromRecords(address, results)
+	return accountFromRecords(pubKey, results)
 }
 
 // accountFromRecords gets the first account from a list of records.
-func accountFromRecords(address string, results []map[string]interface{}) (*Account, error) {
+func accountFromRecords(publicKey []byte, results []map[string]interface{}) (*Account, error) {
 	if len(results) == 0 {
 		return nil, errAccountNotFound
 	}
@@ -135,17 +135,17 @@ func accountFromRecords(address string, results []map[string]interface{}) (*Acco
 	}
 
 	return &Account{
-		Address: address,
-		Balance: balance,
-		Nonce:   nonce,
+		PublicKey: publicKey,
+		Balance:   balance,
+		Nonce:     nonce,
 	}, nil
 }
 
 // getOrCreateAccount gets an account, creating it if it doesn't exist.
-func (a *AccountStore) getOrCreateAccount(ctx context.Context, address string) (*Account, error) {
-	account, err := a.getAccountSynchronous(ctx, address)
+func (a *AccountStore) getOrCreateAccount(ctx context.Context, pubKey []byte) (*Account, error) {
+	account, err := a.getAccountSynchronous(ctx, pubKey)
 	if account == nil && err == errAccountNotFound {
-		err = a.createAccount(ctx, address)
+		err = a.createAccount(ctx, pubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create account: %w", err)
 		}

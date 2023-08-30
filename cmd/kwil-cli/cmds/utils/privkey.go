@@ -46,8 +46,8 @@ func privateKeyCmd() *cobra.Command {
 				// do nothing
 			case "ethereum":
 				addressFunc = ethereumAddr
-			case "cosmos":
-				addressFunc = cosmosAddr
+			case "cometbft":
+				addressFunc = cometbftAddr
 			case "near":
 				addressFunc = nearAddr
 			default:
@@ -56,29 +56,15 @@ func privateKeyCmd() *cobra.Command {
 
 			var privKeyStr string
 			var pubKeyStr string
-			var addrStr string
 			switch encoding {
 			default:
 				return cmd.Help()
 			case "hex", "": // default
 				privKeyStr = pk.Hex()
 				pubKeyStr = hex.EncodeToString(pk.PubKey().Bytes())
-
-				addr, err := addressFunc(pk.PubKey())
-				if err != nil {
-					return fmt.Errorf("error creating address: %w", err)
-				}
-
-				addrStr = hex.EncodeToString(addr.Bytes())
 			case "base64":
 				privKeyStr = base64.StdEncoding.EncodeToString(pk.Bytes())
 				pubKeyStr = base64.StdEncoding.EncodeToString(pk.PubKey().Bytes())
-
-				addr, err := addressFunc(pk.PubKey())
-				if err != nil {
-					return fmt.Errorf("error creating address: %w", err)
-				}
-				addrStr = base64.StdEncoding.EncodeToString(addr.Bytes())
 			}
 
 			if filePath != "" {
@@ -89,20 +75,19 @@ func privateKeyCmd() *cobra.Command {
 					return fmt.Errorf("error checking file: %w", err)
 				}
 
-				file, err := os.Create(filePath)
-				if err != nil {
-					return fmt.Errorf("error creating file: %w", err)
-				}
-				defer file.Close()
-
-				_, err = fmt.Fprintf(file, privKeyStr)
+				err = os.WriteFile(filePath, []byte(privKeyStr), 0600)
 				if err != nil {
 					return fmt.Errorf("error writing to file: %w", err)
 				}
 			}
 
+			addr, err := addressFunc(pk.PubKey())
+			if err != nil {
+				return fmt.Errorf("error creating address: %w", err)
+			}
+
 			if !mute {
-				fmt.Printf(printKeyDesc, privKeyStr, pubKeyStr, addrStr)
+				fmt.Printf(printKeyDesc, privKeyStr, pubKeyStr, addr.String())
 			}
 
 			return nil
@@ -127,10 +112,12 @@ To specify the type of private key to generate, pass the '--key-type' flag with 
 By default, it will generate a secp256k1 private key.
 
 To specify the output encoding, pass the '--encoding <encoding>' flag with either 'hex' or 'base64'.
-By default, it will output the private key, public key, and address in hex format.
+By default, it will output the private keyand public key in hex format.  The '--encoding' flag
+only affects the private key and public key, not the address.  The address will always be outputted
+as the canonical string representation of the address type.
 
 To specify the outputted address format, pass the '--address-format <format>' flag.
-Currently, the CLI supports 'ethereum', 'cosmos', and 'near' address formats.
+Currently, the CLI supports 'ethereum', 'cometbft', and 'near' address formats.
 The default for secp256k1 keys is 'ethereum'.  The default for ed25519 keys is 'near'.
 
 If instead you want to write the private key to a file, pass the '--file <path>' flag.
@@ -150,25 +137,15 @@ type addressCreatorFunc func(crypto.PublicKey) (crypto.Address, error)
 
 // nearAddr is an addressCreatorFunc that creates a NEAR address from a public key.
 func nearAddr(pk crypto.PublicKey) (crypto.Address, error) {
-	edKey, ok := pk.(*crypto.Ed25519PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("NEAR addresses can only be created from Ed25519 public keys")
-	}
-
-	return addresses.CreateNearAddress(edKey)
+	return addresses.GenerateAddress(pk, addresses.AddressFormatNEAR)
 }
 
-// cosmosAddr is an addressCreatorFunc that creates a Cosmos address from a public key.
-func cosmosAddr(pk crypto.PublicKey) (crypto.Address, error) {
-	return addresses.CreateCometBFTAddress(pk)
+// cometbftAddr is an addressCreatorFunc that creates a cometbft address from a public key.
+func cometbftAddr(pk crypto.PublicKey) (crypto.Address, error) {
+	return addresses.GenerateAddress(pk, addresses.AddressFormatCometBFT)
 }
 
 // ethereumAddr is an addressCreatorFunc that creates an Ethereum address from a public key.
 func ethereumAddr(pk crypto.PublicKey) (crypto.Address, error) {
-	secpKey, ok := pk.(*crypto.Secp256k1PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("ethereum addresses can only be created from Secp256k1 public keys")
-	}
-
-	return addresses.CreateEthereumAddress(secpKey)
+	return addresses.GenerateAddress(pk, addresses.AddressFormatEthereum)
 }

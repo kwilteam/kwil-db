@@ -12,7 +12,8 @@ import (
 type DatabaseDropDsl interface {
 	TxQueryDsl
 	DropDatabase(ctx context.Context, dbName string) (txHash []byte, err error)
-	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
+	DatabaseIdentifier
+	DatabaseExister
 }
 
 func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseDropDsl) {
@@ -28,7 +29,7 @@ func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseD
 	expectTxSuccess(t, drop, ctx, txHash, defaultTxQueryTimeout)()
 
 	// And i expect database should not exist
-	err = drop.DatabaseShouldExists(ctx, db.Owner, db.Name)
+	err = drop.DatabaseExists(ctx, drop.DBID(db.Name))
 	assert.Error(t, err)
 
 	// Drop again

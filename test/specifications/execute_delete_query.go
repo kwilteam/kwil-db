@@ -2,8 +2,10 @@ package specifications
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -11,46 +13,37 @@ func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute Exe
 	t.Logf("Executing delete action specification")
 	// Given a valid database schema
 	db := SchemaLoader.Load(t, schemaTestDB)
-	dbID := GenerateSchemaId(db.Owner, db.Name)
+	dbID := execute.DBID(db.Name)
 
-	actionName := "delete_user"
-	actionInput := []any{}
+	actionName := "delete_user_by_id"
 
-	//// get user id
-	receipt, err := execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, receipt)
-	// TODO: get result
-	//if len(results) != 1 {
-	//	t.Errorf("expected 1 statement result, got %d", len(results))
-	//}
-	//returnedUser1 := results[0]
-	//
-	//user1Id, _ := conv.Int32(returnedUser1["id"])
-
-	// When i execute query to database
-	_, err = execute.ExecuteAction(ctx, dbID, actionName, actionInput)
+	// get user id
+	res, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
 	assert.NoError(t, err)
 
-	// Then i expect row to be deleted
-	receipt, err = execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
+	records := res.Export()
 	assert.NoError(t, err)
-	assert.NotNil(t, receipt)
 
-	//if len(results) != 0 {
-	//	t.Errorf("expected 0 user statement result, got %d", len(results))
-	//}
+	if len(records) == 0 {
+		t.Errorf("must have at least 1 user to test delete specification")
+	}
 
-	////// check foreign key constraint
-	//getUserPostsByUserIdActionName := "get_user_posts_by_userid"
-	//actionInput = []map[string]any{
-	//	{"$id": user1Id},
-	//}
-	//actionInput = []any{
-	//	[]any{user1Id},
-	//}
-	//receipt, err = execute.ExecuteAction(ctx, dbID, getUserPostsByUserIdActionName, actionInput)
-	//assert.NoError(t, err)
-	//assert.NotNil(t, receipt)
-	//assert.Zerof(t, len(results), "user's posts should be deleted after user is deleted")
+	user1Id, err := conv.Int32(records[0]["id"])
+	assert.NoError(t, err)
+
+	txHash, err := execute.ExecuteAction(ctx, dbID, actionName, []any{user1Id})
+	assert.NoError(t, err)
+
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+
+	// check that user is deleted
+	res, err = execute.QueryDatabase(ctx, dbID, fmt.Sprintf("SELECT * FROM users WHERE id = %d", user1Id))
+	assert.NoError(t, err)
+
+	records = res.Export()
+	assert.NoError(t, err)
+
+	if len(records) != 0 {
+		t.Errorf("expected 0 user statement result, got %d", len(records))
+	}
 }

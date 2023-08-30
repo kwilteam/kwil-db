@@ -4,9 +4,10 @@ import (
 	"context"
 )
 
+var defaultCallerAddress = []byte{}
+
 const (
-	defaultCallerAddress = "0x0000000000000000000000000000000000000000"
-	callerVarName        = "@caller"
+	callerVarName = "@caller"
 
 	actionVarName = "@action"
 	defaultAction = "_no_action_"
@@ -19,7 +20,7 @@ const (
 // It should be created with newExecutionContext.
 type executionContext struct {
 	ctx           context.Context
-	caller        string
+	caller        []byte
 	action        string
 	datasetID     string
 	lastDmlResult []map[string]any
@@ -54,7 +55,7 @@ func newExecutionContext(ctx context.Context, action string, opts ...ExecutionOp
 
 type ExecutionOpt func(*executionContext)
 
-func WithCaller(caller string) ExecutionOpt {
+func WithCaller(caller []byte) ExecutionOpt {
 	return func(ec *executionContext) {
 		ec.caller = caller
 	}

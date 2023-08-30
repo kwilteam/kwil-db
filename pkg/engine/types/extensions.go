@@ -5,3 +5,10 @@ type Extension struct {
 	Initialization map[string]string `json:"initialization"`
 	Alias          string            `json:"alias"`
 }
+
+func (e *Extension) Clean() error {
+	return runCleans(
+		cleanIdent(&e.Name),
+		cleanIdent(&e.Alias),
+	)
+}

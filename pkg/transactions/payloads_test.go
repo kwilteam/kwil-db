@@ -18,7 +18,7 @@ func Test_Types(t *testing.T) {
 		{
 			name: "schema",
 			obj: &transactions.Schema{
-				Owner: "user",
+				Owner: []byte("user"),
 				Name:  "test_schema",
 				Tables: []*transactions.Table{
 					{

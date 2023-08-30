@@ -144,32 +144,3 @@ func (a *Attribute) Clean() error {
 		cleanScalar(&a.Value),
 	)
 }
-
-// IsType will coerce the attribute value to the correct data type, depending on the attribute type.
-// It takes an input of a column type, which is used in the case that the attribute type is DEFAULT
-func (a *Attribute) IsType(columnType DataType) error {
-	switch a.Type {
-	case PRIMARY_KEY, UNIQUE, NOT_NULL:
-		a.Value = nil
-	case DEFAULT:
-		// default must be the same type as the column
-		return a.assertType(columnType)
-	case MIN, MAX, MIN_LENGTH, MAX_LENGTH:
-		// min, max, min_length, max_length must be int, regardless of column type
-		return a.assertType(INT)
-	default:
-		return fmt.Errorf("invalid attribute type: %s", a.Type)
-	}
-	return nil
-}
-
-// assertType will convert the attribute value to the correct serialized type if it is not already
-func (a *Attribute) assertType(typ DataType) error {
-	newVal, err := typ.Coerce(a.Value)
-	if err != nil {
-		return err
-	}
-
-	a.Value = newVal
-	return nil
-}

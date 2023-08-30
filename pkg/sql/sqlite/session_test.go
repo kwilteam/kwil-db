@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/sql/sqlite"
+	"github.com/stretchr/testify/require"
 )
 
 // This test tests that changesets can be generated, applied, and inverted.
@@ -209,69 +210,6 @@ func Test_ChangesetIgnoresIntermediateOperations(t *testing.T) {
 		counter++
 	}
 }
-func Test_DELETEME(t *testing.T) {
-	db, td := openRealDB()
-	defer td()
-
-	// insert some rows
-	err := insertUsers(db, []*user{
-		{
-			id:   1,
-			name: "John",
-			age:  20,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ses, err := db.CreateSession()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer ses.Delete()
-
-	// update one
-	err = db.Execute("UPDATE users SET name = $name, age = $age WHERE id = $id", map[string]interface{}{
-		"$age":  21,
-		"$name": "Jill",
-		"$id":   1,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cs, err := ses.GenerateChangeset()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cs.Close()
-
-	for {
-		rowReturned, err := cs.Next()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !rowReturned {
-			break
-		}
-
-		val1, _ := cs.New(1)
-		val2, _ := cs.New(2)
-		val3, _ := cs.New(3)
-
-		if !val1.Changed() {
-			t.Errorf("expected val1 to be changed")
-		}
-		if !val2.Changed() {
-			t.Errorf("expected val2 to be changed")
-		}
-		if val3.Changed() {
-			t.Errorf("expected val3 to not be changed")
-		}
-	}
-}
 
 type user struct {
 	id   int
@@ -346,4 +284,88 @@ func Test_SessionPersistence(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatal("expected 1 row")
 	}
+}
+
+// there are known issues with updating primary keys with foreign key cascades, and changesets
+func Test_ChangesetUpdatePrimaryKey(t *testing.T) {
+	db, td := openRealDB()
+	defer td()
+	ctx := context.Background()
+
+	err := db.Execute("CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT, content TEXT, user_id INTEGER NOT NULL, FOREIGN KEY (user_id) REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE) WITHOUT ROWID, STRICT;")
+	require.NoError(t, err)
+
+	// insert a row
+	err = db.Execute("INSERT INTO users (id, name, age) VALUES ($id, $name, $age)", map[string]interface{}{
+		"$id":   1,
+		"$name": "John",
+		"$age":  20,
+	})
+	require.NoError(t, err)
+
+	// insert post
+	err = db.Execute("INSERT INTO posts (id, title, content, user_id) VALUES ($id, $title, $content, $user_id)", map[string]interface{}{
+		"$id":      1,
+		"$title":   "Hello",
+		"$content": "World",
+		"$user_id": 1,
+	})
+	require.NoError(t, err)
+
+	ses, err := db.CreateSession()
+	require.NoError(t, err)
+
+	sp, err := db.Savepoint()
+	require.NoError(t, err)
+
+	err = db.Execute("UPDATE users SET id = $id, name = $name, age = $age WHERE id = $oldId", map[string]interface{}{
+		"$id":    2,
+		"$oldId": 1,
+		"$name":  "Johnny",
+		"$age":   21,
+	})
+	require.NoError(t, err)
+
+	// generate changeset
+	cs, err := ses.GenerateChangeset()
+	require.NoError(t, err)
+
+	err = sp.Rollback()
+	require.NoError(t, err)
+
+	err = db.DisableForeignKey()
+	require.NoError(t, err)
+
+	sp2, err := db.Savepoint()
+	require.NoError(t, err)
+
+	// apply changeset
+	err = db.ApplyChangeset(bytes.NewBuffer(cs.Export()))
+	require.NoError(t, err)
+
+	err = sp2.Commit()
+	require.NoError(t, err)
+
+	err = db.EnableForeignKey()
+	require.NoError(t, err)
+
+	// check that the row is there
+	results, err := db.Query(ctx, "SELECT * FROM users")
+	require.NoError(t, err)
+
+	records, err := results.ExportRecords()
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(records))
+	require.Equal(t, int64(2), records[0]["id"].(int64))
+
+	// check that the post is there
+	results, err = db.Query(ctx, "SELECT * FROM posts")
+	require.NoError(t, err)
+
+	records, err = results.ExportRecords()
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(records))
+	require.Equal(t, int64(2), records[0]["user_id"].(int64))
 }
