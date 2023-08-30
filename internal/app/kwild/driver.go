@@ -69,8 +69,6 @@ func (d *KwildDriver) DBID(name string) string {
 	return utils.GenerateDBID(name, d.clt.Signer.PubKey().Bytes())
 }
 
-// TODO: this likely needs to change; the old Kwild driver is not compatible, since deploy, drop, and execute are asynchronous
-
 func (d *KwildDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) ([]byte, error) {
 	rec, err := d.clt.DeployDatabase(ctx, db)
 	if err != nil {

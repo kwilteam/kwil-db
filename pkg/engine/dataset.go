@@ -19,6 +19,11 @@ func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema, owner 
 		return "", fmt.Errorf("failed to get user: %w", err)
 	}
 
+	err = schema.Clean()
+	if err != nil {
+		return "", fmt.Errorf("failed to clean schema: %w", err)
+	}
+
 	schema.Owner = user.PubKey()
 
 	dbid = GenerateDBID(schema.Name, schema.Owner)

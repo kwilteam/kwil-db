@@ -24,5 +24,12 @@ func (s *Schema) Clean() error {
 		}
 	}
 
+	for _, extension := range s.Extensions {
+		err := extension.Clean()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

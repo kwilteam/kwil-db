@@ -130,9 +130,15 @@ func Test_Open(t *testing.T) {
 }
 
 func Test_CreateDataset(t *testing.T) {
+	type execution struct {
+		procedure string
+		args      []any
+	}
+
 	tests := []struct {
 		name     string
 		database *types.Schema
+		exec     []*execution
 		wantErr  bool
 	}{
 		{
@@ -175,6 +181,58 @@ func Test_CreateDataset(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "ensure procedures, tables, columns, extensions are case insensitive",
+			database: &types.Schema{
+				Name: "test_db",
+				Extensions: []*types.Extension{
+					{
+						Name: "eRC20",
+						Initialization: map[string]string{
+							"address": "0x1234", // initializations should not be case insensitive
+						},
+						Alias: "usDc",
+					},
+				},
+				Tables: []*types.Table{
+					{
+						Name: "usERs",
+						Columns: []*types.Column{
+							{
+								Name: "iD",
+								Type: types.INT,
+								Attributes: []*types.Attribute{
+									{
+										Type: types.PRIMARY_KEY,
+									},
+								},
+							},
+							{
+								Name: "useRName",
+								Type: types.TEXT,
+							},
+						},
+					},
+				},
+				Procedures: []*types.Procedure{
+					{
+						Name:   "creAte_User",
+						Args:   []string{"$id", "$username"},
+						Public: true,
+						Statements: []string{
+							"$cuRRent_bal = uSdc.balanceOf(@caller);",
+							"INSERT INTO Users (id, uSername) VALUES ($id, $username);",
+						},
+					},
+				},
+			},
+			exec: []*execution{
+				{
+					procedure: "create_user",
+					args:      []any{1, "test"},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -201,9 +259,10 @@ func Test_CreateDataset(t *testing.T) {
 
 			// check if the dataset was created
 			_, err = e.GetDataset(ctx, utils.GenerateDBID(tt.database.Name, tt.database.Owner))
-			if hasErr {
-				assert.Error(t, err)
-			} else {
+			assert.NoError(t, err)
+
+			for _, exec := range tt.exec {
+				_, err = e.Execute(ctx, utils.GenerateDBID(tt.database.Name, tt.database.Owner), exec.procedure, [][]any{exec.args})
 				assert.NoError(t, err)
 			}
 
@@ -235,7 +294,7 @@ type testExtensionInstance struct {
 func (t *testExtensionInstance) Execute(ctx context.Context, method string, args ...any) ([]any, error) {
 	for _, m := range t.methods {
 		if m == method {
-			return []any{}, nil
+			return []any{1}, nil
 		}
 	}
 
