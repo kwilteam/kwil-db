@@ -11,10 +11,6 @@ type Spender interface {
 	Spend(ctx context.Context, spend *balances.Spend) error
 }
 
-type Addresser interface {
-	Address(pubkey []byte) string
-}
-
 type ValidatorMgr interface {
 	GenesisInit(ctx context.Context, vals []*validators.Validator) error
 	CurrentSet(ctx context.Context) ([]*validators.Validator, error)

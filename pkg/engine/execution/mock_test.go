@@ -99,7 +99,7 @@ var (
 	}
 
 	testExecutionOpts = []execution.ExecutionOpt{
-		execution.WithCaller("0xCaller"),
+		execution.WithCaller([]byte("0xCaller")),
 		execution.WithDatasetID("xDBID"),
 	}
 

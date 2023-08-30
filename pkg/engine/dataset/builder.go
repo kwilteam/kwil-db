@@ -9,6 +9,7 @@ import (
 
 func Builder() DatasetBuilder {
 	return &datasetBuilder{
+		owner:              &noCaller{},
 		avalableExtensions: map[string]Initializer{},
 		procedures:         []*types.Procedure{},
 		tables:             []*types.Table{},
@@ -23,7 +24,7 @@ type DatasetBuilder interface {
 	WithDatastore(datastore Datastore) DatasetBuilder
 	WithInitializers(extensions map[string]Initializer) DatasetBuilder
 	WithExtensions(extensions ...*types.Extension) DatasetBuilder
-	OwnedBy(owner string) DatasetBuilder
+	OwnedBy(owner User) DatasetBuilder
 	Named(name string) DatasetBuilder
 	WithLogger(l log.Logger) DatasetBuilder
 	Build(context.Context) (*Dataset, error)
@@ -35,7 +36,7 @@ type datasetBuilder struct {
 	datastore          Datastore
 	avalableExtensions map[string]Initializer
 	extensions         []*types.Extension
-	owner              string
+	owner              User
 	name               string
 	log                log.Logger
 }
@@ -65,7 +66,7 @@ func (b *datasetBuilder) WithExtensions(extensions ...*types.Extension) DatasetB
 	return b
 }
 
-func (b *datasetBuilder) OwnedBy(owner string) DatasetBuilder {
+func (b *datasetBuilder) OwnedBy(owner User) DatasetBuilder {
 	b.owner = owner
 	return b
 }

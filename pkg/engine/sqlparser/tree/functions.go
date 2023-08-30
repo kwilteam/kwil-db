@@ -202,6 +202,16 @@ var (
 		Min:          1,
 		Max:          1,
 	}}
+	FunctionAddress = ScalarFunction{AnySQLFunction{
+		FunctionName: "address",
+		Min:          1,
+		Max:          1,
+	}}
+	FunctionPublicKey = ScalarFunction{AnySQLFunction{
+		FunctionName: "public_key",
+		Min:          1,
+		Max:          2,
+	}}
 )
 
 // SQLFunctions is a map of all functions of all types
@@ -231,6 +241,10 @@ var SQLFunctions = map[string]SQLFunction{
 	"unhex":    &FunctionUNHEX,
 	"unicode":  &FunctionUNICODE,
 	"upper":    &FunctionUPPER,
+
+	// @caller functions
+	"address":    &FunctionAddress,
+	"public_key": &FunctionPublicKey,
 	// DateTime functions
 	"date":      &FunctionDATE,
 	"time":      &FunctionTIME,

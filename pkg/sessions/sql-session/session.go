@@ -102,8 +102,15 @@ func (s *SqlCommitable) BeginApply(ctx context.Context) error {
 		return fmt.Errorf("savepoint already active")
 	}
 
+	err := s.db.DisableForeignKey()
+	if err != nil {
+		s.db.EnableForeignKey()
+		return err
+	}
+
 	savepoint, err := s.db.Savepoint()
 	if err != nil {
+		s.db.EnableForeignKey()
 		return err
 	}
 
@@ -123,6 +130,7 @@ func (s *SqlCommitable) Apply(ctx context.Context, changes []byte) error {
 
 // EndApply ends the current savepoint.
 func (s *SqlCommitable) EndApply(ctx context.Context) error {
+	defer s.db.EnableForeignKey()
 	if s.savepoint == nil {
 		return fmt.Errorf("savepoint not active")
 	}
@@ -138,6 +146,8 @@ func (s *SqlCommitable) EndApply(ctx context.Context) error {
 }
 
 // Cancel cancels the current session.
+// it deletes the session and rolls back the savepoint.
+// it will also enable foreign key constraints.
 func (s *SqlCommitable) Cancel(ctx context.Context) {
 	errs := []error{}
 	if s.session != nil {
@@ -147,6 +157,11 @@ func (s *SqlCommitable) Cancel(ctx context.Context) {
 	if s.savepoint != nil {
 		errs = append(errs, s.savepoint.Rollback())
 		s.savepoint = nil
+	}
+
+	// this can be called multiple times without issue
+	if err := s.db.EnableForeignKey(); err != nil {
+		errs = append(errs, err)
 	}
 
 	if len(errs) > 0 {
@@ -185,4 +200,6 @@ type SqlDB interface {
 	CreateSession() (sql.Session, error)
 	Savepoint() (sql.Savepoint, error)
 	CheckpointWal() error
+	EnableForeignKey() error
+	DisableForeignKey() error
 }

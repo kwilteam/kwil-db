@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	"github.com/kwilteam/kwil-db/pkg/engine/db/test"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -16,8 +18,8 @@ import (
 
 func Test_Execute(t *testing.T) {
 	type fields struct {
-		ownerAddress            string
-		callerAddress           string
+		owner                   dataset.User
+		caller                  dataset.User
 		availableExtensions     []*testExt
 		extensionInitialization []*types.Extension
 		tables                  []*types.Table
@@ -25,8 +27,8 @@ func Test_Execute(t *testing.T) {
 	}
 
 	defaultFields := fields{
-		ownerAddress:            callerAddress,
-		callerAddress:           callerAddress,
+		owner:                   testUser(),
+		caller:                  testUser(),
 		availableExtensions:     testAvailableExtensions,
 		extensionInitialization: testExtensions,
 		tables:                  test_tables,
@@ -112,7 +114,7 @@ func Test_Execute(t *testing.T) {
 			expectedOutputs: []map[string]interface{}{
 				{
 					"username":       "test_username",
-					"wallet_address": callerAddress,
+					"wallet_address": testUser().Bytes(),
 					"title":          "test_title",
 					"content":        "test_content",
 				},
@@ -122,6 +124,8 @@ func Test_Execute(t *testing.T) {
 		{
 			name: "batch execute and return the final output",
 			fields: fields{
+				owner:                   testUser(),
+				caller:                  testUser(),
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
 				tables:                  test_tables,
@@ -145,13 +149,13 @@ func Test_Execute(t *testing.T) {
 						"1",
 						"test_username",
 						20,
-						"0x123",
+						testUser().Bytes(),
 					},
 					{
 						"2",
 						"test_username2",
 						20,
-						"0x456",
+						testUser2().Bytes(),
 					},
 				},
 			},
@@ -169,6 +173,8 @@ func Test_Execute(t *testing.T) {
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
 				tables:                  test_tables,
+				owner:                   testUser(),
+				caller:                  testUser(),
 				procedures: []*types.Procedure{
 					{
 						Name:   "create_user_manual",
@@ -187,13 +193,13 @@ func Test_Execute(t *testing.T) {
 						"1",
 						"test_username",
 						20,
-						"0x123",
+						testUser().Bytes(),
 					},
 					{
 						"2abc", // this will fail
 						"test_username2",
 						20,
-						"0x456",
+						testUser().Bytes(),
 					},
 				},
 				finisher: func(database *dataset.Dataset) error {
@@ -217,6 +223,8 @@ func Test_Execute(t *testing.T) {
 			fields: fields{
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
+				owner:                   testUser(),
+				caller:                  testUser(),
 				tables:                  test_tables,
 				procedures: []*types.Procedure{
 					{
@@ -243,6 +251,8 @@ func Test_Execute(t *testing.T) {
 		{
 			name: "use extension that this server does not have an initializer for",
 			fields: fields{
+				owner:               testUser(),
+				caller:              testUser(),
 				availableExtensions: testAvailableExtensions,
 				extensionInitialization: []*types.Extension{
 					{
@@ -278,6 +288,7 @@ func Test_Execute(t *testing.T) {
 		{
 			name: "execute authenticated procedure without caller address should fail",
 			fields: fields{
+				owner:                   testUser(),
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
 				tables:                  test_tables,
@@ -305,8 +316,8 @@ func Test_Execute(t *testing.T) {
 		{
 			name: "execute authenticated procedure with caller address should succeed",
 			fields: fields{
-				ownerAddress:            callerAddress,
-				callerAddress:           callerAddress,
+				owner:                   testUser(),
+				caller:                  testUser2(),
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
 				tables:                  test_tables,
@@ -334,8 +345,8 @@ func Test_Execute(t *testing.T) {
 		{
 			name: "execute owner only procedure with non-owner caller address should fail",
 			fields: fields{
-				ownerAddress:            callerAddress,
-				callerAddress:           "0xnotowner",
+				owner:                   testUser(),
+				caller:                  testUser2(),
 				availableExtensions:     testAvailableExtensions,
 				extensionInitialization: testExtensions,
 				tables:                  test_tables,
@@ -381,7 +392,7 @@ func Test_Execute(t *testing.T) {
 				WithInitializers(availableExtensions).
 				WithExtensions(tt.fields.extensionInitialization...).
 				WithDatastore(database).
-				Named(datasetName).OwnedBy(tt.fields.ownerAddress).
+				Named(datasetName).OwnedBy(tt.fields.owner).
 				Build(ctx)
 			if tt.wantBuilderErr {
 				assert.Error(t, err)
@@ -400,19 +411,22 @@ func Test_Execute(t *testing.T) {
 				}
 			}()
 
+			txOpts := &dataset.TxOpts{}
+			if tt.fields.caller != nil {
+				txOpts.Caller = tt.fields.caller
+			} else {
+				txOpts = nil
+			}
+
 			var outputs []map[string]interface{}
 			if tt.isCall {
 				if len(tt.args.inputs) == 0 {
 					tt.args.inputs = append(tt.args.inputs, []any{})
 				}
 
-				outputs, err = ds.Call(ctx, tt.args.procedure, tt.args.inputs[0], &dataset.TxOpts{
-					Caller: tt.fields.callerAddress,
-				})
+				outputs, err = ds.Call(ctx, tt.args.procedure, tt.args.inputs[0], txOpts)
 			} else {
-				outputs, err = ds.Execute(ctx, tt.args.procedure, tt.args.inputs, &dataset.TxOpts{
-					Caller: tt.fields.callerAddress,
-				})
+				outputs, err = ds.Execute(ctx, tt.args.procedure, tt.args.inputs, txOpts)
 			}
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Dataset.Execute() error = %v, wantErr %v", err, tt.wantErr)
@@ -421,5 +435,48 @@ func Test_Execute(t *testing.T) {
 
 			assert.EqualValues(t, tt.expectedOutputs, outputs, fmt.Sprintf("expected %v, got %v", tt.expectedOutputs, outputs))
 		})
+	}
+}
+
+// TODO: we need a default UserIdentifier that conforms to secp256k1 keys with eth address
+type testUserIdentifier struct {
+	pk *crypto.Secp256k1PrivateKey
+}
+
+func (t *testUserIdentifier) Bytes() []byte {
+	bts, err := (&addresses.KeyIdentifier{
+		KeyType:       addresses.Secp256k1,
+		AddressFormat: addresses.AddressFormatEthereum,
+		PublicKey:     t.pk.PubKey().Bytes(),
+	}).MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+	return bts
+}
+
+func (t *testUserIdentifier) PubKey() []byte {
+	return t.pk.PubKey().Bytes()
+}
+
+func testUser() *testUserIdentifier {
+	pk, err := crypto.Secp256k1PrivateKeyFromHex("a23d63fb2a14a225a81c92006d1fbac023db22bda2286e6d3f18fdd215423da2")
+	if err != nil {
+		panic(err)
+	}
+
+	return &testUserIdentifier{
+		pk: pk,
+	}
+}
+
+func testUser2() *testUserIdentifier {
+	pk, err := crypto.Secp256k1PrivateKeyFromHex("4a3142b366011d28c2a3ca33a678ff753c978c685178d4168bad4474ea480cc9")
+	if err != nil {
+		panic(err)
+	}
+
+	return &testUserIdentifier{
+		pk: pk,
 	}
 }

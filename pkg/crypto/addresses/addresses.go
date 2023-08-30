@@ -139,3 +139,52 @@ func (n *NEARAddress) String() string {
 func (n *NEARAddress) Type() crypto.KeyType {
 	return crypto.Ed25519
 }
+
+type AddressFormat uint8
+
+const (
+	// AddressFormatEthereum is the address format for Ethereum
+	AddressFormatEthereum AddressFormat = iota
+	// AddressFormatCometBFT is the address format for CometBFT
+	AddressFormatCometBFT
+	// AddressFormatNEAR is the address format for NEAR
+	AddressFormatNEAR
+)
+
+// Valid returns an error if the address format is an invalid enum
+func (a AddressFormat) Valid() error {
+	switch a {
+	default:
+		return fmt.Errorf("invalid address format: %d", a)
+	case AddressFormatEthereum, AddressFormatCometBFT, AddressFormatNEAR:
+		return nil
+	}
+}
+
+// GenerateAddress generates the specified address format from the given public key
+func GenerateAddress(pubkey crypto.PublicKey, format AddressFormat) (crypto.Address, error) {
+	if err := format.Valid(); err != nil {
+		return nil, err
+	}
+
+	switch format {
+	default:
+		return nil, fmt.Errorf("unsupported address format: %d", format) // this should get handled by format.Valid()
+	case AddressFormatEthereum:
+		secp256PubKey, ok := pubkey.(*crypto.Secp256k1PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("%w: ethereum address format only supports secp256k1 public keys. got %T", ErrIncompatibleAddress, pubkey)
+		}
+
+		return CreateEthereumAddress(secp256PubKey)
+	case AddressFormatCometBFT:
+		return CreateCometBFTAddress(pubkey)
+	case AddressFormatNEAR:
+		ed25519PubKey, ok := pubkey.(*crypto.Ed25519PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("%w: near address format only supports ed25519 public keys. got %T", ErrIncompatibleAddress, pubkey)
+		}
+
+		return CreateNearAddress(ed25519PubKey)
+	}
+}

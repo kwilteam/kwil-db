@@ -117,7 +117,7 @@ func Test_Accounts(t *testing.T) {
 			assertErr(t, errs, tc.err)
 
 			for address, expectedBalance := range tc.finalBalances {
-				account, err := ar.GetAccount(ctx, address)
+				account, err := ar.GetAccount(ctx, []byte(address))
 				if err != nil {
 					t.Fatalf("unexpected error: %s", err)
 				}
@@ -131,17 +131,17 @@ func Test_Accounts(t *testing.T) {
 
 func newSpend(address string, amount int64, nonce int64) *balances.Spend {
 	return &balances.Spend{
-		AccountAddress: address,
-		Amount:         big.NewInt(amount),
-		Nonce:          nonce,
+		AccountPubKey: []byte(address),
+		Amount:        big.NewInt(amount),
+		Nonce:         nonce,
 	}
 }
 
 func newAccount(address string, balance int64, nonce int64) *balances.Account {
 	return &balances.Account{
-		Address: address,
-		Balance: big.NewInt(balance),
-		Nonce:   nonce,
+		PublicKey: []byte(address),
+		Balance:   big.NewInt(balance),
+		Nonce:     nonce,
 	}
 }
 

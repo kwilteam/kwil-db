@@ -54,3 +54,23 @@ type datastoreWrapper struct {
 func (d datastoreWrapper) Prepare(ctx context.Context, stmt string) (execution.PreparedStatement, error) {
 	return d.Datastore.Prepare(ctx, stmt)
 }
+
+// User is an interface that can be implemented by a type to be used as a user identifier
+type User interface {
+	// Bytes returns a byte representation of the user identifier
+	// This should follow Kwil's caller ID format
+	Bytes() []byte
+	// PublicKey returns the public key bytes of the user identifier
+	PubKey() []byte
+}
+
+// noCaller is a User that is used when no user is identified
+type noCaller struct{}
+
+func (noCaller) Bytes() []byte {
+	return nil
+}
+
+func (noCaller) PubKey() []byte {
+	return nil
+}

@@ -3,8 +3,6 @@ package types
 import (
 	"fmt"
 	"strings"
-
-	"github.com/cstockton/go-conv"
 )
 
 type DataType string
@@ -14,6 +12,7 @@ const (
 	NULL DataType = "NULL"
 	TEXT DataType = "TEXT"
 	INT  DataType = "INT"
+	BLOB DataType = "BLOB"
 )
 
 func (d DataType) String() string {
@@ -29,7 +28,8 @@ func (d *DataType) IsValid() bool {
 
 	return upper == NULL.String() ||
 		upper == TEXT.String() ||
-		upper == INT.String()
+		upper == INT.String() ||
+		upper == BLOB.String()
 
 }
 
@@ -46,19 +46,4 @@ func (d *DataType) Clean() error {
 	*d = DataType(strings.ToUpper(d.String()))
 
 	return nil
-}
-
-// CoerceAny will try to coerce the value to the data type.
-// Instead of taking a ConcreteValue, it takes an interface{}.
-// This is expected to be scalar values, such as int, string, etc.
-func (d DataType) Coerce(val any) (any, error) {
-	switch d {
-	case NULL:
-		return nil, nil
-	case TEXT:
-		return conv.String(val)
-	case INT:
-		return conv.Int(val)
-	}
-	return nil, fmt.Errorf("invalid data type for datatype coercion: %s", d.String())
 }

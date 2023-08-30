@@ -13,12 +13,13 @@ import (
 
 // DatabaseDeployDsl is dsl for database deployment specification
 type DatabaseDeployDsl interface {
-	TxQueryDsl
+	DatabaseIdentifier
+	DatabaseExister
 	DeployDatabase(ctx context.Context, db *transactions.Schema) (txHash []byte, err error)
-	// TODO: verify more than just existence, check schema structure
-	DatabaseShouldExists(ctx context.Context, owner string, dbName string) error
+	TxSuccess(ctx context.Context, txHash []byte) error
 }
 
+// TODO: a better way to do this would be to retrieve the deployed schema structure and do a deep comparison
 func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
 	t.Logf("Executing database deploy specification")
 
@@ -33,7 +34,7 @@ func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy Datab
 	expectTxSuccess(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
 
 	// And i expect database should exist
-	err = deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
+	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
 	require.NoError(t, err)
 }
 
@@ -51,21 +52,14 @@ func DatabaseDeployInvalidSql1Specification(ctx context.Context, t *testing.T, d
 	// Then i expect tx failure
 	expectTxFail(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
 
-}
-
-// DatabaseDeployInvalidSql2Specification tests invalid SQL2 syntax, Kuneiform parser will not fail for SQL2 syntax
-func DatabaseDeployInvalidSql2Specification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
-	t.Logf("Executing database deploy invalid SQL2 specification")
-
 	// read in fixed schema
-	db := SchemaLoader.Load(t, schemaInvalidSqlSyntaxFixed)
-
+	db2 := SchemaLoader.Load(t, schemaInvalidSqlSyntaxFixed)
 	// When i deploy faulty database
-	txHash, err := deploy.DeployDatabase(ctx, db)
+	_, err = deploy.DeployDatabase(ctx, db2)
 	require.NoError(t, err, "failed to send deploy database tx")
 
-	// Then i expect tx failure
-	expectTxFail(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
+	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
+	require.NoError(t, err)
 }
 
 func DatabaseDeployInvalidExtensionSpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
@@ -79,6 +73,10 @@ func DatabaseDeployInvalidExtensionSpecification(ctx context.Context, t *testing
 
 	// Then i expect tx failure
 	expectTxFail(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
+
+	// And i expect database should not exist
+	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
+	assert.Error(t, err)
 }
 
 func DatabaseVerifySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl, exisits bool) {
@@ -88,7 +86,7 @@ func DatabaseVerifySpecification(ctx context.Context, t *testing.T, deploy Datab
 	db := SchemaLoader.Load(t, schemaTestDB)
 
 	// And i expect database should exist
-	err := deploy.DatabaseShouldExists(ctx, db.Owner, db.Name)
+	err := deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
 	if exisits {
 		assert.NoError(t, err)
 	} else {

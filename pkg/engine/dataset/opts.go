@@ -4,9 +4,16 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
+// newTxOpts creates a new TxOpts with the default values
+func newTxOpts() *TxOpts {
+	return &TxOpts{
+		Caller: &noCaller{},
+	}
+}
+
 type TxOpts struct {
-	// Caller is the address of the caller of the transaction
-	Caller string
+	// Caller is the user that is calling the transaction
+	Caller User
 }
 
 type OpenOpt func(*Dataset)
@@ -17,7 +24,7 @@ func WithAvailableExtensions(exts map[string]Initializer) OpenOpt {
 	}
 }
 
-func OwnedBy(owner string) OpenOpt {
+func OwnedBy(owner User) OpenOpt {
 	return func(opts *Dataset) {
 		opts.owner = owner
 	}
