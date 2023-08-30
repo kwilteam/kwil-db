@@ -40,10 +40,20 @@ func NewEngine(ctx context.Context, db Datastore, opts *EngineOpts) (*Engine, er
 	}
 	opts.ensureDefaults()
 
+	procs := make(map[string]*Procedure)
+	for name, proc := range opts.Procedures {
+		procs[strings.ToLower(name)] = proc
+	}
+
+	exts := make(map[string]Initializer)
+	for name, ext := range opts.Extensions {
+		exts[strings.ToLower(name)] = ext
+	}
+
 	e := &Engine{
 		mu:                  sync.Mutex{},
-		availableExtensions: opts.Extensions,
-		procedures:          opts.Procedures,
+		availableExtensions: exts,
+		procedures:          procs,
 		loadCommand:         opts.LoadCmd,
 		db:                  db,
 		cache:               newCache(),
