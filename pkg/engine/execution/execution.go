@@ -3,13 +3,14 @@ package execution
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 func (e *Engine) ExecuteProcedure(ctx context.Context, name string, args []any, opts ...ExecutionOpt) ([]map[string]any, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	proc, ok := e.procedures[name]
+	proc, ok := e.procedures[strings.ToLower(name)]
 	if !ok {
 		return nil, fmt.Errorf("procedure %s not found", name)
 	}

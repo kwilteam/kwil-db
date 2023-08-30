@@ -6,8 +6,8 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
-func GenerateDBID(name, owner string) string {
-	return "x" + crypto.Sha224Hex(joinBytes([]byte(strings.ToLower(name)), []byte(strings.ToLower(owner))))
+func GenerateDBID(name string, ownerPubKey []byte) string {
+	return "x" + crypto.Sha224Hex(joinBytes([]byte(strings.ToLower(name)), ownerPubKey))
 }
 
 // joinBytes is a helper function to join multiple byte slices into one

@@ -2,11 +2,12 @@ package datasets
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -43,9 +44,13 @@ func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, 
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
 	}
-	schema.Owner = hex.EncodeToString(senderPubKey.Bytes())
 
-	_, err = u.engine.CreateDataset(ctx, schema)
+	identifier, err := getUserIdentifier(senderPubKey)
+	if err != nil {
+		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
+	}
+
+	_, err = u.engine.CreateDataset(ctx, schema, identifier)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to create dataset: %w", err)
 	}
@@ -74,7 +79,12 @@ func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.
 		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
 	}
 
-	err = u.engine.DropDataset(ctx, hex.EncodeToString(senderPubKey.Bytes()), dbid)
+	identifier, err := getUserIdentifier(senderPubKey)
+	if err != nil {
+		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
+	}
+
+	err = u.engine.DropDataset(ctx, dbid, identifier)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to drop dataset: %w", err)
 	}
@@ -83,7 +93,6 @@ func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.
 }
 
 // Execute executes an action against a database.
-// TODO: I think args should be [][]any, not [][]string
 func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := u.PriceExecute(ctx, dbid, action, args)
 	if err != nil {
@@ -104,11 +113,16 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
 	}
 
+	identifier, err := getUserIdentifier(senderPubKey)
+	if err != nil {
+		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
+	}
+
 	_, err = u.engine.Execute(ctx, dbid, action, args,
-		engine.WithCaller(hex.EncodeToString(senderPubKey.Bytes())),
+		engine.WithCaller(identifier),
 	)
 	if err != nil {
-		return resp(price), fmt.Errorf("failed to execute action: %w", err)
+		return resp(price), fmt.Errorf("failed to execute action '%s' on database '%s': %w", action, dbid, err)
 	}
 
 	return resp(price), nil
@@ -127,9 +141,9 @@ func (u *DatasetModule) compareAndSpend(ctx context.Context, price *big.Int, tx 
 	}
 
 	return u.accountStore.Spend(ctx, &balances.Spend{
-		AccountAddress: senderPubKey.Address().String(),
-		Amount:         price,
-		Nonce:          int64(tx.Body.Nonce),
+		AccountPubKey: senderPubKey.Bytes(),
+		Amount:        price,
+		Nonce:         int64(tx.Body.Nonce),
 	})
 }
 
@@ -138,4 +152,23 @@ func resp(fee *big.Int) *ExecutionResponse {
 		Fee:     fee,
 		GasUsed: 0,
 	}
+}
+
+// getUserIdentifier gets an identifier for the user based on their public key
+// it currently treats Ethereum as the default format for Secp256k1 keys, and
+// NEAR as the default format for Ed25519 keys
+// in the future, the defaults should probably be configurable, and functionality
+// should be added to support other formats
+func getUserIdentifier(pub crypto.PublicKey) (*addresses.KeyIdentifier, error) {
+	var addressFormat addresses.AddressFormat
+	switch pub.Type() {
+	default: // this should never happen
+		return nil, fmt.Errorf("unknown public key type: %s", pub.Type())
+	case crypto.Secp256k1:
+		addressFormat = addresses.AddressFormatEthereum
+	case crypto.Ed25519:
+		addressFormat = addresses.AddressFormatNEAR
+	}
+
+	return addresses.CreateKeyIdentifier(pub, addressFormat)
 }

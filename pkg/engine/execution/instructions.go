@@ -1,6 +1,9 @@
 package execution
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type Instruction string
 
@@ -127,11 +130,13 @@ func evalExtensionInitialize(ctx *procedureContext, eng *Engine, args ...any) er
 	if !ok {
 		return fmt.Errorf("%w: expected string for extension name, got %T", ErrIncorrectInputType, args[0])
 	}
+	extensionName = strings.ToLower(extensionName)
 
 	initializedName, ok := args[1].(string)
 	if !ok {
 		return fmt.Errorf("%w: expected string for initialized extension name, got %T", ErrIncorrectInputType, args[1])
 	}
+	initializedName = strings.ToLower(initializedName)
 
 	config, ok := args[2].(map[string]string)
 	if !ok {
@@ -174,6 +179,7 @@ func evalProcedureExecute(ctx *procedureContext, eng *Engine, args ...any) error
 	if !ok {
 		return fmt.Errorf("%w: expected string for procedure name, got %T", ErrIncorrectInputType, args[0])
 	}
+	procedureName = strings.ToLower(procedureName)
 
 	procedure, ok := eng.procedures[procedureName]
 	if !ok {
@@ -212,6 +218,7 @@ func evalExtensionExecute(ctx *procedureContext, eng *Engine, args ...any) error
 	if !ok {
 		return fmt.Errorf("%w: expected string for extension name, got %T", ErrIncorrectInputType, args[0])
 	}
+	extensionName = strings.ToLower(extensionName)
 
 	methodName, ok := args[1].(string)
 	if !ok {

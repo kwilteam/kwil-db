@@ -43,13 +43,19 @@ func (d *MasterDB) ListDatasets(ctx context.Context) ([]*types.DatasetInfo, erro
 }
 
 // ListDatasetsByOwner lists all datasets owned by the given owner.
-func (d *MasterDB) ListDatasetsByOwner(ctx context.Context, owner string) ([]string, error) {
-	return d.sqlStore.listDatasetsByOwner(ctx, owner)
+// It identifies the owner by public key.
+func (d *MasterDB) ListDatasetsByOwner(ctx context.Context, ownerPublicKey []byte) ([]string, error) {
+	return d.sqlStore.listDatasetsByOwner(ctx, ownerPublicKey)
 }
 
 // RegisterDataset registers a new dataset.
-func (d *MasterDB) RegisterDataset(ctx context.Context, name, owner string) error {
-	dbid := d.DbidFunc(name, owner)
+func (d *MasterDB) RegisterDataset(ctx context.Context, name string, owner types.UserIdentifier) error {
+	pubkey, err := owner.PubKey()
+	if err != nil {
+		return err
+	}
+
+	dbid := d.DbidFunc(name, pubkey.Bytes())
 
 	exists, err := d.datasetExists(ctx, dbid)
 	if err != nil {

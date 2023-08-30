@@ -10,12 +10,80 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/types/testdata"
 )
 
-const callerAddress = "0x69240"
 const datasetName = "test"
 
 var (
 	test_tables = []*types.Table{
-		&testdata.Table_users,
+		{
+			Name: "users",
+			Columns: []*types.Column{
+				{
+					Name: "id",
+					Type: types.INT,
+					Attributes: []*types.Attribute{
+						{
+							Type: types.PRIMARY_KEY,
+						},
+					},
+				},
+				{
+					Name: "username",
+					Type: types.TEXT,
+					Attributes: []*types.Attribute{
+						{
+							Type: types.NOT_NULL,
+						},
+						{
+							Type: types.UNIQUE,
+						},
+						{
+							Type:  types.MIN_LENGTH,
+							Value: 5,
+						},
+						{
+							Type:  types.MAX_LENGTH,
+							Value: 32,
+						},
+					},
+				},
+				{
+					Name: "age",
+					Type: types.INT,
+					Attributes: []*types.Attribute{
+						{
+							Type: types.NOT_NULL,
+						},
+						{
+							Type:  types.MIN,
+							Value: 13,
+						},
+						{
+							Type:  types.MAX,
+							Value: 200,
+						},
+					},
+				},
+				{
+					Name: "address",
+					Type: types.BLOB,
+					Attributes: []*types.Attribute{
+						{
+							Type: types.NOT_NULL,
+						},
+						{
+							Type: types.UNIQUE,
+						},
+					},
+				},
+			},
+			Indexes: []*types.Index{
+				{
+					Name:    "username",
+					Columns: []string{"username"},
+					Type:    types.BTREE,
+				},
+			},
+		},
 		&testdata.Table_posts,
 	}
 

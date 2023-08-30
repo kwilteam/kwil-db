@@ -22,6 +22,8 @@ func columnTypeToSQLiteType(columnType types.DataType) (string, error) {
 		sqlType = "INTEGER"
 	case types.NULL:
 		sqlType = "NULL"
+	case types.BLOB:
+		sqlType = "BLOB"
 	default:
 		return "", fmt.Errorf("unknown column type: %s", columnType)
 	}

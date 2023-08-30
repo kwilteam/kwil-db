@@ -36,7 +36,7 @@ func WithFileName(name string) MasterOpt {
 	}
 }
 
-type DbidFunc func(name, owner string) string
+type DbidFunc func(name string, owner []byte) string
 
 // WithDbidFunc sets the DbidFunc option.
 func WithDbidFunc(f DbidFunc) MasterOpt {

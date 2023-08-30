@@ -6,12 +6,9 @@ package engine
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql"
-
-	"math/big"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	metadataDB "github.com/kwilteam/kwil-db/pkg/engine/db"
@@ -118,10 +115,15 @@ func (e *Engine) openStoredDatasets(ctx context.Context) error {
 			return err
 		}
 
+		user, err := newDatasetUser(datasetInfo.Owner)
+		if err != nil {
+			return err
+		}
+
 		ds, err := dataset.OpenDataset(ctx, db,
 			dataset.WithAvailableExtensions(e.getInitializers()),
 			dataset.Named(datasetInfo.Name),
-			dataset.OwnedBy(datasetInfo.Owner),
+			dataset.OwnedBy(user),
 			dataset.OpenWithMissingExtensions(),
 			dataset.WithLogger(e.log),
 		)
@@ -164,16 +166,32 @@ func (e *Engine) Execute(ctx context.Context, dbid string, procedure string, arg
 		args = append(args, []any{})
 	}
 
-	if options.ReadOnly {
-
-		return ds.Call(ctx, procedure, args[0], &dataset.TxOpts{
-			Caller: options.Sender,
-		})
+	txOpts, err := getTxOpts(options)
+	if err != nil {
+		return nil, err
 	}
 
-	return ds.Execute(ctx, procedure, args, &dataset.TxOpts{
-		Caller: options.Sender,
-	})
+	if options.ReadOnly {
+		return ds.Call(ctx, procedure, args[0], txOpts)
+	}
+
+	return ds.Execute(ctx, procedure, args, txOpts)
+}
+
+// getTxOpts gets the transaction options from the execution options.
+func getTxOpts(options *executionConfig) (*dataset.TxOpts, error) {
+	if options.Sender == nil {
+		return nil, nil
+	}
+
+	user, err := newDatasetUser(options.Sender)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dataset.TxOpts{
+		Caller: user,
+	}, nil
 }
 
 // Close closes the engine and all of the stored datasets.
@@ -204,20 +222,8 @@ func (e *Engine) GetAllDatasets() ([]string, error) {
 }
 
 // ListDatasets lists all of the datasets that were deployed by the provided owner.
-func (e *Engine) ListDatasets(ctx context.Context, owner string) ([]string, error) {
-	dsInfo, err := e.master.ListDatasets(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var datasets []string
-	for _, info := range dsInfo {
-		if strings.EqualFold(info.Owner, owner) {
-			datasets = append(datasets, info.Name)
-		}
-	}
-
-	return datasets, nil
+func (e *Engine) ListDatasets(ctx context.Context, ownerPublicKey []byte) ([]string, error) {
+	return e.master.ListDatasetsByOwner(ctx, ownerPublicKey)
 }
 
 // Query executes a query on a database.
@@ -252,21 +258,9 @@ func (e *Engine) GetSchema(ctx context.Context, dbid string) (*types.Schema, err
 
 	return &types.Schema{
 		Name:       name,
-		Owner:      owner,
+		Owner:      owner.PubKey(),
 		Tables:     tables,
 		Extensions: extensions,
 		Procedures: ds.ListProcedures(),
 	}, nil
-}
-
-func (e *Engine) PriceDeploy(ctx context.Context, schema *types.Schema) (price *big.Int, err error) {
-	return big.NewInt(0), nil
-}
-
-func (e *Engine) PriceDrop(ctx context.Context, dbid string) (price *big.Int, err error) {
-	return big.NewInt(0), nil
-}
-
-func (e *Engine) PriceExecute(ctx context.Context, dbid string, action string, params []map[string]any) (price *big.Int, err error) {
-	return big.NewInt(0), nil
 }

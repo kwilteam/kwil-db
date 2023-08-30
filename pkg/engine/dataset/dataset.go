@@ -1,6 +1,7 @@
 package dataset
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -25,8 +26,8 @@ type Dataset struct {
 
 	// initializers are the intiialization functions for extensions
 	initializers map[string]Initializer
-	// owner is the owner of the dataset
-	owner string
+	// owner is the public key owner of the dataset
+	owner User
 	// name is the name of the dataset
 	name string
 	// allowMissingExtensions will let a dataset load, even if required extension initializers are not provided
@@ -87,7 +88,7 @@ const constructorName = "init"
 // Execute executes a procedure.
 func (d *Dataset) Execute(ctx context.Context, action string, args [][]any, opts *TxOpts) ([]map[string]any, error) {
 	if opts == nil {
-		opts = &TxOpts{}
+		opts = newTxOpts()
 	}
 
 	proc, err := d.getProcedure(action)
@@ -95,12 +96,12 @@ func (d *Dataset) Execute(ctx context.Context, action string, args [][]any, opts
 		return nil, err
 	}
 
-	if proc.RequiresAuthentication() && opts.Caller == "" {
+	if proc.RequiresAuthentication() && opts.Caller.PubKey() == nil {
 		return nil, ErrCallerNotAuthenticated
 	}
 
-	if proc.IsOwnerOnly() && !strings.EqualFold(opts.Caller, d.owner) {
-		d.log.Debug("caller is not owner", zap.String("caller", opts.Caller), zap.String("owner", d.owner))
+	if proc.IsOwnerOnly() && !bytes.Equal(opts.Caller.PubKey(), d.owner.PubKey()) {
+		d.log.Debug("caller is not owner", zap.Binary("caller", opts.Caller.PubKey()), zap.Binary("owner", d.owner.PubKey()))
 		return nil, ErrCallerNotOwner
 	}
 
@@ -133,7 +134,7 @@ func (d *Dataset) Execute(ctx context.Context, action string, args [][]any, opts
 // Call is like execute, but it is non-mutative.
 func (d *Dataset) Call(ctx context.Context, action string, args []any, opts *TxOpts) ([]map[string]any, error) {
 	if opts == nil {
-		opts = &TxOpts{}
+		opts = newTxOpts()
 	}
 
 	proc, err := d.getProcedure(action)
@@ -143,10 +144,10 @@ func (d *Dataset) Call(ctx context.Context, action string, args []any, opts *TxO
 	if proc.IsMutative() {
 		return nil, ErrCallMutativeProcedure
 	}
-	if proc.RequiresAuthentication() && opts.Caller == "" {
+	if proc.RequiresAuthentication() && opts.Caller.PubKey() == nil {
 		return nil, ErrCallerNotAuthenticated
 	}
-	if proc.IsOwnerOnly() && strings.EqualFold(opts.Caller, d.owner) {
+	if proc.IsOwnerOnly() && !bytes.Equal(opts.Caller.PubKey(), d.owner.PubKey()) {
 		return nil, ErrCallerNotOwner
 	}
 
@@ -172,9 +173,9 @@ func (d *Dataset) getExecutionOpts(proc *types.Procedure, opts *TxOpts) []execut
 	execOpts := []execution.ExecutionOpt{
 		execution.WithDatasetID(d.DBID()),
 	}
-
-	if opts.Caller != "" {
-		execOpts = append(execOpts, execution.WithCaller(opts.Caller))
+	bts := opts.Caller.Bytes()
+	if opts.Caller.PubKey() != nil {
+		execOpts = append(execOpts, execution.WithCaller(bts))
 	}
 
 	if !proc.IsMutative() {
@@ -278,7 +279,7 @@ func (d *Dataset) Delete() error {
 }
 
 // Metadata returns the metadata for the dataset.
-func (d *Dataset) Metadata() (name, owner string) {
+func (d *Dataset) Metadata() (name string, owner User) {
 	return d.name, d.owner
 }
 

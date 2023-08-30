@@ -63,21 +63,11 @@ func (s *Session) GenerateChangeset() (*Changeset, error) {
 		return nil, err
 	}
 
-	return NewChangset(buf)
+	return NewChangeset(buf)
 }
 
-func (s *Session) GenerateChangesetBytes() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	err := s.ses.WriteChangeset(buf)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
-}
-
-// NewChangset creates a new changeset from bytes.
-func NewChangset(buf *bytes.Buffer) (*Changeset, error) {
+// NewChangeset creates a new changeset from bytes.
+func NewChangeset(buf *bytes.Buffer) (*Changeset, error) {
 	iter, err := sqlite.NewChangesetIterator(buf)
 	if err != nil {
 		return nil, err
