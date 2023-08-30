@@ -21,6 +21,7 @@ const (
 	SignatureTypeEd25519           SignatureType = "ed25519"
 	SignatureTypeSecp256k1Personal SignatureType = "secp256k1_ep" // secp256k1 ethereum personal_sign
 	SignatureTypeEd25519Near       SignatureType = "ed25519_nr"   // ed25519 near
+	//SignatureTypeSecp256k1Eip712   SignatureType = "secp256k1_eip712" // secp256k1 ethereum eip712
 )
 
 const (
@@ -34,6 +35,7 @@ var SignatureTypeFromName = map[string]SignatureType{
 	"ed25519":       SignatureTypeEd25519,           // ed25519 standard, any better name?
 	"secp256k1_ep":  SignatureTypeSecp256k1Personal, // secp256k1 ethereum personal_sign
 	"ed25519_nr":    SignatureTypeEd25519Near,       // ed25519 near
+	//"secp256k1_eip712": SignatureTypeSecp256k1Eip712, // secp256k1 ethereum eip712
 }
 
 var (
@@ -104,7 +106,6 @@ func (s *Signature) Verify(publicKey PublicKey, msg []byte) error {
 		}
 
 		hash := sha256.Sum256(msg)
-
 		return publicKey.Verify(s.Signature, hash[:])
 	default:
 		return fmt.Errorf("%w: %s", errNotSupportedSignatureType, s.Type.String())

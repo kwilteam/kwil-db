@@ -41,7 +41,7 @@ func (s *SignedMessage) Verify() error {
 
 // Sign signs a message with a private key.
 func (s *SignedMessage) Sign(signer crypto.Signer) error {
-	signature, err := signer.SignMsg(s.Message)
+	signature, err := signer.Sign(s.Message)
 	if err != nil {
 		return err
 	}

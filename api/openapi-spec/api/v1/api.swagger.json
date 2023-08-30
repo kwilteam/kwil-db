@@ -481,6 +481,9 @@
         "salt": {
           "type": "string",
           "format": "byte"
+        },
+        "description": {
+          "type": "string"
         }
       }
     },
@@ -850,6 +853,9 @@
         "sender": {
           "type": "string",
           "format": "byte"
+        },
+        "serialization": {
+          "type": "string"
         }
       }
     },

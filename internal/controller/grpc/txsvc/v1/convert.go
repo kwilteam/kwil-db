@@ -33,15 +33,17 @@ func convertToAbciTx(incoming *txpb.Transaction) (*transactions.Transaction, err
 	}
 
 	return &transactions.Transaction{
-		Signature: convSignature,
 		Body: &transactions.TransactionBody{
 			PayloadType: payloadType,
 			Payload:     incoming.Body.Payload,
 			Nonce:       incoming.Body.Nonce,
 			Fee:         bigFee,
 			Salt:        incoming.Body.Salt,
+			Description: incoming.Body.Description,
 		},
-		Sender: incoming.Sender,
+		Serialization: transactions.SignedMsgSerializationType(incoming.Serialization),
+		Signature:     convSignature,
+		Sender:        incoming.Sender,
 	}, nil
 }
 
@@ -58,7 +60,9 @@ func convertFromAbciTx(tx *transactions.Transaction) (*txpb.Transaction, error) 
 			Fee:         tx.Body.Fee.String(),
 			Nonce:       tx.Body.Nonce,
 			Salt:        tx.Body.Salt,
+			Description: tx.Body.Description,
 		},
+		Serialization: tx.Serialization.String(),
 		Signature: &txpb.Signature{
 			SignatureBytes: tx.Signature.Signature,
 			SignatureType:  tx.Signature.Type.String(),
