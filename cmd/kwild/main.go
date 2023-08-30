@@ -8,6 +8,6 @@ import (
 
 func main() {
 	if err := kwild.Execute(); err != nil {
-		os.Exit(-1)
+		os.Exit(1)
 	}
 }
