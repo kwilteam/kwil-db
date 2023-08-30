@@ -27,7 +27,7 @@ func NewResetAllCmd() *cobra.Command {
 			cfgFile := viper.GetString("config")
 			if cfgFile == "" {
 				fmt.Println("No config file specified")
-				return nil
+				return fmt.Errorf("no config file specified")
 			}
 
 			cfg := config.DefaultConfig()
@@ -54,7 +54,7 @@ func NewResetStateCmd() *cobra.Command {
 			cfgFile := viper.GetString("config")
 			if cfgFile == "" {
 				fmt.Println("No config file specified")
-				return nil
+				return fmt.Errorf("no config file specified")
 			}
 
 			cfg := config.DefaultConfig()

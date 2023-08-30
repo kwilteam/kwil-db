@@ -108,7 +108,9 @@ func DefaultConfig() *KwildConfig {
 		},
 	}
 
-	cfg.ChainCfg.P2P.SeedMode = true
+	// PEX is recommended to be disabled for validators: https://docs.cometbft.com/v0.37/core/validators#validator-node-configuration
+	cfg.ChainCfg.P2P.PexReactor = false
+
 	/*
 	 As all we are validating are tx signatures, no need to go through Validation again
 	 To be set to true when we have Validations based on gas, nonces, account balance, etc.

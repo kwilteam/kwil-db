@@ -52,7 +52,7 @@ func NewStartCmd(cfg *config.KwildConfig) *cobra.Command {
 
 func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 	// General APP flags:
-	cmd.Flags().StringVar(&cfg.RootDir, "home", cfg.RootDir, "Kwild home directory to store blockchain, kwildb and other data")
+	cmd.Flags().StringVar(&cfg.RootDir, "home_dir", cfg.RootDir, "Kwild home directory to store blockchain, kwildb and other data")
 
 	cmd.Flags().StringVar(&cfg.AppCfg.PrivateKey, "app.private_key", cfg.AppCfg.PrivateKey, "Kwild app's private key")
 
