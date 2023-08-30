@@ -88,6 +88,9 @@ func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 	//  Basic Chain Config flags
 	cmd.Flags().StringVar(&cfg.ChainCfg.Moniker, "chain.moniker", cfg.ChainCfg.Moniker, "Chain moniker")
 
+	cmd.Flags().StringVar(&cfg.ChainCfg.Genesis, "chain.genesis", cfg.ChainCfg.Genesis, "Genesis file path")
+
+	cmd.Flags().StringVar(&cfg.ChainCfg.DBPath, "chain.db_dir", cfg.ChainCfg.DBPath, "Chain database directory path")
 	// Chain RPC flags
 	cmd.Flags().StringVar(&cfg.ChainCfg.RPC.ListenAddress, "chain.rpc.laddr", cfg.ChainCfg.RPC.ListenAddress, "Chain RPC listen address")
 
