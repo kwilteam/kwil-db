@@ -16,7 +16,7 @@
     "application/json"
   ],
   "paths": {
-    "/api/v1/accounts/{address}": {
+    "/api/v1/accounts/{public_key}": {
       "get": {
         "operationId": "TxService_GetAccount",
         "responses": {
@@ -35,10 +35,11 @@
         },
         "parameters": [
           {
-            "name": "address",
+            "name": "public_key",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "byte"
           }
         ],
         "tags": [
@@ -467,7 +468,7 @@
           "type": "string",
           "format": "byte"
         },
-        "payload_type": {
+        "payloadType": {
           "type": "string"
         },
         "fee": {
@@ -514,8 +515,9 @@
     "txAccount": {
       "type": "object",
       "properties": {
-        "address": {
-          "type": "string"
+        "public_key": {
+          "type": "string",
+          "format": "byte"
         },
         "balance": {
           "type": "string"
@@ -580,7 +582,7 @@
     "txBroadcastResponse": {
       "type": "object",
       "properties": {
-        "tx_hash": {
+        "txHash": {
           "type": "string",
           "format": "byte"
         }
@@ -861,11 +863,11 @@
         "log": {
           "type": "string"
         },
-        "gas_used": {
+        "gasUsed": {
           "type": "string",
           "format": "int64"
         },
-        "gas_wanted": {
+        "gasWanted": {
           "type": "string",
           "format": "int64"
         },
@@ -908,7 +910,7 @@
     "txTxQueryRequest": {
       "type": "object",
       "properties": {
-        "tx_hash": {
+        "txHash": {
           "type": "string",
           "format": "byte"
         }
@@ -928,7 +930,7 @@
         "tx": {
           "$ref": "#/definitions/txTransaction"
         },
-        "tx_result": {
+        "txResult": {
           "$ref": "#/definitions/txTransactionResult"
         }
       }
@@ -986,13 +988,13 @@
           "type": "string",
           "format": "int64"
         },
-        "approved_validators": {
+        "approvedValidators": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
-        "rejected_validators": {
+        "rejectedValidators": {
           "type": "array",
           "items": {
             "type": "string"

@@ -13,7 +13,9 @@ import "github.com/kwilteam/kwil-db/pkg/log"
 type ValidatorModule struct {
 	mgr   ValidatorMgr
 	accts Spender
-	addr  Addresser
+
+	// I believe we can remove addresser now, @jchappelow to confirm
+	addr Addresser
 
 	log log.Logger
 }

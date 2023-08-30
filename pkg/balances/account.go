@@ -5,16 +5,16 @@ import "math/big"
 // emptyAccount returns an empty account with a balance of 0 and a nonce of 0.
 func emptyAccount() *Account {
 	return &Account{
-		Address: "",
-		Balance: big.NewInt(0),
-		Nonce:   0,
+		PublicKey: nil,
+		Balance:   big.NewInt(0),
+		Nonce:     0,
 	}
 }
 
 type Account struct {
-	Address string   `json:"address"`
-	Balance *big.Int `json:"balance"`
-	Nonce   int64    `json:"nonce"`
+	PublicKey []byte   `json:"public_key"`
+	Balance   *big.Int `json:"balance"`
+	Nonce     int64    `json:"nonce"`
 }
 
 // validateSpend validates that the account has enough funds to spend the amount.

@@ -23,12 +23,12 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transac
 	}
 
 	// get nonce from address
-	acc, err := c.client.GetAccount(ctx, pub.Address().String())
+	acc, err := c.client.GetAccount(ctx, pub.Bytes())
 	if err != nil {
 		acc = &balances.Account{
-			Address: pub.Address().String(),
-			Nonce:   0,
-			Balance: big.NewInt(0),
+			PublicKey: pub.Bytes(),
+			Nonce:     0,
+			Balance:   big.NewInt(0),
 		}
 	}
 
@@ -67,13 +67,12 @@ func (c *Client) NewNodeTx(ctx context.Context, payload transactions.Payload, pr
 	nodeKey := cmtEd.PrivKey(privKey)
 
 	pubKey := nodeKey.PubKey()
-	address := pubKey.Address().String()
-	acc, err := c.client.GetAccount(ctx, address)
+	acc, err := c.client.GetAccount(ctx, pubKey.Bytes())
 	if err != nil {
 		acc = &balances.Account{
-			Address: address,
-			Nonce:   0,
-			Balance: big.NewInt(0),
+			PublicKey: pubKey.Bytes(),
+			Nonce:     0,
+			Balance:   big.NewInt(0),
 		}
 	}
 

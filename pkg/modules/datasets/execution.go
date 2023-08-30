@@ -141,9 +141,9 @@ func (u *DatasetModule) compareAndSpend(ctx context.Context, price *big.Int, tx 
 	}
 
 	return u.accountStore.Spend(ctx, &balances.Spend{
-		AccountAddress: senderPubKey.Address().String(),
-		Amount:         price,
-		Nonce:          int64(tx.Body.Nonce),
+		AccountPubKey: senderPubKey.Bytes(),
+		Amount:        price,
+		Nonce:         int64(tx.Body.Nonce),
 	})
 }
 

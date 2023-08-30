@@ -17,23 +17,23 @@ type ExecutionResponse struct {
 // Join/Leave/Approve required a spend. There is currently no pricing associated
 // with the actions, although there probably should be for Join.
 
-func (vm *ValidatorModule) spend(ctx context.Context, acctAddr string,
+func (vm *ValidatorModule) spend(ctx context.Context, acctPubKey []byte,
 	amt *big.Int, nonce uint64) error {
 	return vm.accts.Spend(ctx, &balances.Spend{
-		AccountAddress: acctAddr,
-		Amount:         amt,
-		Nonce:          int64(nonce),
+		AccountPubKey: acctPubKey,
+		Amount:        amt,
+		Nonce:         int64(nonce),
 	})
 }
 
 // Join creates a join request for a prospective validator.
 func (vm *ValidatorModule) Join(ctx context.Context, joiner []byte, power int64,
 	txn *transactions.Transaction) (*ExecutionResponse, error) {
-	joinerAddr := vm.addr.Address(joiner)
 	// comet-aware way:
 	// candidateAddr, _ := pubkeyToAddr(joiner)
+	// @jchappelow the above comment is no longer relative, right?
 
-	err := vm.spend(ctx, joinerAddr, txn.Body.Fee, txn.Body.Nonce)
+	err := vm.spend(ctx, joiner, txn.Body.Fee, txn.Body.Nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -51,9 +51,8 @@ func (vm *ValidatorModule) Join(ctx context.Context, joiner []byte, power int64,
 // Leave creates a leave request for a current validator.
 func (vm *ValidatorModule) Leave(ctx context.Context, leaver []byte,
 	txn *transactions.Transaction) (*ExecutionResponse, error) {
-	leaverAddr := vm.addr.Address(leaver)
 
-	err := vm.spend(ctx, leaverAddr, txn.Body.Fee, txn.Body.Nonce)
+	err := vm.spend(ctx, leaver, txn.Body.Fee, txn.Body.Nonce)
 	if err != nil {
 		return nil, err
 	}
@@ -75,9 +74,8 @@ func (vm *ValidatorModule) Leave(ctx context.Context, leaver []byte,
 func (vm *ValidatorModule) Approve(ctx context.Context, joiner []byte,
 	txn *transactions.Transaction) (*ExecutionResponse, error) {
 	approver := txn.Sender
-	approverAddr := vm.addr.Address(approver)
 
-	err := vm.spend(ctx, approverAddr, txn.Body.Fee, txn.Body.Nonce)
+	err := vm.spend(ctx, approver, txn.Body.Fee, txn.Body.Nonce)
 	if err != nil {
 		return nil, err
 	}

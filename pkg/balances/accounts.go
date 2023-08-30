@@ -40,17 +40,17 @@ func NewAccountStore(ctx context.Context, datastore Datastore, opts ...AccountSt
 
 	return ar, nil
 }
-func (a *AccountStore) GetAccount(ctx context.Context, address string) (*Account, error) {
+func (a *AccountStore) GetAccount(ctx context.Context, pubKey []byte) (*Account, error) {
 	a.rw.RLock()
 	defer a.rw.RUnlock()
 
-	return a.getAccountReadOnly(ctx, address)
+	return a.getAccountReadOnly(ctx, pubKey)
 }
 
 type Spend struct {
-	AccountAddress string
-	Amount         *big.Int
-	Nonce          int64
+	AccountPubKey []byte
+	Amount        *big.Int
+	Nonce         int64
 }
 
 // Spend spends an amount from an account. It blocks until the spend is written to the database.
@@ -63,7 +63,7 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 		return fmt.Errorf("failed to check spend: %w", err)
 	}
 
-	err = a.updateAccount(ctx, spend.AccountAddress, balance, nonce)
+	err = a.updateAccount(ctx, spend.AccountPubKey, balance, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to update account: %w", err)
 	}
@@ -75,7 +75,7 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 // If nonces are enabled, it checks that the nonce is correct.  It returns the new balance and nonce if the spend is valid. It returns an
 // error if the spend is invalid.
 func (a *AccountStore) checkSpend(ctx context.Context, spend *Spend) (*big.Int, int64, error) {
-	account, err := a.getOrCreateAccount(ctx, spend.AccountAddress)
+	account, err := a.getOrCreateAccount(ctx, spend.AccountPubKey)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get account: %w", err)
 	}

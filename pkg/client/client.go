@@ -293,8 +293,8 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 	return c.client.Ping(ctx)
 }
 
-func (c *Client) GetAccount(ctx context.Context, address string) (*balances.Account, error) {
-	return c.client.GetAccount(ctx, address)
+func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*balances.Account, error) {
+	return c.client.GetAccount(ctx, pubKey)
 }
 
 func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner string) ([]byte, error) {

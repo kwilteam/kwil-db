@@ -50,7 +50,7 @@ type EngineReader interface {
 }
 
 type AccountReader interface {
-	GetAccount(ctx context.Context, address string) (*balances.Account, error)
+	GetAccount(ctx context.Context, pubkey []byte) (*balances.Account, error)
 }
 
 type BlockchainBroadcaster interface {

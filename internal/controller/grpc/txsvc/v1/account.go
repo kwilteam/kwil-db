@@ -7,16 +7,16 @@ import (
 )
 
 func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (*txpb.GetAccountResponse, error) {
-	acc, err := s.accountStore.GetAccount(ctx, req.Address)
+	acc, err := s.accountStore.GetAccount(ctx, req.PublicKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &txpb.GetAccountResponse{
 		Account: &txpb.Account{
-			Address: acc.Address,
-			Nonce:   acc.Nonce,
-			Balance: acc.Balance.String(),
+			PublicKey: acc.PublicKey,
+			Nonce:     acc.Nonce,
+			Balance:   acc.Balance.String(),
 		},
 	}, nil
 }
