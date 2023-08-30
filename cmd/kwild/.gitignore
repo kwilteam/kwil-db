@@ -1,0 +1,8 @@
+# artifacts if running from here with no home specified i.e. ./kwild
+data/
+application/
+abci/
+rcvdSnaps/
+signing/
+kwild.key
+kwild.cert

@@ -29,9 +29,10 @@ import (
 // it takes in an ed25519 key, and a keyvalue store
 // the key values store should NOT be atomically committed with other KV
 // stores.  Instead, it should simply fsync after every write/commit
-func NewValidatorSigner(ed25519Key []byte, storer AtomicReadWriter) (*ValidatorSigner, error) {
-	if len(ed25519Key) != cometEd25519.PrivateKeySize {
-		return nil, fmt.Errorf("invalid private key size.  received: %d, expected: %d", len(ed25519Key), cometEd25519.PrivateKeySize)
+func NewValidatorSigner(privKey cometEd25519.PrivKey, storer AtomicReadWriter) (*ValidatorSigner, error) {
+	if len(privKey.Bytes()) != cometEd25519.PrivateKeySize {
+		return nil, fmt.Errorf("invalid private key size.  received: %d, expected: %d",
+			len(privKey.Bytes()), cometEd25519.PrivateKeySize)
 	}
 
 	lss := &LastSignState{
@@ -43,7 +44,7 @@ func NewValidatorSigner(ed25519Key []byte, storer AtomicReadWriter) (*ValidatorS
 	}
 
 	return &ValidatorSigner{
-		privateKey:      cometEd25519.PrivKey(ed25519Key),
+		privateKey:      privKey,
 		lastSignedState: lss,
 	}, nil
 }

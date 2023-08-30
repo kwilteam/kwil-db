@@ -1,4 +1,4 @@
-version: "3"
+version: "4"
 
 services:
   k1:
@@ -9,15 +9,12 @@ services:
       - "50051:50051"
       - "26656:26656"
       - "26657:26657"
-    env_file:
-      - .env
-      - k1/.env
     environment:
-      - ID=0
       - LOG=${LOG:-cometbft.log}
+      - KWILD_HOME=/app/.kwild
     volumes:
       - ./k1:/app/config
-      - ./k1/node0/:/app/comet-bft/
+      - ./k1/node0/:/app/.kwild/
     networks:
       kwilnet:
         ipv4_address: 172.10.100.2
@@ -30,14 +27,12 @@ services:
       - "50052:50051"
       - "26666:26656"
       - "26667:26657"
-    env_file:
-      - .env
-      - k2/.env
     environment:
       - LOG=${LOG:-cometbft.log}
+      - KWILD_HOME=/app/.kwild
     volumes:
       - ./k2:/app/config
-      - ./k2/node1/:/app/comet-bft/
+      - ./k2/node1/:/app/.kwild/
     networks:
       kwilnet:
         ipv4_address: 172.10.100.3
@@ -50,14 +45,12 @@ services:
       - "50053:50051"
       - "26676:26656"
       - "26677:26657"
-    env_file:
-      - .env
-      - k3/.env
     environment:
       - LOG=${LOG:-cometbft.log}
+      - KWILD_HOME=/app/.kwild
     volumes:
       - ./k3:/app/config
-      - ./k3/node2/:/app/comet-bft/
+      - ./k3/node2/:/app/.kwild/
     networks:
       kwilnet:
         ipv4_address: 172.10.100.4

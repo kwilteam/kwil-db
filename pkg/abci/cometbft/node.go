@@ -69,7 +69,7 @@ type CometBftNode struct {
 }
 
 // NewCometBftNode creates a new CometBFT node.
-func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privateKey []byte,
+func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privateKey cometEd25519.PrivKey,
 	atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
 
 	logger := NewLogWrapper(log)
@@ -83,7 +83,7 @@ func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privat
 		conf,
 		privateValidator,
 		&p2p.NodeKey{
-			PrivKey: cometEd25519.PrivKey(privateKey),
+			PrivKey: privateKey,
 		},
 		proxy.NewLocalClientCreator(app),
 		cometNodes.DefaultGenesisDocProviderFunc(conf),
