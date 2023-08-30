@@ -221,7 +221,6 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		Arguments: stringInputs,
 	}
 
-	var signedMsg *transactions.SignedMessage
 	shouldSign, err := shouldAuthenticate(c.Signer, callOpts.forceAuthenticated)
 	if err != nil {
 		return nil, err
@@ -240,7 +239,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		}
 	}
 
-	return c.client.Call(ctx, signedMsg)
+	return c.client.Call(ctx, msg)
 }
 
 // shouldAuthenticate decides whether the client should authenticate or not

@@ -44,3 +44,6 @@ dist/*
 
 # go
 vendor/
+
+# config
+config.toml

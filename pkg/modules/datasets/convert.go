@@ -45,10 +45,16 @@ func convertTablesToEngine(tables []*transactions.Table) ([]*engineTypes.Table, 
 			return nil, err
 		}
 
+		foreignKeys, err := convertForeignKeysToEngine(table.ForeignKeys)
+		if err != nil {
+			return nil, err
+		}
+
 		convTables[i] = &engineTypes.Table{
-			Name:    table.Name,
-			Columns: columns,
-			Indexes: indexes,
+			Name:        table.Name,
+			Columns:     columns,
+			Indexes:     indexes,
+			ForeignKeys: foreignKeys,
 		}
 	}
 
@@ -178,4 +184,32 @@ func convertExtensionConfigToEngine(configs []*transactions.ExtensionConfig) map
 	}
 
 	return conf
+}
+
+func convertForeignKeysToEngine(fks []*transactions.ForeignKey) ([]*engineTypes.ForeignKey, error) {
+	results := make([]*engineTypes.ForeignKey, len(fks))
+	for i, fk := range fks {
+		actions := make([]*engineTypes.ForeignKeyAction, len(fk.Actions))
+		for j, action := range fk.Actions {
+			newAction := &engineTypes.ForeignKeyAction{
+				On: engineTypes.ForeignKeyActionOn(action.On),
+				Do: engineTypes.ForeignKeyActionDo(action.Do),
+			}
+			err := newAction.Clean()
+			if err != nil {
+				return nil, err
+			}
+
+			actions[j] = newAction
+		}
+
+		results[i] = &engineTypes.ForeignKey{
+			ChildKeys:   fk.ChildKeys,
+			ParentKeys:  fk.ParentKeys,
+			ParentTable: fk.ParentTable,
+			Actions:     actions,
+		}
+	}
+
+	return results, nil
 }

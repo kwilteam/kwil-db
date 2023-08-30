@@ -58,7 +58,7 @@ func (s *Session) GenerateChangeset() (*Changeset, error) {
 	defer s.mu.Unlock()
 
 	buf := new(bytes.Buffer)
-	err := s.ses.WritePatchset(buf)
+	err := s.ses.WriteChangeset(buf)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (s *Session) GenerateChangeset() (*Changeset, error) {
 
 func (s *Session) GenerateChangesetBytes() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	err := s.ses.WriteChangeset(buf)
+	err := s.ses.WritePatchset(buf)
 	if err != nil {
 		return nil, err
 	}

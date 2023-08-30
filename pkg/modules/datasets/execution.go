@@ -122,7 +122,7 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 		engine.WithCaller(identifier),
 	)
 	if err != nil {
-		return resp(price), fmt.Errorf("failed to execute action: %w", err)
+		return resp(price), fmt.Errorf("failed to execute action '%s' on database '%s': %w", action, dbid, err)
 	}
 
 	return resp(price), nil

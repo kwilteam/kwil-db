@@ -26,30 +26,35 @@ table posts {
 
 action create_user($id, $username, $age) public {
     INSERT INTO users (id, username, age, wallet)
-    VALUES ($id, $username, $age, @caller);
+    VALUES ($id, $username, $age, public_key(@caller, 'hex'));
 }
 
 action update_user($id, $username, $age) public {
     UPDATE users
     SET id = $id, username = $username, age = $age
-    WHERE wallet = @caller;
+    WHERE wallet = public_key(@caller, 'hex');
 }
 
 action update_username($username) public {
     UPDATE users
     SET username = $username
-    WHERE wallet = @caller;
+    WHERE wallet = public_key(@caller, 'hex');
 }
 
 action delete_user() public {
     DELETE FROM users
-    WHERE wallet = @caller;
+    WHERE wallet = public_key(@caller, 'hex');
+}
+
+action delete_user_by_id ($id) public owner {
+    DELETE FROM users
+    WHERE id = $id;
 }
 
 action create_post($id, $title, $content) public {
     INSERT INTO posts (id, user_id, title, content)
     VALUES ($id, (
-        SELECT id FROM users WHERE wallet = @caller
+        SELECT id FROM users WHERE wallet = public_key(@caller, 'hex')
     ), $title, $content);
 }
 
@@ -58,7 +63,7 @@ action delete_post($id) public {
     WHERE id = $id AND user_id = (
         SELECT id
         FROM users
-        WHERE wallet = @caller
+        WHERE wallet = public_key(@caller, 'hex')
     );
 }
 
@@ -107,12 +112,12 @@ action multi_select() public {
     SELECT * FROM users;
 }
 
-action divide($numerator, $denominator) public {
+action divide($numerator, $denominator) public view {
     $up = math_up.div($numerator, $denominator);
     $down = math_down.div($numerator, $denominator);
     select $up AS upper_value, $down AS lower_value;
 }
 
-action owner_only() public owner {
+action owner_only() public owner view {
     select 'owner only';
 }

@@ -492,7 +492,7 @@ func (c *Connection) ApplyChangeset(r io.Reader) error {
 	return c.conn.ApplyChangeset(r, nil, func(ct sqlite.ConflictType, ci *sqlite.ChangesetIterator) sqlite.ConflictAction {
 		op, err := ci.Operation()
 		if err != nil {
-			fmt.Println("Error getting operation: ", err)
+			c.log.Error("failed to get operation", zap.Error(err))
 			return sqlite.ChangesetAbort
 		}
 

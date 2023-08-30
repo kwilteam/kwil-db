@@ -11,10 +11,15 @@ import (
 
 func (c *Client) Call(ctx context.Context, req *transactions.SignedMessage) ([]map[string]any, error) {
 
+	var sender []byte
+	if req.Sender != nil {
+		sender = req.Sender.Bytes()
+	}
+
 	grpcMsg := &txpb.CallRequest{
 		Payload:   req.Message,
 		Signature: convertActionSignature(req.Signature),
-		Sender:    req.Sender.Bytes(),
+		Sender:    sender,
 	}
 
 	res, err := c.txClient.Call(ctx, grpcMsg)

@@ -44,7 +44,7 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("cannot parse database schema", err)
 	}
 
-	schemaJson, err := json.Marshal(astSchema)
+	schemaJson, err := astSchema.ToJSON()
 	if err != nil {
 		t.Fatal("failed to marshal schema: %w", err)
 	}

@@ -2,8 +2,10 @@ package specifications
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,48 +21,65 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 		Age:      22,
 	}
 
-	actionInput := []any{
-		[]any{userQ.ID, userQ.UserName, userQ.Age},
+	actionInput := [][]any{
+		{userQ.ID, userQ.UserName, userQ.Age},
 	}
 
 	// When i execute action to database
-	_, err := execute.ExecuteAction(ctx, dbID, actionName, actionInput)
+	txHash, err := execute.ExecuteAction(ctx, dbID, actionName, actionInput...)
 	assert.NoError(t, err)
+
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
 	// Then i expect row to be updated
-	receipt, err := execute.ExecuteAction(ctx, dbID, listUsersActionName, nil)
+	receipt, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users WHERE id = 2222")
 	assert.NoError(t, err)
 	assert.NotNil(t, receipt)
 
-	// TODO: get result
-	//if len(results) != 1 {
-	//	t.Errorf("expected 1 statement result, got %d", len(results))
-	//}
-	//fmt.Println(results)
-	//returnedUser1 := results[0]
-	//
-	//user1Id, _ := conv.Int32(returnedUser1["id"])
-	//user1Username := returnedUser1["username"].(string)
-	//user1Age, _ := conv.Int32(returnedUser1["age"])
-	//
-	//assert.EqualValues(t, userQ.ID, user1Id)
-	//assert.EqualValues(t, userQ.UserName, user1Username)
-	//assert.EqualValues(t, userQ.Age, user1Age)
+	results := receipt.Export()
+	if len(results) != 1 {
+		t.Errorf("expected 1 statement result, got %d", len(results))
+	}
+
+	returnedUser1 := results[0]
+	user1Id, _ := conv.Int32(returnedUser1["id"])
+	user1Username := returnedUser1["username"].(string)
+	user1Age, _ := conv.Int32(returnedUser1["age"])
+
+	assert.EqualValues(t, userQ.ID, user1Id)
+	assert.EqualValues(t, userQ.UserName, user1Username)
+	assert.EqualValues(t, userQ.Age, user1Age)
 
 	// TODO: delete
-	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+	allPost, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
 	assert.NoError(t, err)
-	assert.NotZero(t, len(records.Export()), "should get user's posts before user_id updated")
-	// TODO: undelete
+	posts := allPost.Export()
+	fmt.Println("allPost", posts)
+	// TODO: end delete
 
-	//// check foreign key constraint
-	getUserPostsByUserIdActionName := "get_user_posts_by_userid"
-	actionInput = []any{
-		[]any{userQ.ID},
-	}
-	receipt, err = execute.ExecuteAction(ctx, dbID, getUserPostsByUserIdActionName, actionInput)
+	// check foreign key was updated properly from the previous UPDATE
+	receipt, err = execute.QueryDatabase(ctx, dbID, "SELECT title, content FROM posts WHERE user_id = 2222;")
 	assert.NoError(t, err)
 	assert.NotNil(t, receipt)
+
+	results = receipt.Export()
+	length1 := len(results)
+	assert.NotZero(t, length1, "user should have more than 0 posts")
+
+	receipt, err = execute.QueryDatabase(ctx, dbID, `SELECT title, content
+    FROM posts
+    WHERE user_id = (
+        SELECT id
+        FROM users
+        WHERE username = 'test_user_update'
+    );`)
+	assert.NoError(t, err)
+	assert.NotNil(t, receipt)
+
+	results = receipt.Export()
+
+	assert.NotZero(t, len(results), "user should have more than 0 posts")
+	assert.Equal(t, length1, len(results), "user should have same number of posts after username update")
 
 	// TODO: get result
 	//assert.NotZero(t, len(results), "should get user's posts after user_id updated")
