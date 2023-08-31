@@ -7,6 +7,7 @@ import (
 
 	cometCfg "github.com/cometbft/cometbft/config"
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/spf13/viper"
 )
 
@@ -52,13 +53,13 @@ func (cfg *KwildConfig) LoadKwildConfig(cfgFile string) error {
 		return fmt.Errorf("failed to parse config file: %v", err)
 	}
 
-	rootDir := cfg.RootDir
-	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
+	err = cfg.sanitizeCfgPaths()
+	if err != nil {
+		return fmt.Errorf("failed to sanitize config paths: %v", err)
+	}
 
 	cfg.configureLogging()
 	cfg.configureCerts()
-	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
-	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
 
 	if err := cfg.ChainCfg.ValidateBasic(); err != nil {
 		return fmt.Errorf("invalid chain configuration data: %v", err)
@@ -146,4 +147,19 @@ func rootify(path, rootDir string) string {
 		return path
 	}
 	return filepath.Join(rootDir, path)
+}
+
+func (cfg *KwildConfig) sanitizeCfgPaths() error {
+
+	rootDir, err := utils.ExpandPath(cfg.RootDir)
+	if err != nil {
+		return fmt.Errorf("error while getting absolute path for root directory: %v", err)
+	}
+
+	cfg.RootDir = rootDir
+	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
+	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
+
+	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd/utils"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/cmd/validator"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	fileutils "github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -46,7 +47,13 @@ func extractKwildConfig(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	err := kwildCfg.LoadKwildConfig(cfgFile)
+	cfgFile, err := fileutils.ExpandPath(cfgFile)
+	if err != nil {
+		fmt.Println("Error while getting absolute path for config file: ", err)
+		return err
+	}
+
+	err = kwildCfg.LoadKwildConfig(cfgFile)
 	if err != nil {
 		fmt.Println("Failed to load config: ", err)
 		return err
