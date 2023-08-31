@@ -464,6 +464,9 @@
     "TransactionBody": {
       "type": "object",
       "properties": {
+        "description": {
+          "type": "string"
+        },
         "payload": {
           "type": "string",
           "format": "byte"
@@ -850,6 +853,10 @@
         "sender": {
           "type": "string",
           "format": "byte"
+        },
+        "serialization": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     },

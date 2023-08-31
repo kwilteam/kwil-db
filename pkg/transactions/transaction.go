@@ -170,7 +170,7 @@ func (t *TransactionBody) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(t)
 }
 
-type TxSerializationType uint16
+type TxSerializationType uint32
 
 const (
 	TxSerFullRLP TxSerializationType = iota
