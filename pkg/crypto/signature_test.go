@@ -29,6 +29,10 @@ func TestSignature_Verify(t *testing.T) {
 	ed25519Sig := "59b2db2d1e4ce6f8771453cfc78d1f943723528f00fa14adf574600f15c601d591fa2ba29c94d9ed694db324f9e8671bdfbcba4b8e10f6a8733682fa3d115f0c"
 	ed25519SigBytes, _ := hex.DecodeString(ed25519Sig)
 
+	// ed25519 near
+	ed25519NearSigHex := "089bcf52220dad77abc2cfcb1639bcb2944fdf64e0b173f40cd0d144bdbf7808f4eff3716eb3e98ed40be3ab126e1449d5f57efbe5626673059edc90e9cd9801"
+	ed25519NearSigBytes, _ := hex.DecodeString(ed25519NearSigHex)
+
 	type fields struct {
 		Signature []byte
 		Type      SignatureType
@@ -149,6 +153,30 @@ func TestSignature_Verify(t *testing.T) {
 			args: args{
 				publicKey: ed25519PublicKey,
 				msg:       anotherMsg,
+			},
+			wantErr: errVerifySignatureFailed,
+		},
+		{
+			name: "ed25519 near valid signature",
+			fields: fields{
+				Signature: ed25519NearSigBytes,
+				Type:      SignatureTypeEd25519Near,
+			},
+			args: args{
+				publicKey: ed25519PublicKey,
+				msg:       msg,
+			},
+			wantErr: nil,
+		},
+		{
+			name: "ed25519 near invalid signature",
+			fields: fields{
+				Signature: ed25519SigBytes,
+				Type:      SignatureTypeEd25519Near,
+			},
+			args: args{
+				publicKey: ed25519PublicKey,
+				msg:       msg,
 			},
 			wantErr: errVerifySignatureFailed,
 		},
