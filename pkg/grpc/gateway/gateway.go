@@ -53,6 +53,11 @@ func NewGateway(ctx context.Context, httpAddress string, opts ...GatewayOpt) (*G
 		opt(gw)
 	}
 
+	for _, m := range gw.middlewares {
+		gw.logger.Info("apply middleware", zap.String("name", m.Name))
+		gw.Handler = m.Middleware(gw.Handler)
+	}
+
 	grpcDialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	for _, grpcService := range gw.grpcServices {
 		if err := grpcService.connector(ctx, mux, grpcService.endpoint, grpcDialOpts); err != nil {
@@ -76,7 +81,7 @@ func (g *GatewayServer) Shutdown(ctx context.Context) error {
 }
 
 func (g *GatewayServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	g.mux.ServeHTTP(w, r)
+	g.ServeHTTP(w, r)
 }
 
 func (g *GatewayServer) SetupHTTPSvc(ctx context.Context) error {
