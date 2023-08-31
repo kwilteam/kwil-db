@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/pkg/utils"
 
 	cmtos "github.com/cometbft/cometbft/libs/os"
 
@@ -50,7 +49,7 @@ type TestnetGenerateConfig struct {
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	cfg := config.DefaultConfig()
 
-	rootDir, err := utils.ExpandPath(genCfg.OutputDir)
+	rootDir, err := config.ExpandPath(genCfg.OutputDir)
 	if err != nil {
 		fmt.Println("Error while getting absolute path for output directory: ", err)
 		return err
@@ -71,7 +70,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 }
 
 func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
-	rootDir, err := utils.ExpandPath(genCfg.OutputDir)
+	rootDir, err := config.ExpandPath(genCfg.OutputDir)
 	if err != nil {
 		fmt.Println("Error while getting absolute path for output directory: ", err)
 		return err

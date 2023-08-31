@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	cometCfg "github.com/cometbft/cometbft/config"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/utils"
 	"github.com/spf13/viper"
 )
 
@@ -151,7 +151,7 @@ func rootify(path, rootDir string) string {
 
 func (cfg *KwildConfig) sanitizeCfgPaths() error {
 
-	rootDir, err := utils.ExpandPath(cfg.RootDir)
+	rootDir, err := ExpandPath(cfg.RootDir)
 	if err != nil {
 		return fmt.Errorf("error while getting absolute path for root directory: %v", err)
 	}
@@ -162,4 +162,25 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 
 	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
 	return nil
+}
+
+func ExpandPath(path string) (string, error) {
+	var expandedPath string
+
+	if tail, cut := strings.CutPrefix(path, "~/"); cut {
+		// Expands ~ in the path
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		expandedPath = filepath.Join(homeDir, tail)
+	} else {
+		// Expands relative paths
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return "", fmt.Errorf("failed to get absolute path of file: %v due to error: %v", path, err)
+		}
+		expandedPath = absPath
+	}
+	return expandedPath, nil
 }
