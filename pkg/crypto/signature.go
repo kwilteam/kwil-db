@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -19,6 +20,7 @@ const (
 	SignatureTypeSecp256k1Cometbft SignatureType = "secp256k1_cmt" // secp256k1 cometbft
 	SignatureTypeEd25519           SignatureType = "ed25519"
 	SignatureTypeSecp256k1Personal SignatureType = "secp256k1_ep" // secp256k1 ethereum personal_sign
+	SignatureTypeEd25519Near       SignatureType = "ed25519_nr"   // ed25519 near
 )
 
 const (
@@ -31,6 +33,7 @@ var SignatureTypeFromName = map[string]SignatureType{
 	"secp256k1_cmt": SignatureTypeSecp256k1Cometbft, // secp256k1 cometbft
 	"ed25519":       SignatureTypeEd25519,           // ed25519 standard, any better name?
 	"secp256k1_ep":  SignatureTypeSecp256k1Personal, // secp256k1 ethereum personal_sign
+	"ed25519_nr":    SignatureTypeEd25519Near,       // ed25519 near
 }
 
 var (
@@ -51,7 +54,7 @@ func (s SignatureType) KeyType() KeyType {
 	switch s {
 	case SignatureTypeSecp256k1Cometbft, SignatureTypeSecp256k1Personal:
 		return Secp256k1
-	case SignatureTypeEd25519:
+	case SignatureTypeEd25519, SignatureTypeEd25519Near:
 		return Ed25519
 	default:
 		return UnknownKeyType
@@ -95,6 +98,14 @@ func (s *Signature) Verify(publicKey PublicKey, msg []byte) error {
 		}
 		// hash(sha512) is handled by downstream library
 		return publicKey.Verify(s.Signature, msg)
+	case SignatureTypeEd25519Near:
+		if len(s.Signature) != SignatureEd25519Length {
+			return errInvalidSignature
+		}
+
+		hash := sha256.Sum256(msg)
+
+		return publicKey.Verify(s.Signature, hash[:])
 	default:
 		return fmt.Errorf("%w: %s", errNotSupportedSignatureType, s.Type.String())
 	}
