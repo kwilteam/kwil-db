@@ -36,6 +36,15 @@ func CreateTransaction(contents Payload, nonce uint64) (*Transaction, error) {
 	}, nil
 }
 
+/* seems unworkable, but we'd ideally keep description off the chain
+type DescribedTransaction struct {
+	Serialization TxSerializationType
+	TxDescription string
+
+	Transaction
+}
+*/
+
 type Transaction struct {
 	// Signature is the signature of the transaction
 	// It can be nil if the transaction is unsigned
@@ -136,6 +145,8 @@ func (t *Transaction) UnmarshalBinary(data serialize.SerializedData) error {
 
 // TransactionBody is the body of a transaction that gets included in the signature
 type TransactionBody struct {
+	Description string // boo
+
 	// Payload are the raw bytes of the payload data
 	Payload serialize.SerializedData
 
@@ -170,10 +181,11 @@ const msgTmpl = `Kwil Signed message:
 
 🖋️🖋️🖋️🖋️🖋️
 
+Description: %s
+
 Payload type: %s
 Fee: %s
 Nonce: %d
-Salt: %x
 Token: %x
 `
 
@@ -191,9 +203,11 @@ func (t *TransactionBody) SerializeMsg(ser TxSerializationType) ([]byte, error) 
 		// In this message scheme, the displayed "token" is a hash of the
 		// payload.
 		token := sha256.Sum256(t.Payload)
-		msgStr := fmt.Sprintf(msgTmpl, t.PayloadType.String(), t.Fee.String(),
-			t.Nonce, t.Salt, token)
+		msgStr := fmt.Sprintf(msgTmpl, t.Description, t.PayloadType.String(),
+			t.Fee.String(), t.Nonce, token)
 		return []byte(msgStr), nil
+
+		// case TxSerEIP...
 	}
 	return nil, errors.New("invalid serialization type")
 }
