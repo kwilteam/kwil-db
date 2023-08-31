@@ -49,16 +49,13 @@ const defaultConfigTemplate = `
 # For more information, see https://github.com/toml-lang/toml
 
 # NOTE: Any path below can be absolute (e.g. "/var/myawesomeapp/data") or
-# relative to the root directory (e.g. "data"). The root directory is
-# "$HOME/.kwild" by default, but could be changed via $KWILD_HOME env variable
-# or via --home command line flag.
-# Order of preference: command line flag, env variable, default value.
+# relative to the home directory (e.g. "data")
 
-# Root Directory Structure:
-# RootDir/
+# Home Directory Structure:
+# HomeDir/
+#   |- config.toml    (app and chain configuration for running the kwild node)
 #   |- abci/
 #   |   |- config/
-#   |   |   |- config.toml    (app and chain configuration for running the kwild node)
 #   |   |   |- genesis.json   (genesis file for the network)
 #   |   |   |- addrbook.json  (peer routable addresses for the kwild node)
 #   |   |- data/
@@ -71,8 +68,12 @@ const defaultConfigTemplate = `
 #   |- signing/
 #   |- rcvdSnaps/   (includes the chunks rcvd from the state sync module during db restoration process, its a temp dir)
 
-# Only the config.toml and genesis file are required to run the kwild node in rootDir/abci/config
+# Only the config.toml and genesis file are required to run the kwild node
 # The rest of the files & directories are created by the kwild node on startup
+
+
+# Directory to store the kwild node's data (described above)
+home_dir = "{{ .RootDir }}"
 
 #######################################################################
 ###                      App Config Options                         ###
@@ -158,6 +159,12 @@ log_format = "{{ .Logging.LogFormat }}"
 # A custom human readable name for this node
 moniker = "{{ .ChainCfg.Moniker }}"
 
+# Blockchain Genesis file
+genesis_file = "{{ .ChainCfg.Genesis }}"
+
+# Blockchain database directory
+db_dir = "{{ .ChainCfg.DBPath }}"
+
 #######################################################################
 ###                 Advanced Configuration Options                  ###
 #######################################################################
@@ -180,6 +187,7 @@ timeout_broadcast_tx_commit = "{{ .ChainCfg.RPC.TimeoutBroadcastTxCommit }}"
 ###         Consensus Configuration Options         ###
 #######################################################
 [chain.consensus]
+
 # How long we wait for a proposal block before prevoting nil
 timeout_propose = "{{ .ChainCfg.Consensus.TimeoutPropose }}"
 

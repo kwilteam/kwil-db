@@ -67,12 +67,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 		outputPath = filepath.Join(dirname, genCfg.OutputDir[2:])
 	}
 
-	writeConfigFile(filepath.Join(
-		outputPath,
-		"abci",
-		"config",
-		"config.toml"),
-		cfg)
+	writeConfigFile(filepath.Join(outputPath, "config.toml"), cfg)
 
 	fmt.Println("Successfully initialized node directory: ", genCfg.OutputDir)
 	return nil
@@ -195,7 +190,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
 		}
 		cfg.AppCfg.PrivateKey = hex.EncodeToString(privateKeys[i])
-		writeConfigFile(filepath.Join(nodeDir, "abci", "config", "config.toml"), cfg)
+		writeConfigFile(filepath.Join(nodeDir, "config.toml"), cfg)
 	}
 
 	fmt.Printf("Successfully initialized %d node directories: %s\n",
