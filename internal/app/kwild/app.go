@@ -20,6 +20,7 @@ var rootCmd = &cobra.Command{
 }
 
 var kwildCfg = config.DefaultConfig()
+var cfgFile string
 
 func Execute() error {
 	rootCmd.AddCommand(
@@ -31,7 +32,7 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&kwildCfg.RootDir, "home", "", "kwild home directory")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "kwild config file")
 	rootCmd.PersistentPreRunE = extractKwildConfig
 }
 
@@ -45,7 +46,7 @@ func extractKwildConfig(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	err := kwildCfg.LoadKwildConfig()
+	err := kwildCfg.LoadKwildConfig(cfgFile)
 	if err != nil {
 		fmt.Println("Failed to load config: ", err)
 		return err

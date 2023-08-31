@@ -11,7 +11,7 @@ import (
 )
 
 type KwildConfig struct {
-	RootDir string
+	RootDir string `mapstructure:"home_dir"`
 
 	AppCfg   *AppConfig       `mapstructure:"app"`
 	ChainCfg *cometCfg.Config `mapstructure:"chain"`
@@ -46,20 +46,14 @@ type SnapshotConfig struct {
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
 }
 
-func (cfg *KwildConfig) LoadKwildConfig() error {
-	err := cfg.rootDirPath()
+func (cfg *KwildConfig) LoadKwildConfig(cfgFile string) error {
+	err := cfg.ParseConfig(cfgFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse config file: %v", err)
 	}
 
 	rootDir := cfg.RootDir
 	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
-
-	cfgFile := filepath.Join(cfg.ChainCfg.RootDir, "config", "config.toml")
-	err = cfg.ParseConfig(cfgFile)
-	if err != nil {
-		return fmt.Errorf("failed to parse config file: %v", err)
-	}
 
 	cfg.configureLogging()
 	cfg.configureCerts()
@@ -114,7 +108,9 @@ func DefaultConfig() *KwildConfig {
 		},
 	}
 
-	cfg.ChainCfg.P2P.SeedMode = true
+	// PEX is recommended to be disabled for validators: https://docs.cometbft.com/v0.37/core/validators#validator-node-configuration
+	cfg.ChainCfg.P2P.PexReactor = false
+
 	/*
 	 As all we are validating are tx signatures, no need to go through Validation again
 	 To be set to true when we have Validations based on gas, nonces, account balance, etc.
@@ -150,26 +146,4 @@ func rootify(path, rootDir string) string {
 		return path
 	}
 	return filepath.Join(rootDir, path)
-}
-
-func (cfg *KwildConfig) rootDirPath() error {
-	// if `home` flag is set, use it
-	if cfg.RootDir != "" {
-		return nil
-	}
-
-	homeDir := os.Getenv("KWILD_HOME")
-	if homeDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			// if `home` env(depends on OS) is not set, complain
-			// we can use '/tmp/.kwil' or '.kwil' in this case, but it's not a good idea
-			return err
-		}
-		cfg.RootDir = filepath.Join(home, ".kwild")
-		return nil
-	}
-
-	cfg.RootDir = homeDir
-	return nil
 }
