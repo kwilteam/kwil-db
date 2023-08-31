@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"crypto/sha256"
 	"fmt"
 
 	ethAccount "github.com/ethereum/go-ethereum/accounts"
@@ -127,7 +128,35 @@ func (e *StdEd25519Signer) SignMsg(msg []byte) (*Signature, error) {
 	}, nil
 }
 
+func NewNearSigner(key *Ed25519PrivateKey) *NearEd25519Signer {
+	return &NearEd25519Signer{
+		key: key,
+	}
+}
+
+type NearEd25519Signer struct {
+	key *Ed25519PrivateKey
+}
+
 // DefaultSigner returns a default signer for the given private key.
+
+func (n *NearEd25519Signer) PubKey() PublicKey {
+	return n.key.PubKey()
+}
+
+func (n *NearEd25519Signer) SignMsg(msg []byte) (*Signature, error) {
+	hash := sha256.Sum256(msg)
+
+	sig, err := n.key.Sign(hash[:])
+	if err != nil {
+		return nil, err
+	}
+
+	return &Signature{
+		Signature: sig,
+		Type:      SignatureTypeEd25519Near,
+	}, nil
+}
 func DefaultSigner(key PrivateKey) Signer {
 	switch key.Type() {
 	case Secp256k1:
