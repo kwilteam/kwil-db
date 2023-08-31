@@ -1,6 +1,8 @@
 package transactions
 
 import (
+	"crypto/sha256"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -23,6 +25,7 @@ func CreateTransaction(contents Payload, nonce uint64) (*Transaction, error) {
 	}
 
 	return &Transaction{
+		Serialization: TxSerFullRLP,
 		Body: &TransactionBody{
 			Payload:     data,
 			PayloadType: contents.Type(),
@@ -37,6 +40,8 @@ type Transaction struct {
 	// Signature is the signature of the transaction
 	// It can be nil if the transaction is unsigned
 	Signature *crypto.Signature
+
+	Serialization TxSerializationType
 
 	// Body is the body of the transaction
 	// It gets serialized and signed
@@ -66,7 +71,7 @@ func (t *Transaction) GetSenderAddress() string {
 
 // Verify verifies the signature of the transaction
 func (t *Transaction) Verify() error {
-	data, err := t.Body.MarshalBinary()
+	data, err := t.Body.SerializeMsg(t.Serialization)
 	if err != nil {
 		return err
 	}
@@ -81,7 +86,7 @@ func (t *Transaction) Verify() error {
 }
 
 func (t *Transaction) Sign(signer crypto.Signer) error {
-	data, err := t.Body.MarshalBinary()
+	data, err := t.Body.SerializeMsg(t.Serialization)
 	if err != nil {
 		return err
 	}
@@ -119,21 +124,14 @@ func (t *Transaction) SetHash() ([]byte, error) {
 	return t.hash, nil
 }
 
+// MarshalBinary serializes the entire transaction for efficient storage and
+// transmission of the body on the blockchain and network.
 func (t *Transaction) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(t)
 }
 
-// TODO: I am not sure if this will actually work, since it is unserializing into an interface
-// I am quite sure it wont; an alternative is to decode into a struct where public key is bytes, and
-// create the public key from there
 func (t *Transaction) UnmarshalBinary(data serialize.SerializedData) error {
-	res, err := serialize.Decode[Transaction](data)
-	if err != nil {
-		return err
-	}
-
-	*t = *res
-	return nil
+	return serialize.DecodeInto(data, t)
 }
 
 // TransactionBody is the body of a transaction that gets included in the signature
@@ -155,20 +153,49 @@ type TransactionBody struct {
 	Salt []byte
 }
 
-func (t *TransactionBody) Verify() error {
-	if !t.PayloadType.Valid() {
-		return fmt.Errorf("invalid payload type: %s", t.PayloadType)
-	}
-
-	if t.Fee == nil {
-		t.Fee = big.NewInt(0)
-	}
-
-	return nil
-}
-
+// MarshalBinary is the full RLP serialization of the transaction body. This is
+// for computation of the tx hash.
 func (t *TransactionBody) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(t)
+}
+
+type TxSerializationType uint16
+
+const (
+	TxSerFullRLP TxSerializationType = iota
+	TxSerReadableWithPayloadHash
+)
+
+const msgTmpl = `Kwil Signed message:
+
+🖋️🖋️🖋️🖋️🖋️
+
+Payload type: %s
+Fee: %s
+Nonce: %d
+Salt: %x
+Token: %x
+`
+
+// SerializeMsg prepares a message for signing or verification using a certain
+// message construction format. This is done since a Kwil transaction is foreign
+// to wallets, and it is signed as a message, not a transaction that is native
+// to the wallet. As such we define conventions for constructing user-friendly
+// messages. The Kwil frontend SDKs much implement these serialization schemes.
+func (t *TransactionBody) SerializeMsg(ser TxSerializationType) ([]byte, error) {
+	switch ser {
+	case TxSerFullRLP:
+		return serialize.Encode(t)
+	case TxSerReadableWithPayloadHash:
+		// Make a human readable message with the payload only in RLP.
+		// In this message scheme, the displayed "token" is a hash of the
+		// payload.
+		token := sha256.Sum256(t.Payload)
+		msgStr := fmt.Sprintf(msgTmpl, t.PayloadType.String(), t.Fee.String(),
+			t.Nonce, t.Salt, token)
+		return []byte(msgStr), nil
+	}
+	return nil, errors.New("invalid serialization type")
 }
 
 // generateRandomSalt generates a new random salt

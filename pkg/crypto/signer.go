@@ -82,11 +82,13 @@ func (e *EthPersonalSecp256k1Signer) PubKey() PublicKey {
 	return e.key.PubKey()
 }
 
-// SignMsg signs the given message(not hashed) according to EIP-191 personal_sign.
-// It prefix the message with "\x19Ethereum Signed Message:\n" and the message length,
-// then hash the message with keccak256.
-// The signature is in [R || S || V] format, 65 bytes.
-// This is default signature type for sec256k1.
+// SignMsg then sign according to EIP-191 personal_sign. EIP-191 personal_sign
+// prefix the message with "\x19Ethereum Signed Message:\n" and the message
+// length, then hash the message with keccak256. The signature is in [R || S ||
+// V] format, 65 bytes. This is default signature type for sec256k1. This method
+// is used to sign an arbitrary message in the same manner in which a wallet
+// like MetaMask would sign a text message. The message is defined by the object
+// that is being serialized e.g. a kwil Transaction.
 func (e *EthPersonalSecp256k1Signer) SignMsg(msg []byte) (*Signature, error) {
 	hash := ethAccount.TextHash(msg)
 	sig, err := e.key.Sign(hash)
