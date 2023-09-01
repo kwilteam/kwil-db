@@ -1,0 +1,7 @@
+version: '3'
+
+services:
+  kwild:
+    user: "${UID}:${GID}"
+  ext:
+    user: "${UID}:${GID}"
