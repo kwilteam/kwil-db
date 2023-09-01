@@ -16,13 +16,32 @@ import (
 	"go.uber.org/zap"
 )
 
+// demotedInfoMsgs contains extremely spammy and generally uninformative Info
+// messages from cometBFT that we will log at Debug level. These are exact
+// messages, no grep patterns.
+var demotedInfoMsgs = map[string]string{
+	"indexed block exents":             "",
+	"indexed block events":             "",
+	"committed state":                  "",
+	"received proposal":                "",
+	"received complete proposal block": "",
+	"executed block":                   "",
+	"Timed out":                        "consensus", // only the one from consensus.(*timeoutTicker).timeoutRoutine, which seems to be normal
+}
+
 type LogWrapper struct {
 	log *log.Logger
+
+	// comet bft typically sets a logger with the "module" key. We record this
+	// whenever it is set so that we can gain context about the log call.
+	module string
 }
 
 func NewLogWrapper(log *log.Logger) *LogWrapper {
 	log = log.WithOptions(zap.AddCallerSkip(1))
-	return &LogWrapper{log}
+	return &LogWrapper{
+		log: log,
+	}
 }
 
 func (lw *LogWrapper) Debug(msg string, kvs ...any) {
@@ -30,16 +49,31 @@ func (lw *LogWrapper) Debug(msg string, kvs ...any) {
 }
 
 func (lw *LogWrapper) Info(msg string, kvs ...any) {
-	lw.log.Info(msg, keyValsToFields(kvs)...)
+	logFun := lw.log.Info
+	if module, quiet := demotedInfoMsgs[msg]; quiet &&
+		(module == "" || lw.module == module) {
+		logFun = lw.log.Debug
+	}
+	logFun(msg, keyValsToFields(kvs)...)
 }
 
 func (lw *LogWrapper) Error(msg string, kvs ...any) {
+	// fields := append(keyValsToFields(kvs), zap.Stack("stacktrace"))
+	// lw.log.Error(msg, fields...)
 	lw.log.Error(msg, keyValsToFields(kvs)...)
 }
 
 func (lw *LogWrapper) With(kvs ...any) cometLog.Logger {
 	fields := keyValsToFields(kvs)
-	return NewLogWrapper(lw.log.With(fields...))
+	module := lw.module
+	for _, f := range fields {
+		if f.Key == "module" {
+			module = f.String
+		}
+	}
+	lw = NewLogWrapper(lw.log.With(fields...))
+	lw.module = module
+	return lw
 }
 
 func keyValsToFields(kvs []any) []zap.Field {
