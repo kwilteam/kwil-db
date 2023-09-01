@@ -71,9 +71,18 @@ const defaultConfigTemplate = `
 # Only the config.toml and genesis file are required to run the kwild node
 # The rest of the files & directories are created by the kwild node on startup
 
+#######################################################################
+###                    Logging Config Options                       ###
+#######################################################################
+[log]
+# Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
+log_level = "{{ .Logging.LogLevel }}"
 
-# Directory to store the kwild node's data (described above)
-home_dir = "{{ .RootDir }}"
+# Output paths for the logger, can be stdout or a file path
+output_paths = {{arrayFormatter .Logging.OutputPaths }}
+
+# Output format: 'plain' or 'json'
+log_format = "{{ .Logging.LogFormat }}"
 
 #######################################################################
 ###                      App Config Options                         ###
@@ -138,19 +147,6 @@ max_snapshots = {{ .AppCfg.SnapshotConfig.MaxSnapshots}}
 
 # The directory where the snapshots are stored. Can be absolute or relative to the kwild root directory
 snapshot_dir = "{{ .AppCfg.SnapshotConfig.SnapshotDir }}"
-
-#######################################################################
-###                    Logging Config Options                       ###
-#######################################################################
-[log]
-# Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
-log_level = "{{ .Logging.LogLevel }}"
-
-# Output paths for the logger, can be stdout or a file path
-output_paths = {{arrayFormatter .Logging.OutputPaths }}
-
-# Output format: 'plain' or 'json'
-log_format = "{{ .Logging.LogFormat }}"
 
 #######################################################################
 ###                 Chain  Main Base Config Options                 ###

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	cometCfg "github.com/cometbft/cometbft/config"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -11,7 +12,7 @@ import (
 )
 
 type KwildConfig struct {
-	RootDir string `mapstructure:"home_dir"`
+	RootDir string
 
 	AppCfg   *AppConfig       `mapstructure:"app"`
 	ChainCfg *cometCfg.Config `mapstructure:"chain"`
@@ -46,19 +47,27 @@ type SnapshotConfig struct {
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
 }
 
-func (cfg *KwildConfig) LoadKwildConfig(cfgFile string) error {
-	err := cfg.ParseConfig(cfgFile)
+func (cfg *KwildConfig) LoadKwildConfig(rootDir string) error {
+	// Expand root dir path
+	rootDir, err := ExpandPath(rootDir)
+	if err != nil {
+		return fmt.Errorf("failed to expand rootdir path: %v", err)
+	}
+	cfg.RootDir = rootDir
+
+	cfgFile := filepath.Join(rootDir, "config.toml")
+	err = cfg.ParseConfig(cfgFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %v", err)
 	}
 
-	rootDir := cfg.RootDir
-	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
+	err = cfg.sanitizeCfgPaths()
+	if err != nil {
+		return fmt.Errorf("failed to sanitize config paths: %v", err)
+	}
 
 	cfg.configureLogging()
 	cfg.configureCerts()
-	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
-	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
 
 	if err := cfg.ChainCfg.ValidateBasic(); err != nil {
 		return fmt.Errorf("invalid chain configuration data: %v", err)
@@ -146,4 +155,34 @@ func rootify(path, rootDir string) string {
 		return path
 	}
 	return filepath.Join(rootDir, path)
+}
+
+func (cfg *KwildConfig) sanitizeCfgPaths() error {
+	rootDir := cfg.RootDir
+	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
+	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
+
+	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
+	return nil
+}
+
+func ExpandPath(path string) (string, error) {
+	var expandedPath string
+
+	if tail, cut := strings.CutPrefix(path, "~/"); cut {
+		// Expands ~ in the path
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		expandedPath = filepath.Join(homeDir, tail)
+	} else {
+		// Expands relative paths
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return "", fmt.Errorf("failed to get absolute path of file: %v due to error: %v", path, err)
+		}
+		expandedPath = absPath
+	}
+	return expandedPath, nil
 }
