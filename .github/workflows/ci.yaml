@@ -70,7 +70,6 @@ jobs:
           task test:unit
 
   acceptance-test:
-    if: false # temporarily disable this job
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -156,7 +155,11 @@ jobs:
 
       - name: Run acceptance test
         run: |
-          task test:act:no-build
+          echo "UID=$(id -u)" >> test/acceptance/.env
+          echo "GID=$(id -g)" >> test/acceptance/.env
+          cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
+          echo "KACT_DOCKER_COMPOSE_OVERRIDE_FILE=docker-compose.override.yml" >> test/acceptance/.env
+          task test:act:nb
 
       - name: Move cache
         run: |

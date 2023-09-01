@@ -30,8 +30,9 @@ type ActTestCfg struct {
 	GrpcEndpoint  string
 	ChainEndpoint string
 
-	SchemaFile        string
-	DockerComposeFile string
+	SchemaFile                string
+	DockerComposeFile         string
+	DockerComposeOverrideFile string
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -110,13 +111,14 @@ func (r *ActHelper) LoadConfig() {
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'
 	cfg := &ActTestCfg{
-		AliceRawPK:        runner.GetEnv("KACT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
-		BobRawPK:          runner.GetEnv("KACT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
-		SchemaFile:        runner.GetEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
-		LogLevel:          runner.GetEnv("KACT_LOG_LEVEL", "debug"),
-		GWEndpoint:        runner.GetEnv("KACT_GATEWAY_ENDPOINT", "localhost:8080"),
-		GrpcEndpoint:      runner.GetEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
-		DockerComposeFile: runner.GetEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
+		AliceRawPK:                runner.GetEnv("KACT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
+		BobRawPK:                  runner.GetEnv("KACT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
+		SchemaFile:                runner.GetEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
+		LogLevel:                  runner.GetEnv("KACT_LOG_LEVEL", "debug"),
+		GWEndpoint:                runner.GetEnv("KACT_GATEWAY_ENDPOINT", "localhost:8080"),
+		GrpcEndpoint:              runner.GetEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
+		DockerComposeFile:         runner.GetEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
+		DockerComposeOverrideFile: runner.GetEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"), // e.g. docker-compose.override.yml
 	}
 
 	// value is in format of "10s" or "1m"
@@ -166,6 +168,11 @@ func (r *ActHelper) generateNodeConfig() {
 		[]string{tmpPath})
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
 func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	r.t.Logf("setup test environment")
 
@@ -174,7 +181,11 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	envs, err := godotenv.Read(envFile)
 	require.NoError(r.t, err, "failed to parse .env file")
 
-	dc, err := compose.NewDockerCompose(r.cfg.DockerComposeFile)
+	composeFiles := []string{r.cfg.DockerComposeFile}
+	if r.cfg.DockerComposeOverrideFile != "" && fileExists(r.cfg.DockerComposeOverrideFile) {
+		composeFiles = append(composeFiles, r.cfg.DockerComposeOverrideFile)
+	}
+	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for single kwild node")
 
 	r.teardown = append(r.teardown, func() {
