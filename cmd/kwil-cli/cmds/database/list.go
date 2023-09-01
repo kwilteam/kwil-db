@@ -33,7 +33,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 				}
 
 				if len(dbs) == 0 {
-					fmt.Printf("No databases found for address '%x'.\n", owner)
+					fmt.Printf("No databases found for '%x'.\n", owner)
 				} else {
 					fmt.Printf("Databases belonging to '%x':\n", owner)
 				}
