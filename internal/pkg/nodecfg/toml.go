@@ -76,13 +76,16 @@ const defaultConfigTemplate = `
 #######################################################################
 [log]
 # Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
-log_level = "{{ .Logging.LogLevel }}"
+level = "{{ .Logging.Level }}"
 
 # Output paths for the logger, can be stdout or a file path
 output_paths = {{arrayFormatter .Logging.OutputPaths }}
 
 # Output format: 'plain' or 'json'
-log_format = "{{ .Logging.LogFormat }}"
+format = "{{ .Logging.Format }}"
+
+# Time format: "epochfloat" (default), "epochmilli", or "rfc3339milli"
+time_format = "{{ .Logging.TimeEncoding }}"
 
 #######################################################################
 ###                      App Config Options                         ###
