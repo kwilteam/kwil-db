@@ -18,7 +18,7 @@ WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/kwild-* ./kwild
 # Copy the startup script into the container
-COPY ./build/package/docker/auto-init/startup.sh /app/startup.sh
+COPY build/package/utils/initialize.sh /app/startup.sh
 RUN chmod +x /app/startup.sh
 RUN /app/startup.sh
 
