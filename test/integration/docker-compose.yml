@@ -22,7 +22,7 @@ services:
     depends_on:
       - ext1
     command: |
-      --home=/app/kwil
+      --root_dir=/app/kwil
       --log.log_level=${LOG_LEVEL:-debug}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
@@ -50,7 +50,7 @@ services:
     depends_on:
       - ext1
     command: |
-      --home=/app/kwil
+      --root_dir=/app/kwil
       --log.log_level=${LOG_LEVEL:-info}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
@@ -78,7 +78,7 @@ services:
     depends_on:
       - ext1
     command: |
-      --home=/app/kwil
+      --root_dir=/app/kwil
       --log.log_level=${LOG_LEVEL:-info}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
