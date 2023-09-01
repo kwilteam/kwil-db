@@ -13,6 +13,7 @@ import (
 
 func callCmd() *cobra.Command {
 	var action string
+	authenticate := new(bool)
 
 	cmd := &cobra.Command{
 		Use:   "call",
@@ -40,7 +41,7 @@ OR
 
 '$name:satoshi' '$age:32' --dbid=x1234 --action=create_user `,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, clnt *client.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return fmt.Errorf("target database not properly specified: %w", err)
@@ -53,7 +54,7 @@ OR
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
 
-				actionStructure, err := getAction(ctx, client, dbid, lowerName)
+				actionStructure, err := getAction(ctx, clnt, dbid, lowerName)
 				if err != nil {
 					return fmt.Errorf("error getting action: %w", err)
 				}
@@ -67,7 +68,7 @@ OR
 					tuples = append(tuples, []any{})
 				}
 
-				res, err := client.CallAction(ctx, dbid, lowerName, tuples[0])
+				res, err := clnt.CallAction(ctx, dbid, lowerName, tuples[0], client.Authenticated(*authenticate))
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}
@@ -90,6 +91,7 @@ OR
 	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the database id")
 	cmd.Flags().StringVarP(&action, actionNameFlag, "a", "", "the action name (required)")
+	authenticate = cmd.Flags().BoolP("authenticate", "a", false, "whether to authenticate the action call")
 
 	cmd.MarkFlagRequired(actionNameFlag)
 	return cmd
