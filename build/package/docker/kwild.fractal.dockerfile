@@ -18,9 +18,9 @@ WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/kwild-* ./kwild
 # Copy the startup script into the container
-COPY ./startup.sh /app/startup.sh
+COPY ./build/package/docker/auto-init/startup.sh /app/startup.sh
 RUN chmod +x /app/startup.sh
 RUN /app/startup.sh
 
 EXPOSE 50051 8080 26656 26657
-ENTRYPOINT ["/app/kwild", "server", "start", "--config", "/app/home_dir/config.toml"]
+ENTRYPOINT ["/app/kwild", "server", "start"]
