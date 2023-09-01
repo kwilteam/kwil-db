@@ -96,13 +96,16 @@ snapshot_dir = "data/snapshots"
 #######################################################################
 [log]
 # Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
-log_level = "info" 
+level = "info" 
 
 # Output paths for the logger, can be stdout or a file path
 output_paths = ["stdout"]
 
 # Output format: 'plain' or 'json'
-log_format = "plain"
+format = "plain"
+
+# Time format: "epochfloat" (default), "epochmilli", or "rfc3339milli"
+# time_format = "epochfloat"
 
 #######################################################################
 ###                 Chain  Main Base Config Options                 ###
