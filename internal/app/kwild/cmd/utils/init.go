@@ -1,9 +1,6 @@
 package utils
 
 import (
-	"os"
-	"path/filepath"
-
 	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
 	"github.com/spf13/cobra"
 )
@@ -18,13 +15,7 @@ func InitFilesCmd() *cobra.Command {
 		RunE:  initFiles,
 	}
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		panic(err)
-	}
-
-	initFilesCmd.Flags().StringVarP(&initFlags.OutputDir, "output-dir", "o",
-		filepath.Join(homeDir, ".kwild"),
+	initFilesCmd.Flags().StringVarP(&initFlags.OutputDir, "output-dir", "o", "~/.kwild",
 		"directory to store initialization data for the node")
 	initFilesCmd.Flags().Int64VarP(&initFlags.InitialHeight, "initial-height", "i", 0,
 		"initial height of the first block")

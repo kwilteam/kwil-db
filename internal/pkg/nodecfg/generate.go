@@ -48,32 +48,35 @@ type TestnetGenerateConfig struct {
 
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	cfg := config.DefaultConfig()
-	cfg.RootDir = genCfg.OutputDir
 
-	err := initFilesWithConfig(cfg, 0)
+	rootDir, err := config.ExpandPath(genCfg.OutputDir)
+	if err != nil {
+		fmt.Println("Error while getting absolute path for output directory: ", err)
+		return err
+	}
+
+	cfg.RootDir = rootDir
+	err = initFilesWithConfig(cfg, 0)
 	if err != nil {
 		return err
 	}
 
 	cfg.ChainCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
 
-	outputPath := genCfg.OutputDir
-	// this only works on linux
-	if strings.HasPrefix(genCfg.OutputDir, "~/") {
-		dirname, err := os.UserHomeDir()
-		if err != nil {
-			return err
-		}
-		outputPath = filepath.Join(dirname, genCfg.OutputDir[2:])
-	}
+	writeConfigFile(filepath.Join(rootDir, "config.toml"), cfg)
 
-	writeConfigFile(filepath.Join(outputPath, "config.toml"), cfg)
-
-	fmt.Println("Successfully initialized node directory: ", genCfg.OutputDir)
+	fmt.Println("Successfully initialized node directory: ", rootDir)
 	return nil
 }
 
 func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
+	rootDir, err := config.ExpandPath(genCfg.OutputDir)
+	if err != nil {
+		fmt.Println("Error while getting absolute path for output directory: ", err)
+		return err
+	}
+	genCfg.OutputDir = rootDir
+
 	if len(genCfg.Hostnames) > 0 && len(genCfg.Hostnames) != (genCfg.NValidators+genCfg.NNonValidators) {
 		return fmt.Errorf(
 			"testnet needs precisely %d hostnames (number of validators plus nonValidators) if --hostname parameter is used",

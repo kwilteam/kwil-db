@@ -24,10 +24,6 @@ func NewStartCmd(cfg *config.KwildConfig) *cobra.Command {
 				return errors.New("private key is not set")
 			}
 
-			if cfg.RootDir == "" {
-				return errors.New("kwild home directory not set")
-			}
-
 			signalChan := make(chan os.Signal, 1)
 			signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 			ctx, cancel := context.WithCancel(cmd.Context())
@@ -52,8 +48,6 @@ func NewStartCmd(cfg *config.KwildConfig) *cobra.Command {
 
 func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 	// General APP flags:
-	cmd.Flags().StringVar(&cfg.RootDir, "home_dir", cfg.RootDir, "Kwild home directory to store blockchain, kwildb and other data")
-
 	cmd.Flags().StringVar(&cfg.AppCfg.PrivateKey, "app.private_key", cfg.AppCfg.PrivateKey, "Kwild app's private key")
 
 	cmd.Flags().StringVar(&cfg.AppCfg.GrpcListenAddress, "app.grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Kwild app gRPC listen address")
