@@ -1,6 +1,9 @@
 package log
 
 import (
+	"fmt"
+	"time"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -42,19 +45,11 @@ func (l *Logger) Fatal(msg string, fields ...Field) {
 	l.L.Fatal(msg, fields...)
 }
 
-func (l *Logger) clone() *Logger {
-	copy := *l
-	return &copy
-}
-
 func (l *Logger) Named(name string) *Logger {
 	if name == "" {
 		return l
 	}
-
-	_log := l.clone()
-	_log.L.Named(name)
-	return _log
+	return &Logger{l.L.Named(name)}
 }
 
 func (l *Logger) With(fields ...Field) *Logger {
@@ -69,20 +64,65 @@ func (l *Logger) Sync() error {
 	return l.L.Sync()
 }
 
+const (
+	FormatJSON  = "json"
+	FormatPlain = "plain"
+)
+
+const (
+	TimeEncodingRFC3339Milli = "rfc3339milli"
+	TimeEncodingEpochMilli   = "epochmilli"
+	TimeEncodingEpochFloat   = "epochfloat"
+)
+
 type Config struct {
 	Level string `mapstructure:"level"`
 	// OutputPaths is a list of URLs or file paths to write logging output to.
 	OutputPaths []string `mapstructure:"output_paths"`
+	// Format is either EncodingJSON or EncodingConsole.
+	Format string `mapstructure:"format"`
+	// EncodeTime indicates how to encode the time. The default is
+	// TimeEncodingEpochFloat.
+	EncodeTime string `mapstructure:"time_format"`
+}
+
+func rfc3339MilliTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(t.Format("2006-01-02T15:04:05.999Z07:00"))
+}
+
+func epochMillisTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendInt64(t.UnixMilli())
 }
 
 func New(config Config) Logger {
-	fields := make([]zap.Field, 0, 10) // ?
-
 	// poor man's config
 	cfg := zap.NewProductionConfig()
 	level, err := zap.ParseAtomicLevel(config.Level)
 	if err != nil {
 		panic(err)
+	}
+
+	switch config.EncodeTime {
+	case TimeEncodingRFC3339Milli:
+		cfg.EncoderConfig.EncodeTime = rfc3339MilliTimeEncoder
+	case TimeEncodingEpochMilli:
+		cfg.EncoderConfig.EncodeTime = epochMillisTimeEncoder
+	case TimeEncodingEpochFloat: // this is the default
+		fallthrough
+	default:
+		// no-op, the default from NewProductionConfig in zap 1.25, but set it
+		// to ensure stability.
+		cfg.EncoderConfig.EncodeTime = zapcore.EpochTimeEncoder
+	}
+
+	// Translate from our formats to Zap's
+	switch enc := config.Format; enc {
+	case FormatPlain: // "plain" => "console"
+		cfg.Encoding = "console"
+	case FormatJSON, "": // also the default
+		cfg.Encoding = "json"
+	default:
+		panic(fmt.Sprintf("invalid log format %q", enc))
 	}
 
 	if config.Level != "" {
@@ -96,8 +136,8 @@ func New(config Config) Logger {
 		cfg.OutputPaths = []string{"stdout"}
 	}
 
-	logger := zap.Must(cfg.Build(zap.Fields(fields...)))
-	// skip the logger wrapper
+	// fields := make([]zap.Field, 0, 10) with cfg.Build(zap.Fields(fields...))
+	logger := zap.Must(cfg.Build())
 	logger = logger.WithOptions(zap.AddCallerSkip(1))
 	return Logger{L: logger}
 }

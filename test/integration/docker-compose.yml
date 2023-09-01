@@ -23,7 +23,7 @@ services:
       - ext1
     command: |
       --root_dir=/app/kwil
-      --log.log_level=${LOG_LEVEL:-debug}
+      --log.level=${LOG_LEVEL:-debug}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
@@ -51,7 +51,7 @@ services:
       - ext1
     command: |
       --root_dir=/app/kwil
-      --log.log_level=${LOG_LEVEL:-info}
+      --log.level=${LOG_LEVEL:-info}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
@@ -79,7 +79,7 @@ services:
       - ext1
     command: |
       --root_dir=/app/kwil
-      --log.log_level=${LOG_LEVEL:-info}
+      --log.level=${LOG_LEVEL:-info}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
