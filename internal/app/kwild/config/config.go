@@ -12,7 +12,7 @@ import (
 )
 
 type KwildConfig struct {
-	RootDir string `mapstructure:"home_dir"`
+	RootDir string
 
 	AppCfg   *AppConfig       `mapstructure:"app"`
 	ChainCfg *cometCfg.Config `mapstructure:"chain"`
@@ -47,8 +47,16 @@ type SnapshotConfig struct {
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
 }
 
-func (cfg *KwildConfig) LoadKwildConfig(cfgFile string) error {
-	err := cfg.ParseConfig(cfgFile)
+func (cfg *KwildConfig) LoadKwildConfig(rootDir string) error {
+	// Expand root dir path
+	rootDir, err := ExpandPath(rootDir)
+	if err != nil {
+		return fmt.Errorf("failed to expand rootdir path: %v", err)
+	}
+	cfg.RootDir = rootDir
+
+	cfgFile := filepath.Join(rootDir, "config.toml")
+	err = cfg.ParseConfig(cfgFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %v", err)
 	}
@@ -150,13 +158,7 @@ func rootify(path, rootDir string) string {
 }
 
 func (cfg *KwildConfig) sanitizeCfgPaths() error {
-
-	rootDir, err := ExpandPath(cfg.RootDir)
-	if err != nil {
-		return fmt.Errorf("error while getting absolute path for root directory: %v", err)
-	}
-
-	cfg.RootDir = rootDir
+	rootDir := cfg.RootDir
 	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
 	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
 
