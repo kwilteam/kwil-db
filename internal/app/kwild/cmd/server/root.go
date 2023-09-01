@@ -67,11 +67,10 @@ func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 	cmd.Flags().StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "Kwild Server hostname")
 
 	// APP logging
-	cmd.Flags().StringVar(&cfg.Logging.LogLevel, "log.log_level", cfg.Logging.LogLevel, "Kwild app log level")
-
-	cmd.Flags().StringVar(&cfg.Logging.LogFormat, "log.log_format", cfg.Logging.LogFormat, "Kwild app log format")
-
-	cmd.Flags().StringSliceVar(&cfg.Logging.OutputPaths, "log.log_output_paths", cfg.Logging.OutputPaths, "Kwild app log output paths")
+	cmd.Flags().StringVar(&cfg.Logging.Level, "log.level", cfg.Logging.Level, "Kwild app log level")
+	cmd.Flags().StringVar(&cfg.Logging.Format, "log.format", cfg.Logging.Format, "Kwild app log format")
+	cmd.Flags().StringVar(&cfg.Logging.TimeEncoding, "log.time_format", cfg.Logging.TimeEncoding, "Kwild app time log format")
+	cmd.Flags().StringSliceVar(&cfg.Logging.OutputPaths, "log.output_paths", cfg.Logging.OutputPaths, "Kwild app log output paths")
 
 	// Extension endpoints flags
 	cmd.Flags().StringSliceVar(&cfg.AppCfg.ExtensionEndpoints, "app.extension_endpoints", cfg.AppCfg.ExtensionEndpoints, "Kwild app extension endpoints")

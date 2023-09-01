@@ -20,9 +20,10 @@ type KwildConfig struct {
 }
 
 type Logging struct {
-	LogLevel    string   `mapstructure:"log_level"`
-	LogFormat   string   `mapstructure:"log_format"`
-	OutputPaths []string `mapstructure:"output_paths"`
+	Level        string   `mapstructure:"level"`
+	Format       string   `mapstructure:"format"`
+	TimeEncoding string   `mapstructure:"time_format"`
+	OutputPaths  []string `mapstructure:"output_paths"`
 }
 
 type AppConfig struct {
@@ -151,9 +152,10 @@ func DefaultConfig() *KwildConfig {
 			},
 		},
 		Logging: &Logging{
-			LogLevel:    "info",
-			LogFormat:   "plain",
-			OutputPaths: []string{"stdout"},
+			Level:        "info",
+			Format:       log.FormatJSON,
+			TimeEncoding: log.TimeEncodingEpochFloat,
+			OutputPaths:  []string{"stdout"},
 		},
 	}
 
@@ -169,13 +171,11 @@ func DefaultConfig() *KwildConfig {
 }
 
 func (cfg *KwildConfig) configureLogging() {
-	// App Logging
-	cfg.AppCfg.Log.Level = cfg.Logging.LogLevel
+	// pkg/log.Config <== pkg/config.Logging
+	cfg.AppCfg.Log.Level = cfg.Logging.Level
 	cfg.AppCfg.Log.OutputPaths = cfg.Logging.OutputPaths
-
-	// Chain Logging
-	cfg.ChainCfg.LogLevel = cfg.Logging.LogLevel
-	cfg.ChainCfg.LogFormat = cfg.Logging.LogFormat
+	cfg.AppCfg.Log.Format = cfg.Logging.Format
+	cfg.AppCfg.Log.EncodeTime = cfg.Logging.TimeEncoding
 }
 
 func (cfg *KwildConfig) configureCerts() {
