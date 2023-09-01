@@ -21,7 +21,7 @@ services:
       - kwil-act-testnet
     command: |
       --root_dir=/app/kwil
-      --log.log_level=${LOG_LEVEL:-info}
+      --log.level=${LOG_LEVEL:-info}
       --app.extension_endpoints=ext:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
