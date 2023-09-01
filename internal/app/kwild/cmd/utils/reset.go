@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -24,14 +22,14 @@ func NewResetAllCmd() *cobra.Command {
 		Aliases: []string{"unsafe_reset_all"},
 		Short:   "(unsafe) Remove all the blockchain's data and WAL, reset this node's validator to genesis state, for testing purposes only",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			cfgFile := viper.GetString("config")
-			if cfgFile == "" {
-				fmt.Println("No config file specified")
-				return fmt.Errorf("no config file specified")
+			rootDir := viper.GetString("root_dir")
+			rootDir, err = config.ExpandPath(rootDir)
+			if err != nil {
+				return err
 			}
 
 			cfg := config.DefaultConfig()
-			err = cfg.LoadKwildConfig(cfgFile)
+			err = cfg.LoadKwildConfig(rootDir)
 			if err != nil {
 				return err
 			}
@@ -51,14 +49,14 @@ func NewResetStateCmd() *cobra.Command {
 		Aliases: []string{"reset_state"},
 		Short:   "(unsafe) Remove all the data and WAL, for testing purposes only",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			cfgFile := viper.GetString("config")
-			if cfgFile == "" {
-				fmt.Println("No config file specified")
-				return fmt.Errorf("no config file specified")
+			rootDir := viper.GetString("root_dir")
+			rootDir, err = config.ExpandPath(rootDir)
+			if err != nil {
+				return err
 			}
 
 			cfg := config.DefaultConfig()
-			err = cfg.LoadKwildConfig(cfgFile)
+			err = cfg.LoadKwildConfig(rootDir)
 			if err != nil {
 				return err
 			}
