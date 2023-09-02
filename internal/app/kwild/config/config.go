@@ -82,6 +82,45 @@ func fileExists(path string) bool {
 }
 
 func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
+	/*
+		Lots of Viper magic here, but the gist is:
+		We want to be able to set config values via
+			-  flags
+			-  environment variables
+			-  config file
+			-  default values
+
+		for env variables support:
+		Requirement is, we need to be able to config from env variables with a prefix "KWILD_"
+
+		It can be done 2 ways:
+		1. AutomaticEnv: off mode
+			- This will not bind env variables to config values automatically
+			- We need to manually bind env variables to config values (this is what we are doing currently)
+			- As we bound flags to viper, viper is already aware of the config structure mapping,
+				so we can explicitly call viper.BindEnv() on all the keys in viper.AllKeys()
+			- else we would have to reflect on the config structure and bind env variables to config values
+
+		2. AutomaticEnv: on mode
+			- This is supposed to automatically bind env variables to config values
+				(but it doesn't work without doing a bit more work from our side)
+			- One way to make this work is add default values using either viper.SetDefault() for all the config values
+			  or can do viper.MergeConfig(<serialized config>)
+			- Serializing is really painful as cometbft has a field which is using map<interface><interface> though its deprecated.
+				which prevents us from doing the AutomaticEnv binding
+		Issues referencing the issues (or) correct usage of AutomaticEnv: https://github.com/spf13/viper/issues/188
+		For now, we are going with the first approach
+
+		Note:
+		The order of preference of various modes of config supported by viper is:
+		explicit call to Set > flags > env variables > config file > default values
+	*/
+
+	for _, key := range viper.AllKeys() {
+		envKey := "KWILD_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+		viper.BindEnv(key, envKey)
+	}
+
 	if fileExists(cfgFile) {
 		viper.SetConfigFile(cfgFile)
 		if err := viper.ReadInConfig(); err != nil {
@@ -91,6 +130,7 @@ func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
 	if err := viper.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("decoding config: %v", err)
 	}
+
 	return nil
 }
 
