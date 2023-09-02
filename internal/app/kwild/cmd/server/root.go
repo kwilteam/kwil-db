@@ -54,7 +54,7 @@ func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 
 	cmd.Flags().StringVar(&cfg.AppCfg.HttpListenAddress, "app.http_listen_addr", cfg.AppCfg.HttpListenAddress, "Kwild app HTTP listen address")
 
-	cmd.Flags().StringVar(&cfg.AppCfg.SqliteFilePath, "sqlite_file_path", cfg.AppCfg.SqliteFilePath, "Kwild app sqlite file path")
+	cmd.Flags().StringVar(&cfg.AppCfg.SqliteFilePath, "app.sqlite_file_path", cfg.AppCfg.SqliteFilePath, "Kwild app sqlite file path")
 
 	cmd.Flags().BoolVar(&cfg.AppCfg.WithoutGasCosts, "app.without_gas_costs", cfg.AppCfg.WithoutGasCosts, "Kwild app without gas costs")
 
@@ -94,7 +94,7 @@ func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 	// Chain RPC flags
 	cmd.Flags().StringVar(&cfg.ChainCfg.RPC.ListenAddress, "chain.rpc.laddr", cfg.ChainCfg.RPC.ListenAddress, "Chain RPC listen address")
 
-	cmd.Flags().DurationVar(&cfg.ChainCfg.RPC.TimeoutBroadcastTxCommit, "chain.timeout_broadcast_tx_commit", cfg.ChainCfg.RPC.TimeoutBroadcastTxCommit, "chain timeout broadcast tx commit")
+	cmd.Flags().DurationVar(&cfg.ChainCfg.RPC.TimeoutBroadcastTxCommit, "chain.rpc.timeout_broadcast_tx_commit", cfg.ChainCfg.RPC.TimeoutBroadcastTxCommit, "chain timeout broadcast tx commit")
 
 	// Chain P2P flags
 	cmd.Flags().StringVar(&cfg.ChainCfg.P2P.ListenAddress, "chain.p2p.laddr", cfg.ChainCfg.P2P.ListenAddress, "chain P2P listen address")
