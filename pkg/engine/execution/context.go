@@ -4,8 +4,6 @@ import (
 	"context"
 )
 
-var defaultCallerAddress = []byte{}
-
 const (
 	callerVarName        = "@caller"
 	callerAddressVarName = "@caller_address"
