@@ -18,7 +18,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/action-grammar-go v0.0.0
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
-	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230824035650-f76011910419
+	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230904024448-cf862ff4b846
 	github.com/kwilteam/kwil-extensions v0.0.0-20230710163303-bfa03f64ff82
 	github.com/kwilteam/sql-grammar-go v0.0.2
 	github.com/manifoldco/promptui v0.9.0
@@ -138,7 +138,6 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.16.5 // indirect
-	github.com/kwilteam/kuneiform-grammar-go v0.4.1-0.20230807195420-c5c1c840c665 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
