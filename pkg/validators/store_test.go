@@ -105,17 +105,17 @@ func Test_validatorStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	i = findValidator(v0Key, valsOut)
+	i = findValidator(vX.PubKey, valsOut)
 	if i == -1 {
-		t.Fatalf("missing validator %v", v0Key)
+		t.Fatalf("missing validator %v", vX.PubKey)
 	}
 	if numValidators != len(valsOut) {
 		t.Fatalf("wanted %d validators, got %d", numValidators, len(valsOut))
 	}
 	err = vs.AddValidator(ctx, vX.PubKey, vX.Power)
 	if err == nil {
-		t.Fatal("expected an error re-adding an existing validator")
-	} // would be a unique constraint error.... hmm what happens for a re-join of previous validator
+		t.Fatal("expected an error re-adding an existing and empowered validator")
+	}
 
 	// Join requests
 	joiner := newValidator()
