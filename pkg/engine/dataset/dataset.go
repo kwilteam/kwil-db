@@ -173,9 +173,8 @@ func (d *Dataset) getExecutionOpts(proc *types.Procedure, opts *TxOpts) []execut
 	execOpts := []execution.ExecutionOpt{
 		execution.WithDatasetID(d.DBID()),
 	}
-	bts := opts.Caller.Bytes()
 	if opts.Caller.PubKey() != nil {
-		execOpts = append(execOpts, execution.WithCaller(bts))
+		execOpts = append(execOpts, execution.WithCaller(opts.Caller))
 	}
 
 	if !proc.IsMutative() {
