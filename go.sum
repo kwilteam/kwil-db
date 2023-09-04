@@ -567,8 +567,8 @@ github.com/kwilteam/action-grammar-go v0.0.0 h1:FyKRrSdE52ex/YPSlKpjhJkfIcBEX9SY
 github.com/kwilteam/action-grammar-go v0.0.0/go.mod h1:2KYz1ittMk7BbKRJSnSnRSysrgDUUtNB1Ha47ZMdc6M=
 github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421 h1:TewJpDtkIU8ZsIoWMqTcWmZKZS6i4AeuBylgogQ1dRI=
 github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421/go.mod h1:urRZ5yExms/OcYQHq0IAPLkNoudEbfUuQdlNvhcfrKI=
-github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230904011635-5d7201bd4fe5 h1:1rxYfUxhTcFTisI3VS4RB2c2Ie+Bfq/EWGQis3Ff/WU=
-github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230904011635-5d7201bd4fe5/go.mod h1:brcnYttEhcbfuyFZSaEOYDmvIVx78hxiR+c3ZsJYwTE=
+github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230904024448-cf862ff4b846 h1:BHsnnWHaPugiWqOXdj3PLxZoSYzyhCeOXYz6MN65TmE=
+github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230904024448-cf862ff4b846/go.mod h1:brcnYttEhcbfuyFZSaEOYDmvIVx78hxiR+c3ZsJYwTE=
 github.com/kwilteam/kwil-extensions v0.0.0-20230710163303-bfa03f64ff82 h1:pA0ya2WrncGSxxXB0g3dVq1jZZSm1HO6Qp0/yYn4qks=
 github.com/kwilteam/kwil-extensions v0.0.0-20230710163303-bfa03f64ff82/go.mod h1:+BrFrV+3qcdYIfptqjwatE5gT19azuRHJzw77wMPY8c=
 github.com/kwilteam/sql-grammar-go v0.0.2 h1:Tg8xo/Pzd72QsO19wwNvFrpw2muuBaERP7XTv21U4Iw=
