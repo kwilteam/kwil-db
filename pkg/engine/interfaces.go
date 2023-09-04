@@ -57,9 +57,15 @@ func newDatasetUser(u types.UserIdentifier) (*datasetUser, error) {
 		return nil, err
 	}
 
+	addr, err := u.Address()
+	if err != nil {
+		return nil, err
+	}
+
 	return &datasetUser{
 		pubkeyBts:     pub.Bytes(),
 		marshalledBts: bts,
+		address:       addr.String(),
 	}, nil
 }
 
@@ -68,6 +74,7 @@ type datasetUser struct {
 	pubkeyBts []byte
 	// marshalledBts are the marshalled bytes of the user
 	marshalledBts []byte
+	address       string
 }
 
 func (u *datasetUser) Bytes() []byte {
@@ -76,4 +83,8 @@ func (u *datasetUser) Bytes() []byte {
 
 func (u *datasetUser) PubKey() []byte {
 	return u.pubkeyBts
+}
+
+func (u *datasetUser) Address() string {
+	return u.address
 }
