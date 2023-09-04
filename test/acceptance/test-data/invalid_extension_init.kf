@@ -1,12 +1,12 @@
 database invalid_extensions;
 
 use math {
-    round: "invalid!!!"
+    round: 'invalid!!!'
 } as math_ext;
 
 table users {
     id int primary notnull,
-    username text default("sds"),
+    username text default('sds'),
     age int min(0),
     wallet text unique
 }
