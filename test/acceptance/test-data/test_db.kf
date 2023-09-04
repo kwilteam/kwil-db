@@ -12,7 +12,7 @@ table users {
     id int primary notnull,
     username text default('sds'),
     age int min(0),
-    wallet blob unique
+    wallet text unique
 }
 
 table posts {
