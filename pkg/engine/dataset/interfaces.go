@@ -62,6 +62,9 @@ type User interface {
 	Bytes() []byte
 	// PublicKey returns the public key bytes of the user identifier
 	PubKey() []byte
+
+	// Address returns the address of the user identifier
+	Address() string
 }
 
 // noCaller is a User that is used when no user is identified
@@ -73,4 +76,8 @@ func (noCaller) Bytes() []byte {
 
 func (noCaller) PubKey() []byte {
 	return nil
+}
+
+func (noCaller) Address() string {
+	return ""
 }
