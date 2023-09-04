@@ -4,10 +4,9 @@ import (
 	"context"
 )
 
-var defaultCallerAddress = []byte{}
-
 const (
-	callerVarName = "@caller"
+	callerVarName        = "@caller"
+	callerAddressVarName = "@caller_address"
 
 	actionVarName = "@action"
 	defaultAction = "_no_action_"
@@ -20,7 +19,7 @@ const (
 // It should be created with newExecutionContext.
 type executionContext struct {
 	ctx           context.Context
-	caller        []byte
+	caller        User
 	action        string
 	datasetID     string
 	lastDmlResult []map[string]any
@@ -32,16 +31,17 @@ type executionContext struct {
 
 func (ec *executionContext) contextualVariables() map[string]any {
 	return map[string]any{
-		callerVarName:  ec.caller,
-		actionVarName:  ec.action,
-		datasetVarName: ec.datasetID,
+		callerVarName:        ec.caller.Bytes(),
+		callerAddressVarName: ec.caller.Address(),
+		actionVarName:        ec.action,
+		datasetVarName:       ec.datasetID,
 	}
 }
 
 func newExecutionContext(ctx context.Context, action string, opts ...ExecutionOpt) *executionContext {
 	ec := &executionContext{
 		ctx:       ctx,
-		caller:    defaultCallerAddress,
+		caller:    &noCaller{},
 		action:    action,
 		datasetID: datasetDefault,
 	}
@@ -55,7 +55,7 @@ func newExecutionContext(ctx context.Context, action string, opts ...ExecutionOp
 
 type ExecutionOpt func(*executionContext)
 
-func WithCaller(caller []byte) ExecutionOpt {
+func WithCaller(caller User) ExecutionOpt {
 	return func(ec *executionContext) {
 		ec.caller = caller
 	}

@@ -99,7 +99,7 @@ var (
 	}
 
 	testExecutionOpts = []execution.ExecutionOpt{
-		execution.WithCaller([]byte("0xCaller")),
+		execution.WithCaller(&mockUser{}),
 		execution.WithDatasetID("xDBID"),
 	}
 
@@ -154,4 +154,18 @@ type mockInitializedExtension struct {
 
 func (m *mockInitializedExtension) Execute(ctx context.Context, method string, args ...any) ([]any, error) {
 	return m.methodReturns[method], nil
+}
+
+type mockUser struct{}
+
+func (m *mockUser) Address() string {
+	return "0xCaller"
+}
+
+func (m *mockUser) Bytes() []byte {
+	return []byte("000xPUBKEY")
+}
+
+func (m *mockUser) PubKey() []byte {
+	return []byte("0xPUBKEY")
 }
