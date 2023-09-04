@@ -62,17 +62,19 @@ func Secp256k1PrivateKeyFromHex(key string) (*Secp256k1PrivateKey, error) {
 	return &Secp256k1PrivateKey{key: pk}, nil
 }
 
+func Ed25519PrivateKeyFromBytes(key []byte) (*Ed25519PrivateKey, error) {
+	if len(key) != ed25519.PrivateKeySize {
+		return nil, errInvalidPrivateKey
+	}
+	return &Ed25519PrivateKey{key: key}, nil
+}
+
 func Ed25519PrivateKeyFromHex(key string) (*Ed25519PrivateKey, error) {
 	pkBytes, err := hex.DecodeString(key)
 	if err != nil {
 		return nil, err
 	}
-
-	if len(pkBytes) != ed25519.PrivateKeySize {
-		return nil, errInvalidPrivateKey
-	}
-
-	return &Ed25519PrivateKey{key: pkBytes}, nil
+	return Ed25519PrivateKeyFromBytes(pkBytes)
 }
 
 func Ed25519PublicKeyFromBytes(key []byte) (*Ed25519PublicKey, error) {

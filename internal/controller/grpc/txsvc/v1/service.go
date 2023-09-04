@@ -11,6 +11,7 @@ import (
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/pkg/validators"
 )
 
 type Service struct {
@@ -20,15 +21,18 @@ type Service struct {
 
 	engine       EngineReader
 	accountStore AccountReader
+	vstore       ValidatorReader
 
-	chainClient BlockchainBroadcaster
+	chainClient BlockchainTransactor
 }
 
-func NewService(engine EngineReader, accountStore AccountReader, chainClient BlockchainBroadcaster, opts ...TxSvcOpt) *Service {
+func NewService(engine EngineReader, accountStore AccountReader, vstore ValidatorReader,
+	chainClient BlockchainTransactor, opts ...TxSvcOpt) *Service {
 	s := &Service{
 		log:          log.NewNoOp(),
 		engine:       engine,
 		accountStore: accountStore,
+		vstore:       vstore,
 		chainClient:  chainClient,
 	}
 
@@ -53,7 +57,13 @@ type AccountReader interface {
 	GetAccount(ctx context.Context, pubkey []byte) (*balances.Account, error)
 }
 
-type BlockchainBroadcaster interface {
-	BroadcastTxAsync(ctx context.Context, tx []byte) (txHash []byte, err error)
+type BlockchainTransactor interface {
+	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
 	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error)
+}
+
+type ValidatorReader interface {
+	CurrentValidators(ctx context.Context) ([]*validators.Validator, error)
+	ActiveVotes(ctx context.Context) ([]*validators.JoinRequest, error)
+	// JoinStatus(ctx context.Context, joiner []byte) ([]*JoinRequest, error)
 }

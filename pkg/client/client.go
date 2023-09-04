@@ -6,36 +6,32 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
-	"github.com/cstockton/go-conv"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-
-	"github.com/cometbft/cometbft/crypto/ed25519"
-	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	engineUtils "github.com/kwilteam/kwil-db/pkg/engine/utils"
 	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
+	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/pkg/validators"
+
+	"github.com/cstockton/go-conv"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	grpcCreds "google.golang.org/grpc/credentials"
 	grpcInsecure "google.golang.org/grpc/credentials/insecure"
 )
 
 type Client struct {
-	client         *grpcClient.Client
-	CometBftClient *rpchttp.HTTP
-	datasets       map[string]*transactions.Schema
-	Signer         crypto.Signer
-	logger         log.Logger
-	certFile       string // the TLS certificate for the grpc Client
+	client   *grpcClient.Client
+	datasets map[string]*transactions.Schema
+	Signer   crypto.Signer
+	logger   log.Logger
+	certFile string // the TLS certificate for the grpc Client
 }
 
 func newTLSConfig(certFile string) (*tls.Config, error) {
@@ -89,6 +85,9 @@ func New(host string, opts ...ClientOpt) (c *Client, err error) {
 	}
 
 	c.client, err = grpcClient.New(host, grpc.WithTransportCredentials(transOpt))
+	if err != nil {
+		return nil, err
+	}
 
 	zapFields := []zapcore.Field{
 		zap.String("host", host),
@@ -98,15 +97,6 @@ func New(host string, opts ...ClientOpt) (c *Client, err error) {
 	}
 
 	c.logger = *c.logger.Named("client").With(zapFields...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	//c.CometBftClient, err = rpchttp.New(c.cometBftRpcUrl, "")
-	//if err != nil {
-	//	return nil, err
-	//}
 
 	return c, nil
 }
@@ -297,54 +287,45 @@ func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*balances.Accou
 	return c.client.GetAccount(ctx, pubKey)
 }
 
-func (c *Client) ApproveValidator(ctx context.Context, approver string, joiner string) ([]byte, error) {
-	approverB, err := base64.StdEncoding.DecodeString(approver)
+func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*validators.JoinRequest, error) {
+	return c.client.ValidatorJoinStatus(ctx, pubKey)
+}
+
+func (c *Client) CurrentValidators(ctx context.Context) ([]*validators.Validator, error) {
+	return c.client.CurrentValidators(ctx)
+}
+
+func (c *Client) ApproveValidator(ctx context.Context, joiner []byte) ([]byte, error) {
+	_, err := crypto.Ed25519PublicKeyFromBytes(joiner)
 	if err != nil {
-		return nil, err
-	}
-	joinerB, err := base64.StdEncoding.DecodeString(joiner)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid candidate validator public key: %w", err)
 	}
 	payload := &transactions.ValidatorApprove{
-		Candidate: joinerB,
+		Candidate: joiner,
 	}
-	tx, err := c.NewNodeTx(ctx, payload, approverB)
+	tx, err := c.newTx(ctx, payload)
 	if err != nil {
 		return nil, err
 	}
 
-	bts, err := tx.MarshalBinary()
+	hash, err := c.client.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-
-	res, err := c.CometBftClient.BroadcastTxAsync(ctx, bts)
-	if err != nil {
-		return nil, err
-	}
-	return res.Hash, nil
+	return hash, nil
 }
 
-func (c *Client) ValidatorJoin(ctx context.Context, joiner string, power int64) ([]byte, error) {
-	return c.ValidatorUpdate(ctx, joiner, power)
+func (c *Client) ValidatorJoin(ctx context.Context) ([]byte, error) {
+	const power = 1
+	return c.validatorUpdate(ctx, power)
 }
 
-func (c *Client) ValidatorLeave(ctx context.Context, joiner string) ([]byte, error) {
-	return c.ValidatorUpdate(ctx, joiner, 0)
+func (c *Client) ValidatorLeave(ctx context.Context) ([]byte, error) {
+	return c.validatorUpdate(ctx, 0)
 }
 
-func (c *Client) ValidatorUpdate(ctx context.Context, privKeyB64 string, power int64) ([]byte, error) {
-	privKeyB, err := base64.StdEncoding.DecodeString(privKeyB64)
-	if err != nil {
-		return nil, err
-	}
-	if len(privKeyB) != ed25519.PrivateKeySize {
-		return nil, errors.New("invalid joiner private key")
-	}
-	privKey := ed25519.PrivKey(privKeyB)
-	pubKey := privKey.PubKey().Bytes()
-	fmt.Printf("Node PublicKey: %s\n", pubKey)
+func (c *Client) validatorUpdate(ctx context.Context, power int64) ([]byte, error) {
+	pubKey := c.Signer.PubKey().Bytes()
 
 	var payload transactions.Payload
 	if power <= 0 {
@@ -358,21 +339,16 @@ func (c *Client) ValidatorUpdate(ctx context.Context, privKeyB64 string, power i
 		}
 	}
 
-	tx, err := c.NewNodeTx(ctx, payload, privKeyB)
+	tx, err := c.newTx(ctx, payload)
 	if err != nil {
 		return nil, err
 	}
 
-	bts, err := tx.MarshalBinary()
+	hash, err := c.client.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-
-	res, err := c.CometBftClient.BroadcastTxAsync(ctx, bts)
-	if err != nil {
-		return nil, err
-	}
-	return res.Hash, nil
+	return hash, nil
 }
 
 // convertTuples converts user passed tuples to strings.

@@ -18,7 +18,10 @@ func (p PayloadType) Valid() bool {
 	case PayloadTypeDeploySchema,
 		PayloadTypeDropSchema,
 		PayloadTypeExecuteAction,
-		PayloadTypeCallAction:
+		PayloadTypeCallAction,
+		PayloadTypeValidatorJoin,
+		PayloadTypeValidatorApprove,
+		PayloadTypeValidatorLeave:
 		return true
 	default:
 		return false

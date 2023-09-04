@@ -7,6 +7,7 @@ import (
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 
+	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
@@ -99,13 +100,44 @@ type wrappedCometBFTClient struct {
 	*cmtlocal.Local
 }
 
-func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx []byte) ([]byte, error) {
-	result, err := wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(tx))
-	if err != nil {
-		return nil, err
+func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (uint32, []byte, error) {
+	var bcastFun func(ctx context.Context, tx cmttypes.Tx) (*cmtCoreTypes.ResultBroadcastTx, error)
+	switch sync {
+	case 0:
+		bcastFun = wc.Local.BroadcastTxAsync
+	case 1:
+		bcastFun = wc.Local.BroadcastTxSync
+	case 2:
+		bcastFun = func(ctx context.Context, tx cmttypes.Tx) (*cmtCoreTypes.ResultBroadcastTx, error) {
+			res, err := wc.Local.BroadcastTxCommit(ctx, tx)
+			if err != nil {
+				return nil, err
+			}
+			if res.CheckTx.Code != abciTypes.CodeTypeOK {
+				return &cmtCoreTypes.ResultBroadcastTx{
+					Code:      res.CheckTx.Code,
+					Data:      res.CheckTx.Data,
+					Log:       res.CheckTx.Log,
+					Codespace: res.CheckTx.Codespace,
+					Hash:      res.Hash,
+				}, nil
+			}
+			return &cmtCoreTypes.ResultBroadcastTx{
+				Code:      res.DeliverTx.Code,
+				Data:      res.DeliverTx.Data,
+				Log:       res.DeliverTx.Log,
+				Codespace: res.DeliverTx.Codespace,
+				Hash:      res.Hash,
+			}, nil
+		}
 	}
 
-	return result.Hash.Bytes(), nil
+	result, err := bcastFun(ctx, cmttypes.Tx(tx))
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return result.Code, result.Hash.Bytes(), nil
 }
 
 func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error) {

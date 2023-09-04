@@ -70,7 +70,6 @@ type ValidatorMgr struct {
 type ValidatorStore interface {
 	Init(ctx context.Context, vals []*Validator) error
 	CurrentValidators(ctx context.Context) ([]*Validator, error)
-	RemoveValidator(ctx context.Context, validator []byte) error
 	UpdateValidatorPower(ctx context.Context, validator []byte, power int64) error
 	ActiveVotes(ctx context.Context) ([]*JoinRequest, error)
 	StartJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64) error
@@ -143,6 +142,26 @@ func (vm *ValidatorMgr) init() error {
 	return nil
 }
 
+// CurrentValidators returns the current validator set.
+func (vm *ValidatorMgr) CurrentValidators(ctx context.Context) ([]*Validator, error) {
+	// NOTE: the DB is the simplest approach, but since this method may be
+	// called on-demand method (e.g. by an RPC client), it is not synchronized
+	// with the other methods that are intended to be utilized by the blockchain
+	// application. The ValidatorStore is thread-safe, but updates to the store
+	// are not deferred until Finalize like the updates to the tracking fields
+	// in this struct. Thus, the atomicity of the underlying datastore is the
+	// only thing guaranteeing that this method reflects the current state.
+	//
+	// Alternatively, we can rig a mutex on the `current` map field, using that
+	// throughout the ValidatorMgr methods. That's not attractive.
+	return vm.db.CurrentValidators(ctx)
+}
+
+// ActiveVotes returns the current validator join requests.
+func (vm *ValidatorMgr) ActiveVotes(ctx context.Context) ([]*JoinRequest, error) {
+	return vm.db.ActiveVotes(ctx)
+}
+
 // GenesisInit is called at the genesis block to set and initial list of
 // validators.
 func (vm *ValidatorMgr) GenesisInit(ctx context.Context, vals []*Validator) error {
@@ -186,8 +205,6 @@ func (vm *ValidatorMgr) Update(ctx context.Context, validator []byte, newPower i
 // execution response with a fee, and put any subsequent execution error in that
 // struct for
 
-// func (vm *ValidatorMgr) join(pubkey []byte)
-
 // Join creates a join request for a prospective validator.
 func (vm *ValidatorMgr) Join(ctx context.Context, joiner []byte, power int64) error {
 	if vm.isCurrent(joiner) {
@@ -214,11 +231,15 @@ func (vm *ValidatorMgr) Join(ctx context.Context, joiner []byte, power int64) er
 	return vm.db.StartJoinRequest(ctx, joiner, approvers, power)
 }
 
-// Leave processes a leave request for a current validator by setting their
-// power to zero.
+// Leave processes a leave request for a current validator.
 func (vm *ValidatorMgr) Leave(ctx context.Context, leaver []byte) error {
+	// TODO: decide if leave should be a hard removal from the database or just
+	// set power to zero. Punish does update even to zero power, so probably
+	// Leave should too.
+
 	const leavePower = 0 // leave the entry, set power to zero
 	return vm.Update(ctx, leaver, leavePower)
+	// return vm.db.RemoveValidator(ctx, leaver)
 }
 
 // Approve records an approval transaction from a current validator.
