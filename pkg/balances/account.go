@@ -1,6 +1,9 @@
 package balances
 
-import "math/big"
+import (
+	"fmt"
+	"math/big"
+)
 
 // emptyAccount returns an empty account with a balance of 0 and a nonce of 0.
 func emptyAccount() *Account {
@@ -30,7 +33,7 @@ func (a *Account) validateSpend(amount *big.Int) (*big.Int, error) {
 // validateNonce checks that the passed nonce is exactly one greater than the account's nonce.
 func (a *Account) validateNonce(nonce int64) error {
 	if a.Nonce+1 != nonce {
-		return ErrInvalidNonce
+		return fmt.Errorf("%w: expected %d, got %d", ErrInvalidNonce, a.Nonce+1, nonce)
 	}
 	return nil
 }

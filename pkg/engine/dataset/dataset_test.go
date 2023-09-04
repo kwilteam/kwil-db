@@ -459,6 +459,10 @@ func (t *testUserIdentifier) PubKey() []byte {
 	return t.pk.PubKey().Bytes()
 }
 
+func (t *testUserIdentifier) Address() string {
+	return t.pk.PubKey().Address().String() // TODO: this may need to change; the default will work for now, but as soon as we support more than just NEAR and ETH it will not work
+}
+
 func testUser() *testUserIdentifier {
 	pk, err := crypto.Secp256k1PrivateKeyFromHex("a23d63fb2a14a225a81c92006d1fbac023db22bda2286e6d3f18fdd215423da2")
 	if err != nil {
