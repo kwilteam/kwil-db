@@ -27,3 +27,29 @@ type PreparedStatement interface {
 	// IsMutative returns true if the statement is mutative.
 	IsMutative() bool
 }
+
+// User is an interface that can be implemented by a type to be used as a user identifier
+type User interface {
+	// Bytes returns a byte representation of the user identifier
+	// This should follow Kwil's caller ID format
+	Bytes() []byte
+	// PublicKey returns the public key bytes of the user identifier
+	PubKey() []byte
+	// Address returns the address of the user
+	Address() string
+}
+
+// noCaller is a User that is used when no user is identified
+type noCaller struct{}
+
+func (noCaller) Bytes() []byte {
+	return nil
+}
+
+func (noCaller) PubKey() []byte {
+	return nil
+}
+
+func (noCaller) Address() string {
+	return ""
+}

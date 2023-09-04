@@ -7,4 +7,5 @@ type UserIdentifier interface {
 	MarshalBinary() ([]byte, error)
 	PubKey() (crypto.PublicKey, error)
 	UnmarshalBinary(data []byte) error
+	Address() (crypto.Address, error)
 }
