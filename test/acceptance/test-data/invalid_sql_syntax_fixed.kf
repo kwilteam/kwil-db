@@ -2,7 +2,7 @@ database invalid_sql_syntax;
 
 table users {
     id int primary notnull,
-    username text default("sds"),
+    username text default('sds'),
     age int min(0),
     dob text,
     wallet text unique
