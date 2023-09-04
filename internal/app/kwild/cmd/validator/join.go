@@ -1,47 +1,54 @@
 package validator
 
 import (
+	"encoding/base64"
 	"fmt"
-	"strconv"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+
 	"github.com/spf13/cobra"
 )
 
 // ApproveCmd is used for approving validators
 func joinCmd(cfg *config.KwildConfig) *cobra.Command {
 	var appGRPCListenAddr string
+	// TODO: read the private key from a file
 	cmd := &cobra.Command{
-		Use:   "join [JoinerPrivateKey][power] [BcRPCURL]",
+		Use:   "join [JoinerPrivateKey]",
 		Short: "Request to join the network as a validator",
-		Long:  "The Join command is used to request to join the network as a validator. Joiner Private key and the Blockchain RPC URL are required.",
-		Args:  cobra.ExactArgs(3),
+		Long:  "The Join command is used to request to join the network as a validator. Joiner private key is required.",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Joining the network as a validator...")
-			power, err := strconv.ParseInt(args[1], 10, 64)
+
+			ctx := cmd.Context()
+
+			joinerKeyB, err := base64.StdEncoding.DecodeString(args[0])
 			if err != nil {
 				return err
 			}
-			fmt.Println("Power:", power, "Pubkey:", args[0])
+			joinerKey, err := crypto.Ed25519PrivateKeyFromBytes(joinerKeyB)
+			if err != nil {
+				return err
+			}
 
-			ctx := cmd.Context()
-			// options := []client.ClientOpt{client.WithCometBftUrl(args[2])}
-			// TODO: Use cometbft client
-			options := []client.ClientOpt{}
+			signer := crypto.NewStdEd25519Signer(joinerKey)
+			options := []client.ClientOpt{client.WithSigner(signer)}
 			clt, err := client.New(appGRPCListenAddr, options...)
 			if err != nil {
 				return err
 			}
 
-			hash, err := clt.ValidatorJoin(ctx, args[0], power)
+			hash, err := clt.ValidatorJoin(ctx)
 			if err != nil {
 				return err
 			}
-			fmt.Println("Transaction hash: ", hash)
+			fmt.Printf("Transaction hash: %x\n", hash)
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&appGRPCListenAddr, "grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Address to listen for gRPC connections for the application")
+	cmd.Flags().StringVar(&appGRPCListenAddr, "grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "gRPC server address")
 	return cmd
 }

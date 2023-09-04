@@ -20,6 +20,7 @@ func NewCmdValidator(cfg *config.KwildConfig) *cobra.Command {
 		joinCmd(cfg),
 		leaveCmd(cfg),
 		statusCmd(cfg),
+		validatorSetCmd(cfg),
 	)
 
 	return rootCmd

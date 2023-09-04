@@ -135,43 +135,48 @@ func GetTransactionResult(attributes []types.EventAttribute) bool {
 
 // NOTE: The keys in these validator related methods are base64-encoded.
 
-func (d *KwildDriver) ApproveNode(ctx context.Context, joinerPubKey string, approverPrivKey string) error {
-	_, err := d.clt.ApproveValidator(ctx, approverPrivKey, joinerPubKey)
+func (d *KwildDriver) ApproveNode(ctx context.Context, joinerPubKey []byte) error {
+	_, err := d.clt.ApproveValidator(ctx, joinerPubKey)
 	return err
 }
 
 func (d *KwildDriver) ValidatorSetCount(ctx context.Context) (int, error) {
-	vals, err := d.clt.CometBftClient.Validators(ctx, nil, nil, nil)
+	vals, err := d.clt.CurrentValidators(ctx)
 	if err != nil {
 		return -1, err
 	}
 
-	return vals.Count, nil
+	return len(vals), nil
 }
 
-func (d *KwildDriver) ValidatorNodeJoin(ctx context.Context, joiner string, power int64) error {
-	_, err := d.clt.ValidatorJoin(ctx, joiner, power)
+func (d *KwildDriver) ValidatorNodeJoin(ctx context.Context) error {
+	hash, err := d.clt.ValidatorJoin(ctx)
 	if err != nil {
 		return fmt.Errorf("error joining validator: %w", err)
 	}
-
-	return nil
-}
-
-func (d *KwildDriver) ValidatorNodeLeave(ctx context.Context, leaver string) error {
-	hash, err := d.clt.ValidatorLeave(ctx, leaver)
-	if err != nil {
-		return fmt.Errorf("error joining validator: %w", err)
-	}
-	// how come this one goes through the cometBFT client?
-	res, err := d.clt.CometBftClient.Tx(ctx, hash, false)
+	res, err := d.clt.TxQuery(ctx, hash)
 	if err != nil {
 		return fmt.Errorf("error getting transaction: %w", err)
 	}
 
-	if !GetTransactionResult(res.TxResult.Events[0].Attributes) {
-		return fmt.Errorf("failed to join as a validator")
+	if code := res.TxResult.Code; code != 0 {
+		return fmt.Errorf("tx code %d", code)
+	}
+	return nil
+}
+
+func (d *KwildDriver) ValidatorNodeLeave(ctx context.Context) error {
+	hash, err := d.clt.ValidatorLeave(ctx)
+	if err != nil {
+		return fmt.Errorf("error joining validator: %w", err)
+	}
+	res, err := d.clt.TxQuery(ctx, hash)
+	if err != nil {
+		return fmt.Errorf("error getting transaction: %w", err)
 	}
 
+	if code := res.TxResult.Code; code != 0 {
+		return fmt.Errorf("tx code %d", code)
+	}
 	return nil
 }
