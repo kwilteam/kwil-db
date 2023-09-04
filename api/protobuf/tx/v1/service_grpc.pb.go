@@ -31,6 +31,7 @@ const (
 	TxService_ValidatorJoin_FullMethodName       = "/tx.TxService/ValidatorJoin"
 	TxService_ValidatorLeave_FullMethodName      = "/tx.TxService/ValidatorLeave"
 	TxService_ValidatorJoinStatus_FullMethodName = "/tx.TxService/ValidatorJoinStatus"
+	TxService_CurrentValidators_FullMethodName   = "/tx.TxService/CurrentValidators"
 	TxService_Call_FullMethodName                = "/tx.TxService/Call"
 	TxService_TxQuery_FullMethodName             = "/tx.TxService/TxQuery"
 )
@@ -51,6 +52,7 @@ type TxServiceClient interface {
 	ValidatorJoin(ctx context.Context, in *ValidatorJoinRequest, opts ...grpc.CallOption) (*ValidatorJoinResponse, error)
 	ValidatorLeave(ctx context.Context, in *ValidatorLeaveRequest, opts ...grpc.CallOption) (*ValidatorLeaveResponse, error)
 	ValidatorJoinStatus(ctx context.Context, in *ValidatorJoinStatusRequest, opts ...grpc.CallOption) (*ValidatorJoinStatusResponse, error)
+	CurrentValidators(ctx context.Context, in *CurrentValidatorsRequest, opts ...grpc.CallOption) (*CurrentValidatorsResponse, error)
 	Call(ctx context.Context, in *CallRequest, opts ...grpc.CallOption) (*CallResponse, error)
 	TxQuery(ctx context.Context, in *TxQueryRequest, opts ...grpc.CallOption) (*TxQueryResponse, error)
 }
@@ -171,6 +173,15 @@ func (c *txServiceClient) ValidatorJoinStatus(ctx context.Context, in *Validator
 	return out, nil
 }
 
+func (c *txServiceClient) CurrentValidators(ctx context.Context, in *CurrentValidatorsRequest, opts ...grpc.CallOption) (*CurrentValidatorsResponse, error) {
+	out := new(CurrentValidatorsResponse)
+	err := c.cc.Invoke(ctx, TxService_CurrentValidators_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *txServiceClient) Call(ctx context.Context, in *CallRequest, opts ...grpc.CallOption) (*CallResponse, error) {
 	out := new(CallResponse)
 	err := c.cc.Invoke(ctx, TxService_Call_FullMethodName, in, out, opts...)
@@ -205,6 +216,7 @@ type TxServiceServer interface {
 	ValidatorJoin(context.Context, *ValidatorJoinRequest) (*ValidatorJoinResponse, error)
 	ValidatorLeave(context.Context, *ValidatorLeaveRequest) (*ValidatorLeaveResponse, error)
 	ValidatorJoinStatus(context.Context, *ValidatorJoinStatusRequest) (*ValidatorJoinStatusResponse, error)
+	CurrentValidators(context.Context, *CurrentValidatorsRequest) (*CurrentValidatorsResponse, error)
 	Call(context.Context, *CallRequest) (*CallResponse, error)
 	TxQuery(context.Context, *TxQueryRequest) (*TxQueryResponse, error)
 	mustEmbedUnimplementedTxServiceServer()
@@ -249,6 +261,9 @@ func (UnimplementedTxServiceServer) ValidatorLeave(context.Context, *ValidatorLe
 }
 func (UnimplementedTxServiceServer) ValidatorJoinStatus(context.Context, *ValidatorJoinStatusRequest) (*ValidatorJoinStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidatorJoinStatus not implemented")
+}
+func (UnimplementedTxServiceServer) CurrentValidators(context.Context, *CurrentValidatorsRequest) (*CurrentValidatorsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CurrentValidators not implemented")
 }
 func (UnimplementedTxServiceServer) Call(context.Context, *CallRequest) (*CallResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Call not implemented")
@@ -485,6 +500,24 @@ func _TxService_ValidatorJoinStatus_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TxService_CurrentValidators_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CurrentValidatorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).CurrentValidators(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TxService_CurrentValidators_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).CurrentValidators(ctx, req.(*CurrentValidatorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TxService_Call_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CallRequest)
 	if err := dec(in); err != nil {
@@ -575,6 +608,10 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ValidatorJoinStatus",
 			Handler:    _TxService_ValidatorJoinStatus_Handler,
+		},
+		{
+			MethodName: "CurrentValidators",
+			Handler:    _TxService_CurrentValidators_Handler,
 		},
 		{
 			MethodName: "Call",

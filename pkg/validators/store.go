@@ -88,11 +88,15 @@ func (vs *validatorStore) UpdateValidatorPower(ctx context.Context, validator []
 	return vs.updateValidatorPower(ctx, validator, power)
 }
 
-// RemoveValidator deletes a validator. This is normally done in response to a
-// leave request from the same validator. On the other hand, punishment involves
-// reducing validator power. NOTE: This may not be required since power 0
-// removes the validator from the "active" validators set returned by
-// CurrentValidators.
+// RemoveValidator deletes a validator. NOTE: Both leave request handling and
+// punishment involve reducing validator power, not removing them. As such, this
+// may not be required since power 0 removes the validator from the "active"
+// validators set returned by CurrentValidators. To support this, AddValidator
+// performs an upsert operation to avoid a UNIQUE constraint violation if
+// re-adding the validator later.
+//
+// TODO: remove if this ultimately has no purpose, but cleanup and pruning of
+// some form is likely needed in the long term
 func (vs *validatorStore) RemoveValidator(ctx context.Context, validator []byte) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
