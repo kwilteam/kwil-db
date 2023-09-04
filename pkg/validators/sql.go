@@ -14,6 +14,8 @@ import (
 	"strings"
 )
 
+var errUnknownValidator = errors.New("unknown validator")
+
 // store:
 // - current validator set
 // - active approvals/votes
@@ -61,10 +63,14 @@ const (
 	sqlDeleteAllValidators = "DELETE FROM validators;"
 	sqlDeleteAllJoins      = "DELETE FROM join_reqs;"
 
-	sqlNewValidator         = "INSERT INTO validators (pubkey, power) VALUES ($pubkey, $power)"
+	// NOTE: if re-adding a validator, this will hit the UNIQUE constraint on
+	// pubkey. We may want to keep validators in the table with power 0 on leave
+	// or punish, so we perform an upsert to be safe.
+	sqlNewValidator         = "INSERT INTO validators (pubkey, power) VALUES ($pubkey, $power) ON CONFLICT DO UPDATE SET power = $power"
 	sqlDeleteValidator      = "DELETE FROM validators WHERE pubkey = $pubkey;"
 	sqlUpdateValidatorPower = `UPDATE validators SET power = $power
 		WHERE pubkey = $pubkey`
+	sqlGetValidatorPower = `SELECT power FROM validators WHERE pubkey = $pubkey`
 
 	sqlNewJoinReq = `INSERT INTO join_reqs (candidate, power_wanted)
 		VALUES ($candidate, $power_wanted)`
@@ -157,7 +163,17 @@ func (vs *validatorStore) addApproval(ctx context.Context, joiner, approver []by
 }
 
 func (vs *validatorStore) addValidator(ctx context.Context, joiner []byte, power int64) error {
-	err := vs.db.Execute(ctx, sqlNewValidator, map[string]any{
+	// Only permit this for first time validators (unknown) or validators with
+	// power zero (not active, but in our tables).
+	power0, err := vs.validatorPower(ctx, joiner)
+	if err != nil && !errors.Is(err, errUnknownValidator) {
+		return err
+	}
+	if power0 > 0 {
+		return errors.New("validator with power already exists")
+	}
+	// Either a new validator, or we are doing a power upsert.
+	err = vs.db.Execute(ctx, sqlNewValidator, map[string]any{
 		"$pubkey": joiner,
 		"$power":  power,
 	})
@@ -216,6 +232,28 @@ func (vs *validatorStore) init(ctx context.Context, vals []*Validator) error {
 	}
 
 	return nil
+}
+
+func (vs *validatorStore) validatorPower(ctx context.Context, validator []byte) (int64, error) {
+	results, err := vs.db.Query(ctx, sqlGetValidatorPower, map[string]interface{}{
+		"$pubkey": validator,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if len(results) == 0 {
+		return 0, errUnknownValidator
+	}
+
+	pwri, ok := results[0]["power"]
+	if !ok {
+		return 0, errors.New("no power in validator record")
+	}
+	power, ok := pwri.(int64)
+	if !ok {
+		return 0, fmt.Errorf("invalid power value (%T)", pwri)
+	}
+	return power, nil
 }
 
 func (vs *validatorStore) currentValidators(ctx context.Context) ([]*Validator, error) {

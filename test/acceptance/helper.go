@@ -154,7 +154,7 @@ func (r *ActHelper) updateGeneratedConfig(ks, vs []string) {
 
 func (r *ActHelper) generateNodeConfig() {
 	r.t.Logf("generate node config")
-	tmpPath := r.t.TempDir()
+	tmpPath := r.t.TempDir() // automatically removed by testing.T.Cleanup
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
 	err := nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
@@ -223,7 +223,7 @@ func (r *ActHelper) Teardown() {
 	}
 }
 
-func (r *ActHelper) GetAliceDriver(ctx context.Context) KwilAcceptanceDriver {
+func (r *ActHelper) GetAliceDriver() KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 	kwilClt, err := client.New(r.cfg.GrpcEndpoint,
 		client.WithSigner(r.cfg.AlicePK),
@@ -234,7 +234,7 @@ func (r *ActHelper) GetAliceDriver(ctx context.Context) KwilAcceptanceDriver {
 	return kwild.NewKwildDriver(kwilClt, kwild.WithLogger(logger))
 }
 
-func (r *ActHelper) GetBobDriver(ctx context.Context) KwilAcceptanceDriver {
+func (r *ActHelper) GetBobDriver() KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 	kwilClt, err := client.New(r.cfg.GrpcEndpoint,
 		client.WithSigner(r.cfg.BobPk),

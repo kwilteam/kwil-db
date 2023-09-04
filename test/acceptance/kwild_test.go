@@ -27,13 +27,12 @@ func TestKwildGrpcAcceptance(t *testing.T) {
 
 	if !*remote {
 		helper.Setup(ctx)
-		defer helper.Teardown()
 	}
 
 	// running forever for local development
 	if *dev {
 		done := make(chan os.Signal, 1)
-		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(done, os.Interrupt, syscall.SIGTERM)
 
 		// block waiting for a signal
 		s := <-done
@@ -43,8 +42,8 @@ func TestKwildGrpcAcceptance(t *testing.T) {
 		return
 	}
 
-	aliceDriver := helper.GetAliceDriver(ctx)
-	bobDriver := helper.GetBobDriver(ctx)
+	aliceDriver := helper.GetAliceDriver()
+	bobDriver := helper.GetBobDriver()
 
 	// When user deployed database
 	//specifications.DatabaseDeployInvalidSqlSpecification(ctx, t, driver)
@@ -66,4 +65,9 @@ func TestKwildGrpcAcceptance(t *testing.T) {
 
 	// and user should be able to drop database
 	specifications.DatabaseDropSpecification(ctx, t, aliceDriver)
+
+	// there's one node in the network and we're the validator
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, aliceDriver, 1)
+
+	// The other network/validator specs require multiple nodes in a network
 }

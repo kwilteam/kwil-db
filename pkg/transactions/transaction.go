@@ -244,18 +244,6 @@ type TransactionBody struct {
 	Salt []byte
 }
 
-func (t *TransactionBody) Verify() error {
-	if !t.PayloadType.Valid() {
-		return fmt.Errorf("invalid payload type: %s", t.PayloadType)
-	}
-
-	if t.Fee == nil {
-		t.Fee = big.NewInt(0)
-	}
-
-	return nil
-}
-
 func (t *TransactionBody) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(t)
 }

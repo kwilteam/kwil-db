@@ -66,61 +66,6 @@ func (RequestStatus) EnumDescriptor() ([]byte, []int) {
 	return file_kwil_tx_v1_validator_proto_rawDescGZIP(), []int{0}
 }
 
-type JoinStatus int32
-
-const (
-	JoinStatus_INITIATED JoinStatus = 0
-	JoinStatus_PENDING   JoinStatus = 1
-	JoinStatus_APPROVED  JoinStatus = 2
-	JoinStatus_REJECTED  JoinStatus = 3
-	JoinStatus_UNKNOWN   JoinStatus = 50
-)
-
-// Enum value maps for JoinStatus.
-var (
-	JoinStatus_name = map[int32]string{
-		0:  "INITIATED",
-		1:  "PENDING",
-		2:  "APPROVED",
-		3:  "REJECTED",
-		50: "UNKNOWN",
-	}
-	JoinStatus_value = map[string]int32{
-		"INITIATED": 0,
-		"PENDING":   1,
-		"APPROVED":  2,
-		"REJECTED":  3,
-		"UNKNOWN":   50,
-	}
-)
-
-func (x JoinStatus) Enum() *JoinStatus {
-	p := new(JoinStatus)
-	*p = x
-	return p
-}
-
-func (x JoinStatus) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (JoinStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_kwil_tx_v1_validator_proto_enumTypes[1].Descriptor()
-}
-
-func (JoinStatus) Type() protoreflect.EnumType {
-	return &file_kwil_tx_v1_validator_proto_enumTypes[1]
-}
-
-func (x JoinStatus) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use JoinStatus.Descriptor instead.
-func (JoinStatus) EnumDescriptor() ([]byte, []int) {
-	return file_kwil_tx_v1_validator_proto_rawDescGZIP(), []int{1}
-}
-
 type Validator struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -467,18 +412,103 @@ func (x *ValidatorLeaveResponse) GetReceipt() *TransactionStatus {
 	return nil
 }
 
+type CurrentValidatorsRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *CurrentValidatorsRequest) Reset() {
+	*x = CurrentValidatorsRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_tx_v1_validator_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CurrentValidatorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CurrentValidatorsRequest) ProtoMessage() {}
+
+func (x *CurrentValidatorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_tx_v1_validator_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CurrentValidatorsRequest.ProtoReflect.Descriptor instead.
+func (*CurrentValidatorsRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_tx_v1_validator_proto_rawDescGZIP(), []int{7}
+}
+
+type CurrentValidatorsResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Validators []*Validator `protobuf:"bytes,1,rep,name=validators,proto3" json:"validators,omitempty"`
+}
+
+func (x *CurrentValidatorsResponse) Reset() {
+	*x = CurrentValidatorsResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_tx_v1_validator_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CurrentValidatorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CurrentValidatorsResponse) ProtoMessage() {}
+
+func (x *CurrentValidatorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_tx_v1_validator_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CurrentValidatorsResponse.ProtoReflect.Descriptor instead.
+func (*CurrentValidatorsResponse) Descriptor() ([]byte, []int) {
+	return file_kwil_tx_v1_validator_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *CurrentValidatorsResponse) GetValidators() []*Validator {
+	if x != nil {
+		return x.Validators
+	}
+	return nil
+}
+
 type ValidatorJoinStatusRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Pubkey []byte `protobuf:"bytes,1,opt,name=Pubkey,proto3" json:"Pubkey,omitempty"` // ED25519 PubKey
+	Pubkey []byte `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"` // ED25519 PubKey
 }
 
 func (x *ValidatorJoinStatusRequest) Reset() {
 	*x = ValidatorJoinStatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_tx_v1_validator_proto_msgTypes[7]
+		mi := &file_kwil_tx_v1_validator_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -491,7 +521,7 @@ func (x *ValidatorJoinStatusRequest) String() string {
 func (*ValidatorJoinStatusRequest) ProtoMessage() {}
 
 func (x *ValidatorJoinStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_tx_v1_validator_proto_msgTypes[7]
+	mi := &file_kwil_tx_v1_validator_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -504,7 +534,7 @@ func (x *ValidatorJoinStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatorJoinStatusRequest.ProtoReflect.Descriptor instead.
 func (*ValidatorJoinStatusRequest) Descriptor() ([]byte, []int) {
-	return file_kwil_tx_v1_validator_proto_rawDescGZIP(), []int{7}
+	return file_kwil_tx_v1_validator_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ValidatorJoinStatusRequest) GetPubkey() []byte {
@@ -519,18 +549,15 @@ type ValidatorJoinStatusResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Approved           int64      `protobuf:"varint,1,opt,name=approved,proto3" json:"approved,omitempty"`
-	Rejected           int64      `protobuf:"varint,2,opt,name=rejected,proto3" json:"rejected,omitempty"`
-	Pending            int64      `protobuf:"varint,3,opt,name=pending,proto3" json:"pending,omitempty"`
-	ApprovedValidators []string   `protobuf:"bytes,4,rep,name=approved_validators,proto3" json:"approved_validators,omitempty"`
-	RejectedValidators []string   `protobuf:"bytes,5,rep,name=rejected_validators,proto3" json:"rejected_validators,omitempty"`
-	Status             JoinStatus `protobuf:"varint,6,opt,name=status,proto3,enum=tx.JoinStatus" json:"status,omitempty"`
+	ApprovedValidators [][]byte `protobuf:"bytes,1,rep,name=approved_validators,proto3" json:"approved_validators,omitempty"`
+	PendingValidators  [][]byte `protobuf:"bytes,2,rep,name=pending_validators,proto3" json:"pending_validators,omitempty"`
+	Power              int64    `protobuf:"varint,3,opt,name=power,proto3" json:"power,omitempty"`
 }
 
 func (x *ValidatorJoinStatusResponse) Reset() {
 	*x = ValidatorJoinStatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_tx_v1_validator_proto_msgTypes[8]
+		mi := &file_kwil_tx_v1_validator_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -543,7 +570,7 @@ func (x *ValidatorJoinStatusResponse) String() string {
 func (*ValidatorJoinStatusResponse) ProtoMessage() {}
 
 func (x *ValidatorJoinStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_tx_v1_validator_proto_msgTypes[8]
+	mi := &file_kwil_tx_v1_validator_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -556,49 +583,28 @@ func (x *ValidatorJoinStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatorJoinStatusResponse.ProtoReflect.Descriptor instead.
 func (*ValidatorJoinStatusResponse) Descriptor() ([]byte, []int) {
-	return file_kwil_tx_v1_validator_proto_rawDescGZIP(), []int{8}
+	return file_kwil_tx_v1_validator_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *ValidatorJoinStatusResponse) GetApproved() int64 {
-	if x != nil {
-		return x.Approved
-	}
-	return 0
-}
-
-func (x *ValidatorJoinStatusResponse) GetRejected() int64 {
-	if x != nil {
-		return x.Rejected
-	}
-	return 0
-}
-
-func (x *ValidatorJoinStatusResponse) GetPending() int64 {
-	if x != nil {
-		return x.Pending
-	}
-	return 0
-}
-
-func (x *ValidatorJoinStatusResponse) GetApprovedValidators() []string {
+func (x *ValidatorJoinStatusResponse) GetApprovedValidators() [][]byte {
 	if x != nil {
 		return x.ApprovedValidators
 	}
 	return nil
 }
 
-func (x *ValidatorJoinStatusResponse) GetRejectedValidators() []string {
+func (x *ValidatorJoinStatusResponse) GetPendingValidators() [][]byte {
 	if x != nil {
-		return x.RejectedValidators
+		return x.PendingValidators
 	}
 	return nil
 }
 
-func (x *ValidatorJoinStatusResponse) GetStatus() JoinStatus {
+func (x *ValidatorJoinStatusResponse) GetPower() int64 {
 	if x != nil {
-		return x.Status
+		return x.Power
 	}
-	return JoinStatus_INITIATED
+	return 0
 }
 
 var File_kwil_tx_v1_validator_proto protoreflect.FileDescriptor
@@ -636,37 +642,32 @@ var file_kwil_tx_v1_validator_proto_rawDesc = []byte{
 	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2f, 0x0a, 0x07, 0x72, 0x65, 0x63, 0x65, 0x69, 0x70, 0x74,
 	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x74, 0x78, 0x2e, 0x54, 0x72, 0x61, 0x6e,
 	0x73, 0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x07, 0x72,
-	0x65, 0x63, 0x65, 0x69, 0x70, 0x74, 0x22, 0x34, 0x0a, 0x1a, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61,
-	0x74, 0x6f, 0x72, 0x4a, 0x6f, 0x69, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x50, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x50, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x22, 0xfb, 0x01, 0x0a,
-	0x1b, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x4a, 0x6f, 0x69, 0x6e, 0x53, 0x74,
-	0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08,
-	0x61, 0x70, 0x70, 0x72, 0x6f, 0x76, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08,
-	0x61, 0x70, 0x70, 0x72, 0x6f, 0x76, 0x65, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65, 0x6a, 0x65,
-	0x63, 0x74, 0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x72, 0x65, 0x6a, 0x65,
-	0x63, 0x74, 0x65, 0x64, 0x12, 0x18, 0x0a, 0x07, 0x70, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x18,
-	0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x07, 0x70, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x12, 0x30,
-	0x0a, 0x13, 0x61, 0x70, 0x70, 0x72, 0x6f, 0x76, 0x65, 0x64, 0x5f, 0x76, 0x61, 0x6c, 0x69, 0x64,
-	0x61, 0x74, 0x6f, 0x72, 0x73, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52, 0x13, 0x61, 0x70, 0x70,
-	0x72, 0x6f, 0x76, 0x65, 0x64, 0x5f, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73,
-	0x12, 0x30, 0x0a, 0x13, 0x72, 0x65, 0x6a, 0x65, 0x63, 0x74, 0x65, 0x64, 0x5f, 0x76, 0x61, 0x6c,
-	0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x18, 0x05, 0x20, 0x03, 0x28, 0x09, 0x52, 0x13, 0x72,
-	0x65, 0x6a, 0x65, 0x63, 0x74, 0x65, 0x64, 0x5f, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f,
-	0x72, 0x73, 0x12, 0x26, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x06, 0x20, 0x01,
-	0x28, 0x0e, 0x32, 0x0e, 0x2e, 0x74, 0x78, 0x2e, 0x4a, 0x6f, 0x69, 0x6e, 0x53, 0x74, 0x61, 0x74,
-	0x75, 0x73, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x2a, 0x22, 0x0a, 0x0d, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x06, 0x0a, 0x02, 0x4f,
-	0x4b, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x45, 0x52, 0x52, 0x4f, 0x52, 0x10, 0x01, 0x2a, 0x51,
-	0x0a, 0x0a, 0x4a, 0x6f, 0x69, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x0d, 0x0a, 0x09,
-	0x49, 0x4e, 0x49, 0x54, 0x49, 0x41, 0x54, 0x45, 0x44, 0x10, 0x00, 0x12, 0x0b, 0x0a, 0x07, 0x50,
-	0x45, 0x4e, 0x44, 0x49, 0x4e, 0x47, 0x10, 0x01, 0x12, 0x0c, 0x0a, 0x08, 0x41, 0x50, 0x50, 0x52,
-	0x4f, 0x56, 0x45, 0x44, 0x10, 0x02, 0x12, 0x0c, 0x0a, 0x08, 0x52, 0x45, 0x4a, 0x45, 0x43, 0x54,
-	0x45, 0x44, 0x10, 0x03, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10,
-	0x32, 0x42, 0x35, 0x5a, 0x33, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
-	0x6b, 0x77, 0x69, 0x6c, 0x74, 0x65, 0x61, 0x6d, 0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x2d, 0x64, 0x62,
-	0x2f, 0x61, 0x70, 0x69, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x74, 0x78,
-	0x2f, 0x76, 0x31, 0x3b, 0x74, 0x78, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x63, 0x65, 0x69, 0x70, 0x74, 0x22, 0x1a, 0x0a, 0x18, 0x43, 0x75, 0x72, 0x72, 0x65, 0x6e,
+	0x74, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x22, 0x4a, 0x0a, 0x19, 0x43, 0x75, 0x72, 0x72, 0x65, 0x6e, 0x74, 0x56, 0x61, 0x6c,
+	0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x2d, 0x0a, 0x0a, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x18, 0x01, 0x20,
+	0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x74, 0x78, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74,
+	0x6f, 0x72, 0x52, 0x0a, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x22, 0x34,
+	0x0a, 0x1a, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x4a, 0x6f, 0x69, 0x6e, 0x53,
+	0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06,
+	0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x70, 0x75,
+	0x62, 0x6b, 0x65, 0x79, 0x22, 0x95, 0x01, 0x0a, 0x1b, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74,
+	0x6f, 0x72, 0x4a, 0x6f, 0x69, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x30, 0x0a, 0x13, 0x61, 0x70, 0x70, 0x72, 0x6f, 0x76, 0x65, 0x64,
+	0x5f, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
+	0x0c, 0x52, 0x13, 0x61, 0x70, 0x70, 0x72, 0x6f, 0x76, 0x65, 0x64, 0x5f, 0x76, 0x61, 0x6c, 0x69,
+	0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x12, 0x2e, 0x0a, 0x12, 0x70, 0x65, 0x6e, 0x64, 0x69, 0x6e,
+	0x67, 0x5f, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x18, 0x02, 0x20, 0x03,
+	0x28, 0x0c, 0x52, 0x12, 0x70, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x5f, 0x76, 0x61, 0x6c, 0x69,
+	0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x70, 0x6f, 0x77, 0x65, 0x72, 0x18,
+	0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x70, 0x6f, 0x77, 0x65, 0x72, 0x2a, 0x22, 0x0a, 0x0d,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x06, 0x0a,
+	0x02, 0x4f, 0x4b, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x05, 0x45, 0x52, 0x52, 0x4f, 0x52, 0x10, 0x01,
+	0x42, 0x35, 0x5a, 0x33, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6b,
+	0x77, 0x69, 0x6c, 0x74, 0x65, 0x61, 0x6d, 0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x2d, 0x64, 0x62, 0x2f,
+	0x61, 0x70, 0x69, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x74, 0x78, 0x2f,
+	0x76, 0x31, 0x3b, 0x74, 0x78, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -681,30 +682,31 @@ func file_kwil_tx_v1_validator_proto_rawDescGZIP() []byte {
 	return file_kwil_tx_v1_validator_proto_rawDescData
 }
 
-var file_kwil_tx_v1_validator_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_kwil_tx_v1_validator_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_kwil_tx_v1_validator_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_kwil_tx_v1_validator_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_kwil_tx_v1_validator_proto_goTypes = []interface{}{
 	(RequestStatus)(0),                  // 0: tx.RequestStatus
-	(JoinStatus)(0),                     // 1: tx.JoinStatus
-	(*Validator)(nil),                   // 2: tx.Validator
-	(*ValidatorApprovalRequest)(nil),    // 3: tx.ValidatorApprovalRequest
-	(*ValidatorApprovalResponse)(nil),   // 4: tx.ValidatorApprovalResponse
-	(*ValidatorJoinRequest)(nil),        // 5: tx.ValidatorJoinRequest
-	(*ValidatorJoinResponse)(nil),       // 6: tx.ValidatorJoinResponse
-	(*ValidatorLeaveRequest)(nil),       // 7: tx.ValidatorLeaveRequest
-	(*ValidatorLeaveResponse)(nil),      // 8: tx.ValidatorLeaveResponse
-	(*ValidatorJoinStatusRequest)(nil),  // 9: tx.ValidatorJoinStatusRequest
-	(*ValidatorJoinStatusResponse)(nil), // 10: tx.ValidatorJoinStatusResponse
-	(*Transaction)(nil),                 // 11: tx.Transaction
-	(*TransactionStatus)(nil),           // 12: tx.TransactionStatus
+	(*Validator)(nil),                   // 1: tx.Validator
+	(*ValidatorApprovalRequest)(nil),    // 2: tx.ValidatorApprovalRequest
+	(*ValidatorApprovalResponse)(nil),   // 3: tx.ValidatorApprovalResponse
+	(*ValidatorJoinRequest)(nil),        // 4: tx.ValidatorJoinRequest
+	(*ValidatorJoinResponse)(nil),       // 5: tx.ValidatorJoinResponse
+	(*ValidatorLeaveRequest)(nil),       // 6: tx.ValidatorLeaveRequest
+	(*ValidatorLeaveResponse)(nil),      // 7: tx.ValidatorLeaveResponse
+	(*CurrentValidatorsRequest)(nil),    // 8: tx.CurrentValidatorsRequest
+	(*CurrentValidatorsResponse)(nil),   // 9: tx.CurrentValidatorsResponse
+	(*ValidatorJoinStatusRequest)(nil),  // 10: tx.ValidatorJoinStatusRequest
+	(*ValidatorJoinStatusResponse)(nil), // 11: tx.ValidatorJoinStatusResponse
+	(*Transaction)(nil),                 // 12: tx.Transaction
+	(*TransactionStatus)(nil),           // 13: tx.TransactionStatus
 }
 var file_kwil_tx_v1_validator_proto_depIdxs = []int32{
 	0,  // 0: tx.ValidatorApprovalResponse.status:type_name -> tx.RequestStatus
-	11, // 1: tx.ValidatorJoinRequest.tx:type_name -> tx.Transaction
-	12, // 2: tx.ValidatorJoinResponse.receipt:type_name -> tx.TransactionStatus
-	11, // 3: tx.ValidatorLeaveRequest.tx:type_name -> tx.Transaction
-	12, // 4: tx.ValidatorLeaveResponse.receipt:type_name -> tx.TransactionStatus
-	1,  // 5: tx.ValidatorJoinStatusResponse.status:type_name -> tx.JoinStatus
+	12, // 1: tx.ValidatorJoinRequest.tx:type_name -> tx.Transaction
+	13, // 2: tx.ValidatorJoinResponse.receipt:type_name -> tx.TransactionStatus
+	12, // 3: tx.ValidatorLeaveRequest.tx:type_name -> tx.Transaction
+	13, // 4: tx.ValidatorLeaveResponse.receipt:type_name -> tx.TransactionStatus
+	1,  // 5: tx.CurrentValidatorsResponse.validators:type_name -> tx.Validator
 	6,  // [6:6] is the sub-list for method output_type
 	6,  // [6:6] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
@@ -804,7 +806,7 @@ func file_kwil_tx_v1_validator_proto_init() {
 			}
 		}
 		file_kwil_tx_v1_validator_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidatorJoinStatusRequest); i {
+			switch v := v.(*CurrentValidatorsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -816,6 +818,30 @@ func file_kwil_tx_v1_validator_proto_init() {
 			}
 		}
 		file_kwil_tx_v1_validator_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CurrentValidatorsResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_tx_v1_validator_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ValidatorJoinStatusRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_tx_v1_validator_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ValidatorJoinStatusResponse); i {
 			case 0:
 				return &v.state
@@ -833,8 +859,8 @@ func file_kwil_tx_v1_validator_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_kwil_tx_v1_validator_proto_rawDesc,
-			NumEnums:      2,
-			NumMessages:   9,
+			NumEnums:      1,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

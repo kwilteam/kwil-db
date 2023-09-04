@@ -96,14 +96,15 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	bootstrapperModule := buildBootstrapper(d)
 
-	abciApp := buildAbci(d, closers, datasetsModule, validatorModule, ac, snapshotModule, bootstrapperModule)
+	abciApp := buildAbci(d, closers, datasetsModule, validatorModule,
+		ac, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
 	// tx service
-	txsvc := buildTxSvc(d, datasetsModule, accs, &wrappedCometBFTClient{cometBftClient})
+	txsvc := buildTxSvc(d, datasetsModule, accs, vstore, &wrappedCometBFTClient{cometBftClient})
 
 	// grpc server
 	grpcServer := buildGrpcServer(d, txsvc)
@@ -186,8 +187,8 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.Data
 }
 
 func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.AccountReader,
-	cometBftClient txSvc.BlockchainBroadcaster) *txSvc.Service {
-	return txSvc.NewService(txsvc, accs, cometBftClient,
+	vstore *vmgr.ValidatorMgr, cometBftClient txSvc.BlockchainTransactor) *txSvc.Service {
+	return txSvc.NewService(txsvc, accs, vstore, cometBftClient,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
 	)
 }

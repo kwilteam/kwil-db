@@ -165,6 +165,28 @@
         ]
       }
     },
+    "/api/v1/current_validators": {
+      "get": {
+        "operationId": "TxService_CurrentValidators",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txCurrentValidatorsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v1/databases/{dbid}/schema": {
       "get": {
         "operationId": "TxService_GetSchema",
@@ -353,7 +375,7 @@
         ]
       }
     },
-    "/api/v1/validator_join_status": {
+    "/api/v1/validator_join_status/{pubkey}": {
       "get": {
         "operationId": "TxService_ValidatorJoinStatus",
         "responses": {
@@ -372,10 +394,10 @@
         },
         "parameters": [
           {
-            "name": "Pubkey",
+            "name": "pubkey",
             "description": "ED25519 PubKey",
-            "in": "query",
-            "required": false,
+            "in": "path",
+            "required": true,
             "type": "string",
             "format": "byte"
           }
@@ -634,6 +656,18 @@
         }
       }
     },
+    "txCurrentValidatorsResponse": {
+      "type": "object",
+      "properties": {
+        "validators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txValidator"
+          }
+        }
+      }
+    },
     "txEstimatePriceRequest": {
       "type": "object",
       "properties": {
@@ -715,17 +749,6 @@
           "type": "string"
         }
       }
-    },
-    "txJoinStatus": {
-      "type": "string",
-      "enum": [
-        "INITIATED",
-        "PENDING",
-        "APPROVED",
-        "REJECTED",
-        "UNKNOWN"
-      ],
-      "default": "INITIATED"
     },
     "txListDatabasesResponse": {
       "type": "object",
@@ -941,6 +964,20 @@
         }
       }
     },
+    "txValidator": {
+      "type": "object",
+      "properties": {
+        "pubkey": {
+          "type": "string",
+          "format": "byte",
+          "title": "ED25519 PubKey"
+        },
+        "power": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
     "txValidatorApprovalRequest": {
       "type": "object",
       "properties": {
@@ -982,32 +1019,23 @@
     "txValidatorJoinStatusResponse": {
       "type": "object",
       "properties": {
-        "approved": {
-          "type": "string",
-          "format": "int64"
-        },
-        "rejected": {
-          "type": "string",
-          "format": "int64"
-        },
-        "pending": {
-          "type": "string",
-          "format": "int64"
-        },
         "approved_validators": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "format": "byte"
           }
         },
-        "rejected_validators": {
+        "pending_validators": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "format": "byte"
           }
         },
-        "status": {
-          "$ref": "#/definitions/txJoinStatus"
+        "power": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
