@@ -1,18 +1,18 @@
 database testdb;
 
 use math {
-    round: "up"
+    round: 'up'
 } as math_up;
 
 use math {
-    round: "down"
+    round: 'down'
 } as math_down;
 
 table users {
     id int primary notnull,
-    username text default("sds"),
+    username text default('sds'),
     age int min(0),
-    wallet text unique
+    wallet blob unique
 }
 
 table posts {
