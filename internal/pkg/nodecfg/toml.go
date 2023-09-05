@@ -51,9 +51,10 @@ const defaultConfigTemplate = `
 # NOTE: Any path below can be absolute (e.g. "/var/myawesomeapp/data") or
 # relative to the home directory (e.g. "data")
 
-# Home Directory Structure:
-# HomeDir/
+# Root Directory Structure:
+# RootDir/
 #   |- config.toml    (app and chain configuration for running the kwild node)
+#   |- private_key.txt   (node's private key)
 #   |- abci/
 #   |   |- config/
 #   |   |   |- genesis.json   (genesis file for the network)
@@ -93,7 +94,7 @@ time_format = "{{ .Logging.TimeEncoding }}"
 
 [app]
 # Node's Private key
-private_key = "{{ .AppCfg.PrivateKey }}"
+private_key_path = "{{ .AppCfg.PrivateKeyPath }}"
 
 # TCP or UNIX socket address for the KWILD App's GRPC server to listen on
 grpc_listen_addr = "{{ .AppCfg.GrpcListenAddress }}"
@@ -157,9 +158,6 @@ snapshot_dir = "{{ .AppCfg.SnapshotConfig.SnapshotDir }}"
 [chain]
 # A custom human readable name for this node
 moniker = "{{ .ChainCfg.Moniker }}"
-
-# Blockchain Genesis file
-genesis_file = "{{ .ChainCfg.Genesis }}"
 
 # Blockchain database directory
 db_dir = "{{ .ChainCfg.DBPath }}"

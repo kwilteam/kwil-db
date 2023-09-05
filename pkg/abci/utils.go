@@ -55,6 +55,19 @@ func ResetAll(cfg *config.KwildConfig) error {
 		fmt.Println("Error removing all sqlite files", "dir", cfg.AppCfg.SqliteFilePath, "err", err)
 	}
 
+	rcvdSnaps := filepath.Join(cfg.RootDir, "rcvdSnaps")
+	if err := os.RemoveAll(rcvdSnaps); err == nil {
+		fmt.Println("Removed all rcvdSnaps", "dir", rcvdSnaps)
+	} else {
+		fmt.Println("Error removing all rcvdSnaps", "dir", rcvdSnaps, "err", err)
+	}
+
+	if err := os.RemoveAll(cfg.AppCfg.SnapshotConfig.SnapshotDir); err == nil {
+		fmt.Println("Removed all snapshots", "dir", cfg.AppCfg.SnapshotConfig.SnapshotDir)
+	} else {
+		fmt.Println("Error removing all snapshots", "dir", cfg.AppCfg.SnapshotConfig.SnapshotDir, "err", err)
+	}
+
 	return nil
 }
 
