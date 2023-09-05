@@ -112,7 +112,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		grpcServer:   grpcServer,
 		gateway:      buildGatewayServer(d),
 		cometBftNode: cometBftNode,
-		log:          *d.log.Named("kwild-server"),
+		log:          *d.log.Named("server"),
 		closers:      closers,
 		cfg:          d.cfg,
 	}
@@ -373,7 +373,7 @@ func buildHealthSvc(d *coreDependencies) *healthsvc.Server {
 
 func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {
 	gw, err := gateway.NewGateway(d.ctx, d.cfg.AppCfg.HttpListenAddress,
-		gateway.WithLogger(d.log),
+		gateway.WithLogger(*d.log.Named("gateway")),
 		gateway.WithMiddleware(cors.MCors([]string{})),
 		gateway.WithGrpcService(d.cfg.AppCfg.GrpcListenAddress, txpb.RegisterTxServiceHandlerFromEndpoint),
 	)
