@@ -55,7 +55,6 @@ tasks:
 
   lint:
     desc: Lint with golangci-lint
-    deps: [pb:compile:v1]
     cmds:
         - golangci-lint run -c .golangci.yml --skip-dirs ./api/protobuf
 
