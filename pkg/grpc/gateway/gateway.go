@@ -19,13 +19,9 @@ import (
 // GatewayServer is an HTTP server that can forward requests to GRPC servers.
 type GatewayServer struct {
 	http.Server
-	mux         *runtime.ServeMux
-	middlewares []*middleware.NamedMiddleware
-	logger      log.Logger
-
+	middlewares  []*middleware.NamedMiddleware
 	grpcServices []registeredGrpcService
-
-	httpAddress string
+	logger       log.Logger
 }
 
 type registeredGrpcService struct {
@@ -43,10 +39,7 @@ func NewGateway(ctx context.Context, httpAddress string, opts ...GatewayOpt) (*G
 			Addr:    httpAddress,
 			Handler: mux,
 		},
-		mux:         mux,
-		logger:      log.NewNoOp(),
-		httpAddress: httpAddress,
-
+		logger:       log.NewNoOp(),
 		grpcServices: []registeredGrpcService{},
 	}
 
@@ -67,7 +60,7 @@ func NewGateway(ctx context.Context, httpAddress string, opts ...GatewayOpt) (*G
 	}
 
 	gw.logger.Info("register extra helper endpoints")
-	err := registerHelperEndpoints(gw.mux)
+	err := registerHelperEndpoints(mux)
 	if err != nil {
 		return nil, fmt.Errorf("error register extra endpoints: %w", err)
 	}
@@ -78,17 +71,13 @@ func NewGateway(ctx context.Context, httpAddress string, opts ...GatewayOpt) (*G
 // Start starts the gateway server
 // This simply calls the HttpServer's ListenAndServe method, but is renamed for conformance with other servers
 func (g *GatewayServer) Start() error {
-	g.logger.Info("kwil gateway started", zap.String("address", g.httpAddress))
+	g.logger.Info("gateway server started", zap.String("address", g.Server.Addr))
 	return g.ListenAndServe()
 }
 
 func (g *GatewayServer) Shutdown(ctx context.Context) error {
-	g.logger.Info("grpc gateway shutting down...")
+	g.logger.Info("gateway server shutting down...")
 	return g.Server.Shutdown(ctx)
-}
-
-func (g *GatewayServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	g.ServeHTTP(w, r)
 }
 
 func registerHelperEndpoints(mux *runtime.ServeMux) error {
