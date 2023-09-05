@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -65,6 +66,12 @@ func NewGateway(ctx context.Context, httpAddress string, opts ...GatewayOpt) (*G
 		}
 	}
 
+	gw.logger.Info("register extra helper endpoints")
+	err := registerHelperEndpoints(gw.mux)
+	if err != nil {
+		return nil, fmt.Errorf("error register extra endpoints: %w", err)
+	}
+
 	return gw, nil
 }
 
@@ -84,27 +91,27 @@ func (g *GatewayServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g.ServeHTTP(w, r)
 }
 
-func (g *GatewayServer) SetupHTTPSvc(ctx context.Context) error {
-	err := g.mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONV0Handler)
+func registerHelperEndpoints(mux *runtime.ServeMux) error {
+	err := mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONV0Handler)
 	if err != nil {
 		return err
 	}
 
-	err = g.mux.HandlePath(http.MethodGet, "/api/v1/swagger.json", swagger.GWSwaggerJSONV1Handler)
+	err = mux.HandlePath(http.MethodGet, "/api/v1/swagger.json", swagger.GWSwaggerJSONV1Handler)
 	if err != nil {
 		return err
 	}
 
-	err = g.mux.HandlePath(http.MethodGet, "/swagger/ui", swagger.GWSwaggerUIHandler)
+	err = mux.HandlePath(http.MethodGet, "/swagger/ui", swagger.GWSwaggerUIHandler)
 	if err != nil {
 		return err
 	}
 
 	// @yaiba TODO: https://grpc-ecosystem.github.io/grpc-gateway/docs/operations/health_check/
-	err = g.mux.HandlePath(http.MethodGet, "/readyz", health.GWReadyzHandler)
+	err = mux.HandlePath(http.MethodGet, "/readyz", health.GWReadyzHandler)
 	if err != nil {
 		return err
 	}
-	err = g.mux.HandlePath(http.MethodGet, "/healthz", health.GWHealthzHandler)
+	err = mux.HandlePath(http.MethodGet, "/healthz", health.GWHealthzHandler)
 	return err
 }
