@@ -54,9 +54,10 @@ func DatabaseDeployInvalidSql1Specification(ctx context.Context, t *testing.T, d
 
 	// read in fixed schema
 	db2 := SchemaLoader.Load(t, schemaInvalidSqlSyntaxFixed)
-	// When i deploy faulty database
 	_, err = deploy.DeployDatabase(ctx, db2)
 	require.NoError(t, err, "failed to send deploy database tx")
+
+	expectTxSuccess(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
 
 	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
 	require.NoError(t, err)
