@@ -22,6 +22,7 @@ linters:
     - nosprintfhostport
     - reassign
     - rowserrcheck
+    - staticcheck
     - sqlclosecheck
     - tparallel
     - typecheck
