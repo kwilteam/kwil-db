@@ -1,12 +1,18 @@
 package config
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	cometCfg "github.com/cometbft/cometbft/config"
+	"github.com/cometbft/cometbft/crypto/ed25519"
+	cmtrand "github.com/cometbft/cometbft/libs/rand"
+	"github.com/cometbft/cometbft/types"
+	cmttime "github.com/cometbft/cometbft/types/time"
+
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/spf13/viper"
 )
@@ -27,9 +33,10 @@ type Logging struct {
 }
 
 type AppConfig struct {
-	GrpcListenAddress  string         `mapstructure:"grpc_listen_addr"`
-	HttpListenAddress  string         `mapstructure:"http_listen_addr"`
-	PrivateKey         string         `mapstructure:"private_key"`
+	GrpcListenAddress  string `mapstructure:"grpc_listen_addr"`
+	HttpListenAddress  string `mapstructure:"http_listen_addr"`
+	PrivateKey         string
+	PrivateKeyPath     string         `mapstructure:"private_key_path"`
 	SqliteFilePath     string         `mapstructure:"sqlite_file_path"`
 	ExtensionEndpoints []string       `mapstructure:"extension_endpoints"`
 	WithoutGasCosts    bool           `mapstructure:"without_gas_costs"`
@@ -49,15 +56,10 @@ type SnapshotConfig struct {
 }
 
 func (cfg *KwildConfig) LoadKwildConfig(rootDir string) error {
-	// Expand root dir path
-	rootDir, err := ExpandPath(rootDir)
-	if err != nil {
-		return fmt.Errorf("failed to expand rootdir path: %v", err)
-	}
 	cfg.RootDir = rootDir
 
 	cfgFile := filepath.Join(rootDir, "config.toml")
-	err = cfg.ParseConfig(cfgFile)
+	err := cfg.ParseConfig(cfgFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %v", err)
 	}
@@ -116,22 +118,24 @@ func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
 		The order of preference of various modes of config supported by viper is:
 		explicit call to Set > flags > env variables > config file > default values
 	*/
-
 	for _, key := range viper.AllKeys() {
 		envKey := "KWILD_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
 		viper.BindEnv(key, envKey)
 	}
 
 	if fileExists(cfgFile) {
+		fmt.Println("Loading config from: ", cfgFile)
 		viper.SetConfigFile(cfgFile)
 		if err := viper.ReadInConfig(); err != nil {
 			return fmt.Errorf("reading config: %v", err)
 		}
+	} else {
+		fmt.Printf("Config file %s not found, Using default config\n", cfgFile)
 	}
+
 	if err := viper.Unmarshal(cfg); err != nil {
 		return fmt.Errorf("decoding config: %v", err)
 	}
-
 	return nil
 }
 
@@ -170,6 +174,98 @@ func DefaultConfig() *KwildConfig {
 	return cfg
 }
 
+/*
+LoadGenesisAndPrivateKey generates private key and genesis file if not exist
+  - If genesis file exists but not private key file, it will generate private key
+    and start the node as a non-validator
+  - Otherwise, the genesis file is generated based on the private key
+    and starts the node as a validator
+*/
+func (cfg *KwildConfig) LoadGenesisAndPrivateKey(autoGen bool) error {
+	rootDir := cfg.RootDir
+	var pkey ed25519.PrivKey
+	/*
+		Get private key:
+			- Get the Private key location: (flags >  config file > default value)
+			- Check if private key file exists
+			- Check if in autogen mode, generate private key and write to file
+			- Else fail the server start
+	*/
+	if fileExists(cfg.AppCfg.PrivateKeyPath) {
+		fmt.Println("Loading private key from file: ", cfg.AppCfg.PrivateKeyPath)
+		pkeyBytes, err := os.ReadFile(cfg.AppCfg.PrivateKeyPath)
+		if err != nil {
+			return fmt.Errorf("error reading private key file: %v", err)
+		}
+		cfg.AppCfg.PrivateKey = string(pkeyBytes)
+		pkey, err = decodePrivateKey(cfg.AppCfg.PrivateKey)
+		if err != nil {
+			return fmt.Errorf("error decoding private key: %v", err)
+		}
+	} else if autoGen {
+		pkey = ed25519.GenPrivKey()
+		cfg.AppCfg.PrivateKey = hex.EncodeToString(pkey[:])
+		if err := os.WriteFile(cfg.AppCfg.PrivateKeyPath, []byte(cfg.AppCfg.PrivateKey), 0600); err != nil {
+			return fmt.Errorf("error creating private key file: %v", err)
+		}
+		fmt.Println("Generated private key file: ", cfg.AppCfg.PrivateKeyPath)
+	} else {
+		return fmt.Errorf("private key not found")
+	}
+
+	abciCfgDir := filepath.Join(rootDir, "abci", "config")
+	genFile := filepath.Join(abciCfgDir, "genesis.json")
+	if !fileExists(genFile) {
+		if !autoGen {
+			return fmt.Errorf("genesis file not found: %s", genFile)
+		}
+
+		if err := os.MkdirAll(abciCfgDir, 0700); err != nil {
+			return fmt.Errorf("error creating abci config dir: %v", err)
+		}
+
+		genDoc := GenesisDoc([]ed25519.PrivKey{pkey}, "kwil-chain-")
+		if err := genDoc.SaveAs(genFile); err != nil {
+			return err
+		}
+		fmt.Println("Generated genesis file: ", genFile)
+	} else {
+		fmt.Println("Loading genesis file: ", genFile)
+	}
+	return nil
+}
+
+func decodePrivateKey(pkey string) (ed25519.PrivKey, error) {
+	privB, err := hex.DecodeString(pkey)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding private key: %v", err)
+	}
+	return ed25519.PrivKey(privB), nil
+}
+
+func GenesisDoc(pkey []ed25519.PrivKey, chainIDPrefix string) *types.GenesisDoc {
+	genVals := make([]types.GenesisValidator, len(pkey))
+	for idx, key := range pkey {
+		pub := key.PubKey().(ed25519.PubKey)
+		addr := pub.Address()
+		val := types.GenesisValidator{
+			Address: addr,
+			PubKey:  pub,
+			Power:   1,
+			Name:    fmt.Sprint("validator-", idx),
+		}
+		genVals[idx] = val
+	}
+
+	genDoc := types.GenesisDoc{
+		ChainID:         chainIDPrefix + cmtrand.Str(6),
+		GenesisTime:     cmttime.Now(),
+		ConsensusParams: types.DefaultConsensusParams(),
+		Validators:      genVals,
+	}
+	return &genDoc
+}
+
 func (cfg *KwildConfig) configureLogging() {
 	// pkg/log.Config <== pkg/config.Logging
 	cfg.AppCfg.Log.Level = cfg.Logging.Level
@@ -201,6 +297,12 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 	rootDir := cfg.RootDir
 	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
 	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
+
+	if cfg.AppCfg.PrivateKeyPath != "" {
+		cfg.AppCfg.PrivateKeyPath = rootify(cfg.AppCfg.PrivateKeyPath, rootDir)
+	} else {
+		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, "private_key.txt")
+	}
 
 	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
 	return nil
