@@ -3,14 +3,8 @@ package server
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"os"
-
-	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
-
-	abciTypes "github.com/cometbft/cometbft/abci/types"
-	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
-	cmttypes "github.com/cometbft/cometbft/types"
 
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
@@ -22,20 +16,12 @@ import (
 	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
+
+	abciTypes "github.com/cometbft/cometbft/abci/types"
+	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
+	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
+	cmttypes "github.com/cometbft/cometbft/types"
 )
-
-var defaultFilePath string
-
-func init() {
-	dirname, err := os.UserHomeDir()
-	if err != nil {
-		dirname = "/tmp"
-	}
-
-	defaultFilePath = fmt.Sprintf("%s/.kwil/sqlite/", dirname)
-}
-
-func init() {}
 
 // connectExtensions connects to the provided extension urls.
 func connectExtensions(ctx context.Context, urls []string) (map[string]*extensions.Extension, error) {
@@ -80,10 +66,6 @@ type sqliteOpener struct {
 }
 
 func newSqliteOpener(sqliteFilePath string) *sqliteOpener {
-	if sqliteFilePath == "" {
-		sqliteFilePath = defaultFilePath
-	}
-
 	return &sqliteOpener{
 		sqliteFilePath: sqliteFilePath,
 	}
@@ -177,7 +159,7 @@ func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove
 	return nil, abci.ErrTxNotFound
 }
 
-// atomicReadWriter implements the CometBFt AtomicReadWriter interface.
+// atomicReadWriter implements the CometBFT AtomicReadWriter interface.
 // This should probably be done with a file instead of a KV store,
 // but we already have a good implementation of an atomic KV store.
 type atomicReadWriter struct {
@@ -189,13 +171,12 @@ var _ privval.AtomicReadWriter = (*atomicReadWriter)(nil)
 
 func (a *atomicReadWriter) Read() ([]byte, error) {
 	res, err := a.kv.Get(a.key)
-	if err == kv.ErrKeyNotFound {
+	if errors.Is(err, kv.ErrKeyNotFound) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
 	return res, nil
 }
 

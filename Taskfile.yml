@@ -66,15 +66,20 @@ tasks:
 
   build:cli:
     desc: Build kwil-cli
-    deps: [pb:compile:v1]
     cmds:
       - ./scripts/build/binary kwil-cli #-mod=mod
     generates:
       - .build/kwil-cli
 
+  build:admin:
+    desc: Build kwil-admin
+    cmds:
+      - ./scripts/build/binary kwil-admin
+    generates:
+      - .build/kwil-admin
+
   build:kwild:
     desc: Builds kwild server
-    deps: [pb:compile:v1]
     cmds:
       - ./scripts/build/binary kwild #-mod=mod
     generates:
@@ -83,9 +88,7 @@ tasks:
   # ************ docker ************
   build:docker:
     desc: Build the docker image for the kwild
-    deps: [ pb:compile:v1]
     cmds:
-      # need to run after protobuf is compiled
       - task: vendor
       # pass any args to build flavored image, e.g. task build:docker -- debug
       - ./scripts/build/docker kwild {{.CLI_ARGS}} {{.VARIANT}}
@@ -93,7 +96,6 @@ tasks:
 
   publish:dockerhub:
     desc: Publish docker image to dockerhub
-    deps: [ pb:compile:v1]
     cmds:
       - task: vendor
       - TAG={{.TAG}} ./scripts/publish/dockerhub

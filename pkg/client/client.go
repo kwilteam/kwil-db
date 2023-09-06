@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -22,8 +23,14 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
+	grpcCodes "google.golang.org/grpc/codes"
 	grpcCreds "google.golang.org/grpc/credentials"
 	grpcInsecure "google.golang.org/grpc/credentials/insecure"
+	grpcStatus "google.golang.org/grpc/status"
+)
+
+var (
+	ErrNotFound = errors.New("not found")
 )
 
 type Client struct {
@@ -288,7 +295,16 @@ func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*balances.Accou
 }
 
 func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*validators.JoinRequest, error) {
-	return c.client.ValidatorJoinStatus(ctx, pubKey)
+	res, err := c.client.ValidatorJoinStatus(ctx, pubKey)
+	if err != nil {
+		if stat, ok := grpcStatus.FromError(err); ok {
+			if stat.Code() == grpcCodes.NotFound {
+				return nil, ErrNotFound
+			}
+		}
+		return nil, err
+	}
+	return res, nil
 }
 
 func (c *Client) CurrentValidators(ctx context.Context) ([]*validators.Validator, error) {

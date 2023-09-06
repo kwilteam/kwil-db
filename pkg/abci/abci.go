@@ -7,20 +7,19 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
-
-	abciTypes "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/crypto/ed25519"
-	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/kv"
-
 	"github.com/kwilteam/kwil-db/pkg/log"
 	modDataset "github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	modVal "github.com/kwilteam/kwil-db/pkg/modules/validators"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/kwilteam/kwil-db/pkg/validators"
+
+	abciTypes "github.com/cometbft/cometbft/abci/types"
+	"github.com/cometbft/cometbft/crypto/ed25519"
+	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
 	"go.uber.org/zap"
 )
 

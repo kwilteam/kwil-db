@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
+	"github.com/kwilteam/kwil-db/pkg/log"
+
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cometConfig "github.com/cometbft/cometbft/config"
 	cometEd25519 "github.com/cometbft/cometbft/crypto/ed25519"
@@ -11,8 +14,7 @@ import (
 	cometNodes "github.com/cometbft/cometbft/node"
 	"github.com/cometbft/cometbft/p2p"
 	"github.com/cometbft/cometbft/proxy"
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
-	"github.com/kwilteam/kwil-db/pkg/log"
+
 	"go.uber.org/zap"
 )
 
@@ -108,6 +110,11 @@ type CometBftNode struct {
 // NewCometBftNode creates a new CometBFT node.
 func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privateKey cometEd25519.PrivKey,
 	atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
+
+	err := conf.ValidateBasic()
+	if err != nil {
+		return nil, fmt.Errorf("invalid node config: %w", err)
+	}
 
 	logger := NewLogWrapper(log)
 

@@ -7,13 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/log"
-
-	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/test/runner"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/nodecfg"
+	"github.com/kwilteam/kwil-db/test/driver"
 
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
@@ -21,9 +19,13 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// envFile is the default env file path
-// it will pass values among different stages of the test setup
-var envFile = runner.GetEnv("KACT_ENV_FILE", "./.env")
+var (
+	getEnv = driver.GetEnv
+
+	// envFile is the default env file path
+	// it will pass values among different stages of the test setup
+	envFile = getEnv("KACT_ENV_FILE", "./.env")
+)
 
 type ActTestCfg struct {
 	GWEndpoint    string // gateway endpoint
@@ -111,18 +113,18 @@ func (r *ActHelper) LoadConfig() {
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'
 	cfg := &ActTestCfg{
-		AliceRawPK:                runner.GetEnv("KACT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
-		BobRawPK:                  runner.GetEnv("KACT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
-		SchemaFile:                runner.GetEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
-		LogLevel:                  runner.GetEnv("KACT_LOG_LEVEL", "debug"),
-		GWEndpoint:                runner.GetEnv("KACT_GATEWAY_ENDPOINT", "localhost:8080"),
-		GrpcEndpoint:              runner.GetEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
-		DockerComposeFile:         runner.GetEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
-		DockerComposeOverrideFile: runner.GetEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"), // e.g. docker-compose.override.yml
+		AliceRawPK:                getEnv("KACT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
+		BobRawPK:                  getEnv("KACT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
+		SchemaFile:                getEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
+		LogLevel:                  getEnv("KACT_LOG_LEVEL", "debug"),
+		GWEndpoint:                getEnv("KACT_GATEWAY_ENDPOINT", "localhost:8080"),
+		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
+		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
+		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"), // e.g. docker-compose.override.yml
 	}
 
 	// value is in format of "10s" or "1m"
-	waitTimeout := runner.GetEnv("KACT_WAIT_TIMEOUT", "10s")
+	waitTimeout := getEnv("KACT_WAIT_TIMEOUT", "10s")
 	cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
 	require.NoError(r.t, err, "invalid wait timeout")
 
@@ -155,11 +157,16 @@ func (r *ActHelper) updateGeneratedConfig(ks, vs []string) {
 func (r *ActHelper) generateNodeConfig() {
 	r.t.Logf("generate node config")
 	tmpPath := r.t.TempDir() // automatically removed by testing.T.Cleanup
+	// To prevent go test from cleaning up:
+	// tmpPath, err := os.MkdirTemp("", "TestKwilAct")
+	// if err != nil {
+	// 	r.t.Fatal(err)
+	// }
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
 	err := nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
-		InitialHeight: 0,
-		OutputDir:     tmpPath,
+		// InitialHeight: 0,
+		OutputDir: tmpPath,
 	})
 	require.NoError(r.t, err, "failed to generate node config")
 
@@ -231,7 +238,7 @@ func (r *ActHelper) GetAliceDriver() KwilAcceptanceDriver {
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return kwild.NewKwildDriver(kwilClt, kwild.WithLogger(logger))
+	return driver.NewKwildDriver(kwilClt, driver.WithLogger(logger))
 }
 
 func (r *ActHelper) GetBobDriver() KwilAcceptanceDriver {
@@ -242,5 +249,5 @@ func (r *ActHelper) GetBobDriver() KwilAcceptanceDriver {
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return kwild.NewKwildDriver(kwilClt, kwild.WithLogger(logger))
+	return driver.NewKwildDriver(kwilClt, driver.WithLogger(logger))
 }
