@@ -5,7 +5,7 @@ ARG build_time
 ARG git_commit
 
 WORKDIR /app
-RUN apk update && apk add git openssh
+RUN apk update && apk add git ca-certificates-bundle
 
 COPY . .
 RUN test -f go.work && rm go.work || true
@@ -18,4 +18,4 @@ WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/kwild-* ./kwild
 EXPOSE 50051 8080 26656 26657
-ENTRYPOINT ["/app/kwild", "server", "start"]
+ENTRYPOINT ["/app/kwild"]

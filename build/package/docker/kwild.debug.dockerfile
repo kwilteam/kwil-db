@@ -8,7 +8,7 @@ ARG build_time
 ARG git_commit
 
 WORKDIR /app
-RUN apk update && apk add git openssh
+RUN apk update && apk add git ca-certificates-bundle
 
 COPY . .
 RUN test -f go.work && rm go.work || true
@@ -26,4 +26,4 @@ COPY --from=stage /app/dist/kwild-* ./kwild
 
 EXPOSE 40000 50051 8080 26656 26657
 
-CMD ["/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/app/kwild", "server", "start"]
+CMD ["/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/app/kwild"]

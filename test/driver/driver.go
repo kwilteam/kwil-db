@@ -1,22 +1,29 @@
-package kwild
+package driver
 
 import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/abci"
-
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/kwilteam/kwil-db/pkg/validators"
 
-	types "github.com/cometbft/cometbft/abci/types"
 	"go.uber.org/zap"
 )
+
+func GetEnv(key, defaultValue string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultValue
+	}
+	return v
+}
 
 // KwildDriver is a grpc driver for  integration tests
 type KwildDriver struct {
@@ -125,15 +132,6 @@ func (d *KwildDriver) QueryDatabase(ctx context.Context, dbid, query string) (*c
 
 func (d *KwildDriver) Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) ([]map[string]any, error) {
 	return d.clt.CallAction(ctx, dbid, action, inputs, opts...)
-}
-
-func GetTransactionResult(attributes []types.EventAttribute) bool {
-	for _, attr := range attributes {
-		if attr.Key == "Result" {
-			return attr.Value == "Success"
-		}
-	}
-	return false
 }
 
 func (d *KwildDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error) {
