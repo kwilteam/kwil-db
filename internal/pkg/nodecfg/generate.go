@@ -67,16 +67,16 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	return nil
 }
 
-func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
+func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) ([]ed25519.PrivKey, error) {
 	rootDir, err := config.ExpandPath(genCfg.OutputDir)
 	if err != nil {
 		fmt.Println("Error while getting absolute path for output directory: ", err)
-		return err
+		return nil, err
 	}
 	genCfg.OutputDir = rootDir
 
 	if len(genCfg.Hostnames) > 0 && len(genCfg.Hostnames) != (genCfg.NValidators+genCfg.NNonValidators) {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"testnet needs precisely %d hostnames (number of validators plus nonValidators) if --hostname parameter is used",
 			genCfg.NValidators+genCfg.NNonValidators,
 		)
@@ -93,17 +93,17 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	if genCfg.ConfigFile != "" {
 		viper.SetConfigFile(genCfg.ConfigFile)
 		if err := viper.ReadInConfig(); err != nil {
-			return err
+			return nil, err
 		}
 		if err := viper.Unmarshal(cfg); err != nil {
-			return err
+			return nil, err
 		}
 		if err := cfg.ChainCfg.ValidateBasic(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	for i := 0; i < genCfg.NValidators; i++ {
+	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i)
 		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
 		cfg.RootDir = nodeDir
@@ -112,13 +112,13 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		err := os.MkdirAll(filepath.Join(nodeDir, "abci", "config"), nodeDirPerm)
 		if err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
-			return err
+			return nil, err
 		}
 
 		err = os.MkdirAll(filepath.Join(nodeDir, "abci", "data"), nodeDirPerm)
 		if err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
-			return err
+			return nil, err
 		}
 		priv := privateKeys[i]
 		cfg.AppCfg.PrivateKey = hex.EncodeToString(priv[:])
@@ -127,29 +127,11 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		err = os.WriteFile(pvkeyFile, []byte(cfg.AppCfg.PrivateKey), 0644)
 		if err != nil {
 			fmt.Println("Error creating private key file: ", err)
-			return err
+			return nil, err
 		}
 
 		cfg.ChainCfg.P2P.AddrBookStrict = false
 		cfg.ChainCfg.P2P.AllowDuplicateIP = true
-	}
-
-	for i := 0; i < genCfg.NNonValidators; i++ {
-		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i+genCfg.NValidators)
-		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
-		cfg.RootDir = nodeDir
-
-		err := os.MkdirAll(filepath.Join(nodeDir, "abci", "config"), nodeDirPerm)
-		if err != nil {
-			_ = os.RemoveAll(nodeDir)
-			return err
-		}
-
-		err = os.MkdirAll(filepath.Join(nodeDir, "abci", "data"), nodeDirPerm)
-		if err != nil {
-			_ = os.RemoveAll(nodeDir)
-			return err
-		}
 	}
 
 	validatorPkeys := privateKeys[:genCfg.NValidators]
@@ -160,7 +142,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
 		if err := genDoc.SaveAs(filepath.Join(nodeDir, "abci", "config", "genesis.json")); err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
-			return err
+			return nil, err
 		}
 	}
 
@@ -189,7 +171,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	fmt.Printf("Successfully initialized %d node directories: %s\n",
 		genCfg.NValidators+genCfg.NNonValidators, genCfg.OutputDir)
 
-	return nil
+	return privateKeys, nil
 }
 
 // It generates private keys, which we should not leave up to Comet

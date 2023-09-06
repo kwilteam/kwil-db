@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"encoding/base64"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -23,16 +22,7 @@ func approveCmd(cfg *config.KwildConfig) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			joiner, err := base64.StdEncoding.DecodeString(args[0])
-			if err != nil {
-				return err
-			}
-
-			approverKeyB, err := base64.StdEncoding.DecodeString(args[1])
-			if err != nil {
-				return err
-			}
-			approverKey, err := crypto.Ed25519PrivateKeyFromBytes(approverKeyB)
+			approverKey, err := crypto.Ed25519PrivateKeyFromHex(args[1])
 			if err != nil {
 				return err
 			}
@@ -43,7 +33,7 @@ func approveCmd(cfg *config.KwildConfig) *cobra.Command {
 				return err
 			}
 
-			hash, err := clt.ApproveValidator(ctx, joiner)
+			hash, err := clt.ApproveValidator(ctx, []byte(args[0]))
 			if err != nil {
 				return err
 			}

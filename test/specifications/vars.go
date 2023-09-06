@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	defaultTxQueryTimeout = time.Second * 5
+	defaultTxQueryTimeout = time.Second * 10
 )
 
 var (

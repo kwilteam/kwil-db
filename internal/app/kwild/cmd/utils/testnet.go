@@ -34,7 +34,8 @@ Example:
 }
 
 func initTestnet(cmd *cobra.Command, args []string) error {
-	return nodecfg.GenerateTestnetConfig(&netFlags)
+	_, err := nodecfg.GenerateTestnetConfig(&netFlags)
+	return err
 }
 
 func NewTestnetCmd() *cobra.Command {

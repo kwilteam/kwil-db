@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"encoding/base64"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -25,11 +24,7 @@ func joinCmd(cfg *config.KwildConfig) *cobra.Command {
 
 			ctx := cmd.Context()
 
-			joinerKeyB, err := base64.StdEncoding.DecodeString(args[0])
-			if err != nil {
-				return err
-			}
-			joinerKey, err := crypto.Ed25519PrivateKeyFromBytes(joinerKeyB)
+			joinerKey, err := crypto.Ed25519PrivateKeyFromHex(args[0])
 			if err != nil {
 				return err
 			}

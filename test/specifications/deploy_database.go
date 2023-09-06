@@ -80,7 +80,7 @@ func DatabaseDeployInvalidExtensionSpecification(ctx context.Context, t *testing
 	assert.Error(t, err)
 }
 
-func DatabaseVerifySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl, exisits bool) {
+func DatabaseVerifySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl, exists bool) {
 	t.Logf("Executing database verify specification")
 
 	// Given a valid database schema
@@ -88,7 +88,7 @@ func DatabaseVerifySpecification(ctx context.Context, t *testing.T, deploy Datab
 
 	// And i expect database should exist
 	err := deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
-	if exisits {
+	if exists {
 		assert.NoError(t, err)
 	} else {
 		assert.Error(t, err)

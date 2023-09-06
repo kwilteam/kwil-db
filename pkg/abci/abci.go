@@ -2,9 +2,7 @@ package abci
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -266,6 +264,8 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				},
 			},
 		}
+		logger.Debug("deployed database", zap.String("DBID", dbID))
+
 	case transactions.PayloadTypeDropSchema:
 		drop := &transactions.DropSchema{}
 		err = drop.UnmarshalBinary(tx.Body.Payload)
@@ -319,7 +319,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		logger.Debug("join validator",
-			zap.String("pubkey", hex.EncodeToString(join.Candidate)),
+			zap.String("pubkey", string(join.Candidate)),
 			zap.Int64("power", int64(join.Power)))
 
 		var res *modVal.ExecutionResponse
@@ -340,7 +340,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "validator_join",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: encodeBase64(join.Candidate), Index: true},
+					{Key: "ValidatorPubKey", Value: string(join.Candidate), Index: true},
 					{Key: "ValidatorPower", Value: fmt.Sprintf("%d", join.Power), Index: true},
 				},
 			},
@@ -355,7 +355,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
-		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(leave.Validator)))
+		logger.Debug("leave validator", zap.String("pubkey", string(leave.Validator)))
 
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Leave(ctx, leave.Validator, tx)
@@ -369,7 +369,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "remove_validator", // is this name arbitrary? it should be "validator_leave" for consistency
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: encodeBase64(leave.Validator), Index: true},
+					{Key: "ValidatorPubKey", Value: string(leave.Validator), Index: true},
 					{Key: "ValidatorPower", Value: "0", Index: true},
 				},
 			},
@@ -384,7 +384,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
-		logger.Debug("approve validator", zap.String("pubkey", hex.EncodeToString(approve.Candidate)))
+		logger.Debug("approve validator", zap.String("pubkey", string(approve.Candidate)))
 
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Approve(ctx, approve.Candidate, tx)
@@ -398,8 +398,8 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "validator_approve",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "CandidatePubKey", Value: encodeBase64(approve.Candidate), Index: true},
-					{Key: "ApproverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
+					{Key: "CandidatePubKey", Value: string(approve.Candidate), Index: true},
+					{Key: "ApproverPubKey", Value: string(tx.Sender), Index: true},
 				},
 			},
 		}
@@ -765,10 +765,4 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	}
 
 	return m.SetBlockHeight(ctx, height+1)
-}
-
-// pubkeys in event attributes returned to comet as strings are base64 encoded,
-// apparently.
-func encodeBase64(b []byte) string {
-	return base64.StdEncoding.EncodeToString(b)
 }

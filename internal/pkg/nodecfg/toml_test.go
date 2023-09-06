@@ -52,7 +52,7 @@ func Test_GenerateTestnetConfig(t *testing.T) {
 		P2pPort:                 26656,
 	}
 
-	err := GenerateTestnetConfig(&genCfg)
+	_, err := GenerateTestnetConfig(&genCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
