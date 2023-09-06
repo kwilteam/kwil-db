@@ -3,6 +3,7 @@ module github.com/kwilteam/kwil-db
 go 1.21
 
 require (
+	github.com/alexflint/go-arg v1.4.3
 	github.com/alexliesenfeld/health v0.6.0
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230512164433-5d1fd1a340c9
 	github.com/buger/jsonparser v1.1.1
@@ -46,6 +47,7 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/alexflint/go-scalar v1.1.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.17.6 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.18.16 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.16 // indirect

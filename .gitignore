@@ -8,6 +8,7 @@
 **/finished_logs/
 **/.kwal/
 cmd/kwild/kwild
+cmd/kwil-admin/kwil-admin
 cmd/kwil-cli/kwil-cli
 keys/cosmos
 keys/ethereum.pem

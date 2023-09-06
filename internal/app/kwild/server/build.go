@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -11,8 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
-	// kwil-db
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
 	txSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
@@ -35,41 +34,13 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
-	"go.uber.org/zap"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
-
-// BuildKwildServer builds the kwild server
-func BuildKwildServer(ctx context.Context, cfg *config.KwildConfig) (svr *Server, err error) {
-	closers := &closeFuncs{
-		closers: make([]func() error, 0),
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("panic while building kwild: %v", r)
-			closers.closeAll()
-		}
-	}()
-
-	logger := log.New(cfg.AppCfg.Log)
-
-	logger = *logger.Named("kwild")
-
-	deps := &coreDependencies{
-		ctx:    ctx,
-		cfg:    cfg,
-		log:    logger,
-		opener: newSqliteOpener(cfg.AppCfg.SqliteFilePath),
-	}
-
-	return buildServer(deps, closers), nil
-}
 
 func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// atomic committer
@@ -152,10 +123,12 @@ func (c *closeFuncs) closeAll() error {
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
 	atomicCommitter *sessions.AtomicCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
-	badgerKv, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, "abci/info"), &badger.Options{
+	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, kwild.ABCIInfoSubDirName)
+	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
 		GuaranteeFSync: true,
 		Logger:         *d.log.Named("abci-kv-store"),
 	})
+	d.log.Info(fmt.Sprintf("created ABCI kv DB in %v", badgerPath))
 	if err != nil {
 		failBuild(err, "failed to open badger")
 	}
@@ -295,7 +268,7 @@ func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {
 }
 
 func buildBootstrapper(d *coreDependencies) *snapshots.Bootstrapper {
-	rcvdSnapsDir := filepath.Join(d.cfg.RootDir, "rcvdSnaps")
+	rcvdSnapsDir := filepath.Join(d.cfg.RootDir, rcvdSnapsDirName)
 	bootstrapper, err := snapshots.NewBootstrapper(d.cfg.AppCfg.SqliteFilePath, rcvdSnapsDir)
 	if err != nil {
 		failBuild(err, "Bootstrap module initialization failure")
@@ -373,7 +346,7 @@ func buildHealthSvc(d *coreDependencies) *healthsvc.Server {
 }
 
 func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {
-	gw, err := gateway.NewGateway(d.ctx, d.cfg.AppCfg.HttpListenAddress,
+	gw, err := gateway.NewGateway(d.ctx, d.cfg.AppCfg.HTTPListenAddress,
 		gateway.WithLogger(*d.log.Named("gateway")),
 		gateway.WithMiddleware(cors.MCors([]string{})),
 		gateway.WithGrpcService(d.cfg.AppCfg.GrpcListenAddress, txpb.RegisterTxServiceHandlerFromEndpoint),
@@ -390,15 +363,23 @@ func buildCometBftClient(cometBftNode *cometbft.CometBftNode) *cmtlocal.Local {
 }
 
 func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.Application) *cometbft.CometBftNode {
-	privB, err := hex.DecodeString(d.cfg.AppCfg.PrivateKey)
+	chainRoot := filepath.Join(d.cfg.RootDir, abciDirName)
+	privateKey, newKey, newGenesis, err := loadGenesisAndPrivateKey(d.cfg.AutoGen,
+		d.cfg.AppCfg.PrivateKeyPath, chainRoot)
 	if err != nil {
-		failBuild(err, "failed to parse private key")
+		failBuild(err, "failed load private key or generate genesis")
 	}
-	privateKey := ed25519.PrivKey(privB)
+	if newKey {
+		d.log.Warn("generated new private key", zap.String("path", d.cfg.AppCfg.PrivateKeyPath))
+	}
+	if newGenesis {
+		d.log.Warn("generated genesis file", zap.String("path", cometbft.GenesisPath(chainRoot)),
+			zap.Bool("validator", newKey))
+	}
 
 	// for now, I'm just using a KV store for my atomic commit.  This probably is not ideal; a file may be better
 	// I'm simply using this because we know it fsyncs the data to disk
-	db, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, "signing"), &badger.Options{
+	db, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, signingDirName), &badger.Options{
 		GuaranteeFSync: true,
 		Logger:         *d.log.Named("private-validator-signature-store"),
 	})
@@ -412,7 +393,8 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 		key: []byte("az"), // any key here will work
 	}
 
-	node, err := cometbft.NewCometBftNode(abciApp, d.cfg.ChainCfg, privateKey,
+	nodeCfg := newCometConfig(d.cfg)
+	node, err := cometbft.NewCometBftNode(abciApp, nodeCfg, privateKey,
 		readWriter, &d.log)
 	if err != nil {
 		failBuild(err, "failed to build comet node")
@@ -422,7 +404,7 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 }
 
 func buildAtomicCommitter(d *coreDependencies, closers *closeFuncs) *sessions.AtomicCommitter {
-	twoPCWal, err := wal.OpenWal(filepath.Join(d.cfg.RootDir, "application/wal"))
+	twoPCWal, err := wal.OpenWal(filepath.Join(d.cfg.RootDir, applicationDirName, "wal"))
 	if err != nil {
 		failBuild(err, "failed to open 2pc wal")
 	}

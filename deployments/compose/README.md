@@ -11,7 +11,7 @@ Put this folder under `deployments`.
 * docker-compose.yml
 
 * node config:
-  * private_key.txt stores the node private key used for p2p and signing messages
+  * private_key stores the node private key used for p2p and signing messages
   * config.toml stores the app and chain configuration
   * abci/config/genesis.json contains the genesis file for setting up initial params
 

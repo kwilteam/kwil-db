@@ -54,7 +54,7 @@ const defaultConfigTemplate = `
 # Root Directory Structure:
 # RootDir/
 #   |- config.toml    (app and chain configuration for running the kwild node)
-#   |- private_key.txt   (node's private key)
+#   |- private_key   (node's private key)
 #   |- abci/
 #   |   |- config/
 #   |   |   |- genesis.json   (genesis file for the network)
@@ -100,7 +100,7 @@ private_key_path = "{{ .AppCfg.PrivateKeyPath }}"
 grpc_listen_addr = "{{ .AppCfg.GrpcListenAddress }}"
 
 # TCP or UNIX socket address for the KWILD App's HTTP server to listen on
-http_listen_addr = "{{ .AppCfg.HttpListenAddress }}"
+http_listen_addr = "{{ .AppCfg.HTTPListenAddress }}"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = {{arrayFormatter .AppCfg.ExtensionEndpoints}}
@@ -156,11 +156,9 @@ snapshot_dir = "{{ .AppCfg.SnapshotConfig.SnapshotDir }}"
 ###                 Chain  Main Base Config Options                 ###
 #######################################################################
 [chain]
+
 # A custom human readable name for this node
 moniker = "{{ .ChainCfg.Moniker }}"
-
-# Blockchain database directory
-db_dir = "{{ .ChainCfg.DBPath }}"
 
 #######################################################################
 ###                 Advanced Configuration Options                  ###
@@ -244,7 +242,7 @@ size = {{ .ChainCfg.Mempool.Size }}
 # Limit the total size of all txs in the mempool.
 # This only accounts for raw transactions (e.g. given 1MB transactions and
 # max_txs_bytes=5MB, mempool will only accept 5 transactions).
-max_txs_bytes = {{ .ChainCfg.Mempool.MaxTxsBytes }}
+#max_txs_bytes = xx .ChainCfg.Mempool.MaxTxsBytes xx
 
 # Size of the cache (used to filter transactions we saw earlier) in transactions
 cache_size = {{ .ChainCfg.Mempool.CacheSize }}

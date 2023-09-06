@@ -48,16 +48,21 @@ fi
 export CGO_ENABLED
 
 BINARY_PKG_PREFIX="github.com/kwilteam/kwil-db/internal/pkg/build"
+# NOTE: VCS info is now built into Go, so we can remove this with some kwil-cli
+# updates. See pkg/version and kwild/kwil-cli for example.
 GO_LDFLAGS="${GO_LDFLAGS:-}"
 GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.GitCommit=${GIT_COMMIT}\""
 GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.BuildTime=${BUILD_TIME}\""
 GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.Version=${GIT_VERSION}\""
 if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ] && [ "$(go env GOOS)" = "linux" ]; then
-    GO_LDFLAGS="$GO_LDFLAGS -extldflags -static"
+    GO_LDFLAGS="$GO_LDFLAGS -extldflags=-static"
 fi
 if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ]; then
     # compiling statically with CGO enabled requires osusergo to be set.
-    GO_BUILDTAGS="$GO_BUILDTAGS osusergo"
+    # netgo is also required to avoid: "warning: Using 'getaddrinfo' in
+    # statically linked applications requires at runtime the shared libraries
+    # from the glibc version used for linking"
+    GO_BUILDTAGS="$GO_BUILDTAGS osusergo netgo"
 fi
 if [ -n "$GO_STRIP" ]; then
     GO_LDFLAGS="$GO_LDFLAGS -s -w"

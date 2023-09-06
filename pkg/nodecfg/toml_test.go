@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,8 +30,8 @@ func Test_Generate_TOML(t *testing.T) {
 
 func Test_GenerateNodeCfg(t *testing.T) {
 	genCfg := NodeGenerateConfig{
-		InitialHeight: 0,
-		OutputDir:     "test/trybuild/",
+		// InitialHeight: 0,
+		OutputDir: "test/trybuild/",
 	}
 
 	err := GenerateNodeConfig(&genCfg)
@@ -43,9 +44,9 @@ func Test_GenerateNodeCfg(t *testing.T) {
 
 func Test_GenerateTestnetConfig(t *testing.T) {
 	genCfg := TestnetGenerateConfig{
+		// InitialHeight:           0,
 		NValidators:             2,
 		NNonValidators:          1,
-		InitialHeight:           0,
 		OutputDir:               "test/testnet/",
 		StartingIPAddress:       "192.168.12.12",
 		PopulatePersistentPeers: true,
