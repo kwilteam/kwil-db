@@ -48,7 +48,7 @@ func NewStartCmd(cfg *config.KwildConfig) *cobra.Command {
 
 func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 	// General APP flags:
-	cmd.Flags().StringVar(&cfg.AppCfg.PrivateKey, "app.private_key", cfg.AppCfg.PrivateKey, "Kwild app's private key")
+	cmd.Flags().StringVar(&cfg.AppCfg.PrivateKeyPath, "app.private_key_path", cfg.AppCfg.PrivateKeyPath, "Path to private key file")
 
 	cmd.Flags().StringVar(&cfg.AppCfg.GrpcListenAddress, "app.grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Kwild app gRPC listen address")
 
@@ -86,8 +86,6 @@ func AddKwildFlags(cmd *cobra.Command, cfg *config.KwildConfig) {
 
 	//  Basic Chain Config flags
 	cmd.Flags().StringVar(&cfg.ChainCfg.Moniker, "chain.moniker", cfg.ChainCfg.Moniker, "Chain moniker")
-
-	cmd.Flags().StringVar(&cfg.ChainCfg.Genesis, "chain.genesis", cfg.ChainCfg.Genesis, "Genesis file path")
 
 	cmd.Flags().StringVar(&cfg.ChainCfg.DBPath, "chain.db_dir", cfg.ChainCfg.DBPath, "Chain database directory path")
 	// Chain RPC flags
