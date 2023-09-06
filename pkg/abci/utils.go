@@ -1,137 +1,25 @@
 package abci
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
+
+	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
+	"github.com/kwilteam/kwil-db/pkg/snapshots"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
-	cmtos "github.com/cometbft/cometbft/libs/os"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/pkg/snapshots"
+	"github.com/cometbft/cometbft/p2p"
 )
-
-// resetAll removes address book files plus all data
-func ResetAll(cfg *config.KwildConfig) error {
-	RemoveAddrBook(cfg.ChainCfg.P2P.AddrBookFile())
-
-	dbDir := cfg.ChainCfg.DBDir()
-	if err := os.RemoveAll(dbDir); err == nil {
-		fmt.Println("Removed all blockchain history", "dir", dbDir)
-	} else {
-		fmt.Println("Error removing all blockchain history", "dir", dbDir, "err", err)
-	}
-
-	if err := cmtos.EnsureDir(dbDir, 0700); err != nil {
-		fmt.Println("Error recreating dbDir", "dir", dbDir, "err", err)
-	}
-
-	infoDir := filepath.Join(cfg.ChainCfg.RootDir, "info")
-	if err := os.RemoveAll(infoDir); err == nil {
-		fmt.Println("Removed all info", "dir", infoDir)
-	} else {
-		fmt.Println("Error removing all info", "dir", infoDir, "err", err)
-	}
-
-	appDir := filepath.Join(cfg.RootDir, "application")
-	if err := os.RemoveAll(appDir); err == nil {
-		fmt.Println("Removed all application", "dir", appDir)
-	} else {
-		fmt.Println("Error removing all application", "dir", appDir, "err", err)
-	}
-
-	sigDir := filepath.Join(cfg.RootDir, "signing")
-	if err := os.RemoveAll(sigDir); err == nil {
-		fmt.Println("Removed all signing", "dir", sigDir)
-	} else {
-		fmt.Println("Error removing all signing", "dir", sigDir, "err", err)
-	}
-
-	if err := os.RemoveAll(cfg.AppCfg.SqliteFilePath); err == nil {
-		fmt.Println("Removed all sqlite files", "dir", cfg.AppCfg.SqliteFilePath)
-	} else {
-		fmt.Println("Error removing all sqlite files", "dir", cfg.AppCfg.SqliteFilePath, "err", err)
-	}
-
-	rcvdSnaps := filepath.Join(cfg.RootDir, "rcvdSnaps")
-	if err := os.RemoveAll(rcvdSnaps); err == nil {
-		fmt.Println("Removed all rcvdSnaps", "dir", rcvdSnaps)
-	} else {
-		fmt.Println("Error removing all rcvdSnaps", "dir", rcvdSnaps, "err", err)
-	}
-
-	if err := os.RemoveAll(cfg.AppCfg.SnapshotConfig.SnapshotDir); err == nil {
-		fmt.Println("Removed all snapshots", "dir", cfg.AppCfg.SnapshotConfig.SnapshotDir)
-	} else {
-		fmt.Println("Error removing all snapshots", "dir", cfg.AppCfg.SnapshotConfig.SnapshotDir, "err", err)
-	}
-
-	return nil
-}
-
-// resetState removes address book files plus all databases.
-func ResetState(dbDir string) error {
-	blockdb := filepath.Join(dbDir, "blockstore.db")
-	state := filepath.Join(dbDir, "state.db")
-	wal := filepath.Join(dbDir, "cs.wal")
-	evidence := filepath.Join(dbDir, "evidence.db")
-	txIndex := filepath.Join(dbDir, "tx_index.db")
-
-	if cmtos.FileExists(blockdb) {
-		if err := os.RemoveAll(blockdb); err == nil {
-			fmt.Println("Removed all blockstore.db", "dir", blockdb)
-		} else {
-			fmt.Println("error removing all blockstore.db", "dir", blockdb, "err", err)
-		}
-	}
-
-	if cmtos.FileExists(state) {
-		if err := os.RemoveAll(state); err == nil {
-			fmt.Println("Removed all state.db", "dir", state)
-		} else {
-			fmt.Println("error removing all state.db", "dir", state, "err", err)
-		}
-	}
-
-	if cmtos.FileExists(wal) {
-		if err := os.RemoveAll(wal); err == nil {
-			fmt.Println("Removed all cs.wal", "dir", wal)
-		} else {
-			fmt.Println("error removing all cs.wal", "dir", wal, "err", err)
-		}
-	}
-
-	if cmtos.FileExists(evidence) {
-		if err := os.RemoveAll(evidence); err == nil {
-			fmt.Println("Removed all evidence.db", "dir", evidence)
-		} else {
-			fmt.Println("error removing all evidence.db", "dir", evidence, "err", err)
-		}
-	}
-
-	if cmtos.FileExists(txIndex) {
-		if err := os.RemoveAll(txIndex); err == nil {
-			fmt.Println("Removed all tx_index.db", "dir", txIndex)
-		} else {
-			fmt.Println("error removing all tx_index.db", "dir", txIndex, "err", err)
-		}
-	}
-
-	if err := cmtos.EnsureDir(dbDir, 0700); err != nil {
-		fmt.Println("unable to recreate dbDir", "err", err)
-	}
-	return nil
-}
-
-func RemoveAddrBook(addrBookFile string) {
-	if err := os.Remove(addrBookFile); err == nil {
-		fmt.Println("Removed existing address book", "file", addrBookFile)
-	} else if !os.IsNotExist(err) {
-		fmt.Println("Error removing address book", "file", addrBookFile, "err", err)
-	}
-}
 
 // cometAddrFromPubKey computes the cometBFT address from an ed25519 public key.
 // This helper is required to support the application's BeginBlock method where
@@ -185,4 +73,98 @@ func abciStatus(status snapshots.Status) abciTypes.ResponseApplySnapshotChunk_Re
 	default:
 		return abciTypes.ResponseApplySnapshotChunk_UNKNOWN
 	}
+}
+
+func listFilesAlphabetically(filePath string) ([]string, error) {
+	files, err := filepath.Glob(filePath)
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(files)
+	return files, nil
+}
+
+func hashFile(filePath string, hasher hash.Hash) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = io.Copy(hasher, file)
+	return err
+}
+
+// PatchGenesisAppHash computes the apphash from a full contents of all sqlite
+// files in the provided folder, and if genesis file is provided, updates the
+// app_hash in the file.
+func PatchGenesisAppHash(sqliteDbDir, genesisFile string) ([]byte, error) {
+	di, err := os.Stat(sqliteDbDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read sqlite path: %v", err)
+	}
+	if !di.IsDir() {
+		return nil, fmt.Errorf("sqlite path is not a directory: %v", sqliteDbDir)
+	}
+	// List all sqlite files in the given dir in lexicographical order
+	files, err := listFilesAlphabetically(filepath.Join(sqliteDbDir, "*.sqlite"))
+	if err != nil {
+		return nil, err
+	}
+	// Allow len(files) == 0 ?
+
+	// Generate DB Hash
+	hasher := sha256.New()
+	for _, file := range files {
+		if err = hashFile(file, hasher); err != nil {
+			return nil, err
+		}
+	}
+	genesisHash := hasher.Sum(nil)
+
+	// Optionally update the app_hash in the genesis file.
+	if genesisFile != "" {
+		err = cometbft.SetGenesisAppHash(genesisHash, genesisFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return genesisHash, nil
+}
+
+func PrintPrivKeyInfo(privateKey []byte) {
+	priv := ed25519.PrivKey(privateKey)
+	pub := priv.PubKey().(ed25519.PubKey)
+	nodeID := p2p.PubKeyToID(pub)
+
+	fmt.Printf("Private key (hex): %x\n", priv.Bytes())
+	fmt.Printf("Private key (base64): %s\n",
+		base64.StdEncoding.EncodeToString(priv.Bytes())) // "value" in abci/config/node_key.json
+	fmt.Printf("Public key (base64): %s\n",
+		base64.StdEncoding.EncodeToString(pub.Bytes())) // "validators.pub_key.value" in abci/config/genesis.json
+	fmt.Printf("Public key (cometized hex): %v\n", pub.String())                // for reference with some cometbft logs
+	fmt.Printf("Public key (plain hex): %v\n", hex.EncodeToString(pub.Bytes())) // for reference with some cometbft logs
+	fmt.Printf("Address (string): %s\n", pub.Address().String())                // "validators.address" in abci/config/genesis.json
+	fmt.Printf("Node ID: %v\n", nodeID)                                         // same as address, just upper case
+}
+
+func GeneratePrivateKey() []byte {
+	privKey := ed25519.GenPrivKey()
+	return privKey[:]
+}
+
+// ReadKeyFile reads a private key from a text file containing the hexadecimal
+// encoding of the private key bytes.
+func ReadKeyFile(keyFile string) ([]byte, error) {
+	privKeyHexB, err := os.ReadFile(keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading private key file: %v", err)
+	}
+	privKeyHex := string(bytes.TrimSpace(privKeyHexB))
+	privB, err := hex.DecodeString(privKeyHex)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding private key: %v", err)
+	}
+	return privB, nil
 }

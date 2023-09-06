@@ -1,11 +1,6 @@
 version: '3'
 
 tasks:
-  update:
-    desc: Updates protobuf git submodules
-    cmds:
-      - git submodule update --remote
-
   compile:v0:
     desc: Compiles v0 protobuf
     internal: true
@@ -45,18 +40,3 @@ tasks:
     generates:
       - api/protobuf/*/v1/*.go
       - api/openapi-spec/api/v1/api.swagger.json
-
-  gogo-gen:
-    desc: Compiles protobuf with gogo
-    cmds:
-      # - echo "dsds"
-      - docker run --rm -v $(PWD):/workspace --workdir /workspace ghcr.io/cosmos/proto-builder:0.13.0 find ./proto/kwil/node/ -name "*.proto" -exec clang-format -i {} \;
-      - docker run --rm -v $(PWD):/workspace --workdir /workspace ghcr.io/cosmos/proto-builder:0.13.0 buf lint --path ./proto/kwil/node/ --error-format=json
-      - echo "Generating Protobuf files"
-      - docker run --rm -v $(PWD):/workspace --workdir /workspace ghcr.io/cosmos/proto-builder:0.13.0 sh ./scripts/gogoprotogen.sh
-    sources:
-      - proto/kwil/node/v1/*.proto
-    generates:
-      - api/protobuf/kwil/node/v1/*.go
-    # vars:
-    #   - protoImage: 'docker run --rm -v .:workspace --workdir /workspace ghcr.io/cosmos/proto-builder:0.13.0'

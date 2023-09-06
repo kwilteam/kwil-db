@@ -9,9 +9,9 @@
 
 # Root Directory Structure:
 # RootDir/
+#   |- config.toml    (app and chain configuration for running the kwild node)
 #   |- abci/
 #   |   |- config/
-#   |   |   |- config.toml    (app and chain configuration for running the kwild node)
 #   |   |   |- genesis.json   (genesis file for the network)
 #   |   |   |- addrbook.json  (peer routable addresses for the kwild node)
 #   |   |- data/
@@ -32,8 +32,6 @@
 #######################################################################
 
 [app]
-# Node's Private key
-private_key = ""
 
 # TCP or UNIX socket address for the KWILD App's GRPC server to listen on
 grpc_listen_addr = "localhost:50051"
