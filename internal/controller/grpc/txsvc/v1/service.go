@@ -59,7 +59,7 @@ type AccountReader interface {
 
 type BlockchainTransactor interface {
 	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
-	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error)
+	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error) // TODO: don't use comet types here
 }
 
 type ValidatorReader interface {
