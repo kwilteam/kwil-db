@@ -954,7 +954,7 @@
         },
         "height": {
           "type": "string",
-          "format": "uint64"
+          "format": "int64"
         },
         "tx": {
           "$ref": "#/definitions/txTransaction"

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -10,8 +11,9 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	cmttypes "github.com/cometbft/cometbft/types"
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
 
+	"github.com/kwilteam/kwil-db/pkg/abci"
+	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/kv"
@@ -140,8 +142,39 @@ func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, syn
 	return result.Code, result.Hash.Bytes(), nil
 }
 
+// TxQuery locates a transaction in the node's blockchain or mempool. If the
+// transaction could not be located, and error of type pkg/abci.ErrTxNotFound is
+// returned.
 func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error) {
-	return wc.Local.Tx(ctx, hash, prove)
+	// First check confirmed transactions. The Tx method of the cometbft client
+	// does not define a specific exported error for a transaction that is not
+	// found, just a "tx (%X) not found" as of cometbft v0.37. The Tx docs also
+	// indicate that "`nil` could mean the transaction is in the mempool", so
+	// this API should be used with caution, not failing on error AND checking
+	// the result for nilness.
+	res, err := wc.Local.Tx(ctx, hash, prove)
+	if err == nil && res != nil {
+		return res, nil
+	}
+	// The transaction could be in mempool.
+	limit := -1
+	unconf, err := wc.Local.UnconfirmedTxs(ctx, &limit)
+	if err != nil {
+		return nil, err
+	}
+	for _, tx := range unconf.Txs {
+		if bytes.Equal(tx.Hash(), hash) {
+			// Found it. Shoe-horn into a ResultTx with -1 height, and the zero
+			// values for ResponseDeliverTx and TxProof (it's checked and
+			// accepted to mempool, but not delivered in a block yet).
+			return &cmtCoreTypes.ResultTx{
+				Hash:   hash,
+				Height: -1,
+				Tx:     tx,
+			}, nil
+		}
+	}
+	return nil, abci.ErrTxNotFound
 }
 
 // atomicReadWriter implements the CometBFt AtomicReadWriter interface.
