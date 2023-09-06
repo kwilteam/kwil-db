@@ -1,29 +1,34 @@
+// Package config provides types and functions for node configuration loading
+// and generation.
 package config
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	cometCfg "github.com/cometbft/cometbft/config"
-	"github.com/cometbft/cometbft/crypto/ed25519"
-	cmtrand "github.com/cometbft/cometbft/libs/rand"
-	"github.com/cometbft/cometbft/types"
-	cmttime "github.com/cometbft/cometbft/types/time"
+	"time"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+
 	"github.com/spf13/viper"
 )
 
+const (
+	ConfigFileName      = "config.toml"
+	PrivateKeyFileName  = "private_key"
+	DefaultSnapshotsDir = "snapshots"
+)
+
+var DefaultSQLitePath = filepath.Join("data", "kwild.db") // a folder, not a file
+
 type KwildConfig struct {
 	RootDir string
+	AutoGen bool
 
-	AppCfg   *AppConfig       `mapstructure:"app"`
-	ChainCfg *cometCfg.Config `mapstructure:"chain"`
-	Logging  *Logging         `mapstructure:"log"`
+	AppCfg   *AppConfig   `mapstructure:"app"`
+	ChainCfg *ChainConfig `mapstructure:"chain"`
+	Logging  *Logging     `mapstructure:"log"`
 }
 
 type Logging struct {
@@ -34,9 +39,8 @@ type Logging struct {
 }
 
 type AppConfig struct {
-	GrpcListenAddress  string `mapstructure:"grpc_listen_addr"`
-	HttpListenAddress  string `mapstructure:"http_listen_addr"`
-	PrivateKey         string
+	GrpcListenAddress  string         `mapstructure:"grpc_listen_addr"`
+	HTTPListenAddress  string         `mapstructure:"http_listen_addr"`
 	PrivateKeyPath     string         `mapstructure:"private_key_path"`
 	SqliteFilePath     string         `mapstructure:"sqlite_file_path"`
 	ExtensionEndpoints []string       `mapstructure:"extension_endpoints"`
@@ -46,7 +50,6 @@ type AppConfig struct {
 	TLSCertFile        string         `mapstructure:"tls_cert_file"`
 	TLSKeyFile         string         `mapstructure:"tls_key_file"`
 	Hostname           string         `mapstructure:"hostname"`
-	Log                log.Config
 }
 
 type SnapshotConfig struct {
@@ -56,25 +59,125 @@ type SnapshotConfig struct {
 	SnapshotDir     string `mapstructure:"snapshot_dir"`
 }
 
-func (cfg *KwildConfig) LoadKwildConfig(rootDir string) error {
-	cfg.RootDir = rootDir
+type ChainRPCConfig struct {
+	// TCP or UNIX socket address for the RPC server to listen on
+	ListenAddress string `mapstructure:"laddr"`
 
-	cfgFile := filepath.Join(rootDir, "config.toml")
-	err := cfg.ParseConfig(cfgFile)
+	// GRPCListenAddress is th TCP or UNIX socket address for the gRPC server to
+	// listen on. NOTE: This server only supports /broadcast_tx_commit
+	GRPCListenAddress string `mapstructure:"grpc_laddr"`
+
+	// TimeoutBroadcastTxCommit is how long to wait for a tx to be committed during /broadcast_tx_commit
+	// WARNING: Using a value larger than 10s will result in increasing the
+	// global HTTP write timeout, which applies to all connections and endpoints.
+	// See https://github.com/tendermint/tendermint/issues/3435
+	TimeoutBroadcastTxCommit time.Duration `mapstructure:"timeout_broadcast_tx_commit"`
+}
+
+type P2PConfig struct {
+	// ListenAddress is the address on which to listen for incoming connections.
+	ListenAddress string `mapstructure:"laddr"`
+	// ExternalAddress is the address to advertise to peers to dial us.
+	ExternalAddress string `mapstructure:"external_address"`
+	// PersistentPeers is a comma separated list of nodes to keep persistent
+	// connections to.
+	PersistentPeers string `mapstructure:"persistent_peers"`
+	// AddrBookStrict enforces strict address routability rules. This must be
+	// false for private or local networks.
+	AddrBookStrict bool `mapstructure:"addr_book_strict"`
+	// MaxNumInboundPeers is the maximum number of inbound peers.
+	MaxNumInboundPeers int `mapstructure:"max_num_inbound_peers"`
+	// MaxNumOutboundPeers is the maximum number of outbound peers to connect
+	// to, excluding persistent peers.
+	MaxNumOutboundPeers int `mapstructure:"max_num_outbound_peers"`
+	// UnconditionalPeerIDs are the node IDs to which a connection will be
+	// (re)established ignoring any existing limits.
+	UnconditionalPeerIDs string `mapstructure:"unconditional_peer_ids"`
+	// PexReactor enables the peer-exchange reactor.
+	PexReactor bool `mapstructure:"pex"`
+	// AllowDuplicateIP permits peers connecting from the same IP.
+	AllowDuplicateIP bool `mapstructure:"allow_duplicate_ip"`
+	// HandshakeTimeout is the peer connection handshake timeout.
+	HandshakeTimeout time.Duration `mapstructure:"handshake_timeout"`
+	// DialTimeout is the peer connection establishment timeout.
+	DialTimeout time.Duration `mapstructure:"dial_timeout"`
+}
+
+type MempoolConfig struct {
+	// Maximum number of transactions in the mempool
+	Size int `mapstructure:"size"`
+	// Size of the cache (used to filter transactions we saw earlier) in transactions
+	CacheSize int `mapstructure:"cache_size"`
+
+	// Limit the total size of all txs in the mempool.
+	// This only accounts for raw transactions (e.g. given 1MB transactions and
+	// max_txs_bytes=5MB, mempool will only accept 5 transactions).
+	// MaxTxsBytes int64 `mapstructure:"max_txs_bytes"`
+}
+
+type ConsensusConfig struct {
+	// TimeoutPropose is how long to wait for a proposal block before prevoting
+	// nil.
+	TimeoutPropose time.Duration `mapstructure:"timeout_propose"`
+	// TimeoutPrevote is how long to wait after receiving +2/3 prevotes for
+	// “anything” (i.e. not a single block or nil).
+	TimeoutPrevote time.Duration `mapstructure:"timeout_prevote"`
+	// TimeoutPrecommit is how long we wait after receiving +2/3 precommits for
+	// “anything” (i.e. not a single block or nil).
+	TimeoutPrecommit time.Duration `mapstructure:"timeout_precommit"`
+	// TimeoutCommit is how long to wait after committing a block, before
+	// starting on the new height (this gives us a chance to receive some more
+	// precommits, even though we already have +2/3).
+	TimeoutCommit time.Duration `mapstructure:"timeout_commit"`
+}
+
+type StateSyncConfig struct {
+	Enable              bool          `mapstructure:"enable"`
+	TempDir             string        `mapstructure:"temp_dir"`
+	RPCServers          []string      `mapstructure:"rpc_servers"`
+	DiscoveryTime       time.Duration `mapstructure:"discovery_time"`
+	ChunkRequestTimeout time.Duration `mapstructure:"chunk_request_timeout"`
+}
+
+type ChainConfig struct {
+	Moniker string `mapstructure:"moniker"`
+	// DBPath  string `mapstructure:"db_dir"` // pkg/abci knows this
+
+	RPC       *ChainRPCConfig  `mapstructure:"rpc"`
+	P2P       *P2PConfig       `mapstructure:"p2p"`
+	Mempool   *MempoolConfig   `mapstructure:"mempool"`
+	StateSync *StateSyncConfig `mapstructure:"statesync"`
+	Consensus *ConsensusConfig `mapstructure:"consensus"`
+}
+
+func defaultMoniker() string {
+	moniker, err := os.Hostname()
+	if err != nil {
+		moniker = "amnesiac"
+	}
+	return moniker
+}
+
+func (cfg *KwildConfig) LoadKwildConfig() error {
+	var err error
+	cfg.RootDir, err = ExpandPath(cfg.RootDir)
+	if err != nil {
+		return fmt.Errorf("failed to expand root directory \"%v\": %v", cfg.RootDir, err)
+	}
+
+	fmt.Printf("kwild starting with root directory \"%v\"\n", cfg.RootDir)
+
+	cfgFile := filepath.Join(cfg.RootDir, ConfigFileName)
+	err = cfg.ParseConfig(cfgFile) // viper magic here
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %v", err)
 	}
 
-	err = cfg.sanitizeCfgPaths()
-	if err != nil {
-		return fmt.Errorf("failed to sanitize config paths: %v", err)
-	}
-
-	cfg.configureLogging()
+	cfg.sanitizeCfgPaths()
 	cfg.configureCerts()
 
-	if err := cfg.ChainCfg.ValidateBasic(); err != nil {
-		return fmt.Errorf("invalid chain configuration data: %v", err)
+	if cfg.ChainCfg.Moniker == "" {
+		cfg.ChainCfg.Moniker = defaultMoniker()
 	}
 
 	return nil
@@ -131,7 +234,7 @@ func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
 			return fmt.Errorf("reading config: %v", err)
 		}
 	} else {
-		fmt.Printf("Config file %s not found, Using default config\n", cfgFile)
+		fmt.Printf("Config file %s not found. Using default settings.\n", cfgFile)
 	}
 
 	if err := viper.Unmarshal(cfg); err != nil {
@@ -141,19 +244,18 @@ func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
 }
 
 func DefaultConfig() *KwildConfig {
-	cfg := &KwildConfig{
-		ChainCfg: cometCfg.DefaultConfig(),
+	return &KwildConfig{
 		AppCfg: &AppConfig{
 			GrpcListenAddress: "localhost:50051",
-			HttpListenAddress: "localhost:8080",
-			SqliteFilePath:    "data/kwil.db",
+			HTTPListenAddress: "localhost:8080",
+			SqliteFilePath:    DefaultSQLitePath,
 			WithoutGasCosts:   true,
 			WithoutNonces:     false,
 			SnapshotConfig: SnapshotConfig{
 				Enabled:         false,
 				RecurringHeight: uint64(10000),
 				MaxSnapshots:    3,
-				SnapshotDir:     "snapshots",
+				SnapshotDir:     DefaultSnapshotsDir,
 			},
 		},
 		Logging: &Logging{
@@ -162,128 +264,60 @@ func DefaultConfig() *KwildConfig {
 			TimeEncoding: log.TimeEncodingEpochFloat,
 			OutputPaths:  []string{"stdout"},
 		},
+		ChainCfg: &ChainConfig{
+			P2P: &P2PConfig{
+				ListenAddress:       "tcp://0.0.0.0:26656",
+				ExternalAddress:     "",
+				AddrBookStrict:      false, // override comet
+				MaxNumInboundPeers:  40,
+				MaxNumOutboundPeers: 10,
+				AllowDuplicateIP:    true,  // override comet
+				PexReactor:          false, // override comet - not recommended for validators
+				HandshakeTimeout:    20 * time.Second,
+				DialTimeout:         3 * time.Second,
+			},
+			RPC: &ChainRPCConfig{
+				ListenAddress:            "tcp://127.0.0.1:26657",
+				GRPCListenAddress:        "", // disabled by default
+				TimeoutBroadcastTxCommit: 10 * time.Second,
+			},
+			Mempool: &MempoolConfig{
+				Size:      5000,
+				CacheSize: 10000,
+				// MaxTxsBytes:  1024 * 1024 * 1024, // 1GB
+			},
+			StateSync: &StateSyncConfig{
+				Enable:              false,
+				DiscoveryTime:       15 * time.Second,
+				ChunkRequestTimeout: 10 * time.Second,
+			},
+			Consensus: &ConsensusConfig{
+				TimeoutPropose:   3 * time.Second,
+				TimeoutPrevote:   time.Second,
+				TimeoutPrecommit: time.Second,
+				TimeoutCommit:    time.Second,
+			},
+		},
 	}
-
-	// PEX is recommended to be disabled for validators: https://docs.cometbft.com/v0.37/core/validators#validator-node-configuration
-	cfg.ChainCfg.P2P.PexReactor = false
-
-	/*
-	 As all we are validating are tx signatures, no need to go through Validation again
-	 To be set to true when we have Validations based on gas, nonces, account balance, etc.
-	*/
-	cfg.ChainCfg.Mempool.Recheck = false
-	return cfg
 }
 
-/*
-LoadGenesisAndPrivateKey generates private key and genesis file if not exist
-  - If genesis file exists but not private key file, it will generate private key
-    and start the node as a non-validator
-  - Otherwise, the genesis file is generated based on the private key
-    and starts the node as a validator
-*/
-func (cfg *KwildConfig) LoadGenesisAndPrivateKey(autoGen bool) error {
-	rootDir := cfg.RootDir
-	var pkey ed25519.PrivKey
-	/*
-		Get private key:
-			- Get the Private key location: (flags >  config file > default value)
-			- Check if private key file exists
-			- Check if in autogen mode, generate private key and write to file
-			- Else fail the server start
-	*/
-	if fileExists(cfg.AppCfg.PrivateKeyPath) {
-		fmt.Println("Loading private key from file: ", cfg.AppCfg.PrivateKeyPath)
-		privKeyHex, err := os.ReadFile(cfg.AppCfg.PrivateKeyPath)
-		if err != nil {
-			return fmt.Errorf("error reading private key file: %v", err)
-		}
-		cfg.AppCfg.PrivateKey = string(bytes.TrimSpace(privKeyHex))
-		pkey, err = decodePrivateKey(cfg.AppCfg.PrivateKey)
-		if err != nil {
-			return fmt.Errorf("error decoding private key: %w", err)
-		}
-	} else if autoGen {
-		pkey = ed25519.GenPrivKey()
-		cfg.AppCfg.PrivateKey = hex.EncodeToString(pkey[:])
-		if err := os.WriteFile(cfg.AppCfg.PrivateKeyPath, []byte(cfg.AppCfg.PrivateKey), 0600); err != nil {
-			return fmt.Errorf("error creating private key file: %v", err)
-		}
-		fmt.Println("Generated private key file: ", cfg.AppCfg.PrivateKeyPath)
-	} else {
-		return fmt.Errorf("private key not found")
-	}
-
-	abciCfgDir := filepath.Join(rootDir, "abci", "config")
-	genFile := filepath.Join(abciCfgDir, "genesis.json")
-	if !fileExists(genFile) {
-		if !autoGen {
-			return fmt.Errorf("genesis file not found: %s", genFile)
-		}
-
-		if err := os.MkdirAll(abciCfgDir, 0700); err != nil {
-			return fmt.Errorf("error creating abci config dir: %v", err)
-		}
-
-		genDoc := GenesisDoc([]ed25519.PrivKey{pkey}, "kwil-chain-")
-		if err := genDoc.SaveAs(genFile); err != nil {
-			return err
-		}
-		fmt.Println("Generated genesis file: ", genFile)
-	} else {
-		fmt.Println("Loading genesis file: ", genFile)
-	}
-	return nil
-}
-
-func decodePrivateKey(pkey string) (ed25519.PrivKey, error) {
-	privB, err := hex.DecodeString(pkey)
-	if err != nil {
-		return nil, err
-	}
-	return ed25519.PrivKey(privB), nil
-}
-
-func GenesisDoc(pkey []ed25519.PrivKey, chainIDPrefix string) *types.GenesisDoc {
-	genVals := make([]types.GenesisValidator, len(pkey))
-	for idx, key := range pkey {
-		pub := key.PubKey().(ed25519.PubKey)
-		addr := pub.Address()
-		val := types.GenesisValidator{
-			Address: addr,
-			PubKey:  pub,
-			Power:   1,
-			Name:    fmt.Sprint("validator-", idx),
-		}
-		genVals[idx] = val
-	}
-
-	genDoc := types.GenesisDoc{
-		ChainID:         chainIDPrefix + cmtrand.Str(6),
-		GenesisTime:     cmttime.Now(),
-		ConsensusParams: types.DefaultConsensusParams(),
-		Validators:      genVals,
-	}
-	return &genDoc
-}
-
-func (cfg *KwildConfig) configureLogging() {
+func (cfg *KwildConfig) LogConfig() *log.Config {
 	// pkg/log.Config <== pkg/config.Logging
-	cfg.AppCfg.Log.Level = cfg.Logging.Level
-	cfg.AppCfg.Log.OutputPaths = cfg.Logging.OutputPaths
-	cfg.AppCfg.Log.Format = cfg.Logging.Format
-	cfg.AppCfg.Log.EncodeTime = cfg.Logging.TimeEncoding
+	return &log.Config{
+		Level:       cfg.Logging.Level,
+		OutputPaths: cfg.Logging.OutputPaths,
+		Format:      cfg.Logging.Format,
+		EncodeTime:  cfg.Logging.TimeEncoding,
+	}
 }
 
 func (cfg *KwildConfig) configureCerts() {
 	if cfg.AppCfg.TLSCertFile != "" {
 		cfg.AppCfg.TLSCertFile = rootify(cfg.AppCfg.TLSCertFile, cfg.RootDir)
-		cfg.ChainCfg.RPC.TLSCertFile = cfg.AppCfg.TLSCertFile
 	}
 
 	if cfg.AppCfg.TLSKeyFile != "" {
 		cfg.AppCfg.TLSKeyFile = rootify(cfg.AppCfg.TLSKeyFile, cfg.RootDir)
-		cfg.ChainCfg.RPC.TLSKeyFile = cfg.AppCfg.TLSKeyFile
 	}
 }
 
@@ -294,7 +328,7 @@ func rootify(path, rootDir string) string {
 	return filepath.Join(rootDir, path)
 }
 
-func (cfg *KwildConfig) sanitizeCfgPaths() error {
+func (cfg *KwildConfig) sanitizeCfgPaths() {
 	rootDir := cfg.RootDir
 	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
 	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
@@ -302,18 +336,16 @@ func (cfg *KwildConfig) sanitizeCfgPaths() error {
 	if cfg.AppCfg.PrivateKeyPath != "" {
 		cfg.AppCfg.PrivateKeyPath = rootify(cfg.AppCfg.PrivateKeyPath, rootDir)
 	} else {
-		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, "private_key.txt")
+		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, PrivateKeyFileName)
 	}
 
-	cfg.ChainCfg.SetRoot(filepath.Join(rootDir, "abci"))
-	return nil
+	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)
 }
 
 func ExpandPath(path string) (string, error) {
 	var expandedPath string
-
 	if tail, cut := strings.CutPrefix(path, "~/"); cut {
-		// Expands ~ in the path
+		// Expands ~/ in the path
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return "", err

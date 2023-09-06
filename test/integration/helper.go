@@ -18,14 +18,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/log"
-
-	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/internal/pkg/nodecfg"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/nodecfg"
 	"github.com/kwilteam/kwil-db/test/acceptance"
-	"github.com/kwilteam/kwil-db/test/runner"
+	"github.com/kwilteam/kwil-db/test/driver"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
 
@@ -36,9 +34,13 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// envFile is the default env file path
-// It will pass values among different stages of the test setup
-var envFile = runner.GetEnv("KIT_ENV_FILE", "./.env")
+var (
+	getEnv = driver.GetEnv
+
+	// envFile is the default env file path
+	// it will pass values among different stages of the test setup
+	envFile = getEnv("KACT_ENV_FILE", "./.env")
+)
 
 var defaultWaitStrategies = map[string]string{
 	"ext1":  "listening on",
@@ -110,16 +112,17 @@ func (r *IntHelper) LoadConfig() {
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'
 	r.cfg.ActTestCfg = acceptance.ActTestCfg{
-		AliceRawPK:        runner.GetEnv("KIT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
-		BobRawPK:          runner.GetEnv("KIT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
-		SchemaFile:        runner.GetEnv("KIT_SCHEMA", "./test-data/test_db.kf"),
-		LogLevel:          runner.GetEnv("KIT_LOG_LEVEL", "debug"),
-		GWEndpoint:        runner.GetEnv("KIT_GATEWAY_ENDPOINT", "localhost:8080"),
-		GrpcEndpoint:      runner.GetEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
-		DockerComposeFile: runner.GetEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
+		AliceRawPK:                getEnv("KIT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
+		BobRawPK:                  getEnv("KIT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
+		SchemaFile:                getEnv("KIT_SCHEMA", "./test-data/test_db.kf"),
+		LogLevel:                  getEnv("KIT_LOG_LEVEL", "debug"),
+		GWEndpoint:                getEnv("KIT_GATEWAY_ENDPOINT", "localhost:8080"),
+		GrpcEndpoint:              getEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
+		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
+		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"), // e.g. docker-compose.override.yml
 	}
 
-	waitTimeout := runner.GetEnv("KIT_WAIT_TIMEOUT", "10s")
+	waitTimeout := getEnv("KIT_WAIT_TIMEOUT", "10s")
 	r.cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
 	require.NoError(r.t, err, "invalid wait timeout")
 
@@ -147,12 +150,17 @@ func (r *IntHelper) updateGeneratedConfigHome(home string) {
 func (r *IntHelper) generateNodeConfig() {
 	r.t.Logf("generate testnet config")
 	tmpPath := r.t.TempDir()
+	// To prevent go test from cleaning up (TODO: consider making this an option):
+	// tmpPath, err := os.MkdirTemp("", "TestKwilInt")
+	// if err != nil {
+	// 	r.t.Fatal(err)
+	// }
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
+		// InitialHeight:           0,
 		NValidators:             r.cfg.NValidator,
 		NNonValidators:          r.cfg.NNonValidator,
-		InitialHeight:           0,
 		ConfigFile:              "",
 		OutputDir:               tmpPath,
 		NodeDirPrefix:           "node",
@@ -168,13 +176,22 @@ func (r *IntHelper) generateNodeConfig() {
 	r.updateGeneratedConfigHome(tmpPath)
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
 func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services []string) {
 	r.t.Logf("run in docker compose")
 
 	envs, err := godotenv.Read(envFile)
 	require.NoError(r.t, err, "failed to parse .env file")
 
-	dc, err := compose.NewDockerCompose(r.cfg.DockerComposeFile)
+	composeFiles := []string{r.cfg.DockerComposeFile}
+	if r.cfg.DockerComposeOverrideFile != "" && fileExists(r.cfg.DockerComposeOverrideFile) {
+		composeFiles = append(composeFiles, r.cfg.DockerComposeOverrideFile)
+	}
+	dc, err := compose.NewDockerCompose(composeFiles...)
 	require.NoError(r.t, err, "failed to create docker compose object for kwild cluster")
 
 	r.teardown = append(r.teardown, func() {
@@ -231,7 +248,7 @@ func (r *IntHelper) WaitForSignals(t *testing.T) {
 }
 
 func (r *IntHelper) ExtractPrivateKeys() {
-	regexPath := filepath.Join(r.home, "*/private_key.txt")
+	regexPath := filepath.Join(r.home, "*/private_key")
 
 	files, err := filepath.Glob(regexPath)
 	require.NoError(r.t, err, "failed to get private key files")
@@ -280,7 +297,7 @@ func (r *IntHelper) GetDriver(ctx context.Context, ctr *testcontainers.DockerCon
 	)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return kwild.NewKwildDriver(kwilClt)
+	return driver.NewKwildDriver(kwilClt)
 }
 
 func (r *IntHelper) GetDrivers(ctx context.Context) []KwilIntDriver {
@@ -318,7 +335,7 @@ func (r *IntHelper) GetNodeDriver(ctx context.Context, name string) KwilIntDrive
 	kwilClt, err := client.New(r.cfg.GrpcEndpoint, options...)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return kwild.NewKwildDriver(kwilClt)
+	return driver.NewKwildDriver(kwilClt)
 }
 
 func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {

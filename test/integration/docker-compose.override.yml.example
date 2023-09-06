@@ -1,7 +1,13 @@
-version: '3'
+version: "3"
 
 services:
-  kwild:
+  node0:
     user: "${UID}:${GID}"
-  ext:
+  node1:
+    user: "${UID}:${GID}"
+  node2:
+    user: "${UID}:${GID}"
+  node3:
+    user: "${UID}:${GID}"
+  ext1:
     user: "${UID}:${GID}"

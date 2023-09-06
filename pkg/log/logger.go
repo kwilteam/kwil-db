@@ -76,14 +76,14 @@ const (
 )
 
 type Config struct {
-	Level string `mapstructure:"level"`
+	Level string
 	// OutputPaths is a list of URLs or file paths to write logging output to.
-	OutputPaths []string `mapstructure:"output_paths"`
+	OutputPaths []string
 	// Format is either EncodingJSON or EncodingConsole.
-	Format string `mapstructure:"format"`
+	Format string
 	// EncodeTime indicates how to encode the time. The default is
 	// TimeEncodingEpochFloat.
-	EncodeTime string `mapstructure:"time_format"`
+	EncodeTime string
 }
 
 func rfc3339MilliTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
@@ -95,11 +95,19 @@ func epochMillisTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 }
 
 func New(config Config) Logger {
+	logger, err := NewChecked(config)
+	if err != nil {
+		panic(err.Error())
+	}
+	return logger
+}
+
+func NewChecked(config Config) (Logger, error) {
 	// poor man's config
 	cfg := zap.NewProductionConfig()
 	level, err := zap.ParseAtomicLevel(config.Level)
 	if err != nil {
-		panic(err)
+		return Logger{}, err
 	}
 
 	switch config.EncodeTime {
@@ -122,7 +130,7 @@ func New(config Config) Logger {
 	case FormatJSON, "": // also the default
 		cfg.Encoding = "json"
 	default:
-		panic(fmt.Sprintf("invalid log format %q", enc))
+		return Logger{}, fmt.Errorf("invalid log format %q", enc)
 	}
 
 	if config.Level != "" {
@@ -139,7 +147,7 @@ func New(config Config) Logger {
 	// fields := make([]zap.Field, 0, 10) with cfg.Build(zap.Fields(fields...))
 	logger := zap.Must(cfg.Build())
 	logger = logger.WithOptions(zap.AddCallerSkip(1))
-	return Logger{L: logger}
+	return Logger{L: logger}, nil
 }
 
 type Level = zapcore.Level

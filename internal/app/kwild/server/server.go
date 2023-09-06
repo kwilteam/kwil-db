@@ -1,17 +1,23 @@
+// Package server defines the main Kwil server, which includes the blockchain
+// node and the gRPC services that interface with the Kwil dataset engine.
 package server
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"path/filepath"
 	"time"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
 	"github.com/kwilteam/kwil-db/pkg/log"
+
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -27,6 +33,53 @@ type Server struct {
 	cfg *config.KwildConfig
 
 	cancelCtxFunc context.CancelFunc
+}
+
+const (
+	// Top-level directory structure for the Server's systems
+	abciDirName        = kwild.ABCIDirName
+	applicationDirName = kwild.ApplicationDirName
+	rcvdSnapsDirName   = kwild.ReceivedSnapsDirName
+	signingDirName     = kwild.SigningDirName
+
+	// Note that the sqlLite file path is user-configurable
+	// e.g. "data/kwil.db"
+)
+
+// New builds the kwild server.
+func New(ctx context.Context, cfg *config.KwildConfig) (svr *Server, err error) {
+	closers := &closeFuncs{
+		closers: make([]func() error, 0),
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			svr = nil
+			err = fmt.Errorf("panic while building kwild: %v", r)
+			closers.closeAll()
+		}
+	}()
+
+	logger, err := log.NewChecked(*cfg.LogConfig())
+	if err != nil {
+		return nil, fmt.Errorf("invalid logger config: %w", err)
+	}
+	logger = *logger.Named("kwild")
+
+	dbDir := cfg.AppCfg.SqliteFilePath
+	if dbDir == "" { // config parsing should have set it (sanitizeCfgPaths), but we can generate the default too
+		dbDir = filepath.Join(cfg.RootDir, config.DefaultSQLitePath)
+		logger.Warn("using fallback sqlite path", zap.String("sqlitePath", dbDir))
+	}
+
+	deps := &coreDependencies{
+		ctx:    ctx,
+		cfg:    cfg,
+		log:    logger,
+		opener: newSqliteOpener(dbDir),
+	}
+
+	return buildServer(deps, closers), nil
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -67,7 +120,7 @@ func (s *Server) Start(ctx context.Context) error {
 			}
 		}()
 
-		s.log.Info("http server started", zap.String("address", s.cfg.AppCfg.HttpListenAddress))
+		s.log.Info("http server started", zap.String("address", s.cfg.AppCfg.HTTPListenAddress))
 		return s.gateway.Start()
 	})
 
