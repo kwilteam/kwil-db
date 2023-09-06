@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -193,14 +194,14 @@ func (cfg *KwildConfig) LoadGenesisAndPrivateKey(autoGen bool) error {
 	*/
 	if fileExists(cfg.AppCfg.PrivateKeyPath) {
 		fmt.Println("Loading private key from file: ", cfg.AppCfg.PrivateKeyPath)
-		pkeyBytes, err := os.ReadFile(cfg.AppCfg.PrivateKeyPath)
+		privKeyHex, err := os.ReadFile(cfg.AppCfg.PrivateKeyPath)
 		if err != nil {
 			return fmt.Errorf("error reading private key file: %v", err)
 		}
-		cfg.AppCfg.PrivateKey = string(pkeyBytes)
+		cfg.AppCfg.PrivateKey = string(bytes.TrimSpace(privKeyHex))
 		pkey, err = decodePrivateKey(cfg.AppCfg.PrivateKey)
 		if err != nil {
-			return fmt.Errorf("error decoding private key: %v", err)
+			return fmt.Errorf("error decoding private key: %w", err)
 		}
 	} else if autoGen {
 		pkey = ed25519.GenPrivKey()
@@ -238,7 +239,7 @@ func (cfg *KwildConfig) LoadGenesisAndPrivateKey(autoGen bool) error {
 func decodePrivateKey(pkey string) (ed25519.PrivKey, error) {
 	privB, err := hex.DecodeString(pkey)
 	if err != nil {
-		return nil, fmt.Errorf("error decoding private key: %v", err)
+		return nil, err
 	}
 	return ed25519.PrivKey(privB), nil
 }
