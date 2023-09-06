@@ -3,8 +3,10 @@ package txsvc
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
@@ -20,14 +22,12 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 
 	cmtResult, err := s.chainClient.TxQuery(ctx, req.TxHash, false)
 	if err != nil {
+		if errors.Is(err, abci.ErrTxNotFound) {
+			logger.Debug("transaction not found")
+			return nil, status.Error(codes.NotFound, "transaction not found")
+		}
 		logger.Error("failed to query tx", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to query transaction")
-	}
-
-	if cmtResult.Height < 0 {
-		logger.Debug("transaction not found",
-			zap.ByteString("TxHash", req.TxHash), zap.Int64("Height", cmtResult.Height))
-		return nil, status.Error(codes.NotFound, "transaction not found")
 	}
 
 	originalTx := &transactions.Transaction{}
@@ -55,7 +55,7 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 
 	return &txpb.TxQueryResponse{
 		Hash:     cmtResult.Hash.Bytes(),
-		Height:   uint64(cmtResult.Height),
+		Height:   cmtResult.Height,
 		Tx:       tx,
 		TxResult: txResult,
 	}, nil

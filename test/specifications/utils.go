@@ -101,7 +101,7 @@ func expectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash 
 				status.WriteString(err.Error())
 				return false
 			}
-		}, waitFor, time.Second*1, "tx failed: %s", status.String())
+		}, waitFor, time.Millisecond*200, "tx failed: %s", status.String())
 	}
 }
 
