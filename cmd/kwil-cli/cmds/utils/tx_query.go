@@ -33,6 +33,9 @@ func txQueryCmd() *cobra.Command {
 					if len(txString) < 2 {
 						return fmt.Errorf("invalid transaction id: %s", txString)
 					}
+
+					// trim off any 0x prefix, which is a common convention
+					// x is not a valid hex digit, so we can safely trim it off
 					if txString[1] == 'x' {
 						txString = txString[2:]
 					}
@@ -81,21 +84,13 @@ func printQueryTxRes(res *txpb.TxQueryResponse, encode encodeFunc) {
 	fmt.Println("Transaction ID: ", encode(res.Hash))
 
 	status := "failed"
-	if res.TxResult.Code == abci.CodeOk.Uint32() {
+	if res.Height == -1 {
+		status = "pending"
+	} else if res.TxResult.Code == abci.CodeOk.Uint32() {
 		status = "success"
 	}
 
 	fmt.Println("Status: ", status)
-	fmt.Println("Data: ", hex.EncodeToString(res.TxResult.Data))
+	fmt.Println("Height: ", res.Height)
 	fmt.Println("Outputted Logs: ", res.TxResult.Log)
 }
-
-/*
-	d.logger.Info("tx info", zap.Uint64("height", resp.Height),
-		zap.String("txHash", strings.ToUpper(hex.EncodeToString(txHash))),
-		zap.Any("result", resp.TxResult))
-
-	if resp.TxResult.Code != abci.CodeOk.Uint32() {
-		return fmt.Errorf("transaction not ok, %s", resp.TxResult.Log)
-	}
-*/
