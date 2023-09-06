@@ -13,10 +13,7 @@ import (
 	cmtos "github.com/cometbft/cometbft/libs/os"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
-	cmtrand "github.com/cometbft/cometbft/libs/rand"
 	"github.com/cometbft/cometbft/p2p"
-	"github.com/cometbft/cometbft/types"
-	cmttime "github.com/cometbft/cometbft/types/time"
 
 	"github.com/spf13/viper"
 )
@@ -24,6 +21,7 @@ import (
 const (
 	nodeDirPerm   = 0755
 	chainIDPrefix = "kwil-chain-"
+	PrivKeyFile   = "private_key.txt"
 )
 
 type NodeGenerateConfig struct {
@@ -105,8 +103,6 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		}
 	}
 
-	genVals := make([]types.GenesisValidator, genCfg.NValidators)
-
 	for i := 0; i < genCfg.NValidators; i++ {
 		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i)
 		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
@@ -126,18 +122,16 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		}
 		priv := privateKeys[i]
 		cfg.AppCfg.PrivateKey = hex.EncodeToString(priv[:])
-		pub := priv.PubKey().(ed25519.PubKey)
-		addr := pub.Address()
+		// write node key
+		pvkeyFile := filepath.Join(cfg.RootDir, PrivKeyFile)
+		err = os.WriteFile(pvkeyFile, []byte(cfg.AppCfg.PrivateKey), 0644)
+		if err != nil {
+			fmt.Println("Error creating private key file: ", err)
+			return err
+		}
 
 		cfg.ChainCfg.P2P.AddrBookStrict = false
 		cfg.ChainCfg.P2P.AllowDuplicateIP = true
-
-		genVals[i] = types.GenesisValidator{
-			Address: addr,
-			PubKey:  pub,
-			Power:   1,
-			Name:    fmt.Sprintf("validator-%d", i),
-		}
 	}
 
 	for i := 0; i < genCfg.NNonValidators; i++ {
@@ -158,13 +152,8 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		}
 	}
 
-	genDoc := &types.GenesisDoc{
-		ChainID:         chainIDPrefix + cmtrand.Str(6),
-		ConsensusParams: types.DefaultConsensusParams(),
-		GenesisTime:     cmttime.Now(),
-		InitialHeight:   genCfg.InitialHeight,
-		Validators:      genVals,
-	}
+	validatorPkeys := privateKeys[:genCfg.NValidators]
+	genDoc := config.GenesisDoc(validatorPkeys, chainIDPrefix)
 
 	// write genesis file
 	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
@@ -193,6 +182,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
 		}
 		cfg.AppCfg.PrivateKey = hex.EncodeToString(privateKeys[i])
+		cfg.AppCfg.PrivateKeyPath = PrivKeyFile
 		writeConfigFile(filepath.Join(nodeDir, "config.toml"), cfg)
 	}
 
@@ -220,8 +210,6 @@ func initFilesWithConfig(cfg *config.KwildConfig, nodeIdx int) error {
 	cfg.ChainCfg.P2P.AllowDuplicateIP = true
 
 	priv := ed25519.GenPrivKey()
-	pub := priv.PubKey().(ed25519.PubKey)
-	addr := pub.Address()
 	cfg.AppCfg.PrivateKey = hex.EncodeToString(priv[:])
 	nodeID := (&p2p.NodeKey{PrivKey: priv}).ID()
 	fmt.Printf("Node Id for node-%d: %v\n", nodeIdx, nodeID)
@@ -231,24 +219,23 @@ func initFilesWithConfig(cfg *config.KwildConfig, nodeIdx int) error {
 	if cmtos.FileExists(genFile) {
 		fmt.Printf("Found genesis file %v\n", genFile)
 	} else {
-		genDoc := types.GenesisDoc{
-			ChainID:         chainIDPrefix + cmtrand.Str(6),
-			GenesisTime:     cmttime.Now(),
-			ConsensusParams: types.DefaultConsensusParams(),
-		}
-		genDoc.Validators = []types.GenesisValidator{{
-			Address: addr,
-			PubKey:  pub,
-			Power:   1,
-			Name:    fmt.Sprintf("validator-%d", nodeIdx),
-		}}
-
+		genDoc := config.GenesisDoc([]ed25519.PrivKey{priv}, chainIDPrefix)
+		genDoc.Validators[0].Name = fmt.Sprintf("validator-%d", nodeIdx)
 		if err := genDoc.SaveAs(genFile); err != nil {
 			return err
 		}
 
 		fmt.Printf("Generated genesis file %v\n", genFile)
 	}
+
+	// write node key
+	pvkeyFile := filepath.Join(cfg.RootDir, PrivKeyFile)
+	err = os.WriteFile(pvkeyFile, []byte(cfg.AppCfg.PrivateKey), 0644)
+	if err != nil {
+		fmt.Println("Error creating private key file: ", err)
+		return err
+	}
+	cfg.AppCfg.PrivateKeyPath = PrivKeyFile
 	return nil
 }
 

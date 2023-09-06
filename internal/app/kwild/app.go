@@ -21,6 +21,7 @@ var rootCmd = &cobra.Command{
 
 var kwildCfg = config.DefaultConfig()
 var rootDir string
+var autoGen bool // auto generate private key and genesis file
 
 func Execute() error {
 	rootCmd.AddCommand(
@@ -33,6 +34,7 @@ func Execute() error {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&rootDir, "root_dir", "~/.kwild", "kwild root directory for config and data")
+	rootCmd.PersistentFlags().BoolVar(&autoGen, "autogen", false, "auto generate private key and genesis file if not exist")
 	rootCmd.PersistentPreRunE = extractKwildConfig
 }
 
@@ -52,10 +54,12 @@ func extractKwildConfig(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	err = kwildCfg.LoadKwildConfig(rootDir)
-	if err != nil {
-		fmt.Println("Failed to load config: ", err)
-		return err
+	if err = kwildCfg.LoadKwildConfig(rootDir); err != nil {
+		return fmt.Errorf("failed to load kwild config: %v", err)
+	}
+
+	if err = kwildCfg.LoadGenesisAndPrivateKey(autoGen); err != nil {
+		return fmt.Errorf("failed to load genesis and private key: %v", err)
 	}
 	return nil
 }
