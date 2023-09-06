@@ -29,6 +29,7 @@ var demotedInfoMsgs = map[string]string{
 	"Timed out":                        "consensus", // only the one from consensus.(*timeoutTicker).timeoutRoutine, which seems to be normal
 }
 
+// LogWrapper that implements cometbft's Logger interface.
 type LogWrapper struct {
 	log *log.Logger
 
@@ -37,6 +38,7 @@ type LogWrapper struct {
 	module string
 }
 
+// NewLogWrapper creates a new LogWrapper using the provided Kwil Logger.
 func NewLogWrapper(log *log.Logger) *LogWrapper {
 	log = log.WithOptions(zap.AddCallerSkip(1))
 	return &LogWrapper{
@@ -71,9 +73,10 @@ func (lw *LogWrapper) With(kvs ...any) cometLog.Logger {
 			module = f.String
 		}
 	}
-	lw = NewLogWrapper(lw.log.With(fields...))
-	lw.module = module
-	return lw
+	return &LogWrapper{
+		log:    lw.log.With(fields...),
+		module: module,
+	}
 }
 
 func keyValsToFields(kvs []any) []zap.Field {
