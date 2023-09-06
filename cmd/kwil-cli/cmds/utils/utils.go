@@ -17,6 +17,7 @@ func NewCmdUtils() *cobra.Command {
 		pingCmd(),
 		printConfigCmd(),
 		privateKeyCmd(),
+		txQueryCmd(),
 	)
 
 	return cmd
