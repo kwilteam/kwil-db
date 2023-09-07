@@ -9,6 +9,7 @@ on:
 jobs:
   build-push-image:
     name: Build & push image
+    if: false # temporary disable
     runs-on: ubuntu-latest
 
     steps:
