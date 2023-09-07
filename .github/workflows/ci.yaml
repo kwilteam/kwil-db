@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    types: [ opened, synchronize, reopened ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
   workflow_dispatch:
   push:
     branches:
@@ -12,6 +12,7 @@ on:
 jobs:
   unit-test:
     runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -71,6 +72,7 @@ jobs:
 
   acceptance-test:
     runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
     steps:
       - name: Checkout
         uses: actions/checkout@v3
