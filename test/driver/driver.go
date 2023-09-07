@@ -130,7 +130,7 @@ func (d *KwildDriver) QueryDatabase(ctx context.Context, dbid, query string) (*c
 	return d.clt.Query(ctx, dbid, query)
 }
 
-func (d *KwildDriver) Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) ([]map[string]any, error) {
+func (d *KwildDriver) Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) (*client.Records, error) {
 	return d.clt.CallAction(ctx, dbid, action, inputs, opts...)
 }
 

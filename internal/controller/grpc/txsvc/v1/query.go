@@ -3,7 +3,6 @@ package txsvc
 import (
 	"context"
 	"encoding/json"
-
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 )
 

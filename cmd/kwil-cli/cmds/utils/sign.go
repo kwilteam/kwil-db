@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 
@@ -15,23 +16,27 @@ func signCmd() *cobra.Command {
 		Long:  "",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conf, err := config.LoadCliConfig()
-			if err != nil {
-				return err
-			}
+			var sig []byte
+			err := func() error {
+				conf, err := config.LoadCliConfig()
+				if err != nil {
+					return err
+				}
 
-			if conf.PrivateKey == nil {
-				return fmt.Errorf("no private key provided")
-			}
+				if conf.PrivateKey == nil {
+					return fmt.Errorf("no private key provided")
+				}
 
-			// generate signature
-			sig, err := conf.PrivateKey.Sign([]byte(args[0]))
-			if err != nil {
-				return fmt.Errorf("error generating signature: %w", err)
-			}
+				sig, err = conf.PrivateKey.Sign([]byte(args[0]))
+				if err != nil {
+					return fmt.Errorf("error generating signature: %w", err)
+				}
 
-			fmt.Println(sig)
-			return nil
+				return nil
+			}()
+
+			msg := display.WrapMsg(respSig(sig), err)
+			return display.Print(msg, err, config.GetOutputFormat())
 		},
 	}
 

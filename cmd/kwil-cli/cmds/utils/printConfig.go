@@ -1,9 +1,7 @@
 package utils
 
 import (
-	"fmt"
-	"reflect"
-
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 
 	"github.com/spf13/cobra"
@@ -20,26 +18,10 @@ func printConfigCmd() *cobra.Command {
 				return err
 			}
 
-			printStruct(cfg.ToPersistedConfig())
-			return nil
+			msg := display.WrapMsg(&respKwilCliConfig{cfg}, nil)
+			return display.Print(msg, nil, config.GetOutputFormat())
 		},
 	}
 
 	return cmd
-}
-
-func printStruct(s interface{}) {
-	v := reflect.ValueOf(s)
-	t := v.Type()
-
-	if t.Kind() == reflect.Ptr {
-		v = v.Elem()
-		t = t.Elem()
-	}
-
-	for i := 0; i < v.NumField(); i++ {
-		field := t.Field(i)
-		fieldValue := v.Field(i)
-		fmt.Printf("%s: %v\n", field.Name, fieldValue)
-	}
 }

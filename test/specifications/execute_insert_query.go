@@ -69,11 +69,7 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	assert.NoError(t, err)
 	assert.NotNil(t, records)
 
-	counter := 0
-	for records.Next() {
-		_ = records.Record()
-		counter++
-	}
+	counter := len(records.Export())
 
 	assert.EqualValues(t, 2, counter)
 
@@ -92,11 +88,7 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 	assert.NoError(t, err)
 	assert.NotNil(t, records)
 
-	counter = 0
-	for records.Next() {
-		_ = records.Record()
-		counter++
-	}
+	counter = len(records.Export())
 
 	assert.EqualValues(t, 4, counter)
 

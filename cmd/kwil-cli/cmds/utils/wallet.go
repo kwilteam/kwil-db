@@ -9,34 +9,30 @@ import (
 	"os"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
-
 	"github.com/spf13/cobra"
 )
 
-// generatePrivateKey is a helper function that generates a private key info
-func generatePrivateKey(keyType string, addressFormat string, encoding string) (*generatedWalletInfo, error) {
+// generateWallet is a helper function that generates a wallet
+func generateWallet(walletType string, encoding string) (*generatedWalletInfo, error) {
 	var pk crypto.PrivateKey
 	var err error
 	var addressFunc addressCreatorFunc
 
 	generatedKeyInfo := &generatedWalletInfo{}
 
-	keyVariant := fmt.Sprintf("%s %s", keyType, addressFormat)
-
-	switch keyVariant {
-	case "secp256k1 ethereum":
+	switch walletType {
+	case "ethereum":
 		addressFunc = ethereumAddr
 		pk, err = crypto.GenerateSecp256k1Key()
-	case "secp256k1 cometbft":
+	case "cometbft":
 		addressFunc = cometbftAddr
 		pk, err = crypto.GenerateSecp256k1Key()
-	case "ed25519 near":
+	case "near":
 		addressFunc = nearAddr
 		pk, err = crypto.GenerateEd25519Key()
 	default:
 		return nil, fmt.Errorf(
-			"not supported combination: %s", keyVariant)
+			"not supported combination: %s", walletType)
 	}
 
 	if err != nil {
@@ -64,20 +60,19 @@ func generatePrivateKey(keyType string, addressFormat string, encoding string) (
 	return generatedKeyInfo, nil
 }
 
-// TODO : use walletCmd instead
-func privateKeyCmd() *cobra.Command {
-	var keyType, encoding, addressFormat, filePath string
+func walletCmd() *cobra.Command {
+	var walletType, encoding, filePath string
 	var overwrite, mute bool
 
 	var cmd = &cobra.Command{
-		Use:   "generate-key",
-		Short: "Generates a cryptographically secure random private key.",
+		Use:   "generate-wallet",
+		Short: "Generates a wallet.",
 		Long:  privKeyDesc,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			respGenKeyInfo := &respGenWalletInfo{}
 
 			err := func() error {
-				generatedKeyInfo, err := generatePrivateKey(keyType, addressFormat, encoding)
+				generatedKeyInfo, err := generateWallet(walletType, encoding)
 				if err != nil {
 					return err
 				}
@@ -109,9 +104,8 @@ func privateKeyCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&keyType, "key-type", "ethereum", "Type of private key to generate: 'secp256k1' or 'ed25519'")
+	cmd.Flags().StringVar(&walletType, "wallet-type", "ethereum", "Type of wallet: 'ethereum' or 'cometbft' or 'near'")
 	cmd.Flags().StringVar(&encoding, "encoding", "hex", "Output encoding: 'hex' or 'base64'")
-	cmd.Flags().StringVar(&addressFormat, "address-format", "ethereum", "Address format: 'ethereum' or 'cometbft' or 'near'")
 	cmd.Flags().StringVar(&filePath, "file", "", "Write the private key to a file")
 	cmd.Flags().BoolVar(&overwrite, "overwrite", false, "Overwrite the file if it exists")
 	cmd.Flags().BoolVar(&mute, "quiet", false, "Mute the output")
@@ -119,19 +113,15 @@ func privateKeyCmd() *cobra.Command {
 	return cmd
 }
 
-const privKeyDesc = `The 'generate-key' function generates a cryptographically secure random private key.
+const walletDesc = `The 'generate-wallet' function generates a wallet.
 
 This can be used to generate both validator and normal private keys.
 
-To specify the type of private key to generate, pass the '--key-type' flag with either 'secp256k1' or 'ed25519'.
-By default, it will generate a secp256k1 private key.
-
-To specify the outputted address format, pass the '--address-format <format>' flag.
-Currently, the CLI supports 'ethereum', 'cometbft', and 'near' address formats.
-The default for secp256k1 keys is 'ethereum'.  The default for ed25519 keys is 'near'.
+To specify the type of wallet to generate, pass the '--wallet-type' flag with either 'ethereum' or 'comebft' or 'near'".
+By default, it will generate a ethereum wallet.
 
 To specify the output encoding, pass the '--encoding <encoding>' flag with either 'hex' or 'base64'.
-By default, it will output the private keyand public key in hex format.  The '--encoding' flag
+By default, it will output the private key and public key in hex format.  The '--encoding' flag
 only affects the private key and public key, not the address.  The address will always be outputted
 as the canonical string representation of the address type.
 
@@ -141,26 +131,3 @@ This can be overridden by passing the '--overwrite' flag.
 
 To mute the output, pass the '--quiet' flag.
 `
-
-const printKeyDesc = `Private Key: 	%s
-Public Key: 	%s
-Address: 	%s
-`
-
-// addressCreatorFunc is a function that creates an address from a public key.
-type addressCreatorFunc func(crypto.PublicKey) (crypto.Address, error)
-
-// nearAddr is an addressCreatorFunc that creates a NEAR address from a public key.
-func nearAddr(pk crypto.PublicKey) (crypto.Address, error) {
-	return addresses.GenerateAddress(pk, addresses.AddressFormatNEAR)
-}
-
-// cometbftAddr is an addressCreatorFunc that creates a cometbft address from a public key.
-func cometbftAddr(pk crypto.PublicKey) (crypto.Address, error) {
-	return addresses.GenerateAddress(pk, addresses.AddressFormatCometBFT)
-}
-
-// ethereumAddr is an addressCreatorFunc that creates an Ethereum address from a public key.
-func ethereumAddr(pk crypto.PublicKey) (crypto.Address, error) {
-	return addresses.GenerateAddress(pk, addresses.AddressFormatEthereum)
-}

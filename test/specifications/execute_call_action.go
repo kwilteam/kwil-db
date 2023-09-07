@@ -11,7 +11,7 @@ import (
 
 type ExecuteCallDsl interface {
 	DatabaseIdentifier
-	Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) ([]map[string]any, error)
+	Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) (*client.Records, error)
 }
 
 func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl) {
@@ -22,22 +22,23 @@ func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteC
 
 	getPostInput := []any{1111}
 
-	results, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput)
+	res, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput)
 	if err != nil {
 		t.Fatalf("error calling action: %s", err.Error())
 	}
-	checkGetPostResults(t, results)
+
+	checkGetPostResults(t, res.Export())
 
 	_, err = caller.Call(ctx, dbID, "get_post_authenticated", getPostInput, client.Authenticated(false))
 	if err == nil {
 		t.Errorf("expected error calling action without authentication")
 	}
 
-	results, err = caller.Call(ctx, dbID, "get_post_unauthenticated", getPostInput, client.Authenticated(false))
+	res, err = caller.Call(ctx, dbID, "get_post_unauthenticated", getPostInput, client.Authenticated(false))
 	if err != nil {
 		t.Fatalf("error calling action: %s", err.Error())
 	}
-	checkGetPostResults(t, results)
+	checkGetPostResults(t, res.Export())
 
 	// try calling mutable action, should fail
 	_, err = caller.Call(ctx, dbID, "delete_user", nil, client.Authenticated(true))

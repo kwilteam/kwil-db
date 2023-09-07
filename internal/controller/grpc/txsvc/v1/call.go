@@ -3,6 +3,7 @@ package txsvc
 import (
 	"context"
 	"encoding/json"
+	"github.com/kwilteam/kwil-db/api/protobuf/conversion"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -61,7 +62,7 @@ func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transa
 		}, nil
 	}
 
-	convSignature, err := convertSignature(req.Signature)
+	convSignature, err := conversion.ConvertToCryptoSignature(req.Signature)
 	if err != nil {
 		return nil, nil, err
 	}

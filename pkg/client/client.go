@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/kwilteam/kwil-db/pkg/client/types"
 	"os"
 
-	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	engineUtils "github.com/kwilteam/kwil-db/pkg/engine/utils"
@@ -200,7 +200,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 }
 
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
-func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any, opts ...CallOpt) ([]map[string]any, error) {
+func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any, opts ...CallOpt) (*Records, error) {
 	callOpts := &callOptions{}
 
 	for _, opt := range opts {
@@ -236,7 +236,12 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		}
 	}
 
-	return c.client.Call(ctx, msg)
+	res, err := c.client.Call(ctx, msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewRecordsFromMaps(res), nil
 }
 
 // shouldAuthenticate decides whether the client should authenticate or not
@@ -399,7 +404,7 @@ func convertTuple(tuple []any) ([]string, error) {
 }
 
 // TxQuery get transaction by hash
-func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*txpb.TxQueryResponse, error) {
+func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*types.TxQueryResponse, error) {
 	res, err := c.client.TxQuery(ctx, txHash)
 	if err != nil {
 		return nil, err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kwilteam/kwil-db/api/protobuf/conversion"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -18,7 +19,7 @@ func (c *Client) Call(ctx context.Context, req *transactions.SignedMessage) ([]m
 
 	grpcMsg := &txpb.CallRequest{
 		Payload:   req.Message,
-		Signature: convertActionSignature(req.Signature),
+		Signature: conversion.ConvertFromCryptoSignature(req.Signature),
 		Sender:    sender,
 	}
 

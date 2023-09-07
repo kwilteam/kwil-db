@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"github.com/kwilteam/kwil-db/api/protobuf/conversion"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/abci"
@@ -36,7 +37,7 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 		return nil, status.Error(codes.Internal, "failed to deserialize transaction")
 	}
 
-	tx, err := convertFromAbciTx(originalTx)
+	tx, err := conversion.ConvertFromAbciTx(originalTx)
 	if err != nil {
 		logger.Warn("failed to convert transaction", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to convert transaction")

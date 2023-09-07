@@ -1,12 +1,15 @@
 package system
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
-	"os"
+	"io"
 	"runtime"
-	"text/tabwriter"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/internal/pkg/build"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/go-rosetta"
@@ -20,36 +23,71 @@ var versionTemplate = `
  Go version:	{{.GoVersion}}
  OS/Arch:	{{.Os}}/{{.Arch}}`
 
-type versionOptions struct {
-	format string
-}
-
 type versionInfo struct {
 	// build-time info
-	Version   string
-	GitCommit string
-	BuildTime string `json:",omitempty"`
+	Version   string `json:"version"`
+	GitCommit string `json:"git_commit"`
+	BuildTime string `json:"build_time"`
 	// client machine info
-	APIVersion string `json:"ApiVersion"`
-	GoVersion  string
-	Os         string
-	Arch       string
+	APIVersion string `json:"api_version"`
+	GoVersion  string `json:"go_version"`
+	Os         string `json:"os"`
+	Arch       string `json:"arch"`
+}
+
+type respVersionInfo struct {
+	Info *versionInfo
+}
+
+func (v *respVersionInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(v.Info)
+}
+
+func (v *respVersionInfo) MarshalText() (string, error) {
+	tmpl := template.New("version")
+	// load different template according to the opts.format
+	tmpl, err := tmpl.Parse(versionTemplate)
+	if err != nil {
+		return "", fmt.Errorf("template parsing error: %w", err)
+	}
+
+	var buf bytes.Buffer
+
+	err = tmpl.Execute(&buf, v.Info)
+	if err != nil {
+		return "", fmt.Errorf("template executing error: %w", err)
+	}
+
+	bs, err := io.ReadAll(&buf)
+	if err != nil {
+		return "", err
+	}
+
+	return string(bs), nil
 }
 
 func NewVersionCmd() *cobra.Command {
-	var opts versionOptions
-
 	var cmd = &cobra.Command{
 		Use:   "version [OPTIONS]",
 		Short: "Show the kwil-cli version information",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runVersion(&opts)
+			resp := &respVersionInfo{
+				Info: &versionInfo{
+					Version:    build.Version,
+					APIVersion: "",
+					GitCommit:  build.GitCommit,
+					GoVersion:  runtime.Version(),
+					Os:         runtime.GOOS,
+					Arch:       arch(),
+					BuildTime:  build.BuildTime,
+				},
+			}
+
+			msg := display.WrapMsg(resp, nil)
+			return display.Print(msg, nil, config.GetOutputFormat())
 		},
 	}
-
-	flags := cmd.Flags()
-	flags.StringVarP(&opts.format, "format", "f", "", "Format the output using the given Go template")
 
 	return cmd
 }
@@ -60,34 +98,4 @@ func arch() string {
 		arch += " (rosetta)"
 	}
 	return arch
-}
-
-func runVersion(opts *versionOptions) error {
-	tmpl := template.New("version")
-	// load different template according to the opts.format
-	tmpl, err := tmpl.Parse(versionTemplate)
-	if err != nil {
-		return fmt.Errorf("template parsing error: %w", err)
-	}
-
-	vd := versionInfo{
-		Version:    build.Version,
-		APIVersion: "",
-		GitCommit:  build.GitCommit,
-		GoVersion:  runtime.Version(),
-		Os:         runtime.GOOS,
-		Arch:       arch(),
-		BuildTime:  build.BuildTime,
-	}
-
-	// @yaiba TODO: add server version?
-	return prettyPrintVersion(vd, tmpl)
-}
-
-func prettyPrintVersion(vd versionInfo, tmpl *template.Template) error {
-	t := tabwriter.NewWriter(os.Stdout, 20, 1, 1, ' ', 0)
-	err := tmpl.Execute(t, vd)
-	_, _ = t.Write([]byte("\n"))
-	t.Flush()
-	return err
 }

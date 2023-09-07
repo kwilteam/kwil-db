@@ -28,7 +28,9 @@ func deployCmd() *cobra.Command {
 		Short: "Deploy databases",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			var resp []byte
+
+			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				// read in the file
 				file, err := os.Open(filePath)
 				if err != nil {
@@ -48,14 +50,16 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
-				res, err := client.DeployDatabase(ctx, db)
+				resp, err = client.DeployDatabase(ctx, db)
 				if err != nil {
 					return err
 				}
 
-				display.PrintTxResponse(res)
 				return nil
 			})
+
+			msg := display.WrapMsg(respTxHash(resp), err)
+			return display.Print(msg, err, config.GetOutputFormat())
 		},
 	}
 

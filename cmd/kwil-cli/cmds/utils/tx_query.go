@@ -2,12 +2,11 @@ package utils
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/client"
@@ -18,51 +17,27 @@ func txQueryCmd() *cobra.Command {
 	var txidEncoding string // can be either "hex" or "base64"
 	cmd := &cobra.Command{
 		Use:   "query-tx TX_ID",
-		Short: "Queries a transaction from the blockchain",
+		Short: "Queries a transaction from the blockchain, TX_ID is hex encoded.",
 		Long:  longTxQueryDesc,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), common.WithoutPrivateKey, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
-				var encode encodeFunc
-				var decode decodeFunc
-
-				txString := args[0]
-
-				switch txidEncoding {
-				case "hex", "":
-					if len(txString) < 2 {
-						return fmt.Errorf("invalid transaction id: %s", txString)
-					}
-
-					// trim off any 0x prefix, which is a common convention
-					// x is not a valid hex digit, so we can safely trim it off
-					if txString[1] == 'x' {
-						txString = txString[2:]
-					}
-
-					encode = hex.EncodeToString
-					decode = hex.DecodeString
-				case "base64":
-					encode = base64.StdEncoding.EncodeToString
-					decode = base64.StdEncoding.DecodeString
-				default:
-					return fmt.Errorf("invalid encoding: %s", txidEncoding)
-				}
-
-				encodedTxid, err := decode(txString)
+			resp := &respTxInfo{}
+			err := common.DialClient(cmd.Context(), common.WithoutPrivateKey, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+				txHash, err := hex.DecodeString(args[0])
 				if err != nil {
 					return fmt.Errorf("error decoding transaction id: %w", err)
 				}
 
-				res, err := client.TxQuery(ctx, encodedTxid)
+				res, err := client.TxQuery(ctx, txHash)
 				if err != nil {
 					return fmt.Errorf("error querying transaction: %w", err)
 				}
-
-				printQueryTxRes(res, encode)
-
+				resp.Msg = res
 				return nil
 			})
+
+			msg := display.WrapMsg(resp, err)
+			return display.Print(msg, err, config.GetOutputFormat())
 		},
 	}
 

@@ -16,6 +16,7 @@ func NewCmdUtils() *cobra.Command {
 		signCmd(),
 		pingCmd(),
 		printConfigCmd(),
+		walletCmd(),
 		privateKeyCmd(),
 		txQueryCmd(),
 	)
