@@ -1,31 +1,46 @@
+
 # This is a TOML config file.
 # For more information, see https://github.com/toml-lang/toml
 
 # NOTE: Any path below can be absolute (e.g. "/var/myawesomeapp/data") or
-# relative to the root directory (e.g. "data"). The root directory is
-# "$HOME/.kwild" by default, but could be changed via $KWILD_HOME env variable
-# or via --home command line flag.
-# Order of preference: command line flag, env variable, default value.
+# relative to the home directory (e.g. "data")
 
 # Root Directory Structure:
 # RootDir/
+#   |- config.toml    (app and chain configuration for running the kwild node)
+#   |- private_key.txt   (node's private key)
 #   |- abci/
 #   |   |- config/
-#   |   |   |- config.toml    (app and chain configuration for running the kwild node)
 #   |   |   |- genesis.json   (genesis file for the network)
 #   |   |   |- addrbook.json  (peer routable addresses for the kwild node)
 #   |   |- data/
 #   |   |   |- blockchain db files/dir (blockstore.db, state.db, etc)
-#   |   |- info/            
-#   |- application/wal      
+#   |   |- info/
+#   |- application/wal
 #   |- data
-#   |   |- kwild.db/    
+#   |   |- kwild.db/
 #   |- snapshots/
 #   |- signing/
 #   |- rcvdSnaps/   (includes the chunks rcvd from the state sync module during db restoration process, its a temp dir)
 
-# Only the config.toml and genesis file are required to run the kwild node in rootDir/abci/config
+# Only the config.toml and genesis file are required to run the kwild node
 # The rest of the files & directories are created by the kwild node on startup
+
+#######################################################################
+###                    Logging Config Options                       ###
+#######################################################################
+[log]
+# Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
+level = "info"
+
+# Output paths for the logger, can be stdout or a file path
+output_paths = ["stdout"]
+
+# Output format: 'plain' or 'json'
+format = "json"
+
+# Time format: "epochfloat" (default), "epochmilli", or "rfc3339milli"
+time_format = "epochfloat"
 
 #######################################################################
 ###                      App Config Options                         ###
@@ -33,13 +48,13 @@
 
 [app]
 # Node's Private key
-private_key = "ece5dd5d1824c6bc110ab4b83c9f040820f43b65c2e660c3acd38b5d9258e77ef1693096d252eac5e366436314996ec39c189dffb997ad7414ed306e3d9244c4"
+private_key_path = "private_key.txt"
 
 # TCP or UNIX socket address for the KWILD App's GRPC server to listen on
-grpc_listen_addr = "127.0.0.1:50052"
+grpc_listen_addr = "localhost:50051"
 
 # TCP or UNIX socket address for the KWILD App's HTTP server to listen on
-http_listen_addr = "127.0.0.1:8081"
+http_listen_addr = "localhost:8080"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = []
@@ -82,7 +97,7 @@ hostname = ""
 enabled = false
 
 # The height at which the snapshot is taken
-snapshot_heights = 100000
+snapshot_heights = 10000
 
 # Maximum number of snapshots to be kept in the snapshot_dir.
 # If max limit is reached, the oldest would be deleted and replaced by the latest snapshot
@@ -92,28 +107,14 @@ max_snapshots = 3
 snapshot_dir = "snapshots"
 
 #######################################################################
-###                    Logging Config Options                       ###
-#######################################################################
-[log]
-# Output level for logging, default is "info". Other options are "debug", "error", "warn", "trace"
-level = "info" 
-
-# Output paths for the logger, can be stdout or a file path
-output_paths = ["stdout"]
-
-# Output format: 'plain' or 'json'
-format = "plain"
-
-# Time format: "epochfloat" (default), "epochmilli", or "rfc3339milli"
-# time_format = ""
-
-#######################################################################
 ###                 Chain  Main Base Config Options                 ###
 #######################################################################
 [chain]
-
 # A custom human readable name for this node
-moniker = "k2"
+moniker = "Charithas-MBP-2.lan"
+
+# Blockchain database directory
+db_dir = "data"
 
 #######################################################################
 ###                 Advanced Configuration Options                  ###
@@ -125,7 +126,7 @@ moniker = "k2"
 [chain.rpc]
 
 # TCP or UNIX socket address for the RPC server to listen on
-laddr = "tcp://172.10.100.3:26657"
+laddr = "tcp://127.0.0.1:26657"
 
 # How long to wait for a tx to be committed during /broadcast_tx_commit.
 # WARNING: Using a value larger than 10s will result in increasing the
@@ -137,6 +138,7 @@ timeout_broadcast_tx_commit = "10s"
 ###         Consensus Configuration Options         ###
 #######################################################
 [chain.consensus]
+
 # How long we wait for a proposal block before prevoting nil
 timeout_propose = "3s"
 
@@ -156,8 +158,6 @@ timeout_commit = "1s"
 #######################################################
 [chain.p2p]
 
-pex = false
-
 # Address to listen for incoming connections
 laddr = "tcp://0.0.0.0:26656"
 
@@ -166,24 +166,24 @@ laddr = "tcp://0.0.0.0:26656"
 # and will introspect on the listener or use UPnP
 # to figure out the address. ip and port are required
 # example: 159.89.10.97:26656
-external_address = "172.10.100.3:26656"
+external_address = ""
 
 # Comma separated list of nodes to keep persistent connections to (used for bootstrapping)
-# persistent_peers = "d69c53bc425fc0252b8f72d3f9d7bef77210260d@172.10.100.2:26656,d433419d2a0f1301db5e361362f1f4ce9a5abeb4@172.10.100.4:26656"
-persistent_peers = "d69c53bc425fc0252b8f72d3f9d7bef77210260d@172.10.100.2:26656,658ea486c3fecf0e6869ad5fc632dd17fc35691a@172.10.100.3:26656,8224ce41147ef2f791a06b1bf5e3fa77d0d543f6@172.10.100.4:26656"
+# Example: "d128266b8b9f64c313de466cf29e0a6182dba54d@172.10.100.2:26656,9440f4a8059cf7ff31454973c4f9c68de65fe526@172.10.100.3:26656"
+persistent_peers = "10baa553dcd6e377d185f2f10c9c4ddbd87cdc55@172.10.100.2:26656,e61666857391f85a221fe21f0857205fc351d222@172.10.100.3:26656,3a0b1fcb4deef65c78133d753018c34e879fc741@172.10.100.4:26656"
 
 # Set true for strict address routability rules
 # Set false for private or local networks
 addr_book_strict = false
 
 # Maximum number of inbound peers
-#max_num_inbound_peers = 40
+max_num_inbound_peers = 40
 
 # Maximum number of outbound peers to connect to, excluding persistent peers
-#max_num_outbound_peers = 10
-  
+max_num_outbound_peers = 10
+
 # List of node IDs, to which a connection will be (re)established ignoring any existing limits
-#unconditional_peer_ids = ""
+unconditional_peer_ids = ""
 
 # Toggle to disable guard against peers connecting from the same ip.
 allow_duplicate_ip = true
@@ -220,11 +220,11 @@ enable = false
 #
 # For Cosmos SDK-based chains, trust_period should usually be about 2/3 of the unbonding time (~2
 # weeks) during which they can be financially punished (slashed) for misbehavior.
-# rpc_servers = []
+rpc_servers = []
 
 # Temporary directory for state sync snapshot chunks, defaults to the OS tempdir (typically /tmp).
 # Will create a new, randomly named directory within, and remove it when done.
-# temp_dir = ""
+temp_dir = ""
 
 # Time to spend discovering snapshots before initiating a restore.
 discovery_time = "15s"
