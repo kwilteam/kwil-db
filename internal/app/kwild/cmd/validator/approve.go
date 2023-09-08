@@ -15,14 +15,14 @@ func approveCmd(cfg *config.KwildConfig) *cobra.Command {
 	var appGRPCListenAddr string
 	// TODO: read the private key from a file
 	cmd := &cobra.Command{
-		Use:   "approve [JoinerPublicKey] [ApproverPrivateKey]",
+		Use:   "approve [JoinerPublicKey]",
 		Short: "Add the validator to the list of approved validators",
 		Long:  "The approve command is used to issue a transaction to approve a joining node as a validator. It requires the public key of the joining node and the private key of the approving node. Both keys are base64.",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			approverKey, err := crypto.Ed25519PrivateKeyFromHex(args[1])
+			approverKey, err := crypto.Ed25519PrivateKeyFromHex(cfg.AppCfg.PrivateKey)
 			if err != nil {
 				return err
 			}

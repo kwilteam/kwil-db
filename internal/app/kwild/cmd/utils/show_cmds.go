@@ -35,6 +35,7 @@ func showKeyInfo(privateKey []byte) {
 	fmt.Printf("Public key (cometized hex): %v\n", pub.String())                              // for reference with come cometbft logs
 	fmt.Printf("Address (string): %s\n", pub.Address().String())                              // "validators.address" in abci/config/genesis.json ?
 	fmt.Printf("Node ID: %v\n", nodeID)
+	fmt.Printf("Public key (hex): %s\n", hex.EncodeToString(pub.Bytes()))
 }
 
 func decodeHexString(s string) []byte {

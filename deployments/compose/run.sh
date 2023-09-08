@@ -4,9 +4,13 @@ set -e
 
 cleanup() {
   cp ./../../.build/kwild-darwin-arm64 kwild
-  ./kwild utils unsafe_reset_all --root_dir ./kwil/k1/node0
-  ./kwild utils unsafe_reset_all --root_dir ./kwil/k2/node1
-  ./kwild utils unsafe_reset_all --root_dir ./kwil/k3/node2
+  rm -rf kwil/testnet/
+  rm ./kwild
+}
+
+bringup() {
+  cp ./../../.build/kwild-darwin-arm64 kwild
+  ./kwild utils testnet -o ./kwil/testnet -v 3 -n 0 --starting-ip-address 172.10.100.2 --populate-persistent-peers
   rm ./kwild
 }
 
@@ -16,6 +20,8 @@ start() {
 
   # start kwild
   printf "bringing up kwild services: \n"
+  bringup
+
   docker compose -f kwil/docker-compose.yml up -d
 }
 
