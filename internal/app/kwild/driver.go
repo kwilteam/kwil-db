@@ -12,6 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/pkg/validators"
 
 	types "github.com/cometbft/cometbft/abci/types"
 	"go.uber.org/zap"
@@ -135,52 +136,22 @@ func GetTransactionResult(attributes []types.EventAttribute) bool {
 	return false
 }
 
-//// Validator related methods
-
-// NOTE: The keys in these validator related methods are base64-encoded.
-
-func (d *KwildDriver) ApproveNode(ctx context.Context, joinerPubKey []byte) error {
-	_, err := d.clt.ApproveValidator(ctx, joinerPubKey)
-	return err
+func (d *KwildDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error) {
+	return d.clt.ApproveValidator(ctx, joinerPubKey)
 }
 
-func (d *KwildDriver) ValidatorSetCount(ctx context.Context) (int, error) {
-	vals, err := d.clt.CurrentValidators(ctx)
-	if err != nil {
-		return -1, err
-	}
-
-	return len(vals), nil
+func (d *KwildDriver) ValidatorNodeJoin(ctx context.Context) ([]byte, error) {
+	return d.clt.ValidatorJoin(ctx)
 }
 
-func (d *KwildDriver) ValidatorNodeJoin(ctx context.Context) error {
-	hash, err := d.clt.ValidatorJoin(ctx)
-	if err != nil {
-		return fmt.Errorf("error joining validator: %w", err)
-	}
-	res, err := d.clt.TxQuery(ctx, hash)
-	if err != nil {
-		return fmt.Errorf("error getting transaction: %w", err)
-	}
-
-	if code := res.TxResult.Code; code != 0 {
-		return fmt.Errorf("tx code %d", code)
-	}
-	return nil
+func (d *KwildDriver) ValidatorNodeLeave(ctx context.Context) ([]byte, error) {
+	return d.clt.ValidatorLeave(ctx)
 }
 
-func (d *KwildDriver) ValidatorNodeLeave(ctx context.Context) error {
-	hash, err := d.clt.ValidatorLeave(ctx)
-	if err != nil {
-		return fmt.Errorf("error joining validator: %w", err)
-	}
-	res, err := d.clt.TxQuery(ctx, hash)
-	if err != nil {
-		return fmt.Errorf("error getting transaction: %w", err)
-	}
+func (d *KwildDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*validators.JoinRequest, error) {
+	return d.clt.ValidatorJoinStatus(ctx, pubKey)
+}
 
-	if code := res.TxResult.Code; code != 0 {
-		return fmt.Errorf("tx code %d", code)
-	}
-	return nil
+func (d *KwildDriver) ValidatorsList(ctx context.Context) ([]*validators.Validator, error) {
+	return d.clt.CurrentValidators(ctx)
 }
