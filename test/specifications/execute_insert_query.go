@@ -107,3 +107,21 @@ func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute Exe
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 }
+
+func ExecuteDBRecordsVerifySpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, numRecords int) {
+	t.Logf("Executing verify db records specification")
+	// Given a valid database schema
+	db := SchemaLoader.Load(t, schemaTestDB)
+	dbID := execute.DBID(db.Name)
+
+	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+	assert.NoError(t, err)
+	assert.NotNil(t, records)
+
+	counter := 0
+	for records.Next() {
+		_ = records.Record()
+		counter++
+	}
+	assert.EqualValues(t, numRecords, counter)
+}

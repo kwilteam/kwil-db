@@ -2,8 +2,8 @@ version: "3"
 
 services:
   # TODO: generate correspond number of nodes and exts by configuration
-  k1:
-    container_name: k1
+  node0:
+    container_name: node0
     image: kwild:latest
     ports:
       - "8080:8080"
@@ -30,8 +30,8 @@ services:
       --chain.p2p.external_address=tcp://0.0.0.0:26656
       --chain.rpc.laddr=tcp://0.0.0.0:26657
 
-  k2:
-    container_name: k2
+  node1:
+    container_name: node1
     image: kwild:latest
     ports:
       - "8081:8080"
@@ -51,15 +51,15 @@ services:
       - ext1
     command: |
       --root_dir=/app/kwil
-      --log.level=${LOG_LEVEL:-info}
+      --log.level=${LOG_LEVEL:-debug}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
       --chain.rpc.laddr=tcp://0.0.0.0:26657
 
-  k3:
-    container_name: k3
+  node2:
+    container_name: node2
     image: kwild:latest
     ports:
       - "8082:8080"
@@ -79,7 +79,36 @@ services:
       - ext1
     command: |
       --root_dir=/app/kwil
-      --log.level=${LOG_LEVEL:-info}
+      --log.level=${LOG_LEVEL:-debug}
+      --app.extension_endpoints=ext1:50051
+      --app.grpc_listen_addr=:50051
+      --app.http_listen_addr=:8080
+      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --chain.rpc.laddr=tcp://0.0.0.0:26657
+
+  # This node is used to test the scenario where new node join the network & sync the blocks
+  # Removing the ext dependency as test-container docker compose creates a new project everytime we run
+  # docker compose, and the ext is defined in a seperate project, so service lookup is hard.
+  node3:
+    container_name: node3
+    image: kwild:latest
+    ports:
+      - "8083:8080"
+      - "50054:50051"
+      - "26686:26656"
+      - "26687:26657"
+    env_file:
+      - .env
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node3
+        target: /app/kwil
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.100.5
+    command: |
+      --root_dir=/app/kwil
+      --log.level=${LOG_LEVEL:-debug}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080

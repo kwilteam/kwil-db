@@ -1,7 +1,7 @@
 package validator
 
 import (
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -24,16 +24,12 @@ func statusCmd(cfg *config.KwildConfig) *cobra.Command {
 				return err
 			}
 
-			pubkey, err := base64.StdEncoding.DecodeString(args[0])
-			if err != nil {
-				return err
-			}
-			status, err := clt.ValidatorJoinStatus(ctx, pubkey)
+			status, err := clt.ValidatorJoinStatus(ctx, []byte(args[0]))
 			if err != nil {
 				return err
 			}
 
-			fmt.Printf("Candidate: %v (want power %d)\n", base64.StdEncoding.EncodeToString(status.Candidate), status.Power)
+			fmt.Printf("Candidate: %v (want power %d)\n", hex.EncodeToString(status.Candidate), status.Power)
 			for i := range status.Board {
 				fmt.Printf(" Validator %x, approved = %v\n", status.Board[i], status.Approved[i])
 			}
