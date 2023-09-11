@@ -28,6 +28,8 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 	case transactions.PayloadTypeValidatorJoin.String():
 		price, err = s.priceValidatorJoin(ctx, tx.Body)
 	case transactions.PayloadTypeValidatorApprove.String():
+		price, err = s.priceValidatorApprove(ctx, tx.Body)
+	case transactions.PayloadTypeValidatorLeave.String():
 		price, err = s.priceValidatorLeave(ctx, tx.Body)
 	default:
 		price, err = nil, fmt.Errorf("invalid transaction payload type %s", tx.Body.PayloadType)
@@ -86,10 +88,15 @@ func (s *Service) priceAction(ctx context.Context, txBody *txpb.Transaction_Body
 	return s.engine.PriceExecute(ctx, executionBody.DBID, executionBody.Action, tuples)
 }
 
+// TODO: Later to be moved to validator module (or) manager
 func (s *Service) priceValidatorJoin(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 func (s *Service) priceValidatorLeave(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
+	return big.NewInt(10000000000000), nil
+}
+
+func (s *Service) priceValidatorApprove(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }

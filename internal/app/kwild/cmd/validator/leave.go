@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"encoding/base64"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -21,11 +20,7 @@ func leaveCmd(cfg *config.KwildConfig) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			leaverKeyB, err := base64.StdEncoding.DecodeString(args[0])
-			if err != nil {
-				return err
-			}
-			leaverKey, err := crypto.Ed25519PrivateKeyFromBytes(leaverKeyB)
+			leaverKey, err := crypto.Ed25519PrivateKeyFromHex(args[0])
 			if err != nil {
 				return err
 			}

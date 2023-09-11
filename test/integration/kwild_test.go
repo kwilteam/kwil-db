@@ -3,9 +3,6 @@ package integration_test
 import (
 	"context"
 	"flag"
-	"os"
-	"os/signal"
-	"syscall"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/test/integration"
@@ -14,24 +11,25 @@ import (
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
+var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", "node3"}
+var numServices = len(allServices)
+
 func TestKwildDatabaseIntegration(t *testing.T) {
 	ctx := context.Background()
 
-	helper := integration.NewIntHelper(t)
+	opts := []integration.HelperOpt{
+		integration.WithValidators(4),
+		integration.WithNonValidators(0),
+	}
+
+	helper := integration.NewIntHelper(t, opts...)
 	helper.LoadConfig()
-	helper.Setup(ctx)
+	helper.Setup(ctx, allServices)
 	defer helper.Teardown()
 
 	// running forever for local development
 	if *dev {
-		done := make(chan os.Signal, 1)
-		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
-
-		// block waiting for a signal
-		s := <-done
-		t.Logf("Got signal: %v\n", s)
-		helper.Teardown()
-		t.Logf("Teardown done\n")
+		helper.WaitForSignals(t)
 		return
 	}
 
@@ -54,99 +52,110 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	specifications.DatabaseDropSpecification(ctx, t, node1Driver)
 }
 
-//func TestKwildNetworkIntegration(t *testing.T) {
-//
-//
-//	tLogger := log.New(log.Config{
-//		Level:       "info",
-//		OutputPaths: []string{"stdout"},
-//	})
-//
-//	cfg := integration.GetTestEnvCfg(t, *remote)
-//	ctx := context.Background()
-//	// to stop mining blocks for current subtest
-//	done := make(chan struct{})
-//
-//	// Bringup the KWIL DB cluster with 3 nodes
-//	cfg.SchemaFile = "./test-data/test_db.kf"
-//	//setupConfig()
-//	fmt.Println("ChainRPCURL: ", cfg.ChainRPCURL)
-//
-//	cfg, kwildC := integration.SetupKwildCluster(ctx, t, cfg, path)
-//
-//	//time.Sleep(30 * time.Second)
-//	// Create Kwil DB clients for each node
-//	node0Driver := integration.SetupKwildDriver(ctx, t, cfg, kwildC[0], tLogger)
-//	node1Driver := integration.SetupKwildDriver(ctx, t, cfg, kwildC[1], tLogger)
-//	node2Driver := integration.SetupKwildDriver(ctx, t, cfg, kwildC[2], tLogger)
-//
-//	/* no more token
-//	// Fund both the User accounts
-//	err := chainDeployer.FundAccount(ctx, cfg.UserAddr, cfg.InitialFundAmount)
-//	assert.NoError(t, err, "failed to fund user account")
-//
-//	err = chainDeployer.FundAccount(ctx, cfg.SecondUserAddr, cfg.InitialFundAmount)
-//	assert.NoError(t, err, "failed to fund second user account")
-//
-//	go integration.KeepMiningBlocks(ctx, done, chainDeployer, cfg.UserAddr)
-//
-//	// and user pledged fund to validator
-//
-//	fmt.Println("Approve token1")
-//	specifications.ApproveTokenSpecification(ctx, t, node0Driver)
-//	fmt.Print("Deposit fund1")
-//	time.Sleep(15 * time.Second)
-//	specifications.DepositFundSpecification(ctx, t, node0Driver)
-//
-//	time.Sleep(cfg.ChainSyncWaitTime)
-//	*/
-//
-//	// running forever for local development
-//	if *dev {
-//		integration.DumpEnv(&cfg)
-//		<-done
-//	}
-//
-//	node0PrivKey := "3za9smSSrMoaLUgzJcEncG79gn3dyeYxoYIielhvygIECZfoKhPmiR/RDtr79o/Jxe6jRUxJkVoZoeA/9NHZhQ=="
-//	node1PubKey := "R0gA+mgclmqknbiTJrnVPfE0i9kCgSNoxJkHqpwh4f0="
-//	node1PrivKey := "6uyWNA9LJNSBp0QNfQpDWZp+RxV+D8wFvll7duhudFhHSAD6aByWaqSduJMmudU98TSL2QKBI2jEmQeqnCHh/Q=="
-//	node2PubKey := "9JL8gRIIvit2GgSPOnoCv1ZCTnTC33z9VjOdIi6iwgI="
-//
-//	// Create a new database and verify that the database exists on other nodes
-//	fmt.Printf("Create database")
-//
-//	/*
-//		Start with Genesis Node0
-//		- Node1 requests to join
-//		- Requires node0 to approve
-//	*/
-//	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 1)
-//	specifications.NetworkNodeJoinSpecification(ctx, t, node1Driver, node1PubKey)
-//	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 1)
-//
-//	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, node1PubKey, node0PrivKey)
-//	specifications.NetworkNodeDeploySpecification(ctx, t, node0Driver)
-//	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node2Driver, 2)
-//
-//	/* > 2/3rd majority approvals
-//	1. Node 0 and Node1 are the current validators
-//	2. Node2 requests to join
-//	3. Node0 and Node1 need to approve for majority approval
-//	*/
-//	specifications.NetworkNodeJoinSpecification(ctx, t, node2Driver, node2PubKey)
-//	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 2)
-//
-//	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, node2PubKey, node0PrivKey)
-//	specifications.NetworkNodeDeploySpecification(ctx, t, node0Driver)
-//	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node1Driver, 2)
-//
-//	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, node2PubKey, node1PrivKey)
-//	specifications.NetworkNodeDeploySpecification(ctx, t, node1Driver)
-//	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node2Driver, 3)
-//
-//	specifications.NetworkNodeLeaveSpecification(ctx, t, node1Driver, node1PubKey)
-//	specifications.NetworkNodeDeploySpecification(ctx, t, node1Driver)
-//	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node1Driver, 2)
-//
-//	close(done)
-//}
+func TestKwildValidatorUpdatesIntegration(t *testing.T) {
+	ctx := context.Background()
+
+	opts := []integration.HelperOpt{
+		integration.WithValidators(3),
+		integration.WithNonValidators(1),
+	}
+
+	helper := integration.NewIntHelper(t, opts...)
+	helper.LoadConfig()
+
+	helper.Setup(ctx, allServices)
+	defer helper.Teardown()
+
+	// running forever for local development
+	if *dev {
+		helper.WaitForSignals(t)
+		return
+	}
+
+	node0Driver := helper.GetNodeDriver(ctx, "node0")
+	node1Driver := helper.GetNodeDriver(ctx, "node1")
+	joinerDriver := helper.GetNodeDriver(ctx, "node3")
+	joinerPkey := helper.NodePrivateKey("node3")
+	joinerPubKey := joinerPkey.PubKey().Bytes()
+
+	// Start the network with 3 validators & 1 Non-validator
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 3)
+
+	/*
+	 Join Process:
+	 - Node3 requests to join
+	 - Requires atleast 2 nodes to approve
+	 - Consensus reached, Node3 is a Validator
+	*/
+	specifications.NetworkNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
+	// Node 0,1 approves
+	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
+	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 4)
+
+	/*
+	 Leave Process:
+	 - node3 issues a leave request -> removes it from the validator list
+	 - Validatorset count should be reduced by 1
+	*/
+	specifications.NetworkNodeLeaveSpecification(ctx, t, joinerDriver)
+
+	/*
+	 Rejoin: (same as join process)
+	*/
+	specifications.NetworkNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
+	// Node 0, 1 approves
+	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
+	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
+	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 4)
+}
+
+func TestKwildNetworkSyncIntegration(t *testing.T) {
+	ctx := context.Background()
+
+	opts := []integration.HelperOpt{
+		integration.WithValidators(4),
+	}
+
+	helper := integration.NewIntHelper(t, opts...)
+	helper.LoadConfig()
+	// Bringup ext1, node 0,1,2 services but not node3
+	helper.Setup(ctx, allServices[:numServices-1])
+	defer helper.Teardown()
+
+	// running forever for local development
+	if *dev {
+		helper.WaitForSignals(t)
+		return
+	}
+
+	drivers := helper.GetDrivers(ctx)
+	node0Driver := drivers[0]
+	node1Driver := drivers[1]
+	node2Driver := drivers[2]
+
+	// Create a new database and verify that the database exists on other nodes
+	specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
+	specifications.DatabaseVerifySpecification(ctx, t, node1Driver, true)
+	specifications.DatabaseVerifySpecification(ctx, t, node2Driver, true)
+
+	// Insert 1 User 4 Posts
+	specifications.ExecuteDBInsertSpecification(ctx, t, node0Driver)
+
+	// Spin up node 4 and ensure that the database is synced to node4
+	/*
+		1. Generate config for node 4: place it in the homedir/newNode
+		2. Run docker compose up on the new node and get the container
+		3. Get the node driver
+		4. Verify that the database exists on the new node
+	*/
+	helper.RunDockerComposeWithServices(ctx, allServices[numServices-1:])
+	node3Driver := helper.GetDriver(ctx, helper.ServiceContainer("node3"))
+
+	/*
+	   1. This checks if the database exists on the new node
+	   2. Verify if the user and posts are synced to the new node
+	*/
+	specifications.DatabaseVerifySpecification(ctx, t, node3Driver, true)
+	specifications.ExecuteDBRecordsVerifySpecification(ctx, t, node3Driver, 4)
+}
