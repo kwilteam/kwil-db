@@ -7,7 +7,5 @@ type KwilIntDriver interface {
 	specifications.DatabaseDropDsl
 	specifications.ExecuteQueryDsl
 	specifications.ExecuteCallDsl
-
-	// TODO: enable when network ops are implemented
-	//specifications.NetworkOpsDsl
+	specifications.NetworkOpsDsl
 }

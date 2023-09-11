@@ -2,7 +2,6 @@ package abci
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -266,6 +265,8 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				},
 			},
 		}
+		logger.Debug("deployed database", zap.String("DBID", dbID))
+
 	case transactions.PayloadTypeDropSchema:
 		drop := &transactions.DropSchema{}
 		err = drop.UnmarshalBinary(tx.Body.Payload)
@@ -340,7 +341,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "validator_join",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: encodeBase64(join.Candidate), Index: true},
+					{Key: "ValidatorPubKey", Value: hex.EncodeToString(join.Candidate), Index: true},
 					{Key: "ValidatorPower", Value: fmt.Sprintf("%d", join.Power), Index: true},
 				},
 			},
@@ -369,7 +370,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "remove_validator", // is this name arbitrary? it should be "validator_leave" for consistency
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: encodeBase64(leave.Validator), Index: true},
+					{Key: "ValidatorPubKey", Value: hex.EncodeToString(leave.Validator), Index: true},
 					{Key: "ValidatorPower", Value: "0", Index: true},
 				},
 			},
@@ -398,7 +399,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "validator_approve",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "CandidatePubKey", Value: encodeBase64(approve.Candidate), Index: true},
+					{Key: "CandidatePubKey", Value: hex.EncodeToString(approve.Candidate), Index: true},
 					{Key: "ApproverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
 				},
 			},
@@ -765,10 +766,4 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	}
 
 	return m.SetBlockHeight(ctx, height+1)
-}
-
-// pubkeys in event attributes returned to comet as strings are base64 encoded,
-// apparently.
-func encodeBase64(b []byte) string {
-	return base64.StdEncoding.EncodeToString(b)
 }

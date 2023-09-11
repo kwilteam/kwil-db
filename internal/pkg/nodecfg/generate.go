@@ -103,7 +103,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		}
 	}
 
-	for i := 0; i < genCfg.NValidators; i++ {
+	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i)
 		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
 		cfg.RootDir = nodeDir
@@ -132,24 +132,6 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 
 		cfg.ChainCfg.P2P.AddrBookStrict = false
 		cfg.ChainCfg.P2P.AllowDuplicateIP = true
-	}
-
-	for i := 0; i < genCfg.NNonValidators; i++ {
-		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i+genCfg.NValidators)
-		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
-		cfg.RootDir = nodeDir
-
-		err := os.MkdirAll(filepath.Join(nodeDir, "abci", "config"), nodeDirPerm)
-		if err != nil {
-			_ = os.RemoveAll(nodeDir)
-			return err
-		}
-
-		err = os.MkdirAll(filepath.Join(nodeDir, "abci", "data"), nodeDirPerm)
-		if err != nil {
-			_ = os.RemoveAll(nodeDir)
-			return err
-		}
 	}
 
 	validatorPkeys := privateKeys[:genCfg.NValidators]

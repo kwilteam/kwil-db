@@ -13,11 +13,17 @@ services:
       - LOG=${LOG:-cometbft.log}
       - KWILD_HOME=/app/.kwild
     volumes:
-      - ./k1:/app/config
-      - ./k1/node0/:/app/.kwild/
+      - ./testnet/node0/:/app/.kwild/
     networks:
       kwilnet:
         ipv4_address: 172.10.100.2
+    command: |
+      --root_dir=/app/.kwild
+      --log.level=debug
+      --app.grpc_listen_addr=:50051
+      --app.http_listen_addr=:8080
+      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --chain.rpc.laddr=tcp://0.0.0.0:26657
 
   k2:
     container_name: k2
@@ -31,11 +37,17 @@ services:
       - LOG=${LOG:-cometbft.log}
       - KWILD_HOME=/app/.kwild
     volumes:
-      - ./k2:/app/config
-      - ./k2/node1/:/app/.kwild/
+      - ./testnet/node1/:/app/.kwild/
     networks:
       kwilnet:
         ipv4_address: 172.10.100.3
+    command: |
+      --root_dir=/app/.kwild
+      --log.level=debug
+      --app.grpc_listen_addr=:50051
+      --app.http_listen_addr=:8080
+      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --chain.rpc.laddr=tcp://0.0.0.0:26657
 
   k3:
     container_name: k3
@@ -49,11 +61,17 @@ services:
       - LOG=${LOG:-cometbft.log}
       - KWILD_HOME=/app/.kwild
     volumes:
-      - ./k3:/app/config
-      - ./k3/node2/:/app/.kwild/
+      - ./testnet/node2/:/app/.kwild/
     networks:
       kwilnet:
         ipv4_address: 172.10.100.4
+    command: |
+      --root_dir=/app/.kwild
+      --log.level=debug
+      --app.grpc_listen_addr=:50051
+      --app.http_listen_addr=:8080
+      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --chain.rpc.laddr=tcp://0.0.0.0:26657
 
 
 networks:
