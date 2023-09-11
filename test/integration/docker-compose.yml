@@ -51,7 +51,7 @@ services:
       - ext1
     command: |
       --root_dir=/app/kwil
-      --log.level=${LOG_LEVEL:-info}
+      --log.level=${LOG_LEVEL:-debug}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
@@ -79,13 +79,16 @@ services:
       - ext1
     command: |
       --root_dir=/app/kwil
-      --log.level=${LOG_LEVEL:-info}
+      --log.level=${LOG_LEVEL:-debug}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
       --chain.rpc.laddr=tcp://0.0.0.0:26657
 
+  # This node is used to test the scenario where new node join the network & sync the blocks
+  # Removing the ext dependency as test-container docker compose creates a new project everytime we run
+  # docker compose, and the ext is defined in a seperate project, so service lookup is hard.
   node3:
     container_name: node3
     image: kwild:latest
@@ -105,7 +108,7 @@ services:
         ipv4_address: 172.10.100.5
     command: |
       --root_dir=/app/kwil
-      --log.level=${LOG_LEVEL:-info}
+      --log.level=${LOG_LEVEL:-debug}
       --app.extension_endpoints=ext1:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080

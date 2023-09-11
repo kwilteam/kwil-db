@@ -8,8 +8,13 @@ package integration
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"os/signal"
+	"path/filepath"
+	"sort"
+	"syscall"
 	"testing"
 	"time"
 
@@ -42,6 +47,8 @@ var defaultWaitStrategies = map[string]string{
 	"node2": "Starting Node service",
 	"node3": "Starting Node service",
 }
+
+const ExtContainer = "ext1"
 
 type IntTestConfig struct {
 	acceptance.ActTestCfg
@@ -142,7 +149,7 @@ func (r *IntHelper) generateNodeConfig() {
 	tmpPath := r.t.TempDir()
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
-	privKeys, err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
+	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		NValidators:             r.cfg.NValidator,
 		NNonValidators:          r.cfg.NNonValidator,
 		InitialHeight:           0,
@@ -157,11 +164,7 @@ func (r *IntHelper) generateNodeConfig() {
 	})
 	require.NoError(r.t, err, "failed to generate testnet config")
 	r.home = tmpPath
-
-	for idx, key := range privKeys {
-		name := fmt.Sprintf("node%d", idx)
-		r.privateKeys[name] = key
-	}
+	r.ExtractPrivateKeys()
 	r.updateGeneratedConfigHome(tmpPath)
 }
 
@@ -194,7 +197,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 
 	for _, name := range services {
 		// skip ext1
-		if name == "ext1" {
+		if name == ExtContainer {
 			continue
 		}
 		container, err := dc.ServiceContainer(ctx, name)
@@ -214,6 +217,45 @@ func (r *IntHelper) Teardown() {
 	for _, fn := range r.teardown {
 		fn()
 	}
+}
+
+func (r *IntHelper) WaitForSignals(t *testing.T) {
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+
+	// block waiting for a signal
+	s := <-done
+	t.Logf("Got signal: %v\n", s)
+	r.Teardown()
+	t.Logf("Teardown done\n")
+}
+
+func (r *IntHelper) ExtractPrivateKeys() {
+	regexPath := filepath.Join(r.home, "*/private_key.txt")
+
+	files, err := filepath.Glob(regexPath)
+	require.NoError(r.t, err, "failed to get private key files")
+
+	sort.Strings(files)
+
+	for idx, file := range files {
+		name := fmt.Sprintf("node%d", idx)
+		pkeyBytes, err := os.ReadFile(file)
+		require.NoError(r.t, err, "failed to read private key file")
+
+		pkey, err := decodePrivateKey(string(pkeyBytes))
+		require.NoError(r.t, err, "failed to decode private key")
+
+		r.privateKeys[name] = pkey
+	}
+}
+
+func decodePrivateKey(pkey string) (ed25519.PrivKey, error) {
+	privB, err := hex.DecodeString(pkey)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding private key: %v", err)
+	}
+	return ed25519.PrivKey(privB), nil
 }
 
 func (r *IntHelper) GetDriver(ctx context.Context, ctr *testcontainers.DockerContainer) KwilIntDriver {

@@ -3,6 +3,7 @@ package abci
 import (
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -319,7 +320,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		logger.Debug("join validator",
-			zap.String("pubkey", string(join.Candidate)),
+			zap.String("pubkey", hex.EncodeToString(join.Candidate)),
 			zap.Int64("power", int64(join.Power)))
 
 		var res *modVal.ExecutionResponse
@@ -340,7 +341,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "validator_join",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: string(join.Candidate), Index: true},
+					{Key: "ValidatorPubKey", Value: hex.EncodeToString(join.Candidate), Index: true},
 					{Key: "ValidatorPower", Value: fmt.Sprintf("%d", join.Power), Index: true},
 				},
 			},
@@ -355,7 +356,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
-		logger.Debug("leave validator", zap.String("pubkey", string(leave.Validator)))
+		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(leave.Validator)))
 
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Leave(ctx, leave.Validator, tx)
@@ -369,7 +370,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "remove_validator", // is this name arbitrary? it should be "validator_leave" for consistency
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: string(leave.Validator), Index: true},
+					{Key: "ValidatorPubKey", Value: hex.EncodeToString(leave.Validator), Index: true},
 					{Key: "ValidatorPower", Value: "0", Index: true},
 				},
 			},
@@ -384,7 +385,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
-		logger.Debug("approve validator", zap.String("pubkey", string(approve.Candidate)))
+		logger.Debug("approve validator", zap.String("pubkey", hex.EncodeToString(approve.Candidate)))
 
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Approve(ctx, approve.Candidate, tx)
@@ -398,8 +399,8 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "validator_approve",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "CandidatePubKey", Value: string(approve.Candidate), Index: true},
-					{Key: "ApproverPubKey", Value: string(tx.Sender), Index: true},
+					{Key: "CandidatePubKey", Value: hex.EncodeToString(approve.Candidate), Index: true},
+					{Key: "ApproverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
 				},
 			},
 		}

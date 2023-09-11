@@ -3,9 +3,6 @@ package integration_test
 import (
 	"context"
 	"flag"
-	"os"
-	"os/signal"
-	"syscall"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/test/integration"
@@ -14,7 +11,7 @@ import (
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
-var allServices = []string{"ext1", "node0", "node1", "node2", "node3"}
+var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", "node3"}
 var numServices = len(allServices)
 
 func TestKwildDatabaseIntegration(t *testing.T) {
@@ -32,14 +29,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 
 	// running forever for local development
 	if *dev {
-		done := make(chan os.Signal, 1)
-		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
-
-		// block waiting for a signal
-		s := <-done
-		t.Logf("Got signal: %v\n", s)
-		helper.Teardown()
-		t.Logf("Teardown done\n")
+		helper.WaitForSignals(t)
 		return
 	}
 
@@ -78,14 +68,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 
 	// running forever for local development
 	if *dev {
-		done := make(chan os.Signal, 1)
-		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
-
-		// block waiting for a signal
-		s := <-done
-		t.Logf("Got signal: %v\n", s)
-		helper.Teardown()
-		t.Logf("Teardown done\n")
+		helper.WaitForSignals(t)
 		return
 	}
 
@@ -105,7 +88,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	 - Consensus reached, Node3 is a Validator
 	*/
 	specifications.NetworkNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
-	// Node 0,1,2 approves
+	// Node 0,1 approves
 	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
 	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
 	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 4)
@@ -121,7 +104,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	 Rejoin: (same as join process)
 	*/
 	specifications.NetworkNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
-	// Node 0, 1, 2 approves
+	// Node 0, 1 approves
 	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
 	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
 	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 4)
@@ -142,14 +125,7 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 
 	// running forever for local development
 	if *dev {
-		done := make(chan os.Signal, 1)
-		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
-
-		// block waiting for a signal
-		s := <-done
-		t.Logf("Got signal: %v\n", s)
-		helper.Teardown()
-		t.Logf("Teardown done\n")
+		helper.WaitForSignals(t)
 		return
 	}
 

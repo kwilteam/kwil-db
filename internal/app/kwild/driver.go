@@ -136,8 +136,8 @@ func GetTransactionResult(attributes []types.EventAttribute) bool {
 	return false
 }
 
-func (d *KwildDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey string) ([]byte, error) {
-	return d.clt.ApproveValidator(ctx, []byte(joinerPubKey))
+func (d *KwildDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error) {
+	return d.clt.ApproveValidator(ctx, joinerPubKey)
 }
 
 func (d *KwildDriver) ValidatorNodeJoin(ctx context.Context) ([]byte, error) {

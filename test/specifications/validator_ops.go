@@ -8,23 +8,24 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type NetworkOpsDsl interface {
+// ValidatorOpsDsl is a DSL for validator set updates specification such as join, leave, approve, etc.
+type ValidatorOpsDsl interface {
 	TxQueryDsl
-	ValidatorNodeApprove(ctx context.Context, joinerPubKey string) ([]byte, error)
+	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error)
 	ValidatorNodeJoin(ctx context.Context) ([]byte, error)
 	ValidatorNodeLeave(ctx context.Context) ([]byte, error)
 	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*validators.JoinRequest, error)
 	ValidatorsList(ctx context.Context) ([]*validators.Validator, error)
 }
 
-func NetworkNodeValidatorSetSpecification(ctx context.Context, t *testing.T, netops NetworkOpsDsl, count int) {
+func NetworkNodeValidatorSetSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, count int) {
 	t.Log("Executing network node validator set specification")
 	vals, err := netops.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, count, len(vals))
 }
 
-func NetworkNodeJoinSpecification(ctx context.Context, t *testing.T, netops NetworkOpsDsl, joiner []byte, valCount int) {
+func NetworkNodeJoinSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, valCount int) {
 	t.Log("Executing network node join specification")
 	// ValidatorSet count doesn't change just by issuing a Join request. Pre and Post cnt should be the same.
 	vals, err := netops.ValidatorsList(ctx)
@@ -49,7 +50,7 @@ func NetworkNodeJoinSpecification(ctx context.Context, t *testing.T, netops Netw
 	assert.Equal(t, valCount, len(vals))
 }
 
-func NetworkNodeApproveSpecification(ctx context.Context, t *testing.T, netops NetworkOpsDsl, joiner []byte, preCnt int, postCnt int, approved bool) {
+func NetworkNodeApproveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, preCnt int, postCnt int, approved bool) {
 	t.Log("Executing network node approve specification")
 	// Pre approval verification
 	vals, err := netops.ValidatorsList(ctx)
@@ -62,7 +63,7 @@ func NetworkNodeApproveSpecification(ctx context.Context, t *testing.T, netops N
 	preApprovalCnt := approvalCount(joinStatus)
 
 	// Approval Request
-	rec, err := netops.ValidatorNodeApprove(ctx, string(joiner))
+	rec, err := netops.ValidatorNodeApprove(ctx, joiner)
 	assert.NoError(t, err)
 
 	// Ensure that the Tx is mined.
@@ -85,7 +86,7 @@ func NetworkNodeApproveSpecification(ctx context.Context, t *testing.T, netops N
 	assert.Equal(t, postCnt, len(vals))
 }
 
-func NetworkNodeLeaveSpecification(ctx context.Context, t *testing.T, netops NetworkOpsDsl) {
+func NetworkNodeLeaveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl) {
 	t.Log("Executing network node leave specification")
 
 	vals, err := netops.ValidatorsList(ctx)

@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -28,7 +29,7 @@ func statusCmd(cfg *config.KwildConfig) *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("Candidate: %v (want power %d)\n", status.Candidate, status.Power)
+			fmt.Printf("Candidate: %v (want power %d)\n", hex.EncodeToString(status.Candidate), status.Power)
 			for i := range status.Board {
 				fmt.Printf(" Validator %x, approved = %v\n", status.Board[i], status.Approved[i])
 			}
