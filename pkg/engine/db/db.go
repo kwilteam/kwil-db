@@ -19,6 +19,12 @@ import (
 
 type DB struct {
 	Sqldb SqlDB
+
+	// caches metadata from QueryUnsafe.
+	// this is a really bad practice, but works.
+	// essentially, we cache the metadata the first time it is retrieved, during schema
+	// deployment.  This prevents the need from calling QueryUnsafe again
+	metadataCache map[metadataType][]*metadata
 }
 
 func (d *DB) Close() error {
@@ -78,7 +84,8 @@ func (d *DB) Savepoint() (sql.Savepoint, error) {
 
 func NewDB(ctx context.Context, sqldb SqlDB) (*DB, error) {
 	db := &DB{
-		Sqldb: sqldb,
+		Sqldb:         sqldb,
+		metadataCache: make(map[metadataType][]*metadata),
 	}
 
 	err := db.initMetadataTable(ctx)

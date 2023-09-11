@@ -1,10 +1,13 @@
 package addresses_test
 
 import (
+	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -86,3 +89,18 @@ func Test_Addresses(t *testing.T) {
 }
 
 type addressFunc func(crypto.PrivateKey) (crypto.Address, error)
+
+func Test_Del(t *testing.T) {
+	pkStr := "074e49f310d58d6d9e9060c4d6172cde63565d4227b8f0d4e1106e383134c8f4"
+	bts, err := hex.DecodeString(pkStr)
+	require.NoError(t, err, "error decode private key")
+
+	pk, err := crypto.Ed25519PublicKeyFromBytes(bts)
+	require.NoError(t, err, "error parse private key")
+
+	addr, err := addresses.CreateNearAddress(pk)
+	require.NoError(t, err, "error create near address")
+
+	fmt.Println(addr.String())
+	panic("")
+}
