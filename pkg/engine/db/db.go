@@ -11,6 +11,7 @@ package db
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
@@ -25,6 +26,8 @@ type DB struct {
 	// essentially, we cache the metadata the first time it is retrieved, during schema
 	// deployment.  This prevents the need from calling QueryUnsafe again
 	metadataCache map[metadataType][]*metadata
+
+	mu sync.RWMutex
 }
 
 func (d *DB) Close() error {

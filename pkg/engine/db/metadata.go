@@ -67,6 +67,8 @@ func (d *DB) storeMetadata(ctx context.Context, meta *metadata) error {
 }
 
 func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadata, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	cached, ok := d.metadataCache[metaType]
 	if ok {
 		return cached, nil
