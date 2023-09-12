@@ -7,5 +7,5 @@ type KwilIntDriver interface {
 	specifications.DatabaseDropDsl
 	specifications.ExecuteQueryDsl
 	specifications.ExecuteCallDsl
-	specifications.NetworkOpsDsl
+	specifications.ValidatorOpsDsl
 }
