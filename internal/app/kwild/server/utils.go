@@ -100,7 +100,7 @@ type wrappedCometBFTClient struct {
 }
 
 func (wc *wrappedCometBFTClient) BroadcastTxAsync(ctx context.Context, tx []byte) ([]byte, error) {
-	result, err := wc.Local.BroadcastTxAsync(ctx, cmttypes.Tx(tx))
+	result, err := wc.Local.BroadcastTxSync(ctx, cmttypes.Tx(tx))
 	if err != nil {
 		return nil, err
 	}
