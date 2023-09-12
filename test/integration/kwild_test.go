@@ -79,7 +79,15 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	joinerPubKey := joinerPkey.PubKey().Bytes()
 
 	// Start the network with 3 validators & 1 Non-validator
-	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 3)
+	specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 3)
+
+	/*
+		Join Expiry:
+		- Node3 requests to join
+		- No approval from other nodes
+		- Join request should expire after 15 blocks (15secs)
+	*/
+	specifications.ValidatorJoinExpirySpecification(ctx, t, joinerDriver, joinerPubKey)
 
 	/*
 	 Join Process:
@@ -87,27 +95,27 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	 - Requires atleast 2 nodes to approve
 	 - Consensus reached, Node3 is a Validator
 	*/
-	specifications.NetworkNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
+	specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
 	// Node 0,1 approves
-	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
-	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
-	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 4)
+	specifications.ValidatorNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
+	specifications.ValidatorNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
+	specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 4)
 
 	/*
 	 Leave Process:
 	 - node3 issues a leave request -> removes it from the validator list
 	 - Validatorset count should be reduced by 1
 	*/
-	specifications.NetworkNodeLeaveSpecification(ctx, t, joinerDriver)
+	specifications.ValidatorNodeLeaveSpecification(ctx, t, joinerDriver)
 
 	/*
 	 Rejoin: (same as join process)
 	*/
-	specifications.NetworkNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
+	specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
 	// Node 0, 1 approves
-	specifications.NetworkNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
-	specifications.NetworkNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
-	specifications.NetworkNodeValidatorSetSpecification(ctx, t, node0Driver, 4)
+	specifications.ValidatorNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
+	specifications.ValidatorNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
+	specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 4)
 }
 
 func TestKwildNetworkSyncIntegration(t *testing.T) {

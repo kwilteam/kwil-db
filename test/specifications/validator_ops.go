@@ -3,9 +3,12 @@ package specifications
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/pkg/validators"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // ValidatorOpsDsl is a DSL for validator set updates specification such as join, leave, approve, etc.
@@ -18,27 +21,28 @@ type ValidatorOpsDsl interface {
 	ValidatorsList(ctx context.Context) ([]*validators.Validator, error)
 }
 
-func NetworkNodeValidatorSetSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, count int) {
+func CurrentValidatorsSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, count int) {
 	t.Log("Executing network node validator set specification")
 	vals, err := netops.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, count, len(vals))
 }
 
-func NetworkNodeJoinSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, valCount int) {
+func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, valCount int) {
 	t.Log("Executing network node join specification")
 	// ValidatorSet count doesn't change just by issuing a Join request. Pre and Post cnt should be the same.
 	vals, err := netops.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, valCount, len(vals))
 
+	// Validator issues a Join request
 	rec, err := netops.ValidatorNodeJoin(ctx)
 	assert.NoError(t, err)
 
 	// Ensure that the Tx is mined.
 	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
 
-	// Get Request status, #approvals = 0
+	// Get Request status, #approvals = 0, #board = valCount
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
 	assert.NoError(t, err)
 	assert.Equal(t, valCount, len(joinStatus.Board))
@@ -50,13 +54,15 @@ func NetworkNodeJoinSpecification(ctx context.Context, t *testing.T, netops Vali
 	assert.Equal(t, valCount, len(vals))
 }
 
-func NetworkNodeApproveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, preCnt int, postCnt int, approved bool) {
+func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, preCnt int, postCnt int, approved bool) {
 	t.Log("Executing network node approve specification")
-	// Pre approval verification
+
+	// Get current validator count, should be equal to preCnt
 	vals, err := netops.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, preCnt, len(vals))
 
+	// Get Join Request status, #board = preCnt
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
 	assert.NoError(t, err)
 	assert.Equal(t, preCnt, len(joinStatus.Board))
@@ -69,7 +75,11 @@ func NetworkNodeApproveSpecification(ctx context.Context, t *testing.T, netops V
 	// Ensure that the Tx is mined.
 	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
 
-	// Check Join Request Status to ensure that the vote is included
+	/*
+		Check Join Request Status:
+		- If Join request approved (2/3rd majority), Join request should be removed
+		- If not approved, ensure that the vote is included, i.e #approvals = preApprovalCnt + 1
+	*/
 	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner)
 	if approved {
 		assert.Error(t, err)
@@ -86,19 +96,22 @@ func NetworkNodeApproveSpecification(ctx context.Context, t *testing.T, netops V
 	assert.Equal(t, postCnt, len(vals))
 }
 
-func NetworkNodeLeaveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl) {
+func ValidatorNodeLeaveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl) {
 	t.Log("Executing network node leave specification")
 
+	// Get current validator count
 	vals, err := netops.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	preCnt := len(vals)
 
+	// Validator issues a Leave request
 	rec, err := netops.ValidatorNodeLeave(ctx)
 	assert.NoError(t, err)
 
-	// Ensure that the Tx is mined.
+	// Ensure that the Validator Leave Tx is mined.
 	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
 
+	// ValidatorSet count should be reduced by 1
 	vals, err = netops.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	postCnt := len(vals)
@@ -113,4 +126,30 @@ func approvalCount(joinStatus *validators.JoinRequest) int {
 		}
 	}
 	return cnt
+}
+
+func ValidatorJoinExpirySpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte) {
+	t.Log("Executing validator join expiry specification")
+
+	// Issue a join request
+	rec, err := netops.ValidatorNodeJoin(ctx)
+	assert.NoError(t, err)
+
+	// Ensure that the Tx is mined.
+	expectTxSuccess(t, netops, ctx, rec, defaultTxQueryTimeout)()
+
+	// Get Request status, #approvals = 0
+	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, approvalCount(joinStatus))
+
+	// Wait for 15 blocks aka 15 secs for the join request to expire
+	time.Sleep(30 * time.Second)
+
+	// join request should be expired and removed
+	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner)
+	assert.Error(t, err)
+	assert.Nil(t, joinStatus)
+	assert.Equal(t, status.Code(err), codes.NotFound)
+	assert.Contains(t, err.Error(), "no active join request")
 }
