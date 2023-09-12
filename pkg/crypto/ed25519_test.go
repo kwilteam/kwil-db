@@ -2,7 +2,6 @@ package crypto_test
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
@@ -93,16 +92,4 @@ func Test_GenerateEd25518PrivateKey(t *testing.T) {
 	if len(pk.Bytes()) != 64 {
 		t.Errorf("invalid private key length: %d", len(pk.Bytes()))
 	}
-}
-
-func Test_Del(t *testing.T) {
-	pkStr := "074e49f310d58d6d9e9060c4d6172cde63565d4227b8f0d4e1106e383134c8f4"
-	bts, err := hex.DecodeString(pkStr)
-	require.NoError(t, err, "error decode private key")
-
-	pk, err := crypto.Ed25519PublicKeyFromBytes(bts)
-	require.NoError(t, err, "error parse private key")
-
-	fmt.Println(pk.Address().String())
-	panic("")
 }
