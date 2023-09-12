@@ -113,11 +113,11 @@ func (vs *validatorStore) AddValidator(ctx context.Context, joiner []byte, power
 	return vs.addValidator(ctx, joiner, power)
 }
 
-func (vs *validatorStore) StartJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64) error {
+func (vs *validatorStore) StartJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
 
-	return vs.startJoinRequest(ctx, joiner, approvers, power)
+	return vs.startJoinRequest(ctx, joiner, approvers, power, expiresAt)
 }
 
 // AddApproval records that a certain validator has approved the join request
@@ -127,4 +127,12 @@ func (vs *validatorStore) AddApproval(ctx context.Context, joiner, approver []by
 	defer vs.rw.Unlock()
 
 	return vs.addApproval(ctx, joiner, approver)
+}
+
+// Delete a join request
+func (vs *validatorStore) DeleteJoinRequest(ctx context.Context, joiner []byte) error {
+	vs.rw.Lock()
+	defer vs.rw.Unlock()
+
+	return vs.deleteJoinRequest(ctx, joiner)
 }

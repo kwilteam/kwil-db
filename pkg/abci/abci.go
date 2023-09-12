@@ -500,6 +500,7 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 		a.log.Error("failed to get block height", zap.Error(err))
 		return abciTypes.ResponseCommit{}
 	}
+	a.validators.UpdateBlockHeight(ctx, height)
 
 	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(uint64(height)) {
 		// TODO: Lock all DBs
@@ -577,7 +578,7 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 		}
 	}
 
-	if err := a.validators.GenesisInit(context.Background(), vldtrs); err != nil {
+	if err := a.validators.GenesisInit(context.Background(), vldtrs, p0.InitialHeight); err != nil {
 		panic(fmt.Sprintf("GenesisInit failed: %v", err))
 	}
 
