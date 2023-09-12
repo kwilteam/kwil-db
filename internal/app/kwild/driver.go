@@ -54,9 +54,13 @@ func (d *KwildDriver) TxSuccess(ctx context.Context, txHash []byte) error {
 		return fmt.Errorf("failed to query: %w", err)
 	}
 
-	d.logger.Info("tx info", zap.Uint64("height", resp.Height),
+	d.logger.Info("tx info", zap.Int64("height", resp.Height),
 		zap.String("txHash", strings.ToUpper(hex.EncodeToString(txHash))),
 		zap.Any("result", resp.TxResult))
+
+	if resp.Height < 0 {
+		return fmt.Errorf("transaction unconfirmed")
+	}
 
 	if resp.TxResult.Code != abci.CodeOk.Uint32() {
 		return fmt.Errorf("transaction not ok, %s", resp.TxResult.Log)

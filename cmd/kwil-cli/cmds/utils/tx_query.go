@@ -85,6 +85,10 @@ func printQueryTxRes(res *txpb.TxQueryResponse, encode encodeFunc) {
 		status = "success"
 	}
 
+	if res.Height < 0 {
+		status = "tx not confirmed"
+	}
+
 	fmt.Println("Status: ", status)
 	fmt.Println("Data: ", hex.EncodeToString(res.TxResult.Data))
 	fmt.Println("Outputted Logs: ", res.TxResult.Log)

@@ -3,6 +3,8 @@ package txsvc
 import (
 	"context"
 	"encoding/hex"
+	"errors"
+	"github.com/kwilteam/kwil-db/pkg/abci"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -20,6 +22,10 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 
 	cmtResult, err := s.chainClient.TxQuery(ctx, req.TxHash, false)
 	if err != nil {
+		if errors.Is(err, abci.ErrTxNotFound) {
+			logger.Debug("transaction not found")
+			return nil, status.Error(codes.NotFound, "transaction not found")
+		}
 		logger.Error("failed to query tx", zap.Error(err))
 		return nil, status.Error(codes.Internal, "failed to query transaction")
 	}
@@ -55,7 +61,7 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 
 	return &txpb.TxQueryResponse{
 		Hash:     cmtResult.Hash.Bytes(),
-		Height:   uint64(cmtResult.Height),
+		Height:   cmtResult.Height,
 		Tx:       tx,
 		TxResult: txResult,
 	}, nil
