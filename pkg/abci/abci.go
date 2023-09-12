@@ -62,11 +62,12 @@ func (ds nilStringer) String() string {
 }
 
 func NewAbciApp(database DatasetsModule, vldtrs ValidatorModule, kv KVStore, committer AtomicCommitter, snapshotter SnapshotModule,
-	bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
+	bootstrapper DBBootstrapModule, genesisHash []byte, opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
-		database:   database,
-		validators: vldtrs,
-		committer:  committer,
+		genesisAppHash: genesisHash,
+		database:       database,
+		validators:     vldtrs,
+		committer:      committer,
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
@@ -99,6 +100,7 @@ func pubkeyToAddr(pubkey []byte) (string, error) {
 }
 
 type AbciApp struct {
+	genesisAppHash []byte
 	// database is the database module that handles database deployment, dropping, and execution
 	database DatasetsModule
 
@@ -478,6 +480,7 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 		a.log.Error("failed to get block height", zap.Error(err))
 		return abciTypes.ResponseCommit{}
 	}
+	a.validators.UpdateBlockHeight(ctx, height)
 
 	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(uint64(height)) {
 		// TODO: Lock all DBs
@@ -555,7 +558,7 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 		}
 	}
 
-	if err := a.validators.GenesisInit(context.Background(), vldtrs); err != nil {
+	if err := a.validators.GenesisInit(context.Background(), vldtrs, p0.InitialHeight); err != nil {
 		panic(fmt.Sprintf("GenesisInit failed: %v", err))
 	}
 
@@ -564,21 +567,24 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 		valUpdates[i] = abciTypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
 	}
 
-	apphash, err := a.metadataStore.GetAppHash(ctx)
+	err := a.metadataStore.SetAppHash(ctx, a.genesisAppHash)
 	if err != nil {
-		panic(fmt.Sprintf("failed to get app hash: %v", err))
-		// TODO: should we initialize with a genesis hash instead if it fails
-		// TODO: apparently InitChain is only genesis, so yes it should only be genesis hash
-		// in fact, I don't think we should be getting it from this store at all
+		panic(fmt.Sprintf("failed to set app hash: %v", err))
 	}
+
+	logger.Debug("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.genesisAppHash)))
 
 	return abciTypes.ResponseInitChain{
 		Validators: valUpdates,
-		AppHash:    apphash,
+		AppHash:    a.genesisAppHash,
 	}
 }
 
 func (a *AbciApp) ApplySnapshotChunk(p0 abciTypes.RequestApplySnapshotChunk) abciTypes.ResponseApplySnapshotChunk {
+	if a.bootstrapper == nil {
+		return abciTypes.ResponseApplySnapshotChunk{Result: abciTypes.ResponseApplySnapshotChunk_ABORT, RefetchChunks: nil}
+	}
+
 	refetchChunks, status, err := a.bootstrapper.ApplySnapshotChunk(p0.Chunk, p0.Index)
 	if err != nil {
 		return abciTypes.ResponseApplySnapshotChunk{Result: abciStatus(status), RefetchChunks: refetchChunks}
@@ -633,6 +639,10 @@ func (a *AbciApp) LoadSnapshotChunk(p0 abciTypes.RequestLoadSnapshotChunk) abciT
 }
 
 func (a *AbciApp) OfferSnapshot(p0 abciTypes.RequestOfferSnapshot) abciTypes.ResponseOfferSnapshot {
+	if a.bootstrapper == nil {
+		return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}
+	}
+
 	snapshot := convertABCISnapshots(p0.Snapshot)
 	if a.bootstrapper.OfferSnapshot(snapshot) != nil {
 		return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_REJECT}

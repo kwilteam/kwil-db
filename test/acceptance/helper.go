@@ -171,7 +171,10 @@ func (r *ActHelper) generateNodeConfig() {
 
 	err := nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
 		// InitialHeight: 0,
-		OutputDir: tmpPath,
+		OutputDir:       tmpPath,
+		JoinExpiry:      86400,
+		WithoutGasCosts: true,
+		WithoutNonces:   false,
 	})
 	require.NoError(r.t, err, "failed to generate node config")
 
