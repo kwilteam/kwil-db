@@ -75,13 +75,8 @@ func NewAbciApp(database DatasetsModule, vldtrs ValidatorModule, kv KVStore, com
 		snapshotter:  snapshotter,
 
 		valAddrToKey: make(map[string][]byte),
-		valUpdates:   make([]*validators.Validator, 0),
 
 		log: log.NewNoOp(),
-
-		commitSemaphore: make(chan struct{}, 1), // max concurrency for a BeginBlock->Commit+Apply sequence is 1
-
-		// state: appState{height, ...}, // TODO
 	}
 
 	for _, opt := range opts {
@@ -127,15 +122,6 @@ type AbciApp struct {
 
 	log log.Logger
 
-	// Consensus method requests from cometbft are synchronous, but a portion of
-	// the work of Commit is launched in a goroutine, so we block a subsequent
-	// BeginBlock from starting new changes. We do this by acquiring a semaphore
-	// with max concurrency of 1 at the start of BeginBlock, and releasing it
-	// when the changes from Commit have finished applying. A mutex is rarely
-	// held for longer than the duration of a local function, while a waitgroup
-	// does not provide atomic Wait/Add semantics that fit here.
-	commitSemaphore chan struct{}
-
 	// Expected AppState after bootstrapping the node with a given snapshot,
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
@@ -150,8 +136,6 @@ var _ abciTypes.Application = &AbciApp{}
 func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.ResponseBeginBlock {
 	logger := a.log.With(zap.String("stage", "ABCI BeginBlock"), zap.Int("height", int(req.Header.Height)))
 	logger.Debug("begin block")
-
-	a.commitSemaphore <- struct{}{} // peg in (until Commit is applied), there will only be at most one waiter
 
 	err := a.committer.Begin(context.Background())
 	if err != nil {
@@ -474,12 +458,7 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to increment block height: %v", err)))
 	}
 
-	err = a.committer.Commit(ctx, func(err error) {
-		if err != nil {
-			panic(newFatalError("Commit", nil, fmt.Sprintf("failed to commit atomic commit: %v", err)))
-		}
-		<-a.commitSemaphore // peg out (from BeginBlock)
-	})
+	err = a.committer.Commit(ctx)
 	if err != nil {
 		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to commit atomic commit: %v", err)))
 	}
