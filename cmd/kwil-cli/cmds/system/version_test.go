@@ -1,24 +1,23 @@
 package system
 
-import "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
+import (
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
+)
 
 func Example_versionInfo_text() {
-	msg := display.WrapMsg(
-		&respVersionInfo{
-			Info: &versionInfo{
-				Version:   "0.0.0",
-				GitCommit: "00000000",
+	display.Print(&respVersionInfo{
+		Info: &versionInfo{
+			Version:   "0.0.0",
+			GitCommit: "00000000",
 
-				BuildTime:  "0001-01-01T00:00:00Z",
-				APIVersion: "0.0.0",
-				GoVersion:  "unknown",
-				Os:         "unknown",
-				Arch:       "unknown",
-			},
+			BuildTime:  "0001-01-01T00:00:00Z",
+			APIVersion: "0.0.0",
+			GoVersion:  "unknown",
+			Os:         "unknown",
+			Arch:       "unknown",
 		},
-		nil)
-
-	display.PrettyPrint(msg, "text")
+	}, nil, "text")
+	//display.PrettyPrint(msg, "text")
 	// Output:
 	//  Version:	0.0.0
 	//  Git commit:	00000000
@@ -29,20 +28,17 @@ func Example_versionInfo_text() {
 }
 
 func Example_versionInfo_json() {
-	msg := display.WrapMsg(
-		&respVersionInfo{
-			Info: &versionInfo{
-				Version:    "0.0.0",
-				GitCommit:  "00000000",
-				BuildTime:  "0001-01-01T00:00:00Z",
-				APIVersion: "0.0.0",
-				GoVersion:  "unknown",
-				Os:         "unknown",
-				Arch:       "unknown",
-			},
+	display.Print(&respVersionInfo{
+		Info: &versionInfo{
+			Version:    "0.0.0",
+			GitCommit:  "00000000",
+			BuildTime:  "0001-01-01T00:00:00Z",
+			APIVersion: "0.0.0",
+			GoVersion:  "unknown",
+			Os:         "unknown",
+			Arch:       "unknown",
 		},
-		nil)
-	display.PrettyPrint(msg, "json")
+	}, nil, "json")
 	// Output:
 	// {
 	//   "result": {

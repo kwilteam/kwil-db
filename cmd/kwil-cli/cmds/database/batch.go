@@ -6,13 +6,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/csv"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
-
 	"github.com/spf13/cobra"
 )
 
@@ -80,8 +79,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 				return nil
 			})
 
-			msg := display.WrapMsg(respTxHash(resp), err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(display.RespTxHash(resp), err, config.GetOutputFormat())
 		},
 	}
 

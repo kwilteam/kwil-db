@@ -5,53 +5,47 @@ import (
 	"testing"
 
 	"github.com/cstockton/go-conv"
-	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/stretchr/testify/assert"
 )
-
-type ExecuteCallDsl interface {
-	DatabaseIdentifier
-	Call(ctx context.Context, dbid, action string, inputs []any, opts ...client.CallOpt) (*client.Records, error)
-}
 
 func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl) {
 	t.Logf("Executing ExecuteCallSpecification")
 
-	db := SchemaLoader.Load(t, schemaTestDB)
+	db := SchemaLoader.Load(t, SchemaTestDB)
 	dbID := caller.DBID(db.Name)
 
 	getPostInput := []any{1111}
 
-	res, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput)
+	_, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput, false)
+	if err == nil {
+		t.Errorf("expected error calling action without authentication")
+	}
+
+	res, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput, true)
 	if err != nil {
 		t.Fatalf("error calling action: %s", err.Error())
 	}
 
 	checkGetPostResults(t, res.Export())
 
-	_, err = caller.Call(ctx, dbID, "get_post_authenticated", getPostInput, client.Authenticated(false))
-	if err == nil {
-		t.Errorf("expected error calling action without authentication")
-	}
-
-	res, err = caller.Call(ctx, dbID, "get_post_unauthenticated", getPostInput, client.Authenticated(false))
+	res, err = caller.Call(ctx, dbID, "get_post_unauthenticated", getPostInput, false)
 	if err != nil {
 		t.Fatalf("error calling action: %s", err.Error())
 	}
 	checkGetPostResults(t, res.Export())
 
 	// try calling mutable action, should fail
-	_, err = caller.Call(ctx, dbID, "delete_user", nil, client.Authenticated(true))
+	_, err = caller.Call(ctx, dbID, "delete_user", nil, false)
 	assert.Error(t, err, "expected error calling mutable action")
 
 	// test that modifiers "public owner view" enforces authentication
 	// the caller here is the correct owner, but not authenticated
-	_, err = caller.Call(ctx, dbID, "owner_only", nil, client.Authenticated(false))
+	_, err = caller.Call(ctx, dbID, "owner_only", nil, false)
 	assert.Error(t, err, "expected error calling owner only action without authentication")
 
 	// and test that authenticating works
-	_, err = caller.Call(ctx, dbID, "owner_only", nil, client.Authenticated(true))
-	assert.NoError(t, err, "expected no error calling owner only action with authentication")
+	_, err = caller.Call(ctx, dbID, "owner_only", nil, true)
+	assert.NoError(t, err, "calling owner only action with authentication should succeed")
 }
 
 func checkGetPostResults(t *testing.T, results []map[string]any) {

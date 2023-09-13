@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"sort"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
@@ -19,26 +17,6 @@ import (
 //
 // A possible way to do this is define actual response types in client package
 // and wrap them in cli package?
-
-// respTxHash is used to represent a transaction hash in cli
-// NOTE: it's different from transactions.TxHash, this is for display purpose.
-type respTxHash []byte
-
-func (h respTxHash) Hex() string {
-	return strings.ToUpper(fmt.Sprintf("%x", h))
-}
-
-func (h respTxHash) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		TxHash string `json:"tx_hash"`
-	}{
-		TxHash: h.Hex(),
-	})
-}
-
-func (h respTxHash) MarshalText() (string, error) {
-	return fmt.Sprintf("TxHash: %s", h.Hex()), nil
-}
 
 // respDBList represent databases belong to an owner in cli
 type respDBList struct {
@@ -70,9 +48,9 @@ func (d *respDBList) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (d *respDBList) MarshalText() (string, error) {
+func (d *respDBList) MarshalText() ([]byte, error) {
 	if len(d.Databases) == 0 {
-		return fmt.Sprintf("No databases found for '%x'.", d.Owner), nil
+		return []byte(fmt.Sprintf("No databases found for '%x'.", d.Owner)), nil
 	}
 
 	msg := fmt.Sprintf("Databases belonging to '%x':\n", d.Owner)
@@ -80,7 +58,7 @@ func (d *respDBList) MarshalText() (string, error) {
 		msg += fmt.Sprintf(" - %s   (dbid:%s)\n", db, utils.GenerateDBID(db, d.Owner))
 	}
 
-	return msg, nil
+	return []byte(msg), nil
 }
 
 // respRelations is a slice of maps that represent the relations(from set theory)
@@ -94,11 +72,11 @@ func (r *respRelations) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.Data.ExportString())
 }
 
-func (r *respRelations) MarshalText() (string, error) {
+func (r *respRelations) MarshalText() ([]byte, error) {
 	data := r.Data.ExportString()
 
 	if len(data) == 0 {
-		return "No data to display.", nil
+		return []byte("No data to display."), nil
 	}
 
 	// collect headers
@@ -117,7 +95,6 @@ func (r *respRelations) MarshalText() (string, error) {
 	table.SetBorders(
 		tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 
-	// TODO: fix the order
 	for _, row := range data {
 		rs := make([]string, 0)
 		for _, h := range headers {
@@ -127,13 +104,7 @@ func (r *respRelations) MarshalText() (string, error) {
 	}
 
 	table.Render()
-
-	bs, err := io.ReadAll(&buf)
-	if err != nil {
-		return "", err
-	}
-
-	return string(bs), nil
+	return buf.Bytes(), nil
 }
 
 // respSchema is used to represent a database schema in cli
@@ -141,37 +112,38 @@ type respSchema struct {
 	Schema *transactions.Schema
 }
 
-func (s respSchema) MarshalJSON() ([]byte, error) {
+func (s *respSchema) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Schema)
 }
 
-func (s respSchema) MarshalText() (string, error) {
-	// TODO: make it more readable
-	msg := make([]string, 0)
+func (s *respSchema) MarshalText() ([]byte, error) {
+	// TODO: make output more readable
+	var msg bytes.Buffer
 
 	// now we print the metadata
-	msg = append(msg, fmt.Sprintln("Tables:"))
+	msg.WriteString("Tables:\n")
 	for _, t := range s.Schema.Tables {
-		msg = append(msg, fmt.Sprintf("  %s\n", t.Name))
-		msg = append(msg, "    Columns:\n")
+		msg.WriteString(fmt.Sprintf("  %s\n", t.Name))
+		msg.WriteString("    Columns:\n")
 		for _, c := range t.Columns {
-			msg = append(msg, fmt.Sprintf("    %s\n", c.Name))
-			msg = append(msg, fmt.Sprintf("      Type: %s\n", c.Type))
+			msg.WriteString(fmt.Sprintf("    %s\n", c.Name))
+			msg.WriteString(fmt.Sprintf("      Type: %s\n", c.Type))
+
 			for _, a := range c.Attributes {
-				msg = append(msg, fmt.Sprintf("      %s\n", a.Type))
+				msg.WriteString(fmt.Sprintf("      %s\n", a.Type))
 				if a.Value != "" {
-					msg = append(msg, fmt.Sprintf("        %s\n", fmt.Sprint(a.Value)))
+					msg.WriteString(fmt.Sprintf("        %s\n", fmt.Sprint(a.Value)))
 				}
 			}
 		}
 	}
 
 	// print queries
-	msg = append(msg, "Actions:\n")
+	msg.WriteString("Actions:\n")
 	for _, q := range s.Schema.Actions {
-		msg = append(msg, fmt.Sprintf("  %s\n", q.Name))
-		msg = append(msg, fmt.Sprintf("    Inputs: %s\n", q.Inputs))
+		msg.WriteString(fmt.Sprintf("  %s\n", q.Name))
+		msg.WriteString(fmt.Sprintf("    Inputs: %s\n", q.Inputs))
 	}
 
-	return strings.Join(msg, ""), nil
+	return msg.Bytes(), nil
 }

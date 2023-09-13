@@ -3,24 +3,17 @@ package specifications
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/transactions"
-	"github.com/stretchr/testify/require"
-
 	"github.com/kwilteam/kuneiform/kfparser"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/test/driver"
+	"github.com/stretchr/testify/require"
 )
-
-type DatabaseIdentifier interface {
-	DBID(name string) string
-}
-
-type DatabaseExister interface {
-	DatabaseExists(ctx context.Context, dbid string) error
-}
 
 type DatabaseSchemaLoader interface {
 	Load(t *testing.T, targetSchema *testSchema) *transactions.Schema
@@ -115,7 +108,8 @@ func expectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []b
 				return false
 			} else {
 				status.WriteString(err.Error())
-				return true
+				// NOTE: ErrTxNotConfirmed is not considered a failure, should retry
+				return !errors.Is(err, driver.ErrTxNotConfirmed)
 			}
 		}, waitFor, time.Second*1, "tx should fail", status.String())
 	}

@@ -11,9 +11,8 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kuneiform/kfparser"
-
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -28,7 +27,7 @@ func deployCmd() *cobra.Command {
 		Short: "Deploy databases",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var resp []byte
+			var txHash []byte
 
 			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				// read in the file
@@ -50,16 +49,11 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
-				resp, err = client.DeployDatabase(ctx, db)
-				if err != nil {
-					return err
-				}
-
-				return nil
+				txHash, err = client.DeployDatabase(ctx, db)
+				return err
 			})
 
-			msg := display.WrapMsg(respTxHash(resp), err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(display.RespTxHash(txHash), err, config.GetOutputFormat())
 		},
 	}
 

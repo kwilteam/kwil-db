@@ -1,15 +1,16 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/client/types"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
-	"reflect"
-	"strings"
 )
 
 // respStr represents a string in cli
@@ -23,12 +24,11 @@ func (s respStr) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (s respStr) MarshalText() (string, error) {
-	return string(s), nil
+func (s respStr) MarshalText() ([]byte, error) {
+	return []byte(s), nil
 }
 
 // respSig represents a signature in cli
-// TODO: how to make this more general?
 type respSig []byte
 
 func (r respSig) Hex() string {
@@ -43,21 +43,21 @@ func (r respSig) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (r respSig) MarshalText() (string, error) {
-	return fmt.Sprintf("Signature: %s\n", r.Hex()), nil
+func (r respSig) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("Signature: %s\n", r.Hex())), nil
 }
 
-// respTxHash is used to represent a transaction response in cli
-type respTxInfo struct {
-	Msg *types.TxQueryResponse
+// respTxQuery is used to represent a transaction response in cli
+type respTxQuery struct {
+	Msg *types.TcTxQueryResponse
 }
 
-func (r *respTxInfo) MarshalJSON() ([]byte, error) {
+func (r *respTxQuery) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
-		Hash     string                          `json:"hash"` // HEX
-		Height   int64                           `json:"height"`
-		Tx       *transactions.Transaction       `json:"tx"`
-		TxResult *transactions.TransactionResult `json:"tx_result"`
+		Hash     string                         `json:"hash"` // HEX
+		Height   int64                          `json:"height"`
+		Tx       transactions.Transaction       `json:"tx"`
+		TxResult transactions.TransactionResult `json:"tx_result"`
 	}{
 		Hash:     hex.EncodeToString(r.Msg.Hash),
 		Height:   r.Msg.Height,
@@ -66,7 +66,7 @@ func (r *respTxInfo) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (r *respTxInfo) MarshalText() (string, error) {
+func (r *respTxQuery) MarshalText() ([]byte, error) {
 	status := "failed"
 	if r.Msg.Height == -1 {
 		status = "pending"
@@ -85,7 +85,7 @@ Log: %s
 		r.Msg.TxResult.Log,
 	)
 
-	return msg, nil
+	return []byte(msg), nil
 }
 
 // respGenWalletInfo is used to represent a generated wallet info in cli
@@ -104,12 +104,13 @@ func (r *respGenWalletInfo) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.info)
 }
 
-func (r *respGenWalletInfo) MarshalText() (string, error) {
+func (r *respGenWalletInfo) MarshalText() ([]byte, error) {
 	printKeyDesc := `PrivateKey: %s
 PublicKey: 	%s
 Address: 	%s
 `
-	return fmt.Sprintf(printKeyDesc, r.info.PrivateKey, r.info.PublicKey, r.info.Address), nil
+	msg := fmt.Sprintf(printKeyDesc, r.info.PrivateKey, r.info.PublicKey, r.info.Address)
+	return []byte(msg), nil
 }
 
 // respKwilCliConfig is used to represent a kwil-cli config in cli
@@ -123,8 +124,8 @@ func (r *respKwilCliConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(cfg)
 }
 
-func (r *respKwilCliConfig) MarshalText() (string, error) {
-	lines := make([]string, 0)
+func (r *respKwilCliConfig) MarshalText() ([]byte, error) {
+	var msg bytes.Buffer
 	cfg := r.cfg.ToPersistedConfig()
 	cfg.PrivateKey = "***"
 
@@ -139,8 +140,8 @@ func (r *respKwilCliConfig) MarshalText() (string, error) {
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
 		fieldValue := v.Field(i)
-		lines = append(lines, fmt.Sprintf("%s: %v", field.Name, fieldValue))
+		msg.WriteString(fmt.Sprintf("%s: %v\n", field.Name, fieldValue))
 	}
 
-	return strings.Join(lines, "\n"), nil
+	return msg.Bytes(), nil
 }

@@ -12,7 +12,7 @@ import (
 func ExecuteDBDeleteSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
 	t.Logf("Executing delete action specification")
 	// Given a valid database schema
-	db := SchemaLoader.Load(t, schemaTestDB)
+	db := SchemaLoader.Load(t, SchemaTestDB)
 	dbID := execute.DBID(db.Name)
 
 	actionName := "delete_user_by_id"

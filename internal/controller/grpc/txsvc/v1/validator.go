@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"context"
 
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
 )
 
 func (s *Service) CurrentValidators(ctx context.Context, _ *txpb.CurrentValidatorsRequest) (*txpb.CurrentValidatorsResponse, error) {

@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"github.com/kwilteam/kwil-db/api/protobuf/conversion"
-	"strings"
-
-	"github.com/kwilteam/kwil-db/pkg/abci"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/pkg/abci"
+	"github.com/kwilteam/kwil-db/pkg/grpc/client/v1/conversion"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,7 +16,7 @@ import (
 
 func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.TxQueryResponse, error) {
 	logger := s.log.With(zap.String("rpc", "TxQuery"),
-		zap.String("TxHash", strings.ToUpper(hex.EncodeToString(req.TxHash))))
+		zap.String("TxHash", hex.EncodeToString(req.TxHash)))
 	logger.Debug("query transaction")
 
 	cmtResult, err := s.chainClient.TxQuery(ctx, req.TxHash, false)

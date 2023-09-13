@@ -4,10 +4,10 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"os"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/spf13/cobra"
 )
@@ -67,9 +67,9 @@ func walletCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "generate-wallet",
 		Short: "Generates a wallet.",
-		Long:  privKeyDesc,
+		Long:  walletDesc,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			respGenKeyInfo := &respGenWalletInfo{}
+			var resp respGenWalletInfo
 
 			err := func() error {
 				generatedKeyInfo, err := generateWallet(walletType, encoding)
@@ -91,7 +91,7 @@ func walletCmd() *cobra.Command {
 					}
 				}
 
-				respGenKeyInfo.info = generatedKeyInfo
+				resp.info = generatedKeyInfo
 				return nil
 			}()
 
@@ -99,8 +99,7 @@ func walletCmd() *cobra.Command {
 				return err
 			}
 
-			msg := display.WrapMsg(respGenKeyInfo, err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(&resp, err, config.GetOutputFormat())
 		},
 	}
 

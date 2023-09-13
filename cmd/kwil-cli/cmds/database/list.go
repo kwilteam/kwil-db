@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/spf13/cobra"
@@ -40,8 +40,7 @@ A wallet can be specified with the --owner flag, otherwise the default wallet is
 				return nil
 			})
 
-			msg := display.WrapMsg(resp, err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(resp, err, config.GetOutputFormat())
 		},
 	}
 

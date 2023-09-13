@@ -3,18 +3,16 @@ package txsvc
 import (
 	"context"
 	"encoding/json"
-	"github.com/kwilteam/kwil-db/api/protobuf/conversion"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/grpc/client/v1/conversion"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallResponse, error) {
-
 	body, msg, err := convertActionCall(req)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "failed to convert action call: %s", err.Error())
@@ -34,7 +32,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 
 	executeResult, err := s.engine.Call(ctx, body.DBID, body.Action, args, msg)
 	if err != nil {
-		return nil, status.Errorf(codes.Unknown, "failed to execution action: %s", err.Error())
+		return nil, status.Errorf(codes.Unknown, "failed to execution view action: %s", err.Error())
 	}
 
 	btsResult, err := json.Marshal(executeResult)

@@ -2,11 +2,11 @@ package utils
 
 import (
 	"context"
+
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-
 	"github.com/spf13/cobra"
 )
 
@@ -21,11 +21,9 @@ func pingCmd() *cobra.Command {
 				var _err error
 				res, _err = client.Ping(ctx)
 				return _err
-
 			})
 
-			msg := display.WrapMsg(respStr(res), err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(respStr(res), err, config.GetOutputFormat())
 		},
 	}
 

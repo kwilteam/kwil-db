@@ -4,13 +4,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"os"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
-
 	"github.com/spf13/cobra"
 )
 
@@ -64,7 +63,6 @@ func generatePrivateKey(keyType string, addressFormat string, encoding string) (
 	return generatedKeyInfo, nil
 }
 
-// TODO : use walletCmd instead
 func privateKeyCmd() *cobra.Command {
 	var keyType, encoding, addressFormat, filePath string
 	var overwrite, mute bool
@@ -104,8 +102,7 @@ func privateKeyCmd() *cobra.Command {
 				return err
 			}
 
-			msg := display.WrapMsg(respGenKeyInfo, err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(respGenKeyInfo, err, config.GetOutputFormat())
 		},
 	}
 
@@ -140,11 +137,6 @@ If a file already exists at the specified path, the operation will fail.
 This can be overridden by passing the '--overwrite' flag.
 
 To mute the output, pass the '--quiet' flag.
-`
-
-const printKeyDesc = `Private Key: 	%s
-Public Key: 	%s
-Address: 	%s
 `
 
 // addressCreatorFunc is a function that creates an address from a public key.

@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
-
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
@@ -73,14 +72,13 @@ OR
 
 				resp.Data, err = clnt.CallAction(ctx, dbid, lowerName, tuples[0], client.Authenticated(*authenticate))
 				if err != nil {
-					return fmt.Errorf("error executing action: %w", err)
+					return fmt.Errorf("error calling action: %w", err)
 				}
 
 				return nil
 			})
 
-			msg := display.WrapMsg(&resp, err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(&resp, err, config.GetOutputFormat())
 		},
 	}
 

@@ -3,22 +3,23 @@ package utils
 import (
 	"encoding/hex"
 	"errors"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
+	"math/big"
+	"testing"
+
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client/types"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/stretchr/testify/assert"
-	"math/big"
-	"testing"
 )
 
 func Test_respStr(t *testing.T) {
 	s := respStr("pong")
 
-	ss, err := s.MarshalText()
+	bs, err := s.MarshalText()
 	assert.NoError(t, err)
-	assert.Equal(t, "pong", ss)
+	assert.Equal(t, "pong", string(bs))
 
 	sb, err := s.MarshalJSON()
 	assert.NoError(t, err)
@@ -26,15 +27,13 @@ func Test_respStr(t *testing.T) {
 }
 
 func Example_respStr_text() {
-	msg := display.WrapMsg(respStr("pong"), nil)
-	display.Print(msg, nil, "text")
+	display.Print(respStr("pong"), nil, "text")
 	// Output:
 	// pong
 }
 
 func Example_respStr_json() {
-	msg := display.WrapMsg(respStr("pong"), nil)
-	display.Print(msg, nil, "json")
+	display.Print(respStr("pong"), nil, "json")
 	// Output:
 	// {
 	//   "result": {
@@ -46,27 +45,22 @@ func Example_respStr_json() {
 
 func Example_respStr_json_withError() {
 	err := errors.New("an error")
-	msg := display.WrapMsg(respStr("pong"), err)
-	display.Print(msg, err, "json")
+	display.Print(respStr("pong"), err, "json")
 	// Output:
 	// {
-	//   "result": {
-	//     "message": "pong"
-	//   },
+	//   "result": "",
 	//   "error": "an error"
 	// }
 }
 
 func Example_respSig_text() {
-	msg := display.WrapMsg(respSig("signature"), nil)
-	display.Print(msg, nil, "text")
+	display.Print(respSig("signature"), nil, "text")
 	// Output:
 	// Signature: 7369676e6174757265
 }
 
 func Example_respSig_json() {
-	msg := display.WrapMsg(respSig("signature"), nil)
-	display.Print(msg, nil, "json")
+	display.Print(respSig("signature"), nil, "json")
 	// Output:
 	// {
 	//   "result": {
@@ -76,7 +70,7 @@ func Example_respSig_json() {
 	// }
 }
 
-func getExampleTxQueryResponse() *types.TxQueryResponse {
+func getExampleTxQueryResponse() *types.TcTxQueryResponse {
 	secp256k1EpSigHex := "cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e253475800"
 	secp256k1EpSigBytes, _ := hex.DecodeString(secp256k1EpSigHex)
 	secpSig := crypto.Signature{
@@ -97,10 +91,10 @@ func getExampleTxQueryResponse() *types.TxQueryResponse {
 		panic(err)
 	}
 
-	return &types.TxQueryResponse{
+	return &types.TcTxQueryResponse{
 		Hash:   []byte("1024"),
 		Height: 10,
-		Tx: &transactions.Transaction{
+		Tx: transactions.Transaction{
 			Body: &transactions.TransactionBody{
 				Payload:     payloadRLP,
 				PayloadType: rawPayload.Type(),
@@ -112,7 +106,7 @@ func getExampleTxQueryResponse() *types.TxQueryResponse {
 			Serialization: transactions.SignedMsgConcat,
 			Signature:     &secpSig,
 		},
-		TxResult: &transactions.TransactionResult{
+		TxResult: transactions.TransactionResult{
 			Code:      0,
 			Log:       "This is log",
 			GasUsed:   10,
@@ -123,10 +117,8 @@ func getExampleTxQueryResponse() *types.TxQueryResponse {
 	}
 }
 
-func Example_respTxInfo_text() {
-	msg := display.WrapMsg(&respTxInfo{Msg: getExampleTxQueryResponse()}, nil)
-
-	display.Print(msg, nil, "text")
+func Example_respTxQuery_text() {
+	display.Print(&respTxQuery{Msg: getExampleTxQueryResponse()}, nil, "text")
 	// Output:
 	// Transaction ID: 31303234
 	// Status: success
@@ -134,9 +126,8 @@ func Example_respTxInfo_text() {
 	// Log: This is log
 }
 
-func Example_respTxInfo_json() {
-	msg := display.WrapMsg(&respTxInfo{Msg: getExampleTxQueryResponse()}, nil)
-	display.Print(msg, nil, "json")
+func Example_respTxQuery_json() {
+	display.Print(&respTxQuery{Msg: getExampleTxQueryResponse()}, nil, "json")
 	// Output:
 	// {
 	//   "result": {
@@ -169,15 +160,12 @@ func Example_respTxInfo_json() {
 }
 
 func Example_respGenWalletInfo_text() {
-	msg := display.WrapMsg(&respGenWalletInfo{
+	display.Print(&respGenWalletInfo{
 		info: &generatedWalletInfo{
 			PrivateKey: "private_key",
 			PublicKey:  "public_key",
 			Address:    "address",
-		},
-	}, nil)
-
-	display.Print(msg, nil, "text")
+		}}, nil, "text")
 	// Output:
 	// PrivateKey: private_key
 	// PublicKey: 	public_key
@@ -185,15 +173,12 @@ func Example_respGenWalletInfo_text() {
 }
 
 func Example_respGenWalletInfo_json() {
-	msg := display.WrapMsg(&respGenWalletInfo{
+	display.Print(&respGenWalletInfo{
 		info: &generatedWalletInfo{
 			PrivateKey: "private_key",
 			PublicKey:  "public_key",
 			Address:    "address",
-		},
-	}, nil)
-
-	display.Print(msg, nil, "json")
+		}}, nil, "json")
 	// Output:
 	// {
 	//   "result": {
@@ -211,15 +196,13 @@ func Example_respKwilCliConfig_text() {
 		panic(err)
 	}
 
-	msg := display.WrapMsg(&respKwilCliConfig{
+	display.Print(&respKwilCliConfig{
 		cfg: &config.KwilCliConfig{
 			PrivateKey:  pk,
 			GrpcURL:     "localhost:9090",
 			TLSCertFile: "",
 		},
-	}, nil)
-
-	display.Print(msg, nil, "text")
+	}, nil, "text")
 	// Output:
 	// PrivateKey: ***
 	// GrpcURL: localhost:9090
@@ -232,15 +215,13 @@ func Example_respKwilCliConfig_json() {
 		panic(err)
 	}
 
-	msg := display.WrapMsg(&respKwilCliConfig{
+	display.Print(&respKwilCliConfig{
 		cfg: &config.KwilCliConfig{
 			PrivateKey:  pk,
 			GrpcURL:     "localhost:9090",
 			TLSCertFile: "",
 		},
-	}, nil)
-
-	display.Print(msg, nil, "json")
+	}, nil, "json")
 	// Output:
 	// {
 	//   "result": {

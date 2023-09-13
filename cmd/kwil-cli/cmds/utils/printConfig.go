@@ -1,9 +1,8 @@
 package utils
 
 import (
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +17,7 @@ func printConfigCmd() *cobra.Command {
 				return err
 			}
 
-			msg := display.WrapMsg(&respKwilCliConfig{cfg}, nil)
-			return display.Print(msg, nil, config.GetOutputFormat())
+			return display.Print(&respKwilCliConfig{cfg}, nil, config.GetOutputFormat())
 		},
 	}
 

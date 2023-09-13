@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-
 	"github.com/spf13/cobra"
 )
 
@@ -31,8 +30,7 @@ func dropCmd() *cobra.Command {
 				return nil
 			})
 
-			msg := display.WrapMsg(respTxHash(resp), err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(display.RespTxHash(resp), err, config.GetOutputFormat())
 		},
 	}
 	return cmd

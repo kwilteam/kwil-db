@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
-
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-
 	"github.com/spf13/cobra"
 )
 
@@ -21,27 +19,21 @@ func readSchemaCmd() *cobra.Command {
 		Long:  "",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var resp *respSchema
+			var resp respSchema
 			err := common.DialClient(cmd.Context(), common.WithoutPrivateKey, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return fmt.Errorf("you must specify either a database name with the --name, or a database id with the --dbid flag")
 				}
 
-				schema, err := client.GetSchema(ctx, dbid)
+				resp.Schema, err = client.GetSchema(ctx, dbid)
 				if err != nil {
-					return err
+					return fmt.Errorf("error getting schema: %w", err)
 				}
-
-				resp = &respSchema{
-					Schema: schema,
-				}
-
-				return nil
+				return err
 			})
 
-			msg := display.WrapMsg(resp, err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(&resp, err, config.GetOutputFormat())
 		},
 	}
 

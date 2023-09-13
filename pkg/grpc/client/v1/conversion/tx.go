@@ -2,11 +2,12 @@ package conversion
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"math/big"
+
+	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/client/types"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
-	"math/big"
 )
 
 // ConvertToAbciTx converts a protobuf transaction to an abci transaction
@@ -115,7 +116,7 @@ func TranslateToTxResult(resp *txpb.TransactionResult) *transactions.Transaction
 	}
 }
 
-func ConvertToTxQueryResp(resp *txpb.TxQueryResponse) (*types.TxQueryResponse, error) {
+func ConvertToTxQueryResp(resp *txpb.TxQueryResponse) (*types.TcTxQueryResponse, error) {
 	tx, err := ConvertToAbciTx(resp.Tx)
 	if err != nil {
 		return nil, err
@@ -123,10 +124,10 @@ func ConvertToTxQueryResp(resp *txpb.TxQueryResponse) (*types.TxQueryResponse, e
 
 	txResult := TranslateToTxResult(resp.TxResult)
 
-	return &types.TxQueryResponse{
+	return &types.TcTxQueryResponse{
 		Hash:     resp.Hash,
 		Height:   resp.Height,
-		Tx:       tx,
-		TxResult: txResult,
+		Tx:       *tx,
+		TxResult: *txResult,
 	}, nil
 }

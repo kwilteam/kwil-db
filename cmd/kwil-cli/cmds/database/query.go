@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
-
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-
 	"github.com/spf13/cobra"
 )
 
@@ -37,9 +35,7 @@ func queryCmd() *cobra.Command {
 					return nil
 				})
 
-			msg := display.WrapMsg(&resp, err)
-			display.Print(msg, err, config.GetOutputFormat())
-			return nil
+			return display.Print(&resp, err, config.GetOutputFormat())
 		},
 	}
 

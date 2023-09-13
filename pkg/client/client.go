@@ -1,31 +1,27 @@
+// Package client contains the client for interacting with the Kwil public API.
+// It's supposed to be used as go-sdk for Kwil, currently used by the Kwil CLI.
+
 package client
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/kwilteam/kwil-db/pkg/client/types"
-	"os"
 
+	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/client/types"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	engineUtils "github.com/kwilteam/kwil-db/pkg/engine/utils"
-	grpcClient "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
+	grpc "github.com/kwilteam/kwil-db/pkg/grpc/client/v1"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/kwilteam/kwil-db/pkg/validators"
-
-	"github.com/cstockton/go-conv"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"google.golang.org/grpc"
 	grpcCodes "google.golang.org/grpc/codes"
-	grpcCreds "google.golang.org/grpc/credentials"
-	grpcInsecure "google.golang.org/grpc/credentials/insecure"
 	grpcStatus "google.golang.org/grpc/status"
 )
 
@@ -33,71 +29,40 @@ var (
 	ErrNotFound = errors.New("not found")
 )
 
+// Client wraps the methods to interact with the Kwil public API.
+// All the transport level details are encapsulated in the transportClient.
 type Client struct {
-	client   *grpcClient.Client
-	datasets map[string]*transactions.Schema
-	Signer   crypto.Signer
-	logger   log.Logger
-	certFile string // the TLS certificate for the grpc Client
+	// transportClient is more useful for testing rn, I'd like to add http
+	// client as well to test HTTP api. This also enables test the cli by mocking.
+	transportClient types.TransportClient
+	Signer          crypto.Signer
+	logger          log.Logger
+
+	tlsCertFile string // the tls cert file path
 }
 
-func newTLSConfig(certFile string) (*tls.Config, error) {
-	rootCAs, _ := x509.SystemCertPool()
-	if rootCAs == nil {
-		rootCAs = x509.NewCertPool()
-	}
-	// NOTE: we're testing a special case of "-" meaning use TLS, but just use
-	// system CAs without appending a known server certificate. We may change
-	// this or formally document it.
-	if certFile != "-" {
-		b, err := os.ReadFile(certFile)
-		if err != nil {
-			return nil, err
-		}
-		if !rootCAs.AppendCertsFromPEM(b) {
-			return nil, fmt.Errorf("credentials: failed to append certificates")
-		}
-	}
-	return &tls.Config{
-		// For proper verification of the server-provided certificate chain
-		// during the TLS handshake, the root CAs, which may contain a custom
-		// certificate we appended above, are used by the client tls.Conn. If we
-		// disable verification with InsecureSkipVerify, the connection is still
-		// encrypted, but we cannot ensure the server is who they claim to be.
-		RootCAs:    rootCAs,
-		MinVersion: tls.VersionTLS12,
-	}, nil
-}
-
-// New creates a new client
-func New(host string, opts ...ClientOpt) (c *Client, err error) {
+// Dial creates a kwil client connection to the given target. It will by default
+// use grpc, but it can be overridden by passing WithTransportClient.
+func Dial(target string, opts ...Option) (c *Client, err error) {
 	c = &Client{
-		datasets: make(map[string]*transactions.Schema),
-		logger:   log.NewNoOp(), // by default we do not want to force client to log anything
+		logger: log.NewNoOp(), // by default, we do not want to force client to log anything
 	}
 
 	for _, opt := range opts {
 		opt(c)
 	}
 
-	var transOpt grpcCreds.TransportCredentials
-	if c.certFile == "" {
-		transOpt = grpcInsecure.NewCredentials()
-	} else {
-		tlsConfig, err := newTLSConfig(c.certFile)
+	if c.transportClient == nil {
+		transportOptions := []grpc.Option{grpc.WithTlsCert(c.tlsCertFile)}
+		transport, err := grpc.New(target, transportOptions...)
 		if err != nil {
 			return nil, err
 		}
-		transOpt = grpcCreds.NewTLS(tlsConfig)
-	}
-
-	c.client, err = grpcClient.New(host, grpc.WithTransportCredentials(transOpt))
-	if err != nil {
-		return nil, err
+		c.transportClient = transport
 	}
 
 	zapFields := []zapcore.Field{
-		zap.String("host", host),
+		zap.String("host", c.transportClient.GetTarget()),
 	}
 	if c.Signer != nil {
 		zapFields = append(zapFields, zap.String("from", c.Signer.PubKey().Address().String()))
@@ -109,22 +74,16 @@ func New(host string, opts ...ClientOpt) (c *Client, err error) {
 }
 
 func (c *Client) Close() error {
-	return c.client.Close()
+	return c.transportClient.Close()
 }
 
-// GetSchema returns the entity of a database
+// GetSchema gets a schema by dbid.
 func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
-	ds, ok := c.datasets[dbid]
-	if ok {
-		return ds, nil
-	}
-
-	ds, err := c.client.GetSchema(ctx, dbid)
+	ds, err := c.transportClient.GetSchema(ctx, dbid)
 	if err != nil {
 		return nil, err
 	}
 
-	c.datasets[dbid] = ds
 	return ds, nil
 }
 
@@ -139,7 +98,7 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 		zap.String("signature_type", tx.Signature.Type.String()),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	return c.client.Broadcast(ctx, tx)
+	return c.transportClient.Broadcast(ctx, tx)
 }
 
 // DropDatabase drops a database
@@ -162,12 +121,10 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (transactions.Tx
 		zap.String("signature_type", tx.Signature.Type.String()),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	res, err := c.client.Broadcast(ctx, tx)
+	res, err := c.transportClient.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-
-	delete(c.datasets, identifier.DBID)
 
 	return res, nil
 }
@@ -192,11 +149,11 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		return nil, err
 	}
 
-	c.logger.Debug("deploying database",
+	c.logger.Debug("execute action",
 		zap.String("signature_type", tx.Signature.Type.String()),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	return c.client.Broadcast(ctx, tx)
+	return c.transportClient.Broadcast(ctx, tx)
 }
 
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
@@ -236,7 +193,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		}
 	}
 
-	res, err := c.client.Call(ctx, msg)
+	res, err := c.transportClient.Call(ctx, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +236,7 @@ func DecodeOutputs(bts []byte) ([]map[string]any, error) {
 
 // Query executes a query
 func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records, error) {
-	res, err := c.client.Query(ctx, dbid, query)
+	res, err := c.transportClient.Query(ctx, dbid, query)
 	if err != nil {
 		return nil, err
 	}
@@ -288,19 +245,19 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records
 }
 
 func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error) {
-	return c.client.ListDatabases(ctx, ownerPubKey)
+	return c.transportClient.ListDatabases(ctx, ownerPubKey)
 }
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
-	return c.client.Ping(ctx)
+	return c.transportClient.Ping(ctx)
 }
 
 func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*balances.Account, error) {
-	return c.client.GetAccount(ctx, pubKey)
+	return c.transportClient.GetAccount(ctx, pubKey)
 }
 
 func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*validators.JoinRequest, error) {
-	res, err := c.client.ValidatorJoinStatus(ctx, pubKey)
+	res, err := c.transportClient.ValidatorJoinStatus(ctx, pubKey)
 	if err != nil {
 		if stat, ok := grpcStatus.FromError(err); ok {
 			if stat.Code() == grpcCodes.NotFound {
@@ -313,7 +270,7 @@ func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*valid
 }
 
 func (c *Client) CurrentValidators(ctx context.Context) ([]*validators.Validator, error) {
-	return c.client.CurrentValidators(ctx)
+	return c.transportClient.CurrentValidators(ctx)
 }
 
 func (c *Client) ApproveValidator(ctx context.Context, joiner []byte) ([]byte, error) {
@@ -329,7 +286,7 @@ func (c *Client) ApproveValidator(ctx context.Context, joiner []byte) ([]byte, e
 		return nil, err
 	}
 
-	hash, err := c.client.Broadcast(ctx, tx)
+	hash, err := c.transportClient.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +322,7 @@ func (c *Client) validatorUpdate(ctx context.Context, power int64) ([]byte, erro
 		return nil, err
 	}
 
-	hash, err := c.client.Broadcast(ctx, tx)
+	hash, err := c.transportClient.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -404,8 +361,8 @@ func convertTuple(tuple []any) ([]string, error) {
 }
 
 // TxQuery get transaction by hash
-func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*types.TxQueryResponse, error) {
-	res, err := c.client.TxQuery(ctx, txHash)
+func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*types.TcTxQueryResponse, error) {
+	res, err := c.transportClient.TxQuery(ctx, txHash)
 	if err != nil {
 		return nil, err
 	}

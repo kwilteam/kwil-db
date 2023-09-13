@@ -8,7 +8,7 @@ import (
 	"io"
 	"runtime"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/internal/pkg/build"
 	"github.com/spf13/cobra"
@@ -43,27 +43,27 @@ func (v *respVersionInfo) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.Info)
 }
 
-func (v *respVersionInfo) MarshalText() (string, error) {
+func (v *respVersionInfo) MarshalText() ([]byte, error) {
 	tmpl := template.New("version")
 	// load different template according to the opts.format
 	tmpl, err := tmpl.Parse(versionTemplate)
 	if err != nil {
-		return "", fmt.Errorf("template parsing error: %w", err)
+		return []byte(""), fmt.Errorf("template parsing error: %w", err)
 	}
 
 	var buf bytes.Buffer
 
 	err = tmpl.Execute(&buf, v.Info)
 	if err != nil {
-		return "", fmt.Errorf("template executing error: %w", err)
+		return []byte(""), fmt.Errorf("template executing error: %w", err)
 	}
 
 	bs, err := io.ReadAll(&buf)
 	if err != nil {
-		return "", err
+		return []byte(""), err
 	}
 
-	return string(bs), nil
+	return bs, nil
 }
 
 func NewVersionCmd() *cobra.Command {
@@ -84,8 +84,7 @@ func NewVersionCmd() *cobra.Command {
 				},
 			}
 
-			msg := display.WrapMsg(resp, nil)
-			return display.Print(msg, nil, config.GetOutputFormat())
+			return display.Print(resp, nil, config.GetOutputFormat())
 		},
 	}
 

@@ -2,10 +2,9 @@ package utils
 
 import (
 	"fmt"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-
 	"github.com/spf13/cobra"
 )
 
@@ -35,8 +34,7 @@ func signCmd() *cobra.Command {
 				return nil
 			}()
 
-			msg := display.WrapMsg(respSig(sig), err)
-			return display.Print(msg, err, config.GetOutputFormat())
+			return display.Print(respSig(sig), err, config.GetOutputFormat())
 		},
 	}
 
