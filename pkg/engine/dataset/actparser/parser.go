@@ -39,7 +39,7 @@ func ParseActionStmt(stmt string, errorListener *sqlparser.ErrorListener, trace 
 		}
 
 		if err != nil {
-			errorListener.Add(err.Error())
+			errorListener.AddError(err)
 		}
 
 		err = errorListener.Err()

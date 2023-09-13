@@ -39,7 +39,7 @@ func ParseSql(sql string, currentLine int, errorListener *ErrorListener, trace b
 		}
 
 		if err != nil {
-			errorListener.Add(err.Error())
+			errorListener.AddError(err)
 		}
 
 		err = errorListener.Err()

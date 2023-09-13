@@ -1,10 +1,10 @@
 package sqlparser
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-	"github.com/pkg/errors"
 )
 
 var ErrInvalidSyntax = errors.New("syntax error")
@@ -15,6 +15,19 @@ func (e *ErrorList) Add(msg string) {
 	*e = append(*e, errors.New(msg))
 }
 
+func (e *ErrorList) AddError(err error) {
+	*e = append(*e, err)
+}
+
+// Unwrap is used by the standard library's errors.Is function.
+func (e ErrorList) Unwrap() []error {
+	return e
+}
+
+var _ error = ErrorList{}
+var _ error = (*ErrorList)(nil)
+
+// Error satisfies the standard library error interface.
 func (e ErrorList) Error() string {
 	switch len(e) {
 	case 0:
@@ -47,8 +60,7 @@ func NewErrorListener() *ErrorListener {
 
 func (s *ErrorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol interface{}, line, column int, msg string, e antlr.RecognitionException) {
 	//symbol := offendingSymbol.(antlr.Token)
-	info := fmt.Sprintf("syntax error: line %d:%d %s", line, column, msg)
-	s.Add(errors.Wrap(ErrInvalidSyntax, info).Error())
+	s.AddError(fmt.Errorf(`%w: line %d:%d "%s"`, ErrInvalidSyntax, line, column, msg))
 }
 
 func (s *ErrorListener) ReportAmbiguity(recognizer antlr.Parser, dfa *antlr.DFA, startIndex, stopIndex int, exact bool, ambigAlts *antlr.BitSet, configs antlr.ATNConfigSet) {
