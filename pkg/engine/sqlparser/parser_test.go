@@ -1,6 +1,7 @@
 package sqlparser
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -2267,8 +2268,8 @@ func TestParseRawSQL_syntax_invalid(t *testing.T) {
 			_, err := ParseSql(tt.input, 1, nil, *trace)
 			assert.Errorf(t, err, "Parser should complain abould invalid syntax")
 
-			if err == nil || !strings.Contains(err.Error(), ErrInvalidSyntax.Error()) {
-				t.Errorf("ParseRawSQL() expected error: %s, got %s", ErrInvalidSyntax, err)
+			if !errors.Is(err, ErrInvalidSyntax) {
+				t.Fatalf("ParseRawSQL() expected error: %s, got %s", ErrInvalidSyntax, err)
 			}
 
 			//if el.symbol != tt.causeSymbol {
