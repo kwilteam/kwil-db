@@ -126,12 +126,12 @@ func (a *AtomicCommitter) Begin(ctx context.Context) (err error) {
 
 // Commit commits the atomic session.
 // It can be given a callback function to handle any errors that occur during the apply phase (which proceeds asynchronously) after this function returns.
-func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error)) (err error) {
+func (a *AtomicCommitter) Commit(ctx context.Context) (err error) {
 	a.mu.Lock()
+	defer a.mu.Unlock()
 
 	// if no session in progress, then return without cancelling
 	if a.phase != CommitPhaseCommit {
-		a.mu.Unlock()
 		return phaseError("Commit", CommitPhaseCommit, a.phase)
 	}
 	a.phase = CommitPhaseApply
@@ -141,14 +141,12 @@ func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error))
 
 	// if session is in progress but the committer is closed, then cancel the session
 	if a.closed {
-		a.mu.Unlock()
 		return ErrClosed
 	}
 
 	// begin the commit in the WAL
 	err = a.wal.WriteBegin(ctx)
 	if err != nil {
-		a.mu.Unlock()
 		return err
 	}
 
@@ -156,25 +154,18 @@ func (a *AtomicCommitter) Commit(ctx context.Context, applyCallback func(error))
 	// any changes to the WAL
 	err = a.endCommit(ctx)
 	if err != nil {
-		a.mu.Unlock()
 		return err
 	}
 
 	// commit the WAL
 	err = a.wal.WriteCommit(ctx)
 	if err != nil {
-		a.mu.Unlock()
 		return err
 	}
 
-	go func() {
-		err2 := a.apply(ctx)
-		applyCallback(err2)
-		a.phase = CommitPhaseNone
-		a.mu.Unlock()
-	}()
+	a.phase = CommitPhaseNone
 
-	return nil
+	return a.apply(ctx)
 }
 
 // ID returns a deterministic identifier representative of all state changes that have occurred in the session.
