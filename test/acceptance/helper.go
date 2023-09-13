@@ -204,6 +204,8 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 		r.Teardown()
 	})
 
+	// NOTE: if you run with debugger image, you need to attach to the debugger
+	// before the timeout
 	err = dc.
 		WithEnv(envs).
 		WaitForService(
