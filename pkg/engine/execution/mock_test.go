@@ -24,6 +24,10 @@ func (m *mockDatastore) Prepare(ctx context.Context, uery string) (execution.Pre
 	}, nil
 }
 
+func (m *mockDatastore) Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error) {
+	return []map[string]any{}, nil
+}
+
 type mockPreparedStatement struct {
 	mutative bool
 }

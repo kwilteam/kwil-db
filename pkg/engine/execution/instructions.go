@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -89,7 +90,27 @@ func evalDMLPrepare(ctx *procedureContext, eng *Engine, args ...any) error {
 }
 
 func evalDMLExecute(ctx *procedureContext, eng *Engine, args ...any) error {
-	if len(args) != 1 {
+	nonMut := ctx.nonMutative
+	if ctx.committedReadOnly {
+		if !nonMut {
+			return errors.New("procedure cannot be mutative in read-only contexty")
+		}
+		if len(args) != 2 {
+			return fmt.Errorf("%w: dml execute requires 2 arguments, got %d", ErrIncorrectNumArgs, len(args))
+		}
+		stmt, ok := args[1].(string)
+		if !ok {
+			return fmt.Errorf("%w: expected string, got %T", ErrIncorrectInputType, args[0])
+		}
+		var err error
+		ctx.lastDmlResult, err = eng.db.Query(ctx.ctx, stmt, ctx.values)
+		if err != nil {
+			return fmt.Errorf("failed to execute statement: %w", err)
+		}
+		return nil
+	}
+
+	if (!nonMut && len(args) != 1) && (nonMut && len(args) != 2) { // may be an extra one if it's non-mutative
 		return fmt.Errorf("%w: dml execute requires 1 argument, got %d", ErrIncorrectNumArgs, len(args))
 	}
 
@@ -103,12 +124,7 @@ func evalDMLExecute(ctx *procedureContext, eng *Engine, args ...any) error {
 		return fmt.Errorf("%w: '%s'", ErrUnknownPreparedStatement, stmtName)
 	}
 
-	ctxMut := ctx.mustBeNonMutative
-	if ctxMut {
-		fmt.Print("mutative")
-	}
-
-	if ctx.mustBeNonMutative && preparedStmt.IsMutative() {
+	if nonMut && preparedStmt.IsMutative() {
 		return fmt.Errorf("%w: '%s'", ErrMutativeStatement, stmtName)
 	}
 
