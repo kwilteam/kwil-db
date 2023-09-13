@@ -1,13 +1,13 @@
 package system
 
 import (
+	"fmt"
 	"html/template"
 	"os"
 	"runtime"
 	"text/tabwriter"
 
 	"github.com/kwilteam/kwil-db/internal/pkg/build"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/go-rosetta"
 )
@@ -44,7 +44,7 @@ func NewVersionCmd() *cobra.Command {
 		Short: "Show the kwil-cli version information",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runVesrion(&opts)
+			return runVersion(&opts)
 		},
 	}
 
@@ -62,12 +62,12 @@ func arch() string {
 	return arch
 }
 
-func runVesrion(opts *versionOptions) error {
+func runVersion(opts *versionOptions) error {
 	tmpl := template.New("version")
 	// load different template according to the opts.format
 	tmpl, err := tmpl.Parse(versionTemplate)
 	if err != nil {
-		return errors.Wrap(err, "template parsing error")
+		return fmt.Errorf("template parsing error: %w", err)
 	}
 
 	vd := versionInfo{
