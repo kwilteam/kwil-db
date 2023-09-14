@@ -156,15 +156,7 @@ func Test_Session(t *testing.T) {
 					return err
 				}
 
-				applyErr := make(chan error)
-				err = committer.Commit(ctx, func(err error) {
-					applyErr <- err
-				})
-				if err != nil {
-					return err
-				}
-
-				err = <-applyErr
+				err = committer.Commit(ctx)
 				if err != nil {
 					return err
 				}

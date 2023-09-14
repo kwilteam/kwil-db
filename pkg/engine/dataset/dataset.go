@@ -151,7 +151,12 @@ func (d *Dataset) Call(ctx context.Context, action string, args []any, opts *TxO
 		return nil, ErrCallerNotOwner
 	}
 
-	return d.executeOnce(ctx, proc, args, d.getExecutionOpts(proc, opts)...)
+	if len(args) != len(proc.Args) {
+		return nil, fmt.Errorf("expected %d args, got %d", len(proc.Args), len(args))
+	}
+
+	execOpts := append(d.getExecutionOpts(proc, opts), execution.CommittedOnly())
+	return d.engine.ExecuteProcedure(ctx, proc.Name, args, execOpts...)
 }
 
 // getProcedure gets a procedure.  If the procedure is not found, it returns an error.
