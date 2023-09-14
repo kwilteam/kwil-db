@@ -97,11 +97,13 @@ func Test_UpgradingProcedures(t *testing.T) {
 					&tc.storedProcedure,
 				},
 			}
-			database := db.DB{
-				Sqldb: datastore,
-			}
 
 			ctx := context.Background()
+			database, err := db.NewDB(ctx, datastore)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
 			returnedProcedures, err := database.ListProcedures(ctx)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)

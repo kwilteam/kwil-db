@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql"
@@ -31,6 +32,8 @@ type SqliteClient struct {
 
 	// log is self-explanatory.
 	log log.Logger
+
+	writerMtx sync.Mutex
 }
 
 func NewSqliteStore(name string, opts ...SqliteOpts) (*SqliteClient, error) {
@@ -71,6 +74,8 @@ func WrapSqliteConn(conn *sqlite.Connection, logger log.Logger) (*SqliteClient, 
 
 // Execute executes a statement.
 func (s *SqliteClient) Execute(ctx context.Context, stmt string, args map[string]any) error {
+	s.writerMtx.Lock()
+	defer s.writerMtx.Unlock()
 	return s.conn.Execute(stmt, args)
 }
 
@@ -106,7 +111,8 @@ func (s *SqliteClient) Prepare(stmt string) (sql.Statement, error) {
 // It SHOULD be read-only, but there is nothing forcing it to be. use with caution
 // This should get deleted once we redo the engine
 func (w *SqliteClient) QueryUnsafe(ctx context.Context, query string, args map[string]any) ([]map[string]any, error) {
-
+	w.writerMtx.Lock()
+	defer w.writerMtx.Unlock()
 	stmt, err := w.Prepare(query)
 	if err != nil {
 		return nil, err
@@ -172,6 +178,8 @@ func ResultsfromReader(reader io.Reader) ([]map[string]any, error) {
 }
 
 func (s *SqliteClient) CreateSession() (sql.Session, error) {
+	s.writerMtx.Lock()
+	defer s.writerMtx.Unlock()
 	sess, err := s.conn.CreateSession()
 	if err != nil {
 		return nil, err
@@ -183,17 +191,25 @@ func (s *SqliteClient) CreateSession() (sql.Session, error) {
 }
 
 func (s *SqliteClient) ApplyChangeset(reader io.Reader) error {
+	s.writerMtx.Lock()
+	defer s.writerMtx.Unlock()
 	return s.conn.ApplyChangeset(reader)
 }
 
 func (s *SqliteClient) CheckpointWal() error {
+	s.writerMtx.Lock()
+	defer s.writerMtx.Unlock()
 	return s.conn.CheckpointWal()
 }
 
 func (s *SqliteClient) DisableForeignKey() error {
+	s.writerMtx.Lock()
+	defer s.writerMtx.Unlock()
 	return s.conn.DisableForeignKey()
 }
 
 func (s *SqliteClient) EnableForeignKey() error {
+	s.writerMtx.Lock()
+	defer s.writerMtx.Unlock()
 	return s.conn.EnableForeignKey()
 }

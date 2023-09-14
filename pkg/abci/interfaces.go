@@ -60,7 +60,7 @@ type AtomicCommitter interface {
 	ClearWal(ctx context.Context) error
 	Begin(ctx context.Context) error
 	ID(ctx context.Context) ([]byte, error)
-	Commit(ctx context.Context, applyCallback func(error)) error
+	Commit(ctx context.Context) error
 }
 
 // KVStore is an interface for a basic key-value store
