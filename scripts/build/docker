@@ -20,6 +20,6 @@ BUILD_ARGS="${BUILD_ARGS} --build-arg version=${GIT_VERSION}"
 BUILD_ARGS="${BUILD_ARGS} --build-arg git_commit=${GIT_COMMIT}"
 BUILD_ARGS="${BUILD_ARGS} --build-arg build_time=${BUILD_TIME}"
 
-export DOCKDER_BUILDKIT=1
+export DOCKER_BUILDKIT=1
 
-docker build .  -t "${IMAGE}:${GIT_VERSION}" -t "${IMAGE}:latest" ${BUILD_ARGS} -f "./build/package/docker/${DOCKER_FILE}" --progress=plain
+docker build .  -t "${IMAGE}:${GIT_VERSION}" -t "${IMAGE}:latest" ${BUILD_ARGS} -f "./build/package/docker/${DOCKER_FILE}" --progress=auto
