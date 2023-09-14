@@ -30,7 +30,7 @@ func queryCmd() *cobra.Command {
 				}
 
 				results := res.ExportString()
-				printTable(results)
+				printTableTrunc(results)
 
 				return nil
 			})

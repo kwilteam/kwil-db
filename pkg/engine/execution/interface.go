@@ -14,7 +14,10 @@ type Initializer interface {
 
 // Datastore is an interface for a datastore, usually a sqlite DB.
 type Datastore interface {
+	// Prepare will be used for RW execution.
 	Prepare(ctx context.Context, query string) (PreparedStatement, error)
+	// Query will be used for RO execution.
+	Query(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
 }
 
 type PreparedStatement interface {

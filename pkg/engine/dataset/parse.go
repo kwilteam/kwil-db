@@ -147,6 +147,7 @@ func parseAction(procedure *types.Procedure) (engineProcedure *execution.Procedu
 	var procedureInstructions []*execution.InstructionExecution
 	loaderInstructions = []*execution.InstructionExecution{}
 
+	mut := procedure.IsMutative()
 	for _, stmt := range procedure.Statements {
 		parsedStmt, err := actparser.Parse(stmt)
 		if err != nil {
@@ -158,7 +159,7 @@ func parseAction(procedure *types.Procedure) (engineProcedure *execution.Procedu
 
 		switch stmtType := parsedStmt.(type) {
 		case *actparser.DMLStmt:
-			stmtInstructions, stmtLoaderInstructions, err = convertDml(stmtType)
+			stmtInstructions, stmtLoaderInstructions, err = convertDml(stmtType, mut)
 		case *actparser.ExtensionCallStmt:
 			stmtInstructions, stmtLoaderInstructions, err = convertExtensionExecute(stmtType)
 		case *actparser.ActionCallStmt:
@@ -185,9 +186,8 @@ func parseAction(procedure *types.Procedure) (engineProcedure *execution.Procedu
 	}, loaderInstructions, nil
 }
 
-func convertDml(dml *actparser.DMLStmt) (procedureInstructions []*execution.InstructionExecution, loaderInstructions []*execution.InstructionExecution, err error) {
+func convertDml(dml *actparser.DMLStmt, mut bool) (procedureInstructions, loaderInstructions []*execution.InstructionExecution, err error) {
 	uniqueName := randomHash.getRandomHash()
-
 	loadOp := &execution.InstructionExecution{
 		Instruction: execution.OpDMLPrepare,
 		Args: []any{
@@ -202,11 +202,17 @@ func convertDml(dml *actparser.DMLStmt) (procedureInstructions []*execution.Inst
 			uniqueName,
 		},
 	}
+	if !mut { // i.e. may be executed with read-only Query
+		// The entire statement would be unused for mutative statements since
+		// they always use a prepared statement. Executions doing a read-only
+		// query for uncommittted data will not use the prepared statement.
+		procedureOp.Args = append(procedureOp.Args, dml.Statement)
+	}
 
 	return []*execution.InstructionExecution{procedureOp}, []*execution.InstructionExecution{loadOp}, nil
 }
 
-func convertExtensionExecute(ext *actparser.ExtensionCallStmt) (procedureInstructions []*execution.InstructionExecution, loaderInstructions []*execution.InstructionExecution, err error) {
+func convertExtensionExecute(ext *actparser.ExtensionCallStmt) (procedureInstructions, loaderInstructions []*execution.InstructionExecution, err error) {
 	var setters []*execution.InstructionExecution
 
 	var args []string
@@ -235,7 +241,7 @@ func convertExtensionExecute(ext *actparser.ExtensionCallStmt) (procedureInstruc
 	return append(setters, procedureOp), []*execution.InstructionExecution{}, nil
 }
 
-func convertProcedureCall(action *actparser.ActionCallStmt) (procedureInstructions []*execution.InstructionExecution, loaderInstructions []*execution.InstructionExecution, err error) {
+func convertProcedureCall(action *actparser.ActionCallStmt) (procedureInstructions, loaderInstructions []*execution.InstructionExecution, err error) {
 	var setters []*execution.InstructionExecution
 
 	var args []string
