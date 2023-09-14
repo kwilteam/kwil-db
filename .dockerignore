@@ -7,3 +7,17 @@ build/package/docker/
 .gitattributes
 .gitignore
 .DS_Store
+test/
+proto/
+deployments/
+.editorconfig
+.gitmodules
+.golangci.yml
+.goreleaser.yaml
+.local_env
+cmd/kwild/kwild
+cmd/kwil-admin/kwil-admin
+cmd/kwil-cli/kwil-cli
+**/__debug_bin.exe
+**/__debug_bin*
+**/_*
