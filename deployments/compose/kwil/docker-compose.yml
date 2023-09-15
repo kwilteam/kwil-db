@@ -7,6 +7,7 @@ services:
     ports:
       - "8080:8080"
       - "50051:50051"
+      - "50151:50151"
       - "26656:26656"
       - "26657:26657"
     environment:
@@ -20,6 +21,7 @@ services:
     command: |
       --root_dir=/app/.kwild
       --log.level=debug
+      --app.admin_listen_addr=:50151
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
@@ -31,6 +33,7 @@ services:
     ports:
       - "8081:8080"
       - "50052:50051"
+      - "50152:50151"
       - "26666:26656"
       - "26667:26657"
     environment:
@@ -44,6 +47,7 @@ services:
     command: |
       --root_dir=/app/.kwild
       --log.level=debug
+      --app.admin_listen_addr=:50151
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
@@ -55,6 +59,7 @@ services:
     ports:
       - "8082:8080"
       - "50053:50051"
+      - "50153:50151"
       - "26676:26656"
       - "26677:26657"
     environment:
@@ -68,6 +73,7 @@ services:
     command: |
       --root_dir=/app/.kwild
       --log.level=debug
+      --app.admin_listen_addr=:50151
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656

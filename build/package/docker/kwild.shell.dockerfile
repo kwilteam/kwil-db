@@ -19,5 +19,5 @@ WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/kwild-* ./kwild
 COPY --from=stage /app/dist/kwil-admin-* ./kwil-admin
-EXPOSE 50051 8080 26656 26657
+EXPOSE 50051 50151 8080 26656 26657
 ENTRYPOINT ["/app/kwild"]

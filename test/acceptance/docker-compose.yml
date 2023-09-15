@@ -7,6 +7,7 @@ services:
     ports:
       - "8080:8080"
       - "50051:50051"
+      - "50151:50151"
       - "26656:26656"
       - "26657:26657"
       - "40000:40000" # debugger
@@ -24,6 +25,7 @@ services:
       --root_dir=/app/kwil
       --log.level=${LOG_LEVEL:-info}
       --app.extension_endpoints=ext:50051
+      --app.admin_listen_addr=:50151
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
@@ -33,7 +35,7 @@ services:
     container_name: math_ext
     image: kwilbrennan/extensions-math:multi-arch
     ports:
-      - "50151:50051"
+      - "50061:50051"
     networks:
       - kwil-act-testnet
 

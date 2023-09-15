@@ -18,6 +18,10 @@ const (
 	ConfigFileName      = "config.toml"
 	PrivateKeyFileName  = "private_key"
 	DefaultSnapshotsDir = "snapshots"
+
+	DefaultTLSCertFile  = "rpc.cert"
+	defaultTLSKeyFile   = "rpc.key"
+	defaultAdminClients = "clients.pem"
 )
 
 var DefaultSQLitePath = filepath.Join("data", "kwild.db") // a folder, not a file
@@ -41,6 +45,7 @@ type Logging struct {
 type AppConfig struct {
 	GrpcListenAddress  string         `mapstructure:"grpc_listen_addr"`
 	HTTPListenAddress  string         `mapstructure:"http_listen_addr"`
+	AdminListenAddress string         `mapstructure:"admin_listen_addr"`
 	PrivateKeyPath     string         `mapstructure:"private_key_path"`
 	SqliteFilePath     string         `mapstructure:"sqlite_file_path"`
 	ExtensionEndpoints []string       `mapstructure:"extension_endpoints"`
@@ -49,6 +54,7 @@ type AppConfig struct {
 	SnapshotConfig     SnapshotConfig `mapstructure:"snapshots"`
 	TLSCertFile        string         `mapstructure:"tls_cert_file"`
 	TLSKeyFile         string         `mapstructure:"tls_key_file"`
+	EnableRPCTLS       bool           `mapstructure:"rpctls"`
 	Hostname           string         `mapstructure:"hostname"`
 }
 
@@ -246,11 +252,12 @@ func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
 func DefaultConfig() *KwildConfig {
 	return &KwildConfig{
 		AppCfg: &AppConfig{
-			GrpcListenAddress: "localhost:50051",
-			HTTPListenAddress: "localhost:8080",
-			SqliteFilePath:    DefaultSQLitePath,
-			WithoutGasCosts:   true,
-			WithoutNonces:     false,
+			GrpcListenAddress:  "localhost:50051",
+			HTTPListenAddress:  "localhost:8080",
+			AdminListenAddress: "localhost:50151",
+			SqliteFilePath:     DefaultSQLitePath,
+			WithoutGasCosts:    true,
+			WithoutNonces:      false,
 			SnapshotConfig: SnapshotConfig{
 				Enabled:         false,
 				RecurringHeight: uint64(10000),
@@ -312,13 +319,15 @@ func (cfg *KwildConfig) LogConfig() *log.Config {
 }
 
 func (cfg *KwildConfig) configureCerts() {
-	if cfg.AppCfg.TLSCertFile != "" {
-		cfg.AppCfg.TLSCertFile = rootify(cfg.AppCfg.TLSCertFile, cfg.RootDir)
+	if cfg.AppCfg.TLSCertFile == "" {
+		cfg.AppCfg.TLSCertFile = DefaultTLSCertFile
 	}
+	cfg.AppCfg.TLSCertFile = rootify(cfg.AppCfg.TLSCertFile, cfg.RootDir)
 
-	if cfg.AppCfg.TLSKeyFile != "" {
-		cfg.AppCfg.TLSKeyFile = rootify(cfg.AppCfg.TLSKeyFile, cfg.RootDir)
+	if cfg.AppCfg.TLSKeyFile == "" {
+		cfg.AppCfg.TLSKeyFile = defaultTLSKeyFile
 	}
+	cfg.AppCfg.TLSKeyFile = rootify(cfg.AppCfg.TLSKeyFile, cfg.RootDir)
 }
 
 func rootify(path, rootDir string) string {

@@ -21,11 +21,13 @@ func addKwildFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.StringVar(&cfg.AppCfg.PrivateKeyPath, "app.private_key_path", cfg.AppCfg.PrivateKeyPath, "Path to private key file")
 	flagSet.StringVar(&cfg.AppCfg.GrpcListenAddress, "app.grpc_listen_addr", cfg.AppCfg.GrpcListenAddress, "Kwild app gRPC listen address")
 	flagSet.StringVar(&cfg.AppCfg.HTTPListenAddress, "app.http_listen_addr", cfg.AppCfg.HTTPListenAddress, "Kwild app HTTP listen address")
+	flagSet.StringVar(&cfg.AppCfg.AdminListenAddress, "app.admin_listen_addr", cfg.AppCfg.AdminListenAddress, "Kwild app gRPC listen address")
 	flagSet.StringVar(&cfg.AppCfg.SqliteFilePath, "app.sqlite_file_path", cfg.AppCfg.SqliteFilePath, "Kwild app sqlite file path")
 	flagSet.BoolVar(&cfg.AppCfg.WithoutGasCosts, "app.without_gas_costs", cfg.AppCfg.WithoutGasCosts, "Kwild app without gas costs")
 	flagSet.BoolVar(&cfg.AppCfg.WithoutNonces, "app.without_nonces", cfg.AppCfg.WithoutNonces, "Kwild app without nonces")
 	flagSet.StringVar(&cfg.AppCfg.TLSCertFile, "app.tls_cert_file", cfg.AppCfg.TLSCertFile, "TLS certificate file path for RPC Server")
 	flagSet.StringVar(&cfg.AppCfg.TLSKeyFile, "app.tls_key_file", cfg.AppCfg.TLSKeyFile, "TLS key file path for RPC Server")
+	flagSet.BoolVar(&cfg.AppCfg.EnableRPCTLS, "app.rpctls", cfg.AppCfg.EnableRPCTLS, "Kwild app without nonces")
 	flagSet.StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "Kwild Server hostname")
 
 	// Extension endpoints flags

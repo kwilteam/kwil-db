@@ -40,3 +40,19 @@ tasks:
     generates:
       - api/protobuf/*/v1/*.go
       - api/openapi-spec/api/v1/api.swagger.json
+
+  admin:v0:
+    desc: Compiles admin v0 protobuf
+    preconditions:
+      - sh: a="libprotoc 23.4";b=`protoc --version`;test "$a" = "$b"
+        msg: "Protobuf compiler version is not 23.4, please install the correct version"
+    cmds:
+      - |
+        protoc -I ./proto \
+        --go_out=. --go_opt module=github.com/kwilteam/kwil-db \
+        --go-grpc_out=. --go-grpc_opt module=github.com/kwilteam/kwil-db \
+        proto/kwil/admin/v0/*.proto
+    sources:
+      - proto/kwil/admin/v0/*.proto
+    generates:
+      - api/protobuf/admin/v0/*.go
