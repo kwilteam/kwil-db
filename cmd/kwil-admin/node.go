@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -33,7 +34,9 @@ type NodeCmd struct {
 
 	Ping    *NodePingCmd       `arg:"subcommand:ping" help:"Check connectivity with the node's admin RPC interface"`
 	Version *NodeVerCmd        `arg:"subcommand:version" help:"Report the version of the remote node"`
-	GenKey  *NodeGenAuthKeyCmd `arg:"subcommand:gen-auth-key"`
+	Status  *NodeStatusCmd     `arg:"subcommand:status" help:"Show detailed node status"`
+	Peers   *NodePeersCmd      `arg:"subcommand:peers" help:"Show info on all current peers"`
+	GenKey  *NodeGenAuthKeyCmd `arg:"subcommand:gen-auth-key" help:"Generate a client key pair."`
 }
 
 type NodeGenAuthKeyCmd struct{}
@@ -157,5 +160,43 @@ func (pc *NodeVerCmd) run(ctx context.Context, a *args) error {
 		return err
 	}
 	fmt.Printf("kwild version %v\n", ver)
+	return nil
+}
+
+type NodeStatusCmd struct{}
+
+func (nsc *NodeStatusCmd) run(ctx context.Context, a *args) error {
+	client, err := a.Node.newClient()
+	if err != nil {
+		return err
+	}
+	status, err := client.Status(ctx)
+	if err != nil {
+		return err
+	}
+	statusJSON, err := json.MarshalIndent(status, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(statusJSON))
+	return nil
+}
+
+type NodePeersCmd struct{}
+
+func (nsc *NodePeersCmd) run(ctx context.Context, a *args) error {
+	client, err := a.Node.newClient()
+	if err != nil {
+		return err
+	}
+	peers, err := client.Peers(ctx)
+	if err != nil {
+		return err
+	}
+	peersJSON, err := json.MarshalIndent(peers, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(peersJSON))
 	return nil
 }

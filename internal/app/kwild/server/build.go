@@ -84,7 +84,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	// admin service and server
-	admsvc := buildAdminSvc(d)
+	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient})
 	admServer := buildAdminServer(d, admsvc)
 
 	return &Server{
@@ -175,8 +175,8 @@ func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.Accoun
 	)
 }
 
-func buildAdminSvc(d *coreDependencies) *admSvc.Service {
-	return admSvc.NewService(
+func buildAdminSvc(d *coreDependencies, node admSvc.Node) *admSvc.Service {
+	return admSvc.NewService(node,
 		admSvc.WithLogger(*d.log.Named("admin-service")),
 	)
 }

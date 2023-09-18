@@ -41,7 +41,9 @@ func defaultKwilAdminRoot() string {
 }
 
 // HelpCmd and VerCmd are defined to emulate -h,--help and --version.
-type HelpCmd struct{}
+type HelpCmd struct {
+	Which []string `arg:"positional"`
+}
 type VerCmd struct{}
 
 func (*args) Version() string {
@@ -88,8 +90,8 @@ func main() {
 		fmt.Println("no command given")
 		os.Exit(exitBadArgs)
 	}
-	if _, isHelp := p.Subcommand().(*HelpCmd); isHelp {
-		p.WriteHelpForSubcommand(os.Stdout) // emulate -h,--help
+	if helpCmd, isHelp := p.Subcommand().(*HelpCmd); isHelp {
+		p.WriteHelpForSubcommand(os.Stdout, helpCmd.Which...) // emulate -h,--help
 		os.Exit(exitSuccess)
 	}
 
