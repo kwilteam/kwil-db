@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
+	"github.com/kwilteam/kwil-db/pkg/admin/types"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/extensions"
 	"github.com/kwilteam/kwil-db/pkg/kv"
@@ -18,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/sql/client"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
+	"github.com/cometbft/cometbft/p2p"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	cmttypes "github.com/cometbft/cometbft/types"
@@ -78,22 +81,73 @@ func (s *sqliteOpener) Open(fileName string, logger log.Logger) (sql.Database, e
 	)
 }
 
-// wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster
-// interface, hiding the details of cometBFT.
+// wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster and
+// admsvc.Node interfaces, hiding the details of cometBFT.
 type wrappedCometBFTClient struct {
-	*cmtlocal.Local
+	cl *cmtlocal.Local
+}
+
+func convertNodeInfo(ni *p2p.DefaultNodeInfo) *types.NodeInfo {
+	return &types.NodeInfo{
+		ChainID:         ni.Network,
+		Name:            ni.Moniker,
+		NodeID:          string(ni.ID()),
+		ProtocolVersion: ni.ProtocolVersion.P2P,
+		AppVersion:      ni.ProtocolVersion.App,
+		BlockVersion:    ni.ProtocolVersion.App,
+		ListenAddr:      ni.ListenAddr,
+		RPCAddr:         ni.Other.RPCAddress,
+	}
+}
+
+func (wc *wrappedCometBFTClient) Peers(ctx context.Context) ([]*types.PeerInfo, error) {
+	cmtNetInfo, err := wc.cl.NetInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	peers := make([]*types.PeerInfo, len(cmtNetInfo.Peers))
+	for i, p := range cmtNetInfo.Peers {
+		peers[i] = &types.PeerInfo{
+			NodeInfo:   convertNodeInfo(&p.NodeInfo),
+			Inbound:    !p.IsOutbound,
+			RemoteAddr: p.RemoteIP,
+		}
+	}
+	return peers, nil
+}
+
+func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, error) {
+	cmtStatus, err := wc.cl.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ni, si, vi := &cmtStatus.NodeInfo, &cmtStatus.SyncInfo, &cmtStatus.ValidatorInfo
+	return &types.Status{
+		Node: convertNodeInfo(ni),
+		Sync: &types.SyncInfo{
+			AppHash:         strings.ToLower(si.LatestAppHash.String()),
+			BestBlockHash:   strings.ToLower(si.LatestBlockHash.String()),
+			BestBlockHeight: si.LatestBlockHeight,
+			BestBlockTime:   si.LatestBlockTime.UTC(),
+		},
+		Validator: &types.ValidatorInfo{
+			PubKey:     vi.PubKey.Bytes(),
+			PubKeyType: vi.PubKey.Type(),
+			Power:      vi.VotingPower,
+		},
+	}, nil
 }
 
 func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (uint32, []byte, error) {
 	var bcastFun func(ctx context.Context, tx cmttypes.Tx) (*cmtCoreTypes.ResultBroadcastTx, error)
 	switch sync {
 	case 0:
-		bcastFun = wc.Local.BroadcastTxAsync
+		bcastFun = wc.cl.BroadcastTxAsync
 	case 1:
-		bcastFun = wc.Local.BroadcastTxSync
+		bcastFun = wc.cl.BroadcastTxSync
 	case 2:
 		bcastFun = func(ctx context.Context, tx cmttypes.Tx) (*cmtCoreTypes.ResultBroadcastTx, error) {
-			res, err := wc.Local.BroadcastTxCommit(ctx, tx)
+			res, err := wc.cl.BroadcastTxCommit(ctx, tx)
 			if err != nil {
 				return nil, err
 			}
@@ -134,13 +188,13 @@ func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove
 	// indicate that "`nil` could mean the transaction is in the mempool", so
 	// this API should be used with caution, not failing on error AND checking
 	// the result for nilness.
-	res, err := wc.Local.Tx(ctx, hash, prove)
+	res, err := wc.cl.Tx(ctx, hash, prove)
 	if err == nil && res != nil {
 		return res, nil
 	}
 	// The transaction could be in mempool.
 	limit := -1
-	unconf, err := wc.Local.UnconfirmedTxs(ctx, &limit)
+	unconf, err := wc.cl.UnconfirmedTxs(ctx, &limit)
 	if err != nil {
 		return nil, err
 	}
