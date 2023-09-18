@@ -21,6 +21,8 @@ const _ = grpc.SupportPackageIsVersion7
 const (
 	AdminService_Ping_FullMethodName    = "/admin.AdminService/Ping"
 	AdminService_Version_FullMethodName = "/admin.AdminService/Version"
+	AdminService_Status_FullMethodName  = "/admin.AdminService/Status"
+	AdminService_Peers_FullMethodName   = "/admin.AdminService/Peers"
 )
 
 // AdminServiceClient is the client API for AdminService service.
@@ -29,6 +31,8 @@ const (
 type AdminServiceClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	Version(ctx context.Context, in *VersionRequest, opts ...grpc.CallOption) (*VersionResponse, error)
+	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	Peers(ctx context.Context, in *PeersRequest, opts ...grpc.CallOption) (*PeersResponse, error)
 }
 
 type adminServiceClient struct {
@@ -57,12 +61,32 @@ func (c *adminServiceClient) Version(ctx context.Context, in *VersionRequest, op
 	return out, nil
 }
 
+func (c *adminServiceClient) Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, AdminService_Status_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *adminServiceClient) Peers(ctx context.Context, in *PeersRequest, opts ...grpc.CallOption) (*PeersResponse, error) {
+	out := new(PeersResponse)
+	err := c.cc.Invoke(ctx, AdminService_Peers_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations must embed UnimplementedAdminServiceServer
 // for forward compatibility
 type AdminServiceServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	Version(context.Context, *VersionRequest) (*VersionResponse, error)
+	Status(context.Context, *StatusRequest) (*StatusResponse, error)
+	Peers(context.Context, *PeersRequest) (*PeersResponse, error)
 	mustEmbedUnimplementedAdminServiceServer()
 }
 
@@ -75,6 +99,12 @@ func (UnimplementedAdminServiceServer) Ping(context.Context, *PingRequest) (*Pin
 }
 func (UnimplementedAdminServiceServer) Version(context.Context, *VersionRequest) (*VersionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Version not implemented")
+}
+func (UnimplementedAdminServiceServer) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Status not implemented")
+}
+func (UnimplementedAdminServiceServer) Peers(context.Context, *PeersRequest) (*PeersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Peers not implemented")
 }
 func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
 
@@ -125,6 +155,42 @@ func _AdminService_Version_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_Status_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).Status(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_Status_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).Status(ctx, req.(*StatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AdminService_Peers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).Peers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_Peers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).Peers(ctx, req.(*PeersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -139,6 +205,14 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Version",
 			Handler:    _AdminService_Version_Handler,
+		},
+		{
+			MethodName: "Status",
+			Handler:    _AdminService_Status_Handler,
+		},
+		{
+			MethodName: "Peers",
+			Handler:    _AdminService_Peers_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
