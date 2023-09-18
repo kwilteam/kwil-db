@@ -74,7 +74,10 @@ type SetupTestnetCmd struct {
 	// InitialHeight           int64    `arg:"--initial-height" default:"true" help:"initial height of the first block"`
 }
 
-func (*SetupTestnetCmd) Description() string {
+// TODO: customize the parser to recognize a detailer subcommand and print
+// extended details after auto-generated usage. Presently this is not shown by
+// WriteHelpForSubcommand.
+func (*SetupTestnetCmd) Details() string {
 	return `The testnet command creates "v + n" node root directories and populates
 each with necessary files to start the new network.
 
@@ -106,7 +109,7 @@ type SetupGenesisHashCmd struct {
 	GenesisFile string `arg:"-g,--genesis" help:"optional path to the genesis file to patch with the computed app hash"`
 }
 
-func (*SetupGenesisHashCmd) Description() string {
+func (*SetupGenesisHashCmd) Details() string {
 	return `Generate the genesis hash of the sqlite DBs and if a genesis file is provided,
 update the app_hash in the genesis file. If genesis file is not provided, only
 print the the genesis hash to stdout.`

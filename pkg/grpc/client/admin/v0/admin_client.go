@@ -3,8 +3,10 @@ package admin
 import (
 	"context"
 	"crypto/tls"
+	"time"
 
 	admpb "github.com/kwilteam/kwil-db/api/protobuf/admin/v0"
+	"github.com/kwilteam/kwil-db/pkg/admin/types"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -48,4 +50,55 @@ func (c *AdminClient) Version(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return resp.VersionString, nil
+}
+
+func convertNodeInfo(ni *admpb.NodeInfo) *types.NodeInfo {
+	return &types.NodeInfo{
+		ChainID:         ni.ChainId,
+		Name:            ni.NodeName,
+		NodeID:          ni.NodeId,
+		ProtocolVersion: ni.ProtocolVersion,
+		AppVersion:      ni.AppVersion,
+		BlockVersion:    ni.BlockVersion,
+		ListenAddr:      ni.ListenAddr,
+		RPCAddr:         ni.RpcAddr,
+	}
+}
+
+func (c *AdminClient) Status(ctx context.Context) (*types.Status, error) {
+	resp, err := c.admClient.Status(ctx, &admpb.StatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return &types.Status{
+		Node: convertNodeInfo(resp.Node),
+		Sync: &types.SyncInfo{
+			AppHash:         resp.Sync.AppHash,
+			BestBlockHash:   resp.Sync.BestBlockHash,
+			BestBlockHeight: resp.Sync.BestBlockHeight,
+			BestBlockTime:   time.UnixMilli(resp.Sync.BestBlockTime),
+			Syncing:         resp.Sync.Syncing,
+		},
+		Validator: &types.ValidatorInfo{
+			PubKey:     resp.Validator.Pubkey,
+			PubKeyType: resp.Validator.PubkeyType,
+			Power:      resp.Validator.Power,
+		},
+	}, nil
+}
+
+func (c *AdminClient) Peers(ctx context.Context) ([]*types.PeerInfo, error) {
+	resp, err := c.admClient.Peers(ctx, &admpb.PeersRequest{})
+	if err != nil {
+		return nil, err
+	}
+	peers := make([]*types.PeerInfo, len(resp.Peers))
+	for i, pbPeer := range resp.Peers {
+		peers[i] = &types.PeerInfo{
+			NodeInfo:   convertNodeInfo(pbPeer.Node),
+			Inbound:    pbPeer.Inbound,
+			RemoteAddr: pbPeer.RemoteAddr,
+		}
+	}
+	return peers, nil
 }
