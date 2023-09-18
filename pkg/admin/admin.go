@@ -5,6 +5,7 @@ package admin
 import (
 	"context"
 
+	"github.com/kwilteam/kwil-db/pkg/admin/types"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	admClient "github.com/kwilteam/kwil-db/pkg/grpc/client/admin/v0"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -60,6 +61,14 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 
 func (c *Client) Version(ctx context.Context) (string, error) {
 	return c.client.Version(ctx)
+}
+
+func (c *Client) Status(ctx context.Context) (*types.Status, error) {
+	return c.client.Status(ctx)
+}
+
+func (c *Client) Peers(ctx context.Context) ([]*types.PeerInfo, error) {
+	return c.client.Peers(ctx)
 }
 
 /* TODO: validator actions that work via server-side transaction authoring
