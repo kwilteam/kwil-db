@@ -41,8 +41,9 @@ import "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	- Are joined with an "=" operator
 
 The joinAnalyzer is used in a DFS manner to determine if a join is valid.  It can exist in one of the following states:
-- BinaryCompareNotFound: The join has not yet encountered a binary comparison
-- BinaryCompareFound: The join has encountered a binary comparison
+- joinableStatusInvalid: the join is invalid
+- joinableStatusContainsColumn: the join contains a column from one of the tables
+- joinableStatusValid: the join is valid
 
 */
 

@@ -10,11 +10,11 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer"
-	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
@@ -39,41 +39,29 @@ func (d *DB) Delete() error {
 }
 
 func (d *DB) Prepare(ctx context.Context, query string) (*PreparedStatement, error) {
-	ast, err := sqlparser.Parse(query)
-	if err != nil {
-		return nil, err
-	}
-
 	tables, err := d.ListTables(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	err = sqlanalyzer.ApplyRules(ast, sqlanalyzer.AllRules, &sqlanalyzer.RuleMetadata{
+	analyzed, err := sqlanalyzer.ApplyRules(query, sqlanalyzer.AllRules, &sqlanalyzer.RuleMetadata{
 		Tables: tables,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	mutativity, err := sqlanalyzer.IsMutative(ast)
+	prepStmt, err := d.Sqldb.Prepare(analyzed.Statement())
 	if err != nil {
-		return nil, err
-	}
-
-	generatedSql, err := ast.ToSQL()
-	if err != nil {
-		return nil, err
-	}
-
-	prepStmt, err := d.Sqldb.Prepare(generatedSql)
-	if err != nil {
+		// TODO: add logs here
+		fmt.Println(query)
+		fmt.Println(analyzed.Statement())
 		return nil, err
 	}
 
 	return &PreparedStatement{
 		Statement: prepStmt,
-		mutative:  mutativity,
+		mutative:  analyzed.Mutative(),
 	}, nil
 }
 

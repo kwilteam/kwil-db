@@ -6,6 +6,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/aggregate"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/join"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/order"
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
@@ -30,34 +31,52 @@ func (a *acceptWrapper) Accept(walker tree.Walker) (err error) {
 	return a.inner.Accept(walker)
 }
 
-// ApplyRules analyzes the given statement and returns the statement.
-// NOTE: this can change the statement, so it is recommended to clone the statement before analyzing it
-// if you want to keep the original statement.
-func ApplyRules(stmt accepter, flags VerifyFlag, metadata *RuleMetadata) error {
-	accept := &acceptWrapper{inner: stmt}
+// ApplyRules analyzes the given statement and returns the transformed statement.
+// It parses it, and then traverses the AST with the given flags.
+// It will alter the statement to make it conform to the given flags, or return an error if it cannot.
+func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*AnalyzedStatement, error) {
+	parsed, err := sqlparser.Parse(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing statement: %w", err)
+	}
+
+	accept := &acceptWrapper{inner: parsed}
 
 	if flags&NoCartesianProduct != 0 {
 		err := accept.Accept(join.NewJoinWalker())
 		if err != nil {
-			return fmt.Errorf("error applying join rules: %w", err)
+			return nil, fmt.Errorf("error applying join rules: %w", err)
 		}
 	}
 
 	if flags&GuaranteedOrder != 0 {
 		err := accept.Accept(order.NewOrderWalker(metadata.Tables))
 		if err != nil {
-			return fmt.Errorf("error enforcing guaranteed order: %w", err)
+			return nil, fmt.Errorf("error enforcing guaranteed order: %w", err)
 		}
 	}
 
 	if flags&DeterministicAggregates != 0 {
 		err := accept.Accept(aggregate.NewGroupByWalker())
 		if err != nil {
-			return fmt.Errorf("error enforcing aggregate determinism: %w", err)
+			return nil, fmt.Errorf("error enforcing aggregate determinism: %w", err)
 		}
 	}
 
-	return nil
+	mutative, err := isMutative(parsed)
+	if err != nil {
+		return nil, fmt.Errorf("error determining mutativity: %w", err)
+	}
+
+	generated, err := parsed.ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("error generating SQL: %w", err)
+	}
+
+	return &AnalyzedStatement{
+		stmt:     generated,
+		mutative: mutative,
+	}, nil
 }
 
 // RuleMetadata contains metadata that is needed to enforce a rule
@@ -80,3 +99,16 @@ const (
 const (
 	AllRules = NoCartesianProduct | GuaranteedOrder | DeterministicAggregates
 )
+
+type AnalyzedStatement struct {
+	stmt     string
+	mutative bool
+}
+
+func (a *AnalyzedStatement) Mutative() bool {
+	return a.mutative
+}
+
+func (a *AnalyzedStatement) Statement() string {
+	return a.stmt
+}

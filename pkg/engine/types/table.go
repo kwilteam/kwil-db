@@ -66,14 +66,14 @@ func (t *Table) Clean() error {
 func (t *Table) GetPrimaryKey() ([]string, error) {
 	var primaryKey []string
 
-	hasAttribitePrimaryKey := false
+	hasAttributePrimaryKey := false
 	for _, col := range t.Columns {
 		for _, attr := range col.Attributes {
 			if attr.Type == PRIMARY_KEY {
-				if hasAttribitePrimaryKey {
+				if hasAttributePrimaryKey {
 					return nil, fmt.Errorf("table %s has multiple primary attributes", t.Name)
 				}
-				hasAttribitePrimaryKey = true
+				hasAttributePrimaryKey = true
 				primaryKey = []string{col.Name}
 			}
 		}
@@ -90,11 +90,11 @@ func (t *Table) GetPrimaryKey() ([]string, error) {
 		}
 	}
 
-	if !hasAttribitePrimaryKey && !hasIndexPrimaryKey {
+	if !hasAttributePrimaryKey && !hasIndexPrimaryKey {
 		return nil, fmt.Errorf("table %s has no primary key", t.Name)
 	}
 
-	if hasAttribitePrimaryKey && hasIndexPrimaryKey {
+	if hasAttributePrimaryKey && hasIndexPrimaryKey {
 		return nil, fmt.Errorf("table %s has both primary attribute and primary index", t.Name)
 	}
 
