@@ -38,11 +38,11 @@ var (
 						},
 						{
 							Type:  types.MIN_LENGTH,
-							Value: 5,
+							Value: "5",
 						},
 						{
 							Type:  types.MAX_LENGTH,
-							Value: 32,
+							Value: "32",
 						},
 					},
 				},
@@ -55,11 +55,11 @@ var (
 						},
 						{
 							Type:  types.MIN,
-							Value: 13,
+							Value: "13",
 						},
 						{
 							Type:  types.MAX,
-							Value: 200,
+							Value: "200",
 						},
 					},
 				},

@@ -2,10 +2,11 @@ package db
 
 import (
 	"context"
-	"encoding/json"
+
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 )
 
 type metadata struct {
@@ -116,7 +117,7 @@ func (d *DB) getMetadata(ctx context.Context, metaType metadataType) ([]*metadat
 
 // VersionedMetadata is a generic that wraps a serializable type with a version
 type VersionedMetadata struct {
-	Version int    `json:"version"`
+	Version uint   `json:"version"`
 	Data    []byte `json:"data"`
 }
 
@@ -129,7 +130,7 @@ func (d *DB) getVersionedMetadata(ctx context.Context, metaType metadataType) ([
 	var versionedMetas []*VersionedMetadata
 	for _, meta := range metas {
 		versionedMeta := &VersionedMetadata{}
-		err = json.Unmarshal(meta.Content, versionedMeta)
+		err = serialize.DecodeInto(meta.Content, versionedMeta)
 		if err != nil {
 			return nil, err
 		}
@@ -141,7 +142,7 @@ func (d *DB) getVersionedMetadata(ctx context.Context, metaType metadataType) ([
 }
 
 func (d *DB) persistVersionedMetadata(ctx context.Context, identifier string, metaType metadataType, meta *VersionedMetadata) error {
-	bts, err := json.Marshal(meta)
+	bts, err := serialize.Encode(meta)
 	if err != nil {
 		return err
 	}
@@ -155,7 +156,7 @@ func (d *DB) persistVersionedMetadata(ctx context.Context, identifier string, me
 
 // serializable is an interface and generic that all serializable types must implement
 type serializable interface {
-	types.Table | types.Procedure | types.Extension
+	types.Table | types.Procedure | encodeableExtension
 }
 
 func decodeMetadata[T serializable](meta []*VersionedMetadata) ([]*T, error) {
@@ -164,7 +165,7 @@ func decodeMetadata[T serializable](meta []*VersionedMetadata) ([]*T, error) {
 	for _, value := range meta {
 		tbl := new(T)
 
-		err := json.Unmarshal(value.Data, tbl)
+		err := serialize.DecodeInto(value.Data, tbl)
 		if err != nil {
 			return nil, err
 		}

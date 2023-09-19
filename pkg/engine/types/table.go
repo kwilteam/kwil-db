@@ -11,10 +11,6 @@ type Table struct {
 	ForeignKeys []*ForeignKey `json:"foreign_keys"`
 }
 
-func (t *Table) Identifier() string {
-	return t.Name
-}
-
 func (t *Table) Clean() error {
 	hasPrimaryAttribute := false
 	for _, col := range t.Columns {
@@ -86,7 +82,11 @@ func (t *Table) GetPrimaryKey() ([]string, error) {
 				return nil, fmt.Errorf("table %s has multiple primary indexes", t.Name)
 			}
 			hasIndexPrimaryKey = true
-			primaryKey = idx.Columns
+
+			// copy
+			// if we do not copy, then the returned slice will allow modification of the index
+			primaryKey = make([]string, len(idx.Columns))
+			copy(primaryKey, idx.Columns)
 		}
 	}
 
@@ -102,9 +102,9 @@ func (t *Table) GetPrimaryKey() ([]string, error) {
 }
 
 type Column struct {
-	Name       string       `json:"name" clean:"lower"`
-	Type       DataType     `json:"type" clean:"is_enum,data_type"`
-	Attributes []*Attribute `json:"attributes,omitempty" traverse:"shallow"`
+	Name       string       `json:"name"`
+	Type       DataType     `json:"type"`
+	Attributes []*Attribute `json:"attributes,omitempty"`
 }
 
 func (c *Column) Clean() error {
@@ -130,17 +130,12 @@ func (c *Column) hasPrimary() bool {
 }
 
 type Attribute struct {
-	Type  AttributeType `json:"type" clean:"is_enum,attribute_type"`
-	Value any           `json:"value"`
+	Type  AttributeType `json:"type"`
+	Value string        `json:"value,omitempty"`
 }
 
 func (a *Attribute) Clean() error {
-	if a.Value == nil {
-		return a.Type.Clean()
-	}
-
 	return runCleans(
 		a.Type.Clean(),
-		cleanScalar(&a.Value),
 	)
 }

@@ -5,12 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	engine "github.com/kwilteam/kwil-db/pkg/engine"
 	engineTesting "github.com/kwilteam/kwil-db/pkg/engine/testing"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
-	"github.com/kwilteam/kwil-db/pkg/engine/types/testdata"
 	"github.com/kwilteam/kwil-db/pkg/engine/utils"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/stretchr/testify/assert"
@@ -34,13 +35,13 @@ func newTestUser() types.UserIdentifier {
 
 var (
 	testTables = []*types.Table{
-		&testdata.Table_users,
-		&testdata.Table_posts,
+		tableUsers,
+		tablePosts,
 	}
 
 	testProcedures = []*types.Procedure{
-		&testdata.Procedure_create_user,
-		&testdata.Procedure_create_post,
+		procedureCreateUser,
+		procedureCreatePost,
 	}
 
 	testInitializedExtensions = []*types.Extension{
@@ -54,7 +55,6 @@ var (
 	}
 )
 
-// TODO: this test is not passing
 func Test_Open(t *testing.T) {
 	ctx := context.Background()
 	user := newTestUser()
@@ -109,11 +109,23 @@ func Test_Open(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.ElementsMatch(t, testTables, tables)
+	for _, table := range tables {
+		if !deepEqual(table, findTable(table.Name)) {
+			t.Errorf("tables not equal: %v, %v", table, findTable(table.Name))
+		}
+	}
+
+	ttt := testProcedures
+	_ = ttt
 
 	// check if the dataset has the correct procedures
 	procs := dataset.ListProcedures()
-	assert.ElementsMatch(t, testProcedures, procs)
+
+	for _, proc := range procs {
+		if !deepEqual(proc, findProc(proc.Name)) {
+			t.Errorf("procedures not equal: %v, %v", proc, findProc(proc.Name))
+		}
+	}
 
 	pub, err := user.PubKey()
 	if err != nil {
@@ -127,6 +139,26 @@ func Test_Open(t *testing.T) {
 	}
 
 	assert.ElementsMatch(t, []string{"testdb1"}, datasets)
+}
+
+func findProc(name string) *types.Procedure {
+	for _, proc := range testProcedures {
+		if proc.Name == name {
+			return proc
+		}
+	}
+
+	panic("procedure not found")
+}
+
+func findTable(name string) *types.Table {
+	for _, table := range testTables {
+		if table.Name == name {
+			return table
+		}
+	}
+
+	panic("table not found")
 }
 
 func Test_CreateDataset(t *testing.T) {
@@ -342,4 +374,197 @@ func (m *mockRegister) Unregister(ctx context.Context, name string) error {
 	delete(m.datasets, name)
 
 	return nil
+}
+
+var (
+	tableUsers = &types.Table{
+		Name: "users",
+		Columns: []*types.Column{
+			{
+				Name: "id",
+				Type: types.INT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.PRIMARY_KEY,
+					},
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+			{
+				Name: "username",
+				Type: types.TEXT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+					{
+						Type: types.UNIQUE,
+					},
+					{
+						Type:  types.MIN_LENGTH,
+						Value: "5",
+					},
+					{
+						Type:  types.MAX_LENGTH,
+						Value: "32",
+					},
+				},
+			},
+			{
+				Name: "age",
+				Type: types.INT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+					{
+						Type:  types.MIN,
+						Value: "13",
+					},
+					{
+						Type:  types.MAX,
+						Value: "420",
+					},
+				},
+			},
+			{
+				Name: "address",
+				Type: types.TEXT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+					{
+						Type: types.UNIQUE,
+					},
+				},
+			},
+		},
+		Indexes: []*types.Index{
+			{
+				Name: "age_idx",
+				Columns: []string{
+					"age",
+				},
+				Type: types.BTREE,
+			},
+		},
+	}
+
+	tablePosts = &types.Table{
+		Name: "posts",
+		Columns: []*types.Column{
+			{
+				Name: "id",
+				Type: types.INT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.PRIMARY_KEY,
+					},
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+			{
+				Name: "title",
+				Type: types.TEXT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+					{
+						Type:  types.MAX_LENGTH,
+						Value: "300",
+					},
+				},
+			},
+			{
+				Name: "content",
+				Type: types.TEXT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+					{
+						Type:  types.MAX_LENGTH,
+						Value: "10000",
+					},
+				},
+			},
+			{
+				Name: "author_id",
+				Type: types.INT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+			{
+				Name: "post_date",
+				Type: types.TEXT,
+				Attributes: []*types.Attribute{
+					{
+						Type: types.NOT_NULL,
+					},
+				},
+			},
+		},
+		Indexes: []*types.Index{
+			{
+				Name: "author_idx",
+				Columns: []string{
+					"author_id",
+				},
+				Type: types.BTREE,
+			},
+		},
+		ForeignKeys: []*types.ForeignKey{
+			{
+				ChildKeys: []string{
+					"author_id",
+				},
+				ParentKeys: []string{
+					"id",
+				},
+				ParentTable: "users",
+				Actions: []*types.ForeignKeyAction{
+					{
+						On: types.ON_UPDATE,
+						Do: types.DO_CASCADE,
+					},
+					{
+						On: types.ON_DELETE,
+						Do: types.DO_CASCADE,
+					},
+				},
+			},
+		},
+	}
+
+	procedureCreateUser = &types.Procedure{
+		Name:   "create_user",
+		Args:   []string{"$id", "$username", "$age"},
+		Public: true,
+		Statements: []string{
+			"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
+		},
+	}
+
+	procedureCreatePost = &types.Procedure{
+		Name:   "create_post",
+		Args:   []string{"$id", "$title", "$content", "$date_string"},
+		Public: true,
+		Statements: []string{
+			"INSERT INTO posts (id, title, content, author_id, post_date)VALUES ($id, $title, $content, (SELECT id FROM users WHERE address=@caller), $date_string);",
+		},
+	}
+)
+
+// deepEqual does a deep comparison, while considering empty slices as equal to nils.
+func deepEqual(a, b any) bool {
+	return cmp.Equal(a, b, cmpopts.EquateEmpty())
 }

@@ -100,15 +100,20 @@ const (
 	AllRules = NoCartesianProduct | GuaranteedOrder | DeterministicAggregates
 )
 
+// AnalyzedStatement is a statement that has been analyzed by the analyzer
+// As we progressively add more types of analysis (e.g. query pricing), we will add more fields to this struct
 type AnalyzedStatement struct {
 	stmt     string
 	mutative bool
 }
 
+// Mutative returns true if the statement will mutate the database
 func (a *AnalyzedStatement) Mutative() bool {
 	return a.mutative
 }
 
+// Statements returns a new statement that is the result of the analysis
+// It may contains changes to the original statement, depending on the flags that were passed in
 func (a *AnalyzedStatement) Statement() string {
 	return a.stmt
 }

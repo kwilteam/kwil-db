@@ -8,9 +8,9 @@ import (
 type IndexType string
 
 type Index struct {
-	Name    string    `json:"name" clean:"lower"`
-	Columns []string  `json:"columns" clean:"lower"`
-	Type    IndexType `json:"type" clean:"is_enum,index_type"`
+	Name    string    `json:"name"`
+	Columns []string  `json:"columns"`
+	Type    IndexType `json:"type"`
 }
 
 func (i *Index) Clean() error {

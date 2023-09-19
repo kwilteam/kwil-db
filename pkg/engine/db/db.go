@@ -10,9 +10,11 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
+	"go.uber.org/zap"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/pkg/sql"
@@ -21,6 +23,8 @@ import (
 type DB struct {
 	Sqldb SqlDB
 
+	log log.Logger
+
 	// caches metadata from QueryUnsafe.
 	// this is a really bad practice, but works.
 	// essentially, we cache the metadata the first time it is retrieved, during schema
@@ -28,6 +32,23 @@ type DB struct {
 	metadataCache map[metadataType][]*metadata
 
 	mu sync.RWMutex
+}
+
+// NewDB wraps the provided database with a DB abstraction layer.
+// It will initialize the metadata table if it does not exist.
+func NewDB(ctx context.Context, sqldb SqlDB, opts ...DBOpt) (*DB, error) {
+	db := &DB{
+		Sqldb:         sqldb,
+		metadataCache: make(map[metadataType][]*metadata),
+		log:           log.NewNoOp(),
+	}
+
+	err := db.initMetadataTable(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 func (d *DB) Close() error {
@@ -48,14 +69,13 @@ func (d *DB) Prepare(ctx context.Context, query string) (*PreparedStatement, err
 		Tables: tables,
 	})
 	if err != nil {
+		d.log.Debug("failed to analyze query", zap.String("query", query), zap.Error(err))
 		return nil, err
 	}
 
 	prepStmt, err := d.Sqldb.Prepare(analyzed.Statement())
 	if err != nil {
-		// TODO: add logs here
-		fmt.Println(query)
-		fmt.Println(analyzed.Statement())
+		d.log.Error("failed to prepare analyzed statement", zap.String("query", query), zap.Error(err))
 		return nil, err
 	}
 
@@ -73,24 +93,18 @@ func (d *DB) Savepoint() (sql.Savepoint, error) {
 	return d.Sqldb.Savepoint()
 }
 
-func NewDB(ctx context.Context, sqldb SqlDB) (*DB, error) {
-	db := &DB{
-		Sqldb:         sqldb,
-		metadataCache: make(map[metadataType][]*metadata),
-	}
-
-	err := db.initMetadataTable(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return db, nil
-}
-
 func (d *DB) CreateSession() (sql.Session, error) {
 	return d.Sqldb.CreateSession()
 }
 
 func (d *DB) ApplyChangeset(changeset io.Reader) error {
 	return d.Sqldb.ApplyChangeset(changeset)
+}
+
+type DBOpt func(*DB)
+
+func WithLogger(logger log.Logger) DBOpt {
+	return func(db *DB) {
+		db.log = logger
+	}
 }
