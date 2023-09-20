@@ -6,23 +6,22 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 // Call executes a call action on a database.  It is a read-only action.
 // It returns the result of the call.
 // If a message caller is specified, then it will check the signature of the message and use the caller as the caller of the action.
-func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.SignedMessage) ([]map[string]any, error) {
+func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg DatasetMessage) ([]map[string]any, error) {
 	executionOpts := []engine.ExecutionOpt{
 		engine.ReadOnly(true),
 	}
-	if msg.Sender != nil {
+	if msg.IsSigned() {
 		err := msg.Verify()
 		if err != nil {
 			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
 		}
 
-		identifier, err := getUserIdentifier(msg.Sender)
+		identifier, err := getUserIdentifier(msg.GetSender())
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user identifier: %w", err)
 		}
