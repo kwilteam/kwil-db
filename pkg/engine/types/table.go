@@ -5,7 +5,7 @@ import (
 )
 
 type Table struct {
-	Name        string        `json:"name" clean:"lower"`
+	Name        string        `json:"name"`
 	Columns     []*Column     `json:"columns"`
 	Indexes     []*Index      `json:"indexes,omitempty"`
 	ForeignKeys []*ForeignKey `json:"foreign_keys"`

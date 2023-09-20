@@ -1,7 +1,7 @@
 package order
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -100,6 +100,8 @@ func (o *orderAnalyzer) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryTabl
 	return nil
 }
 
+// we need to add common table expressions to the list of the schemas tables, as well as the list of used tables
+// this means we need to detect the structure of the common table expression
 func findTable(tables []*types.Table, name string) (*types.Table, error) {
 	for _, t := range tables {
 		if t.Name == name {
@@ -107,5 +109,5 @@ func findTable(tables []*types.Table, name string) (*types.Table, error) {
 		}
 	}
 
-	return nil, errors.New("table not found")
+	return nil, fmt.Errorf(`table "%s" not found`, name)
 }

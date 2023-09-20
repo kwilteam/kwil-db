@@ -72,6 +72,24 @@ func Test_Analyze(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "common table expression",
+			stmt: `WITH
+			users_aged_20 AS (
+				SELECT * FROM users WHERE age = 20
+			)
+			SELECT * FROM users_aged_20`,
+			want: `WITH
+			"users_aged_20" AS (
+				SELECT * FROM "users" WHERE "age" = 20 ORDER BY "users"."id" ASC NULLS LAST
+			)
+			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" ASC NULLS LAST;`,
+			metadata: &sqlanalyzer.RuleMetadata{
+				Tables: []*types.Table{
+					tblUsers,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

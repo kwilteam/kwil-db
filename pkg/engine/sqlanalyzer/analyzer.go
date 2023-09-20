@@ -42,6 +42,8 @@ func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*Analyze
 
 	accept := &acceptWrapper{inner: parsed}
 
+	// TODO: we need to add a clean walker to make identifiers lowercase
+
 	if flags&NoCartesianProduct != 0 {
 		err := accept.Accept(join.NewJoinWalker())
 		if err != nil {

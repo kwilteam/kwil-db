@@ -83,7 +83,7 @@ func (d *DB) StoreExtension(ctx context.Context, extension *types.Extension) err
 // of key value pairs
 type encodeableExtension struct {
 	Name           string
-	Initialization []*order.FlattenedPair[string, string]
+	Initialization []*order.KVPair[string, string]
 	Alias          string
 }
 
