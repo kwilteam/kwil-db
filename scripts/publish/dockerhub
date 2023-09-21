@@ -7,4 +7,4 @@ set -eu
 
 echo Building kwild for multiarch and pushing to dockerhub, tag: ${TAG}
 
-docker buildx build --platform linux/amd64,linux/arm64/v8 -t kwildb/kwil:${TAG} --push -f ./build/package/docker/kwild.auto-init.dockerfile .
+docker buildx build --platform linux/amd64,linux/arm64/v8 -t kwildb/kwil:${TAG} --push -f ./build/package/docker/kwild.shell.dockerfile .
