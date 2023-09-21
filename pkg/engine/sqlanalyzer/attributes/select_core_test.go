@@ -10,14 +10,17 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/engine/types/testdata"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetSelectCoreRelationAttributes(t *testing.T) {
 	tests := []struct {
-		name           string
-		tables         []*types.Table
-		stmt           string
-		want           []*tree.ResultColumnExpression
+		name            string
+		tables          []*types.Table
+		stmt            string
+		want            []*attributes.RelationAttribute
+		resultTableCols []*types.Column
+		// wantInequality is true if we want the test to fail if the result is equal to want
 		wantInequality bool
 		wantErr        bool
 	}{
@@ -27,8 +30,11 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				testdata.TableUsers,
 			},
 			stmt: "SELECT id FROM users",
-			want: []*tree.ResultColumnExpression{
-				tblCol("users", "id"),
+			want: []*attributes.RelationAttribute{
+				tblCol(types.INT, "users", "id"),
+			},
+			resultTableCols: []*types.Column{
+				col("id", types.INT),
 			},
 		},
 		{
@@ -37,8 +43,8 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				testdata.TableUsers,
 			},
 			stmt: "SELECT id FROM users",
-			want: []*tree.ResultColumnExpression{
-				tblCol("users", "name"),
+			want: []*attributes.RelationAttribute{
+				tblCol(types.TEXT, "users", "name"),
 			},
 			wantInequality: true,
 		},
@@ -48,8 +54,11 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				testdata.TableUsers,
 			},
 			stmt: "SELECT id AS user_id FROM users",
-			want: []*tree.ResultColumnExpression{
-				tblColAlias("users", "id", "user_id"),
+			want: []*attributes.RelationAttribute{
+				tblColAlias(types.INT, "users", "id", "user_id"),
+			},
+			resultTableCols: []*types.Column{
+				col("user_id", types.INT),
 			},
 		},
 		{
@@ -58,9 +67,12 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				testdata.TableUsers,
 				testdata.TablePosts,
 			},
-			stmt: "SELECT id FROM users WHERE id IN (SELECT user_id FROM posts)",
-			want: []*tree.ResultColumnExpression{
-				tblCol("users", "id"),
+			stmt: "SELECT id FROM users WHERE id IN (SELECT author_id FROM posts)",
+			want: []*attributes.RelationAttribute{
+				tblCol(types.INT, "users", "id"),
+			},
+			resultTableCols: []*types.Column{
+				col("id", types.INT),
 			},
 		},
 		{
@@ -69,15 +81,25 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				testdata.TableUsers,
 			},
 			stmt: "SELECT users.*, * FROM users",
-			want: []*tree.ResultColumnExpression{
-				tblCol("users", "id"), // we expect them twice since it is defined twice
-				tblCol("users", "username"),
-				tblCol("users", "age"),
-				tblCol("users", "address"),
-				tblCol("users", "id"),
-				tblCol("users", "username"),
-				tblCol("users", "age"),
-				tblCol("users", "address"),
+			want: []*attributes.RelationAttribute{
+				tblCol(types.INT, "users", "id"), // we expect them twice since it is defined twice
+				tblCol(types.TEXT, "users", "username"),
+				tblCol(types.INT, "users", "age"),
+				tblCol(types.TEXT, "users", "address"),
+				tblCol(types.INT, "users", "id"),
+				tblCol(types.TEXT, "users", "username"),
+				tblCol(types.INT, "users", "age"),
+				tblCol(types.TEXT, "users", "address"),
+			},
+			resultTableCols: []*types.Column{
+				col("id", types.INT),
+				col("username", types.TEXT),
+				col("age", types.INT),
+				col("address", types.TEXT),
+				col("id:1", types.INT),
+				col("username:1", types.TEXT),
+				col("age:1", types.INT),
+				col("address:1", types.TEXT),
 			},
 		},
 		{
@@ -86,35 +108,85 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				testdata.TableUsers,
 				testdata.TablePosts,
 			},
-			stmt: "SELECT users.*, *, age, users.age AS the_age, 5 FROM users INNER JOIN posts ON users.id = posts.author_id",
-			want: []*tree.ResultColumnExpression{
+			stmt: "SELECT users.*, *, age, users.age AS the_age, 5 as the_literal_5 FROM users INNER JOIN posts ON users.id = posts.author_id",
+			want: []*attributes.RelationAttribute{
 				// all user columns from users.*
-				tblCol("users", "id"),
-				tblCol("users", "username"),
-				tblCol("users", "age"),
-				tblCol("users", "address"),
+				tblCol(types.INT, "users", "id"),
+				tblCol(types.TEXT, "users", "username"),
+				tblCol(types.INT, "users", "age"),
+				tblCol(types.TEXT, "users", "address"),
 
 				// all user columns from *
-				tblCol("users", "id"),
-				tblCol("users", "username"),
-				tblCol("users", "age"),
-				tblCol("users", "address"),
+				tblCol(types.INT, "users", "id"),
+				tblCol(types.TEXT, "users", "username"),
+				tblCol(types.INT, "users", "age"),
+				tblCol(types.TEXT, "users", "address"),
 
 				// all post columns from *
-				tblCol("posts", "id"),
-				tblCol("posts", "title"),
-				tblCol("posts", "content"),
-				tblCol("posts", "author_id"),
-				tblCol("posts", "post_date"),
+				tblCol(types.INT, "posts", "id"),
+				tblCol(types.TEXT, "posts", "title"),
+				tblCol(types.TEXT, "posts", "content"),
+				tblCol(types.INT, "posts", "author_id"),
+				tblCol(types.TEXT, "posts", "post_date"),
 
 				// age
-				tblCol("users", "age"),
+				tblCol(types.INT, "users", "age"),
 
 				// users.age AS the_age
-				tblColAlias("users", "age", "the_age"),
+				tblColAlias(types.INT, "users", "age", "the_age"),
 
 				// 5
-				literal("5"),
+				literal(types.INT, "5", "the_literal_5"),
+			},
+			resultTableCols: []*types.Column{
+				col("id", types.INT),
+				col("username", types.TEXT),
+				col("age", types.INT),
+				col("address", types.TEXT),
+				col("id:1", types.INT),
+				col("username:1", types.TEXT),
+				col("age:1", types.INT),
+				col("address:1", types.TEXT),
+				col("id:2", types.INT),
+				col("title", types.TEXT),
+				col("content", types.TEXT),
+				col("author_id", types.INT),
+				col("post_date", types.TEXT),
+				col("age:2", types.INT),
+				col("the_age", types.INT),
+				col("the_literal_5", types.INT),
+			},
+		},
+		{
+			name: "join with aliases",
+			tables: []*types.Table{
+				testdata.TableUsers,
+				testdata.TablePosts,
+			},
+			stmt: "SELECT u.id AS user_id, u.username AS username, count(p.id) AS post_count FROM users AS u LEFT JOIN posts AS p ON u.id = p.author_id GROUP BY u.id",
+			want: []*attributes.RelationAttribute{
+				tblColAlias(types.INT, "u", "id", "user_id"),
+				tblColAlias(types.TEXT, "u", "username", "username"),
+				{
+					ResultExpression: &tree.ResultColumnExpression{
+						Expression: &tree.ExpressionFunction{
+							Function: &tree.FunctionCOUNT,
+							Inputs: []tree.Expression{
+								&tree.ExpressionColumn{
+									Table:  "p",
+									Column: "id",
+								},
+							},
+						},
+						Alias: "post_count",
+					},
+					Type: types.INT,
+				},
+			},
+			resultTableCols: []*types.Column{
+				col("user_id", types.INT),
+				col("username", types.TEXT),
+				col("post_count", types.INT),
 			},
 		},
 	}
@@ -144,7 +216,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 			same := true
 			incorrectIdx := -1
 			for i, g := range got {
-				if !cmp.Equal(*g, *tt.want[i], cmpopts.IgnoreUnexported(tree.ExpressionColumn{}, tree.ExpressionLiteral{}), cmpopts.EquateEmpty()) {
+				if !cmp.Equal(*g, *tt.want[i], cmpopts.IgnoreUnexported(tree.ResultColumnExpression{}, tree.AnySQLFunction{}, tree.AggregateFunc{}, tree.ExpressionFunction{}, tree.ExpressionColumn{}, tree.ExpressionLiteral{}), cmpopts.EquateEmpty()) {
 					same = false
 					incorrectIdx = i
 					break
@@ -157,33 +229,68 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 					t.Errorf("Incorrect index: %d", incorrectIdx)
 				}
 			}
+
+			if tt.wantInequality {
+				return
+			}
+
+			genTable, err := attributes.TableFromAttributes("result_table", got, true)
+			if err != nil {
+				t.Errorf("GetSelectCoreRelationAttributes() error = %v", err)
+				return
+			}
+			// check that the auto primary key works
+			assert.Equal(t, len(tt.want), len(genTable.Indexes[0].Columns))
+
+			// check that the columns are correct
+			if !cmp.Equal(tt.resultTableCols, genTable.Columns, cmpopts.IgnoreSliceElements(func(v int) bool { return true })) {
+				t.Errorf("GetSelectCoreRelationAttributes() got = %v, want %v", got, tt.want)
+				return
+			}
 		})
 	}
 }
 
-func tblCol(tbl, col string) *tree.ResultColumnExpression {
-	return &tree.ResultColumnExpression{
-		Expression: &tree.ExpressionColumn{
-			Table:  tbl,
-			Column: col,
+func tblCol(dataType types.DataType, tbl, col string) *attributes.RelationAttribute {
+	return &attributes.RelationAttribute{
+		ResultExpression: &tree.ResultColumnExpression{
+			Expression: &tree.ExpressionColumn{
+				Table:  tbl,
+				Column: col,
+			},
 		},
+		Type: dataType,
 	}
 }
 
-func tblColAlias(tbl, col, alias string) *tree.ResultColumnExpression {
-	return &tree.ResultColumnExpression{
-		Expression: &tree.ExpressionColumn{
-			Table:  tbl,
-			Column: col,
+func tblColAlias(dataType types.DataType, tbl, col, alias string) *attributes.RelationAttribute {
+	return &attributes.RelationAttribute{
+		ResultExpression: &tree.ResultColumnExpression{
+			Expression: &tree.ExpressionColumn{
+				Table:  tbl,
+				Column: col,
+			},
+			Alias: alias,
 		},
-		Alias: alias,
+		Type: dataType,
 	}
 }
 
-func literal(lit string) *tree.ResultColumnExpression {
-	return &tree.ResultColumnExpression{
-		Expression: &tree.ExpressionLiteral{
-			Value: lit,
+func literal(dataType types.DataType, lit string, alias string) *attributes.RelationAttribute {
+	return &attributes.RelationAttribute{
+		ResultExpression: &tree.ResultColumnExpression{
+			Expression: &tree.ExpressionLiteral{
+				Value: lit,
+			},
+			Alias: alias,
 		},
+		Type: dataType,
+	}
+}
+
+func col(name string, datatype types.DataType) *types.Column {
+	return &types.Column{
+		Name: name,
+		Type: datatype,
 	}
 }

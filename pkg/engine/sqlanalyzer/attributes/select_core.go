@@ -7,28 +7,40 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
+// A RelationAttribute is a column or expression that is part of a relation.
+// It contains the logical representation of the attribute, as well as the
+// data type
+type RelationAttribute struct {
+	// ResultExpression is the expression that represents the attribute
+	// This can be things like "column_name", "table"."column_name", "sum(column_name)"", "5", etc.
+	ResultExpression *tree.ResultColumnExpression
+
+	// Type is the data type of the attribute
+	Type types.DataType
+}
+
 // GetSelectCoreRelationAttributes will analyze the select core and return the
 // identified relation.
 // It returns a list of result column expressions.  These can be things like:
 // tbl1.col, col, col AS alias, col*5 AS alias, etc.
 // If a statement has "SELECT * FROM tbl",
 // then the result column expressions will be tbl.col_1, tbl.col_2, etc.
-func GetSelectCoreRelationAttributes(selectCore *tree.SelectCore, tables []*types.Table) ([]*tree.ResultColumnExpression, error) {
+func GetSelectCoreRelationAttributes(selectCore *tree.SelectCore, tables []*types.Table) ([]*RelationAttribute, error) {
 	walker := newSelectCoreWalker(tables)
 	err := selectCore.Accept(walker)
 	if err != nil {
 		return nil, fmt.Errorf("error analyzing select core: %w", err)
 	}
 
-	return walker.lastColumns, nil
+	return walker.detectedAttributes, nil
 }
 
 func newSelectCoreWalker(tables []*types.Table) *selectCoreAnalyzer {
 	return &selectCoreAnalyzer{
-		Walker:       tree.NewBaseWalker(),
-		context:      newSelectCoreContext(nil),
-		schemaTables: tables,
-		lastColumns:  []*tree.ResultColumnExpression{},
+		Walker:             tree.NewBaseWalker(),
+		context:            newSelectCoreContext(nil),
+		schemaTables:       tables,
+		detectedAttributes: []*RelationAttribute{},
 	}
 }
 
@@ -38,8 +50,9 @@ type selectCoreAnalyzer struct {
 	context      *selectCoreContext
 	schemaTables []*types.Table
 
-	// lastColumns is a list of columns from the last popped scope
-	lastColumns []*tree.ResultColumnExpression
+	// detectedAttributes is a list of the detected attributes
+	// from the scope
+	detectedAttributes []*RelationAttribute
 }
 
 // newScope creates a new scope for the select core
@@ -76,8 +89,8 @@ type selectCoreContext struct {
 
 // relations returns the identified relations
 // it will expand the stars and table stars to the list of columns
-func (s *selectCoreContext) relations() ([]*tree.ResultColumnExpression, error) {
-	results := make([]*tree.ResultColumnExpression, 0)
+func (s *selectCoreContext) relations() ([]*RelationAttribute, error) {
+	results := make([]*RelationAttribute, 0)
 
 	for _, res := range s.results {
 		exprs, err := s.evaluateResult(res)
@@ -97,14 +110,19 @@ func (s *selectCoreContext) addResult(result tree.ResultColumn) {
 }
 
 // evaluateResult evaluates a result, returning it as a column expression
-func (s *selectCoreContext) evaluateResult(result tree.ResultColumn) ([]*tree.ResultColumnExpression, error) {
-	results := []*tree.ResultColumnExpression{}
+func (s *selectCoreContext) evaluateResult(result tree.ResultColumn) ([]*RelationAttribute, error) {
+	results := []*RelationAttribute{}
 
 	switch r := result.(type) {
 	default:
 		panic(fmt.Sprintf("unknown result type: %T", r))
 	case *tree.ResultColumnExpression:
 		copied := *r
+
+		dataType, err := predictReturnType(r.Expression, s.usedTables)
+		if err != nil {
+			return nil, err
+		}
 
 		if len(s.usedTables) > 0 {
 			err := addTableIfNotPresent(s.usedTables[0].Name, &copied)
@@ -113,15 +131,21 @@ func (s *selectCoreContext) evaluateResult(result tree.ResultColumn) ([]*tree.Re
 			}
 		}
 
-		results = append(results, &copied)
+		results = append(results, &RelationAttribute{
+			ResultExpression: &copied,
+			Type:             dataType,
+		})
 	case *tree.ResultColumnStar:
 		for _, tbl := range s.usedTables {
 			for _, col := range tbl.Columns {
-				results = append(results, &tree.ResultColumnExpression{
-					Expression: &tree.ExpressionColumn{
-						Table:  tbl.Name,
-						Column: col.Name,
+				results = append(results, &RelationAttribute{
+					ResultExpression: &tree.ResultColumnExpression{
+						Expression: &tree.ExpressionColumn{
+							Table:  tbl.Name,
+							Column: col.Name,
+						},
 					},
+					Type: col.Type,
 				})
 			}
 		}
@@ -132,11 +156,14 @@ func (s *selectCoreContext) evaluateResult(result tree.ResultColumn) ([]*tree.Re
 		}
 
 		for _, col := range tbl.Columns {
-			results = append(results, &tree.ResultColumnExpression{
-				Expression: &tree.ExpressionColumn{
-					Table:  tbl.Name,
-					Column: col.Name,
+			results = append(results, &RelationAttribute{
+				ResultExpression: &tree.ResultColumnExpression{
+					Expression: &tree.ExpressionColumn{
+						Table:  tbl.Name,
+						Column: col.Name,
+					},
 				},
+				Type: col.Type,
 			})
 		}
 	}
@@ -161,7 +188,7 @@ func (s *selectCoreAnalyzer) EnterSelectCore(node *tree.SelectCore) error {
 // ExitSelectCore pops the current scope.
 func (s *selectCoreAnalyzer) ExitSelectCore(node *tree.SelectCore) error {
 	var err error
-	s.lastColumns, err = s.context.relations()
+	s.detectedAttributes, err = s.context.relations()
 	if err != nil {
 		return err
 	}
@@ -219,4 +246,27 @@ func findTable(tables []*types.Table, name string) (*types.Table, error) {
 	}
 
 	return nil, fmt.Errorf(`table "%s" not found`, name)
+}
+
+// findColumn finds a column by name
+func findColumn(columns []*types.Column, name string) (*types.Column, error) {
+	for _, c := range columns {
+		if c.Name == name {
+			return c, nil
+		}
+	}
+
+	return nil, fmt.Errorf(`column "%s" not found`, name)
+}
+
+// addTableIfNotPresent adds the table name to the column if it is not already present.
+func addTableIfNotPresent(tableName string, expr tree.Accepter) error {
+	return expr.Accept(&tree.ImplementedWalker{
+		FuncEnterExpressionColumn: func(col *tree.ExpressionColumn) error {
+			if col.Table == "" {
+				col.Table = tableName
+			}
+			return nil
+		},
+	})
 }
