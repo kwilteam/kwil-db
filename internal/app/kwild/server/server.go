@@ -12,7 +12,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
@@ -91,6 +90,8 @@ func (s *Server) Start(ctx context.Context) error {
 	}()
 	defer func() {
 		if err := recover(); err != nil {
+			s.log.Error("kwild server panic", zap.Any("error", err))
+			/* xxx
 			switch et := err.(type) {
 			case abci.FatalError:
 				s.log.Error("Blockchain application hit an unrecoverable error:\n\n%v",
@@ -99,6 +100,7 @@ func (s *Server) Start(ctx context.Context) error {
 			default:
 				s.log.Error("kwild server panic", zap.Any("error", err))
 			}
+			*/
 		}
 	}()
 

@@ -129,9 +129,9 @@ func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privat
 		&p2p.NodeKey{
 			PrivKey: privateKey,
 		},
-		proxy.NewLocalClientCreator(app),
+		proxy.NewConnSyncLocalClientCreator(app), // "connection-synchronized" local client
 		cometNodes.DefaultGenesisDocProviderFunc(conf),
-		cometNodes.DefaultDBProvider,
+		cometConfig.DefaultDBProvider,
 		cometNodes.DefaultMetricsProvider(conf.Instrumentation),
 		logger,
 	)

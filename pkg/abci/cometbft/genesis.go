@@ -71,7 +71,7 @@ func GenesisDoc(pkeys []cmtEd.PrivKey, chainIDPrefix string) *cmtTypes.GenesisDo
 	genDoc := cmtTypes.GenesisDoc{
 		ChainID:         chainIDPrefix + cmtRand.Str(6),
 		GenesisTime:     cmtTime.Now(),
-		ConsensusParams: cmtTypes.DefaultConsensusParams(),
+		ConsensusParams: cmtTypes.DefaultConsensusParams(), // includes VoteExtensionsEnableHeight: 0, (disabled)
 		Validators:      genVals,
 	}
 	return &genDoc

@@ -122,6 +122,8 @@ func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) e
 
 	signBytes := types.VoteSignBytes(chainID, vote)
 
+	// VoteExtensionSignBytes???
+
 	// We might crash before writing to the wal,
 	// causing us to try to re-sign for the same HRS.
 	// If signbytes are the same, use the last signature.
