@@ -2,6 +2,7 @@ package client
 
 import "fmt"
 
+// Records providers an iterator over a set of records.
 type Records struct {
 	// index tracks the current row index for the iterator.
 	index int

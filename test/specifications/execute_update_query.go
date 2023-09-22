@@ -2,7 +2,6 @@ package specifications
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/cstockton/go-conv"
@@ -12,7 +11,7 @@ import (
 func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
 	t.Logf("Executing update action specification")
 	// Given a valid database schema
-	db := SchemaLoader.Load(t, schemaTestDB)
+	db := SchemaLoader.Load(t, SchemaTestDB)
 	dbID := execute.DBID(db.Name)
 	actionName := "update_user"
 	userQ := userTable{
@@ -49,13 +48,6 @@ func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute Exe
 	assert.EqualValues(t, userQ.ID, user1Id)
 	assert.EqualValues(t, userQ.UserName, user1Username)
 	assert.EqualValues(t, userQ.Age, user1Age)
-
-	// TODO: delete
-	allPost, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
-	assert.NoError(t, err)
-	posts := allPost.Export()
-	fmt.Println("allPost", posts)
-	// TODO: end delete
 
 	// check foreign key was updated properly from the previous UPDATE
 	receipt, err = execute.QueryDatabase(ctx, dbID, "SELECT title, content FROM posts WHERE user_id = 2222;")

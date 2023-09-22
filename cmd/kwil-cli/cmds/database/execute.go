@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
-
 	"github.com/spf13/cobra"
 )
 
@@ -23,12 +22,11 @@ func executeCmd() *cobra.Command {
 		Long: `Execute executes a query against the specified database.  The query name is
 specified as a required "--action" flag, and the query parameters as arguments.
 In order to specify an parameter, you first need to specify the parameter name, then the parameter value, delimited by a colon.
-You can include the input's '$' prefix if you wish, but it is not required.
 
 For example, if I have a query name "create_user" that takes two arguments: name and age.
 I would specify the query as follows:
 
-'$name:satoshi' '$age:32' --action=create_user
+'name:satoshi' 'age:32' --action=create_user
 
 You specify the database to execute this against with the --name flag, and
 the owner with the --owner flag.
@@ -37,13 +35,15 @@ You can also specify the database by passing the database id with the --dbid fla
 
 For example:
 
-'$name:satoshi' 'age:32' --action=create_user --name mydb --owner 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D
+'name:satoshi' 'age:32' --action=create_user --name mydb --owner 0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D
 
 OR
 
-'$name:satoshi' '$age:32' --dbid=x1234 --action=create_user `,
+'name:satoshi' 'age:32' --dbid=x1234 --action=create_user `,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			var resp []byte
+
+			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				dbId, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return fmt.Errorf("target database not properly specified: %w", err)
@@ -61,19 +61,15 @@ OR
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
 
-				receipt, err := client.ExecuteAction(ctx, dbId, lowerName, inputs...)
+				resp, err = client.ExecuteAction(ctx, dbId, lowerName, inputs...)
 				if err != nil {
 					return fmt.Errorf("error executing database: %w", err)
 				}
 
-				// print the response
-				display.PrintTxResponse(receipt)
-
-				// print the results
-				// printTableAny(results)
-
 				return nil
 			})
+
+			return display.Print(display.RespTxHash(resp), err, config.GetOutputFormat())
 		},
 	}
 
@@ -118,7 +114,6 @@ func GetInputs(args []string, action *transactions.Action) ([][]any, error) {
 
 // createActionInputs takes a []map[string]any and an action, and converts it to [][]any
 func createActionInputs(inputs []map[string]any, action *transactions.Action) ([][]any, error) {
-
 	tuples := [][]any{}
 	for _, input := range inputs {
 		newTuple := []any{}

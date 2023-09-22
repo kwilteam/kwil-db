@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	// this is a wire flag
 	// WithoutPrivateKey is a flag that can be passed to DialClient to indicate that the client should not use the private key in the config
+	// this is a weird flag
 	WithoutPrivateKey uint8 = 1 << iota
 )
 
@@ -24,10 +24,11 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		return err
 	}
 
-	options := []client.ClientOpt{
+	options := []client.Option{
 		client.WithLogger(log.New(log.Config{
 			Level: "error", // TODO: the log package should change this to take an enum instead of a string
 		})),
+		client.WithTLSCert(conf.TLSCertFile),
 	}
 
 	if flags&WithoutPrivateKey == 0 {
@@ -46,13 +47,7 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		return fmt.Errorf("kwil grpc url is required")
 	}
 
-	if conf.TLSCertFile != "" {
-		options = append(options, client.WithTLSCert(conf.TLSCertFile))
-	}
-
-	clt, err := client.New(conf.GrpcURL,
-		options...,
-	)
+	clt, err := client.Dial(conf.GrpcURL, options...)
 	if err != nil {
 		return err
 	}

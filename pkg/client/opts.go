@@ -1,27 +1,34 @@
 package client
 
 import (
+	"github.com/kwilteam/kwil-db/pkg/client/types"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
-type ClientOpt func(*Client)
+type Option func(*Client)
 
-func WithLogger(logger log.Logger) ClientOpt {
+func WithLogger(logger log.Logger) Option {
 	return func(c *Client) {
 		c.logger = logger
 	}
 }
 
-func WithSigner(signer crypto.Signer) ClientOpt {
+func WithSigner(signer crypto.Signer) Option {
 	return func(c *Client) {
 		c.Signer = signer
 	}
 }
 
-func WithTLSCert(certFile string) ClientOpt {
+func WithTLSCert(certFile string) Option {
 	return func(c *Client) {
-		c.certFile = certFile
+		c.tlsCertFile = certFile
+	}
+}
+
+func WithTransportClient(tc types.TransportClient) Option {
+	return func(c *Client) {
+		c.transportClient = tc
 	}
 }
 
@@ -30,7 +37,7 @@ type callOptions struct {
 	// if nil, the client will use the default value
 	// if false, it will not authenticate
 	// if true, it will authenticate
-	forceAuthenticated *bool
+	forceAuthenticated *bool // is pointer necessary here?
 }
 
 type CallOpt func(*callOptions)
