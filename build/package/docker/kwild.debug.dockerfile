@@ -23,5 +23,5 @@ WORKDIR /app
 COPY --from=stage /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=stage /app/dist/kwild-* ./kwild
 COPY --from=stage /app/dist/kwil-admin-* ./kwil-admin
-EXPOSE 40000 50051 8080 26656 26657
+EXPOSE 40000 50151 50051 8080 26656 26657
 ENTRYPOINT ["/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "--accept-multiclient", "exec", "/app/kwild", "--"]

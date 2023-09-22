@@ -121,7 +121,7 @@ services:
     container_name: math_ext1
     image: kwilbrennan/extensions-math:multi-arch
     ports:
-      - "50151:50051"
+      - "50061:50051"
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.100.101
