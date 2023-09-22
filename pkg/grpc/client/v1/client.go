@@ -5,7 +5,8 @@ import (
 	"os"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	ktls "github.com/kwilteam/kwil-db/pkg/crypto/tls"
+	"github.com/kwilteam/kwil-db/internal/pkg/transport"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	grpcInsecure "google.golang.org/grpc/credentials/insecure"
@@ -80,7 +81,7 @@ func CreateCertOption(certFile string) (grpc.DialOption, error) {
 			return nil, fmt.Errorf("failed to read cert file: %w", err)
 		}
 
-		tlsConfig, err := ktls.NewTLSConfig(pemCerts)
+		tlsConfig, err := transport.NewClientTLSConfig(pemCerts)
 		if err != nil {
 			return nil, err
 		}

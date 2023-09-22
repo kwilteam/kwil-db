@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -10,20 +11,23 @@ import (
 	"path/filepath"
 	"time"
 
+	admpb "github.com/kwilteam/kwil-db/api/protobuf/admin/v0"
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	admSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/admin/v0"
 	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
 	txSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
 	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
 	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
+	"github.com/kwilteam/kwil-db/internal/pkg/transport"
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway/middleware/cors"
-	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
+	kwilgrpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
 	"github.com/kwilteam/kwil-db/pkg/kv/atomic"
 	"github.com/kwilteam/kwil-db/pkg/kv/badger"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -37,8 +41,9 @@ import (
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
-
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
@@ -74,14 +79,17 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
-	// tx service
+	// tx service and grpc server
 	txsvc := buildTxSvc(d, datasetsModule, accs, vstore, &wrappedCometBFTClient{cometBftClient})
-
-	// grpc server
 	grpcServer := buildGrpcServer(d, txsvc)
+
+	// admin service and server
+	admsvc := buildAdminSvc(d)
+	admServer := buildAdminServer(d, admsvc)
 
 	return &Server{
 		grpcServer:   grpcServer,
+		admServer:    admServer,
 		gateway:      buildGatewayServer(d),
 		cometBftNode: cometBftNode,
 		log:          *d.log.Named("server"),
@@ -92,10 +100,11 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 // coreDependencies holds dependencies that are widely used
 type coreDependencies struct {
-	ctx    context.Context
-	cfg    *config.KwildConfig
-	log    log.Logger
-	opener sql.Opener
+	ctx     context.Context
+	cfg     *config.KwildConfig
+	log     log.Logger
+	opener  sql.Opener
+	keypair *tls.Certificate
 }
 
 // closeFuncs holds a list of closers
@@ -163,6 +172,12 @@ func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.Accoun
 	vstore *vmgr.ValidatorMgr, cometBftClient txSvc.BlockchainTransactor) *txSvc.Service {
 	return txSvc.NewService(txsvc, accs, vstore, cometBftClient,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
+	)
+}
+
+func buildAdminSvc(d *coreDependencies) *admSvc.Service {
+	return admSvc.NewService(
+		admSvc.WithLogger(*d.log.Named("admin-service")),
 	)
 }
 
@@ -304,27 +319,19 @@ func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, e
 	return &keyPair, nil
 }
 
-func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *grpc.Server {
+func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *kwilgrpc.Server {
 	lis, err := net.Listen("tcp", d.cfg.AppCfg.GrpcListenAddress)
 	if err != nil {
 		failBuild(err, "failed to build grpc server")
 	}
-	if d.cfg.AppCfg.TLSKeyFile != "" {
-		d.log.Debug("loading TLS key pair for gRPC server", zap.String("key_file", "d.cfg.TLSKeyFile"),
-			zap.String("cert_file", "d.cfg.TLSCertFile")) // wtf why can't we log yet?
-		fmt.Println("*********** loading TLS key pair ***********")
-		keyPair, err := loadTLSCertificate(d.cfg.AppCfg.TLSKeyFile, d.cfg.AppCfg.TLSCertFile, d.cfg.AppCfg.Hostname)
-		if err != nil {
-			failBuild(err, "loadTLSCertificate")
-		}
+	if d.cfg.AppCfg.EnableRPCTLS {
 		lis = tls.NewListener(lis, &tls.Config{
-			// ServerName:   d.cfg.HostName,
-			Certificates: []tls.Certificate{*keyPair},
+			Certificates: []tls.Certificate{*d.keypair},
 			MinVersion:   tls.VersionTLS12,
 		})
 	}
 
-	grpcServer := grpc.New(*d.log.Named("grpc-server"), lis)
+	grpcServer := kwilgrpc.New(*d.log.Named("grpc-server"), lis)
 	txpb.RegisterTxServiceServer(grpcServer, txsvc)
 	grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
 
@@ -333,7 +340,7 @@ func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *grpc.Serv
 
 func buildHealthSvc(d *coreDependencies) *healthsvc.Server {
 	// health service
-	registrar := healthcheck.NewRegistrar(*d.log.Named("healthcheck"))
+	registrar := healthcheck.NewRegistrar(*d.log.Named("auth-healthcheck"))
 	registrar.RegisterAsyncCheck(10*time.Second, 3*time.Second, healthcheck.Check{
 		Name: "dummy",
 		Check: func(ctx context.Context) error {
@@ -343,6 +350,58 @@ func buildHealthSvc(d *coreDependencies) *healthsvc.Server {
 	})
 	ck := registrar.BuildChecker(simple_checker.New(d.log))
 	return healthsvc.NewServer(ck)
+}
+
+func buildAdminServer(d *coreDependencies, admsvc admpb.AdminServiceServer) *kwilgrpc.Server {
+	lis, err := net.Listen("tcp", d.cfg.AppCfg.AdminListenAddress)
+	if err != nil {
+		failBuild(err, "failed to build grpc server")
+	}
+	// client certs
+	caCertPool := x509.NewCertPool()
+	var clientsCerts []byte
+	if clientsFile := filepath.Join(d.cfg.RootDir, defaultAdminClients); fileExists(clientsFile) {
+		clientsCerts, err = os.ReadFile(clientsFile)
+		if err != nil {
+			failBuild(err, "failed to load client CAs file")
+		}
+	} else if d.cfg.AutoGen {
+		clientCredsFileBase := filepath.Join(d.cfg.RootDir, "auth")
+		clientCertFile, clientKeyFile := clientCredsFileBase+".cert", clientCredsFileBase+".key"
+		err = transport.GenTLSKeyPair(clientCertFile, clientKeyFile, "kwild CA", nil)
+		if err != nil {
+			failBuild(err, "failed to generate admin client credentials")
+		}
+		d.log.Info("generated admin service client key pair", zap.String("cert", clientCertFile), zap.String("key", clientKeyFile))
+		if clientsCerts, err = os.ReadFile(clientCertFile); err != nil {
+			failBuild(err, "failed to read auto-generate client certificate")
+		}
+		if err = os.WriteFile(clientsFile, clientsCerts, 0644); err != nil {
+			failBuild(err, "failed to write client CAs file")
+		}
+		d.log.Info("generated admin service client CAs file", zap.String("file", clientsFile))
+	} else {
+		d.log.Info("No admin client CAs file. Use kwil-admin's node gen-auth-key command to generate")
+	}
+	if len(clientsCerts) > 0 && !caCertPool.AppendCertsFromPEM(clientsCerts) {
+		failBuild(err, "invalid client CAs file")
+	}
+
+	// TLS configuration for mTLS (mutual TLS) protocol-level authentication
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{*d.keypair},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    caCertPool,
+	}
+
+	creds := grpc.Creds(credentials.NewTLS(tlsConfig))
+	opts := kwilgrpc.WithSrvOpt(creds)
+
+	grpcServer := kwilgrpc.New(*d.log.Named("auth-grpc-server"), lis, opts)
+	admpb.RegisterAdminServiceServer(grpcServer, admsvc)
+	grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
+
+	return grpcServer
 }
 
 func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {

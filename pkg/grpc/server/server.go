@@ -3,9 +3,10 @@ package server
 import (
 	"net"
 
+	"github.com/kwilteam/kwil-db/pkg/log"
+
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
-	"github.com/kwilteam/kwil-db/pkg/log"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -16,10 +17,12 @@ type Server struct {
 	server   *grpc.Server
 	logger   log.Logger
 	listener net.Listener
+
+	srvOpts []grpc.ServerOption
 }
 
 func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
-	l := *logger.Named("grpcServer").WithOptions(zap.WithCaller(false))
+	l := *logger.WithOptions(zap.WithCaller(false))
 
 	recoveryFunc := func(p interface{}) error {
 		l.Error("panic triggered", zap.Any("panic", p))
@@ -33,15 +36,7 @@ func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 		logging.WithLogOnEvents(logging.StartCall, logging.FinishCall),
 	}
 
-	server := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			recovery.UnaryServerInterceptor(recoveryOpts...),
-			logging.UnaryServerInterceptor(InterceptorLogger(&l), loggingOpts...),
-		),
-	)
-
 	s := &Server{
-		server:   server,
 		logger:   l,
 		listener: lis,
 	}
@@ -49,6 +44,12 @@ func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(s)
 	}
+	srvOpts := append(s.srvOpts, grpc.ChainUnaryInterceptor(
+		recovery.UnaryServerInterceptor(recoveryOpts...),
+		logging.UnaryServerInterceptor(InterceptorLogger(&l), loggingOpts...),
+	))
+
+	s.server = grpc.NewServer(srvOpts...)
 
 	return s
 }

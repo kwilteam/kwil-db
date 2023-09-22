@@ -17,5 +17,5 @@ FROM scratch AS assemble
 WORKDIR /app
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /app/dist/kwild-* ./kwild
-EXPOSE 50051 8080 26656 26657
+EXPOSE 50051 50151 8080 26656 26657
 ENTRYPOINT ["/app/kwild"]

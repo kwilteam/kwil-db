@@ -90,14 +90,14 @@ Examples:
 
 	# Generate a network with 4 validators and 4 non-validators with the IPs
 	# 192.168.10.{2,...,9}
-	kwild testnet -v 4 -o ./output --starting-ip 192.168.10.2
+	kwil-admin setup testnet -v 4 -o ./output --starting-ip 192.168.10.2
 
 	# Same as above but only 2 additional (non-validator) nodes
-	kwild testnet -v 4 -n 2 --o ./output --starting-ip 192.168.10.2
+	kwil-admin setup testnet -v 4 -n 2 --o ./output --starting-ip 192.168.10.2
 
 	# Manually specify the IP addresses of the first two nodes, with the others
 	# using "node2" and "node3" in persistent_peers.
-	kwild testnet -v 4 -o ./output --hostname 192.168.10.2 --hostname 192.168.10.4
+	kwil-admin setup testnet -v 4 -o ./output --hostname 192.168.10.2 --hostname 192.168.10.4
 `
 }
 
@@ -126,7 +126,7 @@ func (rdc *resetDirCmd) rootDir() (string, error) {
 		if !rdc.Force {
 			return "", errors.New("not removing default home directory without --force or --root_dir")
 		}
-		rootDir = defaultRoot()
+		rootDir = defaultKwildRoot()
 	}
 	return rootDir, nil
 }
