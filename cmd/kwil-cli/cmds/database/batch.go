@@ -6,13 +6,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/csv"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
-
 	"github.com/spf13/cobra"
 )
 
@@ -35,7 +34,9 @@ reads in a file from the specified directory, and executes the action in bulk.
 The execution is treated as a single transaction, and will either succeed or fail.`,
 		Args: cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			var resp []byte
+
+			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return err
@@ -70,16 +71,15 @@ The execution is treated as a single transaction, and will either succeed or fai
 					return fmt.Errorf("error creating action inputs: %w", err)
 				}
 
-				receipt, err := client.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples...)
+				resp, err = client.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples...)
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}
 
-				// print the response
-				display.PrintTxResponse(receipt)
-
 				return nil
 			})
+
+			return display.Print(display.RespTxHash(resp), err, config.GetOutputFormat())
 		},
 	}
 

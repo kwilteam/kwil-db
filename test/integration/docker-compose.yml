@@ -11,7 +11,7 @@ services:
       - "26656:26656"
       - "26657:26657"
     env_file:
-      - .env
+      - .env # docker compose by default will use this file, here just make it explicit
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node0

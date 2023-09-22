@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
-
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"

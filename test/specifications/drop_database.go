@@ -8,18 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// DatabaseDropDsl is dsl for database drop specification
-type DatabaseDropDsl interface {
-	TxQueryDsl
-	DropDatabase(ctx context.Context, dbName string) (txHash []byte, err error)
-	DatabaseIdentifier
-	DatabaseExister
-}
-
 func DatabaseDropSpecification(ctx context.Context, t *testing.T, drop DatabaseDropDsl) {
 	t.Logf("Executing database drop specification")
 	// Given a valid database schema
-	db := SchemaLoader.Load(t, schemaTestDB)
+	db := SchemaLoader.Load(t, SchemaTestDB)
 
 	// When i drop the database
 	txHash, err := drop.DropDatabase(ctx, db.Name)

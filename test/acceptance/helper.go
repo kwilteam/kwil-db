@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"path"
+	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -27,6 +31,7 @@ var (
 	envFile = getEnv("KACT_ENV_FILE", "./.env")
 )
 
+// ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
 	GWEndpoint    string // gateway endpoint
 	GrpcEndpoint  string
@@ -39,18 +44,18 @@ type ActTestCfg struct {
 	WaitTimeout time.Duration
 	LogLevel    string
 
-	AliceRawPK string // Alice is the owner
-	BobRawPK   string
-	AlicePK    crypto.Signer
-	BobPk      crypto.Signer
+	CreatorRawPk  string
+	VisitorRawPK  string
+	CreatorSigner crypto.Signer
+	VisitorSigner crypto.Signer
 }
 
-func (e *ActTestCfg) AliceAddr() string {
-	return e.AlicePK.PubKey().Address().String()
+func (e *ActTestCfg) CreatorAddr() string {
+	return e.CreatorSigner.PubKey().Address().String()
 }
 
-func (e *ActTestCfg) BobAddr() string {
-	return e.BobPk.PubKey().Address().String()
+func (e *ActTestCfg) VisitorAddr() string {
+	return e.VisitorSigner.PubKey().Address().String()
 }
 
 func (e *ActTestCfg) IsRemote() bool {
@@ -62,19 +67,19 @@ func (e *ActTestCfg) DumpToEnv() error {
 GRPC_ENDPOINT=%s
 GATEWAY_ENDPOINT=%s
 CHAIN_ENDPOINT=%s
-ALICE_PK=%s
-ALICE_ADDR=%s
-BOB_PK=%s
-BOB_ADDR=%s
+CREATOR_PK=%s
+CREATOR_ADDR=%s
+VISITOR_PK=%s
+VISITOR_ADDR=%s
 `
 	content := fmt.Sprintf(envTemplage,
 		e.GrpcEndpoint,
 		e.GWEndpoint,
 		e.ChainEndpoint,
-		e.AliceRawPK,
-		e.AliceAddr(),
-		e.BobRawPK,
-		e.BobAddr(),
+		e.CreatorRawPk,
+		e.CreatorAddr(),
+		e.VisitorRawPK,
+		e.VisitorAddr(),
 	)
 
 	err := os.WriteFile("../../.local_env", []byte(content), 0644)
@@ -113,14 +118,14 @@ func (r *ActHelper) LoadConfig() {
 	// default wallet mnemonic: test test test test test test test test test test test junk
 	// default wallet hd path : m/44'/60'/0'
 	cfg := &ActTestCfg{
-		AliceRawPK:                getEnv("KACT_ALICE_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
-		BobRawPK:                  getEnv("KACT_BOB_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
+		CreatorRawPk:              getEnv("KACT_CREATOR_PK", "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"),
+		VisitorRawPK:              getEnv("KACT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
-		LogLevel:                  getEnv("KACT_LOG_LEVEL", "debug"),
+		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
 		GWEndpoint:                getEnv("KACT_GATEWAY_ENDPOINT", "localhost:8080"),
 		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
-		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"), // e.g. docker-compose.override.yml
+		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
 
 	// value is in format of "10s" or "1m"
@@ -128,13 +133,13 @@ func (r *ActHelper) LoadConfig() {
 	cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
 	require.NoError(r.t, err, "invalid wait timeout")
 
-	alicePk, err := crypto.Secp256k1PrivateKeyFromHex(cfg.AliceRawPK)
-	require.NoError(r.t, err, "invalid alice private key")
-	cfg.AlicePK = crypto.DefaultSigner(alicePk)
+	creatorPk, err := crypto.Secp256k1PrivateKeyFromHex(cfg.CreatorRawPk)
+	require.NoError(r.t, err, "invalid creator private key")
+	cfg.CreatorSigner = crypto.DefaultSigner(creatorPk)
 
-	bobPk, err := crypto.Secp256k1PrivateKeyFromHex(cfg.BobRawPK)
-	require.NoError(r.t, err, "invalid bob private key")
-	cfg.BobPk = crypto.DefaultSigner(bobPk)
+	bobPk, err := crypto.Secp256k1PrivateKeyFromHex(cfg.VisitorRawPK)
+	require.NoError(r.t, err, "invalid visitor private key")
+	cfg.VisitorSigner = crypto.DefaultSigner(bobPk)
 
 	r.cfg = cfg
 	cfg.DumpToEnv()
@@ -183,7 +188,7 @@ func fileExists(path string) bool {
 func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	r.t.Logf("setup test environment")
 
-	//setSchemaLoader(r.cfg.AliceAddr())
+	//setSchemaLoader(r.cfg.CreatorAddr())
 
 	envs, err := godotenv.Read(envFile)
 	require.NoError(r.t, err, "failed to parse .env file")
@@ -232,24 +237,57 @@ func (r *ActHelper) Teardown() {
 	}
 }
 
-func (r *ActHelper) GetAliceDriver() KwilAcceptanceDriver {
-	logger := log.New(log.Config{Level: r.cfg.LogLevel})
-	kwilClt, err := client.New(r.cfg.GrpcEndpoint,
-		client.WithSigner(r.cfg.AlicePK),
-		client.WithLogger(logger),
-	)
-	require.NoError(r.t, err, "failed to create kwil client")
+func (r *ActHelper) WaitUntilInterrupt() {
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
 
-	return driver.NewKwildDriver(kwilClt, driver.WithLogger(logger))
+	// block waiting for a signal
+	s := <-done
+	r.t.Logf("Got signal: %v\n", s)
+	r.Teardown()
+	r.t.Logf("Teardown done\n")
 }
 
-func (r *ActHelper) GetBobDriver() KwilAcceptanceDriver {
+// GetDriver returns a concrete driver for acceptance test, based on the driver
+// type and user. By default, the driver is created with the creator's private key.
+func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDriver {
+	pk := r.cfg.CreatorRawPk
+	signer := r.cfg.CreatorSigner
+	if user == "visitor" {
+		signer = r.cfg.VisitorSigner
+		pk = r.cfg.VisitorRawPK
+	}
+
+	switch driveType {
+	case "client":
+		return r.getClientDriver(signer)
+	case "cli":
+		return r.getCliDriver(pk, signer.PubKey().Bytes())
+	default:
+		panic("unsupported driver type")
+	}
+}
+
+func (r *ActHelper) getClientDriver(signer crypto.Signer) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
-	kwilClt, err := client.New(r.cfg.GrpcEndpoint,
-		client.WithSigner(r.cfg.BobPk),
+
+	options := []client.Option{client.WithSigner(signer),
 		client.WithLogger(logger),
-	)
+		client.WithTLSCert("")} // TODO: handle cert
+	kwilClt, err := client.Dial(r.cfg.GrpcEndpoint, options...)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return driver.NewKwildDriver(kwilClt, driver.WithLogger(logger))
+	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+}
+
+func (r *ActHelper) getCliDriver(privKey string, pubKey []byte) KwilAcceptanceDriver {
+	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+
+	_, currentFilePath, _, _ := runtime.Caller(1)
+	cliBinPath := path.Join(path.Dir(currentFilePath),
+		fmt.Sprintf("../../.build/kwil-cli-%s-%s", runtime.GOOS, runtime.GOARCH))
+	adminBinPath := path.Join(path.Dir(currentFilePath),
+		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
+
+	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.GrpcEndpoint, privKey, pubKey, logger)
 }

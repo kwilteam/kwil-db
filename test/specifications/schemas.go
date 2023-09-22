@@ -15,7 +15,7 @@ func (s *testSchema) GetFilePath() string {
 }
 
 var (
-	schemaTestDB = &testSchema{
+	SchemaTestDB = &testSchema{
 		FileName: "test_db",
 	}
 	schemaInvalidSqlSyntax = &testSchema{

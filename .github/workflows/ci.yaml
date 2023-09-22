@@ -134,6 +134,11 @@ jobs:
           build_time=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`
           echo "BUILD_TIME=$build_time" >> $GITHUB_ENV
 
+      - name: Build cli binaries
+        run: |
+          task build:cli
+          task build:admin
+
       - name: Pull Docker image
         run: |
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64

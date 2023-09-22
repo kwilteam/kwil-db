@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"go.uber.org/zap"
-
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"go.uber.org/zap"
 )
 
 func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequest) (*txpb.EstimatePriceResponse, error) {

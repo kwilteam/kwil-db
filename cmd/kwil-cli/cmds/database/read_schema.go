@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/pkg/client"
-
 	"github.com/spf13/cobra"
 )
 
@@ -19,42 +19,21 @@ func readSchemaCmd() *cobra.Command {
 		Long:  "",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return common.DialClient(cmd.Context(), common.WithoutPrivateKey, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			var resp respSchema
+			err := common.DialClient(cmd.Context(), common.WithoutPrivateKey, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return fmt.Errorf("you must specify either a database name with the --name, or a database id with the --dbid flag")
 				}
 
-				meta, err := client.GetSchema(ctx, dbid)
+				resp.Schema, err = client.GetSchema(ctx, dbid)
 				if err != nil {
-					return err
+					return fmt.Errorf("error getting schema: %w", err)
 				}
-
-				// now we print the metadata
-				fmt.Println("Tables:")
-				for _, t := range meta.Tables {
-					fmt.Printf("  %s\n", t.Name)
-					fmt.Printf("    Columns:\n")
-					for _, c := range t.Columns {
-						fmt.Printf("    %s\n", c.Name)
-						fmt.Printf("      Type: %s\n", c.Type)
-						for _, a := range c.Attributes {
-							fmt.Printf("      %s\n", a.Type)
-							if a.Value != "" {
-								fmt.Printf("        %s\n", fmt.Sprint(a.Value))
-							}
-						}
-					}
-				}
-
-				// print queries
-				fmt.Println("Actions:")
-				for _, q := range meta.Actions {
-					fmt.Printf("  %s\n", q.Name)
-					fmt.Printf("    Inputs: %s\n", q.Inputs)
-				}
-				return nil
+				return err
 			})
+
+			return display.Print(&resp, err, config.GetOutputFormat())
 		},
 	}
 

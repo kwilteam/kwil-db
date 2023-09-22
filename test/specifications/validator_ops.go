@@ -6,23 +6,14 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/validators"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
-
-// ValidatorOpsDsl is a DSL for validator set updates specification such as join, leave, approve, etc.
-type ValidatorOpsDsl interface {
-	TxQueryDsl
-	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error)
-	ValidatorNodeJoin(ctx context.Context) ([]byte, error)
-	ValidatorNodeLeave(ctx context.Context) ([]byte, error)
-	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*validators.JoinRequest, error)
-	ValidatorsList(ctx context.Context) ([]*validators.Validator, error)
-}
 
 func NetworkNodeValidatorSetSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, count int) {
 	t.Log("Executing network node validator set specification")
 	vals, err := netops.ValidatorsList(ctx)
-	assert.NoError(t, err)
-	assert.Equal(t, count, len(vals))
+	require.NoError(t, err)
+	require.Equal(t, count, len(vals))
 }
 
 func NetworkNodeJoinSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, valCount int) {
