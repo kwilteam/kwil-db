@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 type Server struct {
 	grpcServer   *grpc.Server
 	gateway      *gateway.GatewayServer
+	admServer    *grpc.Server
 	cometBftNode *cometbft.CometBftNode
 	closers      *closeFuncs
 	log          log.Logger
@@ -72,11 +74,28 @@ func New(ctx context.Context, cfg *config.KwildConfig) (svr *Server, err error) 
 		logger.Warn("using fallback sqlite path", zap.String("sqlitePath", dbDir))
 	}
 
+	if cfg.AppCfg.TLSKeyFile == "" || cfg.AppCfg.TLSCertFile == "" {
+		return nil, errors.New("unspecified TLS key and/or certificate")
+	}
+
+	// Make the root directory if it does not exist.
+	if err = os.MkdirAll(cfg.RootDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create root directory %q: %w", cfg.RootDir, err)
+	}
+
+	logger.Debug("loading TLS key pair for gRPC servers", zap.String("key_file", "d.cfg.TLSKeyFile"),
+		zap.String("cert_file", "d.cfg.TLSCertFile")) // wtf why can't we log yet?
+	keyPair, err := loadTLSCertificate(cfg.AppCfg.TLSKeyFile, cfg.AppCfg.TLSCertFile, cfg.AppCfg.Hostname)
+	if err != nil {
+		return nil, err
+	}
+
 	deps := &coreDependencies{
-		ctx:    ctx,
-		cfg:    cfg,
-		log:    logger,
-		opener: newSqliteOpener(dbDir),
+		ctx:     ctx,
+		cfg:     cfg,
+		log:     logger,
+		opener:  newSqliteOpener(dbDir),
+		keypair: keyPair,
 	}
 
 	return buildServer(deps, closers), nil
@@ -134,6 +153,17 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.grpcServer.Start()
 	})
 	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.GrpcListenAddress))
+
+	group.Go(func() error {
+		go func() {
+			<-groupCtx.Done()
+			s.log.Info("stop admin server")
+			s.admServer.Stop()
+		}()
+
+		return s.admServer.Start()
+	})
+	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
 
 	group.Go(func() error {
 		go func() {

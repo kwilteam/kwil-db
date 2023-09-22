@@ -51,7 +51,7 @@ func (vlc *ValListCmd) run(ctx context.Context, a *args) error {
 }
 
 type ValJoinStatusCmd struct {
-	Joiner HexArg `arg:"positional,required" help:"Public hey (hex) of the candidate valiator to check for an active join request."`
+	Joiner HexArg `arg:"positional,required" help:"Public hey (hex) of the candidate validator to check for an active join request."`
 }
 
 var _ runner = (*ValJoinStatusCmd)(nil)
@@ -95,9 +95,9 @@ func edSigningClient(rpcAddr string, privKey []byte) (*client.Client, error) {
 // valSignedCmd is meant to be embedded in commands that want a private key in
 // either a positional arg or a text file.
 type valSignedCmd struct {
-	PrivKey HexArg `arg:"positional" help:"Private key (hexadecimal string) of the validator"`
+	PrivKey HexArg `arg:"positional" help:"(Optional) Private key (hexadecimal) of the validator. Mutually exclusive with --key-file."`
 
-	PrivKeyFile string `arg:"-k,--key-file" help:"file containing the private key of the validator"`
+	PrivKeyFile string `arg:"-k,--key-file" help:"File containing the private key of the validator."`
 }
 
 func (vsc *valSignedCmd) client(rpcAddr string) (*client.Client, error) {
@@ -130,7 +130,7 @@ func (vjc *ValJoinCmd) run(ctx context.Context, a *args) error {
 }
 
 type ValApproveCmd struct {
-	Joiner HexArg `arg:"positional,required"`
+	Joiner HexArg `arg:"positional,required" help:"Public key of the candidate node with an active join request to approve."`
 	valSignedCmd
 }
 
