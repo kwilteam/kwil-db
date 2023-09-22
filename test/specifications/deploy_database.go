@@ -5,26 +5,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/kwilteam/kwil-db/pkg/transactions"
-
-	"github.com/stretchr/testify/assert"
 )
-
-// DatabaseDeployDsl is dsl for database deployment specification
-type DatabaseDeployDsl interface {
-	DatabaseIdentifier
-	DatabaseExister
-	DeployDatabase(ctx context.Context, db *transactions.Schema) (txHash []byte, err error)
-	TxSuccess(ctx context.Context, txHash []byte) error
-}
 
 // TODO: a better way to do this would be to retrieve the deployed schema structure and do a deep comparison
 func DatabaseDeploySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl) {
 	t.Logf("Executing database deploy specification")
 
 	// Given a valid database schema
-	db := SchemaLoader.Load(t, schemaTestDB)
+	db := SchemaLoader.Load(t, SchemaTestDB)
 
 	// When i deploy the database
 	txHash, err := deploy.DeployDatabase(ctx, db)
@@ -77,20 +65,20 @@ func DatabaseDeployInvalidExtensionSpecification(ctx context.Context, t *testing
 
 	// And i expect database should not exist
 	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func DatabaseVerifySpecification(ctx context.Context, t *testing.T, deploy DatabaseDeployDsl, exists bool) {
 	t.Logf("Executing database verify specification")
 
 	// Given a valid database schema
-	db := SchemaLoader.Load(t, schemaTestDB)
+	db := SchemaLoader.Load(t, SchemaTestDB)
 
 	// And i expect database should exist
 	err := deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
 	if exists {
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	} else {
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 }

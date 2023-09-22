@@ -9,7 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
-func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) (transactions.TxHash, error) {
+func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
 	pbTx := convertTx(tx)
 	res, err := c.txClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
 	if err != nil {

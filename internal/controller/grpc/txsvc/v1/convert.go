@@ -3,93 +3,10 @@ package txsvc
 import (
 	"fmt"
 
-	"math/big"
-
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
-
-// convertToAbciTx converts a protobuf transaction to an abci transaction
-func convertToAbciTx(incoming *txpb.Transaction) (*transactions.Transaction, error) {
-	payloadType := transactions.PayloadType(incoming.Body.PayloadType)
-	if !payloadType.Valid() {
-		return nil, fmt.Errorf("invalid payload type: %s", incoming.Body.PayloadType)
-	}
-
-	if incoming.Signature == nil {
-		return nil, fmt.Errorf("transaction signature not given")
-	}
-
-	convSignature, err := convertSignature(incoming.Signature)
-	if err != nil {
-		return nil, err
-	}
-
-	bigFee, ok := big.NewInt(0).SetString(incoming.Body.Fee, 10)
-	if !ok {
-		return nil, fmt.Errorf("invalid fee: %s", incoming.Body.Fee)
-	}
-
-	return &transactions.Transaction{
-		Body: &transactions.TransactionBody{
-			PayloadType: payloadType,
-			Payload:     incoming.Body.Payload,
-			Nonce:       incoming.Body.Nonce,
-			Fee:         bigFee,
-			Salt:        incoming.Body.Salt,
-			Description: incoming.Body.Description,
-		},
-		Serialization: transactions.SignedMsgSerializationType(incoming.Serialization),
-		Signature:     convSignature,
-		Sender:        incoming.Sender,
-	}, nil
-}
-
-// convertFromAbciTx converts an abci transaction(encoded) to a protobuf transaction
-func convertFromAbciTx(tx *transactions.Transaction) (*txpb.Transaction, error) {
-	if tx == nil {
-		return nil, fmt.Errorf("transaction is nil")
-	}
-
-	return &txpb.Transaction{
-		Body: &txpb.Transaction_Body{
-			Payload:     tx.Body.Payload,
-			PayloadType: tx.Body.PayloadType.String(),
-			Fee:         tx.Body.Fee.String(),
-			Nonce:       tx.Body.Nonce,
-			Salt:        tx.Body.Salt,
-			Description: tx.Body.Description,
-		},
-		Serialization: tx.Serialization.String(),
-		Signature: &txpb.Signature{
-			SignatureBytes: tx.Signature.Signature,
-			SignatureType:  tx.Signature.Type.String(),
-		},
-		Sender: tx.Sender,
-	}, nil
-}
-
-func newEmptySignature() (bytes []byte, sigType crypto.SignatureType) {
-	return []byte{}, crypto.SignatureTypeEmpty
-}
-
-func convertSignature(sig *txpb.Signature) (*crypto.Signature, error) {
-	if sig == nil {
-		emptyBts, emptyType := newEmptySignature()
-		return &crypto.Signature{
-			Signature: emptyBts,
-			Type:      emptyType,
-		}, nil
-	}
-
-	sigType := crypto.SignatureTypeLookUp(sig.SignatureType)
-	return &crypto.Signature{
-		Signature: sig.SignatureBytes,
-		Type:      sigType,
-	}, nil
-}
 
 func convertSchemaFromEngine(schema *engineTypes.Schema) (*txpb.Schema, error) {
 	actions, err := convertActionsFromEngine(schema.Procedures)

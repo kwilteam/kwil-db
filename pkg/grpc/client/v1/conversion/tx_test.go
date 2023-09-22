@@ -1,4 +1,4 @@
-package txsvc
+package conversion
 
 import (
 	"testing"
@@ -24,10 +24,10 @@ func Test_convertTx(t *testing.T) {
 		Sender: []byte("sender"),
 	}
 
-	abciTx, err := convertToAbciTx(incomingTx)
+	abciTx, err := ConvertToAbciTx(incomingTx)
 	require.NoError(t, err, "convertToAbciTx failed")
 
-	outgoingTx, err := convertFromAbciTx(abciTx)
+	outgoingTx, err := ConvertFromAbciTx(abciTx)
 	require.NoError(t, err, "convertFromAbciTx failed")
 
 	require.EqualValues(t, incomingTx, outgoingTx, "convertToAbciTx and convertFromAbciTx are not inverse")
@@ -50,7 +50,7 @@ func Test_convertTxWithSerialization(t *testing.T) {
 		Sender: []byte("sender"),
 	}
 
-	incomingAbciTx, err := convertToAbciTx(incomingTx)
+	incomingAbciTx, err := ConvertToAbciTx(incomingTx)
 	require.NoError(t, err, "convertToAbciTx failed")
 
 	abciTxBytes, err := incomingAbciTx.MarshalBinary()
@@ -59,7 +59,7 @@ func Test_convertTxWithSerialization(t *testing.T) {
 	err = outgoingAbciTx.UnmarshalBinary(abciTxBytes)
 	require.NoError(t, err, "outgoingAbciTx.UnmarshalBinary failed")
 
-	outgoingTx, err := convertFromAbciTx(outgoingAbciTx)
+	outgoingTx, err := ConvertFromAbciTx(outgoingAbciTx)
 	require.NoError(t, err, "convertFromAbciTx failed")
 
 	require.EqualValues(t, incomingTx, outgoingTx, "convertToAbciTx and convertFromAbciTx are not inverse")

@@ -3,13 +3,12 @@ package txsvc
 import (
 	"context"
 	"encoding/hex"
-	"strings"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/pkg/grpc/client/v1/conversion"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*txpb.BroadcastResponse, error) {
@@ -17,7 +16,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		zap.String("PayloadType", req.Tx.Body.PayloadType))
 	logger.Debug("incoming transaction")
 
-	tx, err := convertToAbciTx(req.Tx)
+	tx, err := conversion.ConvertToAbciTx(req.Tx)
 	if err != nil {
 		logger.Error("failed to convert transaction", zap.Error(err))
 		// NOTE: for internal error, we should not expose the error message to the client
@@ -45,7 +44,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
 	}
 
-	logger.Info("broadcast transaction", zap.String("TxHash", strings.ToUpper(hex.EncodeToString(txHash))),
+	logger.Info("broadcast transaction", zap.String("TxHash", hex.EncodeToString(txHash)),
 		zap.Uint32("code", code), zap.Int("sync", sync))
 	return &txpb.BroadcastResponse{
 		TxHash: txHash,

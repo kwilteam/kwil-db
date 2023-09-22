@@ -118,6 +118,6 @@ action divide($numerator, $denominator) public view {
     select $up AS upper_value, $down AS lower_value;
 }
 
-action owner_only() public owner view {
+action owner_only() public owner view mustsign {
     select 'owner only';
 }
