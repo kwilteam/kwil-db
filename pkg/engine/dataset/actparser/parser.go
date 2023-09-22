@@ -1,3 +1,12 @@
+// Package actparser contains the parser for the statements inside the kuneiform
+// action block.
+// This package is only temporary, to reduce the need to change our public
+// kuneiform schema. Once our schema is stable, we will remove this package, and
+// put actual Stmt type to kuneiform schema(so engine don't need to parse).
+//
+// By having this package, we can just check the syntax of the action block
+// without parsing, then pass the whole statement to the engine. The engine will
+// parse the statements to its needs.
 package actparser
 
 import (
