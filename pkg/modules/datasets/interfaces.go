@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/pkg/balances"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 )
@@ -19,4 +20,13 @@ type Engine interface {
 	ListDatasets(ctx context.Context, owner []byte) ([]string, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
+}
+
+// DatasetMessage is a message that dataset module could consume, and it can be
+// verified if it's signed.
+// We currently only have `transactions.CallMessage` that implements this interface.
+type DatasetMessage interface {
+	IsSigned() bool
+	Verify() error
+	GetSender() crypto.PublicKey
 }

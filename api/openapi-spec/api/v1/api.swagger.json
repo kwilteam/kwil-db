@@ -483,32 +483,6 @@
         }
       }
     },
-    "TransactionBody": {
-      "type": "object",
-      "properties": {
-        "payload": {
-          "type": "string",
-          "format": "byte"
-        },
-        "payload_type": {
-          "type": "string"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "nonce": {
-          "type": "string",
-          "format": "uint64"
-        },
-        "salt": {
-          "type": "string",
-          "format": "byte"
-        },
-        "description": {
-          "type": "string"
-        }
-      }
-    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -616,14 +590,28 @@
     "txCallRequest": {
       "type": "object",
       "properties": {
-        "payload": {
-          "type": "string",
-          "format": "byte"
+        "body": {
+          "$ref": "#/definitions/txCallRequestBody"
         },
         "signature": {
           "$ref": "#/definitions/txSignature"
         },
         "sender": {
+          "type": "string",
+          "format": "byte"
+        },
+        "serialization": {
+          "type": "string"
+        }
+      }
+    },
+    "txCallRequestBody": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "payload": {
           "type": "string",
           "format": "byte"
         }
@@ -868,7 +856,7 @@
       "type": "object",
       "properties": {
         "body": {
-          "$ref": "#/definitions/TransactionBody"
+          "$ref": "#/definitions/txTransactionBody"
         },
         "signature": {
           "$ref": "#/definitions/txSignature"
@@ -878,6 +866,32 @@
           "format": "byte"
         },
         "serialization": {
+          "type": "string"
+        }
+      }
+    },
+    "txTransactionBody": {
+      "type": "object",
+      "properties": {
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        },
+        "payload_type": {
+          "type": "string"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "salt": {
+          "type": "string",
+          "format": "byte"
+        },
+        "description": {
           "type": "string"
         }
       }

@@ -13,7 +13,7 @@ import (
 // gRPC or HTTP.
 type TransportClient interface {
 	Close() error
-	Call(ctx context.Context, req *transactions.SignedMessage) ([]map[string]any, error)
+	Call(ctx context.Context, req *transactions.CallMessage) ([]map[string]any, error)
 	TxQuery(ctx context.Context, txHash []byte) (*TcTxQueryResponse, error)
 	GetTarget() string
 	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)

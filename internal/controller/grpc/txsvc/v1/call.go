@@ -18,7 +18,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 		return nil, status.Errorf(codes.InvalidArgument, "failed to convert action call: %s", err.Error())
 	}
 
-	if msg.Sender != nil {
+	if msg.GetSender() != nil {
 		err = msg.Verify()
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to verify signed message: %s", err.Error())
@@ -45,17 +45,18 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 	}, nil
 }
 
-func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transactions.SignedMessage, error) {
+func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transactions.CallMessage, error) {
 	var actionPayload transactions.ActionCall
-	err := actionPayload.UnmarshalBinary(req.Payload)
+
+	err := actionPayload.UnmarshalBinary(req.Body.Payload)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if req.GetSignature() == nil {
-		return &actionPayload, &transactions.SignedMessage{
+		return &actionPayload, &transactions.CallMessage{
 			Signature: nil,
-			Message:   nil,
+			Body:      nil,
 			Sender:    nil,
 		}, nil
 	}
@@ -65,7 +66,7 @@ func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transa
 		return nil, nil, err
 	}
 
-	// TODO: not sure should we parse PublicKey based on Signature.Type or not
+	// NOTE: here we infer the public key type from the signature type
 	var sender crypto.PublicKey
 	if req.Sender != nil {
 		sender, err = crypto.PublicKeyFromBytes(convSignature.KeyType(), req.Sender)
@@ -74,9 +75,13 @@ func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transa
 		}
 	}
 
-	return &actionPayload, &transactions.SignedMessage{
-		Message:   req.Payload,
-		Signature: convSignature,
-		Sender:    sender,
+	return &actionPayload, &transactions.CallMessage{
+		Body: &transactions.CallMessageBody{
+			Description: req.Body.Description,
+			Payload:     req.Body.Payload,
+		},
+		Signature:     convSignature,
+		Sender:        sender,
+		Serialization: transactions.SignedMsgSerializationType(req.Serialization),
 	}, nil
 }
