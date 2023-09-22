@@ -180,7 +180,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		return nil, err
 	}
 
-	msg, err := transactions.CreateSignedMessage(payload)
+	msg, err := transactions.CreateCallMessage(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signed message: %w", err)
 	}
