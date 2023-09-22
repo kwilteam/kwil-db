@@ -166,17 +166,16 @@ func TestTransactionBody_SerializeMsg(t *testing.T) {
 	payload, err := rawPayload.MarshalBinary()
 	require.NoError(t, err)
 
-	txBody := &transactions.TransactionBody{
-		Payload:     payload,
-		PayloadType: rawPayload.Type(),
-		Fee:         big.NewInt(100),
-		Nonce:       1,
-		Salt:        []byte("salt"),
-		Description: "By signing this message, you'll reveal your xxx to zzz",
-	}
+	defaultDescription := "By signing this message, you'll reveal your xxx to zzz"
+	longDescrption := `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+`
 
 	type args struct {
-		mst transactions.SignedMsgSerializationType
+		mst         transactions.SignedMsgSerializationType
+		description string
 	}
 
 	tests := []struct {
@@ -188,7 +187,17 @@ func TestTransactionBody_SerializeMsg(t *testing.T) {
 		{
 			name: "non support message serialization type",
 			args: args{
-				mst: transactions.SignedMsgSerializationType("non support message serialization type"),
+				mst:         transactions.SignedMsgSerializationType("non support message serialization type"),
+				description: defaultDescription,
+			},
+			wantMsg: "",
+			wantErr: true,
+		},
+		{
+			name: "description too long",
+			args: args{
+				mst:         transactions.SignedMsgConcat,
+				description: longDescrption,
 			},
 			wantMsg: "",
 			wantErr: true,
@@ -196,7 +205,8 @@ func TestTransactionBody_SerializeMsg(t *testing.T) {
 		{
 			name: "concat string",
 			args: args{
-				mst: transactions.SignedMsgConcat,
+				mst:         transactions.SignedMsgConcat,
+				description: defaultDescription,
 			},
 			wantMsg: "4279207369676e696e672074686973206d6573736167652c20796f75276c6c2072657665616c20796f75722078787820746f207a7a7a0a0a5061796c6f6164547970653a20657865637574655f616374696f6e0a5061796c6f61644469676573743a20386531326432386530313665316139306331386662333037316331316137663038306462383764330a4665653a203130300a4e6f6e63653a20310a53616c743a2037333631366337340a0a4b77696c20f09f968b0a",
 			wantErr: false,
@@ -204,8 +214,17 @@ func TestTransactionBody_SerializeMsg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t1 *testing.T) {
+			txBody := &transactions.TransactionBody{
+				Payload:     payload,
+				PayloadType: rawPayload.Type(),
+				Fee:         big.NewInt(100),
+				Nonce:       1,
+				Salt:        []byte("salt"),
+				Description: tt.args.description,
+			}
+
 			got, err := txBody.SerializeMsg(tt.args.mst)
-			if tt.wantErr {
+			if tt.wantErr { // TODO: verify expect error
 				assert.Error(t1, err, "SerializeMsg(%v)", tt.args.mst)
 				return
 			}
@@ -213,7 +232,6 @@ func TestTransactionBody_SerializeMsg(t *testing.T) {
 			assert.NoError(t1, err, "SerializeMsg(%v)", tt.args.mst)
 			assert.Equalf(t1, tt.wantMsg, hex.EncodeToString(got), "SerializeMsg(%v)", tt.args.mst)
 			fmt.Printf("msg to sign: \n%s\n", string(got))
-
 		})
 	}
 }
