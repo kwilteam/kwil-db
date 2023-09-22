@@ -18,7 +18,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transac
 	}
 
 	// get nonce from address
-	acc, err := c.client.GetAccount(ctx, pub.Bytes())
+	acc, err := c.transportClient.GetAccount(ctx, pub.Bytes())
 	if err != nil {
 		acc = &balances.Account{
 			PublicKey: pub.Bytes(),
@@ -34,7 +34,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transac
 	}
 
 	// estimate price
-	price, err := c.client.EstimateCost(ctx, tx)
+	price, err := c.transportClient.EstimateCost(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}

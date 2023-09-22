@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,7 +9,6 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/utils"
-
 	"github.com/spf13/viper"
 )
 
@@ -34,10 +34,19 @@ func (c *KwilCliConfig) Store() error {
 	return PersistConfig(c)
 }
 
+func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
+	return &kwilCliPersistedConfig{
+		GrpcURL: "127.0.0.1:50051",
+	}
+}
+
+// kwilCliPersistedConfig is the config that is used to persist the config file
+// and also to work with viper(flags)
 type kwilCliPersistedConfig struct {
-	PrivateKey  string `json:"private_key"`
-	GrpcURL     string `json:"grpc_url"`
-	TLSCertFile string `json:"tls_cert_file"`
+	// NOTE: `mapstructure` is used by viper, name is same as the viper key name
+	PrivateKey  string `mapstructure:"private_key" json:"private_key"`
+	GrpcURL     string `mapstructure:"grpc_url" json:"grpc_url"`
+	TLSCertFile string `mapstructure:"tls_cert_file" json:"tls_cert_file"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
@@ -64,7 +73,7 @@ func PersistConfig(conf *KwilCliConfig) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	file, err := utils.CreateOrOpenFile(DefaultConfigFile)
+	file, err := utils.CreateOrOpenFile(defaultConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to create or open config file: %w", err)
 	}
@@ -83,7 +92,7 @@ func PersistConfig(conf *KwilCliConfig) error {
 }
 
 func LoadPersistedConfig() (*KwilCliConfig, error) {
-	bts, err := utils.ReadOrCreateFile(DefaultConfigFile)
+	bts, err := utils.ReadOrCreateFile(defaultConfigFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create or open config file: %w", err)
 	}
@@ -102,22 +111,52 @@ func LoadPersistedConfig() (*KwilCliConfig, error) {
 	return conf.toKwilCliConfig()
 }
 
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
+// LoadCliConfig loads the config.
+// The precedence order is following, each item takes precedence over the item below it:
+//  1. flags
+//  2. config file
+//  3. default config
 func LoadCliConfig() (*KwilCliConfig, error) {
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Printf("Config file not found. Using default values and/or flags.  To create a config file, run 'kwil-cli configure'\n")
-		} else {
+	// NOTE: flags are already parsed, and viper also have the bind flags value
+	// since flags has higher precedence, all below config values will be
+	// overwritten by flags(if flags are set)
+
+	// create default config and set to viper
+	defaultCfg := DefaultKwilCliPersistedConfig()
+	bs, err := json.Marshal(defaultCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal default config: %w", err)
+	}
+
+	defaultConfig := bytes.NewReader(bs)
+	viper.SetConfigType("json")
+	if err := viper.MergeConfig(defaultConfig); err != nil {
+		return nil, err
+	}
+
+	// NOTE: defaultConfigFile is set in init() in flags.go
+	// read default config file if it exists
+	// and override viper values from config file
+	if fileExists(defaultConfigFile) {
+		viper.SetConfigFile(defaultConfigFile)
+		if err := viper.MergeInConfig(); err != nil {
 			fmt.Printf("Error reading config file: %s\n", err)
 			askAndDeleteConfig()
 		}
 	}
 
-	innerConf := &kwilCliPersistedConfig{
-		PrivateKey:  viper.GetString("private_key"),
-		GrpcURL:     viper.GetString("grpc_url"),
-		TLSCertFile: viper.GetString("tls_cert_file"),
+	// populate a new config with viper values(by viper key name)
+	cfg := &kwilCliPersistedConfig{}
+	if err := viper.Unmarshal(cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	return innerConf.toKwilCliConfig()
+
+	return cfg.toKwilCliConfig()
 }
 
 func askAndDeleteConfig() {

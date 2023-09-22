@@ -2,10 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
-	"fmt"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
@@ -23,7 +22,8 @@ type ValidatorsCmd struct {
 	Approve    *ValApproveCmd    `arg:"subcommand:approve"`
 	Leave      *ValLeaveCmd      `arg:"subcommand:leave"`
 
-	RPCServer string `arg:"-s,--rpcserver" default:"127.0.0.1:50051" help:"RPC server address"`
+	RPCServer    string `arg:"-s,--rpcserver" default:"127.0.0.1:50051" help:"RPC server address"`
+	OutputFormat string `arg:"-o,--output" default:"text" help:"Output format (text|json)"`
 }
 
 // NOTE: each of the validator subcommands satisfies the runner interface to be
@@ -34,22 +34,20 @@ type ValListCmd struct{}
 var _ runner = (*ValListCmd)(nil)
 
 func (vlc *ValListCmd) run(ctx context.Context, a *args) error {
-	rpcAddr := a.Vals.RPCServer
-	options := []client.ClientOpt{}
-	clt, err := client.New(rpcAddr, options...)
-	if err != nil {
-		return err
-	}
+	var resp respValSets
+	err := func() error {
+		rpcAddr := a.Vals.RPCServer
+		options := []client.Option{client.WithTLSCert("")} // TODO: handle cert
+		clt, err := client.Dial(rpcAddr, options...)
+		if err != nil {
+			return err
+		}
 
-	vals, err := clt.CurrentValidators(ctx)
-	if err != nil {
+		resp.Data, err = clt.CurrentValidators(ctx)
 		return err
-	}
-	fmt.Println("Current validator set:")
-	for i, v := range vals {
-		fmt.Printf("% 3d. %v\n", i, v)
-	}
-	return nil
+	}()
+
+	return display.Print(&resp, err, a.Vals.OutputFormat)
 }
 
 type ValJoinStatusCmd struct {
@@ -59,26 +57,26 @@ type ValJoinStatusCmd struct {
 var _ runner = (*ValJoinStatusCmd)(nil)
 
 func (vjsc *ValJoinStatusCmd) run(ctx context.Context, a *args) error {
-	rpcAddr := a.Vals.RPCServer
-	options := []client.ClientOpt{}
-	clt, err := client.New(rpcAddr, options...)
-	if err != nil {
-		return err
-	}
-
-	status, err := clt.ValidatorJoinStatus(ctx, vjsc.Joiner)
-	if err != nil {
-		if errors.Is(err, client.ErrNotFound) {
-			fmt.Println("No active join request for that validator.")
-			return nil
+	var resp respValJoinStatus
+	err := func() error {
+		rpcAddr := a.Vals.RPCServer
+		options := []client.Option{client.WithTLSCert("")} // TODO: handle cert
+		clt, err := client.Dial(rpcAddr, options...)
+		if err != nil {
+			return err
 		}
-		return err
-	}
-	fmt.Printf("Candidate: %v (want power %d)\n", base64.StdEncoding.EncodeToString(status.Candidate), status.Power)
-	for i := range status.Board {
-		fmt.Printf(" Validator %x, approved = %v\n", status.Board[i], status.Approved[i])
-	}
-	return nil
+
+		resp.Data, err = clt.ValidatorJoinStatus(ctx, vjsc.Joiner)
+		if err != nil {
+			if errors.Is(err, client.ErrNotFound) {
+				return errors.New("no active join request for that validator")
+			}
+			return err
+		}
+		return nil
+	}()
+
+	return display.Print(&resp, err, a.Vals.OutputFormat)
 }
 
 // edSigningClient makes a client using the provided private key as an ed25519
@@ -90,8 +88,8 @@ func edSigningClient(rpcAddr string, privKey []byte) (*client.Client, error) {
 	}
 
 	signer := crypto.NewStdEd25519Signer(edPrivKey)
-	options := []client.ClientOpt{client.WithSigner(signer)}
-	return client.New(rpcAddr, options...)
+	options := []client.Option{client.WithSigner(signer), client.WithTLSCert("")}
+	return client.Dial(rpcAddr, options...)
 }
 
 // valSignedCmd is meant to be embedded in commands that want a private key in
@@ -117,17 +115,18 @@ type ValJoinCmd struct {
 var _ runner = (*ValJoinCmd)(nil)
 
 func (vjc *ValJoinCmd) run(ctx context.Context, a *args) error {
-	rpcAddr := a.Vals.RPCServer
-	clt, err := vjc.client(rpcAddr)
-	if err != nil {
+	var txHash []byte
+	err := func() error {
+		rpcAddr := a.Vals.RPCServer
+		clt, err := vjc.client(rpcAddr)
+		if err != nil {
+			return err
+		}
+		txHash, err = clt.ValidatorJoin(ctx)
 		return err
-	}
-	hash, err := clt.ValidatorJoin(ctx)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Join transaction hash: %x\n", hash)
-	return nil
+	}()
+
+	return display.Print(display.RespTxHash(txHash), err, a.Vals.OutputFormat)
 }
 
 type ValApproveCmd struct {
@@ -138,17 +137,18 @@ type ValApproveCmd struct {
 var _ runner = (*ValApproveCmd)(nil)
 
 func (vac *ValApproveCmd) run(ctx context.Context, a *args) error {
-	rpcAddr := a.Vals.RPCServer
-	clt, err := vac.client(rpcAddr)
-	if err != nil {
+	var txHash []byte
+	err := func() error {
+		rpcAddr := a.Vals.RPCServer
+		clt, err := vac.client(rpcAddr)
+		if err != nil {
+			return err
+		}
+		txHash, err = clt.ApproveValidator(ctx, vac.Joiner)
 		return err
-	}
-	hash, err := clt.ApproveValidator(ctx, vac.Joiner)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Approval transaction hash: %x\n", hash)
-	return nil
+	}()
+
+	return display.Print(display.RespTxHash(txHash), err, a.Vals.OutputFormat)
 }
 
 type ValLeaveCmd struct {
@@ -158,15 +158,16 @@ type ValLeaveCmd struct {
 var _ runner = (*ValLeaveCmd)(nil)
 
 func (vjc *ValLeaveCmd) run(ctx context.Context, a *args) error {
-	rpcAddr := a.Vals.RPCServer
-	clt, err := vjc.client(rpcAddr)
-	if err != nil {
+	var txHash []byte
+	err := func() error {
+		rpcAddr := a.Vals.RPCServer
+		clt, err := vjc.client(rpcAddr)
+		if err != nil {
+			return err
+		}
+		txHash, err = clt.ValidatorLeave(ctx)
 		return err
-	}
-	hash, err := clt.ValidatorLeave(ctx)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Leave transaction hash: %x\n", hash)
-	return nil
+	}()
+
+	return display.Print(display.RespTxHash(txHash), err, a.Vals.OutputFormat)
 }
