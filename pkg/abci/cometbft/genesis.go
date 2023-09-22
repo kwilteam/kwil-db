@@ -74,6 +74,7 @@ func GenesisDoc(pkeys []cmtEd.PrivKey, chainIDPrefix string) *cmtTypes.GenesisDo
 		ConsensusParams: cmtTypes.DefaultConsensusParams(), // includes VoteExtensionsEnableHeight: 0, (disabled)
 		Validators:      genVals,
 	}
+	// genDoc.ConsensusParams.ABCI.VoteExtensionsEnableHeight = 1
 	return &genDoc
 }
 

@@ -122,7 +122,21 @@ func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) e
 
 	signBytes := types.VoteSignBytes(chainID, vote)
 
-	// VoteExtensionSignBytes???
+	// Vote extensions are non-deterministic, so it is possible that an
+	// application may have created a different extension. We therefore always
+	// re-sign the vote extensions of precommits. For prevotes and nil
+	// precommits, the extension signature will always be empty.
+	// Even if the signed over data is empty, we still add the signature
+	var extSig []byte
+	if vote.Type == tendermintTypes.PrecommitType && !types.ProtoBlockIDIsNil(&vote.BlockID) {
+		extSignBytes := types.VoteExtensionSignBytes(chainID, vote)
+		extSig, err = v.privateKey.Sign(extSignBytes)
+		if err != nil {
+			return err
+		}
+	} else if len(vote.Extension) > 0 {
+		return errors.New("unexpected vote extension - extensions are only allowed in non-nil precommits")
+	}
 
 	// We might crash before writing to the wal,
 	// causing us to try to re-sign for the same HRS.
@@ -138,6 +152,9 @@ func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) e
 		} else {
 			err = fmt.Errorf("conflicting data")
 		}
+
+		vote.ExtensionSignature = extSig
+
 		return err
 	}
 
@@ -149,6 +166,7 @@ func (v *ValidatorSigner) SignVote(chainID string, vote *tendermintTypes.Vote) e
 
 	// Set the vote signature
 	vote.Signature = signature
+	vote.ExtensionSignature = extSig
 
 	return nil
 }
@@ -213,6 +231,8 @@ func (l *LastSignState) store() error {
 // loadLatest loads the latest lastSignState from the given KV store
 // if none exists, it sets all fields to zero values
 func (l *LastSignState) loadLatest() (err error) {
+	// l.setZero()
+	// return nil
 	bts, err := l.storer.Read()
 	if err != nil {
 		return err
