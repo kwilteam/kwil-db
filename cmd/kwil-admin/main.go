@@ -30,9 +30,14 @@ type args struct {
 	Ver  *VerCmd  `arg:"subcommand:version"`
 }
 
-func defaultRoot() string {
+func defaultKwildRoot() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".kwild")
+}
+
+func defaultKwilAdminRoot() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".kwil-admin")
 }
 
 // HelpCmd and VerCmd are defined to emulate -h,--help and --version.
@@ -60,15 +65,13 @@ type runner interface {
 
 // run is a fallback dispatcher if the subcommand is not a runner.
 func (a *args) run(ctx context.Context) error {
+	// All of the Node and Vals subcommands are runners, and as such the
+	// commands to not provide a basic run function in this switch.
 	switch {
 	case a.Key != nil:
 		return a.Key.run(ctx)
 	case a.Setup != nil:
 		return a.Setup.run(ctx)
-	case a.Node != nil:
-		return a.Node.run(ctx)
-	// case a.Vals != nil: // made these runners to test the pattern
-	// 	return a.Vals.run(ctx)
 	case a.Ver != nil:
 		fmt.Fprintln(os.Stdout, a.Version()) // emulate --version
 		return nil
