@@ -162,8 +162,6 @@ tasks:
   # this CLI_ARGS will be used by `go test`
   test:act:nb:
     desc: Run acceptance tests without building docker image
-    env:
-      KACT_LOG_LEVEL: debug
     cmds:
       - go test ./test/acceptance/ -count=1 -v {{.CLI_ARGS}}
 

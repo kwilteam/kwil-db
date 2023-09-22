@@ -12,7 +12,11 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/utils/random"
 )
 
-const signedMsgTmplV0 = `%s
+// MsgDescriptionMaxLength is the max length of Description filed in
+// TransactionBody and CallMessageBody
+const MsgDescriptionMaxLength = 200
+
+const txMsgToSignTmplV0 = `%s
 
 PayloadType: %s
 PayloadDigest: %x
@@ -49,7 +53,7 @@ func (s SignedMsgSerializationType) String() string {
 }
 
 const (
-	// SignedMsgConcat is a human readable serialization of the transaction body
+	// SignedMsgConcat is a human-readable serialization of the transaction body
 	// it needs a signer that signs
 	SignedMsgConcat SignedMsgSerializationType = "concat"
 	// SignedMsgEip712 is specific serialization for EIP712
@@ -128,7 +132,7 @@ type Transaction struct {
 	Serialization SignedMsgSerializationType
 
 	// Sender is the public key of the sender
-	// It is not included in the signature
+	// NOTE: we could not use crypto.PublicKey, since it's not RLP-serializable
 	Sender []byte
 
 	// hash of the transaction that is signed.  it is kept here as a cache
@@ -150,6 +154,7 @@ func (t *Transaction) GetSenderAddress() string {
 }
 
 // Verify verifies the signature of the transaction
+// It will deserialize the transaction body and verify the signature
 func (t *Transaction) Verify() error {
 	msg, err := t.Body.SerializeMsg(t.Serialization)
 	if err != nil {
@@ -165,6 +170,8 @@ func (t *Transaction) Verify() error {
 	return t.Signature.Verify(pubKey, msg)
 }
 
+// Sign signs transaction body with given signer.
+// It will serialize the transaction body first and sign it.
 func (t *Transaction) Sign(signer crypto.Signer) error {
 	msg, err := t.Body.SerializeMsg(t.Serialization)
 	if err != nil {
@@ -224,10 +231,10 @@ func (t *Transaction) UnmarshalBinary(data serialize.SerializedData) error {
 // TransactionBody is the body of a transaction that gets included in the signature
 // NOTE: rlp encoding will preserve the order of the fields
 type TransactionBody struct {
-	// Description is a human readable description of the transaction
+	// Description is a human-readable description of the transaction
 	Description string
 
-	// Payload are the raw bytes of the payload data
+	// Payload is the raw bytes of the payload data, it is RLP encoded
 	Payload serialize.SerializedData
 
 	// PayloadType is the type of the payload
@@ -254,15 +261,19 @@ func (t *TransactionBody) MarshalBinary() ([]byte, error) {
 // to the wallet. As such we define conventions for constructing user-friendly
 // messages. The Kwil frontend SDKs much implement these serialization schemes.
 func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, error) {
+	if len(t.Description) > MsgDescriptionMaxLength {
+		return nil, errors.New("description is too long")
+	}
+
 	switch mst {
 	case SignedMsgConcat:
-		// Make a human readable message using a template(signedMsgTmplV0).
+		// Make a human-readable message using a template(txMsgToSignTmplV0).
 		// In this message scheme, the displayed "token" is a hash of the
 		// payload.
 		// NOTE: 'payload` is still in binary form(RLP encoded),
 		// we present its hash in the result message.
-		payloadDigest := crypto.Sha256(t.Payload)[:20] // long enough?
-		msgStr := fmt.Sprintf(signedMsgTmplV0,
+		payloadDigest := crypto.Sha256(t.Payload)[:20]
+		msgStr := fmt.Sprintf(txMsgToSignTmplV0,
 			t.Description,
 			t.PayloadType.String(),
 			payloadDigest,
