@@ -36,7 +36,11 @@ func (a *acceptWrapper) Accept(walker tree.Walker) (err error) {
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
 func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*AnalyzedStatement, error) {
-	// TODO: copy and clean tables
+	copiedMetadata, err := metadata.Clean()
+	if err != nil {
+		return nil, fmt.Errorf("error cleaning metadata: %w", err)
+	}
+
 	parsed, err := sqlparser.Parse(stmt)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing statement: %w", err)
@@ -58,7 +62,7 @@ func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*Analyze
 	}
 
 	if flags&GuaranteedOrder != 0 {
-		err := accept.Accept(order.NewOrderWalker(metadata.Tables))
+		err := accept.Accept(order.NewOrderWalker(copiedMetadata.Tables))
 		if err != nil {
 			return nil, fmt.Errorf("error enforcing guaranteed order: %w", err)
 		}
@@ -91,6 +95,24 @@ func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*Analyze
 type RuleMetadata struct {
 	// Tables only needs to be set if you are guaranteeing order
 	Tables []*types.Table
+}
+
+// Clean copies the tables and cleans them
+func (r *RuleMetadata) Clean() (*RuleMetadata, error) {
+	cleaned := &RuleMetadata{
+		Tables: make([]*types.Table, len(r.Tables)),
+	}
+
+	for i, tbl := range r.Tables {
+		err := tbl.Clean()
+		if err != nil {
+			return nil, fmt.Errorf("error cleaning table: %w", err)
+		}
+
+		cleaned.Tables[i] = tbl
+	}
+
+	return cleaned, nil
 }
 
 type VerifyFlag uint8
