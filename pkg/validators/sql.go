@@ -36,7 +36,11 @@ const (
 		validator BLOB REFERENCES validators (pubkey) ON DELETE CASCADE,
 		approval INTEGER,
 		PRIMARY KEY (candidate, validator)
-	) WITHOUT ROWID, STRICT;`
+	) WITHOUT ROWID, STRICT;
+
+	CREATE TABLE IF NOT EXISTS schema_version (
+		version INT NOT NULL
+	);`
 
 	// joins_board give us the board of validators (approvers) for a given join
 	// request which is needed to resume vote handling. The validators for a
@@ -78,7 +82,57 @@ const (
 
 	sqlAddToJoinBoard = `INSERT INTO joins_board (candidate, validator, approval)
 		VALUES ($candidate, $validator, $approval)`
+
+	sqlInitMetaTable = `
+	CREATE TABLE IF NOT EXISTS schema_version (
+		version INT NOT NULL
+	);`
+
+	sqlSetVersion = "INSERT INTO schema_version (version) VALUES ($version);"
+
+	// sqlUpdateVersion = "UPDATE schema_version SET version = $version;"
+
+	sqlGetVersion = "SELECT version FROM schema_version;"
+
+	valStoreVersion = 1
 )
+
+// Schema version table.
+func (vs *validatorStore) initSchemaVersion(ctx context.Context) error {
+	if err := vs.db.Execute(ctx, sqlInitMetaTable, nil); err != nil {
+		return fmt.Errorf("failed to initialize schema version table: %w", err)
+	}
+	return nil
+}
+
+func (vs *validatorStore) setCurrentVersion(ctx context.Context, version int) error {
+	err := vs.db.Execute(ctx, sqlSetVersion, map[string]any{
+		"$version": version,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set schema version: %w", err)
+	}
+	return nil
+}
+
+func (vs *validatorStore) currentVersion(ctx context.Context) (int, error) {
+	results, err := vs.db.Query(ctx, sqlGetVersion, nil)
+	if err != nil {
+		return 0, err
+	}
+	if len(results) == 0 {
+		return 0, nil
+	}
+	vi, ok := results[0]["version"]
+	if !ok {
+		return 0, errors.New("no version in schema_version record")
+	}
+	version, ok := vi.(int)
+	if !ok {
+		return 0, fmt.Errorf("invalid version value (%T)", vi)
+	}
+	return version, nil
+}
 
 // -- CREATE TABLE IF NOT EXISTS validator_approvals (
 // -- 	validator_id INTEGER REFERENCES validators (id) ON DELETE CASCADE,

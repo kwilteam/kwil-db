@@ -34,9 +34,14 @@ func newValidatorStore(ctx context.Context, datastore Datastore, log log.Logger)
 		log: log,
 	}
 
-	err := ar.initTables(ctx)
+	// err := ar.initTables(ctx)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to initialize tables: %w", err)
+	// }
+
+	err := ar.databaseUpgrade(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tables: %w", err)
+		return nil, fmt.Errorf("failed to upgrade database: %w", err)
 	}
 
 	// err = ar.prepareStatements()
