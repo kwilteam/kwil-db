@@ -1,7 +1,7 @@
 package server
 
 import (
-	"encoding/hex"
+	"fmt"
 	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -108,15 +108,12 @@ func extractGenesisDoc(g *config.GenesisConfig) (*cmttypes.GenesisDoc, error) {
 	}
 
 	for _, v := range g.Validators {
-		// Addr in Hex string format, convert back to HexBytes.
-		addr, err := hex.DecodeString(v.Address)
-		if err != nil {
-			return nil, err
+		if len(v.PubKey) != cmtEd.PubKeySize {
+			return nil, fmt.Errorf("pubkey is incorrect size: %v", v.PubKey.String())
 		}
-
 		pubKey := cmtEd.PubKey(v.PubKey)
 		genDoc.Validators = append(genDoc.Validators, cmttypes.GenesisValidator{
-			Address: addr,
+			Address: pubKey.Address(),
 			PubKey:  pubKey,
 			Power:   v.Power,
 			Name:    v.Name,

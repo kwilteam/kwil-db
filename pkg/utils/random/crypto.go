@@ -36,3 +36,5 @@ var _ rand.Source64 = &Source
 func New() *rand.Rand {
 	return rand.New(Source)
 }
+
+var rng = rand.New(Source)

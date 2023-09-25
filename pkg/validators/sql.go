@@ -84,7 +84,7 @@ const (
 		version INT NOT NULL
     );` // Do we still need WITHOUT ROWID and STRICT? It's just a single row table
 
-	sqlSetVersion = "INSERT INTO schema_version (version) VALUES ($version);"
+	sqlInitVersionRow = "INSERT INTO schema_version (version) VALUES ($version);"
 
 	//sqlUpdateVersion = "UPDATE schema_version SET version = $version;"
 
@@ -104,7 +104,7 @@ func (vs *validatorStore) initSchemaVersion(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize schema version table: %w", err)
 	}
 
-	err := vs.db.Execute(ctx, sqlSetVersion, map[string]any{
+	err := vs.db.Execute(ctx, sqlInitVersionRow, map[string]any{
 		"$version": valStoreVersion,
 	})
 	if err != nil {
