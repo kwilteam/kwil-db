@@ -39,7 +39,7 @@ const (
 	) WITHOUT ROWID, STRICT;
 
 	CREATE TABLE IF NOT EXISTS schema_version (
-		version INT NOT NULL
+		version INTEGER NOT NULL
 	);`
 
 	// joins_board give us the board of validators (approvers) for a given join
@@ -127,11 +127,11 @@ func (vs *validatorStore) currentVersion(ctx context.Context) (int, error) {
 	if !ok {
 		return 0, errors.New("no version in schema_version record")
 	}
-	version, ok := vi.(int)
+	version, ok := vi.(int64)
 	if !ok {
 		return 0, fmt.Errorf("invalid version value (%T)", vi)
 	}
-	return version, nil
+	return int(version), nil
 }
 
 // -- CREATE TABLE IF NOT EXISTS validator_approvals (
@@ -160,6 +160,10 @@ func (vs *validatorStore) initTables(ctx context.Context) error {
 		}
 	}
 
+	err := vs.setCurrentVersion(ctx, valStoreVersion)
+	if err != nil {
+		return fmt.Errorf("failed to set schema version: %w", err)
+	}
 	return nil
 }
 

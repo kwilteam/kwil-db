@@ -3,6 +3,8 @@ package validators
 import (
 	"context"
 	"fmt"
+
+	"go.uber.org/zap"
 )
 
 type upgradeAction int
@@ -12,6 +14,19 @@ const (
 	upgradeActionLegacy
 	upgradeActionRunMigrations
 )
+
+func upgradeActionString(action upgradeAction) string {
+	switch action {
+	case upgradeActionNone:
+		return "none"
+	case upgradeActionLegacy:
+		return "legacy"
+	case upgradeActionRunMigrations:
+		return "run migrations"
+	default:
+		return "unknown"
+	}
+}
 
 /*
 	CheckVersion checks the current version of the validator store and
@@ -25,12 +40,9 @@ func (vs *validatorStore) CheckVersion(ctx context.Context) (int, upgradeAction,
 	// Check if validators db exists
 	_, valErr := vs.currentValidators(ctx)
 
-	fmt.Println("version: ", version, "versionErr: ", versionErr, "valStoreVersion: ", valStoreVersion)
-	fmt.Println("valErr: ", valErr, "valStoreVersion: ", valStoreVersion)
-
 	if versionErr != nil && valErr != nil {
 		// Fresh db, do regular init
-		return 1, upgradeActionNone, nil
+		return valStoreVersion, upgradeActionNone, nil
 	} else if versionErr != nil && valErr == nil {
 		// Legacy db
 		return 0, upgradeActionLegacy, nil
@@ -56,7 +68,8 @@ func (vs *validatorStore) CheckVersion(ctx context.Context) (int, upgradeAction,
 
 func (vs *validatorStore) databaseUpgrade(ctx context.Context) error {
 	version, action, err := vs.CheckVersion(ctx)
-	fmt.Println("version: ", version, "action: ", action, "err: ", err)
+	vs.log.Info("databaseUpgrade", zap.String("version", fmt.Sprintf("%d", version)), zap.String("action", upgradeActionString(action)), zap.Error(err))
+
 	if err != nil {
 		return err
 	}
@@ -65,12 +78,12 @@ func (vs *validatorStore) databaseUpgrade(ctx context.Context) error {
 	case upgradeActionNone:
 		return vs.initTables(ctx)
 	case upgradeActionLegacy:
+		fallthrough
 	case upgradeActionRunMigrations:
 		return vs.runMigrations(ctx, version)
 	default:
 		return fmt.Errorf("unknown upgrade action: %d", action)
 	}
-	return nil
 }
 
 func (vs *validatorStore) runMigrations(ctx context.Context, version int) error {
@@ -92,6 +105,7 @@ Version 1: join_reqs table: [candidate, power, expiryAt]
 "ALTER TABLE join_reqs ADD COLUMN expiresAt INTEGER;"
 */
 func (vs *validatorStore) upgradeValidatorsDB_0_1(ctx context.Context) error {
+	vs.log.Info("Upgrading validators db from version 0 to 1")
 	// Add schema version table
 	if err := vs.initSchemaVersion(ctx); err != nil {
 		return err
@@ -103,6 +117,10 @@ func (vs *validatorStore) upgradeValidatorsDB_0_1(ctx context.Context) error {
 	}
 
 	if err := vs.db.Execute(ctx, "ALTER TABLE join_reqs ADD COLUMN expiresAt INTEGER;", nil); err != nil {
+		return fmt.Errorf("failed to upgrade validators db from version 0 to 1: %w", err)
+	}
+
+	if err := vs.db.Execute(ctx, "UPDATE join_reqs SET expiresAt = -1;", nil); err != nil {
 		return fmt.Errorf("failed to upgrade validators db from version 0 to 1: %w", err)
 	}
 	return nil
