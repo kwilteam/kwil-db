@@ -40,6 +40,7 @@ import (
 	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
+	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtlocal "github.com/cometbft/cometbft/rpc/client/local"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -100,11 +101,13 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 // coreDependencies holds dependencies that are widely used
 type coreDependencies struct {
-	ctx     context.Context
-	cfg     *config.KwildConfig
-	log     log.Logger
-	opener  sql.Opener
-	keypair *tls.Certificate
+	ctx        context.Context
+	cfg        *config.KwildConfig
+	genesisCfg *config.GenesisConfig
+	privKey    cmtEd.PrivKey
+	log        log.Logger
+	opener     sql.Opener
+	keypair    *tls.Certificate
 }
 
 // closeFuncs holds a list of closers
@@ -158,7 +161,7 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.Data
 		sh = snapshotter
 	}
 
-	genesisHash := d.cfg.GenesisConfig.ComputeGenesisHash()
+	genesisHash := d.genesisCfg.ComputeGenesisHash()
 	return abci.NewAbciApp(
 		datasetsModule,
 		validatorModule,
@@ -186,7 +189,7 @@ func buildAdminSvc(d *coreDependencies, node admSvc.Node) *admSvc.Service {
 
 func buildDatasetsModule(d *coreDependencies, eng datasets.Engine, accs datasets.AccountStore) *datasets.DatasetModule {
 	feeMultiplier := 1
-	if d.cfg.GenesisConfig.ConsensusParams.WithoutGasCosts {
+	if d.genesisCfg.ConsensusParams.WithoutGasCosts {
 		feeMultiplier = 0
 	}
 
@@ -231,7 +234,7 @@ func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *session
 		failBuild(err, "failed to register accounts db")
 	}
 
-	genCfg := d.cfg.GenesisConfig
+	genCfg := d.genesisCfg
 	b, err := balances.NewAccountStore(d.ctx, db,
 		balances.WithLogger(*d.log.Named("accountStore")),
 		balances.WithNonces(!genCfg.ConsensusParams.WithoutNonces),
@@ -251,7 +254,7 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 	}
 	closer.addCloser(db.Close)
 
-	joinExpiry := d.cfg.GenesisConfig.ConsensusParams.Validator.JoinExpiry
+	joinExpiry := d.genesisCfg.ConsensusParams.Validator.JoinExpiry
 	v, err := vmgr.NewValidatorMgr(d.ctx, db,
 		vmgr.WithLogger(*d.log.Named("validatorStore")),
 		vmgr.WithJoinExpiry(joinExpiry),
@@ -445,12 +448,12 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	}
 
 	nodeCfg := newCometConfig(d.cfg)
-	genDoc, err := extractGenesisDoc(d.cfg.GenesisConfig)
+	genDoc, err := extractGenesisDoc(d.genesisCfg)
 	if err != nil {
 		failBuild(err, "failed to generate cometbft genesis configuration")
 	}
 
-	node, err := cometbft.NewCometBftNode(abciApp, nodeCfg, genDoc, d.cfg.NodeKey,
+	node, err := cometbft.NewCometBftNode(abciApp, nodeCfg, genDoc, d.privKey,
 		readWriter, &d.log)
 	if err != nil {
 		failBuild(err, "failed to build comet node")

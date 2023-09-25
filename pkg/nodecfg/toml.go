@@ -10,8 +10,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 )
 
-const defaultDirPerm = 0755
-
 var configTemplate *template.Template
 
 func init() {
@@ -33,15 +31,15 @@ func arrayFormatter(items []string) string {
 	return "[" + strings.Join(formattedStrings, ", ") + "]"
 }
 
-// kwildTemplateConfig
-func writeConfigFile(configFilePath string, cfg *config.KwildConfig) {
+// writeConfigFile writes the config to a file.
+func writeConfigFile(configFilePath string, cfg *config.KwildConfig) error {
 	var buffer bytes.Buffer
 
 	if err := configTemplate.Execute(&buffer, cfg); err != nil {
-		panic(err)
+		return err
 	}
 
-	os.WriteFile(configFilePath, buffer.Bytes(), defaultDirPerm)
+	return os.WriteFile(configFilePath, buffer.Bytes(), nodeDirPerm)
 }
 
 const defaultConfigTemplate = `

@@ -1,26 +1,29 @@
 package config
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
-
-	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
-	cmtrand "github.com/cometbft/cometbft/libs/rand"
+	admtypes "github.com/kwilteam/kwil-db/pkg/admin/types"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/utils/random"
 )
 
 const (
-	ABCIPubKeyTypeEd25519 = "ed25519"
+	abciPubKeyTypeEd25519 = "ed25519"
 	chainIDPrefix         = "kwil-chain-"
+
+	nodeDirPerm = 0755
 )
+
+type HexBytes = admtypes.HexBytes
 
 type GenesisConfig struct {
 	GenesisTime   time.Time `json:"genesis_time"`
@@ -33,15 +36,14 @@ type GenesisConfig struct {
 	 abci init will generate a new app hash after applying this state
 	*/
 	// AppState json.RawMessage `json:"app_state"`
-	ConsensusParams *ConsensusParams   `json:"consensus_params,omitempty"`
-	Validators      []GenesisValidator `json:"validators,omitempty"`
+	ConsensusParams *ConsensusParams    `json:"consensus_params,omitempty"`
+	Validators      []*GenesisValidator `json:"validators,omitempty"`
 }
 
 type GenesisValidator struct {
-	Address string `json:"address"`
-	PubKey  []byte `json:"pub_key"`
-	Power   int64  `json:"power"`
-	Name    string `json:"name"`
+	PubKey HexBytes `json:"pub_key"`
+	Power  int64    `json:"power"`
+	Name   string   `json:"name"`
 }
 
 type ConsensusParams struct {
@@ -68,7 +70,8 @@ type EvidenceParams struct {
 type ValidatorParams struct {
 	PubKeyTypes []string `json:"pub_key_types"`
 
-	// Number of blocks after which the validators join request expires if not approved
+	// JoinExpiry is the number of blocks after which the validators join
+	// request expires if not approved.
 	JoinExpiry int64 `json:"join_expiry"`
 }
 
@@ -76,88 +79,59 @@ type VersionParams struct {
 	App uint64 `json:"app"`
 }
 
-type GenesisParams struct {
-	JoinExpiry      int64
-	WithoutGasCosts bool
-	WithoutNonces   bool
-	ChainIDPrefix   string
+func generateChainID(prefix string) string {
+	return prefix + random.String(6)
 }
 
-func DefaultGenesisParams() *GenesisParams {
-	return &GenesisParams{
-		JoinExpiry:      86400,
-		WithoutGasCosts: true,
-		WithoutNonces:   false,
-		ChainIDPrefix:   "kwil-chain-",
+// DefaultGenesisConfig returns a new instance of a GenesisConfig with the
+// default values set, which in particular includes no validators and a nil
+// appHash. The chain ID will semi-random, with the prefix "kwil-chain-"
+// followed by random alphanumeric characters.
+func DefaultGenesisConfig() *GenesisConfig {
+	return &GenesisConfig{
+		GenesisTime:     genesisTime(),
+		ChainID:         generateChainID(chainIDPrefix),
+		InitialHeight:   1,
+		DataAppHash:     nil,
+		Validators:      nil,
+		ConsensusParams: defaultConsensusParams(),
 	}
 }
 
-// Default ConsensusParams
 func defaultConsensusParams() *ConsensusParams {
 	return &ConsensusParams{
 		Block: BlockParams{
-			MaxBytes: 22020096, // 21MB
+			MaxBytes: 21 * 1024 * 1024, // 21 MiB
 			MaxGas:   -1,
 		},
-
 		Evidence: EvidenceParams{
-			MaxAgeNumBlocks: 100000,         // 27.8 hrs at 1block/s
+			MaxAgeNumBlocks: 100_000,        // 27.8 hrs at 1block/s
 			MaxAgeDuration:  48 * time.Hour, // 2 days
-			MaxBytes:        1048576,        // 1 MB
+			MaxBytes:        1024 * 1024,    // 1 MiB
 		},
 		Version: VersionParams{
 			App: 0,
 		},
-
 		Validator: ValidatorParams{
-			PubKeyTypes: []string{ABCIPubKeyTypeEd25519},
+			PubKeyTypes: []string{abciPubKeyTypeEd25519},
 			JoinExpiry:  86400, // approx 1 day considering block rate of 1 block/s
 		},
-
 		WithoutNonces:   false,
 		WithoutGasCosts: true,
 	}
 }
 
-// Generate a genesis file with default configuration
-func GenerateGenesisConfig(pkey []cmtEd.PrivKey, genParams *GenesisParams) *GenesisConfig {
-	genVals := make([]GenesisValidator, len(pkey))
-	for idx, key := range pkey {
-		pub := key.PubKey()
-		addr := pub.Address()
-		val := GenesisValidator{
-			Address: hex.EncodeToString(addr),
-			PubKey:  pub.Bytes(),
-			Power:   1,
-			Name:    fmt.Sprint("validator-", idx),
-		}
-		genVals[idx] = val
-	}
-
-	genConf := GenesisConfig{
-		ChainID:         cometbft.GenerateChainID(genParams.ChainIDPrefix),
-		GenesisTime:     genesisTime(),
-		ConsensusParams: defaultConsensusParams(),
-		Validators:      genVals,
-	}
-
-	genConf.ConsensusParams.Validator.JoinExpiry = genParams.JoinExpiry
-	genConf.ConsensusParams.WithoutGasCosts = genParams.WithoutGasCosts
-	genConf.ConsensusParams.WithoutNonces = genParams.WithoutNonces
-
-	return &genConf
-}
-
-// Write a genesis file to disk
-func (genConf *GenesisConfig) SaveAs(file string) error {
-	genDocBytes, err := json.MarshalIndent(genConf, "", "  ")
+// SaveAs writes the genesis config to a file.
+func (genConfig *GenesisConfig) SaveAs(file string) error {
+	genDocBytes, err := json.MarshalIndent(genConfig, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(file, genDocBytes, 0644)
 }
 
-// Load a genesis file from disk and parse it into a GenesisConfig
+// LoadGenesisConfig loads a genesis file from disk and parse it into a
+// GenesisConfig.
 func LoadGenesisConfig(file string) (*GenesisConfig, error) {
 	genConfig := &GenesisConfig{}
 	genDocBytes, err := os.ReadFile(file)
@@ -171,87 +145,61 @@ func LoadGenesisConfig(file string) (*GenesisConfig, error) {
 	return genConfig, nil
 }
 
-func generatePrivateKeyFile(keyPath string) (cmtEd.PrivKey, error) {
-	privKey := cmtEd.GenPrivKey()
-	keyHex := hex.EncodeToString(privKey[:])
-	return privKey, os.WriteFile(keyPath, []byte(keyHex), 0600)
-}
-
-func readPrivateKeyFile(keyPath string) (cmtEd.PrivKey, error) {
-	privKeyHexB, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading private key file: %v", err)
-	}
-	privKeyHex := string(bytes.TrimSpace(privKeyHexB))
-	privB, err := hex.DecodeString(privKeyHex)
-	if err != nil {
-		return nil, fmt.Errorf("error decoding private key: %v", err)
-	}
-	return cmtEd.PrivKey(privB), nil
-}
-
-func readOrCreatePrivateKeyFile(keyPath string, autogen bool) (privKey cmtEd.PrivKey, newKey bool, err error) {
-	if fileExists(keyPath) {
-		privKey, err = readPrivateKeyFile(keyPath)
-		return
-	}
-	if !autogen {
-		err = fmt.Errorf("private key not found")
-		return
-	}
-
-	privKey, err = generatePrivateKeyFile(keyPath)
-	newKey = true
-	return
-}
-
 // loadGenesisAndPrivateKey generates private key and genesis file if not exist
 //
 //   - If genesis file exists but not private key file, it will generate private
 //     key and start the node as a non-validator.
 //   - Otherwise, the genesis file is generated based on the private key and
 //     starts the node as a validator.
-func LoadGenesisAndPrivateKey(autoGen bool, privKeyPath, chainRootDir string, genParams *GenesisParams) (privKey cmtEd.PrivKey, genesisCfg *GenesisConfig, newKey, newGenesis bool, err error) {
+func loadGenesisAndPrivateKey(autoGen bool, privKeyPath, rootDir string) (privKey *crypto.Ed25519PrivateKey, genesisCfg *GenesisConfig, err error) {
 	// Get private key:
 	//  - if private key file exists, load it.
 	//  - else if in autogen mode, generate private key and write to file.
 	//  - else fail
 
-	privKey, newKey, err = readOrCreatePrivateKeyFile(privKeyPath, autoGen)
+	if err = os.MkdirAll(rootDir, nodeDirPerm); err != nil {
+		return nil, nil, fmt.Errorf("failed to make root directory: %w", err)
+	}
+
+	chainRootDir := filepath.Join(rootDir, kwild.ABCIDirName)
+	priv, pub, newKey, err := ReadOrCreatePrivateKeyFile(privKeyPath, autoGen)
 	if err != nil {
-		return
+		return nil, nil, err
+	}
+	if newKey {
+		fmt.Printf("Generated new private key, path: %v\n", privKeyPath)
+	}
+	privKey, err = crypto.Ed25519PrivateKeyFromBytes(priv)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid private key: %v", err)
 	}
 
 	abciCfgDir := filepath.Join(chainRootDir, cometbft.ConfigDir)
 	genFile := filepath.Join(abciCfgDir, cometbft.GenesisJSONName) // i.e. <root>/abci/config/genesis.json
+
 	if fileExists(genFile) {
-		fmt.Printf("Found genesis file %v\n", genFile)
 		genesisCfg, err = LoadGenesisConfig(genFile)
 		if err != nil {
-			err = fmt.Errorf("error loading genesis file %s: %v", genFile, err)
-			return
+			return nil, nil, fmt.Errorf("error loading genesis file %s: %v", genFile, err)
 		}
-	} else {
-		if !autoGen {
-			err = fmt.Errorf("genesis file not found: %s", genFile)
-			return
-		}
-
-		if err = os.MkdirAll(abciCfgDir, 0755); err != nil {
-			err = fmt.Errorf("error creating abci config dir %s: %v", abciCfgDir, err)
-			return
-		}
-
-		genesisCfg = GenerateGenesisConfig([]cmtEd.PrivKey{privKey}, genParams)
-		err = genesisCfg.SaveAs(genFile)
-		if err != nil {
-			err = fmt.Errorf("unable to write genesis file %s: %v", genFile, err)
-			return
-		}
-		newGenesis = true
+		return privKey, genesisCfg, nil
 	}
 
-	return
+	if !autoGen {
+		return nil, nil, fmt.Errorf("genesis file not found: %s", genFile)
+	}
+
+	if err = os.MkdirAll(abciCfgDir, 0755); err != nil {
+		return nil, nil, fmt.Errorf("error creating abci config dir %s: %v", abciCfgDir, err)
+	}
+
+	genesisCfg = NewGenesisWithValidator(pub)
+	err = genesisCfg.SaveAs(genFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to write genesis file %s: %v", genFile, err)
+	}
+	fmt.Printf("Generated new genesis file: %v\n", genFile)
+	return privKey, genesisCfg, nil
 }
 
 func genesisTime() time.Time {
@@ -295,6 +243,13 @@ func (genConf *GenesisConfig) ComputeGenesisHash() []byte {
 	return hasher.Sum(nil)
 }
 
-func GenerateChainID(prefix string) string {
-	return prefix + cmtrand.Str(6)
+func NewGenesisWithValidator(pubKey []byte) *GenesisConfig {
+	genesisCfg := DefaultGenesisConfig()
+	const power = 1
+	genesisCfg.Validators = append(genesisCfg.Validators, &GenesisValidator{
+		PubKey: pubKey,
+		Power:  power,
+		Name:   "validator-0",
+	})
+	return genesisCfg
 }
