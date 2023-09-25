@@ -302,7 +302,6 @@ func (c *Connection) Query(ctx context.Context, statement string, options ...Exe
 
 	results, err := c.query(ctx, statement, removeNilVals(options)...)
 	if err != nil {
-		c.log.Error("failed to execute query", zap.Error(err))
 		return nil, err
 	}
 
