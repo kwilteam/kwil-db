@@ -3,6 +3,8 @@
 package config
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,10 +12,9 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
-	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/spf13/viper"
 )
 
@@ -28,10 +29,8 @@ const (
 var DefaultSQLitePath = filepath.Join("data", "kwild.db") // a folder, not a file
 
 type KwildConfig struct {
-	RootDir       string
-	AutoGen       bool
-	GenesisConfig *GenesisConfig
-	NodeKey       ed25519.PrivKey
+	RootDir string
+	AutoGen bool
 
 	AppCfg   *AppConfig   `mapstructure:"app"`
 	ChainCfg *ChainConfig `mapstructure:"chain"`
@@ -338,23 +337,8 @@ func (cfg *KwildConfig) sanitizeCfgPaths() {
 	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)
 }
 
-func (cfg *KwildConfig) InitPrivateKeyAndGenesis() error {
-	chainRoot := filepath.Join(cfg.RootDir, kwild.ABCIDirName)
-	genPath := filepath.Join(chainRoot, cometbft.ConfigDir, cometbft.GenesisJSONName)
-	genParams := DefaultGenesisParams()
-	privateKey, genConfig, newKey, newGenesis, err := LoadGenesisAndPrivateKey(cfg.AutoGen, cfg.AppCfg.PrivateKeyPath, chainRoot, genParams)
-	if err != nil {
-		return fmt.Errorf("failed load private key or generate genesis: %w", err)
-	}
-	if newKey {
-		fmt.Println("generated new private key, path: ", cfg.AppCfg.PrivateKeyPath)
-	}
-	if newGenesis {
-		fmt.Println("generated genesis file, path:", genPath)
-	}
-	cfg.NodeKey = privateKey
-	cfg.GenesisConfig = genConfig
-	return nil
+func (cfg *KwildConfig) InitPrivateKeyAndGenesis() (privateKey *crypto.Ed25519PrivateKey, genConfig *GenesisConfig, err error) {
+	return loadGenesisAndPrivateKey(cfg.AutoGen, cfg.AppCfg.PrivateKeyPath, cfg.RootDir)
 }
 
 func ExpandPath(path string) (string, error) {
@@ -375,4 +359,58 @@ func ExpandPath(path string) (string, error) {
 		expandedPath = absPath
 	}
 	return expandedPath, nil
+}
+
+// saveNodeKey writes the private key hexadecimal encoded to a file.
+func saveNodeKey(priv []byte, keyPath string) error {
+	keyHex := hex.EncodeToString(priv[:])
+	return os.WriteFile(keyPath, []byte(keyHex), 0600)
+}
+
+// loadNodeKey loads a Kwil node private key file.
+func loadNodeKey(keyFile string) (priv, pub []byte, err error) {
+	privKeyHexB, err := os.ReadFile(keyFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error reading private key file: %w", err)
+	}
+	privKeyHex := string(bytes.TrimSpace(privKeyHexB))
+	privB, err := hex.DecodeString(privKeyHex)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error decoding private key: %w", err)
+	}
+	privKey, err := crypto.Ed25519PrivateKeyFromBytes(privB)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid private key: %w", err)
+	}
+	pubKey := privKey.PubKey()
+	return privKey.Bytes(), pubKey.Bytes(), nil
+}
+
+// newNodeKey generates a node key pair, returning both as bytes.
+func newNodeKey() (priv, pub []byte, err error) {
+	privKey, err := crypto.GenerateEd25519Key()
+	if err != nil {
+		return nil, nil, err
+	}
+	return privKey.Bytes(), privKey.PubKey().Bytes(), nil
+}
+
+// ReadOrCreatePrivateKeyFile will read the node key pair from the given file,
+// or generate it if it does not exist and requested.
+func ReadOrCreatePrivateKeyFile(keyPath string, autogen bool) (priv, pub []byte, generated bool, err error) {
+	priv, pub, err = loadNodeKey(keyPath)
+	if err == nil {
+		return priv, pub, false, nil
+	}
+
+	if !autogen {
+		return nil, nil, false, fmt.Errorf("private key not found")
+	}
+
+	priv, pub, err = newNodeKey()
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	return priv, pub, true, saveNodeKey(priv, keyPath)
 }

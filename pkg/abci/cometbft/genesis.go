@@ -2,8 +2,6 @@ package cometbft
 
 import (
 	"path/filepath"
-
-	cmtrand "github.com/cometbft/cometbft/libs/rand"
 )
 
 // NOTE: we will soon be passing the genesis doc in memory rather than file.
@@ -29,8 +27,4 @@ func GenesisPath(chainRootDir string) string {
 func AddrBookPath(chainRootDir string) string {
 	abciCfgDir := filepath.Join(chainRootDir, ConfigDir)
 	return filepath.Join(abciCfgDir, AddrBookFileName)
-}
-
-func GenerateChainID(prefix string) string {
-	return prefix + cmtrand.Str(6)
 }

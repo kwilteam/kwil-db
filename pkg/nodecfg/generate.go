@@ -15,7 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 
-	"github.com/cometbft/cometbft/crypto/ed25519"
+	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 )
 
 const (
@@ -53,15 +53,13 @@ type TestnetGenerateConfig struct {
 	WithoutNonces           bool
 }
 
-/*
- GenerateNodeConfig is used to generate configuration required for running a kwil node.
-	- private_key, config.toml, genesis.json
-
- The private key is generated if it does not exist.
- The genesis file is generated if it does not exist (or) updated if a new private key is generated.
- The config.toml file is generated if it does not exist.
-*/
-
+// GenerateNodeConfig is used to generate configuration required for running a
+// kwil node. This includes the files: private_key, config.toml, genesis.json.
+//
+//   - The private key is generated if it does not exist.
+//   - The genesis file is generated if it does not exist. A new genesis file
+//     will include the node as a validator; existing genesis is not updated.
+//   - The config.toml file is generated if it does not exist.
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	rootDir, err := config.ExpandPath(genCfg.OutputDir)
 	if err != nil {
@@ -74,7 +72,8 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	// NOTE: not the fully re-rooted path since this may run in a container. The
 	// caller can update PrivateKeyPath if desired.
 
-	err = os.MkdirAll(filepath.Join(chainRoot, abciConfigDir), nodeDirPerm)
+	fullABCIConfigDir := filepath.Join(chainRoot, abciConfigDir)
+	err = os.MkdirAll(fullABCIConfigDir, nodeDirPerm)
 	if err != nil {
 		return err
 	}
@@ -85,29 +84,42 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	}
 
 	cfg.AppCfg.PrivateKeyPath = kwild.PrivateKeyFileName
-
-	genParams := &config.GenesisParams{
-		JoinExpiry:      genCfg.JoinExpiry,
-		WithoutGasCosts: genCfg.WithoutGasCosts,
-		WithoutNonces:   genCfg.WithoutNonces,
-		ChainIDPrefix:   chainIDPrefix,
-	}
-	_, _, _, _, err = config.LoadGenesisAndPrivateKey(true,
-		filepath.Join(cfg.RootDir, kwild.PrivateKeyFileName),
-		chainRoot, genParams)
+	err = writeConfigFile(filepath.Join(rootDir, kwild.ConfigFileName), cfg)
 	if err != nil {
 		return err
 	}
 
-	// cometbft's gRPC server -- we won't use, right?
-	// cfg.ChainCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
+	// Load or generate private key.
+	fullKeyPath := filepath.Join(rootDir, kwild.PrivateKeyFileName)
+	_, pubKey, newKey, err := config.ReadOrCreatePrivateKeyFile(fullKeyPath, true)
+	if err != nil {
+		return fmt.Errorf("cannot read or create private key: %w", err)
+	}
+	if newKey {
+		fmt.Printf("Generated new private key: %v\n", fullKeyPath)
+	}
 
-	writeConfigFile(filepath.Join(rootDir, kwild.ConfigFileName), cfg)
+	// Create or update genesis config.
+	genFile := filepath.Join(fullABCIConfigDir, cometbft.GenesisJSONName)
 
-	fmt.Println("Successfully initialized node directory: ", rootDir)
-	return nil
+	_, err = os.Stat(genFile)
+	if os.IsNotExist(err) {
+		genesisCfg := config.NewGenesisWithValidator(pubKey)
+		genCfg.applyGenesisParams(genesisCfg)
+		return genesisCfg.SaveAs(genFile)
+	}
+
+	return err
 }
 
+func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisConfig) {
+	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
+	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
+	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
+}
+
+// GenerateTestnetConfig is like GenerateNodeConfig but it generates multiple
+// configs for a network of nodes on a LAN.  See also TestnetGenerateConfig.
 func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	var err error
 	genCfg.OutputDir, err = config.ExpandPath(genCfg.OutputDir)
@@ -132,9 +144,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		}
 	}
 
-	privateKeys := make([]ed25519.PrivKey, nNodes)
+	privateKeys := make([]cmtEd.PrivKey, nNodes)
 	for i := range privateKeys {
-		privateKeys[i] = ed25519.GenPrivKey()
+		privateKeys[i] = cmtEd.GenPrivKey()
 
 		nodeDirName := fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i)
 		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
@@ -160,14 +172,15 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		}
 	}
 
-	validatorPkeys := privateKeys[:genCfg.NValidators]
-	genParams := &config.GenesisParams{
-		JoinExpiry:      genCfg.JoinExpiry,
-		WithoutGasCosts: genCfg.WithoutGasCosts,
-		WithoutNonces:   genCfg.WithoutNonces,
-		ChainIDPrefix:   chainIDPrefix,
+	genConfig := config.DefaultGenesisConfig()
+	for i, pk := range privateKeys[:genCfg.NValidators] {
+		genConfig.Validators = append(genConfig.Validators, &config.GenesisValidator{
+			PubKey: pk.PubKey().Bytes(),
+			Power:  1,
+			Name:   fmt.Sprintf("validator-%d", i),
+		})
 	}
-	genConfig := config.GenerateGenesisConfig(validatorPkeys, genParams)
+	genCfg.applyGenesisParams(genConfig)
 
 	// write genesis file
 	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
@@ -206,6 +219,12 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	return nil
 }
 
+func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisConfig) {
+	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
+	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
+	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
+}
+
 func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {
 	if len(genCfg.Hostnames) > 0 && i < len(genCfg.Hostnames) {
 		return genCfg.Hostnames[i]
@@ -223,10 +242,10 @@ func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {
 	return ip.String()
 }
 
-func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []ed25519.PrivKey) string {
+func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivKey) string {
 	persistentPeers := make([]string, genCfg.NValidators+genCfg.NNonValidators)
 	for i := range persistentPeers {
-		pubKey := privKeys[i].PubKey().(ed25519.PubKey)
+		pubKey := privKeys[i].PubKey().(cmtEd.PubKey)
 		hostPort := fmt.Sprintf("%s:%d", hostnameOrIP(genCfg, i), genCfg.P2pPort)
 		persistentPeers[i] = cometbft.NodeIDAddressString(pubKey, hostPort)
 	}

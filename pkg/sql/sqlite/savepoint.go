@@ -50,24 +50,9 @@ func (sp *Savepoint) Rollback() error {
 	return sp.conn.Execute("RELEASE " + sp.saveName)
 }
 
-var letterRunes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
-var alphanumericRunes = []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-
-var rnd = random.New()
-
 func randomSavepointName(length int) string {
 	if length < 2 {
 		panic("Length must be at least 2 to generate a valid savepoint name.")
 	}
-
-	result := make([]rune, length)
-	// First character must be a letter
-	result[0] = letterRunes[rnd.Intn(len(letterRunes))]
-
-	// Rest of the characters can be alphanumeric
-	for i := 1; i < length; i++ {
-		result[i] = alphanumericRunes[rnd.Intn(len(alphanumericRunes))]
-	}
-
-	return string(result)
+	return random.String(length)
 }
