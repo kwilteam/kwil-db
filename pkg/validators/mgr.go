@@ -2,10 +2,16 @@ package validators
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
+	"sort"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sessions"
+	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
+	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type joinReq struct {
@@ -62,6 +68,9 @@ type ValidatorMgr struct {
 	// opts
 	joinExpiry int64
 	log        log.Logger
+
+	// session params
+	cm *validatorDbCommittable
 }
 
 // NOTE: The SQLite validator/approval store is local and transparent to the
@@ -81,6 +90,79 @@ type ValidatorStore interface {
 	AddValidator(ctx context.Context, joiner []byte, power int64) error
 }
 
+type ValidatorDbSession interface {
+	Datastore
+
+	ApplyChangeset(reader io.Reader) error
+	CreateSession() (sql.Session, error)
+	Savepoint() (sql.Savepoint, error)
+	CheckpointWal() error
+	EnableForeignKey() error
+	DisableForeignKey() error
+}
+
+type validatorDbCommittable struct {
+	sessions.Committable
+
+	validatorDbHash func() []byte
+}
+
+// ID overrides the base Committable. We do this so that we can have the
+// persistence of the state be part of the 2pc process, but have the ID reflect
+// the actual state free from SQL specifics.
+func (c *validatorDbCommittable) ID(ctx context.Context) ([]byte, error) {
+	return c.validatorDbHash(), nil
+}
+
+func (vm *ValidatorMgr) Committable() sessions.Committable {
+	return vm.cm
+}
+
+// ValidatorDB state includes:
+// - current validators
+// - active join requests
+// - approvers for each join request
+func (vm *ValidatorMgr) validatorDbHash() []byte {
+	hasher := sha256.New()
+
+	// current validators  val1:val2:...
+	var currentValidators []string
+	for val := range vm.current {
+		currentValidators = append(currentValidators, val)
+	}
+	sort.Strings(currentValidators)
+	for _, val := range currentValidators {
+		hasher.Write([]byte(val + ":"))
+	}
+
+	// active join requests & approvals
+	// joinerPubkey:power:expiresAt:approver1:approver2:...
+	var joiners []string
+	for val := range vm.candidates {
+		joiners = append(joiners, val)
+	}
+	sort.Strings(joiners)
+
+	for _, joiner := range joiners {
+		jr := vm.candidates[joiner]
+		jrStr := fmt.Sprintf("%s:%d:%d", joiner, jr.power, jr.expiresAt)
+		hasher.Write([]byte(jrStr))
+
+		var approvers []string
+		for val, approved := range jr.validators {
+			if approved {
+				approvers = append(approvers, val)
+			}
+		}
+		sort.Strings(approvers)
+		for _, approver := range approvers {
+			hasher.Write([]byte(":" + approver))
+		}
+		hasher.Write([]byte(";"))
+	}
+	return hasher.Sum(nil)
+}
+
 func (vm *ValidatorMgr) isCurrent(val []byte) bool {
 	_, have := vm.current[string(val)]
 	return have
@@ -90,7 +172,7 @@ func (vm *ValidatorMgr) candidate(val []byte) *joinReq {
 	return vm.candidates[string(val)]
 }
 
-func NewValidatorMgr(ctx context.Context, datastore Datastore, opts ...ValidatorMgrOpt) (*ValidatorMgr, error) {
+func NewValidatorMgr(ctx context.Context, datastore ValidatorDbSession, opts ...ValidatorMgrOpt) (*ValidatorMgr, error) {
 	vm := &ValidatorMgr{
 		current:    make(map[string]struct{}),
 		candidates: make(map[string]*joinReq),
@@ -99,6 +181,13 @@ func NewValidatorMgr(ctx context.Context, datastore Datastore, opts ...Validator
 	}
 	for _, opt := range opts {
 		opt(vm)
+	}
+
+	vm.cm = &validatorDbCommittable{
+		Committable: sqlSessions.NewSqlCommitable(datastore,
+			sqlSessions.WithLogger(*vm.log.Named("validator-committable")),
+		),
+		validatorDbHash: vm.validatorDbHash,
 	}
 
 	var err error
@@ -282,8 +371,7 @@ func (vm *ValidatorMgr) Finalize(ctx context.Context) []*Validator {
 	// Updates for approved (joining) validators.
 	for candidate, join := range vm.candidates {
 		if join.votes() < join.requiredVotes() {
-
-			if vm.lastBlockHeight >= join.expiresAt {
+			if isJoinExpired(join, vm.lastBlockHeight) {
 				// Join request expired
 				delete(vm.candidates, candidate)
 				if err := vm.db.DeleteJoinRequest(ctx, join.pubkey); err != nil {
@@ -330,4 +418,8 @@ func (vm *ValidatorMgr) Finalize(ctx context.Context) []*Validator {
 
 func (mgr *ValidatorMgr) UpdateBlockHeight(height int64) {
 	mgr.lastBlockHeight = height
+}
+
+func isJoinExpired(join *joinReq, blockHeight int64) bool {
+	return join.expiresAt != -1 && blockHeight >= join.expiresAt
 }

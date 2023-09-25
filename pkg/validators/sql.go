@@ -24,7 +24,7 @@ const (
 	CREATE TABLE IF NOT EXISTS validators (
 		pubkey BLOB PRIMARY KEY,
 		power INTEGER
-		) WITHOUT ROWID, STRICT;
+	) WITHOUT ROWID, STRICT;
 
 	CREATE TABLE IF NOT EXISTS join_reqs (
 		candidate BLOB PRIMARY KEY,
@@ -79,7 +79,68 @@ const (
 
 	sqlAddToJoinBoard = `INSERT INTO joins_board (candidate, validator, approval)
 		VALUES ($candidate, $validator, $approval)`
+
+	sqlInitVersionTable = `CREATE TABLE IF NOT EXISTS schema_version (
+		version INT NOT NULL
+    );` // Do we still need WITHOUT ROWID and STRICT? It's just a single row table
+
+	sqlSetVersion = "INSERT INTO schema_version (version) VALUES ($version);"
+
+	//sqlUpdateVersion = "UPDATE schema_version SET version = $version;"
+
+	sqlGetVersion = "SELECT version FROM schema_version;"
+
+	valStoreVersion = 1
 )
+
+// Migration actions.
+const (
+	sqlAddJoinExpiry string = `ALTER TABLE join_reqs ADD COLUMN expiresAt INTEGER DEFAULT -1;`
+)
+
+// Schema version table.
+func (vs *validatorStore) initSchemaVersion(ctx context.Context) error {
+	if err := vs.db.Execute(ctx, sqlInitVersionTable, nil); err != nil {
+		return fmt.Errorf("failed to initialize schema version table: %w", err)
+	}
+
+	err := vs.db.Execute(ctx, sqlSetVersion, map[string]any{
+		"$version": valStoreVersion,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set schema version: %w", err)
+	}
+	return nil
+}
+
+// func (vs *validatorStore) updateCurrentVersion(ctx context.Context, version int) error {
+// 	err := vs.db.Execute(ctx, sqlUpdateVersion, map[string]any{
+// 		"$version": version,
+// 	})
+// 	if err != nil {
+// 		return fmt.Errorf("failed to update schema version: %w", err)
+// 	}
+// 	return nil
+// }
+
+func (vs *validatorStore) currentVersion(ctx context.Context) (int, error) {
+	results, err := vs.db.Query(ctx, sqlGetVersion, nil)
+	if err != nil {
+		return 0, err
+	}
+	if len(results) == 0 {
+		return 0, nil
+	}
+	vi, ok := results[0]["version"]
+	if !ok {
+		return 0, errors.New("no version in schema_version record")
+	}
+	version, ok := vi.(int64)
+	if !ok {
+		return 0, fmt.Errorf("invalid version value (%T)", vi)
+	}
+	return int(version), nil
+}
 
 // -- CREATE TABLE IF NOT EXISTS validator_approvals (
 // -- 	validator_id INTEGER REFERENCES validators (id) ON DELETE CASCADE,
@@ -101,10 +162,13 @@ func (vs *validatorStore) initTables(ctx context.Context) error {
 	inits := getTableInits()
 
 	for _, init := range inits {
-		err := vs.db.Execute(ctx, init, nil)
-		if err != nil {
+		if err := vs.db.Execute(ctx, init, nil); err != nil {
 			return fmt.Errorf("failed to initialize tables: %w", err)
 		}
+	}
+
+	if err := vs.initSchemaVersion(ctx); err != nil {
+		return err
 	}
 
 	return nil
