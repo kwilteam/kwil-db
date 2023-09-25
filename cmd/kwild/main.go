@@ -47,7 +47,8 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("failed to load kwild config: %w", err)
 		}
 
-		if err := kwildCfg.InitPrivateKeyAndGenesis(); err != nil {
+		nodeKey, genesisConfig, err := kwildCfg.InitPrivateKeyAndGenesis()
+		if err != nil {
 			return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 		}
 
@@ -60,7 +61,7 @@ var rootCmd = &cobra.Command{
 			cancel()
 		}()
 
-		svr, err := server.New(ctx, kwildCfg)
+		svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey)
 		if err != nil {
 			return err
 		}

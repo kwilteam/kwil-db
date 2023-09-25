@@ -11,10 +11,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
+	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
 	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -49,7 +51,7 @@ const (
 )
 
 // New builds the kwild server.
-func New(ctx context.Context, cfg *config.KwildConfig) (svr *Server, err error) {
+func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.GenesisConfig, nodeKey *crypto.Ed25519PrivateKey) (svr *Server, err error) {
 	closers := &closeFuncs{
 		closers: make([]func() error, 0),
 	}
@@ -78,7 +80,6 @@ func New(ctx context.Context, cfg *config.KwildConfig) (svr *Server, err error) 
 		return nil, errors.New("unspecified TLS key and/or certificate")
 	}
 
-	// Make the root directory if it does not exist.
 	if err = os.MkdirAll(cfg.RootDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create root directory %q: %w", cfg.RootDir, err)
 	}
@@ -91,11 +92,13 @@ func New(ctx context.Context, cfg *config.KwildConfig) (svr *Server, err error) 
 	}
 
 	deps := &coreDependencies{
-		ctx:     ctx,
-		cfg:     cfg,
-		log:     logger,
-		opener:  newSqliteOpener(dbDir),
-		keypair: keyPair,
+		ctx:        ctx,
+		cfg:        cfg,
+		genesisCfg: genesisCfg,
+		privKey:    ed25519.PrivKey(nodeKey.Bytes()),
+		log:        logger,
+		opener:     newSqliteOpener(dbDir),
+		keypair:    keyPair,
 	}
 
 	return buildServer(deps, closers), nil

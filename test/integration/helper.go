@@ -274,7 +274,7 @@ func (r *IntHelper) WaitForSignals(t *testing.T) {
 }
 
 func (r *IntHelper) ExtractPrivateKeys() {
-	regexPath := filepath.Join(r.home, "*/private_key")
+	regexPath := filepath.Join(r.home, "*", "private_key")
 
 	files, err := filepath.Glob(regexPath)
 	require.NoError(r.t, err, "failed to get private key files")
