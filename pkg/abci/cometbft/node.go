@@ -83,11 +83,11 @@ func (lw *LogWrapper) With(kvs ...any) cometLog.Logger {
 }
 
 func keyValsToFields(kvs []any) []zap.Field {
-	if len(kvs)%2 != 0 {
+	n := len(kvs)
+	if n%2 != 0 {
 		kvs = append(kvs, errors.New("missing value"))
 	}
-	n := len(kvs) / 2
-	fields := make([]zap.Field, 0, n)
+	fields := make([]zap.Field, 0, n/2)
 	for i := 0; i < n; i += 2 {
 		fields = append(fields, zap.Any(toString(kvs[i]), kvs[i+1]))
 	}
