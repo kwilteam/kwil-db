@@ -12,7 +12,7 @@ table users {
     id int primary notnull,
     username text default('sds'),
     age int min(0),
-    wallet text unique
+    wallet blob unique
 }
 
 table posts {
@@ -25,36 +25,36 @@ table posts {
 }
 
 action create_user($id, $username, $age) public {
-    INSERT INTO users (id, username, age, wallet)
-    VALUES ($id, $username, $age, public_key(@caller, 'hex'));
+    INSERT INTO "users" (id, username, age, wallet)
+    VALUES ($id, $username, $age, @caller);
 }
 
 action update_user($id, $username, $age) public {
-    UPDATE users
+    UPDATE [users]
     SET id = $id, username = $username, age = $age
-    WHERE wallet = public_key(@caller, 'hex');
+    WHERE wallet = @caller;
 }
 
 action update_username($username) public {
-    UPDATE users
+    UPDATE `users`
     SET username = $username
-    WHERE wallet = public_key(@caller, 'hex');
+    WHERE wallet = @caller;
 }
 
 action delete_user() public {
     DELETE FROM users
-    WHERE wallet = public_key(@caller, 'hex');
+    WHERE public_key(wallet) = public_key(@caller);
 }
 
 action delete_user_by_id ($id) public owner {
-    DELETE FROM users
-    WHERE id = $id;
+    DELETE FROM "users"
+    WHERE id = $id AND public_key(wallet) = public_key(@caller);
 }
 
 action create_post($id, $title, $content) public {
     INSERT INTO posts (id, user_id, title, content)
     VALUES ($id, (
-        SELECT id FROM users WHERE wallet = public_key(@caller, 'hex')
+        SELECT id FROM users WHERE wallet = @caller
     ), $title, $content);
 }
 
@@ -63,7 +63,7 @@ action delete_post($id) public {
     WHERE id = $id AND user_id = (
         SELECT id
         FROM users
-        WHERE wallet = public_key(@caller, 'hex')
+        WHERE wallet = @caller
     );
 }
 
@@ -102,7 +102,7 @@ action get_post_authenticated($id) public view mustsign {
 
 action get_post_unauthenticated($id) public view {
     SELECT *
-    FROM posts
+    FROM "posts"
     WHERE id = $id;
 }
 
@@ -118,6 +118,6 @@ action divide($numerator, $denominator) public view {
     select $up AS upper_value, $down AS lower_value;
 }
 
-action owner_only() public owner view {
+action owner_only() public owner view mustsign {
     select 'owner only';
 }
