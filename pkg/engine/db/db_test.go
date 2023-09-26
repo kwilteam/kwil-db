@@ -201,7 +201,11 @@ func Test_Prepare(t *testing.T) {
 			}
 
 			_, err = datastore.Prepare(ctx, tt.statement)
-			assert.Equal(t, tt.wantErr, err != nil)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
@@ -331,7 +335,7 @@ var (
 		},
 		Indexes: []*types.Index{
 			{
-				Name: "primary",
+				Name: "primary_key",
 				Columns: []string{
 					"id1",
 					"id2",

@@ -106,7 +106,7 @@ func (r *RuleMetadata) Clean() (*RuleMetadata, error) {
 	for i, tbl := range r.Tables {
 		err := tbl.Clean()
 		if err != nil {
-			return nil, fmt.Errorf("error cleaning table: %w", err)
+			return nil, fmt.Errorf(`error cleaning table "%s": %w`, tbl.Name, err)
 		}
 
 		cleaned.Tables[i] = tbl
