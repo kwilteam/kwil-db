@@ -22,6 +22,9 @@ const (
 
 	// Procedure
 	OpProcedureExecute Instruction = "proc_exec" // p1: procedure name. p2: list of set variable names to pass to the procedure. executes the procedure.
+
+	// Eval
+	OpEvaluatable Instruction = "eval" // p1: evaluatable expression, should be some "SELECT [EXPR]" string. p2: the variable name to assign. evaluates the expression and sets the result to the variable.
 )
 
 func (o Instruction) evaluate(ctx *procedureContext, eng *Engine, args ...any) error {
@@ -40,6 +43,8 @@ func (o Instruction) evaluate(ctx *procedureContext, eng *Engine, args ...any) e
 		return evalExtensionExecute(ctx, eng, args...)
 	case OpProcedureExecute:
 		return evalProcedureExecute(ctx, eng, args...)
+	case OpEvaluatable:
+		return evalEvaluatable(ctx, eng, args...)
 	}
 }
 
@@ -293,5 +298,34 @@ func evalExtensionExecute(ctx *procedureContext, eng *Engine, args ...any) error
 		ctx.values[returns[i]] = result
 	}
 
+	return nil
+}
+
+// evalEvaluatable evaluates some pre-set evaluatable.
+// This should be some SELECT tree.Expression, such as:
+// SELECT $name
+// SELECT abs(-1)
+// SELECT $age + 1
+func evalEvaluatable(ctx *procedureContext, eng *Engine, args ...any) error {
+	if len(args) != 2 {
+		return fmt.Errorf("%w: evaluatable requires 2 arguments, got %d", ErrIncorrectNumArgs, len(args))
+	}
+
+	expr, ok := args[0].(string)
+	if !ok {
+		return fmt.Errorf("%w: expected string for expression, got %T", ErrIncorrectInputType, args[0])
+	}
+
+	varName, ok := args[1].(string)
+	if !ok {
+		return fmt.Errorf("%w: expected string for variable name, got %T", ErrIncorrectInputType, args[1])
+	}
+
+	evaluatedValue, err := eng.evaluater.Evaluate(expr, ctx.values)
+	if err != nil {
+		return fmt.Errorf("failed to evaluate expression: %w", err)
+	}
+
+	ctx.values[varName] = evaluatedValue
 	return nil
 }

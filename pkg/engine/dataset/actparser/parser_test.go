@@ -1,9 +1,10 @@
-package actparser
+package actparser_test
 
 import (
 	"flag"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/dataset/actparser"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/stretchr/testify/assert"
 )
@@ -14,17 +15,17 @@ func TestParseActionStmt(t *testing.T) {
 	tests := []struct {
 		name   string
 		input  string
-		expect ActionStmt
+		expect actparser.ActionStmt
 	}{
 		{
 			name: "action_call",
 			// both `-2` and `- 2` will be parsed as ExpressionUnary
 			input: `action_xx(2, '3', $a, @b, -2, 1 + - 2, (1 * 2) + 3, 1 <= 2, 1 and $c, address($c), address(upper($c)));`,
-			expect: &ActionCallStmt{
+			expect: &actparser.ActionCallStmt{
 				Method: "action_xx",
 				Args: []tree.Expression{
 					&tree.ExpressionLiteral{Value: "2"},
-					&tree.ExpressionLiteral{Value: `"3"`},
+					&tree.ExpressionLiteral{Value: `'3'`},
 					&tree.ExpressionBindParameter{Parameter: "$a"},
 					&tree.ExpressionBindParameter{Parameter: "@b"},
 					&tree.ExpressionUnary{
@@ -76,15 +77,16 @@ func TestParseActionStmt(t *testing.T) {
 			},
 		},
 		{
-			name:  "extension_call",
+			name: "extension_call",
+			// both `-2` and `- 2` will be parsed as ExpressionUnary
 			input: `$a, $b = erc20.transfer(2, '3', $a, @b, -2, 1 + - 2, (1 * 2) + 3, 1 <= 2, 1 and $c, address($c), address(upper($c)));`,
-			expect: &ExtensionCallStmt{
+			expect: &actparser.ExtensionCallStmt{
 				Extension: "erc20",
 				Method:    "transfer",
 				Receivers: []string{"$a", "$b"},
 				Args: []tree.Expression{
 					&tree.ExpressionLiteral{Value: "2"},
-					&tree.ExpressionLiteral{Value: `"3"`},
+					&tree.ExpressionLiteral{Value: `'3'`},
 					&tree.ExpressionBindParameter{Parameter: "$a"},
 					&tree.ExpressionBindParameter{Parameter: "@b"},
 					&tree.ExpressionUnary{
@@ -138,42 +140,42 @@ func TestParseActionStmt(t *testing.T) {
 		{
 			name:  "dml select",
 			input: `SELECT * FROM users;`,
-			expect: &DMLStmt{
+			expect: &actparser.DMLStmt{
 				Statement: `SELECT * FROM users;`,
 			},
 		},
 		{
 			name:  "dml insert",
 			input: `insert into users (id, name) values (1, "test");`,
-			expect: &DMLStmt{
+			expect: &actparser.DMLStmt{
 				Statement: `insert into users (id, name) values (1, "test");`,
 			},
 		},
 		{
 			name:  "dml update",
 			input: `update users set name = "test" where id = 1;`,
-			expect: &DMLStmt{
+			expect: &actparser.DMLStmt{
 				Statement: `update users set name = "test" where id = 1;`,
 			},
 		},
 		{
 			name:  "dml delete",
 			input: `delete from users where id = 1;`,
-			expect: &DMLStmt{
+			expect: &actparser.DMLStmt{
 				Statement: `delete from users where id = 1;`,
 			},
 		},
 		{
 			name:  "dml with",
 			input: `with x as (select * from users) select * from x;`,
-			expect: &DMLStmt{
+			expect: &actparser.DMLStmt{
 				Statement: `with x as (select * from users) select * from x;`,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotAst, err := ParseActionStmt(tt.input, nil, *trace)
+			gotAst, err := actparser.ParseActionStmt(tt.input, nil, *trace)
 			if err != nil {
 				t.Errorf("ParseActionStmt() error = %v", err)
 				return
@@ -219,7 +221,7 @@ func TestParseActionStmt_scalar_function(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseActionStmt(tt.input, nil, *trace)
+			_, err := actparser.ParseActionStmt(tt.input, nil, *trace)
 			if tt.wantErr {
 				assert.Error(t, err, "ParseActionStmt(%v)", tt.input)
 			} else {

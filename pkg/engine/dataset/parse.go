@@ -7,6 +7,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset/actparser"
+	"github.com/kwilteam/kwil-db/pkg/engine/dataset/evaluater"
 	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"go.uber.org/zap"
@@ -217,12 +218,20 @@ func convertExtensionExecute(ext *actparser.ExtensionCallStmt) (procedureInstruc
 
 	var args []string
 	for _, arg := range ext.Args {
-		if isIdent(arg) {
-			args = append(args, arg)
-			continue
+		// add instruction Evaluatable
+		stmt, err := evaluater.PrepareExpression(arg)
+		if err != nil {
+			return nil, nil, err
 		}
 
-		loadOp, uniqueName := newSetter(arg)
+		uniqueName := randomHash.getRandomIdent()
+		loadOp := &execution.InstructionExecution{
+			Instruction: execution.OpEvaluatable,
+			Args: []any{
+				stmt,
+				uniqueName,
+			},
+		}
 
 		args = append(args, uniqueName)
 		setters = append(setters, loadOp)
@@ -246,12 +255,20 @@ func convertProcedureCall(action *actparser.ActionCallStmt) (procedureInstructio
 
 	var args []string
 	for _, arg := range action.Args {
-		if isIdent(arg) {
-			args = append(args, arg)
-			continue
+		// add instruction Evaluatable
+		stmt, err := evaluater.PrepareExpression(arg)
+		if err != nil {
+			return nil, nil, err
 		}
 
-		loadOp, uniqueName := newSetter(arg)
+		uniqueName := randomHash.getRandomIdent()
+		loadOp := &execution.InstructionExecution{
+			Instruction: execution.OpEvaluatable,
+			Args: []any{
+				stmt,
+				uniqueName,
+			},
+		}
 
 		args = append(args, uniqueName)
 		setters = append(setters, loadOp)

@@ -27,6 +27,10 @@ type Engine struct {
 
 	// cache is a cache of initialized extensions and prepared statements.
 	cache *cache
+
+	// evaluater can evaluate expressions.
+	// this is sort've a hack to support: my_ext.my_method($my_var + 1)
+	evaluater Evaluater
 }
 
 type cache struct {
@@ -34,7 +38,7 @@ type cache struct {
 	preparedStatements    map[string]PreparedStatement
 }
 
-func NewEngine(ctx context.Context, db Datastore, opts *EngineOpts) (*Engine, error) {
+func NewEngine(ctx context.Context, db Datastore, eval Evaluater, opts *EngineOpts) (*Engine, error) {
 	if opts == nil {
 		opts = &EngineOpts{}
 	}
@@ -57,6 +61,7 @@ func NewEngine(ctx context.Context, db Datastore, opts *EngineOpts) (*Engine, er
 		loadCommand:         opts.LoadCmd,
 		db:                  db,
 		cache:               newCache(),
+		evaluater:           eval,
 	}
 
 	err := e.executeLoad(ctx)
@@ -111,5 +116,5 @@ func (e *Engine) Close() error {
 		return fmt.Errorf("failed to close %d prepared statements: %s", len(errs), strings.Join(errs, ", "))
 	}
 
-	return nil
+	return e.evaluater.Close()
 }
