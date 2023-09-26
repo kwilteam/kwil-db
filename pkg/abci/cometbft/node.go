@@ -14,6 +14,7 @@ import (
 	cometNodes "github.com/cometbft/cometbft/node"
 	"github.com/cometbft/cometbft/p2p"
 	"github.com/cometbft/cometbft/proxy"
+	"github.com/cometbft/cometbft/types"
 
 	"go.uber.org/zap"
 )
@@ -107,9 +108,15 @@ type CometBftNode struct {
 	Node *cometNodes.Node
 }
 
+// Parses genesis file to extract cometbft specific config
+func genesisDocProvider(genDoc *types.GenesisDoc) cometNodes.GenesisDocProvider {
+	return func() (*types.GenesisDoc, error) {
+		return genDoc, nil
+	}
+}
+
 // NewCometBftNode creates a new CometBFT node.
-func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privateKey cometEd25519.PrivKey,
-	atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
+func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, genDoc *types.GenesisDoc, privateKey cometEd25519.PrivKey, atomicStore privval.AtomicReadWriter, log *log.Logger) (*CometBftNode, error) {
 
 	err := conf.ValidateBasic()
 	if err != nil {
@@ -130,7 +137,7 @@ func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, privat
 			PrivKey: privateKey,
 		},
 		proxy.NewLocalClientCreator(app),
-		cometNodes.DefaultGenesisDocProviderFunc(conf),
+		genesisDocProvider(genDoc),
 		cometNodes.DefaultDBProvider,
 		cometNodes.DefaultMetricsProvider(conf.Instrumentation),
 		logger,

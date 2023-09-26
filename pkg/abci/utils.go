@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
@@ -124,7 +124,7 @@ func PatchGenesisAppHash(sqliteDbDir, genesisFile string) ([]byte, error) {
 
 	// Optionally update the app_hash in the genesis file.
 	if genesisFile != "" {
-		err = cometbft.SetGenesisAppHash(genesisHash, genesisFile)
+		err = setGenesisAppHash(genesisHash, genesisFile)
 		if err != nil {
 			return nil, err
 		}
@@ -167,4 +167,17 @@ func ReadKeyFile(keyFile string) ([]byte, error) {
 		return nil, fmt.Errorf("error decoding private key: %v", err)
 	}
 	return privB, nil
+}
+
+func setGenesisAppHash(appHash []byte, genesisFile string) error {
+	genesisConf, err := config.LoadGenesisConfig(genesisFile)
+	if err != nil {
+		return fmt.Errorf("failed to load genesis file: %w", err)
+	}
+
+	genesisConf.DataAppHash = appHash
+	if err := genesisConf.SaveAs(genesisFile); err != nil {
+		return fmt.Errorf("failed to save genesis file: %w", err)
+	}
+	return nil
 }

@@ -72,7 +72,7 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.DatabaseDropSpecification(ctx, t, creatorDriver)
 
 			// there's one node in the network and we're the validator
-			specifications.NetworkNodeValidatorSetSpecification(ctx, t, creatorDriver, 1)
+			specifications.CurrentValidatorsSpecification(ctx, t, creatorDriver, 1)
 
 			// The other network/validator specs require multiple nodes in a network
 		})

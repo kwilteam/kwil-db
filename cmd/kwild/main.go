@@ -44,7 +44,11 @@ var rootCmd = &cobra.Command{
 		// command line flags are now (finally) parsed by cobra. Bind env vars,
 		// load the config file, and unmarshal into kwildCfg.
 		if err := kwildCfg.LoadKwildConfig(); err != nil {
-			return fmt.Errorf("Failed to load kwild config: %w", err)
+			return fmt.Errorf("failed to load kwild config: %w", err)
+		}
+
+		if err := kwildCfg.InitPrivateKeyAndGenesis(); err != nil {
+			return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 		}
 
 		signalChan := make(chan os.Signal, 1)

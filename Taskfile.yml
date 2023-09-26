@@ -59,7 +59,7 @@ tasks:
         - golangci-lint run -c .golangci.yml --skip-dirs ./api/protobuf
 
   build:
-    desc: Build cli & kwild
+    desc: Build cli, admin & kwild
     cmds:
       - task: build:cli
       - task: build:kwild

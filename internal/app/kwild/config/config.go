@@ -9,14 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild"
+	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
+	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/spf13/viper"
 )
 
 const (
-	ConfigFileName      = "config.toml"
-	PrivateKeyFileName  = "private_key"
 	DefaultSnapshotsDir = "snapshots"
 
 	DefaultTLSCertFile  = "rpc.cert"
@@ -27,8 +28,10 @@ const (
 var DefaultSQLitePath = filepath.Join("data", "kwild.db") // a folder, not a file
 
 type KwildConfig struct {
-	RootDir string
-	AutoGen bool
+	RootDir       string
+	AutoGen       bool
+	GenesisConfig *GenesisConfig
+	NodeKey       ed25519.PrivKey
 
 	AppCfg   *AppConfig   `mapstructure:"app"`
 	ChainCfg *ChainConfig `mapstructure:"chain"`
@@ -43,19 +46,17 @@ type Logging struct {
 }
 
 type AppConfig struct {
-	GrpcListenAddress  string         `mapstructure:"grpc_listen_addr"`
-	HTTPListenAddress  string         `mapstructure:"http_listen_addr"`
-	AdminListenAddress string         `mapstructure:"admin_listen_addr"`
-	PrivateKeyPath     string         `mapstructure:"private_key_path"`
-	SqliteFilePath     string         `mapstructure:"sqlite_file_path"`
-	ExtensionEndpoints []string       `mapstructure:"extension_endpoints"`
-	WithoutGasCosts    bool           `mapstructure:"without_gas_costs"`
-	WithoutNonces      bool           `mapstructure:"without_nonces"`
-	SnapshotConfig     SnapshotConfig `mapstructure:"snapshots"`
-	TLSCertFile        string         `mapstructure:"tls_cert_file"`
-	TLSKeyFile         string         `mapstructure:"tls_key_file"`
-	EnableRPCTLS       bool           `mapstructure:"rpctls"`
-	Hostname           string         `mapstructure:"hostname"`
+	GrpcListenAddress  string   `mapstructure:"grpc_listen_addr"`
+	HTTPListenAddress  string   `mapstructure:"http_listen_addr"`
+	AdminListenAddress string   `mapstructure:"admin_listen_addr"`
+	PrivateKeyPath     string   `mapstructure:"private_key_path"`
+	SqliteFilePath     string   `mapstructure:"sqlite_file_path"`
+	ExtensionEndpoints []string `mapstructure:"extension_endpoints"`
+	//SnapshotConfig     SnapshotConfig `mapstructure:"snapshots"`
+	TLSCertFile  string `mapstructure:"tls_cert_file"`
+	TLSKeyFile   string `mapstructure:"tls_key_file"`
+	EnableRPCTLS bool   `mapstructure:"rpctls"`
+	Hostname     string `mapstructure:"hostname"`
 }
 
 type SnapshotConfig struct {
@@ -67,22 +68,12 @@ type SnapshotConfig struct {
 
 type ChainRPCConfig struct {
 	// TCP or UNIX socket address for the RPC server to listen on
-	ListenAddress string `mapstructure:"laddr"`
-
-	// GRPCListenAddress is th TCP or UNIX socket address for the gRPC server to
-	// listen on. NOTE: This server only supports /broadcast_tx_commit
-	GRPCListenAddress string `mapstructure:"grpc_laddr"`
-
-	// TimeoutBroadcastTxCommit is how long to wait for a tx to be committed during /broadcast_tx_commit
-	// WARNING: Using a value larger than 10s will result in increasing the
-	// global HTTP write timeout, which applies to all connections and endpoints.
-	// See https://github.com/tendermint/tendermint/issues/3435
-	TimeoutBroadcastTxCommit time.Duration `mapstructure:"timeout_broadcast_tx_commit"`
+	ListenAddress string `mapstructure:"listen_addr"`
 }
 
 type P2PConfig struct {
 	// ListenAddress is the address on which to listen for incoming connections.
-	ListenAddress string `mapstructure:"laddr"`
+	ListenAddress string `mapstructure:"listen_addr"`
 	// ExternalAddress is the address to advertise to peers to dial us.
 	ExternalAddress string `mapstructure:"external_address"`
 	// PersistentPeers is a comma separated list of nodes to keep persistent
@@ -173,7 +164,7 @@ func (cfg *KwildConfig) LoadKwildConfig() error {
 
 	fmt.Printf("kwild starting with root directory \"%v\"\n", cfg.RootDir)
 
-	cfgFile := filepath.Join(cfg.RootDir, ConfigFileName)
+	cfgFile := filepath.Join(cfg.RootDir, kwild.ConfigFileName)
 	err = cfg.ParseConfig(cfgFile) // viper magic here
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %v", err)
@@ -256,14 +247,12 @@ func DefaultConfig() *KwildConfig {
 			HTTPListenAddress:  "localhost:8080",
 			AdminListenAddress: "localhost:50151",
 			SqliteFilePath:     DefaultSQLitePath,
-			WithoutGasCosts:    true,
-			WithoutNonces:      false,
-			SnapshotConfig: SnapshotConfig{
-				Enabled:         false,
-				RecurringHeight: uint64(10000),
-				MaxSnapshots:    3,
-				SnapshotDir:     DefaultSnapshotsDir,
-			},
+			// SnapshotConfig: SnapshotConfig{
+			// 	Enabled:         false,
+			// 	RecurringHeight: uint64(10000),
+			// 	MaxSnapshots:    3,
+			// 	SnapshotDir:     DefaultSnapshotsDir,
+			// },
 		},
 		Logging: &Logging{
 			Level:        "info",
@@ -284,9 +273,7 @@ func DefaultConfig() *KwildConfig {
 				DialTimeout:         3 * time.Second,
 			},
 			RPC: &ChainRPCConfig{
-				ListenAddress:            "tcp://127.0.0.1:26657",
-				GRPCListenAddress:        "", // disabled by default
-				TimeoutBroadcastTxCommit: 10 * time.Second,
+				ListenAddress: "tcp://127.0.0.1:26657",
 			},
 			Mempool: &MempoolConfig{
 				Size:      5000,
@@ -340,15 +327,34 @@ func rootify(path, rootDir string) string {
 func (cfg *KwildConfig) sanitizeCfgPaths() {
 	rootDir := cfg.RootDir
 	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
-	cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
+	//cfg.AppCfg.SnapshotConfig.SnapshotDir = rootify(cfg.AppCfg.SnapshotConfig.SnapshotDir, rootDir)
 
 	if cfg.AppCfg.PrivateKeyPath != "" {
 		cfg.AppCfg.PrivateKeyPath = rootify(cfg.AppCfg.PrivateKeyPath, rootDir)
 	} else {
-		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, PrivateKeyFileName)
+		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, kwild.PrivateKeyFileName)
 	}
 
 	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)
+}
+
+func (cfg *KwildConfig) InitPrivateKeyAndGenesis() error {
+	chainRoot := filepath.Join(cfg.RootDir, kwild.ABCIDirName)
+	genPath := filepath.Join(chainRoot, cometbft.ConfigDir, cometbft.GenesisJSONName)
+	genParams := DefaultGenesisParams()
+	privateKey, genConfig, newKey, newGenesis, err := LoadGenesisAndPrivateKey(cfg.AutoGen, cfg.AppCfg.PrivateKeyPath, chainRoot, genParams)
+	if err != nil {
+		return fmt.Errorf("failed load private key or generate genesis: %w", err)
+	}
+	if newKey {
+		fmt.Println("generated new private key, path: ", cfg.AppCfg.PrivateKeyPath)
+	}
+	if newGenesis {
+		fmt.Println("generated genesis file, path:", genPath)
+	}
+	cfg.NodeKey = privateKey
+	cfg.GenesisConfig = genConfig
+	return nil
 }
 
 func ExpandPath(path string) (string, error) {

@@ -31,7 +31,10 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 	switch {
 	case cc.Init != nil:
 		genCfg := &nodecfg.NodeGenerateConfig{
-			OutputDir: cc.Init.OutputDir,
+			OutputDir:       cc.Init.OutputDir,
+			JoinExpiry:      cc.Init.JoinExpiry,
+			WithoutGasCosts: cc.Init.WithoutGasCosts,
+			WithoutNonces:   cc.Init.WithoutNonces,
 		}
 		return nodecfg.GenerateNodeConfig(genCfg)
 	case cc.Testnet != nil:
@@ -56,7 +59,10 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 }
 
 type SetupInitCmd struct {
-	OutputDir string `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
+	OutputDir       string `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
+	JoinExpiry      int64  `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
+	WithoutGasCosts bool   `arg:"--without-gas-costs" help:"disable gas costs"`
+	WithoutNonces   bool   `arg:"--without-nonces" help:"disable nonces"`
 }
 
 type SetupTestnetCmd struct {
@@ -71,6 +77,9 @@ type SetupTestnetCmd struct {
 	StartingIPAddress       string   `arg:"--starting-ip" help:"starting IP address of the first network node" placeholder:"IP"`
 	Hostnames               []string `arg:"--hostname" help:"override all hostnames of the nodes"`
 	P2pPort                 int      `arg:"-p,--p2p-port" help:"P2P port" placeholder:"PORT"`
+	JoinExpiry              int64    `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
+	WithoutGasCosts         bool     `arg:"--without-gas-costs" help:"disable gas costs"`
+	WithoutNonces           bool     `arg:"--without-nonces" help:"disable nonces"`
 	// InitialHeight           int64    `arg:"--initial-height" default:"true" help:"initial height of the first block"`
 }
 
