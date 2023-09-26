@@ -21,7 +21,7 @@ require (
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
 	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230904052536-cb47bf390d18
 	github.com/kwilteam/kwil-extensions v0.0.0-20230710163303-bfa03f64ff82
-	github.com/kwilteam/sql-grammar-go v0.0.2
+	github.com/kwilteam/sql-grammar-go v0.0.3-0.20230925230724-00685e1bac32
 	github.com/manifoldco/promptui v0.9.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/spf13/cobra v1.7.0
