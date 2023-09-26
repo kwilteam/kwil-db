@@ -317,11 +317,7 @@ func (s *StatementCleaner) EnterSelectCore(node *tree.SelectCore) (err error) {
 
 // EnterSelectStmt checks that, for each SelectCore besides the last, a compound operator is provided
 func (s *StatementCleaner) EnterSelectStmt(node *tree.SelectStmt) (err error) {
-	for i, core := range node.SelectCores {
-		if i == len(node.SelectCores)-1 {
-			break
-		}
-
+	for _, core := range node.SelectCores[:len(node.SelectCores)-1] {
 		if core.Compound == nil {
 			return wrapErr(ErrInvalidCompoundOperator, errors.New("compound operator must be provided for all SelectCores except the last"))
 		}

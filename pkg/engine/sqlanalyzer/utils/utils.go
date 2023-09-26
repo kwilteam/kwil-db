@@ -15,6 +15,14 @@ func IsLiteral(literal string) (types.DataType, error) {
 		return types.TEXT, nil
 	}
 
+	if strings.EqualFold(literal, "true") || strings.EqualFold(literal, "false") {
+		return types.INT, nil
+	}
+
+	if strings.EqualFold(literal, "null") {
+		return types.NULL, nil
+	}
+
 	_, err := strconv.Atoi(literal)
 	if err != nil {
 		return types.NULL, fmt.Errorf("invalid literal: could not detect literal type: %s", literal)

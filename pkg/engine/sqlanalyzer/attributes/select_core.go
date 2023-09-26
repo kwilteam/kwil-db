@@ -62,7 +62,7 @@ func newSelectCoreWalker(tables []*types.Table) *selectCoreAnalyzer {
 	}
 }
 
-// selectCoreAnalyzer will walk the tree and
+// selectCoreAnalyzer will walk the tree and identify the returned attributes for the select core
 type selectCoreAnalyzer struct {
 	tree.Walker
 	context      *selectCoreContext

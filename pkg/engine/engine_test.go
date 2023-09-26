@@ -116,9 +116,6 @@ func Test_Open(t *testing.T) {
 		}
 	}
 
-	ttt := testProcedures
-	_ = ttt
-
 	// check if the dataset has the correct procedures
 	procs := dataset.ListProcedures()
 

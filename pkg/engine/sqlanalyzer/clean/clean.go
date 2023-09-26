@@ -21,23 +21,16 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/utils"
 )
 
-// checks that the string starts with a letter
-var startsWithLetter = regexp.MustCompile(`^[a-zA-Z]`)
-
 // checks that the string only contains alphanumeric characters and underscores
-var onlyAlnumUnderscore = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
+var identifierRegexp = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // cleanIdentifier checks that the identifier is a valid identifier and returns
 // it in lower case
 func cleanIdentifier(identifier string) (string, error) {
 	res := strings.ToLower(identifier)
 
-	if !startsWithLetter.MatchString(res) {
-		return "", wrapErr(ErrInvalidIdentifier, fmt.Errorf(`identifier must start with a letter, received: "%s"`, identifier))
-	}
-
-	if !onlyAlnumUnderscore.MatchString(res) {
-		return "", wrapErr(ErrInvalidIdentifier, fmt.Errorf(`identifier must only contain alphanumeric characters or underscores, received: "%s"`, identifier))
+	if !identifierRegexp.MatchString(res) {
+		return "", wrapErr(ErrInvalidIdentifier, fmt.Errorf(`identifier must start with letter and only contain alphanumeric characters or underscores, received: "%s"`, identifier))
 	}
 
 	return res, nil

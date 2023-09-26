@@ -109,7 +109,7 @@ func (r *RuleMetadata) Clean() (*RuleMetadata, error) {
 			return nil, fmt.Errorf(`error cleaning table "%s": %w`, tbl.Name, err)
 		}
 
-		cleaned.Tables[i] = tbl
+		cleaned.Tables[i] = tbl.Copy()
 	}
 
 	return cleaned, nil

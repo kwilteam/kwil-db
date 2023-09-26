@@ -21,6 +21,15 @@ func (i *Index) Clean() error {
 	)
 }
 
+// Copy returns a copy of the index.
+func (i *Index) Copy() *Index {
+	return &Index{
+		Name:    i.Name,
+		Columns: i.Columns,
+		Type:    i.Type,
+	}
+}
+
 const (
 	BTREE        IndexType = "BTREE"
 	UNIQUE_BTREE IndexType = "UNIQUE_BTREE"

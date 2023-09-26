@@ -91,6 +91,16 @@ func Test_Analyze(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "basic insert",
+			stmt: `INSERT INTO users (id, username, age) VALUES (1, 'user1', 20)`,
+			want: `INSERT INTO "users" ("id", "username", "age") VALUES (1, 'user1', 20);`,
+			metadata: &sqlanalyzer.RuleMetadata{
+				Tables: []*types.Table{
+					tblUsers,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

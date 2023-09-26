@@ -101,6 +101,27 @@ func (t *Table) GetPrimaryKey() ([]string, error) {
 	return primaryKey, nil
 }
 
+// Copy returns a copy of the table
+func (t *Table) Copy() *Table {
+	res := &Table{
+		Name: t.Name,
+	}
+
+	for _, col := range t.Columns {
+		res.Columns = append(res.Columns, col.Copy())
+	}
+
+	for _, idx := range t.Indexes {
+		res.Indexes = append(res.Indexes, idx.Copy())
+	}
+
+	for _, fk := range t.ForeignKeys {
+		res.ForeignKeys = append(res.ForeignKeys, fk.Copy())
+	}
+
+	return res
+}
+
 type Column struct {
 	Name       string       `json:"name"`
 	Type       DataType     `json:"type"`
@@ -118,6 +139,20 @@ func (c *Column) Clean() error {
 		cleanIdent(&c.Name),
 		c.Type.Clean(),
 	)
+}
+
+// Copy returns a copy of the column
+func (c *Column) Copy() *Column {
+	res := &Column{
+		Name: c.Name,
+		Type: c.Type,
+	}
+
+	for _, attr := range c.Attributes {
+		res.Attributes = append(res.Attributes, attr.Copy())
+	}
+
+	return res
 }
 
 func (c *Column) hasPrimary() bool {
@@ -138,4 +173,12 @@ func (a *Attribute) Clean() error {
 	return runCleans(
 		a.Type.Clean(),
 	)
+}
+
+// Copy returns a copy of the attribute
+func (a *Attribute) Copy() *Attribute {
+	return &Attribute{
+		Type:  a.Type,
+		Value: a.Value,
+	}
 }
