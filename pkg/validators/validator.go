@@ -9,7 +9,9 @@
 // engine punishing a validator for some bad behavior.
 package validators
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Validator struct {
 	PubKey []byte
@@ -23,6 +25,7 @@ func (v *Validator) String() string {
 type JoinRequest struct {
 	Candidate []byte   // pubkey of the candidate validator
 	Power     int64    // the requested power
+	ExpiresAt int64    // the block height at which the join request expires
 	Board     [][]byte // slice of pubkeys of all the eligible voting validators
 	Approved  []bool   // if they approved
 }

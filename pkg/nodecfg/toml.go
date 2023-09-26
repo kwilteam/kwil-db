@@ -65,9 +65,7 @@ const defaultConfigTemplate = `
 #   |- application/wal
 #   |- data
 #   |   |- kwild.db/
-#   |- snapshots/
 #   |- signing/
-#   |- rcvdSnaps/   (includes the chunks rcvd from the state sync module during db restoration process, its a temp dir)
 
 # Only the config.toml and genesis file are required to run the kwild node
 # The rest of the files & directories are created by the kwild node on startup
@@ -105,12 +103,6 @@ http_listen_addr = "{{ .AppCfg.HTTPListenAddress }}"
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = {{arrayFormatter .AppCfg.ExtensionEndpoints}}
 
-# Toggle to enable gas costs for transactions and queries
-without_gas_costs = {{ .AppCfg.WithoutGasCosts }}
-
-# Toggle to disable nonces for transactions and queries
-without_nonces = {{ .AppCfg.WithoutNonces }}
-
 # KWILD Sqlite database file path
 sqlite_file_path = "{{ .AppCfg.SqliteFilePath }}"
 
@@ -133,26 +125,6 @@ tls_key_file = "{{ .AppCfg.TLSKeyFile }}"
 hostname = ""
 
 #######################################################################
-###                Snapshot store Config Options                    ###
-#######################################################################
-[app.snapshots]
-# Toggle to enable snapshot store
-# This would snapshot the application state at every snapshot_heights blocks
-# and keep max_snapshots number of snapshots in the snapshot_dir
-# Application state includes the databases deployed, accounts and the Validators db
-enabled = {{ .AppCfg.SnapshotConfig.Enabled }}
-
-# The height at which the snapshot is taken
-snapshot_heights = {{ .AppCfg.SnapshotConfig.RecurringHeight }}
-
-# Maximum number of snapshots to be kept in the snapshot_dir.
-# If max limit is reached, the oldest would be deleted and replaced by the latest snapshot
-max_snapshots = {{ .AppCfg.SnapshotConfig.MaxSnapshots}}
-
-# The directory where the snapshots are stored. Can be absolute or relative to the kwild root directory
-snapshot_dir = "{{ .AppCfg.SnapshotConfig.SnapshotDir }}"
-
-#######################################################################
 ###                 Chain  Main Base Config Options                 ###
 #######################################################################
 [chain]
@@ -170,13 +142,7 @@ moniker = "{{ .ChainCfg.Moniker }}"
 [chain.rpc]
 
 # TCP or UNIX socket address for the RPC server to listen on
-laddr = "{{ .ChainCfg.RPC.ListenAddress }}"
-
-# How long to wait for a tx to be committed during /broadcast_tx_commit.
-# WARNING: Using a value larger than 10s will result in increasing the
-# global HTTP write timeout, which applies to all connections and endpoints.
-# See https://github.com/tendermint/tendermint/issues/3435
-timeout_broadcast_tx_commit = "{{ .ChainCfg.RPC.TimeoutBroadcastTxCommit }}"
+listen_addr = "{{ .ChainCfg.RPC.ListenAddress }}"
 
 #######################################################
 ###         Consensus Configuration Options         ###
@@ -203,10 +169,10 @@ timeout_commit = "{{ .ChainCfg.Consensus.TimeoutCommit }}"
 [chain.p2p]
 
 # Address to listen for incoming connections
-laddr = "{{ .ChainCfg.P2P.ListenAddress }}"
+listen_addr = "{{ .ChainCfg.P2P.ListenAddress }}"
 
 # Address to advertise to peers for them to dial
-# If empty, will use the same port as the laddr,
+# If empty, will use the same port as the listening address,
 # and will introspect on the listener or use UPnP
 # to figure out the address. ip and port are required
 # example: 159.89.10.97:26656
@@ -246,34 +212,4 @@ size = {{ .ChainCfg.Mempool.Size }}
 
 # Size of the cache (used to filter transactions we saw earlier) in transactions
 cache_size = {{ .ChainCfg.Mempool.CacheSize }}
-
-#######################################################
-###         State Sync Configuration Options        ###
-#######################################################
-[chain.statesync]
-# State sync rapidly bootstraps a new node by discovering, fetching, and restoring a state machine
-# snapshot from peers instead of fetching and replaying historical blocks. Requires some peers in
-# the network to take and serve state machine snapshots. State sync is not attempted if the node
-# has any local state (LastBlockHeight > 0). The node will have a truncated block history,
-# starting from the height of the snapshot.
-enable = {{ .ChainCfg.StateSync.Enable }}
-
-# RPC servers (comma-separated) for light client verification of the synced state machine and
-# retrieval of state data for node bootstrapping. Also needs a trusted height and corresponding
-# header hash obtained from a trusted source, and a period during which validators can be trusted.
-#
-# For Cosmos SDK-based chains, trust_period should usually be about 2/3 of the unbonding time (~2
-# weeks) during which they can be financially punished (slashed) for misbehavior.
-rpc_servers = {{arrayFormatter .ChainCfg.StateSync.RPCServers }}
-
-# Temporary directory for state sync snapshot chunks, defaults to the OS tempdir (typically /tmp).
-# Will create a new, randomly named directory within, and remove it when done.
-temp_dir = "{{ .ChainCfg.StateSync.TempDir }}"
-
-# Time to spend discovering snapshots before initiating a restore.
-discovery_time = "{{ .ChainCfg.StateSync.DiscoveryTime }}"
-
-# The timeout duration before re-requesting a chunk, possibly from a different
-# peer (default: 1 minute).
-chunk_request_timeout = "{{ .ChainCfg.StateSync.ChunkRequestTimeout }}"
 `

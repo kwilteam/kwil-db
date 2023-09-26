@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,7 @@ import (
 
 func Test_Config_Toml(t *testing.T) {
 	cfg := config.DefaultConfig()
-	err := cfg.ParseConfig(filepath.Join("test_data", config.ConfigFileName))
+	err := cfg.ParseConfig(filepath.Join("test_data", kwild.ConfigFileName))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "localhost:50051", cfg.AppCfg.GrpcListenAddress)
@@ -22,6 +23,5 @@ func Test_Config_Toml(t *testing.T) {
 	assert.Equal(t, "localhost:50052", cfg.AppCfg.ExtensionEndpoints[0])
 	assert.Equal(t, "localhost:50053", cfg.AppCfg.ExtensionEndpoints[1])
 
-	assert.Equal(t, true, cfg.AppCfg.WithoutGasCosts)
 	// TODO: Add bunch of other validations for different types
 }

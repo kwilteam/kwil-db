@@ -11,6 +11,7 @@ import (
 type joinReq struct {
 	pubkey     []byte
 	power      int64
+	expiresAt  int64
 	validators map[string]bool // pubkey bytes as string for map key
 }
 
@@ -52,13 +53,15 @@ func (jr *joinReq) approve(approver []byte) (repeat, eligible bool) {
 type ValidatorMgr struct {
 	db ValidatorStore
 
+	lastBlockHeight int64
 	// state - these maps are keyed by pubkey, just coerced to string for the map
 	current    map[string]struct{}
 	candidates map[string]*joinReq
 	updates    []*Validator // updates are built in BeginBlock/DeliverTx and cleared in EndBlock
 
 	// opts
-	log log.Logger
+	joinExpiry int64
+	log        log.Logger
 }
 
 // NOTE: The SQLite validator/approval store is local and transparent to the
@@ -72,7 +75,8 @@ type ValidatorStore interface {
 	CurrentValidators(ctx context.Context) ([]*Validator, error)
 	UpdateValidatorPower(ctx context.Context, validator []byte, power int64) error
 	ActiveVotes(ctx context.Context) ([]*JoinRequest, error)
-	StartJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64) error
+	StartJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error
+	DeleteJoinRequest(ctx context.Context, joiner []byte) error
 	AddApproval(ctx context.Context, joiner, approver []byte) error
 	AddValidator(ctx context.Context, joiner []byte, power int64) error
 }
@@ -91,6 +95,7 @@ func NewValidatorMgr(ctx context.Context, datastore Datastore, opts ...Validator
 		current:    make(map[string]struct{}),
 		candidates: make(map[string]*joinReq),
 		log:        log.NewNoOp(),
+		joinExpiry: 86400,
 	}
 	for _, opt := range opts {
 		opt(vm)
@@ -164,7 +169,7 @@ func (vm *ValidatorMgr) ActiveVotes(ctx context.Context) ([]*JoinRequest, error)
 
 // GenesisInit is called at the genesis block to set and initial list of
 // validators.
-func (vm *ValidatorMgr) GenesisInit(ctx context.Context, vals []*Validator) error {
+func (vm *ValidatorMgr) GenesisInit(ctx context.Context, vals []*Validator, blockHeight int64) error {
 	// Initialize the current validator map.
 	vm.current = make(map[string]struct{}, len(vals))
 	for _, vi := range vals {
@@ -172,6 +177,7 @@ func (vm *ValidatorMgr) GenesisInit(ctx context.Context, vals []*Validator) erro
 	}
 	vm.candidates = make(map[string]*joinReq)
 	vm.updates = nil
+	vm.lastBlockHeight = blockHeight
 
 	vm.log.Warn("Resetting validator store with genesis validators.")
 
@@ -222,13 +228,16 @@ func (vm *ValidatorMgr) Join(ctx context.Context, joiner []byte, power int64) er
 		valMap[pk] = false // eligible, but no vote yet
 		approvers = append(approvers, []byte(pk))
 	}
+	expiresAt := vm.lastBlockHeight + vm.joinExpiry
+
 	vm.candidates[string(joiner)] = &joinReq{
 		pubkey:     joiner,
 		power:      power,
 		validators: valMap,
+		expiresAt:  expiresAt,
 	}
 
-	return vm.db.StartJoinRequest(ctx, joiner, approvers, power)
+	return vm.db.StartJoinRequest(ctx, joiner, approvers, power, expiresAt)
 }
 
 // Leave processes a leave request for a current validator.
@@ -273,7 +282,17 @@ func (vm *ValidatorMgr) Finalize(ctx context.Context) []*Validator {
 	// Updates for approved (joining) validators.
 	for candidate, join := range vm.candidates {
 		if join.votes() < join.requiredVotes() {
-			continue // maybe next time
+
+			if vm.lastBlockHeight >= join.expiresAt {
+				// Join request expired
+				delete(vm.candidates, candidate)
+				if err := vm.db.DeleteJoinRequest(ctx, join.pubkey); err != nil {
+					panic(fmt.Sprintf("failed to delete expired join request: %v", err))
+				}
+			}
+
+			continue
+
 		}
 
 		// Candidate is above vote threshold
@@ -307,4 +326,8 @@ func (vm *ValidatorMgr) Finalize(ctx context.Context) []*Validator {
 	vm.updates = nil
 
 	return updates
+}
+
+func (mgr *ValidatorMgr) UpdateBlockHeight(height int64) {
+	mgr.lastBlockHeight = height
 }

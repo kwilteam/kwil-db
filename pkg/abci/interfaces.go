@@ -30,7 +30,7 @@ type DatasetsModule interface {
 type ValidatorModule interface {
 	// GenesisInit configures the initial set of validators for the genesis
 	// block. This is only called once for a new chain.
-	GenesisInit(ctx context.Context, vals []*validators.Validator) error
+	GenesisInit(ctx context.Context, vals []*validators.Validator, blockHeight int64) error
 
 	// CurrentSet returns the current validator set. This is used on app
 	// construction to initialize the addr=>pubkey mapping.
@@ -53,6 +53,9 @@ type ValidatorModule interface {
 	// is not idempotent. The modules working list of updates is reset until
 	// subsequent join/approves are processed for the next block.
 	Finalize(ctx context.Context) []*validators.Validator // end of block processing requires providing list of updates to the node's consensus client
+
+	// Updates block height stored by the validator manager. Called in the abci Commit
+	UpdateBlockHeight(ctx context.Context, blockHeight int64)
 }
 
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores

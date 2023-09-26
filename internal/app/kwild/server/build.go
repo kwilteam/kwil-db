@@ -157,6 +157,8 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.Data
 	if snapshotter != nil {
 		sh = snapshotter
 	}
+
+	genesisHash := d.cfg.GenesisConfig.ComputeGenesisHash()
 	return abci.NewAbciApp(
 		datasetsModule,
 		validatorModule,
@@ -164,6 +166,7 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.Data
 		atomicCommitter,
 		sh,
 		bootstrapper,
+		genesisHash,
 		abci.WithLogger(*d.log.Named("abci")),
 	)
 }
@@ -183,7 +186,7 @@ func buildAdminSvc(d *coreDependencies, node admSvc.Node) *admSvc.Service {
 
 func buildDatasetsModule(d *coreDependencies, eng datasets.Engine, accs datasets.AccountStore) *datasets.DatasetModule {
 	feeMultiplier := 1
-	if d.cfg.AppCfg.WithoutGasCosts {
+	if d.cfg.GenesisConfig.ConsensusParams.WithoutGasCosts {
 		feeMultiplier = 0
 	}
 
@@ -228,10 +231,11 @@ func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *session
 		failBuild(err, "failed to register accounts db")
 	}
 
+	genCfg := d.cfg.GenesisConfig
 	b, err := balances.NewAccountStore(d.ctx, db,
 		balances.WithLogger(*d.log.Named("accountStore")),
-		balances.WithNonces(!d.cfg.AppCfg.WithoutNonces),
-		balances.WithGasCosts(!d.cfg.AppCfg.WithoutGasCosts),
+		balances.WithNonces(!genCfg.ConsensusParams.WithoutNonces),
+		balances.WithGasCosts(!genCfg.ConsensusParams.WithoutGasCosts),
 	)
 	if err != nil {
 		failBuild(err, "failed to build account store")
@@ -252,8 +256,10 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 		failBuild(err, "failed to register validator db")
 	}
 
+	joinExpiry := d.cfg.GenesisConfig.ConsensusParams.Validator.JoinExpiry
 	v, err := vmgr.NewValidatorMgr(d.ctx, db,
 		vmgr.WithLogger(*d.log.Named("validatorStore")),
+		vmgr.WithJoinExpiry(joinExpiry),
 	)
 	if err != nil {
 		failBuild(err, "failed to build validator store")
@@ -269,26 +275,30 @@ func buildValidatorModule(d *coreDependencies, accs datasets.AccountStore,
 }
 
 func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {
-	cfg := d.cfg.AppCfg
-	if !cfg.SnapshotConfig.Enabled {
-		return nil
-	}
+	return nil
+	// TODO: Uncomment when we have statesync ready
+	// cfg := d.cfg.AppCfg
+	// if !cfg.SnapshotConfig.Enabled {
+	// 	return nil
+	// }
 
-	return snapshots.NewSnapshotStore(cfg.SqliteFilePath,
-		cfg.SnapshotConfig.SnapshotDir,
-		cfg.SnapshotConfig.RecurringHeight,
-		cfg.SnapshotConfig.MaxSnapshots,
-		snapshots.WithLogger(*d.log.Named("snapshotStore")),
-	)
+	// return snapshots.NewSnapshotStore(cfg.SqliteFilePath,
+	// 	cfg.SnapshotConfig.SnapshotDir,
+	// 	cfg.SnapshotConfig.RecurringHeight,
+	// 	cfg.SnapshotConfig.MaxSnapshots,
+	// 	snapshots.WithLogger(*d.log.Named("snapshotStore")),
+	// )
 }
 
 func buildBootstrapper(d *coreDependencies) *snapshots.Bootstrapper {
-	rcvdSnapsDir := filepath.Join(d.cfg.RootDir, rcvdSnapsDirName)
-	bootstrapper, err := snapshots.NewBootstrapper(d.cfg.AppCfg.SqliteFilePath, rcvdSnapsDir)
-	if err != nil {
-		failBuild(err, "Bootstrap module initialization failure")
-	}
-	return bootstrapper
+	return nil
+	// TODO: Uncomment when we have statesync ready
+	// rcvdSnapsDir := filepath.Join(d.cfg.RootDir, rcvdSnapsDirName)
+	// bootstrapper, err := snapshots.NewBootstrapper(d.cfg.AppCfg.SqliteFilePath, rcvdSnapsDir)
+	// if err != nil {
+	// 	failBuild(err, "Bootstrap module initialization failure")
+	// }
+	// return bootstrapper
 }
 
 func fileExists(name string) bool {
@@ -422,20 +432,6 @@ func buildCometBftClient(cometBftNode *cometbft.CometBftNode) *cmtlocal.Local {
 }
 
 func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.Application) *cometbft.CometBftNode {
-	chainRoot := filepath.Join(d.cfg.RootDir, abciDirName)
-	privateKey, newKey, newGenesis, err := loadGenesisAndPrivateKey(d.cfg.AutoGen,
-		d.cfg.AppCfg.PrivateKeyPath, chainRoot)
-	if err != nil {
-		failBuild(err, "failed load private key or generate genesis")
-	}
-	if newKey {
-		d.log.Warn("generated new private key", zap.String("path", d.cfg.AppCfg.PrivateKeyPath))
-	}
-	if newGenesis {
-		d.log.Warn("generated genesis file", zap.String("path", cometbft.GenesisPath(chainRoot)),
-			zap.Bool("validator", newKey))
-	}
-
 	// for now, I'm just using a KV store for my atomic commit.  This probably is not ideal; a file may be better
 	// I'm simply using this because we know it fsyncs the data to disk
 	db, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, signingDirName), &badger.Options{
@@ -453,7 +449,12 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	}
 
 	nodeCfg := newCometConfig(d.cfg)
-	node, err := cometbft.NewCometBftNode(abciApp, nodeCfg, privateKey,
+	genDoc, err := extractGenesisDoc(d.cfg.GenesisConfig)
+	if err != nil {
+		failBuild(err, "failed to generate cometbft genesis configuration")
+	}
+
+	node, err := cometbft.NewCometBftNode(abciApp, nodeCfg, genDoc, d.cfg.NodeKey,
 		readWriter, &d.log)
 	if err != nil {
 		failBuild(err, "failed to build comet node")
