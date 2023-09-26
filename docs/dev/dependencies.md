@@ -14,28 +14,36 @@ management in Kwil DB.
 
 ## Semantic Import Versioning (SIV) in Go
 
-Go's dependency management tool, Go Modules, uses the concept of Semantic Import
-Versioning (SIV) to handle versioning issues. It mandates that module paths
-change as the major version of the module changes, if there are breaking
-changes. However, it is often followed loosely or entirely flaunted, even by
-widely used projects.
+Go's dependency management tool, Go Modules, uses the concept of [Semantic
+Import Versioning (SIV)](https://research.swtch.com/vgo-import) to handle
+versioning issues. It mandates that module paths change as the major version of
+the module changes, if there are breaking changes. However, it is often followed
+loosely or entirely flaunted, even by widely used projects.
+
+### Breaking Changes Increase the Major Version
 
 Examples of breaking API changes include when an exported function signature
 changes, or an exported struct has a field removed or renamed, etc. Adding new
-functions, methods, or fields are generally not breaking changes. For example,
-if a module at example.com/module is at version 1, and there is a breaking
-change, it would become version 2 and it would be imported as
-example.com/module/v2 (with a revised module name in its go.mod).
+functions, methods, or fields are generally not breaking changes.
 
-NOTE: This is a main reason why it is important to minimize our own public API
-surface by unexporting and utilizing `internal` packages for things that we only
-intend to be used within our project.
+For example, if a module at `example.com/module` is at version 1, and there is a
+breaking change, it should become version 2 and it would be imported as
+`example.com/module/v2` (with a revised module name in its `go.mod`).
 
-Also note that projects with their major version at v0 (e.g. version 0.5.1) are
-considered to have unstable APIs, and there are no promises of stability as
-described above. This is necessary for early stage and rapidly evolving
-projects. We should strive to reach v1, but not before we are ready to commit to
-a stable Go API.
+See the [Go Modules Reference](https://go.dev/ref/mod#versions) for more
+information.
+
+**NOTE:** This is a main reason why it is important to minimize our own public
+API surface by unexporting and utilizing `internal` packages for things that we
+only intend to be used within our project.
+
+### v0 Project Status
+
+Also note that projects with their major version at 0 in revision control semver
+version tags (e.g. `v0.5.1`) are considered to have unstable APIs, and there are
+no promises of stability as described above. This is necessary for early stage
+and rapidly evolving projects. We should strive to reach v1, but not before we
+are ready to commit to a stable Go API.
 
 ## Handling Transitive Dependencies
 
