@@ -51,14 +51,25 @@ func (vs *stubValStore) ActiveVotes(context.Context) ([]*JoinRequest, error) {
 	return vs.joins, nil
 }
 
-func (vs *stubValStore) StartJoinRequest(_ context.Context, joiner []byte, approvers [][]byte, power int64) error {
+func (vs *stubValStore) StartJoinRequest(_ context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
 	vs.joins = append(vs.joins, &JoinRequest{
 		Candidate: joiner,
 		Power:     power,
 		Board:     approvers,
+		ExpiresAt: expiresAt,
 		Approved:  make([]bool, len(approvers)),
 	})
 	return nil
+}
+
+func (vs *stubValStore) DeleteJoinRequest(_ context.Context, joiner []byte) error {
+	for i, ji := range vs.joins {
+		if bytes.Equal(ji.Candidate, joiner) {
+			vs.joins = append(vs.joins[:i], vs.joins[i+1:]...)
+			return nil
+		}
+	}
+	return errors.New("unknown candidate")
 }
 
 func (vs *stubValStore) AddApproval(_ context.Context, joiner []byte, approver []byte) error {
@@ -96,6 +107,7 @@ func newTestValidatorMgr(t *testing.T, store ValidatorStore) *ValidatorMgr {
 		candidates: make(map[string]*joinReq),
 		log:        log.NewStdOut(log.DebugLevel),
 		db:         store,
+		joinExpiry: 3,
 	}
 	if err := mgr.init(); err != nil {
 		t.Fatal(err)
@@ -131,7 +143,7 @@ func TestValidatorMgr_updates(t *testing.T) {
 	numVals = 3
 	genesisSet := make([]*Validator, numVals)
 	copy(genesisSet, resumeSet)
-	err = mgr.GenesisInit(ctx, genesisSet)
+	err = mgr.GenesisInit(ctx, genesisSet, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

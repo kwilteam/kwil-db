@@ -10,5 +10,8 @@ const (
 	ReceivedSnapsDirName = "rcvdSnaps"
 	SigningDirName       = "signing"
 
+	ConfigFileName     = "config.toml"
+	PrivateKeyFileName = "private_key"
+
 	// Note that the sqlLite file path is user-configurable e.g. "data/kwil.db"
 )

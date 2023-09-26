@@ -21,10 +21,10 @@ const (
 )
 
 type args struct {
-	Key   *KeyCmd        `arg:"subcommand:key"`
-	Setup *SetupCmd      `arg:"subcommand:setup"`
-	Vals  *ValidatorsCmd `arg:"subcommand:validators"`
-	Node  *NodeCmd       `arg:"subcommand:node"`
+	Key   *KeyCmd        `arg:"subcommand:key" help:"commands for managing node private keys"`
+	Setup *SetupCmd      `arg:"subcommand:setup" help:"commands for setting up a standalone node or testnet configuration"`
+	Vals  *ValidatorsCmd `arg:"subcommand:validators" help:"commands for managing validators"`
+	Node  *NodeCmd       `arg:"subcommand:node" help:"commands for controlling a running node on the authenticated RPC service"`
 
 	Help *HelpCmd `arg:"subcommand:help"`
 	Ver  *VerCmd  `arg:"subcommand:version"`

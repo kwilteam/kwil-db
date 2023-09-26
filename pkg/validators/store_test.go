@@ -131,12 +131,39 @@ func Test_validatorStore(t *testing.T) {
 	for i, vi := range valsOut {
 		approvers[i] = vi.PubKey
 	}
-	err = vs.StartJoinRequest(ctx, joiner.PubKey, approvers, wantPower)
+	expiresAt := int64(3)
+	err = vs.StartJoinRequest(ctx, joiner.PubKey, approvers, wantPower, expiresAt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Expire the join request & delete it
+	err = vs.DeleteJoinRequest(ctx, joiner.PubKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add approval for expired join request
+	err = vs.AddApproval(ctx, joiner.PubKey, v0Key)
+	if err == nil {
+		t.Fatalf("no error approving expired join requests")
+	}
+
 	joins, err := vs.ActiveVotes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(joins) != 0 {
+		t.Fatalf("expected 0 active join requests, found %d", len(joins))
+	}
+
+	// Start a new join request
+	err = vs.StartJoinRequest(ctx, joiner.PubKey, approvers, wantPower, expiresAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	joins, err = vs.ActiveVotes(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

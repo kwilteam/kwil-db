@@ -10,9 +10,9 @@ import (
 
 // GenesisInit is called at the genesis block to set and initial list of
 // validators.
-func (vm *ValidatorModule) GenesisInit(ctx context.Context, vals []*validators.Validator) error {
+func (vm *ValidatorModule) GenesisInit(ctx context.Context, vals []*validators.Validator, blockHeight int64) error {
 	vm.log.Warn("Resetting validator store with genesis validators.")
-	return vm.mgr.GenesisInit(ctx, vals)
+	return vm.mgr.GenesisInit(ctx, vals, blockHeight)
 }
 
 // CurrentSet returns the current validator list. This may be used on
@@ -35,4 +35,9 @@ func (vm *ValidatorModule) Punish(ctx context.Context, validator []byte, newPowe
 // requires providing list of updates to the node's consensus client
 func (vm *ValidatorModule) Finalize(ctx context.Context) []*validators.Validator {
 	return vm.mgr.Finalize(ctx)
+}
+
+// Updates block height stored by the validator manager. Called in the abci Commit
+func (vm *ValidatorModule) UpdateBlockHeight(ctx context.Context, blockHeight int64) {
+	vm.mgr.UpdateBlockHeight(blockHeight)
 }

@@ -12,11 +12,12 @@ type Spender interface {
 }
 
 type ValidatorMgr interface {
-	GenesisInit(ctx context.Context, vals []*validators.Validator) error
+	GenesisInit(ctx context.Context, vals []*validators.Validator, blockHeight int64) error
 	CurrentSet(ctx context.Context) ([]*validators.Validator, error)
 	Update(ctx context.Context, validator []byte, power int64) error
 	Join(ctx context.Context, joiner []byte, power int64) error
 	Leave(ctx context.Context, joiner []byte) error
 	Approve(ctx context.Context, joiner, approver []byte) error
 	Finalize(ctx context.Context) []*validators.Validator // end of block processing requires providing list of updates to the node's consensus client
+	UpdateBlockHeight(blockHeight int64)
 }

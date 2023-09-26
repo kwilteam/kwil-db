@@ -10,3 +10,9 @@ func WithLogger(logger log.Logger) ValidatorMgrOpt {
 		v.log = logger
 	}
 }
+
+func WithJoinExpiry(joinExpiry int64) ValidatorMgrOpt {
+	return func(v *ValidatorMgr) {
+		v.joinExpiry = joinExpiry
+	}
+}

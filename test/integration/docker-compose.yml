@@ -28,7 +28,7 @@ services:
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
-      --chain.rpc.laddr=tcp://0.0.0.0:26657
+      --chain.rpc.listen_addr=tcp://0.0.0.0:26657
 
   node1:
     container_name: node1
@@ -56,7 +56,7 @@ services:
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
-      --chain.rpc.laddr=tcp://0.0.0.0:26657
+      --chain.rpc.listen_addr=tcp://0.0.0.0:26657
 
   node2:
     container_name: node2
@@ -84,7 +84,7 @@ services:
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
-      --chain.rpc.laddr=tcp://0.0.0.0:26657
+      --chain.rpc.listen_addr=tcp://0.0.0.0:26657
 
   # This node is used to test the scenario where new node join the network & sync the blocks
   # Removing the ext dependency as test-container docker compose creates a new project everytime we run
@@ -113,7 +113,7 @@ services:
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
-      --chain.rpc.laddr=tcp://0.0.0.0:26657
+      --chain.rpc.listen_addr=tcp://0.0.0.0:26657
 
   # this ext is shared by all nodes
   # we can make a separate ext for each node if we want
