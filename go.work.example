@@ -1,0 +1,9 @@
+go 1.21.1
+
+use (
+	.
+	./test
+)
+
+// replace github.com/kwilteam/kwil-extensions => ../../kwil-extensions
+// replace github.com/cometbft/cometbft => ../../../github/cometbft/cometbft
