@@ -31,7 +31,10 @@ func Test_Generate_TOML(t *testing.T) {
 func Test_GenerateNodeCfg(t *testing.T) {
 	genCfg := NodeGenerateConfig{
 		// InitialHeight: 0,
-		OutputDir: "test/trybuild/",
+		OutputDir:       "test/trybuild/",
+		JoinExpiry:      100,
+		WithoutGasCosts: true,
+		WithoutNonces:   false,
 	}
 
 	err := GenerateNodeConfig(&genCfg)

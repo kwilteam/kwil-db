@@ -72,6 +72,7 @@ type IntTestConfig struct {
 
 	NValidator    int
 	NNonValidator int
+	JoinExpiry    int64
 }
 
 type IntHelper struct {
@@ -88,7 +89,9 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 		t:           t,
 		privateKeys: make(map[string]ed25519.PrivKey),
 		containers:  make(map[string]*testcontainers.DockerContainer),
-		cfg:         &IntTestConfig{},
+		cfg: &IntTestConfig{
+			JoinExpiry: 86400,
+		},
 	}
 
 	helper.LoadConfig()
@@ -111,6 +114,12 @@ func WithValidators(n int) HelperOpt {
 func WithNonValidators(n int) HelperOpt {
 	return func(r *IntHelper) {
 		r.cfg.NNonValidator = n
+	}
+}
+
+func WithJoinExpiry(expiry int64) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.JoinExpiry = expiry
 	}
 }
 
@@ -183,6 +192,9 @@ func (r *IntHelper) generateNodeConfig() {
 		HostnameSuffix:          "",
 		StartingIPAddress:       "172.10.100.2",
 		P2pPort:                 26656,
+		JoinExpiry:              r.cfg.JoinExpiry,
+		WithoutGasCosts:         true,
+		WithoutNonces:           true,
 	})
 	require.NoError(r.t, err, "failed to generate testnet config")
 	r.home = tmpPath

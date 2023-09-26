@@ -29,7 +29,10 @@ const (
 
 type NodeGenerateConfig struct {
 	// InitialHeight int64 // ?
-	OutputDir string
+	OutputDir       string
+	JoinExpiry      int64
+	WithoutGasCosts bool
+	WithoutNonces   bool
 }
 
 type TestnetGenerateConfig struct {
@@ -45,10 +48,20 @@ type TestnetGenerateConfig struct {
 	StartingIPAddress       string
 	Hostnames               []string
 	P2pPort                 int
+	JoinExpiry              int64
+	WithoutGasCosts         bool
+	WithoutNonces           bool
 }
 
-// GenerateNodeConfig is used to generate a new config file. It is an error if
-// the private key already exists in the root directory.
+/*
+ GenerateNodeConfig is used to generate configuration required for running a kwil node.
+	- private_key, config.toml, genesis.json
+
+ The private key is generated if it does not exist.
+ The genesis file is generated if it does not exist (or) updated if a new private key is generated.
+ The config.toml file is generated if it does not exist.
+*/
+
 func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	rootDir, err := config.ExpandPath(genCfg.OutputDir)
 	if err != nil {
@@ -57,27 +70,11 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 
 	cfg := config.DefaultConfig()
 	cfg.RootDir = rootDir
+	chainRoot := filepath.Join(rootDir, abciDir)
 	// NOTE: not the fully re-rooted path since this may run in a container. The
 	// caller can update PrivateKeyPath if desired.
-	cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName
-	err = initFileKeyAndGenesis(cfg.RootDir)
-	if err != nil {
-		return err
-	}
 
-	// cometbft's gRPC server -- we won't use, right?
-	// cfg.ChainCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
-
-	writeConfigFile(filepath.Join(rootDir, config.ConfigFileName), cfg)
-
-	fmt.Println("Successfully initialized node directory: ", rootDir)
-	return nil
-}
-
-// initFileKeyAndGenesis generates the private key and genesis files.
-func initFileKeyAndGenesis(rootDir string) error {
-	chainRoot := filepath.Join(rootDir, abciDir)
-	err := os.MkdirAll(filepath.Join(chainRoot, abciConfigDir), nodeDirPerm)
+	err = os.MkdirAll(filepath.Join(chainRoot, abciConfigDir), nodeDirPerm)
 	if err != nil {
 		return err
 	}
@@ -87,30 +84,27 @@ func initFileKeyAndGenesis(rootDir string) error {
 		return err
 	}
 
-	// Generate new private key.
-	privKeyPath := filepath.Join(rootDir, config.PrivateKeyFileName)
-	if fileExists(privKeyPath) { // don't clobber an existing private key!
-		return fmt.Errorf("private key file already exists: %v", privKeyPath)
+	cfg.AppCfg.PrivateKeyPath = kwild.PrivateKeyFileName
+
+	genParams := &config.GenesisParams{
+		JoinExpiry:      genCfg.JoinExpiry,
+		WithoutGasCosts: genCfg.WithoutGasCosts,
+		WithoutNonces:   genCfg.WithoutNonces,
+		ChainIDPrefix:   chainIDPrefix,
 	}
-	priv, err := cometbft.GeneratePrivateKeyFile(privKeyPath)
+	_, _, _, _, err = config.LoadGenesisAndPrivateKey(true,
+		filepath.Join(cfg.RootDir, kwild.PrivateKeyFileName),
+		chainRoot, genParams)
 	if err != nil {
-		return fmt.Errorf("creating private key file failed: %w", err)
+		return err
 	}
 
-	// Generate new genesis file using this private key as the validator, if it
-	// does not already exist.
-	genFile := cometbft.GenesisPath(chainRoot)
-	if fileExists(genFile) {
-		fmt.Printf("Found genesis file %v\n", genFile)
-		return nil
-	}
-	err = cometbft.GenerateGenesisFile(genFile, []ed25519.PrivKey{priv}, chainIDPrefix)
-	if err != nil {
-		return fmt.Errorf("failed to write genesis file %v: %w", genFile, err)
-	}
+	// cometbft's gRPC server -- we won't use, right?
+	// cfg.ChainCfg.RPC.ListenAddress = "tcp://0.0.0.0:26657"
 
-	fmt.Printf("Generated genesis file %v\n", genFile)
+	writeConfigFile(filepath.Join(rootDir, kwild.ConfigFileName), cfg)
 
+	fmt.Println("Successfully initialized node directory: ", rootDir)
 	return nil
 }
 
@@ -159,7 +153,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		}
 
 		privKeyHex := hex.EncodeToString(privateKeys[i][:])
-		privKeyFile := filepath.Join(nodeDir, config.PrivateKeyFileName)
+		privKeyFile := filepath.Join(nodeDir, kwild.PrivateKeyFileName)
 		err = os.WriteFile(privKeyFile, []byte(privKeyHex), 0644) // permissive for testnet only
 		if err != nil {
 			return fmt.Errorf("creating private key file: %w", err)
@@ -167,19 +161,22 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	}
 
 	validatorPkeys := privateKeys[:genCfg.NValidators]
-	genDoc, err := cometbft.GenesisDocBytes(validatorPkeys, chainIDPrefix)
-	if err != nil {
-		return fmt.Errorf("creating genesis file: %w", err)
+	genParams := &config.GenesisParams{
+		JoinExpiry:      genCfg.JoinExpiry,
+		WithoutGasCosts: genCfg.WithoutGasCosts,
+		WithoutNonces:   genCfg.WithoutNonces,
+		ChainIDPrefix:   chainIDPrefix,
 	}
+	genConfig := config.GenerateGenesisConfig(validatorPkeys, genParams)
 
 	// write genesis file
 	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
 		chainRoot := filepath.Join(nodeDir, abciDir)
 		genFile := cometbft.GenesisPath(chainRoot) // filepath.Join(nodeDir, abciDir, abciConfigDir, "genesis.json")
-		if err := os.WriteFile(genFile, genDoc, 0644); err != nil {
-			_ = os.RemoveAll(genCfg.OutputDir)
-			return err
+		err = genConfig.SaveAs(genFile)
+		if err != nil {
+			return fmt.Errorf("failed to write genesis file %v: %w", genFile, err)
 		}
 	}
 
@@ -199,19 +196,14 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		if genCfg.PopulatePersistentPeers {
 			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
 		}
-		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
-		writeConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
+		cfg.AppCfg.PrivateKeyPath = kwild.PrivateKeyFileName // not abs/rooted because this might be run in a container
+		writeConfigFile(filepath.Join(nodeDir, kwild.ConfigFileName), cfg)
 	}
 
 	fmt.Printf("Successfully initialized %d node directories: %s\n",
 		genCfg.NValidators+genCfg.NNonValidators, genCfg.OutputDir)
 
 	return nil
-}
-
-func fileExists(filePath string) bool {
-	_, err := os.Stat(filePath)
-	return !os.IsNotExist(err)
 }
 
 func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {

@@ -1,10 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"encoding/hex"
-	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
@@ -12,6 +9,7 @@ import (
 
 	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
+	cmttypes "github.com/cometbft/cometbft/types"
 )
 
 // newCometConfig creates a new CometBFT config for use with NewCometBftNode.
@@ -39,8 +37,6 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	}
 
 	nodeCfg.RPC.ListenAddress = userChainCfg.RPC.ListenAddress
-	nodeCfg.RPC.GRPCListenAddress = userChainCfg.RPC.GRPCListenAddress
-	nodeCfg.RPC.TimeoutBroadcastTxCommit = userChainCfg.RPC.TimeoutBroadcastTxCommit
 	nodeCfg.RPC.TLSCertFile = cfg.AppCfg.TLSCertFile
 	nodeCfg.RPC.TLSKeyFile = cfg.AppCfg.TLSKeyFile
 
@@ -64,11 +60,12 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	nodeCfg.Consensus.TimeoutPrecommit = userChainCfg.Consensus.TimeoutPrecommit
 	nodeCfg.Consensus.TimeoutCommit = userChainCfg.Consensus.TimeoutCommit
 
-	nodeCfg.StateSync.Enable = userChainCfg.StateSync.Enable
-	nodeCfg.StateSync.TempDir = userChainCfg.StateSync.TempDir
-	nodeCfg.StateSync.RPCServers = userChainCfg.StateSync.RPCServers
-	nodeCfg.StateSync.DiscoveryTime = userChainCfg.StateSync.DiscoveryTime
-	nodeCfg.StateSync.ChunkRequestTimeout = userChainCfg.StateSync.ChunkRequestTimeout
+	nodeCfg.StateSync.Enable = false
+	//nodeCfg.StateSync.Enable = userChainCfg.StateSync.Enable
+	// nodeCfg.StateSync.TempDir = userChainCfg.StateSync.TempDir
+	// nodeCfg.StateSync.RPCServers = userChainCfg.StateSync.RPCServers
+	// nodeCfg.StateSync.DiscoveryTime = userChainCfg.StateSync.DiscoveryTime
+	// nodeCfg.StateSync.ChunkRequestTimeout = userChainCfg.StateSync.ChunkRequestTimeout
 
 	// Standardize the paths.
 	nodeCfg.DBPath = cometbft.DataDir // i.e. "data", we do not allow users to change
@@ -81,61 +78,49 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	return nodeCfg
 }
 
-// loadGenesisAndPrivateKey generates private key and genesis file if not exist
-//
-//   - If genesis file exists but not private key file, it will generate private
-//     key and start the node as a non-validator.
-//   - Otherwise, the genesis file is generated based on the private key and
-//     starts the node as a validator.
-func loadGenesisAndPrivateKey(autoGen bool, privKeyPath, chainRootDir string) (privKey cmtEd.PrivKey, newKey, newGenesis bool, err error) {
-	// Get private key:
-	//  - if private key file exists, load it.
-	//  - else if in autogen mode, generate private key and write to file.
-	//  - else fail
-	if fileExists(privKeyPath) {
-		privKeyHexB, err0 := os.ReadFile(privKeyPath)
-		if err0 != nil {
-			err = fmt.Errorf("error reading private key file: %v", err0)
-			return
-		}
-		privKeyHex := string(bytes.TrimSpace(privKeyHexB))
-		privB, err0 := hex.DecodeString(privKeyHex)
-		if err0 != nil {
-			err = fmt.Errorf("error decoding private key: %v", err0)
-			return
-		}
-		privKey = cmtEd.PrivKey(privB)
-	} else if autoGen {
-		privKey, err = cometbft.GeneratePrivateKeyFile(privKeyPath)
-		if err != nil {
-			err = fmt.Errorf("error creating private key file: %v", err)
-			return
-		}
-		newKey = true
-	} else {
-		return nil, false, false, fmt.Errorf("private key not found")
+// Used by cometbft while initializing the node to extract the genesis configuration
+func extractGenesisDoc(g *config.GenesisConfig) (*cmttypes.GenesisDoc, error) {
+
+	consensusParams := &cmttypes.ConsensusParams{
+		Block: cmttypes.BlockParams{
+			MaxBytes: g.ConsensusParams.Block.MaxBytes,
+			MaxGas:   g.ConsensusParams.Block.MaxGas,
+		},
+		Evidence: cmttypes.EvidenceParams{
+			MaxAgeNumBlocks: g.ConsensusParams.Evidence.MaxAgeNumBlocks,
+			MaxAgeDuration:  g.ConsensusParams.Evidence.MaxAgeDuration,
+			MaxBytes:        g.ConsensusParams.Evidence.MaxBytes,
+		},
+		Version: cmttypes.VersionParams{
+			App: g.ConsensusParams.Version.App,
+		},
+		Validator: cmttypes.ValidatorParams{
+			PubKeyTypes: g.ConsensusParams.Validator.PubKeyTypes,
+		},
 	}
 
-	abciCfgDir := filepath.Join(chainRootDir, cometbft.ConfigDir)
-	genFile := filepath.Join(abciCfgDir, cometbft.GenesisJSONName) // i.e. <root>/abci/config/genesis.json
-	if !fileExists(genFile) {
-		if !autoGen {
-			err = fmt.Errorf("genesis file not found: %s", genFile)
-			return
-		}
-
-		if err = os.MkdirAll(abciCfgDir, 0755); err != nil {
-			err = fmt.Errorf("error creating abci config dir %s: %v", abciCfgDir, err)
-			return
-		}
-
-		err = cometbft.GenerateGenesisFile(genFile, []cmtEd.PrivKey{privKey}, "kwil-chain-")
-		if err != nil {
-			err = fmt.Errorf("unable to write genesis file %s: %v", genFile, err)
-			return
-		}
-		newGenesis = true
+	genDoc := &cmttypes.GenesisDoc{
+		ChainID:         g.ChainID,
+		GenesisTime:     g.GenesisTime,
+		InitialHeight:   g.InitialHeight,
+		AppHash:         g.DataAppHash,
+		ConsensusParams: consensusParams,
 	}
 
-	return
+	for _, v := range g.Validators {
+		// Addr in Hex string format, convert back to HexBytes.
+		addr, err := hex.DecodeString(v.Address)
+		if err != nil {
+			return nil, err
+		}
+
+		pubKey := cmtEd.PubKey(v.PubKey)
+		genDoc.Validators = append(genDoc.Validators, cmttypes.GenesisValidator{
+			Address: addr,
+			PubKey:  pubKey,
+			Power:   v.Power,
+			Name:    v.Name,
+		})
+	}
+	return genDoc, nil
 }

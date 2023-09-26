@@ -28,7 +28,8 @@ const (
 
 	CREATE TABLE IF NOT EXISTS join_reqs (
 		candidate BLOB PRIMARY KEY,
-		power_wanted INTEGER
+		power_wanted INTEGER,
+		expiresAt INTEGER
 	) WITHOUT ROWID, STRICT;
 
 	CREATE TABLE IF NOT EXISTS joins_board (
@@ -49,7 +50,7 @@ const (
 		WHERE power > 0 COLLATE NOCASE`
 
 	// get the rows: candidate, power - separate query for scan prealloc
-	sqlGetOngoingVotes = "SELECT candidate, power_wanted FROM join_reqs;"
+	sqlGetOngoingVotes = "SELECT candidate, power_wanted, expiresAt FROM join_reqs;"
 	// a validator "join" request for a candidate may receive votes from a
 	// specific set of existing validators, calling this the board of
 	// validators.
@@ -72,8 +73,8 @@ const (
 		WHERE pubkey = $pubkey`
 	sqlGetValidatorPower = `SELECT power FROM validators WHERE pubkey = $pubkey`
 
-	sqlNewJoinReq = `INSERT INTO join_reqs (candidate, power_wanted)
-		VALUES ($candidate, $power_wanted)`
+	sqlNewJoinReq = `INSERT INTO join_reqs (candidate, power_wanted, expiresAt)
+		VALUES ($candidate, $power_wanted, $expiresAt)`
 	sqlDeleteJoinReq = "DELETE FROM join_reqs WHERE candidate = $candidate;" // cascades to joins_board
 
 	sqlAddToJoinBoard = `INSERT INTO joins_board (candidate, validator, approval)
@@ -109,11 +110,12 @@ func (vs *validatorStore) initTables(ctx context.Context) error {
 	return nil
 }
 
-func (vs *validatorStore) startJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64) error {
+func (vs *validatorStore) startJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
 	// Insert into join_reqs.
 	err := vs.db.Execute(ctx, sqlNewJoinReq, map[string]any{
 		"$candidate":    joiner,
 		"$power_wanted": power,
+		"$expiresAt":    expiresAt,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to insert new join request: %w", err)
@@ -162,6 +164,12 @@ func (vs *validatorStore) addApproval(ctx context.Context, joiner, approver []by
 	})
 }
 
+func (vs *validatorStore) deleteJoinRequest(ctx context.Context, joiner []byte) error {
+	return vs.db.Execute(ctx, sqlDeleteJoinReq, map[string]any{
+		"$candidate": joiner,
+	})
+}
+
 func (vs *validatorStore) addValidator(ctx context.Context, joiner []byte, power int64) error {
 	// Only permit this for first time validators (unknown) or validators with
 	// power zero (not active, but in our tables).
@@ -180,11 +188,9 @@ func (vs *validatorStore) addValidator(ctx context.Context, joiner []byte, power
 	if err != nil {
 		return fmt.Errorf("failed to add validator: %w", err)
 	}
-	err = vs.db.Execute(ctx, sqlDeleteJoinReq, map[string]any{
-		"$candidate": joiner,
-	})
+	err = vs.deleteJoinRequest(ctx, joiner)
 	if err != nil {
-		return fmt.Errorf("failed to remove join request: %w", err)
+		return fmt.Errorf("failed to delete join request: %w", err)
 	}
 
 	return nil
@@ -329,6 +335,7 @@ func (vs *validatorStore) allActiveJoinReqs(ctx context.Context) ([]*JoinRequest
 		jr := &JoinRequest{
 			Candidate: cv.pubkey,
 			Power:     cv.pwr,
+			ExpiresAt: cv.expiresAt,
 		}
 		err = vs.loadJoinVotes(ctx, jr)
 		if err != nil {
@@ -341,8 +348,9 @@ func (vs *validatorStore) allActiveJoinReqs(ctx context.Context) ([]*JoinRequest
 }
 
 type candidate struct {
-	pubkey []byte
-	pwr    int64
+	pubkey    []byte
+	pwr       int64
+	expiresAt int64
 }
 
 func activeVotesFromRecords(results []map[string]interface{}) ([]*candidate, error) {
@@ -364,10 +372,21 @@ func activeVotesFromRecords(results []map[string]interface{}) ([]*candidate, err
 		if !ok {
 			return nil, fmt.Errorf("invalid power value (%T)", pwri)
 		}
-		vals[i] = &candidate{
-			pubkey: pubkey,
-			pwr:    power,
+		expiresAti, ok := res["expiresAt"]
+		if !ok {
+			return nil, errors.New("no expiresAt in join_reqs record")
 		}
+		expiresAt, ok := expiresAti.(int64)
+		if !ok {
+			return nil, fmt.Errorf("invalid expiresAt value (%T)", expiresAti)
+		}
+
+		vals[i] = &candidate{
+			pubkey:    pubkey,
+			pwr:       power,
+			expiresAt: expiresAt,
+		}
+
 	}
 	return vals, nil
 }
