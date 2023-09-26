@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -2151,7 +2152,148 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				},
 			},
 		},
+		//// identifier quotes, `"` and `[]` and "`"
+		{"table name with double quote", `select * from "t1"`,
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{
+								JoinClause: &tree.JoinClause{
+									TableOrSubquery: &tree.TableOrSubqueryTable{
+										Name: "t1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"table name alias with double quote", `select * from "t1" as "t"`,
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns:    columnStar,
+							From: &tree.FromClause{
+								JoinClause: &tree.JoinClause{
+									TableOrSubquery: &tree.TableOrSubqueryTable{
+										Name:  "t1",
+										Alias: "t",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"column name with bracket quote", `select [col1] from "t1"`,
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionColumn{
+										Column: "col1",
+									},
+								},
+							},
+							From: &tree.FromClause{
+								JoinClause: &tree.JoinClause{
+									TableOrSubquery: &tree.TableOrSubqueryTable{
+										Name: "t1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"column name alias with bracket quote", `select [col1] as [col] from t1`,
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionColumn{
+										Table:  "",
+										Column: "col1",
+									},
+									Alias: "col",
+								},
+							}, From: &tree.FromClause{
+								JoinClause: &tree.JoinClause{
+									TableOrSubquery: &tree.TableOrSubqueryTable{
+										Name: "t1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"collation name with back tick quote", "select `col1` COLLATE `nocase` from `t1`; ",
+			&tree.Select{
+				SelectStmt: &tree.SelectStmt{
+					SelectCores: []*tree.SelectCore{
+						{
+							SelectType: tree.SelectTypeAll,
+							Columns: []tree.ResultColumn{
+								&tree.ResultColumnExpression{
+									Expression: &tree.ExpressionCollate{
+										Expression: &tree.ExpressionColumn{
+											Table:  "",
+											Column: "col1",
+										},
+										Collation: tree.CollationTypeNoCase,
+									},
+								},
+							},
+							From: &tree.FromClause{
+								JoinClause: &tree.JoinClause{
+									TableOrSubquery: &tree.TableOrSubqueryTable{
+										Name: "t1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{"index name with double quote", `update "t1" indexed by "someindex" set [col1]=1`,
+			&tree.Update{
+				UpdateStmt: &tree.UpdateStmt{
+					QualifiedTableName: &tree.QualifiedTableName{
+						TableName:  "t1",
+						TableAlias: "",
+						IndexedBy:  "someindex",
+					},
+					UpdateSetClause: []*tree.UpdateSetClause{
+						{
+							Columns:    []string{"col1"},
+							Expression: genLiteralExpression("1"),
+						},
+					},
+				},
+			}},
+		{"function name with back tick quote", "select `abs`(1)",
+			genSimpleFunctionSelectTree(&tree.FunctionABS, genLiteralExpression("1"))},
 	}
+
+	// Replace multiple spaces with a single space
+	re := regexp.MustCompile(`\s+`)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2177,18 +2319,28 @@ func TestParseRawSQL_syntax_valid(t *testing.T) {
 				fmt.Println("SQL from AST: ", sql)
 			}
 
+			singleSpaceSql := re.ReplaceAllString(sql, " ")
+			t.Logf("%s => %s\n", tt.input, singleSpaceSql)
+
+			// assert original sql and sql from ast are equal, WITHOUT format
 			assert.True(t,
 				strings.EqualFold(unFormatSql(sql), unFormatSql(tt.input)),
-				"ParseRawSQL() got %s, want %s", sql, tt.input)
+				"ParseRawSQL() got %s, origin %s", sql, tt.input)
 		})
 	}
 }
 
+// unFormatSql remove unnecessary spaces, quotes, etc.
 func unFormatSql(sql string) string {
 	sql = strings.ReplaceAll(sql, " ", "")
 	sql = strings.ReplaceAll(sql, ";", "")
-	// double quotes are for table/column names
+	//// double quotes are for table/column names, astTree.ToSQL() will add them
 	sql = strings.ReplaceAll(sql, `"`, "")
+	// those markers are not supported by astTree.ToSQL(), but they are supported by sqlite(from original input)
+	sql = strings.ReplaceAll(sql, `[`, "")
+	sql = strings.ReplaceAll(sql, `]`, "")
+	sql = strings.ReplaceAll(sql, "`", "")
+
 	return sql
 }
 

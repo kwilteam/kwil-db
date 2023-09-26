@@ -41,11 +41,11 @@ func (v *KFSqliteVisitor) VisitCommon_table_expression(ctx *sqlgrammar.Common_ta
 
 	// cte_table_name
 	cteTableCtx := ctx.Cte_table_name()
-	cte.Table = cteTableCtx.Table_name().GetText()
+	cte.Table = extractSQLName(cteTableCtx.Table_name().GetText())
 	if len(cteTableCtx.AllColumn_name()) > 0 {
 		cte.Columns = make([]string, len(cteTableCtx.AllColumn_name()))
 		for i, colNameCtx := range cteTableCtx.AllColumn_name() {
-			cte.Columns[i] = colNameCtx.GetText()
+			cte.Columns[i] = extractSQLName(colNameCtx.GetText())
 		}
 	}
 
@@ -129,10 +129,10 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 	case ctx.Table_name() != nil || ctx.Column_name() != nil:
 		expr := &tree.ExpressionColumn{}
 		if ctx.Table_name() != nil {
-			expr.Table = ctx.Table_name().GetText()
+			expr.Table = extractSQLName(ctx.Table_name().GetText())
 		}
 		if ctx.Column_name() != nil {
-			expr.Column = ctx.Column_name().GetText()
+			expr.Column = extractSQLName(ctx.Column_name().GetText())
 		}
 		return expr
 	case ctx.Select_stmt_core() != nil && ctx.IN_() == nil:
@@ -204,7 +204,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 	// collate
 	case ctx.COLLATE_() != nil:
 		// collation_name is any_name
-		collationName := ctx.Collation_name().GetText()
+		collationName := extractSQLName(ctx.Collation_name().GetText())
 		return &tree.ExpressionCollate{
 			Expression: v.visitExpr(ctx.Expr(0)),
 			Collation:  v.getCollateType(collationName),
@@ -457,7 +457,7 @@ func (v *KFSqliteVisitor) visitExpr(ctx sqlgrammar.IExprContext) tree.Expression
 		expr := &tree.ExpressionFunction{
 			Inputs: make([]tree.Expression, len(ctx.AllExpr())),
 		}
-		funcName := ctx.Function_name().GetText()
+		funcName := extractSQLName(ctx.Function_name().GetText())
 
 		f, ok := tree.SQLFunctions[strings.ToLower(funcName)]
 		if !ok {
@@ -532,7 +532,7 @@ func (v *KFSqliteVisitor) VisitUpsert_clause(ctx *sqlgrammar.Upsert_clauseContex
 	allIndexedColumnCtx := ctx.AllIndexed_column()
 	indexedColumns := make([]string, len(allIndexedColumnCtx))
 	for i, indexedColumnCtx := range allIndexedColumnCtx {
-		indexedColumns[i] = indexedColumnCtx.Column_name().GetText()
+		indexedColumns[i] = extractSQLName(indexedColumnCtx.Column_name().GetText())
 	}
 	conflictTarget.IndexedColumns = indexedColumns
 
@@ -570,7 +570,7 @@ func (v *KFSqliteVisitor) VisitUpsert_update(ctx *sqlgrammar.Upsert_updateContex
 	if ctx.Column_name_list() != nil {
 		clause.Columns = v.Visit(ctx.Column_name_list()).([]string)
 	} else {
-		clause.Columns = []string{ctx.Column_name().GetText()}
+		clause.Columns = []string{extractSQLName(ctx.Column_name().GetText())}
 	}
 
 	clause.Expression = v.Visit(ctx.Expr()).(tree.Expression)
@@ -581,14 +581,14 @@ func (v *KFSqliteVisitor) VisitUpsert_update(ctx *sqlgrammar.Upsert_updateContex
 func (v *KFSqliteVisitor) VisitColumn_name_list(ctx *sqlgrammar.Column_name_listContext) interface{} {
 	names := make([]string, len(ctx.AllColumn_name()))
 	for i, nameCtx := range ctx.AllColumn_name() {
-		names[i] = nameCtx.GetText()
+		names[i] = extractSQLName(nameCtx.GetText())
 	}
 	return names
 }
 
 // VisitColumn_name is called when visiting a column_name, return string
 func (v *KFSqliteVisitor) VisitColumn_name(ctx *sqlgrammar.Column_nameContext) interface{} {
-	return ctx.GetText()
+	return extractSQLName(ctx.GetText())
 }
 
 // VisitReturning_clause is called when visiting a returning_clause, return *tree.ReturningClause
@@ -608,7 +608,7 @@ func (v *KFSqliteVisitor) VisitReturning_clause(ctx *sqlgrammar.Returning_clause
 		}
 
 		if columnCtx.Column_alias() != nil {
-			clause.Returned[i].Alias = columnCtx.Column_alias().GetText()
+			clause.Returned[i].Alias = extractSQLName(columnCtx.Column_alias().GetText())
 		}
 
 	}
@@ -622,7 +622,7 @@ func (v *KFSqliteVisitor) VisitUpdate_set_subclause(ctx *sqlgrammar.Update_set_s
 	if ctx.Column_name_list() != nil {
 		result.Columns = v.Visit(ctx.Column_name_list()).([]string)
 	} else {
-		result.Columns = []string{ctx.Column_name().GetText()}
+		result.Columns = []string{extractSQLName(ctx.Column_name().GetText())}
 	}
 
 	result.Expression = v.Visit(ctx.Expr()).(tree.Expression)
@@ -633,17 +633,17 @@ func (v *KFSqliteVisitor) VisitUpdate_set_subclause(ctx *sqlgrammar.Update_set_s
 func (v *KFSqliteVisitor) VisitQualified_table_name(ctx *sqlgrammar.Qualified_table_nameContext) interface{} {
 	result := tree.QualifiedTableName{}
 
-	result.TableName = ctx.Table_name().GetText()
+	result.TableName = extractSQLName(ctx.Table_name().GetText())
 
-	if ctx.Alias() != nil {
-		result.TableAlias = ctx.Alias().GetText()
+	if ctx.Table_alias() != nil {
+		result.TableAlias = extractSQLName(ctx.Table_alias().GetText())
 	}
 
 	if ctx.INDEXED_() != nil {
 		if ctx.NOT_() != nil {
 			result.NotIndexed = true
 		} else {
-			result.IndexedBy = ctx.Index_name().GetText()
+			result.IndexedBy = extractSQLName(ctx.Index_name().GetText())
 		}
 	}
 
@@ -717,16 +717,16 @@ func (v *KFSqliteVisitor) VisitInsert_stmt(ctx *sqlgrammar.Insert_stmtContext) i
 	}
 
 	insertStmt.InsertType = getInsertType(ctx)
-	insertStmt.Table = ctx.Table_name().GetText()
+	insertStmt.Table = extractSQLName(ctx.Table_name().GetText())
 	if ctx.Table_alias() != nil {
-		insertStmt.TableAlias = ctx.Table_alias().GetText()
+		insertStmt.TableAlias = extractSQLName(ctx.Table_alias().GetText())
 	}
 
 	allColumnNameCtx := ctx.AllColumn_name()
 	if len(allColumnNameCtx) > 0 {
 		insertStmt.Columns = make([]string, len(allColumnNameCtx))
 		for i, nc := range allColumnNameCtx {
-			insertStmt.Columns[i] = nc.GetText()
+			insertStmt.Columns[i] = extractSQLName(nc.GetText())
 		}
 	}
 
@@ -831,10 +831,10 @@ func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *sqlgrammar.Table_or_subque
 	switch {
 	case ctx.Table_name() != nil:
 		t := tree.TableOrSubqueryTable{
-			Name: ctx.Table_name().GetText(),
+			Name: extractSQLName(ctx.Table_name().GetText()),
 		}
 		if ctx.Table_alias() != nil {
-			t.Alias = ctx.Table_alias().GetText()
+			t.Alias = extractSQLName(ctx.Table_alias().GetText())
 		}
 		return &t
 	case ctx.Select_stmt_core() != nil:
@@ -842,7 +842,7 @@ func (v *KFSqliteVisitor) VisitTable_or_subquery(ctx *sqlgrammar.Table_or_subque
 			Select: v.Visit(ctx.Select_stmt_core()).(*tree.SelectStmt),
 		}
 		if ctx.Table_alias() != nil {
-			t.Alias = ctx.Table_alias().GetText()
+			t.Alias = extractSQLName(ctx.Table_alias().GetText())
 		}
 		return &t
 	}
@@ -910,7 +910,7 @@ func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlgrammar.Result_columnContex
 	// table_name need to be checked first
 	case ctx.Table_name() != nil:
 		return &tree.ResultColumnTable{
-			TableName: ctx.Table_name().GetText(),
+			TableName: extractSQLName(ctx.Table_name().GetText()),
 		}
 	case ctx.STAR() != nil:
 		return &tree.ResultColumnStar{}
@@ -919,7 +919,7 @@ func (v *KFSqliteVisitor) VisitResult_column(ctx *sqlgrammar.Result_columnContex
 			Expression: v.Visit(ctx.Expr()).(tree.Expression),
 		}
 		if ctx.Column_alias() != nil {
-			r.Alias = ctx.Column_alias().GetText()
+			r.Alias = extractSQLName(ctx.Column_alias().GetText())
 		}
 		return r
 	}
@@ -1121,4 +1121,27 @@ func (v *KFSqliteVisitor) shouldVisitNextChild(node antlr.Tree, currentResult in
 	}
 
 	return true
+}
+
+// extractSQLName remove surrounding lexical token(pair) of an identifier(name).
+// Those tokens are: `"` and `[` `]` and "`".
+// In sqlparser identifiers are used for: table name, table alias name, column name,
+// column alias name, collation name, index name, function name.
+func extractSQLName(name string) string {
+	// remove surrounding token pairs
+	if len(name) > 1 {
+		if name[0] == '"' && name[len(name)-1] == '"' {
+			name = name[1 : len(name)-1]
+		}
+
+		if name[0] == '[' && name[len(name)-1] == ']' {
+			name = name[1 : len(name)-1]
+		}
+
+		if name[0] == '`' && name[len(name)-1] == '`' {
+			name = name[1 : len(name)-1]
+		}
+	}
+
+	return name
 }

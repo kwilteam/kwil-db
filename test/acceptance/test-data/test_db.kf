@@ -25,18 +25,18 @@ table posts {
 }
 
 action create_user($id, $username, $age) public {
-    INSERT INTO users (id, username, age, wallet)
+    INSERT INTO "users" (id, username, age, wallet)
     VALUES ($id, $username, $age, @caller);
 }
 
 action update_user($id, $username, $age) public {
-    UPDATE users
+    UPDATE [users]
     SET id = $id, username = $username, age = $age
     WHERE wallet = @caller;
 }
 
 action update_username($username) public {
-    UPDATE users
+    UPDATE `users`
     SET username = $username
     WHERE wallet = @caller;
 }
@@ -47,9 +47,10 @@ action delete_user() public {
 }
 
 action delete_user_by_id ($id) public owner {
-    DELETE FROM users
-    WHERE id = $id;
+    DELETE FROM "users"
+    WHERE id = $id AND public_key(wallet) = public_key(@caller);
 }
+
 
 action create_post($id, $title, $content) public {
     INSERT INTO posts (id, user_id, title, content)
@@ -102,7 +103,7 @@ action get_post_authenticated($id) public view mustsign {
 
 action get_post_unauthenticated($id) public view {
     SELECT *
-    FROM posts
+    FROM "posts"
     WHERE id = $id;
 }
 
