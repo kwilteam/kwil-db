@@ -15,6 +15,7 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 		procedures          map[string]*execution.Procedure
 		loadCommand         []*execution.InstructionExecution
 		db                  execution.Datastore
+		evaluater           execution.Evaluater
 	}
 	type args struct {
 		ctx  context.Context
@@ -405,10 +406,43 @@ func TestEngine_ExecuteProcedure(t *testing.T) {
 			want:    nil,
 			wantErr: nil,
 		},
+		{
+			name: "basic evaluatable procedure should succeed",
+			fields: fields{
+				availableExtensions: testExtensions,
+				procedures: map[string]*execution.Procedure{
+					"evaluatableProcedure": {
+						Name:       "evaluatableProcedure",
+						Parameters: []string{"$arg1"},
+						Scoping:    execution.ProcedureScopingPublic,
+						Body: []*execution.InstructionExecution{
+							{
+								Instruction: execution.OpEvaluatable,
+								Args:        []any{"SELECT $arg1", "$arg1"},
+							},
+						},
+					},
+				},
+				db:          &mockDatastore{},
+				loadCommand: testLoadCommand,
+				evaluater:   newMockEvaluater("result"),
+			},
+			args: args{
+				ctx:  context.Background(),
+				name: "evaluatableProcedure",
+				args: []any{"0x123"},
+				opts: testExecutionOpts,
+			},
+			want: nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e, err := execution.NewEngine(context.Background(), tt.fields.db, &execution.EngineOpts{
+			if tt.fields.evaluater == nil {
+				tt.fields.evaluater = newMockEvaluater("default_mock_evaluater")
+			}
+
+			e, err := execution.NewEngine(context.Background(), tt.fields.db, tt.fields.evaluater, &execution.EngineOpts{
 				Extensions: tt.fields.availableExtensions,
 				Procedures: tt.fields.procedures,
 				LoadCmd:    tt.fields.loadCommand,

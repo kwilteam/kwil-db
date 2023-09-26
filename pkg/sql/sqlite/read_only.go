@@ -21,7 +21,7 @@ func (c *Connection) newReadOnlyStatement(readConn *sqlite.Conn, stmt *sqlite.St
 		stmt: stmt,
 	}
 
-	s.determineColumnNames()
+	s.columnNames = determineColumnNames(s.stmt)
 
 	return s
 }

@@ -2,7 +2,6 @@ package execution_test
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 )
@@ -15,9 +14,6 @@ type mockDatastore struct {
 }
 
 func (m *mockDatastore) Prepare(ctx context.Context, uery string) (execution.PreparedStatement, error) {
-	if m.createsNonMutative {
-		fmt.Print("aa")
-	}
 
 	return &mockPreparedStatement{
 		mutative: !m.createsNonMutative,
@@ -172,4 +168,22 @@ func (m *mockUser) Bytes() []byte {
 
 func (m *mockUser) PubKey() []byte {
 	return []byte("0xPUBKEY")
+}
+
+type mockEvaluater struct {
+	val any
+}
+
+func newMockEvaluater(returnVal any) *mockEvaluater {
+	return &mockEvaluater{
+		val: returnVal,
+	}
+}
+
+func (m *mockEvaluater) Evaluate(expr string, values map[string]any) (any, error) {
+	return m.val, nil
+}
+
+func (m *mockEvaluater) Close() error {
+	return nil
 }
