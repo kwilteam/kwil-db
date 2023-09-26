@@ -251,24 +251,24 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 	}
 }
 
-func tblCol(dataType types.DataType, tbl, col string) *attributes.RelationAttribute {
+func tblCol(dataType types.DataType, tbl, column string) *attributes.RelationAttribute {
 	return &attributes.RelationAttribute{
 		ResultExpression: &tree.ResultColumnExpression{
 			Expression: &tree.ExpressionColumn{
 				Table:  tbl,
-				Column: col,
+				Column: column,
 			},
 		},
 		Type: dataType,
 	}
 }
 
-func tblColAlias(dataType types.DataType, tbl, col, alias string) *attributes.RelationAttribute {
+func tblColAlias(dataType types.DataType, tbl, column, alias string) *attributes.RelationAttribute {
 	return &attributes.RelationAttribute{
 		ResultExpression: &tree.ResultColumnExpression{
 			Expression: &tree.ExpressionColumn{
 				Table:  tbl,
-				Column: col,
+				Column: column,
 			},
 			Alias: alias,
 		},

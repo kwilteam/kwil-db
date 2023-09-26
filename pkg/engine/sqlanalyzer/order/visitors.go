@@ -6,15 +6,20 @@ import (
 )
 
 func NewOrderWalker(tables []*types.Table) tree.Walker {
+	// copy tables, since we will be modifying it to register CTEs
+	tbls := make([]*types.Table, len(tables))
+	copy(tbls, tables)
+
 	return &orderAnalyzer{
 		Walker:       tree.NewBaseWalker(),
-		schemaTables: tables,
+		schemaTables: tbls,
 	}
 }
 
 type orderAnalyzer struct {
 	tree.Walker
-	context      *orderContext
+	context *orderContext
+	// schemaTables is a list of all tables in the schema
 	schemaTables []*types.Table
 }
 

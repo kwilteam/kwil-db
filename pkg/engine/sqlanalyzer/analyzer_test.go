@@ -5,6 +5,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/engine/types/testdata"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -76,14 +77,14 @@ func Test_Analyze(t *testing.T) {
 			name: "common table expression",
 			stmt: `WITH
 			users_aged_20 AS (
-				SELECT * FROM users WHERE age = 20
+				SELECT id, username FROM users WHERE age = 20
 			)
 			SELECT * FROM users_aged_20`,
 			want: `WITH
 			"users_aged_20" AS (
-				SELECT * FROM "users" WHERE "age" = 20 ORDER BY "users"."id" ASC NULLS LAST
+				SELECT "users"."id", "users"."username" FROM "users" WHERE "age" = 20 ORDER BY "users"."id" ASC NULLS LAST
 			)
-			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" ASC NULLS LAST;`,
+			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" ASC NULLS LAST, "users_aged_20"."username" ASC NULLS LAST;`,
 			metadata: &sqlanalyzer.RuleMetadata{
 				Tables: []*types.Table{
 					tblUsers,
@@ -106,26 +107,7 @@ func Test_Analyze(t *testing.T) {
 }
 
 var (
-	tblUsers = &types.Table{
-		Name: "users",
-		Columns: []*types.Column{
-			{
-				Name: "id",
-				Type: types.INT,
-				Attributes: []*types.Attribute{
-					{
-						Type: types.PRIMARY_KEY,
-					},
-				},
-			},
-			{
-				Name: "name",
-				Type: types.TEXT,
-			},
-		},
-		Indexes:     []*types.Index{},
-		ForeignKeys: []*types.ForeignKey{},
-	}
+	tblUsers = testdata.TableUsers
 
 	tblPosts = &types.Table{
 		Name: "posts",

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/aggregate"
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/join"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/order"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser"
@@ -35,6 +36,7 @@ func (a *acceptWrapper) Accept(walker tree.Walker) (err error) {
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
 func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*AnalyzedStatement, error) {
+	// TODO: copy and clean tables
 	parsed, err := sqlparser.Parse(stmt)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing statement: %w", err)
@@ -42,7 +44,11 @@ func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*Analyze
 
 	accept := &acceptWrapper{inner: parsed}
 
-	// TODO: we need to add a clean walker to make identifiers lowercase
+	clnr := clean.NewStatementCleaner()
+	err = accept.Accept(clnr)
+	if err != nil {
+		return nil, fmt.Errorf("error cleaning statement: %w", err)
+	}
 
 	if flags&NoCartesianProduct != 0 {
 		err := accept.Accept(join.NewJoinWalker())

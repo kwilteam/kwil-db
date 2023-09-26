@@ -2,9 +2,8 @@ package attributes
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/utils"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
@@ -218,16 +217,18 @@ func (r *returnTypeWalker) EnterExpressionLiteral(p0 *tree.ExpressionLiteral) er
 		return nil
 	}
 
-	if strings.HasPrefix(p0.Value, "'") && strings.HasSuffix(p0.Value, "'") {
-		r.set(types.TEXT)
-		return nil
-	}
-
-	_, err := strconv.Atoi(p0.Value)
+	dataTypes, err := utils.IsLiteral(p0.Value)
 	if err != nil {
-		return fmt.Errorf("invalid literal: could not detect literal type: %s", p0.Value)
+		return err
 	}
-	r.set(types.INT)
+	switch dataTypes {
+	case types.TEXT:
+		r.set(types.TEXT)
+	case types.INT:
+		r.set(types.INT)
+	default:
+		return fmt.Errorf("unknown literal type for analyzed relation attribute: %s", dataTypes)
+	}
 
 	return nil
 }

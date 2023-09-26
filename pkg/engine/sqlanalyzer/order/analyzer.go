@@ -3,6 +3,7 @@ package order
 import (
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/sqlanalyzer/attributes"
 	"github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
@@ -96,6 +97,28 @@ func (o *orderAnalyzer) EnterTableOrSubqueryTable(node *tree.TableOrSubqueryTabl
 		Indexes:     tbl.Indexes,
 		ForeignKeys: tbl.ForeignKeys,
 	})
+
+	return nil
+}
+
+// EnterCommonTableExpression adds the table to the list of used tables.
+// This allows it to be used later for the ordering terms.
+func (o *orderAnalyzer) EnterCTE(node *tree.CTE) error {
+	if len(node.Select.SelectCores) == 0 {
+		return nil
+	}
+
+	cteAttributes, err := attributes.GetSelectCoreRelationAttributes(node.Select.SelectCores[0], o.schemaTables)
+	if err != nil {
+		return err
+	}
+
+	cteTable, err := attributes.TableFromAttributes(node.Table, cteAttributes, true)
+	if err != nil {
+		return err
+	}
+
+	o.schemaTables = append(o.schemaTables, cteTable)
 
 	return nil
 }
