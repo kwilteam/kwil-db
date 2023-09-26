@@ -8,7 +8,7 @@ import (
 )
 
 // TableFromAttributes generates a table structure from a list of relation attributes.
-// It will do it's best to interpet the proper name for the attributes.
+// It will do it's best to interpret the proper name for the attributes.
 // If a column is given (either as a table.column or just column), it will apply the new table name.
 // If any other expression is given (math on top of a column, aggregate, etc), it will enforce that an alias
 // is given in the ResultColumnExpression of the relation attribute.  The types of ambiguous naming supported by SQLite for CTEs is
