@@ -56,3 +56,11 @@ func (noCaller) PubKey() []byte {
 func (noCaller) Address() string {
 	return ""
 }
+
+// Evaluater can evaluate arbitrary expressions
+// The expressions must begin with a "SELECT"
+// It returns the evaluated value
+type Evaluater interface {
+	Evaluate(expr string, values map[string]any) (any, error)
+	Close() error
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 
+	"github.com/kwilteam/kwil-db/pkg/engine/dataset/evaluater"
 	"github.com/kwilteam/kwil-db/pkg/engine/execution"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
@@ -52,7 +53,12 @@ func OpenDataset(ctx context.Context, ds Datastore, opts ...OpenOpt) (*Dataset, 
 		return nil, err
 	}
 
-	engine, err := execution.NewEngine(ctx, datastoreWrapper{ds}, engineOpts)
+	eval, err := evaluater.NewEvaluater()
+	if err != nil {
+		return nil, err
+	}
+
+	engine, err := execution.NewEngine(ctx, datastoreWrapper{ds}, eval, engineOpts)
 	if err != nil {
 		return nil, err
 	}

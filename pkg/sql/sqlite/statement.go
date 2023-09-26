@@ -25,7 +25,7 @@ func newStatement(conn *Connection, stmt *sqlite.Stmt) *Statement {
 		stmt: stmt,
 	}
 
-	s.determineColumnNames()
+	s.columnNames = determineColumnNames(s.stmt)
 
 	return s
 }
@@ -196,7 +196,7 @@ func (r *Results) Next() (rowReturned bool, err error) {
 	}
 
 	if r.firstIteration {
-		r.statement.determineColumnTypes()
+		r.statement.columnTypes = determineColumnTypes(r.statement.stmt)
 		r.firstIteration = false
 	}
 
@@ -204,9 +204,13 @@ func (r *Results) Next() (rowReturned bool, err error) {
 }
 
 func (r *Results) GetRecord() map[string]any {
+	return getRecord(r.statement.stmt, r.statement.columnNames, r.statement.columnTypes)
+}
+
+func getRecord(stmt *sqlite.Stmt, columnNames []string, columnTypes []DataType) map[string]any {
 	row := make(map[string]any)
-	for i, col := range r.statement.columnNames {
-		row[col] = r.statement.getAny(i)
+	for i, col := range columnNames {
+		row[col] = getAny(stmt, i, columnTypes[i])
 	}
 	return row
 }
@@ -286,13 +290,13 @@ func (s *Statement) bindParameters(opts *ExecOpts) error {
 		opts.NamedArgs = make(map[string]interface{})
 	}
 
-	err := s.bindMany(opts.Args)
+	err := bindMany(s.stmt, opts.Args)
 	if err != nil {
 		return fmt.Errorf("error binding args: %w", err)
 	}
 
 	// binding named after binding positional will override any positional values
-	err = s.setMany(opts.NamedArgs)
+	err = setMany(s.stmt, opts.NamedArgs)
 	if err != nil {
 		return fmt.Errorf("error setting named args: %w", err)
 	}
@@ -335,16 +339,17 @@ func (s *Statement) ReadBlob(param string, buf []byte) {
 	s.stmt.GetBytes(param, buf)
 }
 
-func (s *Statement) getAny(position int) any {
-	switch s.columnTypes[position] {
+// getAny gets the value of the given parameter as an any.
+func getAny(stmt *sqlite.Stmt, position int, typ DataType) any {
+	switch typ {
 	case DataTypeInteger:
-		return s.stmt.ColumnInt64(position)
+		return stmt.ColumnInt64(position)
 	case DataTypeFloat:
-		return s.stmt.ColumnFloat(position)
+		return stmt.ColumnFloat(position)
 	case DataTypeText:
-		return s.stmt.ColumnText(position)
+		return stmt.ColumnText(position)
 	case DataTypeBlob:
-		rdr := s.stmt.ColumnReader(position)
+		rdr := stmt.ColumnReader(position)
 		bts, err := io.ReadAll(rdr)
 		if err != nil {
 			panic(fmt.Errorf("kwildb get any error: error reading blob: %w", err))
@@ -358,23 +363,23 @@ func (s *Statement) getAny(position int) any {
 }
 
 // bindAny binds the given value to the parameter index.
-func (s *Statement) bindAny(position int, val any) error {
+func bindAny(stmt *sqlite.Stmt, position int, val any) error {
 	ref := reflect.ValueOf(val)
 	if !ref.IsValid() {
-		s.stmt.BindNull(position)
+		stmt.BindNull(position)
 		return nil
 	}
 	switch ref.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		s.stmt.BindInt64(position, ref.Int())
+		stmt.BindInt64(position, ref.Int())
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		s.stmt.BindInt64(position, int64(ref.Uint()))
+		stmt.BindInt64(position, int64(ref.Uint()))
 	case reflect.Float32, reflect.Float64:
-		s.stmt.BindFloat(position, ref.Float())
+		stmt.BindFloat(position, ref.Float())
 	case reflect.String:
-		s.stmt.BindText(position, ref.String())
+		stmt.BindText(position, ref.String())
 	case reflect.Bool:
-		s.stmt.BindBool(position, ref.Bool())
+		stmt.BindBool(position, ref.Bool())
 	default:
 		return fmt.Errorf("kwildb bind any error: unsupported type: %s", ref.Kind())
 	}
@@ -383,9 +388,9 @@ func (s *Statement) bindAny(position int, val any) error {
 }
 
 // bindMany binds the given values to parameters based on their index.
-func (s *Statement) bindMany(vals []any) error {
+func bindMany(stmt *sqlite.Stmt, vals []any) error {
 	for i, val := range vals {
-		if err := s.bindAny(i+1, val); err != nil {
+		if err := bindAny(stmt, i+1, val); err != nil {
 			return err
 		}
 	}
@@ -393,30 +398,31 @@ func (s *Statement) bindMany(vals []any) error {
 }
 
 // setAny sets the given value to the parameter name.
-func (s *Statement) setAny(param string, val any) error {
-	index := s.stmt.FindBindName("kwil set any", param)
+// if the parameter does not exist, it will return nil.
+func setAny(stmt *sqlite.Stmt, param string, val any) error {
+	index := stmt.FindBindName("", param)
 	if index <= 0 {
 		return nil
 	}
 
 	ref := reflect.ValueOf(val)
 	if !ref.IsValid() {
-		s.stmt.SetNull(param)
+		stmt.SetNull(param)
 		return nil
 	}
 	switch ref.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		s.stmt.BindInt64(index, ref.Int())
+		stmt.BindInt64(index, ref.Int())
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		s.stmt.BindInt64(index, int64(ref.Uint()))
+		stmt.BindInt64(index, int64(ref.Uint()))
 	case reflect.Float32, reflect.Float64:
-		s.stmt.BindFloat(index, ref.Float())
+		stmt.BindFloat(index, ref.Float())
 	case reflect.String:
-		s.stmt.BindText(index, ref.String())
+		stmt.BindText(index, ref.String())
 	case reflect.Bool:
-		s.stmt.BindBool(index, ref.Bool())
+		stmt.BindBool(index, ref.Bool())
 	case reflect.Array, reflect.Slice:
-		s.stmt.BindBytes(index, ref.Bytes())
+		stmt.BindBytes(index, ref.Bytes())
 	default:
 		return fmt.Errorf("kwildb set any error: unsupported type: %s", ref.Kind())
 	}
@@ -425,9 +431,9 @@ func (s *Statement) setAny(param string, val any) error {
 }
 
 // setMany sets the given values to parameters based on their name.
-func (s *Statement) setMany(vals map[string]any) error {
+func setMany(stmt *sqlite.Stmt, vals map[string]any) error {
 	for param, val := range vals {
-		if err := s.setAny(param, val); err != nil {
+		if err := setAny(stmt, param, val); err != nil {
 			return err
 		}
 	}
@@ -435,22 +441,23 @@ func (s *Statement) setMany(vals map[string]any) error {
 }
 
 // determineColumnNames determines the column names of the statement.
-func (s *Statement) determineColumnNames() {
-	if s.columnNames == nil {
-		s.columnNames = make([]string, s.stmt.ColumnCount())
+func determineColumnNames(stmt *sqlite.Stmt) []string {
+	columnNames := make([]string, stmt.ColumnCount())
+	for i := 0; i < stmt.ColumnCount(); i++ {
+		columnNames[i] = stmt.ColumnName(i)
 	}
-	for i := 0; i < s.stmt.ColumnCount(); i++ {
-		s.columnNames[i] = s.stmt.ColumnName(i)
-	}
+	return columnNames
 }
 
 // determineColumnTypes determines the column types of the statement.
-func (s *Statement) determineColumnTypes() {
-	s.columnTypes = make([]DataType, s.stmt.ColumnCount())
+func determineColumnTypes(stmt *sqlite.Stmt) []DataType {
+	columnTypes := make([]DataType, stmt.ColumnCount())
 
-	for i := 0; i < s.stmt.ColumnCount(); i++ {
-		s.columnTypes[i] = convertColumnType(s.stmt.ColumnType(i))
+	for i := 0; i < stmt.ColumnCount(); i++ {
+		columnTypes[i] = convertColumnType(stmt.ColumnType(i))
 	}
+
+	return columnTypes
 }
 
 // Clear resets the statement and clears all bound parameters.
