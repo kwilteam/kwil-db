@@ -2,7 +2,7 @@
 // action block.
 // This package is only temporary, to reduce the need to change our public
 // kuneiform schema. Once our schema is stable, we will remove this package, and
-// put actual Stmt type to kuneiform schema(so engine don't need to parse).
+// put actual Stmt types to kuneiform schema (so engine doesn't need to parse).
 //
 // By having this package, we can just check the syntax of the action block
 // without parsing, then pass the whole statement to the engine. The engine will
@@ -18,14 +18,18 @@ import (
 	"github.com/kwilteam/action-grammar-go/actgrammar"
 )
 
-// Parse parses a action statement string and returns a ActionStmt
+// Parse parses an action statement string and returns an ActionStmt.
+// A new error listener will be created, and parsing trace is disabled.
 func Parse(stmt string) (ast ActionStmt, err error) {
 	return ParseActionStmt(stmt, nil, false)
 }
 
-// ParseActionStmt parses a single action statement and returns
+// ParseActionStmt parses a single action statement and returns an ActionStmt.
+// errorListener is optional, if nil, a new error listener is created, it's
+// mostly used for testing.
+// trace is optional, if true, parsing trace will be enabled.
 func ParseActionStmt(stmt string, errorListener *sqlparser.ErrorListener, trace bool) (ast ActionStmt, err error) {
-	var visitor *KFActionVisitor
+	var visitor *kfActionVisitor
 
 	if errorListener == nil {
 		errorListener = sqlparser.NewErrorListener()
@@ -54,7 +58,7 @@ func ParseActionStmt(stmt string, errorListener *sqlparser.ErrorListener, trace 
 		err = errorListener.Err()
 	}()
 
-	visitor = NewKFActionVisitor(KFActionVisitorWithTrace(trace))
+	visitor = newKFActionVisitor(kfActionVisitorWithTrace(trace))
 
 	parseTree := p.Statement()
 	result := visitor.Visit(parseTree)

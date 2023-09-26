@@ -19,12 +19,12 @@ func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute Ex
 	dbID := execute.DBID(db.Name)
 
 	// try executing extension
-	txHash, err := execute.ExecuteAction(ctx, dbID, divideActionName, []any{3, 2})
+	txHash, err := execute.ExecuteAction(ctx, dbID, divideActionName, []any{2, 1, 2})
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	records, err := execute.Call(ctx, dbID, divideActionName, []any{3, 2}, false)
+	records, err := execute.Call(ctx, dbID, divideActionName, []any{2, 1, 2}, false)
 	assert.NoError(t, err)
 
 	results := records.Export()
