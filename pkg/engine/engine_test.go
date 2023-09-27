@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	engine "github.com/kwilteam/kwil-db/pkg/engine"
@@ -34,13 +36,13 @@ func newTestUser() types.UserIdentifier {
 
 var (
 	testTables = []*types.Table{
-		&testdata.Table_users,
-		&testdata.Table_posts,
+		testdata.TableUsers,
+		testdata.TablePosts,
 	}
 
 	testProcedures = []*types.Procedure{
-		&testdata.Procedure_create_user,
-		&testdata.Procedure_create_post,
+		procedureCreateUser,
+		procedureCreatePost,
 	}
 
 	testInitializedExtensions = []*types.Extension{
@@ -54,7 +56,6 @@ var (
 	}
 )
 
-// TODO: this test is not passing
 func Test_Open(t *testing.T) {
 	ctx := context.Background()
 	user := newTestUser()
@@ -109,11 +110,20 @@ func Test_Open(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.ElementsMatch(t, testTables, tables)
+	for _, table := range tables {
+		if !deepEqual(table, findTable(table.Name)) {
+			t.Errorf("tables not equal: %v, %v", table, findTable(table.Name))
+		}
+	}
 
 	// check if the dataset has the correct procedures
 	procs := dataset.ListProcedures()
-	assert.ElementsMatch(t, testProcedures, procs)
+
+	for _, proc := range procs {
+		if !deepEqual(proc, findProc(proc.Name)) {
+			t.Errorf("procedures not equal: %v, %v", proc, findProc(proc.Name))
+		}
+	}
 
 	pub, err := user.PubKey()
 	if err != nil {
@@ -127,6 +137,26 @@ func Test_Open(t *testing.T) {
 	}
 
 	assert.ElementsMatch(t, []string{"testdb1"}, datasets)
+}
+
+func findProc(name string) *types.Procedure {
+	for _, proc := range testProcedures {
+		if proc.Name == name {
+			return proc
+		}
+	}
+
+	panic("procedure not found")
+}
+
+func findTable(name string) *types.Table {
+	for _, table := range testTables {
+		if table.Name == name {
+			return table
+		}
+	}
+
+	panic("table not found")
 }
 
 func Test_CreateDataset(t *testing.T) {
@@ -342,4 +372,29 @@ func (m *mockRegister) Unregister(ctx context.Context, name string) error {
 	delete(m.datasets, name)
 
 	return nil
+}
+
+var (
+	procedureCreateUser = &types.Procedure{
+		Name:   "create_user",
+		Args:   []string{"$id", "$username", "$age"},
+		Public: true,
+		Statements: []string{
+			"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
+		},
+	}
+
+	procedureCreatePost = &types.Procedure{
+		Name:   "create_post",
+		Args:   []string{"$id", "$title", "$content", "$date_string"},
+		Public: true,
+		Statements: []string{
+			"INSERT INTO posts (id, title, content, author_id, post_date)VALUES ($id, $title, $content, (SELECT id FROM users WHERE address=@caller), $date_string);",
+		},
+	}
+)
+
+// deepEqual does a deep comparison, while considering empty slices as equal to nils.
+func deepEqual(a, b any) bool {
+	return cmp.Equal(a, b, cmpopts.EquateEmpty())
 }

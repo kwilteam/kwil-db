@@ -13,6 +13,7 @@ require (
 	github.com/decred/dcrd/certgen v1.1.2
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/ethereum/go-ethereum v1.12.0
+	github.com/google/go-cmp v0.5.9
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0
 	github.com/joho/godotenv v1.5.1
@@ -117,7 +118,6 @@ require (
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/flatbuffers v1.12.1 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/orderedcode v0.0.1 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect

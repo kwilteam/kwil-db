@@ -84,6 +84,15 @@ const (
 	InsertTypeInsertOrReplace
 )
 
+func (i InsertType) Valid() error {
+	switch i {
+	case InsertTypeInsert, InsertTypeReplace, InsertTypeInsertOrReplace:
+		return nil
+	default:
+		return fmt.Errorf("invalid insert type: %d", i)
+	}
+}
+
 func (i *InsertType) String() string {
 	switch *i {
 	case InsertTypeInsert:

@@ -1,6 +1,8 @@
 package tree
 
 import (
+	"fmt"
+
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -10,6 +12,15 @@ const (
 	UpsertTypeDoNothing UpsertType = iota
 	UpsertTypeDoUpdate
 )
+
+func (u UpsertType) Valid() error {
+	switch u {
+	case UpsertTypeDoNothing, UpsertTypeDoUpdate:
+		return nil
+	default:
+		return fmt.Errorf("invalid upsert type: %d", u)
+	}
+}
 
 type Upsert struct {
 	ConflictTarget *ConflictTarget
