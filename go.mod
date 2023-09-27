@@ -20,7 +20,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/kwilteam/action-grammar-go v0.0.1-0.20230926160920-472768e1186c
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
-	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230925201122-34acf0ae55e6
+	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230927233431-2868efa34572
 	github.com/kwilteam/kwil-extensions v0.0.0-20230710163303-bfa03f64ff82
 	github.com/kwilteam/sql-grammar-go v0.0.3-0.20230925230724-00685e1bac32
 	github.com/manifoldco/promptui v0.9.0
