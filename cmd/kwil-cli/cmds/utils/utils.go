@@ -13,11 +13,8 @@ func NewCmdUtils() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		signCmd(),
 		pingCmd(),
 		printConfigCmd(),
-		walletCmd(),
-		privateKeyCmd(), // TODO: use walletCmd instead, it's more intuitive
 		txQueryCmd(),
 	)
 

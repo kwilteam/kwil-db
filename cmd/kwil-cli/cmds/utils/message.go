@@ -28,25 +28,6 @@ func (s respStr) MarshalText() ([]byte, error) {
 	return []byte(s), nil
 }
 
-// respSig represents a signature in cli
-type respSig []byte
-
-func (r respSig) Hex() string {
-	return hex.EncodeToString(r)
-}
-
-func (r respSig) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Bytes string `json:"signature"` // HEX
-	}{
-		Bytes: r.Hex(),
-	})
-}
-
-func (r respSig) MarshalText() ([]byte, error) {
-	return []byte(fmt.Sprintf("Signature: %s\n", r.Hex())), nil
-}
-
 // respTxQuery is used to represent a transaction response in cli
 type respTxQuery struct {
 	Msg *types.TcTxQueryResponse
@@ -85,31 +66,6 @@ Log: %s
 		r.Msg.TxResult.Log,
 	)
 
-	return []byte(msg), nil
-}
-
-// respGenWalletInfo is used to represent a generated wallet info in cli
-type respGenWalletInfo struct {
-	info *generatedWalletInfo
-}
-
-// generatedWalletInfo is used to represent a generated wallet info
-type generatedWalletInfo struct {
-	PrivateKey string `json:"private_key"`
-	PublicKey  string `json:"public_key"`
-	Address    string `json:"address"`
-}
-
-func (r *respGenWalletInfo) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.info)
-}
-
-func (r *respGenWalletInfo) MarshalText() ([]byte, error) {
-	printKeyDesc := `PrivateKey: %s
-PublicKey: 	%s
-Address: 	%s
-`
-	msg := fmt.Sprintf(printKeyDesc, r.info.PrivateKey, r.info.PublicKey, r.info.Address)
 	return []byte(msg), nil
 }
 
