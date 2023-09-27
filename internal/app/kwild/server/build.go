@@ -251,11 +251,6 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 	}
 	closer.addCloser(db.Close)
 
-	err = registerSQL(d.ctx, ac, db, "validator_db", d.log)
-	if err != nil {
-		failBuild(err, "failed to register validator db")
-	}
-
 	joinExpiry := d.cfg.GenesisConfig.ConsensusParams.Validator.JoinExpiry
 	v, err := vmgr.NewValidatorMgr(d.ctx, db,
 		vmgr.WithLogger(*d.log.Named("validatorStore")),
@@ -265,6 +260,7 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 		failBuild(err, "failed to build validator store")
 	}
 
+	ac.Register(d.ctx, "validator_db", v.Committable())
 	return v
 }
 
