@@ -1,6 +1,9 @@
 package tree
 
 import (
+	"fmt"
+	"strings"
+
 	sqlwriter "github.com/kwilteam/kwil-db/pkg/engine/sqlparser/tree/sql-writer"
 )
 
@@ -52,9 +55,12 @@ func (o *OrderingTerm) ToSQL() string {
 
 	stmt.WriteString(o.Expression.ToSQL())
 
-	if o.Collation.Valid() {
+	err := o.Collation.Valid()
+	if !o.Collation.Empty() && err == nil {
 		stmt.Token.Collate()
 		stmt.WriteString(o.Collation.String())
+	} else if !o.Collation.Empty() && err != nil {
+		panic(err)
 	}
 
 	if o.OrderType != OrderTypeNone {
@@ -80,6 +86,14 @@ func (n NullOrderingType) String() string {
 	return string(n)
 }
 
+func (n NullOrderingType) Valid() error {
+	if n != NullOrderingTypeFirst && n != NullOrderingTypeLast && n != NullOrderingTypeNone {
+		return fmt.Errorf("invalid null ordering type: %s", n)
+	}
+
+	return nil
+}
+
 type OrderType string
 
 const (
@@ -94,7 +108,21 @@ func (o OrderType) String() string {
 }
 
 func (o OrderType) check() {
-	if o != OrderTypeNone && o != OrderTypeAsc && o != OrderTypeDesc {
-		panic("invalid order type")
+
+	err := o.Valid()
+	if err != nil {
+		panic(err)
 	}
+}
+
+func (o *OrderType) Valid() error {
+	upper := OrderType(strings.ToUpper(string(*o)))
+
+	if upper != OrderTypeAsc && upper != OrderTypeDesc && upper != OrderTypeNone {
+		return fmt.Errorf("invalid order type: %s", o)
+	}
+
+	*o = upper
+
+	return nil
 }

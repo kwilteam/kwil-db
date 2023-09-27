@@ -3,7 +3,6 @@ package types
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/types/validation"
@@ -42,21 +41,6 @@ func cleanIdents(idents *[]string) error {
 	}
 
 	return nil
-}
-
-func cleanScalar(scalar *any) error {
-	if scalar == nil {
-		return nil
-	}
-
-	kind := reflect.TypeOf(*scalar).Kind()
-
-	switch kind {
-	case reflect.String, reflect.Int, reflect.Float64, reflect.Bool, reflect.Int64, reflect.Float32, reflect.Int32, reflect.Int16, reflect.Int8, reflect.Uint, reflect.Uint64, reflect.Uint32, reflect.Uint16, reflect.Uint8:
-		return nil
-	default:
-		return fmt.Errorf("invalid scalar type: %s", kind.String())
-	}
 }
 
 func cleanActionParameters(inputs *[]string) error {

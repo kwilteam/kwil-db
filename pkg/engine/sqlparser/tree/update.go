@@ -82,20 +82,37 @@ const (
 	UpdateOrRollback UpdateOr = "ROLLBACK"
 )
 
-func (u *UpdateOr) check() {
+func (u *UpdateOr) Valid() error {
+	if u.Empty() {
+		return nil
+	}
+
 	switch *u {
-	case UpdateOrAbort:
-	case UpdateOrFail:
-	case UpdateOrIgnore:
-	case UpdateOrReplace:
-	case UpdateOrRollback:
+	case UpdateOrAbort, UpdateOrFail, UpdateOrIgnore, UpdateOrReplace, UpdateOrRollback:
+		return nil
 	default:
-		panic("unknown UpdateOr")
+		return fmt.Errorf("unknown UpdateOr: %s", *u)
+	}
+}
+
+func (u UpdateOr) Empty() bool {
+	return u == ""
+}
+
+func (u UpdateOr) check() {
+	if u.Empty() {
+		return
+	}
+	if err := u.Valid(); err != nil {
+		panic(err)
 	}
 }
 
 func (u *UpdateOr) ToSQL() string {
 	u.check()
+	if u.Empty() {
+		return ""
+	}
 
 	stmt := sqlwriter.NewWriter()
 	stmt.Token.Or()
@@ -108,7 +125,7 @@ func (u *UpdateStmt) ToSQL() string {
 
 	stmt := sqlwriter.NewWriter()
 	stmt.Token.Update()
-	if u.Or != "" {
+	if !u.Or.Empty() {
 		stmt.WriteString(u.Or.ToSQL())
 	}
 	stmt.WriteString(u.QualifiedTableName.ToSQL())

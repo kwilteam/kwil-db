@@ -1,5 +1,10 @@
 package tree
 
+import (
+	"fmt"
+	"strings"
+)
+
 type CollationType string
 
 const (
@@ -9,16 +14,28 @@ const (
 )
 
 func (c CollationType) String() string {
-	c.check()
 	return string(c)
 }
 
-func (c CollationType) check() {
-	if !c.Valid() {
-		panic("invalid collation type")
+// Valid checks if the collation type is valid.
+// Empty collation types are considered valid.
+func (c *CollationType) Valid() error {
+	if c.Empty() {
+		return nil
 	}
+
+	newC := CollationType(strings.ToUpper(string(*c)))
+
+	switch newC {
+	case CollationTypeBinary, CollationTypeNoCase, CollationTypeRTrim:
+	default:
+		return fmt.Errorf("invalid collation type: %s", c)
+	}
+	*c = newC
+
+	return nil
 }
 
-func (c CollationType) Valid() bool {
-	return c == CollationTypeBinary || c == CollationTypeNoCase || c == CollationTypeRTrim
+func (c CollationType) Empty() bool {
+	return c == ""
 }

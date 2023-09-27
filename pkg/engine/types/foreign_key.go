@@ -42,6 +42,21 @@ func (f *ForeignKey) Clean() error {
 	return nil
 }
 
+// Copy returns a copy of the foreign key
+func (f *ForeignKey) Copy() *ForeignKey {
+	actions := make([]*ForeignKeyAction, len(f.Actions))
+	for i, action := range f.Actions {
+		actions[i] = action.Copy()
+	}
+
+	return &ForeignKey{
+		ChildKeys:   f.ChildKeys,
+		ParentKeys:  f.ParentKeys,
+		ParentTable: f.ParentTable,
+		Actions:     actions,
+	}
+}
+
 // ForeignKeyAction is used to specify what should occur
 // if a parent key is updated or deleted
 type ForeignKeyAction struct {
@@ -58,6 +73,14 @@ func (f *ForeignKeyAction) Clean() error {
 		f.On.Clean(),
 		f.Do.Clean(),
 	)
+}
+
+// Copy returns a copy of the foreign key action
+func (f *ForeignKeyAction) Copy() *ForeignKeyAction {
+	return &ForeignKeyAction{
+		On: f.On,
+		Do: f.Do,
+	}
 }
 
 // ForeignKeyActionOn specifies when a foreign key action should occur.

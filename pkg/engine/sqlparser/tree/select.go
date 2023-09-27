@@ -143,6 +143,15 @@ const (
 	SelectTypeDistinct
 )
 
+func (s SelectType) Valid() error {
+	switch s {
+	case SelectTypeAll, SelectTypeDistinct:
+		return nil
+	default:
+		return fmt.Errorf("invalid select type: %d", s)
+	}
+}
+
 type FromClause struct {
 	JoinClause *JoinClause
 }
@@ -170,6 +179,15 @@ const (
 	CompoundOperatorTypeIntersect
 	CompoundOperatorTypeExcept
 )
+
+func (c CompoundOperatorType) Valid() error {
+	switch c {
+	case CompoundOperatorTypeUnion, CompoundOperatorTypeUnionAll, CompoundOperatorTypeIntersect, CompoundOperatorTypeExcept:
+		return nil
+	default:
+		return fmt.Errorf("invalid compound operator type: %d", c)
+	}
+}
 
 func (c *CompoundOperatorType) ToSQL() string {
 	switch *c {
