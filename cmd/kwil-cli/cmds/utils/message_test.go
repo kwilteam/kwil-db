@@ -53,23 +53,6 @@ func Example_respStr_json_withError() {
 	// }
 }
 
-func Example_respSig_text() {
-	display.Print(respSig("signature"), nil, "text")
-	// Output:
-	// Signature: 7369676e6174757265
-}
-
-func Example_respSig_json() {
-	display.Print(respSig("signature"), nil, "json")
-	// Output:
-	// {
-	//   "result": {
-	//     "signature": "7369676e6174757265"
-	//   },
-	//   "error": ""
-	// }
-}
-
 func getExampleTxQueryResponse() *types.TcTxQueryResponse {
 	secp256k1EpSigHex := "cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e253475800"
 	secp256k1EpSigBytes, _ := hex.DecodeString(secp256k1EpSigHex)
@@ -154,37 +137,6 @@ func Example_respTxQuery_json() {
 	//       "gas_used": 10,
 	//       "gas_wanted": 10
 	//     }
-	//   },
-	//   "error": ""
-	// }
-}
-
-func Example_respGenWalletInfo_text() {
-	display.Print(&respGenWalletInfo{
-		info: &generatedWalletInfo{
-			PrivateKey: "private_key",
-			PublicKey:  "public_key",
-			Address:    "address",
-		}}, nil, "text")
-	// Output:
-	// PrivateKey: private_key
-	// PublicKey: 	public_key
-	// Address: 	address
-}
-
-func Example_respGenWalletInfo_json() {
-	display.Print(&respGenWalletInfo{
-		info: &generatedWalletInfo{
-			PrivateKey: "private_key",
-			PublicKey:  "public_key",
-			Address:    "address",
-		}}, nil, "json")
-	// Output:
-	// {
-	//   "result": {
-	//     "private_key": "private_key",
-	//     "public_key": "public_key",
-	//     "address": "address"
 	//   },
 	//   "error": ""
 	// }
