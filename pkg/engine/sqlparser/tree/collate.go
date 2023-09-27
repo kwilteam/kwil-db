@@ -25,13 +25,15 @@ func (c *CollationType) Valid() error {
 	}
 
 	newC := CollationType(strings.ToUpper(string(*c)))
-	*c = newC
+
 	switch newC {
 	case CollationTypeBinary, CollationTypeNoCase, CollationTypeRTrim:
-		return nil
 	default:
 		return fmt.Errorf("invalid collation type: %s", c)
 	}
+	*c = newC
+
+	return nil
 }
 
 func (c CollationType) Empty() bool {

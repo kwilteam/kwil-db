@@ -6,7 +6,7 @@ import (
 )
 
 func NewOrderWalker(tables []*types.Table) tree.Walker {
-	// copy tables, since we will be modifying it to register CTEs
+	// copy tables, since we will be modifying the tables slice to register CTEs
 	tbls := make([]*types.Table, len(tables))
 	copy(tbls, tables)
 
