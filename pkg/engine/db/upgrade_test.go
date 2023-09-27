@@ -2,12 +2,12 @@ package db_test
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/db"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 	"github.com/stretchr/testify/assert"
 )
@@ -137,7 +137,7 @@ func (m procedureStore) Query(ctx context.Context, query string, args map[string
 	returnVals := []map[string]interface{}{}
 
 	for _, procedure := range m.procedures {
-		serializedProc, err := json.Marshal(procedure.Procedure)
+		serializedProc, err := serialize.Encode(procedure.Procedure)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func (m procedureStore) Query(ctx context.Context, query string, args map[string
 			Data:    serializedProc,
 		}
 
-		contentBytes, err := json.Marshal(dbVersionedProcedure)
+		contentBytes, err := serialize.Encode(dbVersionedProcedure)
 		if err != nil {
 			return nil, err
 		}
@@ -174,6 +174,6 @@ func (m *procedureStore) CreateSession() (sql.Session, error) {
 }
 
 type versionedProcedure struct {
-	Version   int
+	Version   uint
 	Procedure *types.Procedure
 }

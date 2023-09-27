@@ -2,9 +2,10 @@ package db
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
+	"github.com/kwilteam/kwil-db/pkg/utils/order"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 
 // persistTableMetadata persists the metadata for a table to the database
 func (d *DB) persistTableMetadata(ctx context.Context, table *types.Table) error {
-	bts, err := json.Marshal(table)
+	bts, err := serialize.Encode(table)
 	if err != nil {
 		return err
 	}
@@ -38,7 +39,7 @@ func (d *DB) ListTables(ctx context.Context) ([]*types.Table, error) {
 
 // StoreProcedure stores a procedure in the database
 func (d *DB) StoreProcedure(ctx context.Context, procedure *types.Procedure) error {
-	bts, err := json.Marshal(procedure)
+	bts, err := serialize.Encode(procedure)
 	if err != nil {
 		return err
 	}
@@ -61,7 +62,11 @@ func (d *DB) ListProcedures(ctx context.Context) ([]*types.Procedure, error) {
 
 // StoreExtension stores an extension in the database
 func (d *DB) StoreExtension(ctx context.Context, extension *types.Extension) error {
-	bts, err := json.Marshal(extension)
+	bts, err := serialize.Encode(&encodeableExtension{
+		Name:           extension.Name,
+		Initialization: order.OrderMap(extension.Initialization),
+		Alias:          extension.Alias,
+	})
 	if err != nil {
 		return err
 	}
@@ -72,6 +77,16 @@ func (d *DB) StoreExtension(ctx context.Context, extension *types.Extension) err
 	})
 }
 
+// encodeableExtension is a modification of the extension struct that can be encoded
+// using rlp. This is because the extension struct contains a map[string]string and
+// since maps cannot be rlp encoded, we need to convert the map[string]string to a slice
+// of key value pairs
+type encodeableExtension struct {
+	Name           string
+	Initialization []*order.KVPair[string, string]
+	Alias          string
+}
+
 // ListExtensions lists all extensions in the database
 func (d *DB) ListExtensions(ctx context.Context) ([]*types.Extension, error) {
 	meta, err := d.getVersionedMetadata(ctx, metadataTypeExtension)
@@ -79,5 +94,19 @@ func (d *DB) ListExtensions(ctx context.Context) ([]*types.Extension, error) {
 		return nil, err
 	}
 
-	return decodeMetadata[types.Extension](meta)
+	encodeable, err := decodeMetadata[encodeableExtension](meta)
+	if err != nil {
+		return nil, err
+	}
+
+	var extensions []*types.Extension
+	for _, ext := range encodeable {
+		extensions = append(extensions, &types.Extension{
+			Name:           ext.Name,
+			Initialization: order.ToMap(ext.Initialization),
+			Alias:          ext.Alias,
+		})
+	}
+
+	return extensions, nil
 }

@@ -24,10 +24,3 @@ func compareIgnoringWhitespace(a, b string) bool {
 
 	return aWithoutWhitespace == bWithoutWhitespace
 }
-
-/*
-
-
-
-
- */

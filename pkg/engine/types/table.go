@@ -5,14 +5,10 @@ import (
 )
 
 type Table struct {
-	Name        string        `json:"name" clean:"lower"`
+	Name        string        `json:"name"`
 	Columns     []*Column     `json:"columns"`
 	Indexes     []*Index      `json:"indexes,omitempty"`
 	ForeignKeys []*ForeignKey `json:"foreign_keys"`
-}
-
-func (t *Table) Identifier() string {
-	return t.Name
 }
 
 func (t *Table) Clean() error {
@@ -66,14 +62,14 @@ func (t *Table) Clean() error {
 func (t *Table) GetPrimaryKey() ([]string, error) {
 	var primaryKey []string
 
-	hasAttribitePrimaryKey := false
+	hasAttributePrimaryKey := false
 	for _, col := range t.Columns {
 		for _, attr := range col.Attributes {
 			if attr.Type == PRIMARY_KEY {
-				if hasAttribitePrimaryKey {
+				if hasAttributePrimaryKey {
 					return nil, fmt.Errorf("table %s has multiple primary attributes", t.Name)
 				}
-				hasAttribitePrimaryKey = true
+				hasAttributePrimaryKey = true
 				primaryKey = []string{col.Name}
 			}
 		}
@@ -86,25 +82,50 @@ func (t *Table) GetPrimaryKey() ([]string, error) {
 				return nil, fmt.Errorf("table %s has multiple primary indexes", t.Name)
 			}
 			hasIndexPrimaryKey = true
-			primaryKey = idx.Columns
+
+			// copy
+			// if we do not copy, then the returned slice will allow modification of the index
+			primaryKey = make([]string, len(idx.Columns))
+			copy(primaryKey, idx.Columns)
 		}
 	}
 
-	if !hasAttribitePrimaryKey && !hasIndexPrimaryKey {
+	if !hasAttributePrimaryKey && !hasIndexPrimaryKey {
 		return nil, fmt.Errorf("table %s has no primary key", t.Name)
 	}
 
-	if hasAttribitePrimaryKey && hasIndexPrimaryKey {
+	if hasAttributePrimaryKey && hasIndexPrimaryKey {
 		return nil, fmt.Errorf("table %s has both primary attribute and primary index", t.Name)
 	}
 
 	return primaryKey, nil
 }
 
+// Copy returns a copy of the table
+func (t *Table) Copy() *Table {
+	res := &Table{
+		Name: t.Name,
+	}
+
+	for _, col := range t.Columns {
+		res.Columns = append(res.Columns, col.Copy())
+	}
+
+	for _, idx := range t.Indexes {
+		res.Indexes = append(res.Indexes, idx.Copy())
+	}
+
+	for _, fk := range t.ForeignKeys {
+		res.ForeignKeys = append(res.ForeignKeys, fk.Copy())
+	}
+
+	return res
+}
+
 type Column struct {
-	Name       string       `json:"name" clean:"lower"`
-	Type       DataType     `json:"type" clean:"is_enum,data_type"`
-	Attributes []*Attribute `json:"attributes,omitempty" traverse:"shallow"`
+	Name       string       `json:"name"`
+	Type       DataType     `json:"type"`
+	Attributes []*Attribute `json:"attributes,omitempty"`
 }
 
 func (c *Column) Clean() error {
@@ -120,6 +141,20 @@ func (c *Column) Clean() error {
 	)
 }
 
+// Copy returns a copy of the column
+func (c *Column) Copy() *Column {
+	res := &Column{
+		Name: c.Name,
+		Type: c.Type,
+	}
+
+	for _, attr := range c.Attributes {
+		res.Attributes = append(res.Attributes, attr.Copy())
+	}
+
+	return res
+}
+
 func (c *Column) hasPrimary() bool {
 	for _, attr := range c.Attributes {
 		if attr.Type == PRIMARY_KEY {
@@ -130,17 +165,20 @@ func (c *Column) hasPrimary() bool {
 }
 
 type Attribute struct {
-	Type  AttributeType `json:"type" clean:"is_enum,attribute_type"`
-	Value any           `json:"value"`
+	Type  AttributeType `json:"type"`
+	Value string        `json:"value,omitempty"`
 }
 
 func (a *Attribute) Clean() error {
-	if a.Value == nil {
-		return a.Type.Clean()
-	}
-
 	return runCleans(
 		a.Type.Clean(),
-		cleanScalar(&a.Value),
 	)
+}
+
+// Copy returns a copy of the attribute
+func (a *Attribute) Copy() *Attribute {
+	return &Attribute{
+		Type:  a.Type,
+		Value: a.Value,
+	}
 }

@@ -1,15 +1,14 @@
 package order
 
-import "sort"
+import (
+	"cmp"
+	"sort"
+)
 
-// OrderMapLexicographically orders a map lexicographically by its keys.
+// OrderMap orders a map lexicographically by its keys.
 // It permits any map with keys that are generically orderable.
-// TODO: once upgraded to go 1.21, an equivalent is in the standard library
-func OrderMapLexicographically[S Ordered, T any](m map[S]T) []*struct {
-	Id    S
-	Value T
-} {
-	keys := make([]S, 0, len(m))
+func OrderMap[O cmp.Ordered, T any](m map[O]T) []*KVPair[O, T] {
+	keys := make([]O, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
@@ -18,17 +17,11 @@ func OrderMapLexicographically[S Ordered, T any](m map[S]T) []*struct {
 		return keys[i] < keys[j]
 	})
 
-	result := make([]*struct {
-		Id    S
-		Value T
-	}, 0, len(m))
+	result := make([]*KVPair[O, T], 0, len(m))
 
 	for _, k := range keys {
-		result = append(result, &struct {
-			Id    S
-			Value T
-		}{
-			Id:    k,
+		result = append(result, &KVPair[O, T]{
+			Key:   k,
 			Value: m[k],
 		})
 	}
@@ -36,22 +29,20 @@ func OrderMapLexicographically[S Ordered, T any](m map[S]T) []*struct {
 	return result
 }
 
-type Ordered interface {
-	Integer | Float | ~string
+// KVPair is a pair of key and value for a map.
+// The key must be orderable.
+type KVPair[O cmp.Ordered, T any] struct {
+	Key   O
+	Value T
 }
 
-type Float interface {
-	~float32 | ~float64
-}
+// ToMap converts a slice of flattened pairs to a map.
+func ToMap[O cmp.Ordered, T any](pairs []*KVPair[O, T]) map[O]T {
+	result := make(map[O]T, len(pairs))
 
-type Integer interface {
-	Signed | Unsigned
-}
+	for _, pair := range pairs {
+		result[pair.Key] = pair.Value
+	}
 
-type Unsigned interface {
-	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
-}
-
-type Signed interface {
-	~int | ~int8 | ~int16 | ~int32 | ~int64
+	return result
 }

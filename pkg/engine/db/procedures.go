@@ -1,10 +1,10 @@
 package db
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
+	"github.com/kwilteam/kwil-db/pkg/serialize"
 )
 
 /*
@@ -25,9 +25,9 @@ func decodeVersionedProcedures(meta []*VersionedMetadata) ([]*types.Procedure, e
 	return procedures, nil
 }
 
-func decodeProcedure(version int, procedureBytes []byte) (*types.Procedure, error) {
+func decodeProcedure(version uint, procedureBytes []byte) (*types.Procedure, error) {
 	procedure := &types.Procedure{}
-	err := json.Unmarshal(procedureBytes, procedure)
+	err := serialize.DecodeInto(procedureBytes, procedure)
 	if err != nil {
 		return nil, err
 	}

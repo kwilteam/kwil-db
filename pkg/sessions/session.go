@@ -368,7 +368,7 @@ func (a *AtomicCommitter) endApply(ctx context.Context) error {
 func (a *AtomicCommitter) id(ctx context.Context) (id []byte, err error) {
 	hash := sha256.New()
 
-	for _, c := range order.OrderMapLexicographically[CommittableId, Committable](a.committables) {
+	for _, c := range order.OrderMap[CommittableId, Committable](a.committables) {
 		commitId, err := c.Value.ID(ctx)
 		if err != nil {
 			return nil, wrapError(ErrID, err)

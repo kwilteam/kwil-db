@@ -1,8 +1,11 @@
 package tree
 
+import "fmt"
+
 type BinaryOperator interface {
 	binary()
 	String() string
+	Valid() error
 }
 
 type ArithmeticOperator string
@@ -24,6 +27,15 @@ const (
 
 func (a ArithmeticOperator) String() string {
 	return string(a)
+}
+
+func (a ArithmeticOperator) Valid() error {
+	switch a {
+	case ArithmeticOperatorAdd, ArithmeticOperatorSubtract, ArithmeticOperatorMultiply, ArithmeticOperatorDivide, ArithmeticOperatorModulus, ArithmeticOperatorBitwiseAnd, ArithmeticOperatorBitwiseOr, ArithmeticOperatorBitwiseLeftShift, ArithmeticOperatorBitwiseRightShift, ArithmeticConcat:
+		return nil
+	default:
+		return fmt.Errorf("invalid arithmetic operator: %s", a)
+	}
 }
 
 type ComparisonOperator string
@@ -48,6 +60,15 @@ func (c ComparisonOperator) String() string {
 	return string(c)
 }
 
+func (c ComparisonOperator) Valid() error {
+	switch c {
+	case ComparisonOperatorDoubleEqual, ComparisonOperatorEqual, ComparisonOperatorNotEqualDiamond, ComparisonOperatorNotEqual, ComparisonOperatorGreaterThan, ComparisonOperatorLessThan, ComparisonOperatorGreaterThanOrEqual, ComparisonOperatorLessThanOrEqual, ComparisonOperatorIs, ComparisonOperatorIsNot, ComparisonOperatorIn, ComparisonOperatorNotIn:
+		return nil
+	default:
+		return fmt.Errorf("invalid comparison operator: %s", c)
+	}
+}
+
 type LogicalOperator string
 
 const (
@@ -58,6 +79,15 @@ const (
 func (l LogicalOperator) binary() {}
 func (l LogicalOperator) String() string {
 	return string(l)
+}
+
+func (l LogicalOperator) Valid() error {
+	switch l {
+	case LogicalOperatorAnd, LogicalOperatorOr:
+		return nil
+	default:
+		return fmt.Errorf("invalid logical operator: %s", l)
+	}
 }
 
 type StringOperator string
@@ -76,6 +106,14 @@ const (
 func (s StringOperator) binary() {}
 func (s StringOperator) String() string {
 	return string(s)
+}
+func (s StringOperator) Valid() error {
+	switch s {
+	case StringOperatorLike, StringOperatorNotLike, StringOperatorGlob, StringOperatorNotGlob, StringOperatorRegexp, StringOperatorNotRegexp, StringOperatorMatch, StringOperatorNotMatch:
+		return nil
+	default:
+		return fmt.Errorf("invalid string operator: %s", s)
+	}
 }
 func (s StringOperator) Escapable() bool {
 	switch s {
@@ -97,4 +135,13 @@ const (
 
 func (u UnaryOperator) String() string {
 	return string(u)
+}
+
+func (u UnaryOperator) Valid() error {
+	switch u {
+	case UnaryOperatorPlus, UnaryOperatorMinus, UnaryOperatorNot, UnaryOperatorBitNot:
+		return nil
+	default:
+		return fmt.Errorf("invalid unary operator: %s", u)
+	}
 }
