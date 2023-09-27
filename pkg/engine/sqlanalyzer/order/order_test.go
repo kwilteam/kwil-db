@@ -20,6 +20,26 @@ func Test_Ordering(t *testing.T) {
 
 	testCases := []testCase{
 		{
+			name:   "select star with no ordering",
+			tables: defaultTables,
+			selectCores: []*tree.SelectCore{
+				Select().
+					Columns("*").
+					From("users").
+					Build(),
+			},
+			expectedOrderingTerms: []*tree.OrderingTerm{
+				{
+					Expression: &tree.ExpressionColumn{
+						Table:  "users",
+						Column: "id",
+					},
+					OrderType:    tree.OrderTypeAsc,
+					NullOrdering: tree.NullOrderingTypeLast,
+				},
+			},
+		},
+		{
 			name:   "simple ordering",
 			tables: defaultTables,
 			selectCores: []*tree.SelectCore{
@@ -250,11 +270,17 @@ func Test_Ordering(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			walker := order.NewOrderWalker(tc.tables)
 
+			// we test for nil orderBy, since a previous bug was caused by having an empty orderBy
+			var orderBy *tree.OrderBy
+			if tc.originalOrderingTerms != nil {
+				orderBy = &tree.OrderBy{
+					OrderingTerms: tc.originalOrderingTerms,
+				}
+			}
+
 			selectStmt := &tree.SelectStmt{
 				SelectCores: tc.selectCores,
-				OrderBy: &tree.OrderBy{
-					OrderingTerms: tc.originalOrderingTerms,
-				},
+				OrderBy:     orderBy,
 			}
 
 			err := selectStmt.Accept(walker)
@@ -262,7 +288,9 @@ func Test_Ordering(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			assert.Equal(t, tc.expectedOrderingTerms, selectStmt.OrderBy.OrderingTerms)
+			if tc.expectedOrderingTerms != nil {
+				assert.EqualValues(t, tc.expectedOrderingTerms, selectStmt.OrderBy.OrderingTerms)
+			}
 		})
 	}
 }

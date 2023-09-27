@@ -169,3 +169,15 @@ func (j *JoinOperator) ToSQL() string {
 	stmt.Token.Join()
 	return stmt.String()
 }
+
+func (j *JoinOperator) Valid() error {
+	if j.JoinType < JoinTypeJoin || j.JoinType > JoinTypeFull {
+		return fmt.Errorf("invalid join type: %d", j.JoinType)
+	}
+
+	if j.Outer && (j.JoinType == JoinTypeJoin || j.JoinType == JoinTypeInner) {
+		return fmt.Errorf("outer join cannot be used with generic join or inner join")
+	}
+
+	return nil
+}

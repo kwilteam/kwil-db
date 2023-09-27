@@ -330,6 +330,48 @@ func TestGenerateDDL(t *testing.T) {
 	}
 }
 
+// there used to be a bug where the DDL generator would edit a table's primary key index,
+// if one existed.  It would add an extra '\"' to the beginning and end of each column name.
+func Test_PrimaryIndexModification(t *testing.T) {
+	testTable := &types.Table{
+		Name: "test",
+		Columns: []*types.Column{
+			{
+				Name: "id1",
+				Type: types.INT,
+			},
+			{
+				Name: "id2", // doing this to check composite primary keys
+				Type: types.INT,
+			},
+		},
+		Indexes: []*types.Index{
+			{
+				Name: "primary",
+				Columns: []string{
+					"id1",
+					"id2",
+				},
+				Type: types.PRIMARY,
+			},
+		},
+	}
+
+	_, err := sqlddlgenerator.GenerateDDL(testTable)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// check that the primary key index was not modified
+	if testTable.Indexes[0].Columns[0] != "id1" {
+		t.Errorf("primary key index was modified. Expected 'id1', got '%s'", testTable.Indexes[0].Columns[0])
+	}
+
+	if testTable.Indexes[0].Columns[1] != "id2" {
+		t.Errorf("primary key index was modified. Expected 'id2', got '%s'", testTable.Indexes[0].Columns[1])
+	}
+}
+
 func removeWhitespace(s string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) {
