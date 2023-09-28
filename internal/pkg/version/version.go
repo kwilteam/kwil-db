@@ -3,28 +3,51 @@ package version
 import (
 	"fmt"
 	"runtime/debug"
+	"strings"
 	"time"
 )
 
+// The kwilVersion should adhere to the semantic versioning (SemVer) spec 2.0.0.
+// The general format is MAJOR.MINOR.PATCH-PRERELEASE+BUILD_META where both the
+// prerelease label and build metadata are optional. For example:
+//
+//   - 0.6.0-rc.1
+//   - 0.6.0+release
+//   - 0.6.1
+//   - 0.6.2-alpha0+go1.21.nocgo
+const kwilVersion = "0.6.0-beta" // precursor to 0.6.0+release
+
+// KwildVersion may be set at compile time by:
+//
+//	go build -ldflags "-s -w -X github.com/kwilteam/kwil-db/internal/pkg/version.KwilVersion=0.6.0+release"
 var (
-	KwilVersion = "0.5.1-pre" // precursor to 0.5.1+release
+	KwilVersion string
 	Build       = vcsInfo()
 )
 
 func init() {
-	if Build != nil {
-		KwilVersion += "+" + Build.Revision
-		if Build.Dirty {
-			KwilVersion += ".dirty"
+	if KwilVersion == "" { // not set via ldflags
+		KwilVersion = kwilVersion
+		if Build != nil {
+			// Append VCS revision and workspace dirty flag.
+			sep := "+" // start build metadata
+			if strings.Contains(KwilVersion, "+") {
+				sep = "." // append to existing build metadata
+			}
+			KwilVersion += sep + Build.RevisionShort
+			if Build.Dirty {
+				KwilVersion += ".dirty"
+			}
 		}
 	}
 }
 
 type BuildInfo struct {
-	GoVersion string
-	Revision  string
-	RevTime   time.Time
-	Dirty     bool
+	GoVersion     string
+	Revision      string
+	RevisionShort string
+	RevTime       time.Time
+	Dirty         bool
 }
 
 func vcsInfo() *BuildInfo {
@@ -32,7 +55,7 @@ func vcsInfo() *BuildInfo {
 	if !ok {
 		return nil
 	}
-	buildInfo := new(BuildInfo)
+	buildInfo := &BuildInfo{GoVersion: bi.GoVersion}
 	for _, bs := range bi.Settings {
 		switch bs.Key {
 		case "vcs.revision":
@@ -49,8 +72,6 @@ func vcsInfo() *BuildInfo {
 		}
 	}
 	const revLen = 9
-	if len(buildInfo.Revision) > revLen {
-		buildInfo.Revision = buildInfo.Revision[:revLen]
-	}
+	buildInfo.RevisionShort = buildInfo.Revision[:min(revLen, len(buildInfo.Revision))]
 	return buildInfo
 }
