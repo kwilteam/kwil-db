@@ -1,7 +1,4 @@
-project_name: kwil-cli
-before:
-  hooks:
-    - go mod tidy
+project_name: kwil-db
 
 changelog:
   skip: true
@@ -15,10 +12,9 @@ changelog:
 builds:
   - id: kwil-cli
     binary: kwil-cli
-    main: ./cmd/kwil-cli/main.go
+    main: ./cmd/kwil-cli
     goos:
       - linux
-      - windows
       - darwin
     goarch:
       - amd64
@@ -27,23 +23,22 @@ builds:
       - 6
       - 7
     ignore:
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w
-      - -X 'kwil/internal/pkg/build.Version={{.Version}}'
-      - -X 'kwil/internal/pkg/build.GitCommit={{.Commit}}'
-      - -X 'kwil/internal/pkg/build.BuildTime={{.Date}}'
+      - -X 'github.com/kwilteam/kwil-db/internal/pkg/version.KwilVersion={{ .Env.KWIL_VERSION }}'
+    tags:
+      - osusergo
+      - netgo
     env:
       - CGO_ENABLED=0
       - CC_darwin_amd64=o64-clang
-      - CCX_darwin_amd64=o64-clang+
+      - CXX_darwin_amd64=o64-clang+
       - CC_darwin_arm64=aarch64-apple-darwin20.2-clang
-      - CCX_darwin_arm64=aarch64-apple-darwin20.2-clang++
+      - CXX_darwin_arm64=aarch64-apple-darwin20.2-clang++
       - CC_windows_amd64=x86_64-w64-mingw32-gc
-      - CCX_windows_amd64=x86_64-w64-mingw32-g++
+      - CXX_windows_amd64=x86_64-w64-mingw32-g++
       - 'CC={{ index .Env (print "CC_" .Os "_" .Arch) }}'
-      - 'CCX={{ index .Env (print "CCX_" .Os "_" .Arch) }}'
+      - 'CXX={{ index .Env (print "CXX_" .Os "_" .Arch) }}'
 
 checksum:
   name_template: 'checksums.txt'
@@ -55,7 +50,7 @@ release:
     name: kwil-cli
   replace_existing_draft: true
   ids:
-    - kwil-cli
+    - kwil-db
 
 universal_binaries:
   - replace: true

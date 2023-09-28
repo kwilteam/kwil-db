@@ -34,7 +34,7 @@ func init() {
 			if strings.Contains(KwilVersion, "+") {
 				sep = "." // append to existing build metadata
 			}
-			KwilVersion += sep + Build.Revision
+			KwilVersion += sep + Build.RevisionShort
 			if Build.Dirty {
 				KwilVersion += ".dirty"
 			}
@@ -43,10 +43,11 @@ func init() {
 }
 
 type BuildInfo struct {
-	GoVersion string
-	Revision  string
-	RevTime   time.Time
-	Dirty     bool
+	GoVersion     string
+	Revision      string
+	RevisionShort string
+	RevTime       time.Time
+	Dirty         bool
 }
 
 func vcsInfo() *BuildInfo {
@@ -71,8 +72,6 @@ func vcsInfo() *BuildInfo {
 		}
 	}
 	const revLen = 9
-	if len(buildInfo.Revision) > revLen {
-		buildInfo.Revision = buildInfo.Revision[:revLen]
-	}
+	buildInfo.RevisionShort = buildInfo.Revision[:min(revLen, len(buildInfo.Revision))]
 	return buildInfo
 }
