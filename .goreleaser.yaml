@@ -25,20 +25,56 @@ builds:
     ignore:
     ldflags:
       - -s -w
-      - -X 'github.com/kwilteam/kwil-db/internal/pkg/version.KwilVersion={{ .Env.KWIL_VERSION }}'
+      - -X 'github.com/kwilteam/kwil-db/internal/pkg/version.KwilVersion={{ index .Env "KWIL_VERSION" }}'
     tags:
       - osusergo
       - netgo
     env:
       - CGO_ENABLED=0
-      - CC_darwin_amd64=o64-clang
-      - CXX_darwin_amd64=o64-clang+
-      - CC_darwin_arm64=aarch64-apple-darwin20.2-clang
-      - CXX_darwin_arm64=aarch64-apple-darwin20.2-clang++
-      - CC_windows_amd64=x86_64-w64-mingw32-gc
-      - CXX_windows_amd64=x86_64-w64-mingw32-g++
-      - 'CC={{ index .Env (print "CC_" .Os "_" .Arch) }}'
-      - 'CXX={{ index .Env (print "CXX_" .Os "_" .Arch) }}'
+
+  - id: kwild
+    binary: kwild
+    main: ./cmd/kwild
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - 6
+      - 7
+    ignore:
+    ldflags:
+      - -s -w
+      - -X 'github.com/kwilteam/kwil-db/internal/pkg/version.KwilVersion={{ index .Env "KWIL_VERSION" }}'
+    tags:
+      - osusergo
+      - netgo
+    env:
+      - CGO_ENABLED=0
+
+  - id: kwil-admin
+    binary: kwil-admin
+    main: ./cmd/kwil-admin
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - 6
+      - 7
+    ignore:
+    ldflags:
+      - -s -w
+      - -X 'github.com/kwilteam/kwil-db/internal/pkg/version.KwilVersion={{ index .Env "KWIL_VERSION"  }}'
+    tags:
+      - osusergo
+      - netgo
+    env:
+      - CGO_ENABLED=0
 
 checksum:
   name_template: 'checksums.txt'
@@ -50,7 +86,9 @@ release:
     name: kwil-cli
   replace_existing_draft: true
   ids:
-    - kwil-db
+    - kwil-cli
+    - kwild
+    - kwil-admin
 
 universal_binaries:
   - replace: true
