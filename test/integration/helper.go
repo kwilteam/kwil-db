@@ -194,7 +194,7 @@ func (r *IntHelper) generateNodeConfig() {
 		P2pPort:                 26656,
 		JoinExpiry:              r.cfg.JoinExpiry,
 		WithoutGasCosts:         true,
-		WithoutNonces:           true,
+		WithoutNonces:           false,
 	})
 	require.NoError(r.t, err, "failed to generate testnet config")
 	r.home = tmpPath
