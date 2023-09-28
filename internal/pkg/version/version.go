@@ -15,7 +15,7 @@ import (
 //   - 0.6.0+release
 //   - 0.6.1
 //   - 0.6.2-alpha0+go1.21.nocgo
-const kwilVersion = "0.6.0-rc.1" // precursor to 0.6.0+release
+const kwilVersion = "0.6.0-beta" // precursor to 0.6.0+release
 
 // KwildVersion may be set at compile time by:
 //
