@@ -33,11 +33,12 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 		genCfg := &nodecfg.NodeGenerateConfig{
 			OutputDir:       cc.Init.OutputDir,
 			JoinExpiry:      cc.Init.JoinExpiry,
-			WithoutGasCosts: cc.Init.WithoutGasCosts,
+			WithoutGasCosts: true, // gas disabled by setup init
 			WithoutNonces:   cc.Init.WithoutNonces,
 		}
 		return nodecfg.GenerateNodeConfig(genCfg)
 	case cc.Testnet != nil:
+		cc.Testnet.WithoutGasCosts = true // gas disabled by setup testnet
 		genCfg := nodecfg.TestnetGenerateConfig(*cc.Testnet)
 		genCfg.PopulatePersistentPeers = true // temporary workaround without changing nodecfg
 		return nodecfg.GenerateTestnetConfig(&genCfg)
@@ -59,12 +60,17 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 }
 
 type SetupInitCmd struct {
-	OutputDir       string `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
-	JoinExpiry      int64  `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
-	WithoutGasCosts bool   `arg:"--without-gas-costs" help:"disable gas costs"`
-	WithoutNonces   bool   `arg:"--without-nonces" help:"disable nonces"`
+	OutputDir     string `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
+	JoinExpiry    int64  `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
+	WithoutNonces bool   `arg:"--without-nonces" help:"disable nonces"`
+
+	// WithoutGasCosts is not an available flag since Kwil users have no way to
+	// get funded with the external chain syncer gone.
+	// WithoutGasCosts bool   `arg:"--without-gas-costs" default:"true" help:"disable gas costs"`
 }
 
+// SetupTestnetCmd exactly matches nodecfg.TestnetGenerateConfig in field name,
+// type, and layout so that it may be converted directly.
 type SetupTestnetCmd struct {
 	NValidators             int      `arg:"-v,--validators" default:"4" help:"number of validators" placeholder:"V"`
 	NNonValidators          int      `arg:"-n,--non-validators" default:"4" help:"number of non-validators" placeholder:"N"`
@@ -78,9 +84,8 @@ type SetupTestnetCmd struct {
 	Hostnames               []string `arg:"--hostname" help:"override all hostnames of the nodes"`
 	P2pPort                 int      `arg:"-p,--p2p-port" help:"P2P port" placeholder:"PORT"`
 	JoinExpiry              int64    `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
-	WithoutGasCosts         bool     `arg:"--without-gas-costs" help:"disable gas costs"`
+	WithoutGasCosts         bool     `arg:"-"` // we force true since kwild doesn't work with gas for this release.
 	WithoutNonces           bool     `arg:"--without-nonces" help:"disable nonces"`
-	// InitialHeight           int64    `arg:"--initial-height" default:"true" help:"initial height of the first block"`
 }
 
 // TODO: customize the parser to recognize a detailer subcommand and print
