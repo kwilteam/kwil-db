@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"runtime"
+	"text/template"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/internal/pkg/build"
+	"github.com/kwilteam/kwil-db/internal/pkg/version"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/go-rosetta"
 )
@@ -18,7 +19,7 @@ import (
 var versionTemplate = `
  Version:	{{.Version}}
  Git commit:	{{.GitCommit}}
- Built:	{{.BuildTime}}
+ Built:		{{.BuildTime}}
  API version:	{{.APIVersion}}
  Go version:	{{.GoVersion}}
  OS/Arch:	{{.Os}}/{{.Arch}}`
@@ -74,13 +75,13 @@ func NewVersionCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resp := &respVersionInfo{
 				Info: &versionInfo{
-					Version:    build.Version,
+					Version:    version.KwilVersion,
 					APIVersion: "",
-					GitCommit:  build.GitCommit,
+					GitCommit:  version.Build.Revision,
 					GoVersion:  runtime.Version(),
 					Os:         runtime.GOOS,
 					Arch:       arch(),
-					BuildTime:  build.BuildTime,
+					BuildTime:  version.Build.RevTime.Format(time.RFC3339),
 				},
 			}
 
