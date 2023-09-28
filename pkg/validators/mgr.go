@@ -3,10 +3,11 @@ package validators
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sessions"
@@ -130,9 +131,9 @@ func (vm *ValidatorMgr) validatorDbHash() []byte {
 	for val := range vm.current {
 		currentValidators = append(currentValidators, val)
 	}
-	sort.Strings(currentValidators)
+	slices.Sort(currentValidators)
 	for _, val := range currentValidators {
-		hasher.Write([]byte(val + ":"))
+		hasher.Write([]byte(val))
 	}
 
 	// active join requests & approvals
@@ -141,12 +142,14 @@ func (vm *ValidatorMgr) validatorDbHash() []byte {
 	for val := range vm.candidates {
 		joiners = append(joiners, val)
 	}
-	sort.Strings(joiners)
+	slices.Sort(joiners)
 
 	for _, joiner := range joiners {
 		jr := vm.candidates[joiner]
-		jrStr := fmt.Sprintf("%s:%d:%d", joiner, jr.power, jr.expiresAt)
-		hasher.Write([]byte(jrStr))
+
+		hasher.Write([]byte(joiner))
+		binary.Write(hasher, binary.LittleEndian, jr.power)
+		binary.Write(hasher, binary.LittleEndian, jr.expiresAt)
 
 		var approvers []string
 		for val, approved := range jr.validators {
@@ -154,12 +157,12 @@ func (vm *ValidatorMgr) validatorDbHash() []byte {
 				approvers = append(approvers, val)
 			}
 		}
-		sort.Strings(approvers)
+		slices.Sort(approvers)
 		for _, approver := range approvers {
-			hasher.Write([]byte(":" + approver))
+			hasher.Write([]byte(approver))
 		}
-		hasher.Write([]byte(";"))
 	}
+
 	return hasher.Sum(nil)
 }
 
