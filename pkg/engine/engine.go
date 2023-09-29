@@ -5,9 +5,12 @@ package engine
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/pkg/sessions"
+	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
@@ -39,9 +42,27 @@ type Engine struct {
 	opener sql.Opener
 
 	// commitRegister is the commit register that is used to register commits
+	// for datasets registered with the masterDB
 	commitRegister CommitRegister
 	// addresser takes in an address type and a public key and returns an address
 	addresser Addresser
+
+	// Committable for masterDB
+	committable *Committable
+}
+
+type Committable struct {
+	sessions.Committable
+
+	masterDbHash func() ([]byte, error)
+}
+
+func (m *Committable) ID(ctx context.Context) ([]byte, error) {
+	return m.masterDbHash()
+}
+
+func (e *Engine) Committable() sessions.Committable {
+	return e.committable
 }
 
 // Open opens a new engine with the provided options.
@@ -76,9 +97,16 @@ func Open(ctx context.Context, dbOpener sql.Opener, commitRegister CommitRegiste
 
 // openMasterDB opens the master database and registers it with the commit register
 func (e *Engine) openMasterDB(ctx context.Context) error {
-	ds, err := e.open(ctx, e.name)
+	ds, err := e.opener.Open(e.name, e.log)
 	if err != nil {
 		return err
+	}
+
+	e.committable = &Committable{
+		Committable: sqlSessions.NewSqlCommittable(ds,
+			sqlSessions.WithLogger(*e.log.Named("master-db-committable")),
+		),
+		masterDbHash: e.masterDBHash,
 	}
 
 	e.master, err = master.New(ctx, ds)
@@ -138,6 +166,21 @@ func (e *Engine) openStoredDatasets(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// hashes the dbid's of all of the stored datasets
+func (e *Engine) masterDBHash() ([]byte, error) {
+	var datasets []string
+	for dbid := range e.datasets {
+		datasets = append(datasets, dbid)
+	}
+
+	hasher := sha256.New()
+	for _, dataset := range datasets {
+		hasher.Write([]byte(dataset))
+	}
+
+	return hasher.Sum(nil), nil
 }
 
 // getInitializers gets all of the initializers for extensions that have been
@@ -213,15 +256,6 @@ func (e *Engine) Close() error {
 	}
 
 	return errors.Join(errs...)
-}
-
-func (e *Engine) GetAllDatasets() ([]string, error) {
-	var datasets []string
-	for dbid := range e.datasets {
-		datasets = append(datasets, dbid)
-	}
-
-	return datasets, nil
 }
 
 // ListDatasets lists all of the datasets that were deployed by the provided owner.

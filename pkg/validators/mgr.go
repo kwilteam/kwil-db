@@ -6,13 +6,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sessions"
 	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
-	"github.com/kwilteam/kwil-db/pkg/sql"
 )
 
 type joinReq struct {
@@ -69,9 +67,6 @@ type ValidatorMgr struct {
 	// opts
 	joinExpiry int64
 	log        log.Logger
-
-	// session params
-	cm *validatorDbCommittable
 }
 
 // NOTE: The SQLite validator/approval store is local and transparent to the
@@ -91,32 +86,19 @@ type ValidatorStore interface {
 	AddValidator(ctx context.Context, joiner []byte, power int64) error
 }
 
-type ValidatorDbSession interface {
-	Datastore
-
-	ApplyChangeset(reader io.Reader) error
-	CreateSession() (sql.Session, error)
-	Savepoint() (sql.Savepoint, error)
-	CheckpointWal() error
-	EnableForeignKey() error
-	DisableForeignKey() error
-}
-
-type validatorDbCommittable struct {
+// Committable is a wrapper around the SQL committable that provides a
+// deterministic ID based on the state of the validator manager.
+type Committable struct {
 	sessions.Committable
 
-	validatorDbHash func() []byte
+	dbHash func() []byte
 }
 
 // ID overrides the base Committable. We do this so that we can have the
 // persistence of the state be part of the 2pc process, but have the ID reflect
 // the actual state free from SQL specifics.
-func (c *validatorDbCommittable) ID(ctx context.Context) ([]byte, error) {
-	return c.validatorDbHash(), nil
-}
-
-func (vm *ValidatorMgr) Committable() sessions.Committable {
-	return vm.cm
+func (c *Committable) ID(ctx context.Context) ([]byte, error) {
+	return c.dbHash(), nil
 }
 
 // ValidatorDB state includes:
@@ -175,7 +157,16 @@ func (vm *ValidatorMgr) candidate(val []byte) *joinReq {
 	return vm.candidates[string(val)]
 }
 
-func NewValidatorMgr(ctx context.Context, datastore ValidatorDbSession, opts ...ValidatorMgrOpt) (*ValidatorMgr, error) {
+// WrapCommittable wraps a SQL committable with methods that provide a
+// deterministic ID based on the state of the validator manager.
+func (vm *ValidatorMgr) WrapCommittable(committable *sqlSessions.SqlCommitable) *Committable {
+	return &Committable{
+		Committable: committable,
+		dbHash:      vm.validatorDbHash,
+	}
+}
+
+func NewValidatorMgr(ctx context.Context, datastore Datastore, opts ...ValidatorMgrOpt) (*ValidatorMgr, error) {
 	vm := &ValidatorMgr{
 		current:    make(map[string]struct{}),
 		candidates: make(map[string]*joinReq),
@@ -184,13 +175,6 @@ func NewValidatorMgr(ctx context.Context, datastore ValidatorDbSession, opts ...
 	}
 	for _, opt := range opts {
 		opt(vm)
-	}
-
-	vm.cm = &validatorDbCommittable{
-		Committable: sqlSessions.NewSqlCommitable(datastore,
-			sqlSessions.WithLogger(*vm.log.Named("validator-committable")),
-		),
-		validatorDbHash: vm.validatorDbHash,
 	}
 
 	var err error
