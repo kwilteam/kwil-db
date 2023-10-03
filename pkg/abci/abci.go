@@ -181,7 +181,7 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	}
 
 	logger.Debug("",
-		zap.String("sender", tx.GetSenderAddress()),
+		zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	err = tx.Verify()
@@ -212,7 +212,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 	gasUsed := int64(0)
 	txCode := CodeOk
 
-	logger = logger.With(zap.String("Sender", tx.GetSenderAddress()),
+	logger = logger.With(zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	switch tx.Body.PayloadType {
@@ -244,7 +244,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			{
 				Type: transactions.PayloadTypeDeploySchema.String(),
 				Attributes: []abciTypes.EventAttribute{
-					{Key: "Sender", Value: tx.GetSenderAddress(), Index: true},
+					{Key: "sender", Value: hex.EncodeToString(tx.Sender), Index: true},
 					{Key: "Result", Value: "Success", Index: true},
 					{Key: "DBID", Value: dbID, Index: true},
 				},

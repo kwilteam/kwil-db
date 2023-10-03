@@ -3,6 +3,7 @@ package dataset
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -107,7 +108,7 @@ func (d *Dataset) Execute(ctx context.Context, action string, args [][]any, opts
 	}
 
 	if proc.IsOwnerOnly() && !bytes.Equal(opts.Caller.PubKey(), d.owner.PubKey()) {
-		d.log.Debug("caller is not owner", zap.Binary("caller", opts.Caller.PubKey()), zap.Binary("owner", d.owner.PubKey()))
+		d.log.Debug("caller is not owner", zap.String("caller", hex.EncodeToString(opts.Caller.PubKey())), zap.String("owner", hex.EncodeToString(d.owner.PubKey())))
 		return nil, ErrCallerNotOwner
 	}
 

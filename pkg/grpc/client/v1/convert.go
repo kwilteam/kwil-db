@@ -2,7 +2,7 @@ package client
 
 import (
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
@@ -24,14 +24,14 @@ func convertTx(incoming *transactions.Transaction) *txpb.Transaction {
 	}
 }
 
-func convertActionSignature(oldSig *crypto.Signature) *txpb.Signature {
+func convertActionSignature(oldSig *auth.Signature) *txpb.Signature {
 	if oldSig == nil {
 		return &txpb.Signature{}
 	}
 
 	newSig := &txpb.Signature{
 		SignatureBytes: oldSig.Signature,
-		SignatureType:  oldSig.Type.String(),
+		SignatureType:  oldSig.Type,
 	}
 
 	return newSig

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
@@ -87,8 +88,9 @@ func edSigningClient(rpcAddr string, privKey []byte) (*client.Client, error) {
 		return nil, err
 	}
 
-	signer := crypto.NewStdEd25519Signer(edPrivKey)
-	options := []client.Option{client.WithSigner(signer), client.WithTLSCert("")}
+	signer := auth.Ed25519Signer{Ed25519PrivateKey: *edPrivKey}
+
+	options := []client.Option{client.WithSigner(&signer), client.WithTLSCert("")}
 	return client.Dial(rpcAddr, options...)
 }
 

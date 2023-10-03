@@ -13,7 +13,7 @@ import (
 )
 
 type KwilCliConfig struct {
-	PrivateKey  crypto.PrivateKey
+	PrivateKey  *crypto.Secp256k1PrivateKey
 	GrpcURL     string
 	TLSCertFile string
 }
