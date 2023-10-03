@@ -1,7 +1,7 @@
 package admin
 
 import (
-	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -13,7 +13,7 @@ func WithLogger(logger log.Logger) ClientOpt {
 	}
 }
 
-func WithSigner(signer crypto.Signer) ClientOpt {
+func WithSigner(signer auth.Signer) ClientOpt {
 	return func(c *Client) {
 		c.signer = signer
 	}

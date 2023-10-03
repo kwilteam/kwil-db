@@ -6,8 +6,6 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -39,13 +37,7 @@ func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, 
 		return resp(price), err
 	}
 
-	senderPubKey, err := tx.GetSenderPubKey()
-	// NOTE: This should never happen, since the transaction is already validated
-	if err != nil {
-		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
-	}
-
-	identifier, err := getUserIdentifier(senderPubKey)
+	identifier := getUserIdentifier(tx)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
 	}
@@ -73,13 +65,7 @@ func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.
 		return resp(price), err
 	}
 
-	senderPubKey, err := tx.GetSenderPubKey()
-	// NOTE: This should never happen, since the transaction is already validated
-	if err != nil {
-		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
-	}
-
-	identifier, err := getUserIdentifier(senderPubKey)
+	identifier := getUserIdentifier(tx)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
 	}
@@ -107,13 +93,7 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 		return resp(price), err
 	}
 
-	senderPubKey, err := tx.GetSenderPubKey()
-	// NOTE: This should never happen, since the transaction is already validated
-	if err != nil {
-		return resp(price), fmt.Errorf("failed to parse sender: %w", err)
-	}
-
-	identifier, err := getUserIdentifier(senderPubKey)
+	identifier := getUserIdentifier(tx)
 	if err != nil {
 		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
 	}
@@ -134,14 +114,8 @@ func (u *DatasetModule) compareAndSpend(ctx context.Context, price *big.Int, tx 
 		return fmt.Errorf(`%w: fee %s is less than price %s`, ErrInsufficientFee, tx.Body.Fee.String(), price.String())
 	}
 
-	senderPubKey, err := tx.GetSenderPubKey()
-	// NOTE: This should never happen, since the transaction is already validated
-	if err != nil {
-		return fmt.Errorf("failed to parse sender: %w", err)
-	}
-
 	return u.accountStore.Spend(ctx, &balances.Spend{
-		AccountPubKey: senderPubKey.Bytes(),
+		AccountPubKey: tx.Sender,
 		Amount:        price,
 		Nonce:         int64(tx.Body.Nonce),
 	})
@@ -154,21 +128,10 @@ func resp(fee *big.Int) *ExecutionResponse {
 	}
 }
 
-// getUserIdentifier gets an identifier for the user based on their public key
-// it currently treats Ethereum as the default format for Secp256k1 keys, and
-// NEAR as the default format for Ed25519 keys
-// in the future, the defaults should probably be configurable, and functionality
-// should be added to support other formats
-func getUserIdentifier(pub crypto.PublicKey) (*addresses.KeyIdentifier, error) {
-	var addressFormat addresses.AddressFormat
-	switch pub.Type() {
-	default: // this should never happen
-		return nil, fmt.Errorf("unknown public key type: %s", pub.Type())
-	case crypto.Secp256k1:
-		addressFormat = addresses.AddressFormatEthereum
-	case crypto.Ed25519:
-		addressFormat = addresses.AddressFormatNEAR
+// getUserIdentifier gets the user identifier from a transaction.
+func getUserIdentifier(tx *transactions.Transaction) *engineTypes.User {
+	return &engineTypes.User{
+		PublicKey: tx.Sender,
+		AuthType:  tx.Signature.Type,
 	}
-
-	return addresses.CreateKeyIdentifier(pub, addressFormat)
 }

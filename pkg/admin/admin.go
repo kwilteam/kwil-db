@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/pkg/admin/types"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	admClient "github.com/kwilteam/kwil-db/pkg/grpc/client/admin/v0"
 	"github.com/kwilteam/kwil-db/pkg/log"
 
@@ -17,7 +17,7 @@ import (
 // service on a running kwild node.
 type Client struct {
 	client *admClient.AdminClient
-	signer crypto.Signer // for use in methods that require signing a transaction with a Kwil account
+	signer auth.Signer // for use in methods that require signing a transaction with a Kwil account
 	logger log.Logger
 }
 

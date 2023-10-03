@@ -39,50 +39,39 @@ func TestEd25519PublicKey_Verify(t *testing.T) {
 		name     string
 		msg      []byte
 		sigBytes []byte
-		wantErr  string // internal error message
+		wantErr  error
 	}{
 		{
 			name:     "verify success",
 			msg:      msg,
 			sigBytes: sigBytes,
-			wantErr:  "",
+			wantErr:  nil,
 		},
 		{
 			name:     "invalid signature length",
 			msg:      msg,
 			sigBytes: sigBytes[1:],
-			wantErr:  "invalid signature",
+			wantErr:  crypto.ErrInvalidSignatureLength,
 		},
 		{
 			name:     "wrong signature",
 			msg:      []byte("bar"),
 			sigBytes: sigBytes,
-			wantErr:  "verify signature failed",
+			wantErr:  crypto.ErrInvalidSignature,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := pubKey.Verify(tt.sigBytes, tt.msg)
-			if tt.wantErr != "" {
-				assert.ErrorContains(t, err, tt.wantErr)
-			} else {
-				assert.Nil(t, err, "expect no error")
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr, "verify error")
+				return
 			}
+
+			assert.NoError(t, err, "verify error")
 		})
 	}
-}
-
-func TestEd25519PublicKey_Address(t *testing.T) {
-	key := "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
-	keyBytes, err := hex.DecodeString(key)
-	require.NoError(t, err, "error decode public key")
-
-	pubKey, err := crypto.Ed25519PublicKeyFromBytes(keyBytes)
-	require.NoError(t, err, "error parse public key")
-
-	eq := pubKey.Address().String() == "0aa611bf555596912bc6f9a9f169f8785918e7ba"
-	assert.True(t, eq, "mismatch address")
 }
 
 func Test_GenerateEd25518PrivateKey(t *testing.T) {

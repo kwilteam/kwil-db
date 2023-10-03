@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/serialize"
 )
@@ -70,12 +71,11 @@ type CallMessage struct {
 
 	// Signature is the signature of the message
 	// optional, only required if the action requires authentication
-	Signature *crypto.Signature
+	Signature *auth.Signature
 
 	// Sender is the public key of the sender
 	// optional, only required if the action requires authentication
-	// here we can use `crypto.PublicKey` because it won't be RLPEncoded
-	Sender crypto.PublicKey
+	Sender []byte
 
 	// Serialization is the serialization performed on `Body`
 	// inorder to generate the message that being signed
@@ -99,7 +99,7 @@ func CreateCallMessage(payload *ActionCall) (*CallMessage, error) {
 
 // Sign signs message body with given signer. It will serialize the message
 // body to get message-to-be-sign first, then sign it.
-func (s *CallMessage) Sign(signer crypto.Signer) error {
+func (s *CallMessage) Sign(signer auth.Signer) error {
 	msg, err := s.Body.SerializeMsg(s.Serialization)
 	if err != nil {
 		return err
@@ -111,7 +111,7 @@ func (s *CallMessage) Sign(signer crypto.Signer) error {
 	}
 
 	s.Signature = signature
-	s.Sender = signer.PubKey()
+	s.Sender = signer.PublicKey()
 	return nil
 }
 
@@ -133,11 +133,4 @@ func (s *CallMessage) Verify() error {
 	}
 
 	return s.Signature.Verify(s.Sender, msg)
-
-}
-
-// GetSender returns the sender of the message
-// This implements the datasets.SignedMessage interface
-func (s *CallMessage) GetSender() crypto.PublicKey {
-	return s.Sender
 }

@@ -1,8 +1,8 @@
 package client
 
 import (
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/client/types"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
 )
 
@@ -14,7 +14,7 @@ func WithLogger(logger log.Logger) Option {
 	}
 }
 
-func WithSigner(signer crypto.Signer) Option {
+func WithSigner(signer auth.Signer) Option {
 	return func(c *Client) {
 		c.Signer = signer
 	}

@@ -40,14 +40,14 @@ type ExecutionOpt func(*executionConfig)
 
 type executionConfig struct {
 	// Sender is the address of the action caller.
-	Sender types.UserIdentifier
+	Sender *types.User
 
 	// ReadOnly is a flag that indicates if the execution is read-only.
 	ReadOnly bool
 }
 
 // WithCaller sets the caller of the execution.
-func WithCaller(caller types.UserIdentifier) ExecutionOpt {
+func WithCaller(caller *types.User) ExecutionOpt {
 	return func(cfg *executionConfig) {
 		cfg.Sender = caller
 	}
