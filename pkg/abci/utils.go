@@ -138,7 +138,7 @@ func PrintPrivKeyInfo(privateKey []byte) {
 	pub := priv.PubKey().(ed25519.PubKey)
 	nodeID := p2p.PubKeyToID(pub)
 
-	fmt.Printf("Private key (hex): %x\n", priv.Bytes())
+	fmt.Printf("Private key (hex): %s\n", hex.EncodeToString(priv.Bytes()))
 	fmt.Printf("Private key (base64): %s\n",
 		base64.StdEncoding.EncodeToString(priv.Bytes())) // "value" in abci/config/node_key.json
 	fmt.Printf("Public key (base64): %s\n",

@@ -181,7 +181,7 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	}
 
 	logger.Debug("",
-		zap.String("sender", fmt.Sprintf("%x", tx.Sender)),
+		zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	err = tx.Verify()
@@ -212,7 +212,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 	gasUsed := int64(0)
 	txCode := CodeOk
 
-	logger = logger.With(zap.String("sender", fmt.Sprintf("%x", tx.Sender)),
+	logger = logger.With(zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	switch tx.Body.PayloadType {

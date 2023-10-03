@@ -4,14 +4,9 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/serialize"
 )
 
-// // UserIdentifier is an interface for identifying a user by public key
-// type UserIdentifier interface {
-// 	MarshalBinary() ([]byte, error)
-// 	PubKey() (crypto.PublicKey, error)
-// 	UnmarshalBinary(data []byte) error
-// 	Address() (string, error)
-// }
-
+// User is an end user of the engine, identified by a public key.
+// It includes an authentication type, which is used to determine how to
+// authenticate the and how to generate an address for the user.
 type User struct {
 	// PublicKey is the public key of the user
 	PublicKey []byte

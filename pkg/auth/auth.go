@@ -1,3 +1,8 @@
+/*
+Package auth provides an interface for developers to implement their own Kwil authentication drivers.
+
+Similar to Go's database/sql package, developers can implement the `Authenticator` interface and register it with the `RegisterAuthenticator` function.
+*/
 package auth
 
 import (
@@ -48,29 +53,6 @@ func GetAddress(authType string, sender []byte) (string, error) {
 	}
 
 	return auth.Address(sender)
-}
-
-// ListAuthenticators returns a list of registered authenticators
-func ListAuthenticators() []struct {
-	Name          string
-	Authenticator Authenticator
-} {
-	var authenticators []struct {
-		Name          string
-		Authenticator Authenticator
-	}
-
-	for name, auth := range registeredAuthenticators {
-		authenticators = append(authenticators, struct {
-			Name          string
-			Authenticator Authenticator
-		}{
-			Name:          name,
-			Authenticator: auth,
-		})
-	}
-
-	return authenticators
 }
 
 var (

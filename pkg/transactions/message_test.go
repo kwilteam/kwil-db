@@ -143,14 +143,14 @@ func TestCallMessage_Sign(t *testing.T) {
 		wantSig *auth.Signature
 		wantErr bool
 	}{
-		// {
-		// 	name: "non support message serialization type",
-		// 	args: args{
-		// 		mst:    transactions.SignedMsgSerializationType("non support message serialization type"),
-		// 		signer: &ethPersonalSigner,
-		// 	},
-		// 	wantErr: true,
-		// },
+		{
+			name: "non support message serialization type",
+			args: args{
+				mst:    transactions.SignedMsgSerializationType("non support message serialization type"),
+				signer: &ethPersonalSigner,
+			},
+			wantErr: true,
+		},
 		{
 			name: "eth personal_sign concat string",
 			args: args{

@@ -122,7 +122,6 @@ func CreateTransaction(contents Payload, nonce uint64) (*Transaction, error) {
 type Transaction struct {
 	// Signature is the signature of the transaction
 	// It can be nil if the transaction is unsigned
-	// This should probably be renamed to "Authentication"
 	Signature *auth.Signature
 
 	// Body is the body of the transaction
@@ -140,10 +139,6 @@ type Transaction struct {
 	// hash of the transaction that is signed.  it is kept here as a cache
 	hash []byte
 }
-
-// func (t *Transaction) GetSenderPubKey() (crypto.PublicKey, error) {
-// 	return crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
-// }
 
 // Verify verifies the signature of the transaction
 // It will deserialize the transaction body and verify the signature
