@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	sqlTesting "github.com/kwilteam/kwil-db/pkg/sql/testing"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/master"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 const testPrivateKey = "4a3142b366011d28c2a3ca33a678ff753c978c685178d4168bad4474ea480cc9"
@@ -22,18 +23,20 @@ func Test_Master(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ident, err := addresses.CreateKeyIdentifier(pk.PubKey(), addresses.AddressFormatEthereum)
-	if err != nil {
-		t.Fatal(err)
+
+	ident := &types.User{
+		PublicKey: pk.PubKey().Bytes(),
+		AuthType:  auth.EthAuth,
 	}
 
 	pk2, err := crypto.Secp256k1PrivateKeyFromHex(testPrivateKey2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ident2, err := addresses.CreateKeyIdentifier(pk2.PubKey(), addresses.AddressFormatEthereum)
-	if err != nil {
-		t.Fatal(err)
+
+	ident2 := &types.User{
+		PublicKey: pk2.PubKey().Bytes(),
+		AuthType:  auth.EthAuth,
 	}
 
 	tests := []struct {
@@ -130,13 +133,7 @@ func Test_Master(t *testing.T) {
 					t.Error(err)
 				}
 
-				pubKey, err := ident.PubKey()
-				if err != nil {
-					t.Error(err)
-				}
-				bts := pubKey.Bytes()
-
-				datasets, err := m.ListDatasetsByOwner(ctx, bts)
+				datasets, err := m.ListDatasetsByOwner(ctx, ident.PublicKey)
 				if err != nil {
 					t.Error(err)
 				}
@@ -155,12 +152,8 @@ func Test_Master(t *testing.T) {
 				if err != nil {
 					t.Error(err)
 				}
-				pubKey, err := ident.PubKey()
-				if err != nil {
-					t.Error(err)
-				}
 
-				err = m.UnregisterDataset(ctx, m.DbidFunc("testName", pubKey.Bytes()))
+				err = m.UnregisterDataset(ctx, m.DbidFunc("testName", ident.PublicKey))
 				if err != nil {
 					t.Error(err)
 				}

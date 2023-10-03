@@ -9,7 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
+	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/kwilteam/kwil-db/pkg/validators"
 )
 
@@ -43,7 +43,7 @@ func NewService(engine EngineReader, accountStore AccountReader, vstore Validato
 }
 
 type EngineReader interface {
-	Call(ctx context.Context, dbid string, action string, args []any, msg datasets.DatasetMessage) ([]map[string]any, error)
+	Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
 	ListOwnedDatabases(ctx context.Context, owner []byte) ([]string, error)
 	PriceDeploy(ctx context.Context, schema *engineTypes.Schema) (price *big.Int, err error)

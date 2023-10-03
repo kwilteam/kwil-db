@@ -49,13 +49,8 @@ func (d *MasterDB) ListDatasetsByOwner(ctx context.Context, ownerPublicKey []byt
 }
 
 // RegisterDataset registers a new dataset.
-func (d *MasterDB) RegisterDataset(ctx context.Context, name string, owner types.UserIdentifier) error {
-	pubkey, err := owner.PubKey()
-	if err != nil {
-		return err
-	}
-
-	dbid := d.DbidFunc(name, pubkey.Bytes())
+func (d *MasterDB) RegisterDataset(ctx context.Context, name string, owner *types.User) error {
+	dbid := d.DbidFunc(name, owner.PublicKey)
 
 	exists, err := d.datasetExists(ctx, dbid)
 	if err != nil {

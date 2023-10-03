@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/stretchr/testify/assert"
@@ -15,9 +16,9 @@ import (
 // testing serialization of a transaction, since Luke found a bug
 func Test_TransactionMarshal(t *testing.T) {
 	tx := &transactions.Transaction{
-		Signature: &crypto.Signature{
+		Signature: &auth.Signature{
 			Signature: []byte("signature"),
-			Type:      crypto.SignatureTypeSecp256k1Cometbft,
+			Type:      auth.CometBftSecp256k1Auth,
 		},
 		Body: &transactions.TransactionBody{
 			Payload:     []byte("payload"),
@@ -45,13 +46,13 @@ func TestTransaction_Sign(t *testing.T) {
 	secp256k1PrivateKey, err := crypto.Secp256k1PrivateKeyFromHex(secp2561k1PvKeyHex)
 	require.NoError(t, err, "error parse private secp2561k1PvKeyHex")
 
-	ethPersonalSigner := crypto.NewEthPersonalSecp256k1Signer(secp256k1PrivateKey)
+	ethPersonalSigner := auth.EthPersonalSigner{Secp256k1PrivateKey: *secp256k1PrivateKey}
 
 	expectPersonalSignConcatSigHex := "4a8f9a2eea6fc6b6d055a13603bd9fc9495283a20d12cf44742673fb297a8f7f2b61231eeac778df354f10191562167e86275bebd55dbdfe7d2377b96e09d74901"
 	expectPersonalSignConcatSigBytes, _ := hex.DecodeString(expectPersonalSignConcatSigHex)
-	expectPersonalSignConcatSig := &crypto.Signature{
+	expectPersonalSignConcatSig := &auth.Signature{
 		Signature: expectPersonalSignConcatSigBytes,
-		Type:      crypto.SignatureTypeSecp256k1Personal,
+		Type:      auth.EthAuth,
 	}
 
 	// TODO: add test case for cometbft
@@ -65,13 +66,13 @@ func TestTransaction_Sign(t *testing.T) {
 	ed25519PrivateKey, err := crypto.Ed25519PrivateKeyFromHex(ed25519PvKeyHex)
 	require.NoError(t, err, "error parse ed25519PvKeyHex")
 
-	nearSigner := crypto.NewNearSigner(ed25519PrivateKey)
+	nearSigner := auth.NearSigner{Ed25519PrivateKey: *ed25519PrivateKey}
 
 	expectNearConcatSigHex := "b72f815bcb5a7126fe54cd8d77210209249b1c11087a4b4601c61814911fac7f4a921f1c37991408251a04891a5e10ecc1be4535124a3827f22660adbec0590c"
 	expectNearConcatSigBytes, _ := hex.DecodeString(expectNearConcatSigHex)
-	expectNearConcatSig := &crypto.Signature{
+	expectNearConcatSig := &auth.Signature{
 		Signature: expectNearConcatSigBytes,
-		Type:      crypto.SignatureTypeEd25519Near,
+		Type:      auth.NearAuth,
 	}
 	////
 
@@ -88,19 +89,19 @@ func TestTransaction_Sign(t *testing.T) {
 
 	type args struct {
 		mst    transactions.SignedMsgSerializationType
-		signer crypto.Signer
+		signer auth.Signer
 	}
 	tests := []struct {
 		name    string
 		args    args
-		wantSig *crypto.Signature
+		wantSig *auth.Signature
 		wantErr bool
 	}{
 		{
 			name: "not support message serialization type",
 			args: args{
 				mst:    transactions.SignedMsgSerializationType("not support message serialization type"),
-				signer: ethPersonalSigner,
+				signer: &ethPersonalSigner,
 			},
 			wantErr: true,
 		},
@@ -108,7 +109,7 @@ func TestTransaction_Sign(t *testing.T) {
 			name: "eth personal_sign concat string",
 			args: args{
 				mst:    transactions.SignedMsgConcat,
-				signer: ethPersonalSigner,
+				signer: &ethPersonalSigner,
 			},
 			wantSig: expectPersonalSignConcatSig,
 		},
@@ -116,7 +117,7 @@ func TestTransaction_Sign(t *testing.T) {
 			name: "near concat string",
 			args: args{
 				mst:    transactions.SignedMsgConcat,
-				signer: nearSigner,
+				signer: &nearSigner,
 			},
 			wantSig: expectNearConcatSig,
 		},

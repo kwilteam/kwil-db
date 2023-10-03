@@ -3,5 +3,5 @@ package types
 type DatasetInfo struct {
 	DBID  string
 	Name  string
-	Owner UserIdentifier
+	Owner *User
 }

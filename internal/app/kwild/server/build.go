@@ -23,6 +23,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/pkg/transport"
 	"github.com/kwilteam/kwil-db/pkg/abci"
 	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/engine"
 	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
@@ -212,6 +213,7 @@ func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engin
 
 	e, err := engine.Open(d.ctx, d.opener,
 		sqlCommitRegister,
+		auth.GetAddress,
 		engine.WithLogger(*d.log.Named("engine")),
 		engine.WithExtensions(adaptExtensions(extensions)),
 	)

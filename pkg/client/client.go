@@ -6,11 +6,13 @@ package client
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/cstockton/go-conv"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/client/types"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
@@ -35,7 +37,7 @@ type Client struct {
 	// transportClient is more useful for testing rn, I'd like to add http
 	// client as well to test HTTP api. This also enables test the cli by mocking.
 	transportClient types.TransportClient
-	Signer          crypto.Signer
+	Signer          auth.Signer
 	logger          log.Logger
 
 	tlsCertFile string // the tls cert file path
@@ -65,7 +67,7 @@ func Dial(target string, opts ...Option) (c *Client, err error) {
 		zap.String("host", c.transportClient.GetTarget()),
 	}
 	if c.Signer != nil {
-		zapFields = append(zapFields, zap.String("from", c.Signer.PubKey().Address().String()))
+		zapFields = append(zapFields, zap.String("from", hex.EncodeToString(c.Signer.PublicKey())))
 	}
 
 	c.logger = *c.logger.Named("client").With(zapFields...)
@@ -95,7 +97,7 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 	}
 
 	c.logger.Debug("deploying database",
-		zap.String("signature_type", tx.Signature.Type.String()),
+		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
 	return c.transportClient.Broadcast(ctx, tx)
@@ -103,13 +105,8 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 
 // DropDatabase drops a database
 func (c *Client) DropDatabase(ctx context.Context, name string) (transactions.TxHash, error) {
-	pub, err := c.getPublicKey()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get address from private key: %w", err)
-	}
-
 	identifier := &transactions.DropSchema{
-		DBID: engineUtils.GenerateDBID(name, pub.Bytes()),
+		DBID: engineUtils.GenerateDBID(name, c.Signer.PublicKey()),
 	}
 
 	tx, err := c.newTx(ctx, identifier)
@@ -118,7 +115,7 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (transactions.Tx
 	}
 
 	c.logger.Debug("deploying database",
-		zap.String("signature_type", tx.Signature.Type.String()),
+		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
 	res, err := c.transportClient.Broadcast(ctx, tx)
@@ -150,7 +147,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	}
 
 	c.logger.Debug("execute action",
-		zap.String("signature_type", tx.Signature.Type.String()),
+		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
 	return c.transportClient.Broadcast(ctx, tx)
@@ -204,7 +201,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 // shouldAuthenticate decides whether the client should authenticate or not
 // if enforced is not nil, it will be used instead of the default value
 // otherwise, if the private key is not nil, it will authenticate
-func shouldAuthenticate(signer crypto.Signer, enforced *bool) (bool, error) {
+func shouldAuthenticate(signer auth.Signer, enforced *bool) (bool, error) {
 	if enforced != nil {
 		if !*enforced {
 			return false, nil
@@ -303,7 +300,7 @@ func (c *Client) ValidatorLeave(ctx context.Context) ([]byte, error) {
 }
 
 func (c *Client) validatorUpdate(ctx context.Context, power int64) ([]byte, error) {
-	pubKey := c.Signer.PubKey().Bytes()
+	pubKey := c.Signer.PublicKey()
 
 	var payload transactions.Payload
 	if power <= 0 {

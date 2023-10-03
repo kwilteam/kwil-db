@@ -40,11 +40,13 @@ type Engine struct {
 
 	// commitRegister is the commit register that is used to register commits
 	commitRegister CommitRegister
+	// addresser takes in an address type and a public key and returns an address
+	addresser Addresser
 }
 
 // Open opens a new engine with the provided options.
 // It will also open any stored datasets.
-func Open(ctx context.Context, dbOpener sql.Opener, commitRegister CommitRegister, opts ...EngineOpt) (*Engine, error) {
+func Open(ctx context.Context, dbOpener sql.Opener, commitRegister CommitRegister, addresser Addresser, opts ...EngineOpt) (*Engine, error) {
 	e := &Engine{
 		name:           masterDBName,
 		log:            log.NewNoOp(),
@@ -52,6 +54,7 @@ func Open(ctx context.Context, dbOpener sql.Opener, commitRegister CommitRegiste
 		extensions:     make(map[string]ExtensionInitializer),
 		opener:         dbOpener,
 		commitRegister: commitRegister,
+		addresser:      addresser,
 	}
 
 	for _, opt := range opts {
@@ -115,7 +118,7 @@ func (e *Engine) openStoredDatasets(ctx context.Context) error {
 			return err
 		}
 
-		user, err := newDatasetUser(datasetInfo.Owner)
+		user, err := e.newDatasetUser(datasetInfo.Owner)
 		if err != nil {
 			return err
 		}
@@ -166,7 +169,7 @@ func (e *Engine) Execute(ctx context.Context, dbid string, procedure string, arg
 		args = append(args, []any{})
 	}
 
-	txOpts, err := getTxOpts(options)
+	txOpts, err := e.getTxOpts(options)
 	if err != nil {
 		return nil, err
 	}
@@ -179,12 +182,12 @@ func (e *Engine) Execute(ctx context.Context, dbid string, procedure string, arg
 }
 
 // getTxOpts gets the transaction options from the execution options.
-func getTxOpts(options *executionConfig) (*dataset.TxOpts, error) {
+func (e *Engine) getTxOpts(options *executionConfig) (*dataset.TxOpts, error) {
 	if options.Sender == nil {
 		return nil, nil
 	}
 
-	user, err := newDatasetUser(options.Sender)
+	user, err := e.newDatasetUser(options.Sender)
 	if err != nil {
 		return nil, err
 	}

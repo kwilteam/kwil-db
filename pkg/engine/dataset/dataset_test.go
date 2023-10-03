@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
 	"github.com/kwilteam/kwil-db/pkg/engine/db/test"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -444,10 +444,9 @@ type testUserIdentifier struct {
 }
 
 func (t *testUserIdentifier) Bytes() []byte {
-	bts, err := (&addresses.KeyIdentifier{
-		KeyType:       addresses.Secp256k1,
-		AddressFormat: addresses.AddressFormatEthereum,
-		PublicKey:     t.pk.PubKey().Bytes(),
+	bts, err := (&types.User{
+		PublicKey: t.pk.PubKey().Bytes(),
+		AuthType:  auth.EthAuth,
 	}).MarshalBinary()
 	if err != nil {
 		panic(err)
@@ -460,7 +459,7 @@ func (t *testUserIdentifier) PubKey() []byte {
 }
 
 func (t *testUserIdentifier) Address() string {
-	return t.pk.PubKey().Address().String() // TODO: this may need to change; the default will work for now, but as soon as we support more than just NEAR and ETH it will not work
+	return "address"
 }
 
 func testUser() *testUserIdentifier {
