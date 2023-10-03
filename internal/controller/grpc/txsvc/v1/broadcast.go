@@ -3,6 +3,7 @@ package txsvc
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/pkg/grpc/client/v1/conversion"
@@ -23,7 +24,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, status.Errorf(codes.Internal, "failed to convert transaction")
 	}
 
-	logger = logger.With(zap.Binary("from", tx.Sender))
+	logger = logger.With(zap.String("from", fmt.Sprintf("%x", tx.Sender)))
 
 	err = tx.Verify()
 	if err != nil {

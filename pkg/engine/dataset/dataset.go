@@ -107,7 +107,7 @@ func (d *Dataset) Execute(ctx context.Context, action string, args [][]any, opts
 	}
 
 	if proc.IsOwnerOnly() && !bytes.Equal(opts.Caller.PubKey(), d.owner.PubKey()) {
-		d.log.Debug("caller is not owner", zap.Binary("caller", opts.Caller.PubKey()), zap.Binary("owner", d.owner.PubKey()))
+		d.log.Debug("caller is not owner", zap.String("caller", fmt.Sprintf("%x", opts.Caller.PubKey())), zap.String("owner", fmt.Sprintf("%x", d.owner.PubKey())))
 		return nil, ErrCallerNotOwner
 	}
 

@@ -93,7 +93,7 @@ func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions
 	}
 
 	d.logger.Debug("deployed database",
-		zap.String("name", db.Name), zap.Binary("owner", d.clt.Signer.PublicKey()),
+		zap.String("name", db.Name), zap.String("owner", fmt.Sprintf("%x", d.clt.Signer.PublicKey())),
 		zap.String("TxHash", rec.Hex()))
 	return rec, nil
 }
@@ -126,7 +126,7 @@ func (d *KwildClientDriver) DropDatabase(ctx context.Context, dbName string) ([]
 		return nil, fmt.Errorf("error dropping database: %w", err)
 	}
 
-	d.logger.Info("drop database", zap.String("name", dbName), zap.Binary("owner", d.GetUserPublicKey()),
+	d.logger.Info("drop database", zap.String("name", dbName), zap.String("owner", fmt.Sprintf("%x", d.GetUserPublicKey())),
 		zap.String("TxHash", rec.Hex()))
 	return rec, nil
 }

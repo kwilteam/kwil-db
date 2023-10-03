@@ -66,7 +66,7 @@ func Dial(target string, opts ...Option) (c *Client, err error) {
 		zap.String("host", c.transportClient.GetTarget()),
 	}
 	if c.Signer != nil {
-		zapFields = append(zapFields, zap.Binary("from", c.Signer.PublicKey()))
+		zapFields = append(zapFields, zap.String("from", fmt.Sprintf("%x", c.Signer.PublicKey())))
 	}
 
 	c.logger = *c.logger.Named("client").With(zapFields...)
