@@ -2,7 +2,6 @@ package crypto_test
 
 import (
 	"encoding/hex"
-	"errors"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
@@ -66,8 +65,7 @@ func TestEd25519PublicKey_Verify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := pubKey.Verify(tt.sigBytes, tt.msg)
 			if tt.wantErr != nil {
-				isCorrectErr := errors.Is(err, tt.wantErr)
-				assert.True(t, isCorrectErr, "verify error")
+				assert.ErrorIs(t, err, tt.wantErr, "verify error")
 				return
 			}
 

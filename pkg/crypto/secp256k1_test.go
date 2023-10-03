@@ -3,7 +3,6 @@ package crypto_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
@@ -70,7 +69,7 @@ func TestSecp256k1PublicKey_Verify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := pubKey.Verify(tt.sigBytes, hash[:])
 			if tt.wantErr != nil {
-				assert.True(t, errors.Is(err, tt.wantErr), "verify error")
+				assert.ErrorIs(t, err, tt.wantErr, "verify error")
 				return
 			}
 

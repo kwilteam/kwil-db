@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	Secp256k1CompressedPublicKeySize   = 33
-	Secp256k1UncompressedPublicKeySize = 65
-	secp256k1SignatureLength           = 64
+	Secp256k1CompressedPublicKeySize       = 33
+	Secp256k1UncompressedPublicKeySize     = 65
+	secp256k1SignatureLength               = 64
+	secp256k1SignatureWithRecoveryIDLength = 65
 )
 
 type Secp256k1PrivateKey struct {
@@ -72,7 +73,7 @@ func (pub *Secp256k1PublicKey) Bytes() []byte {
 // e.g. this `Verify` function is able to verify multi-signature-schema like personal_sign, eip712, cometbft, etc.,
 // as long as the given signature is in supported format.
 func (pub *Secp256k1PublicKey) Verify(sig []byte, hash []byte) error {
-	if len(sig) == 65 {
+	if len(sig) == secp256k1SignatureWithRecoveryIDLength {
 		// we choose `VerifySignature` since it doesn't care recovery ID
 		// it expects signature in 64 byte [R || S] format
 		sig = sig[:len(sig)-1]
