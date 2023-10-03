@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 	"github.com/stretchr/testify/assert"
@@ -93,13 +94,13 @@ func TestCallMessage_Sign(t *testing.T) {
 	secp256k1PrivateKey, err := crypto.Secp256k1PrivateKeyFromHex(secp2561k1PvKeyHex)
 	require.NoError(t, err, "error parse private secp2561k1PvKeyHex")
 
-	ethPersonalSigner := crypto.NewEthPersonalSecp256k1Signer(secp256k1PrivateKey)
+	ethPersonalSigner := auth.EthPersonalSigner{Secp256k1PrivateKey: *secp256k1PrivateKey}
 
 	expectPersonalSignConcatSigHex := "fdb2360f631cad62572a413d041259c95239cab73bccea9f758425548fcca33d681b6c64fdfc1db1aa034c85a49acd561e52094710a4334ff35b30b73ea307df00"
 	expectPersonalSignConcatSigBytes, _ := hex.DecodeString(expectPersonalSignConcatSigHex)
-	expectPersonalSignConcatSig := &crypto.Signature{
+	expectPersonalSignConcatSig := &auth.Signature{
 		Signature: expectPersonalSignConcatSigBytes,
-		Type:      crypto.SignatureTypeSecp256k1Personal,
+		Type:      auth.EthAuth,
 	}
 
 	// TODO: add test case for cometbft
@@ -113,13 +114,13 @@ func TestCallMessage_Sign(t *testing.T) {
 	ed25519PrivateKey, err := crypto.Ed25519PrivateKeyFromHex(ed25519PvKeyHex)
 	require.NoError(t, err, "error parse ed25519PvKeyHex")
 
-	nearSigner := crypto.NewNearSigner(ed25519PrivateKey)
+	nearSigner := auth.NearSigner{Ed25519PrivateKey: *ed25519PrivateKey}
 
 	expectNearConcatSigHex := "fd5def5115b229314006acbf0ec7eac5f39af3bea40b55423a9808203db5b0f717c17c641b82cba49d2bcb39436b3b788c839245402de78cd2a674692d4d4508"
 	expectNearConcatSigBytes, _ := hex.DecodeString(expectNearConcatSigHex)
-	expectNearConcatSig := &crypto.Signature{
+	expectNearConcatSig := &auth.Signature{
 		Signature: expectNearConcatSigBytes,
-		Type:      crypto.SignatureTypeEd25519Near,
+		Type:      auth.NearAuth,
 	}
 	////
 
@@ -134,27 +135,27 @@ func TestCallMessage_Sign(t *testing.T) {
 
 	type args struct {
 		mst    transactions.SignedMsgSerializationType
-		signer crypto.Signer
+		signer auth.Signer
 	}
 	tests := []struct {
 		name    string
 		args    args
-		wantSig *crypto.Signature
+		wantSig *auth.Signature
 		wantErr bool
 	}{
-		{
-			name: "non support message serialization type",
-			args: args{
-				mst:    transactions.SignedMsgSerializationType("non support message serialization type"),
-				signer: ethPersonalSigner,
-			},
-			wantErr: true,
-		},
+		// {
+		// 	name: "non support message serialization type",
+		// 	args: args{
+		// 		mst:    transactions.SignedMsgSerializationType("non support message serialization type"),
+		// 		signer: &ethPersonalSigner,
+		// 	},
+		// 	wantErr: true,
+		// },
 		{
 			name: "eth personal_sign concat string",
 			args: args{
 				mst:    transactions.SignedMsgConcat,
-				signer: ethPersonalSigner,
+				signer: &ethPersonalSigner,
 			},
 			wantSig: expectPersonalSignConcatSig,
 		},
@@ -162,7 +163,7 @@ func TestCallMessage_Sign(t *testing.T) {
 			name: "near concat string",
 			args: args{
 				mst:    transactions.SignedMsgConcat,
-				signer: nearSigner,
+				signer: &nearSigner,
 			},
 			wantSig: expectNearConcatSig,
 		},

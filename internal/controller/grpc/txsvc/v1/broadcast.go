@@ -23,7 +23,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, status.Errorf(codes.Internal, "failed to convert transaction")
 	}
 
-	logger = logger.With(zap.String("from", tx.GetSenderAddress()))
+	logger = logger.With(zap.Binary("from", tx.Sender))
 
 	err = tx.Verify()
 	if err != nil {

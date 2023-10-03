@@ -22,6 +22,7 @@ import (
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/joho/godotenv"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -67,8 +68,8 @@ type IntTestConfig struct {
 
 	CreatorRawPk  string
 	VisitorRawPK  string
-	CreatorSigner crypto.Signer
-	VisitorSigner crypto.Signer
+	CreatorSigner auth.Signer
+	VisitorSigner auth.Signer
 
 	NValidator    int
 	NNonValidator int
@@ -153,11 +154,12 @@ func (r *IntHelper) LoadConfig() {
 
 	creatorPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.CreatorRawPk)
 	require.NoError(r.t, err, "invalid creator private key")
-	r.cfg.CreatorSigner = crypto.DefaultSigner(creatorPk)
+
+	r.cfg.CreatorSigner = &auth.EthPersonalSigner{Secp256k1PrivateKey: *creatorPk}
 
 	bobPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.VisitorRawPK)
 	require.NoError(r.t, err, "invalid visitor private key")
-	r.cfg.VisitorSigner = crypto.DefaultSigner(bobPk)
+	r.cfg.VisitorSigner = &auth.EthPersonalSigner{Secp256k1PrivateKey: *bobPk}
 }
 
 func (r *IntHelper) updateGeneratedConfigHome(home string) {
@@ -321,7 +323,7 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 	case "client":
 		return r.getClientDriver(signer)
 	case "cli":
-		return r.getCliDriver(pk, signer.PubKey().Bytes())
+		return r.getCliDriver(pk, signer.PublicKey())
 	default:
 		panic("unsupported driver type")
 	}
@@ -345,7 +347,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, name string, driverTy
 	privKeyHex := hex.EncodeToString(privKeyB)
 	privKey, err := crypto.Ed25519PrivateKeyFromBytes(privKeyB)
 	require.NoError(r.t, err, "invalid private key")
-	signer := crypto.DefaultSigner(privKey)
+	signer := &auth.Ed25519Signer{Ed25519PrivateKey: *privKey}
 
 	pk := privKeyHex
 	switch driverType {
@@ -358,7 +360,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, name string, driverTy
 	}
 }
 
-func (r *IntHelper) getClientDriver(signer crypto.Signer) KwilIntDriver {
+func (r *IntHelper) getClientDriver(signer auth.Signer) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	options := []client.Option{client.WithSigner(signer),

@@ -12,7 +12,7 @@ import (
 func (c *Client) Call(ctx context.Context, req *transactions.CallMessage) ([]map[string]any, error) {
 	var sender []byte
 	if req.Sender != nil {
-		sender = req.Sender.Bytes()
+		sender = req.Sender
 	}
 
 	callReq := &txpb.CallRequest{

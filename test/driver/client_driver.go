@@ -55,8 +55,8 @@ func (d *KwildClientDriver) SupportBatch() bool {
 	return true
 }
 
-func (d *KwildClientDriver) GetUserAddress() string {
-	return d.clt.Signer.PubKey().Address().String()
+func (d *KwildClientDriver) GetUserPublicKey() []byte {
+	return d.clt.Signer.PublicKey()
 }
 
 // TxSuccess checks if the transaction was successful
@@ -83,7 +83,7 @@ func (d *KwildClientDriver) TxSuccess(ctx context.Context, txHash []byte) error 
 }
 
 func (d *KwildClientDriver) DBID(name string) string {
-	return utils.GenerateDBID(name, d.clt.Signer.PubKey().Bytes())
+	return utils.GenerateDBID(name, d.clt.Signer.PublicKey())
 }
 
 func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) ([]byte, error) {
@@ -93,7 +93,7 @@ func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions
 	}
 
 	d.logger.Debug("deployed database",
-		zap.String("name", db.Name), zap.Binary("owner", d.clt.Signer.PubKey().Bytes()),
+		zap.String("name", db.Name), zap.Binary("owner", d.clt.Signer.PublicKey()),
 		zap.String("TxHash", rec.Hex()))
 	return rec, nil
 }
@@ -126,7 +126,7 @@ func (d *KwildClientDriver) DropDatabase(ctx context.Context, dbName string) ([]
 		return nil, fmt.Errorf("error dropping database: %w", err)
 	}
 
-	d.logger.Info("drop database", zap.String("name", dbName), zap.String("owner", d.GetUserAddress()),
+	d.logger.Info("drop database", zap.String("name", dbName), zap.Binary("owner", d.GetUserPublicKey()),
 		zap.String("TxHash", rec.Hex()))
 	return rec, nil
 }

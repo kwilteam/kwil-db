@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
@@ -76,7 +75,7 @@ func (d *sqlStore) getDataset(ctx context.Context, dbid string) (*types.DatasetI
 		return nil, fmt.Errorf("error getting dataset owner fromr result set")
 	}
 
-	owner := &addresses.KeyIdentifier{}
+	owner := &types.User{}
 	err = owner.UnmarshalBinary(ownerBts)
 	if err != nil {
 		return nil, err
@@ -110,7 +109,7 @@ func (d *sqlStore) listDatasetsByOwner(ctx context.Context, ownerPubKey []byte) 
 	return names, nil
 }
 
-func (d *sqlStore) createDataset(ctx context.Context, dbid, name string, owner types.UserIdentifier) error {
+func (d *sqlStore) createDataset(ctx context.Context, dbid, name string, owner *types.User) error {
 	ownerBts, err := owner.MarshalBinary()
 	if err != nil {
 		return err
@@ -147,7 +146,7 @@ func (s *sqlStore) listDatasets(ctx context.Context) ([]*types.DatasetInfo, erro
 			return nil, fmt.Errorf("error getting owner from result set")
 		}
 
-		owner := &addresses.KeyIdentifier{}
+		owner := &types.User{}
 		err = owner.UnmarshalBinary(ownerBts)
 		if err != nil {
 			return nil, err

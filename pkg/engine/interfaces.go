@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
@@ -33,7 +34,7 @@ type MasterDB interface {
 	ListDatasetsByOwner(ctx context.Context, owner []byte) ([]string, error)
 	// RegisterDataset registers a dataset to the master database
 	// It tracks the desired address of the deployer, which can be used later
-	RegisterDataset(ctx context.Context, name string, owner types.UserIdentifier) error
+	RegisterDataset(ctx context.Context, name string, owner *types.User) error
 	UnregisterDataset(ctx context.Context, dbid string) error
 }
 
@@ -46,30 +47,30 @@ type CommitRegister interface {
 	Unregister(ctx context.Context, name string) error
 }
 
-func newDatasetUser(u types.UserIdentifier) (*datasetUser, error) {
+func (e *Engine) newDatasetUser(u *types.User) (*datasetUser, error) {
 	bts, err := u.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	pub, err := u.PubKey()
-	if err != nil {
-		return nil, err
+	addrFunc, ok := e.addressFuncs[u.AuthType]
+	if !ok {
+		return nil, fmt.Errorf("unknown auth type %s", u.AuthType)
 	}
 
-	addr, err := u.Address()
+	addr, err := addrFunc(u.PublicKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &datasetUser{
-		pubkeyBts:     pub.Bytes(),
+		pubkeyBts:     u.PublicKey,
 		marshalledBts: bts,
-		address:       addr.String(),
+		address:       addr,
 	}, nil
 }
 
-// implements datasets.UserIdentifier
+// implements datasets.User
 type datasetUser struct {
 	pubkeyBts []byte
 	// marshalledBts are the marshalled bytes of the user
@@ -88,3 +89,6 @@ func (u *datasetUser) PubKey() []byte {
 func (u *datasetUser) Address() string {
 	return u.address
 }
+
+// AddressFunc is a function that takes a public key and returns an address
+type AddressFunc func([]byte) (string, error)

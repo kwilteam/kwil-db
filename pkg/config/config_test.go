@@ -103,7 +103,7 @@ func Test_Failures(t *testing.T) {
 }
 
 type TestConfig struct {
-	PrivateKey crypto.PrivateKey
+	PrivateKey *crypto.Ed25519PrivateKey
 	Inner      InnerTestConfig
 }
 

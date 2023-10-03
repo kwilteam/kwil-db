@@ -13,8 +13,8 @@ import (
 )
 
 // CreateDataset creates a new dataset
-func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema, owner types.UserIdentifier) (dbid string, finalErr error) {
-	user, err := newDatasetUser(owner)
+func (e *Engine) CreateDataset(ctx context.Context, schema *types.Schema, owner *types.User) (dbid string, finalErr error) {
+	user, err := e.newDatasetUser(owner)
 	if err != nil {
 		return "", fmt.Errorf("failed to get user: %w", err)
 	}
@@ -118,24 +118,19 @@ func (e *Engine) GetDataset(ctx context.Context, dbid string) (Dataset, error) {
 	return ds, nil
 }
 
-func (e *Engine) DropDataset(ctx context.Context, dbid string, sender types.UserIdentifier) error {
+func (e *Engine) DropDataset(ctx context.Context, dbid string, sender *types.User) error {
 	ds, ok := e.datasets[dbid]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrDatasetNotFound, dbid)
 	}
 
-	senderPub, err := sender.PubKey()
-	if err != nil {
-		return fmt.Errorf("failed to get sender public key: %w", err)
-	}
-
 	_, owner := ds.Metadata()
-	if !bytes.Equal(owner.PubKey(), senderPub.Bytes()) {
+	if !bytes.Equal(owner.PubKey(), sender.PublicKey) {
 		return fmt.Errorf("%w: %s", ErrDatasetNotOwned, dbid)
 	}
 
 	// we call unregister first so the session can be canceled, before the database is deleted
-	err = e.commitRegister.Unregister(ctx, dbid)
+	err := e.commitRegister.Unregister(ctx, dbid)
 	if err != nil {
 		return fmt.Errorf("failed to unregister dataset: %w", err)
 	}

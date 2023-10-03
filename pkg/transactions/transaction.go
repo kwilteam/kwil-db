@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	gethTypes "github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/serialize"
 	"github.com/kwilteam/kwil-db/pkg/utils/random"
@@ -121,7 +122,8 @@ func CreateTransaction(contents Payload, nonce uint64) (*Transaction, error) {
 type Transaction struct {
 	// Signature is the signature of the transaction
 	// It can be nil if the transaction is unsigned
-	Signature *crypto.Signature
+	// This should probably be renamed to "Authentication"
+	Signature *auth.Signature
 
 	// Body is the body of the transaction
 	// It gets serialized and signed
@@ -139,19 +141,9 @@ type Transaction struct {
 	hash []byte
 }
 
-func (t *Transaction) GetSenderPubKey() (crypto.PublicKey, error) {
-	return crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
-}
-
-func (t *Transaction) GetSenderAddress() string {
-	var pubKey crypto.PublicKey
-	pubKey, err := crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
-	if err != nil {
-		return "unknown"
-	}
-
-	return pubKey.Address().String()
-}
+// func (t *Transaction) GetSenderPubKey() (crypto.PublicKey, error) {
+// 	return crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
+// }
 
 // Verify verifies the signature of the transaction
 // It will deserialize the transaction body and verify the signature
@@ -161,18 +153,17 @@ func (t *Transaction) Verify() error {
 		return err
 	}
 
-	var pubKey crypto.PublicKey
-	pubKey, err = crypto.PublicKeyFromBytes(t.Signature.KeyType(), t.Sender)
+	authenticator, err := auth.GetAuthenticator(t.Signature.Type)
 	if err != nil {
 		return err
 	}
 
-	return t.Signature.Verify(pubKey, msg)
+	return authenticator.Verify(t.Sender, msg, t.Signature.Signature)
 }
 
 // Sign signs transaction body with given signer.
 // It will serialize the transaction body first and sign it.
-func (t *Transaction) Sign(signer crypto.Signer) error {
+func (t *Transaction) Sign(signer auth.Signer) error {
 	msg, err := t.Body.SerializeMsg(t.Serialization)
 	if err != nil {
 		return err
@@ -184,7 +175,7 @@ func (t *Transaction) Sign(signer crypto.Signer) error {
 	}
 
 	t.Signature = signature
-	t.Sender = signer.PubKey().Bytes()
+	t.Sender = signer.PublicKey()
 
 	return nil
 }
