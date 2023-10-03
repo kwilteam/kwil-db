@@ -15,12 +15,7 @@ import (
 func NewTestEngine(ctx context.Context, ec engine.CommitRegister, opts ...engine.EngineOpt) (*engine.Engine, func() error, error) {
 	opener := newTestDBOpener()
 
-	addressFuncs := make(map[string]engine.AddressFunc)
-	for _, a := range auth.ListAuthenticators() {
-		addressFuncs[a.Name] = a.Authenticator.Address
-	}
-
-	e, err := engine.Open(ctx, opener, ec, addressFuncs,
+	e, err := engine.Open(ctx, opener, ec, auth.GetAddress,
 		opts...,
 	)
 	if err != nil {

@@ -40,14 +40,13 @@ type Engine struct {
 
 	// commitRegister is the commit register that is used to register commits
 	commitRegister CommitRegister
-
-	// addressFuncs is a map of address functions that are used to generate addresses from public keys
-	addressFuncs map[string]AddressFunc
+	// addresser takes in an address type and a public key and returns an address
+	addresser Addresser
 }
 
 // Open opens a new engine with the provided options.
 // It will also open any stored datasets.
-func Open(ctx context.Context, dbOpener sql.Opener, commitRegister CommitRegister, addressFuncs map[string]AddressFunc, opts ...EngineOpt) (*Engine, error) {
+func Open(ctx context.Context, dbOpener sql.Opener, commitRegister CommitRegister, addresser Addresser, opts ...EngineOpt) (*Engine, error) {
 	e := &Engine{
 		name:           masterDBName,
 		log:            log.NewNoOp(),
@@ -55,7 +54,7 @@ func Open(ctx context.Context, dbOpener sql.Opener, commitRegister CommitRegiste
 		extensions:     make(map[string]ExtensionInitializer),
 		opener:         dbOpener,
 		commitRegister: commitRegister,
-		addressFuncs:   addressFuncs,
+		addresser:      addresser,
 	}
 
 	for _, opt := range opts {

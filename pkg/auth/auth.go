@@ -29,8 +29,8 @@ func RegisterAuthenticator(name string, auth Authenticator) error {
 	return nil
 }
 
-// GetAuthenticator returns an authenticator by the name it was registered with
-func GetAuthenticator(name string) (Authenticator, error) {
+// getAuthenticator returns an authenticator by the name it was registered with
+func getAuthenticator(name string) (Authenticator, error) {
 	name = strings.ToLower(name)
 	auth, ok := registeredAuthenticators[name]
 	if !ok {
@@ -38,6 +38,16 @@ func GetAuthenticator(name string) (Authenticator, error) {
 	}
 
 	return auth, nil
+}
+
+// GetAddress returns an address from a public key and authenticator type
+func GetAddress(authType string, sender []byte) (string, error) {
+	auth, err := getAuthenticator(authType)
+	if err != nil {
+		return "", err
+	}
+
+	return auth.Address(sender)
 }
 
 // ListAuthenticators returns a list of registered authenticators

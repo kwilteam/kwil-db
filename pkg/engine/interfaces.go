@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/kwilteam/kwil-db/pkg/engine/dataset"
@@ -53,12 +52,7 @@ func (e *Engine) newDatasetUser(u *types.User) (*datasetUser, error) {
 		return nil, err
 	}
 
-	addrFunc, ok := e.addressFuncs[u.AuthType]
-	if !ok {
-		return nil, fmt.Errorf("unknown auth type %s", u.AuthType)
-	}
-
-	addr, err := addrFunc(u.PublicKey)
+	addr, err := e.addresser(u.AuthType, u.PublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -90,5 +84,5 @@ func (u *datasetUser) Address() string {
 	return u.address
 }
 
-// AddressFunc is a function that takes a public key and returns an address
-type AddressFunc func([]byte) (string, error)
+// Addresser is a function that takes an address type and a public key and returns an address
+type Addresser func(addressType string, pubkey []byte) (string, error)

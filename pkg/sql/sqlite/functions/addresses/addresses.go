@@ -51,12 +51,7 @@ func addressFunc(ctx sqlite.Context, args []sqlite.Value) (sqlite.Value, error) 
 		return raiseErr(addressFuncName, fmt.Errorf("failed to read public key identifier: %w", err))
 	}
 
-	authenticator, err := auth.GetAuthenticator(ident.AuthType)
-	if err != nil {
-		return raiseErr(addressFuncName, fmt.Errorf("failed to get authenticator: %w", err))
-	}
-
-	address, err := authenticator.Address(ident.PublicKey)
+	address, err := auth.GetAddress(ident.AuthType, ident.PublicKey)
 	if err != nil {
 		return raiseErr(addressFuncName, fmt.Errorf("failed to get address: %w", err))
 	}

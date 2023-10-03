@@ -56,16 +56,12 @@ func Test_Auth(t *testing.T) {
 			sig, err := tc.signer.Sign(msg)
 			assert.NoError(t, err)
 
-			// get the authenticator
-			authenticator, err := auth.GetAuthenticator(sig.Type)
-			assert.NoError(t, err)
-
 			// verify the signature
-			err = authenticator.Verify(tc.signer.PublicKey(), msg, sig.Signature)
+			err = sig.Verify(tc.signer.PublicKey(), msg)
 			assert.NoError(t, err)
 
 			// check the address
-			address, err := authenticator.Address(tc.signer.PublicKey())
+			address, err := auth.GetAddress(sig.Type, tc.signer.PublicKey())
 			assert.NoError(t, err)
 
 			assert.Equal(t, tc.address, address)

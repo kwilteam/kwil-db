@@ -211,14 +211,9 @@ func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engin
 		log:       *d.log.Named("sqlite-committable"),
 	}
 
-	addressFuncs := make(map[string]engine.AddressFunc)
-	for _, a := range auth.ListAuthenticators() {
-		addressFuncs[a.Name] = a.Authenticator.Address
-	}
-
 	e, err := engine.Open(d.ctx, d.opener,
 		sqlCommitRegister,
-		addressFuncs,
+		auth.GetAddress,
 		engine.WithLogger(*d.log.Named("engine")),
 		engine.WithExtensions(adaptExtensions(extensions)),
 	)

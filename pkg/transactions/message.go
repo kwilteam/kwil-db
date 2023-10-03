@@ -132,10 +132,5 @@ func (s *CallMessage) Verify() error {
 		return err
 	}
 
-	authenticator, err := auth.GetAuthenticator(s.Signature.Type)
-	if err != nil {
-		return err
-	}
-
-	return authenticator.Verify(s.Sender, msg, s.Signature.Signature)
+	return s.Signature.Verify(s.Sender, msg)
 }

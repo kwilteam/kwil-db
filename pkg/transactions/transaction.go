@@ -153,12 +153,7 @@ func (t *Transaction) Verify() error {
 		return err
 	}
 
-	authenticator, err := auth.GetAuthenticator(t.Signature.Type)
-	if err != nil {
-		return err
-	}
-
-	return authenticator.Verify(t.Sender, msg, t.Signature.Signature)
+	return t.Signature.Verify(t.Sender, msg)
 }
 
 // Sign signs transaction body with given signer.

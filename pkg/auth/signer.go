@@ -17,6 +17,16 @@ type Signature struct {
 	Type      string `json:"signature_type"`
 }
 
+// Verify verifies the signature against the given message and public key.
+func (s *Signature) Verify(senderPubKey, msg []byte) error {
+	a, err := getAuthenticator(s.Type)
+	if err != nil {
+		return err
+	}
+
+	return a.Verify(senderPubKey, msg, s.Signature)
+}
+
 // Signer is an interface for something that can sign messages.
 // It returns signatures with a designated AuthType, which should
 // be used to determine how to verify the signature.
