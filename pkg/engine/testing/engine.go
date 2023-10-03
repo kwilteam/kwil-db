@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/log"
 	"github.com/kwilteam/kwil-db/pkg/sql"
 
@@ -14,7 +15,7 @@ import (
 func NewTestEngine(ctx context.Context, ec engine.CommitRegister, opts ...engine.EngineOpt) (*engine.Engine, func() error, error) {
 	opener := newTestDBOpener()
 
-	e, err := engine.Open(ctx, opener, ec,
+	e, err := engine.Open(ctx, opener, ec, auth.GetAddress,
 		opts...,
 	)
 	if err != nil {

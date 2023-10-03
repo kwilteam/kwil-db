@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/client"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/log"
@@ -46,16 +47,16 @@ type ActTestCfg struct {
 
 	CreatorRawPk  string
 	VisitorRawPK  string
-	CreatorSigner crypto.Signer
-	VisitorSigner crypto.Signer
+	CreatorSigner auth.Signer
+	VisitorSigner auth.Signer
 }
 
-func (e *ActTestCfg) CreatorAddr() string {
-	return e.CreatorSigner.PubKey().Address().String()
+func (e *ActTestCfg) CreatorPublicKey() []byte {
+	return e.CreatorSigner.PublicKey()
 }
 
-func (e *ActTestCfg) VisitorAddr() string {
-	return e.VisitorSigner.PubKey().Address().String()
+func (e *ActTestCfg) VisitorPublicKey() []byte {
+	return e.VisitorSigner.PublicKey()
 }
 
 func (e *ActTestCfg) IsRemote() bool {
@@ -67,19 +68,19 @@ func (e *ActTestCfg) DumpToEnv() error {
 GRPC_ENDPOINT=%s
 GATEWAY_ENDPOINT=%s
 CHAIN_ENDPOINT=%s
-CREATOR_PK=%s
-CREATOR_ADDR=%s
-VISITOR_PK=%s
-VISITOR_ADDR=%s
+CREATOR_PRIVATE_KEY=%s
+CREATOR_PUBLIC_KEY=%x
+VISITOR_PRIVATE_KEY=%s
+VISITOR_PUBLIC_KEY=%x
 `
 	content := fmt.Sprintf(envTemplage,
 		e.GrpcEndpoint,
 		e.GWEndpoint,
 		e.ChainEndpoint,
 		e.CreatorRawPk,
-		e.CreatorAddr(),
+		e.CreatorPublicKey(),
 		e.VisitorRawPK,
-		e.VisitorAddr(),
+		e.VisitorPublicKey(),
 	)
 
 	err := os.WriteFile("../../.local_env", []byte(content), 0644)
@@ -135,11 +136,11 @@ func (r *ActHelper) LoadConfig() {
 
 	creatorPk, err := crypto.Secp256k1PrivateKeyFromHex(cfg.CreatorRawPk)
 	require.NoError(r.t, err, "invalid creator private key")
-	cfg.CreatorSigner = crypto.DefaultSigner(creatorPk)
+	cfg.CreatorSigner = &auth.EthPersonalSigner{Secp256k1PrivateKey: *creatorPk}
 
 	bobPk, err := crypto.Secp256k1PrivateKeyFromHex(cfg.VisitorRawPK)
 	require.NoError(r.t, err, "invalid visitor private key")
-	cfg.VisitorSigner = crypto.DefaultSigner(bobPk)
+	cfg.VisitorSigner = &auth.EthPersonalSigner{Secp256k1PrivateKey: *bobPk}
 
 	r.cfg = cfg
 	cfg.DumpToEnv()
@@ -265,13 +266,13 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 	case "client":
 		return r.getClientDriver(signer)
 	case "cli":
-		return r.getCliDriver(pk, signer.PubKey().Bytes())
+		return r.getCliDriver(pk, signer.PublicKey())
 	default:
 		panic("unsupported driver type")
 	}
 }
 
-func (r *ActHelper) getClientDriver(signer crypto.Signer) KwilAcceptanceDriver {
+func (r *ActHelper) getClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	options := []client.Option{client.WithSigner(signer),

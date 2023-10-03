@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/go-sqlite"
-	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
+	"github.com/kwilteam/kwil-db/pkg/auth"
+	"github.com/kwilteam/kwil-db/pkg/engine/types"
 )
 
 func Register(c *sqlite.Conn) error {
@@ -45,18 +46,17 @@ func addressFunc(ctx sqlite.Context, args []sqlite.Value) (sqlite.Value, error) 
 		return raiseErr(addressFuncName, fmt.Errorf("expected 1 argument, got %d", len(args)))
 	}
 
-	// matches the pkg/crypto/addresses/identifiers.go:KeyIdentifier
 	ident, err := getIdentifier(args[0])
 	if err != nil {
 		return raiseErr(addressFuncName, fmt.Errorf("failed to read public key identifier: %w", err))
 	}
 
-	address, err := ident.Address()
+	address, err := auth.GetAddress(ident.AuthType, ident.PublicKey)
 	if err != nil {
 		return raiseErr(addressFuncName, fmt.Errorf("failed to get address: %w", err))
 	}
 
-	return sqlite.TextValue(address.String()), nil
+	return sqlite.TextValue(address), nil
 }
 
 // publicKeyImpl is the implementation of the PUBLIC_KEY function.
@@ -85,22 +85,17 @@ func publicKeyFunc(ctx sqlite.Context, args []sqlite.Value) (sqlite.Value, error
 		encodingType = args[1].Text()
 	}
 
-	pubKey, err := ident.PubKey()
-	if err != nil {
-		return raiseErr(publicKeyFuncName, fmt.Errorf("failed to get public key: %w", err))
-	}
-
 	switch encodingType {
 	default:
 		return raiseErr(publicKeyFuncName, fmt.Errorf("invalid encoding type: %s", encodingType))
 	case "hex":
-		return sqlite.TextValue(hex.EncodeToString(pubKey.Bytes())), nil
+		return sqlite.TextValue(hex.EncodeToString(ident.PublicKey)), nil
 	case "base64":
-		return sqlite.TextValue(base64.StdEncoding.EncodeToString(pubKey.Bytes())), nil
+		return sqlite.TextValue(base64.StdEncoding.EncodeToString(ident.PublicKey)), nil
 	case "base64url":
-		return sqlite.TextValue(base64.URLEncoding.EncodeToString(pubKey.Bytes())), nil
+		return sqlite.TextValue(base64.URLEncoding.EncodeToString(ident.PublicKey)), nil
 	case "blob":
-		return sqlite.BlobValue(pubKey.Bytes()), nil
+		return sqlite.BlobValue(ident.PublicKey), nil
 	}
 }
 
@@ -109,16 +104,16 @@ func publicKeyFunc(ctx sqlite.Context, args []sqlite.Value) (sqlite.Value, error
 // It will check if it is a valid key identifier.
 // An example of an invalid key identifier is a key identifier
 // that has uses Ethereum addresses and an ed25519 public key.
-func getIdentifier(arg sqlite.Value) (*addresses.KeyIdentifier, error) {
+func getIdentifier(arg sqlite.Value) (*types.User, error) {
 	// matches the pkg/crypto/addresses/identifiers.go:KeyIdentifier
 	userIdentifierBlob := arg.Blob()
-	ident := &addresses.KeyIdentifier{}
+	ident := &types.User{}
 	err := ident.UnmarshalBinary(userIdentifierBlob)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read public key identifier: %w", err)
 	}
 
-	return ident, ident.Check()
+	return ident, nil
 }
 
 // raiseErr is a helper function that returns an error with the given

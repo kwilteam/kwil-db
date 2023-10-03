@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/crypto/addresses"
 	engine "github.com/kwilteam/kwil-db/pkg/engine"
 	engineTesting "github.com/kwilteam/kwil-db/pkg/engine/testing"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -20,18 +20,16 @@ import (
 
 const testPrivateKey = "4a3142b366011d28c2a3ca33a678ff753c978c685178d4168bad4474ea480cc9"
 
-func newTestUser() types.UserIdentifier {
+func newTestUser() *types.User {
 	pk, err := crypto.Secp256k1PrivateKeyFromHex(testPrivateKey)
 	if err != nil {
 		panic(err)
 	}
 
-	ident, err := addresses.CreateKeyIdentifier(pk.PubKey(), addresses.AddressFormatEthereum)
-	if err != nil {
-		panic(err)
+	return &types.User{
+		PublicKey: pk.PubKey().Bytes(),
+		AuthType:  auth.EthAuth,
 	}
-
-	return ident
 }
 
 var (
@@ -93,13 +91,8 @@ func Test_Open(t *testing.T) {
 	}
 	defer teardown2()
 
-	pubkey, err := user.PubKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// check if the dataset was created
-	dataset, err := e2.GetDataset(ctx, utils.GenerateDBID("testdb1", pubkey.Bytes()))
+	dataset, err := e2.GetDataset(ctx, utils.GenerateDBID("testdb1", user.PublicKey))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,13 +118,8 @@ func Test_Open(t *testing.T) {
 		}
 	}
 
-	pub, err := user.PubKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// list the datasets
-	datasets, err := e2.ListDatasets(ctx, pub.Bytes())
+	datasets, err := e2.ListDatasets(ctx, user.PublicKey)
 	if err != nil {
 		t.Fatal(err)
 	}

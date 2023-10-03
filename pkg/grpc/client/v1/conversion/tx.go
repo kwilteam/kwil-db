@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/client/types"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
@@ -21,9 +21,9 @@ func ConvertToAbciTx(incoming *txpb.Transaction) (*transactions.Transaction, err
 		return nil, fmt.Errorf("transaction signature not given")
 	}
 
-	convSignature, err := ConvertToCryptoSignature(incoming.Signature)
-	if err != nil {
-		return nil, err
+	convSignature := &auth.Signature{
+		Signature: incoming.Signature.SignatureBytes,
+		Type:      incoming.Signature.SignatureType,
 	}
 
 	bigFee, ok := big.NewInt(0).SetString(incoming.Body.Fee, 10)
@@ -67,36 +67,31 @@ func ConvertFromAbciTx(tx *transactions.Transaction) (*txpb.Transaction, error) 
 	}, nil
 }
 
-func newEmptySignature() (bytes []byte, sigType crypto.SignatureType) {
-	return []byte{}, crypto.SignatureTypeEmpty
-}
-
 // ConvertToCryptoSignature convert a protobuf signature to crypto signature
-func ConvertToCryptoSignature(sig *txpb.Signature) (*crypto.Signature, error) {
+func ConvertToCryptoSignature(sig *txpb.Signature) (*auth.Signature, error) {
+	// signatures can be empty and still be valid for calls
 	if sig == nil {
-		emptyBts, emptyType := newEmptySignature()
-		return &crypto.Signature{
-			Signature: emptyBts,
-			Type:      emptyType,
+		return &auth.Signature{
+			Signature: []byte{},
+			Type:      "",
 		}, nil
 	}
 
-	sigType := crypto.SignatureTypeLookUp(sig.SignatureType)
-	return &crypto.Signature{
+	return &auth.Signature{
 		Signature: sig.SignatureBytes,
-		Type:      sigType,
+		Type:      sig.SignatureType,
 	}, nil
 }
 
 // ConvertFromCryptoSignature Convert a crypto signature to protobuf signature
-func ConvertFromCryptoSignature(sig *crypto.Signature) *txpb.Signature {
+func ConvertFromCryptoSignature(sig *auth.Signature) *txpb.Signature {
 	if sig == nil {
 		return &txpb.Signature{}
 	}
 
 	newSig := &txpb.Signature{
 		SignatureBytes: sig.Signature,
-		SignatureType:  sig.Type.String(),
+		SignatureType:  sig.Type,
 	}
 
 	return newSig

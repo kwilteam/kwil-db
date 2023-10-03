@@ -6,22 +6,16 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/pkg/balances"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
 )
 
 // newTx creates a new Transaction signed by the Client's Signer
 func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transactions.Transaction, error) {
-	pub, err := c.getPublicKey()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get address from private key: %w", err)
-	}
-
 	// get nonce from address
-	acc, err := c.transportClient.GetAccount(ctx, pub.Bytes())
+	acc, err := c.transportClient.GetAccount(ctx, c.Signer.PublicKey())
 	if err != nil {
 		acc = &balances.Account{
-			PublicKey: pub.Bytes(),
+			PublicKey: c.Signer.PublicKey(),
 			Nonce:     0,
 			Balance:   big.NewInt(0),
 		}
@@ -49,12 +43,4 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload) (*transac
 	}
 
 	return tx, nil
-}
-
-func (c *Client) getPublicKey() (crypto.PublicKey, error) {
-	if c.Signer == nil {
-		return nil, fmt.Errorf("private key is nil")
-	}
-
-	return c.Signer.PubKey(), nil
 }
