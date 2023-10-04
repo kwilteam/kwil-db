@@ -1,10 +1,13 @@
 package auth
 
 import (
-	"crypto/sha256"
-
 	ethAccount "github.com/ethereum/go-ethereum/accounts"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
+)
+
+const (
+	EthPersonalSignAuth = "secp256k1_ep"
+	Ed25519Auth         = "ed25519"
 )
 
 // Signature is a signature with a designated AuthType, which should
@@ -61,41 +64,12 @@ func (e *EthPersonalSigner) Sign(msg []byte) (*Signature, error) {
 
 	return &Signature{
 		Signature: signatureBts,
-		Type:      EthAuth,
+		Type:      EthPersonalSignAuth,
 	}, nil
 }
 
 // PublicKey returns the public key of the signer
 func (e *EthPersonalSigner) PublicKey() []byte {
-	return e.Secp256k1PrivateKey.PubKey().Bytes()
-}
-
-// CometBftSecp256k1Signer is a signer that signs messages using the
-// secp256k1 curve, using CometBFT's signature scheme.
-type CometBftSecp256k1Signer struct {
-	crypto.Secp256k1PrivateKey
-}
-
-var _ Signer = (*CometBftSecp256k1Signer)(nil)
-
-// Sign signs the given message(not hashed) according to cometbft's signature scheme.
-// It use sha256 to hash the message.
-// The signature is in [R || S] format, 64 bytes.
-func (c *CometBftSecp256k1Signer) Sign(msg []byte) (*Signature, error) {
-	hash := sha256.Sum256(msg)
-	signatureBts, err := c.Secp256k1PrivateKey.Sign(hash[:])
-	if err != nil {
-		return nil, err
-	}
-
-	return &Signature{
-		Signature: signatureBts,
-		Type:      CometBftSecp256k1Auth,
-	}, nil
-}
-
-// PublicKey returns the public key of the signer
-func (e *CometBftSecp256k1Signer) PublicKey() []byte {
 	return e.Secp256k1PrivateKey.PubKey().Bytes()
 }
 
@@ -123,34 +97,5 @@ func (e *Ed25519Signer) Sign(msg []byte) (*Signature, error) {
 
 // PublicKey returns the public key of the signer
 func (e *Ed25519Signer) PublicKey() []byte {
-	return e.Ed25519PrivateKey.PubKey().Bytes()
-}
-
-// NearSigner is a signer that signs messages using the
-// ed25519 curve, using the near signature scheme.
-type NearSigner struct {
-	crypto.Ed25519PrivateKey
-}
-
-var _ Signer = (*NearSigner)(nil)
-
-// Sign signs the given message(not hashed) according to Near's signature scheme.
-// It first hash the message with sha256, then sign the hash.
-// It returns 64 bytes signature.
-func (n *NearSigner) Sign(msg []byte) (*Signature, error) {
-	hash := sha256.Sum256(msg)
-	signatureBts, err := n.Ed25519PrivateKey.Sign(hash[:])
-	if err != nil {
-		return nil, err
-	}
-
-	return &Signature{
-		Signature: signatureBts,
-		Type:      NearAuth,
-	}, nil
-}
-
-// PublicKey returns the public key of the signer
-func (e *NearSigner) PublicKey() []byte {
 	return e.Ed25519PrivateKey.PubKey().Bytes()
 }

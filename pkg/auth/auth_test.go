@@ -34,19 +34,9 @@ func Test_Auth(t *testing.T) {
 			address: "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7",
 		},
 		{
-			name:    "cometbft secp256k1",
-			signer:  newCometBftSigner(secp256k1Key),
-			address: "6E741B9E60A1DFB6FE40B53069CFBD00A6C1FC88",
-		},
-		{
 			name:   "ed25519",
 			signer: newEd25519Signer(ed25519Key),
 			// ed25519 doesn't really have the concept of address, so it is just the hex public key
-			address: "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842",
-		},
-		{
-			name:    "near",
-			signer:  newNearSigner(ed25519Key),
 			address: "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842",
 		},
 	}
@@ -78,15 +68,6 @@ func newEthSigner(pkey string) *auth.EthPersonalSigner {
 	return &auth.EthPersonalSigner{Secp256k1PrivateKey: *secpKey}
 }
 
-func newCometBftSigner(pkey string) *auth.CometBftSecp256k1Signer {
-	secpKey, err := crypto.Secp256k1PrivateKeyFromHex(pkey)
-	if err != nil {
-		panic(err)
-	}
-
-	return &auth.CometBftSecp256k1Signer{Secp256k1PrivateKey: *secpKey}
-}
-
 func newEd25519Signer(pkey string) *auth.Ed25519Signer {
 	edKey, err := crypto.Ed25519PrivateKeyFromHex(pkey)
 	if err != nil {
@@ -94,13 +75,4 @@ func newEd25519Signer(pkey string) *auth.Ed25519Signer {
 	}
 
 	return &auth.Ed25519Signer{Ed25519PrivateKey: *edKey}
-}
-
-func newNearSigner(pkey string) *auth.NearSigner {
-	edKey, err := crypto.Ed25519PrivateKeyFromHex(pkey)
-	if err != nil {
-		panic(err)
-	}
-
-	return &auth.NearSigner{Ed25519PrivateKey: *edKey}
 }

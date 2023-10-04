@@ -28,7 +28,7 @@ func newTestUser() *types.User {
 
 	return &types.User{
 		PublicKey: pk.PubKey().Bytes(),
-		AuthType:  auth.EthAuth,
+		AuthType:  auth.EthPersonalSignAuth,
 	}
 }
 
