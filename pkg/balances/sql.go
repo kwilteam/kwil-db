@@ -4,9 +4,23 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/pkg/sql"
+)
+
+const (
+	sqlInitTables = `CREATE TABLE IF NOT EXISTS accounts (
+		public_key BLOB PRIMARY KEY,
+		balance TEXT NOT NULL,
+		nonce INTEGER NOT NULL
+		) WITHOUT ROWID, STRICT;`
+
+	sqlCreateAccount = `INSERT INTO accounts (public_key, balance, nonce) VALUES ($public_key, $balance, $nonce)`
+
+	sqlUpdateAccount = `UPDATE accounts SET balance = $balance,
+						nonce = $nonce WHERE public_key = $public_key COLLATE NOCASE`
+
+	sqlGetAccount = `SELECT balance, nonce FROM accounts WHERE public_key = $public_key`
 )
 
 type preparedStatements struct {
@@ -32,35 +46,13 @@ func (a *AccountStore) prepareStatements() error {
 	return nil
 }
 
-const (
-	sqlInitTables = `
-CREATE TABLE IF NOT EXISTS accounts (
-	public_key BLOB PRIMARY KEY,
-	balance TEXT NOT NULL,
-	nonce INTEGER NOT NULL
-	) WITHOUT ROWID, STRICT;
-	`
-)
-
-func getTableInits() []string {
-	inits := strings.Split(sqlInitTables, ";")
-	return inits[:len(inits)-1]
-}
-
 func (ar *AccountStore) initTables(ctx context.Context) error {
-	inits := getTableInits()
-
-	for _, init := range inits {
-		err := ar.db.Execute(ctx, init, nil)
-		if err != nil {
-			return fmt.Errorf("failed to initialize tables: %w", err)
-		}
+	err := ar.db.Execute(ctx, sqlInitTables, nil)
+	if err != nil {
+		return fmt.Errorf("failed to initialize tables: %w", err)
 	}
-
 	return nil
 }
-
-const sqlUpdateAccount = "UPDATE accounts SET balance = $balance, nonce = $nonce WHERE public_key = $public_key COLLATE NOCASE"
 
 func (a *AccountStore) updateAccount(ctx context.Context, pubKey []byte, amount *big.Int, nonce int64) error {
 	return a.db.Execute(ctx, sqlUpdateAccount, map[string]interface{}{
@@ -70,8 +62,6 @@ func (a *AccountStore) updateAccount(ctx context.Context, pubKey []byte, amount 
 	})
 }
 
-const sqlCreateAccount = "INSERT INTO accounts (public_key, balance, nonce) VALUES ($public_key, $balance, $nonce)"
-
 // createAccount creates an account with the given public_key.
 func (a *AccountStore) createAccount(ctx context.Context, pubKey []byte) error {
 	return a.db.Execute(ctx, sqlCreateAccount, map[string]interface{}{
@@ -80,8 +70,6 @@ func (a *AccountStore) createAccount(ctx context.Context, pubKey []byte) error {
 		"$nonce":      0,
 	})
 }
-
-const sqlGetAccount = "SELECT balance, nonce FROM accounts WHERE public_key = $public_key COLLATE NOCASE"
 
 // getAccountReadOnly gets an account using a read-only connection.
 // it will not show uncommitted changes.
