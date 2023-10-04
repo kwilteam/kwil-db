@@ -258,7 +258,7 @@ func (s *sqlCommittableRegister) Unregister(ctx context.Context, name string) er
 // registerSQL is a helper function to register a SQL committable to the atomic committer.
 func registerSQL(ctx context.Context, ac *sessions.AtomicCommitter, db sql.Database, name string, logger log.Logger) error {
 	return ac.Register(ctx, name,
-		sqlSessions.NewSqlCommitable(db,
+		sqlSessions.NewSqlCommittable(db,
 			sqlSessions.WithLogger(*logger.Named(name + "-committable")),
 		),
 	)

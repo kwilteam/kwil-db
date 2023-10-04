@@ -25,7 +25,7 @@ type SqlCommitable struct {
 var _ sessions.Committable = (*SqlCommitable)(nil)
 
 // NewSqlCommitable creates a new SqlCommitable.
-func NewSqlCommitable(db SqlDB, opts ...SqlCommittableOpt) *SqlCommitable {
+func NewSqlCommittable(db SqlDB, opts ...SqlCommittableOpt) *SqlCommitable {
 	s := &SqlCommitable{
 		db:  db,
 		log: log.NewNoOp(),
