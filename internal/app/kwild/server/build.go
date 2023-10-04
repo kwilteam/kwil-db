@@ -35,6 +35,7 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	"github.com/kwilteam/kwil-db/pkg/modules/validators"
 	"github.com/kwilteam/kwil-db/pkg/sessions"
+	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
 	"github.com/kwilteam/kwil-db/pkg/sessions/wal"
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/sql"
@@ -152,11 +153,6 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.Data
 		failBuild(err, "failed to open atomic kv")
 	}
 
-	err = atomicCommitter.Register(d.ctx, "blockchain_kv", atomicKv)
-	if err != nil {
-		failBuild(err, "failed to register atomic kv")
-	}
-
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
@@ -221,6 +217,8 @@ func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engin
 		failBuild(err, "failed to open engine")
 	}
 
+	// Register masterDB committable
+	a.Register(d.ctx, "master_db", e.Committable())
 	return e
 }
 
@@ -231,11 +229,6 @@ func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *session
 	}
 	closer.addCloser(db.Close)
 
-	err = registerSQL(d.ctx, ac, db, "accounts_db", d.log)
-	if err != nil {
-		failBuild(err, "failed to register accounts db")
-	}
-
 	genCfg := d.genesisCfg
 	b, err := balances.NewAccountStore(d.ctx, db,
 		balances.WithLogger(*d.log.Named("accountStore")),
@@ -245,6 +238,10 @@ func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *session
 	if err != nil {
 		failBuild(err, "failed to build account store")
 	}
+	closer.addCloser(b.Close)
+
+	committable := sqlSessions.NewSqlCommittable(db, sqlSessions.WithLogger(*d.log.Named("accounts-committable")))
+	ac.Register(d.ctx, "accounts_db", b.WrapCommittable(committable))
 
 	return b
 }
@@ -265,7 +262,8 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 		failBuild(err, "failed to build validator store")
 	}
 
-	ac.Register(d.ctx, "validator_db", v.Committable())
+	committable := sqlSessions.NewSqlCommittable(db, sqlSessions.WithLogger(*d.log.Named("validator-committable")))
+	ac.Register(d.ctx, "validator_db", v.WrapCommittable(committable))
 	return v
 }
 
