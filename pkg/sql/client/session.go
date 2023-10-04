@@ -53,7 +53,7 @@ func (c *Changeset) Close() error {
 }
 
 /*
-ID generates a determinstic ID for the changeset.
+ID generates a deterministic ID for the changeset.
 It does this by:
 1. ordering each record by primary key
 if there are multiple primary keys, it will concatenate them alphabetically

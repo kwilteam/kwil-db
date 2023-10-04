@@ -449,6 +449,12 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to get commit id: %v", err)))
 	}
 
+	err = a.committer.Commit(ctx)
+	if err != nil {
+		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to commit atomic commit: %v", err)))
+	}
+
+	// Update AppHash and Block Height in metadata store.
 	appHash, err := a.createNewAppHash(ctx, id)
 	if err != nil {
 		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to create new app hash: %v", err)))
@@ -457,11 +463,6 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	err = a.metadataStore.IncrementBlockHeight(ctx)
 	if err != nil {
 		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to increment block height: %v", err)))
-	}
-
-	err = a.committer.Commit(ctx)
-	if err != nil {
-		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to commit atomic commit: %v", err)))
 	}
 
 	// Update the validator address=>pubkey map used by Penalize.
