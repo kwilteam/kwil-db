@@ -119,20 +119,17 @@ type closeFuncs struct {
 }
 
 func (c *closeFuncs) addCloser(f func() error) {
-	c.closers = append(c.closers, f)
+	c.closers = append([]func() error{f}, c.closers...) // slices.Insert(c.closers, 0, f)
 }
 
-// closeAll closeps all closers, in the order they were added
+// closeAll closes all closers
 func (c *closeFuncs) closeAll() error {
-	errs := make([]error, 0)
+	var err error
 	for _, closer := range c.closers {
-		err := closer()
-		if err != nil {
-			errs = append(errs, err)
-		}
+		err = errors.Join(closer())
 	}
 
-	return errors.Join(errs...)
+	return err
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
@@ -467,12 +464,13 @@ func buildAtomicCommitter(d *coreDependencies, closers *closeFuncs) *sessions.At
 	if err != nil {
 		failBuild(err, "failed to open 2pc wal")
 	}
+	closers.addCloser(twoPCWal.Close)
 
 	// we are actually registering all committables ad-hoc, so we can pass nil here
 	s := sessions.NewAtomicCommitter(d.ctx, twoPCWal, sessions.WithLogger(*d.log.Named("atomic-committer")))
 	// we need atomic committer to close before 2pc wal
 	closers.addCloser(s.Close)
-	closers.addCloser(twoPCWal.Close)
+
 	return s
 }
 
