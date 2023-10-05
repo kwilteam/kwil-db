@@ -94,7 +94,7 @@ func convertNodeInfo(ni *p2p.DefaultNodeInfo) *types.NodeInfo {
 		NodeID:          string(ni.ID()),
 		ProtocolVersion: ni.ProtocolVersion.P2P,
 		AppVersion:      ni.ProtocolVersion.App,
-		BlockVersion:    ni.ProtocolVersion.App,
+		BlockVersion:    ni.ProtocolVersion.Block,
 		ListenAddr:      ni.ListenAddr,
 		RPCAddr:         ni.Other.RPCAddress,
 	}
