@@ -4,7 +4,7 @@ Extensions are compile-time loaded pieces of code that impact core `kwild` funct
 
 ## Interfaces and Drivers
 
-Extensions can made by implementing a driver for one of many interfaces. These implementations should be registered using Go's `init()` function, which will register the driver when the package is loaded.  This is conceptually similar to Go's `database/sql` package, where users can implement custom `database/sql/driver/Driver` implementations.
+Extensions can be made by implementing a driver for one of many interfaces. These implementations should be registered using Go's `init()` function, which will register the driver when the package is loaded.  This is conceptually similar to Go's `database/sql` package, where users can implement custom `database/sql/driver/Driver` implementations.
 
 ## Build Tags
 

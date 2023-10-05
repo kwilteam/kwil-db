@@ -20,6 +20,7 @@ func init() {
 // ed25519 constants
 const (
 	// using Ed25519Auth for the authenticator name
+	Ed25519Auth = "ed25519"
 
 	// ed25519SignatureLength is the expected length of a signature
 	ed25519SignatureLength = 64

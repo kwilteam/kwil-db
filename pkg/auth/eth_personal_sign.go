@@ -20,6 +20,7 @@ func init() {
 
 const (
 	// using EthPersonalSignAuth for the authenticator name
+	EthPersonalSignAuth = "secp256k1_ep"
 
 	// ethPersonalSignSignatureLength is the expected length of a signature
 	ethPersonalSignSignatureLength = 65

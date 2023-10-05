@@ -5,11 +5,6 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 )
 
-const (
-	EthPersonalSignAuth = "secp256k1_ep"
-	Ed25519Auth         = "ed25519"
-)
-
 // Signature is a signature with a designated AuthType, which should
 // be used to determine how to verify the signature.
 // It seems a bit weird to have a field "Signature" inside a struct called "Signature",
