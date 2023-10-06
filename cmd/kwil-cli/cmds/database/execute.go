@@ -43,7 +43,7 @@ OR
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var resp []byte
 
-			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, cl *client.Client, conf *config.KwilCliConfig) error {
 				dbId, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return fmt.Errorf("target database not properly specified: %w", err)
@@ -51,7 +51,7 @@ OR
 
 				lowerName := strings.ToLower(actionName)
 
-				actionStructure, err := getAction(ctx, client, dbId, lowerName)
+				actionStructure, err := getAction(ctx, cl, dbId, lowerName)
 				if err != nil {
 					return fmt.Errorf("error getting action: %w", err)
 				}
@@ -61,7 +61,9 @@ OR
 					return fmt.Errorf("error getting inputs: %w", err)
 				}
 
-				resp, err = client.ExecuteAction(ctx, dbId, lowerName, inputs...)
+				// Could actually just directly pass nonce to the client method,
+				// but those methods don't need tx details in the inputs.
+				resp, err = cl.ExecuteAction(ctx, dbId, lowerName, inputs, client.WithNonce(nonceOverride))
 				if err != nil {
 					return fmt.Errorf("error executing database: %w", err)
 				}

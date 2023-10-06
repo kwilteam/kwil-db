@@ -113,7 +113,7 @@ func (d *KwildClientDriver) DatabaseExists(ctx context.Context, dbid string) err
 }
 
 func (d *KwildClientDriver) ExecuteAction(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) ([]byte, error) {
-	rec, err := d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs...)
+	rec, err := d.clt.ExecuteAction(ctx, dbid, actionName, actionInputs)
 	if err != nil {
 		return nil, fmt.Errorf("error executing query: %w", err)
 	}

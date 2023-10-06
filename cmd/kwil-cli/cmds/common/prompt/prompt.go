@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/manifoldco/promptui"
-	"github.com/spf13/cobra"
 )
 
 type Prompter struct {
@@ -49,14 +48,4 @@ func (p Prompter) Run() (string, error) {
 	}
 
 	return prompt.Run()
-}
-
-func ConfirmPrompt() bool {
-	prompt := promptui.Select{
-		Label: "Are you sure?",
-		Items: []string{"Apply", "Abort"},
-	}
-	_, result, err := prompt.Run()
-	cobra.CheckErr(err)
-	return result == "Apply"
 }

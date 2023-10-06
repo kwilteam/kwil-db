@@ -29,7 +29,7 @@ func deployCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var txHash []byte
 
-			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, cl *client.Client, conf *config.KwilCliConfig) error {
 				// read in the file
 				file, err := os.Open(filePath)
 				if err != nil {
@@ -49,7 +49,7 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
-				txHash, err = client.DeployDatabase(ctx, db)
+				txHash, err = cl.DeployDatabase(ctx, db, client.WithNonce(nonceOverride))
 				return err
 			})
 
