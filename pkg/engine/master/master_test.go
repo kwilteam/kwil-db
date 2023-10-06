@@ -26,7 +26,7 @@ func Test_Master(t *testing.T) {
 
 	ident := &types.User{
 		PublicKey: pk.PubKey().Bytes(),
-		AuthType:  auth.EthAuth,
+		AuthType:  auth.EthPersonalSignAuth,
 	}
 
 	pk2, err := crypto.Secp256k1PrivateKeyFromHex(testPrivateKey2)
@@ -36,7 +36,7 @@ func Test_Master(t *testing.T) {
 
 	ident2 := &types.User{
 		PublicKey: pk2.PubKey().Bytes(),
-		AuthType:  auth.EthAuth,
+		AuthType:  auth.EthPersonalSignAuth,
 	}
 
 	tests := []struct {
