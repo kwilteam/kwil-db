@@ -33,7 +33,7 @@ func Encode(val any) (SerializedData, error) {
 		return nil, err
 	}
 
-	return addSerializedTypePrefix(currentEncodingType, btsVal)
+	return addSerializedTypePrefix(currentEncodingType, btsVal), nil
 }
 
 // Decode decodes the given serialized data into the given value.

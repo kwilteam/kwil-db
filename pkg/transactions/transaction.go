@@ -120,24 +120,19 @@ func CreateTransaction(contents Payload, nonce uint64) (*Transaction, error) {
 }
 
 type Transaction struct {
-	// Signature is the signature of the transaction
-	// It can be nil if the transaction is unsigned
+	// Signature is the signature of the transaction.
 	Signature *auth.Signature
 
-	// Body is the body of the transaction
-	// It gets serialized and signed
+	// Body is the body of the transaction. It gets serialized and signed.
 	Body *TransactionBody
 
 	// Serialization is the serialization performed on `Body`
-	// inorder to generate the message that being signed
+	// in order to generate the message that being signed.
 	Serialization SignedMsgSerializationType
 
 	// Sender is the public key of the sender
 	// NOTE: we could not use crypto.PublicKey, since it's not RLP-serializable
 	Sender []byte
-
-	// hash of the transaction that is signed.  it is kept here as a cache
-	hash []byte
 }
 
 // Verify verifies the signature of the transaction
@@ -170,43 +165,12 @@ func (t *Transaction) Sign(signer auth.Signer) error {
 	return nil
 }
 
-// GetHash gets the hash for the transaction
-// If a hash has already been generated, it is returned
-func (t *Transaction) GetHash() ([]byte, error) {
-	if t.hash != nil {
-		return t.hash, nil
-	}
-
-	return t.SetHash()
-}
-
-// SetHash re-hashes the transaction and caches the new hash
-func (t *Transaction) SetHash() ([]byte, error) {
-	bts, err := t.Body.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
-	t.hash = crypto.Sha256(bts)
-
-	return t.hash, nil
-}
-
 func (t *Transaction) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(t)
 }
 
-// TODO: I am not sure if this will actually work, since it is unserializing into an interface
-// I am quite sure it wont; an alternative is to decode into a struct where public key is bytes, and
-// create the public key from there
 func (t *Transaction) UnmarshalBinary(data serialize.SerializedData) error {
-	res, err := serialize.Decode[Transaction](data)
-	if err != nil {
-		return err
-	}
-
-	*t = *res
-	return nil
+	return serialize.DecodeInto(data, t)
 }
 
 // TransactionBody is the body of a transaction that gets included in the signature

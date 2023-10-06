@@ -82,7 +82,7 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 func extractGenesisDoc(g *config.GenesisConfig) (*cmttypes.GenesisDoc, error) {
 
 	consensusParams := &cmttypes.ConsensusParams{
-		Block: cmttypes.BlockParams{
+		Block: cmttypes.BlockParams{ // TODO: set MaxBytes to -1 so we can do the truncation in PrepareProposal after our other processing
 			MaxBytes: g.ConsensusParams.Block.MaxBytes,
 			MaxGas:   g.ConsensusParams.Block.MaxGas,
 		},

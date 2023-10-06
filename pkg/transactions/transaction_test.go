@@ -9,9 +9,24 @@ import (
 	"github.com/kwilteam/kwil-db/pkg/auth"
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// NOTE: this fails because of legacy issues with RLP itself. We should be aware
+// of these issues with RLP (allows encoding nil fields, but cannot decode
+// them). If we add the `rlp:"nil"` tag, it can decode, but it's a breaking
+// change to transaction serialization.
+func Test_TransactionMarshalUnmarshal(t *testing.T) {
+	tx := &transactions.Transaction{}
+	serialized, err := tx.MarshalBinary()
+	require.NoError(t, err)
+
+	tx2 := &transactions.Transaction{}
+	err = tx2.UnmarshalBinary(serialized)
+	require.Error(t, err)
+}
 
 // testing serialization of a transaction, since Luke found a bug
 func Test_TransactionMarshal(t *testing.T) {
