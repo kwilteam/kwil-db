@@ -15,18 +15,6 @@ tasks:
     cmds:
       - grep _ tools.txt | awk -F'"' '{print $2}' | xargs -tI % go install %
 
-  vendor:
-    desc: Generate vendor
-    deps:
-      - task: vendor:clean
-    cmds:
-      - go mod vendor
-
-  vendor:clean:
-    desc: Clean vendor
-    cmds:
-      - rm -rf ./vendor
-
   git:init:
     desc: Initialize git submodules
     cmds:
@@ -60,8 +48,6 @@ tasks:
 
   build:
     desc: Build cli, admin & kwild
-    deps:
-      - task: vendor:clean
     cmds:
       - task: build:cli
       - task: build:kwild
@@ -89,24 +75,36 @@ tasks:
       - .build/kwild
 
   # ************ docker ************
+  vendor:
+    desc: Generate vendor
+    deps:
+      - task: vendor:clean
+    cmds:
+      - go mod vendor
+
+  vendor:clean:
+    desc: Clean vendor
+    cmds:
+      - rm -rf ./vendor
+
   build:docker:
     desc: Build the docker image for the kwild, support extra args to specify image flavor
     cmds:
       - task: vendor
+      - defer: { task: vendor:clean }
       # pass any args to build flavored image, e.g. task build:docker -- debug
       # NOTE: this is kind hack/messy, since `./scripts/build/docker` only care first 2 args
       # {{.CLI_ARGS}} is a special variable that will be replaced with the CLI args
       # {{.VARIANT}} is a variable other tasks can set, it will have effect if {{.CLI_ARGS}} is empty
       # !! if parent task(which has deps on this task) has {{.CLI_ARGS}}, only this child task get the {{.CLI_ARGS}}
       - ./scripts/build/docker kwild {{.CLI_ARGS}} {{.VARIANT}}
-      - task: vendor:clean
 
   publish:dockerhub:
     desc: Publish docker image to dockerhub
     cmds:
       - task: vendor
+      - defer: { task: vendor:clean }
       - TAG={{.TAG}} ./scripts/publish/dockerhub
-      - task: vendor:clean
     requires:
       vars: [TAG]
 
@@ -117,7 +115,7 @@ tasks:
       - task: build:docker
         vars: {VARIANT: 'shell'}
     cmds:
-      - task dev:up:nb
+      - task: dev:up:nb
 
   dev:up:debug:
     desc: Start the dev environment
@@ -125,7 +123,7 @@ tasks:
       - task: build:docker
         vars: { VARIANT: 'debug' }
     cmds:
-      - task dev:up:nb
+      - task: dev:up:nb
 
   dev:up:nb:
     desc: Start the dev environment without rebuilding docker image
@@ -134,7 +132,7 @@ tasks:
       KACT_WAIT_TIMEOUT: 20s
     dir: test # different module
     cmds:
-      - go test ./acceptance/ -timeout 12h -dev -v)
+      - go test ./acceptance/ -timeout 12h -dev -v
 
   dev:testnet:up:
     desc: Start the dev environment(with testnet)
@@ -142,7 +140,7 @@ tasks:
       - task: build:docker
         vars: { VARIANT: 'shell' }
     cmds:
-      - task dev:testnet:up:nb
+      - task: dev:testnet:up:nb
 
   dev:testnet:up:nb:
     desc: Start the dev environment(with testnet) without rebuilding docker image
@@ -156,9 +154,11 @@ tasks:
   test:act:
     desc: Run acceptance tests
     deps:
-      - task: build
+      - task: build:cli
+      - task: build:admin
+      - task: build:docker
     cmds:
-      - task test:act:nb
+      - task: test:act:nb
 
   # *:nb task support passing CLI_ARGS to go test, e.g. task test:act:nb -- -remote
   # this CLI_ARGS will be used by `go test`
@@ -176,9 +176,7 @@ tasks:
   test:unit:race:
       desc: Run unit tests with race
       cmds:
-        - task vendor
         - go test `go list ./... | grep -v /kwil-db\/test/` -count=1 -race
-        - task vendor:clean
 
   test:it:
     desc: Run integration tests
@@ -187,7 +185,7 @@ tasks:
       - task: build:admin
       - task: build:docker
     cmds:
-      - task test:it:nb
+      - task: test:it:nb
 
   test:it:nb:
     desc: Run integration tests
