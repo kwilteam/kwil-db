@@ -67,6 +67,9 @@ type ValidatorMgr struct {
 	// opts
 	joinExpiry int64
 	log        log.Logger
+
+	// pricing
+	feeMultiplier int64
 }
 
 // NOTE: The SQLite validator/approval store is local and transparent to the

@@ -37,7 +37,7 @@ type Committable interface {
 	EndApply(ctx context.Context) error
 
 	// Cancel is used to cancel a session.
-	Cancel(ctx context.Context)
+	Cancel(ctx context.Context) error
 
 	// ID returns a unique ID representative of the state changes that have occurred so far for this committable.
 	// It should be deterministic, and should change if and only if the committable has changed.
