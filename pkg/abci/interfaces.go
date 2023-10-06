@@ -2,10 +2,12 @@ package abci
 
 import (
 	"context"
+	"math/big"
 
 	modDataset "github.com/kwilteam/kwil-db/pkg/modules/datasets"
 	modVal "github.com/kwilteam/kwil-db/pkg/modules/validators"
 
+	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/engine/types"
 	"github.com/kwilteam/kwil-db/pkg/snapshots"
 	"github.com/kwilteam/kwil-db/pkg/transactions"
@@ -16,6 +18,10 @@ type DatasetsModule interface {
 	Deploy(ctx context.Context, schema *types.Schema, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
 	Drop(ctx context.Context, dbid string, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
 	Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*modDataset.ExecutionResponse, error)
+
+	PriceDeploy(ctx context.Context, schema *types.Schema) (*big.Int, error)
+	PriceDrop(ctx context.Context, dbid string) (*big.Int, error)
+	PriceExecute(ctx context.Context, dbid string, action string, args [][]any) (*big.Int, error)
 }
 
 // ValidatorModule handles the processing of validator approve/join/leave
@@ -56,6 +62,15 @@ type ValidatorModule interface {
 
 	// Updates block height stored by the validator manager. Called in the abci Commit
 	UpdateBlockHeight(ctx context.Context, blockHeight int64)
+
+	// PriceJoin returns the price of a join transaction.
+	PriceJoin(ctx context.Context) (*big.Int, error)
+
+	// PriceApprove returns the price of an approve transaction.
+	PriceApprove(ctx context.Context) (*big.Int, error)
+
+	// PriceLeave returns the price of a leave transaction.
+	PriceLeave(ctx context.Context) (*big.Int, error)
 }
 
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
@@ -98,4 +113,8 @@ type DBBootstrapModule interface {
 
 	// Signifies the end of the db restoration
 	IsDBRestored() bool
+}
+
+type AccountsModule interface {
+	GetAccount(ctx context.Context, pubKey []byte) (*balances.Account, error)
 }

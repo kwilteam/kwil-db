@@ -16,3 +16,9 @@ func WithJoinExpiry(joinExpiry int64) ValidatorMgrOpt {
 		v.joinExpiry = joinExpiry
 	}
 }
+
+func WithFeeMultiplier(multiplier int64) ValidatorMgrOpt {
+	return func(v *ValidatorMgr) {
+		v.feeMultiplier = multiplier
+	}
+}

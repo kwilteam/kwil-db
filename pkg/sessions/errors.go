@@ -18,6 +18,7 @@ var (
 	ErrAlreadyRegistered   = errors.New("committable already registered")
 	ErrUnknownCommittable  = errors.New("unknown committable")
 	ErrClosed              = errors.New("session closed")
+	ErrCancel              = errors.New("error cancelling committer")
 )
 
 // wrapError wraps an error with a message.
