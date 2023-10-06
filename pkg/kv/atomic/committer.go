@@ -167,7 +167,7 @@ func (k *AtomicKV) EndApply(ctx context.Context) error {
 	return nil
 }
 
-func (k *AtomicKV) Cancel(ctx context.Context) {
+func (k *AtomicKV) Cancel(ctx context.Context) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
@@ -178,6 +178,7 @@ func (k *AtomicKV) Cancel(ctx context.Context) {
 	k.currentTx = nil
 	k.inSession = false
 	k.uncommittedData = make([]*keyValue, 0)
+	return nil
 }
 
 func (k *AtomicKV) ID(ctx context.Context) ([]byte, error) {

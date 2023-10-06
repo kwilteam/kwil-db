@@ -75,7 +75,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	bootstrapperModule := buildBootstrapper(d)
 
-	abciApp := buildAbci(d, closers, datasetsModule, validatorModule,
+	abciApp := buildAbci(d, closers, accs, datasetsModule, validatorModule,
 		ac, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
@@ -132,7 +132,7 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
+func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
 	atomicCommitter *sessions.AtomicCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, kwild.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
@@ -157,6 +157,7 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, datasetsModule abci.Data
 
 	genesisHash := d.genesisCfg.ComputeGenesisHash()
 	return abci.NewAbciApp(
+		accountsModule,
 		datasetsModule,
 		validatorModule,
 		atomicKv,
@@ -251,9 +252,15 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 	closer.addCloser(db.Close)
 
 	joinExpiry := d.genesisCfg.ConsensusParams.Validator.JoinExpiry
+	feeMultiplier := 1
+	if d.genesisCfg.ConsensusParams.WithoutGasCosts {
+		feeMultiplier = 0
+	}
+
 	v, err := vmgr.NewValidatorMgr(d.ctx, db,
 		vmgr.WithLogger(*d.log.Named("validatorStore")),
 		vmgr.WithJoinExpiry(joinExpiry),
+		vmgr.WithFeeMultiplier(int64(feeMultiplier)),
 	)
 	if err != nil {
 		failBuild(err, "failed to build validator store")

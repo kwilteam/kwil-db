@@ -148,25 +148,26 @@ func (s *SqlCommitable) EndApply(ctx context.Context) error {
 // Cancel cancels the current session.
 // it deletes the session and rolls back the savepoint.
 // it will also enable foreign key constraints.
-func (s *SqlCommitable) Cancel(ctx context.Context) {
-	errs := []error{}
+func (s *SqlCommitable) Cancel(ctx context.Context) error {
+	var errs error
 	if s.session != nil {
-		errs = append(errs, s.session.Delete())
+		errs = errors.Join(errs, s.session.Delete())
 		s.session = nil
 	}
 	if s.savepoint != nil {
-		errs = append(errs, s.savepoint.Rollback())
+		errs = errors.Join(errs, s.savepoint.Rollback())
 		s.savepoint = nil
 	}
 
 	// this can be called multiple times without issue
 	if err := s.db.EnableForeignKey(); err != nil {
-		errs = append(errs, err)
+		errs = errors.Join(errs, err)
 	}
 
-	if len(errs) > 0 {
-		s.log.Error("errors while cancelling session", zap.Error(errors.Join(errs...)))
+	if errs != nil {
+		s.log.Error("errors while cancelling session", zap.Error(errs))
 	}
+	return errs
 }
 
 // ID returns the ID of the current session.

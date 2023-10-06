@@ -89,13 +89,13 @@ func (s *Service) priceAction(ctx context.Context, txBody *txpb.Transaction_Body
 
 // TODO: Later to be moved to validator module (or) manager
 func (s *Service) priceValidatorJoin(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
-	return big.NewInt(10000000000000), nil
+	return s.vstore.PriceJoin(ctx)
 }
 
 func (s *Service) priceValidatorLeave(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
-	return big.NewInt(10000000000000), nil
+	return s.vstore.PriceLeave(ctx)
 }
 
 func (s *Service) priceValidatorApprove(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
-	return big.NewInt(10000000000000), nil
+	return s.vstore.PriceApprove(ctx)
 }
