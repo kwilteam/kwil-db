@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/kwilteam/kwil-db/pkg/crypto"
 	engineTypes "github.com/kwilteam/kwil-db/pkg/engine/types"
@@ -101,6 +102,7 @@ func pubkeyToAddr(pubkey []byte) (string, error) {
 
 type AbciApp struct {
 	genesisAppHash []byte
+
 	// database is the database module that handles database deployment, dropping, and execution
 	database DatasetsModule
 
@@ -169,6 +171,25 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 	return abciTypes.ResponseBeginBlock{}
 }
 
+// CheckTx is the "Guardian of the mempool: every node runs CheckTx before
+// letting a transaction into its local mempool". Also "The transaction may come
+// from an external user or another node". Further "CheckTx validates the
+// transaction against the current state of the application, for example,
+// checking signatures and account balances, but does not apply any of the state
+// changes described in the transaction."
+//
+// This method must reject transactions that are invalid and/or may be crafted
+// to attack the network by flooding the mempool or filling blocks with rejected
+// transactions.
+//
+// This method is also used to re-check mempool transactions after blocks are
+// mined. This is used to *evict* previously accepted transactions that become
+// invalid, which may happen for a variety of reason only the application can
+// decide, such as changes in account balance and last mined nonce.
+//
+// It is important to use this method rather than include failing transactions
+// in blocks, particularly if the failure mode involves the transaction author
+// spending no gas or achieving including in the block with little effort.
 func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseCheckTx {
 	logger := a.log.With(zap.String("stage", "ABCI CheckTx"))
 	logger.Debug("check tx")
@@ -189,6 +210,15 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 		logger.Error("failed to verify transaction", zap.Error(err))
 		return abciTypes.ResponseCheckTx{Code: 1, Log: err.Error()}
 	}
+
+	// TODO: CheckTx must reject transactions with a nonce <= currently mined
+	// account nonce. Also, with re-check happening (CheckTxType_Recheck) we
+	// must evict transactions that become invalid.
+	//
+	// Pathological cases:
+	//  a. accept any txns to mempool -- that's a trivial mempool flooding attack.
+	//  b. mine them (failed) -- that's a trivial block space attack.
+	//  c. txns paying no fee -- flood, so a. and b. are crucial with no gas
 
 	return abciTypes.ResponseCheckTx{Code: 0}
 }
@@ -653,16 +683,113 @@ func (a *AbciApp) OfferSnapshot(p0 abciTypes.RequestOfferSnapshot) abciTypes.Res
 	return abciTypes.ResponseOfferSnapshot{Result: abciTypes.ResponseOfferSnapshot_ACCEPT}
 }
 
+// txSubList implements sort.Interface to perform in-place sorting of a slice
+// that is a subset of another slice, reordering in both while staying within
+// the subsets positions in the parent slice.
+//
+// For example:
+//
+//	parent slice: {a0, b2, b0, a1, b1}
+//	b's subset: {b2, b0, b1}
+//	sorted subset: {b0, b1, b2}
+//	parent slice: {a0, b0, b1, a1, b2}
+//
+// The set if locations used by b elements within the parent slice is unchanged,
+// but the elements are sorted.
+type txSubList struct {
+	sub   []*indexedTxn // sort.Sort references only this with Len and Less
+	super []*indexedTxn // sort.Sort also Swaps in super using the i field
+}
+
+func (txl txSubList) Len() int {
+	return len(txl.sub)
+}
+
+func (txl txSubList) Less(i int, j int) bool {
+	a, b := txl.sub[i], txl.sub[j]
+	return a.Body.Nonce < b.Body.Nonce
+}
+
+func (txl txSubList) Swap(i int, j int) {
+	// Swap elements in sub.
+	txl.sub[i], txl.sub[j] = txl.sub[j], txl.sub[i]
+	// Swap the elements in their positions in super.
+	ip, jp := txl.sub[i].i, txl.sub[j].i
+	txl.super[ip], txl.super[jp] = txl.super[jp], txl.super[ip]
+}
+
+// indexedTxn facilitates in-place sorting of transaction slices that are
+// subsets of other larger slices using a txSubList. This is only used within
+// prepareMempoolTxns, and is package-level rather than scoped to the function
+// because we define methods to implement sort.Interface.
+type indexedTxn struct {
+	i int // index in superset slice
+	*transactions.Transaction
+
+	is int // not used for sorting, only referencing the marshalled txn slice
+}
+
+// prepareMempoolTxns prepares the transactions for the block we are proposing.
+// The input transactions are from mempool direct from cometbft, and we modify
+// the list for our purposes. This includes ensuring transactions from the same
+// sender in ascending nonce-order, enforcing the max bytes limit, etc.
+//
+// NOTE: This is a plain function instead of an AbciApplication method so that
+// it may be directly tested.
+func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger) [][]byte {
+	// Unmarshal and index the transactions.
+	var okTxns []*indexedTxn
+	var i int
+	for is, txB := range txs {
+		tx := &transactions.Transaction{}
+		err := tx.UnmarshalBinary(txB)
+		if err != nil {
+			log.Error("failed to unmarshal transaction that was previously accepted to mempool", zap.Error(err))
+			continue // should not have passed CheckTx to get into our mempool
+		}
+		okTxns = append(okTxns, &indexedTxn{i, tx, is})
+		i++
+	}
+
+	// Group by sender and stable sort each group by nonce.
+	grouped := make(map[string][]*indexedTxn)
+	for _, txn := range okTxns {
+		key := string(txn.Sender)
+		grouped[key] = append(grouped[key], txn)
+	}
+	for _, txns := range grouped {
+		sort.Stable(txSubList{
+			sub:   txns,
+			super: okTxns,
+		})
+	}
+
+	// TODO: truncate based on our max block size since we'll have to set
+	// ConsensusParams.Block.MaxBytes to -1 so that we get ALL transactions even
+	// if it goes beyond max_tx_bytes.  See:
+	// https://github.com/cometbft/cometbft/pull/1003
+	// https://docs.cometbft.com/v0.38/spec/abci/abci++_methods#prepareproposal
+	// https://github.com/cometbft/cometbft/issues/980
+
+	// Grab the bytes rather than re-marshalling.
+	finalTxns := make([][]byte, len(okTxns))
+	for i, tx := range okTxns {
+		finalTxns[i] = txs[tx.is]
+	}
+
+	return finalTxns
+}
+
 func (a *AbciApp) PrepareProposal(p0 abciTypes.RequestPrepareProposal) abciTypes.ResponsePrepareProposal {
 	a.log.Debug("",
 		zap.String("stage", "ABCI PrepareProposal"),
 		zap.Int64("height", p0.Height),
 		zap.Int("txs", len(p0.Txs)))
 
-	// TODO: do something with the txs?
+	okTxns := prepareMempoolTxns(p0.Txs, int(p0.MaxTxBytes), &a.log)
 
 	return abciTypes.ResponsePrepareProposal{
-		Txs: p0.Txs,
+		Txs: okTxns,
 	}
 }
 
@@ -672,7 +799,10 @@ func (a *AbciApp) ProcessProposal(p0 abciTypes.RequestProcessProposal) abciTypes
 		zap.Int64("height", p0.Height),
 		zap.Int("txs", len(p0.Txs)))
 
-	// TODO: do something with the txs?
+	// TODO: ensure there are no gaps in an account's nonce, either from the
+	// previous best confirmed or within this block. Our current transaction
+	// execution does not update an accounts nonce in state unless it is the
+	// next nonce. Delivering transactions to a block in that way cannot happen.
 
 	return abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}
 }
