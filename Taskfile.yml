@@ -168,7 +168,7 @@ tasks:
   test:unit:
     desc: Run unit tests
     cmds:
-      - go test $(go list ./... | grep -v /kwil-db\/test/) -count=1
+      - go test $(go list ./... | grep -v /kwil-db\/test/) -tags=ext_test -count=1
 
   test:unit:race:
       desc: Run unit tests with race
