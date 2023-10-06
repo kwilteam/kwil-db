@@ -446,7 +446,7 @@ type testUserIdentifier struct {
 func (t *testUserIdentifier) Bytes() []byte {
 	bts, err := (&types.User{
 		PublicKey: t.pk.PubKey().Bytes(),
-		AuthType:  auth.EthAuth,
+		AuthType:  auth.EthPersonalSignAuth,
 	}).MarshalBinary()
 	if err != nil {
 		panic(err)

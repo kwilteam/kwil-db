@@ -100,29 +100,8 @@ func TestCallMessage_Sign(t *testing.T) {
 	expectPersonalSignConcatSigBytes, _ := hex.DecodeString(expectPersonalSignConcatSigHex)
 	expectPersonalSignConcatSig := &auth.Signature{
 		Signature: expectPersonalSignConcatSigBytes,
-		Type:      auth.EthAuth,
+		Type:      auth.EthPersonalSignAuth,
 	}
-
-	// TODO: add test case for cometbft
-	//cometbftSigner := crypto.NewCometbftSecp256k1Signer(secp256k1PrivateKey)
-	//expectCometbftConcatSigHex
-
-	//expectEip721SigHex := ""
-	////
-	// ed25519
-	ed25519PvKeyHex := "7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
-	ed25519PrivateKey, err := crypto.Ed25519PrivateKeyFromHex(ed25519PvKeyHex)
-	require.NoError(t, err, "error parse ed25519PvKeyHex")
-
-	nearSigner := auth.NearSigner{Ed25519PrivateKey: *ed25519PrivateKey}
-
-	expectNearConcatSigHex := "fd5def5115b229314006acbf0ec7eac5f39af3bea40b55423a9808203db5b0f717c17c641b82cba49d2bcb39436b3b788c839245402de78cd2a674692d4d4508"
-	expectNearConcatSigBytes, _ := hex.DecodeString(expectNearConcatSigHex)
-	expectNearConcatSig := &auth.Signature{
-		Signature: expectNearConcatSigBytes,
-		Type:      auth.NearAuth,
-	}
-	////
 
 	callPayload := transactions.ActionCall{
 		DBID:      "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
@@ -158,14 +137,6 @@ func TestCallMessage_Sign(t *testing.T) {
 				signer: &ethPersonalSigner,
 			},
 			wantSig: expectPersonalSignConcatSig,
-		},
-		{
-			name: "near concat string",
-			args: args{
-				mst:    transactions.SignedMsgConcat,
-				signer: &nearSigner,
-			},
-			wantSig: expectNearConcatSig,
 		},
 	}
 

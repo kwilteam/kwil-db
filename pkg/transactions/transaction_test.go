@@ -33,7 +33,7 @@ func Test_TransactionMarshal(t *testing.T) {
 	tx := &transactions.Transaction{
 		Signature: &auth.Signature{
 			Signature: []byte("signature"),
-			Type:      auth.CometBftSecp256k1Auth,
+			Type:      auth.EthPersonalSignAuth,
 		},
 		Body: &transactions.TransactionBody{
 			Payload:     []byte("payload"),
@@ -67,29 +67,8 @@ func TestTransaction_Sign(t *testing.T) {
 	expectPersonalSignConcatSigBytes, _ := hex.DecodeString(expectPersonalSignConcatSigHex)
 	expectPersonalSignConcatSig := &auth.Signature{
 		Signature: expectPersonalSignConcatSigBytes,
-		Type:      auth.EthAuth,
+		Type:      auth.EthPersonalSignAuth,
 	}
-
-	// TODO: add test case for cometbft
-	//cometbftSigner := crypto.NewCometbftSecp256k1Signer(secp256k1PrivateKey)
-	//expectCometbftConcatSigHex
-
-	//expectEip721SigHex := ""
-	////
-	// ed25519
-	ed25519PvKeyHex := "7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
-	ed25519PrivateKey, err := crypto.Ed25519PrivateKeyFromHex(ed25519PvKeyHex)
-	require.NoError(t, err, "error parse ed25519PvKeyHex")
-
-	nearSigner := auth.NearSigner{Ed25519PrivateKey: *ed25519PrivateKey}
-
-	expectNearConcatSigHex := "b72f815bcb5a7126fe54cd8d77210209249b1c11087a4b4601c61814911fac7f4a921f1c37991408251a04891a5e10ecc1be4535124a3827f22660adbec0590c"
-	expectNearConcatSigBytes, _ := hex.DecodeString(expectNearConcatSigHex)
-	expectNearConcatSig := &auth.Signature{
-		Signature: expectNearConcatSigBytes,
-		Type:      auth.NearAuth,
-	}
-	////
 
 	rawPayload := transactions.ActionExecution{
 		DBID:   "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
@@ -128,15 +107,6 @@ func TestTransaction_Sign(t *testing.T) {
 			},
 			wantSig: expectPersonalSignConcatSig,
 		},
-		{
-			name: "near concat string",
-			args: args{
-				mst:    transactions.SignedMsgConcat,
-				signer: &nearSigner,
-			},
-			wantSig: expectNearConcatSig,
-		},
-		//{}, // eth eip712
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t1 *testing.T) {

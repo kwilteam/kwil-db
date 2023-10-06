@@ -13,6 +13,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	_ "github.com/kwilteam/kwil-db/extensions/auth"
 )
 
 var (
