@@ -8,7 +8,7 @@ import (
 // emptyAccount returns an empty account with a balance of 0 and a nonce of 0.
 func emptyAccount() *Account {
 	return &Account{
-		PublicKey: nil,
+		PublicKey: nil, // do not change unless callers are updated
 		Balance:   big.NewInt(0),
 		Nonce:     0,
 	}
