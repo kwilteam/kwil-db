@@ -62,7 +62,7 @@ func (ds nilStringer) String() string {
 	return "no message"
 }
 
-func NewAbciApp(database DatasetsModule, vldtrs ValidatorModule, kv KVStore, committer AtomicCommitter, snapshotter SnapshotModule,
+func NewAbciApp(accounts AccountsModule, database DatasetsModule, vldtrs ValidatorModule, kv KVStore, committer AtomicCommitter, snapshotter SnapshotModule,
 	bootstrapper DBBootstrapModule, genesisHash []byte, opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
 		genesisAppHash: genesisHash,
@@ -74,8 +74,15 @@ func NewAbciApp(database DatasetsModule, vldtrs ValidatorModule, kv KVStore, com
 		},
 		bootstrapper: bootstrapper,
 		snapshotter:  snapshotter,
+		accounts:     accounts,
 
 		valAddrToKey: make(map[string][]byte),
+
+		mempool: &mempool{
+			nonceTracker: make(map[string]uint64),
+			accounts:     make(map[string]*userAccount),
+			accountStore: accounts,
+		},
 
 		log: log.NewNoOp(),
 	}
@@ -120,8 +127,16 @@ type AbciApp struct {
 	snapshotter SnapshotModule
 
 	// bootstrapper is the bootstrapper module that handles bootstrapping the database
-	bootstrapper  DBBootstrapModule
+	bootstrapper DBBootstrapModule
+
+	// metadataStore to track the app hash and block height
 	metadataStore *metadataStore
+
+	// accountStore is the store that maintains the account state
+	accounts AccountsModule
+
+	// mempool maintains in-memory account state to validate the unconfirmed transactions against.
+	mempool *mempool
 
 	log log.Logger
 
@@ -193,34 +208,50 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseCheckTx {
 	logger := a.log.With(zap.String("stage", "ABCI CheckTx"))
 	logger.Debug("check tx")
+	ctx := context.Background()
+	var err error
+	code := CodeOk
+	newTx := incoming.Type == abciTypes.CheckTxType_New
 
 	tx := &transactions.Transaction{}
-	err := tx.UnmarshalBinary(incoming.Tx)
+	err = tx.UnmarshalBinary(incoming.Tx)
 	if err != nil {
+		code = CodeEncodingError
 		logger.Error("failed to unmarshal transaction", zap.Error(err))
-		return abciTypes.ResponseCheckTx{Code: 1, Log: err.Error()}
+		return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
 	}
 
 	logger.Debug("",
 		zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
-	err = tx.Verify()
-	if err != nil {
-		logger.Error("failed to verify transaction", zap.Error(err))
-		return abciTypes.ResponseCheckTx{Code: 1, Log: err.Error()}
+	// For a new transaction (not re-check), before looking at execution cost or
+	// checking nonce validity, ensure the payload is recognized and signature is valid.
+	if newTx {
+		// Verify Payload type
+		if !tx.Body.PayloadType.Valid() {
+			code = CodeInvalidTxType
+			logger.Error("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
+			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "invalid payload type"}
+		}
+
+		// Verify Signature
+		err = tx.Verify()
+		if err != nil {
+			code = CodeInvalidSignature
+			logger.Error("failed to verify transaction", zap.Error(err))
+			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
+		}
 	}
 
-	// TODO: CheckTx must reject transactions with a nonce <= currently mined
-	// account nonce. Also, with re-check happening (CheckTxType_Recheck) we
-	// must evict transactions that become invalid.
-	//
-	// Pathological cases:
-	//  a. accept any txns to mempool -- that's a trivial mempool flooding attack.
-	//  b. mine them (failed) -- that's a trivial block space attack.
-	//  c. txns paying no fee -- flood, so a. and b. are crucial with no gas
+	err = a.mempool.applyTransaction(ctx, tx)
+	if err != nil {
+		code = CodeInvalidNonce
+		logger.Error("failed to verify transaction against local mempool state", zap.Error(err))
+		return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
+	}
 
-	return abciTypes.ResponseCheckTx{Code: 0}
+	return abciTypes.ResponseCheckTx{Code: code.Uint32()}
 }
 
 func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDeliverTx {
@@ -472,6 +503,8 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 	logger := a.log.With(zap.String("stage", "ABCI Commit"))
 	logger.Debug("start commit")
 	ctx := context.Background()
+
+	defer a.mempool.reset()
 
 	// generate the unique id for all changes occurred thus far
 	id, err := a.committer.ID(ctx)
@@ -793,17 +826,54 @@ func (a *AbciApp) PrepareProposal(p0 abciTypes.RequestPrepareProposal) abciTypes
 	}
 }
 
+func (a *AbciApp) validateProposalTransactions(ctx context.Context, Txns [][]byte) error {
+	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"))
+	grouped, err := groupTxsBySender(Txns)
+	if err != nil {
+		logger.Error("failed to group transaction based on sender: ", zap.Error(err))
+		return err
+	}
+
+	// ensure there are no gaps in an account's nonce, either from the
+	// previous best confirmed or within this block. Our current transaction
+	// execution does not update an accounts nonce in state unless it is the
+	// next nonce. Delivering transactions to a block in that way cannot happen.
+	for sender, txs := range grouped {
+		acct, err := a.accounts.GetAccount(ctx, []byte(sender))
+		if err != nil {
+			return err
+		}
+		expectedNonce := uint64(acct.Nonce) + 1
+
+		for _, tx := range txs {
+			if tx.Body.Nonce != expectedNonce {
+				logger.Error("nonce mismatch", zap.Uint64("txNonce", tx.Body.Nonce), zap.Uint64("expectedNonce", expectedNonce))
+				return fmt.Errorf("nonce mismatch, ExpectedNonce: %d TxNonce: %d", expectedNonce, tx.Body.Nonce)
+			}
+			expectedNonce++
+		}
+	}
+	return nil
+}
+
+// ProcessProposal should validate the received blocks and reject the block if:
+// 1. transactions are not ordered by nonces
+// 2. nonce is less than the last committed nonce for the account
+// 3. duplicates or gaps in the nonces
+// 4. transaction size is greater than the max_tx_bytes
+// else accept the proposed block.
 func (a *AbciApp) ProcessProposal(p0 abciTypes.RequestProcessProposal) abciTypes.ResponseProcessProposal {
 	a.log.Debug("",
 		zap.String("stage", "ABCI ProcessProposal"),
 		zap.Int64("height", p0.Height),
 		zap.Int("txs", len(p0.Txs)))
 
-	// TODO: ensure there are no gaps in an account's nonce, either from the
-	// previous best confirmed or within this block. Our current transaction
-	// execution does not update an accounts nonce in state unless it is the
-	// next nonce. Delivering transactions to a block in that way cannot happen.
+	ctx := context.Background()
+	if err := a.validateProposalTransactions(ctx, p0.Txs); err != nil {
+		return abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}
+	}
 
+	// TODO: Verify the Tx and Block sizes based on the genesis configuration
 	return abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_ACCEPT}
 }
 

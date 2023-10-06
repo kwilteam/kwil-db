@@ -239,10 +239,14 @@ func (a *AtomicCommitter) apply(ctx context.Context) (err error) {
 	return a.wal.Truncate(ctx)
 }
 
-func (a *AtomicCommitter) cancel(ctx context.Context) {
+func (a *AtomicCommitter) cancel(ctx context.Context) error {
+	var errs error
 	for _, committable := range a.committables {
-		committable.Cancel(ctx)
+		if err := committable.Cancel(ctx); err != nil {
+			errs = errors.Join(errs, err)
+		}
 	}
+	return errs
 }
 
 // handleErr checks if an error is nil or not.
@@ -251,7 +255,9 @@ func (a *AtomicCommitter) cancel(ctx context.Context) {
 func (a *AtomicCommitter) handleErr(ctx context.Context, err *error) {
 	if *err != nil {
 		a.log.Error("error during atomic commit", zap.Error(*err))
-		a.cancel(ctx)
+		if err := a.cancel(ctx); err != nil {
+			a.log.Error("error cancelling atomic commit", zap.Error(err))
+		}
 		a.phase = CommitPhaseNone
 	}
 }
@@ -295,8 +301,7 @@ func (a *AtomicCommitter) applyWal(ctx context.Context) (err error) {
 			if truncErr != nil {
 				return truncErr
 			}
-			a.cancel(ctx)
-			return nil
+			return a.cancel(ctx)
 		}
 		if err != nil {
 			return err
@@ -452,7 +457,9 @@ func (a *AtomicCommitter) Unregister(ctx context.Context, id string) error {
 	delete(a.committables, CommittableId(id))
 
 	if a.phase.InSession() {
-		committable.Cancel(ctx)
+		if err := committable.Cancel(ctx); err != nil {
+			return wrapError(ErrCancel, err)
+		}
 	}
 
 	return nil
@@ -478,8 +485,7 @@ func (a *AtomicCommitter) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
 	defer cancel()
 
-	a.cancel(ctx)
-	return nil
+	return a.cancel(ctx)
 }
 
 type CommitPhase uint8

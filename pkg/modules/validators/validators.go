@@ -2,7 +2,12 @@
 // blockchain application using a pluggable validator manager and account store.
 package validators
 
-import "github.com/kwilteam/kwil-db/pkg/log"
+import (
+	"context"
+	"math/big"
+
+	"github.com/kwilteam/kwil-db/pkg/log"
+)
 
 // NOTE: currently there is no pricing. Any fee is accepted (nonce update only)
 // if their account has the sufficient balance.
@@ -41,4 +46,16 @@ func WithLogger(logger log.Logger) ValidatorModuleOpt {
 	return func(u *ValidatorModule) {
 		u.log = logger
 	}
+}
+
+func (v *ValidatorModule) PriceJoin(ctx context.Context) (*big.Int, error) {
+	return v.mgr.PriceJoin(ctx)
+}
+
+func (v *ValidatorModule) PriceLeave(ctx context.Context) (*big.Int, error) {
+	return v.mgr.PriceLeave(ctx)
+}
+
+func (v *ValidatorModule) PriceApprove(ctx context.Context) (*big.Int, error) {
+	return v.mgr.PriceApprove(ctx)
 }
