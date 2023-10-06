@@ -191,13 +191,14 @@ func (m *mockCommittable) EndApply(ctx context.Context) error {
 	return nil
 }
 
-func (m *mockCommittable) Cancel(ctx context.Context) {
+func (m *mockCommittable) Cancel(ctx context.Context) error {
 	m.isInCommit = false
 	m.isInApply = false
 
 	m.appliedData = map[string]any{}
 
 	m.canceled = true
+	return nil
 }
 
 func (m *mockCommittable) ID(ctx context.Context) ([]byte, error) {

@@ -65,4 +65,7 @@ type ValidatorReader interface {
 	CurrentValidators(ctx context.Context) ([]*validators.Validator, error)
 	ActiveVotes(ctx context.Context) ([]*validators.JoinRequest, error)
 	// JoinStatus(ctx context.Context, joiner []byte) ([]*JoinRequest, error)
+	PriceJoin(ctx context.Context) (*big.Int, error)
+	PriceLeave(ctx context.Context) (*big.Int, error)
+	PriceApprove(ctx context.Context) (*big.Int, error)
 }

@@ -44,9 +44,9 @@ func (ac *Committable) ID(ctx context.Context) ([]byte, error) {
 
 // Wrapper around the Cancel method on the base Committable.
 // This reset the updates recorded in the account store within a commit session.
-func (ac *Committable) Cancel(ctx context.Context) {
+func (ac *Committable) Cancel(ctx context.Context) error {
 	ac.resetDBHash()
-	ac.Committable.Cancel(ctx)
+	return ac.Committable.Cancel(ctx)
 }
 
 func NewAccountStore(ctx context.Context, datastore Datastore, opts ...AccountStoreOpts) (*AccountStore, error) {

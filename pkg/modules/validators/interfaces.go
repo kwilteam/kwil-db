@@ -2,6 +2,7 @@ package validators
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/pkg/balances"
 	"github.com/kwilteam/kwil-db/pkg/validators"
@@ -20,4 +21,8 @@ type ValidatorMgr interface {
 	Approve(ctx context.Context, joiner, approver []byte) error
 	Finalize(ctx context.Context) []*validators.Validator // end of block processing requires providing list of updates to the node's consensus client
 	UpdateBlockHeight(blockHeight int64)
+
+	PriceJoin(ctx context.Context) (*big.Int, error)
+	PriceApprove(ctx context.Context) (*big.Int, error)
+	PriceLeave(ctx context.Context) (*big.Int, error)
 }
