@@ -20,9 +20,9 @@ func dropCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var resp []byte
 
-			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, cl *client.Client, conf *config.KwilCliConfig) error {
 				var _err error
-				resp, _err = client.DropDatabase(ctx, args[0])
+				resp, _err = cl.DropDatabase(ctx, args[0], client.WithNonce(nonceOverride))
 				if _err != nil {
 					return fmt.Errorf("error dropping database: %w", _err)
 				}

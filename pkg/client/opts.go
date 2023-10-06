@@ -51,3 +51,15 @@ func Authenticated(shouldSign bool) CallOpt {
 		o.forceAuthenticated = &copied
 	}
 }
+
+type txOptions struct {
+	nonce int64
+}
+
+type TxOpt func(*txOptions)
+
+func WithNonce(nonce int64) TxOpt {
+	return func(o *txOptions) {
+		o.nonce = nonce
+	}
+}

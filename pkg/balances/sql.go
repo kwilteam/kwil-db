@@ -71,8 +71,9 @@ func (a *AccountStore) createAccount(ctx context.Context, pubKey []byte) error {
 	})
 }
 
-// getAccountReadOnly gets an account using a read-only connection.
-// it will not show uncommitted changes.
+// getAccountReadOnly gets an account using a read-only connection. it will not
+// show uncommitted changes. If the account does not exist, no error is
+// returned, but an account with a nil pubkey is returned.
 func (a *AccountStore) getAccountReadOnly(ctx context.Context, pubKey []byte) (*Account, error) {
 	results, err := a.db.Query(ctx, sqlGetAccount, map[string]interface{}{
 		"$public_key": pubKey,
