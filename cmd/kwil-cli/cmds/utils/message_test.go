@@ -59,7 +59,7 @@ func getExampleTxQueryResponse() *types.TcTxQueryResponse {
 	secp256k1EpSigBytes, _ := hex.DecodeString(secp256k1EpSigHex)
 	secpSig := auth.Signature{
 		Signature: secp256k1EpSigBytes,
-		Type:      auth.EthAuth,
+		Type:      auth.EthPersonalSignAuth,
 	}
 
 	rawPayload := transactions.ActionExecution{
