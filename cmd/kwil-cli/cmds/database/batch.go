@@ -36,7 +36,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var resp []byte
 
-			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, client *client.Client, conf *config.KwilCliConfig) error {
+			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, cl *client.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return err
@@ -61,7 +61,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 					return fmt.Errorf("error building inputs: %w", err)
 				}
 
-				actionStructure, err := getAction(ctx, client, dbid, action)
+				actionStructure, err := getAction(ctx, cl, dbid, action)
 				if err != nil {
 					return fmt.Errorf("error getting action: %w", err)
 				}
@@ -71,7 +71,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 					return fmt.Errorf("error creating action inputs: %w", err)
 				}
 
-				resp, err = client.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples...)
+				resp, err = cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples, client.WithNonce(nonceOverride))
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}

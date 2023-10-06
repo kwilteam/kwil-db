@@ -14,7 +14,7 @@ func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (
 
 	return &txpb.GetAccountResponse{
 		Account: &txpb.Account{
-			PublicKey: acc.PublicKey,
+			PublicKey: acc.PublicKey, // nil for non-existent account
 			Nonce:     acc.Nonce,
 			Balance:   acc.Balance.String(),
 		},

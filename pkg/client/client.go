@@ -90,8 +90,8 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 }
 
 // DeployDatabase deploys a schema
-func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema) (transactions.TxHash, error) {
-	tx, err := c.newTx(ctx, payload)
+func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...TxOpt) (transactions.TxHash, error) {
+	tx, err := c.newTx(ctx, payload, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -104,12 +104,12 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 }
 
 // DropDatabase drops a database
-func (c *Client) DropDatabase(ctx context.Context, name string) (transactions.TxHash, error) {
+func (c *Client) DropDatabase(ctx context.Context, name string, opts ...TxOpt) (transactions.TxHash, error) {
 	identifier := &transactions.DropSchema{
 		DBID: engineUtils.GenerateDBID(name, c.Signer.PublicKey()),
 	}
 
-	tx, err := c.newTx(ctx, identifier)
+	tx, err := c.newTx(ctx, identifier, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (c *Client) DropDatabase(ctx context.Context, name string) (transactions.Tx
 // ExecuteAction executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 // It can take any number of inputs, and if multiple tuples of inputs are passed, it will execute them transactionally.
-func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples ...[]any) (transactions.TxHash, error) {
+func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (transactions.TxHash, error) {
 	stringTuples, err := convertTuples(tuples)
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		Arguments: stringTuples,
 	}
 
-	tx, err := c.newTx(ctx, executionBody)
+	tx, err := c.newTx(ctx, executionBody, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +270,7 @@ func (c *Client) CurrentValidators(ctx context.Context) ([]*validators.Validator
 	return c.transportClient.CurrentValidators(ctx)
 }
 
-func (c *Client) ApproveValidator(ctx context.Context, joiner []byte) ([]byte, error) {
+func (c *Client) ApproveValidator(ctx context.Context, joiner []byte, opts ...TxOpt) ([]byte, error) {
 	_, err := crypto.Ed25519PublicKeyFromBytes(joiner)
 	if err != nil {
 		return nil, fmt.Errorf("invalid candidate validator public key: %w", err)
@@ -278,7 +278,7 @@ func (c *Client) ApproveValidator(ctx context.Context, joiner []byte) ([]byte, e
 	payload := &transactions.ValidatorApprove{
 		Candidate: joiner,
 	}
-	tx, err := c.newTx(ctx, payload)
+	tx, err := c.newTx(ctx, payload, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +299,7 @@ func (c *Client) ValidatorLeave(ctx context.Context) ([]byte, error) {
 	return c.validatorUpdate(ctx, 0)
 }
 
-func (c *Client) validatorUpdate(ctx context.Context, power int64) ([]byte, error) {
+func (c *Client) validatorUpdate(ctx context.Context, power int64, opts ...TxOpt) ([]byte, error) {
 	pubKey := c.Signer.PublicKey()
 
 	var payload transactions.Payload
@@ -314,7 +314,7 @@ func (c *Client) validatorUpdate(ctx context.Context, power int64) ([]byte, erro
 		}
 	}
 
-	tx, err := c.newTx(ctx, payload)
+	tx, err := c.newTx(ctx, payload, opts...)
 	if err != nil {
 		return nil, err
 	}
