@@ -110,14 +110,15 @@ tasks:
       # {{.CLI_ARGS}} is a special variable that will be replaced with the CLI args
       # {{.VARIANT}} is a variable other tasks can set, it will have effect if {{.CLI_ARGS}} is empty
       # !! if parent task(which has deps on this task) has {{.CLI_ARGS}}, only this child task get the {{.CLI_ARGS}}
-      - ./scripts/build/docker kwild {{.CLI_ARGS}} {{.VARIANT}}
+      - GO_BUILDTAGS="{{.GO_BUILDTAGS}}" ./scripts/build/docker kwild {{.CLI_ARGS}} {{.VARIANT}}
 
   publish:dockerhub:
     desc: Publish docker image to dockerhub
     cmds:
       - task: vendor
       - defer: { task: vendor:clean }
-      - TAG={{.TAG}} ./scripts/publish/dockerhub
+      # TAG is the docker tag. GO_BUILDTAGS is the build tags for go build
+      - TAG={{.TAG}} GO_BUILDTAGS="{{.GO_BUILDTAGS}}" ./scripts/publish/dockerhub
     requires:
       vars: [TAG]
 
