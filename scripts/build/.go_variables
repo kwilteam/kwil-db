@@ -56,7 +56,7 @@ if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ]; then
     # netgo is also required to avoid: "warning: Using 'getaddrinfo' in
     # statically linked applications requires at runtime the shared libraries
     # from the glibc version used for linking"
-    GO_BUILDTAGS="$GO_BUILDTAGS osusergo netgo"
+    GO_BUILDTAGS="$GO_BUILDTAGS osusergo netgo auth_nep413 auth_ed25519_sha256"
 fi
 if [ -n "$GO_STRIP" ]; then
     GO_LDFLAGS="$GO_LDFLAGS -s -w"
