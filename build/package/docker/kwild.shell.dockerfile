@@ -3,6 +3,7 @@ FROM golang:alpine AS stage
 ARG version
 ARG build_time
 ARG git_commit
+ARG go_build_tags
 
 WORKDIR /app
 RUN apk update && apk add git ca-certificates-bundle
@@ -10,7 +11,7 @@ RUN apk update && apk add git ca-certificates-bundle
 COPY . .
 RUN test -f go.work && rm go.work || true
 
-RUN GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" ./scripts/build/binary kwild
+RUN GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" GO_BUILDTAGS=$go_build_tags ./scripts/build/binary kwild
 RUN GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" ./scripts/build/binary kwil-admin
 RUN chmod +x /app/dist/kwild-* /app/dist/kwil-admin-*
 
