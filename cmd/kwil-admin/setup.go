@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/pkg/abci"
-	"github.com/kwilteam/kwil-db/pkg/nodecfg"
+	"github.com/kwilteam/kwil-db/nodecfg"
 
 	"github.com/alexflint/go-arg"
 )

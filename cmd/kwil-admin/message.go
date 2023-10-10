@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/pkg/validators"
+	"github.com/kwilteam/kwil-db/internal/validators"
 )
 
 // respValSets represent current validator set in cli

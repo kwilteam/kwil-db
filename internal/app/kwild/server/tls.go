@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/kwilteam/kwil-db/internal/pkg/transport"
+	"github.com/kwilteam/kwil-db/core/rpc/transport"
 )
 
 // defaultAdminClients is the name of the file containing the PEM-encoded

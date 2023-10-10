@@ -12,15 +12,17 @@ import (
 	"time"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/log"               // to top
+	"github.com/kwilteam/kwil-db/internal/abci"          // internalize
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft" // internalize
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/pkg/abci"
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
-	grpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
-	"github.com/kwilteam/kwil-db/pkg/log"
+	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
+	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 
+	// internalize
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )

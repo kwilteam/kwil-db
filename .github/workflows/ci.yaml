@@ -56,7 +56,7 @@ jobs:
 
       - name: Compile packages, apps, and specs
         run: |
-          go build -mod=readonly ./pkg/... ./cmd/... ./test/specifications/...
+          go build -mod=readonly ./... ./parse/... ./core/... ./test/specifications/
 
       - name: Lint
         uses: golangci/golangci-lint-action@v3
@@ -64,7 +64,7 @@ jobs:
           install-mode: "binary"
           version: "latest"
           skip-pkg-cache: true
-          args: --timeout=10m --config=.golangci.yml ./pkg/... ./cmd/... ./test/specifications/...
+          args: ./... ./core/... ./test/... ./parse/... --timeout=10m --config=.golangci.yml --skip-dirs ./core/rpc/protobuf
 
       - name: Run unit test
         run: |

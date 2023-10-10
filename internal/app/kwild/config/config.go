@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/log"
 
 	"github.com/spf13/viper"
 )
@@ -137,7 +137,7 @@ type StateSyncConfig struct {
 
 type ChainConfig struct {
 	Moniker string `mapstructure:"moniker"`
-	// DBPath  string `mapstructure:"db_dir"` // pkg/abci knows this
+	// DBPath  string `mapstructure:"db_dir"` // internal/abci knows this
 
 	RPC       *ChainRPCConfig  `mapstructure:"rpc"`
 	P2P       *P2PConfig       `mapstructure:"p2p"`
@@ -295,7 +295,7 @@ func DefaultConfig() *KwildConfig {
 }
 
 func (cfg *KwildConfig) LogConfig() *log.Config {
-	// pkg/log.Config <== pkg/config.Logging
+	// log.Config <== config.Logging
 	return &log.Config{
 		Level:       cfg.Logging.Level,
 		OutputPaths: cfg.Logging.OutputPaths,

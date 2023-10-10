@@ -13,11 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
-	"github.com/kwilteam/kwil-db/pkg/validators"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/core/utils"
+
 	"go.uber.org/zap"
 )
 
@@ -336,7 +337,7 @@ func (d *KwilCliDriver) ValidatorNodeLeave(_ context.Context) ([]byte, error) {
 	return txHash, nil
 }
 
-func (d *KwilCliDriver) ValidatorJoinStatus(_ context.Context, pubKey []byte) (*validators.JoinRequest, error) {
+func (d *KwilCliDriver) ValidatorJoinStatus(_ context.Context, pubKey []byte) (*types.JoinRequest, error) {
 	cmd := d.newKwilAdminCmd("validators", "join-status", hex.EncodeToString(pubKey))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
@@ -354,7 +355,7 @@ func (d *KwilCliDriver) ValidatorJoinStatus(_ context.Context, pubKey []byte) (*
 	return joinReq, nil
 }
 
-func (d *KwilCliDriver) ValidatorsList(_ context.Context) ([]*validators.Validator, error) {
+func (d *KwilCliDriver) ValidatorsList(_ context.Context) ([]*types.Validator, error) {
 	cmd := d.newKwilAdminCmd("validators", "list")
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
@@ -522,7 +523,7 @@ type respValJoinRequest struct {
 // parseRespValJoinRequest parses the validator join request response(json) from the cli response
 // NOTE: this could be defined as a `encoding.TextUnmarshaler` interface in `cmd/kwil-cli`
 // if we expose the type from `cmd/kwil-cli`
-func parseRespValJoinRequest(data any) (*validators.JoinRequest, error) {
+func parseRespValJoinRequest(data any) (*types.JoinRequest, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal val join request resp: %w", err)
@@ -547,7 +548,7 @@ func parseRespValJoinRequest(data any) (*validators.JoinRequest, error) {
 		}
 	}
 
-	return &validators.JoinRequest{
+	return &types.JoinRequest{
 		Candidate: candidateBts,
 		Power:     resp.Power,
 		Board:     board,
@@ -562,7 +563,7 @@ type respValInfo struct {
 	Power  int64  `json:"power"`
 }
 
-func parseRespValSets(data any) ([]*validators.Validator, error) {
+func parseRespValSets(data any) ([]*types.Validator, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal val sets resp: %w", err)
@@ -574,13 +575,13 @@ func parseRespValSets(data any) ([]*validators.Validator, error) {
 		return nil, fmt.Errorf("failed to unmarshal val sets: %w", err)
 	}
 
-	vals := make([]*validators.Validator, len(resp))
+	vals := make([]*types.Validator, len(resp))
 	for i := range resp {
 		pubKey, err := hex.DecodeString(resp[i].PubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode pubkey: %w", err)
 		}
-		vals[i] = &validators.Validator{
+		vals[i] = &types.Validator{
 			PubKey: pubKey,
 			Power:  resp[i].Power,
 		}

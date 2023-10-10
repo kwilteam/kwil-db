@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kwilteam/kwil-db/pkg/abci"
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
-	"github.com/kwilteam/kwil-db/pkg/validators"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/core/utils"
 
 	"go.uber.org/zap"
 )
@@ -24,7 +23,7 @@ func GetEnv(key, defaultValue string) string {
 	return v
 }
 
-// KwildClientDriver is driver for tests using `pkg/client`
+// KwildClientDriver is driver for tests using the `client` package
 type KwildClientDriver struct {
 	clt    *client.Client
 	logger log.Logger
@@ -70,7 +69,7 @@ func (d *KwildClientDriver) TxSuccess(ctx context.Context, txHash []byte) error 
 		zap.String("txHash", hex.EncodeToString(txHash)),
 		zap.Any("result", resp.TxResult))
 
-	if resp.TxResult.Code != abci.CodeOk.Uint32() {
+	if resp.TxResult.Code != transactions.CodeOk.Uint32() {
 		return fmt.Errorf("transaction not ok, %s", resp.TxResult.Log)
 	}
 
@@ -153,10 +152,10 @@ func (d *KwildClientDriver) ValidatorNodeLeave(ctx context.Context) ([]byte, err
 	return d.clt.ValidatorLeave(ctx)
 }
 
-func (d *KwildClientDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*validators.JoinRequest, error) {
+func (d *KwildClientDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
 	return d.clt.ValidatorJoinStatus(ctx, pubKey)
 }
 
-func (d *KwildClientDriver) ValidatorsList(ctx context.Context) ([]*validators.Validator, error) {
+func (d *KwildClientDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {
 	return d.clt.CurrentValidators(ctx)
 }

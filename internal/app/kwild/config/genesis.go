@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
+	types "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/utils/random"
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
-	admtypes "github.com/kwilteam/kwil-db/pkg/admin/types"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/utils/random"
 )
 
 const (
@@ -23,7 +23,7 @@ const (
 	nodeDirPerm = 0755
 )
 
-type HexBytes = admtypes.HexBytes
+type HexBytes = types.HexBytes
 
 type GenesisConfig struct {
 	GenesisTime   time.Time `json:"genesis_time"`

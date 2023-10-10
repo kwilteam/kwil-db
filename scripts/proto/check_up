@@ -5,14 +5,14 @@
 pushd $(git rev-parse --show-toplevel)  > /dev/null
 
 # Force regenerate of pb Go code.
-task -f pb:compile:v1
+task -f pb:compile
 
-STATUS=$(git status api/protobuf/tx/v1 --porcelain)
+STATUS=$(git status core/rpc/protobuf/tx/v1 --porcelain)
 
 popd > /dev/null
 
 if [[ -n "$STATUS" ]]; then
-    echo "Changes detected in api/protobuf/tx/v1 !"
+    echo "Changes detected in core/rpc/protobuf/tx/v1 !"
     exit 1
 else
     echo "No changes detected in the directory."

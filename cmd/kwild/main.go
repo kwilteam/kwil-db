@@ -9,7 +9,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
-	"github.com/kwilteam/kwil-db/internal/pkg/version"
+	"github.com/kwilteam/kwil-db/internal/version"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

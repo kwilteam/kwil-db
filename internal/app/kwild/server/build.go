@@ -11,35 +11,36 @@ import (
 	"path/filepath"
 	"time"
 
-	admpb "github.com/kwilteam/kwil-db/api/protobuf/admin/v0"
-	txpb "github.com/kwilteam/kwil-db/api/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/internal/abci"
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
+	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/app/kwild"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	admSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/admin/v0"
-	"github.com/kwilteam/kwil-db/internal/controller/grpc/healthsvc/v0"
-	txSvc "github.com/kwilteam/kwil-db/internal/controller/grpc/txsvc/v1"
-	"github.com/kwilteam/kwil-db/internal/pkg/healthcheck"
-	simple_checker "github.com/kwilteam/kwil-db/internal/pkg/healthcheck/simple-checker"
-	"github.com/kwilteam/kwil-db/internal/pkg/transport"
-	"github.com/kwilteam/kwil-db/pkg/abci"
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
-	"github.com/kwilteam/kwil-db/pkg/auth"
-	"github.com/kwilteam/kwil-db/pkg/balances"
-	"github.com/kwilteam/kwil-db/pkg/engine"
-	"github.com/kwilteam/kwil-db/pkg/grpc/gateway"
-	"github.com/kwilteam/kwil-db/pkg/grpc/gateway/middleware/cors"
-	kwilgrpc "github.com/kwilteam/kwil-db/pkg/grpc/server"
-	"github.com/kwilteam/kwil-db/pkg/kv/atomic"
-	"github.com/kwilteam/kwil-db/pkg/kv/badger"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/modules/datasets"
-	"github.com/kwilteam/kwil-db/pkg/modules/validators"
-	"github.com/kwilteam/kwil-db/pkg/sessions"
-	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
-	"github.com/kwilteam/kwil-db/pkg/sessions/wal"
-	"github.com/kwilteam/kwil-db/pkg/snapshots"
-	"github.com/kwilteam/kwil-db/pkg/sql"
-	vmgr "github.com/kwilteam/kwil-db/pkg/validators"
+	"github.com/kwilteam/kwil-db/internal/kv/atomic"
+	"github.com/kwilteam/kwil-db/internal/kv/badger"
+	"github.com/kwilteam/kwil-db/internal/modules/datasets"
+	"github.com/kwilteam/kwil-db/internal/modules/validators"
+	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
+	"github.com/kwilteam/kwil-db/internal/services/grpc/healthsvc/v0"
+	txSvc "github.com/kwilteam/kwil-db/internal/services/grpc/txsvc/v1"
+	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
+	"github.com/kwilteam/kwil-db/internal/services/grpc_gateway/middleware/cors"
+	kwilgrpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
+	healthcheck "github.com/kwilteam/kwil-db/internal/services/health"
+	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
+	"github.com/kwilteam/kwil-db/internal/sessions"
+	sqlSessions "github.com/kwilteam/kwil-db/internal/sessions/sql-session"
+	"github.com/kwilteam/kwil-db/internal/sessions/wal"
+	vmgr "github.com/kwilteam/kwil-db/internal/validators"
+
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
+	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
+	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/core/rpc/transport"
+	"github.com/kwilteam/kwil-db/internal/engine"
+	"github.com/kwilteam/kwil-db/internal/sql"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
@@ -220,7 +221,7 @@ func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engin
 	return e
 }
 
-func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.AtomicCommitter) *balances.AccountStore {
+func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.AtomicCommitter) *accounts.AccountStore {
 	db, err := d.opener.Open("accounts_db", *d.log.Named("account-store"))
 	if err != nil {
 		failBuild(err, "failed to open accounts db")
@@ -228,10 +229,10 @@ func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *session
 	closer.addCloser(db.Close)
 
 	genCfg := d.genesisCfg
-	b, err := balances.NewAccountStore(d.ctx, db,
-		balances.WithLogger(*d.log.Named("accountStore")),
-		balances.WithNonces(!genCfg.ConsensusParams.WithoutNonces),
-		balances.WithGasCosts(!genCfg.ConsensusParams.WithoutGasCosts),
+	b, err := accounts.NewAccountStore(d.ctx, db,
+		accounts.WithLogger(*d.log.Named("accountStore")),
+		accounts.WithNonces(!genCfg.ConsensusParams.WithoutNonces),
+		accounts.WithGasCosts(!genCfg.ConsensusParams.WithoutGasCosts),
 	)
 	if err != nil {
 		failBuild(err, "failed to build account store")

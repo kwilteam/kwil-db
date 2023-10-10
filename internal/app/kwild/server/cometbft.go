@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft"
 
 	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"

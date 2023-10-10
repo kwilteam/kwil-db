@@ -7,17 +7,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/pkg/abci"
-	"github.com/kwilteam/kwil-db/pkg/abci/cometbft/privval"
-	"github.com/kwilteam/kwil-db/pkg/admin/types"
-	"github.com/kwilteam/kwil-db/pkg/engine"
-	"github.com/kwilteam/kwil-db/pkg/extensions"
-	"github.com/kwilteam/kwil-db/pkg/kv"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/sessions"
-	sqlSessions "github.com/kwilteam/kwil-db/pkg/sessions/sql-session"
-	"github.com/kwilteam/kwil-db/pkg/sql"
-	"github.com/kwilteam/kwil-db/pkg/sql/client"
+	"github.com/kwilteam/kwil-db/core/log"
+	types "github.com/kwilteam/kwil-db/core/types/admin"
+	extensions "github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/internal/abci"
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
+	"github.com/kwilteam/kwil-db/internal/engine"
+	"github.com/kwilteam/kwil-db/internal/kv"
+	"github.com/kwilteam/kwil-db/internal/sessions"
+	sqlSessions "github.com/kwilteam/kwil-db/internal/sessions/sql-session"
+	"github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/sql/client"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/p2p"
@@ -179,7 +179,7 @@ func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, syn
 }
 
 // TxQuery locates a transaction in the node's blockchain or mempool. If the
-// transaction could not be located, and error of type pkg/abci.ErrTxNotFound is
+// transaction could not be located, and error of type internal/abci.ErrTxNotFound is
 // returned.
 func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error) {
 	// First check confirmed transactions. The Tx method of the cometbft client
