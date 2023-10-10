@@ -7,6 +7,34 @@ import (
 	"github.com/kwilteam/kwil-extensions/types"
 )
 
+var (
+	// this can be overridden for testing
+	ConnectFunc Connecter = extensionConnectFunc(client.NewExtensionClient)
+)
+
+type ExtensionDriver interface {
+	Name() string
+	Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error)
+	Execute(ctx context.Context, metadata map[string]string, method string, args ...any) ([]any, error)
+}
+
+type ExtensionInitializer struct {
+	Extension ExtensionDriver
+}
+
+// CreateInstance creates an instance of the extension with the given metadata.
+func (e *ExtensionInitializer) CreateInstance(ctx context.Context, metadata map[string]string) (*Instance, error) {
+	metadata, err := e.Extension.Initialize(ctx, metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Instance{
+		metadata:  metadata,
+		extension: e.Extension,
+	}, nil
+}
+
 type ExtensionClient interface {
 	CallMethod(execCtx *types.ExecutionContext, method string, args ...any) ([]any, error)
 	Close() error
@@ -24,8 +52,3 @@ type extensionConnectFunc func(ctx context.Context, target string, opts ...clien
 func (e extensionConnectFunc) Connect(ctx context.Context, target string, opts ...client.ClientOpt) (ExtensionClient, error) {
 	return e(ctx, target, opts...)
 }
-
-var (
-	// this can be overridden for testing
-	ConnectFunc Connecter = extensionConnectFunc(client.NewExtensionClient)
-)

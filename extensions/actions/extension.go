@@ -3,70 +3,54 @@ package extensions
 import (
 	"context"
 	"fmt"
-	"strings"
 )
 
+// Local Extension
 type Extension struct {
-	name    string
-	url     string
-	methods map[string]struct{}
-
-	client ExtensionClient
+	// Extension name
+	name string
+	// Supported methods by the extension
+	methods map[string]MethodFunc
+	// Initializer that initializes the extension
+	initializeFunc InitializeFunc
 }
 
 func (e *Extension) Name() string {
 	return e.name
 }
 
-// New connects to the given extension, and attempts to configure it with the given config.
-// If the extension is not available, an error is returned.
-func New(url string) *Extension {
-	return &Extension{
-		name:    "",
-		url:     url,
-		methods: make(map[string]struct{}),
-	}
-}
-
-func (e *Extension) Connect(ctx context.Context) error {
-	extClient, err := ConnectFunc.Connect(ctx, e.url)
-	if err != nil {
-		return fmt.Errorf("failed to connect to extension at %s: %w", e.url, err)
-	}
-
-	name, err := extClient.GetName(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get extension name: %w", err)
-	}
-
-	e.name = name
-	e.client = extClient
-
-	err = e.loadMethods(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load methods for extension %s: %w", e.name, err)
-	}
-
-	return nil
-}
-
-func (e *Extension) loadMethods(ctx context.Context) error {
-	methodList, err := e.client.ListMethods(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list methods for extension '%s' at target '%s': %w", e.name, e.url, err)
-	}
-
-	e.methods = make(map[string]struct{})
-	for _, method := range methodList {
-		lowerName := strings.ToLower(method)
-
-		_, ok := e.methods[lowerName]
-		if ok {
-			return fmt.Errorf("extension %s has duplicate method %s. this is an issue with the extension", e.name, lowerName)
+func (e *Extension) Execute(ctx context.Context, metadata map[string]string, method string, args ...any) ([]any, error) {
+	var encodedArgs []*ScalarValue
+	for _, arg := range args {
+		scalarVal, err := NewScalarValue(arg)
+		if err != nil {
+			return nil, fmt.Errorf("error encoding argument: %s", err.Error())
 		}
 
-		e.methods[lowerName] = struct{}{}
+		encodedArgs = append(encodedArgs, scalarVal)
 	}
 
-	return nil
+	methodFn, ok := e.methods[method]
+	if !ok {
+		return nil, fmt.Errorf("method %s not found", method)
+	}
+
+	execCtx := &ExecutionContext{
+		Ctx:      ctx,
+		Metadata: metadata,
+	}
+	results, err := methodFn(execCtx, encodedArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	var outputs []any
+	for _, result := range results {
+		outputs = append(outputs, result.Value)
+	}
+	return outputs, nil
+}
+
+func (e *Extension) Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error) {
+	return e.initializeFunc(ctx, metadata)
 }
