@@ -47,7 +47,7 @@ func Decode[T any](bts SerializedData) (*T, error) {
 	case encodingTypeRLP:
 		return decodeRLP[T](val)
 	default:
-		return nil, fmt.Errorf("invalid encoding type: %d", val)
+		return nil, fmt.Errorf("invalid encoding type: %d", encType)
 	}
 }
 
@@ -160,6 +160,6 @@ func DecodeInto(bts []byte, v any) error {
 	case encodingTypeRLP:
 		return rlp.DecodeBytes(val, v)
 	default:
-		return fmt.Errorf("invalid encoding type: %d", val)
+		return fmt.Errorf("invalid encoding type: %d", encType)
 	}
 }
