@@ -17,7 +17,6 @@ tasks:
       - go install "golang.org/x/tools/cmd/goimports@v0.14.0"
       - go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0"
       - go install "google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0"
-      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2"
 
   git:init:
     desc: Initialize git submodules
@@ -54,6 +53,11 @@ tasks:
     desc: Lint with golangci-lint
     cmds:
         - golangci-lint run ./... ./core/... ./test/... ./parse/... -c .golangci.yml --skip-dirs ./core/rpc/protobuf
+
+  linter:
+    desc: Install the linter (not for CI which has an action for this)
+    cmds:
+      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2"
 
   build:
     desc: Build cli, admin & kwild

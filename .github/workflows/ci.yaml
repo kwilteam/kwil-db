@@ -55,7 +55,8 @@ jobs:
           ./scripts/proto/check_up
 
       - name: Compile packages, apps, and specs
-        run: |
+        run: | # enter workspace mode to do this on one line
+          go work init && go work use . ./parse ./test ./core
           go build -mod=readonly ./... ./parse/... ./core/... ./test/specifications/
 
       - name: Lint

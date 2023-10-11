@@ -5,7 +5,6 @@ go 1.21
 // During development cycle, use the workspace kwil-db module. Remove this after
 // tagging kwil-db module.
 replace (
-	github.com/kwilteam/kuneiform => ../../kuneiform
 	github.com/kwilteam/kwil-db => ../
 	github.com/kwilteam/kwil-db/core => ../core
 	github.com/kwilteam/kwil-db/parse => ../parse
@@ -15,7 +14,7 @@ require (
 	github.com/cometbft/cometbft v0.37.2
 	github.com/cstockton/go-conv v1.0.0
 	github.com/joho/godotenv v1.5.1
-	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20230927233431-2868efa34572
+	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20231011193347-ab7495c55426
 	github.com/kwilteam/kwil-db v0.5.1-0.20230927233025-c3e8ef579ade
 	github.com/kwilteam/kwil-db/core v0.0.0
 	github.com/stretchr/testify v1.8.4
