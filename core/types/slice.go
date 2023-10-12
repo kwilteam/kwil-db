@@ -7,7 +7,7 @@ package types
 //
 // Such types include those defined in types/transactions, but these helpers can
 // be used for any qualified types in other packages. e.g. engine/types.User and
-// kv/atomic.keyValue. Given the generality of
+// kv/atomic.keyValue.
 
 import (
 	"encoding"

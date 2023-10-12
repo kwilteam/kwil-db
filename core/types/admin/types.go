@@ -10,8 +10,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-// TODO(@jchappelow): doc these types.
-
+// NodeInfo describes a peer node. This may be a peer or a node being
+// administered.
 type NodeInfo struct {
 	ChainID         string `json:"chain_id"`
 	Name            string `json:"name"`
@@ -23,6 +23,7 @@ type NodeInfo struct {
 	RPCAddr         string `json:"rpc_addr"`
 }
 
+// SyncInfo describes the sync state of a node.
 type SyncInfo struct {
 	AppHash         string    `json:"app_hash"`
 	BestBlockHash   string    `json:"best_block_hash"`
@@ -32,18 +33,24 @@ type SyncInfo struct {
 	Syncing bool `json:"syncing"`
 }
 
+// ValidatorInfo describes a validator node.
 type ValidatorInfo struct {
 	PubKey     types.HexBytes `json:"pubkey"`
 	PubKeyType string         `json:"pubkey_type"`
 	Power      int64          `json:"power"`
 }
 
+// Status includes a comprehensive summary of a nodes status, including if the
+// service is running, it's best block and if it is syncing, it's identity on
+// the network, and the node's validator identity if it is one. Note that our
+// validator is part of the node rather than an external signer.
 type Status struct {
 	Node      *NodeInfo      `json:"node"`
 	Sync      *SyncInfo      `json:"sync"`
-	Validator *ValidatorInfo `json:"current_validator"`
+	Validator *ValidatorInfo `json:"validator"`
 }
 
+// PeerInfo describes a connected peer node.
 type PeerInfo struct {
 	NodeInfo   *NodeInfo `json:"node"`
 	Inbound    bool      `json:"inbound"`

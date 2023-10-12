@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/internal/csv"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/csv"
 )
 
 func Test_CSV(t *testing.T) {

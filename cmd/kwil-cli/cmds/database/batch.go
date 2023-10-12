@@ -9,9 +9,9 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/csv"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/csv"
 
 	"github.com/spf13/cobra"
 )
