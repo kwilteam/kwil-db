@@ -13,7 +13,9 @@ import (
 type Signature struct {
 	// Signature is the raw signature bytes
 	Signature []byte `json:"signature_bytes"`
-	Type      string `json:"signature_type"`
+	// Type is the signature type, which must have a registered Authenticator of
+	// the same name for the Verify method to be usable.
+	Type string `json:"signature_type"`
 }
 
 // Verify verifies the signature against the given message and public key.

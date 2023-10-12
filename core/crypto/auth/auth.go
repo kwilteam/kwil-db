@@ -1,7 +1,18 @@
 /*
-Package auth provides an interface for developers to implement their own Kwil authentication drivers.
+Package auth provides an Authenticator interface for developers to implement
+their own Kwil authentication drivers. Authenticator extensions may be used to
+expand the type of signatures that may be verified on transactions and messages
+via the (*Signature).Verify method, where the Signature.Type field corresponds
+to the unique Authenticator name. It also provides the ability to derive an
+address from a public key for a certain network.
 
-Similar to Go's database/sql package, developers can implement the `Authenticator` interface and register it with the `RegisterAuthenticator` function.
+Similar to Go's database/sql package, developers can implement the Authenticator
+interface and register it with the RegisterAuthenticator function. The name used
+to register is to be set as the signature type creating signatures.
+
+There are presently two Signers defined in the Kwil Go SDK with pre-registered
+Authenticators with the same type: EthPersonalSigType and Ed25519SigType. When
+registering a new Authenticator, the values of these may not be used.
 */
 package auth
 

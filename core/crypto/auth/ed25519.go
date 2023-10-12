@@ -1,6 +1,7 @@
 package auth
 
-// ed25519 is a standard signature scheme that uses the ed25519 curve, and does not have a build tag
+// ed25519 is a standard signature scheme that uses the ed25519 curve, it is a
+// required component for kwild.
 
 import (
 	"crypto/ed25519"
@@ -17,21 +18,22 @@ func init() {
 	}
 }
 
-// ed25519 constants
 const (
-	// using Ed25519Auth for the authenticator name
+	// Ed25519Auth is a plain ed25519 authenticator. This is used for validator
+	// signature verification. This is intended as the authenticator for the
+	// SDK-provided Ed25519Signer, and must be registered with that name.
 	Ed25519Auth = "ed25519"
 
 	// ed25519SignatureLength is the expected length of a signature
 	ed25519SignatureLength = 64
 )
 
-// Ed25519Authenticator is an authenticator for ed25519 keys
+// Ed25519Authenticator is an authenticator for ed25519 keys.
 type Ed25519Authenticator struct{}
 
 var _ Authenticator = Ed25519Authenticator{}
 
-// Address simply returns the public key as the address
+// Address simply returns the hexadecimal encoded public key as the address.
 func (e Ed25519Authenticator) Address(publicKey []byte) (string, error) {
 	if len(publicKey) != ed25519.PublicKeySize {
 		return "", fmt.Errorf("invalid ed25519 public key size: %d", len(publicKey))
