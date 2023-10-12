@@ -27,5 +27,5 @@ Additionally, the build tag `ext_test` is added if the extension should be inclu
 In the above example, the source file that either implements or imports the extension would have the following at the start of the file:
 
 ```go
-//go:build auth_ed25519_sha256
+//go:build auth_rsa
 ```
