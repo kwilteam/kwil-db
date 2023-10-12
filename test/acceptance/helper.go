@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/nodecfg"
 	"github.com/kwilteam/kwil-db/test/driver"
 
 	"github.com/joho/godotenv"

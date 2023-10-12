@@ -5,15 +5,17 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"hash"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	types "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/random"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-	"github.com/kwilteam/kwil-db/internal/app/kwild"
 )
 
 const (
@@ -161,7 +163,7 @@ func loadGenesisAndPrivateKey(autoGen bool, privKeyPath, rootDir string) (privKe
 		return nil, nil, fmt.Errorf("failed to make root directory: %w", err)
 	}
 
-	chainRootDir := filepath.Join(rootDir, kwild.ABCIDirName)
+	chainRootDir := filepath.Join(rootDir, ABCIDirName)
 	priv, pub, newKey, err := ReadOrCreatePrivateKeyFile(privKeyPath, autoGen)
 	if err != nil {
 		return nil, nil, err
@@ -252,4 +254,75 @@ func NewGenesisWithValidator(pubKey []byte) *GenesisConfig {
 		Name:   "validator-0",
 	})
 	return genesisCfg
+}
+
+func listFilesAlphabetically(filePath string) ([]string, error) {
+	files, err := filepath.Glob(filePath)
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(files)
+	return files, nil
+}
+
+func hashFile(filePath string, hasher hash.Hash) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = io.Copy(hasher, file)
+	return err
+}
+
+func setGenesisAppHash(appHash []byte, genesisFile string) error {
+	genesisConf, err := LoadGenesisConfig(genesisFile)
+	if err != nil {
+		return fmt.Errorf("failed to load genesis file: %w", err)
+	}
+
+	genesisConf.DataAppHash = appHash
+	if err := genesisConf.SaveAs(genesisFile); err != nil {
+		return fmt.Errorf("failed to save genesis file: %w", err)
+	}
+	return nil
+}
+
+// PatchGenesisAppHash computes the apphash from a full contents of all sqlite
+// files in the provided folder, and if genesis file is provided, updates the
+// app_hash in the file.
+func PatchGenesisAppHash(sqliteDbDir, genesisFile string) ([]byte, error) {
+	di, err := os.Stat(sqliteDbDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read sqlite path: %v", err)
+	}
+	if !di.IsDir() {
+		return nil, fmt.Errorf("sqlite path is not a directory: %v", sqliteDbDir)
+	}
+	// List all sqlite files in the given dir in lexicographical order
+	files, err := listFilesAlphabetically(filepath.Join(sqliteDbDir, "*.sqlite"))
+	if err != nil {
+		return nil, err
+	}
+	// Allow len(files) == 0 ?
+
+	// Generate DB Hash
+	hasher := sha256.New()
+	for _, file := range files {
+		if err = hashFile(file, hasher); err != nil {
+			return nil, err
+		}
+	}
+	genesisHash := hasher.Sum(nil)
+
+	// Optionally update the app_hash in the genesis file.
+	if genesisFile != "" {
+		err = setGenesisAppHash(genesisHash, genesisFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return genesisHash, nil
 }

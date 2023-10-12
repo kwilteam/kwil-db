@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 
 	"github.com/spf13/pflag"
 )

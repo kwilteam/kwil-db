@@ -1,4 +1,4 @@
-package kwild
+package config
 
 import (
 	"fmt"

@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/internal/abci"
-	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/nodecfg"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 
 	"github.com/alexflint/go-arg"
 )
@@ -44,7 +42,7 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 		return nodecfg.GenerateTestnetConfig(&genCfg)
 	case cc.GenesisHash != nil:
 		dbDir, genesisFile := cc.GenesisHash.DBDir, cc.GenesisHash.GenesisFile
-		appHash, err := abci.PatchGenesisAppHash(dbDir, genesisFile)
+		appHash, err := config.PatchGenesisAppHash(dbDir, genesisFile)
 		if err != nil {
 			fmt.Printf("App hash written: %x", appHash)
 			return nil
@@ -157,7 +155,7 @@ func (src *SetupResetStateCmd) run(_ context.Context) error {
 	if err != nil {
 		return err
 	}
-	return kwild.ResetChainState(rootDir)
+	return config.ResetChainState(rootDir)
 }
 
 type SetupResetCmd struct {
@@ -179,5 +177,5 @@ func (src *SetupResetCmd) run(_ context.Context) error {
 	if snapshotDir == "" {
 		snapshotDir = config.DefaultSnapshotsDir
 	}
-	return kwild.ResetAll(rootDir, sqlitePath, snapshotDir)
+	return config.ResetAll(rootDir, sqlitePath, snapshotDir)
 }

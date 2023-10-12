@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/server"
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/cmd/kwild/server"
 	"github.com/kwilteam/kwil-db/internal/version"
 
 	"github.com/spf13/cobra"

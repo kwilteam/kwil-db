@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 
 	"github.com/stretchr/testify/assert"
 )

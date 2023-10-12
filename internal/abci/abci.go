@@ -896,7 +896,7 @@ func (a *AbciApp) createNewAppHash(ctx context.Context, addition []byte) ([]byte
 }
 
 // TODO: here should probably be other apphash computations such as the genesis
-// config digest. The internal/app/kwild/config package should probably not
+// config digest. The cmd/kwild/config package should probably not
 // contain consensus-critical computations.
 
 // convertArgs converts the string args to type any.

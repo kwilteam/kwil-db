@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/cmd/kwild/config" // relocate or merge with nodecfg
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
 	"github.com/kwilteam/kwil-db/internal/admin"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config" // relocate or merge with nodecfg
 )
 
 const (

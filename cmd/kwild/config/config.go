@@ -13,7 +13,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/app/kwild"
 
 	"github.com/spf13/viper"
 )
@@ -163,7 +162,7 @@ func (cfg *KwildConfig) LoadKwildConfig() error {
 
 	fmt.Printf("kwild starting with root directory \"%v\"\n", cfg.RootDir)
 
-	cfgFile := filepath.Join(cfg.RootDir, kwild.ConfigFileName)
+	cfgFile := filepath.Join(cfg.RootDir, ConfigFileName)
 	err = cfg.ParseConfig(cfgFile) // viper magic here
 	if err != nil {
 		return fmt.Errorf("failed to parse config file: %v", err)
@@ -316,13 +315,6 @@ func (cfg *KwildConfig) configureCerts() {
 	cfg.AppCfg.TLSKeyFile = rootify(cfg.AppCfg.TLSKeyFile, cfg.RootDir)
 }
 
-func rootify(path, rootDir string) string {
-	if filepath.IsAbs(path) {
-		return path
-	}
-	return filepath.Join(rootDir, path)
-}
-
 func (cfg *KwildConfig) sanitizeCfgPaths() {
 	rootDir := cfg.RootDir
 	cfg.AppCfg.SqliteFilePath = rootify(cfg.AppCfg.SqliteFilePath, rootDir)
@@ -331,7 +323,7 @@ func (cfg *KwildConfig) sanitizeCfgPaths() {
 	if cfg.AppCfg.PrivateKeyPath != "" {
 		cfg.AppCfg.PrivateKeyPath = rootify(cfg.AppCfg.PrivateKeyPath, rootDir)
 	} else {
-		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, kwild.PrivateKeyFileName)
+		cfg.AppCfg.PrivateKeyPath = filepath.Join(rootDir, PrivateKeyFileName)
 	}
 
 	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)

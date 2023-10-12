@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 
 	cmtCfg "github.com/cometbft/cometbft/config"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
@@ -61,7 +61,7 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	nodeCfg.Consensus.TimeoutCommit = userChainCfg.Consensus.TimeoutCommit
 
 	nodeCfg.StateSync.Enable = false
-	//nodeCfg.StateSync.Enable = userChainCfg.StateSync.Enable
+	// nodeCfg.StateSync.Enable = userChainCfg.StateSync.Enable
 	// nodeCfg.StateSync.TempDir = userChainCfg.StateSync.TempDir
 	// nodeCfg.StateSync.RPCServers = userChainCfg.StateSync.RPCServers
 	// nodeCfg.StateSync.DiscoveryTime = userChainCfg.StateSync.DiscoveryTime

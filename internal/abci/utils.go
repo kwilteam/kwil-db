@@ -2,19 +2,13 @@ package abci
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"hash"
-	"io"
 	"os"
-	"path/filepath"
-	"slices"
 
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -75,64 +69,6 @@ func abciStatus(status snapshots.Status) abciTypes.ResponseApplySnapshotChunk_Re
 	}
 }
 
-func listFilesAlphabetically(filePath string) ([]string, error) {
-	files, err := filepath.Glob(filePath)
-	if err != nil {
-		return nil, err
-	}
-	slices.Sort(files)
-	return files, nil
-}
-
-func hashFile(filePath string, hasher hash.Hash) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = io.Copy(hasher, file)
-	return err
-}
-
-// PatchGenesisAppHash computes the apphash from a full contents of all sqlite
-// files in the provided folder, and if genesis file is provided, updates the
-// app_hash in the file.
-func PatchGenesisAppHash(sqliteDbDir, genesisFile string) ([]byte, error) {
-	di, err := os.Stat(sqliteDbDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read sqlite path: %v", err)
-	}
-	if !di.IsDir() {
-		return nil, fmt.Errorf("sqlite path is not a directory: %v", sqliteDbDir)
-	}
-	// List all sqlite files in the given dir in lexicographical order
-	files, err := listFilesAlphabetically(filepath.Join(sqliteDbDir, "*.sqlite"))
-	if err != nil {
-		return nil, err
-	}
-	// Allow len(files) == 0 ?
-
-	// Generate DB Hash
-	hasher := sha256.New()
-	for _, file := range files {
-		if err = hashFile(file, hasher); err != nil {
-			return nil, err
-		}
-	}
-	genesisHash := hasher.Sum(nil)
-
-	// Optionally update the app_hash in the genesis file.
-	if genesisFile != "" {
-		err = setGenesisAppHash(genesisHash, genesisFile)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return genesisHash, nil
-}
-
 func PrintPrivKeyInfo(privateKey []byte) {
 	priv := ed25519.PrivKey(privateKey)
 	pub := priv.PubKey().(ed25519.PubKey)
@@ -167,17 +103,4 @@ func ReadKeyFile(keyFile string) ([]byte, error) {
 		return nil, fmt.Errorf("error decoding private key: %v", err)
 	}
 	return privB, nil
-}
-
-func setGenesisAppHash(appHash []byte, genesisFile string) error {
-	genesisConf, err := config.LoadGenesisConfig(genesisFile)
-	if err != nil {
-		return fmt.Errorf("failed to load genesis file: %w", err)
-	}
-
-	genesisConf.DataAppHash = appHash
-	if err := genesisConf.SaveAs(genesisFile); err != nil {
-		return fmt.Errorf("failed to save genesis file: %w", err)
-	}
-	return nil
 }

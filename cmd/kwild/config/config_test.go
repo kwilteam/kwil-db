@@ -4,15 +4,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_Config_Toml(t *testing.T) {
 	cfg := config.DefaultConfig()
-	err := cfg.ParseConfig(filepath.Join("test_data", kwild.ConfigFileName))
+	err := cfg.ParseConfig(filepath.Join("test_data", config.ConfigFileName))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "localhost:50051", cfg.AppCfg.GrpcListenAddress)

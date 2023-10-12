@@ -1,5 +1,4 @@
-// Package kwild defines shared values pertaining to kwild's operation.
-package kwild
+package config
 
 // Top-level directory structure for the Server's systems. These are not user
 // configurable.

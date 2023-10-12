@@ -13,9 +13,8 @@ import (
 
 	// NOTE: do not use the types from these internal packages on nodecfg's
 	// exported API.
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
 )
@@ -24,7 +23,7 @@ const (
 	nodeDirPerm   = 0755
 	chainIDPrefix = "kwil-chain-"
 
-	abciDir       = kwild.ABCIDirName
+	abciDir       = config.ABCIDirName
 	abciConfigDir = cometbft.ConfigDir
 	abciDataDir   = cometbft.DataDir
 )
@@ -85,14 +84,14 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 		return err
 	}
 
-	cfg.AppCfg.PrivateKeyPath = kwild.PrivateKeyFileName
-	err = writeConfigFile(filepath.Join(rootDir, kwild.ConfigFileName), cfg)
+	cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName
+	err = writeConfigFile(filepath.Join(rootDir, config.ConfigFileName), cfg)
 	if err != nil {
 		return err
 	}
 
 	// Load or generate private key.
-	fullKeyPath := filepath.Join(rootDir, kwild.PrivateKeyFileName)
+	fullKeyPath := filepath.Join(rootDir, config.PrivateKeyFileName)
 	_, pubKey, newKey, err := config.ReadOrCreatePrivateKeyFile(fullKeyPath, true)
 	if err != nil {
 		return fmt.Errorf("cannot read or create private key: %w", err)
@@ -167,7 +166,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		}
 
 		privKeyHex := hex.EncodeToString(privateKeys[i][:])
-		privKeyFile := filepath.Join(nodeDir, kwild.PrivateKeyFileName)
+		privKeyFile := filepath.Join(nodeDir, config.PrivateKeyFileName)
 		err = os.WriteFile(privKeyFile, []byte(privKeyHex), 0644) // permissive for testnet only
 		if err != nil {
 			return fmt.Errorf("creating private key file: %w", err)
@@ -211,8 +210,8 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		if genCfg.PopulatePersistentPeers {
 			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
 		}
-		cfg.AppCfg.PrivateKeyPath = kwild.PrivateKeyFileName // not abs/rooted because this might be run in a container
-		writeConfigFile(filepath.Join(nodeDir, kwild.ConfigFileName), cfg)
+		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
+		writeConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
 	}
 
 	fmt.Printf("Successfully initialized %d node directories: %s\n",

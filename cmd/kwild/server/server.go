@@ -13,12 +13,11 @@ import (
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
 
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"               // to top
 	"github.com/kwilteam/kwil-db/internal/abci"          // internalize
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft" // internalize
-	"github.com/kwilteam/kwil-db/internal/app/kwild"
-	"github.com/kwilteam/kwil-db/internal/app/kwild/config"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 
@@ -43,10 +42,10 @@ type Server struct {
 
 const (
 	// Top-level directory structure for the Server's systems
-	abciDirName        = kwild.ABCIDirName
-	applicationDirName = kwild.ApplicationDirName
-	rcvdSnapsDirName   = kwild.ReceivedSnapsDirName
-	signingDirName     = kwild.SigningDirName
+	abciDirName        = config.ABCIDirName
+	applicationDirName = config.ApplicationDirName
+	rcvdSnapsDirName   = config.ReceivedSnapsDirName
+	signingDirName     = config.SigningDirName
 
 	// Note that the sqlLite file path is user-configurable
 	// e.g. "data/kwil.db"
