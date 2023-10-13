@@ -7,8 +7,9 @@ import (
 	"os"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/utils"
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/internal/utils"
+
 	"github.com/spf13/viper"
 )
 

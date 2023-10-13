@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
-	"github.com/kwilteam/kwil-db/pkg/validators"
+	"github.com/kwilteam/kwil-db/internal/validators"
 )
 
 func Example_respValSets_text() {

@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
-	"github.com/kwilteam/kwil-db/pkg/auth"
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
 
 // kwil-admin validators list

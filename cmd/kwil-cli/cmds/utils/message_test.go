@@ -8,10 +8,10 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/pkg/auth"
-	"github.com/kwilteam/kwil-db/pkg/client/types"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -54,7 +54,7 @@ func Example_respStr_json_withError() {
 	// }
 }
 
-func getExampleTxQueryResponse() *types.TcTxQueryResponse {
+func getExampleTxQueryResponse() *transactions.TcTxQueryResponse {
 	secp256k1EpSigHex := "cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e253475800"
 	secp256k1EpSigBytes, _ := hex.DecodeString(secp256k1EpSigHex)
 	secpSig := auth.Signature{
@@ -75,7 +75,7 @@ func getExampleTxQueryResponse() *types.TcTxQueryResponse {
 		panic(err)
 	}
 
-	return &types.TcTxQueryResponse{
+	return &transactions.TcTxQueryResponse{
 		Hash:   []byte("1024"),
 		Height: 10,
 		Tx: transactions.Transaction{
