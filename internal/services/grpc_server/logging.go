@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -45,8 +46,11 @@ func SimpleInterceptorLogger(l *log.Logger) grpc.UnaryServerInterceptor {
 		fields := []zap.Field{
 			zap.String("method", strings.Trim(info.FullMethod, "/")),
 			zap.String("elapsed", fmt.Sprintf("%.3fms", elapsedMs)),
-			zap.String("code", code.String()),
 		}
+		if peer, ok := peer.FromContext(ctx); ok {
+			fields = append(fields, zap.String("addr", peer.Addr.String()))
+		}
+		fields = append(fields, zap.String("code", code.String()))
 		var msg string
 		if err != nil {
 			msg = "call failure"
