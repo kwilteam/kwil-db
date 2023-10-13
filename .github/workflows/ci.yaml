@@ -44,7 +44,6 @@ jobs:
           go version
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           task install:deps
-          go mod download
 
       - name: Check tidiness of go.mod and go.sum
         run: |

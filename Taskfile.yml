@@ -102,7 +102,6 @@ tasks:
 
   build:docker:
     desc: Build the docker image for the kwild, support extra args to specify image flavor
-    defer: 
     cmds:
       - task: vendor
       - defer: { task: vendor:clean }
