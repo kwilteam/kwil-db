@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
+	"github.com/kwilteam/kwil-db/core/utils"
 
 	"github.com/spf13/cobra"
 )

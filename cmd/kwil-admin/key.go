@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kwilteam/kwil-db/pkg/abci"
+	"github.com/kwilteam/kwil-db/internal/abci"
 
 	"github.com/alexflint/go-arg"
 )

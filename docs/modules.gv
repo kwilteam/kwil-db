@@ -1,0 +1,26 @@
+digraph {
+	graph [splines=ortho colorscheme=svg label=<Kwil Module Dependencies> labelloc=t fontsize=18.0]
+	node [shape=box style="filled, rounded"]
+
+	kwildb [label="kwil-db" fillcolor=dodgerblue]
+	core [label="core (SDK)" fillcolor=aquamarine]
+	parse [label="parse" fillcolor=cadetblue]
+	test [label="test" fillcolor=lightsalmon]
+
+	{rank=min core}
+	{rank=max test}
+	{rank=same core}
+
+	// sqlgrammargo [label="sql-grammar-go" fillcolor=lightgray]
+	// actgrammargo [label="action-grammar-go" fillcolor=lightgray]
+	kuneiform [label="kuneiform" fillcolor=lightgray]
+
+	core -> kwildb [dir=back color=black]
+	core -> test [dir=back color=black]
+	kwildb -> test [dir=back color=black]
+	parse -> kwildb [dir=back color=black]
+
+	parse -> kuneiform [dir=back color=gray]
+	// sqlgrammargo -> parse [dir=back color=gray]
+	// actgrammargo -> parse [dir=back color=gray]
+}
