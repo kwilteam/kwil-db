@@ -3,41 +3,58 @@ package server
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
-// InterceptorLogger adapts zap logger to interceptor logger.
-// This code is copied from go-grpc-middleware/interceptors/logging/examples/zap/example_test.go
-func InterceptorLogger(l *log.Logger) logging.Logger {
+func codeToLevel(code codes.Code) log.Level {
+	switch code {
+	case codes.OK:
+		return log.InfoLevel // log.DebugLevel
+	case codes.NotFound, codes.Canceled, codes.AlreadyExists, codes.InvalidArgument, codes.Unauthenticated:
+		return log.InfoLevel
 
-	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
-		var f []zap.Field
-		i := logging.Fields(fields).Iterator()
-		for i.Next() {
-			k, v := i.At()
-			f = append(f, zap.Any(k, v))
+	case codes.DeadlineExceeded, codes.PermissionDenied, codes.ResourceExhausted, codes.FailedPrecondition,
+		codes.Aborted, codes.OutOfRange, codes.Unavailable:
+		return log.WarnLevel
+
+	case codes.Unknown, codes.Unimplemented, codes.Internal, codes.DataLoss:
+		return log.ErrorLevel
+
+	default:
+		return log.WarnLevel
+	}
+}
+
+// SimpleInterceptorLogger is a simplified gRPC server request logger. For an
+// alternative, see the example from
+// go-grpc-middleware/interceptors/logging/examples/zap/example_test.go
+func SimpleInterceptorLogger(l *log.Logger) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		tStart := time.Now()
+		resp, err := handler(ctx, req)
+		elapsedMs := float64(time.Since(tStart).Microseconds()) / 1e3
+		code := status.Code(err)
+		fields := []zap.Field{
+			zap.String("method", strings.Trim(info.FullMethod, "/")),
+			zap.String("elapsed", fmt.Sprintf("%.3fms", elapsedMs)),
+			zap.String("code", code.String()),
 		}
-
-		// TODO: this is a hack to get rid of the extended fields every time we log
-		// log wrapper is not correctly cloned
-		// here use zap.Logger
-		lg := l.L.WithOptions(zap.AddCallerSkip(1)).With(f...)
-
-		switch lvl {
-		case logging.LevelDebug:
-			lg.Debug(msg)
-		case logging.LevelInfo:
-			lg.Info(msg)
-		case logging.LevelWarn:
-			lg.Warn(msg)
-		case logging.LevelError:
-			lg.Error(msg)
-		default:
-			panic(fmt.Sprintf("unknown level %v", lvl))
+		var msg string
+		if err != nil {
+			msg = "call failure"
+			fields = append(fields, zap.Error(err))
+		} else {
+			msg = "call success"
 		}
-	})
+		l.Log(codeToLevel(code), msg, fields...)
+		return resp, err
+	}
 }

@@ -5,7 +5,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -32,10 +31,6 @@ func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 		recovery.WithRecoveryHandler(recoveryFunc),
 	}
 
-	loggingOpts := []logging.Option{
-		logging.WithLogOnEvents(logging.StartCall, logging.FinishCall),
-	}
-
 	s := &Server{
 		logger:   l,
 		listener: lis,
@@ -46,7 +41,7 @@ func New(logger log.Logger, lis net.Listener, opts ...Option) *Server {
 	}
 	srvOpts := append(s.srvOpts, grpc.ChainUnaryInterceptor(
 		recovery.UnaryServerInterceptor(recoveryOpts...),
-		logging.UnaryServerInterceptor(InterceptorLogger(&l), loggingOpts...),
+		SimpleInterceptorLogger(&l),
 	))
 
 	s.server = grpc.NewServer(srvOpts...)
