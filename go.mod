@@ -2,11 +2,6 @@ module github.com/kwilteam/kwil-db
 
 go 1.21
 
-replace (
-	github.com/kwilteam/kwil-db/core => ./core
-	github.com/kwilteam/kwil-db/parse => ./parse
-)
-
 require (
 	github.com/alexflint/go-arg v1.4.3
 	github.com/alexliesenfeld/health v0.6.0
