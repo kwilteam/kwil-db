@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/engine/utils"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/core/utils"
+
 	"github.com/olekukonko/tablewriter"
 )
 

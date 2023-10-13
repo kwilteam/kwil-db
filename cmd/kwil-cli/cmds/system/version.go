@@ -11,7 +11,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/internal/pkg/version"
+	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/go-rosetta"
 )

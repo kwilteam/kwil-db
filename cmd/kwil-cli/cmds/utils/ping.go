@@ -6,7 +6,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/pkg/client"
+	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/spf13/cobra"
 )
 

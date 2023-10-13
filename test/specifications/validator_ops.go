@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/validators"
+	"github.com/kwilteam/kwil-db/core/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,7 +111,7 @@ func ValidatorNodeLeaveSpecification(ctx context.Context, t *testing.T, netops V
 	assert.Equal(t, preCnt-1, postCnt)
 }
 
-func approvalCount(joinStatus *validators.JoinRequest) int {
+func approvalCount(joinStatus *types.JoinRequest) int {
 	cnt := 0
 	for _, vote := range joinStatus.Approved {
 		if vote {

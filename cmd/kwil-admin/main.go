@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/kwilteam/kwil-db/internal/pkg/version"
+	"github.com/kwilteam/kwil-db/internal/version"
 
 	"github.com/alexflint/go-arg"
 )

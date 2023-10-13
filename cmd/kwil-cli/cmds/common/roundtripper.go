@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/pkg/auth"
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/log"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
 )
 
 const (

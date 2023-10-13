@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 var (

@@ -2,8 +2,8 @@ package database
 
 import (
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 func Example_respDBlist_text_0() {
@@ -164,7 +164,7 @@ func Example_respSchema_json() {
 	// Output:
 	// {
 	//   "result": {
-	//     "Owner": "dXNlcg==",
+	//     "owner": "dXNlcg==",
 	//     "name": "test_schema",
 	//     "tables": [
 	//       {

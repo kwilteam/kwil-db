@@ -1,9 +1,0 @@
-# The following command line tools are necessary to build. These have nothing to do 
-# with the kwil-db module or any of the repository dependencies:
-
-_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.16.2"
-_ "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.16.2"
-_ "golang.org/x/tools/cmd/goimports@v0.12.0"
-_ "google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0"
-_ "google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0"
-_ "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.1"
