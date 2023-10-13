@@ -22,16 +22,17 @@ import (
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/joho/godotenv"
-	"github.com/kwilteam/kwil-db/pkg/auth"
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
-	"github.com/kwilteam/kwil-db/pkg/log"
-	"github.com/kwilteam/kwil-db/pkg/nodecfg"
-	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/test/driver"
 )
 
 var (

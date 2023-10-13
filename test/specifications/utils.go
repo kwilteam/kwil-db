@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kuneiform/kfparser"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/stretchr/testify/require"
 )

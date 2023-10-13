@@ -8,9 +8,8 @@ import (
 	"reflect"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/pkg/abci"
-	"github.com/kwilteam/kwil-db/pkg/client/types"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/internal/abci"
 )
 
 // respStr represents a string in cli
@@ -30,7 +29,7 @@ func (s respStr) MarshalText() ([]byte, error) {
 
 // respTxQuery is used to represent a transaction response in cli
 type respTxQuery struct {
-	Msg *types.TcTxQueryResponse
+	Msg *transactions.TcTxQueryResponse
 }
 
 func (r *respTxQuery) MarshalJSON() ([]byte, error) {

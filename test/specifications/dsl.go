@@ -3,9 +3,9 @@ package specifications
 import (
 	"context"
 
-	"github.com/kwilteam/kwil-db/pkg/client"
-	"github.com/kwilteam/kwil-db/pkg/transactions"
-	"github.com/kwilteam/kwil-db/pkg/validators"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // A Dsl describes a set of interactions that could achieve a specific goal
@@ -80,6 +80,6 @@ type ValidatorOpsDsl interface {
 	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error)
 	ValidatorNodeJoin(ctx context.Context) ([]byte, error)
 	ValidatorNodeLeave(ctx context.Context) ([]byte, error)
-	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*validators.JoinRequest, error)
-	ValidatorsList(ctx context.Context) ([]*validators.Validator, error)
+	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
+	ValidatorsList(ctx context.Context) ([]*types.Validator, error)
 }

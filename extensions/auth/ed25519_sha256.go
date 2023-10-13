@@ -8,8 +8,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/pkg/auth"
-	"github.com/kwilteam/kwil-db/pkg/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
 
 func init() {
@@ -23,7 +23,8 @@ const (
 	// Ed25519Sha256Auth is the authenticator name
 	// the "nr" suffix is for NEAR, and provides backwards compatibility
 	Ed25519Sha256Auth = "ed25519_nr"
-	// ed25519SignatureLength is the expected length of a signature
+
+	// ed25519SignatureLength is the expected length of an ed25519 signature
 	ed25519SignatureLength = 64
 )
 

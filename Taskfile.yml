@@ -1,8 +1,7 @@
 version: "3"
 
 includes:
-  #note: actual execute directory is the root of the project
-  pb: ./api/
+  pb: ./Taskfile-pb.yml
 
 tasks:
   default:
@@ -13,19 +12,11 @@ tasks:
     aliases: [tools]
     desc: Install tools required to build this app
     cmds:
-      - grep _ tools.txt | awk -F'"' '{print $2}' | xargs -tI % go install %
-
-  vendor:
-    desc: Generate vendor
-    deps:
-      - task: vendor:clean
-    cmds:
-      - go mod vendor
-
-  vendor:clean:
-    desc: Clean vendor
-    cmds:
-      - rm -rf ./vendor
+      - go install "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.16.2"
+      - go install "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.16.2"
+      - go install "golang.org/x/tools/cmd/goimports@v0.14.0"
+      - go install "google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0"
+      - go install "google.golang.org/protobuf/cmd/protoc-gen-go@v1.31.0"
 
   git:init:
     desc: Initialize git submodules
@@ -51,12 +42,22 @@ tasks:
   fmt:
     desc: Format the code
     cmds:
-      - goimports -format-only -w ./cmd ./internal ./pkg ./test
+      # goimports does allow to ignore certain paths (protobuf) with modules,
+      # so we have to list all the folders that are adjacent to protobuf.
+      - |
+        goimports -format-only -w ./cmd ./internal ./test ./core/client \
+          ./core/crypto ./core/log ./core/rpc/client ./core/rpc/conversion \
+          ./core/rpc/transport ./core/types ./core/utils
 
   lint:
     desc: Lint with golangci-lint
     cmds:
-        - golangci-lint run -c .golangci.yml --skip-dirs ./api/protobuf
+        - golangci-lint run ./... ./core/... ./test/... ./parse/... -c .golangci.yml --skip-dirs ./core/rpc/protobuf
+
+  linter:
+    desc: Install the linter (not for CI which has an action for this)
+    cmds:
+      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2"
 
   build:
     desc: Build cli, admin & kwild
@@ -87,24 +88,37 @@ tasks:
       - .build/kwild
 
   # ************ docker ************
+  vendor:
+    desc: Generate vendor
+    deps:
+      - task: vendor:clean
+    cmds:
+      - go mod vendor
+
+  vendor:clean:
+    desc: Clean vendor
+    cmds:
+      - rm -rf ./vendor
+
   build:docker:
     desc: Build the docker image for the kwild, support extra args to specify image flavor
+    defer: 
     cmds:
       - task: vendor
+      - defer: { task: vendor:clean }
       # pass any args to build flavored image, e.g. task build:docker -- debug
       # NOTE: this is kind hack/messy, since `./scripts/build/docker` only care first 2 args
       # {{.CLI_ARGS}} is a special variable that will be replaced with the CLI args
       # {{.VARIANT}} is a variable other tasks can set, it will have effect if {{.CLI_ARGS}} is empty
       # !! if parent task(which has deps on this task) has {{.CLI_ARGS}}, only this child task get the {{.CLI_ARGS}}
       - ./scripts/build/docker kwild {{.CLI_ARGS}} {{.VARIANT}}
-      - task: vendor:clean
 
   publish:dockerhub:
     desc: Publish docker image to dockerhub
     cmds:
       - task: vendor
+      - defer: { task: vendor:clean }
       - TAG={{.TAG}} ./scripts/publish/dockerhub
-      - task: vendor:clean
     requires:
       vars: [TAG]
 
@@ -115,7 +129,7 @@ tasks:
       - task: build:docker
         vars: {VARIANT: 'shell'}
     cmds:
-      - task dev:up:nb
+      - task: dev:up:nb
 
   dev:up:debug:
     desc: Start the dev environment
@@ -123,15 +137,16 @@ tasks:
       - task: build:docker
         vars: { VARIANT: 'debug' }
     cmds:
-      - task dev:up:nb
+      - task: dev:up:nb
 
   dev:up:nb:
     desc: Start the dev environment without rebuilding docker image
     env:
       # NOTE: this timeout should be long enough to attach to debugger
       KACT_WAIT_TIMEOUT: 20s
+    dir: test # different module
     cmds:
-      - go test ./test/acceptance/ -timeout 12h -dev -v
+      - go test ./acceptance -timeout 12h -dev -v
 
   dev:testnet:up:
     desc: Start the dev environment(with testnet)
@@ -139,12 +154,13 @@ tasks:
       - task: build:docker
         vars: { VARIANT: 'shell' }
     cmds:
-      - task dev:testnet:up:nb
+      - task: dev:testnet:up:nb
 
   dev:testnet:up:nb:
     desc: Start the dev environment(with testnet) without rebuilding docker image
+    dir: test # different module
     cmds:
-      - go test ./test/integration/ -timeout 12h -dev -v
+      - go test ./integration -timeout 12h -dev -v
 
   # ************ test ************
   # test with build:docker task support passing CLI_ARGS to go test, e.g. task test:act -- -debug
@@ -156,26 +172,29 @@ tasks:
       - task: build:admin
       - task: build:docker
     cmds:
-      - task test:act:nb
+      - task: test:act:nb
 
   # *:nb task support passing CLI_ARGS to go test, e.g. task test:act:nb -- -remote
   # this CLI_ARGS will be used by `go test`
   test:act:nb:
     desc: Run acceptance tests without building docker image
+    dir: test # different module
     cmds:
-      - go test ./test/acceptance/ -count=1 -v {{.CLI_ARGS}}
+      - go test ./acceptance -count=1 -v {{.CLI_ARGS}}
 
   test:unit:
     desc: Run unit tests
     cmds:
-      - go test $(go list ./... | grep -v /kwil-db\/test/) -tags=ext_test -count=1
+      - go test ./core/... -tags=ext_test -count=1
+      - go test ./parse/... -tags=ext_test -count=1
+      - go test ./... -tags=ext_test -count=1
 
   test:unit:race:
-      desc: Run unit tests with race
-      cmds:
-        - task vendor
-        - go test `go list ./... | grep -v /kwil-db\/test/` -count=1 -race
-        - task vendor:clean
+    desc: Run unit tests with the race detector
+    cmds:
+      - go test ./core/... -tags=ext_test -count=1 -race
+      - go test ./parse/... -tags=ext_test -count=1 -race
+      - go test ./... -tags=ext_test -count=1 -race
 
   test:it:
     desc: Run integration tests
@@ -184,9 +203,10 @@ tasks:
       - task: build:admin
       - task: build:docker
     cmds:
-      - task test:it:nb
+      - task: test:it:nb
 
   test:it:nb:
     desc: Run integration tests
+    dir: test # different module
     cmds:
-      - go test -count=1 -timeout 0 ./test/integration/ -v {{.CLI_ARGS}}
+      - go test -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}

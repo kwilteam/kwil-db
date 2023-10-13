@@ -47,13 +47,7 @@ if [ -z "$CGO_ENABLED" ]; then
 fi
 export CGO_ENABLED
 
-BINARY_PKG_PREFIX="github.com/kwilteam/kwil-db/internal/pkg/build"
-# NOTE: VCS info is now built into Go, so we can remove this with some kwil-cli
-# updates. See pkg/version and kwild/kwil-cli for example.
 GO_LDFLAGS="${GO_LDFLAGS:-}"
-GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.GitCommit=${GIT_COMMIT}\""
-GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.BuildTime=${BUILD_TIME}\""
-GO_LDFLAGS="$GO_LDFLAGS -X \"${BINARY_PKG_PREFIX}.Version=${GIT_VERSION}\""
 if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ] && [ "$(go env GOOS)" = "linux" ]; then
     GO_LDFLAGS="$GO_LDFLAGS -extldflags=-static"
 fi
