@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -383,4 +384,28 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 	}
 
 	return res, nil
+}
+
+func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Duration) (*transactions.TcTxQueryResponse, error) {
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for {
+		resp, err := c.TxQuery(ctx, txHash)
+		notFound := grpcStatus.Code(err) == grpcCodes.NotFound
+		if !notFound {
+			if err != nil {
+				return nil, err
+			}
+			if resp.Height > 0 {
+				return resp, nil
+			}
+		} else {
+			c.logger.Warn("tx not found") // TODO: remove this once we've resolved cometbft bcast -> mempool window
+		}
+		select {
+		case <-tick.C:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 }

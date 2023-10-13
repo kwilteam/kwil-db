@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/log"
@@ -193,7 +194,7 @@ func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove
 		return res, nil
 	}
 	// The transaction could be in mempool.
-	limit := -1
+	limit := math.MaxInt // cmt is bugged, -1 doesn't work
 	unconf, err := wc.cl.UnconfirmedTxs(ctx, &limit)
 	if err != nil {
 		return nil, err
