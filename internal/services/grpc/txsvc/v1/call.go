@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/internal/ident"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,7 +20,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 	}
 
 	if msg.Sender != nil {
-		err = msg.Verify()
+		err = ident.VerifyMessage(msg)
 		if err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to verify signed message: %s", err.Error())
 		}

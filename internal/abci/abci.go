@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
 	modDataset "github.com/kwilteam/kwil-db/internal/modules/datasets"
 	modVal "github.com/kwilteam/kwil-db/internal/modules/validators"
@@ -236,7 +237,7 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 		}
 
 		// Verify Signature
-		err = tx.Verify()
+		err = ident.VerifyTransaction(tx)
 		if err != nil {
 			code = CodeInvalidSignature
 			logger.Error("failed to verify transaction", zap.Error(err))

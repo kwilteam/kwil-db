@@ -97,10 +97,16 @@ func CreateCallMessage(payload *ActionCall) (*CallMessage, error) {
 	}, nil
 }
 
+// SerializeMsg produces the serialization of the message that is to be used in
+// both signing and verification of message.
+func (s *CallMessage) SerializeMsg() ([]byte, error) {
+	return s.Body.SerializeMsg(s.Serialization)
+}
+
 // Sign signs message body with given signer. It will serialize the message
 // body to get message-to-be-sign first, then sign it.
 func (s *CallMessage) Sign(signer auth.Signer) error {
-	msg, err := s.Body.SerializeMsg(s.Serialization)
+	msg, err := s.SerializeMsg()
 	if err != nil {
 		return err
 	}
@@ -120,17 +126,22 @@ func (s *CallMessage) IsSigned() bool {
 	return s.Signature != nil && s.Sender != nil
 }
 
-// Verify verifies the authenticity of a signed message. It will serialize
-// the message body to get message-to-be-sign, then verify it .
-func (s *CallMessage) Verify() error {
+// Verify verifies the authenticity of a signed message. It will serialize the
+// message body to get message-to-be-signed, then verify it.
+//
+// NOTE: This is not the recommended way to verify a call message in kwild since
+// it should use its internal VerifyMessage function that uses its Authenticator
+// registry. This method is provided so SDK users may verify messages directly
+// with a Verifier implementation, such as those provided in core/crypto/auth.
+func (s *CallMessage) Verify(verifier auth.Verifier) error {
 	if !s.IsSigned() {
 		return errors.New("message is not signed")
 	}
 
-	msg, err := s.Body.SerializeMsg(s.Serialization)
+	msg, err := s.SerializeMsg()
 	if err != nil {
 		return err
 	}
 
-	return s.Signature.Verify(s.Sender, msg)
+	return verifier.Verify(s.Sender, msg, s.Signature.Signature)
 }

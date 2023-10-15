@@ -162,7 +162,8 @@ func TestCallMessage_Sign(t *testing.T) {
 			require.Equal(t1, hex.EncodeToString(tt.wantSig.Signature),
 				hex.EncodeToString(msg.Signature.Signature), "mismatch signature")
 
-			err = msg.Verify()
+			authenticator := tt.args.signer.Authenticator()
+			err = msg.Verify(authenticator)
 			require.NoError(t1, err, "error verifying tx")
 		})
 	}
