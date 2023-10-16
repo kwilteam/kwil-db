@@ -134,10 +134,12 @@ func TestTransaction_Sign(t *testing.T) {
 			require.Equal(t1, hex.EncodeToString(tt.wantSig.Signature),
 				hex.EncodeToString(tx.Signature.Signature), "mismatch signature")
 
-			// The application would use auth.Verify with tx.SerializeMsg?
+			msgBts, err := tx.SerializeMsg()
+			require.NoError(t1, err, "error serializing message")
+
 			authenticator := tt.args.signer.Authenticator()
-			err = tx.Verify(authenticator)
-			require.NoError(t1, err, "error verifying tx")
+			err = authenticator.Verify(tx.Sender, msgBts, tx.Signature.Signature)
+			require.NoError(t1, err, "error verifying message")
 		})
 	}
 }

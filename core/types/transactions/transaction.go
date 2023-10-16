@@ -142,23 +142,6 @@ func (t *Transaction) SerializeMsg() ([]byte, error) {
 	return t.Body.SerializeMsg(t.Serialization)
 }
 
-// Verify verifies the authenticity of a signed transaction. It will serialize
-// the transaction body to get message-to-be-signed, then verify it.
-//
-// NOTE: This is not the recommended way to verify a transaction in kwild since
-// it should use its internal VerifyTransaction function that uses its
-// Authenticator registry. This method is provided so SDK users may verify
-// transactions directly with an Verifier implementation, such as those provided
-// in core/crypto/auth.
-func (t *Transaction) Verify(verifier auth.Verifier) error {
-	msg, err := t.Body.SerializeMsg(t.Serialization)
-	if err != nil {
-		return err
-	}
-
-	return verifier.Verify(t.Sender, msg, t.Signature.Signature)
-}
-
 // Sign signs transaction body with given signer.
 // It will serialize the transaction body first and sign it.
 func (t *Transaction) Sign(signer auth.Signer) error {
