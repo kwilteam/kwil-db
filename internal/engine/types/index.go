@@ -13,6 +13,7 @@ type Index struct {
 	Type    IndexType `json:"type"`
 }
 
+// Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
 func (i *Index) Clean() error {
 	return runCleans(
 		cleanIdent(&i.Name),

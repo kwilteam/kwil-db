@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-
-	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 const (
@@ -23,31 +21,8 @@ const (
 	sqlGetAccount = `SELECT balance, nonce FROM accounts WHERE public_key = $public_key`
 )
 
-type preparedStatements struct {
-	getAccount sql.Statement
-}
-
-func (p *preparedStatements) Close() error {
-	return p.getAccount.Close()
-}
-
-func (a *AccountStore) prepareStatements() error {
-	if a.stmts == nil {
-		a.stmts = &preparedStatements{}
-	}
-
-	stmt, err := a.db.Prepare(sqlGetAccount)
-	if err != nil {
-		return fmt.Errorf("failed to prepare get account statement: %w", err)
-	}
-
-	a.stmts.getAccount = stmt
-
-	return nil
-}
-
 func (ar *AccountStore) initTables(ctx context.Context) error {
-	err := ar.db.Execute(ctx, sqlInitTables, nil)
+	_, err := ar.db.Execute(ctx, sqlInitTables, nil)
 	if err != nil {
 		return fmt.Errorf("failed to initialize tables: %w", err)
 	}
@@ -55,20 +30,22 @@ func (ar *AccountStore) initTables(ctx context.Context) error {
 }
 
 func (a *AccountStore) updateAccount(ctx context.Context, pubKey []byte, amount *big.Int, nonce int64) error {
-	return a.db.Execute(ctx, sqlUpdateAccount, map[string]interface{}{
+	_, err := a.db.Execute(ctx, sqlUpdateAccount, map[string]interface{}{
 		"$public_key": pubKey,
 		"$balance":    amount.String(),
 		"$nonce":      nonce,
 	})
+	return err
 }
 
 // createAccount creates an account with the given public_key.
 func (a *AccountStore) createAccount(ctx context.Context, pubKey []byte) error {
-	return a.db.Execute(ctx, sqlCreateAccount, map[string]interface{}{
+	_, err := a.db.Execute(ctx, sqlCreateAccount, map[string]interface{}{
 		"$public_key": pubKey,
 		"$balance":    big.NewInt(0).String(),
 		"$nonce":      0,
 	})
+	return err
 }
 
 // getAccountReadOnly gets an account using a read-only connection. it will not
@@ -92,7 +69,7 @@ func (a *AccountStore) getAccountReadOnly(ctx context.Context, pubKey []byte) (*
 // getAccountSynchronous gets an account using a read-write connection.
 // it will show uncommitted changes.
 func (a *AccountStore) getAccountSynchronous(ctx context.Context, pubKey []byte) (*Account, error) {
-	results, err := a.stmts.getAccount.Execute(ctx, map[string]interface{}{
+	results, err := a.db.Execute(ctx, sqlGetAccount, map[string]interface{}{
 		"$public_key": pubKey,
 	})
 	if err != nil {

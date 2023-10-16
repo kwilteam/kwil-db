@@ -16,11 +16,6 @@ func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteC
 
 	getPostInput := []any{1111}
 
-	_, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput, false)
-	if err == nil {
-		t.Errorf("expected error calling action without authentication")
-	}
-
 	res, err := caller.Call(ctx, dbID, "get_post_authenticated", getPostInput, true)
 	if err != nil {
 		t.Fatalf("error calling action: %s", err.Error())

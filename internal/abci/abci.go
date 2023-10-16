@@ -154,6 +154,9 @@ type AbciApp struct {
 	// Expected AppState after bootstrapping the node with a given snapshot,
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
+
+	// blockHeight is the current block height
+	blockHeight int64
 }
 
 func (a *AbciApp) ChainID() string {
@@ -187,7 +190,13 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 	logger := a.log.With(zap.String("stage", "ABCI BeginBlock"), zap.Int("height", int(req.Header.Height)))
 	logger.Debug("begin block")
 
-	err := a.committer.Begin(context.Background())
+	ctx := context.Background()
+
+	idempotencyKey := make([]byte, 8)
+	binary.LittleEndian.PutUint64(idempotencyKey, uint64(req.Header.Height))
+	a.blockHeight = req.Header.Height
+
+	err := a.committer.Begin(ctx, idempotencyKey)
 	if err != nil {
 		panic(newFatalError("BeginBlock", &req, err.Error()))
 	}
@@ -209,7 +218,7 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 		}
 		const punishDelta = 1
 		newPower := ev.Validator.Power - punishDelta
-		if err = a.validators.Punish(context.Background(), pubkey, newPower); err != nil {
+		if err = a.validators.Punish(ctx, pubkey, newPower); err != nil {
 			logger.Error("failed to punish validator", zap.Error(err))
 			panic(newFatalError("BeginBlock", &req, fmt.Sprintf("failed to punish validator %v", addr)))
 		}
@@ -589,13 +598,10 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 
 	defer a.mempool.reset()
 
-	// generate the unique id for all changes occurred thus far
-	id, err := a.committer.ID(ctx)
-	if err != nil {
-		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to get commit id: %v", err)))
-	}
+	idempotencyKey := make([]byte, 8)
+	binary.LittleEndian.PutUint64(idempotencyKey, uint64(a.blockHeight))
 
-	err = a.committer.Commit(ctx)
+	id, err := a.committer.Commit(ctx, idempotencyKey)
 	if err != nil {
 		panic(newFatalError("Commit", nil, fmt.Sprintf("failed to commit atomic commit: %v", err)))
 	}
@@ -645,11 +651,6 @@ func (a *AbciApp) Commit() abciTypes.ResponseCommit {
 
 func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
 	ctx := context.Background()
-
-	err := a.committer.ClearWal(ctx)
-	if err != nil {
-		panic(newFatalError("Info", &p0, fmt.Sprintf("failed to clear WAL: %v", err)))
-	}
 
 	// Load the current validator set from our store.
 	vals, err := a.validators.CurrentSet(ctx)

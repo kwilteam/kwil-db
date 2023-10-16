@@ -21,6 +21,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft" // internalize
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 
 	// internalize
 	"go.uber.org/zap"
@@ -101,7 +102,7 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 		genesisCfg: genesisCfg,
 		privKey:    ed25519.PrivKey(nodeKey.Bytes()),
 		log:        logger,
-		opener:     newSqliteOpener(dbDir),
+		opener:     sqlite.NewPool,
 		keypair:    keyPair,
 	}
 
