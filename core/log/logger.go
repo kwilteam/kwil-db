@@ -45,6 +45,13 @@ func (l *Logger) Fatal(msg string, fields ...Field) {
 	l.L.Fatal(msg, fields...)
 }
 
+func (l *Logger) Log(level Level, msg string, fields ...Field) {
+	if level >= ErrorLevel {
+		fields = append(fields, detailedFields...)
+	}
+	l.L.Log(level, msg, fields...)
+}
+
 func (l *Logger) Named(name string) *Logger {
 	if name == "" {
 		return l
