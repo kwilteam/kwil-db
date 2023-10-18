@@ -11,13 +11,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
-func init() {
-	err := RegisterAuthenticator(Ed25519Auth, Ed25519Authenticator{})
-	if err != nil {
-		panic(err)
-	}
-}
-
 const (
 	// Ed25519Auth is a plain ed25519 authenticator. This is used for validator
 	// signature verification. This is intended as the authenticator for the

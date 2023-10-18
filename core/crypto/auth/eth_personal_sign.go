@@ -6,15 +6,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 
 	ethAccounts "github.com/ethereum/go-ethereum/accounts"
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 )
-
-func init() {
-	err := RegisterAuthenticator(EthPersonalSignAuth, EthSecp256k1Authenticator{})
-	if err != nil {
-		panic(err)
-	}
-}
 
 const (
 	// EthPersonalSignAuth is the Ethereum "personal sign" authentication type,
@@ -37,12 +31,9 @@ var _ Authenticator = EthSecp256k1Authenticator{}
 
 // Address generates an ethereum address from a public key.
 func (EthSecp256k1Authenticator) Address(publicKey []byte) (string, error) {
-	ethKey, err := ethCrypto.UnmarshalPubkey(publicKey)
-	if err != nil {
-		return "", err
-	}
-
-	return ethCrypto.PubkeyToAddress(*ethKey).Hex(), nil
+	// See ethCrypto.PubkeyToAddress for this formula:
+	addr := ethCommon.BytesToAddress(ethCrypto.Keccak256(publicKey[1:])[12:])
+	return addr.String(), nil
 }
 
 // Verify verifies applies the Ethereum TextHash digest and verifies the signature
