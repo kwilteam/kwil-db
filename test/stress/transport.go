@@ -1,0 +1,109 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"math/big"
+	"time"
+
+	"github.com/kwilteam/kwil-db/core/log"
+	grpc "github.com/kwilteam/kwil-db/core/rpc/client/user"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
+)
+
+type timedClient struct {
+	showReqDur bool
+	logger     *log.Logger
+	cl         *grpc.Client
+}
+
+func (tc *timedClient) Close() error {
+	return tc.cl.Close()
+}
+
+func (tc *timedClient) printDur(t time.Time, method string) {
+	tc.logger.Info(fmt.Sprintf("%s took %vms", method, float64(time.Since(t).Microseconds())/1e3)) // not using zap Fields so it is legible
+}
+
+func (tc *timedClient) Call(ctx context.Context, req *transactions.CallMessage) ([]map[string]any, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "Call")
+	}
+	return tc.cl.Call(ctx, req)
+}
+
+func (tc *timedClient) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "TxQuery")
+	}
+	return tc.cl.TxQuery(ctx, txHash)
+}
+
+func (tc *timedClient) GetTarget() string {
+	return tc.cl.GetTarget()
+}
+
+func (tc *timedClient) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "GetSchema")
+	}
+	return tc.cl.GetSchema(ctx, dbid)
+}
+
+func (tc *timedClient) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "Query")
+	}
+	return tc.cl.Query(ctx, dbid, query)
+}
+
+func (tc *timedClient) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "ListDatabases")
+	}
+	return tc.cl.ListDatabases(ctx, ownerPubKey)
+}
+
+func (tc *timedClient) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "GetAccount")
+	}
+	return tc.cl.GetAccount(ctx, pubKey, status)
+}
+
+func (tc *timedClient) Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "Broadcast")
+	}
+	return tc.cl.Broadcast(ctx, tx)
+}
+
+func (tc *timedClient) Ping(ctx context.Context) (string, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "Ping")
+	}
+	return tc.cl.Ping(ctx)
+}
+
+func (tc *timedClient) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "ChainInfo")
+	}
+	return tc.cl.ChainInfo(ctx)
+}
+
+func (tc *timedClient) EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "EstimateCost")
+	}
+	return tc.cl.EstimateCost(ctx, tx)
+}
+
+func (tc *timedClient) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (tc *timedClient) CurrentValidators(ctx context.Context) ([]*types.Validator, error) {
+	panic("not implemented") // TODO: Implement
+}
