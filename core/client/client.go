@@ -6,11 +6,11 @@ package client
 import (
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -87,9 +87,6 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 
 	zapFields := []zapcore.Field{
 		zap.String("host", c.transportClient.GetTarget()),
-	}
-	if c.Signer != nil {
-		zapFields = append(zapFields, zap.String("from", hex.EncodeToString(c.Signer.PublicKey())))
 	}
 
 	c.logger = *c.logger.Named("client").With(zapFields...)
@@ -407,4 +404,32 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 	}
 
 	return res, nil
+}
+
+// WaitTx repeatedly queries at a given interval for the status of a transaction
+// until it is confirmed (is included in a block).
+func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Duration) (*transactions.TcTxQueryResponse, error) {
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for {
+		resp, err := c.TxQuery(ctx, txHash)
+		notFound := grpcStatus.Code(err) == grpcCodes.NotFound
+		if !notFound {
+			if err != nil {
+				return nil, err
+			}
+			if resp.Height > 0 {
+				return resp, nil
+			}
+		} else {
+			// NOTE: this log may be removed once we've resolved the issue of
+			// transactions not being found immediately after broadcast.
+			c.logger.Debug("tx not found")
+		}
+		select {
+		case <-tick.C:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 }
