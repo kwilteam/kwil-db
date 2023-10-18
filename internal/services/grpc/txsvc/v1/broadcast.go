@@ -3,15 +3,16 @@ package txsvc
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"go.uber.org/zap"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func (s *Service) ChainInfo(ctx context.Context, req *txpb.ChainInfoRequest) (*txpb.ChainInfoResponse, error) {
@@ -46,19 +47,27 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, status.Errorf(codes.Internal, "failed to serialize transaction data")
 	}
 
-	const sync = 1 // async, TODO: sync field of BroadcastRequest
-	txHash, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
+	const sync = 1
+	code, txHash, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
 	if err != nil {
-		// NOTE: here we can errors.Is and return an actual response with a
-		// field for the error code and message instead of this internal grpc
-		// thing. Since we do not have such response structure, we have to pick
-		// from the general categories of gRPC response codes, which are similar
-		// to http status codes, and do string matching on the message.
-		if errors.Is(err, transactions.ErrWrongChain) {
-			return nil, status.Errorf(codes.InvalidArgument, "wrong chain ID %q", tx.Body.ChainID)
-		}
 		logger.Error("failed to broadcast tx", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
+	}
+
+	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
+		stat := &spb.Status{
+			Code:    int32(codes.InvalidArgument),
+			Message: "broadcast error",
+		}
+		if details, err := anypb.New(&txpb.BroadcastErrorDetails{
+			Code: code, // e.g. invalid nonce, wrong chain, etc.
+			Hash: hex.EncodeToString(txHash),
+		}); err != nil {
+			logger.Error("failed to marshal broadcast error details", zap.Error(err))
+		} else {
+			stat.Details = append(stat.Details, details)
+		}
+		return nil, status.ErrorProto(stat)
 	}
 
 	logger.Info("broadcast transaction", zap.String("TxHash", hex.EncodeToString(txHash)),

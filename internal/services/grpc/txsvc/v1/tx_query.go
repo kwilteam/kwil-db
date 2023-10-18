@@ -18,7 +18,6 @@ import (
 func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.TxQueryResponse, error) {
 	logger := s.log.With(zap.String("rpc", "TxQuery"),
 		zap.String("TxHash", hex.EncodeToString(req.TxHash)))
-	logger.Debug("query transaction")
 
 	cmtResult, err := s.chainClient.TxQuery(ctx, req.TxHash, false)
 	if err != nil {

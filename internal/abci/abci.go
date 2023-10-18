@@ -217,12 +217,12 @@ func (a *AbciApp) BeginBlock(req abciTypes.RequestBeginBlock) abciTypes.Response
 // in blocks, particularly if the failure mode involves the transaction author
 // spending no gas or achieving including in the block with little effort.
 func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseCheckTx {
-	logger := a.log.With(zap.String("stage", "ABCI CheckTx"))
+	newTx := incoming.Type == abciTypes.CheckTxType_New
+	logger := a.log.With(zap.Bool("recheck", !newTx))
 	logger.Debug("check tx")
 	ctx := context.Background()
 	var err error
 	code := CodeOk
-	newTx := incoming.Type == abciTypes.CheckTxType_New
 
 	tx := &transactions.Transaction{}
 	err = tx.UnmarshalBinary(incoming.Tx)
