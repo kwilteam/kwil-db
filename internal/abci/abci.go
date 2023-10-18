@@ -862,8 +862,8 @@ func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger) [][]byte {
 	finalTxns := make([][]byte, 0, len(okTxns))
 	i = 0
 	for _, tx := range okTxns {
-		if i > 0 && bytes.Equal(tx.Sender, okTxns[i-1].Sender) && tx.Body.Nonce == nonces[i-1] {
-			log.Warn(fmt.Sprintf("Dropping tx with nonce %d from block proposal", tx.Body.Nonce))
+		if i > 0 && tx.Body.Nonce == nonces[i-1] && bytes.Equal(tx.Sender, okTxns[i-1].Sender) {
+			log.Warn(fmt.Sprintf("Dropping tx with re-used nonce %d from block proposal", tx.Body.Nonce))
 			continue // mempool recheck should have removed this
 		}
 		finalTxns = append(finalTxns, txs[tx.is])
