@@ -15,6 +15,7 @@ import (
 	engine "github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
+	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/sql"
 	sqlTesting "github.com/kwilteam/kwil-db/internal/sql/testing"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,7 @@ import (
 func newTestEngine(ctx context.Context, ec engine.CommitRegister, opts ...engine.EngineOpt) (*engine.Engine, func() error, error) {
 	opener := newTestDBOpener()
 
-	e, err := engine.Open(ctx, opener, ec, auth.GetAddress,
+	e, err := engine.Open(ctx, opener, ec, ident.Address,
 		opts...,
 	)
 	if err != nil {

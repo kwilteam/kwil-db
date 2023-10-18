@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/engine"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/internal/ident"
 )
 
 // Call executes a call action on a database.  It is a read-only action.
@@ -17,7 +18,7 @@ func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, ar
 		engine.ReadOnly(true),
 	}
 	if msg.IsSigned() {
-		err := msg.Verify()
+		err := ident.VerifyMessage(msg)
 		if err != nil {
 			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
 		}
