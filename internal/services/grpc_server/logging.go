@@ -42,7 +42,6 @@ func SimpleInterceptorLogger(l *log.Logger) grpc.UnaryServerInterceptor {
 		tStart := time.Now()
 		resp, err := handler(ctx, req)
 		elapsedMs := float64(time.Since(tStart).Microseconds()) / 1e3
-		code := status.Code(err)
 		fields := []zap.Field{
 			zap.String("method", strings.Trim(info.FullMethod, "/")),
 			zap.String("elapsed", fmt.Sprintf("%.3fms", elapsedMs)),
@@ -50,13 +49,17 @@ func SimpleInterceptorLogger(l *log.Logger) grpc.UnaryServerInterceptor {
 		if peer, ok := peer.FromContext(ctx); ok {
 			fields = append(fields, zap.String("addr", peer.Addr.String()))
 		}
+		stat := status.Convert(err)
+		code := stat.Code()
 		fields = append(fields, zap.String("code", code.String()))
 		var msg string
 		if err != nil {
 			msg = "call failure"
-			fields = append(fields, zap.Error(err))
 		} else {
 			msg = "call success"
+		}
+		if errDesc := stat.Message(); errDesc != "" {
+			fields = append(fields, zap.String("err", errDesc))
 		}
 		l.Log(codeToLevel(code), msg, fields...)
 		return resp, err

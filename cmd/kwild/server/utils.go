@@ -10,7 +10,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 	extActions "github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
@@ -152,7 +151,7 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 	}, nil
 }
 
-func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, sync uint8) ([]byte, error) {
+func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (uint32, []byte, error) {
 	var bcastFun func(ctx context.Context, tx cmttypes.Tx) (*cmtCoreTypes.ResultBroadcastTx, error)
 	switch sync {
 	case 0:
@@ -186,19 +185,10 @@ func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, syn
 
 	result, err := bcastFun(ctx, cmttypes.Tx(tx))
 	if err != nil {
-		return nil, err
+		return 0, nil, err
 	}
 
-	txCode := transactions.TxCode(result.Code)
-	switch txCode {
-	case transactions.CodeOk:
-	case transactions.CodeWrongChain:
-		return nil, transactions.ErrWrongChain
-	default:
-		return nil, fmt.Errorf("transaction rejected with code %d (%v)", txCode, txCode)
-	}
-
-	return result.Hash.Bytes(), nil
+	return result.Code, result.Hash.Bytes(), nil
 }
 
 // TxQuery locates a transaction in the node's blockchain or mempool. If the
