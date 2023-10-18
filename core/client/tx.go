@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
@@ -19,7 +20,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 		nonce = uint64(txOpts.nonce)
 	} else {
 		// Get the latest nonce for the account, if it exists.
-		acc, err := c.transportClient.GetAccount(ctx, c.Signer.PublicKey())
+		acc, err := c.transportClient.GetAccount(ctx, c.Signer.PublicKey(), types.AccountStatusPending)
 		if err != nil {
 			return nil, err
 		}

@@ -13,10 +13,6 @@ import (
 // mempoolState maintains in-memory account state to validate the transactions against.
 type mempool struct {
 	accountStore AccountsModule
-	// nonceTracker tracks the last valid nonce for each account. nonce is
-	// unconfirmed if the value is greater than the nonce in the account store.
-	// Key: sender's public key, Value: last valid nonce
-	nonceTracker map[string]uint64
 
 	// in-memory account state to validate transactions against, purged at the end of commit.
 	accounts map[string]*userAccount
@@ -50,6 +46,19 @@ func (m *mempool) accountInfo(ctx context.Context, pubKey []byte) (*userAccount,
 	return acctInfo, nil
 }
 
+// peekAccountInfo is like accountInfo, but it does not query the account store
+// if there are no unconfirmed transactions for the user.
+func (m *mempool) peekAccountInfo(ctx context.Context, pubKey []byte) *userAccount {
+	acctInfo := &userAccount{balance: &big.Int{}} // must be new instance
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if acct, ok := m.accounts[string(pubKey)]; ok {
+		acctInfo.balance = big.NewInt(0).Set(acct.balance)
+		acctInfo.nonce = acct.nonce
+	}
+	return acctInfo
+}
+
 // applyTransaction validates account specific info and applies valid transactions to the mempool state.
 func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transaction) error {
 	m.mu.Lock()
@@ -61,33 +70,19 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 		return err
 	}
 
-	hexKey := hex.EncodeToString(tx.Sender)
-
 	//  It is normally permissible to accept a transaction with the same nonce
 	//	as a tx already in mempool (but not in a block), however without gas
 	//	we would not want to allow that since there is no criteria
 	//  for selecting the one to mine (normally higher fee).
 	if tx.Body.Nonce != uint64(acct.nonce)+1 {
-		return fmt.Errorf("invalid nonce for account %s: got %d, expected %d", hexKey, tx.Body.Nonce, acct.nonce+1)
+		return fmt.Errorf("%w for account %s: got %d, expected %d", transactions.ErrInvalidNonce,
+			hex.EncodeToString(tx.Sender), tx.Body.Nonce, acct.nonce+1)
 	}
 
-	m.updateAccount(tx.Sender, tx.Body.Nonce)
-	return nil
-}
-
-// updateAccount is called post-transaction validation, so that the effects of
-// the transaction is reflected in the mempool's view of the account state.
-// This ensures that the subsequent transactions are validated against this
-// updated view of the account state, rather than the one from the account store.
-func (m *mempool) updateAccount(pubKey []byte, txNonce uint64) {
-	publicKey := string(pubKey)
-
-	m.accounts[publicKey].nonce++
+	acct.nonce = int64(tx.Body.Nonce)
 	//acct.balance.Sub(acct.balance, fee)
 
-	if txNonce > m.nonceTracker[publicKey] {
-		m.nonceTracker[publicKey] = txNonce
-	}
+	return nil
 }
 
 // reset clears the in-memory unconfirmed account states.
@@ -112,4 +107,13 @@ func groupTxsBySender(txns [][]byte) (map[string][]*transactions.Transaction, er
 		grouped[key] = append(grouped[key], t)
 	}
 	return grouped, nil
+}
+
+// nonceList is for debugging
+func nonceList(txns []*transactions.Transaction) []uint64 {
+	nonces := make([]uint64, len(txns))
+	for i, tx := range txns {
+		nonces[i] = tx.Body.Nonce
+	}
+	return nonces
 }
