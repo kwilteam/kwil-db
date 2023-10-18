@@ -142,10 +142,17 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 	return c.transportClient.Broadcast(ctx, tx)
 }
 
-// DropDatabase drops a database
+// DropDatabase drops a database by name, using the configured signer to derive
+// the DB ID.
 func (c *Client) DropDatabase(ctx context.Context, name string, opts ...TxOpt) (transactions.TxHash, error) {
+	dbid := utils.GenerateDBID(name, c.Signer.PublicKey())
+	return c.DropDatabaseID(ctx, dbid, opts...)
+}
+
+// DropDatabaseID drops a database by ID.
+func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt) (transactions.TxHash, error) {
 	identifier := &transactions.DropSchema{
-		DBID: utils.GenerateDBID(name, c.Signer.PublicKey()),
+		DBID: dbid,
 	}
 
 	tx, err := c.newTx(ctx, identifier, opts...)
