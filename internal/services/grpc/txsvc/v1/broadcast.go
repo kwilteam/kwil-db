@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
+	"github.com/kwilteam/kwil-db/internal/ident"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -26,7 +27,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 
 	logger = logger.With(zap.String("from", hex.EncodeToString(tx.Sender)))
 
-	err = tx.Verify()
+	err = ident.VerifyTransaction(tx)
 	if err != nil {
 		logger.Error("failed to verify transaction", zap.Error(err))
 		return nil, status.Errorf(codes.Unauthenticated, "failed to verify transaction: %s", err)

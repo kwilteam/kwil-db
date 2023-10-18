@@ -136,15 +136,10 @@ type Transaction struct {
 	Sender []byte
 }
 
-// Verify verifies the signature of the transaction
-// It will deserialize the transaction body and verify the signature
-func (t *Transaction) Verify() error {
-	msg, err := t.Body.SerializeMsg(t.Serialization)
-	if err != nil {
-		return err
-	}
-
-	return t.Signature.Verify(t.Sender, msg)
+// SerializeMsg produces the serialization of the transaction that is to be used
+// in both signing and verification of transaction.
+func (t *Transaction) SerializeMsg() ([]byte, error) {
+	return t.Body.SerializeMsg(t.Serialization)
 }
 
 // Sign signs transaction body with given signer.

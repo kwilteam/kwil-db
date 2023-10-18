@@ -16,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv/atomic"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/modules/datasets"
@@ -33,7 +34,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sessions/wal"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
@@ -207,7 +207,7 @@ func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engin
 
 	e, err := engine.Open(d.ctx, d.opener,
 		sqlCommitRegister,
-		auth.GetAddress,
+		ident.Address,
 		engine.WithLogger(*d.log.Named("engine")),
 		engine.WithExtensions(adaptExtensions(extensions)),
 	)

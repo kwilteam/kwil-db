@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/go-sqlite"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/internal/engine/types" // this is the one binding to engine in sql/sqlite
+	"github.com/kwilteam/kwil-db/internal/ident"
 )
 
 func Register(c *sqlite.Conn) error {
@@ -46,12 +46,12 @@ func addressFunc(ctx sqlite.Context, args []sqlite.Value) (sqlite.Value, error) 
 		return raiseErr(addressFuncName, fmt.Errorf("expected 1 argument, got %d", len(args)))
 	}
 
-	ident, err := getIdentifier(args[0])
+	identifier, err := getIdentifier(args[0])
 	if err != nil {
 		return raiseErr(addressFuncName, fmt.Errorf("failed to read public key identifier: %w", err))
 	}
 
-	address, err := auth.GetAddress(ident.AuthType, ident.PublicKey)
+	address, err := ident.Address(identifier.AuthType, identifier.PublicKey)
 	if err != nil {
 		return raiseErr(addressFuncName, fmt.Errorf("failed to get address: %w", err))
 	}
