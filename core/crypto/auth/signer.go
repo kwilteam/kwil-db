@@ -18,16 +18,6 @@ type Signature struct {
 	Type string `json:"signature_type"`
 }
 
-// Verify verifies the signature against the given message and public key.
-func (s *Signature) Verify(senderPubKey, msg []byte) error {
-	a, err := getAuthenticator(s.Type)
-	if err != nil {
-		return err
-	}
-
-	return a.Verify(senderPubKey, msg, s.Signature)
-}
-
 // Signer is an interface for something that can sign messages.
 // It returns signatures with a designated AuthType, which should
 // be used to determine how to verify the signature.
@@ -37,6 +27,12 @@ type Signer interface {
 
 	// PublicKey returns the public key of the signer
 	PublicKey() []byte
+
+	// Authenticator returns the corresponding Authenticator that must work with
+	// signatures produced by this signer. Not all Authenticators have a
+	// corresponding Signer, but all Signers must have an Authenticator, which
+	// this method guarantees.
+	Authenticator() Authenticator
 }
 
 // EthPersonalSecp256k1Signer is a signer that signs messages using the
@@ -64,6 +60,18 @@ func (e *EthPersonalSigner) Sign(msg []byte) (*Signature, error) {
 		Signature: signatureBts,
 		Type:      EthPersonalSignAuth,
 	}, nil
+}
+
+// Address generates an ethereum address from a public key.
+func (e *EthPersonalSigner) Address() (string, error) {
+	pubBytes := e.PublicKey()
+	return EthSecp256k1Authenticator{}.Address(pubBytes)
+}
+
+// Authenticator returns the Authenticator capable of Verifying signatures
+// produced by this Signer.
+func (e *EthPersonalSigner) Authenticator() Authenticator {
+	return EthSecp256k1Authenticator{}
 }
 
 // PublicKey returns the public key of the signer
@@ -96,4 +104,16 @@ func (e *Ed25519Signer) Sign(msg []byte) (*Signature, error) {
 // PublicKey returns the public key of the signer
 func (e *Ed25519Signer) PublicKey() []byte {
 	return e.Ed25519PrivateKey.PubKey().Bytes()
+}
+
+// Address generates an ethereum address from a public key.
+func (e *Ed25519Signer) Address() (string, error) {
+	pubBytes := e.PublicKey()
+	return Ed25519Authenticator{}.Address(pubBytes)
+}
+
+// Authenticator returns the Authenticator capable of Verifying signatures
+// produced by this Signer.
+func (e *Ed25519Signer) Authenticator() Authenticator {
+	return Ed25519Authenticator{}
 }
