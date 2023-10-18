@@ -1,6 +1,8 @@
 package client
 
 import (
+	"math/big"
+
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 )
@@ -61,12 +63,23 @@ func Authenticated(shouldSign bool) CallOpt {
 
 type txOptions struct {
 	nonce int64
+	fee   *big.Int
 }
 
+// TxOpt sets an option used when making a new transaction.
 type TxOpt func(*txOptions)
 
+// WithNonce sets the nonce to use for the transaction.
 func WithNonce(nonce int64) TxOpt {
 	return func(o *txOptions) {
 		o.nonce = nonce
+	}
+}
+
+// WithFee sets the fee to use on the transaction, otherwise an EstimateCode RPC
+// will be performed for the action.
+func WithFee(fee *big.Int) TxOpt {
+	return func(o *txOptions) {
+		o.fee = fee
 	}
 }
