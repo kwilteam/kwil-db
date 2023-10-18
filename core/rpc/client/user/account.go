@@ -9,9 +9,11 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*types.Account, error) {
+func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+	pbStatus := txpb.AccountStatus(status)
 	res, err := c.txClient.GetAccount(ctx, &txpb.GetAccountRequest{
 		PublicKey: pubKey,
+		Status:    &pbStatus,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account: %w", err)

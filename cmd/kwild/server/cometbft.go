@@ -24,10 +24,8 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 
 	// Override defaults with our own if we do not expose them to the user.
 
-	// As all we are validating are tx signatures, no need to go through
-	// Validation again. To be set to true when we have validations based on
-	// gas, nonces, account balance, etc.
-	nodeCfg.Mempool.Recheck = false
+	// Recheck should be the default, but make sure.
+	nodeCfg.Mempool.Recheck = true
 
 	// Translate the entire config.
 	userChainCfg := cfg.ChainCfg

@@ -38,7 +38,7 @@ type TransportClient interface {
 	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
 	ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error)
-	GetAccount(ctx context.Context, pubKey []byte) (*types.Account, error)
+	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
 	Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error)
 	Ping(ctx context.Context) (string, error)
 	EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
@@ -288,8 +288,8 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 	return c.transportClient.Ping(ctx)
 }
 
-func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*types.Account, error) {
-	return c.transportClient.GetAccount(ctx, pubKey)
+func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+	return c.transportClient.GetAccount(ctx, pubKey, status)
 }
 
 func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {

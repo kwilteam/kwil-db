@@ -18,25 +18,26 @@ type Service struct {
 	txpb.UnimplementedTxServiceServer
 
 	log log.Logger
-	// chainID is the Kwil network ID. This is static, so we'll set it in the
-	// constructor even though there are ways to get it via the node app or chain client.
+	// chainID is the Kwil network ID.
 	chainID string
 
 	engine       EngineReader
 	accountStore AccountReader
 	vstore       ValidatorReader
 
+	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
 	chainClient BlockchainTransactor
 }
 
-func NewService(chainID string, engine EngineReader, accountStore AccountReader, vstore ValidatorReader,
+func NewService(engine EngineReader, accountStore AccountReader, vstore ValidatorReader,
 	chainClient BlockchainTransactor, nodeApp NodeApplication, opts ...TxSvcOpt) *Service {
 	s := &Service{
 		log:          log.NewNoOp(),
-		chainID:      chainID,
+		chainID:      nodeApp.ChainID(),
 		engine:       engine,
 		accountStore: accountStore,
 		vstore:       vstore,
+		nodeApp:      nodeApp,
 		chainClient:  chainClient,
 	}
 
@@ -69,6 +70,7 @@ type BlockchainTransactor interface {
 
 type NodeApplication interface {
 	ChainID() string
+	AccountInfo(ctx context.Context, pubkey []byte) (balance *big.Int, nonce int64, err error)
 }
 
 type ValidatorReader interface {

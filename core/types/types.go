@@ -13,6 +13,13 @@ type Account struct {
 	Nonce     int64    `json:"nonce"`
 }
 
+type AccountStatus uint32
+
+const (
+	AccountStatusLatest AccountStatus = iota
+	AccountStatusPending
+)
+
 // ChainInfo describes the current status of a Kwil blockchain.
 type ChainInfo struct {
 	ChainID     string
