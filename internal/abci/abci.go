@@ -1,11 +1,13 @@
 package abci
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -22,6 +24,7 @@ import (
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
+	cmtTypes "github.com/cometbft/cometbft/types"
 	"go.uber.org/zap"
 )
 
@@ -88,7 +91,6 @@ func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModul
 		valAddrToKey: make(map[string][]byte),
 
 		mempool: &mempool{
-			nonceTracker: make(map[string]uint64),
 			accounts:     make(map[string]*userAccount),
 			accountStore: accounts,
 		},
@@ -158,6 +160,25 @@ func (a *AbciApp) ChainID() string {
 	return a.cfg.ChainID
 }
 
+// AccountInfo gets the pending balance and nonce for an account. If there are
+// no unconfirmed transactions for the account, the latest confirmed values are
+// returned.
+func (a *AbciApp) AccountInfo(ctx context.Context, pubkey []byte) (balance *big.Int, nonce int64, err error) {
+	// If we have any unconfirmed transactions for the user, report that info
+	// without even checking the account store.
+	ua := a.mempool.peekAccountInfo(ctx, pubkey)
+	if ua.nonce > 0 {
+		return ua.balance, ua.nonce, nil
+	}
+	// Nothing in mempool, check account store. Changes to the account store are
+	// committed before the mempool is cleared, so there should not be any race.
+	acct, err := a.accounts.GetAccount(ctx, pubkey)
+	if err != nil {
+		return nil, 0, err
+	}
+	return acct.Balance, acct.Nonce, nil
+}
+
 var _ abciTypes.Application = &AbciApp{}
 
 // BeginBlock begins a block.
@@ -224,17 +245,23 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	var err error
 	code := CodeOk
 
+	// NOTE about the error logging here: These transactions are from users, so
+	// most of these are not server errors, but client errors, so we ideally do
+	// not want to log them at all in production. We'll keep a few for now to
+	// help debugging.
+
 	tx := &transactions.Transaction{}
 	err = tx.UnmarshalBinary(incoming.Tx)
 	if err != nil {
 		code = CodeEncodingError
-		logger.Error("failed to unmarshal transaction", zap.Error(err))
+		logger.Debug("failed to unmarshal transaction", zap.Error(err))
 		return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
 	}
 
 	logger.Debug("",
 		zap.String("sender", hex.EncodeToString(tx.Sender)),
-		zap.String("PayloadType", tx.Body.PayloadType.String()))
+		zap.String("PayloadType", tx.Body.PayloadType.String()),
+		zap.Uint64("nonce", tx.Body.Nonce))
 
 	// For a new transaction (not re-check), before looking at execution cost or
 	// checking nonce validity, ensure the payload is recognized and signature is valid.
@@ -248,7 +275,7 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 		// Verify Payload type
 		if !tx.Body.PayloadType.Valid() {
 			code = CodeInvalidTxType
-			logger.Error("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
+			logger.Debug("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
 			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "invalid payload type"}
 		}
 
@@ -256,15 +283,23 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 		err = ident.VerifyTransaction(tx)
 		if err != nil {
 			code = CodeInvalidSignature
-			logger.Error("failed to verify transaction", zap.Error(err))
+			logger.Debug("failed to verify transaction", zap.Error(err))
 			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
 		}
+	} else {
+		txHash := cmtTypes.Tx(incoming.Tx).Hash()
+		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce))
 	}
 
 	err = a.mempool.applyTransaction(ctx, tx)
 	if err != nil {
-		code = CodeInvalidNonce
-		logger.Error("failed to verify transaction against local mempool state", zap.Error(err))
+		if errors.Is(err, transactions.ErrInvalidNonce) {
+			code = CodeInvalidNonce
+			logger.Info("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
+		} else {
+			code = CodeUnknownError
+			logger.Warn("unexpected failure to verify transaction against local mempool state", zap.Error(err))
+		}
 		return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
 	}
 
@@ -282,6 +317,14 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			zap.Error(err))
 		return abciTypes.ResponseDeliverTx{
 			Code: CodeEncodingError.Uint32(),
+			Log:  err.Error(),
+		}
+	}
+
+	// Fail transactions with invalid signatures.
+	if err = ident.VerifyTransaction(tx); err != nil {
+		return abciTypes.ResponseDeliverTx{
+			Code: CodeInvalidSignature.Uint32(),
 			Log:  err.Error(),
 		}
 	}
@@ -349,13 +392,6 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		gasUsed = res.GasUsed
 	case transactions.PayloadTypeExecuteAction:
 		execution := &transactions.ActionExecution{}
-		// Concept:
-		// if res.Error != "" {
-		// 	err = errors.New(res.Error)
-		// 	gasUsed = res.Fee.Int64()
-		// 	break
-		// }
-
 		err = execution.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
 			txCode = CodeEncodingError
@@ -430,7 +466,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 
 		events = []abciTypes.Event{
 			{
-				Type: "remove_validator", // is this name arbitrary? it should be "validator_leave" for consistency
+				Type: "validator_leave",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
 					{Key: "ValidatorPubKey", Value: hex.EncodeToString(leave.Validator), Index: true},
@@ -475,10 +511,8 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 	if err != nil {
 		a.log.Warn("failed to deliver tx", zap.Error(err))
 		return abciTypes.ResponseDeliverTx{
-			Code: txCode.Uint32(),
-			Log:  err.Error(),
-			// NOTE: some execution that returned an error may still have used
-			// gas. What is the meaning of the "Code"?
+			Code:    txCode.Uint32(),
+			Log:     err.Error(),
 			GasUsed: gasUsed,
 		}
 	}
@@ -824,33 +858,49 @@ func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger) [][]byte {
 	// https://github.com/cometbft/cometbft/issues/980
 
 	// Grab the bytes rather than re-marshalling.
-	finalTxns := make([][]byte, len(okTxns))
-	for i, tx := range okTxns {
-		finalTxns[i] = txs[tx.is]
+	nonces := make([]uint64, 0, len(okTxns))
+	finalTxns := make([][]byte, 0, len(okTxns))
+	i = 0
+	for _, tx := range okTxns {
+		if i > 0 && bytes.Equal(tx.Sender, okTxns[i-1].Sender) && tx.Body.Nonce == nonces[i-1] {
+			log.Warn(fmt.Sprintf("Dropping tx with nonce %d from block proposal", tx.Body.Nonce))
+			continue // mempool recheck should have removed this
+		}
+		finalTxns = append(finalTxns, txs[tx.is])
+		nonces = append(nonces, tx.Body.Nonce)
+		i++
 	}
 
 	return finalTxns
 }
 
 func (a *AbciApp) PrepareProposal(p0 abciTypes.RequestPrepareProposal) abciTypes.ResponsePrepareProposal {
-	a.log.Debug("",
-		zap.String("stage", "ABCI PrepareProposal"),
-		zap.Int64("height", p0.Height),
-		zap.Int("txs", len(p0.Txs)))
+	logger := a.log.With(zap.String("stage", "ABCI PrepareProposal"),
+		zap.Int64("height", p0.Height), zap.Int("txs", len(p0.Txs)))
 
-	okTxns := prepareMempoolTxns(p0.Txs, int(p0.MaxTxBytes), &a.log)
+	okTxns := prepareMempoolTxns(p0.Txs, int(p0.MaxTxBytes), logger)
+
+	if len(okTxns) != len(p0.Txs) {
+		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
+			zap.Int("in", len(p0.Txs)), zap.Int("out", len(okTxns)))
+	} else if logger.L.Level() <= log.DebugLevel { // spare the check if it wouldn't be logged
+		for i, tx := range okTxns {
+			if !bytes.Equal(tx, p0.Txs[i]) { //  not and error, just notable
+				logger.Debug("transaction was moved or mutated", zap.Int("idx", i))
+			}
+		}
+	}
 
 	return abciTypes.ResponsePrepareProposal{
 		Txs: okTxns,
 	}
 }
 
-func (a *AbciApp) validateProposalTransactions(ctx context.Context, Txns [][]byte) error {
+func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byte) error {
 	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"))
-	grouped, err := groupTxsBySender(Txns)
+	grouped, err := groupTxsBySender(txns)
 	if err != nil {
-		logger.Error("failed to group transaction based on sender: ", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to group transaction by sender: %w", err)
 	}
 
 	// ensure there are no gaps in an account's nonce, either from the
@@ -860,14 +910,15 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, Txns [][]byt
 	for sender, txs := range grouped {
 		acct, err := a.accounts.GetAccount(ctx, []byte(sender))
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get account: %w", err)
 		}
 		expectedNonce := uint64(acct.Nonce) + 1
 
 		for _, tx := range txs {
 			if tx.Body.Nonce != expectedNonce {
-				logger.Error("nonce mismatch", zap.Uint64("txNonce", tx.Body.Nonce), zap.Uint64("expectedNonce", expectedNonce))
-				return fmt.Errorf("nonce mismatch, ExpectedNonce: %d TxNonce: %d", expectedNonce, tx.Body.Nonce)
+				logger.Warn("nonce mismatch", zap.Uint64("txNonce", tx.Body.Nonce),
+					zap.Uint64("expectedNonce", expectedNonce), zap.String("nonces", fmt.Sprintf("%v", nonceList(txs))))
+				return fmt.Errorf("nonce mismatch, expected: %d tx: %d", expectedNonce, tx.Body.Nonce)
 			}
 			expectedNonce++
 
@@ -879,7 +930,6 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, Txns [][]byt
 			// This block proposal may include transactions that did not pass
 			// through our mempool, so we have to verify all signatures.
 			if err = ident.VerifyTransaction(tx); err != nil {
-				logger.Error("transaction signature verification failed", zap.Error(err))
 				return fmt.Errorf("transaction signature verification failed: %w", err)
 			}
 		}
@@ -894,13 +944,12 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, Txns [][]byt
 // 4. transaction size is greater than the max_tx_bytes
 // else accept the proposed block.
 func (a *AbciApp) ProcessProposal(p0 abciTypes.RequestProcessProposal) abciTypes.ResponseProcessProposal {
-	a.log.Debug("",
-		zap.String("stage", "ABCI ProcessProposal"),
-		zap.Int64("height", p0.Height),
-		zap.Int("txs", len(p0.Txs)))
+	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"),
+		zap.Int64("height", p0.Height), zap.Int("txs", len(p0.Txs)))
 
 	ctx := context.Background()
 	if err := a.validateProposalTransactions(ctx, p0.Txs); err != nil {
+		logger.Warn("rejecting block proposal", zap.Error(err))
 		return abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}
 	}
 

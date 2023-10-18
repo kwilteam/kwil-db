@@ -192,7 +192,7 @@ func Test_prepareMempoolTxns(t *testing.T) {
 		{
 			"multi-party, one misordered, one dup nonce, stable",
 			[][]byte{tOtherSenderAb, tOtherSenderAbDupb, tBb, tAb},
-			[][]byte{tOtherSenderAb, tOtherSenderAbDupb, tAb, tBb},
+			[][]byte{tOtherSenderAb, tAb, tBb},
 		},
 		{
 			"multi-party, both misordered, stable",
@@ -364,36 +364,35 @@ func Test_CheckTx(t *testing.T) {
 	m := &mempool{
 		accountStore: &MockAccountStore{},
 		accounts:     make(map[string]*userAccount),
-		nonceTracker: make(map[string]uint64),
 	}
 	ctx := context.Background()
 
 	// Successful transaction A: 1
 	err := m.applyTransaction(ctx, newTx(t, 1, "A"))
 	assert.NoError(t, err)
-	assert.EqualValues(t, m.nonceTracker["A"], 1)
+	assert.EqualValues(t, m.accounts["A"].nonce, 1)
 
 	// Successful transaction A: 2
 	err = m.applyTransaction(ctx, newTx(t, 2, "A"))
 	assert.NoError(t, err)
-	assert.EqualValues(t, m.nonceTracker["A"], 2)
+	assert.EqualValues(t, m.accounts["A"].nonce, 2)
 
 	// Duplicate nonce failure
 	err = m.applyTransaction(ctx, newTx(t, 2, "A"))
 	assert.Error(t, err)
-	assert.EqualValues(t, m.nonceTracker["A"], 2)
+	assert.EqualValues(t, m.accounts["A"].nonce, 2)
 
 	// Invalid order
 	err = m.applyTransaction(ctx, newTx(t, 4, "A"))
 	assert.Error(t, err)
-	assert.EqualValues(t, m.nonceTracker["A"], 2)
+	assert.EqualValues(t, m.accounts["A"].nonce, 2)
 
 	err = m.applyTransaction(ctx, newTx(t, 3, "A"))
 	assert.NoError(t, err)
-	assert.EqualValues(t, m.nonceTracker["A"], 3)
+	assert.EqualValues(t, m.accounts["A"].nonce, 3)
 
 	// Recheck nonce 4 transaction
 	err = m.applyTransaction(ctx, newTx(t, 4, "A"))
 	assert.NoError(t, err)
-	assert.EqualValues(t, m.nonceTracker["A"], 4)
+	assert.EqualValues(t, m.accounts["A"].nonce, 4)
 }
