@@ -40,6 +40,17 @@
             "required": true,
             "type": "string",
             "format": "byte"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "latest",
+              "pending"
+            ],
+            "default": "latest"
           }
         ],
         "tags": [
@@ -548,6 +559,14 @@
           "format": "int64"
         }
       }
+    },
+    "txAccountStatus": {
+      "type": "string",
+      "enum": [
+        "latest",
+        "pending"
+      ],
+      "default": "latest"
     },
     "txAction": {
       "type": "object",
