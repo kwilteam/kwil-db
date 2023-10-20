@@ -38,7 +38,7 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		}
 
 		signer := auth.EthPersonalSigner{Secp256k1PrivateKey: *conf.PrivateKey}
-		options = append(options, client.WithSigner(&signer))
+		options = append(options, client.WithSigner(&signer, conf.ChainID))
 	}
 
 	if conf.GrpcURL == "" {
@@ -47,20 +47,11 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		return fmt.Errorf("kwil grpc url is required")
 	}
 
-	clt, err := client.Dial(conf.GrpcURL, options...)
+	clt, err := client.Dial(ctx, conf.GrpcURL, options...)
 	if err != nil {
 		return err
 	}
 	defer clt.Close()
-
-	pong, err := clt.Ping(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to ping provider: %w", err)
-	}
-
-	if pong != "pong" {
-		return fmt.Errorf("unexpected ping response: %s", pong)
-	}
 
 	return fn(ctx, clt, conf)
 }

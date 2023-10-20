@@ -40,7 +40,7 @@ func Test_TransactionMarshal(t *testing.T) {
 			PayloadType: transactions.PayloadTypeDeploySchema,
 			Fee:         big.NewInt(100),
 			Nonce:       1,
-			Salt:        []byte("salt"),
+			ChainID:     "chainIDXXX",
 		},
 		Sender: []byte("sender"),
 	}
@@ -63,7 +63,7 @@ func TestTransaction_Sign(t *testing.T) {
 
 	ethPersonalSigner := auth.EthPersonalSigner{Secp256k1PrivateKey: *secp256k1PrivateKey}
 
-	expectPersonalSignConcatSigHex := "4a8f9a2eea6fc6b6d055a13603bd9fc9495283a20d12cf44742673fb297a8f7f2b61231eeac778df354f10191562167e86275bebd55dbdfe7d2377b96e09d74901"
+	expectPersonalSignConcatSigHex := "8965f5eec95be54d974bb122f0d4b16eff820ac34bea7f8ffcb9565a905888117d334e890409f23a6bd37dff69c78d7b577a1b1a219cdbaa0df05ed9298101bc01"
 	expectPersonalSignConcatSigBytes, _ := hex.DecodeString(expectPersonalSignConcatSigHex)
 	expectPersonalSignConcatSig := &auth.Signature{
 		Signature: expectPersonalSignConcatSigBytes,
@@ -112,12 +112,12 @@ func TestTransaction_Sign(t *testing.T) {
 		t.Run(tt.name, func(t1 *testing.T) {
 			tx := transactions.Transaction{
 				Body: &transactions.TransactionBody{
+					Description: "By signing this message, you'll reveal your xxx to zzz",
 					Payload:     payloadRLP,
 					PayloadType: rawPayload.Type(),
 					Fee:         big.NewInt(100),
 					Nonce:       1,
-					Salt:        []byte("salt"),
-					Description: "By signing this message, you'll reveal your xxx to zzz",
+					ChainID:     "adsf",
 				},
 				Serialization: tt.args.mst,
 			}
@@ -157,7 +157,7 @@ func TestTransactionBody_SerializeMsg(t *testing.T) {
 	require.NoError(t, err)
 
 	defaultDescription := "By signing this message, you'll reveal your xxx to zzz"
-	longDescrption := `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+	longDescription := `abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
@@ -187,7 +187,7 @@ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 			name: "description too long",
 			args: args{
 				mst:         transactions.SignedMsgConcat,
-				description: longDescrption,
+				description: longDescription,
 			},
 			wantMsg: "",
 			wantErr: true,
@@ -198,19 +198,19 @@ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 				mst:         transactions.SignedMsgConcat,
 				description: defaultDescription,
 			},
-			wantMsg: "4279207369676e696e672074686973206d6573736167652c20796f75276c6c2072657665616c20796f75722078787820746f207a7a7a0a0a5061796c6f6164547970653a20657865637574655f616374696f6e0a5061796c6f61644469676573743a20386531326432386530313665316139306331386662333037316331316137663038306462383764330a4665653a203130300a4e6f6e63653a20310a53616c743a2037333631366337340a0a4b77696c20f09f968b0a",
+			wantMsg: "4279207369676e696e672074686973206d6573736167652c20796f75276c6c2072657665616c20796f75722078787820746f207a7a7a0a0a5061796c6f6164547970653a20657865637574655f616374696f6e0a5061796c6f61644469676573743a20386531326432386530313665316139306331386662333037316331316137663038306462383764330a4665653a203130300a4e6f6e63653a20310a436861696e2049443a2030303030303030303030300a0a4b77696c20f09f968b0a",
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t1 *testing.T) {
 			txBody := &transactions.TransactionBody{
+				Description: tt.args.description,
 				Payload:     payload,
 				PayloadType: rawPayload.Type(),
 				Fee:         big.NewInt(100),
 				Nonce:       1,
-				Salt:        []byte("salt"),
-				Description: tt.args.description,
+				ChainID:     "00000000000",
 			}
 
 			got, err := txBody.SerializeMsg(tt.args.mst)

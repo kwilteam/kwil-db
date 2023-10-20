@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 	extensions "github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
@@ -116,6 +118,16 @@ func (wc *wrappedCometBFTClient) Peers(ctx context.Context) ([]*types.PeerInfo, 
 	return peers, nil
 }
 
+/* xxx
+func (wc *wrappedCometBFTClient) ChainID(ctx context.Context) (string, error) {
+	stat, err := wc.Status(ctx)
+	if err != nil {
+		return "", err
+	}
+	return stat.Node.ChainID, nil
+}
+*/
+
 func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, error) {
 	cmtStatus, err := wc.cl.Status(ctx)
 	if err != nil {
@@ -138,7 +150,7 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 	}, nil
 }
 
-func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (uint32, []byte, error) {
+func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, sync uint8) ([]byte, error) {
 	var bcastFun func(ctx context.Context, tx cmttypes.Tx) (*cmtCoreTypes.ResultBroadcastTx, error)
 	switch sync {
 	case 0:
@@ -172,10 +184,19 @@ func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, syn
 
 	result, err := bcastFun(ctx, cmttypes.Tx(tx))
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 
-	return result.Code, result.Hash.Bytes(), nil
+	txCode := transactions.TxCode(result.Code)
+	switch txCode {
+	case transactions.CodeOk:
+	case transactions.CodeWrongChain:
+		return nil, transactions.ErrWrongChain
+	default:
+		return nil, fmt.Errorf("transaction rejected with code %d (%v)", txCode, txCode)
+	}
+
+	return result.Hash.Bytes(), nil
 }
 
 // TxQuery locates a transaction in the node's blockchain or mempool. If the
@@ -192,9 +213,10 @@ func (wc *wrappedCometBFTClient) TxQuery(ctx context.Context, hash []byte, prove
 	if err == nil && res != nil {
 		return res, nil
 	}
+
 	// The transaction could be in mempool.
-	limit := -1
-	unconf, err := wc.cl.UnconfirmedTxs(ctx, &limit)
+	limit := math.MaxInt                             // cmt is bugged, -1 doesn't actually work (see rpc/core.validatePerPage and how it goes with 30 instead of no limit)
+	unconf, err := wc.cl.UnconfirmedTxs(ctx, &limit) // SLOW quite often!
 	if err != nil {
 		return nil, err
 	}

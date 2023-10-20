@@ -23,6 +23,7 @@ func NewCmdConfigure() *cobra.Command {
 
 			err = runErrs(conf,
 				promptGRPCURL,
+				promptChainID,
 				promptPrivateKey,
 				promptTLSCertFile,
 			)
@@ -60,6 +61,21 @@ func promptGRPCURL(conf *config.KwilCliConfig) error {
 	}
 
 	conf.GrpcURL = res
+
+	return nil
+}
+
+func promptChainID(conf *config.KwilCliConfig) error {
+	prompt := &common.Prompter{
+		Label:   "Kwil Chain ID",
+		Default: conf.ChainID,
+	}
+	res, err := prompt.Run()
+	if err != nil {
+		return err
+	}
+
+	conf.ChainID = res
 
 	return nil
 }

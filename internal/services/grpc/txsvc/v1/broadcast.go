@@ -3,10 +3,11 @@ package txsvc
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/internal/ident"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -27,12 +28,6 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 
 	logger = logger.With(zap.String("from", hex.EncodeToString(tx.Sender)))
 
-	err = ident.VerifyTransaction(tx)
-	if err != nil {
-		logger.Error("failed to verify transaction", zap.Error(err))
-		return nil, status.Errorf(codes.Unauthenticated, "failed to verify transaction: %s", err)
-	}
-
 	encodedTx, err := tx.MarshalBinary()
 	if err != nil {
 		logger.Error("failed to serialize transaction data", zap.Error(err))
@@ -40,14 +35,22 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	}
 
 	const sync = 1 // async, TODO: sync field of BroadcastRequest
-	code, txHash, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
+	txHash, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
 	if err != nil {
+		// NOTE: here we can errors.Is and return an actual response with a
+		// field for the error code and message instead of this internal grpc
+		// thing. Since we do not have such response structure, we have to pick
+		// from the general categories of gRPC response codes, which are similar
+		// to http status codes, and do string matching on the message.
+		if errors.Is(err, transactions.ErrWrongChain) {
+			return nil, status.Errorf(codes.InvalidArgument, "wrong chain ID %q", tx.Body.ChainID)
+		}
 		logger.Error("failed to broadcast tx", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
 	}
 
 	logger.Info("broadcast transaction", zap.String("TxHash", hex.EncodeToString(txHash)),
-		zap.Uint32("code", code), zap.Int("sync", sync))
+		zap.Int("sync", sync), zap.Uint64("nonce", tx.Body.Nonce))
 	return &txpb.BroadcastResponse{
 		TxHash: txHash,
 	}, nil

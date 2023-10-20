@@ -887,9 +887,8 @@
           "type": "string",
           "format": "uint64"
         },
-        "salt": {
-          "type": "string",
-          "format": "byte"
+        "chain_id": {
+          "type": "string"
         },
         "description": {
           "type": "string"

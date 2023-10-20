@@ -29,6 +29,7 @@ const (
 )
 
 type NodeGenerateConfig struct {
+	ChainID string
 	// InitialHeight int64 // ?
 	OutputDir       string
 	JoinExpiry      int64
@@ -37,6 +38,7 @@ type NodeGenerateConfig struct {
 }
 
 type TestnetGenerateConfig struct {
+	ChainID string
 	// InitialHeight           int64
 	NValidators             int
 	NNonValidators          int
@@ -114,6 +116,9 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 }
 
 func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisConfig) {
+	if genCfg.ChainID != "" {
+		genesisCfg.ChainID = genCfg.ChainID
+	}
 	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
 	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
@@ -221,6 +226,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 }
 
 func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisConfig) {
+	if genCfg.ChainID != "" {
+		genesisCfg.ChainID = genCfg.ChainID
+	}
 	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
 	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces

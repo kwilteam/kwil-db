@@ -57,13 +57,16 @@ type Client struct {
 	transportClient TransportClient
 	Signer          auth.Signer
 	logger          log.Logger
+	// chainID is used when creating transactions as replay protection since the
+	// signatures will only be valid on this network.
+	chainID string
 
 	tlsCertFile string // the tls cert file path
 }
 
 // Dial creates a kwil client connection to the given target. It will by default
 // use grpc, but it can be overridden by passing WithTransportClient.
-func Dial(target string, opts ...Option) (c *Client, err error) {
+func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err error) {
 	c = &Client{
 		logger: log.NewNoOp(), // by default, we do not want to force client to log anything
 	}
@@ -74,7 +77,7 @@ func Dial(target string, opts ...Option) (c *Client, err error) {
 
 	if c.transportClient == nil {
 		transportOptions := []grpc.Option{grpc.WithTlsCert(c.tlsCertFile)}
-		transport, err := grpc.New(target, transportOptions...)
+		transport, err := grpc.New(ctx, target, transportOptions...)
 		if err != nil {
 			return nil, err
 		}
@@ -89,6 +92,19 @@ func Dial(target string, opts ...Option) (c *Client, err error) {
 	}
 
 	c.logger = *c.logger.Named("client").With(zapFields...)
+
+	chainID, err := c.Ping(ctx) // maybe we rename ping or something
+	if err != nil {
+		return nil, fmt.Errorf("ping: %w", err)
+	}
+	if c.chainID == "" {
+		// TODO: make this an error instead, or allowed given an Option and/or if TLS is used
+		c.logger.Warn("chain ID not set, trusting chain ID from remote host!", zap.String("chainID", chainID))
+		c.chainID = chainID
+	} else if c.chainID != chainID {
+		c.Close()
+		return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainID, c.chainID)
+	}
 
 	return c, nil
 }

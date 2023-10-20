@@ -16,6 +16,7 @@ import (
 type KwilCliConfig struct {
 	PrivateKey  *crypto.Secp256k1PrivateKey
 	GrpcURL     string
+	ChainID     string
 	TLSCertFile string
 }
 
@@ -27,6 +28,7 @@ func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
 	return &kwilCliPersistedConfig{
 		PrivateKey:  privKeyHex,
 		GrpcURL:     c.GrpcURL,
+		ChainID:     c.ChainID,
 		TLSCertFile: c.TLSCertFile,
 	}
 }
@@ -47,12 +49,14 @@ type kwilCliPersistedConfig struct {
 	// NOTE: `mapstructure` is used by viper, name is same as the viper key name
 	PrivateKey  string `mapstructure:"private_key" json:"private_key"`
 	GrpcURL     string `mapstructure:"grpc_url" json:"grpc_url"`
+	ChainID     string `mapstructure:"chain_id" json:"chain_id"`
 	TLSCertFile string `mapstructure:"tls_cert_file" json:"tls_cert_file"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 	kwilConfig := &KwilCliConfig{
 		GrpcURL:     c.GrpcURL,
+		ChainID:     c.ChainID,
 		TLSCertFile: c.TLSCertFile,
 	}
 
