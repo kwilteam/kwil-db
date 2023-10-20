@@ -143,6 +143,28 @@
         ]
       }
     },
+    "/api/v1/chain_info": {
+      "get": {
+        "operationId": "TxService_ChainInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txChainInfoResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
     "/api/v1/config": {
       "get": {
         "operationId": "TxService_GetConfig",
@@ -623,6 +645,21 @@
         "result": {
           "type": "string",
           "format": "byte"
+        }
+      }
+    },
+    "txChainInfoResponse": {
+      "type": "object",
+      "properties": {
+        "chain_id": {
+          "type": "string"
+        },
+        "height": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "hash": {
+          "type": "string"
         }
       }
     },

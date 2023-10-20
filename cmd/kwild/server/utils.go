@@ -118,16 +118,6 @@ func (wc *wrappedCometBFTClient) Peers(ctx context.Context) ([]*types.PeerInfo, 
 	return peers, nil
 }
 
-/* xxx
-func (wc *wrappedCometBFTClient) ChainID(ctx context.Context) (string, error) {
-	stat, err := wc.Status(ctx)
-	if err != nil {
-		return "", err
-	}
-	return stat.Node.ChainID, nil
-}
-*/
-
 func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, error) {
 	cmtStatus, err := wc.cl.Status(ctx)
 	if err != nil {

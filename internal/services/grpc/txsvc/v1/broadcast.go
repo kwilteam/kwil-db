@@ -14,6 +14,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func (s *Service) ChainInfo(ctx context.Context, req *txpb.ChainInfoRequest) (*txpb.ChainInfoResponse, error) {
+	status, err := s.chainClient.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &txpb.ChainInfoResponse{
+		ChainId: status.Node.ChainID,
+		Height:  uint64(status.Sync.BestBlockHeight),
+		Hash:    status.Sync.BestBlockHash,
+	}, nil
+}
+
 func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*txpb.BroadcastResponse, error) {
 	logger := s.log.With(zap.String("rpc", "Broadcast"),
 		zap.String("PayloadType", req.Tx.Body.PayloadType))

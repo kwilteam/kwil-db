@@ -67,11 +67,11 @@ func promptGRPCURL(conf *config.KwilCliConfig) error {
 
 func promptChainID(conf *config.KwilCliConfig) error {
 	prompt := &common.Prompter{
-		Label:   "Kwil Chain ID",
+		Label:   "Kwil Chain ID (leave empty to trust a server-provided value)",
 		Default: conf.ChainID,
 	}
 	res, err := prompt.Run()
-	if err != nil {
+	if err != nil { // NOTE: empty is valid (no error)
 		return err
 	}
 

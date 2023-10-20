@@ -13,6 +13,13 @@ type Account struct {
 	Nonce     int64    `json:"nonce"`
 }
 
+// ChainInfo describes the current status of a Kwil blockchain.
+type ChainInfo struct {
+	ChainID     string
+	BlockHeight uint64
+	BlockHash   string
+}
+
 type JoinRequest struct {
 	Candidate []byte   // pubkey of the candidate validator
 	Power     int64    // the requested power

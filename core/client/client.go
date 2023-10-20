@@ -31,6 +31,7 @@ import (
 // gRPC or HTTP.
 type TransportClient interface {
 	Close() error
+	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	Call(ctx context.Context, req *transactions.CallMessage) ([]map[string]any, error)
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
 	GetTarget() string
@@ -93,10 +94,11 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 
 	c.logger = *c.logger.Named("client").With(zapFields...)
 
-	chainID, err := c.Ping(ctx) // maybe we rename ping or something
+	chainInfo, err := c.ChainInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("ping: %w", err)
 	}
+	chainID := chainInfo.ChainID
 	if c.chainID == "" {
 		// TODO: make this an error instead, or allowed given an Option and/or if TLS is used
 		c.logger.Warn("chain ID not set, trusting chain ID from remote host!", zap.String("chainID", chainID))
@@ -111,6 +113,12 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 
 func (c *Client) Close() error {
 	return c.transportClient.Close()
+}
+
+// ChainInfo get the current blockchain information like chain ID and best block
+// height/hash.
+func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
+	return c.transportClient.ChainInfo(ctx)
 }
 
 // GetSchema gets a schema by dbid.

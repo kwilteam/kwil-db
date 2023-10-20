@@ -7,6 +7,7 @@ import (
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/kwilteam/kwil-db/core/log"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
+	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
@@ -61,6 +62,7 @@ type AccountReader interface {
 }
 
 type BlockchainTransactor interface {
+	Status(ctx context.Context) (*types.Status, error)
 	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (txHash []byte, err error)
 	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error) // TODO: don't use comet types here
 }
