@@ -37,7 +37,7 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 			return fmt.Errorf("private key not provided")
 		}
 
-		signer := auth.EthPersonalSigner{Secp256k1PrivateKey: *conf.PrivateKey}
+		signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}
 		options = append(options, client.WithSigner(&signer, conf.ChainID))
 	}
 

@@ -66,7 +66,7 @@ func newEthSigner(pkey string) *auth.EthPersonalSigner {
 		panic(err)
 	}
 
-	return &auth.EthPersonalSigner{Secp256k1PrivateKey: *secpKey}
+	return &auth.EthPersonalSigner{Key: *secpKey}
 }
 
 func newEd25519Signer(pkey string) *auth.Ed25519Signer {

@@ -240,9 +240,9 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 	abciApp.log = logger
 
 	keyA, _ := crypto.GenerateSecp256k1Key()
-	signerA := &auth.EthPersonalSigner{*keyA}
+	signerA := &auth.EthPersonalSigner{Key: *keyA}
 	keyB, _ := crypto.GenerateSecp256k1Key()
-	signerB := &auth.EthPersonalSigner{*keyB}
+	signerB := &auth.EthPersonalSigner{Key: *keyB}
 
 	txA1 := newTxBts(t, 1, signerA)
 	txA2 := newTxBts(t, 2, signerA)

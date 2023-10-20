@@ -156,11 +156,11 @@ func (r *IntHelper) LoadConfig() {
 	creatorPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.CreatorRawPk)
 	require.NoError(r.t, err, "invalid creator private key")
 
-	r.cfg.CreatorSigner = &auth.EthPersonalSigner{Secp256k1PrivateKey: *creatorPk}
+	r.cfg.CreatorSigner = &auth.EthPersonalSigner{Key: *creatorPk}
 
 	bobPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.VisitorRawPK)
 	require.NoError(r.t, err, "invalid visitor private key")
-	r.cfg.VisitorSigner = &auth.EthPersonalSigner{Secp256k1PrivateKey: *bobPk}
+	r.cfg.VisitorSigner = &auth.EthPersonalSigner{Key: *bobPk}
 }
 
 func (r *IntHelper) updateGeneratedConfigHome(home string) {

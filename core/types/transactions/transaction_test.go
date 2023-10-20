@@ -61,7 +61,7 @@ func TestTransaction_Sign(t *testing.T) {
 	secp256k1PrivateKey, err := crypto.Secp256k1PrivateKeyFromHex(secp2561k1PvKeyHex)
 	require.NoError(t, err, "error parse private secp2561k1PvKeyHex")
 
-	ethPersonalSigner := auth.EthPersonalSigner{Secp256k1PrivateKey: *secp256k1PrivateKey}
+	ethPersonalSigner := auth.EthPersonalSigner{Key: *secp256k1PrivateKey}
 
 	expectPersonalSignConcatSigHex := "8965f5eec95be54d974bb122f0d4b16eff820ac34bea7f8ffcb9565a905888117d334e890409f23a6bd37dff69c78d7b577a1b1a219cdbaa0df05ed9298101bc01"
 	expectPersonalSignConcatSigBytes, _ := hex.DecodeString(expectPersonalSignConcatSigHex)
