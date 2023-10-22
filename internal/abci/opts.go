@@ -9,9 +9,3 @@ func WithLogger(logger log.Logger) AbciOpt {
 		a.log = logger
 	}
 }
-
-func WithApplicationVersion(version uint64) AbciOpt {
-	return func(a *AbciApp) {
-		a.applicationVersion = version
-	}
-}

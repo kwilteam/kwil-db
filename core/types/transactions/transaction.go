@@ -1,7 +1,6 @@
 package transactions
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"math/big"
@@ -24,7 +23,7 @@ PayloadType: %s
 PayloadDigest: %x
 Fee: %s
 Nonce: %d
-Salt: %x
+Chain ID: %s
 
 Kwil 🖋
 `
@@ -92,18 +91,13 @@ var EIP712TypedDataMessage = []gethTypes.Type{
 	{Name: "fee", Type: "string"},
 	// nonce is the nonce for the transaction
 	{Name: "nonce", Type: "string"},
-	// salt is the salt for the transaction
-	{Name: "salt", Type: "string"},
+	// chainID is the chain for which the transaction is valid
+	{Name: "chainID", Type: "string"}, // ugh, string
 }
 
 // CreateTransaction creates a new unsigned transaction.
-func CreateTransaction(contents Payload, nonce uint64) (*Transaction, error) {
+func CreateTransaction(contents Payload, chainID string, nonce uint64) (*Transaction, error) {
 	data, err := contents.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
-	salt, err := generateRandomSalt()
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +108,7 @@ func CreateTransaction(contents Payload, nonce uint64) (*Transaction, error) {
 			PayloadType: contents.Type(),
 			Fee:         big.NewInt(0),
 			Nonce:       nonce,
-			Salt:        salt[:],
+			ChainID:     chainID,
 		},
 		Serialization: DefaultSignedMsgSerType,
 	}, nil
@@ -139,16 +133,19 @@ type Transaction struct {
 // SerializeMsg produces the serialization of the transaction that is to be used
 // in both signing and verification of transaction.
 func (t *Transaction) SerializeMsg() ([]byte, error) {
-	return t.Body.SerializeMsg(t.Serialization)
+	return t.Body.SerializeMsg(t.Serialization) // alt t.Body.SerializeMsg(t.ChainID, t.Serialization)
 }
 
 // Sign signs transaction body with given signer.
 // It will serialize the transaction body first and sign it.
 func (t *Transaction) Sign(signer auth.Signer) error {
-	msg, err := t.Body.SerializeMsg(t.Serialization)
+	msg, err := t.SerializeMsg()
 	if err != nil {
 		return err
 	}
+	// The above serialized msg has to include the chainID rather than passing
+	// it to the signer because it needs to be displayed in the friendly message
+	// that the user signs.
 
 	signature, err := signer.Sign(msg)
 	if err != nil {
@@ -161,6 +158,8 @@ func (t *Transaction) Sign(signer auth.Signer) error {
 	return nil
 }
 
+// MarshalBinary produces the full binary serialization of the transaction,
+// which is the form used in p2p messaging and blockchain storage.
 func (t *Transaction) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(t)
 }
@@ -188,8 +187,14 @@ type TransactionBody struct {
 	// Nonce is the next nonce of the sender
 	Nonce uint64
 
-	// Salt is a random value that is used to prevent replay attacks and hash collisions
-	Salt []byte
+	// ChainID identifies the Kwil chain for which the transaction is intended.
+	// Alternatively, this could be withheld from the TransactionBody and passed
+	// as an argument to SerializeMsg, as is seen in ethereum signers and even
+	// CometBFT's SignProposal method. However, the full transaction
+	// serialization must include it anyway since it passes through the
+	// consensus engine and p2p systems as an opaque blob that must be
+	// unmarshalled with the chain ID in Kwil blockchain application.
+	ChainID string
 }
 
 func (t *TransactionBody) MarshalBinary() ([]byte, error) {
@@ -200,7 +205,7 @@ func (t *TransactionBody) MarshalBinary() ([]byte, error) {
 // message construction format. This is done since a Kwil transaction is foreign
 // to wallets, and it is signed as a message, not a transaction that is native
 // to the wallet. As such we define conventions for constructing user-friendly
-// messages. The Kwil frontend SDKs much implement these serialization schemes.
+// messages. The Kwil frontend SDKs must implement these serialization schemes.
 func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, error) {
 	if len(t.Description) > MsgDescriptionMaxLength {
 		return nil, errors.New("description is too long")
@@ -220,7 +225,7 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 			payloadDigest,
 			t.Fee.String(),
 			t.Nonce,
-			t.Salt)
+			t.ChainID)
 		return []byte(msgStr), nil
 		//case SignedMsgEip712:
 		//	signerData := gethTypes.TypedData{
@@ -250,20 +255,6 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 
 	}
 	return nil, errors.New("invalid serialization type")
-}
-
-// generateRandomSalt generates a new random salt
-// this salt is not used for any sort of security purpose;
-// rather, it is just to prevent hash collisions
-// therefore, we only need a small amount of entropy
-func generateRandomSalt() ([8]byte, error) {
-	var s [8]byte
-
-	_, err := rand.Read(s[:])
-	if err != nil {
-		return s, err
-	}
-	return s, nil
 }
 
 // TxHash is the hash of a transaction that could be used to query the transaction

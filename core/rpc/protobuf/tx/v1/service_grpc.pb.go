@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
+	TxService_ChainInfo_FullMethodName           = "/tx.TxService/ChainInfo"
 	TxService_Broadcast_FullMethodName           = "/tx.TxService/Broadcast"
 	TxService_EstimatePrice_FullMethodName       = "/tx.TxService/EstimatePrice"
 	TxService_Query_FullMethodName               = "/tx.TxService/Query"
@@ -40,6 +41,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TxServiceClient interface {
+	ChainInfo(ctx context.Context, in *ChainInfoRequest, opts ...grpc.CallOption) (*ChainInfoResponse, error)
 	Broadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error)
 	EstimatePrice(ctx context.Context, in *EstimatePriceRequest, opts ...grpc.CallOption) (*EstimatePriceResponse, error)
 	Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (*QueryResponse, error)
@@ -63,6 +65,15 @@ type txServiceClient struct {
 
 func NewTxServiceClient(cc grpc.ClientConnInterface) TxServiceClient {
 	return &txServiceClient{cc}
+}
+
+func (c *txServiceClient) ChainInfo(ctx context.Context, in *ChainInfoRequest, opts ...grpc.CallOption) (*ChainInfoResponse, error) {
+	out := new(ChainInfoResponse)
+	err := c.cc.Invoke(ctx, TxService_ChainInfo_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *txServiceClient) Broadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error) {
@@ -204,6 +215,7 @@ func (c *txServiceClient) TxQuery(ctx context.Context, in *TxQueryRequest, opts 
 // All implementations must embed UnimplementedTxServiceServer
 // for forward compatibility
 type TxServiceServer interface {
+	ChainInfo(context.Context, *ChainInfoRequest) (*ChainInfoResponse, error)
 	Broadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error)
 	EstimatePrice(context.Context, *EstimatePriceRequest) (*EstimatePriceResponse, error)
 	Query(context.Context, *QueryRequest) (*QueryResponse, error)
@@ -226,6 +238,9 @@ type TxServiceServer interface {
 type UnimplementedTxServiceServer struct {
 }
 
+func (UnimplementedTxServiceServer) ChainInfo(context.Context, *ChainInfoRequest) (*ChainInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChainInfo not implemented")
+}
 func (UnimplementedTxServiceServer) Broadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Broadcast not implemented")
 }
@@ -282,6 +297,24 @@ type UnsafeTxServiceServer interface {
 
 func RegisterTxServiceServer(s grpc.ServiceRegistrar, srv TxServiceServer) {
 	s.RegisterService(&TxService_ServiceDesc, srv)
+}
+
+func _TxService_ChainInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChainInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).ChainInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TxService_ChainInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).ChainInfo(ctx, req.(*ChainInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _TxService_Broadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -561,6 +594,10 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "tx.TxService",
 	HandlerType: (*TxServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ChainInfo",
+			Handler:    _TxService_ChainInfo_Handler,
+		},
 		{
 			MethodName: "Broadcast",
 			Handler:    _TxService_Broadcast_Handler,

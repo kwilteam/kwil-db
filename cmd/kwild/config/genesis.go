@@ -82,7 +82,7 @@ type VersionParams struct {
 }
 
 func generateChainID(prefix string) string {
-	return prefix + random.String(6)
+	return prefix + random.String(8)
 }
 
 // DefaultGenesisConfig returns a new instance of a GenesisConfig with the

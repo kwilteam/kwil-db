@@ -29,6 +29,7 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 	switch {
 	case cc.Init != nil:
 		genCfg := &nodecfg.NodeGenerateConfig{
+			ChainID:         cc.Init.ChainID,
 			OutputDir:       cc.Init.OutputDir,
 			JoinExpiry:      cc.Init.JoinExpiry,
 			WithoutGasCosts: true, // gas disabled by setup init
@@ -58,6 +59,7 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 }
 
 type SetupInitCmd struct {
+	ChainID       string `arg:"--chain-id" help:"override the chain ID"`
 	OutputDir     string `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
 	JoinExpiry    int64  `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
 	WithoutNonces bool   `arg:"--without-nonces" help:"disable nonces"`
@@ -70,6 +72,7 @@ type SetupInitCmd struct {
 // SetupTestnetCmd exactly matches nodecfg.TestnetGenerateConfig in field name,
 // type, and layout so that it may be converted directly.
 type SetupTestnetCmd struct {
+	ChainID                 string   `arg:"--chain-id" help:"override the chain ID"`
 	NValidators             int      `arg:"-v,--validators" default:"4" help:"number of validators" placeholder:"V"`
 	NNonValidators          int      `arg:"-n,--non-validators" default:"4" help:"number of non-validators" placeholder:"N"`
 	ConfigFile              string   `arg:"--config" help:"template config file to use, default is none" placeholder:"FILE"`
