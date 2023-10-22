@@ -84,7 +84,7 @@ func getExampleTxQueryResponse() *transactions.TcTxQueryResponse {
 				PayloadType: rawPayload.Type(),
 				Fee:         big.NewInt(100),
 				Nonce:       10,
-				Salt:        []byte("salt"),
+				ChainID:     "asdf",
 				Description: "This is a test transaction for cli",
 			},
 			Serialization: transactions.SignedMsgConcat,
@@ -128,7 +128,7 @@ func Example_respTxQuery_json() {
 	//         "PayloadType": "execute_action",
 	//         "Fee": 100,
 	//         "Nonce": 10,
-	//         "Salt": "c2FsdA=="
+	//         "ChainID": "asdf"
 	//       },
 	//       "Serialization": "concat",
 	//       "Sender": null
@@ -152,6 +152,7 @@ func Example_respKwilCliConfig_text() {
 	display.Print(&respKwilCliConfig{
 		cfg: &config.KwilCliConfig{
 			PrivateKey:  pk,
+			ChainID:     "chainid123",
 			GrpcURL:     "localhost:9090",
 			TLSCertFile: "",
 		},
@@ -159,6 +160,7 @@ func Example_respKwilCliConfig_text() {
 	// Output:
 	// PrivateKey: ***
 	// GrpcURL: localhost:9090
+	// ChainID: chainid123
 	// TLSCertFile:
 }
 
@@ -171,6 +173,7 @@ func Example_respKwilCliConfig_json() {
 	display.Print(&respKwilCliConfig{
 		cfg: &config.KwilCliConfig{
 			PrivateKey:  pk,
+			ChainID:     "chainid123",
 			GrpcURL:     "localhost:9090",
 			TLSCertFile: "",
 		},
@@ -180,6 +183,7 @@ func Example_respKwilCliConfig_json() {
 	//   "result": {
 	//     "private_key": "***",
 	//     "grpc_url": "localhost:9090",
+	//     "chain_id": "chainid123",
 	//     "tls_cert_file": ""
 	//   },
 	//   "error": ""
