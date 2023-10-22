@@ -15,7 +15,7 @@ func Test_convertTx(t *testing.T) {
 			PayloadType: "execute_action",
 			Fee:         "10",
 			Nonce:       1,
-			Salt:        []byte("salt"),
+			ChainId:     "chainidxyz",
 		},
 		Signature: &txpb.Signature{
 			SignatureBytes: []byte("signature"),
@@ -40,7 +40,7 @@ func Test_convertTxWithSerialization(t *testing.T) {
 			PayloadType: "execute_action",
 			Fee:         "10",
 			Nonce:       1,
-			Salt:        []byte("salt"),
+			ChainId:     "chainidxyz",
 		},
 		Signature: &txpb.Signature{
 			SignatureBytes: []byte("signature"),

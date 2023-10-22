@@ -83,7 +83,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	cometBftClient := buildCometBftClient(cometBftNode)
 
 	// tx service and grpc server
-	txsvc := buildTxSvc(d, datasetsModule, accs, vstore, &wrappedCometBFTClient{cometBftClient})
+	txsvc := buildTxSvc(d, datasetsModule, accs, vstore, &wrappedCometBFTClient{cometBftClient}, abciApp)
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	// admin service and server
@@ -155,8 +155,12 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		sh = snapshotter
 	}
 
-	genesisHash := d.genesisCfg.ComputeGenesisHash()
-	return abci.NewAbciApp(
+	cfg := &abci.AbciConfig{
+		GenesisAppHash:     d.genesisCfg.ComputeGenesisHash(),
+		ChainID:            d.genesisCfg.ChainID,
+		ApplicationVersion: d.genesisCfg.ConsensusParams.Version.App,
+	}
+	return abci.NewAbciApp(cfg,
 		accountsModule,
 		datasetsModule,
 		validatorModule,
@@ -164,14 +168,13 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		atomicCommitter,
 		sh,
 		bootstrapper,
-		genesisHash,
 		abci.WithLogger(*d.log.Named("abci")),
 	)
 }
 
 func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.AccountReader,
-	vstore *vmgr.ValidatorMgr, cometBftClient txSvc.BlockchainTransactor) *txSvc.Service {
-	return txSvc.NewService(txsvc, accs, vstore, cometBftClient,
+	vstore *vmgr.ValidatorMgr, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
+	return txSvc.NewService(d.genesisCfg.ChainID, txsvc, accs, vstore, cometBftClient, nodeApp,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
 	)
 }

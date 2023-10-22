@@ -63,13 +63,21 @@ func (ds nilStringer) String() string {
 	return "no message"
 }
 
-func NewAbciApp(accounts AccountsModule, database DatasetsModule, vldtrs ValidatorModule, kv KVStore, committer AtomicCommitter, snapshotter SnapshotModule,
-	bootstrapper DBBootstrapModule, genesisHash []byte, opts ...AbciOpt) *AbciApp {
+// AbciConfig includes data that defines the chain and allow the application to
+// satisfy the ABCI Application interface.
+type AbciConfig struct {
+	GenesisAppHash     []byte
+	ChainID            string
+	ApplicationVersion uint64
+}
+
+func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModule, vldtrs ValidatorModule, kv KVStore,
+	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
-		genesisAppHash: genesisHash,
-		database:       database,
-		validators:     vldtrs,
-		committer:      committer,
+		cfg:        *cfg,
+		database:   database,
+		validators: vldtrs,
+		committer:  committer,
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
@@ -109,7 +117,7 @@ func pubkeyToAddr(pubkey []byte) (string, error) {
 }
 
 type AbciApp struct {
-	genesisAppHash []byte
+	cfg AbciConfig
 
 	// database is the database module that handles database deployment, dropping, and execution
 	database DatasetsModule
@@ -144,8 +152,10 @@ type AbciApp struct {
 	// Expected AppState after bootstrapping the node with a given snapshot,
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
+}
 
-	applicationVersion uint64
+func (a *AbciApp) ChainID() string {
+	return a.cfg.ChainID
 }
 
 var _ abciTypes.Application = &AbciApp{}
@@ -229,6 +239,12 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	// For a new transaction (not re-check), before looking at execution cost or
 	// checking nonce validity, ensure the payload is recognized and signature is valid.
 	if newTx {
+		// Verify the correct chain ID is set, if it is set.
+		if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != a.cfg.ChainID {
+			code = CodeWrongChain
+			logger.Info("wrong chain ID", zap.String("payloadType", tx.Body.PayloadType.String()))
+			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "wrong chain ID"}
+		}
 		// Verify Payload type
 		if !tx.Body.PayloadType.Valid() {
 			code = CodeInvalidTxType
@@ -488,10 +504,10 @@ func (a *AbciApp) EndBlock(e abciTypes.RequestEndBlock) abciTypes.ResponseEndBlo
 
 	return abciTypes.ResponseEndBlock{
 		ValidatorUpdates: valUpdates,
-		ConsensusParamUpdates: &tendermintTypes.ConsensusParams{
+		ConsensusParamUpdates: &tendermintTypes.ConsensusParams{ // why are we "updating" these on every block? Should be nil for no update.
 			// we can include evidence in here for malicious actors, but this is not important this release
 			Version: &tendermintTypes.VersionParams{
-				App: a.applicationVersion,
+				App: a.cfg.ApplicationVersion, // how would we change the application version?
 			},
 			Validator: &tendermintTypes.ValidatorParams{
 				PubKeyTypes: []string{"ed25519"},
@@ -600,13 +616,15 @@ func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
 	return abciTypes.ResponseInfo{
 		LastBlockHeight:  height,
 		LastBlockAppHash: appHash,
-		AppVersion:       a.applicationVersion,
+		// Version: kwildVersion, // the *software* semver string
+		AppVersion: a.cfg.ApplicationVersion, // app protocol version, must match "the version in the current height’s block header"
 	}
 }
 
 func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseInitChain {
 	logger := a.log.With(zap.String("stage", "ABCI InitChain"), zap.Int64("height", p0.InitialHeight))
 	logger.Debug("", zap.String("ChainId", p0.ChainId))
+	// maybe verify a.cfg.ChainID against the one in the request
 
 	ctx := context.Background()
 
@@ -632,16 +650,16 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 		valUpdates[i] = abciTypes.Ed25519ValidatorUpdate(validator.PubKey, validator.Power)
 	}
 
-	err := a.metadataStore.SetAppHash(ctx, a.genesisAppHash)
+	err := a.metadataStore.SetAppHash(ctx, a.cfg.GenesisAppHash)
 	if err != nil {
 		panic(fmt.Sprintf("failed to set app hash: %v", err))
 	}
 
-	logger.Debug("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.genesisAppHash)))
+	logger.Debug("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))
 
 	return abciTypes.ResponseInitChain{
 		Validators: valUpdates,
-		AppHash:    a.genesisAppHash,
+		AppHash:    a.cfg.GenesisAppHash,
 	}
 }
 
@@ -852,6 +870,18 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, Txns [][]byt
 				return fmt.Errorf("nonce mismatch, ExpectedNonce: %d TxNonce: %d", expectedNonce, tx.Body.Nonce)
 			}
 			expectedNonce++
+
+			chainID := tx.Body.ChainID
+			if protected := chainID != ""; protected && chainID != a.cfg.ChainID {
+				return fmt.Errorf("protected transaction with mismatched chain ID")
+			}
+
+			// This block proposal may include transactions that did not pass
+			// through our mempool, so we have to verify all signatures.
+			if err = ident.VerifyTransaction(tx); err != nil {
+				logger.Error("transaction signature verification failed", zap.Error(err))
+				return fmt.Errorf("transaction signature verification failed: %w", err)
+			}
 		}
 	}
 	return nil

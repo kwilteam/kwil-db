@@ -13,9 +13,17 @@ func WithLogger(logger log.Logger) Option {
 	}
 }
 
-func WithSigner(signer auth.Signer) Option {
+// WithSigner sets a signer to use when authoring transactions. The chain ID
+// will be used in all transactions, which helps prevent replay attacks on
+// different chains. On the initial connection, the remote node's chain ID is
+// checked against ours to ensure were are on the right network. If the chain ID
+// is empty, we will create and sign transactions for whatever network the
+// remote node claims, which should only be done for testing or when in secure
+// (TLS) communication with a trusted node.
+func WithSigner(signer auth.Signer, chainID string) Option {
 	return func(c *Client) {
 		c.Signer = signer
+		c.chainID = chainID
 	}
 }
 

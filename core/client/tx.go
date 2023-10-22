@@ -33,7 +33,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 	}
 
 	// build transaction
-	tx, err := transactions.CreateTransaction(data, nonce)
+	tx, err := transactions.CreateTransaction(data, c.chainID, nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
