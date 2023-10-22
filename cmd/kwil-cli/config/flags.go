@@ -23,12 +23,14 @@ const (
 	// also since the config file is using `grpc_url`, should change too
 	// TODO: this is a breaking change
 	globalProviderFlag = "kwil-provider"
+	globalChainIDFlag  = "chain-id"
 	globalOutputFlag   = "output"
 	globalTlsCertFlag  = "tls-cert-file"
 	// NOTE: viper key name are used for viper related operations
 	// here they are same `mapstructure` names defined in the config struct
 	viperPrivateKeyName = "private_key"
 	viperProviderName   = "grpc_url"
+	viperChainID        = "chain_id"
 	viperTlsCertName    = "tls_cert_file"
 	viperOutputName     = "output"
 )
@@ -83,13 +85,15 @@ var outputFormat = DefaultOutputFormat
 func BindGlobalFlags(fs *pflag.FlagSet) {
 	// Bind flags to environment variables
 	fs.String(globalPrivateKeyFlag, cliCfg.PrivateKey, "The private key of the wallet that will be used for signing")
-	fs.String(globalProviderFlag, cliCfg.GrpcURL, "The kwil provider endpoint")
+	fs.String(globalProviderFlag, cliCfg.GrpcURL, "The Kwil provider endpoint")
+	fs.String(globalChainIDFlag, cliCfg.ChainID, "The expected/intended Kwil Chain ID")
 	fs.String(globalTlsCertFlag, cliCfg.TLSCertFile, "The path to the TLS certificate, this is required if the kwil provider endpoint is using TLS")
 	fs.Var(&outputFormat, globalOutputFlag, "the format for command output, either 'text' or 'json'")
 
 	// Bind flags to viper, named by the flag name
 	viper.BindPFlag(viperPrivateKeyName, fs.Lookup(globalPrivateKeyFlag))
 	viper.BindPFlag(viperProviderName, fs.Lookup(globalProviderFlag))
+	viper.BindPFlag(viperChainID, fs.Lookup(globalChainIDFlag))
 	viper.BindPFlag(viperTlsCertName, fs.Lookup(globalTlsCertFlag))
 	viper.BindPFlag(viperOutputName, fs.Lookup(globalOutputFlag))
 }

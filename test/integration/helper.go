@@ -156,11 +156,11 @@ func (r *IntHelper) LoadConfig() {
 	creatorPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.CreatorRawPk)
 	require.NoError(r.t, err, "invalid creator private key")
 
-	r.cfg.CreatorSigner = &auth.EthPersonalSigner{Secp256k1PrivateKey: *creatorPk}
+	r.cfg.CreatorSigner = &auth.EthPersonalSigner{Key: *creatorPk}
 
 	bobPk, err := crypto.Secp256k1PrivateKeyFromHex(r.cfg.VisitorRawPK)
 	require.NoError(r.t, err, "invalid visitor private key")
-	r.cfg.VisitorSigner = &auth.EthPersonalSigner{Secp256k1PrivateKey: *bobPk}
+	r.cfg.VisitorSigner = &auth.EthPersonalSigner{Key: *bobPk}
 }
 
 func (r *IntHelper) updateGeneratedConfigHome(home string) {
@@ -364,10 +364,10 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, name string, driverTy
 func (r *IntHelper) getClientDriver(signer auth.Signer) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	options := []client.Option{client.WithSigner(signer),
+	options := []client.Option{client.WithSigner(signer, ""),
 		client.WithLogger(logger),
 		client.WithTLSCert("")} // TODO: handle cert
-	kwilClt, err := client.Dial(r.cfg.GrpcEndpoint, options...)
+	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
 	require.NoError(r.t, err, "failed to create kwil client")
 
 	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))

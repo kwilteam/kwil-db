@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -39,7 +40,7 @@ func WithDialOptions(opts ...grpc.DialOption) Option {
 	}
 }
 
-func New(target string, opts ...Option) (*Client, error) {
+func New(ctx context.Context, target string, opts ...Option) (*Client, error) {
 	clt := &Client{
 		dailOpts: []grpc.DialOption{},
 	}
@@ -50,7 +51,7 @@ func New(target string, opts ...Option) (*Client, error) {
 		}
 	}
 
-	conn, err := grpc.Dial(target, clt.dailOpts...)
+	conn, err := grpc.DialContext(ctx, target, clt.dailOpts...)
 	if err != nil {
 		return nil, err
 	}

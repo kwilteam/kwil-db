@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -53,16 +54,26 @@ func (m *MockAccountStore) GetAccount(ctx context.Context, pubKey []byte) (*acco
 	}, nil
 }
 
-func newTxBts(t *testing.T, nonce uint64, sender string) []byte {
+func newTxBts(t *testing.T, nonce uint64, signer auth.Signer) []byte {
 	tx := &transactions.Transaction{
-		Signature: &auth.Signature{},
+		Signature:     &auth.Signature{},
+		Serialization: transactions.SignedMsgConcat,
 		Body: &transactions.TransactionBody{
 			Description: "test",
 			Payload:     []byte(`random payload`),
 			Fee:         big.NewInt(0),
 			Nonce:       nonce,
 		},
-		Sender: []byte(sender),
+		Sender: signer.PublicKey(),
+	}
+
+	msg, err := tx.SerializeMsg()
+	if err != nil {
+		t.Fatalf("serialization failed: %v", err)
+	}
+	tx.Signature, err = signer.Sign(msg)
+	if err != nil {
+		t.Fatalf("signing failed: %v", err)
 	}
 
 	bts, err := tx.MarshalBinary()
@@ -228,13 +239,18 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 
 	abciApp.log = logger
 
-	txA1 := newTxBts(t, 1, "A")
-	txA2 := newTxBts(t, 2, "A")
-	txA3 := newTxBts(t, 3, "A")
-	txA4 := newTxBts(t, 4, "A")
-	txB1 := newTxBts(t, 1, "B")
-	txB2 := newTxBts(t, 2, "B")
-	txB3 := newTxBts(t, 3, "B")
+	keyA, _ := crypto.GenerateSecp256k1Key()
+	signerA := &auth.EthPersonalSigner{Key: *keyA}
+	keyB, _ := crypto.GenerateSecp256k1Key()
+	signerB := &auth.EthPersonalSigner{Key: *keyB}
+
+	txA1 := newTxBts(t, 1, signerA)
+	txA2 := newTxBts(t, 2, signerA)
+	txA3 := newTxBts(t, 3, signerA)
+	txA4 := newTxBts(t, 4, signerA)
+	txB1 := newTxBts(t, 1, signerB)
+	txB2 := newTxBts(t, 2, signerB)
+	txB3 := newTxBts(t, 3, signerB)
 
 	testcases := []struct {
 		name string
