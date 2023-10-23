@@ -84,7 +84,6 @@ func getExampleTxQueryResponse() *transactions.TcTxQueryResponse {
 				PayloadType: rawPayload.Type(),
 				Fee:         big.NewInt(100),
 				Nonce:       10,
-				ChainID:     "asdf",
 				Description: "This is a test transaction for cli",
 			},
 			Serialization: transactions.SignedMsgConcat,
@@ -127,8 +126,7 @@ func Example_respTxQuery_json() {
 	//         "Payload": "AAH4ULg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2VyyMeDZm9vgjMy",
 	//         "PayloadType": "execute_action",
 	//         "Fee": 100,
-	//         "Nonce": 10,
-	//         "ChainID": "asdf"
+	//         "Nonce": 10
 	//       },
 	//       "Serialization": "concat",
 	//       "Sender": null

@@ -180,8 +180,6 @@ func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, syn
 	txCode := transactions.TxCode(result.Code)
 	switch txCode {
 	case transactions.CodeOk:
-	case transactions.CodeWrongChain:
-		return nil, transactions.ErrWrongChain
 	default:
 		return nil, fmt.Errorf("transaction rejected with code %d (%v)", txCode, txCode)
 	}

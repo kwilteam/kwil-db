@@ -21,6 +21,5 @@ const (
 	CodeInvalidTxType    = transactions.CodeInvalidTxType
 	CodeInvalidSignature = transactions.CodeInvalidSignature
 	CodeInvalidNonce     = transactions.CodeInvalidNonce
-	CodeWrongChain       = transactions.CodeWrongChain
 	CodeUnknownError     = transactions.CodeUnknownError
 )

@@ -16,7 +16,6 @@ var (
 	// ErrTxNotFound is indicates when the a transaction was not found in the
 	// nodes blocks or mempool.
 	ErrTxNotFound = errors.New("transaction not found")
-	ErrWrongChain = errors.New("wrong chain ID")
 )
 
 type TxCode uint32
@@ -27,8 +26,7 @@ const (
 	CodeInvalidTxType    TxCode = 2
 	CodeInvalidSignature TxCode = 3
 	CodeInvalidNonce     TxCode = 4
-	CodeWrongChain       TxCode = 5
-	CodeUnknownError     TxCode = 6 // for now it's for all non-encoding error
+	CodeUnknownError     TxCode = 5 // for now it's for all non-encoding error
 )
 
 func (c TxCode) Uint32() uint32 {
@@ -45,8 +43,6 @@ func (tc TxCode) String() string {
 		return "invalid tx type"
 	case CodeInvalidSignature:
 		return "invalid signature"
-	case CodeWrongChain:
-		return "wrong chain"
 	default:
 		return "unknown tx error"
 	}

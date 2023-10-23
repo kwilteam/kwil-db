@@ -239,12 +239,6 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	// For a new transaction (not re-check), before looking at execution cost or
 	// checking nonce validity, ensure the payload is recognized and signature is valid.
 	if newTx {
-		// Verify the correct chain ID is set, if it is set.
-		if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != a.cfg.ChainID {
-			code = CodeWrongChain
-			logger.Info("wrong chain ID", zap.String("payloadType", tx.Body.PayloadType.String()))
-			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "wrong chain ID"}
-		}
 		// Verify Payload type
 		if !tx.Body.PayloadType.Valid() {
 			code = CodeInvalidTxType
@@ -253,7 +247,7 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 		}
 
 		// Verify Signature
-		err = ident.VerifyTransaction(tx)
+		err = ident.VerifyTransaction(a.cfg.ChainID, tx)
 		if err != nil {
 			code = CodeInvalidSignature
 			logger.Error("failed to verify transaction", zap.Error(err))
@@ -871,14 +865,14 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, Txns [][]byt
 			}
 			expectedNonce++
 
-			chainID := tx.Body.ChainID
-			if protected := chainID != ""; protected && chainID != a.cfg.ChainID {
-				return fmt.Errorf("protected transaction with mismatched chain ID")
-			}
+			// chainID := tx.Body.ChainID
+			// if protected := chainID != ""; protected && chainID != a.cfg.ChainID {
+			// 	return fmt.Errorf("protected transaction with mismatched chain ID")
+			// }
 
 			// This block proposal may include transactions that did not pass
 			// through our mempool, so we have to verify all signatures.
-			if err = ident.VerifyTransaction(tx); err != nil {
+			if err = ident.VerifyTransaction(a.cfg.ChainID, tx); err != nil {
 				logger.Error("transaction signature verification failed", zap.Error(err))
 				return fmt.Errorf("transaction signature verification failed: %w", err)
 			}

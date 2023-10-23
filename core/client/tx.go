@@ -33,7 +33,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 	}
 
 	// build transaction
-	tx, err := transactions.CreateTransaction(data, c.chainID, nonce)
+	tx, err := transactions.CreateTransaction(data, nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
@@ -48,7 +48,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 	tx.Body.Fee = price
 
 	// sign transaction
-	err = tx.Sign(c.Signer)
+	err = tx.Sign(c.chainID, c.Signer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}

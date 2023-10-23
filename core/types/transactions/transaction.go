@@ -96,7 +96,7 @@ var EIP712TypedDataMessage = []gethTypes.Type{
 }
 
 // CreateTransaction creates a new unsigned transaction.
-func CreateTransaction(contents Payload, chainID string, nonce uint64) (*Transaction, error) {
+func CreateTransaction(contents Payload, nonce uint64) (*Transaction, error) {
 	data, err := contents.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -108,7 +108,6 @@ func CreateTransaction(contents Payload, chainID string, nonce uint64) (*Transac
 			PayloadType: contents.Type(),
 			Fee:         big.NewInt(0),
 			Nonce:       nonce,
-			ChainID:     chainID,
 		},
 		Serialization: DefaultSignedMsgSerType,
 	}, nil
@@ -132,14 +131,14 @@ type Transaction struct {
 
 // SerializeMsg produces the serialization of the transaction that is to be used
 // in both signing and verification of transaction.
-func (t *Transaction) SerializeMsg() ([]byte, error) {
-	return t.Body.SerializeMsg(t.Serialization) // alt t.Body.SerializeMsg(t.ChainID, t.Serialization)
+func (t *Transaction) SerializeMsg(chainID string) ([]byte, error) {
+	return t.Body.SerializeMsg(chainID, t.Serialization)
 }
 
 // Sign signs transaction body with given signer.
 // It will serialize the transaction body first and sign it.
-func (t *Transaction) Sign(signer auth.Signer) error {
-	msg, err := t.SerializeMsg()
+func (t *Transaction) Sign(chainID string, signer auth.Signer) error {
+	msg, err := t.SerializeMsg(chainID)
 	if err != nil {
 		return err
 	}
@@ -186,15 +185,6 @@ type TransactionBody struct {
 
 	// Nonce is the next nonce of the sender
 	Nonce uint64
-
-	// ChainID identifies the Kwil chain for which the transaction is intended.
-	// Alternatively, this could be withheld from the TransactionBody and passed
-	// as an argument to SerializeMsg, as is seen in ethereum signers and even
-	// CometBFT's SignProposal method. However, the full transaction
-	// serialization must include it anyway since it passes through the
-	// consensus engine and p2p systems as an opaque blob that must be
-	// unmarshalled with the chain ID in Kwil blockchain application.
-	ChainID string
 }
 
 func (t *TransactionBody) MarshalBinary() ([]byte, error) {
@@ -206,7 +196,7 @@ func (t *TransactionBody) MarshalBinary() ([]byte, error) {
 // to wallets, and it is signed as a message, not a transaction that is native
 // to the wallet. As such we define conventions for constructing user-friendly
 // messages. The Kwil frontend SDKs must implement these serialization schemes.
-func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, error) {
+func (t *TransactionBody) SerializeMsg(chainID string, mst SignedMsgSerializationType) ([]byte, error) {
 	if len(t.Description) > MsgDescriptionMaxLength {
 		return nil, errors.New("description is too long")
 	}
@@ -225,7 +215,7 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 			payloadDigest,
 			t.Fee.String(),
 			t.Nonce,
-			t.ChainID)
+			chainID)
 		return []byte(msgStr), nil
 		//case SignedMsgEip712:
 		//	signerData := gethTypes.TypedData{

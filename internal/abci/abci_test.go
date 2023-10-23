@@ -67,7 +67,7 @@ func newTxBts(t *testing.T, nonce uint64, signer auth.Signer) []byte {
 		Sender: signer.PublicKey(),
 	}
 
-	msg, err := tx.SerializeMsg()
+	msg, err := tx.SerializeMsg("")
 	if err != nil {
 		t.Fatalf("serialization failed: %v", err)
 	}

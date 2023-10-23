@@ -3,11 +3,9 @@ package txsvc
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -49,14 +47,6 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	const sync = 1 // async, TODO: sync field of BroadcastRequest
 	txHash, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
 	if err != nil {
-		// NOTE: here we can errors.Is and return an actual response with a
-		// field for the error code and message instead of this internal grpc
-		// thing. Since we do not have such response structure, we have to pick
-		// from the general categories of gRPC response codes, which are similar
-		// to http status codes, and do string matching on the message.
-		if errors.Is(err, transactions.ErrWrongChain) {
-			return nil, status.Errorf(codes.InvalidArgument, "wrong chain ID %q", tx.Body.ChainID)
-		}
 		logger.Error("failed to broadcast tx", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
 	}

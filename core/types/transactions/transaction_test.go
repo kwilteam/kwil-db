@@ -40,7 +40,6 @@ func Test_TransactionMarshal(t *testing.T) {
 			PayloadType: transactions.PayloadTypeDeploySchema,
 			Fee:         big.NewInt(100),
 			Nonce:       1,
-			ChainID:     "chainIDXXX",
 		},
 		Sender: []byte("sender"),
 	}
@@ -70,6 +69,13 @@ func TestTransaction_Sign(t *testing.T) {
 		Type:      auth.EthPersonalSignAuth,
 	}
 
+	expectPersonalSignConcatSigHexAltChain := "3de73a839831459dbeb0546767242d12173cb35f911d2dcb6d3c091435086847329cd5dab4e87eed2928627480e490a3601bee8e29cf14217e2b7b0d4361eff501"
+	expectPersonalSignConcatSigAltChainBytes, _ := hex.DecodeString(expectPersonalSignConcatSigHexAltChain)
+	expectPersonalSignConcatSigAltChain := &auth.Signature{
+		Signature: expectPersonalSignConcatSigAltChainBytes,
+		Type:      auth.EthPersonalSignAuth,
+	}
+
 	rawPayload := transactions.ActionExecution{
 		DBID:   "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
 		Action: "create_user",
@@ -82,8 +88,9 @@ func TestTransaction_Sign(t *testing.T) {
 	require.NoError(t, err)
 
 	type args struct {
-		mst    transactions.SignedMsgSerializationType
-		signer auth.Signer
+		mst     transactions.SignedMsgSerializationType
+		signer  auth.Signer
+		chainID string
 	}
 	tests := []struct {
 		name    string
@@ -102,10 +109,20 @@ func TestTransaction_Sign(t *testing.T) {
 		{
 			name: "eth personal_sign concat string",
 			args: args{
-				mst:    transactions.SignedMsgConcat,
-				signer: &ethPersonalSigner,
+				mst:     transactions.SignedMsgConcat,
+				signer:  &ethPersonalSigner,
+				chainID: "adsf",
 			},
 			wantSig: expectPersonalSignConcatSig,
+		},
+		{
+			name: "eth personal_sign concat string wrong chainID",
+			args: args{
+				mst:     transactions.SignedMsgConcat,
+				signer:  &ethPersonalSigner,
+				chainID: "different chain ID",
+			},
+			wantSig: expectPersonalSignConcatSigAltChain,
 		},
 	}
 	for _, tt := range tests {
@@ -117,12 +134,11 @@ func TestTransaction_Sign(t *testing.T) {
 					PayloadType: rawPayload.Type(),
 					Fee:         big.NewInt(100),
 					Nonce:       1,
-					ChainID:     "adsf",
 				},
 				Serialization: tt.args.mst,
 			}
 
-			err := tx.Sign(tt.args.signer)
+			err := tx.Sign(tt.args.chainID, tt.args.signer)
 			if tt.wantErr {
 				assert.Error(t1, err, "Sign(%v)", tt.args.mst)
 				return
@@ -134,7 +150,7 @@ func TestTransaction_Sign(t *testing.T) {
 			require.Equal(t1, hex.EncodeToString(tt.wantSig.Signature),
 				hex.EncodeToString(tx.Signature.Signature), "mismatch signature")
 
-			msgBts, err := tx.SerializeMsg()
+			msgBts, err := tx.SerializeMsg(tt.args.chainID)
 			require.NoError(t1, err, "error serializing message")
 
 			authenticator := tt.args.signer.Authenticator()
@@ -210,10 +226,10 @@ abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 				PayloadType: rawPayload.Type(),
 				Fee:         big.NewInt(100),
 				Nonce:       1,
-				ChainID:     "00000000000",
 			}
 
-			got, err := txBody.SerializeMsg(tt.args.mst)
+			chainID := "00000000000"
+			got, err := txBody.SerializeMsg(chainID, tt.args.mst)
 			if tt.wantErr { // TODO: verify expect error
 				assert.Error(t1, err, "SerializeMsg(%v)", tt.args.mst)
 				return

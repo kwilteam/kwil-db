@@ -924,9 +924,6 @@
           "type": "string",
           "format": "uint64"
         },
-        "chain_id": {
-          "type": "string"
-        },
         "description": {
           "type": "string"
         }
