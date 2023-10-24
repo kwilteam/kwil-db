@@ -243,7 +243,7 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	logger.Debug("check tx")
 	ctx := context.Background()
 	var err error
-	code := CodeOk
+	code := codeOk
 
 	// NOTE about the error logging here: These transactions are from users, so
 	// most of these are not server errors, but client errors, so we ideally do
@@ -253,7 +253,7 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	tx := &transactions.Transaction{}
 	err = tx.UnmarshalBinary(incoming.Tx)
 	if err != nil {
-		code = CodeEncodingError
+		code = codeEncodingError
 		logger.Debug("failed to unmarshal transaction", zap.Error(err))
 		return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
 	}
@@ -268,13 +268,13 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	if newTx {
 		// Verify the correct chain ID is set, if it is set.
 		if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != a.cfg.ChainID {
-			code = CodeWrongChain
+			code = codeWrongChain
 			logger.Info("wrong chain ID", zap.String("payloadType", tx.Body.PayloadType.String()))
 			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "wrong chain ID"}
 		}
 		// Verify Payload type
 		if !tx.Body.PayloadType.Valid() {
-			code = CodeInvalidTxType
+			code = codeInvalidTxType
 			logger.Debug("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
 			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "invalid payload type"}
 		}
@@ -282,7 +282,7 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 		// Verify Signature
 		err = ident.VerifyTransaction(tx)
 		if err != nil {
-			code = CodeInvalidSignature
+			code = codeInvalidSignature
 			logger.Debug("failed to verify transaction", zap.Error(err))
 			return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
 		}
@@ -294,10 +294,10 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 	err = a.mempool.applyTransaction(ctx, tx)
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
-			code = CodeInvalidNonce
+			code = codeInvalidNonce
 			logger.Info("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
 		} else {
-			code = CodeUnknownError
+			code = codeUnknownError
 			logger.Warn("unexpected failure to verify transaction against local mempool state", zap.Error(err))
 		}
 		return abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}
@@ -316,7 +316,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		logger.Error("failed to unmarshal transaction",
 			zap.Error(err))
 		return abciTypes.ResponseDeliverTx{
-			Code: CodeEncodingError.Uint32(),
+			Code: codeEncodingError.Uint32(),
 			Log:  err.Error(),
 		}
 	}
@@ -324,14 +324,14 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 	// Fail transactions with invalid signatures.
 	if err = ident.VerifyTransaction(tx); err != nil {
 		return abciTypes.ResponseDeliverTx{
-			Code: CodeInvalidSignature.Uint32(),
+			Code: codeInvalidSignature.Uint32(),
 			Log:  err.Error(),
 		}
 	}
 
 	var events []abciTypes.Event
 	gasUsed := int64(0)
-	txCode := CodeOk
+	txCode := codeOk
 
 	logger = logger.With(zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
@@ -341,21 +341,21 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var schemaPayload transactions.Schema
 		err = schemaPayload.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
-			txCode = CodeEncodingError
+			txCode = codeEncodingError
 			break
 		}
 
 		var schema *engineTypes.Schema
 		schema, err = modDataset.ConvertSchemaToEngine(&schemaPayload)
 		if err != nil {
-			txCode = CodeEncodingError
+			txCode = codeEncodingError
 			break
 		}
 
 		var res *modDataset.ExecutionResponse
 		res, err = a.database.Deploy(ctx, schema, tx)
 		if err != nil {
-			txCode = CodeUnknownError
+			txCode = codeUnknownError
 			break
 		}
 
@@ -385,7 +385,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var res *modDataset.ExecutionResponse
 		res, err = a.database.Drop(ctx, drop.DBID, tx)
 		if err != nil {
-			txCode = CodeUnknownError
+			txCode = codeUnknownError
 			break
 		}
 
@@ -394,7 +394,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		execution := &transactions.ActionExecution{}
 		err = execution.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
-			txCode = CodeEncodingError
+			txCode = codeEncodingError
 			break
 		}
 
@@ -405,7 +405,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var res *modDataset.ExecutionResponse
 		res, err = a.database.Execute(ctx, execution.DBID, execution.Action, convertArgs(execution.Arguments), tx)
 		if err != nil {
-			txCode = CodeUnknownError
+			txCode = codeUnknownError
 			break
 		}
 
@@ -414,7 +414,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var join transactions.ValidatorJoin
 		err = join.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
-			txCode = CodeEncodingError
+			txCode = codeEncodingError
 			break
 		}
 
@@ -425,7 +425,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Join(ctx, join.Candidate, int64(join.Power), tx)
 		if err != nil {
-			txCode = CodeUnknownError
+			txCode = codeUnknownError
 			break
 		}
 		// Concept:
@@ -451,7 +451,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var leave transactions.ValidatorLeave
 		err = leave.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
-			txCode = CodeEncodingError
+			txCode = codeEncodingError
 			break
 		}
 
@@ -460,7 +460,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Leave(ctx, leave.Validator, tx)
 		if err != nil {
-			txCode = CodeUnknownError
+			txCode = codeUnknownError
 			break
 		}
 
@@ -480,7 +480,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var approve transactions.ValidatorApprove
 		err = approve.UnmarshalBinary(tx.Body.Payload)
 		if err != nil {
-			txCode = CodeEncodingError
+			txCode = codeEncodingError
 			break
 		}
 
@@ -489,7 +489,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		var res *modVal.ExecutionResponse
 		res, err = a.validators.Approve(ctx, approve.Candidate, tx)
 		if err != nil {
-			txCode = CodeUnknownError
+			txCode = codeUnknownError
 			break
 		}
 
