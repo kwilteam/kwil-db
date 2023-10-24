@@ -14,7 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	grpc "github.com/kwilteam/kwil-db/core/rpc/client/user"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	"github.com/kwilteam/kwil-db/core/types"
 
 	"go.uber.org/zap"

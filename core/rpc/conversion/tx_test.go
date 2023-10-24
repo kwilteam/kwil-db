@@ -24,10 +24,10 @@ func Test_convertTx(t *testing.T) {
 		Sender: []byte("sender"),
 	}
 
-	abciTx, err := ConvertToAbciTx(incomingTx)
+	abciTx, err := ConvertFromPBTx(incomingTx)
 	require.NoError(t, err, "convertToAbciTx failed")
 
-	outgoingTx := ConvertFromAbciTx(abciTx)
+	outgoingTx := ConvertToPBTx(abciTx)
 
 	require.EqualValues(t, incomingTx, outgoingTx, "convertToAbciTx and convertFromAbciTx are not inverse")
 }
@@ -49,7 +49,7 @@ func Test_convertTxWithSerialization(t *testing.T) {
 		Sender: []byte("sender"),
 	}
 
-	incomingAbciTx, err := ConvertToAbciTx(incomingTx)
+	incomingAbciTx, err := ConvertFromPBTx(incomingTx)
 	require.NoError(t, err, "convertToAbciTx failed")
 
 	abciTxBytes, err := incomingAbciTx.MarshalBinary()
@@ -58,7 +58,7 @@ func Test_convertTxWithSerialization(t *testing.T) {
 	err = outgoingAbciTx.UnmarshalBinary(abciTxBytes)
 	require.NoError(t, err, "outgoingAbciTx.UnmarshalBinary failed")
 
-	outgoingTx := ConvertFromAbciTx(outgoingAbciTx)
+	outgoingTx := ConvertToPBTx(outgoingAbciTx)
 
 	require.EqualValues(t, incomingTx, outgoingTx, "convertToAbciTx and convertFromAbciTx are not inverse")
 }

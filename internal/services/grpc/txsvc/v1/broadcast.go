@@ -32,7 +32,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		zap.String("PayloadType", req.Tx.Body.PayloadType))
 	logger.Debug("incoming transaction")
 
-	tx, err := conversion.ConvertToAbciTx(req.Tx)
+	tx, err := conversion.ConvertFromPBTx(req.Tx)
 	if err != nil {
 		logger.Error("failed to convert transaction", zap.Error(err))
 		// NOTE: for internal error, we should not expose the error message to the client

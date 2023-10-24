@@ -12,15 +12,14 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	grpc "github.com/kwilteam/kwil-db/core/rpc/client/user"
+	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
-
-	"github.com/cstockton/go-conv"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	grpcCodes "google.golang.org/grpc/codes"
@@ -65,8 +64,8 @@ type Client struct {
 	tlsCertFile string // the tls cert file path
 }
 
-// Dial creates a kwil client connection to the given target. It will by default
-// use grpc, but it can be overridden by passing WithTransportClient.
+// Dial creates a Kwil client. It will by default use http connection, which
+// can be overridden by using WithTransportClient.
 func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err error) {
 	c = &Client{
 		logger: log.NewNoOp(), // by default, we do not want to force client to log anything
@@ -77,8 +76,8 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 	}
 
 	if c.transportClient == nil {
-		transportOptions := []grpc.Option{grpc.WithTlsCert(c.tlsCertFile)}
-		transport, err := grpc.New(ctx, target, transportOptions...)
+		transportOptions := []gRPC.Option{gRPC.WithTlsCert(c.tlsCertFile)}
+		transport, err := gRPC.New(ctx, target, transportOptions...)
 		if err != nil {
 			return nil, err
 		}
