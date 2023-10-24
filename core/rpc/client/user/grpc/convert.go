@@ -1,4 +1,4 @@
-package client
+package grpc
 
 import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -8,9 +8,9 @@ import (
 )
 
 func convertTx(incoming *transactions.Transaction) *txpb.Transaction {
-	return conversion.ConvertFromAbciTx(incoming)
+	return conversion.ConvertToPBTx(incoming)
 }
 
 func convertActionSignature(oldSig *auth.Signature) *txpb.Signature {
-	return conversion.ConvertFromCryptoSignature(oldSig)
+	return conversion.ConvertToPBCryptoSignature(oldSig)
 }

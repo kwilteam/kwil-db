@@ -4,10 +4,10 @@ import "errors"
 
 // TransactionResult is the result of a transaction execution on chain
 type TransactionResult struct {
-	Code      uint32   `json:"code,omitempty"`
-	Log       string   `json:"log,omitempty"`
-	GasUsed   int64    `json:"gas_used,omitempty"`
-	GasWanted int64    `json:"gas_wanted,omitempty"`
+	Code      uint32   `json:"code"`
+	Log       string   `json:"log"`
+	GasUsed   int64    `json:"gas_used"`
+	GasWanted int64    `json:"gas_wanted"`
 	Data      []byte   `json:"data,omitempty"`
 	Events    [][]byte `json:"events,omitempty"`
 }
@@ -55,9 +55,12 @@ func (tc TxCode) String() string {
 	}
 }
 
+// TcTxQueryResponse is the response of a transaction query
+// NOTE: not `txpb.TxQueryResponse` so TransportClient only use our brewed type
+// same as `TransactionResult`
 type TcTxQueryResponse struct {
-	Hash     []byte
-	Height   int64
-	Tx       Transaction
-	TxResult TransactionResult
+	Hash     []byte            `json:"hash,omitempty"`
+	Height   int64             `json:"height,omitempty"`
+	Tx       Transaction       `json:"tx"`
+	TxResult TransactionResult `json:"tx_result"`
 }

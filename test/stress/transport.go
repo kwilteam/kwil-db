@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	grpc "github.com/kwilteam/kwil-db/core/rpc/client/user"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
