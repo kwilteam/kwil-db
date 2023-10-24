@@ -135,7 +135,7 @@ type GetAccountRequest struct {
 	unknownFields protoimpl.UnknownFields
 
 	PublicKey []byte         `protobuf:"bytes,1,opt,name=public_key,proto3" json:"public_key,omitempty"`
-	Status    *AccountStatus `protobuf:"varint,2,opt,name=status,proto3,enum=tx.AccountStatus,oneof" json:"status,omitempty"`
+	Status    *AccountStatus `protobuf:"varint,2,opt,name=status,proto3,enum=tx.AccountStatus,oneof" json:"status,omitempty"` // Mapped to URL query parameter `status`.
 }
 
 func (x *GetAccountRequest) Reset() {
