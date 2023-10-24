@@ -12,15 +12,14 @@ var (
 	ErrTxNotFound = errors.New("transaction not found")
 )
 
-type TxCode = transactions.TxCode
-
-// consumers should use the transactions package codes
+// These aliases are for internal use by the ABCI application. They exist only
+// for brevity in the application code.
 const (
-	CodeOk               = transactions.CodeOk
-	CodeEncodingError    = transactions.CodeEncodingError
-	CodeInvalidTxType    = transactions.CodeInvalidTxType
-	CodeInvalidSignature = transactions.CodeInvalidSignature
-	CodeInvalidNonce     = transactions.CodeInvalidNonce
-	CodeWrongChain       = transactions.CodeWrongChain
-	CodeUnknownError     = transactions.CodeUnknownError
+	codeOk               = transactions.CodeOk
+	codeEncodingError    = transactions.CodeEncodingError
+	codeInvalidTxType    = transactions.CodeInvalidTxType
+	codeInvalidSignature = transactions.CodeInvalidSignature
+	codeInvalidNonce     = transactions.CodeInvalidNonce
+	codeWrongChain       = transactions.CodeWrongChain
+	codeUnknownError     = transactions.CodeUnknownError
 )
