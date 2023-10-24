@@ -62,7 +62,7 @@ func convertActionCall(req *txpb.CallRequest) (*transactions.ActionCall, *transa
 		}, nil
 	}
 
-	convSignature := conversion.ConvertToCryptoSignature(req.Signature)
+	convSignature := conversion.ConvertFromPBCryptoSignature(req.Signature)
 
 	return &actionPayload, &transactions.CallMessage{
 		Body: &transactions.CallMessageBody{

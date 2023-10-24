@@ -134,6 +134,7 @@ func Example_respTxQuery_json() {
 	//       "Sender": null
 	//     },
 	//     "tx_result": {
+	//       "code": 0,
 	//       "log": "This is log",
 	//       "gas_used": 10,
 	//       "gas_wanted": 10

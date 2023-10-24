@@ -43,6 +43,7 @@
           },
           {
             "name": "status",
+            "description": "Mapped to URL query parameter `status`.",
             "in": "query",
             "required": false,
             "type": "string",
