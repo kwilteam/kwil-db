@@ -9,7 +9,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/abci"
 )
 
 // respStr represents a string in cli
@@ -50,7 +49,7 @@ func (r *respTxQuery) MarshalText() ([]byte, error) {
 	status := "failed"
 	if r.Msg.Height == -1 {
 		status = "pending"
-	} else if r.Msg.TxResult.Code == abci.CodeOk.Uint32() {
+	} else if r.Msg.TxResult.Code == transactions.CodeOk.Uint32() {
 		status = "success"
 	}
 
