@@ -4,7 +4,6 @@ go 1.21
 
 replace (
 	github.com/kwilteam/kwil-db/core => ./core
-	github.com/kwilteam/kwil-db/extensions => ./extensions
 	github.com/kwilteam/kwil-db/parse => ./parse
 )
 
@@ -23,6 +22,7 @@ require (
 	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20231011193347-ab7495c55426
 	github.com/kwilteam/kwil-db/core v0.0.0
 	github.com/kwilteam/kwil-db/parse v0.0.0
+	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/spf13/cobra v1.7.0
@@ -82,7 +82,6 @@ require (
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/kwilteam/action-grammar-go v0.0.1-0.20230926160920-472768e1186c // indirect
-	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
 	github.com/kwilteam/sql-grammar-go v0.0.3-0.20230925230724-00685e1bac32 // indirect
 	github.com/lib/pq v1.10.7 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect

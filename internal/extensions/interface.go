@@ -3,6 +3,7 @@ package extensions
 import (
 	"context"
 
+	extensions "github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-extensions/client"
 	"github.com/kwilteam/kwil-extensions/types"
 )
@@ -12,14 +13,8 @@ var (
 	ConnectFunc Connecter = extensionConnectFunc(client.NewExtensionClient)
 )
 
-type ExtensionDriver interface {
-	Name() string
-	Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error)
-	Execute(ctx context.Context, metadata map[string]string, method string, args ...any) ([]any, error)
-}
-
 type ExtensionInitializer struct {
-	Extension ExtensionDriver
+	Extension extensions.Extension
 }
 
 // CreateInstance creates an instance of the extension with the given metadata.

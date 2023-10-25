@@ -31,10 +31,10 @@ import (
 
 // getExtensions returns both the local and remote extensions. Remote extensions are identified by
 // connecting to the specified extension URLs.
-func getExtensions(ctx context.Context, urls []string) (map[string]extensions.ExtensionDriver, error) {
-	exts := make(map[string]extensions.ExtensionDriver)
+func getExtensions(ctx context.Context, urls []string) (map[string]extActions.Extension, error) {
+	exts := make(map[string]extActions.Extension)
 
-	for name, ext := range extActions.GetRegisteredExtensions() {
+	for name, ext := range extActions.RegisteredExtensions() {
 		_, ok := exts[name]
 		if ok {
 			return nil, fmt.Errorf("duplicate extension name: %s", name)
@@ -59,7 +59,7 @@ func getExtensions(ctx context.Context, urls []string) (map[string]extensions.Ex
 	return exts, nil
 }
 
-func adaptExtensions(exts map[string]extensions.ExtensionDriver) map[string]engine.ExtensionInitializer {
+func adaptExtensions(exts map[string]extActions.Extension) map[string]engine.ExtensionInitializer {
 	adapted := make(map[string]engine.ExtensionInitializer, len(exts))
 
 	for name, ext := range exts {

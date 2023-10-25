@@ -4,9 +4,10 @@ package extensions_test
 
 import (
 	"context"
+	"math/big"
 	"testing"
 
-	extActions "github.com/kwilteam/kwil-db/extensions/actions"
+	mathexample "github.com/kwilteam/kwil-db/extensions/actions/math_example"
 	extensions "github.com/kwilteam/kwil-db/internal/extensions"
 
 	"github.com/kwilteam/kwil-extensions/client"
@@ -61,8 +62,7 @@ func Test_LocalExtension(t *testing.T) {
 		"roundoff": "down",
 	}
 
-	ext, err := extActions.NewMathExtension()
-	assert.NoError(t, err)
+	ext := &mathexample.MathExtension{}
 
 	initializer := &extensions.ExtensionInitializer{
 		Extension: ext,
@@ -72,9 +72,16 @@ func Test_LocalExtension(t *testing.T) {
 	instance1, err := initializer.CreateInstance(ctx, metadata)
 	assert.NoError(t, err)
 
-	result, err := instance1.Execute(ctx, "divide", 1, 2)
+	result, err := instance1.Execute(ctx, "add", 1, 2)
 	assert.NoError(t, err)
-	assert.Equal(t, int64(0), result[0]) // 1/2 rounded down to 0
+	assert.Equal(t, int(3), result[0])
+
+	result, err = instance1.Execute(ctx, "add", 1.2, 2.3)
+	assert.Error(t, err)
+
+	result, err = instance1.Execute(ctx, "divide", 1, 2)
+	assert.NoError(t, err)
+	assert.Equal(t, big.NewInt(0), result[0]) // 1/2 rounded down to 0
 
 	// Create instance with incorrect metadata, uses defaults
 	instance2, err := initializer.CreateInstance(ctx, incorrectMetadata)
@@ -84,7 +91,7 @@ func Test_LocalExtension(t *testing.T) {
 
 	result, err = instance2.Execute(ctx, "divide", 1, 2)
 	assert.NoError(t, err)
-	assert.Equal(t, int64(1), result[0]) // 1/2 rounded up -> 1
+	assert.Equal(t, big.NewInt(1), result[0]) // 1/2 rounded up -> 1
 }
 
 func Test_RemoteExtension(t *testing.T) {

@@ -1,10 +1,19 @@
 package extensions
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
 
-var registeredExtensions = make(map[string]*Extension)
+type Extension interface {
+	Name() string
+	Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error)
+	Execute(ctx context.Context, metadata map[string]string, method string, args ...any) ([]any, error)
+}
 
-func RegisterExtension(name string, ext *Extension) error {
+var registeredExtensions = make(map[string]Extension)
+
+func RegisterExtension(name string, ext Extension) error {
 	name = strings.ToLower(name)
 	if _, ok := registeredExtensions[name]; ok {
 		panic("extension of same name already registered: " + name)
@@ -14,6 +23,6 @@ func RegisterExtension(name string, ext *Extension) error {
 	return nil
 }
 
-func GetRegisteredExtensions() map[string]*Extension {
+func RegisteredExtensions() map[string]Extension {
 	return registeredExtensions
 }
