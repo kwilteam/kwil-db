@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
@@ -339,8 +341,10 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 	signer := r.cfg.CreatorSigner
 	pk := r.cfg.CreatorRawPk
 	switch driverType {
-	case "client":
-		return r.getClientDriver(signer)
+	case "http":
+		return r.getHTTPClientDriver(signer)
+	case "grpc":
+		return r.getGRPCClientDriver(signer)
 	case "cli":
 		return r.getCliDriver(pk, signer.PublicKey())
 	default:
@@ -377,8 +381,10 @@ container name: "%s"`,
 
 	pk := privKeyHex
 	switch driverType {
-	case "client":
-		return r.getClientDriver(signer)
+	case "http":
+		return r.getHTTPClientDriver(signer)
+	case "grpc":
+		return r.getGRPCClientDriver(signer)
 	case "cli":
 		return r.getCliDriver(pk, signer.PubKey().Bytes())
 	default:
@@ -386,7 +392,7 @@ container name: "%s"`,
 	}
 }
 
-func (r *IntHelper) getClientDriver(signer auth.Signer) KwilIntDriver {
+func (r *IntHelper) getHTTPClientDriver(signer auth.Signer) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	options := []client.Option{client.WithSigner(signer, testChainID),
@@ -394,6 +400,24 @@ func (r *IntHelper) getClientDriver(signer auth.Signer) KwilIntDriver {
 		client.WithTLSCert("")} // TODO: handle cert
 	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, options...)
 	require.NoError(r.t, err, "failed to create kwil client")
+
+	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+}
+
+func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) KwilIntDriver {
+	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+
+	gtOptions := []gRPC.Option{gRPC.WithTlsCert("")}
+	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
+	require.NoError(r.t, err, "failed to create grpc transport")
+
+	options := []client.Option{client.WithSigner(signer, ""),
+		client.WithLogger(logger),
+		client.WithTLSCert(""),
+		client.WithTransportClient(gt),
+	} // TODO: handle cert
+	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
+	require.NoError(r.t, err, "failed to create grpc client")
 
 	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
 }

@@ -185,8 +185,11 @@ tasks:
     cmds:
       - task: test:act:nb
 
-  # *:nb task support passing CLI_ARGS to go test, e.g. task test:act:nb -- -remote
+  # *:nb task support passing CLI_ARGS to go test
   # this CLI_ARGS will be used by `go test`
+  # e.g.
+  # - task test:act:nb -- -remote
+  # - task test:act:nb -- -drivers grpc
   test:act:nb:
     desc: Run acceptance tests without building docker image
     dir: test # different module

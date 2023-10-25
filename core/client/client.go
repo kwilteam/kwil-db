@@ -75,6 +75,7 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 
 	if c.rpc == nil {
 		hc, err := httpRPC.Dial(target)
+		// NOTE: target will be ignored if WithTransportClient is passed
 		if err != nil {
 			return nil, err
 		}
