@@ -139,7 +139,8 @@ func parseBroadcastResponse(resp *http.Response) ([]byte, error) {
 	return res.TxHash, nil
 }
 
-func newGetAccountRequest(server string, publicKey []byte) (*http.Request, error) {
+func newGetAccountRequest(server string, publicKey []byte, _ types.AccountStatus) (*http.Request, error) {
+	// TODO: change proto HTTP option to add a query parameter `status`
 	pk := url.PathEscape(base64.URLEncoding.EncodeToString(publicKey))
 	return NewGetRequest(server, fmt.Sprintf("/api/v1/accounts/%s", pk))
 }

@@ -103,8 +103,8 @@ func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]strin
 	return parseListDatabasesResponse(resp)
 }
 
-func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*types.Account, error) {
-	req, err := newGetAccountRequest(c.target, pubKey)
+func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+	req, err := newGetAccountRequest(c.target, pubKey, status)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

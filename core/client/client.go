@@ -16,7 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	httpRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
@@ -26,9 +26,8 @@ import (
 	grpcStatus "google.golang.org/grpc/status"
 )
 
-// TransportClient abstracts the communication with a kwil-db node, either via
-// gRPC or HTTP.
-type TransportClient interface {
+// RPCClient defines the methods that the transport layer should implement.
+type RPCClient interface {
 	Close() error
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	Call(ctx context.Context, req *transactions.CallMessage) ([]map[string]any, error)
@@ -51,13 +50,11 @@ var (
 )
 
 // Client wraps the methods to interact with the Kwil public API.
-// All the transport level details are encapsulated in the transportClient.
+// All the transport level details are encapsulated in the rpc.
 type Client struct {
-	// transportClient is more useful for testing rn, I'd like to add http
-	// client as well to test HTTP api. This also enables test the cli by mocking.
-	transportClient TransportClient
-	Signer          auth.Signer
-	logger          log.Logger
+	rpc    RPCClient
+	Signer auth.Signer
+	logger log.Logger
 	// chainID is used when creating transactions as replay protection since the
 	// signatures will only be valid on this network.
 	chainID string
@@ -76,17 +73,16 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 		opt(c)
 	}
 
-	if c.transportClient == nil {
-		transportOptions := []gRPC.Option{gRPC.WithTlsCert(c.tlsCertFile)}
-		transport, err := gRPC.New(ctx, target, transportOptions...)
+	if c.rpc == nil {
+		hc, err := httpRPC.Dial(target)
 		if err != nil {
 			return nil, err
 		}
-		c.transportClient = transport
+		c.rpc = hc
 	}
 
 	zapFields := []zapcore.Field{
-		zap.String("host", c.transportClient.GetTarget()),
+		zap.String("host", c.rpc.GetTarget()),
 	}
 
 	c.logger = *c.logger.Named("client").With(zapFields...)
@@ -109,18 +105,18 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 }
 
 func (c *Client) Close() error {
-	return c.transportClient.Close()
+	return c.rpc.Close()
 }
 
 // ChainInfo get the current blockchain information like chain ID and best block
 // height/hash.
 func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
-	return c.transportClient.ChainInfo(ctx)
+	return c.rpc.ChainInfo(ctx)
 }
 
 // GetSchema gets a schema by dbid.
 func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
-	ds, err := c.transportClient.GetSchema(ctx, dbid)
+	ds, err := c.rpc.GetSchema(ctx, dbid)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +135,7 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	return c.transportClient.Broadcast(ctx, tx)
+	return c.rpc.Broadcast(ctx, tx)
 }
 
 // DropDatabase drops a database by name, using the configured signer to derive
@@ -164,7 +160,7 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt)
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	res, err := c.transportClient.Broadcast(ctx, tx)
+	res, err := c.rpc.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +192,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	return c.transportClient.Broadcast(ctx, tx)
+	return c.rpc.Broadcast(ctx, tx)
 }
 
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
@@ -236,7 +232,7 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		}
 	}
 
-	res, err := c.transportClient.Call(ctx, msg)
+	res, err := c.rpc.Call(ctx, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +275,7 @@ func DecodeOutputs(bts []byte) ([]map[string]any, error) {
 
 // Query executes a query
 func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records, error) {
-	res, err := c.transportClient.Query(ctx, dbid, query)
+	res, err := c.rpc.Query(ctx, dbid, query)
 	if err != nil {
 		return nil, err
 	}
@@ -288,19 +284,19 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records
 }
 
 func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error) {
-	return c.transportClient.ListDatabases(ctx, ownerPubKey)
+	return c.rpc.ListDatabases(ctx, ownerPubKey)
 }
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
-	return c.transportClient.Ping(ctx)
+	return c.rpc.Ping(ctx)
 }
 
 func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
-	return c.transportClient.GetAccount(ctx, pubKey, status)
+	return c.rpc.GetAccount(ctx, pubKey, status)
 }
 
 func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
-	res, err := c.transportClient.ValidatorJoinStatus(ctx, pubKey)
+	res, err := c.rpc.ValidatorJoinStatus(ctx, pubKey)
 	if err != nil {
 		if stat, ok := grpcStatus.FromError(err); ok {
 			if stat.Code() == grpcCodes.NotFound {
@@ -313,7 +309,7 @@ func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types
 }
 
 func (c *Client) CurrentValidators(ctx context.Context) ([]*types.Validator, error) {
-	return c.transportClient.CurrentValidators(ctx)
+	return c.rpc.CurrentValidators(ctx)
 }
 
 func (c *Client) ApproveValidator(ctx context.Context, joiner []byte, opts ...TxOpt) ([]byte, error) {
@@ -329,7 +325,7 @@ func (c *Client) ApproveValidator(ctx context.Context, joiner []byte, opts ...Tx
 		return nil, err
 	}
 
-	hash, err := c.transportClient.Broadcast(ctx, tx)
+	hash, err := c.rpc.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +374,7 @@ func (c *Client) validatorUpdate(ctx context.Context, power int64, opts ...TxOpt
 		return nil, err
 	}
 
-	hash, err := c.transportClient.Broadcast(ctx, tx)
+	hash, err := c.rpc.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +414,7 @@ func convertTuple(tuple []any) ([]string, error) {
 
 // TxQuery get transaction by hash
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
-	res, err := c.transportClient.TxQuery(ctx, txHash)
+	res, err := c.rpc.TxQuery(ctx, txHash)
 	if err != nil {
 		return nil, err
 	}
