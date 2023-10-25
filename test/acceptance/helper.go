@@ -36,7 +36,7 @@ const testChainID = "kwil-test-chain"
 
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
-	GWEndpoint    string // gateway endpoint
+	HTTPEndpoint  string
 	GrpcEndpoint  string
 	ChainEndpoint string
 
@@ -77,7 +77,7 @@ VISITOR_PUBLIC_KEY=%x
 `
 	content := fmt.Sprintf(envTemplage,
 		e.GrpcEndpoint,
-		e.GWEndpoint,
+		e.HTTPEndpoint,
 		e.ChainEndpoint,
 		e.CreatorRawPk,
 		e.CreatorPublicKey(),
@@ -125,7 +125,7 @@ func (r *ActHelper) LoadConfig() {
 		VisitorRawPK:              getEnv("KACT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
-		GWEndpoint:                getEnv("KACT_GATEWAY_ENDPOINT", "localhost:8080"),
+		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://localhost:8080"),
 		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
@@ -282,7 +282,7 @@ func (r *ActHelper) getClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	options := []client.Option{client.WithSigner(signer, testChainID),
 		client.WithLogger(logger),
 		client.WithTLSCert("")} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
+	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, options...)
 	require.NoError(r.t, err, "failed to create kwil client")
 
 	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
@@ -297,5 +297,5 @@ func (r *ActHelper) getCliDriver(privKey string, pubKey []byte) KwilAcceptanceDr
 	adminBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.GrpcEndpoint, privKey, pubKey, logger)
+	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, pubKey, logger)
 }
