@@ -35,7 +35,7 @@ func WithTLSCert(certFile string) Option {
 	}
 }
 
-func WithTransportClient(tc RPCClient) Option {
+func WithRPCClient(tc RPCClient) Option {
 	return func(c *Client) {
 		c.rpc = tc
 	}

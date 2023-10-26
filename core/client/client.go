@@ -63,7 +63,7 @@ type Client struct {
 }
 
 // Dial creates a Kwil client. It will by default use http connection, which
-// can be overridden by using WithTransportClient.
+// can be overridden by using WithRPCClient.
 func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err error) {
 	c = &Client{
 		logger: log.NewNoOp(), // by default, we do not want to force client to log anything
@@ -75,7 +75,7 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 
 	if c.rpc == nil {
 		hc, err := httpRPC.Dial(target)
-		// NOTE: target will be ignored if WithTransportClient is passed
+		// NOTE: target will be ignored if WithRPCClient is passed
 		if err != nil {
 			return nil, err
 		}
