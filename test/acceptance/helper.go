@@ -32,6 +32,8 @@ var (
 	envFile = getEnv("KACT_ENV_FILE", "./.env")
 )
 
+const testChainID = "kwil-test-chain"
+
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
 	GWEndpoint    string // gateway endpoint
@@ -171,6 +173,7 @@ func (r *ActHelper) generateNodeConfig() {
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
 	err := nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
+		ChainID: testChainID,
 		// InitialHeight: 0,
 		OutputDir:       tmpPath,
 		JoinExpiry:      86400,
@@ -275,7 +278,7 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 func (r *ActHelper) getClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	options := []client.Option{client.WithSigner(signer, ""),
+	options := []client.Option{client.WithSigner(signer, testChainID),
 		client.WithLogger(logger),
 		client.WithTLSCert("")} // TODO: handle cert
 	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
