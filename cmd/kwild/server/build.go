@@ -198,9 +198,13 @@ func buildDatasetsModule(d *coreDependencies, eng datasets.Engine, accs datasets
 }
 
 func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engine {
-	extensions, err := connectExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
+	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
 	if err != nil {
-		failBuild(err, "failed to connect to extensions")
+		failBuild(err, "failed to get extensions")
+	}
+
+	for _, ext := range extensions {
+		d.log.Debug("registered extension", zap.String("name", ext.Name()))
 	}
 
 	sqlCommitRegister := &sqlCommittableRegister{

@@ -22,7 +22,7 @@ require (
 	github.com/kwilteam/kuneiform v0.5.0-alpha.0.20231011193347-ab7495c55426
 	github.com/kwilteam/kwil-db/core v0.0.0
 	github.com/kwilteam/kwil-db/parse v0.0.0
-	github.com/kwilteam/kwil-extensions v0.0.0-20230710163303-bfa03f64ff82
+	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
 	github.com/manifoldco/promptui v0.9.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/spf13/cobra v1.7.0
