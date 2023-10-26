@@ -3,9 +3,32 @@ package extensions
 import (
 	"context"
 
+	extensions "github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-extensions/client"
 	"github.com/kwilteam/kwil-extensions/types"
 )
+
+var (
+	// this can be overridden for testing
+	ConnectFunc Connecter = extensionConnectFunc(client.NewExtensionClient)
+)
+
+type ExtensionInitializer struct {
+	Extension extensions.Extension
+}
+
+// CreateInstance creates an instance of the extension with the given metadata.
+func (e *ExtensionInitializer) CreateInstance(ctx context.Context, metadata map[string]string) (*Instance, error) {
+	metadata, err := e.Extension.Initialize(ctx, metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Instance{
+		metadata:  metadata,
+		extension: e.Extension,
+	}, nil
+}
 
 type ExtensionClient interface {
 	CallMethod(execCtx *types.ExecutionContext, method string, args ...any) ([]any, error)
@@ -24,8 +47,3 @@ type extensionConnectFunc func(ctx context.Context, target string, opts ...clien
 func (e extensionConnectFunc) Connect(ctx context.Context, target string, opts ...client.ClientOpt) (ExtensionClient, error) {
 	return e(ctx, target, opts...)
 }
-
-var (
-	// this can be overridden for testing
-	ConnectFunc Connecter = extensionConnectFunc(client.NewExtensionClient)
-)
