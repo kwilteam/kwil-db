@@ -51,7 +51,10 @@ var defaultWaitStrategies = map[string]string{
 	"node3": "Starting Node service",
 }
 
-const ExtContainer = "ext1"
+const (
+	ExtContainer = "ext1"
+	testChainID  = "kwil-test-chain"
+)
 
 // IntTestConfig is the config for integration test
 // This is totally separate from acceptance test
@@ -184,6 +187,7 @@ func (r *IntHelper) generateNodeConfig() {
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
+		ChainID: testChainID,
 		// InitialHeight:           0,
 		NValidators:             r.cfg.NValidator,
 		NNonValidators:          r.cfg.NNonValidator,
@@ -364,7 +368,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, name string, driverTy
 func (r *IntHelper) getClientDriver(signer auth.Signer) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	options := []client.Option{client.WithSigner(signer, ""),
+	options := []client.Option{client.WithSigner(signer, testChainID),
 		client.WithLogger(logger),
 		client.WithTLSCert("")} // TODO: handle cert
 	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
