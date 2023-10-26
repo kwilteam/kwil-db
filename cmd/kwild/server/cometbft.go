@@ -98,6 +98,9 @@ func extractGenesisDoc(g *config.GenesisConfig) (*cmttypes.GenesisDoc, error) {
 		Validator: cmttypes.ValidatorParams{
 			PubKeyTypes: g.ConsensusParams.Validator.PubKeyTypes,
 		},
+		ABCI: cmttypes.ABCIParams{
+			VoteExtensionsEnableHeight: 0, // disabled for now
+		},
 	}
 
 	genDoc := &cmttypes.GenesisDoc{
