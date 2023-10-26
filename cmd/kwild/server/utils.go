@@ -174,10 +174,10 @@ func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, syn
 				}, nil
 			}
 			return &cmtCoreTypes.ResultBroadcastTx{
-				Code:      res.DeliverTx.Code,
-				Data:      res.DeliverTx.Data,
-				Log:       res.DeliverTx.Log,
-				Codespace: res.DeliverTx.Codespace,
+				Code:      res.TxResult.Code,
+				Data:      res.TxResult.Data,
+				Log:       res.TxResult.Log,
+				Codespace: res.TxResult.Codespace,
 				Hash:      res.Hash,
 			}, nil
 		}
