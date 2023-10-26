@@ -15,9 +15,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/log"               // to top
-	"github.com/kwilteam/kwil-db/internal/abci"          // internalize
-	"github.com/kwilteam/kwil-db/internal/abci/cometbft" // internalize
+	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 
@@ -114,14 +113,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}()
 	defer func() {
 		if err := recover(); err != nil {
-			switch et := err.(type) {
-			case abci.FatalError:
-				s.log.Error("Blockchain application hit an unrecoverable error:\n\n%v",
-					zap.Stringer("error", et))
-				// cometbft *may* already recover panics from the application. Investigate.
-			default:
-				s.log.Error("kwild server panic", zap.Any("error", err))
-			}
+			s.log.Error("kwild server panic", zap.Any("error", err))
 		}
 	}()
 
