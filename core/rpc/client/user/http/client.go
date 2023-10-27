@@ -140,9 +140,11 @@ func (c *Client) Close() error {
 func DefaultHTTPClient() *http.Client {
 	// same transport same connection
 	tr := &http.Transport{
-		MaxIdleConnsPerHost: 200,
+		//MaxConnsPerHost: 5, // default is 0, no limit
+		//MaxIdleConnsPerHost: 2, // default is 2
 		//DisableCompression: ,
 		//DisableKeepAlives:  ,
+		IdleConnTimeout: time.Second * 5, // default is 90s
 	}
 	return &http.Client{
 		Transport: tr,
