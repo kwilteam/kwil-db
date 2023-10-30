@@ -8,6 +8,7 @@ import (
 	"reflect"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
@@ -24,6 +25,35 @@ func (s respStr) MarshalJSON() ([]byte, error) {
 
 func (s respStr) MarshalText() ([]byte, error) {
 	return []byte(s), nil
+}
+
+type respChainInfo struct {
+	Info *types.ChainInfo
+}
+
+func (r *respChainInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ChainID     string `json:"chain_id"`
+		BlockHeight uint64 `json:"block_height"`
+		BlockHash   string `json:"block_hash"`
+	}{
+		ChainID:     r.Info.ChainID,
+		BlockHeight: r.Info.BlockHeight,
+		BlockHash:   r.Info.BlockHash,
+	})
+}
+
+func (r *respChainInfo) MarshalText() ([]byte, error) {
+	msg := fmt.Sprintf(`Chain ID: %s
+Height: %d
+Hash: %s
+`,
+		r.Info.ChainID,
+		r.Info.BlockHeight,
+		r.Info.BlockHash,
+	)
+
+	return []byte(msg), nil
 }
 
 // respTxQuery is used to represent a transaction response in cli

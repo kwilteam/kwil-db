@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"github.com/stretchr/testify/assert"
@@ -25,6 +26,39 @@ func Test_respStr(t *testing.T) {
 	sb, err := s.MarshalJSON()
 	assert.NoError(t, err)
 	assert.Equal(t, `{"message":"pong"}`, string(sb))
+}
+
+func Example_respChainInfo_text() {
+	display.Print(&respChainInfo{
+		&types.ChainInfo{
+			ChainID:     "kwil-chain",
+			BlockHeight: 100,
+			BlockHash:   "00000beefbeefbeef",
+		},
+	}, nil, "text")
+	// Output:
+	// Chain ID: kwil-chain
+	// Height: 100
+	// Hash: 00000beefbeefbeef
+}
+
+func Example_respChainInfo_json() {
+	display.Print(&respChainInfo{
+		&types.ChainInfo{
+			ChainID:     "kwil-chain",
+			BlockHeight: 100,
+			BlockHash:   "00000beefbeefbeef",
+		},
+	}, nil, "json")
+	// Output:
+	// {
+	//   "result": {
+	//     "chain_id": "kwil-chain",
+	//     "block_height": 100,
+	//     "block_hash": "00000beefbeefbeef"
+	//   },
+	//   "error": ""
+	// }
 }
 
 func Example_respStr_text() {
