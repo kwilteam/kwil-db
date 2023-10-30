@@ -1,3 +1,5 @@
+//go:build auth_nep413 || ext_test
+
 package auth
 
 import (
