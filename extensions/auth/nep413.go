@@ -1,5 +1,3 @@
-//go:build auth_nep413 || ext_test
-
 package auth
 
 import (
@@ -154,7 +152,6 @@ func deserializeSignature(signatureBts []byte) (*Nep413Payload, []byte, error) {
 	if payload.CallbackUrl != nil && *payload.CallbackUrl == "" {
 		payload.CallbackUrl = nil
 	}
-	payload.CallbackUrl = nil
 
 	signature := signatureBts[2+payloadLength:]
 	if len(signature) != ed25519.SignatureSize {
