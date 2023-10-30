@@ -46,3 +46,6 @@ dist/*
 
 # go
 vendor/
+
+go.work
+go.work.sum
