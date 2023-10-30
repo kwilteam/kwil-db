@@ -8,12 +8,10 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	httpRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
-	"github.com/kwilteam/kwil-db/internal/utils"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
 const (
@@ -76,14 +74,15 @@ func authCmd() *cobra.Command {
 				return fmt.Errorf("request for token: %w", err)
 			}
 
-			fmt.Printf("token: %s\n", token)
+			fmt.Println("cookie:", token.String())
 
-			err = saveAuthToken(userAddress, token)
+			err = common.SaveAuthInfo(common.KGWAuthTokenFilePath(), userAddress, token)
 			if err != nil {
 				return fmt.Errorf("save auth token: %w", err)
 			}
 
-			// NOTE: seems no point support JSON output format
+			// NOTE: seems no point support JSON output format?
+			fmt.Println("Authentication successful")
 			return nil
 		},
 	}
@@ -223,60 +222,4 @@ func requestForToken(hc *http.Client, target string, sender []byte,
 	}
 
 	return nil, fmt.Errorf("no cookie returned")
-}
-
-// saveAuthToken saves the cookie to a local auth file
-// The file is always in user's config directory.
-func saveAuthToken(address string, originCookie *http.Cookie) error {
-	authFilePath := common.KGWAuthTokenFilePath()
-	address = strings.ToLower(address)
-	cookie := common.ConvertToCookie(originCookie)
-
-	authInfoBytes, err := utils.ReadOrCreateFile(authFilePath)
-	if err != nil {
-		return fmt.Errorf("read kgw auth file: %w", err)
-	}
-
-	var aInfo []common.KGWAuthInfo
-
-	if len(authInfoBytes) != 0 {
-		// if the file is not empty, load the content
-		err = json.Unmarshal(authInfoBytes, &aInfo)
-		if err != nil {
-			return fmt.Errorf("unmarshal kgw auth file: %w", err)
-		}
-
-		exists := false
-		// always overwrite if the address already exists
-		for _, a := range aInfo {
-			if a.Address == address {
-				a.Cookie = cookie
-				exists = true
-				break
-			}
-		}
-
-		if !exists {
-			aInfo = append(aInfo, common.KGWAuthInfo{
-				Address: address,
-				Cookie:  cookie,
-			})
-		}
-	} else {
-		aInfo = append(aInfo, common.KGWAuthInfo{
-			Address: address,
-			Cookie:  cookie,
-		})
-	}
-
-	jsonBytes, err := json.MarshalIndent(&aInfo, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal kgw auth info: %w", err)
-	}
-
-	err = utils.WriteFile(authFilePath, jsonBytes)
-	if err != nil {
-		return fmt.Errorf("write kgw auth file: %w", err)
-	}
-	return nil
 }

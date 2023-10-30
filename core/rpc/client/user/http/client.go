@@ -66,13 +66,14 @@ func DialOptions(target string, opts ...ClientOption) (*Client, error) {
 	if clt.Jar == nil {
 		clt.Jar, _ = cookiejar.New(nil)
 	}
+
 	clt.Jar.SetCookies(u, cfg.cookies)
 
 	client := &Client{
 		target:    target,
 		debugMode: cfg.debugMode,
 		conn:      clt,
-		headers:   cfg.httpHeaders,
+		headers:   headers,
 	}
 
 	return client, nil

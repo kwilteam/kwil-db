@@ -80,21 +80,23 @@ type KGWAuthInfo struct {
 	Cookie  cookie `json:"cookie"`
 }
 
-// LoadKGWAuthInfo loads the KGW authentication info for a wallet address.
+type LocalKGWAuthInfo []*KGWAuthInfo
+
+// LoadKGWAuthInfo loads the address KGW authentication info from the given file.
 // If the address is not authenticated(local), it returns nil.
-func LoadKGWAuthInfo(address string) (*KGWAuthInfo, error) {
+func LoadKGWAuthInfo(authFile string, address string) (*KGWAuthInfo, error) {
 	address = strings.ToLower(address)
-	if !utils.FileExists(KGWAuthTokenFilePath()) {
+	if !utils.FileExists(authFile) {
 		return nil, nil
 	}
 
-	authFile, err := utils.CreateOrOpenFile(KGWAuthTokenFilePath())
+	file, err := utils.CreateOrOpenFile(authFile)
 	if err != nil {
 		return nil, fmt.Errorf("open kgw auth file: %w", err)
 	}
 
-	var aInfo []KGWAuthInfo
-	err = json.NewDecoder(authFile).Decode(aInfo)
+	var aInfo LocalKGWAuthInfo
+	err = json.NewDecoder(file).Decode(&aInfo)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal kgw auth file: %w", err)
 	}
@@ -102,9 +104,63 @@ func LoadKGWAuthInfo(address string) (*KGWAuthInfo, error) {
 	// always overwrite if the address already exists
 	for _, a := range aInfo {
 		if a.Address == address {
-			return &a, nil
+			return a, nil
 		}
 	}
 
 	return nil, nil
+}
+
+// SaveAuthInfo saves the cookie to auth file.
+func SaveAuthInfo(authFile string, address string, originCookie *http.Cookie) error {
+	address = strings.ToLower(address)
+	cookie := ConvertToCookie(originCookie)
+
+	authInfoBytes, err := utils.ReadOrCreateFile(authFile)
+	if err != nil {
+		return fmt.Errorf("read kgw auth file: %w", err)
+	}
+
+	var aInfo LocalKGWAuthInfo
+
+	if len(authInfoBytes) != 0 {
+		// if the file is not empty, load the content
+		err = json.Unmarshal(authInfoBytes, &aInfo)
+		if err != nil {
+			return fmt.Errorf("unmarshal kgw auth file: %w", err)
+		}
+
+		exists := false
+		// always overwrite if the address already exists
+		for _, a := range aInfo {
+			if a.Address == address {
+				a.Cookie = cookie
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			aInfo = append(aInfo, &KGWAuthInfo{
+				Address: address,
+				Cookie:  cookie,
+			})
+		}
+	} else {
+		aInfo = append(aInfo, &KGWAuthInfo{
+			Address: address,
+			Cookie:  cookie,
+		})
+	}
+
+	jsonBytes, err := json.MarshalIndent(&aInfo, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal kgw auth info: %w", err)
+	}
+
+	err = utils.WriteFile(authFile, jsonBytes)
+	if err != nil {
+		return fmt.Errorf("write kgw auth file: %w", err)
+	}
+	return nil
 }
