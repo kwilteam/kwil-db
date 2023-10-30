@@ -25,6 +25,7 @@ func Test_Nep413(t *testing.T) {
 		signature   string
 		hexPubkey   string
 		encodeFn    func([]byte) string
+		decodeFn    func(string) ([]byte, error)
 	}
 
 	testCases := []testCase{
@@ -46,6 +47,17 @@ func Test_Nep413(t *testing.T) {
 			hexPubkey:   "bcb7c8d4ae100a39d8d39be9443b96e14dcc3764e682ae9fb004afecc1cba33d", // DhgBrU3N1n36MV9rENSaQgc4xprMgh7N2vY4th8kLRZN
 			//encodeFn:    func(bts []byte) string { return string(bts) },
 		},
+		{
+			name:        "plaintext",
+			message:     "*See your idOS profile ID*\n\nDBID: x625a832c84f02fbebb229ee3b5e66b6767802b29d87acf72b8dd05d1\nAction: get_wallet_human_id\nPayloadDigest: e9122a61e2f86846c23ebb78e478b4f3a25754cb\n\nKwil \n",
+			nonce:       zeroNonce,
+			recipient:   "idos.network",
+			callbackUrl: "http://localhost:5173/",
+			signature:   "PCvQ1VOrm2uZl2gcE9JPni/3j/C4ZU2kTlFZeofWMCRybT+rLuQ2Zuft3Vv5DKise7/zNqzZIA9noGJQ8RHZBg==",
+			hexPubkey:   "bcb7c8d4ae100a39d8d39be9443b96e14dcc3764e682ae9fb004afecc1cba33d", // DhgBrU3N1n36MV9rENSaQgc4xprMgh7N2vY4th8kLRZN
+			encodeFn:    strEncode,
+			decodeFn:    strDecode,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -57,11 +69,14 @@ func Test_Nep413(t *testing.T) {
 			if tc.encodeFn == nil {
 				tc.encodeFn = base64.StdEncoding.EncodeToString
 			}
+			if tc.decodeFn == nil {
+				tc.decodeFn = base64.StdEncoding.DecodeString
+			}
 
 			pubKey, err := hex.DecodeString(tc.hexPubkey)
 			require.NoError(t, err)
 
-			msgBts, err := base64.StdEncoding.DecodeString(tc.message)
+			msgBts, err := tc.decodeFn(tc.message)
 			require.NoError(t, err)
 
 			serializedPayload, err := borsch.Serialize(auth.Nep413Payload{
@@ -86,4 +101,8 @@ func Test_Nep413(t *testing.T) {
 
 func strEncode(bts []byte) string {
 	return string(bts)
+}
+
+func strDecode(str string) ([]byte, error) {
+	return []byte(str), nil
 }

@@ -5,7 +5,6 @@ package auth
 import (
 	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,7 +14,9 @@ import (
 
 func init() {
 	err := RegisterAuthenticator(nep413Name, Nep413Authenticator{
-		MsgEncoder: base64.StdEncoding.EncodeToString,
+		MsgEncoder: func(bts []byte) string {
+			return string(bts)
+		},
 	})
 	if err != nil {
 		panic(err)
