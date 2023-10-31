@@ -20,8 +20,6 @@ const callMsgToSignTmplV0 = `%s
 DBID: %s
 Action: %s
 PayloadDigest: %x
-
-Kwil 🖋
 `
 
 // CallMessageBody is the body of a call message.
