@@ -5,7 +5,7 @@ set -e
 modules=("./core" "./parse" "." "./test")
 
 for mod in "${modules[@]}"; do
-    pushd "$dir" > /dev/null || {
+    pushd "$mod" > /dev/null || {
         echo "Could not change to directory: $mod"
         exit 1
     }
