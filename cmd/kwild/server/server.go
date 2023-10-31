@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -60,7 +61,9 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 	defer func() {
 		if r := recover(); r != nil {
 			svr = nil
-			err = fmt.Errorf("panic while building kwild: %v", r)
+			stack := make([]byte, 8192)
+			length := runtime.Stack(stack, false)
+			err = fmt.Errorf("panic while building kwild: %v\n\nstack:\n\n%v", r, string(stack[:length]))
 			closers.closeAll()
 		}
 	}()

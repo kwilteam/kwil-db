@@ -28,6 +28,9 @@ func addKwildFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	flagSet.BoolVar(&cfg.AppCfg.EnableRPCTLS, "app.rpctls", cfg.AppCfg.EnableRPCTLS, "Use TLS on the user gRPC server")
 	flagSet.StringVar(&cfg.AppCfg.Hostname, "app.hostname", cfg.AppCfg.Hostname, "kwild Server hostname")
 
+	flagSet.StringVar(&cfg.AppCfg.ProfileMode, "app.profile_mode", cfg.AppCfg.ProfileMode, "kwild profile mode (http, cpu, mem, mutex, or block)")
+	flagSet.StringVar(&cfg.AppCfg.ProfileFile, "app.profile_file", cfg.AppCfg.ProfileFile, "kwild profile output file path (e.g. cpu.pprof)")
+
 	// Extension endpoints flags
 	flagSet.StringSliceVar(&cfg.AppCfg.ExtensionEndpoints, "app.extension_endpoints", cfg.AppCfg.ExtensionEndpoints, "kwild extension endpoints")
 
