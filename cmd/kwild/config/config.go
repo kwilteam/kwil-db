@@ -55,6 +55,8 @@ type AppConfig struct {
 	TLSKeyFile   string `mapstructure:"tls_key_file"`
 	EnableRPCTLS bool   `mapstructure:"rpctls"`
 	Hostname     string `mapstructure:"hostname"`
+	ProfileMode  string `mapstructure:"profile_mode"`
+	ProfileFile  string `mapstructure:"profile_file"`
 }
 
 type SnapshotConfig struct {
