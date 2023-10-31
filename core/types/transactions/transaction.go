@@ -23,9 +23,8 @@ PayloadType: %s
 PayloadDigest: %x
 Fee: %s
 Nonce: %d
-Chain ID: %s
 
-Kwil 🖋
+Kwil Chain ID: %s
 `
 
 // SignedMsgSerializationType is the type of serialization performed on a
