@@ -215,6 +215,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		if genCfg.PopulatePersistentPeers {
 			cfg.ChainCfg.P2P.PersistentPeers = persistentPeers
 		}
+		if i <= len(genCfg.Hostnames)-1 {
+			cfg.AppCfg.Hostname = genCfg.Hostnames[i]
+		}
 		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
 		writeConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
 	}

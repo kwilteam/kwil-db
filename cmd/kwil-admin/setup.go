@@ -82,8 +82,8 @@ type SetupTestnetCmd struct {
 	HostnamePrefix          string   `arg:"--hostname-prefix" help:"prefix for node host names e.g. node results in node0, node1, etc." placeholder:"PRE"`
 	HostnameSuffix          string   `arg:"--hostname-suffix" help:"suffix for node host names e.g. .example.com results in node0.example.com, node1.example.com, etc." placeholder:"SUF"`
 	StartingIPAddress       string   `arg:"--starting-ip" help:"starting IP address of the first network node" placeholder:"IP"`
-	Hostnames               []string `arg:"--hostname" help:"override all hostnames of the nodes"`
-	P2pPort                 int      `arg:"-p,--p2p-port" help:"P2P port" placeholder:"PORT"`
+	Hostnames               []string `arg:"--hostnames" help:"override all hostnames of the nodes (list of hostnames must be the same length as the number of nodes)" placeholder:"HOST"`
+	P2pPort                 int      `arg:"-p,--p2p-port" help:"P2P port" default:"26656" placeholder:"PORT"`
 	JoinExpiry              int64    `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
 	WithoutGasCosts         bool     `arg:"-"` // we force true since kwild doesn't work with gas for this release.
 	WithoutNonces           bool     `arg:"--without-nonces" help:"disable nonces"`
@@ -113,9 +113,8 @@ Examples:
 	# Same as above but only 2 additional (non-validator) nodes
 	kwil-admin setup testnet -v 4 -n 2 --o ./output --starting-ip 192.168.10.2
 
-	# Manually specify the IP addresses of the first two nodes, with the others
-	# using "node2" and "node3" in persistent_peers.
-	kwil-admin setup testnet -v 4 -o ./output --hostname 192.168.10.2 --hostname 192.168.10.4
+	# Manually specify hostnames for the nodes
+	kwil-admin setup testnet -v 4 -o ./output --hostnames 192.168.10.2 192.168.10.3 ...
 `
 }
 

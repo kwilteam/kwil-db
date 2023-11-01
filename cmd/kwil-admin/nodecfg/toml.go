@@ -120,7 +120,7 @@ tls_cert_file = "{{ .AppCfg.TLSCertFile }}"
 tls_key_file = "{{ .AppCfg.TLSKeyFile }}"
 
 # Kwild Server hostname
-hostname = ""
+hostname = "{{ .AppCfg.Hostname }}"
 
 #######################################################################
 ###                 Chain  Main Base Config Options                 ###
