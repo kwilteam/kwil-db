@@ -352,7 +352,11 @@ func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *kwilgrpc.
 		})
 	}
 
-	grpcServer := kwilgrpc.New(*d.log.Named("grpc-server"), lis)
+	// Increase the maximum message size to the largest allowable transaction
+	// size plus a very generous 16KiB buffer for message overhead.
+	const msgOverHeadBuffer = 16384
+	recvLimit := d.cfg.ChainCfg.Mempool.MaxTxBytes + msgOverHeadBuffer
+	grpcServer := kwilgrpc.New(*d.log.Named("grpc-server"), lis, kwilgrpc.WithSrvOpt(grpc.MaxRecvMsgSize(recvLimit)))
 	txpb.RegisterTxServiceServer(grpcServer, txsvc)
 	grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
 

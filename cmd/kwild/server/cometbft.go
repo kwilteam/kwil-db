@@ -52,6 +52,8 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 
 	nodeCfg.Mempool.Size = userChainCfg.Mempool.Size
 	nodeCfg.Mempool.CacheSize = userChainCfg.Mempool.CacheSize
+	nodeCfg.Mempool.MaxTxBytes = userChainCfg.Mempool.MaxTxBytes
+	nodeCfg.Mempool.MaxTxsBytes = int64(userChainCfg.Mempool.MaxTxsBytes)
 
 	nodeCfg.Consensus.TimeoutPropose = userChainCfg.Consensus.TimeoutPropose
 	nodeCfg.Consensus.TimeoutPrevote = userChainCfg.Consensus.TimeoutPrevote

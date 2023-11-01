@@ -42,7 +42,11 @@ func WithDialOptions(opts ...grpc.DialOption) Option {
 
 func New(ctx context.Context, target string, opts ...Option) (*Client, error) {
 	clt := &Client{
-		dailOpts: []grpc.DialOption{},
+		dailOpts: []grpc.DialOption{
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(64 * 1024 * 1024), // 64MiB limit on *responses*; sends are unlimited
+			),
+		},
 	}
 
 	for _, opt := range opts {
