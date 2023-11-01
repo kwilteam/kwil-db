@@ -61,7 +61,8 @@ func addKwildFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	// Chain Mempool flags
 	flagSet.IntVar(&cfg.ChainCfg.Mempool.Size, "chain.mempool.size", cfg.ChainCfg.Mempool.Size, "Chain mempool size")
 	flagSet.IntVar(&cfg.ChainCfg.Mempool.CacheSize, "chain.mempool.cache_size", cfg.ChainCfg.Mempool.CacheSize, "Chain mempool cache size")
-	// flagSet.Int64Var(&cfg.ChainCfg.Mempool.MaxTxsBytes, "chain.mempool.max_txs_bytes", cfg.ChainCfg.Mempool.MaxTxsBytes, "chain mempool maximum transactions bytes")
+	flagSet.IntVar(&cfg.ChainCfg.Mempool.MaxTxBytes, "chain.mempool.max_tx_bytes", cfg.ChainCfg.Mempool.MaxTxBytes, "chain mempool maximum single transaction size in bytes")
+	flagSet.IntVar(&cfg.ChainCfg.Mempool.MaxTxsBytes, "chain.mempool.max_txs_bytes", cfg.ChainCfg.Mempool.MaxTxsBytes, "chain mempool maximum total transactions in bytes")
 
 	// Chain Consensus flags
 	flagSet.DurationVar(&cfg.ChainCfg.Consensus.TimeoutPropose, "chain.consensus.timeout_propose", cfg.ChainCfg.Consensus.TimeoutPropose, "Chain consensus timeout propose")
