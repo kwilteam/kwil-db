@@ -58,6 +58,7 @@ tasks:
         (cd core; go mod tidy)
         (cd parse; go mod tidy)
         go mod tidy
+        (cd test; go mod tidy)
 
   lint:
     desc: Lint with golangci-lint
