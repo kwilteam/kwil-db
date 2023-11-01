@@ -81,7 +81,7 @@ func hammer(ctx context.Context) error {
 	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
 	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
 	cl, err := client.Dial(ctx, host, client.WithLogger(trLogger),
-		client.WithTransportClient(&timedClient{rpcTiming, &logger, transportClient}),
+		client.WithRPCClient(&timedClient{rpcTiming, &logger, transportClient}),
 		client.WithSigner(signer, ""), // we don't care what the chain ID is
 	)
 	if err != nil {
