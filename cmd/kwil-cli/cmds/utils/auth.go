@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	httpRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
-	"net/http"
-	"net/url"
 )
 
 const (

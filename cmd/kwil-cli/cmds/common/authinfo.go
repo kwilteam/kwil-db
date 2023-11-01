@@ -3,12 +3,13 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
-	"github.com/kwilteam/kwil-db/internal/utils"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/internal/utils"
 )
 
 const (

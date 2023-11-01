@@ -1,11 +1,12 @@
 package common
 
 import (
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLoadKGWAuthInfo(t *testing.T) {
