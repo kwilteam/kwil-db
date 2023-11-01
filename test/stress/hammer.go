@@ -224,7 +224,6 @@ func hammer(ctx context.Context) error {
 			posters <- struct{}{}
 			t0 := time.Now()
 			next := int(pid.Add(1))
-			h.printf("beginning createPostAsync id = %d (concurrent with %d others)", next, len(posters)-1)
 			defer func() {
 				since := time.Since(t0)
 				var slow string
@@ -235,6 +234,8 @@ func hammer(ctx context.Context) error {
 			}()
 
 			content := string(bigData[:rand.Intn(maxContentLen)+1]) // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
+			h.printf("beginning createPostAsync id = %d, content len = %d (concurrent with %d others)",
+				next, len(content), len(posters)-1)
 			promise, err := h.createPostAsync(ctx, dbid, next, "title_"+strconv.Itoa(next), content)
 			if err != nil {
 				<-posters

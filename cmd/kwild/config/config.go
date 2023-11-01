@@ -106,10 +106,13 @@ type MempoolConfig struct {
 	// Size of the cache (used to filter transactions we saw earlier) in transactions
 	CacheSize int `mapstructure:"cache_size"`
 
-	// Limit the total size of all txs in the mempool.
+	// MaxTxBytes limits the size of any one transaction in mempool.
+	MaxTxBytes int `mapstructure:"max_tx_bytes"`
+
+	// MaxTxsBytes limits the total size of all txs in the mempool.
 	// This only accounts for raw transactions (e.g. given 1MB transactions and
 	// max_txs_bytes=5MB, mempool will only accept 5 transactions).
-	// MaxTxsBytes int64 `mapstructure:"max_txs_bytes"`
+	MaxTxsBytes int `mapstructure:"max_txs_bytes"`
 }
 
 type ConsensusConfig struct {
@@ -276,9 +279,10 @@ func DefaultConfig() *KwildConfig {
 				ListenAddress: "tcp://127.0.0.1:26657",
 			},
 			Mempool: &MempoolConfig{
-				Size:      5000,
-				CacheSize: 10000,
-				// MaxTxsBytes:  1024 * 1024 * 1024, // 1GB
+				Size:        5000,
+				CacheSize:   10000,
+				MaxTxBytes:  1024 * 1024 * 4,   // 4 MiB
+				MaxTxsBytes: 1024 * 1024 * 512, // 512 MiB
 			},
 			StateSync: &StateSyncConfig{
 				Enable:              false,
