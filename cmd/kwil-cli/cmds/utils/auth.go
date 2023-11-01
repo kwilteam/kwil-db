@@ -58,7 +58,7 @@ func authCmd() *cobra.Command {
 
 			// KGW auth is not part of Kwil API, we use a standard http client
 			// this client is to reuse connection
-			hc := httpRPC.DefaultJarHTTPClient()
+			hc := httpRPC.DefaultHTTPClient()
 			msg, err := requestForAuthentication(hc, conf.GrpcURL, userAddress)
 			if err != nil {
 				return fmt.Errorf("request for authentication: %w", err)
