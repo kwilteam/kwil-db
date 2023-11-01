@@ -42,12 +42,22 @@ tasks:
   fmt:
     desc: Format the code
     cmds:
-      # goimports does allow to ignore certain paths (protobuf) with modules,
+      # goimports does not allow to ignore certain paths (protobuf) with modules,
       # so we have to list all the folders that are adjacent to protobuf.
       - |
         goimports -format-only -w ./cmd ./internal ./test ./core/client \
           ./core/crypto ./core/log ./core/rpc/client ./core/rpc/conversion \
           ./core/rpc/transport ./core/types ./core/utils
+
+  tidy:
+    desc: go mod tidy each module
+    cmds:
+      # This is simple, but it require to run go mod tidy in each module's folder,
+      # and from bottom to top in terms of dependencies.
+      - |
+        (cd core; go mod tidy)
+        (cd parse; go mod tidy)
+        go mod tidy
 
   lint:
     desc: Lint with golangci-lint
