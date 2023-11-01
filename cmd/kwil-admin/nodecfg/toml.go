@@ -206,7 +206,10 @@ size = {{ .ChainCfg.Mempool.Size }}
 # Limit the total size of all txs in the mempool.
 # This only accounts for raw transactions (e.g. given 1MB transactions and
 # max_txs_bytes=5MB, mempool will only accept 5 transactions).
-#max_txs_bytes = xx .ChainCfg.Mempool.MaxTxsBytes xx
+max_txs_bytes = {{ .ChainCfg.Mempool.MaxTxsBytes }}
+
+# Limit the size of any one transaction in mempool.
+max_tx_bytes = {{ .ChainCfg.Mempool.MaxTxBytes }}
 
 # Size of the cache (used to filter transactions we saw earlier) in transactions
 cache_size = {{ .ChainCfg.Mempool.CacheSize }}
