@@ -53,7 +53,6 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 			return fmt.Errorf("get address: %w", err)
 		}
 		kgwAuthInfo, err := LoadKGWAuthInfo(KGWAuthTokenFilePath(), addr)
-		fmt.Printf("kgw auth info=========: %v\n", kgwAuthInfo)
 		if err == nil && kgwAuthInfo != nil {
 			// here create http client to config cookie
 			// put cookie options in core/client/client.go seems not a good idea
