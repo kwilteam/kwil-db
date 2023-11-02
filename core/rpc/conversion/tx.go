@@ -186,11 +186,12 @@ func convertFromPBActions(actions []*txpb.Action) []*transactions.Action {
 	convActions := make([]*transactions.Action, len(actions))
 	for i, action := range actions {
 		convActions[i] = &transactions.Action{
-			Name:       action.Name,
-			Public:     action.Public,
-			Mutability: action.Mutability,
-			Inputs:     action.Inputs,
-			Statements: action.Statements,
+			Name:        action.Name,
+			Public:      action.Public,
+			Mutability:  action.Mutability,
+			Inputs:      action.Inputs,
+			Statements:  action.Statements,
+			Annotations: action.Annotations,
 		}
 	}
 
