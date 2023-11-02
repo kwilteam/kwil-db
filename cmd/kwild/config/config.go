@@ -296,10 +296,20 @@ func DefaultConfig() *KwildConfig {
 }
 
 func (cfg *KwildConfig) LogConfig() *log.Config {
+	// Rootify any relative paths.
+	outputPaths := make([]string, 0, len(cfg.Logging.OutputPaths))
+	for _, path := range cfg.Logging.OutputPaths {
+		switch path {
+		case "stdout", "stderr":
+			outputPaths = append(outputPaths, path)
+		default:
+			outputPaths = append(outputPaths, rootify(path, cfg.RootDir))
+		}
+	}
 	// log.Config <== config.Logging
 	return &log.Config{
 		Level:       cfg.Logging.Level,
-		OutputPaths: cfg.Logging.OutputPaths,
+		OutputPaths: outputPaths,
 		Format:      cfg.Logging.Format,
 		EncodeTime:  cfg.Logging.TimeEncoding,
 	}
