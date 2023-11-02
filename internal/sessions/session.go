@@ -14,6 +14,7 @@ package sessions
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -378,7 +379,8 @@ func (a *AtomicCommitter) id(ctx context.Context) (id []byte, err error) {
 		if err != nil {
 			return nil, wrapError(ErrID, err)
 		}
-
+		a.log.Debug("committable id", zap.String("committable_id", c.Key.String()),
+			zap.String("commit_id", hex.EncodeToString(commitId)))
 		_, err = hash.Write(commitId)
 		if err != nil {
 			return nil, wrapError(ErrID, err)
