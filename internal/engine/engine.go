@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"slices"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/engine/dataset"
@@ -167,12 +168,13 @@ func (e *Engine) openStoredDatasets(ctx context.Context) error {
 	return nil
 }
 
-// hashes the dbid's of all of the stored datasets
+// masterDBHash hashes the DBIDs of all of the stored datasets.
 func (e *Engine) masterDBHash() ([]byte, error) {
 	var datasets []string
 	for dbid := range e.datasets {
 		datasets = append(datasets, dbid)
 	}
+	slices.Sort(datasets)
 
 	hasher := sha256.New()
 	for _, dataset := range datasets {
