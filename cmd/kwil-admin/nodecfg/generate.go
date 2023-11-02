@@ -137,8 +137,8 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	nNodes := genCfg.NValidators + genCfg.NNonValidators
 	if nHosts := len(genCfg.Hostnames); nHosts > 0 && nHosts != nNodes {
 		return fmt.Errorf(
-			"testnet needs precisely %d hostnames (number of validators plus nonValidators) if --hostname parameter is used",
-			nNodes,
+			"testnet needs precisely %d hostnames (for the %d validators and %d non-validators) if --hostname parameter is used",
+			nNodes, genCfg.NValidators, genCfg.NNonValidators,
 		)
 	}
 

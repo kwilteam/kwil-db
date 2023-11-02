@@ -73,8 +73,8 @@ type SetupInitCmd struct {
 // type, and layout so that it may be converted directly.
 type SetupTestnetCmd struct {
 	ChainID                 string   `arg:"--chain-id" help:"override the chain ID"`
-	NValidators             int      `arg:"-v,--validators" default:"4" help:"number of validators" placeholder:"V"`
-	NNonValidators          int      `arg:"-n,--non-validators" default:"4" help:"number of non-validators" placeholder:"N"`
+	NValidators             int      `arg:"-v,--validators" default:"3" help:"number of validators" placeholder:"V"`
+	NNonValidators          int      `arg:"-n,--non-validators" default:"0" help:"number of non-validators" placeholder:"N"`
 	ConfigFile              string   `arg:"--config" help:"template config file to use, default is none" placeholder:"FILE"`
 	OutputDir               string   `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
 	NodeDirPrefix           string   `arg:"--node-dir-prefix" default:"node" help:"prefix for the node directories (node results in node0, node1, ...)" placeholder:"PRE"`
