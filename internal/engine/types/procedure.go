@@ -1,11 +1,12 @@
 package types
 
 type Procedure struct {
-	Name       string     `json:"name"`
-	Args       []string   `json:"inputs"`
-	Public     bool       `json:"public"`
-	Modifiers  []Modifier `json:"modifiers"`
-	Statements []string   `json:"statements"`
+	Name        string     `json:"name"`
+	Annotations []string   `json:"annotations,omitempty"`
+	Args        []string   `json:"inputs"`
+	Public      bool       `json:"public"`
+	Modifiers   []Modifier `json:"modifiers"`
+	Statements  []string   `json:"statements"`
 }
 
 // Clean cleans the procedure, and returns an error if it is invalid.

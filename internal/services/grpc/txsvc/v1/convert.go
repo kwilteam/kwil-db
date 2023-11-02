@@ -91,6 +91,7 @@ func convertActionsFromEngine(actions []*engineTypes.Procedure) ([]*txpb.Action,
 			Auxiliaries: auxiliaries,
 			Inputs:      action.Args,
 			Statements:  action.Statements,
+			Annotations: action.Annotations,
 		}
 	}
 
