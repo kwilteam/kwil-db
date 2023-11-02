@@ -79,9 +79,9 @@ type SetupTestnetCmd struct {
 	OutputDir               string   `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
 	NodeDirPrefix           string   `arg:"--node-dir-prefix" default:"node" help:"prefix for the node directories (node results in node0, node1, ...)" placeholder:"PRE"`
 	PopulatePersistentPeers bool     `arg:"-"` // `arg:"--populate-persistent-peers" help:"update config of each node with the list of persistent peers build using either hostname-prefix or starting-ip-address"`
-	HostnamePrefix          string   `arg:"--hostname-prefix" help:"prefix for node host names e.g. node results in node0, node1, etc." placeholder:"PRE"`
+	HostnamePrefix          string   `arg:"--hostname-prefix" default:"kwil-" help:"prefix for node host names e.g. node results in node0, node1, etc." placeholder:"PRE"`
 	HostnameSuffix          string   `arg:"--hostname-suffix" help:"suffix for node host names e.g. .example.com results in node0.example.com, node1.example.com, etc." placeholder:"SUF"`
-	StartingIPAddress       string   `arg:"--starting-ip" help:"starting IP address of the first network node" placeholder:"IP"`
+	StartingIPAddress       string   `arg:"--starting-ip" default:"172.10.100.2" help:"starting IP address of the first network node" placeholder:"IP"`
 	Hostnames               []string `arg:"--hostnames" help:"override all hostnames of the nodes (list of hostnames must be the same length as the number of nodes)" placeholder:"HOST"`
 	P2pPort                 int      `arg:"-p,--p2p-port" help:"P2P port" default:"26656" placeholder:"PORT"`
 	JoinExpiry              int64    `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
