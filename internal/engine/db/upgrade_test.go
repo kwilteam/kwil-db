@@ -71,6 +71,7 @@ func Test_UpgradingProcedures(t *testing.T) {
 					Modifiers: []types.Modifier{
 						types.ModifierAuthenticated,
 					},
+					Annotations: []string{"sql(engine=sqlite3)"},
 				},
 			},
 			returnedProcedure: &types.Procedure{
@@ -86,6 +87,7 @@ func Test_UpgradingProcedures(t *testing.T) {
 				Modifiers: []types.Modifier{
 					types.ModifierAuthenticated,
 				},
+				Annotations: []string{"sql(engine=sqlite3)"},
 			},
 		},
 	}

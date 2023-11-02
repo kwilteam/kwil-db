@@ -598,6 +598,12 @@
           "items": {
             "type": "string"
           }
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

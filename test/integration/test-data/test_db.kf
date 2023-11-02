@@ -113,12 +113,14 @@ action multi_select() public {
     SELECT * FROM users;
 }
 
+@ext(local='yes')
 action divide($numerator1, $numerator2, $denominator) public view {
     $up = math_up.div(abs($numerator1 + $numerator2), $denominator);
     $down = math_down.div(abs($numerator1 + $numerator2), $denominator);
     select $up AS upper_value, $down AS lower_value;
 }
 
+@test(remove_mustsign='yes', when='after engine refactor')
 action owner_only() public owner view mustsign {
     select 'owner only';
 }
