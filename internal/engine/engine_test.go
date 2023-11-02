@@ -423,6 +423,7 @@ var (
 		Statements: []string{
 			"INSERT INTO users (id, username, age, address) VALUES ($id, $username, $age, @caller);",
 		},
+		Annotations: []string{"sql(engine=sqlite3)"},
 	}
 
 	procedureCreatePost = &types.Procedure{
@@ -432,6 +433,7 @@ var (
 		Statements: []string{
 			"INSERT INTO posts (id, title, content, author_id, post_date)VALUES ($id, $title, $content, (SELECT id FROM users WHERE address=@caller), $date_string);",
 		},
+		Annotations: []string{"sql(engine=sqlite3)"},
 	}
 )
 

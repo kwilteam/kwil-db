@@ -66,6 +66,7 @@ func Test_Types(t *testing.T) {
 						Auxiliaries: []string{transactions.AuxiliaryTypeMustSign.String()},
 						Public:      true,
 						Statements:  []string{"SELECT * FROM users WHERE id = $user_id"},
+						Annotations: []string{"sql(engine=sqlite3)"},
 					},
 				},
 				Extensions: []*transactions.Extension{

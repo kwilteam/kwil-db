@@ -128,11 +128,12 @@ func convertActionsToEngine(actions []*transactions.Action) ([]*engineTypes.Proc
 		}
 
 		convActions[i] = &engineTypes.Procedure{
-			Name:       action.Name,
-			Public:     action.Public,
-			Modifiers:  mods,
-			Args:       action.Inputs,
-			Statements: action.Statements,
+			Name:        action.Name,
+			Annotations: action.Annotations,
+			Public:      action.Public,
+			Modifiers:   mods,
+			Args:        action.Inputs,
+			Statements:  action.Statements,
 		}
 	}
 
