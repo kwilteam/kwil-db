@@ -9,6 +9,7 @@ var (
 	defaultJoinPrice    = big.NewInt(10000000000000)
 	defaultLeavePrice   = big.NewInt(10000000000000)
 	defaultApprovePrice = big.NewInt(10000000000000)
+	defaultRemovePrice  = big.NewInt(10000000000000)
 )
 
 // applyFeeMultiplier applies the fee multiplier to the price.
@@ -29,4 +30,9 @@ func (mgr *ValidatorMgr) PriceLeave(ctx context.Context) (price *big.Int, err er
 // PriceApprove returns the price of approving a join request.
 func (mgr *ValidatorMgr) PriceApprove(ctx context.Context) (price *big.Int, err error) {
 	return mgr.applyFeeMultiplier(defaultApprovePrice), nil
+}
+
+// PriceRemove returns the price of a remove request.
+func (mgr *ValidatorMgr) PriceRemove(ctx context.Context) (price *big.Int, err error) {
+	return mgr.applyFeeMultiplier(defaultRemovePrice), nil
 }

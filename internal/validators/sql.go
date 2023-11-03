@@ -16,15 +16,29 @@ import (
 
 var errUnknownValidator = errors.New("unknown validator")
 
+// valStoreVersion is the current schema version.
+var valStoreVersion = 2
+
 // store:
 // - current validator set
 // - active approvals/votes
+// - removal proposals
 const (
 	sqlInitTables = `
 	CREATE TABLE IF NOT EXISTS validators (
 		pubkey BLOB PRIMARY KEY,
 		power INTEGER
 	) WITHOUT ROWID, STRICT;
+
+	-- removals contains all validator removal proposals / votes from a
+	-- given remover validator targeting another validator.
+	-- If the targeted validator is ultimately removed or voluntarily leaves
+	-- the validator set, all relevant removal request should be removed.
+	CREATE TABLE IF NOT EXISTS removals (
+		remover BLOB REFERENCES validators (pubkey) ON DELETE CASCADE,
+		target BLOB REFERENCES validators (pubkey) ON DELETE CASCADE,
+		PRIMARY KEY (remover, target)
+	);
 
 	CREATE TABLE IF NOT EXISTS join_reqs (
 		candidate BLOB PRIMARY KEY,
@@ -80,48 +94,51 @@ const (
 	sqlAddToJoinBoard = `INSERT INTO joins_board (candidate, validator, approval)
 		VALUES ($candidate, $validator, $approval)`
 
+	sqlListAllRemovals    = `SELECT target, remover FROM removals`
+	sqlListTargetRemovals = `SELECT remover FROM removals WHERE target = $pubkey`
+	sqlAddRemoval         = `INSERT INTO removals (remover, target) VALUES ($remover, $target)`
+	sqlDeleteRemoval      = "DELETE FROM removals WHERE remover = $remover AND target = $target"
+	sqlDeleteRemovals     = "DELETE FROM removals WHERE target = $target"
+
+	// Schema version table queries
 	sqlInitVersionTable = `CREATE TABLE IF NOT EXISTS schema_version (
 		version INT NOT NULL
     );` // Do we still need WITHOUT ROWID and STRICT? It's just a single row table
 
 	sqlInitVersionRow = "INSERT INTO schema_version (version) VALUES ($version);"
 
-	//sqlUpdateVersion = "UPDATE schema_version SET version = $version;"
+	sqlUpdateVersion = "UPDATE schema_version SET version = $version;"
 
 	sqlGetVersion = "SELECT version FROM schema_version;"
-
-	valStoreVersion = 1
 )
 
-// Migration actions.
+// The following queries are used in schema upgrade, and should never be
+// changed. Each are used in the upgrade paths, pertaining to a specific schema
+// version, so they should not be changed like the ones in sqlInitTables may be.
 const (
-	sqlAddJoinExpiry string = `ALTER TABLE join_reqs ADD COLUMN expiresAt INTEGER DEFAULT -1;`
+	sqlAddJoinExpiryV1 = `ALTER TABLE join_reqs ADD COLUMN expiresAt INTEGER DEFAULT -1;`
+
+	sqlInitVersionTableV1 = `CREATE TABLE IF NOT EXISTS schema_version (
+		version INT NOT NULL
+    );`
+	sqlInitVersionRowV1 = "INSERT INTO schema_version (version) VALUES ($version);"
+
+	sqlInitRemovalsTableV2 = `CREATE TABLE IF NOT EXISTS removals (
+		remover BLOB REFERENCES validators (pubkey) ON DELETE CASCADE,
+		target BLOB REFERENCES validators (pubkey) ON DELETE CASCADE,
+		PRIMARY KEY (remover, target)
+	)`
 )
 
-// Schema version table.
-func (vs *validatorStore) initSchemaVersion(ctx context.Context) error {
-	if err := vs.db.Execute(ctx, sqlInitVersionTable, nil); err != nil {
-		return fmt.Errorf("failed to initialize schema version table: %w", err)
-	}
-
-	err := vs.db.Execute(ctx, sqlInitVersionRow, map[string]any{
-		"$version": valStoreVersion,
+func (vs *validatorStore) updateCurrentVersion(ctx context.Context, version int) error {
+	err := vs.db.Execute(ctx, sqlUpdateVersion, map[string]any{
+		"$version": version,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to set schema version: %w", err)
+		return fmt.Errorf("failed to update schema version: %w", err)
 	}
 	return nil
 }
-
-// func (vs *validatorStore) updateCurrentVersion(ctx context.Context, version int) error {
-// 	err := vs.db.Execute(ctx, sqlUpdateVersion, map[string]any{
-// 		"$version": version,
-// 	})
-// 	if err != nil {
-// 		return fmt.Errorf("failed to update schema version: %w", err)
-// 	}
-// 	return nil
-// }
 
 func (vs *validatorStore) currentVersion(ctx context.Context) (int, error) {
 	results, err := vs.db.Query(ctx, sqlGetVersion, nil)
@@ -142,22 +159,13 @@ func (vs *validatorStore) currentVersion(ctx context.Context) (int, error) {
 	return int(version), nil
 }
 
-// -- CREATE TABLE IF NOT EXISTS validator_approvals (
-// -- 	validator_id INTEGER REFERENCES validators (id) ON DELETE CASCADE,
-// -- 	approval_id INTEGER REFERENCES approvals (id) ON DELETE CASCADE,
-// -- 	unique (validator_id, approval_id)
-// -- 	);
-
-// -- CREATE TABLE IF NOT EXISTS approvals (
-// -- 	id INTEGER PRIMARY KEY AUTOINCREMENT,
-// -- 	voter TEXT NOT NULL   -- the validator that approved
-// -- 	);
-
 func getTableInits() []string {
 	inits := strings.Split(sqlInitTables, ";")
 	return inits[:len(inits)-1]
 }
 
+// initTables initializes the validator store tables. This is not an upgrade
+// action and is only used on a fresh DB being created at the latest version.
 func (vs *validatorStore) initTables(ctx context.Context) error {
 	inits := getTableInits()
 
@@ -167,8 +175,15 @@ func (vs *validatorStore) initTables(ctx context.Context) error {
 		}
 	}
 
-	if err := vs.initSchemaVersion(ctx); err != nil {
-		return err
+	if err := vs.db.Execute(ctx, sqlInitVersionTable, nil); err != nil {
+		return fmt.Errorf("failed to initialize schema version table: %w", err)
+	}
+
+	err := vs.db.Execute(ctx, sqlInitVersionRow, map[string]any{
+		"$version": valStoreVersion,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set schema version: %w", err)
 	}
 
 	return nil
@@ -228,6 +243,28 @@ func (vs *validatorStore) addApproval(ctx context.Context, joiner, approver []by
 	})
 }
 
+func (vs *validatorStore) addRemoval(ctx context.Context, target, validator []byte) error {
+	return vs.db.Execute(ctx, sqlAddRemoval, map[string]any{
+		"$remover": validator,
+		"$target":  target,
+	})
+}
+
+// deleteRemoval and deleteRemovals should not be required with ON DELETE
+// CASCADE on both the remover and target columns of the removals table...
+func (vs *validatorStore) deleteRemoval(ctx context.Context, target, validator []byte) error {
+	return vs.db.Execute(ctx, sqlDeleteRemoval, map[string]any{
+		"$remover": validator,
+		"$target":  target,
+	})
+}
+
+func (vs *validatorStore) deleteRemovals(ctx context.Context, target []byte) error {
+	return vs.db.Execute(ctx, sqlDeleteRemovals, map[string]any{
+		"$target": target,
+	})
+}
+
 func (vs *validatorStore) deleteJoinRequest(ctx context.Context, joiner []byte) error {
 	return vs.db.Execute(ctx, sqlDeleteJoinReq, map[string]any{
 		"$candidate": joiner,
@@ -261,7 +298,11 @@ func (vs *validatorStore) addValidator(ctx context.Context, joiner []byte, power
 }
 
 func (vs *validatorStore) removeValidator(ctx context.Context, validator []byte) error {
-	err := vs.db.Execute(ctx, sqlDeleteValidator, map[string]any{
+	err := vs.deleteRemovals(ctx, validator)
+	if err != nil {
+		return fmt.Errorf("failed to delete removals: %w", err)
+	}
+	err = vs.db.Execute(ctx, sqlDeleteValidator, map[string]any{
 		"$pubkey": validator,
 	})
 	if err != nil {
@@ -359,6 +400,39 @@ func (vs *validatorStore) currentValidators(ctx context.Context) ([]*Validator, 
 		}
 	}
 	return vals, nil
+}
+
+func (vs *validatorStore) allActiveRemoveReqs(ctx context.Context) ([]*ValidatorRemoveProposal, error) {
+	results, err := vs.db.Query(ctx, sqlListAllRemovals, map[string]interface{}{})
+	if err != nil {
+		return nil, err
+	}
+
+	removals := make([]*ValidatorRemoveProposal, len(results))
+	for i, res := range results {
+		pki, ok := res["target"]
+		if !ok {
+			return nil, errors.New("no target in removals record")
+		}
+		target, ok := pki.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid target pubkey value (%T)", pki)
+		}
+		rem, ok := res["remover"]
+		if !ok {
+			return nil, errors.New("no remover in removals record")
+		}
+		remover, ok := rem.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid remover pubkey value (%T)", rem)
+		}
+		removals[i] = &ValidatorRemoveProposal{
+			Target:  target,
+			Remover: remover,
+		}
+	}
+
+	return removals, nil
 }
 
 func (vs *validatorStore) loadJoinVotes(ctx context.Context, jr *JoinRequest) error {

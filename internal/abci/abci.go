@@ -502,6 +502,37 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		gasUsed = res.GasUsed
+
+	case transactions.PayloadTypeValidatorRemove:
+		var remove transactions.ValidatorRemove
+		err = remove.UnmarshalBinary(tx.Body.Payload)
+		if err != nil {
+			txCode = codeEncodingError
+			break
+		}
+
+		logger.Debug("remove validator", zap.String("pubkey", hex.EncodeToString(remove.Validator)))
+
+		var res *modVal.ExecutionResponse
+		res, err = a.validators.Remove(ctx, remove.Validator, tx)
+		if err != nil {
+			txCode = codeUnknownError
+			break
+		}
+
+		events = []abciTypes.Event{
+			{
+				Type: "validator_remove",
+				Attributes: []abciTypes.EventAttribute{
+					{Key: "Result", Value: "Success", Index: true},
+					{Key: "TargetPubKey", Value: hex.EncodeToString(remove.Validator), Index: true},
+					{Key: "RemoverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
+				},
+			},
+		}
+
+		gasUsed = res.GasUsed
+
 	default:
 		err = fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
@@ -526,7 +557,11 @@ func (a *AbciApp) EndBlock(e abciTypes.RequestEndBlock) abciTypes.ResponseEndBlo
 	logger := a.log.With(zap.String("stage", "ABCI EndBlock"), zap.Int("height", int(e.Height)))
 	logger.Debug("", zap.Int64("height", e.Height))
 
-	a.valUpdates = a.validators.Finalize(context.Background())
+	var err error
+	a.valUpdates, err = a.validators.Finalize(context.Background())
+	if err != nil {
+		panic(fmt.Sprintf("failed to finalize validator updates: %v", err))
+	}
 
 	valUpdates := make([]abciTypes.ValidatorUpdate, len(a.valUpdates))
 	for i, up := range a.valUpdates {

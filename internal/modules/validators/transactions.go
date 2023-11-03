@@ -108,3 +108,33 @@ func (vm *ValidatorModule) Approve(ctx context.Context, joiner []byte,
 		GasUsed: 0,
 	}, nil
 }
+
+// Remove records a removal transaction targeting the given validator pubkey.
+// The transaction sender must be a current validator. The caller ensures that
+// the transaction signature is verified.
+func (vm *ValidatorModule) Remove(ctx context.Context, validator []byte,
+	txn *transactions.Transaction) (*ExecutionResponse, error) {
+	remover := txn.Sender
+	price, err := vm.PriceRemove(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if txn.Body.Fee.Cmp(price) < 0 {
+		return nil, fmt.Errorf("insufficient fee: %d < %d", txn.Body.Fee, price)
+	}
+
+	err = vm.spend(ctx, remover, txn.Body.Fee, txn.Body.Nonce)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = vm.mgr.Remove(ctx, validator, remover); err != nil {
+		return nil, err
+	}
+
+	return &ExecutionResponse{
+		Fee:     txn.Body.Fee,
+		GasUsed: 0,
+	}, nil
+}

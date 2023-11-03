@@ -48,7 +48,7 @@ func convertJoinRequest(join *vmgr.JoinRequest) *txpb.ValidatorJoinStatusRespons
 
 func (s *Service) ValidatorJoinStatus(ctx context.Context, req *txpb.ValidatorJoinStatusRequest) (*txpb.ValidatorJoinStatusResponse, error) {
 	joiner := req.Pubkey
-	allJoins, err := s.vstore.ActiveVotes(ctx)
+	allJoins, _, err := s.vstore.ActiveVotes(ctx)
 	if err != nil {
 		s.log.Error("failed to retrieve active join requests", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to retrieve active join requests")

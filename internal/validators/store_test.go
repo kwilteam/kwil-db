@@ -36,12 +36,15 @@ func Test_validatorStore(t *testing.T) {
 		t.Fatalf("Starting validator set not empty (%d)", len(vals))
 	}
 
-	votes, err := vs.ActiveVotes(ctx)
+	votes, removals, err := vs.ActiveVotes(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(votes) != 0 {
 		t.Fatalf("Starting votes not empty (%d)", len(votes))
+	}
+	if len(removals) != 0 {
+		t.Fatalf("Starting removals not empty (%d)", len(removals))
 	}
 
 	// Init for genesis validator set
@@ -149,12 +152,15 @@ func Test_validatorStore(t *testing.T) {
 		t.Fatalf("no error approving expired join requests")
 	}
 
-	joins, err := vs.ActiveVotes(ctx)
+	joins, removals, err := vs.ActiveVotes(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(joins) != 0 {
 		t.Fatalf("expected 0 active join requests, found %d", len(joins))
+	}
+	if len(removals) != 0 {
+		t.Fatalf("expected 0 active removals, found %d", len(removals))
 	}
 
 	// Start a new join request
@@ -163,9 +169,12 @@ func Test_validatorStore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	joins, err = vs.ActiveVotes(ctx)
+	joins, removals, err = vs.ActiveVotes(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(removals) != 0 {
+		t.Fatalf("expected 0 active removals, found %d", len(removals))
 	}
 	if len(joins) != 1 {
 		t.Fatalf("expected 1 active join request, found %d", len(joins))
@@ -193,9 +202,12 @@ outer:
 	if err != nil {
 		t.Fatalf("unable to add approval")
 	}
-	joins, err = vs.ActiveVotes(ctx)
+	joins, removals, err = vs.ActiveVotes(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(removals) != 0 {
+		t.Fatalf("expected 0 active removals, found %d", len(removals))
 	}
 	var present bool
 	for i, pki := range joins[0].Board {
@@ -218,9 +230,12 @@ outer:
 	}
 	numValidators++
 	// the join request should be removed
-	joins, err = vs.ActiveVotes(ctx)
+	joins, removals, err = vs.ActiveVotes(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(removals) != 0 {
+		t.Fatalf("expected 0 active removals, found %d", len(removals))
 	}
 	if len(joins) != 0 {
 		t.Error("inactive join request not removed on validator add")

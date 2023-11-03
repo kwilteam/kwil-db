@@ -335,6 +335,24 @@ func (c *Client) ApproveValidator(ctx context.Context, joiner []byte, opts ...Tx
 	return hash, nil
 }
 
+// RemoveValidator makes a transaction proposing to remove a validator. This is
+// only useful if the Client's signing key is a current validator key.
+func (c *Client) RemoveValidator(ctx context.Context, target []byte, opts ...TxOpt) ([]byte, error) {
+	_, err := crypto.Ed25519PublicKeyFromBytes(target)
+	if err != nil {
+		return nil, fmt.Errorf("invalid candidate validator public key: %w", err)
+	}
+	payload := &transactions.ValidatorRemove{
+		Validator: target,
+	}
+	tx, err := c.newTx(ctx, payload, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.transportClient.Broadcast(ctx, tx)
+}
+
 func (c *Client) ValidatorJoin(ctx context.Context) ([]byte, error) {
 	const power = 1
 	return c.validatorUpdate(ctx, power)

@@ -53,12 +53,15 @@ type ValidatorModule interface {
 	// Approve records an approval transaction from a current validator. The
 	// approver is the tx Sender.
 	Approve(ctx context.Context, joiner []byte, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
+	// Remove removes a validator from the validator set, if the sender is a
+	// current validator.
+	Remove(ctx context.Context, validator []byte, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
 
 	// Finalize is used at the end of block processing to retrieve the validator
 	// updates to be provided to the consensus client for the next block. This
 	// is not idempotent. The modules working list of updates is reset until
 	// subsequent join/approves are processed for the next block.
-	Finalize(ctx context.Context) []*validators.Validator // end of block processing requires providing list of updates to the node's consensus client
+	Finalize(ctx context.Context) ([]*validators.Validator, error) // end of block processing requires providing list of updates to the node's consensus client
 
 	// Updates block height stored by the validator manager. Called in the abci Commit
 	UpdateBlockHeight(ctx context.Context, blockHeight int64)
@@ -71,6 +74,9 @@ type ValidatorModule interface {
 
 	// PriceLeave returns the price of a leave transaction.
 	PriceLeave(ctx context.Context) (*big.Int, error)
+
+	// PriceRemove returns the price of a remove transaction.
+	PriceRemove(ctx context.Context) (*big.Int, error)
 }
 
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores

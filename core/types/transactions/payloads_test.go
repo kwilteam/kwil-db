@@ -132,6 +132,12 @@ func Test_Types(t *testing.T) {
 			name: "validator_leave",
 			obj:  &transactions.ValidatorLeave{},
 		},
+		{
+			name: "validator_remove",
+			obj: &transactions.ValidatorRemove{
+				Validator: []byte("asdfadsf"),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -157,6 +163,8 @@ func Test_Types(t *testing.T) {
 				obj = &transactions.ValidatorJoin{}
 			case *transactions.ValidatorLeave:
 				obj = &transactions.ValidatorLeave{}
+			case *transactions.ValidatorRemove:
+				obj = &transactions.ValidatorRemove{}
 			default:
 				t.Fatal("unknown type")
 			}
