@@ -60,8 +60,9 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 			Message: "broadcast error",
 		}
 		if details, err := anypb.New(&txpb.BroadcastErrorDetails{
-			Code: code, // e.g. invalid nonce, wrong chain, etc.
-			Hash: hex.EncodeToString(txHash),
+			Code:    code, // e.g. invalid nonce, wrong chain, etc.
+			Hash:    hex.EncodeToString(txHash),
+			Message: txCode.String(),
 		}); err != nil {
 			logger.Error("failed to marshal broadcast error details", zap.Error(err))
 		} else {
