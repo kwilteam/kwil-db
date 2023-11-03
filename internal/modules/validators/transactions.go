@@ -35,7 +35,7 @@ func (vm *ValidatorModule) spend(ctx context.Context, acctPubKey []byte,
 }
 
 // Join creates a join request for a prospective validator.
-func (vm *ValidatorModule) Join(ctx context.Context, joiner []byte, power int64,
+func (vm *ValidatorModule) Join(ctx context.Context, power int64,
 	txn *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := vm.PriceJoin(ctx)
 	if err != nil {
@@ -46,12 +46,12 @@ func (vm *ValidatorModule) Join(ctx context.Context, joiner []byte, power int64,
 		return nil, fmt.Errorf("insufficient fee: %d < %d", txn.Body.Fee, price)
 	}
 
-	err = vm.spend(ctx, joiner, txn.Body.Fee, txn.Body.Nonce)
+	err = vm.spend(ctx, txn.Sender, txn.Body.Fee, txn.Body.Nonce)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = vm.mgr.Join(ctx, joiner, power); err != nil {
+	if err = vm.mgr.Join(ctx, txn.Sender, power); err != nil {
 		return nil, err
 	}
 
@@ -59,8 +59,7 @@ func (vm *ValidatorModule) Join(ctx context.Context, joiner []byte, power int64,
 }
 
 // Leave creates a leave request for a current validator.
-func (vm *ValidatorModule) Leave(ctx context.Context, leaver []byte,
-	txn *transactions.Transaction) (*ExecutionResponse, error) {
+func (vm *ValidatorModule) Leave(ctx context.Context, txn *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := vm.PriceLeave(ctx)
 	if err != nil {
 		return nil, err
@@ -70,19 +69,19 @@ func (vm *ValidatorModule) Leave(ctx context.Context, leaver []byte,
 		return nil, fmt.Errorf("insufficient fee: %d < %d", txn.Body.Fee, price)
 	}
 
-	err = vm.spend(ctx, leaver, txn.Body.Fee, txn.Body.Nonce)
+	err = vm.spend(ctx, txn.Sender, txn.Body.Fee, txn.Body.Nonce)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = vm.mgr.Leave(ctx, leaver); err != nil {
+	if err = vm.mgr.Leave(ctx, txn.Sender); err != nil {
 		return nil, err
 	}
 
 	return resp(txn.Body.Fee), nil
 }
 
-// Approve records an approval transaction from a current validator..
+// Approve records an approval transaction from a current validator.
 func (vm *ValidatorModule) Approve(ctx context.Context, joiner []byte,
 	txn *transactions.Transaction) (*ExecutionResponse, error) {
 	approver := txn.Sender

@@ -345,17 +345,12 @@ func (c *Client) ValidatorLeave(ctx context.Context) ([]byte, error) {
 }
 
 func (c *Client) validatorUpdate(ctx context.Context, power int64, opts ...TxOpt) ([]byte, error) {
-	pubKey := c.Signer.PublicKey()
-
 	var payload transactions.Payload
 	if power <= 0 {
-		payload = &transactions.ValidatorLeave{
-			Validator: pubKey,
-		}
+		payload = &transactions.ValidatorLeave{}
 	} else {
 		payload = &transactions.ValidatorJoin{
-			Candidate: pubKey,
-			Power:     uint64(power),
+			Power: uint64(power),
 		}
 	}
 

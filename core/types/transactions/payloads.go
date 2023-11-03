@@ -263,8 +263,7 @@ func (a *ActionCall) Type() PayloadType {
 }
 
 type ValidatorJoin struct {
-	Candidate []byte
-	Power     uint64
+	Power uint64
 }
 
 func (v *ValidatorJoin) Type() PayloadType {
@@ -301,9 +300,7 @@ func (v *ValidatorApprove) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
-type ValidatorLeave struct {
-	Validator []byte
-}
+type ValidatorLeave struct{}
 
 func (v *ValidatorLeave) Type() PayloadType {
 	return PayloadTypeValidatorLeave

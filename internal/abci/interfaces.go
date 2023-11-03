@@ -47,9 +47,9 @@ type ValidatorModule interface {
 	Punish(ctx context.Context, validator []byte, power int64) error
 
 	// Join creates a join request for a prospective validator.
-	Join(ctx context.Context, joiner []byte, power int64, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
+	Join(ctx context.Context, power int64, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
 	// Leave processes a leave request for a validator.
-	Leave(ctx context.Context, joiner []byte, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
+	Leave(ctx context.Context, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)
 	// Approve records an approval transaction from a current validator. The
 	// approver is the tx Sender.
 	Approve(ctx context.Context, joiner []byte, tx *transactions.Transaction) (*modVal.ExecutionResponse, error)

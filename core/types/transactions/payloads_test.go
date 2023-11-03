@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -124,15 +125,12 @@ func Test_Types(t *testing.T) {
 		{
 			name: "validator_join",
 			obj: &transactions.ValidatorJoin{
-				Candidate: []byte("asdfadsf"),
-				Power:     1,
+				Power: 1,
 			},
 		},
 		{
 			name: "validator_leave",
-			obj: &transactions.ValidatorLeave{
-				Validator: []byte("asdfadsf"),
-			},
+			obj:  &transactions.ValidatorLeave{},
 		},
 	}
 

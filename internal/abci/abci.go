@@ -410,6 +410,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		gasUsed = res.GasUsed
+
 	case transactions.PayloadTypeValidatorJoin:
 		var join transactions.ValidatorJoin
 		err = join.UnmarshalBinary(tx.Body.Payload)
@@ -419,34 +420,29 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		logger.Debug("join validator",
-			zap.String("pubkey", hex.EncodeToString(join.Candidate)),
+			zap.String("pubkey", hex.EncodeToString(tx.Sender)),
 			zap.Int64("power", int64(join.Power)))
 
 		var res *modVal.ExecutionResponse
-		res, err = a.validators.Join(ctx, join.Candidate, int64(join.Power), tx)
+		res, err = a.validators.Join(ctx, int64(join.Power), tx)
 		if err != nil {
 			txCode = codeUnknownError
 			break
 		}
-		// Concept:
-		// if res.Error != "" {
-		// 	err = errors.New(res.Error)
-		// 	gasUsed = res.Fee.Int64()
-		// 	break
-		// }
 
 		events = []abciTypes.Event{
 			{
 				Type: "validator_join",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: hex.EncodeToString(join.Candidate), Index: true},
+					{Key: "ValidatorPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
 					{Key: "ValidatorPower", Value: fmt.Sprintf("%d", join.Power), Index: true},
 				},
 			},
 		}
 
 		gasUsed = res.GasUsed
+
 	case transactions.PayloadTypeValidatorLeave:
 		var leave transactions.ValidatorLeave
 		err = leave.UnmarshalBinary(tx.Body.Payload)
@@ -455,10 +451,10 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
-		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(leave.Validator)))
+		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(tx.Sender)))
 
 		var res *modVal.ExecutionResponse
-		res, err = a.validators.Leave(ctx, leave.Validator, tx)
+		res, err = a.validators.Leave(ctx, tx)
 		if err != nil {
 			txCode = codeUnknownError
 			break
@@ -469,13 +465,14 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "validator_leave",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: hex.EncodeToString(leave.Validator), Index: true},
+					{Key: "ValidatorPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
 					{Key: "ValidatorPower", Value: "0", Index: true},
 				},
 			},
 		}
 
 		gasUsed = res.GasUsed
+
 	case transactions.PayloadTypeValidatorApprove:
 		var approve transactions.ValidatorApprove
 		err = approve.UnmarshalBinary(tx.Body.Payload)
