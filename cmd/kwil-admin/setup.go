@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
@@ -30,6 +31,7 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 	case cc.Init != nil:
 		genCfg := &nodecfg.NodeGenerateConfig{
 			ChainID:         cc.Init.ChainID,
+			BlockInterval:   cc.Init.BlockInterval,
 			OutputDir:       cc.Init.OutputDir,
 			JoinExpiry:      cc.Init.JoinExpiry,
 			WithoutGasCosts: true, // gas disabled by setup init
@@ -59,10 +61,11 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 }
 
 type SetupInitCmd struct {
-	ChainID       string `arg:"--chain-id" help:"override the chain ID"`
-	OutputDir     string `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
-	JoinExpiry    int64  `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
-	WithoutNonces bool   `arg:"--without-nonces" help:"disable nonces"`
+	ChainID       string        `arg:"--chain-id" help:"override the chain ID"`
+	BlockInterval time.Duration `arg:"-i,--block-interval" default:"6s" help:"Shortest block interval in seconds (timeout_commit)" placeholder:"DURATION"`
+	OutputDir     string        `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
+	JoinExpiry    int64         `arg:"--join-expiry" default:"14400" help:"number of blocks before a join request expires"`
+	WithoutNonces bool          `arg:"--without-nonces" help:"disable nonces"`
 
 	// WithoutGasCosts is not an available flag since Kwil users have no way to
 	// get funded with the external chain syncer gone.
@@ -72,21 +75,22 @@ type SetupInitCmd struct {
 // SetupTestnetCmd exactly matches nodecfg.TestnetGenerateConfig in field name,
 // type, and layout so that it may be converted directly.
 type SetupTestnetCmd struct {
-	ChainID                 string   `arg:"--chain-id" help:"override the chain ID"`
-	NValidators             int      `arg:"-v,--validators" default:"3" help:"number of validators" placeholder:"V"`
-	NNonValidators          int      `arg:"-n,--non-validators" default:"0" help:"number of non-validators" placeholder:"N"`
-	ConfigFile              string   `arg:"--config" help:"template config file to use, default is none" placeholder:"FILE"`
-	OutputDir               string   `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
-	NodeDirPrefix           string   `arg:"--node-dir-prefix" default:"node" help:"prefix for the node directories (node results in node0, node1, ...)" placeholder:"PRE"`
-	PopulatePersistentPeers bool     `arg:"-"` // `arg:"--populate-persistent-peers" help:"update config of each node with the list of persistent peers build using either hostname-prefix or starting-ip-address"`
-	HostnamePrefix          string   `arg:"--hostname-prefix" default:"kwil-" help:"prefix for node host names e.g. node results in node0, node1, etc." placeholder:"PRE"`
-	HostnameSuffix          string   `arg:"--hostname-suffix" help:"suffix for node host names e.g. .example.com results in node0.example.com, node1.example.com, etc." placeholder:"SUF"`
-	StartingIPAddress       string   `arg:"--starting-ip" default:"172.10.100.2" help:"starting IP address of the first network node" placeholder:"IP"`
-	Hostnames               []string `arg:"--hostnames" help:"override all hostnames of the nodes (list of hostnames must be the same length as the number of nodes)" placeholder:"HOST"`
-	P2pPort                 int      `arg:"-p,--p2p-port" help:"P2P port" default:"26656" placeholder:"PORT"`
-	JoinExpiry              int64    `arg:"--join-expiry" default:"86400" help:"number of blocks before a join request expires"`
-	WithoutGasCosts         bool     `arg:"-"` // we force true since kwild doesn't work with gas for this release.
-	WithoutNonces           bool     `arg:"--without-nonces" help:"disable nonces"`
+	ChainID                 string        `arg:"--chain-id" help:"override the chain ID"`
+	BlockInterval           time.Duration `arg:"-i,--block-interval" default:"6s" help:"Shortest block interval in seconds (timeout_commit)" placeholder:"DURATION"`
+	NValidators             int           `arg:"-v,--validators" default:"3" help:"number of validators" placeholder:"V"`
+	NNonValidators          int           `arg:"-n,--non-validators" default:"0" help:"number of non-validators" placeholder:"N"`
+	ConfigFile              string        `arg:"--config" help:"template config file to use, default is none" placeholder:"FILE"`
+	OutputDir               string        `arg:"-o,--output-dir" default:".testnet" help:"parent directory for all of generated node folders" placeholder:"DIR"`
+	NodeDirPrefix           string        `arg:"--node-dir-prefix" default:"node" help:"prefix for the node directories (node results in node0, node1, ...)" placeholder:"PRE"`
+	PopulatePersistentPeers bool          `arg:"-"` // `arg:"--populate-persistent-peers" help:"update config of each node with the list of persistent peers build using either hostname-prefix or starting-ip-address"`
+	HostnamePrefix          string        `arg:"--hostname-prefix" default:"kwil-" help:"prefix for node host names e.g. node results in node0, node1, etc." placeholder:"PRE"`
+	HostnameSuffix          string        `arg:"--hostname-suffix" help:"suffix for node host names e.g. .example.com results in node0.example.com, node1.example.com, etc." placeholder:"SUF"`
+	StartingIPAddress       string        `arg:"--starting-ip" default:"172.10.100.2" help:"starting IP address of the first network node" placeholder:"IP"`
+	Hostnames               []string      `arg:"--hostnames" help:"override all hostnames of the nodes (list of hostnames must be the same length as the number of nodes)" placeholder:"HOST"`
+	P2pPort                 int           `arg:"-p,--p2p-port" help:"P2P port" default:"26656" placeholder:"PORT"`
+	JoinExpiry              int64         `arg:"--join-expiry" default:"14400" help:"number of blocks before a join request expires"`
+	WithoutGasCosts         bool          `arg:"-"` // we force true since kwild doesn't work with gas for this release.
+	WithoutNonces           bool          `arg:"--without-nonces" help:"disable nonces"`
 }
 
 // TODO: customize the parser to recognize a detailer subcommand and print
