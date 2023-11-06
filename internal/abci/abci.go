@@ -410,6 +410,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		gasUsed = res.GasUsed
+
 	case transactions.PayloadTypeValidatorJoin:
 		var join transactions.ValidatorJoin
 		err = join.UnmarshalBinary(tx.Body.Payload)
@@ -419,34 +420,29 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		logger.Debug("join validator",
-			zap.String("pubkey", hex.EncodeToString(join.Candidate)),
+			zap.String("pubkey", hex.EncodeToString(tx.Sender)),
 			zap.Int64("power", int64(join.Power)))
 
 		var res *modVal.ExecutionResponse
-		res, err = a.validators.Join(ctx, join.Candidate, int64(join.Power), tx)
+		res, err = a.validators.Join(ctx, int64(join.Power), tx)
 		if err != nil {
 			txCode = codeUnknownError
 			break
 		}
-		// Concept:
-		// if res.Error != "" {
-		// 	err = errors.New(res.Error)
-		// 	gasUsed = res.Fee.Int64()
-		// 	break
-		// }
 
 		events = []abciTypes.Event{
 			{
 				Type: "validator_join",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: hex.EncodeToString(join.Candidate), Index: true},
+					{Key: "ValidatorPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
 					{Key: "ValidatorPower", Value: fmt.Sprintf("%d", join.Power), Index: true},
 				},
 			},
 		}
 
 		gasUsed = res.GasUsed
+
 	case transactions.PayloadTypeValidatorLeave:
 		var leave transactions.ValidatorLeave
 		err = leave.UnmarshalBinary(tx.Body.Payload)
@@ -455,10 +451,10 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			break
 		}
 
-		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(leave.Validator)))
+		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(tx.Sender)))
 
 		var res *modVal.ExecutionResponse
-		res, err = a.validators.Leave(ctx, leave.Validator, tx)
+		res, err = a.validators.Leave(ctx, tx)
 		if err != nil {
 			txCode = codeUnknownError
 			break
@@ -469,13 +465,14 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 				Type: "validator_leave",
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: hex.EncodeToString(leave.Validator), Index: true},
+					{Key: "ValidatorPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
 					{Key: "ValidatorPower", Value: "0", Index: true},
 				},
 			},
 		}
 
 		gasUsed = res.GasUsed
+
 	case transactions.PayloadTypeValidatorApprove:
 		var approve transactions.ValidatorApprove
 		err = approve.UnmarshalBinary(tx.Body.Payload)
@@ -505,6 +502,37 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		gasUsed = res.GasUsed
+
+	case transactions.PayloadTypeValidatorRemove:
+		var remove transactions.ValidatorRemove
+		err = remove.UnmarshalBinary(tx.Body.Payload)
+		if err != nil {
+			txCode = codeEncodingError
+			break
+		}
+
+		logger.Debug("remove validator", zap.String("pubkey", hex.EncodeToString(remove.Validator)))
+
+		var res *modVal.ExecutionResponse
+		res, err = a.validators.Remove(ctx, remove.Validator, tx)
+		if err != nil {
+			txCode = codeUnknownError
+			break
+		}
+
+		events = []abciTypes.Event{
+			{
+				Type: "validator_remove",
+				Attributes: []abciTypes.EventAttribute{
+					{Key: "Result", Value: "Success", Index: true},
+					{Key: "TargetPubKey", Value: hex.EncodeToString(remove.Validator), Index: true},
+					{Key: "RemoverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
+				},
+			},
+		}
+
+		gasUsed = res.GasUsed
+
 	default:
 		err = fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
@@ -529,7 +557,11 @@ func (a *AbciApp) EndBlock(e abciTypes.RequestEndBlock) abciTypes.ResponseEndBlo
 	logger := a.log.With(zap.String("stage", "ABCI EndBlock"), zap.Int("height", int(e.Height)))
 	logger.Debug("", zap.Int64("height", e.Height))
 
-	a.valUpdates = a.validators.Finalize(context.Background())
+	var err error
+	a.valUpdates, err = a.validators.Finalize(context.Background())
+	if err != nil {
+		panic(fmt.Sprintf("failed to finalize validator updates: %v", err))
+	}
 
 	valUpdates := make([]abciTypes.ValidatorUpdate, len(a.valUpdates))
 	for i, up := range a.valUpdates {

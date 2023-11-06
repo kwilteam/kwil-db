@@ -33,7 +33,7 @@ func (vm *ValidatorModule) Punish(ctx context.Context, validator []byte, newPowe
 // not idempotent. The modules working list of updates is reset until subsequent
 // join/approves are processed for the next block. end of block processing
 // requires providing list of updates to the node's consensus client
-func (vm *ValidatorModule) Finalize(ctx context.Context) []*validators.Validator {
+func (vm *ValidatorModule) Finalize(ctx context.Context) ([]*validators.Validator, error) {
 	return vm.mgr.Finalize(ctx)
 }
 

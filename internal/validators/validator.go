@@ -13,25 +13,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-// maybe use kwil-db/type instead
-
 type Validator = types.Validator
-
-// type Validator struct {
-// 	PubKey []byte
-// 	Power  int64
-// }
-
-// func (v *Validator) String() string {
-// 	return fmt.Sprintf("{pubkey = %x, power = %d}", v.PubKey, v.Power)
-// }
 
 type JoinRequest = types.JoinRequest
 
-// type JoinRequest struct {
-// 	Candidate []byte   // pubkey of the candidate validator
-// 	Power     int64    // the requested power
-// 	ExpiresAt int64    // the block height at which the join request expires
-// 	Board     [][]byte // slice of pubkeys of all the eligible voting validators
-// 	Approved  []bool   // if they approved
-// }
+type ValidatorRemoveProposal = types.ValidatorRemoveProposal

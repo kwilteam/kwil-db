@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -124,13 +125,16 @@ func Test_Types(t *testing.T) {
 		{
 			name: "validator_join",
 			obj: &transactions.ValidatorJoin{
-				Candidate: []byte("asdfadsf"),
-				Power:     1,
+				Power: 1,
 			},
 		},
 		{
 			name: "validator_leave",
-			obj: &transactions.ValidatorLeave{
+			obj:  &transactions.ValidatorLeave{},
+		},
+		{
+			name: "validator_remove",
+			obj: &transactions.ValidatorRemove{
 				Validator: []byte("asdfadsf"),
 			},
 		},
@@ -159,6 +163,8 @@ func Test_Types(t *testing.T) {
 				obj = &transactions.ValidatorJoin{}
 			case *transactions.ValidatorLeave:
 				obj = &transactions.ValidatorLeave{}
+			case *transactions.ValidatorRemove:
+				obj = &transactions.ValidatorRemove{}
 			default:
 				t.Fatal("unknown type")
 			}
