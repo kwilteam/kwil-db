@@ -15,6 +15,7 @@ import (
 // kwil-admin validators join
 // kwil-admin validators approve
 // kwil-admin validators leave
+// kwil-admin validators remove
 
 type ValidatorsCmd struct {
 	List       *ValListCmd       `arg:"subcommand:list"`
@@ -22,6 +23,7 @@ type ValidatorsCmd struct {
 	Join       *ValJoinCmd       `arg:"subcommand:join"`
 	Approve    *ValApproveCmd    `arg:"subcommand:approve"`
 	Leave      *ValLeaveCmd      `arg:"subcommand:leave"`
+	Remove     *ValRemoveCmd     `arg:"subcommand:remove"`
 
 	RPCServer    string `arg:"-s,--rpcserver" default:"127.0.0.1:50051" help:"RPC server address"`
 	ChainID      string `arg:"-c,--chain" default:"" help:"The Kwil network's chain ID to use for transactions"`
@@ -151,6 +153,28 @@ func (vac *ValApproveCmd) run(ctx context.Context, a *args) error {
 			return err
 		}
 		txHash, err = clt.ApproveValidator(ctx, vac.Joiner)
+		return err
+	}()
+
+	return display.Print(display.RespTxHash(txHash), err, a.Vals.OutputFormat)
+}
+
+type ValRemoveCmd struct {
+	Target HexArg `arg:"positional,required" help:"Public key of the validator to propose to remove."`
+	valSignedCmd
+}
+
+var _ runner = (*ValRemoveCmd)(nil)
+
+func (vac *ValRemoveCmd) run(ctx context.Context, a *args) error {
+	var txHash []byte
+	err := func() error {
+		rpcAddr, chainID := a.Vals.RPCServer, a.Vals.ChainID
+		clt, err := vac.client(ctx, rpcAddr, chainID)
+		if err != nil {
+			return err
+		}
+		txHash, err = clt.RemoveValidator(ctx, vac.Target)
 		return err
 	}()
 

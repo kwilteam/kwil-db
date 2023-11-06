@@ -23,7 +23,7 @@ func setup(srcFile string) {
 	}
 }
 
-func TestValidatorStoreUpgradeLegacyToV1(t *testing.T) {
+func TestValidatorStoreUpgradeLegacy(t *testing.T) {
 	setup("./test_data/version0.sqlite")
 
 	//	Open Version 0 DB. It contains: 1 validator and 3 join requests
@@ -65,18 +65,18 @@ func TestValidatorStoreUpgradeLegacyToV1(t *testing.T) {
 	}
 
 	//	Expect failure as expiresAt column doesn't exist in legacy code
-	_, err = vs.ActiveVotes(ctx)
+	_, _, err = vs.ActiveVotes(ctx)
 	if err == nil {
 		t.Fatal(err)
 	}
 
-	// Upgrade DB to version 1
+	// Upgrade DB to latest
 	err = vs.initOrUpgradeDatabase(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Check Version Table to ensure version is 1
+	// Check Version Table to ensure version is latest
 	version, err = vs.currentVersion(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +89,7 @@ func TestValidatorStoreUpgradeLegacyToV1(t *testing.T) {
 func TestValidatorStoreUpgradeV1(t *testing.T) {
 	setup("./test_data/version1.sqlite")
 
-	// Open Version 0 DB. It contains 1 validator and 3 join requests
+	// Open Version 1 DB. It contains 1 validator and 3 join requests
 	ds, td, err := sqlTesting.OpenTestDB("validator_db")
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +97,13 @@ func TestValidatorStoreUpgradeV1(t *testing.T) {
 	defer td()
 	ctx := context.Background()
 	logger := log.NewStdOut(log.DebugLevel)
+
+	realValStoreVersion := valStoreVersion
+	defer func() {
+		valStoreVersion = realValStoreVersion
+	}()
+
+	valStoreVersion = 1
 
 	// validator store
 	vs := &validatorStore{
@@ -128,7 +135,7 @@ func TestValidatorStoreUpgradeV1(t *testing.T) {
 	}
 
 	// Three entries in join_reqs table with expiresAt column
-	votes, err := vs.ActiveVotes(ctx)
+	votes, err := vs.allActiveJoinReqs(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,16 +154,36 @@ func TestValidatorStoreUpgradeV1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Version should be 1, no upgrade
+	// Version should be 1, no upgrade required
 	if versionPost != versionPre {
 		t.Fatalf("Expected version %d, got %d", versionPre, versionPost)
 	}
+
+	valStoreVersion = 2
+
+	// Now it should upgrade from 1->2
+
+	// Upgrade
+	err = vs.initOrUpgradeDatabase(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check Version Table
+	versionPost, err = vs.currentVersion(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Version should be 1, no upgrade required
+	if versionPost != valStoreVersion {
+		t.Fatalf("Expected version %d, got %d", versionPre, valStoreVersion)
+	}
 }
 
-func TestValidatorStoreUpgradeV2(t *testing.T) {
-	setup("./test_data/version2.sqlite")
+func TestValidatorStoreUpgradeFuture(t *testing.T) {
+	setup("./test_data/version9999.sqlite")
 
-	// Open Version 2 DB. It contains 1 validator and 3 join requests
+	// Open Version 9999 DB.
 	ds, td, err := sqlTesting.OpenTestDB("validator_db")
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +201,7 @@ func TestValidatorStoreUpgradeV2(t *testing.T) {
 	// invalid version
 	_, _, err = vs.checkVersion(ctx)
 	if err == nil {
-		t.Fatal(err)
+		t.Fatal("expected an error for an unknown version, but got none")
 	}
 
 	// Upgrade should fail as version is invalid

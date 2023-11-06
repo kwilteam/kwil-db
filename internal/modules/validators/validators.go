@@ -59,3 +59,7 @@ func (v *ValidatorModule) PriceLeave(ctx context.Context) (*big.Int, error) {
 func (v *ValidatorModule) PriceApprove(ctx context.Context) (*big.Int, error) {
 	return v.mgr.PriceApprove(ctx)
 }
+
+func (v *ValidatorModule) PriceRemove(ctx context.Context) (*big.Int, error) {
+	return v.mgr.PriceRemove(ctx)
+}

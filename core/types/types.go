@@ -40,6 +40,13 @@ type Validator struct {
 	Power  int64
 }
 
+// ValidatorRemoveProposal is a proposal from an existing validator (remover) to
+// remove a validator (the target) from the validator set.
+type ValidatorRemoveProposal struct {
+	Target  []byte
+	Remover []byte
+}
+
 func (v *Validator) String() string {
 	return fmt.Sprintf("{pubkey = %x, power = %d}", v.PubKey, v.Power)
 }

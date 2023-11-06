@@ -55,14 +55,24 @@ func (vs *validatorStore) CurrentValidators(ctx context.Context) ([]*Validator, 
 	return vs.currentValidators(ctx)
 }
 
-// ActiveVotes returns the currently ongoing join requests, which includes the
-// candidate validator, the desired power, the set of validators who may
-// approve the request, and if they did approve yet.
-func (vs *validatorStore) ActiveVotes(ctx context.Context) ([]*JoinRequest, error) {
+// ActiveVotes returns the currently ongoing join and removal requests. For join
+// requests, this includes the candidate validator, the desired power, the set
+// of validators who may approve the request, and if they did approve yet.
+func (vs *validatorStore) ActiveVotes(ctx context.Context) ([]*JoinRequest, []*ValidatorRemoveProposal, error) {
 	vs.rw.RLock()
 	defer vs.rw.RUnlock()
 
-	return vs.allActiveJoinReqs(ctx)
+	joins, err := vs.allActiveJoinReqs(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	removals, err := vs.allActiveRemoveReqs(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return joins, removals, nil
 }
 
 // Init deletes all existing validator and join requests data, and inserts the
@@ -94,9 +104,6 @@ func (vs *validatorStore) UpdateValidatorPower(ctx context.Context, validator []
 // validators set returned by CurrentValidators. To support this, AddValidator
 // performs an upsert operation to avoid a UNIQUE constraint violation if
 // re-adding the validator later.
-//
-// TODO: remove if this ultimately has no purpose, but cleanup and pruning of
-// some form is likely needed in the long term
 func (vs *validatorStore) RemoveValidator(ctx context.Context, validator []byte) error {
 	vs.rw.Lock()
 	defer vs.rw.Unlock()
@@ -127,6 +134,25 @@ func (vs *validatorStore) AddApproval(ctx context.Context, joiner, approver []by
 	defer vs.rw.Unlock()
 
 	return vs.addApproval(ctx, joiner, approver)
+}
+
+// AddApproval records that a certain validator has requested removal of a
+// validator from the validator set.
+func (vs *validatorStore) AddRemoval(ctx context.Context, target, validator []byte) error {
+	vs.rw.Lock()
+	defer vs.rw.Unlock()
+
+	return vs.addRemoval(ctx, target, validator)
+}
+
+// DeleteRemoval deletes a removal request. Note that when removing a validator
+// with RemoveValidator, any and all removal requests for removed validator are
+// deleted, so it is not necessary to use this method in that case.
+func (vs *validatorStore) DeleteRemoval(ctx context.Context, target, validator []byte) error {
+	vs.rw.Lock()
+	defer vs.rw.Unlock()
+
+	return vs.deleteRemoval(ctx, target, validator)
 }
 
 // Delete a join request

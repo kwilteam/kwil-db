@@ -17,19 +17,21 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 	var price *big.Int
 	var err error
 
-	switch tx.Body.PayloadType {
-	case transactions.PayloadTypeDeploySchema.String():
+	switch transactions.PayloadType(tx.Body.PayloadType) {
+	case transactions.PayloadTypeDeploySchema:
 		price, err = s.priceDeploy(ctx, tx.Body)
-	case transactions.PayloadTypeDropSchema.String():
+	case transactions.PayloadTypeDropSchema:
 		price, err = s.priceDrop(ctx, tx.Body)
-	case transactions.PayloadTypeExecuteAction.String():
+	case transactions.PayloadTypeExecuteAction:
 		price, err = s.priceAction(ctx, tx.Body)
-	case transactions.PayloadTypeValidatorJoin.String():
+	case transactions.PayloadTypeValidatorJoin:
 		price, err = s.priceValidatorJoin(ctx, tx.Body)
-	case transactions.PayloadTypeValidatorApprove.String():
+	case transactions.PayloadTypeValidatorApprove:
 		price, err = s.priceValidatorApprove(ctx, tx.Body)
-	case transactions.PayloadTypeValidatorLeave.String():
+	case transactions.PayloadTypeValidatorLeave:
 		price, err = s.priceValidatorLeave(ctx, tx.Body)
+	case transactions.PayloadTypeValidatorRemove:
+		price, err = s.priceValidatorRemove(ctx, tx.Body)
 	default:
 		price, err = nil, fmt.Errorf("invalid transaction payload type %s", tx.Body.PayloadType)
 	}
@@ -98,4 +100,8 @@ func (s *Service) priceValidatorLeave(ctx context.Context, txBody *txpb.Transact
 
 func (s *Service) priceValidatorApprove(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
 	return s.vstore.PriceApprove(ctx)
+}
+
+func (s *Service) priceValidatorRemove(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {
+	return s.vstore.PriceRemove(ctx)
 }
