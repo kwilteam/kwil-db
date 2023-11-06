@@ -291,9 +291,9 @@ func DefaultConfig() *KwildConfig {
 			},
 			Consensus: &ConsensusConfig{
 				TimeoutPropose:   3 * time.Second,
-				TimeoutPrevote:   time.Second,
-				TimeoutPrecommit: time.Second,
-				TimeoutCommit:    time.Second,
+				TimeoutPrevote:   2 * time.Second,
+				TimeoutPrecommit: 2 * time.Second,
+				TimeoutCommit:    6 * time.Second,
 			},
 		},
 	}
