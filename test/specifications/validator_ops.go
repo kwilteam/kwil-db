@@ -121,7 +121,7 @@ func approvalCount(joinStatus *types.JoinRequest) int {
 	return cnt
 }
 
-func ValidatorJoinExpirySpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte) {
+func ValidatorJoinExpirySpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, expiry time.Duration) {
 	t.Log("Executing validator join expiry specification")
 
 	// Issue a join request
@@ -136,8 +136,9 @@ func ValidatorJoinExpirySpecification(ctx context.Context, t *testing.T, netops 
 	assert.NoError(t, err)
 	assert.Equal(t, 0, approvalCount(joinStatus))
 
-	// Wait for 15 blocks aka 15 secs for the join request to expire
-	time.Sleep(30 * time.Second)
+	// Wait for the join request to expire
+	t.Logf("Waiting %v for join request to expire", expiry)
+	time.Sleep(expiry)
 
 	// join request should be expired and removed
 	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner)

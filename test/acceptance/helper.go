@@ -173,10 +173,11 @@ func (r *ActHelper) generateNodeConfig() {
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
 	err := nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
-		ChainID: testChainID,
+		ChainID:       testChainID,
+		BlockInterval: time.Second,
 		// InitialHeight: 0,
 		OutputDir:       tmpPath,
-		JoinExpiry:      86400,
+		JoinExpiry:      14400,
 		WithoutGasCosts: true,
 		WithoutNonces:   false,
 	})

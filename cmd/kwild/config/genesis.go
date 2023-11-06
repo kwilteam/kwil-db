@@ -116,7 +116,7 @@ func defaultConsensusParams() *ConsensusParams {
 		},
 		Validator: ValidatorParams{
 			PubKeyTypes: []string{abciPubKeyTypeEd25519},
-			JoinExpiry:  86400, // approx 1 day considering block rate of 1 block/s
+			JoinExpiry:  14400, // approx 1 day considering block rate of 6 sec/s
 		},
 		WithoutNonces:   false,
 		WithoutGasCosts: true,
