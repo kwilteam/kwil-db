@@ -148,13 +148,13 @@ timeout_broadcast_tx_commit = "10s"
 # How long we wait for a proposal block before prevoting nil
 timeout_propose = "3s"
 # How long we wait after receiving +2/3 prevotes for “anything” (ie. not a single block or nil)
-timeout_prevote = "1s"
+timeout_prevote = "2s"
 # How long we wait after receiving +2/3 precommits for “anything” (ie. not a single block or nil)
-timeout_precommit = "1s"
+timeout_precommit = "2s"
 # How long we wait after committing a block, before starting on the new
 # height (this gives us a chance to receive some more precommits, even
 # though we already have +2/3).
-timeout_commit = "1s"
+timeout_commit = "6s"
 
 #######################################################
 ###           P2P Configuration Options             ###
