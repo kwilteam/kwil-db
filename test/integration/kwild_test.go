@@ -64,9 +64,10 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 
 	const expiryBlocks = 15
 	const blockInterval = time.Second
+	const numVals, numNonVals = 3, 1
 	opts := []integration.HelperOpt{
-		integration.WithValidators(3),
-		integration.WithNonValidators(1),
+		integration.WithValidators(numVals),
+		integration.WithNonValidators(numNonVals),
 		integration.WithJoinExpiry(expiryBlocks),
 		integration.WithBlockInterval(blockInterval),
 	}
@@ -89,8 +90,8 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
 			joinerDriver := helper.GetOperatorDriver(ctx, "node3", driverType)
-			joinerPkey := helper.NodePrivateKey("node3")
-			joinerPubKey := joinerPkey.PubKey().Bytes()
+			joinerPrivKey := helper.NodePrivateKey("node3")
+			joinerPubKey := joinerPrivKey.PubKey().Bytes()
 
 			// Start the network with 3 validators & 1 Non-validator
 			specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 3)
@@ -106,7 +107,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			/*
 			 Join Process:
 			 - Node3 requests to join
-			 - Requires atleast 2 nodes to approve
+			 - Requires at least 2 nodes to approve
 			 - Consensus reached, Node3 is a Validator
 			*/
 			specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
@@ -118,7 +119,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			/*
 			 Leave Process:
 			 - node3 issues a leave request -> removes it from the validator list
-			 - Validatorset count should be reduced by 1
+			 - Validator set count should be reduced by 1
 			*/
 			specifications.ValidatorNodeLeaveSpecification(ctx, t, joinerDriver)
 
@@ -130,6 +131,17 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			specifications.ValidatorNodeApproveSpecification(ctx, t, node0Driver, joinerPubKey, 3, 3, false)
 			specifications.ValidatorNodeApproveSpecification(ctx, t, node1Driver, joinerPubKey, 3, 4, true)
 			specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 4)
+
+			/* Remove node 2 (4 validators, nodes 0, 1, and 3 remove node 2)
+			- node 0 votes to remove
+			- node 2 is still a validator
+			- node 1 votes to remove
+			- node 2 is still a validator
+			- node 3 votes to remove
+			- node 2 is no longer a validator
+			*/
+			node2PubKey := helper.NodePrivateKey("node2").PubKey().Bytes()
+			specifications.ValidatorNodeRemoveSpecificationV4R2(ctx, t, node0Driver, node1Driver, joinerDriver /* node3 */, node2PubKey) // joiner is a validator at node
 		})
 	}
 }

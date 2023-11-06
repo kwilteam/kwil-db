@@ -225,6 +225,7 @@ func fileExists(path string) bool {
 
 func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services []string) {
 	r.t.Logf("run in docker compose")
+	time.Sleep(time.Second) // sometimes docker compose fails if previous test had some slow async clean up (no idea)
 
 	envs, err := godotenv.Read(envFile)
 	require.NoError(r.t, err, "failed to parse .env file")
@@ -348,14 +349,21 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 func (r *IntHelper) GetOperatorDriver(ctx context.Context, name string, driverType string) KwilIntDriver {
 	ctr := r.containers[name]
 
-	nodeURL, err := ctr.PortEndpoint(ctx, "50051", "")
+	rpcURL, err := ctr.PortEndpoint(ctx, "50051", "")
 	require.NoError(r.t, err, "failed to get node url")
 	gatewayURL, err := ctr.PortEndpoint(ctx, "8080", "")
 	require.NoError(r.t, err, "failed to get gateway url")
+	p2pURL, err := ctr.PortEndpoint(ctx, "26656", "tcp")
+	require.NoError(r.t, err, "failed to get p2p url")
 	cometBftURL, err := ctr.PortEndpoint(ctx, "26657", "tcp")
-	require.NoError(r.t, err, "failed to get cometBft url")
+	require.NoError(r.t, err, "failed to get cometBFT RPC url")
 
-	r.t.Logf("nodeURL: %s gatewayURL: %s cometBftURL: %s for container name: %s", nodeURL, gatewayURL, cometBftURL, name)
+	r.t.Logf(`user RPC URL: "%s"
+gateway URL: "%s"
+p2p URL: "%s"
+cometBFT URL: "%s"
+container name: "%s"`,
+		rpcURL, gatewayURL, cometBftURL, p2pURL, name)
 
 	privKeyB := r.privateKeys[name].Bytes()
 	privKeyHex := hex.EncodeToString(privKeyB)

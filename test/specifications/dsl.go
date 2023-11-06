@@ -80,6 +80,7 @@ type ValidatorOpsDsl interface {
 	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error)
 	ValidatorNodeJoin(ctx context.Context) ([]byte, error)
 	ValidatorNodeLeave(ctx context.Context) ([]byte, error)
+	ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error)
 	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
 	ValidatorsList(ctx context.Context) ([]*types.Validator, error)
 }
