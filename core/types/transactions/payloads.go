@@ -21,6 +21,7 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeCallAction,
 		PayloadTypeValidatorJoin,
 		PayloadTypeValidatorApprove,
+		PayloadTypeValidatorRemove,
 		PayloadTypeValidatorLeave:
 		return true
 	default:
@@ -35,6 +36,7 @@ const (
 	PayloadTypeCallAction       PayloadType = "call_action"
 	PayloadTypeValidatorJoin    PayloadType = "validator_join"
 	PayloadTypeValidatorLeave   PayloadType = "validator_leave"
+	PayloadTypeValidatorRemove  PayloadType = "validator_remove"
 	PayloadTypeValidatorApprove PayloadType = "validator_approve"
 )
 
@@ -263,8 +265,7 @@ func (a *ActionCall) Type() PayloadType {
 }
 
 type ValidatorJoin struct {
-	Candidate []byte
-	Power     uint64
+	Power uint64
 }
 
 func (v *ValidatorJoin) Type() PayloadType {
@@ -301,9 +302,26 @@ func (v *ValidatorApprove) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
-type ValidatorLeave struct {
+type ValidatorRemove struct {
 	Validator []byte
 }
+
+func (v *ValidatorRemove) Type() PayloadType {
+	return PayloadTypeValidatorRemove
+}
+
+var _ encoding.BinaryUnmarshaler = (*ValidatorRemove)(nil)
+var _ encoding.BinaryMarshaler = (*ValidatorRemove)(nil)
+
+func (v *ValidatorRemove) UnmarshalBinary(b []byte) error {
+	return serialize.DecodeInto(b, v)
+}
+
+func (v *ValidatorRemove) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(v)
+}
+
+type ValidatorLeave struct{}
 
 func (v *ValidatorLeave) Type() PayloadType {
 	return PayloadTypeValidatorLeave

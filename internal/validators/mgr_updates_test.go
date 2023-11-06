@@ -17,11 +17,13 @@ import (
 type stubValStore struct {
 	current []*Validator
 	joins   []*JoinRequest
+	removes []*ValidatorRemoveProposal
 }
 
 func (vs *stubValStore) Init(_ context.Context, vals []*Validator) error {
 	vs.current = vals
 	vs.joins = nil
+	vs.removes = nil
 	return nil
 }
 
@@ -47,8 +49,8 @@ func (vs *stubValStore) UpdateValidatorPower(_ context.Context, validator []byte
 	return nil
 }
 
-func (vs *stubValStore) ActiveVotes(context.Context) ([]*JoinRequest, error) {
-	return vs.joins, nil
+func (vs *stubValStore) ActiveVotes(context.Context) ([]*JoinRequest, []*ValidatorRemoveProposal, error) {
+	return vs.joins, nil, nil
 }
 
 func (vs *stubValStore) StartJoinRequest(_ context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
@@ -70,6 +72,14 @@ func (vs *stubValStore) DeleteJoinRequest(_ context.Context, joiner []byte) erro
 		}
 	}
 	return errors.New("unknown candidate")
+}
+
+func (vs *stubValStore) AddRemoval(_ context.Context, target, validator []byte) error {
+	return nil
+}
+
+func (vs *stubValStore) DeleteRemoval(ctx context.Context, target, validator []byte) error {
+	return nil
 }
 
 func (vs *stubValStore) AddApproval(_ context.Context, joiner []byte, approver []byte) error {
@@ -204,7 +214,7 @@ func TestValidatorMgr_updates(t *testing.T) {
 	}
 
 	// Should be no validator updates yet (subthresh at 1 of 2 required)
-	updates := mgr.Finalize(ctx)
+	updates, _ := mgr.Finalize(ctx)
 	if len(updates) != 0 {
 		t.Fatalf("wanted no validator updates, got %d", len(updates))
 	}
@@ -215,7 +225,7 @@ func TestValidatorMgr_updates(t *testing.T) {
 	if err != nil {
 		t.Errorf("valid approval failed: %v", err)
 	}
-	updates = mgr.Finalize(ctx)
+	updates, _ = mgr.Finalize(ctx)
 	if len(updates) != 1 {
 		t.Fatalf("wanted a validator update, got %d", len(updates))
 	}
@@ -227,7 +237,7 @@ func TestValidatorMgr_updates(t *testing.T) {
 	}
 
 	// Finalize again (another block), should be empty updates
-	updates = mgr.Finalize(ctx)
+	updates, _ = mgr.Finalize(ctx)
 	if len(updates) != 0 {
 		t.Fatalf("wanted no validator updates, got %d", len(updates))
 	}
