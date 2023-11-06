@@ -186,7 +186,7 @@ func NewValidatorMgr(ctx context.Context, datastore Datastore, opts ...Validator
 		candidates: make(map[string]*joinReq),
 		removals:   make(map[string]map[string]bool),
 		log:        log.NewNoOp(),
-		joinExpiry: 86400,
+		joinExpiry: 14400, // really should *always* come from opts in production to match consensus config
 	}
 	for _, opt := range opts {
 		opt(vm)
