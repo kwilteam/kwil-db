@@ -75,6 +75,8 @@ type IntTestConfig struct {
 	CreatorSigner auth.Signer
 	VisitorSigner auth.Signer
 
+	BlockInterval time.Duration // timeout_commit i.e. minimum block interval
+
 	NValidator    int
 	NNonValidator int
 	JoinExpiry    int64
@@ -95,7 +97,7 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 		privateKeys: make(map[string]ed25519.PrivKey),
 		containers:  make(map[string]*testcontainers.DockerContainer),
 		cfg: &IntTestConfig{
-			JoinExpiry: 86400,
+			JoinExpiry: 14400,
 		},
 	}
 
@@ -109,6 +111,12 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 }
 
 type HelperOpt func(*IntHelper)
+
+func WithBlockInterval(d time.Duration) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.BlockInterval = d
+	}
+}
 
 func WithValidators(n int) HelperOpt {
 	return func(r *IntHelper) {
@@ -187,7 +195,8 @@ func (r *IntHelper) generateNodeConfig() {
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
-		ChainID: testChainID,
+		ChainID:       testChainID,
+		BlockInterval: r.cfg.BlockInterval,
 		// InitialHeight:           0,
 		NValidators:             r.cfg.NValidator,
 		NNonValidators:          r.cfg.NNonValidator,

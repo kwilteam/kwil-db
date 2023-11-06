@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	// NOTE: do not use the types from these internal packages on nodecfg's
 	// exported API.
@@ -29,7 +30,8 @@ const (
 )
 
 type NodeGenerateConfig struct {
-	ChainID string
+	ChainID       string
+	BlockInterval time.Duration
 	// InitialHeight int64 // ?
 	OutputDir       string
 	JoinExpiry      int64
@@ -38,7 +40,8 @@ type NodeGenerateConfig struct {
 }
 
 type TestnetGenerateConfig struct {
-	ChainID string
+	ChainID       string
+	BlockInterval time.Duration
 	// InitialHeight           int64
 	NValidators             int
 	NNonValidators          int
@@ -71,6 +74,9 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 
 	cfg := config.DefaultConfig()
 	cfg.RootDir = rootDir
+	if genCfg.BlockInterval > 0 {
+		cfg.ChainCfg.Consensus.TimeoutCommit = genCfg.BlockInterval
+	}
 	chainRoot := filepath.Join(rootDir, abciDir)
 	// NOTE: not the fully re-rooted path since this may run in a container. The
 	// caller can update PrivateKeyPath if desired.
@@ -206,6 +212,9 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	}
 
 	// Overwrite default config
+	if genCfg.BlockInterval > 0 {
+		cfg.ChainCfg.Consensus.TimeoutCommit = genCfg.BlockInterval
+	}
 	cfg.ChainCfg.P2P.AddrBookStrict = false
 	cfg.ChainCfg.P2P.AllowDuplicateIP = true
 	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
