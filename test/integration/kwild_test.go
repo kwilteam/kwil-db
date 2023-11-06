@@ -5,6 +5,7 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/test/integration"
 	"github.com/kwilteam/kwil-db/test/specifications"
@@ -20,6 +21,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	opts := []integration.HelperOpt{
+		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(4),
 		integration.WithNonValidators(0),
 	}
@@ -60,11 +62,16 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	ctx := context.Background()
 
+	const expiryBlocks = 15
+	const blockInterval = time.Second
 	opts := []integration.HelperOpt{
 		integration.WithValidators(3),
 		integration.WithNonValidators(1),
-		integration.WithJoinExpiry(15),
+		integration.WithJoinExpiry(expiryBlocks),
+		integration.WithBlockInterval(blockInterval),
 	}
+
+	expiryWait := 2 * expiryBlocks * blockInterval
 
 	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
@@ -92,9 +99,9 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 				Join Expiry:
 				- Node3 requests to join
 				- No approval from other nodes
-				- Join request should expire after 15 blocks (15secs)
+				- Join request should expire after 15 blocks
 			*/
-			specifications.ValidatorJoinExpirySpecification(ctx, t, joinerDriver, joinerPubKey)
+			specifications.ValidatorJoinExpirySpecification(ctx, t, joinerDriver, joinerPubKey, expiryWait)
 
 			/*
 			 Join Process:
@@ -132,6 +139,7 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 
 	opts := []integration.HelperOpt{
 		integration.WithValidators(4),
+		integration.WithBlockInterval(time.Second),
 	}
 
 	testDrivers := strings.Split(*drivers, ",")
