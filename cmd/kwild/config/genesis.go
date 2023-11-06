@@ -103,7 +103,7 @@ func DefaultGenesisConfig() *GenesisConfig {
 func defaultConsensusParams() *ConsensusParams {
 	return &ConsensusParams{
 		Block: BlockParams{
-			MaxBytes: 21 * 1024 * 1024, // 21 MiB
+			MaxBytes: 6 * 1024 * 1024, // 21 MiB
 			MaxGas:   -1,
 		},
 		Evidence: EvidenceParams{
