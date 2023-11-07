@@ -51,6 +51,9 @@ func (ngkc *NodeGenAuthKeyCmd) run(ctx context.Context, a *args) error {
 	if fileExists(clientKeyFile) {
 		return fmt.Errorf("key file exists: %v", clientKeyFile)
 	}
+	if err := os.MkdirAll(filepath.Dir(clientKeyFile), 0755); err != nil {
+		return fmt.Errorf("failed to create key file dir: %v", err)
+	}
 
 	clientCertFile := a.Node.ClientTLSCertFile
 	if !filepath.IsAbs(clientCertFile) {
@@ -58,6 +61,9 @@ func (ngkc *NodeGenAuthKeyCmd) run(ctx context.Context, a *args) error {
 	}
 	if fileExists(clientCertFile) {
 		return fmt.Errorf("cert file exists: %v", clientCertFile)
+	}
+	if err := os.MkdirAll(filepath.Dir(clientCertFile), 0755); err != nil {
+		return fmt.Errorf("failed to create key file dir: %v", err)
 	}
 
 	return transport.GenTLSKeyPair(clientCertFile, clientKeyFile, "kwild CA", nil)
