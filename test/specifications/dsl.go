@@ -74,13 +74,25 @@ type TxQueryDsl interface {
 	TxSuccess(ctx context.Context, txHash []byte) error
 }
 
-// ValidatorOpsDsl is a DSL for validator set updates specification such as join, leave, approve, etc.
-type ValidatorOpsDsl interface {
+// ValidatorStatusDsl is the dsl for checking validator status, including
+// current validator set and active join requests.
+type ValidatorStatusDsl interface {
 	TxQueryDsl
+	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
+	ValidatorsList(ctx context.Context) ([]*types.Validator, error)
+}
+
+// ValidatorRemoveDsl is the dsl for the validator remove procedure.
+type ValidatorRemoveDsl interface {
+	ValidatorStatusDsl
+	ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error)
+}
+
+// ValidatorOpsDsl is a DSL for validator set updates specification such as
+// join, leave, approve, etc. TODO: split this up?
+type ValidatorOpsDsl interface {
+	ValidatorStatusDsl
 	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error)
 	ValidatorNodeJoin(ctx context.Context) ([]byte, error)
 	ValidatorNodeLeave(ctx context.Context) ([]byte, error)
-	ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error)
-	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
-	ValidatorsList(ctx context.Context) ([]*types.Validator, error)
 }

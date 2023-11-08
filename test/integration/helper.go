@@ -242,7 +242,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
 	})
 
-	r.t.Cleanup(func() {
+	r.t.Cleanup(func() { // redundant if test defers Teardown()
 		r.Teardown()
 	})
 

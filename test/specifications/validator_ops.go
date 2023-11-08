@@ -47,21 +47,13 @@ func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops Va
 	assert.Equal(t, valCount, len(vals))
 }
 
-// ValidatorNodeRemoveSpecificationN4R2 tests the validator remove process on a
-// network with 4 validators, where nodes 0, 1, and 3 target node 2.
-func ValidatorNodeRemoveSpecificationV4R2(ctx context.Context, t *testing.T, n0, n1, n3 ValidatorOpsDsl, n2PubKey []byte) {
+// ValidatorNodeRemoveSpecificationN4R1 tests the validator remove process on a
+// network with 4 validators, where 3 nodes target the last.
+func ValidatorNodeRemoveSpecificationV4R1(ctx context.Context, t *testing.T, n0, n1, n2 ValidatorRemoveDsl, target []byte) {
 	t.Log("Executing network node remove specification")
-	// NOTE: In the integration tests where there are multiple nodes and each
-	// has their own driver (which individually satisfy a DSL), what is the
-	// right way to define these specifications? e.g.
-	// TestKwildValidatorUpdatesIntegration creates an integration helper with a
-	// number of validators and non-validators defined in that test function, so
-	// how is that network information supposed to be conveyed to the test
-	// function?  Should it just be part of the assumed environment of the
-	// specification i.e. V4R2 for validators = 4, remove node = 2?
-	const expectNumVals = 4
 
 	// Ensure that the validator set precondition for this spec test is met.
+	const expectNumVals = 4
 	vals, err := n0.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	numVals := len(vals)
@@ -70,13 +62,13 @@ func ValidatorNodeRemoveSpecificationV4R2(ctx context.Context, t *testing.T, n0,
 		t.Fatalf("have %d validators, but require %d", numVals, expectNumVals)
 	}
 
-	// node 0 sends remove tx targeting node 2
-	rec, err := n0.ValidatorNodeRemove(ctx, n2PubKey)
+	// node 0 sends remove tx targeting node 3
+	rec, err := n0.ValidatorNodeRemove(ctx, target)
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
 
-	// node 2 is still in the validator set
+	// node 3 is still in the validator set
 	vals, err = n0.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	numVals = len(vals)
@@ -86,12 +78,12 @@ func ValidatorNodeRemoveSpecificationV4R2(ctx context.Context, t *testing.T, n0,
 	}
 
 	// node 1 also sends remove tx
-	rec, err = n1.ValidatorNodeRemove(ctx, n2PubKey)
+	rec, err = n1.ValidatorNodeRemove(ctx, target)
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
 
-	// node 2 is still in the validator set (2 / 4 validators is sub-threshold)
+	// node 3 is still in the validator set (2 / 4 validators is sub-threshold)
 	vals, err = n0.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	numVals = len(vals)
@@ -100,13 +92,13 @@ func ValidatorNodeRemoveSpecificationV4R2(ctx context.Context, t *testing.T, n0,
 		t.Fatalf("have %d validators, but expected %d", numVals, expectNumVals)
 	}
 
-	// node 3 also sends remove tx
-	rec, err = n3.ValidatorNodeRemove(ctx, n2PubKey)
+	// node 2 also sends remove tx
+	rec, err = n2.ValidatorNodeRemove(ctx, target)
 	assert.NoError(t, err)
 
 	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
 
-	// node 2 is gone from the validator set
+	// node 3 is gone from the validator set
 	vals, err = n0.ValidatorsList(ctx)
 	assert.NoError(t, err)
 	numVals = len(vals)
