@@ -126,10 +126,10 @@ services:
       kwil-int-testnet:
         ipv4_address: 172.10.100.101
     healthcheck:
-      test: [ "CMD", "nc", "-v", "50051" ]
-      interval: 5s
-      timeout: 3s
-      retries: 3
+      test: [ "CMD", "nc", "-vz", "localhost", "50051" ]
+      interval: 1s
+      timeout: 6s
+      retries: 20
 
 
 networks:

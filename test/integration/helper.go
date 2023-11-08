@@ -251,7 +251,9 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 		waitMsg := defaultWaitStrategies[service]
 		stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
 	}
-	err = stack.Up(ctx, compose.RunServices(services...))
+	// Use compose.Wait to wait for containers to become "healthy" according to
+	// their defined healthchecks.
+	err = stack.Up(ctx, compose.Wait(true), compose.RunServices(services...))
 	r.t.Log("docker compose up")
 	require.NoError(r.t, err, "failed to start kwild cluster")
 
