@@ -106,10 +106,12 @@ services:
     networks:
       kwil-int-testnet:
         ipv4_address: 172.10.100.5
+    depends_on:
+      - ext3
     command: |
       --root_dir=/app/kwil
       --log.level=${LOG_LEVEL:-debug}
-      --app.extension_endpoints=ext1:50051
+      --app.extension_endpoints=ext3:50051
       --app.grpc_listen_addr=:50051
       --app.http_listen_addr=:8080
       --chain.p2p.external_address=tcp://0.0.0.0:26656
@@ -131,6 +133,20 @@ services:
       timeout: 6s
       retries: 20
 
+  # this one is just for node3, which is started in a separate compose project in some tests
+  ext3:
+    container_name: math_ext3
+    image: kwilbrennan/extensions-math:multi-arch
+    ports:
+      - "50071:50051"
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.100.102
+    healthcheck:
+      test: [ "CMD", "nc", "-vz", "localhost", "50051" ]
+      interval: 1s
+      timeout: 6s
+      retries: 20
 
 networks:
   kwil-int-testnet:

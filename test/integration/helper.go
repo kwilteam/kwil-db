@@ -44,16 +44,18 @@ var (
 )
 
 var defaultWaitStrategies = map[string]string{
-	"ext1":  "listening on",
-	"node0": "Starting Node service",
-	"node1": "Starting Node service",
-	"node2": "Starting Node service",
-	"node3": "Starting Node service",
+	ExtContainer:  "listening on",
+	Ext3Container: "listening on",
+	"node0":       "Starting Node service",
+	"node1":       "Starting Node service",
+	"node2":       "Starting Node service",
+	"node3":       "Starting Node service",
 }
 
 const (
-	ExtContainer = "ext1"
-	testChainID  = "kwil-test-chain"
+	ExtContainer  = "ext1"
+	Ext3Container = "ext3"
+	testChainID   = "kwil-test-chain"
 )
 
 // IntTestConfig is the config for integration test
@@ -258,8 +260,8 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	require.NoError(r.t, err, "failed to start kwild cluster")
 
 	for _, name := range services {
-		// skip ext1
-		if name == ExtContainer {
+		// skip ext containers
+		if name == ExtContainer || name == Ext3Container {
 			continue
 		}
 		container, err := dc.ServiceContainer(ctx, name)

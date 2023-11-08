@@ -14,7 +14,7 @@ import (
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 var drivers = flag.String("drivers", "client,cli", "comma separated list of drivers to run")
 
-var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", "node3"}
+var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", integration.Ext3Container, "node3"}
 var numServices = len(allServices)
 
 func TestKwildDatabaseIntegration(t *testing.T) {
@@ -189,8 +189,8 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
-			// Bringup ext1, node 0,1,2 services but not node3
-			helper.Setup(ctx, allServices[:numServices-1])
+			// Bringup ext1, node 0,1,2 services but not node3 or ext3
+			helper.Setup(ctx, allServices[:numServices-2])
 			defer helper.Teardown()
 
 			// running forever for local development
@@ -218,7 +218,7 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 				3. Get the node driver
 				4. Verify that the database exists on the new node
 			*/
-			helper.RunDockerComposeWithServices(ctx, allServices[numServices-1:])
+			helper.RunDockerComposeWithServices(ctx, allServices[numServices-2:])
 			//node3Driver := helper.GetUserDriver(ctx, helper.ServiceContainer("node3"))
 			node3Driver := helper.GetUserDriver(ctx, "node3", driverType)
 
