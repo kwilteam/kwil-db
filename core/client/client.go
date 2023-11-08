@@ -348,7 +348,7 @@ func (c *Client) RemoveValidator(ctx context.Context, target []byte, opts ...TxO
 		return nil, err
 	}
 
-	return c.transportClient.Broadcast(ctx, tx)
+	return c.rpc.Broadcast(ctx, tx)
 }
 
 func (c *Client) ValidatorJoin(ctx context.Context) ([]byte, error) {
