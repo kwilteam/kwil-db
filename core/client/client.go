@@ -43,6 +43,20 @@ type TransportClient interface {
 	EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
 	CurrentValidators(ctx context.Context) ([]*types.Validator, error)
+
+	/*
+		TODO: Client should also support the following methods:
+		- ApproveDeposit
+		- Deposit
+		- Withdraw
+		- ApproveWithdraw
+		- Allowance
+		- BalanceOf
+
+		internal: To ensure that the
+		- initTokenContract
+		- initEscrowContract
+	*/
 }
 
 var (
@@ -55,8 +69,10 @@ type Client struct {
 	// transportClient is more useful for testing rn, I'd like to add http
 	// client as well to test HTTP api. This also enables test the cli by mocking.
 	transportClient TransportClient
-	Signer          auth.Signer
-	logger          log.Logger
+
+	// TODO: chainClient ChainClient that can be used to interact with the chain to do approvals, deposits, etc.
+	Signer auth.Signer
+	logger log.Logger
 	// chainID is used when creating transactions as replay protection since the
 	// signatures will only be valid on this network.
 	chainID string

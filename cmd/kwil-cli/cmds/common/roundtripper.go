@@ -53,5 +53,12 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 	}
 	defer clt.Close()
 
+	// TODO:
+	/*
+		if conf.ChainRPCURL != "" {
+			create a chainClient
+		}
+		get the token and escrow contract instances. not here, but in the correspondong method functions
+	*/
 	return fn(ctx, clt, conf)
 }
