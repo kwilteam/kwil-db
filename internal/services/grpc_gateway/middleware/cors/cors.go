@@ -36,6 +36,7 @@ func MCors(cors []string) *middleware.NamedMiddleware {
 					w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 					w.Header().Set("Access-Control-Allow-Methods", AllowMethods)
 					w.Header().Set("Access-Control-Allow-Headers", AllowHeaders)
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
 				}
 
 				if r.Method == "OPTIONS" {
