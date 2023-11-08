@@ -44,7 +44,29 @@ type TransportClient interface {
 	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
 	CurrentValidators(ctx context.Context) ([]*types.Validator, error)
 	VerifySignature(ctx context.Context, sender []byte, signature *auth.Signature, message []byte) error
+
+	/*
+		TODO: Client should also support the following methods:
+		- ApproveDeposit
+		- Deposit
+		- Withdraw
+		- ApproveWithdraw
+		- Allowance
+		- BalanceOf
+
+		internal: To ensure that the
+		- initTokenContract
+		- initEscrowContract
+	*/
 }
+
+// type TokenBridge interface {
+// 	Approve(ctx context.Context, spender string, amount *big.Int, privateKey *ecdsa.PrivateKey) (string, error)
+// 	Deposit(ctx context.Context, amount *big.Int, privateKey *ecdsa.PrivateKey) (string, error)
+// 	Balance(ctx context.Context, address string) (*big.Int, error)
+// 	Allowance(ctx context.Context, owner, spender string) (*big.Int, error)
+// 	BalanceOf(ctx context.Context, address string) (*big.Int, error)
+// }
 
 var (
 	ErrNotFound = errors.New("not found")
@@ -56,14 +78,27 @@ type Client struct {
 	// transportClient is more useful for testing rn, I'd like to add http
 	// client as well to test HTTP api. This also enables test the cli by mocking.
 	transportClient TransportClient
-	Signer          auth.Signer
-	logger          log.Logger
+
+	//bridgeClient bridge.BridgeClient
+
+	// TODO: chainClient ChainClient that can be used to interact with the chain to do approvals, deposits, etc.
+	Signer auth.Signer
+	logger log.Logger
 	// chainID is used when creating transactions as replay protection since the
 	// signatures will only be valid on this network.
 	chainID string
 
 	tlsCertFile string // the tls cert file path
+	//brConfig    BridgeConfig
 }
+
+// type BridgeConfig struct {
+// 	enabled   bool
+// 	chainCode chain.ChainCode
+// 	endpoint  string
+// 	tokenAddr string
+// 	poolAddr  string
+// }
 
 // Dial creates a Kwil client. It will by default use http connection, which
 // can be overridden by using WithTransportClient.
@@ -384,6 +419,15 @@ func (c *Client) validatorUpdate(ctx context.Context, power int64, opts ...TxOpt
 	}
 	return hash, nil
 }
+
+// func (c *Client) InitChainClient() error {
+// 	cc, err := provider.New(c.chainClientConfig.Endpoint, c.chainClientConfig.ChainCode, c.chainClientConfig.TokenAddr, c.chainClientConfig.PoolAddr)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	c.chainClient = cc
+// 	return nil
+// }
 
 // convertTuples converts user passed tuples to strings.
 // this is necessary for RLP encoding

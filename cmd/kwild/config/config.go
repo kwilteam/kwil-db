@@ -13,6 +13,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types/chain"
 
 	"github.com/spf13/viper"
 )
@@ -57,6 +58,7 @@ type AppConfig struct {
 	Hostname     string `mapstructure:"hostname"`
 	ProfileMode  string `mapstructure:"profile_mode"`
 	ProfileFile  string `mapstructure:"profile_file"`
+	BridgeConfig TokenBridgeConfig
 }
 
 type SnapshotConfig struct {
@@ -148,6 +150,15 @@ type ChainConfig struct {
 	Mempool   *MempoolConfig   `mapstructure:"mempool"`
 	StateSync *StateSyncConfig `mapstructure:"statesync"`
 	Consensus *ConsensusConfig `mapstructure:"consensus"`
+}
+
+type TokenBridgeConfig struct {
+	Endpoint              string
+	Code                  chain.ChainCode
+	EscrowAddress         string
+	TokenAddress          string
+	RequiredConfirmations int64
+	ReconnectInterval     time.Duration
 }
 
 func defaultMoniker() string {
@@ -256,6 +267,14 @@ func DefaultConfig() *KwildConfig {
 			// 	MaxSnapshots:    3,
 			// 	SnapshotDir:     DefaultSnapshotsDir,
 			// },
+			BridgeConfig: TokenBridgeConfig{
+				Endpoint:              "ws://localhost:8545",
+				RequiredConfirmations: 12,
+				ReconnectInterval:     30 * time.Second,
+				EscrowAddress:         "0xcc46cc0960d6903a5b7a76d431aed56fef70e7b0",
+				TokenAddress:          "0x8ce9d23b427b80ab5e21c272a46acd3a27082836",
+				Code:                  chain.GOERLI,
+			},
 		},
 		Logging: &Logging{
 			Level:        "info",

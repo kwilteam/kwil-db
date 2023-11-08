@@ -18,6 +18,13 @@ type KwilCliConfig struct {
 	GrpcURL     string
 	ChainID     string
 	TLSCertFile string
+
+	// TODO: add more config values
+	// chainRPCUrl string
+	// escrow address
+	// token address
+	// chain code
+	// What uniquely identifies a chain?? url? chain code??
 }
 
 func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {

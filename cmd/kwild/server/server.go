@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
+	"github.com/kwilteam/kwil-db/internal/chainsyncer"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
@@ -33,6 +34,7 @@ type Server struct {
 	gateway      *gateway.GatewayServer
 	admServer    *grpc.Server
 	cometBftNode *cometbft.CometBftNode
+	chainSyncer  *chainsyncer.ChainSyncer
 	closers      *closeFuncs
 	log          log.Logger
 
@@ -177,6 +179,17 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.cometBftNode.Start()
 	})
 	s.log.Info("comet node started")
+
+	group.Go(func() error {
+		go func() {
+			<-groupCtx.Done()
+			s.log.Info("stop chain syncer")
+			if err := s.chainSyncer.Close(); err != nil {
+				s.log.Warn("failed to close chain syncer", zap.Error(err))
+			}
+		}()
+		return s.chainSyncer.Start()
+	})
 
 	err := group.Wait()
 

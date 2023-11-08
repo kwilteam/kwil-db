@@ -35,10 +35,13 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 
+	bClient "github.com/kwilteam/kwil-db/core/bridge/client"
+	"github.com/kwilteam/kwil-db/core/bridge/syncer"
 	"github.com/kwilteam/kwil-db/core/log"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
+	"github.com/kwilteam/kwil-db/internal/chainsyncer"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
@@ -79,6 +82,8 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
+	// ChainSyncer
+	chainsyncer := buildChainSyncer(d, closers)
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, datasetsModule, accs, vstore,
 		&wrappedCometBFTClient{cometBftClient}, abciApp)
@@ -93,6 +98,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		admServer:    admServer,
 		gateway:      buildGatewayServer(d),
 		cometBftNode: cometBftNode,
+		chainSyncer:  chainsyncer,
 		log:          *d.log.Named("server"),
 		closers:      closers,
 		cfg:          d.cfg,
@@ -520,4 +526,27 @@ func failBuild(err error, msg string) {
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
 	}
+}
+
+func buildChainSyncer(d *coreDependencies, closer *closeFuncs) *chainsyncer.ChainSyncer {
+	// build bridge client
+	bridgeClient, err := bClient.New(d.cfg.AppCfg.BridgeConfig.Endpoint,
+		d.cfg.AppCfg.BridgeConfig.Code,
+		d.cfg.AppCfg.BridgeConfig.EscrowAddress,
+		d.cfg.AppCfg.BridgeConfig.TokenAddress)
+
+	if err != nil {
+		failBuild(err, "failed to build bridge client")
+	}
+
+	// build block syncer
+	blockSyncer, err := syncer.New(bridgeClient.ChainClient())
+	if err != nil {
+		failBuild(err, "failed to build block syncer")
+	}
+
+	// build chain syncer
+	chainSyncer := chainsyncer.New(bridgeClient, blockSyncer)
+	//chainSyncer.Start()
+	return chainSyncer
 }
