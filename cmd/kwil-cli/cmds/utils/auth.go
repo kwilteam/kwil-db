@@ -41,7 +41,6 @@ func authCmd() *cobra.Command {
 				return fmt.Errorf("private key not provided")
 			}
 
-			// TODO: verify chainID and other info
 			signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}
 			if conf.GrpcURL == "" {
 				// this is somewhat redundant since the config marks it as required, but in case the config is changed
@@ -54,8 +53,6 @@ func authCmd() *cobra.Command {
 			}
 
 			userPubkey := signer.PublicKey()
-
-			// TODO: if already exists, prompt to overwrite ?????
 
 			// KGW auth is not part of Kwil API, we use a standard http client
 			// this client is to reuse connection
@@ -71,10 +68,11 @@ func authCmd() *cobra.Command {
 				return fmt.Errorf("request for authentication: %w", err)
 			}
 
-			// TODO: need a authVersion configuration, or should this be part of the authParam?
-			// It seems reasonable to have this as part of the authParam, and SDK
-			// will use the version to compose the message using different template.
-			// According to SIWE, the version is fixed to 1 right now.
+			// NOTE: It seems reasonable to have authVersion as part of the
+			// authParam, and SDK then use the version to compose the message
+			// using different template.
+			// According to SIWE, the version is the version of the spec, and
+			// it is fixed to "1" right now.
 			msg := composeAuthMessage(authParam, conf.GrpcURL, userAddress,
 				authURI, "1", conf.ChainID)
 
@@ -146,7 +144,8 @@ func requestAuthParameter(hc *http.Client, target string, address string) (*auth
 // composeAuthMessage composes the SIWE-like message to sign.
 // param is the result of GET request for authentication.
 // ALl the other parameters are expected from config.
-func composeAuthMessage(param *authParam, domain string, address string, uri string, version string, chainID string) string {
+func composeAuthMessage(param *authParam, domain string, address string,
+	uri string, version string, chainID string) string {
 	var msg bytes.Buffer
 	msg.WriteString(
 		fmt.Sprintf("%s wants you to sign in with your account:\n", domain))
