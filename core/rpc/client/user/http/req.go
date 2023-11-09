@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+
 	"google.golang.org/genproto/googleapis/rpc/status"
 
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
@@ -392,4 +394,40 @@ func parseChainInfoResponse(resp *http.Response) (*types.ChainInfo, error) {
 	}
 
 	return &info, nil
+}
+
+func newVerifySignatureRequest(server string, sender []byte, sig *auth.Signature,
+	msg []byte) (*http.Request, error) {
+	req := &txpb.VerifySignatureRequest{
+		Signature: &txpb.Signature{
+			SignatureBytes: sig.Signature,
+			SignatureType:  sig.Type,
+		},
+		Sender: sender,
+		Msg:    msg,
+	}
+
+	var bodyReader io.Reader
+	buf, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	bodyReader = bytes.NewReader(buf)
+
+	return NewJsonPostRequest(server, "/api/v1/verify_signature", bodyReader)
+}
+
+func parseVerifySignatureResponse(resp *http.Response) (bool, error) {
+	if resp.StatusCode != http.StatusOK {
+		return false, parseErrorResponse(resp)
+	}
+
+	var res txpb.VerifySignatureResponse
+	err := unmarshalResponse(resp.Body, &res)
+	if err != nil {
+		return false, fmt.Errorf("parseVerifySignatureResponse: %w", err)
+	}
+
+	return res.Valid, nil
 }

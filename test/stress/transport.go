@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -105,5 +106,10 @@ func (tc *timedClient) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (
 }
 
 func (tc *timedClient) CurrentValidators(ctx context.Context) ([]*types.Validator, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (tc *timedClient) VerifySignature(ctx context.Context, pubKey []byte,
+	signature *auth.Signature, message []byte) (bool, error) {
 	panic("not implemented") // TODO: Implement
 }

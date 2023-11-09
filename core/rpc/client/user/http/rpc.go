@@ -7,6 +7,8 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
@@ -197,4 +199,20 @@ func (c *Client) CurrentValidators(ctx context.Context) ([]*types.Validator, err
 	defer resp.Body.Close()
 
 	return parseCurrentValidatorsResponse(resp)
+}
+
+func (c *Client) VerifySignature(ctx context.Context, sender []byte,
+	signature *auth.Signature, message []byte) (bool, error) {
+	req, err := newVerifySignatureRequest(c.target, sender, signature, message)
+	if err != nil {
+		return false, fmt.Errorf("create request: %w", err)
+	}
+
+	resp, err := c.makeRequest(req.WithContext(ctx))
+	if err != nil {
+		return false, fmt.Errorf("make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	return parseVerifySignatureResponse(resp)
 }

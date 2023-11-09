@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+
 	"google.golang.org/grpc/status"
 
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
@@ -239,4 +241,23 @@ func (c *Client) CurrentValidators(ctx context.Context) ([]*types.Validator, err
 		}
 	}
 	return vals, nil
+}
+
+func (c *Client) VerifySignature(ctx context.Context, sender []byte,
+	signature *auth.Signature, message []byte) (bool, error) {
+	req := &txpb.VerifySignatureRequest{
+		Signature: &txpb.Signature{
+			SignatureBytes: signature.Signature,
+			SignatureType:  signature.Type,
+		},
+		Sender: sender,
+		Msg:    message,
+	}
+
+	resp, err := c.txClient.VerifySignature(ctx, req)
+	if err != nil {
+		return false, fmt.Errorf("verify signature: %w", err)
+	}
+
+	return resp.Valid, nil
 }

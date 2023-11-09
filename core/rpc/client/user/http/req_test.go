@@ -508,3 +508,54 @@ func Test_parseChainInfoResponse(t *testing.T) {
 		})
 	}
 }
+
+func Test_parseVerifySignatureRespoonse(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		resp       []byte
+		wantErr    bool
+		want       bool
+	}{
+		{
+			name:       "other error",
+			statusCode: http.StatusInternalServerError,
+			resp: []byte(`{
+  "code": 5,
+  "message": "something happen",
+  "details": []
+}`),
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name:       "ok",
+			statusCode: http.StatusOK,
+			resp:       []byte(`{"valid":true, "error": ""}`),
+			want:       true,
+		},
+		{
+			name:       "invalid",
+			statusCode: http.StatusOK,
+			resp:       []byte(`{"valid":false, "error": "some reason"}`),
+			want:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := http.Response{
+				StatusCode: tt.statusCode,
+				Body:       io.NopCloser(bytes.NewReader(tt.resp)),
+			}
+
+			got, err := parseVerifySignatureResponse(&response)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
