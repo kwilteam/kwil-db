@@ -73,7 +73,7 @@ func authCmd() *cobra.Command {
 			// using different template.
 			// According to SIWE, the version is the version of the spec, and
 			// it is fixed to "1" right now.
-			msg := composeAuthMessage(authParam, conf.GrpcURL, userAddress,
+			msg := composeAuthMessage(authParam, conf.GrpcURL,
 				authURI, "1", conf.ChainID)
 
 			sig, err := promptSigning(&signer, msg)
@@ -144,12 +144,11 @@ func requestAuthParameter(hc *http.Client, target string, address string) (*auth
 // composeAuthMessage composes the SIWE-like message to sign.
 // param is the result of GET request for authentication.
 // ALl the other parameters are expected from config.
-func composeAuthMessage(param *authParam, domain string, address string,
-	uri string, version string, chainID string) string {
+func composeAuthMessage(param *authParam, domain string, uri string,
+	version string, chainID string) string {
 	var msg bytes.Buffer
 	msg.WriteString(
 		fmt.Sprintf("%s wants you to sign in with your account:\n", domain))
-	msg.WriteString(fmt.Sprintf("%s\n", address))
 	msg.WriteString("\n")
 	if param.Statement != "" {
 		msg.WriteString(fmt.Sprintf("%s\n", param.Statement))
