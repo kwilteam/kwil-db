@@ -12,13 +12,11 @@ import (
 	"net/url"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-
-	"google.golang.org/genproto/googleapis/rpc/status"
-
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"google.golang.org/genproto/googleapis/rpc/status"
 )
 
 // NOTE: a lot of boilerplate code, and part of the logic is kind of duplicated

@@ -8,7 +8,6 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )

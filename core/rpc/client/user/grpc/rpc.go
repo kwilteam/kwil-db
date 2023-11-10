@@ -8,13 +8,11 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-
-	"google.golang.org/grpc/status"
-
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"google.golang.org/grpc/status"
 )
 
 func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
