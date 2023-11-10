@@ -7,7 +7,7 @@ import (
 )
 
 func Test_composeAuthMessage(t *testing.T) {
-	param := &authParam{
+	param := &authParameter{
 		Nonce:          "123456",
 		Statement:      "eww",
 		IssueAt:        "2023-11-05T22:57:46Z",

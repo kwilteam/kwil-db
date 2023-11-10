@@ -63,13 +63,13 @@ func authCmd() *cobra.Command {
 				panic(err)
 			}
 
-			authParam, err := requestAuthParameter(hc, authURI, userAddress)
+			authParam, err := requestAuthParameter(hc, authURI)
 			if err != nil {
 				return fmt.Errorf("request for authentication: %w", err)
 			}
 
 			// NOTE: It seems reasonable to have authVersion as part of the
-			// authParam, and SDK then use the version to compose the message
+			// authParameter, and SDK then use the version to compose the message
 			// using different template.
 			// According to SIWE, the version is the version of the spec, and
 			// it is fixed to "1" right now.
@@ -81,7 +81,8 @@ func authCmd() *cobra.Command {
 				return fmt.Errorf("prompt signing: %w", err)
 			}
 
-			token, err := requestAuthToken(hc, conf.GrpcURL, userPubkey, sig)
+			token, err := requestAuthToken(hc, conf.GrpcURL, authParam.Nonce,
+				userPubkey, sig)
 			if err != nil {
 				return fmt.Errorf("request for token: %w", err)
 			}
@@ -105,19 +106,8 @@ func authCmd() *cobra.Command {
 // requestAuthParameter requests authentication parameters from the KGW provider.
 // This will send a GET request to KGW provider, and the provider will return
 // parameters that the user could use to compose a message to sign.
-// NOTE: this workflow will change to the same workflow in web browser, for now
-// we just sign whatever the provider returns for quick prototyping.
-// The ideal workflow will be:
-// 1. cli requests authentication
-// 2. KGW provider returns a nonce to cli
-// 3. cli composes a message with the nonce and sign it, send to KGW provider
-// 4. KGW provider verifies the signature and returns a token
-func requestAuthParameter(hc *http.Client, target string, address string) (*authParam, error) {
-	params := url.Values{
-		"from": []string{address},
-	}
-
-	req, err := http.NewRequest(http.MethodGet, target+"?"+params.Encode(), nil)
+func requestAuthParameter(hc *http.Client, target string) (*authParameter, error) {
+	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -144,7 +134,7 @@ func requestAuthParameter(hc *http.Client, target string, address string) (*auth
 // composeAuthMessage composes the SIWE-like message to sign.
 // param is the result of GET request for authentication.
 // ALl the other parameters are expected from config.
-func composeAuthMessage(param *authParam, domain string, uri string,
+func composeAuthMessage(param *authParameter, domain string, uri string,
 	version string, chainID string) string {
 	var msg bytes.Buffer
 	msg.WriteString(
@@ -182,10 +172,10 @@ func promptSigning(signer auth.Signer, msg string) (*auth.Signature, error) {
 	return signer.Sign([]byte(msg))
 }
 
-// authParam defines the result of GET request for authentication.
+// authParameter defines the result of GET request for authentication.
 // It's the parameters that will be used to compose the message(SIWE like)
 // to sign.
-type authParam struct {
+type authParameter struct {
 	Nonce          string `json:"nonce"`
 	Statement      string `json:"statement"` // optional
 	IssueAt        string `json:"issue_at"`
@@ -193,8 +183,8 @@ type authParam struct {
 }
 
 type authGetResponse struct {
-	Result *authParam `json:"result"`
-	Error  string     `json:"error"`
+	Result *authParameter `json:"result"`
+	Error  string         `json:"error"`
 }
 
 type authPostResponse struct {
@@ -204,6 +194,7 @@ type authPostResponse struct {
 
 // authPostPayload defines the payload of POST request for authentication
 type authPostPayload struct {
+	Nonce     string          `json:"nonce"`  // identifier for authn session
 	Sender    []byte          `json:"sender"` // sender public key
 	Signature *auth.Signature `json:"signature"`
 }
@@ -211,8 +202,8 @@ type authPostPayload struct {
 // requestAuthToken requests a authenticated token from the KGW provider.
 // This will send a POST request to the KGW provider, and the provider will
 // return a cookie.
-func requestAuthToken(hc *http.Client, target string, sender []byte,
-	sig *auth.Signature) (*http.Cookie, error) {
+func requestAuthToken(hc *http.Client, target string, nonce string,
+	sender []byte, sig *auth.Signature) (*http.Cookie, error) {
 	targetURL, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("parse target: %w", err)
@@ -224,6 +215,7 @@ func requestAuthToken(hc *http.Client, target string, sender []byte,
 	}
 
 	payload := authPostPayload{
+		Nonce:     nonce,
 		Signature: sig,
 		Sender:    sender,
 	}
