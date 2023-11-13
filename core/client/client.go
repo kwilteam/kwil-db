@@ -222,20 +222,20 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 
 	msg, err := transactions.CreateCallMessage(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create signed message: %w", err)
+		return nil, fmt.Errorf("create signed message: %w", err)
 	}
 
 	if shouldSign {
 		err = msg.Sign(c.Signer)
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to create signed message: %w", err)
+			return nil, fmt.Errorf("sign message: %w", err)
 		}
 	}
 
 	res, err := c.rpc.Call(ctx, msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("call action: %w", err)
 	}
 
 	return NewRecordsFromMaps(res), nil
