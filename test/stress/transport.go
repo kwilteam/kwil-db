@@ -111,5 +111,9 @@ func (tc *timedClient) CurrentValidators(ctx context.Context) ([]*types.Validato
 
 func (tc *timedClient) VerifySignature(ctx context.Context, pubKey []byte,
 	signature *auth.Signature, message []byte) error {
-	panic("not implemented") // TODO: Implement
+	if tc.showReqDur {
+		defer tc.printDur(time.Now(), "VerifySignature")
+	}
+	return tc.cl.VerifySignature(ctx, pubKey, signature, message)
+
 }
