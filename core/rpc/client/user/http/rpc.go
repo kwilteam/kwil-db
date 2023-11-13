@@ -201,15 +201,15 @@ func (c *Client) CurrentValidators(ctx context.Context) ([]*types.Validator, err
 }
 
 func (c *Client) VerifySignature(ctx context.Context, sender []byte,
-	signature *auth.Signature, message []byte) (bool, error) {
+	signature *auth.Signature, message []byte) error {
 	req, err := newVerifySignatureRequest(c.target, sender, signature, message)
 	if err != nil {
-		return false, fmt.Errorf("create request: %w", err)
+		return fmt.Errorf("create request: %w", err)
 	}
 
 	resp, err := c.makeRequest(req.WithContext(ctx))
 	if err != nil {
-		return false, fmt.Errorf("make request: %w", err)
+		return fmt.Errorf("make request: %w", err)
 	}
 	defer resp.Body.Close()
 

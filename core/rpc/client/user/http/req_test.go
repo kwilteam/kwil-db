@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -515,7 +515,7 @@ func Test_parseVerifySignatureRespoonse(t *testing.T) {
 		statusCode int
 		resp       []byte
 		wantErr    bool
-		want       bool
+		invalid    bool
 	}{
 		{
 			name:       "other error",
@@ -525,20 +525,19 @@ func Test_parseVerifySignatureRespoonse(t *testing.T) {
   "message": "something happen",
   "details": []
 }`),
-			want:    false,
 			wantErr: true,
 		},
 		{
 			name:       "ok",
 			statusCode: http.StatusOK,
 			resp:       []byte(`{"valid":true, "error": ""}`),
-			want:       true,
 		},
 		{
 			name:       "invalid",
 			statusCode: http.StatusOK,
 			resp:       []byte(`{"valid":false, "error": "some reason"}`),
-			want:       false,
+			wantErr:    true,
+			invalid:    true,
 		},
 	}
 	for _, tt := range tests {
@@ -548,14 +547,18 @@ func Test_parseVerifySignatureRespoonse(t *testing.T) {
 				Body:       io.NopCloser(bytes.NewReader(tt.resp)),
 			}
 
-			got, err := parseVerifySignatureResponse(&response)
+			err := parseVerifySignatureResponse(&response)
 			if tt.wantErr {
 				assert.Error(t, err)
+
+				if tt.invalid {
+					assert.ErrorIs(t, err, client.ErrInvalidSignature)
+				}
+
 				return
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.want, got)
 		})
 	}
 }

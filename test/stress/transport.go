@@ -110,6 +110,6 @@ func (tc *timedClient) CurrentValidators(ctx context.Context) ([]*types.Validato
 }
 
 func (tc *timedClient) VerifySignature(ctx context.Context, pubKey []byte,
-	signature *auth.Signature, message []byte) (bool, error) {
+	signature *auth.Signature, message []byte) error {
 	panic("not implemented") // TODO: Implement
 }

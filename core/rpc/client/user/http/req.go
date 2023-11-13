@@ -12,6 +12,7 @@ import (
 	"net/url"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -416,16 +417,23 @@ func newVerifySignatureRequest(server string, sender []byte, sig *auth.Signature
 	return NewJsonPostRequest(server, "/api/v1/verify_signature", bodyReader)
 }
 
-func parseVerifySignatureResponse(resp *http.Response) (bool, error) {
+// parseVerifySignatureResponse parses the response from verify_signature endpoint.
+// An ErrInvalidSignature is returned if the signature is invalid.
+func parseVerifySignatureResponse(resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
-		return false, parseErrorResponse(resp)
+		return parseErrorResponse(resp)
 	}
 
 	var res txpb.VerifySignatureResponse
 	err := unmarshalResponse(resp.Body, &res)
 	if err != nil {
-		return false, fmt.Errorf("parseVerifySignatureResponse: %w", err)
+		return fmt.Errorf("parseVerifySignatureResponse: %w", err)
 	}
 
-	return res.Valid, nil
+	// caller can tell if signature is valid
+	if !res.Valid {
+		return fmt.Errorf("%w: %s", client.ErrInvalidSignature, res.Error)
+	}
+
+	return nil
 }

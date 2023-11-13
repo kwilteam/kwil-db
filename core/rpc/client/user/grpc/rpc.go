@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -241,8 +242,10 @@ func (c *Client) CurrentValidators(ctx context.Context) ([]*types.Validator, err
 	return vals, nil
 }
 
+// VerifySignature verifies the signature.
+// An ErrInvalidSignature is returned if the signature is invalid.
 func (c *Client) VerifySignature(ctx context.Context, sender []byte,
-	signature *auth.Signature, message []byte) (bool, error) {
+	signature *auth.Signature, message []byte) error {
 	req := &txpb.VerifySignatureRequest{
 		Signature: &txpb.Signature{
 			SignatureBytes: signature.Signature,
@@ -252,10 +255,16 @@ func (c *Client) VerifySignature(ctx context.Context, sender []byte,
 		Msg:    message,
 	}
 
+	// communication error
 	resp, err := c.txClient.VerifySignature(ctx, req)
 	if err != nil {
-		return false, fmt.Errorf("verify signature: %w", err)
+		return fmt.Errorf("verify signature: %w", err)
 	}
 
-	return resp.Valid, nil
+	// caller can tell if signature is valid
+	if !resp.Valid {
+		return fmt.Errorf("%w: %s", client.ErrInvalidSignature, resp.Error)
+	}
+
+	return nil
 }
