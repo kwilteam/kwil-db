@@ -455,5 +455,5 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 // An ErrInvalidSignature is returned if the signature is invalid.
 func (c *Client) VerifySignature(ctx context.Context, pubKey []byte,
 	signature *auth.Signature, message []byte) error {
-	return c.transportClient.VerifySignature(ctx, pubKey, signature, message)
+	return c.rpc.VerifySignature(ctx, pubKey, signature, message)
 }
