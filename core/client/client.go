@@ -455,8 +455,7 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 }
 
 // VerifySignature verifies a signature through API.
-// It returns true if the signature is valid, false otherwise.
-// error is returned if there is a connection error.
+// An ErrInvalidSignature is returned if the signature is invalid.
 func (c *Client) VerifySignature(ctx context.Context, pubKey []byte,
 	signature *auth.Signature, message []byte) error {
 	return c.transportClient.VerifySignature(ctx, pubKey, signature, message)
