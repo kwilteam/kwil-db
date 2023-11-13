@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -505,6 +505,60 @@ func Test_parseChainInfoResponse(t *testing.T) {
 			assert.NoError(t, err)
 
 			assert.EqualValues(t, tt.want, got)
+		})
+	}
+}
+
+func Test_parseVerifySignatureRespoonse(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		resp       []byte
+		wantErr    bool
+		invalid    bool
+	}{
+		{
+			name:       "other error",
+			statusCode: http.StatusInternalServerError,
+			resp: []byte(`{
+  "code": 5,
+  "message": "something happen",
+  "details": []
+}`),
+			wantErr: true,
+		},
+		{
+			name:       "ok",
+			statusCode: http.StatusOK,
+			resp:       []byte(`{"valid":true, "error": ""}`),
+		},
+		{
+			name:       "invalid",
+			statusCode: http.StatusOK,
+			resp:       []byte(`{"valid":false, "error": "some reason"}`),
+			wantErr:    true,
+			invalid:    true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := http.Response{
+				StatusCode: tt.statusCode,
+				Body:       io.NopCloser(bytes.NewReader(tt.resp)),
+			}
+
+			err := parseVerifySignatureResponse(&response)
+			if tt.wantErr {
+				assert.Error(t, err)
+
+				if tt.invalid {
+					assert.ErrorIs(t, err, client.ErrInvalidSignature)
+				}
+
+				return
+			}
+
+			assert.NoError(t, err)
 		})
 	}
 }

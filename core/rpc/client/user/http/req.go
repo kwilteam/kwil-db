@@ -11,12 +11,13 @@ import (
 	"net/http"
 	"net/url"
 
-	"google.golang.org/genproto/googleapis/rpc/status"
-
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"google.golang.org/genproto/googleapis/rpc/status"
 )
 
 // NOTE: a lot of boilerplate code, and part of the logic is kind of duplicated
@@ -392,4 +393,47 @@ func parseChainInfoResponse(resp *http.Response) (*types.ChainInfo, error) {
 	}
 
 	return &info, nil
+}
+
+func newVerifySignatureRequest(server string, sender []byte, sig *auth.Signature,
+	msg []byte) (*http.Request, error) {
+	req := &txpb.VerifySignatureRequest{
+		Signature: &txpb.Signature{
+			SignatureBytes: sig.Signature,
+			SignatureType:  sig.Type,
+		},
+		Sender: sender,
+		Msg:    msg,
+	}
+
+	var bodyReader io.Reader
+	buf, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	bodyReader = bytes.NewReader(buf)
+
+	return NewJsonPostRequest(server, "/api/v1/verify_signature", bodyReader)
+}
+
+// parseVerifySignatureResponse parses the response from verify_signature endpoint.
+// An ErrInvalidSignature is returned if the signature is invalid.
+func parseVerifySignatureResponse(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK {
+		return parseErrorResponse(resp)
+	}
+
+	var res txpb.VerifySignatureResponse
+	err := unmarshalResponse(resp.Body, &res)
+	if err != nil {
+		return fmt.Errorf("parseVerifySignatureResponse: %w", err)
+	}
+
+	// caller can tell if signature is valid
+	if !res.Valid {
+		return fmt.Errorf("%w: %s", client.ErrInvalidSignature, res.Error)
+	}
+
+	return nil
 }

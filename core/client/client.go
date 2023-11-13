@@ -43,6 +43,7 @@ type TransportClient interface {
 	EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
 	CurrentValidators(ctx context.Context) ([]*types.Validator, error)
+	VerifySignature(ctx context.Context, sender []byte, signature *auth.Signature, message []byte) error
 }
 
 var (
@@ -451,4 +452,11 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 			return nil, ctx.Err()
 		}
 	}
+}
+
+// VerifySignature verifies a signature through API.
+// An ErrInvalidSignature is returned if the signature is invalid.
+func (c *Client) VerifySignature(ctx context.Context, pubKey []byte,
+	signature *auth.Signature, message []byte) error {
+	return c.transportClient.VerifySignature(ctx, pubKey, signature, message)
 }
