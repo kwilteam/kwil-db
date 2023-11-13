@@ -35,6 +35,7 @@ const (
 	TxService_CurrentValidators_FullMethodName   = "/tx.TxService/CurrentValidators"
 	TxService_Call_FullMethodName                = "/tx.TxService/Call"
 	TxService_TxQuery_FullMethodName             = "/tx.TxService/TxQuery"
+	TxService_VerifySignature_FullMethodName     = "/tx.TxService/VerifySignature"
 )
 
 // TxServiceClient is the client API for TxService service.
@@ -57,6 +58,7 @@ type TxServiceClient interface {
 	CurrentValidators(ctx context.Context, in *CurrentValidatorsRequest, opts ...grpc.CallOption) (*CurrentValidatorsResponse, error)
 	Call(ctx context.Context, in *CallRequest, opts ...grpc.CallOption) (*CallResponse, error)
 	TxQuery(ctx context.Context, in *TxQueryRequest, opts ...grpc.CallOption) (*TxQueryResponse, error)
+	VerifySignature(ctx context.Context, in *VerifySignatureRequest, opts ...grpc.CallOption) (*VerifySignatureResponse, error)
 }
 
 type txServiceClient struct {
@@ -211,6 +213,15 @@ func (c *txServiceClient) TxQuery(ctx context.Context, in *TxQueryRequest, opts 
 	return out, nil
 }
 
+func (c *txServiceClient) VerifySignature(ctx context.Context, in *VerifySignatureRequest, opts ...grpc.CallOption) (*VerifySignatureResponse, error) {
+	out := new(VerifySignatureResponse)
+	err := c.cc.Invoke(ctx, TxService_VerifySignature_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TxServiceServer is the server API for TxService service.
 // All implementations must embed UnimplementedTxServiceServer
 // for forward compatibility
@@ -231,6 +242,7 @@ type TxServiceServer interface {
 	CurrentValidators(context.Context, *CurrentValidatorsRequest) (*CurrentValidatorsResponse, error)
 	Call(context.Context, *CallRequest) (*CallResponse, error)
 	TxQuery(context.Context, *TxQueryRequest) (*TxQueryResponse, error)
+	VerifySignature(context.Context, *VerifySignatureRequest) (*VerifySignatureResponse, error)
 	mustEmbedUnimplementedTxServiceServer()
 }
 
@@ -285,6 +297,9 @@ func (UnimplementedTxServiceServer) Call(context.Context, *CallRequest) (*CallRe
 }
 func (UnimplementedTxServiceServer) TxQuery(context.Context, *TxQueryRequest) (*TxQueryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TxQuery not implemented")
+}
+func (UnimplementedTxServiceServer) VerifySignature(context.Context, *VerifySignatureRequest) (*VerifySignatureResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifySignature not implemented")
 }
 func (UnimplementedTxServiceServer) mustEmbedUnimplementedTxServiceServer() {}
 
@@ -587,6 +602,24 @@ func _TxService_TxQuery_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TxService_VerifySignature_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifySignatureRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TxServiceServer).VerifySignature(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TxService_VerifySignature_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TxServiceServer).VerifySignature(ctx, req.(*VerifySignatureRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TxService_ServiceDesc is the grpc.ServiceDesc for TxService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -657,6 +690,10 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TxQuery",
 			Handler:    _TxService_TxQuery_Handler,
+		},
+		{
+			MethodName: "VerifySignature",
+			Handler:    _TxService_VerifySignature_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

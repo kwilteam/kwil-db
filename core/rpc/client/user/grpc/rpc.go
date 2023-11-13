@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"google.golang.org/grpc/status"
-
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"google.golang.org/grpc/status"
 )
 
 func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
@@ -239,4 +240,31 @@ func (c *Client) CurrentValidators(ctx context.Context) ([]*types.Validator, err
 		}
 	}
 	return vals, nil
+}
+
+// VerifySignature verifies the signature.
+// An ErrInvalidSignature is returned if the signature is invalid.
+func (c *Client) VerifySignature(ctx context.Context, sender []byte,
+	signature *auth.Signature, message []byte) error {
+	req := &txpb.VerifySignatureRequest{
+		Signature: &txpb.Signature{
+			SignatureBytes: signature.Signature,
+			SignatureType:  signature.Type,
+		},
+		Sender: sender,
+		Msg:    message,
+	}
+
+	// communication error
+	resp, err := c.txClient.VerifySignature(ctx, req)
+	if err != nil {
+		return fmt.Errorf("verify signature: %w", err)
+	}
+
+	// caller can tell if signature is valid
+	if !resp.Valid {
+		return fmt.Errorf("%w: %s", client.ErrInvalidSignature, resp.Error)
+	}
+
+	return nil
 }
