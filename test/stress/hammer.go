@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -15,8 +16,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
-
 	"go.uber.org/zap"
 )
 
@@ -67,7 +68,12 @@ func hammer(ctx context.Context) error {
 	signer := &auth.EthPersonalSigner{Key: *priv}
 	pub := priv.PubKey().Bytes()
 
-	transportClient, err := grpc.New(ctx, host, grpc.WithTlsCert(""))
+	var rpcClient client.RPCClient
+	if strings.Contains(host, "http") {
+		rpcClient, err = http.Dial(host)
+	} else {
+		rpcClient, err = grpc.New(ctx, host, grpc.WithTlsCert(""))
+	}
 	if err != nil {
 		return err
 	}
@@ -81,7 +87,7 @@ func hammer(ctx context.Context) error {
 	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
 	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
 	cl, err := client.Dial(ctx, host, client.WithLogger(trLogger),
-		client.WithRPCClient(&timedClient{rpcTiming, &logger, transportClient}),
+		client.WithRPCClient(&timedClient{rpcTiming, &logger, rpcClient}),
 		client.WithSigner(signer, ""), // we don't care what the chain ID is
 	)
 	if err != nil {

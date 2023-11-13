@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
@@ -16,7 +16,7 @@ import (
 type timedClient struct {
 	showReqDur bool
 	logger     *log.Logger
-	cl         *grpc.Client
+	cl         client.RPCClient
 }
 
 func (tc *timedClient) Close() error {
