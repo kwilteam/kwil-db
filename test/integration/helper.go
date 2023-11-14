@@ -213,7 +213,7 @@ func (r *IntHelper) generateNodeConfig() {
 		JoinExpiry:              r.cfg.JoinExpiry,
 		WithoutGasCosts:         true,
 		WithoutNonces:           false,
-	})
+	}, nil)
 	require.NoError(r.t, err, "failed to generate testnet config")
 	r.home = tmpPath
 	r.ExtractPrivateKeys()

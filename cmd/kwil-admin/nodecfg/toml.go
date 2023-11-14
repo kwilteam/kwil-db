@@ -98,6 +98,9 @@ grpc_listen_addr = "{{ .AppCfg.GrpcListenAddress }}"
 # TCP or UNIX socket address for the KWILD App's HTTP server to listen on
 http_listen_addr = "{{ .AppCfg.HTTPListenAddress }}"
 
+# TCP or UNIX socket address for the KWILD App's Admin GRPC server to listen on
+admin_listen_addr = "{{ .AppCfg.AdminListenAddress }}"
+
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = {{arrayFormatter .AppCfg.ExtensionEndpoints}}
 
