@@ -103,7 +103,7 @@ const (
 	// Schema version table queries
 	sqlInitVersionTable = `CREATE TABLE IF NOT EXISTS schema_version (
 		version INT NOT NULL
-    );` // Do we still need WITHOUT ROWID and STRICT? It's just a single row table
+    );`
 
 	sqlInitVersionRow = "INSERT INTO schema_version (version) VALUES ($version);"
 

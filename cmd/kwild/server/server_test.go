@@ -24,6 +24,6 @@ func Test_BuildChainSyncer(t *testing.T) {
 	}
 
 	// build chain syncer
-	chainSyncer := chainsyncer.New(bridgeClient, blockSyncer)
+	chainSyncer := chainsyncer.New(bridgeClient, blockSyncer, nil)
 	chainSyncer.Start()
 }

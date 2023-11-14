@@ -2,6 +2,9 @@ package chainsyncer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	bClient "github.com/kwilteam/kwil-db/core/bridge/client"
@@ -21,7 +24,7 @@ import (
 type ChainSyncer struct {
 	bridgeClient bClient.BridgeClient
 	blockSyncer  syncer.BlockSyncer
-	// eventStore  EventStore
+	eventStore   EventStore
 
 	// height of the last block that was synced
 	height int64
@@ -30,13 +33,13 @@ type ChainSyncer struct {
 	chunkSize int64
 }
 
-func New(bridgeClient bClient.BridgeClient, blockSyncer syncer.BlockSyncer) *ChainSyncer {
+func New(bridgeClient bClient.BridgeClient, blockSyncer syncer.BlockSyncer, eventStore EventStore) *ChainSyncer {
 	return &ChainSyncer{
 		bridgeClient: bridgeClient,
 		blockSyncer:  blockSyncer,
-		// eventStore:  eventStore,
-		height:    0,
-		chunkSize: 100,
+		eventStore:   eventStore,
+		height:       0,
+		chunkSize:    100,
 	}
 }
 
@@ -83,6 +86,23 @@ func (cs *ChainSyncer) listen(ctx context.Context) error {
 				}
 
 				for _, depositEvent := range depositEvents {
+					// Insert local event
+					data, err := json.Marshal(depositEvent)
+					if err != nil {
+						fmt.Println("Failed to marshal deposit event", zap.Error(err))
+						return
+					}
+
+					hasher := sha256.New()
+					hasher.Write(data)
+					ID := hasher.Sum(nil)
+
+					event := &chain.Event{
+						Type: chain.Deposits,
+						ID:   hex.EncodeToString(ID),
+						Data: data,
+					}
+					cs.eventStore.AddLocalEvent(ctx, event)
 					fmt.Println("depositEvent", depositEvent)
 				}
 			}

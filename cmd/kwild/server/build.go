@@ -16,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	events "github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/modules/datasets"
@@ -75,6 +76,12 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	bootstrapperModule := buildBootstrapper(d)
 
+	// event store
+	eventStore := buildEventStore(d, closers)
+
+	// ChainSyncer
+	chainsyncer := buildChainSyncer(d, closers, eventStore)
+
 	abciApp := buildAbci(d, closers, accs, datasetsModule, validatorModule,
 		ac, snapshotModule, bootstrapperModule)
 
@@ -82,8 +89,6 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
-	// ChainSyncer
-	chainsyncer := buildChainSyncer(d, closers)
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, datasetsModule, accs, vstore,
 		&wrappedCometBFTClient{cometBftClient}, abciApp)
@@ -528,7 +533,7 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildChainSyncer(d *coreDependencies, closer *closeFuncs) *chainsyncer.ChainSyncer {
+func buildChainSyncer(d *coreDependencies, closer *closeFuncs, es *events.EventStore) *chainsyncer.ChainSyncer {
 	// build bridge client
 	bridgeClient, err := bClient.New(d.cfg.AppCfg.BridgeConfig.Endpoint,
 		d.cfg.AppCfg.BridgeConfig.Code,
@@ -546,7 +551,24 @@ func buildChainSyncer(d *coreDependencies, closer *closeFuncs) *chainsyncer.Chai
 	}
 
 	// build chain syncer
-	chainSyncer := chainsyncer.New(bridgeClient, blockSyncer)
+	chainSyncer := chainsyncer.New(bridgeClient, blockSyncer, es)
 	//chainSyncer.Start()
 	return chainSyncer
+}
+
+func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore {
+	db, err := d.opener.Open("event_db", *d.log.Named("event-store"))
+	if err != nil {
+		failBuild(err, "failed to open event db")
+	}
+	closer.addCloser(db.Close)
+
+	logger := *d.log.Named("event-store")
+	address := []byte("az") // update it with the node address
+	ev, err := events.NewEventStore(d.ctx, db, address, logger)
+	if err != nil {
+		failBuild(err, "failed to build event store")
+	}
+
+	return ev
 }
