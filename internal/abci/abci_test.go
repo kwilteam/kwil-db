@@ -54,6 +54,10 @@ func (m *MockAccountStore) GetAccount(ctx context.Context, pubKey []byte) (*acco
 	}, nil
 }
 
+func (m *MockAccountStore) Credit(ctx context.Context, acct []byte, amt *big.Int) error {
+	return nil
+}
+
 func newTxBts(t *testing.T, nonce uint64, signer auth.Signer) []byte {
 	tx := &transactions.Transaction{
 		Signature:     &auth.Signature{},

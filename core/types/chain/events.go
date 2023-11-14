@@ -1,6 +1,6 @@
 package chain
 
-type EventType int
+type EventType uint32
 
 const (
 	Deposits EventType = iota
@@ -15,6 +15,7 @@ type Event struct {
 	Observer []byte // this is the address of the receiver of the event
 }
 type DepositEvent struct {
+	// ChainID   string //?
 	// Version   int
 	ID     string `json:"id"`
 	Sender string `json:"sender"`

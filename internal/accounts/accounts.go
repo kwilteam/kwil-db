@@ -104,11 +104,28 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 	return a.committable.Register(spend.bytes())
 }
 
+func (a *AccountStore) Credit(ctx context.Context, addr string, acct []byte, amt *big.Int) error {
+	account, err := a.getOrCreateAccount(ctx, addr, acct)
+	if err != nil {
+		return fmt.Errorf("failed to get account: %w", err)
+	}
+
+	bal := new(big.Int).Add(account.Balance, amt)
+
+	err = a.updateAccountBalance(ctx, acct, bal)
+	if err != nil {
+		return fmt.Errorf("failed to update account: %w", err)
+	}
+
+	// TODO: registerCredit
+	return nil
+}
+
 // checkSpend checks that a spend is valid.  If gas costs are enabled, it checks that the account has enough gas to pay for the spend.
 // If nonces are enabled, it checks that the nonce is correct.  It returns the new balance and nonce if the spend is valid. It returns an
 // error if the spend is invalid.
 func (a *AccountStore) checkSpend(ctx context.Context, spend *Spend) (*big.Int, int64, error) {
-	account, err := a.getOrCreateAccount(ctx, spend.AccountPubKey)
+	account, err := a.getAccountSynchronous(ctx, spend.AccountPubKey)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get account: %w", err)
 	}

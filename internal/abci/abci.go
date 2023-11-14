@@ -117,6 +117,8 @@ type AbciApp struct {
 	// mempool maintains in-memory account state to validate the unconfirmed transactions against.
 	mempool *mempool
 
+	chainEvents BridgeEventsModule
+
 	log log.Logger
 
 	// Expected AppState after bootstrapping the node with a given snapshot,
@@ -198,6 +200,15 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil // return error now or is it still all about code?
 	}
 
+	// Reject any governance transaction that should be inserted by the block
+	// proposer rather than broadcasted. This would be like broadcasting a
+	// coinbase transaction.
+	switch tx.Body.PayloadType {
+	case transactions.PayloadTypeAccountCredit: // list others here
+		code = codeInvalidTxType
+		return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "governance transaction not valid in mempool"}, nil
+	}
+
 	logger.Debug("",
 		zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()),
@@ -246,7 +257,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	return &abciTypes.ResponseCheckTx{Code: code.Uint32()}, nil
 }
 
-func (a *AbciApp) executeTx(ctx context.Context, rawTx []byte, logger *log.Logger) *abciTypes.ExecTxResult {
+func (a *AbciApp) executeTx(ctx context.Context, rawTx, blockProposerAddr []byte, logger *log.Logger) *abciTypes.ExecTxResult {
 	var events []abciTypes.Event
 	var gasUsed int64
 
@@ -277,6 +288,41 @@ func (a *AbciApp) executeTx(ctx context.Context, rawTx []byte, logger *log.Logge
 		zap.String("PayloadType", tx.Body.PayloadType.String()))
 
 	switch tx.Body.PayloadType {
+	case transactions.PayloadTypeAccountCredit:
+		var creditPayload transactions.AccountCredit
+		err = creditPayload.UnmarshalBinary(tx.Body.Payload)
+		if err != nil {
+			return newExecuteTxRes(codeEncodingError, err)
+		}
+
+		// TODO: check that tx.Sender was the proposer of the block? or just let that be in ProcessProposal...
+		// if !bytes.Equal(cometAddrFromPubKey(tx.Sender), blockProposerAddr) {}
+
+		amt, ok := big.NewInt(0).SetString(creditPayload.Amount, 10)
+		if !ok {
+			return newExecuteTxRes(codeUnknownError, fmt.Errorf("bad amount %q", creditPayload.Amount))
+		}
+		addr := a.chainEvents.Address(creditPayload.Account)
+		err = a.accounts.Credit(ctx, addr, creditPayload.Account, amt)
+		if err != nil { // this is probably worse then just a non-zero code (panic?)
+			return newExecuteTxRes(codeUnknownError, err)
+		}
+
+		events = []abciTypes.Event{
+			{
+				Type: transactions.PayloadTypeAccountCredit.String(),
+				Attributes: []abciTypes.EventAttribute{
+					{Key: "Proposer", Value: hex.EncodeToString(tx.Sender), Index: true},
+					{Key: "Result", Value: "Success", Index: true},
+					{Key: "Account", Value: hex.EncodeToString(creditPayload.Account), Index: true},
+					{Key: "Amount", Value: creditPayload.Amount, Index: true},
+				},
+			},
+		}
+
+		logger.Debug("credited account for deposit", zap.String("account", hex.EncodeToString(creditPayload.Account)),
+			zap.String("amount", creditPayload.Amount))
+
 	case transactions.PayloadTypeDeploySchema:
 		var schemaPayload transactions.Schema
 		err = schemaPayload.UnmarshalBinary(tx.Body.Payload)
@@ -508,7 +554,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	for _, tx := range req.Txs {
 		// DeliverTx was the part in this loop.
-		execRes := a.executeTx(ctx, tx, logger)
+		execRes := a.executeTx(ctx, tx, req.ProposerAddress, logger)
 		res.TxResults = append(res.TxResults, execRes)
 	}
 
@@ -744,18 +790,92 @@ func (a *AbciApp) OfferSnapshot(ctx context.Context, req *abciTypes.RequestOffer
 //     not call RequestExtendVote.
 //   - The Application logic that creates the extension can be non-deterministic.
 func (a *AbciApp) ExtendVote(ctx context.Context, req *abciTypes.RequestExtendVote) (*abciTypes.ResponseExtendVote, error) {
+	a.log.Info("extend vote", zap.Int64("height", req.Height))
 
-	return &abciTypes.ResponseExtendVote{}, nil
+	dv := &TestVoteExt{
+		Msg: "howdy",
+	}
+	data, err := dv.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	ve := []*VoteExtensionSegment{{
+		Version: 0,
+		Type:    VoteExtensionTypeDeposit,
+		Data:    data,
+	}}
+
+	// here get from the BridgeEventsModule or something wrapping event store
+	// any new events we have not announced yet.
+	depEventIDs, depAmts, depAccts := a.chainEvents.DepositsToReport()
+	for i := range depEventIDs {
+		// EncodeDeposits(...)
+		dep := &DepositVoteExt{
+			EventID: depEventIDs[i],
+			Account: depAccts[i],
+			Amount:  depAmts[i],
+		}
+		ve = append(ve, dep.EncodeSegment())
+	}
+
+	return &abciTypes.ResponseExtendVote{
+		VoteExtension: EncodeVoteExtension(ve),
+	}, nil
 }
 
-// Verify application's vote extension data
+// registerVoteExtension is the handler for incoming extensions
+func (a *AbciApp) registerVoteExtension(ctx context.Context, validator, b []byte) error {
+	ve, err := DecodeVoteExtension(b)
+	if err != nil {
+		return fmt.Errorf("failed to decode vote extension: %w", err)
+	}
+	if len(ve) == 0 {
+		return nil // ok
+	}
+
+	a.log.Info("decoded vote extension", zap.Int("segments", len(ve)))
+
+	for i := range ve {
+		// Decode the segment and invoke the appropriate module method with the
+		// data. This code could submit the opaque extension data, but the
+		// module interfaces are more sensible and clear this way.
+		switch ve[i].Type {
+		case VoteExtensionTypeDeposit:
+			dep := &DepositVoteExt{}
+			err = dep.UnmarshalBinary(ve[i].Data)
+			if err != nil {
+				// a.log.Warn("failed to decode deposit vote", zap.Error(err))
+				return fmt.Errorf("failed to decode deposit vote: %w", err)
+			}
+			a.log.Info("decoded a val deposit vote extension segment",
+				zap.String("account", dep.Account), zap.String("amount", dep.Amount))
+
+			a.chainEvents.RecordDepositAttestation(dep.EventID,
+				dep.Account, dep.Amount, validator)
+
+		default:
+			a.log.Error("ignoring unknown vote extension type", zap.Uint32("type", ve[i].Type))
+			// just ignore it, return ACCEPT
+			continue
+		}
+	}
+
+	return nil
+}
+
+// VerifyVoteExtension verifies the vote extension data from another validator.
 func (a *AbciApp) VerifyVoteExtension(ctx context.Context, req *abciTypes.RequestVerifyVoteExtension) (*abciTypes.ResponseVerifyVoteExtension, error) {
-	if len(req.VoteExtension) > 0 {
-		// We recognize no vote extensions yet.
+	a.log.Info("verify vote extension", zap.Int64("height", req.Height))
+
+	// handle the vote extension by dispatching to appropriate modules depending on type
+	err := a.registerVoteExtension(ctx, req.ValidatorAddress, req.VoteExtension)
+	if err != nil {
+		a.log.Warn("bad vote extension", zap.Error(err))
 		return &abciTypes.ResponseVerifyVoteExtension{
 			Status: abciTypes.ResponseVerifyVoteExtension_REJECT,
 		}, nil
 	}
+
 	return &abciTypes.ResponseVerifyVoteExtension{
 		Status: abciTypes.ResponseVerifyVoteExtension_ACCEPT,
 	}, nil
@@ -884,17 +1004,95 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		}
 	}
 
+	/*
+		for _, vote := range req.LocalLastCommit.Votes {
+			a.log.Info("ExtendedCommitInfo", zap.String("validator", hex.EncodeToString(vote.Validator.Address)),
+				zap.Int("extension_length", len(vote.VoteExtension)))
+			err := a.registerVoteExtension(ctx, vote.Validator.Address, vote.VoteExtension)
+			if err != nil {
+				a.log.Error("bad vote extension", zap.Error(err))
+				continue // just ignore it
+			}
+		}
+	*/
+
+	// For any deposit events that have reached the deposit threshold, create an
+	// account credit transaction (and clear those events or wait until the tx
+	// executes in case the proposal is rejected?).
+
+	for eventID, dep := range a.thresholdDeposits(ctx) {
+		a.log.Debug("preparing account credit txn", zap.String("acct_addr", dep.acct),
+			zap.String("amount", dep.amt.String()), zap.String("event", eventID))
+		// newAccountCreditTxn(eventID, dep.Account, dep.Amount)
+	}
+
+	// Create consensus transaction type and include in okTxns (prepend?)
+
 	return &abciTypes.ResponsePrepareProposal{
 		Txs: okTxns,
 	}, nil
 }
 
-func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byte) error {
+func haveValidatorKey(b []byte, vs []*validators.Validator) bool {
+	for _, vi := range vs {
+		if bytes.Equal(b, vi.PubKey) {
+			return true
+		}
+	}
+	return false
+}
+
+type depEvt struct {
+	acct string // account address, not pubkey
+	amt  *big.Int
+}
+
+func (a *AbciApp) thresholdDeposits(ctx context.Context) map[string]depEvt {
+	deps := make(map[string]depEvt)
+	for eventID, dep := range a.chainEvents.DepositEvents() {
+		currentValidators, err := a.validators.CurrentSet(ctx)
+		if err != nil {
+			panic(fmt.Sprintf("failed to retrieve current validator set: %s", err))
+		}
+		attestations := dep.Attestations
+		thresh := validators.Threshold(len(currentValidators))
+		if len(attestations) < thresh {
+			a.log.Info("not enough attestations", zap.Int("attestations", len(attestations)))
+			continue
+		}
+		var count int
+		for _, ai := range attestations {
+			pubkey, ok := a.valAddrToKey[string(ai)] // attestations are address, get pubkey
+			if !ok {
+				continue // not a current validator or address unknown
+			}
+			if haveValidatorKey(pubkey, currentValidators) {
+				count++
+			}
+		}
+
+		amt, ok := big.NewInt(0).SetString(dep.Amount, 10)
+		if !ok { // that shouldn't have happened
+			a.log.Error("invalid deposit amount from event store!", zap.String("amount", dep.Amount))
+			continue
+		}
+
+		if count >= thresh {
+			deps[eventID] = depEvt{dep.Account, amt}
+		}
+	}
+	return deps
+}
+
+func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byte, proposerAddr string) error {
 	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"))
 	grouped, err := groupTxsBySender(txns)
 	if err != nil {
 		return fmt.Errorf("failed to group transaction by sender: %w", err)
 	}
+
+	// Deposit events at threshold (allowable ot have account credit txn).
+	var thresholdDeps map[string]depEvt
 
 	// ensure there are no gaps in an account's nonce, either from the
 	// previous best confirmed or within this block. Our current transaction
@@ -925,9 +1123,52 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 			if err = ident.VerifyTransaction(tx); err != nil {
 				return fmt.Errorf("transaction signature verification failed: %w", err)
 			}
+
+			// If account credit, ensure there is a threshold of attestations
+			// warranting the transaction, and that it is authored by the block
+			// proposer.
+			if tx.Body.PayloadType == transactions.PayloadTypeAccountCredit {
+				if cometAddrFromPubKey(tx.Sender) != proposerAddr {
+					return fmt.Errorf("account credit not authored by block proposer")
+				}
+				if thresholdDeps == nil {
+					thresholdDeps = a.thresholdDeposits(ctx)
+				}
+				eventID, acct, amt, err := extractDepInfo(tx.Body)
+				if err != nil {
+					return fmt.Errorf("invalid account credit tx payload: %w", err)
+				}
+				if dep, ok := thresholdDeps[eventID]; !ok {
+					return fmt.Errorf("deposit not at threshold (event ID %v)", eventID)
+				} else if a.chainEvents.Address(acct) != dep.acct {
+					return fmt.Errorf("deposit account mismatch (%x != %x)", acct, dep.acct)
+				} else if dep.amt.Cmp(amt) != 0 {
+					return fmt.Errorf("deposit amount mismatch (%v != %v)", acct, dep.amt)
+				}
+				// it's valid!
+			}
 		}
 	}
 	return nil
+}
+
+func extractDepInfo(txBody *transactions.TransactionBody) (id string, acct []byte, amt *big.Int, err error) {
+	if txBody.PayloadType != transactions.PayloadTypeAccountCredit {
+		err = errors.New("not an account credit transaction")
+		return
+	}
+	var creditPayload transactions.AccountCredit
+	err = creditPayload.UnmarshalBinary(txBody.Payload)
+	if err != nil {
+		return
+	}
+	var ok bool
+	amt, ok = big.NewInt(0).SetString(creditPayload.Amount, 10)
+	if !ok {
+		err = fmt.Errorf("bad amount %q", creditPayload.Amount)
+		return
+	}
+	return creditPayload.DepositEventID, creditPayload.Account, amt, nil
 }
 
 // ProcessProposal should validate the received blocks and reject the block if:
@@ -941,7 +1182,7 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	if err := a.validateProposalTransactions(ctx, req.Txs); err != nil {
+	if err := a.validateProposalTransactions(ctx, req.Txs, string(req.ProposerAddress)); err != nil {
 		logger.Warn("rejecting block proposal", zap.Error(err))
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}

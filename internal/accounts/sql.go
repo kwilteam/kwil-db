@@ -9,16 +9,22 @@ import (
 const (
 	sqlInitTables = `CREATE TABLE IF NOT EXISTS accounts (
 		public_key BLOB PRIMARY KEY,
+		address TEXT,
 		balance TEXT NOT NULL,
 		nonce INTEGER NOT NULL
 		) WITHOUT ROWID, STRICT;`
 
-	sqlCreateAccount = `INSERT INTO accounts (public_key, balance, nonce) VALUES ($public_key, $balance, $nonce)`
+	sqlCreateAccount = `INSERT INTO accounts (public_key, address, balance, nonce) VALUES ($public_key, $address, $balance, $nonce)`
 
 	sqlUpdateAccount = `UPDATE accounts SET balance = $balance,
 						nonce = $nonce WHERE public_key = $public_key COLLATE NOCASE`
+	sqlUpdateAccountBalance = `UPDATE accounts SET balance = $balance
+			WHERE public_key = $public_key COLLATE NOCASE`
 
 	sqlGetAccount = `SELECT balance, nonce FROM accounts WHERE public_key = $public_key`
+
+	// TEMPORARY to support matching address to pub key.
+	// sqlGetAllAccountKeys = `SELECT public_key FROM accounts;`
 )
 
 func (ar *AccountStore) initTables(ctx context.Context) error {
@@ -38,10 +44,18 @@ func (a *AccountStore) updateAccount(ctx context.Context, pubKey []byte, amount 
 	return err
 }
 
+func (a *AccountStore) updateAccountBalance(ctx context.Context, pubKey []byte, amount *big.Int) error {
+	return a.db.Execute(ctx, sqlUpdateAccountBalance, map[string]interface{}{
+		"$public_key": pubKey,
+		"$balance":    amount.String(),
+	})
+}
+
 // createAccount creates an account with the given public_key.
-func (a *AccountStore) createAccount(ctx context.Context, pubKey []byte) error {
+func (a *AccountStore) createAccount(ctx context.Context, addr string, pubKey []byte) error {
 	_, err := a.db.Execute(ctx, sqlCreateAccount, map[string]interface{}{
 		"$public_key": pubKey,
+		"$address":    addr,
 		"$balance":    big.NewInt(0).String(),
 		"$nonce":      0,
 	})
@@ -108,10 +122,10 @@ func accountFromRecords(publicKey []byte, results []map[string]interface{}) (*Ac
 }
 
 // getOrCreateAccount gets an account, creating it if it doesn't exist.
-func (a *AccountStore) getOrCreateAccount(ctx context.Context, pubKey []byte) (*Account, error) {
+func (a *AccountStore) getOrCreateAccount(ctx context.Context, address string, pubKey []byte) (*Account, error) {
 	account, err := a.getAccountSynchronous(ctx, pubKey)
 	if account == nil && err == errAccountNotFound {
-		err = a.createAccount(ctx, pubKey)
+		err = a.createAccount(ctx, address, pubKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create account: %w", err)
 		}

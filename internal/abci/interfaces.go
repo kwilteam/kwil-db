@@ -121,4 +121,63 @@ type DBBootstrapModule interface {
 
 type AccountsModule interface {
 	GetAccount(ctx context.Context, pubKey []byte) (*accounts.Account, error)
+	Credit(ctx context.Context, addr string, acct []byte, amt *big.Int) error
+	// Passing an opaque chain event would be awkward here I think.
+}
+
+// BridgeEventsModule is used to report deposit attestations and retrieve
+// deposit events on the cross chain bridge contract. The only event is
+// presently a deposit, and the events pertain to specific chain and contract.
+//
+// NOTE: the implementation will depend on an event store, which is continually
+// updated with deposit events for contracts configured with the bridge client.
+type BridgeEventsModule interface {
+	// DepositsToReport returns witnessed deposit events that should be
+	// broadcast to other validators via vote extensions.
+	DepositsToReport() (eventID, amt, acct []string)
+
+	// RecordDepositAttestation stores a validator's attestation to a deposit
+	// event. i.e. we have received another validator's vote extension
+	// referencing the event in VerifyVoteExtension or PrepareProposal, or we
+	// have reported a deposit with ExtendVote.
+	//
+	// The amount and account are stored so that a proposer may author an
+	// account credit transaction without themselves having observed the event.
+	// Do we need the full event data to validate the eventID was correct for
+	// the given amt and account?
+	RecordDepositAttestation(eventID, amt, acct string, validator []byte)
+
+	// DepositEvents is used when preparing a block to determine which events
+	// should be acted upon (i.e. by creation of a governance transaction that
+	// credits and account's balance). This give the application enough
+	// information to decide if an event has sufficient attestation, and to
+	// create a transaction to credit the account.
+	DepositEvents() map[string]struct { // eventID => details
+		Account string
+		Amount  string
+		// Attestations int // number of attestations including local
+		Attestations [][]byte // the attester identities, including self
+	}
+
+	// MarkDepositActuated is used to mark a deposit as applied to an account
+	// (when a relevant governance transaction referencing it is executed). This
+	// may mean removing all entries for the event. NOTE: would this also be
+	// used as the block proposer at the time the proposal is submitted rather
+	// than later in execution?
+	MarkDepositActuated(eventID string)
+
+	// Address returns the address for an account public key. Observed on-chain
+	// contract transaction events report a chain-specific address of the
+	// depositor. This method is used so that Kwil accounts and thus transaction
+	// senders, which are presently public keys, can be matched with deposit
+	// events.
+	Address(pubkey []byte) string
+
+	// **** possibly useless methods below for consideration
+
+	// RemoveDepositAttestation is used to remove a leaving/removed validator's
+	// attestation to an event. NOTE: maybe we don't need this if the module
+	// returns the source/observer identity of each event, which allows the
+	// application to only count attestations for current validators.
+	//RemoveDepositAttestation(eventID string, validator []byte)
 }

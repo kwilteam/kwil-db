@@ -22,7 +22,8 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeValidatorJoin,
 		PayloadTypeValidatorApprove,
 		PayloadTypeValidatorRemove,
-		PayloadTypeValidatorLeave:
+		PayloadTypeValidatorLeave,
+		PayloadTypeAccountCredit:
 		return true
 	default:
 		return false
@@ -38,6 +39,17 @@ const (
 	PayloadTypeValidatorLeave   PayloadType = "validator_leave"
 	PayloadTypeValidatorRemove  PayloadType = "validator_remove"
 	PayloadTypeValidatorApprove PayloadType = "validator_approve"
+
+	// PayloadTypeAccountCredit is special case of chain event pertaining to the
+	// Kwil native gas token linked to a consensus-configured chain and bridge
+	// contract where tokens are deposited (and locked) to obtain credit in the
+	// Kwil network.
+	PayloadTypeAccountCredit PayloadType = "account_credit"
+
+	// PayloadTypeChainEvent may pertain to various types of oracle-observed
+	// chain events that can be executed in different ways, such as an action
+	// call with an 'oracle' modifier.
+	//PayloadTypeChainEvent PayloadType = "chain_event" // generalized cross-chain events attested to by decentralized oracle
 )
 
 // Payload is the interface that all payloads must implement
@@ -47,6 +59,38 @@ type Payload interface {
 	UnmarshalBinary(serialize.SerializedData) error
 	Type() PayloadType
 }
+
+// AccountCredit is the payload of an oracle-generated and consensus-validated
+// transaction used to increase a Kwil account's balance following the
+// observation of a deposit to the network's bridge contract by a super-majority
+// of validators.
+type AccountCredit struct {
+	// DepositEventID associates the transaction with the a deposit event on the
+	// token bridge contract. The transaction is only valid in a block if there
+	// are sufficient attestations from the current validator set.
+	DepositEventID string
+	Account        []byte
+	Amount         string
+}
+
+var _ encoding.BinaryUnmarshaler = (*AccountCredit)(nil)
+var _ encoding.BinaryMarshaler = (*AccountCredit)(nil)
+
+func (ac *AccountCredit) UnmarshalBinary(b []byte) error {
+	return serialize.DecodeInto(b, ac)
+}
+
+func (ac *AccountCredit) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(ac)
+}
+
+/*
+type ChainEvent struct {
+	Type  uint32
+	Chain string // not necessarily an EVM chain code or Tendermint chain id
+	Data  []byte // who would interpret this?
+}
+*/
 
 // Schema is the payload that is used to deploy a schema
 type Schema struct {

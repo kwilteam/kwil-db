@@ -31,6 +31,10 @@ func (jr *joinReq) votes() int {
 	return n
 }
 
+func Threshold(numValidators int) int {
+	return threshold(numValidators)
+}
+
 func threshold(numValidators int) int {
 	return int(intDivUp(2*int64(numValidators), 3)) // float64(valSet.Count*2) / 3.
 }

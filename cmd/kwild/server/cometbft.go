@@ -98,7 +98,7 @@ func extractGenesisDoc(g *config.GenesisConfig) (*cmttypes.GenesisDoc, error) {
 			PubKeyTypes: g.ConsensusParams.Validator.PubKeyTypes,
 		},
 		ABCI: cmttypes.ABCIParams{
-			VoteExtensionsEnableHeight: 0, // disabled for now
+			VoteExtensionsEnableHeight: 1, // 0 means disabled
 		},
 	}
 
