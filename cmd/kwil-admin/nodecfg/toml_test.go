@@ -56,10 +56,47 @@ func Test_GenerateTestnetConfig(t *testing.T) {
 		P2pPort:                 26656,
 	}
 
-	err := GenerateTestnetConfig(&genCfg)
+	err := GenerateTestnetConfig(&genCfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	os.RemoveAll(genCfg.OutputDir)
+}
+
+func Test_IncrementingPorts(t *testing.T) {
+	type testcase struct {
+		input  string
+		amount int
+		want   string
+	}
+
+	testcases := []testcase{
+		{
+			input:  "localhost:26656",
+			amount: 1,
+			want:   "localhost:26657",
+		},
+		{
+			input:  "http://localhost:26656",
+			amount: 2,
+			want:   "http://localhost:26658",
+		},
+		{
+			input:  "https://localhost:26656",
+			amount: -2,
+			want:   "https://localhost:26654",
+		},
+		{
+			input:  "tcp://0.0.0.0:26656",
+			amount: 3,
+			want:   "tcp://0.0.0.0:26659",
+		},
+	}
+
+	for _, tc := range testcases {
+		got, err := incrementPort(tc.input, tc.amount)
+		assert.NoError(t, err)
+		assert.Equal(t, tc.want, got)
+	}
 }
