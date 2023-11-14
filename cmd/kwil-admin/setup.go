@@ -42,7 +42,9 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 		cc.Testnet.WithoutGasCosts = true // gas disabled by setup testnet
 		genCfg := nodecfg.TestnetGenerateConfig(*cc.Testnet)
 		genCfg.PopulatePersistentPeers = true // temporary workaround without changing nodecfg
-		return nodecfg.GenerateTestnetConfig(&genCfg)
+		return nodecfg.GenerateTestnetConfig(&genCfg, &nodecfg.ConfigOpts{
+			UniquePorts: true,
+		})
 	case cc.GenesisHash != nil:
 		dbDir, genesisFile := cc.GenesisHash.DBDir, cc.GenesisHash.GenesisFile
 		appHash, err := config.PatchGenesisAppHash(dbDir, genesisFile)

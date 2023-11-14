@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,6 +59,15 @@ type TestnetGenerateConfig struct {
 	JoinExpiry              int64
 	WithoutGasCosts         bool
 	WithoutNonces           bool
+}
+
+// ConfigOpts is a struct to alter the generation of the node config.
+type ConfigOpts struct {
+	// UniquePorts is a flag to generate unique listening addresses
+	// (gRPC, HTTP, Admin, P2P, RPC) for each node.
+	// This is useful for testing multiple nodes on the same machine.
+	// If it is used for generating a single config, it has no effect.
+	UniquePorts bool
 }
 
 // GenerateNodeConfig is used to generate configuration required for running a
@@ -132,7 +143,11 @@ func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisC
 
 // GenerateTestnetConfig is like GenerateNodeConfig but it generates multiple
 // configs for a network of nodes on a LAN.  See also TestnetGenerateConfig.
-func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
+func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) error {
+	if opts == nil {
+		opts = &ConfigOpts{}
+	}
+
 	var err error
 	genCfg.OutputDir, err = config.ExpandPath(genCfg.OutputDir)
 	if err != nil {
@@ -143,7 +158,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	nNodes := genCfg.NValidators + genCfg.NNonValidators
 	if nHosts := len(genCfg.Hostnames); nHosts > 0 && nHosts != nNodes {
 		return fmt.Errorf(
-			"testnet needs precisely %d hostnames (for the %d validators and %d non-validators) if --hostname parameter is used",
+			"testnet needs precisely %d hostnames (for the %d validators and %d non-validators) if --hostnames parameter is used",
 			nNodes, genCfg.NValidators, genCfg.NNonValidators,
 		)
 	}
@@ -208,7 +223,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 	// Gather persistent peers addresses
 	var persistentPeers string
 	if genCfg.PopulatePersistentPeers {
-		persistentPeers = persistentPeersString(genCfg, privateKeys)
+		persistentPeers = persistentPeersString(genCfg, privateKeys, opts.UniquePorts)
 	}
 
 	// Overwrite default config
@@ -227,6 +242,13 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig) error {
 		if i <= len(genCfg.Hostnames)-1 {
 			cfg.AppCfg.Hostname = genCfg.Hostnames[i]
 		}
+		if i > 0 && opts.UniquePorts {
+			err = addressSpecificConfig(cfg)
+			if err != nil {
+				return fmt.Errorf("failed to apply unique addresses: %w", err)
+			}
+		}
+
 		cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName // not abs/rooted because this might be run in a container
 		writeConfigFile(filepath.Join(nodeDir, config.ConfigFileName), cfg)
 	}
@@ -263,12 +285,97 @@ func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {
 	return ip.String()
 }
 
-func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivKey) string {
+// persistentPeersString returns a comma-separated list of persistent peers
+// if decrementingPorts is true, it will begin at the default port and
+// decrement by 1 for each node.
+func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivKey, decrementingPorts bool) string {
 	persistentPeers := make([]string, genCfg.NValidators+genCfg.NNonValidators)
 	for i := range persistentPeers {
 		pubKey := privKeys[i].PubKey().(cmtEd.PubKey)
-		hostPort := fmt.Sprintf("%s:%d", hostnameOrIP(genCfg, i), genCfg.P2pPort)
+
+		port := genCfg.P2pPort
+		if decrementingPorts {
+			port -= i
+		}
+
+		hostPort := fmt.Sprintf("%s:%d", hostnameOrIP(genCfg, i), port)
 		persistentPeers[i] = cometbft.NodeIDAddressString(pubKey, hostPort)
 	}
 	return strings.Join(persistentPeers, ",")
+}
+
+// applyUniqueAddresses applies unique addresses to the config.
+// it will begin at the default port and increment by 1 for each node.
+func addressSpecificConfig(c *config.KwildConfig) error {
+
+	grpcAddr, err := incrementPort(c.AppCfg.GrpcListenAddress, 1)
+	if err != nil {
+		return err
+	}
+	c.AppCfg.GrpcListenAddress = grpcAddr
+
+	httpAddr, err := incrementPort(c.AppCfg.HTTPListenAddress, 1)
+	if err != nil {
+		return err
+	}
+	c.AppCfg.HTTPListenAddress = httpAddr
+
+	adminAddr, err := incrementPort(c.AppCfg.AdminListenAddress, 1)
+	if err != nil {
+		return err
+	}
+	c.AppCfg.AdminListenAddress = adminAddr
+
+	p2pAddr, err := incrementPort(c.ChainCfg.P2P.ListenAddress, -1) // decrement since default rpc is 1 higher than p2p, so p2p needs to be 1 lower
+	if err != nil {
+		return err
+	}
+	c.ChainCfg.P2P.ListenAddress = p2pAddr
+
+	rpcAddr, err := incrementPort(c.ChainCfg.RPC.ListenAddress, 1)
+	if err != nil {
+		return err
+	}
+	c.ChainCfg.RPC.ListenAddress = rpcAddr
+
+	return nil
+}
+
+// incrementPort increments the port in the URL by the given amount.
+func incrementPort(incoming string, amt int) (string, error) {
+	res, err := url.Parse(incoming)
+	if err != nil {
+		return "", err
+	}
+
+	// Split the URL into two parts: host (and possibly scheme) and port
+	host, portStr, err := net.SplitHostPort(res.Host)
+	if err != nil {
+		// Handle the case where there is no scheme (like "localhost:50051")
+		if strings.Contains(err.Error(), "missing port in address") {
+			parts := strings.Split(incoming, ":")
+			if len(parts) != 2 {
+				return "", fmt.Errorf("invalid URL format")
+			}
+			host, portStr = parts[0], parts[1]
+		} else {
+			return "", err
+		}
+	}
+
+	// Convert the port to an integer and increment it
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", err
+	}
+	port += amt
+
+	// Reconstruct and return the new URL
+	newUrl := net.JoinHostPort(host, strconv.Itoa(port))
+
+	if res.Scheme != "localhost" {
+		newUrl = res.Scheme + "://" + newUrl
+	}
+
+	return newUrl, nil
 }
