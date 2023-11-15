@@ -1,195 +1,273 @@
+// package http implements an http transport for the Kwil txsvc client.
 package http
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptrace"
 	"net/url"
-	"slices"
-	"time"
+	"strconv"
 
-	"golang.org/x/net/publicsuffix"
+	"context"
+	"math/big"
+
+	"github.com/antihax/optional"
+	"github.com/kwilteam/kwil-db/core/rpc/client"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user"
+	httpTx "github.com/kwilteam/kwil-db/core/rpc/http/tx"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
-const (
-	contentType = "application/json"
-)
-
-// Client represent a connection to a kwil node
 type Client struct {
-	target    string // host:port or domain
-	debugMode bool
-	// https://cs.opensource.google/go/go/+/refs/tags/go1.21.3:src/net/http/client.go;l=562
-	// https://cs.opensource.google/go/go/+/refs/tags/go1.21.3:src/net/http/response.go;l=59
-	// for the connection to be reused, just close the resp.body is not enough,
-	// the body also has to be read fully.
-	conn    *http.Client
-	headers http.Header
+	conn *httpTx.APIClient
+	url  *url.URL
 }
 
-// Dial creates an HTTP connection to the given target.
-// Supported URL schemes are http and https.
-// For more configuration options, use DialOptions.
-func Dial(target string) (*Client, error) {
-	return DialOptions(target)
+// NewClient creates a new http client for the Kwil user service
+func NewClient(target *url.URL, opts ...ClientOption) *Client {
+	c := &Client{
+		url: target,
+	}
+
+	clientOpts := &clientOptions{
+		client: &http.Client{},
+	}
+
+	for _, o := range opts {
+		o(clientOpts)
+	}
+
+	cfg := httpTx.NewConfiguration()
+	cfg.HTTPClient = clientOpts.client
+	cfg.BasePath = target.String()
+	cfg.Host = target.Host
+	cfg.Scheme = target.Scheme
+
+	c.conn = httpTx.NewAPIClient(cfg)
+
+	return c
 }
 
-// DialOptions creates an HTTP connection to the given options.
-func DialOptions(target string, opts ...ClientOption) (*Client, error) {
-	u, err := url.Parse(target)
+var _ user.TxSvcClient = (*Client)(nil)
+
+func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
+	result, res, err := c.conn.TxServiceApi.TxServiceBroadcast(ctx, httpTx.TxBroadcastRequest{
+		Tx: convertTx(tx),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse target: %w", err)
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	decodedTxHash, err := base64.StdEncoding.DecodeString(result.TxHash)
+	if err != nil {
+		return nil, err
 	}
 
-	switch u.Scheme {
-	case "http", "https":
-	default:
-		return nil, fmt.Errorf("URL scheme not support: %s", u.Scheme)
-	}
-
-	cfg := new(clientConfig)
-	for _, opt := range opts {
-		opt.apply(cfg)
-	}
-
-	headers := make(http.Header, 2+len(cfg.httpHeaders))
-	headers.Set("Accept", contentType)
-	headers.Set("Content-Type", contentType)
-	for key, values := range cfg.httpHeaders {
-		headers[key] = values
-	}
-
-	clt := cfg.httpClient
-	if clt == nil {
-		clt = DefaultHTTPClient()
-	}
-
-	// enable cookie jar
-	if clt.Jar == nil {
-		clt.Jar = newCookieJar()
-	}
-
-	clt.Jar.SetCookies(u, cfg.cookies)
-
-	client := &Client{
-		target:    target,
-		debugMode: cfg.debugMode,
-		conn:      clt,
-		headers:   headers,
-	}
-
-	return client, nil
+	return decodedTxHash, nil
 }
 
-// makeRequest makes a request to the target and returns the response body
-// the caller should read all data in the body and close the response body
-func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
-	carriedCookies := req.Cookies()
-	// default headers
-	req.Header = c.headers.Clone()
-	s := time.Now()
-
-	var dnsStart, connStart, reqStart time.Time
-	var dnsDuration, connDuration, reqDuration time.Duration
-	var connReused bool
-	if c.debugMode {
-		trace := &httptrace.ClientTrace{
-			DNSStart: func(_ httptrace.DNSStartInfo) {
-				dnsStart = time.Now()
-			},
-			DNSDone: func(_ httptrace.DNSDoneInfo) {
-				dnsDuration = time.Since(dnsStart)
-			},
-			GetConn: func(_ string) {
-				connStart = time.Now()
-			},
-			GotConn: func(info httptrace.GotConnInfo) {
-				if !info.Reused {
-					connDuration = time.Since(connStart)
-				} else {
-					connReused = true
-				}
-				reqStart = time.Now()
-			},
-			WroteRequest: func(_ httptrace.WroteRequestInfo) {
-				reqDuration = time.Since(reqStart)
-			},
+func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...client.ActionCallOption) ([]map[string]any, error) {
+	result, res, err := c.conn.TxServiceApi.TxServiceCall(ctx, httpTx.TxCallRequest{
+		AuthType: msg.AuthType,
+		Sender:   base64.StdEncoding.EncodeToString(msg.Sender),
+		Body: &httpTx.TxCallRequestBody{
+			Payload: base64.StdEncoding.EncodeToString(msg.Body.Payload),
+		},
+	})
+	if err != nil {
+		// we need to account for a 401 Unauthorized error in this function,
+		// but the codegen will return 400 responses as an err, causing this
+		// to return. We need to check for this error here and wrap it in
+		// our own error type.
+		if res != nil && res.StatusCode == http.StatusUnauthorized {
+			err = errors.Join(err, client.ErrUnauthorized)
 		}
-		req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// result is []map[string]any encoded in base64
+	decodedResult, err := base64.StdEncoding.DecodeString(result.Result)
+	if err != nil {
+		return nil, err
 	}
 
-	// handle jar cookies and request cookies
-	if carriedCookies != nil {
-		jarCookies := c.conn.Jar.Cookies(req.URL)
-		if jarCookies == nil {
-			// use request cookies if jar has no cookies
-			for _, cookie := range carriedCookies {
-				req.AddCookie(cookie)
-			}
-		} else {
-			// NOTE: SetCookies won't overwrite existing cookies of cookieJar,
-			// so we have to create a new cookie jar
-			oldJar := c.conn.Jar
-			defer func() {
-				c.conn.Jar = oldJar
-			}()
-
-			// overwrite jar cookies with request cookies
-			newJarCookies := append(carriedCookies, jarCookies...) // order matters
-			// remove duplicated cookies; CompactFunc will modify the slice and
-			// keep the first one of duplicated cookies, e.g., from carryCookies
-			newJarCookies = slices.CompactFunc(newJarCookies,
-				func(c1 *http.Cookie, c2 *http.Cookie) bool {
-					return c1.Name == c2.Name
-				})
-
-			c.conn.Jar = newCookieJar()
-			c.conn.Jar.SetCookies(req.URL, newJarCookies)
-		}
+	// unmashal result
+	var resultSet []map[string]any
+	err = json.Unmarshal(decodedResult, &resultSet)
+	if err != nil {
+		return nil, err
 	}
 
-	resp, err := c.conn.Do(req)
-	// NOTE: we can copy&close resp.Body to a buffer here so that later we
-	// don't need to close the resp.Body to ensure the connection can be reused.
-	// seems not a good idea
-
-	if c.debugMode {
-		duration := time.Since(s)
-		// NOTE: kind of exotic using fmt here, but it's just for debugging
-		fmt.Printf("request %s completed in %s (dns=%s, conn=%s, req=%s), reused=%t\n",
-			req.URL.Path, duration, dnsDuration, connDuration, reqDuration, connReused)
-	}
-
-	return resp, err
+	return resultSet, nil
 }
 
-func (c *Client) GetTarget() string {
-	return c.target
-}
-
-func (c *Client) Close() error {
-	c.conn = nil
-	return nil
-}
-
-func DefaultHTTPClient() *http.Client {
-	// same transport same connection
-	tr := &http.Transport{
-		//MaxConnsPerHost: 5, // default is 0, no limit
-		//MaxIdleConnsPerHost: 2, // default is 2
-		//DisableCompression: ,
-		//DisableKeepAlives:  ,
-		IdleConnTimeout: time.Second * 5, // default is 90s
+func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
+	result, res, err := c.conn.TxServiceApi.TxServiceChainInfo(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return &http.Client{
-		Transport: tr,
-		Timeout:   time.Second * 3,
+	defer res.Body.Close()
+
+	parsedHeight, err := strconv.ParseUint(result.Height, 10, 64)
+	if err != nil {
+		return nil, err
 	}
+
+	return &types.ChainInfo{
+		ChainID:     result.ChainId,
+		BlockHeight: parsedHeight,
+		BlockHash:   result.Hash,
+	}, nil
 }
 
-func newCookieJar() http.CookieJar {
-	// NOTE: not entirely sure about the PublicSuffixList
-	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-	return jar
+func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+	result, res, err := c.conn.TxServiceApi.TxServiceEstimatePrice(ctx, httpTx.TxEstimatePriceRequest{
+		Tx: convertTx(tx),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// parse result.Price to big.Int
+	price, ok := new(big.Int).SetString(result.Price, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse price to big.Int. received: %s", result.Price)
+	}
+
+	return price, nil
+}
+
+func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+	// we need to use b64url since this method uses a query string
+	result, res, err := c.conn.TxServiceApi.TxServiceGetAccount(ctx, base64.URLEncoding.EncodeToString(pubKey), &httpTx.TxServiceApiTxServiceGetAccountOpts{
+		Status: optional.NewString(strconv.FormatUint(uint64(status), 10)), // does not seem to properly handle optional enum properly. This could cause a bug, will need to investigate
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// parse result.Balance to big.Int
+	balance, ok := new(big.Int).SetString(result.Account.Balance, 10)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse balance to big.Int. received: %s", result.Account.Balance)
+	}
+
+	parsedNonce, err := strconv.ParseInt(result.Account.Nonce, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.Account{
+		Identifier: pubKey,
+		Balance:    balance,
+		Nonce:      parsedNonce,
+	}, nil
+}
+
+func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
+	result, res, err := c.conn.TxServiceApi.TxServiceGetSchema(ctx, dbid)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	convertedSchema, err := convertHttpSchema(result.Schema)
+	if err != nil {
+		return nil, err
+	}
+
+	return convertedSchema, nil
+}
+
+func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error) {
+	result, res, err := c.conn.TxServiceApi.TxServiceListDatabases(ctx, base64.StdEncoding.EncodeToString(ownerPubKey))
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	return result.Databases, nil
+}
+
+func (c *Client) Ping(ctx context.Context) (string, error) {
+	result, res, err := c.conn.TxServiceApi.TxServicePing(ctx, &httpTx.TxServiceApiTxServicePingOpts{
+		Message: optional.NewString("ping"), // we don't really need this I believe?
+	})
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	return result.Message, nil
+}
+
+func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {
+	result, res, err := c.conn.TxServiceApi.TxServiceQuery(ctx, httpTx.TxQueryRequest{
+		Dbid:  dbid,
+		Query: query,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// result is []map[string]any encoded in base64
+	decodedResult, err := base64.StdEncoding.DecodeString(result.Result)
+	if err != nil {
+		return nil, err
+	}
+
+	// unmashal result
+	var resultSet []map[string]any
+	err = json.Unmarshal(decodedResult, &resultSet)
+	if err != nil {
+		return nil, err
+	}
+
+	return resultSet, nil
+}
+
+func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
+	result, res, err := c.conn.TxServiceApi.TxServiceTxQuery(ctx, httpTx.TxTxQueryRequest{
+		TxHash: base64.StdEncoding.EncodeToString(txHash),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	decodedHeight, err := strconv.ParseInt(result.Height, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	decodedHash, err := base64.StdEncoding.DecodeString(result.Hash)
+	if err != nil {
+		return nil, err
+	}
+
+	convertedTx, err := convertHttpTx(result.Tx)
+	if err != nil {
+		return nil, err
+	}
+
+	convertedTxResult, err := convertHttpTxResult(result.TxResult)
+	if err != nil {
+		return nil, err
+	}
+
+	return &transactions.TcTxQueryResponse{
+		Hash:     decodedHash,
+		Height:   decodedHeight,
+		Tx:       *convertedTx,
+		TxResult: *convertedTxResult,
+	}, nil
 }

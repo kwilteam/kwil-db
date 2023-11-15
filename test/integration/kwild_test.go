@@ -73,6 +73,7 @@ func TestKwildValidatorRemoval(t *testing.T) {
 
 	testDrivers := []string{"cli"} // strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
+
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)
@@ -105,8 +106,8 @@ func TestKwildValidatorRemoval(t *testing.T) {
 func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	ctx := context.Background()
 
-	const expiryBlocks = 15
-	const blockInterval = time.Second
+	const expiryBlocks = 10
+	const blockInterval = 500 * time.Millisecond
 	const numVals, numNonVals = 3, 1
 	opts := []integration.HelperOpt{
 		integration.WithValidators(numVals),
@@ -117,7 +118,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 
 	expiryWait := 2 * expiryBlocks * blockInterval
 
-	testDrivers := strings.Split(*drivers, ",")
+	testDrivers := []string{"cli"} // strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)

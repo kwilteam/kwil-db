@@ -8,8 +8,8 @@ var (
 	dbCmd = &cobra.Command{
 		Use:     "database",
 		Aliases: []string{"db"},
-		Short:   "manage databases",
-		Long:    "Database is a command that contains subcommands for interacting with databases",
+		Short:   "The database command is a parent command containing subcommands for interacting with databases.",
+		Long:    "The database command is a parent command containing subcommands for interacting with databases.",
 	}
 
 	nonceOverride int64

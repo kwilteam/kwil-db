@@ -63,7 +63,8 @@ tasks:
   lint:
     desc: Lint with golangci-lint
     cmds:
-        - golangci-lint run ./... ./core/... ./test/... ./parse/... -c .golangci.yml --skip-dirs ./core/rpc/protobuf
+      # skip-dirs only works in .yaml
+      - golangci-lint run ./... ./core/... ./test/... ./parse/... -c .golangci.yml
 
   linter:
     desc: Install the linter (not for CI which has an action for this)
@@ -97,6 +98,12 @@ tasks:
       - ./scripts/build/binary kwild #-mod=mod
     generates:
       - .build/kwild
+
+  generate:docs:
+    desc: Generate docs for CLIs
+    cmds:
+      - go run ./cmd/kwil-cli/generate -out ./gen
+      - go run ./cmd/kwil-admin/generate -out ./gen
 
   # ************ docker ************
   vendor:

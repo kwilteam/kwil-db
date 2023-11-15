@@ -1,97 +1,74 @@
 // Package client contains the client for interacting with the Kwil public API.
 // It's supposed to be used as go-sdk for Kwil, currently used by the Kwil CLI.
-
 package client
 
 import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"math/big"
-	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/cstockton/go-conv"
-	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
-	httpRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	grpcCodes "google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 )
 
-// RPCClient defines the methods that the transport layer should implement.
-type RPCClient interface {
-	Close() error
-	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
-	Call(ctx context.Context, req *transactions.CallMessage, opts ...rpcClient.ActionCallOption) ([]map[string]any, error)
-	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
-	GetTarget() string
-	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)
-	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
-	ListDatabases(ctx context.Context, acctID []byte) ([]string, error)
-	GetAccount(ctx context.Context, acctID []byte, status types.AccountStatus) (*types.Account, error)
-	Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error)
-	Ping(ctx context.Context) (string, error)
-	EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
-	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
-	CurrentValidators(ctx context.Context) ([]*types.Validator, error)
-	VerifySignature(ctx context.Context, sender []byte, signature *auth.Signature, message []byte) error
-}
-
-var (
-	ErrNotFound = errors.New("not found")
-)
-
-// Client wraps the methods to interact with the Kwil public API.
-// All the transport level details are encapsulated in the rpc.
+// Client is a Kwil client that can interact with the main public Kwil RPC.
 type Client struct {
-	rpc    RPCClient
-	Signer auth.Signer
-	logger log.Logger
+	txClient user.TxSvcClient
+	Signer   auth.Signer
+	logger   log.Logger
 	// chainID is used when creating transactions as replay protection since the
 	// signatures will only be valid on this network.
-	chainID     string
-	target      string
-	cookie      *http.Cookie // current session cookie
-	tlsCertFile string       // the tls cert file path
+	chainID string
+
+	noWarnings bool // silence warning logs
 }
 
-// Dial creates a Kwil client. It will by default use http connection, which
-// can be overridden by using WithRPCClient.
-func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err error) {
-	c = &Client{
-		logger: log.NewNoOp(), // by default, we do not want to force client to log anything
-		target: target,
+// Dial creates a Kwil client. It will dial the remote host via HTTP, and
+// verify the chain ID of the remote host against the chain ID passed in.
+func Dial(ctx context.Context, target string, options *ClientOptions) (c *Client, err error) {
+	parsedUrl, err := url.Parse(target)
+	if err != nil {
+		return nil, fmt.Errorf("parse url: %w", err)
 	}
 
-	for _, opt := range opts {
-		opt(c)
+	httpClient := http.NewClient(parsedUrl)
+
+	clt, err := WrapClient(ctx, httpClient, options)
+	if err != nil {
+		return nil, fmt.Errorf("wrap client: %w", err)
 	}
 
-	if c.rpc == nil {
-		hc, err := httpRPC.Dial(target)
-		// NOTE: target will be ignored if WithRPCClient is passed
-		if err != nil {
-			return nil, err
-		}
-		c.rpc = hc
-	}
+	clt.logger = *clt.logger.Named("client").With(zap.String("host", target))
 
-	zapFields := []zapcore.Field{
-		zap.String("host", c.rpc.GetTarget()),
-	}
+	return clt, nil
+}
 
-	c.logger = *c.logger.Named("client").With(zapFields...)
+// WrapClient wraps an rpc client with a Kwil client.
+// It provides a way to use a custom rpc client with the Kwil client.
+// Unless a custom rpc client is needed, use Dial instead.
+func WrapClient(ctx context.Context, client user.TxSvcClient, options *ClientOptions) (*Client, error) {
+	clientOptions := DefaultOptions()
+	clientOptions.Apply(options)
+
+	c := &Client{
+		txClient:   client,
+		Signer:     clientOptions.Signer,
+		logger:     clientOptions.Logger,
+		chainID:    clientOptions.ChainID,
+		noWarnings: clientOptions.Silence,
+	}
 
 	chainInfo, err := c.ChainInfo(ctx)
 	if err != nil {
@@ -99,30 +76,26 @@ func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err er
 	}
 	chainID := chainInfo.ChainID
 	if c.chainID == "" {
-		// TODO: make this an error instead, or allowed given an Option and/or if TLS is used
-		c.logger.Warn("chain ID not set, trusting chain ID from remote host!", zap.String("chainID", chainID))
+		if !c.noWarnings {
+			c.logger.Warn("chain ID not set, trusting chain ID from remote host!", zap.String("chainID", chainID))
+		}
 		c.chainID = chainID
 	} else if c.chainID != chainID {
-		c.Close()
 		return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainID, c.chainID)
 	}
 
 	return c, nil
 }
 
-func (c *Client) Close() error {
-	return c.rpc.Close()
-}
-
 // ChainInfo get the current blockchain information like chain ID and best block
 // height/hash.
 func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
-	return c.rpc.ChainInfo(ctx)
+	return c.txClient.ChainInfo(ctx)
 }
 
 // GetSchema gets a schema by dbid.
 func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
-	ds, err := c.rpc.GetSchema(ctx, dbid)
+	ds, err := c.txClient.GetSchema(ctx, dbid)
 	if err != nil {
 		return nil, err
 	}
@@ -140,8 +113,7 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 	c.logger.Debug("deploying database",
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
-
-	return c.rpc.Broadcast(ctx, tx)
+	return c.txClient.Broadcast(ctx, tx)
 }
 
 // DropDatabase drops a database by name, using the configured signer to derive
@@ -166,7 +138,7 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt)
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	res, err := c.rpc.Broadcast(ctx, tx)
+	res, err := c.txClient.Broadcast(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -198,17 +170,11 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
 
-	return c.rpc.Broadcast(ctx, tx)
+	return c.txClient.Broadcast(ctx, tx)
 }
 
-// CallAction calls an action. It returns the records.
-func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any, opts ...CallOpt) (*Records, error) {
-	callOpts := &callOptions{} // TODO: remove
-
-	for _, opt := range opts {
-		opt(callOpts)
-	}
-
+// CallAction call an action. It returns the result records.
+func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*Records, error) {
 	stringInputs, err := convertTuple(inputs)
 	if err != nil {
 		return nil, err
@@ -225,15 +191,12 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		return nil, fmt.Errorf("create signed message: %w", err)
 	}
 
-	msg.AuthType = c.Signer.AuthType()
-	msg.Sender = c.Signer.Identity()
-
-	// NOTE: only HTTP RPC supports authn cookie
-	var actCallOpts []rpcClient.ActionCallOption
-	if c.cookie != nil {
-		actCallOpts = append(actCallOpts, rpcClient.WithAuthCookie(c.cookie))
+	if c.Signer != nil {
+		msg.AuthType = c.Signer.AuthType()
+		msg.Sender = c.Signer.Identity()
 	}
-	res, err := c.rpc.Call(ctx, msg, actCallOpts...)
+
+	res, err := c.txClient.Call(ctx, msg)
 	if err != nil {
 		return nil, fmt.Errorf("call action: %w", err)
 	}
@@ -257,7 +220,7 @@ func DecodeOutputs(bts []byte) ([]map[string]any, error) {
 
 // Query executes a query
 func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records, error) {
-	res, err := c.rpc.Query(ctx, dbid, query)
+	res, err := c.txClient.Query(ctx, dbid, query)
 	if err != nil {
 		return nil, err
 	}
@@ -266,101 +229,15 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records
 }
 
 func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]string, error) {
-	return c.rpc.ListDatabases(ctx, owner)
+	return c.txClient.ListDatabases(ctx, owner)
 }
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
-	return c.rpc.Ping(ctx)
+	return c.txClient.Ping(ctx)
 }
 
 func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
-	return c.rpc.GetAccount(ctx, pubKey, status)
-}
-
-func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
-	res, err := c.rpc.ValidatorJoinStatus(ctx, pubKey)
-	if err != nil {
-		if stat, ok := grpcStatus.FromError(err); ok {
-			if stat.Code() == grpcCodes.NotFound {
-				return nil, ErrNotFound
-			}
-		}
-		return nil, err
-	}
-	return res, nil
-}
-
-func (c *Client) CurrentValidators(ctx context.Context) ([]*types.Validator, error) {
-	return c.rpc.CurrentValidators(ctx)
-}
-
-func (c *Client) ApproveValidator(ctx context.Context, joiner []byte, opts ...TxOpt) ([]byte, error) {
-	_, err := crypto.Ed25519PublicKeyFromBytes(joiner)
-	if err != nil {
-		return nil, fmt.Errorf("invalid candidate validator public key: %w", err)
-	}
-	payload := &transactions.ValidatorApprove{
-		Candidate: joiner,
-	}
-	tx, err := c.newTx(ctx, payload, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	hash, err := c.rpc.Broadcast(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-	return hash, nil
-}
-
-// RemoveValidator makes a transaction proposing to remove a validator. This is
-// only useful if the Client's signing key is a current validator key.
-func (c *Client) RemoveValidator(ctx context.Context, target []byte, opts ...TxOpt) ([]byte, error) {
-	_, err := crypto.Ed25519PublicKeyFromBytes(target)
-	if err != nil {
-		return nil, fmt.Errorf("invalid target validator public key: %w", err)
-	}
-	payload := &transactions.ValidatorRemove{
-		Validator: target,
-	}
-	tx, err := c.newTx(ctx, payload, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.rpc.Broadcast(ctx, tx)
-}
-
-func (c *Client) ValidatorJoin(ctx context.Context) ([]byte, error) {
-	const power = 1
-	return c.validatorUpdate(ctx, power)
-}
-
-func (c *Client) ValidatorLeave(ctx context.Context) ([]byte, error) {
-	return c.validatorUpdate(ctx, 0)
-}
-
-func (c *Client) validatorUpdate(ctx context.Context, power int64, opts ...TxOpt) ([]byte, error) {
-	var payload transactions.Payload
-	if power <= 0 {
-		payload = &transactions.ValidatorLeave{}
-	} else {
-		payload = &transactions.ValidatorJoin{
-			Power: uint64(power),
-		}
-	}
-
-	tx, err := c.newTx(ctx, payload, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	hash, err := c.rpc.Broadcast(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-	return hash, nil
+	return c.txClient.GetAccount(ctx, pubKey, status)
 }
 
 // convertTuples converts user passed tuples to strings.
@@ -396,7 +273,7 @@ func convertTuple(tuple []any) ([]string, error) {
 
 // TxQuery get transaction by hash
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
-	res, err := c.rpc.TxQuery(ctx, txHash)
+	res, err := c.txClient.TxQuery(ctx, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -432,52 +309,6 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 	}
 }
 
-// VerifySignature verifies a signature through API.
-// An ErrInvalidSignature is returned if the signature is invalid.
-func (c *Client) VerifySignature(ctx context.Context, pubKey []byte,
-	signature *auth.Signature, message []byte) error {
-	return c.rpc.VerifySignature(ctx, pubKey, signature, message)
-}
-
-// GatewayAuthenticate authenticates the client with the gateway(KGW) provider.
-// It returns a cookie so caller can choose a way to persist it if wanted.
-// It also sets the cookie in the client, so that it can be used for subsequent requests.
-// 'signMessage' is a function to present the message to be signed to
-// the user, and returns error if the user declines to sign the message.
-func (c *Client) GatewayAuthenticate(ctx context.Context,
-	signMessage func(message string) error) (*http.Cookie, error) {
-	// KGW auth is not part of Kwil API, we use a standard http client
-	// this client is to reuse connection
-	hc := httpRPC.DefaultHTTPClient()
-
-	authURI, err := url.JoinPath(c.target, kgwAuthEndpoint)
-	if err != nil {
-		return nil, fmt.Errorf("%w", err)
-	}
-
-	authParam, err := requestGatewayAuthParameter(hc, authURI)
-	if err != nil {
-		return nil, fmt.Errorf("request for authentication: %w", err)
-	}
-
-	msg := composeGatewayAuthMessage(authParam, c.target, authURI, kgwAuthVersion, c.chainID)
-	decline := signMessage(msg)
-	if decline != nil {
-		return nil, decline
-	}
-
-	sig, err := c.Signer.Sign([]byte(msg))
-	if err != nil {
-		return nil, fmt.Errorf("sign message: %w", err)
-	}
-
-	cookie, err := requestGatewayAuthCookie(hc, c.target, authParam.Nonce,
-		c.Signer.Identity(), sig)
-	if err != nil {
-		return nil, fmt.Errorf("request for token: %w", err)
-	}
-
-	// set cookie for current session
-	c.cookie = cookie
-	return cookie, nil
+func (c *Client) ChainID() string {
+	return c.chainID
 }

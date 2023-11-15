@@ -1,0 +1,1165 @@
+openapi: 3.0.1
+info:
+  title: kwil/tx/v1/account.proto
+  version: version not set
+servers:
+- url: /
+tags:
+- name: TxService
+paths:
+  /api/v1/accounts/{identifier}:
+    get:
+      tags:
+      - TxService
+      operationId: TxService_GetAccount
+      parameters:
+      - name: identifier
+        in: path
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          format: byte
+      - name: status
+        in: query
+        description: Mapped to URL query parameter `status`.
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: string
+          default: latest
+          enum:
+          - latest
+          - pending
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txGetAccountResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+  /api/v1/broadcast:
+    post:
+      tags:
+      - TxService
+      operationId: TxService_Broadcast
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/txBroadcastRequest'
+        required: true
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txBroadcastResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      x-codegen-request-body-name: body
+  /api/v1/call:
+    post:
+      tags:
+      - TxService
+      operationId: TxService_Call
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/txCallRequest'
+        required: true
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txCallResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      x-codegen-request-body-name: body
+  /api/v1/chain_info:
+    get:
+      tags:
+      - TxService
+      operationId: TxService_ChainInfo
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txChainInfoResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+  /api/v1/config:
+    get:
+      tags:
+      - TxService
+      operationId: TxService_GetConfig
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txGetConfigResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+  /api/v1/databases/{dbid}/schema:
+    get:
+      tags:
+      - TxService
+      operationId: TxService_GetSchema
+      parameters:
+      - name: dbid
+        in: path
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txGetSchemaResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+  /api/v1/estimate_price:
+    post:
+      tags:
+      - TxService
+      operationId: TxService_EstimatePrice
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/txEstimatePriceRequest'
+        required: true
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txEstimatePriceResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      x-codegen-request-body-name: body
+  /api/v1/ping:
+    get:
+      tags:
+      - TxService
+      operationId: TxService_Ping
+      parameters:
+      - name: message
+        in: query
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txPingResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+  /api/v1/query:
+    post:
+      tags:
+      - TxService
+      operationId: TxService_Query
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/txQueryRequest'
+        required: true
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txQueryResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      x-codegen-request-body-name: body
+  /api/v1/tx_query:
+    post:
+      tags:
+      - TxService
+      operationId: TxService_TxQuery
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/txTxQueryRequest'
+        required: true
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txTxQueryResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      x-codegen-request-body-name: body
+  /api/v1/{owner}/databases:
+    get:
+      tags:
+      - TxService
+      operationId: TxService_ListDatabases
+      parameters:
+      - name: owner
+        in: path
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+          format: byte
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/txListDatabasesResponse'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+components:
+  schemas:
+    ExtensionsExtensionConfig:
+      type: object
+      properties:
+        argument:
+          type: string
+        value:
+          type: string
+      example:
+        argument: argument
+        value: value
+    protobufAny:
+      type: object
+      properties:
+        '@type':
+          type: string
+      additionalProperties:
+        type: object
+      x-schema-name: protobufAny
+    rpcStatus:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/protobufAny'
+    txAccount:
+      type: object
+      properties:
+        identifier:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+        balance:
+          type: string
+        nonce:
+          type: string
+          format: int64
+      example:
+        identifier: ""
+        balance: balance
+        nonce: nonce
+    txAccountStatus:
+      type: string
+      default: latest
+      enum:
+      - latest
+      - pending
+    txAction:
+      type: object
+      properties:
+        name:
+          type: string
+        public:
+          type: boolean
+        inputs:
+          type: array
+          items:
+            type: string
+        statements:
+          type: array
+          items:
+            type: string
+        mutability:
+          type: string
+        auxiliaries:
+          type: array
+          items:
+            type: string
+        annotations:
+          type: array
+          items:
+            type: string
+      example:
+        public: true
+        inputs:
+        - inputs
+        - inputs
+        auxiliaries:
+        - auxiliaries
+        - auxiliaries
+        name: name
+        annotations:
+        - annotations
+        - annotations
+        statements:
+        - statements
+        - statements
+        mutability: mutability
+    txAttribute:
+      type: object
+      properties:
+        type:
+          type: string
+        value:
+          type: string
+      example:
+        type: type
+        value: value
+    txBroadcastRequest:
+      type: object
+      properties:
+        tx:
+          $ref: '#/components/schemas/txTransaction'
+    txBroadcastResponse:
+      type: object
+      properties:
+        tx_hash:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+      example:
+        tx_hash: ""
+    txCallRequest:
+      type: object
+      properties:
+        body:
+          $ref: '#/components/schemas/txCallRequestBody'
+        auth_type:
+          type: string
+          description: |-
+            auth_type is the type of authenticator that will be used to derive
+            identifier from the sender.
+        sender:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+    txCallRequestBody:
+      type: object
+      properties:
+        payload:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+    txCallResponse:
+      type: object
+      properties:
+        result:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+      example:
+        result: ""
+    txChainInfoResponse:
+      type: object
+      properties:
+        chain_id:
+          type: string
+        height:
+          type: string
+          format: uint64
+        hash:
+          type: string
+      example:
+        chain_id: chain_id
+        hash: hash
+        height: height
+    txColumn:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/txAttribute'
+      example:
+        name: name
+        attributes:
+        - type: type
+          value: value
+        - type: type
+          value: value
+        type: type
+    txEstimatePriceRequest:
+      type: object
+      properties:
+        tx:
+          $ref: '#/components/schemas/txTransaction'
+    txEstimatePriceResponse:
+      type: object
+      properties:
+        price:
+          type: string
+      example:
+        price: price
+    txExtensions:
+      type: object
+      properties:
+        name:
+          type: string
+        initialization:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtensionsExtensionConfig'
+        alias:
+          type: string
+      example:
+        name: name
+        initialization:
+        - argument: argument
+          value: value
+        - argument: argument
+          value: value
+        alias: alias
+    txForeignKey:
+      type: object
+      properties:
+        child_keys:
+          type: array
+          items:
+            type: string
+        parent_keys:
+          type: array
+          items:
+            type: string
+        parent_table:
+          type: string
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/txForeignKeyAction'
+      example:
+        child_keys:
+        - child_keys
+        - child_keys
+        parent_keys:
+        - parent_keys
+        - parent_keys
+        parent_table: parent_table
+        actions:
+        - do: do
+          "on": "on"
+        - do: do
+          "on": "on"
+    txForeignKeyAction:
+      type: object
+      properties:
+        "on":
+          type: string
+        do:
+          type: string
+      example:
+        do: do
+        "on": "on"
+    txGetAccountResponse:
+      type: object
+      properties:
+        account:
+          $ref: '#/components/schemas/txAccount'
+      example:
+        account:
+          identifier: ""
+          balance: balance
+          nonce: nonce
+    txGetConfigResponse:
+      type: object
+      properties:
+        chain_code:
+          type: string
+          format: int64
+        provider_address:
+          type: string
+        pool_address:
+          type: string
+      example:
+        provider_address: provider_address
+        chain_code: chain_code
+        pool_address: pool_address
+    txGetSchemaResponse:
+      type: object
+      properties:
+        schema:
+          $ref: '#/components/schemas/txSchema'
+      example:
+        schema:
+          owner: ""
+          tables:
+          - indexes:
+            - columns:
+              - columns
+              - columns
+              name: name
+              type: type
+            - columns:
+              - columns
+              - columns
+              name: name
+              type: type
+            columns:
+            - name: name
+              attributes:
+              - type: type
+                value: value
+              - type: type
+                value: value
+              type: type
+            - name: name
+              attributes:
+              - type: type
+                value: value
+              - type: type
+                value: value
+              type: type
+            name: name
+            foreign_keys:
+            - child_keys:
+              - child_keys
+              - child_keys
+              parent_keys:
+              - parent_keys
+              - parent_keys
+              parent_table: parent_table
+              actions:
+              - do: do
+                "on": "on"
+              - do: do
+                "on": "on"
+            - child_keys:
+              - child_keys
+              - child_keys
+              parent_keys:
+              - parent_keys
+              - parent_keys
+              parent_table: parent_table
+              actions:
+              - do: do
+                "on": "on"
+              - do: do
+                "on": "on"
+          - indexes:
+            - columns:
+              - columns
+              - columns
+              name: name
+              type: type
+            - columns:
+              - columns
+              - columns
+              name: name
+              type: type
+            columns:
+            - name: name
+              attributes:
+              - type: type
+                value: value
+              - type: type
+                value: value
+              type: type
+            - name: name
+              attributes:
+              - type: type
+                value: value
+              - type: type
+                value: value
+              type: type
+            name: name
+            foreign_keys:
+            - child_keys:
+              - child_keys
+              - child_keys
+              parent_keys:
+              - parent_keys
+              - parent_keys
+              parent_table: parent_table
+              actions:
+              - do: do
+                "on": "on"
+              - do: do
+                "on": "on"
+            - child_keys:
+              - child_keys
+              - child_keys
+              parent_keys:
+              - parent_keys
+              - parent_keys
+              parent_table: parent_table
+              actions:
+              - do: do
+                "on": "on"
+              - do: do
+                "on": "on"
+          extensions:
+          - name: name
+            initialization:
+            - argument: argument
+              value: value
+            - argument: argument
+              value: value
+            alias: alias
+          - name: name
+            initialization:
+            - argument: argument
+              value: value
+            - argument: argument
+              value: value
+            alias: alias
+          name: name
+          actions:
+          - public: true
+            inputs:
+            - inputs
+            - inputs
+            auxiliaries:
+            - auxiliaries
+            - auxiliaries
+            name: name
+            annotations:
+            - annotations
+            - annotations
+            statements:
+            - statements
+            - statements
+            mutability: mutability
+          - public: true
+            inputs:
+            - inputs
+            - inputs
+            auxiliaries:
+            - auxiliaries
+            - auxiliaries
+            name: name
+            annotations:
+            - annotations
+            - annotations
+            statements:
+            - statements
+            - statements
+            mutability: mutability
+    txIndex:
+      type: object
+      properties:
+        name:
+          type: string
+        columns:
+          type: array
+          items:
+            type: string
+        type:
+          type: string
+      example:
+        columns:
+        - columns
+        - columns
+        name: name
+        type: type
+    txListDatabasesResponse:
+      type: object
+      properties:
+        databases:
+          type: array
+          items:
+            type: string
+      example:
+        databases:
+        - databases
+        - databases
+    txPingResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      example:
+        message: message
+    txQueryRequest:
+      type: object
+      properties:
+        dbid:
+          type: string
+        query:
+          type: string
+    txQueryResponse:
+      type: object
+      properties:
+        result:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+      example:
+        result: ""
+    txSchema:
+      type: object
+      properties:
+        owner:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+        name:
+          type: string
+        tables:
+          type: array
+          items:
+            $ref: '#/components/schemas/txTable'
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/txAction'
+        extensions:
+          type: array
+          items:
+            $ref: '#/components/schemas/txExtensions'
+      example:
+        owner: ""
+        tables:
+        - indexes:
+          - columns:
+            - columns
+            - columns
+            name: name
+            type: type
+          - columns:
+            - columns
+            - columns
+            name: name
+            type: type
+          columns:
+          - name: name
+            attributes:
+            - type: type
+              value: value
+            - type: type
+              value: value
+            type: type
+          - name: name
+            attributes:
+            - type: type
+              value: value
+            - type: type
+              value: value
+            type: type
+          name: name
+          foreign_keys:
+          - child_keys:
+            - child_keys
+            - child_keys
+            parent_keys:
+            - parent_keys
+            - parent_keys
+            parent_table: parent_table
+            actions:
+            - do: do
+              "on": "on"
+            - do: do
+              "on": "on"
+          - child_keys:
+            - child_keys
+            - child_keys
+            parent_keys:
+            - parent_keys
+            - parent_keys
+            parent_table: parent_table
+            actions:
+            - do: do
+              "on": "on"
+            - do: do
+              "on": "on"
+        - indexes:
+          - columns:
+            - columns
+            - columns
+            name: name
+            type: type
+          - columns:
+            - columns
+            - columns
+            name: name
+            type: type
+          columns:
+          - name: name
+            attributes:
+            - type: type
+              value: value
+            - type: type
+              value: value
+            type: type
+          - name: name
+            attributes:
+            - type: type
+              value: value
+            - type: type
+              value: value
+            type: type
+          name: name
+          foreign_keys:
+          - child_keys:
+            - child_keys
+            - child_keys
+            parent_keys:
+            - parent_keys
+            - parent_keys
+            parent_table: parent_table
+            actions:
+            - do: do
+              "on": "on"
+            - do: do
+              "on": "on"
+          - child_keys:
+            - child_keys
+            - child_keys
+            parent_keys:
+            - parent_keys
+            - parent_keys
+            parent_table: parent_table
+            actions:
+            - do: do
+              "on": "on"
+            - do: do
+              "on": "on"
+        extensions:
+        - name: name
+          initialization:
+          - argument: argument
+            value: value
+          - argument: argument
+            value: value
+          alias: alias
+        - name: name
+          initialization:
+          - argument: argument
+            value: value
+          - argument: argument
+            value: value
+          alias: alias
+        name: name
+        actions:
+        - public: true
+          inputs:
+          - inputs
+          - inputs
+          auxiliaries:
+          - auxiliaries
+          - auxiliaries
+          name: name
+          annotations:
+          - annotations
+          - annotations
+          statements:
+          - statements
+          - statements
+          mutability: mutability
+        - public: true
+          inputs:
+          - inputs
+          - inputs
+          auxiliaries:
+          - auxiliaries
+          - auxiliaries
+          name: name
+          annotations:
+          - annotations
+          - annotations
+          statements:
+          - statements
+          - statements
+          mutability: mutability
+    txSignature:
+      type: object
+      properties:
+        signature_bytes:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+        signature_type:
+          type: string
+      example:
+        signature_bytes: ""
+        signature_type: signature_type
+    txTable:
+      type: object
+      properties:
+        name:
+          type: string
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/txColumn'
+        indexes:
+          type: array
+          items:
+            $ref: '#/components/schemas/txIndex'
+        foreign_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/txForeignKey'
+      example:
+        indexes:
+        - columns:
+          - columns
+          - columns
+          name: name
+          type: type
+        - columns:
+          - columns
+          - columns
+          name: name
+          type: type
+        columns:
+        - name: name
+          attributes:
+          - type: type
+            value: value
+          - type: type
+            value: value
+          type: type
+        - name: name
+          attributes:
+          - type: type
+            value: value
+          - type: type
+            value: value
+          type: type
+        name: name
+        foreign_keys:
+        - child_keys:
+          - child_keys
+          - child_keys
+          parent_keys:
+          - parent_keys
+          - parent_keys
+          parent_table: parent_table
+          actions:
+          - do: do
+            "on": "on"
+          - do: do
+            "on": "on"
+        - child_keys:
+          - child_keys
+          - child_keys
+          parent_keys:
+          - parent_keys
+          - parent_keys
+          parent_table: parent_table
+          actions:
+          - do: do
+            "on": "on"
+          - do: do
+            "on": "on"
+    txTransaction:
+      type: object
+      properties:
+        body:
+          $ref: '#/components/schemas/txTransactionBody'
+        signature:
+          $ref: '#/components/schemas/txSignature'
+        sender:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+        serialization:
+          type: string
+      example:
+        serialization: serialization
+        signature:
+          signature_bytes: ""
+          signature_type: signature_type
+        sender: ""
+        body:
+          payload_type: payload_type
+          chain_id: chain_id
+          payload: ""
+          fee: fee
+          description: description
+          nonce: nonce
+    txTransactionBody:
+      type: object
+      properties:
+        payload:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+        payload_type:
+          type: string
+        fee:
+          type: string
+        nonce:
+          type: string
+          format: uint64
+        chain_id:
+          type: string
+        description:
+          type: string
+      example:
+        payload_type: payload_type
+        chain_id: chain_id
+        payload: ""
+        fee: fee
+        description: description
+        nonce: nonce
+    txTransactionResult:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int64
+        log:
+          type: string
+        gas_used:
+          type: string
+          format: int64
+        gas_wanted:
+          type: string
+          format: int64
+        data:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          description: Data contains the output of the transaction.
+          format: byte
+        events:
+          type: array
+          items:
+            pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+            type: string
+            format: byte
+      example:
+        code: 0
+        data: ""
+        log: log
+        gas_used: gas_used
+        gas_wanted: gas_wanted
+        events:
+        - ""
+        - ""
+    txTxQueryRequest:
+      type: object
+      properties:
+        tx_hash:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+    txTxQueryResponse:
+      type: object
+      properties:
+        hash:
+          pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+          type: string
+          format: byte
+        height:
+          type: string
+          format: int64
+        tx:
+          $ref: '#/components/schemas/txTransaction'
+        tx_result:
+          $ref: '#/components/schemas/txTransactionResult'
+      example:
+        tx:
+          serialization: serialization
+          signature:
+            signature_bytes: ""
+            signature_type: signature_type
+          sender: ""
+          body:
+            payload_type: payload_type
+            chain_id: chain_id
+            payload: ""
+            fee: fee
+            description: description
+            nonce: nonce
+        tx_result:
+          code: 0
+          data: ""
+          log: log
+          gas_used: gas_used
+          gas_wanted: gas_wanted
+          events:
+          - ""
+          - ""
+        hash: ""
+        height: height
+x-original-swagger-version: "2.0"

@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 )
@@ -16,6 +17,9 @@ func init() {
 	var err error
 	tmpl := template.New("configFileTemplate").Funcs(template.FuncMap{
 		"arrayFormatter": arrayFormatter,
+		"configDuration": func(d config.Duration) time.Duration {
+			return time.Duration(d)
+		},
 	})
 	if configTemplate, err = tmpl.Parse(defaultConfigTemplate); err != nil {
 		panic(err)
@@ -92,13 +96,13 @@ time_format = "{{ .Logging.TimeEncoding }}"
 # Node's Private key
 private_key_path = "{{ .AppCfg.PrivateKeyPath }}"
 
-# TCP or UNIX socket address for the KWILD App's GRPC server to listen on
+# TCP address for the KWILD App's GRPC server to listen on
 grpc_listen_addr = "{{ .AppCfg.GrpcListenAddress }}"
 
-# TCP or UNIX socket address for the KWILD App's HTTP server to listen on
+# TCP address for the KWILD App's HTTP server to listen on
 http_listen_addr = "{{ .AppCfg.HTTPListenAddress }}"
 
-# TCP or UNIX socket address for the KWILD App's Admin GRPC server to listen on
+# Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
 admin_listen_addr = "{{ .AppCfg.AdminListenAddress }}"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
@@ -151,18 +155,18 @@ listen_addr = "{{ .ChainCfg.RPC.ListenAddress }}"
 [chain.consensus]
 
 # How long we wait for a proposal block before prevoting nil
-timeout_propose = "{{ .ChainCfg.Consensus.TimeoutPropose }}"
+timeout_propose = "{{configDuration .ChainCfg.Consensus.TimeoutPropose }}"
 
 # How long we wait after receiving +2/3 prevotes for “anything” (ie. not a single block or nil)
-timeout_prevote = "{{ .ChainCfg.Consensus.TimeoutPrevote }}"
+timeout_prevote = "{{configDuration .ChainCfg.Consensus.TimeoutPrevote }}"
 
 # How long we wait after receiving +2/3 precommits for “anything” (ie. not a single block or nil)
-timeout_precommit = "{{ .ChainCfg.Consensus.TimeoutPrecommit }}"
+timeout_precommit = "{{configDuration .ChainCfg.Consensus.TimeoutPrecommit }}"
 
 # How long we wait after committing a block, before starting on the new
 # height (this gives us a chance to receive some more precommits, even
 # though we already have +2/3).
-timeout_commit = "{{ .ChainCfg.Consensus.TimeoutCommit }}"
+timeout_commit = "{{configDuration .ChainCfg.Consensus.TimeoutCommit }}"
 
 #######################################################
 ###           P2P Configuration Options             ###
@@ -180,6 +184,7 @@ listen_addr = "{{ .ChainCfg.P2P.ListenAddress }}"
 external_address = "{{ .ChainCfg.P2P.ExternalAddress }}"
 
 # Comma separated list of nodes to keep persistent connections to (used for bootstrapping)
+# Nodes should be identified as id@host:port, where id is the hex encoded CometBFT address.
 # Example: "d128266b8b9f64c313de466cf29e0a6182dba54d@172.10.100.2:26656,9440f4a8059cf7ff31454973c4f9c68de65fe526@172.10.100.3:26656"
 persistent_peers = "{{ .ChainCfg.P2P.PersistentPeers }}"
 

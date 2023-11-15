@@ -39,6 +39,9 @@ deployments/helm/*/charts/
 
 dist/*
 
+# tools
+swagger-codegen-cli.jar
+
 # kwild
 .testnet
 

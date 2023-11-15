@@ -26,7 +26,6 @@ import (
 // KwilCliDriver is a driver for tests using `cmd/kwil-cli`
 type KwilCliDriver struct {
 	cliBin   string // kwil-cli binary path
-	adminBin string // kwil-admin binary path
 	rpcUrl   string
 	privKey  string
 	identity []byte
@@ -34,10 +33,9 @@ type KwilCliDriver struct {
 	logger   log.Logger
 }
 
-func NewKwilCliDriver(cliBin, adminBin, rpcUrl, privKey, chainID string, identity []byte, logger log.Logger) *KwilCliDriver {
+func NewKwilCliDriver(cliBin, rpcUrl, privKey, chainID string, identity []byte, logger log.Logger) *KwilCliDriver {
 	return &KwilCliDriver{
 		cliBin:   cliBin,
-		adminBin: adminBin,
 		rpcUrl:   rpcUrl,
 		privKey:  privKey,
 		identity: identity,
@@ -56,17 +54,6 @@ func (d *KwilCliDriver) newKwilCliCmd(args ...string) *exec.Cmd {
 		strings.Join(append([]string{d.cliBin}, args...), " ")))
 
 	cmd := exec.Command(d.cliBin, args...)
-	return cmd
-}
-
-func (d *KwilCliDriver) newKwilAdminCmd(args ...string) *exec.Cmd {
-	args = append(args, "--rpcserver", d.rpcUrl)
-	args = append(args, "--output", "json")
-
-	d.logger.Info("admin cmd", zap.String("args",
-		strings.Join(append([]string{d.adminBin}, args...), " ")))
-
-	cmd := exec.Command(d.adminBin, args...)
 	return cmd
 }
 
@@ -291,106 +278,27 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 	return parseRespQueryDb(out.Result)
 }
 
-func (d *KwilCliDriver) ApproveNode(_ context.Context, joinerPubKey []byte) error {
-	cmd := d.newKwilCliCmd("validator", "approve", hex.EncodeToString(joinerPubKey))
-	_, err := mustRun(cmd, d.logger)
-	if err != nil {
-		return fmt.Errorf("failed to approve node: %w", err)
-	}
-
-	return nil
-}
-
-func (d *KwilCliDriver) ValidatorNodeApprove(_ context.Context, joinerPubKey []byte) ([]byte, error) {
-	cmd := d.newKwilAdminCmd("validators", "approve", hex.EncodeToString(joinerPubKey), d.privKey)
+func (d *KwilCliDriver) ChainInfo(_ context.Context) (*types.ChainInfo, error) {
+	cmd := d.newKwilCliCmd("utils", "chain-info")
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to approve validators: %w", err)
+		return nil, fmt.Errorf("failed to get chain info: %w", err)
 	}
 
-	txHash, err := parseRespTxHash(out.Result)
+	d.logger.Debug("chain info", zap.Any("Resp", out.Result))
+	var chainInfo types.ChainInfo
+
+	bts, err := json.Marshal(out.Result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
+		return nil, fmt.Errorf("failed to marshal chain info: %w", err)
 	}
 
-	return txHash, nil
-}
-
-func (d *KwilCliDriver) ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error) {
-	cmd := d.newKwilAdminCmd("validators", "remove", hex.EncodeToString(target), d.privKey)
-	out, err := mustRun(cmd, d.logger)
+	err = json.Unmarshal(bts, &chainInfo)
 	if err != nil {
-		return nil, fmt.Errorf("failed to approve validators: %w", err)
+		return nil, fmt.Errorf("failed to parse chain info: %w", err)
 	}
 
-	txHash, err := parseRespTxHash(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
-	}
-
-	return txHash, nil
-}
-
-func (d *KwilCliDriver) ValidatorNodeJoin(_ context.Context) ([]byte, error) {
-	cmd := d.newKwilAdminCmd("validators", "join", d.privKey)
-	out, err := mustRun(cmd, d.logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to joni as validator: %w", err)
-	}
-
-	txHash, err := parseRespTxHash(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
-	}
-
-	return txHash, nil
-}
-
-func (d *KwilCliDriver) ValidatorNodeLeave(_ context.Context) ([]byte, error) {
-	cmd := d.newKwilAdminCmd("validators", "leave", d.privKey)
-	out, err := mustRun(cmd, d.logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to leave as validator: %w", err)
-	}
-
-	txHash, err := parseRespTxHash(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
-	}
-
-	return txHash, nil
-}
-
-func (d *KwilCliDriver) ValidatorJoinStatus(_ context.Context, pubKey []byte) (*types.JoinRequest, error) {
-	cmd := d.newKwilAdminCmd("validators", "join-status", hex.EncodeToString(pubKey))
-	out, err := mustRun(cmd, d.logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query validator join status: %w", err)
-	}
-
-	d.logger.Debug("validator join status", zap.Any("Resp", out.Result))
-	joinReq, err := parseRespValJoinRequest(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse validator join status: %w", err)
-	}
-
-	return joinReq, nil
-}
-
-func (d *KwilCliDriver) ValidatorsList(_ context.Context) ([]*types.Validator, error) {
-	cmd := d.newKwilAdminCmd("validators", "list")
-	out, err := mustRun(cmd, d.logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list validators: %w", err)
-	}
-
-	d.logger.Debug("validator list", zap.Any("Resp", out.Result))
-	valSets, err := parseRespValSets(out.Result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse validator list: %w", err)
-	}
-
-	return valSets, nil
+	return &chainInfo, nil
 }
 
 ///////// helper functions
@@ -520,85 +428,6 @@ func parseRespQueryDb(data any) (*client.Records, error) {
 	}
 
 	return client.NewRecordsFromMaps(resp), nil
-}
-
-// respValJoinRequest is customized json format for respValJoinStatus
-// NOTE: this is exactly the same as the one in cmd/kwil-admin/message.go
-type respValJoinRequest struct {
-	Candidate string `json:"candidate"`
-	Power     int64  `json:"power"`
-	Board     []string
-	Approved  []bool
-}
-
-// parseRespValJoinRequest parses the validator join request response(json) from the cli response
-// NOTE: this could be defined as a `encoding.TextUnmarshaler` interface in `cmd/kwil-cli`
-// if we expose the type from `cmd/kwil-cli`
-func parseRespValJoinRequest(data any) (*types.JoinRequest, error) {
-	bts, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal val join request resp: %w", err)
-	}
-
-	var resp respValJoinRequest
-	err = json.Unmarshal(bts, &resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal val join request: %w", err)
-	}
-
-	candidateBts, err := hex.DecodeString(resp.Candidate)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode candidate: %w", err)
-	}
-
-	board := make([][]byte, len(resp.Board))
-	for i := range resp.Board {
-		board[i], err = hex.DecodeString(resp.Board[i])
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode board: %w", err)
-		}
-	}
-
-	return &types.JoinRequest{
-		Candidate: candidateBts,
-		Power:     resp.Power,
-		Board:     board,
-		Approved:  resp.Approved,
-	}, nil
-}
-
-// respValInfo represents the validator info response(json) from the cli response
-// NOTE: this is exactly the same as the one in cmd/kwil-admin/message.go
-type respValInfo struct {
-	PubKey string `json:"pubkey"`
-	Power  int64  `json:"power"`
-}
-
-func parseRespValSets(data any) ([]*types.Validator, error) {
-	bts, err := json.Marshal(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal val sets resp: %w", err)
-	}
-
-	var resp []respValInfo
-	err = json.Unmarshal(bts, &resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal val sets: %w", err)
-	}
-
-	vals := make([]*types.Validator, len(resp))
-	for i := range resp {
-		pubKey, err := hex.DecodeString(resp[i].PubKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode pubkey: %w", err)
-		}
-		vals[i] = &types.Validator{
-			PubKey: pubKey,
-			Power:  resp[i].Power,
-		}
-	}
-
-	return vals, nil
 }
 
 // respDBList represent databases belong to an owner in cli

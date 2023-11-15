@@ -1,7 +1,7 @@
 package database
 
 import (
-	"github.com/kwilteam/kwil-db/cmd/internal/display"
+	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )

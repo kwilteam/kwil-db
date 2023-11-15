@@ -13,7 +13,7 @@ import (
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 var remote = flag.Bool("remote", false, "test against remote node")
 
-var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
+var drivers = flag.String("drivers", "grpc,cli", "comma separated list of drivers to run")
 
 // TestKwildAcceptance runs acceptance tests again a single kwild node(and
 // are not concurrent), using different drivers: clientDriver, cliDriver.
@@ -72,8 +72,13 @@ func TestKwildAcceptance(t *testing.T) {
 			// and user should be able to drop database
 			specifications.DatabaseDropSpecification(ctx, t, creatorDriver)
 
+			specifications.ExecuteChainInfoSpecification(ctx, t, creatorDriver, acceptance.TestChainID)
 			// there's one node in the network and we're the validator
-			specifications.CurrentValidatorsSpecification(ctx, t, creatorDriver, 1)
+			// @brennan I am commenting this out temporarily, but it seems to be _mostly_ useless
+			// all it does is check that the node is a validator, which is not really a useful test,
+			// and couples the rest of acceptance to the validator rpcs, which should probably
+			// be a standalone set of tests anyways
+			//specifications.CurrentValidatorsSpecification(ctx, t, creatorDriver, 1)
 
 			// The other network/validator specs require multiple nodes in a network
 		})

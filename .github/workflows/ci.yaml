@@ -26,6 +26,9 @@ jobs:
           version: '23.4'
           repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
+#      - name: Install swagger-codegen
+#        uses: swagger-api/swagger-codegen/.github/actions/generate/action.yml@main
+
       - name: Install Taskfile
         uses: arduino/setup-task@v1
         with:
@@ -52,6 +55,12 @@ jobs:
       - name: Ensure generated protobuf Go source is up-to-date
         run: |
           ./scripts/proto/check_up
+
+      - name: Ensure generated swagger Go code is up-to-date
+      # This script gets a permissions error.  I cannot figure out why, @yaiba do you know?  The others don't.
+        run: |
+          chmod +x ./scripts/swagger/check_up
+          ./scripts/swagger/check_up
 
       - name: Compile packages, apps, and specs
         run: | # enter workspace mode to do this on one line

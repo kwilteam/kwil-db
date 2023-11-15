@@ -21,14 +21,16 @@ services:
         ipv4_address: 172.10.100.2
     depends_on:
       - ext1
+    # the admin_listen_addr socket HAS to have the same number as the node name (node0 -> admin0.sock)
     command: |
-      --root_dir=/app/kwil
+      --root-dir=/app/kwil
       --log.level=${LOG_LEVEL:-debug}
-      --app.extension_endpoints=ext1:50051
-      --app.grpc_listen_addr=:50051
-      --app.http_listen_addr=:8080
-      --chain.p2p.external_address=tcp://0.0.0.0:26656
-      --chain.rpc.listen_addr=tcp://0.0.0.0:26657
+      --app.extension-endpoints=ext1:50051
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   node1:
     container_name: node1
@@ -50,13 +52,14 @@ services:
     depends_on:
       - ext1
     command: |
-      --root_dir=/app/kwil
+      --root-dir=/app/kwil
       --log.level=${LOG_LEVEL:-debug}
-      --app.extension_endpoints=ext1:50051
-      --app.grpc_listen_addr=:50051
-      --app.http_listen_addr=:8080
-      --chain.p2p.external_address=tcp://0.0.0.0:26656
-      --chain.rpc.listen_addr=tcp://0.0.0.0:26657
+      --app.extension-endpoints=ext1:50051
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   node2:
     container_name: node2
@@ -78,13 +81,14 @@ services:
     depends_on:
       - ext1
     command: |
-      --root_dir=/app/kwil
+      --root-dir=/app/kwil
       --log.level=${LOG_LEVEL:-debug}
-      --app.extension_endpoints=ext1:50051
-      --app.grpc_listen_addr=:50051
-      --app.http_listen_addr=:8080
-      --chain.p2p.external_address=tcp://0.0.0.0:26656
-      --chain.rpc.listen_addr=tcp://0.0.0.0:26657
+      --app.extension-endpoints=ext1:50051
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   # This node is used to test the scenario where new node join the network & sync the blocks
   # Removing the ext dependency as test-container docker compose creates a new project everytime we run
@@ -109,13 +113,14 @@ services:
     depends_on:
       - ext3
     command: |
-      --root_dir=/app/kwil
+      --root-dir=/app/kwil
       --log.level=${LOG_LEVEL:-debug}
-      --app.extension_endpoints=ext3:50051
-      --app.grpc_listen_addr=:50051
-      --app.http_listen_addr=:8080
-      --chain.p2p.external_address=tcp://0.0.0.0:26656
-      --chain.rpc.listen_addr=tcp://0.0.0.0:26657
+      --app.extension-endpoints=ext3:50051
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   # this ext is shared by all nodes
   # we can make a separate ext for each node if we want

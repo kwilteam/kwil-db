@@ -33,13 +33,14 @@ var (
 	envFile = getEnv("KACT_ENV_FILE", "./.env")
 )
 
-const testChainID = "kwil-test-chain"
+const TestChainID = "kwil-test-chain"
 
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
-	HTTPEndpoint  string
-	GrpcEndpoint  string
-	ChainEndpoint string
+	HTTPEndpoint          string
+	GrpcEndpoint          string
+	P2PAddress            string // cometbft p2p address
+	AdminClientUnixSocket string
 
 	SchemaFile                string
 	DockerComposeFile         string
@@ -79,7 +80,7 @@ VISITOR_PUBLIC_KEY=%x
 	content := fmt.Sprintf(envTemplage,
 		e.GrpcEndpoint,
 		e.HTTPEndpoint,
-		e.ChainEndpoint,
+		e.P2PAddress,
 		e.CreatorRawPk,
 		e.CreatorPublicKey(),
 		e.VisitorRawPK,
@@ -128,6 +129,8 @@ func (r *ActHelper) LoadConfig() {
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
 		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://localhost:8080"),
 		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
+		P2PAddress:                getEnv("KACT_CHAIN_ENDPOINT", "tcp://0.0.0.0:26656"),
+		AdminClientUnixSocket:     getEnv("KACT_ADMIN_CLIENT_UNIX_SOCKET", "tcp://localhost:50151"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
@@ -174,7 +177,7 @@ func (r *ActHelper) generateNodeConfig() {
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
 	err := nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
-		ChainID:       testChainID,
+		ChainID:       TestChainID,
 		BlockInterval: time.Second,
 		// InitialHeight: 0,
 		OutputDir:       tmpPath,
@@ -282,13 +285,14 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	options := []client.Option{client.WithSigner(signer, testChainID),
-		client.WithLogger(logger),
-		client.WithTLSCert("")} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, options...)
+	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
+		Signer:  signer,
+		ChainID: TestChainID,
+		Logger:  logger,
+	})
 	require.NoError(r.t, err, "failed to create http client")
 
-	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+	return driver.NewKwildClientDriver(kwilClt, logger)
 }
 
 func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver {
@@ -298,15 +302,14 @@ func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
 	require.NoError(r.t, err, "failed to create grpc transport")
 
-	options := []client.Option{client.WithSigner(signer, ""),
-		client.WithLogger(logger),
-		client.WithTLSCert(""),
-		client.WithRPCClient(gt),
-	} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
+	kwilClt, err := client.WrapClient(context.TODO(), gt, &client.ClientOptions{
+		Signer: signer,
+		Logger: logger,
+		// we dont care about chain id here
+	})
 	require.NoError(r.t, err, "failed to create grpc client")
 
-	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+	return driver.NewKwildClientDriver(kwilClt, logger)
 }
 
 func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptanceDriver {
@@ -315,8 +318,6 @@ func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptan
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-cli-%s-%s", runtime.GOOS, runtime.GOARCH))
-	adminBinPath := path.Join(path.Dir(currentFilePath),
-		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, testChainID, identifier, logger)
+	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, TestChainID, identifier, logger)
 }

@@ -26,9 +26,8 @@ const (
 	nodeDirPerm   = 0755
 	chainIDPrefix = "kwil-chain-"
 
-	abciDir       = config.ABCIDirName
-	abciConfigDir = cometbft.ConfigDir
-	abciDataDir   = cometbft.DataDir
+	abciDir     = config.ABCIDirName
+	abciDataDir = cometbft.DataDir
 )
 
 type NodeGenerateConfig struct {
@@ -68,6 +67,12 @@ type ConfigOpts struct {
 	// This is useful for testing multiple nodes on the same machine.
 	// If it is used for generating a single config, it has no effect.
 	UniquePorts bool
+
+	// NoGenesis is a flag to not generate a genesis file.
+	// This is useful if you are generating a node config for
+	// a network that already has a genesis file.
+	// If used with creating a testnet, it will result in an error.
+	NoGenesis bool
 }
 
 // GenerateNodeConfig is used to generate configuration required for running a
@@ -86,50 +91,75 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 	cfg := config.DefaultConfig()
 	cfg.RootDir = rootDir
 	if genCfg.BlockInterval > 0 {
-		cfg.ChainCfg.Consensus.TimeoutCommit = genCfg.BlockInterval
+		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
 	}
-	chainRoot := filepath.Join(rootDir, abciDir)
-	// NOTE: not the fully re-rooted path since this may run in a container. The
-	// caller can update PrivateKeyPath if desired.
 
-	fullABCIConfigDir := filepath.Join(chainRoot, abciConfigDir)
-	err = os.MkdirAll(fullABCIConfigDir, nodeDirPerm)
+	pub, err := GenerateNodeFiles(rootDir, cfg)
 	if err != nil {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(chainRoot, abciDataDir), nodeDirPerm)
+	// Create or update genesis config.
+	genFile := filepath.Join(rootDir, cometbft.GenesisJSONName)
+
+	_, err = os.Stat(genFile)
+	if os.IsNotExist(err) {
+		genesisCfg := config.NewGenesisWithValidator(pub)
+		genCfg.applyGenesisParams(genesisCfg)
+		return genesisCfg.SaveAs(genFile)
+
+	}
+
+	return err
+}
+
+// GenerateNodeFiles will generate all generic node files that are not
+// dependent on the network configuration (e.g. genesis.json).
+// It can optionally be given a config file to merge with the default config.
+func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig) (publicKey []byte, err error) {
+	cfg := config.DefaultConfig()
+	if originalCfg != nil {
+		err := cfg.Merge(originalCfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge config file: %w", err)
+		}
+	}
+
+	rootDir, err := config.ExpandPath(outputDir)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to get absolute path for output directory: %w", err)
+	}
+	cfg.RootDir = rootDir
+
+	cometbftRoot := filepath.Join(outputDir, abciDir)
+
+	err = os.MkdirAll(cometbftRoot, nodeDirPerm)
+	if err != nil {
+		return nil, err
+	}
+
+	err = os.MkdirAll(filepath.Join(cometbftRoot, abciDataDir), nodeDirPerm)
+	if err != nil {
+		return nil, err
 	}
 
 	cfg.AppCfg.PrivateKeyPath = config.PrivateKeyFileName
 	err = writeConfigFile(filepath.Join(rootDir, config.ConfigFileName), cfg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Load or generate private key.
 	fullKeyPath := filepath.Join(rootDir, config.PrivateKeyFileName)
 	_, pubKey, newKey, err := config.ReadOrCreatePrivateKeyFile(fullKeyPath, true)
 	if err != nil {
-		return fmt.Errorf("cannot read or create private key: %w", err)
+		return nil, fmt.Errorf("cannot read or create private key: %w", err)
 	}
 	if newKey {
 		fmt.Printf("Generated new private key: %v\n", fullKeyPath)
 	}
 
-	// Create or update genesis config.
-	genFile := filepath.Join(fullABCIConfigDir, cometbft.GenesisJSONName)
-
-	_, err = os.Stat(genFile)
-	if os.IsNotExist(err) {
-		genesisCfg := config.NewGenesisWithValidator(pubKey)
-		genCfg.applyGenesisParams(genesisCfg)
-		return genesisCfg.SaveAs(genFile)
-	}
-
-	return err
+	return pubKey, nil
 }
 
 func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisConfig) {
@@ -146,6 +176,9 @@ func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisC
 func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) error {
 	if opts == nil {
 		opts = &ConfigOpts{}
+	}
+	if opts.NoGenesis {
+		return fmt.Errorf("cannot use NoGenesis opt with testnet")
 	}
 
 	var err error
@@ -166,8 +199,14 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	// overwrite default config if set and valid
 	cfg := config.DefaultConfig()
 	if genCfg.ConfigFile != "" {
-		if err = cfg.ParseConfig(genCfg.ConfigFile); err != nil {
-			return fmt.Errorf("failed to parse config file %s: %w", genCfg.ConfigFile, err)
+		configFile, err := config.LoadConfigFile(genCfg.ConfigFile)
+		if err != nil {
+			return fmt.Errorf("failed to load config file %s: %w", genCfg.ConfigFile, err)
+		}
+
+		err = cfg.Merge(configFile)
+		if err != nil {
+			return fmt.Errorf("failed to merge config file %s: %w", genCfg.ConfigFile, err)
 		}
 	}
 
@@ -179,7 +218,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		nodeDir := filepath.Join(genCfg.OutputDir, nodeDirName)
 		chainRoot := filepath.Join(nodeDir, abciDir)
 
-		err := os.MkdirAll(filepath.Join(chainRoot, abciConfigDir), nodeDirPerm)
+		err := os.MkdirAll(chainRoot, nodeDirPerm)
 		if err != nil {
 			_ = os.RemoveAll(genCfg.OutputDir)
 			return err
@@ -212,8 +251,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 	// write genesis file
 	for i := 0; i < genCfg.NValidators+genCfg.NNonValidators; i++ {
 		nodeDir := filepath.Join(genCfg.OutputDir, fmt.Sprintf("%s%d", genCfg.NodeDirPrefix, i))
-		chainRoot := filepath.Join(nodeDir, abciDir)
-		genFile := cometbft.GenesisPath(chainRoot) // filepath.Join(nodeDir, abciDir, abciConfigDir, "genesis.json")
+		genFile := filepath.Join(nodeDir, cometbft.GenesisJSONName)
 		err = genConfig.SaveAs(genFile)
 		if err != nil {
 			return fmt.Errorf("failed to write genesis file %v: %w", genFile, err)
@@ -228,7 +266,7 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 
 	// Overwrite default config
 	if genCfg.BlockInterval > 0 {
-		cfg.ChainCfg.Consensus.TimeoutCommit = genCfg.BlockInterval
+		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
 	}
 	cfg.ChainCfg.P2P.AddrBookStrict = false
 	cfg.ChainCfg.P2P.AllowDuplicateIP = true
@@ -348,19 +386,22 @@ func incrementPort(incoming string, amt int) (string, error) {
 		return "", err
 	}
 
+	if res.Scheme == "unix" {
+		return incoming, nil
+	}
+
 	// Split the URL into two parts: host (and possibly scheme) and port
 	host, portStr, err := net.SplitHostPort(res.Host)
 	if err != nil {
-		// Handle the case where there is no scheme (like "localhost:50051")
-		if strings.Contains(err.Error(), "missing port in address") {
-			parts := strings.Split(incoming, ":")
-			if len(parts) != 2 {
-				return "", fmt.Errorf("invalid URL format")
-			}
-			host, portStr = parts[0], parts[1]
-		} else {
+		// err will occur if there is no scheme, complaining (incorrectly) that
+		// there is no port. If res.Opaque is not empty, then
+		// res.Scheme is actually the host, and
+		// res.Opaque is the port.
+		if res.Opaque == "" {
 			return "", err
 		}
+		host = res.Scheme
+		portStr = res.Opaque
 	}
 
 	// Convert the port to an integer and increment it
