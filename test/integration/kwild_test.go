@@ -14,7 +14,7 @@ import (
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 var drivers = flag.String("drivers", "client,cli", "comma separated list of drivers to run")
 
-var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", "node3"}
+var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", integration.Ext3Container, "node3"}
 var numServices = len(allServices)
 
 func TestKwildDatabaseIntegration(t *testing.T) {
@@ -59,14 +59,57 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	}
 }
 
+func TestKwildValidatorRemoval(t *testing.T) {
+	ctx := context.Background()
+
+	// In this test, we will have a set of 4 validators, where 3 of the
+	// validators are required to remove one.
+	const numVals, numNonVals = 4, 0
+	opts := []integration.HelperOpt{
+		integration.WithValidators(numVals),
+		integration.WithNonValidators(numNonVals),
+	}
+
+	testDrivers := []string{"cli"} // strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			helper := integration.NewIntHelper(t, opts...)
+			helper.Setup(ctx, allServices)
+			defer helper.Teardown()
+
+			// running forever for local development
+			if *dev {
+				helper.WaitForSignals(t)
+				return
+			}
+
+			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
+			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
+			node2Driver := helper.GetOperatorDriver(ctx, "node2", driverType)
+			targetPubKey := helper.NodePrivateKey("node3").PubKey().Bytes()
+
+			/* Remove node 3 (4 validators, nodes 0, 1, and 2 remove node 3)
+			- node 0 votes to remove
+			- node 3 is still a validator
+			- node 1 votes to remove
+			- node 3 is still a validator
+			- node 2 votes to remove
+			- node 3 is no longer a validator
+			*/
+			specifications.ValidatorNodeRemoveSpecificationV4R1(ctx, t, node0Driver, node1Driver, node2Driver, targetPubKey) // joiner is a validator at node
+		})
+	}
+}
+
 func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	const expiryBlocks = 15
 	const blockInterval = time.Second
+	const numVals, numNonVals = 3, 1
 	opts := []integration.HelperOpt{
-		integration.WithValidators(3),
-		integration.WithNonValidators(1),
+		integration.WithValidators(numVals),
+		integration.WithNonValidators(numNonVals),
 		integration.WithJoinExpiry(expiryBlocks),
 		integration.WithBlockInterval(blockInterval),
 	}
@@ -89,8 +132,8 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
 			joinerDriver := helper.GetOperatorDriver(ctx, "node3", driverType)
-			joinerPkey := helper.NodePrivateKey("node3")
-			joinerPubKey := joinerPkey.PubKey().Bytes()
+			joinerPrivKey := helper.NodePrivateKey("node3")
+			joinerPubKey := joinerPrivKey.PubKey().Bytes()
 
 			// Start the network with 3 validators & 1 Non-validator
 			specifications.CurrentValidatorsSpecification(ctx, t, node0Driver, 3)
@@ -106,7 +149,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			/*
 			 Join Process:
 			 - Node3 requests to join
-			 - Requires atleast 2 nodes to approve
+			 - Requires at least 2 nodes to approve
 			 - Consensus reached, Node3 is a Validator
 			*/
 			specifications.ValidatorNodeJoinSpecification(ctx, t, joinerDriver, joinerPubKey, 3)
@@ -118,7 +161,7 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			/*
 			 Leave Process:
 			 - node3 issues a leave request -> removes it from the validator list
-			 - Validatorset count should be reduced by 1
+			 - Validator set count should be reduced by 1
 			*/
 			specifications.ValidatorNodeLeaveSpecification(ctx, t, joinerDriver)
 
@@ -146,8 +189,8 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
-			// Bringup ext1, node 0,1,2 services but not node3
-			helper.Setup(ctx, allServices[:numServices-1])
+			// Bringup ext1, node 0,1,2 services but not node3 or ext3
+			helper.Setup(ctx, allServices[:numServices-2])
 			defer helper.Teardown()
 
 			// running forever for local development
@@ -175,7 +218,7 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 				3. Get the node driver
 				4. Verify that the database exists on the new node
 			*/
-			helper.RunDockerComposeWithServices(ctx, allServices[numServices-1:])
+			helper.RunDockerComposeWithServices(ctx, allServices[numServices-2:])
 			//node3Driver := helper.GetUserDriver(ctx, helper.ServiceContainer("node3"))
 			node3Driver := helper.GetUserDriver(ctx, "node3", driverType)
 

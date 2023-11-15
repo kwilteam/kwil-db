@@ -47,6 +47,68 @@ func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops Va
 	assert.Equal(t, valCount, len(vals))
 }
 
+// ValidatorNodeRemoveSpecificationN4R1 tests the validator remove process on a
+// network with 4 validators, where 3 nodes target the last.
+func ValidatorNodeRemoveSpecificationV4R1(ctx context.Context, t *testing.T, n0, n1, n2 ValidatorRemoveDsl, target []byte) {
+	t.Log("Executing network node remove specification")
+
+	// Ensure that the validator set precondition for this spec test is met.
+	const expectNumVals = 4
+	vals, err := n0.ValidatorsList(ctx)
+	assert.NoError(t, err)
+	numVals := len(vals)
+	t.Logf("Initial validator set size = %d", numVals)
+	if numVals != expectNumVals {
+		t.Fatalf("have %d validators, but require %d", numVals, expectNumVals)
+	}
+
+	// node 0 sends remove tx targeting node 3
+	rec, err := n0.ValidatorNodeRemove(ctx, target)
+	assert.NoError(t, err)
+
+	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
+
+	// node 3 is still in the validator set
+	vals, err = n0.ValidatorsList(ctx)
+	assert.NoError(t, err)
+	numVals = len(vals)
+	t.Logf("Current validator set size = %d", numVals)
+	if numVals != expectNumVals {
+		t.Fatalf("have %d validators, but expected %d", numVals, expectNumVals)
+	}
+
+	// node 1 also sends remove tx
+	rec, err = n1.ValidatorNodeRemove(ctx, target)
+	assert.NoError(t, err)
+
+	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
+
+	// node 3 is still in the validator set (2 / 4 validators is sub-threshold)
+	vals, err = n0.ValidatorsList(ctx)
+	assert.NoError(t, err)
+	numVals = len(vals)
+	t.Logf("Current validator set size = %d", numVals)
+	if numVals != expectNumVals {
+		t.Fatalf("have %d validators, but expected %d", numVals, expectNumVals)
+	}
+
+	// node 2 also sends remove tx
+	rec, err = n2.ValidatorNodeRemove(ctx, target)
+	assert.NoError(t, err)
+
+	expectTxSuccess(t, n0, ctx, rec, defaultTxQueryTimeout)()
+
+	// node 3 is gone from the validator set
+	vals, err = n0.ValidatorsList(ctx)
+	assert.NoError(t, err)
+	numVals = len(vals)
+	t.Logf("Current validator set size = %d", numVals)
+	const expectReducedNumVals = expectNumVals - 1
+	if numVals != expectReducedNumVals {
+		t.Fatalf("have %d validators, but expected %d", numVals, expectReducedNumVals)
+	}
+}
+
 func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joiner []byte, preCnt int, postCnt int, approved bool) {
 	t.Log("Executing network node approve specification")
 

@@ -287,7 +287,7 @@ func (d *KwilCliDriver) ValidatorNodeApprove(_ context.Context, joinerPubKey []b
 	cmd := d.newKwilAdminCmd("validators", "approve", hex.EncodeToString(joinerPubKey), d.privKey)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to approve validators", zap.Error(err))
+		d.logger.Error("failed to approve validator", zap.Error(err))
 		return nil, fmt.Errorf("failed to approve validators: %w", err)
 	}
 
@@ -295,6 +295,22 @@ func (d *KwilCliDriver) ValidatorNodeApprove(_ context.Context, joinerPubKey []b
 	txHash, err := parseRespTxHash(out.Result)
 	if err != nil {
 		d.logger.Error("failed to parse tx hash", zap.Error(err))
+		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
+	}
+
+	return txHash, nil
+}
+
+func (d *KwilCliDriver) ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error) {
+	cmd := d.newKwilAdminCmd("validators", "remove", hex.EncodeToString(target), d.privKey)
+	out, err := mustRun(cmd, d.logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to approve validators: %w", err)
+	}
+
+	d.logger.Debug("validator target", zap.Any("Resp", out.Result))
+	txHash, err := parseRespTxHash(out.Result)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
 
