@@ -92,13 +92,13 @@ time_format = "{{ .Logging.TimeEncoding }}"
 # Node's Private key
 private_key_path = "{{ .AppCfg.PrivateKeyPath }}"
 
-# TCP or UNIX socket address for the KWILD App's GRPC server to listen on
+# TCP address for the KWILD App's GRPC server to listen on
 grpc_listen_addr = "{{ .AppCfg.GrpcListenAddress }}"
 
-# TCP or UNIX socket address for the KWILD App's HTTP server to listen on
+# TCP address for the KWILD App's HTTP server to listen on
 http_listen_addr = "{{ .AppCfg.HTTPListenAddress }}"
 
-# TCP or UNIX socket address for the KWILD App's Admin GRPC server to listen on
+# Unix socket or TCP address for the KWILD App's Admin GRPC server to listen on
 admin_listen_addr = "{{ .AppCfg.AdminListenAddress }}"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]

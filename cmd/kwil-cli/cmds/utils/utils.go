@@ -8,8 +8,8 @@ func NewCmdUtils() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:     "utils",
 		Aliases: []string{"common"},
-		Short:   "Various utility commands.",
-		Long:    "",
+		Short:   "Various CLI utility commands.",
+		Long:    "Various CLI utility commands.",
 	}
 
 	cmd.AddCommand(

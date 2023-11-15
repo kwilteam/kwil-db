@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/client"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -17,11 +16,7 @@ import (
 type timedClient struct {
 	showReqDur bool
 	logger     *log.Logger
-	cl         client.RPCClient
-}
-
-func (tc *timedClient) Close() error {
-	return tc.cl.Close()
+	cl         client.TxClient
 }
 
 func (tc *timedClient) printDur(t time.Time, method string) {
@@ -40,10 +35,6 @@ func (tc *timedClient) TxQuery(ctx context.Context, txHash []byte) (*transaction
 		defer tc.printDur(time.Now(), "TxQuery")
 	}
 	return tc.cl.TxQuery(ctx, txHash)
-}
-
-func (tc *timedClient) GetTarget() string {
-	return tc.cl.GetTarget()
 }
 
 func (tc *timedClient) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
@@ -100,21 +91,4 @@ func (tc *timedClient) EstimateCost(ctx context.Context, tx *transactions.Transa
 		defer tc.printDur(time.Now(), "EstimateCost")
 	}
 	return tc.cl.EstimateCost(ctx, tx)
-}
-
-func (tc *timedClient) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
-	panic("not implemented") // TODO: Implement
-}
-
-func (tc *timedClient) CurrentValidators(ctx context.Context) ([]*types.Validator, error) {
-	panic("not implemented") // TODO: Implement
-}
-
-func (tc *timedClient) VerifySignature(ctx context.Context, pubKey []byte,
-	signature *auth.Signature, message []byte) error {
-	if tc.showReqDur {
-		defer tc.printDur(time.Now(), "VerifySignature")
-	}
-	return tc.cl.VerifySignature(ctx, pubKey, signature, message)
-
 }

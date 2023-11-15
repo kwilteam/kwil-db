@@ -7,8 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
@@ -21,6 +24,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/modules/datasets"
 	"github.com/kwilteam/kwil-db/internal/modules/validators"
 	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
+	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
 	"github.com/kwilteam/kwil-db/internal/services/grpc/healthsvc/v0"
 	txSvc "github.com/kwilteam/kwil-db/internal/services/grpc/txsvc/v1"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
@@ -35,8 +39,11 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
+	functionpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/function/v0"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
 
@@ -85,17 +92,17 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	// admin service and server
-	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient})
-	admServer := buildAdminServer(d, admsvc)
+	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient}, abciApp, vstore)
+	adminTCPServer := buildAdminService(d, closers, admsvc, txsvc)
 
 	return &Server{
-		grpcServer:   grpcServer,
-		admServer:    admServer,
-		gateway:      buildGatewayServer(d),
-		cometBftNode: cometBftNode,
-		log:          *d.log.Named("server"),
-		closers:      closers,
-		cfg:          d.cfg,
+		grpcServer:     grpcServer,
+		adminTPCServer: adminTCPServer,
+		gateway:        buildGatewayServer(d),
+		cometBftNode:   cometBftNode,
+		log:            *d.log.Named("server"),
+		closers:        closers,
+		cfg:            d.cfg,
 	}
 }
 
@@ -179,8 +186,15 @@ func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.Accoun
 	)
 }
 
-func buildAdminSvc(d *coreDependencies, node admSvc.Node) *admSvc.Service {
-	return admSvc.NewService(node,
+func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, node admSvc.NodeApplication, validatorStore admSvc.ValidatorReader) *admSvc.Service {
+	pk, err := crypto.Ed25519PrivateKeyFromBytes(d.privKey.Bytes())
+	if err != nil {
+		failBuild(err, "failed to build admin service")
+	}
+
+	signer := auth.Ed25519Signer{Ed25519PrivateKey: *pk}
+
+	return admSvc.NewService(transactor, node, validatorStore, &signer,
 		admSvc.WithLogger(*d.log.Named("admin-service")),
 	)
 }
@@ -378,6 +392,11 @@ func buildGrpcServer(d *coreDependencies, txsvc txpb.TxServiceServer) *kwilgrpc.
 	recvLimit := d.cfg.ChainCfg.Mempool.MaxTxBytes + msgOverHeadBuffer
 	grpcServer := kwilgrpc.New(*d.log.Named("grpc-server"), lis, kwilgrpc.WithSrvOpt(grpc.MaxRecvMsgSize(recvLimit)))
 	txpb.RegisterTxServiceServer(grpcServer, txsvc)
+
+	// right now, the function service is just registered to the public tx service
+	functionsvc := functionSvc.FunctionService{}
+	functionpb.RegisterFunctionServiceServer(grpcServer, &functionsvc)
+
 	grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
 
 	return grpcServer
@@ -397,56 +416,109 @@ func buildHealthSvc(d *coreDependencies) *healthsvc.Server {
 	return healthsvc.NewServer(ck)
 }
 
-func buildAdminServer(d *coreDependencies, admsvc admpb.AdminServiceServer) *kwilgrpc.Server {
-	lis, err := net.Listen("tcp", d.cfg.AppCfg.AdminListenAddress)
+func buildAdminService(d *coreDependencies, closer *closeFuncs, admsvc admpb.AdminServiceServer, txsvc txpb.TxServiceServer) *kwilgrpc.Server {
+	addr := d.cfg.AppCfg.AdminListenAddress
+	// if listen address does not have unix:// or tcp:// prefix, assume tcp://
+	if !strings.HasPrefix(d.cfg.AppCfg.AdminListenAddress, "unix://") && !strings.HasPrefix(d.cfg.AppCfg.AdminListenAddress, "tcp://") {
+		addr = "tcp://" + addr
+	}
+
+	// parse AdminListenAddress to see if it is tcp or unix
+	u, err := url.Parse(addr)
 	if err != nil {
 		failBuild(err, "failed to build grpc server")
 	}
-	// client certs
-	caCertPool := x509.NewCertPool()
-	var clientsCerts []byte
-	if clientsFile := filepath.Join(d.cfg.RootDir, defaultAdminClients); fileExists(clientsFile) {
-		clientsCerts, err = os.ReadFile(clientsFile)
+
+	switch u.Scheme {
+	default:
+		failBuild(err, "unknown admin service protocol "+u.Scheme)
+	case "tcp":
+
+		// if tcp, we need to set up TLS
+		lis, err := net.Listen("tcp", ":"+u.Port())
 		if err != nil {
-			failBuild(err, "failed to load client CAs file")
+			failBuild(err, "failed to build grpc server")
 		}
-	} else if d.cfg.AutoGen {
-		clientCredsFileBase := filepath.Join(d.cfg.RootDir, "auth")
-		clientCertFile, clientKeyFile := clientCredsFileBase+".cert", clientCredsFileBase+".key"
-		err = transport.GenTLSKeyPair(clientCertFile, clientKeyFile, "kwild CA", nil)
+		closer.addCloser(lis.Close)
+
+		// client certs
+		caCertPool := x509.NewCertPool()
+		var clientsCerts []byte
+		if clientsFile := filepath.Join(d.cfg.RootDir, defaultAdminClients); fileExists(clientsFile) {
+			clientsCerts, err = os.ReadFile(clientsFile)
+			if err != nil {
+				failBuild(err, "failed to load client CAs file")
+			}
+		} else if d.cfg.AutoGen {
+			clientCredsFileBase := filepath.Join(d.cfg.RootDir, "auth")
+			clientCertFile, clientKeyFile := clientCredsFileBase+".cert", clientCredsFileBase+".key"
+			err = transport.GenTLSKeyPair(clientCertFile, clientKeyFile, "kwild CA", nil)
+			if err != nil {
+				failBuild(err, "failed to generate admin client credentials")
+			}
+			d.log.Info("generated admin service client key pair", zap.String("cert", clientCertFile), zap.String("key", clientKeyFile))
+			if clientsCerts, err = os.ReadFile(clientCertFile); err != nil {
+				failBuild(err, "failed to read auto-generate client certificate")
+			}
+			if err = os.WriteFile(clientsFile, clientsCerts, 0644); err != nil {
+				failBuild(err, "failed to write client CAs file")
+			}
+			d.log.Info("generated admin service client CAs file", zap.String("file", clientsFile))
+		} else {
+			d.log.Info("No admin client CAs file. Use kwil-admin's node gen-auth-key command to generate")
+		}
+		if len(clientsCerts) > 0 && !caCertPool.AppendCertsFromPEM(clientsCerts) {
+			failBuild(err, "invalid client CAs file")
+		}
+
+		// TLS configuration for mTLS (mutual TLS) protocol-level authentication
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{*d.keypair},
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    caCertPool,
+		}
+
+		creds := grpc.Creds(credentials.NewTLS(tlsConfig))
+		opts := kwilgrpc.WithSrvOpt(creds)
+
+		grpcServer := kwilgrpc.New(*d.log.Named("auth-grpc-server"), lis, opts)
+		admpb.RegisterAdminServiceServer(grpcServer, admsvc)
+		txpb.RegisterTxServiceServer(grpcServer, txsvc)
+		grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
+
+		return grpcServer
+	case "unix":
+		// if unix, we need to set up unix socket
+		err = os.MkdirAll(filepath.Dir(u.Path), 0755) // ensure parent dir exists
 		if err != nil {
-			failBuild(err, "failed to generate admin client credentials")
+			failBuild(err, "failed to build grpc server")
 		}
-		d.log.Info("generated admin service client key pair", zap.String("cert", clientCertFile), zap.String("key", clientKeyFile))
-		if clientsCerts, err = os.ReadFile(clientCertFile); err != nil {
-			failBuild(err, "failed to read auto-generate client certificate")
+
+		// unix sockets will remain "open" unless lis.Close is called
+		// In case of crash, this creates very bad ux for developers.
+		// suggested approach here (not sure about this for obvious reasons):
+		// https://gist.github.com/hakobe/6f70d69b8c5243117787fd488ae7fbf2
+
+		err = syscall.Unlink(u.Path)
+		if err != nil && !os.IsNotExist(err) {
+			failBuild(err, "failed to build grpc server")
 		}
-		if err = os.WriteFile(clientsFile, clientsCerts, 0644); err != nil {
-			failBuild(err, "failed to write client CAs file")
+		lis, err := net.Listen("unix", u.Path)
+		if err != nil {
+			failBuild(err, "failed to build grpc server")
 		}
-		d.log.Info("generated admin service client CAs file", zap.String("file", clientsFile))
-	} else {
-		d.log.Info("No admin client CAs file. Use kwil-admin's node gen-auth-key command to generate")
-	}
-	if len(clientsCerts) > 0 && !caCertPool.AppendCertsFromPEM(clientsCerts) {
-		failBuild(err, "invalid client CAs file")
-	}
+		closer.addCloser(lis.Close)
 
-	// TLS configuration for mTLS (mutual TLS) protocol-level authentication
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{*d.keypair},
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    caCertPool,
+		grpcServer := kwilgrpc.New(*d.log.Named("auth-grpc-server"), lis)
+		admpb.RegisterAdminServiceServer(grpcServer, admsvc)
+		txpb.RegisterTxServiceServer(grpcServer, txsvc)
+		grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
+
+		return grpcServer
 	}
 
-	creds := grpc.Creds(credentials.NewTLS(tlsConfig))
-	opts := kwilgrpc.WithSrvOpt(creds)
-
-	grpcServer := kwilgrpc.New(*d.log.Named("auth-grpc-server"), lis, opts)
-	admpb.RegisterAdminServiceServer(grpcServer, admsvc)
-	grpc_health_v1.RegisterHealthServer(grpcServer, buildHealthSvc(d))
-
-	return grpcServer
+	failBuild(nil, "unknown error building admin service") // should never get here
+	return nil
 }
 
 func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {

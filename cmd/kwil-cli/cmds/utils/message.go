@@ -12,21 +12,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
-// respStr represents a string in cli
-type respStr string
-
-func (s respStr) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Message string `json:"message"`
-	}{
-		Message: string(s),
-	})
-}
-
-func (s respStr) MarshalText() ([]byte, error) {
-	return []byte(s), nil
-}
-
 type respChainInfo struct {
 	Info *types.ChainInfo
 }

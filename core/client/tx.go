@@ -10,6 +10,10 @@ import (
 
 // newTx creates a new Transaction signed by the Client's Signer
 func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...TxOpt) (*transactions.Transaction, error) {
+	if c.Signer == nil {
+		return nil, fmt.Errorf("signer must be set to create a transaction")
+	}
+
 	txOpts := &txOptions{}
 	for _, opt := range opts {
 		opt(txOpts)
@@ -20,10 +24,11 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 		nonce = uint64(txOpts.nonce)
 	} else {
 		// Get the latest nonce for the account, if it exists.
-		acc, err := c.rpc.GetAccount(ctx, c.Signer.Identity(), types.AccountStatusPending)
+		acc, err := c.txClient.GetAccount(ctx, c.Signer.Identity(), types.AccountStatusPending)
 		if err != nil {
 			return nil, err
 		}
+
 		// NOTE: an error type would be more robust signalling of a non-existent
 		// account, but presently a nil ID is set by internal/accounts.
 		if len(acc.Identifier) > 0 {
@@ -40,7 +45,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 	}
 
 	// estimate price
-	price, err := c.rpc.EstimateCost(ctx, tx)
+	price, err := c.txClient.EstimateCost(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}

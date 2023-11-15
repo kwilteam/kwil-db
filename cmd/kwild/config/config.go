@@ -248,7 +248,7 @@ func DefaultConfig() *KwildConfig {
 		AppCfg: &AppConfig{
 			GrpcListenAddress:  "localhost:50051",
 			HTTPListenAddress:  "localhost:8080",
-			AdminListenAddress: "localhost:50151",
+			AdminListenAddress: "unix:///tmp/kwil_admin.sock",
 			SqliteFilePath:     DefaultSQLitePath,
 			// SnapshotConfig: SnapshotConfig{
 			// 	Enabled:         false,

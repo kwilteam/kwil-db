@@ -142,9 +142,8 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 			BestBlockTime:   si.LatestBlockTime.UTC(),
 		},
 		Validator: &types.ValidatorInfo{
-			PubKey:     vi.PubKey.Bytes(),
-			PubKeyType: vi.PubKey.Type(),
-			Power:      vi.VotingPower,
+			PubKey: vi.PubKey.Bytes(),
+			Power:  vi.VotingPower,
 		},
 	}, nil
 }

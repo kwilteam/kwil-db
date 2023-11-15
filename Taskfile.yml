@@ -98,6 +98,12 @@ tasks:
     generates:
       - .build/kwild
 
+  generate:docs:
+    desc: Generate docs for CLIs
+    cmds:
+      - go run ./cmd/kwil-cli/generate -out ./gen
+      - go run ./cmd/kwil-admin/generate -out ./gen
+
   # ************ docker ************
   vendor:
     desc: Generate vendor

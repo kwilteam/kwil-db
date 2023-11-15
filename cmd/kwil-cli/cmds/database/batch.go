@@ -20,6 +20,30 @@ var (
 	supportedBatchFileTypes = []string{"csv"}
 )
 
+var (
+	batchLong = `Batch executes an action on a database using inputs from a CSV file.
+
+To map a CSV column name to an action input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
+The format is ` + "`" + `--map-inputs <csv_column>:<action_input>` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
+the CSV column name will be used as the action input name.
+	
+You can also specify the input values directly using the ` + "`" + `--values` + "`" + ` flag, delimited by a colon.
+These values will apply to all inserted rows, and will override the CSV column mappings.
+
+You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + ` 
+flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
+flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.`
+
+	batchExample = `# Given a CSV file with the following contents:
+# id,name,age
+# 1,john,25
+# 2,jane,30
+# 3,jack,35
+
+# Executing the ` + "`" + `create_user($user_id, $username, $user_age, $created_at)` + "`" + ` action on the "mydb" database
+kwil-cli database batch --path ./users.csv --action create_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 --map-inputs id:user_id name:username age:user_age --values created_at:$(date +%s)`
+)
+
 // batch is used for batch operations on databases
 func batchCmd() *cobra.Command {
 	var filePath string
@@ -28,16 +52,13 @@ func batchCmd() *cobra.Command {
 	var action string
 
 	cmd := &cobra.Command{
-		Use:   "batch",
-		Short: "Batch executes an action",
-		Long: `The batch command is used to batch execute an action on a database.  It
-reads in a file from the specified directory, and executes the action in bulk.
-The execution is treated as a single transaction, and will either succeed or fail.`,
-		Args: cobra.ExactArgs(0),
+		Use:     "batch",
+		Short:   "Batch execute an action using inputs from a CSV file.",
+		Long:    batchLong,
+		Example: batchExample,
+		Args:    cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var resp []byte
-
-			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, cl *client.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
 					return err
@@ -72,21 +93,19 @@ The execution is treated as a single transaction, and will either succeed or fai
 					return fmt.Errorf("error creating action inputs: %w", err)
 				}
 
-				resp, err = cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples, client.WithNonce(nonceOverride))
+				resp, err := cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples, client.WithNonce(nonceOverride))
 				if err != nil {
 					return fmt.Errorf("error executing action: %w", err)
 				}
 
-				return nil
+				return display.PrintCmd(cmd, display.RespTxHash(resp))
 			})
-
-			return display.Print(display.RespTxHash(resp), err, config.GetOutputFormat())
 		},
 	}
 
-	cmd.Flags().StringSliceVarP(&csvColumnMappings, "map-input", "m", []string{}, "the variables mappings to the action inputs (e.g. id:$id, name:$name, age:$age)")
-	cmd.Flags().StringSliceVarP(&inputValueMappings, "value", "v", []string{}, "the variables mappings to the action inputs (e.g. id:123, name:john, age:25).  These will apply to all rows, and will override the csv column mappings")
-	cmd.Flags().StringVarP(&filePath, "path", "p", "", "the path to the file to read in (e.g. /home/user/file.csv)")
+	cmd.Flags().StringSliceVarP(&csvColumnMappings, "map-inputs", "m", []string{}, "csv column to action parameter mappings (e.g. csv_id:user_id, csv_name:user_name)")
+	cmd.Flags().StringSliceVarP(&inputValueMappings, "values", "v", []string{}, "action parameter mappings applied to all executions (e.g. id:123, name:john)")
+	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the CSV file to use")
 	cmd.Flags().StringVarP(&action, "action", "a", "", "the action to execute")
 	cmd.Flags().StringP(nameFlag, "n", "", "the database name")
 	cmd.Flags().StringP(ownerFlag, "o", "", "the database owner")
@@ -97,7 +116,7 @@ The execution is treated as a single transaction, and will either succeed or fai
 	return cmd
 }
 
-func getAction(ctx context.Context, c *client.Client, dbid, action string) (*transactions.Action, error) {
+func getAction(ctx context.Context, c common.Client, dbid, action string) (*transactions.Action, error) {
 	schema, err := c.GetSchema(context.Background(), dbid)
 	if err != nil {
 		return nil, fmt.Errorf("error getting schema: %w", err)

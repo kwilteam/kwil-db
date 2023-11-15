@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/adminclient"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 
 	"github.com/joho/godotenv"
@@ -37,9 +38,10 @@ const testChainID = "kwil-test-chain"
 
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
-	HTTPEndpoint  string
-	GrpcEndpoint  string
-	ChainEndpoint string
+	HTTPEndpoint          string
+	GrpcEndpoint          string
+	ChainEndpoint         string
+	AdminClientUnixSocket string
 
 	SchemaFile                string
 	DockerComposeFile         string
@@ -128,6 +130,7 @@ func (r *ActHelper) LoadConfig() {
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
 		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://localhost:8080"),
 		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
+		AdminClientUnixSocket:     getEnv("KACT_ADMIN_CLIENT_UNIX_SOCKET", "tcp://localhost:50151"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
@@ -282,13 +285,18 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	options := []client.Option{client.WithSigner(signer, testChainID),
-		client.WithLogger(logger),
-		client.WithTLSCert("")} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, options...)
+	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
+		Signer:  signer,
+		ChainID: testChainID,
+		Logger:  logger,
+	})
 	require.NoError(r.t, err, "failed to create http client")
 
-	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+	// kwil admin does not use http, so we use unix here
+	kwilAdmin, err := adminclient.New(context.TODO(), r.cfg.AdminClientUnixSocket, adminclient.WithLogger(logger))
+	require.NoError(r.t, err, "failed to create admin client")
+
+	return driver.NewKwildClientDriver(kwilClt, kwilAdmin, logger)
 }
 
 func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver {
@@ -298,15 +306,18 @@ func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
 	require.NoError(r.t, err, "failed to create grpc transport")
 
-	options := []client.Option{client.WithSigner(signer, ""),
-		client.WithLogger(logger),
-		client.WithTLSCert(""),
-		client.WithRPCClient(gt),
-	} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
+	kwilClt, err := client.WrapClient(context.TODO(), gt, &client.ClientOptions{
+		Signer: signer,
+		Logger: logger,
+		// we dont care about chain id here
+	})
 	require.NoError(r.t, err, "failed to create grpc client")
 
-	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+	// kwil admin does not use http, so we use unix here
+	kwilAdmin, err := adminclient.New(context.TODO(), r.cfg.AdminClientUnixSocket, adminclient.WithLogger(logger))
+	require.NoError(r.t, err, "failed to create admin client")
+
+	return driver.NewKwildClientDriver(kwilClt, kwilAdmin, logger)
 }
 
 func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptanceDriver {

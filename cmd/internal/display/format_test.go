@@ -1,4 +1,4 @@
-package display_test
+package display
 
 import (
 	"bytes"
@@ -8,8 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/cmd/internal/display"
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
 )
 
 type demoFormat struct {
@@ -29,8 +28,8 @@ func (d *demoFormat) MarshalText() ([]byte, error) {
 }
 
 func Example_wrappedMsg_text() {
-	msg := display.WrapMsg(&demoFormat{data: []byte("demo")}, nil)
-	display.PrettyPrint(msg, "text", os.Stdout, os.Stderr)
+	msg := wrapMsg(&demoFormat{data: []byte("demo")}, nil)
+	prettyPrint(msg, "text", os.Stdout, os.Stderr)
 	// Output: Whatever format: demo
 }
 
@@ -39,8 +38,8 @@ func Test_wrappedMsg_text_withError(t *testing.T) {
 	var stdout bytes.Buffer
 
 	err := errors.New("an error")
-	msg := display.WrapMsg(&demoFormat{data: []byte("demo")}, err)
-	display.PrettyPrint(msg, "text", &stdout, &stderr)
+	msg := wrapMsg(&demoFormat{data: []byte("demo")}, err)
+	prettyPrint(msg, "text", &stdout, &stderr)
 
 	output := stdout.Bytes()
 	assert.Equal(t, "", string(output), "stdout should be empty")
@@ -50,8 +49,8 @@ func Test_wrappedMsg_text_withError(t *testing.T) {
 }
 
 func Example_wrappedMsg_json() {
-	msg := display.WrapMsg(&demoFormat{data: []byte("demo")}, nil)
-	display.PrettyPrint(msg, "json", os.Stdout, os.Stderr)
+	msg := wrapMsg(&demoFormat{data: []byte("demo")}, nil)
+	prettyPrint(msg, "json", os.Stdout, os.Stderr)
 	// Output: {
 	//   "result": {
 	//     "name_to_whatever": "demo_whatever"
@@ -62,8 +61,8 @@ func Example_wrappedMsg_json() {
 
 func Example_wrappedMsg_json_withError() {
 	err := errors.New("an error")
-	msg := display.WrapMsg(&demoFormat{data: []byte("demo")}, err)
-	display.PrettyPrint(msg, "json", os.Stdout, os.Stderr)
+	msg := wrapMsg(&demoFormat{data: []byte("demo")}, err)
+	prettyPrint(msg, "json", os.Stdout, os.Stderr)
 	// Output:
 	// {
 	//   "result": "",

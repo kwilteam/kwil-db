@@ -9,15 +9,15 @@ import (
 func printConfigCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "print-config",
-		Short: "Print the current configuration",
-		Long:  "",
+		Short: "Print the current CLI configuration.",
+		Long:  "Print the current CLI configuration.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadCliConfig()
 			if err != nil {
 				return err
 			}
 
-			return display.Print(&respKwilCliConfig{cfg}, nil, config.GetOutputFormat())
+			return display.PrintCmd(cmd, &respKwilCliConfig{cfg: cfg})
 		},
 	}
 

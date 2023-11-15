@@ -59,38 +59,6 @@
         ]
       }
     },
-    "/api/v1/approve_validator": {
-      "post": {
-        "operationId": "TxService_ApproveValidator",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txValidatorApprovalResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/txValidatorApprovalRequest"
-            }
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
     "/api/v1/broadcast": {
       "post": {
         "operationId": "TxService_Broadcast",
@@ -185,28 +153,6 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/txGetConfigResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
-    "/api/v1/current_validators": {
-      "get": {
-        "operationId": "TxService_CurrentValidators",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txCurrentValidatorsResponse"
             }
           },
           "default": {
@@ -369,134 +315,6 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/txTxQueryRequest"
-            }
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
-    "/api/v1/validator_join": {
-      "post": {
-        "operationId": "TxService_ValidatorJoin",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txValidatorJoinResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/txValidatorJoinRequest"
-            }
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
-    "/api/v1/validator_join_status/{pubkey}": {
-      "get": {
-        "operationId": "TxService_ValidatorJoinStatus",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txValidatorJoinStatusResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "pubkey",
-            "description": "ED25519 PubKey",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "byte"
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
-    "/api/v1/validator_leave": {
-      "post": {
-        "operationId": "TxService_ValidatorLeave",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txValidatorLeaveResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/txValidatorLeaveRequest"
-            }
-          }
-        ],
-        "tags": [
-          "TxService"
-        ]
-      }
-    },
-    "/api/v1/verify_signature": {
-      "post": {
-        "operationId": "TxService_VerifySignature",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/txVerifySignatureResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/txVerifySignatureRequest"
             }
           }
         ],
@@ -686,9 +504,6 @@
     "txCallRequestBody": {
       "type": "object",
       "properties": {
-        "description": {
-          "type": "string"
-        },
         "payload": {
           "type": "string",
           "format": "byte"
@@ -737,18 +552,6 @@
         }
       }
     },
-    "txCurrentValidatorsResponse": {
-      "type": "object",
-      "properties": {
-        "validators": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/txValidator"
-          }
-        }
-      }
-    },
     "txEstimatePriceRequest": {
       "type": "object",
       "properties": {
@@ -779,6 +582,44 @@
           }
         },
         "alias": {
+          "type": "string"
+        }
+      }
+    },
+    "txForeignKey": {
+      "type": "object",
+      "properties": {
+        "child_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parent_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parent_table": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txForeignKeyAction"
+          }
+        }
+      }
+    },
+    "txForeignKeyAction": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "string"
+        },
+        "do": {
           "type": "string"
         }
       }
@@ -870,14 +711,6 @@
         }
       }
     },
-    "txRequestStatus": {
-      "type": "string",
-      "enum": [
-        "OK",
-        "ERROR"
-      ],
-      "default": "OK"
-    },
     "txSchema": {
       "type": "object",
       "properties": {
@@ -941,6 +774,13 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/txIndex"
+          }
+        },
+        "foreign_keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txForeignKey"
           }
         }
       }
@@ -1020,28 +860,6 @@
         }
       }
     },
-    "txTransactionStatus": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "byte"
-        },
-        "fee": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "errors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "title": "deprecated"
-    },
     "txTxQueryRequest": {
       "type": "object",
       "properties": {
@@ -1067,124 +885,6 @@
         },
         "tx_result": {
           "$ref": "#/definitions/txTransactionResult"
-        }
-      }
-    },
-    "txValidator": {
-      "type": "object",
-      "properties": {
-        "pubkey": {
-          "type": "string",
-          "format": "byte",
-          "title": "ED25519 PubKey"
-        },
-        "power": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
-    "txValidatorApprovalRequest": {
-      "type": "object",
-      "properties": {
-        "PubKey": {
-          "type": "string",
-          "format": "byte",
-          "title": "ED25519 PubKey"
-        }
-      }
-    },
-    "txValidatorApprovalResponse": {
-      "type": "object",
-      "properties": {
-        "status": {
-          "$ref": "#/definitions/txRequestStatus"
-        },
-        "log": {
-          "type": "string"
-        }
-      }
-    },
-    "txValidatorJoinRequest": {
-      "type": "object",
-      "properties": {
-        "tx": {
-          "$ref": "#/definitions/txTransaction"
-        }
-      },
-      "title": "TODO: these should not wrap Transactions; all of these should just get forwarded to the broadcast endpoint"
-    },
-    "txValidatorJoinResponse": {
-      "type": "object",
-      "properties": {
-        "receipt": {
-          "$ref": "#/definitions/txTransactionStatus"
-        }
-      }
-    },
-    "txValidatorJoinStatusResponse": {
-      "type": "object",
-      "properties": {
-        "approved_validators": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "byte"
-          }
-        },
-        "pending_validators": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "byte"
-          }
-        },
-        "power": {
-          "type": "string",
-          "format": "int64"
-        }
-      }
-    },
-    "txValidatorLeaveRequest": {
-      "type": "object",
-      "properties": {
-        "tx": {
-          "$ref": "#/definitions/txTransaction"
-        }
-      }
-    },
-    "txValidatorLeaveResponse": {
-      "type": "object",
-      "properties": {
-        "receipt": {
-          "$ref": "#/definitions/txTransactionStatus"
-        }
-      }
-    },
-    "txVerifySignatureRequest": {
-      "type": "object",
-      "properties": {
-        "signature": {
-          "$ref": "#/definitions/txSignature"
-        },
-        "sender": {
-          "type": "string",
-          "format": "byte"
-        },
-        "msg": {
-          "type": "string",
-          "format": "byte"
-        }
-      }
-    },
-    "txVerifySignatureResponse": {
-      "type": "object",
-      "properties": {
-        "valid": {
-          "type": "boolean"
-        },
-        "error": {
-          "type": "string"
         }
       }
     }

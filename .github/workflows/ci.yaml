@@ -25,6 +25,9 @@ jobs:
         with:
           version: '23.4'
           repo-token: ${{ secrets.KWIL_MACH_SECRET }}
+      
+#      - name: Install swagger-codegen
+#        uses: swagger-api/swagger-codegen/.github/actions/generate/action.yml@main
 
       - name: Install Taskfile
         uses: arduino/setup-task@v1

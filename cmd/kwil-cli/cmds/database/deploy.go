@@ -16,17 +16,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	deployLong = `Deploy a database schema to the target Kwil node.
+A path to a file containing the database schema must be provided using the --path flag.
+
+Either a Kuneiform or a JSON file can be provided.  The file type is determined by the --type flag.
+By default, the file type is kf (Kuneiform).  Pass --type json to deploy a JSON file.`
+
+	deployExample = `# Deploy a database schema to the target Kwil node
+kwil-cli database deploy --path ./schema.kf`
+)
+
 func deployCmd() *cobra.Command {
 	var filePath string
 	var fileType string
 	cmd := &cobra.Command{
-		Use:   "deploy",
-		Short: "Deploy databases",
-		Args:  cobra.NoArgs,
+		Use:     "deploy",
+		Short:   "Deploy a database schema to the target Kwil node.",
+		Long:    deployLong,
+		Example: deployExample,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var txHash []byte
-
-			err := common.DialClient(cmd.Context(), 0, func(ctx context.Context, cl *client.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
 				// read in the file
 				file, err := os.Open(filePath)
 				if err != nil {
@@ -46,16 +57,18 @@ func deployCmd() *cobra.Command {
 					return fmt.Errorf("failed to unmarshal file: %w", err)
 				}
 
-				txHash, err = cl.DeployDatabase(ctx, db, client.WithNonce(nonceOverride))
-				return err
-			})
+				txHash, err := cl.DeployDatabase(ctx, db, client.WithNonce(nonceOverride))
+				if err != nil {
+					return fmt.Errorf("failed to deploy database: %w", err)
+				}
 
-			return display.Print(display.RespTxHash(txHash), err, config.GetOutputFormat())
+				return display.PrintCmd(cmd, display.RespTxHash(txHash))
+			})
 		},
 	}
 
-	cmd.Flags().StringVarP(&filePath, "path", "p", "", "Path to the database definition file (required)")
-	cmd.Flags().StringVarP(&fileType, "type", "t", "kf", "File type of the database definition file (kf or json).  defaults to kf (kuneiform).")
+	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the database definition file (required)")
+	cmd.Flags().StringVarP(&fileType, "type", "t", "kf", "file type of the database definition file (kf or json) - defaults to kf")
 	cmd.MarkFlagRequired("path")
 	return cmd
 }

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
@@ -18,7 +17,7 @@ import (
 
 func (c *Client) GetAccount(ctx context.Context, identifier []byte, status types.AccountStatus) (*types.Account, error) {
 	pbStatus := txpb.AccountStatus(status)
-	res, err := c.txClient.GetAccount(ctx, &txpb.GetAccountRequest{
+	res, err := c.TxClient.GetAccount(ctx, &txpb.GetAccountRequest{
 		Identifier: identifier,
 		Status:     &pbStatus,
 	})
@@ -41,7 +40,7 @@ func (c *Client) GetAccount(ctx context.Context, identifier []byte, status types
 }
 
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
-	res, err := c.txClient.TxQuery(ctx, &txpb.TxQueryRequest{
+	res, err := c.TxClient.TxQuery(ctx, &txpb.TxQueryRequest{
 		TxHash: txHash,
 	})
 	if err != nil {
@@ -53,7 +52,7 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 
 // ChainInfo gets information on the blockchain of the remote host.
 func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
-	res, err := c.txClient.ChainInfo(ctx, &txpb.ChainInfoRequest{})
+	res, err := c.TxClient.ChainInfo(ctx, &txpb.ChainInfoRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +65,7 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 
 func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
 	pbTx := convertTx(tx)
-	res, err := c.txClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
+	res, err := c.TxClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
 	if err != nil {
 		statusError, ok := status.FromError(err)
 		if !ok {
@@ -97,7 +96,7 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([
 }
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
-	res, err := c.txClient.Ping(ctx, &txpb.PingRequest{})
+	res, err := c.TxClient.Ping(ctx, &txpb.PingRequest{})
 	if err != nil {
 		return "", fmt.Errorf("failed to ping: %w", err)
 	}
@@ -109,7 +108,7 @@ func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction)
 	// convert transaction to proto
 	pbTx := convertTx(tx)
 
-	res, err := c.txClient.EstimatePrice(ctx, &txpb.EstimatePriceRequest{
+	res, err := c.TxClient.EstimatePrice(ctx, &txpb.EstimatePriceRequest{
 		Tx: pbTx,
 	})
 	if err != nil {
@@ -139,7 +138,7 @@ func (c *Client) Call(ctx context.Context, req *transactions.CallMessage,
 		Sender:   sender,
 	}
 
-	res, err := c.txClient.Call(ctx, callReq)
+	res, err := c.TxClient.Call(ctx, callReq)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to call: %w", err)
@@ -155,7 +154,7 @@ func (c *Client) Call(ctx context.Context, req *transactions.CallMessage,
 }
 
 func (c *Client) GetConfig(ctx context.Context) (*SvcConfig, error) {
-	res, err := c.txClient.GetConfig(ctx, &txpb.GetConfigRequest{})
+	res, err := c.TxClient.GetConfig(ctx, &txpb.GetConfigRequest{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config: %w", err)
 	}
@@ -173,9 +172,9 @@ type SvcConfig struct {
 	ProviderAddress string
 }
 
-func (c *Client) ListDatabases(ctx context.Context, userIdentifier []byte) ([]string, error) {
-	res, err := c.txClient.ListDatabases(ctx, &txpb.ListDatabasesRequest{
-		Owner: userIdentifier,
+func (c *Client) ListDatabases(ctx context.Context, ownerIdentifier []byte) ([]string, error) {
+	res, err := c.TxClient.ListDatabases(ctx, &txpb.ListDatabasesRequest{
+		Owner: ownerIdentifier,
 	})
 
 	if err != nil {
@@ -186,7 +185,7 @@ func (c *Client) ListDatabases(ctx context.Context, userIdentifier []byte) ([]st
 }
 
 func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {
-	res, err := c.txClient.Query(ctx, &txpb.QueryRequest{
+	res, err := c.TxClient.Query(ctx, &txpb.QueryRequest{
 		Dbid:  dbid,
 		Query: query,
 	})
@@ -204,7 +203,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 }
 
 func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
-	res, err := c.txClient.GetSchema(ctx, &txpb.GetSchemaRequest{
+	res, err := c.TxClient.GetSchema(ctx, &txpb.GetSchemaRequest{
 		Dbid: dbid,
 	})
 	if err != nil {
@@ -212,58 +211,4 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 	}
 
 	return conversion.ConvertFromPBSchema(res.Schema), nil
-}
-
-func (c *Client) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
-	resp, err := c.txClient.ValidatorJoinStatus(ctx, &txpb.ValidatorJoinStatusRequest{Pubkey: pubKey})
-	if err != nil {
-		return nil, fmt.Errorf("failed check validator status: %w", err)
-	}
-
-	jq := conversion.ConvertFromPBJoinRequest(resp)
-	jq.Candidate = pubKey
-	return jq, nil
-}
-
-func (c *Client) CurrentValidators(ctx context.Context) ([]*types.Validator, error) {
-	req := &txpb.CurrentValidatorsRequest{}
-	resp, err := c.txClient.CurrentValidators(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve current validators: %w", err)
-	}
-	vals := make([]*types.Validator, len(resp.Validators))
-	for i, vi := range resp.Validators {
-		vals[i] = &types.Validator{
-			PubKey: vi.Pubkey,
-			Power:  vi.Power,
-		}
-	}
-	return vals, nil
-}
-
-// VerifySignature verifies the signature.
-// An ErrInvalidSignature is returned if the signature is invalid.
-func (c *Client) VerifySignature(ctx context.Context, sender []byte,
-	signature *auth.Signature, message []byte) error {
-	req := &txpb.VerifySignatureRequest{
-		Signature: &txpb.Signature{
-			SignatureBytes: signature.Signature,
-			SignatureType:  signature.Type,
-		},
-		Sender: sender,
-		Msg:    message,
-	}
-
-	// communication error
-	resp, err := c.txClient.VerifySignature(ctx, req)
-	if err != nil {
-		return fmt.Errorf("verify signature: %w", err)
-	}
-
-	// caller can tell if signature is valid
-	if !resp.Valid {
-		return fmt.Errorf("%w: %s", rpcClient.ErrInvalidSignature, resp.Error)
-	}
-
-	return nil
 }

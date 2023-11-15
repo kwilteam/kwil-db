@@ -1,4 +1,4 @@
-package display_test
+package display
 
 import (
 	"bytes"
@@ -7,14 +7,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/stretchr/testify/assert"
 )
 
 // NOTE: could do this for all the other tests,
 // but using Example* is more handy and obvious
 func Test_RespTxHash(t *testing.T) {
-	resp := display.RespTxHash("1024")
+	resp := RespTxHash("1024")
 	expectJson := `{"tx_hash":"31303234"}`
 	expectText := `TxHash: 31303234`
 
@@ -28,8 +27,8 @@ func Test_RespTxHash(t *testing.T) {
 }
 
 func ExampleRespTxHash_text() {
-	msg := display.WrapMsg(display.RespTxHash("1024"), nil)
-	display.PrettyPrint(msg, "text", os.Stdout, os.Stderr)
+	msg := wrapMsg(RespTxHash("1024"), nil)
+	prettyPrint(msg, "text", os.Stdout, os.Stderr)
 	// Output:
 	// TxHash: 31303234
 }
@@ -39,8 +38,8 @@ func TestRespTxHash_text_withError(t *testing.T) {
 	var stdout bytes.Buffer
 
 	err := errors.New("an error")
-	msg := display.WrapMsg(display.RespTxHash("1024"), err)
-	display.PrettyPrint(msg, "text", &stdout, &stderr)
+	msg := wrapMsg(RespTxHash("1024"), err)
+	prettyPrint(msg, "text", &stdout, &stderr)
 
 	output, err := io.ReadAll(&stdout)
 	assert.NoError(t, err, "ReadAll should not return error")
@@ -52,8 +51,8 @@ func TestRespTxHash_text_withError(t *testing.T) {
 }
 
 func ExampleRespTxHash_json() {
-	msg := display.WrapMsg(display.RespTxHash("1024"), nil)
-	display.PrettyPrint(msg, "json", os.Stdout, os.Stderr)
+	msg := wrapMsg(RespTxHash("1024"), nil)
+	prettyPrint(msg, "json", os.Stdout, os.Stderr)
 	// Output:
 	// {
 	//   "result": {
@@ -65,8 +64,8 @@ func ExampleRespTxHash_json() {
 
 func ExampleRespTxHash_json_withError() {
 	err := errors.New("an error")
-	msg := display.WrapMsg(display.RespTxHash("1024"), err)
-	display.PrettyPrint(msg, "json", os.Stdout, os.Stderr)
+	msg := wrapMsg(RespTxHash("1024"), err)
+	prettyPrint(msg, "json", os.Stdout, os.Stderr)
 	// Output:
 	// {
 	//   "result": "",

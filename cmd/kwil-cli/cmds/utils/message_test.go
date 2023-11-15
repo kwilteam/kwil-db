@@ -2,9 +2,7 @@ package utils
 
 import (
 	"encoding/hex"
-	"errors"
 	"math/big"
-	"testing"
 
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -12,21 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-
-	"github.com/stretchr/testify/assert"
 )
-
-func Test_respStr(t *testing.T) {
-	s := respStr("pong")
-
-	bs, err := s.MarshalText()
-	assert.NoError(t, err)
-	assert.Equal(t, "pong", string(bs))
-
-	sb, err := s.MarshalJSON()
-	assert.NoError(t, err)
-	assert.Equal(t, `{"message":"pong"}`, string(sb))
-}
 
 func Example_respChainInfo_text() {
 	display.Print(&respChainInfo{
@@ -58,33 +42,6 @@ func Example_respChainInfo_json() {
 	//     "block_hash": "00000beefbeefbeef"
 	//   },
 	//   "error": ""
-	// }
-}
-
-func Example_respStr_text() {
-	display.Print(respStr("pong"), nil, "text")
-	// Output:
-	// pong
-}
-
-func Example_respStr_json() {
-	display.Print(respStr("pong"), nil, "json")
-	// Output:
-	// {
-	//   "result": {
-	//     "message": "pong"
-	//   },
-	//   "error": ""
-	// }
-}
-
-func Example_respStr_json_withError() {
-	err := errors.New("an error")
-	display.Print(respStr("pong"), err, "json")
-	// Output:
-	// {
-	//   "result": "",
-	//   "error": "an error"
 	// }
 }
 

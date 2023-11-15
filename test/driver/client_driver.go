@@ -7,12 +7,13 @@ import (
 	"os"
 	"slices"
 
+	"github.com/kwilteam/kwil-db/core/adminclient"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"go.uber.org/zap"
 )
 
@@ -26,26 +27,16 @@ func GetEnv(key, defaultValue string) string {
 
 // KwildClientDriver is driver for tests using the `client` package
 type KwildClientDriver struct {
-	clt    *client.Client
-	logger log.Logger
+	clt         *client.Client
+	adminClient *adminclient.AdminClient // TODO: we need a way to construct this
+	logger      log.Logger
 }
 
-type GrpcDriverOpt func(*KwildClientDriver)
-
-func WithLogger(logger log.Logger) GrpcDriverOpt {
-	return func(d *KwildClientDriver) {
-		d.logger = logger
-	}
-}
-
-func NewKwildClientDriver(clt *client.Client, opts ...GrpcDriverOpt) *KwildClientDriver {
+func NewKwildClientDriver(clt *client.Client, adminClient *adminclient.AdminClient, logger log.Logger) *KwildClientDriver {
 	driver := &KwildClientDriver{
-		clt:    clt,
-		logger: log.New(log.Config{}),
-	}
-
-	for _, opt := range opts {
-		opt(driver)
+		clt:         clt,
+		adminClient: adminClient,
+		logger:      logger,
 	}
 
 	return driver
@@ -146,31 +137,30 @@ func (d *KwildClientDriver) QueryDatabase(ctx context.Context, dbid, query strin
 }
 
 func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any, withSignature bool) (*client.Records, error) {
-	callOpts := make([]client.CallOpt, 0)
-	callOpts = append(callOpts, client.Authenticated(withSignature))
-	return d.clt.CallAction(ctx, dbid, action, inputs, callOpts...)
+
+	return d.clt.CallAction(ctx, dbid, action, inputs)
 }
 
-func (d *KwildClientDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error) {
-	return d.clt.ApproveValidator(ctx, joinerPubKey)
+func (k *KwildClientDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
+	panic("TODO: Implement")
 }
 
-func (d *KwildClientDriver) ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error) {
-	return d.clt.RemoveValidator(ctx, target)
+func (k *KwildClientDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error) {
+	panic("TODO: Implement")
 }
 
-func (d *KwildClientDriver) ValidatorNodeJoin(ctx context.Context) ([]byte, error) {
-	return d.clt.ValidatorJoin(ctx)
+func (k *KwildClientDriver) ValidatorNodeJoin(ctx context.Context) ([]byte, error) {
+	panic("TODO: Implement")
 }
 
-func (d *KwildClientDriver) ValidatorNodeLeave(ctx context.Context) ([]byte, error) {
-	return d.clt.ValidatorLeave(ctx)
+func (k *KwildClientDriver) ValidatorNodeLeave(ctx context.Context) ([]byte, error) {
+	panic("TODO: Implement")
 }
 
-func (d *KwildClientDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
-	return d.clt.ValidatorJoinStatus(ctx, pubKey)
+func (k *KwildClientDriver) ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error) {
+	panic("TODO: Implement")
 }
 
-func (d *KwildClientDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {
-	return d.clt.CurrentValidators(ctx)
+func (k *KwildClientDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {
+	panic("TODO: Implement")
 }
