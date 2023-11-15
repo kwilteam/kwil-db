@@ -144,6 +144,10 @@ func (d *KwildClientDriver) ValidatorNodeApprove(ctx context.Context, joinerPubK
 	return d.clt.ApproveValidator(ctx, joinerPubKey)
 }
 
+func (d *KwildClientDriver) ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error) {
+	return d.clt.RemoveValidator(ctx, target)
+}
+
 func (d *KwildClientDriver) ValidatorNodeJoin(ctx context.Context) ([]byte, error) {
 	return d.clt.ValidatorJoin(ctx)
 }
