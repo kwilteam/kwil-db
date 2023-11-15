@@ -7,5 +7,6 @@ type KwilIntDriver interface {
 	specifications.DatabaseDropDsl
 	specifications.ExecuteQueryDsl
 	specifications.ExecuteCallDsl
-	specifications.ValidatorOpsDsl
+	specifications.ValidatorOpsDsl // TODO: split into ValidatorJoinDsl, ValidatorApproveDsl, ValidatorLeaveDsl
+	specifications.ValidatorRemoveDsl
 }

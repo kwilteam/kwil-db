@@ -44,16 +44,18 @@ var (
 )
 
 var defaultWaitStrategies = map[string]string{
-	"ext1":  "listening on",
-	"node0": "Starting Node service",
-	"node1": "Starting Node service",
-	"node2": "Starting Node service",
-	"node3": "Starting Node service",
+	ExtContainer:  "listening on",
+	Ext3Container: "listening on",
+	"node0":       "Starting Node service",
+	"node1":       "Starting Node service",
+	"node2":       "Starting Node service",
+	"node3":       "Starting Node service",
 }
 
 const (
-	ExtContainer = "ext1"
-	testChainID  = "kwil-test-chain"
+	ExtContainer  = "ext1"
+	Ext3Container = "ext3"
+	testChainID   = "kwil-test-chain"
 )
 
 // IntTestConfig is the config for integration test
@@ -225,6 +227,7 @@ func fileExists(path string) bool {
 
 func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services []string) {
 	r.t.Logf("run in docker compose")
+	time.Sleep(time.Second) // sometimes docker compose fails if previous test had some slow async clean up (no idea)
 
 	envs, err := godotenv.Read(envFile)
 	require.NoError(r.t, err, "failed to parse .env file")
@@ -241,7 +244,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
 	})
 
-	r.t.Cleanup(func() {
+	r.t.Cleanup(func() { // redundant if test defers Teardown()
 		r.Teardown()
 	})
 
@@ -250,13 +253,15 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 		waitMsg := defaultWaitStrategies[service]
 		stack = stack.WaitForService(service, wait.NewLogStrategy(waitMsg).WithStartupTimeout(r.cfg.WaitTimeout))
 	}
-	err = stack.Up(ctx, compose.RunServices(services...))
+	// Use compose.Wait to wait for containers to become "healthy" according to
+	// their defined healthchecks.
+	err = stack.Up(ctx, compose.Wait(true), compose.RunServices(services...))
 	r.t.Log("docker compose up")
 	require.NoError(r.t, err, "failed to start kwild cluster")
 
 	for _, name := range services {
-		// skip ext1
-		if name == ExtContainer {
+		// skip ext containers
+		if name == ExtContainer || name == Ext3Container {
 			continue
 		}
 		container, err := dc.ServiceContainer(ctx, name)
@@ -348,14 +353,21 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 func (r *IntHelper) GetOperatorDriver(ctx context.Context, name string, driverType string) KwilIntDriver {
 	ctr := r.containers[name]
 
-	nodeURL, err := ctr.PortEndpoint(ctx, "50051", "")
+	rpcURL, err := ctr.PortEndpoint(ctx, "50051", "")
 	require.NoError(r.t, err, "failed to get node url")
 	gatewayURL, err := ctr.PortEndpoint(ctx, "8080", "")
 	require.NoError(r.t, err, "failed to get gateway url")
+	p2pURL, err := ctr.PortEndpoint(ctx, "26656", "tcp")
+	require.NoError(r.t, err, "failed to get p2p url")
 	cometBftURL, err := ctr.PortEndpoint(ctx, "26657", "tcp")
-	require.NoError(r.t, err, "failed to get cometBft url")
+	require.NoError(r.t, err, "failed to get cometBFT RPC url")
 
-	r.t.Logf("nodeURL: %s gatewayURL: %s cometBftURL: %s for container name: %s", nodeURL, gatewayURL, cometBftURL, name)
+	r.t.Logf(`user RPC URL: "%s"
+gateway URL: "%s"
+p2p URL: "%s"
+cometBFT URL: "%s"
+container name: "%s"`,
+		rpcURL, gatewayURL, cometBftURL, p2pURL, name)
 
 	privKeyB := r.privateKeys[name].Bytes()
 	privKeyHex := hex.EncodeToString(privKeyB)

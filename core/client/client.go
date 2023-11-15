@@ -341,7 +341,7 @@ func (c *Client) ApproveValidator(ctx context.Context, joiner []byte, opts ...Tx
 func (c *Client) RemoveValidator(ctx context.Context, target []byte, opts ...TxOpt) ([]byte, error) {
 	_, err := crypto.Ed25519PublicKeyFromBytes(target)
 	if err != nil {
-		return nil, fmt.Errorf("invalid candidate validator public key: %w", err)
+		return nil, fmt.Errorf("invalid target validator public key: %w", err)
 	}
 	payload := &transactions.ValidatorRemove{
 		Validator: target,
