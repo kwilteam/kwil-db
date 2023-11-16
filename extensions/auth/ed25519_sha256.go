@@ -34,8 +34,9 @@ type Ed22519Sha256Authenticator struct{}
 
 var _ auth.Authenticator = Ed22519Sha256Authenticator{}
 
-// Address generates a NEAR implicit address from a public key
-func (e Ed22519Sha256Authenticator) Address(publicKey []byte) (string, error) {
+// Identifier returns the hex-encoded public key as the identifier.
+// The input must be a 32-byte ed25519 public key.
+func (e Ed22519Sha256Authenticator) Identifier(publicKey []byte) (string, error) {
 	if len(publicKey) != ed25519.PublicKeySize {
 		return "", fmt.Errorf("invalid ed25519 public key size for generating near address: %d", len(publicKey))
 	}

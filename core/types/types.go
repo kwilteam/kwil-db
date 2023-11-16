@@ -8,9 +8,9 @@ import (
 // TODO: doc it all
 
 type Account struct {
-	PublicKey []byte   `json:"public_key"`
-	Balance   *big.Int `json:"balance"`
-	Nonce     int64    `json:"nonce"`
+	Identifier []byte   `json:"identifier"`
+	Balance    *big.Int `json:"balance"`
+	Nonce      int64    `json:"nonce"`
 }
 
 type AccountStatus uint32

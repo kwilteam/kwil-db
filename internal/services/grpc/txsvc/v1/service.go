@@ -59,7 +59,7 @@ type EngineReader interface {
 }
 
 type AccountReader interface {
-	GetAccount(ctx context.Context, pubkey []byte) (*accounts.Account, error)
+	GetAccount(ctx context.Context, identifier []byte) (*accounts.Account, error)
 }
 
 type BlockchainTransactor interface {
@@ -70,7 +70,7 @@ type BlockchainTransactor interface {
 
 type NodeApplication interface {
 	ChainID() string
-	AccountInfo(ctx context.Context, pubkey []byte) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, identifier []byte) (balance *big.Int, nonce int64, err error)
 }
 
 type ValidatorReader interface {

@@ -124,8 +124,8 @@ type Transaction struct {
 	// in order to generate the message that being signed.
 	Serialization SignedMsgSerializationType
 
-	// Sender is the public key of the sender
-	// NOTE: we could not use crypto.PublicKey, since it's not RLP-serializable
+	// Sender is the user identifier, which is generally an address but may be
+	// a public key of the sender.
 	Sender []byte
 }
 
@@ -152,7 +152,7 @@ func (t *Transaction) Sign(signer auth.Signer) error {
 	}
 
 	t.Signature = signature
-	t.Sender = signer.PublicKey()
+	t.Sender = signer.Identity()
 
 	return nil
 }

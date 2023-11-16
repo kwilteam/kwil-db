@@ -87,7 +87,7 @@ func (p *procedure) call(scoper Scoper, inputs []any) error {
 	}
 	scope := scoper.NewScope()
 
-	if p.mutable && !scope.execution.Mutative {
+	if p.mutable && !scope.execution.Data.Mutative {
 		return fmt.Errorf(`%w: mutable procedure "%s" called with non-mutative scope`, ErrMutativeProcedure, p.name)
 	}
 
@@ -109,7 +109,7 @@ func convertModifier(mod types.Modifier) (instruction, error) {
 	switch mod {
 	case types.ModifierOwner:
 		return instructionFunc(func(scope *ScopeContext, dataset *dataset) error {
-			if !bytes.EqualFold(scope.execution.PublicKey, dataset.schema.Owner) {
+			if !bytes.Equal(scope.execution.Data.Caller, dataset.schema.Owner) {
 				return fmt.Errorf("cannot call owner procedure, not owner")
 			}
 

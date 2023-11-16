@@ -13,12 +13,9 @@ type AccountStore interface {
 }
 
 type Engine interface {
-	// TODO: signer and caller will become the same thing after we update auth
-	Call(ctx context.Context, dbid string, procedure string, caller []byte, signer []byte, args []any) (*sql.ResultSet, error)
 	CreateDataset(ctx context.Context, schema *types.Schema, caller []byte) (err error)
 	DeleteDataset(ctx context.Context, dbid string, caller []byte) error
-	// TODO: signer and caller will become the same thing after we update auth
-	Execute(ctx context.Context, dbid string, procedure string, caller []byte, signer []byte, args []any) error
+	Execute(ctx context.Context, data *types.ExecutionData) (*sql.ResultSet, error)
 	GetSchema(ctx context.Context, dbid string) (*types.Schema, error)
 	ListDatasets(ctx context.Context, caller []byte) ([]string, error)
 	Query(ctx context.Context, dbid string, query string) (*sql.ResultSet, error)

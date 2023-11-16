@@ -55,11 +55,11 @@ type ActTestCfg struct {
 }
 
 func (e *ActTestCfg) CreatorPublicKey() []byte {
-	return e.CreatorSigner.PublicKey()
+	return e.CreatorSigner.Identity()
 }
 
 func (e *ActTestCfg) VisitorPublicKey() []byte {
-	return e.VisitorSigner.PublicKey()
+	return e.VisitorSigner.Identity()
 }
 
 func (e *ActTestCfg) IsRemote() bool {
@@ -273,7 +273,7 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 	case "grpc":
 		return r.getGRPCClientDriver(signer)
 	case "cli":
-		return r.getCliDriver(pk, signer.PublicKey())
+		return r.getCliDriver(pk, signer.Identity())
 	default:
 		panic("unsupported driver type")
 	}

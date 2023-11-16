@@ -50,7 +50,7 @@ type Payload interface {
 
 // Schema is the payload that is used to deploy a schema
 type Schema struct {
-	Owner      []byte       `json:"owner"` // public key of the owner
+	Owner      []byte       `json:"owner"`
 	Name       string       `json:"name"`
 	Tables     []*Table     `json:"tables"`
 	Actions    []*Action    `json:"actions"`

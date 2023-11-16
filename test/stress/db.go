@@ -72,7 +72,7 @@ func (h *harness) deployDBAsync(ctx context.Context) (string, <-chan asyncResp, 
 		return "", nil, err
 	}
 
-	dbid := utils.GenerateDBID(schema.Name, h.pub)
+	dbid := utils.GenerateDBID(schema.Name, h.Signer.Identity())
 
 	promise := make(chan asyncResp, 1)
 	go func() {

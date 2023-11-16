@@ -117,10 +117,11 @@ func TestCallMessage_Sign(t *testing.T) {
 		signer auth.Signer
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantSig *auth.Signature
-		wantErr bool
+		name          string
+		args          args
+		wantSig       *auth.Signature
+		authenticator auth.Authenticator
+		wantErr       bool
 	}{
 		{
 			name: "non support message serialization type",
@@ -136,7 +137,8 @@ func TestCallMessage_Sign(t *testing.T) {
 				mst:    transactions.SignedMsgConcat,
 				signer: &ethPersonalSigner,
 			},
-			wantSig: expectPersonalSignConcatSig,
+			authenticator: &auth.EthSecp256k1Authenticator{},
+			wantSig:       expectPersonalSignConcatSig,
 		},
 	}
 
@@ -166,10 +168,8 @@ func TestCallMessage_Sign(t *testing.T) {
 			msgBts, err := msg.SerializeMsg()
 			require.NoError(t1, err, "error serializing message")
 
-			authenticator := tt.args.signer.Authenticator()
-			err = authenticator.Verify(msg.Sender, msgBts, msg.Signature.Signature)
+			err = tt.authenticator.Verify(msg.Sender, msgBts, msg.Signature.Signature)
 			require.NoError(t1, err, "error verifying message")
 		})
 	}
-
 }

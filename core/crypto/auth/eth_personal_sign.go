@@ -29,25 +29,29 @@ type EthSecp256k1Authenticator struct{}
 
 var _ Authenticator = EthSecp256k1Authenticator{}
 
-// Address generates an ethereum address from a public key.
-func (EthSecp256k1Authenticator) Address(publicKey []byte) (string, error) {
-	// See ethCrypto.PubkeyToAddress for this formula:
-	addr := ethCommon.BytesToAddress(ethCrypto.Keccak256(publicKey[1:])[12:])
-	return addr.String(), nil
+// Identifier returns an ethereum address hex string from address bytes.
+// It will include the 0x prefix, and the address will be checksum-able.
+func (EthSecp256k1Authenticator) Identifier(ident []byte) (string, error) {
+	return ethCommon.BytesToAddress(ident).Hex(), nil
 }
 
 // Verify verifies applies the Ethereum TextHash digest and verifies the signature
-func (EthSecp256k1Authenticator) Verify(publicKey []byte, msg []byte, signature []byte) error {
-	pubkey, err := crypto.Secp256k1PublicKeyFromBytes(publicKey)
-	if err != nil {
-		return err
-	}
-
+func (EthSecp256k1Authenticator) Verify(identity []byte, msg []byte, signature []byte) error {
 	// signature is 65 bytes, [R || S || V] format
 	if len(signature) != ethPersonalSignSignatureLength {
 		return fmt.Errorf("invalid signature length: expected %d, received %d", ethPersonalSignSignatureLength, len(signature))
 	}
 	hash := ethAccounts.TextHash(msg)
+
+	pubkeyBytes, err := ethCrypto.Ecrecover(hash, signature)
+	if err != nil {
+		return err
+	}
+
+	pubkey, err := crypto.Secp256k1PublicKeyFromBytes(pubkeyBytes)
+	if err != nil {
+		return err
+	}
 
 	// The contract of (*Secp256k1PublicKey).Verify is to have any recovery byte
 	// at the end, if it is present. If verification fails here, it is possible
