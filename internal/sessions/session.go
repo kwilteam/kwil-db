@@ -134,15 +134,13 @@ func (m *MultiCommitter) Commit(ctx context.Context, idempotencyKey []byte) (id 
 	id = []byte{}
 
 	orderedMap := order.OrderMap(m.committables)
-	for committiableId, c := range orderedMap {
+	for _, c := range orderedMap {
 		newId, err := c.Value.Commit(ctx, idempotencyKey)
 		if err != nil {
 			return nil, err
 		}
 
 		id = append(id, newId...)
-
-		_ = committiableId // TODO: delete this.  Using it for debugging.
 	}
 
 	err = deleteCurrentKey(m.kv)
