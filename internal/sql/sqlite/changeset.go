@@ -238,9 +238,11 @@ func convertValue(v *sqlite.Value) (*Value, error) {
 			Value:    v.Text(),
 		}
 	case sqlite.TypeBlob:
+		b := make([]byte, len(v.Blob()))
+		copy(b, v.Blob())
 		val = &Value{
 			DataType: DataTypeBlob,
-			Value:    v.Blob(),
+			Value:    b,
 		}
 	case sqlite.TypeNull:
 		val = &Value{
