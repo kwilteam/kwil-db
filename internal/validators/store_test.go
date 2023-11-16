@@ -4,21 +4,28 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/utils/random"
-	sqlTesting "github.com/kwilteam/kwil-db/internal/sql/testing"
+	"github.com/kwilteam/kwil-db/internal/sql/adapter"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 )
 
 func Test_validatorStore(t *testing.T) {
-	ds, td, err := sqlTesting.OpenTestDB("test_validator_store")
+	ctx := context.Background()
+	defer deleteTempDir()
+
+	pool, err := sqlite.NewPool(ctx, fmt.Sprintf("%s/test_validator_store.db", tempDir), 1, 1, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer td()
+	defer pool.Close()
 
-	ctx := context.Background()
+	ds := &adapter.PoolAdapater{Pool: pool}
+
 	logger := log.NewStdOut(log.DebugLevel)
 	vs, err := newValidatorStore(ctx, ds, logger)
 	if err != nil {
@@ -275,4 +282,25 @@ func newValidator() *Validator {
 		PubKey: randomBytes(32),
 		Power:  rng.Int63n(4) + 1, // in {1,2,3,4}
 	}
+}
+
+const tempDir = "./tmp"
+
+func deleteTempDir() {
+	err := os.RemoveAll(tempDir)
+	if err != nil {
+		panic(err)
+	}
+}
+
+type mockCommittable struct {
+	fn func() ([]byte, error)
+}
+
+func (m *mockCommittable) SetIDFunc(p0 func() ([]byte, error)) {
+	m.fn = p0
+}
+
+func (m *mockCommittable) Skip() bool {
+	return false
 }

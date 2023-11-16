@@ -5,42 +5,46 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/engine"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 // Call executes a call action on a database.  It is a read-only action.
 // It returns the result of the call.
 // If a message caller is specified, then it will check the signature of the message and use the caller as the caller of the action.
 func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error) {
-	executionOpts := []engine.ExecutionOpt{
-		engine.ReadOnly(true),
-	}
+	sender := []byte{}
+
 	if msg.IsSigned() {
 		err := ident.VerifyMessage(msg)
 		if err != nil {
 			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
 		}
 
-		identifier := &engineTypes.User{
-			PublicKey: msg.Sender,
-			AuthType:  msg.Signature.Type,
-		}
+		sender, err = getUserIdentifier(msg.Sender, msg.Signature.Type)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user identifier: %w", err)
 		}
-
-		executionOpts = append(executionOpts, engine.WithCaller(identifier))
 	}
 
-	return u.engine.Execute(ctx, dbid, action, [][]any{args}, executionOpts...)
+	results, err := u.engine.Call(ctx, dbid, action, sender, msg.Sender, args)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute call: %w", err)
+	}
+
+	return getResultMap(results), nil
 }
 
 // Query executes an ad-hoc query on a database.  It is a read-only action.
 // It returns the result of the query.
 func (u *DatasetModule) Query(ctx context.Context, dbid string, query string) ([]map[string]any, error) {
-	return u.engine.Query(ctx, dbid, query)
+	results, err := u.engine.Query(ctx, dbid, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	return getResultMap(results), nil
 }
 
 // GetSchema returns the schema of a database.
@@ -51,4 +55,18 @@ func (u *DatasetModule) GetSchema(ctx context.Context, dbid string) (*engineType
 // ListOwnedDatabase returns a list of databases owned by a public key.
 func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner []byte) ([]string, error) {
 	return u.engine.ListDatasets(ctx, owner)
+}
+
+func getResultMap(results *sql.ResultSet) []map[string]any {
+	resMap := make([]map[string]any, 0)
+	for _, result := range results.Rows {
+		res := make(map[string]any)
+		for i, column := range results.Columns {
+			res[column] = result[i]
+		}
+
+		resMap = append(resMap, res)
+	}
+
+	return resMap
 }

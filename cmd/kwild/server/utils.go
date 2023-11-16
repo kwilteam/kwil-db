@@ -8,18 +8,13 @@ import (
 	"math"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/core/log"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	extActions "github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
-	"github.com/kwilteam/kwil-db/internal/engine"
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-db/internal/kv"
-	"github.com/kwilteam/kwil-db/internal/sessions"
-	sqlSessions "github.com/kwilteam/kwil-db/internal/sessions/sql-session"
-	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/sql/client"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/p2p"
@@ -58,40 +53,43 @@ func getExtensions(ctx context.Context, urls []string) (map[string]extActions.Ex
 	return exts, nil
 }
 
-func adaptExtensions(exts map[string]extActions.Extension) map[string]engine.ExtensionInitializer {
-	adapted := make(map[string]engine.ExtensionInitializer, len(exts))
+func adaptExtensions(exts map[string]extActions.Extension) map[string]execution.NamespaceInitializer {
+	adapted := make(map[string]execution.NamespaceInitializer, len(exts))
 
 	for name, ext := range exts {
 		initializer := &extensions.ExtensionInitializer{
 			Extension: ext,
 		}
-		adapted[name] = extensionInitializeFunc(initializer.CreateInstance)
+		adapted[name] = func(ctx context.Context, metadata map[string]string) (execution.Namespace, error) {
+			// external extensions expect string as "string", however the engine now passes literals as "'string'"
+			trimmedMap := make(map[string]string, len(metadata))
+			for k, v := range metadata {
+				trimmedMap[k] = strings.Trim(v, "'")
+			}
+
+			ext, err := initializer.CreateInstance(ctx, trimmedMap)
+			if err != nil {
+				return nil, err
+			}
+
+			return &extensionAdapter{
+				ext: ext,
+			}, nil
+		}
 	}
 
 	return adapted
 }
 
-type extensionInitializeFunc func(ctx context.Context, metadata map[string]string) (*extensions.Instance, error)
-
-func (e extensionInitializeFunc) CreateInstance(ctx context.Context, metadata map[string]string) (engine.ExtensionInstance, error) {
-	return e(ctx, metadata)
+// extensionAdapater allows an extension to be used as an engine namespace.
+type extensionAdapter struct {
+	ext *extensions.Instance
 }
 
-type sqliteOpener struct {
-	sqliteFilePath string
-}
+func (e *extensionAdapter) Call(scoper execution.Scoper, method string, inputs []any) ([]any, error) {
+	ctx := scoper.NewScope().Ctx()
 
-func newSqliteOpener(sqliteFilePath string) *sqliteOpener {
-	return &sqliteOpener{
-		sqliteFilePath: sqliteFilePath,
-	}
-}
-
-func (s *sqliteOpener) Open(fileName string, logger log.Logger) (sql.Database, error) {
-	return client.NewSqliteStore(fileName,
-		client.WithLogger(logger),
-		client.WithPath(s.sqliteFilePath),
-	)
+	return e.ext.Execute(ctx, method, inputs...)
 }
 
 // wrappedCometBFTClient satisfies the generic txsvc.BlockchainBroadcaster and
@@ -250,30 +248,4 @@ func (a *atomicReadWriter) Read() ([]byte, error) {
 
 func (a *atomicReadWriter) Write(val []byte) error {
 	return a.kv.Set(a.key, val)
-}
-
-// sqlCommittableRegister allows dynamic registration of SQL committables
-// it implements engine.CommitRegister
-type sqlCommittableRegister struct {
-	committer *sessions.AtomicCommitter
-	log       log.Logger
-}
-
-var _ engine.CommitRegister = (*sqlCommittableRegister)(nil)
-
-func (s *sqlCommittableRegister) Register(ctx context.Context, name string, db sql.Database) error {
-	return registerSQL(ctx, s.committer, db, name, s.log)
-}
-
-func (s *sqlCommittableRegister) Unregister(ctx context.Context, name string) error {
-	return s.committer.Unregister(ctx, name)
-}
-
-// registerSQL is a helper function to register a SQL committable to the atomic committer.
-func registerSQL(ctx context.Context, ac *sessions.AtomicCommitter, db sql.Database, name string, logger log.Logger) error {
-	return ac.Register(ctx, name,
-		sqlSessions.NewSqlCommittable(db,
-			sqlSessions.WithLogger(*logger.Named(name + "-committable")),
-		),
-	)
 }

@@ -65,7 +65,7 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 	defer m.mu.Unlock()
 
 	// get account info from mempool state or account store
-	acct, err := m.accountInfo(context.Background(), tx.Sender)
+	acct, err := m.accountInfo(ctx, tx.Sender)
 	if err != nil {
 		return err
 	}

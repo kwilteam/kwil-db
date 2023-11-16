@@ -9,7 +9,7 @@ type Procedure struct {
 	Statements  []string   `json:"statements"`
 }
 
-// Clean cleans the procedure, and returns an error if it is invalid.
+// Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
 func (p *Procedure) Clean() error {
 	for _, m := range p.Modifiers {
 		if err := m.Clean(); err != nil {

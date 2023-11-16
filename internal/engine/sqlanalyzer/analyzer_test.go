@@ -11,11 +11,11 @@ import (
 
 func Test_Analyze(t *testing.T) {
 	type testCase struct {
-		name     string
-		stmt     string
-		want     string
-		metadata *sqlanalyzer.RuleMetadata
-		wantErr  bool
+		name    string
+		stmt    string
+		want    string
+		tables  []*types.Table
+		wantErr bool
 	}
 
 	tests := []testCase{
@@ -23,10 +23,8 @@ func Test_Analyze(t *testing.T) {
 			name: "simple select",
 			stmt: "SELECT * FROM users",
 			want: `SELECT * FROM "users" ORDER BY "users"."id" ASC NULLS LAST;`,
-			metadata: &sqlanalyzer.RuleMetadata{
-				Tables: []*types.Table{
-					tblUsers,
-				},
+			tables: []*types.Table{
+				tblUsers,
 			},
 		},
 		{
@@ -50,12 +48,10 @@ func Test_Analyze(t *testing.T) {
 			ORDER BY date ("p"."post_date") DESC NULLS LAST,
 			"f"."follower_id" ASC NULLS LAST, "f"."user_id" ASC NULLS LAST, "p"."id" ASC NULLS LAST, "u"."id" ASC NULLS LAST
 			LIMIT 20 OFFSET $offset;`,
-			metadata: &sqlanalyzer.RuleMetadata{
-				Tables: []*types.Table{
-					tblUsers,
-					tblPosts,
-					tblFollowers,
-				},
+			tables: []*types.Table{
+				tblUsers,
+				tblPosts,
+				tblFollowers,
 			},
 		},
 		{
@@ -67,10 +63,8 @@ func Test_Analyze(t *testing.T) {
 			FROM "users" AS "u1"
 			INNER JOIN "users" AS "u2" ON "u1"."id" = "u2"."id"
 			ORDER BY "u1"."id" ASC NULLS LAST, "u2"."id" ASC NULLS LAST;`,
-			metadata: &sqlanalyzer.RuleMetadata{
-				Tables: []*types.Table{
-					tblUsers,
-				},
+			tables: []*types.Table{
+				tblUsers,
 			},
 		},
 		{
@@ -85,27 +79,23 @@ func Test_Analyze(t *testing.T) {
 				SELECT "users"."id", "users"."username" FROM "users" WHERE "age" = 20 ORDER BY "users"."id" ASC NULLS LAST
 			)
 			SELECT * FROM "users_aged_20" ORDER BY "users_aged_20"."id" ASC NULLS LAST, "users_aged_20"."username" ASC NULLS LAST;`,
-			metadata: &sqlanalyzer.RuleMetadata{
-				Tables: []*types.Table{
-					tblUsers,
-				},
+			tables: []*types.Table{
+				tblUsers,
 			},
 		},
 		{
 			name: "basic insert",
 			stmt: `INSERT INTO users (id, username, age) VALUES (1, 'user1', 20)`,
 			want: `INSERT INTO "users" ("id", "username", "age") VALUES (1, 'user1', 20);`,
-			metadata: &sqlanalyzer.RuleMetadata{
-				Tables: []*types.Table{
-					tblUsers,
-				},
+			tables: []*types.Table{
+				tblUsers,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, tt.metadata)
+			got, err := sqlanalyzer.ApplyRules(tt.stmt, sqlanalyzer.AllRules, tt.tables)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ApplyRules() error = %v, wantErr %v", err, tt.wantErr)
 				return
