@@ -39,7 +39,7 @@ func kgwAuthnCmd() *cobra.Command {
 						return fmt.Errorf("provider url not provided")
 					}
 
-					userAddress, err := signer.Address()
+					address, err := auth.EthSecp256k1Authenticator{}.Identifier(signer.Identity())
 					if err != nil {
 						return fmt.Errorf("get address: %w", err)
 					}
@@ -50,7 +50,7 @@ func kgwAuthnCmd() *cobra.Command {
 					}
 
 					err = common.SaveAuthInfo(common.KGWAuthTokenFilePath(),
-						userAddress, cookie)
+						address, cookie)
 					if err != nil {
 						return fmt.Errorf("save auth token: %w", err)
 					}

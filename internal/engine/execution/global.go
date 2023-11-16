@@ -121,7 +121,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller [
 		return fmt.Errorf(`dataset "%s" does not exist`, dbid)
 	}
 
-	if !bytes.EqualFold(caller, dataset.schema.Owner) {
+	if !bytes.Equal(caller, dataset.schema.Owner) {
 		return fmt.Errorf(`cannot delete dataset "%s", not owner`, dbid)
 	}
 
@@ -137,52 +137,50 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller [
 
 // Execute executes a procedure.
 // It has the ability to mutate state, including uncommitted state.
-// TODO: right now caller is the full @caller binary, while signer is a public key
 // once we fix auth, signer should get removed, as they would be the same.
-func (g *GlobalContext) Execute(ctx context.Context, dbid string, procedure string, caller []byte, signer []byte, args []any) error {
-	dataset, ok := g.datasets[dbid]
+func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionData) (*sql.ResultSet, error) {
+	dataset, ok := g.datasets[options.Dataset]
 	if !ok {
-		return fmt.Errorf(`dataset "%s" does not exist`, dbid)
-	}
-
-	_, err := dataset.Call(&executionContext{
-		Ctx:       ctx,
-		Caller:    caller,
-		PublicKey: signer,
-		Mutative:  true,
-	}, procedure, args)
-
-	return err
-}
-
-// Call calls a procedure.
-// It can return a sql result.
-func (g *GlobalContext) Call(ctx context.Context, dbid string, procedure string, caller []byte, signer []byte, args []any) (*sql.ResultSet, error) {
-	dataset, ok := g.datasets[dbid]
-	if !ok {
-		return nil, fmt.Errorf(`dataset "%s" does not exist`, dbid)
+		return nil, fmt.Errorf(`dataset "%s" does not exist`, options.Dataset)
 	}
 
 	execCtx := &executionContext{
-		Ctx:       ctx,
-		Caller:    caller,
-		PublicKey: signer,
-		Mutative:  false,
+		Ctx:  ctx,
+		Data: options,
 	}
 
-	_, err := dataset.Call(execCtx, procedure, args)
-	if err != nil {
-		return nil, err
-	}
+	_, err := dataset.Call(execCtx, options.Procedure, options.Args)
 
-	return execCtx.FinalResult, nil
+	return execCtx.FinalResult, err
 }
+
+// // Call calls a procedure.
+// // It can return a sql result.
+// func (g *GlobalContext) Call(ctx context.Context, dbid string, procedure string, caller []byte, args []any) (*sql.ResultSet, error) {
+// 	dataset, ok := g.datasets[dbid]
+// 	if !ok {
+// 		return nil, fmt.Errorf(`dataset "%s" does not exist`, dbid)
+// 	}
+
+// 	execCtx := &executionContext{
+// 		Ctx:      ctx,
+// 		Caller:   caller,
+// 		Mutative: false,
+// 	}
+
+// 	_, err := dataset.Call(execCtx, procedure, args)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return execCtx.FinalResult, nil
+// }
 
 // ListDatasets list datasets deployed by a specific caller
 func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]string, error) {
 	var datasets []string
 	for _, dataset := range g.datasets {
-		if bytes.EqualFold(dataset.schema.Owner, caller) {
+		if bytes.Equal(dataset.schema.Owner, caller) {
 			datasets = append(datasets, dataset.schema.Name)
 		}
 	}

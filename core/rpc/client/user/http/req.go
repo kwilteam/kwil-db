@@ -162,9 +162,9 @@ func parseGetAccountResponse(resp *http.Response) (*types.Account, error) {
 	}
 
 	acc := types.Account{
-		PublicKey: res.Account.PublicKey,
-		Balance:   bigBalance,
-		Nonce:     res.Account.Nonce,
+		Identifier: res.Account.Identifier,
+		Balance:    bigBalance,
+		Nonce:      res.Account.Nonce,
 	}
 
 	return &acc, nil

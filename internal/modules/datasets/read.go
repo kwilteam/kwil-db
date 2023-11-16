@@ -14,7 +14,7 @@ import (
 // It returns the result of the call.
 // If a message caller is specified, then it will check the signature of the message and use the caller as the caller of the action.
 func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error) {
-	sender := []byte{}
+	var sender string
 
 	if msg.IsSigned() {
 		err := ident.VerifyMessage(msg)
@@ -22,13 +22,20 @@ func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, ar
 			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
 		}
 
-		sender, err = getUserIdentifier(msg.Sender, msg.Signature.Type)
+		sender, err = ident.Identifier(msg.Signature.Type, msg.Sender)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get user identifier: %w", err)
+			return nil, fmt.Errorf("failed to get sender address: %w", err)
 		}
 	}
 
-	results, err := u.engine.Call(ctx, dbid, action, sender, msg.Sender, args)
+	results, err := u.engine.Execute(ctx, &engineTypes.ExecutionData{
+		Dataset:          dbid,
+		Procedure:        action,
+		Mutative:         false,
+		Args:             args,
+		Caller:           msg.Sender,
+		CallerIdentifier: sender,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute call: %w", err)
 	}

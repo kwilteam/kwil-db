@@ -143,7 +143,7 @@ func hammer(ctx context.Context) error {
 	// bother the masterDB
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		_, err := h.ListDatabases(ctx, pub)
+		_, err := h.ListDatabases(ctx, h.Signer.Identity())
 		return err
 	}, "ListDatabases", badgerInterval, &logger)
 

@@ -60,21 +60,21 @@ func (a *AccountStore) Close() error {
 	return nil
 }
 
-func (a *AccountStore) GetAccount(ctx context.Context, pubKey []byte) (*Account, error) {
+func (a *AccountStore) GetAccount(ctx context.Context, ident []byte) (*Account, error) {
 	a.rw.RLock()
 	defer a.rw.RUnlock()
 
-	return a.getAccountReadOnly(ctx, pubKey)
+	return a.getAccountReadOnly(ctx, ident)
 }
 
 type Spend struct {
-	AccountPubKey []byte
-	Amount        *big.Int
-	Nonce         int64
+	AccountID []byte
+	Amount    *big.Int
+	Nonce     int64
 }
 
 func (s *Spend) bytes() []byte {
-	bts := s.AccountPubKey
+	bts := s.AccountID
 	bts = append(bts, s.Amount.Bytes()...)
 
 	binary.LittleEndian.AppendUint64(bts, uint64(s.Nonce))
@@ -96,7 +96,7 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 		return fmt.Errorf("failed to check spend: %w", err)
 	}
 
-	err = a.updateAccount(ctx, spend.AccountPubKey, balance, nonce)
+	err = a.updateAccount(ctx, spend.AccountID, balance, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to update account: %w", err)
 	}
@@ -108,7 +108,7 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 // If nonces are enabled, it checks that the nonce is correct.  It returns the new balance and nonce if the spend is valid. It returns an
 // error if the spend is invalid.
 func (a *AccountStore) checkSpend(ctx context.Context, spend *Spend) (*big.Int, int64, error) {
-	account, err := a.getOrCreateAccount(ctx, spend.AccountPubKey)
+	account, err := a.getOrCreateAccount(ctx, spend.AccountID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get account: %w", err)
 	}

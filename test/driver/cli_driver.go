@@ -24,22 +24,22 @@ import (
 
 // KwilCliDriver is a driver for tests using `cmd/kwil-cli`
 type KwilCliDriver struct {
-	cliBin   string // kwil-cli binary path
-	adminBin string // kwil-admin binary path
-	rpcUrl   string
-	privKey  string
-	pubKey   []byte
-	logger   log.Logger
+	cliBin     string // kwil-cli binary path
+	adminBin   string // kwil-admin binary path
+	rpcUrl     string
+	privKey    string
+	identifier []byte
+	logger     log.Logger
 }
 
 func NewKwilCliDriver(cliBin, adminBin, rpcUrl, privKey string, pubKey []byte, logger log.Logger) *KwilCliDriver {
 	return &KwilCliDriver{
-		cliBin:   cliBin,
-		adminBin: adminBin,
-		rpcUrl:   rpcUrl,
-		privKey:  privKey,
-		pubKey:   pubKey,
-		logger:   logger,
+		cliBin:     cliBin,
+		adminBin:   adminBin,
+		rpcUrl:     rpcUrl,
+		privKey:    privKey,
+		identifier: pubKey,
+		logger:     logger,
 	}
 }
 
@@ -73,7 +73,7 @@ func (d *KwilCliDriver) SupportBatch() bool {
 }
 
 func (d *KwilCliDriver) DBID(name string) string {
-	return utils.GenerateDBID(name, d.pubKey)
+	return utils.GenerateDBID(name, d.identifier)
 }
 
 func (d *KwilCliDriver) DatabaseExists(_ context.Context, dbid string) error {

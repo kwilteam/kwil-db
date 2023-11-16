@@ -18,9 +18,9 @@ type account txpb.Account
 
 func (a *account) UnmarshalJSON(data []byte) error {
 	var acc struct {
-		PublicKey string `json:"public_Key"`
-		Balance   string `json:"balance"`
-		Nonce     string `json:"nonce"` // int64
+		Identifier string `json:"identifier"`
+		Balance    string `json:"balance"`
+		Nonce      string `json:"nonce"` // int64
 	}
 
 	err := json.Unmarshal(data, &acc)
@@ -33,14 +33,14 @@ func (a *account) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("parseNonce: %w", err)
 	}
 
-	pk, err := base64.StdEncoding.DecodeString(acc.PublicKey)
+	pk, err := base64.StdEncoding.DecodeString(acc.Identifier)
 	if err != nil {
 		return fmt.Errorf("parsePublicKey: %w", err)
 	}
 
 	a.Balance = acc.Balance
 	a.Nonce = nonce
-	a.PublicKey = pk
+	a.Identifier = pk
 	return nil
 }
 

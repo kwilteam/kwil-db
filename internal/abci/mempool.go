@@ -26,13 +26,13 @@ type userAccount struct {
 
 // accountInfo retrieves the account info from the mempool state or the account store.
 // If the account is not found, it returns a dummy account with nonce 0 and balance 0.
-func (m *mempool) accountInfo(ctx context.Context, pubKey []byte) (*userAccount, error) {
-	if acctInfo, ok := m.accounts[string(pubKey)]; ok {
+func (m *mempool) accountInfo(ctx context.Context, acctID []byte) (*userAccount, error) {
+	if acctInfo, ok := m.accounts[string(acctID)]; ok {
 		return acctInfo, nil // there is an unconfirmed tx for this account
 	}
 
 	// get account from account store
-	acct, err := m.accountStore.GetAccount(ctx, pubKey)
+	acct, err := m.accountStore.GetAccount(ctx, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -41,18 +41,18 @@ func (m *mempool) accountInfo(ctx context.Context, pubKey []byte) (*userAccount,
 		nonce:   acct.Nonce,
 		balance: acct.Balance,
 	}
-	m.accounts[string(pubKey)] = acctInfo
+	m.accounts[string(acctID)] = acctInfo
 
 	return acctInfo, nil
 }
 
 // peekAccountInfo is like accountInfo, but it does not query the account store
 // if there are no unconfirmed transactions for the user.
-func (m *mempool) peekAccountInfo(ctx context.Context, pubKey []byte) *userAccount {
+func (m *mempool) peekAccountInfo(ctx context.Context, acctID []byte) *userAccount {
 	acctInfo := &userAccount{balance: &big.Int{}} // must be new instance
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if acct, ok := m.accounts[string(pubKey)]; ok {
+	if acct, ok := m.accounts[string(acctID)]; ok {
 		acctInfo.balance = big.NewInt(0).Set(acct.balance)
 		acctInfo.nonce = acct.nonce
 	}

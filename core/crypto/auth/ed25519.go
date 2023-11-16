@@ -27,7 +27,7 @@ type Ed25519Authenticator struct{}
 var _ Authenticator = Ed25519Authenticator{}
 
 // Address simply returns the hexadecimal encoded public key as the address.
-func (e Ed25519Authenticator) Address(publicKey []byte) (string, error) {
+func (e Ed25519Authenticator) Identifier(publicKey []byte) (string, error) {
 	if len(publicKey) != ed25519.PublicKeySize {
 		return "", fmt.Errorf("invalid ed25519 public key size: %d", len(publicKey))
 	}
@@ -35,7 +35,8 @@ func (e Ed25519Authenticator) Address(publicKey []byte) (string, error) {
 	return hex.EncodeToString(publicKey), nil
 }
 
-// Verify verifies the signature against the given public key and data.
+// Verify verifies the signature against the given user identifier and data. The
+// identifier must be the ed25519 public key bytes.
 func (e Ed25519Authenticator) Verify(publicKey []byte, msg []byte, signature []byte) error {
 	pubkey, err := crypto.Ed25519PublicKeyFromBytes(publicKey)
 	if err != nil {

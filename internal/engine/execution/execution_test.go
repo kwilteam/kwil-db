@@ -72,7 +72,14 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				err = eng.Execute(ctx, testdata.TestSchema.DBID(), "create_user", testdata.TestSchema.Owner, testdata.TestSchema.Owner, []any{1, "brennan", 22})
+				_, err = eng.Execute(ctx, &types.ExecutionData{
+					Dataset:          testdata.TestSchema.DBID(),
+					Procedure:        "create_user",
+					Mutative:         true,
+					Args:             []any{1, "brennan", 22},
+					Caller:           testdata.TestSchema.Owner,
+					CallerIdentifier: string(testdata.TestSchema.Owner),
+				})
 				require.NoError(t, err)
 			},
 		},
@@ -84,7 +91,14 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				err = eng.Execute(ctx, testdata.TestSchema.DBID(), "create_user", testdata.TestSchema.Owner, testdata.TestSchema.Owner, []any{1, "brennan"})
+				_, err = eng.Execute(ctx, &types.ExecutionData{
+					Dataset:          testdata.TestSchema.DBID(),
+					Procedure:        "create_user",
+					Mutative:         true,
+					Args:             []any{1, "brennan"}, // missing age
+					Caller:           testdata.TestSchema.Owner,
+					CallerIdentifier: string(testdata.TestSchema.Owner),
+				})
 				require.Error(t, err)
 			},
 		},
@@ -96,11 +110,25 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, testdata.TestSchema, testdata.TestSchema.Owner)
 				require.NoError(t, err)
 
-				_, err = eng.Call(ctx, testdata.TestSchema.DBID(), "create_user", testdata.TestSchema.Owner, testdata.TestSchema.Owner, []any{1, "brennan", 22})
+				_, err = eng.Execute(ctx, &types.ExecutionData{
+					Dataset:          testdata.TestSchema.DBID(),
+					Procedure:        "create_user",
+					Mutative:         false,
+					Args:             []any{1, "brennan", 22},
+					Caller:           testdata.TestSchema.Owner,
+					CallerIdentifier: string(testdata.TestSchema.Owner),
+				})
 				require.Error(t, err)
 				require.ErrorIs(t, err, execution.ErrMutativeProcedure)
 
-				_, err = eng.Call(ctx, testdata.TestSchema.DBID(), "get_user_by_address", testdata.TestSchema.Owner, testdata.TestSchema.Owner, []any{[]byte("address")})
+				_, err = eng.Execute(ctx, &types.ExecutionData{
+					Dataset:          testdata.TestSchema.DBID(),
+					Procedure:        "get_user_by_address",
+					Mutative:         false,
+					Args:             []any{"address"},
+					Caller:           testdata.TestSchema.Owner,
+					CallerIdentifier: string(testdata.TestSchema.Owner),
+				})
 				require.NoError(t, err)
 			},
 		},
@@ -112,12 +140,26 @@ func Test_Execution(t *testing.T) {
 				err := eng.CreateDataset(ctx, testSchema, testSchema.Owner)
 				require.NoError(t, err)
 
-				err = eng.Execute(ctx, testSchema.DBID(), "use_math", testSchema.Owner, testSchema.Owner, []any{1, 2})
+				_, err = eng.Execute(ctx, &types.ExecutionData{
+					Dataset:          testSchema.DBID(),
+					Procedure:        "use_math",
+					Mutative:         true,
+					Args:             []any{1, 2},
+					Caller:           testSchema.Owner,
+					CallerIdentifier: string(testSchema.Owner),
+				})
 				require.NoError(t, err)
 
-				// call it as well
+				// call non-mutative
 				// since we do not have a sql connection, we cannot evaluate the result
-				_, err = eng.Call(ctx, testSchema.DBID(), "use_math", testSchema.Owner, testSchema.Owner, []any{1, 2})
+				_, err = eng.Execute(ctx, &types.ExecutionData{
+					Dataset:          testSchema.DBID(),
+					Procedure:        "use_math",
+					Mutative:         false,
+					Args:             []any{1, 2},
+					Caller:           testSchema.Owner,
+					CallerIdentifier: string(testSchema.Owner),
+				})
 				require.NoError(t, err)
 			},
 		},
@@ -126,12 +168,12 @@ func Test_Execution(t *testing.T) {
 			fn: func(t *testing.T, eng *execution.GlobalContext) {
 				ctx := context.Background()
 
-				owner := []byte("owner")
+				owner := "owner"
 
-				err := eng.CreateDataset(ctx, testdata.TestSchema, owner)
+				err := eng.CreateDataset(ctx, testdata.TestSchema, []byte(owner))
 				require.NoError(t, err)
 
-				datasets, err := eng.ListDatasets(ctx, owner)
+				datasets, err := eng.ListDatasets(ctx, []byte(owner))
 				require.NoError(t, err)
 
 				require.Equal(t, 1, len(datasets))

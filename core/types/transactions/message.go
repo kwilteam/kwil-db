@@ -115,7 +115,7 @@ func (s *CallMessage) Sign(signer auth.Signer) error {
 	}
 
 	s.Signature = signature
-	s.Sender = signer.PublicKey()
+	s.Sender = signer.Identity()
 	return nil
 }
 
