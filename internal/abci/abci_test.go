@@ -48,9 +48,9 @@ type MockAccountStore struct {
 
 func (m *MockAccountStore) GetAccount(ctx context.Context, pubKey []byte) (*accounts.Account, error) {
 	return &accounts.Account{
-		PublicKey: nil,
-		Balance:   big.NewInt(0),
-		Nonce:     0,
+		Identifier: nil,
+		Balance:    big.NewInt(0),
+		Nonce:      0,
 	}, nil
 }
 
@@ -64,7 +64,7 @@ func newTxBts(t *testing.T, nonce uint64, signer auth.Signer) []byte {
 			Fee:         big.NewInt(0),
 			Nonce:       nonce,
 		},
-		Sender: signer.PublicKey(),
+		Sender: signer.Identity(),
 	}
 
 	msg, err := tx.SerializeMsg()

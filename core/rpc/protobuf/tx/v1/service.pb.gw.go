@@ -152,7 +152,7 @@ func local_request_TxService_Query_0(ctx context.Context, marshaler runtime.Mars
 }
 
 var (
-	filter_TxService_GetAccount_0 = &utilities.DoubleArray{Encoding: map[string]int{"public_key": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 2, 2}}
+	filter_TxService_GetAccount_0 = &utilities.DoubleArray{Encoding: map[string]int{"identifier": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 2, 2}}
 )
 
 func request_TxService_GetAccount_0(ctx context.Context, marshaler runtime.Marshaler, client TxServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -166,14 +166,14 @@ func request_TxService_GetAccount_0(ctx context.Context, marshaler runtime.Marsh
 		_   = err
 	)
 
-	val, ok = pathParams["public_key"]
+	val, ok = pathParams["identifier"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "public_key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "identifier")
 	}
 
-	protoReq.PublicKey, err = runtime.Bytes(val)
+	protoReq.Identifier, err = runtime.Bytes(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "public_key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "identifier", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -199,14 +199,14 @@ func local_request_TxService_GetAccount_0(ctx context.Context, marshaler runtime
 		_   = err
 	)
 
-	val, ok = pathParams["public_key"]
+	val, ok = pathParams["identifier"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "public_key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "identifier")
 	}
 
-	protoReq.PublicKey, err = runtime.Bytes(val)
+	protoReq.Identifier, err = runtime.Bytes(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "public_key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "identifier", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -767,7 +767,7 @@ func RegisterTxServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/tx.TxService/GetAccount", runtime.WithHTTPPathPattern("/api/v1/accounts/{public_key}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/tx.TxService/GetAccount", runtime.WithHTTPPathPattern("/api/v1/accounts/{identifier}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1219,7 +1219,7 @@ func RegisterTxServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/tx.TxService/GetAccount", runtime.WithHTTPPathPattern("/api/v1/accounts/{public_key}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/tx.TxService/GetAccount", runtime.WithHTTPPathPattern("/api/v1/accounts/{identifier}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1511,7 +1511,7 @@ var (
 
 	pattern_TxService_Query_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "query"}, ""))
 
-	pattern_TxService_GetAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "accounts", "public_key"}, ""))
+	pattern_TxService_GetAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "v1", "accounts", "identifier"}, ""))
 
 	pattern_TxService_Ping_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "v1", "ping"}, ""))
 

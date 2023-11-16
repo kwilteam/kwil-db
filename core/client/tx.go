@@ -20,13 +20,13 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 		nonce = uint64(txOpts.nonce)
 	} else {
 		// Get the latest nonce for the account, if it exists.
-		acc, err := c.rpc.GetAccount(ctx, c.Signer.PublicKey(), types.AccountStatusPending)
+		acc, err := c.rpc.GetAccount(ctx, c.Signer.Identity(), types.AccountStatusPending)
 		if err != nil {
 			return nil, err
 		}
 		// NOTE: an error type would be more robust signalling of a non-existent
-		// account, but presently a nil pubkey is set by internal/accounts.
-		if len(acc.PublicKey) > 0 {
+		// account, but presently a nil ID is set by internal/accounts.
+		if len(acc.Identifier) > 0 {
 			nonce = uint64(acc.Nonce + 1)
 		} else {
 			nonce = 1

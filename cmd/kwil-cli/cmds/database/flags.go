@@ -21,18 +21,18 @@ const (
 // it will check to see if it was passed.  If it was not passed, it will attempt to
 // get the user's public key from the configuration file.
 func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, error) {
-	var publicKey []byte
+	var ident []byte
 	if cmd.Flags().Changed(ownerFlag) {
-		pubHex, err := cmd.Flags().GetString(ownerFlag)
+		hexIdent, err := cmd.Flags().GetString(ownerFlag) // hex owner
 		if err != nil {
 			return nil, fmt.Errorf("failed to get public key from flag: %w", err)
 		}
 
-		if pubHex == "" {
-			return nil, fmt.Errorf("no public key provided")
+		if ident == nil {
+			return nil, fmt.Errorf("no user identifier provided")
 		}
 
-		publicKey, err = hex.DecodeString(pubHex)
+		ident, err = hex.DecodeString(hexIdent)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode public key: %w", err)
 		}
@@ -42,10 +42,10 @@ func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, e
 			return nil, fmt.Errorf("no public key provided")
 		}
 
-		publicKey = conf.PrivateKey.PubKey().Bytes()
+		ident = conf.PrivateKey.PubKey().Bytes()
 	}
 
-	return publicKey, nil
+	return ident, nil
 }
 
 // getSelectedDbid returns the Dbid selected by the user.

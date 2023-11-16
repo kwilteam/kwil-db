@@ -29,11 +29,11 @@ type Verifier interface {
 	Verify(sender, msg, signature []byte) error
 }
 
-// Authenticator is an interface for authenticating a message and deriving an
-// encoded address for a public key.
+// Authenticator is an interface for authenticating a message and deriving a
+// string identifier from the sender bytes.
 type Authenticator interface {
 	Verifier
 
-	// Address returns an address from a public key
-	Address(sender []byte) (string, error)
+	// Identifier returns the string identifier for a message sender
+	Identifier(sender []byte) (string, error)
 }
