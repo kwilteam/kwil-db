@@ -4,234 +4,209 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"reflect"
+	"strings"
 	"sync"
-
-	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite/functions"
+	"sync/atomic"
 
 	"github.com/kwilteam/go-sqlite"
 	"github.com/kwilteam/go-sqlite/sqlitex"
-	"go.uber.org/zap"
+	sql "github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlite/functions"
 )
 
+var (
+	globalMu sync.Mutex                  // globalMu protects the global map of open databases.
+	openDBs  = make(map[string]struct{}) // Map to hold DB names that have an open writer
+)
+
+// Open opens a connection to a sqlite database.
+// It will open with foreign key constraints enabled.
+func Open(ctx context.Context, name string, flags sql.ConnectionFlag) (*Connection, error) {
+
+	globalMu.Lock()
+	defer globalMu.Unlock()
+
+	sqliteFlags := sqlite.OpenFlags(0)
+	if flags&sql.OpenReadOnly != 0 {
+		sqliteFlags |= sqlite.OpenReadOnly
+	} else {
+		sqliteFlags |= sqlite.OpenReadWrite
+
+		// If the database is already open, return an error
+		if _, ok := openDBs[name]; ok {
+			return nil, ErrWriterOpen
+		}
+
+		// only if the database is not in-memory do we want to track it
+		if flags&sql.OpenMemory == 0 {
+			openDBs[name] = struct{}{}
+		}
+	}
+
+	if flags&sql.OpenMemory != 0 {
+		sqliteFlags |= sqlite.OpenMemory
+	} else {
+		sqliteFlags |= sqlite.OpenWAL
+	}
+
+	if flags&sql.OpenCreate != 0 {
+		sqliteFlags |= sqlite.OpenCreate
+	}
+
+	// Extract the directory name from the file path
+	dirName := filepath.Dir(name)
+
+	// Create the directory along with any necessary parent directories
+	if err := os.MkdirAll(dirName, 0755); err != nil {
+		return nil, err
+	}
+
+	done := make(chan struct{})
+	var conn *sqlite.Conn
+	var err error
+
+	go func() {
+		conn, err = sqlite.OpenConn(name, sqliteFlags)
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		// Cancel ongoing operations here and then return
+		return nil, ctx.Err()
+	case <-done:
+		// Continue as normal
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	err = functions.Register(conn)
+	if err != nil {
+		return nil, errors.Join(err, conn.Close())
+	}
+
+	err = conn.SetDefensive(true)
+	if err != nil {
+		return nil, errors.Join(err, conn.Close())
+	}
+
+	c := &Connection{
+		closed: make(chan struct{}),
+		conn:   conn,
+		flags:  flags,
+		file:   name,
+	}
+
+	if !c.isReadonly() {
+		err = c.EnableForeignKey()
+		if err != nil {
+			return nil, errors.Join(err, c.close())
+		}
+	}
+
+	res, err := c.execute(ctx, sqlPragmaSync, nil)
+	if err != nil {
+		return nil, errors.Join(err, c.close())
+	}
+	err = res.Finish()
+	if err != nil {
+		return nil, errors.Join(err, c.close())
+	}
+
+	err = initializeKv(ctx, c)
+	if err != nil {
+		return nil, errors.Join(err, c.close())
+	}
+
+	return c, nil
+}
+
+// connection is a single connection to a sqlite database.
 type Connection struct {
-	conn        *sqlite.Conn
-	mu          lockable // mutex to protect the write connection, using an interface to allow for nil mutex
-	log         log.Logger
-	path        string
-	readPool    *sqlitex.Pool
-	poolSize    int
-	flags       sqlite.OpenFlags
-	isMemory    bool
-	name        string
-	attachedDBs map[string]string // maps the name to the file name
+	mu     sync.Mutex // mu protects all exported methods of Connection
+	closed chan struct{}
+	conn   *sqlite.Conn
+	flags  sql.ConnectionFlag
+	file   string
+
+	// inUse is true if the connection is in use.
+	inUse atomic.Bool
+	// activeSavepoint is true if there is an active savepoint.
+	// if false, then a new savepoint will checkpoint the wal when committed.
+	activeSavepoint atomic.Bool
 }
 
-// OpenConn opens a connection to the database with the given name.
-// It takes optional ConnectionOptions, which can be used to specify the path, logger, and other options.
-func OpenConn(name string, opts ...ConnectionOption) (*Connection, error) {
-	connection := &Connection{
-		log:         log.NewNoOp(),
-		mu:          &sync.Mutex{},
-		path:        DefaultPath,
-		name:        name,
-		poolSize:    10,
-		conn:        nil,
-		readPool:    nil,
-		isMemory:    false,
-		flags:       sqlite.OpenWAL | sqlite.OpenURI,
-		attachedDBs: make(map[string]string),
-	}
-	for _, opt := range opts {
-		opt(connection)
-	}
-	if !connection.isMemory {
-		err := os.MkdirAll(connection.path, os.ModePerm)
-		if err != nil && !os.IsExist(err) {
-			return nil, fmt.Errorf("failed to create path dir: %w", err)
-		}
-	}
-
-	err := connection.openConn()
-	if err != nil {
-		return nil, fmt.Errorf("failed to open connection: %w", err)
-	}
-
-	err = connection.EnableForeignKey()
-	if err != nil {
-		return nil, fmt.Errorf("failed to enable foreign key: %w", err)
-	}
-
-	return connection, nil
-}
-
-func (c *Connection) openFlags(readOnly bool) sqlite.OpenFlags {
-	if readOnly {
-		return c.flags | sqlite.OpenReadOnly
-	}
-	return c.flags | sqlite.OpenReadWrite | sqlite.OpenCreate
-}
-
-func (c *Connection) getFilePath() string {
-	if c.isMemory {
-		return c.path
-	}
-	return c.formatFilePath(c.name)
-}
-
-func formatFilePath(path, fileName string) string {
-	return filepath.Join(path, fileName+".sqlite")
-}
-
-func (c *Connection) formatFilePath(fileName string) string {
-	return formatFilePath(c.path, fileName)
-}
-
-func (c *Connection) openConn() error {
-	var err error
-	c.conn, err = sqlite.OpenConn(c.getFilePath(), c.openFlags(false))
-	if err != nil {
-		return fmt.Errorf("failed to open readwrite connection: %w", err)
-	}
-
-	err = functions.Register(c.conn)
-	if err != nil {
-		return fmt.Errorf("failed to register custom functions: %w", err)
-	}
-
-	err = c.attachDBs(c.conn)
-	if err != nil {
-		return fmt.Errorf("failed to attach databases: %w", err)
-	}
-
-	err = c.initializeReadPool()
-	if err != nil {
-		return fmt.Errorf("failed to initialize read pool: %w", err)
-	}
-
-	return nil
-}
-
-// initializeReadPool initializes the read connection pool.
-// it will ensure attached databases and sqlite extensions are registered.
-func (c *Connection) initializeReadPool() error {
-	var err error
-	c.readPool, err = sqlitex.Open(c.getFilePath(), c.openFlags(true), c.poolSize)
-	if err != nil {
-		return fmt.Errorf("failed to create read connection pool: %w", err)
-	}
-
-	poolArray := make([]*sqlite.Conn, c.poolSize)
-
-	for i := 0; i < c.poolSize; i++ {
-		conn := c.readPool.Get(context.Background())
-		if conn == nil {
-			return fmt.Errorf("failed to get read connection from connection pool")
-		}
-
-		poolArray[i] = conn
-	}
-
-	for _, conn := range poolArray {
-		err = functions.Register(conn)
-		if err != nil {
-			return fmt.Errorf("failed to register custom functions: %w", err)
-		}
-
-		err = c.attachDBs(conn)
-		if err != nil {
-			return fmt.Errorf("failed to attach databases: %w", err)
-		}
-	}
-
-	for _, conn := range poolArray {
-		c.readPool.Put(conn)
-	}
-
-	return nil
-}
-
-// attachDBs attaches the databases to the connection
-func (c *Connection) attachDBs(conn *sqlite.Conn) error {
-	for name, file := range c.attachedDBs {
-		err := attachDB(conn, name, c.formatURI(file))
-		if err != nil {
-			return fmt.Errorf("failed to attach database: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func attachDB(c *sqlite.Conn, schemaName, uri string) error {
-	return sqlitex.ExecuteTransient(c, fmt.Sprintf(sqlAttach, uri, schemaName), nil)
-}
-
-const sqlAttach = `ATTACH DATABASE '%s' AS %s;`
-
-// formatURI formats the URI for the given file name.
-// It includes a read only flag
-func (c *Connection) formatURI(fileName string) string {
-	return fmt.Sprintf("file:%s?mode=ro", c.formatFilePath(fileName))
-}
-
-// execute executes a statement on the write connection.
-// this should really only be used for DDL statements or pragmas.
-// dml statements should use prepared statements instead unless they are one-offs.
-// this method is intentionally barebones to prevent misuse.
-func (c *Connection) Execute(stmt string, args ...map[string]any) error {
-
-	if c.conn == nil {
-		return fmt.Errorf("connection is nil")
-	}
+// Execute executes a statement against the connection.
+// This can be either a write or read query.
+// If a write is executed against a read-only connection, an error will be returned.
+func (c *Connection) Execute(ctx context.Context, stmt string, args map[string]any) (sql.Result, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.execute(stmt, args...)
+	return c.execute(ctx, stmt, args)
 }
 
-// execute executes a one-off statement.  It does not use a mutex, unlike Execute.
-func (c *Connection) execute(stmt string, args ...map[string]any) error {
-	cleanedStmt := trimPadding(stmt)
-
-	if len(args) == 0 {
-		return sqlitex.ExecuteTransient(c.conn, cleanedStmt, nil)
+// execute executes a statement.
+// it does not acquire the connection mutex.
+func (c *Connection) execute(ctx context.Context, stmt string, args map[string]any) (res sql.Result, err error) {
+	if c.inUse.Swap(true) {
+		return nil, ErrInUse
 	}
-
-	for _, arg := range args {
-		err := sqlitex.ExecuteTransient(c.conn, cleanedStmt, &sqlitex.ExecOptions{
-			Named: arg,
-		})
+	defer func() {
 		if err != nil {
-			return fmt.Errorf("failed to execute statement: %w", err)
+			c.inUse.Store(false)
 		}
+	}()
+
+	c.conn.SetBlockOnBusy()
+	c.conn.SetInterrupt(ctx.Done())
+
+	runningStmt := c.conn.CheckReset()
+	if runningStmt != "" {
+		return nil, fmt.Errorf("connection is busy with statement %q", runningStmt)
 	}
 
-	return nil
+	prepared, err := c.conn.Prepare(cleanStmt(stmt))
+	if err != nil {
+		return nil, err
+	}
+
+	err = setMany(prepared, args)
+	if err != nil {
+		return nil, err
+	}
+
+	columns := determineColumnNames(prepared)
+
+	r := &Result{
+		stmt:           prepared,
+		firstIteration: true,
+		columnNames:    columns,
+		closeFn: sync.OnceFunc(func() {
+			c.inUse.Store(false)
+			c.conn.SetInterrupt(nil)
+		}),
+		conn: c,
+	}
+
+	return r, nil
 }
 
-func (c *Connection) Prepare(stmt string) (*Statement, error) {
-	if c.conn == nil {
-		return nil, fmt.Errorf("connection is nil")
-	}
+func cleanStmt(stmt string) string {
+	trimmed := strings.TrimSpace(stmt)
 
-	innerStmt, trailingBytes, err := c.conn.PrepareTransient(trimPadding(stmt))
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare statement: %w", err)
+	// check if ends with semicolon
+	// if not, add one
+	if !strings.HasSuffix(trimmed, ";") {
+		return trimmed + ";"
 	}
-	if trailingBytes > 0 { // there should not be trailing bytes since we use trimPadding
-		return nil, fmt.Errorf("trailing bytes after statement: %q", trailingBytes)
-	}
-
-	return newStatement(c, innerStmt), nil
+	return trimmed
 }
 
 // Close closes the connection.
-// It takes an optional wait channel, which will be waited on until the connection is closed.
 func (c *Connection) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -240,232 +215,74 @@ func (c *Connection) Close() error {
 }
 
 // close closes the connection.
-// It takes an optional wait channel, which will be waited on before the connection is closed.
+// it does not acquire the connection mutex.
 func (c *Connection) close() error {
-	if c.conn == nil { // if the connection is nil, it's already closed / been deleted
+	if c.isClosed() {
 		return nil
-	}
-
-	if c.readPool != nil {
-		err := c.readPool.Close()
-		if err != nil {
-			return fmt.Errorf("failed to close read connection pool: %w", err)
-		}
 	}
 
 	err := c.conn.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close connection: %w", err)
+		return err
 	}
+
+	globalMu.Lock()
+	if !c.isReadonly() && !c.isMemory() {
+		delete(openDBs, c.file)
+	}
+	globalMu.Unlock()
+
+	close(c.closed)
 
 	return nil
 }
 
-// prepareRead prepares a read-only query.  it returns a statement, a deferFunc which returns the connection to the pool and finalizes the statement, and an error.
-func (c *Connection) prepareRead(ctx context.Context, statement string) (stmt *Statement, deferFunc func() error, err error) {
-	readConn := c.readPool.Get(ctx)
-	if readConn == nil {
-		return nil, nil, fmt.Errorf("failed to get read connection from connection pool")
+func (c *Connection) isClosed() bool {
+	select {
+	case <-c.closed:
+		return true
+	default:
+		return false
 	}
-
-	deferFunc = func() error {
-		c.readPool.Put(readConn)
-
-		if stmt == nil {
-			return nil
-		}
-
-		return stmt.stmt.Finalize()
-	}
-
-	innerStmt, trailingBytes, err := readConn.PrepareTransient(trimPadding(statement))
-	if err != nil {
-		return nil, deferFunc, fmt.Errorf("failed to prepare statement: %w", err)
-	}
-
-	if trailingBytes > 0 {
-		return nil, deferFunc, fmt.Errorf("trailing bytes after statement: %q", trailingBytes)
-	}
-
-	return c.newReadOnlyStatement(readConn, innerStmt), deferFunc, nil
 }
 
-// Query executes a read-only query against the database.
-// It takes a QueryOpts struct, which can contain arguments, a function to manually bind parameters, a function
-// to manually handle each result in between Step() calls, and a struct to store the results in.
-// All of these are optional, and if not provided, the function will return an error
-// TODO: rename this to BeginQuery
-func (c *Connection) Query(ctx context.Context, statement string, options ...ExecOption) (*Results, error) {
-	if c.readPool == nil {
-		return nil, fmt.Errorf("connection is nil")
-	}
-
-	results, err := c.query(ctx, statement, removeNilVals(options)...)
-	if err != nil {
-		return nil, err
-	}
-
-	return results, nil
-}
-
-func removeNilVals[T any](vals []T) []T {
-	newVals := make([]T, 0)
-	for _, val := range vals {
-		if !reflect.ValueOf(&val).Elem().IsZero() {
-			newVals = append(newVals, val)
-		}
-	}
-	return newVals
-}
-
-// query executes a query and calls the resultFn for each row returned
-// statementSetterFn is a function that is called to set the arguments for the statement
-func (c *Connection) query(ctx context.Context, statement string, options ...ExecOption) (*Results, error) {
-	stmt, deferFunc, err := c.prepareRead(ctx, statement)
-	if err != nil {
-		return nil, errors.Join(fmt.Errorf("error preparing read: %w", err), deferFunc())
-	}
-
-	results, err := stmt.execute(ctx, options...)
-	if err != nil {
-		return nil, errors.Join(fmt.Errorf("error executing read: %w", err), deferFunc())
-	}
-
-	results.addCloser(deferFunc)
-
-	return results, nil
-}
-
-func (c *Connection) CheckpointWal() error {
+// Delete deletes the database file.
+// If the connection is read-only, an error will be returned.
+func (c *Connection) DeleteDatabase() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.execute(sqlCheckpoint)
-}
-
-func (c *Connection) EnableForeignKey() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	return c.execute(sqlEnableFK)
-}
-
-func (c *Connection) DisableForeignKey() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	return c.execute(sqlDisableFK)
-}
-
-func (c *Connection) ListTables(ctx context.Context) ([]string, error) {
-	tables := make([]string, 0)
-	results, err := c.Query(ctx, sqlListTables)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list tables: %w", err)
-	}
-	defer results.Finish()
-
-	for {
-		rowReturned, err := results.Next()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get next row: %w", err)
-		}
-
-		if !rowReturned {
-			break
-		}
-
-		row := results.GetRecord()
-
-		nameAny, ok := row["name"]
-		if !ok {
-			return nil, fmt.Errorf("failed to get name from row: %w", err)
-		}
-
-		name, ok := nameAny.(string)
-		if !ok {
-			return nil, fmt.Errorf("failed to cast name to string: %w", err)
-		}
-
-		tables = append(tables, name)
-	}
-
-	return tables, nil
-}
-
-func (c *Connection) TableExists(ctx context.Context, tableName string) (bool, error) {
-	exists := false
-	results, err := c.Query(ctx, sqlIfTableExists,
-		WithNamedArgs(map[string]interface{}{
-			"$name": tableName,
-		}),
-	)
-	if err != nil {
-		return false, fmt.Errorf("failed to check if table exists: %w", err)
-	}
-	defer results.Finish()
-
-	for {
-		rowReturned, err := results.Next()
-		if err != nil {
-			return false, fmt.Errorf("failed to get next row: %w", err)
-		}
-
-		if !rowReturned {
-			break
-		}
-
-		exists = true
-	}
-
-	return exists, nil
-}
-
-// Delete deletes the entire database, and sets the underlying connection to nil.
-// It waits for all read connections to close before deleting the database.
-func (c *Connection) Delete() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.conn == nil {
-		return nil
+	if c.isReadonly() {
+		return ErrReadOnlyConn
 	}
 
 	err := c.close()
 	if err != nil {
-		return fmt.Errorf("failed to close connection: %w", err)
+		return err
 	}
 
-	if c.isMemory {
-		c.conn = nil
-		c.readPool = nil
-		return nil
-	}
-
-	err = c.deleteFiles()
-	if err != nil {
-		return fmt.Errorf("failed to delete database: %w", err)
-	}
-
-	c.conn = nil
-	c.readPool = nil
-
-	return nil
-}
-
-func (c *Connection) deleteFiles() error {
-	if c.isMemory {
+	if c.isMemory() {
 		return nil
 	}
 
 	files := []string{
-		c.getFilePath(),
-		fmt.Sprintf("%s-wal", c.getFilePath()),
-		fmt.Sprintf("%s-shm", c.getFilePath()),
+		c.file,
+		fmt.Sprintf("%s-wal", c.file),
+		fmt.Sprintf("%s-shm", c.file),
 	}
 
 	for _, file := range files {
-		err := deleteIfExists(file)
+		_, err = os.Stat(c.file)
+
+		if os.IsNotExist(err) {
+			continue
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to stat file %q: %w", file, err)
+		}
+
+		err = os.Remove(c.file)
 		if err != nil {
 			return fmt.Errorf("failed to delete file %q: %w", file, err)
 		}
@@ -474,108 +291,83 @@ func (c *Connection) deleteFiles() error {
 	return nil
 }
 
-func deleteIfExists(path string) error {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil
-	}
-
-	return os.Remove(path)
+// isReadonly returns whether the connection is read-only.
+func (c *Connection) isReadonly() bool {
+	return c.flags&sql.OpenReadOnly != 0
 }
 
-// ApplyChangeset applies a changeset to the database.
-// It will either all succeed or all fail.
-func (c *Connection) ApplyChangeset(r io.Reader) error {
+// isMemory returns whether the connection is in-memory.
+func (c *Connection) isMemory() bool {
+	return c.flags&sql.OpenMemory != 0
+}
+
+// checkpointWal checkpoints the wal.
+// If the connection is read-only, an error will be returned.
+func (c *Connection) checkpointWal() error {
+
+	if c.isReadonly() {
+		return ErrReadOnlyConn
+	}
+
+	return execute(c.conn, sqlCheckpoint)
+}
+
+// EnableForeignKey enables foreign key constraints.
+// If the connection is read-only, an error will be returned.
+func (c *Connection) EnableForeignKey() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.conn.ApplyChangeset(r, nil, func(ct sqlite.ConflictType, ci *sqlite.ChangesetIterator) sqlite.ConflictAction {
-		op, err := ci.Operation()
-		if err != nil {
-			c.log.Error("failed to get operation", zap.Error(err))
-			return sqlite.ChangesetAbort
-		}
+	if c.isReadonly() {
+		return ErrReadOnlyConn
+	}
 
-		switch op.Type {
-		case sqlite.OpInsert:
-			return sqlite.ChangesetReplace
-		case sqlite.OpDelete:
-			return sqlite.ChangesetOmit
-		case sqlite.OpUpdate:
-			return sqlite.ChangesetReplace
-		default:
-			return sqlite.ChangesetAbort
-		}
+	return execute(c.conn, sqlEnableFK)
+}
+
+// DisableForeignKey disables foreign key constraints.
+// If the connection is read-only, an error will be returned.
+func (c *Connection) DisableForeignKey() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.isReadonly() {
+		return ErrReadOnlyConn
+	}
+
+	return execute(c.conn, sqlDisableFK)
+}
+
+// TableExists returns whether the table exists.
+func (c *Connection) TableExists(ctx context.Context, table string) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	exists := false
+	err := sqlitex.ExecuteTransient(c.conn, sqlIfTableExists, &sqlitex.ExecOptions{
+		Named: map[string]interface{}{
+			"$name": table,
+		},
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			exists = true
+			return nil
+		},
 	})
-}
-
-/*
-for some fucking reason this will not work, we don't even need it yet so will come back when we do
-the invertedChangset is null, however r is (AFAIK) a valid changeset
-// InverseChangeset applies the inverse of the given changeset.
-func (c *Connection) InverseChangeset(r *bytes.Buffer) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	invertedChangeset := new(bytes.Buffer)
-	err := sqlite.InvertChangeset(r, invertedChangeset)
 	if err != nil {
-		return fmt.Errorf("failed to invert changeset: %w", err)
+		return false, fmt.Errorf(`failed to execute "if table exists" query: %w`, err)
 	}
 
-	if invertedChangeset.Len() == 0 {
-		return fmt.Errorf("inverted changeset is empty")
-	}
-
-	return c.conn.ApplyInverseChangeset(invertedChangeset, nil, nil)
-}
-*/
-
-type ResultSet struct {
-	Rows    [][]any  `json:"rows"`
-	Columns []string `json:"columns"`
-	index   int
+	return exists, nil
 }
 
-// Next increments the row index by 1 and returns true if there is another row in the result set
-func (r *ResultSet) Next() bool {
-	r.index++
-	return r.index < len(r.Rows)
+// execute executes an ad-hoc statement against the connection.
+// it does not cache the statement.
+func execute(c *sqlite.Conn, stmt string) error {
+	return sqlitex.ExecuteTransient(c, trimPadding(stmt), nil)
 }
 
-// GetColumn returns the value of the column at the given index
-func (r *ResultSet) GetColumn(name string) any {
-	for i, col := range r.Columns {
-		if col == name {
-			return r.Rows[r.index][i]
-		}
-	}
-	return nil
-}
-
-func (r *ResultSet) GetRecord() map[string]any {
-	record := make(map[string]any)
-	for i, col := range r.Columns {
-		record[col] = r.Rows[r.index][i]
-	}
-	return record
-}
-
-// Records will retrieve all records for the result set.
-// It will not reset the row index.
-func (r *ResultSet) Records() []map[string]any {
-	records := make([]map[string]any, len(r.Rows))
-	for i, row := range r.Rows {
-		record := make(map[string]any)
-		for j, col := range r.Columns {
-			record[col] = row[j]
-		}
-		records[i] = record
-	}
-
-	return records
-}
-
-// Reset resets the row index to -1
-func (r *ResultSet) Reset() {
-	r.index = -1
+// trimPadding removes unnecessary padding from a statement.
+func trimPadding(s string) string {
+	ss := strings.TrimSpace(s)
+	return ss
 }

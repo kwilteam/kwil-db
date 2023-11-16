@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/engine"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 type AccountStore interface {
@@ -13,10 +13,13 @@ type AccountStore interface {
 }
 
 type Engine interface {
-	CreateDataset(ctx context.Context, schema *engineTypes.Schema, caller *engineTypes.User) (dbid string, finalErr error)
-	DropDataset(ctx context.Context, dbid string, sender *engineTypes.User) error
-	Execute(ctx context.Context, dbid string, procedure string, args [][]any, opts ...engine.ExecutionOpt) ([]map[string]any, error)
-	ListDatasets(ctx context.Context, owner []byte) ([]string, error)
-	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
-	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
+	// TODO: signer and caller will become the same thing after we update auth
+	Call(ctx context.Context, dbid string, procedure string, caller []byte, signer []byte, args []any) (*sql.ResultSet, error)
+	CreateDataset(ctx context.Context, schema *types.Schema, caller []byte) (err error)
+	DeleteDataset(ctx context.Context, dbid string, caller []byte) error
+	// TODO: signer and caller will become the same thing after we update auth
+	Execute(ctx context.Context, dbid string, procedure string, caller []byte, signer []byte, args []any) error
+	GetSchema(ctx context.Context, dbid string) (*types.Schema, error)
+	ListDatasets(ctx context.Context, caller []byte) ([]string, error)
+	Query(ctx context.Context, dbid string, query string) (*sql.ResultSet, error)
 }

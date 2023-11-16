@@ -5,8 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/kwilteam/go-sqlite"
-	"github.com/kwilteam/kwil-db/internal/engine/types" // this is the one binding to engine in sql/sqlite
+	"github.com/kwilteam/go-sqlite" // this is the one binding to engine in sql/sqlite
 	"github.com/kwilteam/kwil-db/internal/ident"
 )
 
@@ -104,10 +103,10 @@ func publicKeyFunc(ctx sqlite.Context, args []sqlite.Value) (sqlite.Value, error
 // It will check if it is a valid key identifier.
 // An example of an invalid key identifier is a key identifier
 // that has uses Ethereum addresses and an ed25519 public key.
-func getIdentifier(arg sqlite.Value) (*types.User, error) {
+func getIdentifier(arg sqlite.Value) (*ident.User, error) {
 	// matches the crypto/addresses/identifiers.go:KeyIdentifier
 	userIdentifierBlob := arg.Blob()
-	ident := &types.User{}
+	ident := &ident.User{}
 	err := ident.UnmarshalBinary(userIdentifierBlob)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read public key identifier: %w", err)

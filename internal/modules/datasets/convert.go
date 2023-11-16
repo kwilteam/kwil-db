@@ -178,13 +178,16 @@ func convertExtensionsToEngine(extensions []*transactions.Extension) ([]*engineT
 	return convExtensions, nil
 }
 
-func convertExtensionConfigToEngine(configs []*transactions.ExtensionConfig) map[string]string {
-	conf := make(map[string]string)
-	for _, param := range configs {
-		conf[param.Argument] = param.Value
+func convertExtensionConfigToEngine(configs []*transactions.ExtensionConfig) []*engineTypes.ExtensionConfig {
+	convConfigs := make([]*engineTypes.ExtensionConfig, len(configs))
+	for i, config := range configs {
+		convConfigs[i] = &engineTypes.ExtensionConfig{
+			Key:   config.Argument,
+			Value: config.Value,
+		}
 	}
 
-	return conf
+	return convConfigs
 }
 
 func convertForeignKeysToEngine(fks []*transactions.ForeignKey) ([]*engineTypes.ForeignKey, error) {

@@ -111,17 +111,23 @@ func (vs *stubValStore) AddValidator(_ context.Context, joiner []byte, power int
 	return nil
 }
 
-func newTestValidatorMgr(t *testing.T, store ValidatorStore) *ValidatorMgr {
+func newTestValidatorMgr(t *testing.T, committable Committable, store ValidatorStore) *ValidatorMgr {
 	mgr := &ValidatorMgr{
-		current:    make(map[string]struct{}),
-		candidates: make(map[string]*joinReq),
-		log:        log.NewStdOut(log.DebugLevel),
-		db:         store,
-		joinExpiry: 3,
+		current:     make(map[string]struct{}),
+		candidates:  make(map[string]*joinReq),
+		log:         log.NewStdOut(log.DebugLevel),
+		db:          store,
+		joinExpiry:  3,
+		committable: committable,
 	}
 	if err := mgr.init(); err != nil {
 		t.Fatal(err)
 	}
+
+	mgr.committable.SetIDFunc(func() ([]byte, error) {
+		return mgr.validatorDbHash(), nil
+	})
+
 	return mgr
 }
 
@@ -139,7 +145,7 @@ func TestValidatorMgr_updates(t *testing.T) {
 	}
 
 	// Build a ValidatorMgr with the in-memory store.
-	mgr := newTestValidatorMgr(t, store)
+	mgr := newTestValidatorMgr(t, &mockCommittable{}, store)
 
 	vals, err := mgr.CurrentSet(ctx)
 	if err != nil {

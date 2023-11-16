@@ -1,688 +1,641 @@
 package sqlite_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
+	sql "github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/stretchr/testify/require"
 )
 
-func Test_Query_With_Opts(t *testing.T) {
-	ctx := context.Background()
-	conn, teardown := openRealDB()
-	defer teardown()
+func Test_WriterConn(t *testing.T) {
+	type testcase struct {
+		name  string
+		flags sql.ConnectionFlag
+		fn    func(*testing.T, *sqlite.Connection)
+	}
 
-	// prepare invalid statement
-	_, err := conn.Prepare("INSERT INTOewfnw users (id, name, age) VALUES ($id, $name, $age)")
+	cases := []testcase{
+		{
+			name: "close database while read query is running",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				// insert a user
+				err = insertUser(ctx, conn, 1, "john", 20)
+				require.NoError(t, err)
+
+				// open a reader connection
+				readerConn, err := openDB("test", sql.OpenReadOnly)
+				require.NoError(t, err)
+
+				// select all users
+				res, err := selectUsers(ctx, readerConn)
+				require.NoError(t, err)
+
+				// close the database
+				err = conn.Close()
+				require.NoError(t, err)
+
+				// check that we can still read from the reader connection
+				results, err := getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 1)
+			},
+		},
+		{
+			name: "commit savepoint while read query is running",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				// insert a user
+				err = insertUser(ctx, conn, 1, "john", 20)
+				require.NoError(t, err)
+
+				sp, err := conn.Savepoint()
+				require.NoError(t, err)
+
+				// insert another user
+				err = insertUser(ctx, conn, 2, "jane", 20)
+				require.NoError(t, err)
+
+				// open a reader connection
+				readerConn, err := openDB("test", sql.OpenReadOnly)
+				require.NoError(t, err)
+
+				// select all users
+				res, err := selectUsers(ctx, readerConn)
+				require.NoError(t, err)
+				defer res.Finish()
+
+				// commit savepoint
+				err = sp.Commit()
+				require.NoError(t, err)
+
+				// close the database
+				err = conn.Close()
+				require.NoError(t, err)
+
+			},
+		},
+		{
+			name: "close database while query is running",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				// insert a user
+				err = insertUser(ctx, conn, 1, "john", 20)
+				require.NoError(t, err)
+
+				// select all users
+				res, err := selectUsers(ctx, conn)
+				require.NoError(t, err)
+
+				// close the database
+				err = conn.Close()
+				require.NoError(t, err)
+
+				err = res.Finish()
+				require.ErrorIs(t, err, sqlite.ErrClosed)
+			},
+		},
+		{
+			name: "testing basic write, read, and foreign key",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				err = createPostTable(ctx, conn)
+				require.NoError(t, err)
+
+				// insert a user
+				err = insertUser(ctx, conn, 1, "john", 20)
+				require.NoError(t, err)
+
+				// insert another user
+				err = insertUser(ctx, conn, 2, "jane", 20)
+				require.NoError(t, err)
+
+				// insert a post
+				err = insertPost(ctx, conn, 1, "hello world", 1)
+				require.NoError(t, err)
+
+				// select all users
+				res, err := selectUsers(ctx, conn)
+				require.NoError(t, err)
+
+				// check that we have 2 users
+				results, err := getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 2)
+
+				if notEq(results[0]["id"], "1") || notEq(results[0]["name"], "john") || notEq(results[0]["age"], "20") {
+					t.Errorf("expected user 1 to be john, 20, got %v", results[0])
+				}
+
+				if notEq(results[1]["id"], "2") || notEq(results[1]["name"], "jane") || notEq(results[1]["age"], "20") {
+					t.Errorf("expected user 2 to be jane, 20, got %v", results[1])
+				}
+
+				// select all posts
+				res, err = selectPosts(ctx, conn)
+				require.NoError(t, err)
+
+				// check that we have 1 post
+				results, err = getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 1)
+
+				if notEq(results[0]["id"], "1") || notEq(results[0]["content"], "hello world") || notEq(results[0]["user_id"], "1") {
+					t.Errorf("expected post 1 to be hello world, 1, got %v", results[0])
+				}
+
+				// delete user 1
+				err = deleteUser(ctx, conn, 1)
+				require.NoError(t, err)
+
+				// select all users
+				res, err = selectUsers(ctx, conn)
+				require.NoError(t, err)
+
+				// check that we have 1 user
+				results, err = getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 1)
+
+				// check that post 1 is gone
+				res, err = selectPosts(ctx, conn)
+				require.NoError(t, err)
+
+				// check that we have 0 posts
+				results, err = getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 0)
+			},
+		},
+		{
+			name: "testing savepoint",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				sp, err := conn.Savepoint()
+				require.NoError(t, err)
+
+				// insert a user
+				err = insertUser(ctx, conn, 1, "john", 20)
+				require.NoError(t, err)
+
+				// rollback
+				err = sp.Rollback()
+				require.NoError(t, err)
+
+				// check that we have 0 users
+				res, err := selectUsers(ctx, conn)
+				require.NoError(t, err)
+
+				results, err := getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 0)
+
+			},
+		},
+		{
+			name: "table exists",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				exists, err := conn.TableExists(ctx, "users")
+				require.NoError(t, err)
+
+				require.True(t, exists)
+			},
+		},
+		{
+			name: "reader connections",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				// create a reader connection
+				readerConn, err := openDB("test", sql.OpenReadOnly)
+				require.NoError(t, err)
+
+				// insert a user with reader connection
+				err = insertUser(ctx, readerConn, 1, "john", 20)
+				require.Error(t, err)
+
+				// insert a user with writer connection
+				err = insertUser(ctx, conn, 1, "john", 20)
+				require.NoError(t, err)
+
+				// select all users with reader connection
+				res, err := selectUsers(ctx, readerConn)
+				require.NoError(t, err)
+
+				// check that we have 1 user
+				results, err := getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 1)
+
+				if notEq(results[0]["id"], "1") || notEq(results[0]["name"], "john") || notEq(results[0]["age"], "20") {
+					t.Errorf("expected user 1 to be john, 20, got %v", results[0])
+				}
+
+				// savepoint with writer connection
+				sp, err := conn.Savepoint()
+				require.NoError(t, err)
+
+				// insert another user with writer connection
+				err = insertUser(ctx, conn, 2, "jane", 20)
+				require.NoError(t, err)
+
+				// see if reader connection can see the new user
+				res, err = selectUsers(ctx, readerConn)
+				require.NoError(t, err)
+
+				// check that we have 1 user on reader connection
+				results, err = getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 1)
+
+				// commit savepoint
+				err = sp.Commit()
+				require.NoError(t, err)
+
+				// see if reader connection can see the new user
+				res, err = selectUsers(ctx, readerConn)
+				require.NoError(t, err)
+
+				// check that we have 2 users on reader connection
+				results, err = getResults(res)
+				require.NoError(t, err)
+
+				require.Len(t, results, 2)
+			},
+		},
+		{
+			name: "testing reader restrictions",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				reader, err := openDB("test", sql.OpenReadOnly)
+				require.NoError(t, err)
+
+				err = reader.ApplyChangeset(bytes.NewReader([]byte{}))
+				require.Error(t, err)
+
+				_, err = reader.CreateSession()
+				require.Error(t, err)
+
+				err = reader.DeleteDatabase()
+				require.Error(t, err)
+
+				err = reader.DisableForeignKey()
+				require.Error(t, err)
+
+				err = reader.EnableForeignKey()
+				require.Error(t, err)
+
+				_, err = reader.Savepoint()
+				require.Error(t, err)
+			},
+		},
+		{
+			name: "testing multiple writers fails",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				_, err := openDB("test", sql.OpenCreate)
+				require.Error(t, err)
+			},
+		},
+		{
+			name: "using a writer without a closed result set errors",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				err = insertUser(ctx, conn, 1, "john", 20)
+				require.NoError(t, err)
+
+				res, err := selectUsers(ctx, conn)
+				require.NoError(t, err)
+
+				_, err = selectUsers(ctx, conn)
+				require.ErrorIs(t, err, sqlite.ErrInUse)
+
+				err = res.Close()
+				require.NoError(t, err)
+
+				_, err = selectUsers(ctx, conn)
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "cancelling context mid statement",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx, cancel := context.WithCancel(context.Background())
+
+				err := createUserTable(ctx, conn)
+				require.NoError(t, err)
+
+				// insert a user
+				err = insertUser(ctx, conn, 1, "john", 20)
+				require.NoError(t, err)
+
+				// select all users
+				res, err := selectUsers(ctx, conn)
+				require.NoError(t, err)
+
+				cancel()
+
+				err = res.Finish()
+				require.ErrorIs(t, err, sqlite.ErrInterrupted)
+			},
+		},
+		{
+			name: "test kv",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := conn.Set(ctx, []byte("key"), []byte("value"))
+				require.NoError(t, err)
+
+				value, err := conn.Get(ctx, []byte("key"))
+				require.NoError(t, err)
+
+				require.Equal(t, []byte("value"), value)
+
+				// get empty key
+				value, err = conn.Get(ctx, []byte("key2"))
+				require.NoError(t, err)
+
+				require.Nil(t, value)
+			},
+		},
+		{
+			name: "kv conflict",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := conn.Set(ctx, []byte("key"), []byte("value"))
+				require.NoError(t, err)
+
+				err = conn.Set(ctx, []byte("key"), []byte("value2"))
+				require.NoError(t, err)
+
+				value, err := conn.Get(ctx, []byte("key"))
+				require.NoError(t, err)
+
+				require.Equal(t, []byte("value2"), value)
+			},
+		},
+		{
+			name: "kv non existent",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				value, err := conn.Get(ctx, []byte("key"))
+				require.NoError(t, err)
+
+				require.Nil(t, value)
+			},
+		},
+		{
+			name: "KV delete",
+			fn: func(t *testing.T, conn *sqlite.Connection) {
+				ctx := context.Background()
+
+				err := conn.Set(ctx, []byte("key"), []byte("value"))
+				require.NoError(t, err)
+
+				err = conn.Delete(ctx, []byte("key"))
+				require.NoError(t, err)
+
+				value, err := conn.Get(ctx, []byte("key"))
+				require.NoError(t, err)
+
+				require.Nil(t, value)
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			defer deleteTempDir()
+			if tt.flags&sql.OpenCreate == 0 {
+				tt.flags |= sql.OpenCreate
+			}
+
+			conn, err := openDB("test", tt.flags)
+			require.NoError(t, err)
+			tt.fn(t, conn)
+			err = conn.Close()
+			require.NoError(t, err)
+
+			// try calling close twice
+			err = conn.Close()
+			require.NoError(t, err)
+		})
+	}
+}
+
+// notEq returns true if a and b are not equal.
+// It converts a and b to strings before comparing.
+func notEq(a, b any) bool {
+	return fmt.Sprintf("%v", a) != fmt.Sprintf("%v", b)
+}
+
+// we pass no OpenCreate flag, so it should fail
+func Test_OpenNoCreate(t *testing.T) {
+	_, err := openDB("test", 0)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
-	// prepare statement with trailing bytes
-	_, err = conn.Prepare("INSERT INTO users (id, name, age) VALUES ($id, $name, $age); DROP TABLE users")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	// prepare statement
-	stmt, err := conn.Prepare("INSERT INTO users (id, name, age) VALUES ($id, $name, $age)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// insert users
-	results, err := stmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
-		"$id":   1,
-		"$name": "John",
-		"$age":  30,
-	}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = results.Finish()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// read it back
-	results, err = conn.Query(ctx, "SELECT * FROM users")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err := results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records) != 1 {
-		t.Fatalf("expected 1 row, got %d", len(records))
-	}
-	if len(records[0]) != 3 {
-		t.Fatalf("expected 3 columns, got %d", len(records[0]))
-	}
-
-	// Test ResultFunc
-	results, err = conn.Query(ctx, "SELECT * FROM users")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err = results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records) != 1 {
-		t.Fatalf("expected 1 row, got %d", len(records))
-	}
-
-	// test numbered args
-	// read it back
-	results, err = conn.Query(ctx, "SELECT * FROM users WHERE id = $1", sqlite.WithArgs("1"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err = results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records) != 1 {
-		t.Fatalf("expected 1 row, got %d", len(records))
-	}
-
-	// test named args
-	// read it back
-	results, err = conn.Query(ctx, "SELECT * FROM users WHERE id = $id",
-		sqlite.WithNamedArgs(map[string]interface{}{
-			"$id": 1,
-		}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err = results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records) != 1 {
-		t.Fatalf("expected 1 row, got %d", len(records))
-	}
-	counter := 0
-	// test result func
-	results, err = conn.Query(ctx, "SELECT * FROM users")
-	if err != nil {
-		t.Fatal(err)
-	}
-	records, err = results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records) != 1 {
-		t.Fatalf("expected 1 row, got %d", counter)
-	}
-
-	if records[0]["name"] != "John" {
-		t.Fatalf("expected name to be John, got %s", records[0]["name"])
-	}
-
-	if records[0]["age"] != int64(30) {
-		t.Fatalf("expected age to be 30, got %d", records[0]["age"])
-	}
-
-	if records[0]["id"] != int64(1) {
-		t.Fatalf("expected id to be 1, got %d", records[0]["id"])
-	}
-
-	// delete the database
-	err = conn.Delete()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// check that the database is gone
-	_, err = conn.ListTables(ctx)
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	deleteTempDir()
 }
 
-func Test_Database_Wal(t *testing.T) {
+func Test_InMemory(t *testing.T) {
 	ctx := context.Background()
-	conn, teardown := openRealDB()
-	defer teardown()
+	conn, err := sqlite.Open(ctx, ":memory:", sql.OpenMemory)
+	require.NoError(t, err)
+	defer deleteTempDir()
+	defer func() {
+		err = conn.Close()
+		require.NoError(t, err)
+	}()
 
-	sp, err := conn.Savepoint()
-	if err != nil {
-		t.Fatal(err)
+	res, err := conn.Execute(ctx, "SELECT 1+2", nil)
+	require.NoError(t, err)
+
+	rowReturned, err := res.Next()
+	require.NoError(t, err)
+	require.True(t, rowReturned)
+
+	vals, err := res.Values()
+	require.NoError(t, err)
+
+	require.Len(t, vals, 1)
+
+	if notEq(vals[0], int64(3)) {
+		t.Errorf("expected 3, got %v", vals[0])
 	}
 
-	// prepare statement
-	stmt, err := conn.Prepare("INSERT INTO users (id, name, age) VALUES ($id, $name, $age)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// insert users
-	results, err := stmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
-		"$id":   1,
-		"$name": "John",
-		"$age":  30,
-	}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = results.Finish()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// query users
-	results, err = conn.Query(ctx, "SELECT * FROM users")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err := results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records) != 0 {
-		t.Fatalf("expected 0 rows since insert is not committed, got %d", len(records))
-	}
-
-	// rollback
-	err = sp.Rollback()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// query users
-	results, err = conn.Query(context.Background(), "SELECT * FROM users")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err = results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records) != 0 {
-		t.Fatalf("expected 0 rows since insert is not committed, got %d", len(records))
-	}
-
-	// re-insert users
-	sp, err = conn.Savepoint()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// insert users
-	results, err = stmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
-		"$id":   1,
-		"$name": "John",
-		"$age":  30,
-	}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = results.Finish()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = stmt.Finalize()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = sp.CommitAndCheckpoint()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// query users
-	results, err = conn.Query(ctx, "SELECT * FROM users")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records2, err := results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records2) != 1 {
-		t.Errorf("expected 1 row")
-	}
+	// test that the same db name can be opened twice if in memory
+	_, err = sqlite.Open(ctx, ":memory:", sql.OpenMemory)
+	require.NoError(t, err)
 }
 
-/*
-	func Test_Global_Variables(t *testing.T) {
-		ctx := context.Background()
-		conn, td := openRealDB()
-		defer td()
+const tempDir = "./tmp"
 
-		// prepare statement
-		stmt, err := conn.Prepare("INSERT INTO users (id, name, age) VALUES ($id, @caller, @block)")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// test defaults
-		results, err := stmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
-			"$id":     1,
-			"@caller": "0xbennan",
-			"@block":  420,
-		}),
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = results.Finish()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// query users
-		results, err = conn.Query(context.Background(), "SELECT * FROM users")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		records, err := results.ExportRecords()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if len(records) != 1 {
-			t.Fatalf("expected 1 row, got %d", len(records))
-		}
-
-		results.Next()
-		retrievedNamed, ok := results.GetColumn("name").(string)
-		if !ok {
-			t.Fatalf("expected string, got %T", results.GetColumn("name"))
-		}
-
-		if retrievedNamed != "0xbennan" {
-			t.Fatalf("expected 0xbennan, got %s", retrievedNamed)
-		}
-
-		retrievedAge, ok := results.GetColumn("age").(int64)
-		if !ok {
-			t.Fatalf("expected int64, got %T", results.GetColumn("age"))
-		}
-
-		if retrievedAge != 420 {
-			t.Fatalf("expected 420, got %d", retrievedAge)
-		}
-
-		// now we test that the global variables can be overwritten
-		err = stmt.Execute(sqlite.WithNamedArgs(map[string]interface{}{
-			"$id":     2,
-			"@caller": "0xjohndoe",
-			"@block":  69,
-		}),
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// query users
-		results = &sqlite.ResultSet{}
-		err = conn.Query(context.Background(), "SELECT * FROM users")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if len(records) != 2 {
-			t.Fatalf("expected 2 rows, got %d", len(records))
-		}
-
-		results.Next()
-		results.Next() // skip first row.  sqlite's ordering is deterministic, even without an ORDER BY clause
-		retrievedNamed, ok = results.GetColumn("name").(string)
-		if !ok {
-			t.Fatalf("expected string, got %T", results.GetColumn("name"))
-		}
-
-		if retrievedNamed != "0xjohndoe" {
-			t.Fatalf("expected 0xjohndoe, got %s", retrievedNamed)
-		}
-
-		retrievedAge, ok = results.GetColumn("age").(int64)
-		if !ok {
-			t.Fatalf("expected int64, got %T", results.GetColumn("age"))
-		}
-
-		if retrievedAge != 69 {
-			t.Fatalf("expected 69, got %d", retrievedAge)
-		}
-
-		err = stmt.Finalize()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-*/
-func openRealDB() (conn *sqlite.Connection, teardown func() error) {
-	conn, td, err := sqlite.OpenDbWithTearDown("testdb_DELETE_ME")
+func openDB(name string, flag sql.ConnectionFlag) (*sqlite.Connection, error) {
+	ctx := context.Background()
+	return sqlite.Open(ctx, fmt.Sprintf("%s/%s", tempDir, name), flag)
+}
+func deleteTempDir() {
+	err := os.RemoveAll(tempDir)
 	if err != nil {
 		panic(err)
-	}
-
-	initTables(conn)
-
-	return conn, td
-}
-
-func openRealDBWithAttached() (conn *sqlite.Connection, teardown func() error) {
-	conn1, err := sqlite.OpenConn("testdb", sqlite.WithPath("./tmp/"), sqlite.WithConnectionPoolSize(1), sqlite.WithAttachedDatabase("test_attach", "attachdb"))
-	if err != nil {
-		panic(err)
-	}
-
-	err = conn1.Delete()
-	if err != nil {
-		panic(err)
-	}
-
-	conn, err = sqlite.OpenConn("testdb", sqlite.WithPath("./tmp/"), sqlite.WithAttachedDatabase("test_attach", "attachdb"))
-	if err != nil {
-		panic(err)
-	}
-
-	initTables(conn)
-
-	return conn, conn.Delete
-}
-
-func Test_Reads(t *testing.T) {
-	ctx := context.Background()
-	conn, td := openRealDB()
-	defer td()
-	// prepare statement
-	stmt, err := conn.Prepare("INSERT INTO users (id, name, age) VALUES ($id, $name, $age)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// insert users
-	results, err := stmt.Start(ctx,
-		sqlite.WithNamedArgs(map[string]interface{}{
-			"$id":   1,
-			"$name": "John",
-			"$age":  30,
-		}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = results.Finish()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// try to insert user with a query
-	results, err = conn.Query(ctx, "INSERT INTO users (id, name, age) VALUES ($id, $name, $age)",
-		sqlite.WithNamedArgs(map[string]interface{}{
-			"$id":   2,
-			"$name": "Jane",
-			"$age":  25,
-		}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = results.Finish()
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	// test injection
-	_, err = conn.Query(ctx, "SELECT * FROM users; INSERT INTO users VALUES (4, 'bb', 3);")
-	if err == nil {
-		t.Errorf("expected error")
-	}
-
-}
-
-// testing statement prepare with two statements that are the same
-// usually, this returns 1 prepared statement, but our implementation
-// returns 2
-func Test_Preparation(t *testing.T) {
-	db, td := openRealDB()
-	defer td()
-
-	stmt, err := db.Prepare("SELECT * FROM users;")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stmt2, err := db.Prepare("SELECT * FROM users;")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = stmt.Finalize()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = stmt2.Finalize()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func Test_CustomFunction(t *testing.T) {
-	db, td := openRealDB()
-	defer td()
-
-	// testing the custom error('msg') function
-	stmt, err := db.Prepare("SELECT ERROR('msg');")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ctx := context.Background()
-
-	results, err := stmt.Start(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	closeErr1 := results.Finish()
-	if closeErr1 == nil {
-		t.Errorf("expected error")
-	}
-
-	results, err = stmt.Start(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	closeErr2 := results.Finish()
-	if closeErr2 == nil {
-		t.Errorf("expected error")
-	}
-
-	if closeErr1.Error() != closeErr2.Error() {
-		t.Fatalf("expected errors to be the same, got %s and %s", closeErr1.Error(), closeErr2.Error())
-	}
-
-	results, err = db.Query(ctx, "SELECT error('msg');")
-	if err != nil {
-		t.Fatal(err)
-	}
-	closeErr := results.Finish()
-	if closeErr == nil {
-		t.Errorf("expected no error")
-	}
-
-	// try inserting data with an error, within a savepoint
-	sp, err := db.Savepoint()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stmt, err = db.Prepare("INSERT INTO users (id, name, age) VALUES ($id, $name, $age) RETURNING ERROR('msg');")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	results, err = stmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
-		"$id":   1,
-		"$name": "John",
-		"$age":  30,
-	}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	finishErr := results.Finish()
-	if finishErr == nil {
-		t.Errorf("expected error")
-	}
-
-	err = sp.Rollback()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// ensure that no user was inserted
-	results, err = db.Query(ctx, "SELECT * FROM users")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	records, err := results.ExportRecords()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(records) != 0 {
-		t.Errorf("expected 0 rows, got %d", len(records))
-	}
-}
-
-func Test_Attach(t *testing.T) {
-	ctx := context.Background()
-	err, attachedTeardown := createAttachDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer attachedTeardown()
-
-	db, td := openRealDBWithAttached()
-	defer td()
-
-	// try preparing and executing a statement
-	stmt, err := db.Prepare("INSERT INTO test_attach.users (id, name, age) VALUES ($id, $name, $age)")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	results, err := stmt.Start(ctx, sqlite.WithNamedArgs(map[string]interface{}{
-		"$id":   1,
-		"$name": "John",
-		"$age":  30,
-	}))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = results.Finish()
-	if err == nil {
-		t.Errorf("expected error when inserting into attached database")
-	}
-
-	// test that we can read from the attached database
-	// if it is not registered it will panic
-	results, err = db.Query(ctx, "SELECT * FROM test_attach.users")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = results.Finish()
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 
 const (
-	usersTable = `CREATE TABLE IF NOT EXISTS users (
+	createUsersTableStmt = `CREATE TABLE users (
 		id INTEGER PRIMARY KEY NOT NULL,
 		name TEXT NOT NULL,
 		age INTEGER NOT NULL
 	) WITHOUT ROWID, STRICT;`
+
+	insertUserStmt = `INSERT INTO users (id, name, age) VALUES ($id, $name, $age);`
+
+	selectUsersStmt = `SELECT * FROM users;`
+
+	deleteUserStmt       = `DELETE FROM users WHERE id = $id;`
+	createPostsTableStmt = `CREATE TABLE posts (
+		id INTEGER PRIMARY KEY NOT NULL,
+		content TEXT NOT NULL,
+		user_id INTEGER NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users (id) ON UPDATE CASCADE ON DELETE CASCADE
+	) WITHOUT ROWID, STRICT;`
+
+	insertPostStmt = `INSERT INTO posts (id, content, user_id) VALUES ($id, $content, $user_id);`
+
+	selectPostsStmt = `SELECT * FROM posts;`
 )
 
-func initTables(conn *sqlite.Connection) {
-	err := conn.Execute(usersTable)
+func createUserTable(ctx context.Context, conn *sqlite.Connection) error {
+	res, err := conn.Execute(ctx, createUsersTableStmt, nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
-	ctx := context.Background()
-	tables, err := conn.ListTables(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	if len(tables) != 1 {
-		panic("expected 1 table, got " + fmt.Sprint(len(tables)))
-	}
-
-	if tables[0] != "users" {
-		panic("expected users table")
-	}
-
-	// also test if table exists
-	exists, err := conn.TableExists(ctx, "users")
-	if err != nil {
-		panic(err)
-	}
-
-	if !exists {
-		panic("expected users table to exist")
-	}
+	return res.Finish()
 }
 
-const attachedDBFileName = "attachdb"
-
-func createAttachDB() (error, func() error) {
-	conn1, err := sqlite.OpenConn(attachedDBFileName, sqlite.WithPath("./tmp/"), sqlite.WithConnectionPoolSize(1))
+func createPostTable(ctx context.Context, conn *sqlite.Connection) error {
+	res, err := conn.Execute(ctx, createPostsTableStmt, nil)
 	if err != nil {
-		return err, nil
+		return err
+	}
+	return res.Finish()
+}
+
+func insertUser(ctx context.Context, conn *sqlite.Connection, id int64, name string, age int64) error {
+	res, err := conn.Execute(ctx, insertUserStmt, map[string]any{
+		"$id":   id,
+		"$name": name,
+		"$age":  age,
+	})
+	if err != nil {
+		return err
+	}
+	return res.Finish()
+}
+
+func insertPost(ctx context.Context, conn *sqlite.Connection, id int64, context string, userID int64) error {
+	res, err := conn.Execute(ctx, insertPostStmt, map[string]any{
+		"$id":      id,
+		"$content": context,
+		"$user_id": userID,
+	})
+	if err != nil {
+		return err
+	}
+	return res.Finish()
+}
+
+func selectUsers(ctx context.Context, conn *sqlite.Connection) (sql.Result, error) {
+	return conn.Execute(ctx, selectUsersStmt, nil)
+}
+
+func selectPosts(ctx context.Context, conn *sqlite.Connection) (sql.Result, error) {
+	return conn.Execute(ctx, selectPostsStmt, nil)
+}
+
+func deleteUser(ctx context.Context, conn *sqlite.Connection, id int64) error {
+	res, err := conn.Execute(ctx, deleteUserStmt, map[string]any{
+		"$id": id,
+	})
+	if err != nil {
+		return err
+	}
+	return res.Finish()
+}
+
+// getResults exports the results from a sqlite.Result.
+func getResults(res sql.Result) ([]map[string]any, error) {
+	results := make([]map[string]any, 0)
+	for {
+		rowReturned, err := res.Next()
+		if err != nil {
+			return nil, err
+		}
+		if !rowReturned {
+			break
+		}
+
+		values, err := res.Values()
+		if err != nil {
+			return nil, err
+		}
+
+		record := make(map[string]any)
+
+		for i, col := range res.Columns() {
+			record[col] = values[i]
+		}
+
+		results = append(results, record)
 	}
 
-	err = conn1.Delete()
-	if err != nil {
-		return err, nil
-	}
-
-	conn, err := sqlite.OpenConn(attachedDBFileName, sqlite.WithPath("./tmp/"))
-	if err != nil {
-		return err, nil
-	}
-
-	initTables(conn)
-
-	return nil, conn.Delete
+	return results, res.Close()
 }

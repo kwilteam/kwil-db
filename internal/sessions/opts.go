@@ -2,11 +2,11 @@ package sessions
 
 import "github.com/kwilteam/kwil-db/core/log"
 
-type CommiterOpt func(*AtomicCommitter)
+type CommitterOpt func(*MultiCommitter)
 
-// WithLogger sets the logger for the session.
-func WithLogger(logger log.Logger) CommiterOpt {
-	return func(a *AtomicCommitter) {
-		a.log = logger
+// WithLogger sets the logger to use for the committer.
+func WithLogger(logger log.Logger) CommitterOpt {
+	return func(c *MultiCommitter) {
+		c.log = logger
 	}
 }
