@@ -11,32 +11,33 @@ func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (
 	// be others such as finalized and safe.
 	if req.Status != nil && *req.Status > 0 {
 		// Ask the node application for account info, which includes any unconfirmed.
-		balance, nonce, err := s.nodeApp.AccountInfo(ctx, req.PublicKey)
+		balance, nonce, err := s.nodeApp.AccountInfo(ctx, req.Identifier)
 		if err != nil {
 			return nil, err
 		}
-		var pubkey []byte
+
+		var identifier []byte
 		if nonce > 0 { // return nil pubkey for non-existent account
-			pubkey = req.PublicKey
+			identifier = req.Identifier
 		}
 		return &txpb.GetAccountResponse{
 			Account: &txpb.Account{
-				PublicKey: pubkey, // nil for non-existent account
-				Nonce:     nonce,
-				Balance:   balance.String(),
+				Identifier: identifier, // nil for non-existent account
+				Nonce:      nonce,
+				Balance:    balance.String(),
 			},
 		}, nil
 	}
 
-	acct, err := s.accountStore.GetAccount(ctx, req.PublicKey)
+	acct, err := s.accountStore.GetAccount(ctx, req.Identifier)
 	if err != nil {
 		return nil, err
 	}
 	return &txpb.GetAccountResponse{
 		Account: &txpb.Account{
-			PublicKey: acct.PublicKey, // nil for non-existent account
-			Nonce:     acct.Nonce,
-			Balance:   acct.Balance.String(),
+			Identifier: acct.Identifier, // nil for non-existent account
+			Nonce:      acct.Nonce,
+			Balance:    acct.Balance.String(),
 		},
 	}, nil
 }

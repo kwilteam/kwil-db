@@ -116,9 +116,9 @@ func (n Nep413Authenticator) Verify(sender []byte, msg []byte, signature []byte)
 	return nil
 }
 
-// Address generates a NEAR implicit address from a public key.
-// It is used to tell the database engine how to generate the user's implicit address
-func (n Nep413Authenticator) Address(sender []byte) (string, error) {
+// Identifier generates a NEAR implicit address from a public key,
+// which is simply the hex-encoded public key.
+func (n Nep413Authenticator) Identifier(sender []byte) (string, error) {
 	if len(sender) != ed25519.PublicKeySize {
 		return "", fmt.Errorf("invalid ed25519 public key size for generating near address: %d", len(sender))
 	}

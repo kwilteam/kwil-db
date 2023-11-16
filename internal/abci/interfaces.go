@@ -120,5 +120,5 @@ type DBBootstrapModule interface {
 }
 
 type AccountsModule interface {
-	GetAccount(ctx context.Context, pubKey []byte) (*accounts.Account, error)
+	GetAccount(ctx context.Context, acctID []byte) (*accounts.Account, error)
 }

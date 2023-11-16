@@ -16,7 +16,7 @@
     "application/json"
   ],
   "paths": {
-    "/api/v1/accounts/{public_key}": {
+    "/api/v1/accounts/{identifier}": {
       "get": {
         "operationId": "TxService_GetAccount",
         "responses": {
@@ -35,7 +35,7 @@
         },
         "parameters": [
           {
-            "name": "public_key",
+            "name": "identifier",
             "in": "path",
             "required": true,
             "type": "string",
@@ -580,7 +580,7 @@
     "txAccount": {
       "type": "object",
       "properties": {
-        "public_key": {
+        "identifier": {
           "type": "string",
           "format": "byte"
         },

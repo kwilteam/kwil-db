@@ -1,14 +1,11 @@
 package database
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/kwilteam/kuneiform/kfparser"
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
@@ -101,59 +98,4 @@ func UnmarshalJson(file *os.File) (*transactions.Schema, error) {
 	}
 
 	return &db, nil
-}
-
-// parseComments parses the comments from the file
-// and returns the bytes of the file without the comments
-// @brennanjs remove?
-func parseComments(file *os.File) ([]byte, error) { //nolint:unused
-	reader := bufio.NewReader(file)
-	var result bytes.Buffer
-	for {
-		line, err := reader.ReadString('\n')
-
-		if err != nil && err != io.EOF {
-			fmt.Println("Error reading file:", err)
-			return nil, err
-		}
-
-		line = removeComments(line)
-		result.WriteString(line)
-
-		if err == io.EOF {
-			break
-		}
-	}
-
-	return result.Bytes(), nil
-}
-
-// removeComments removes the comments from the line
-// @brennanjs remove?
-func removeComments(line string) string { //nolint:unused
-	// Check if the line contains a comment
-	if idx := strings.Index(line, "//"); idx != -1 {
-		// Check if the comment is within a string (either single, double, or backtick quotes)
-		quoteIdxDouble := strings.Index(line[:idx], "\"")
-		quoteIdxSingle := strings.Index(line[:idx], "'")
-		quoteIdxBacktick := strings.Index(line[:idx], "`")
-		isInString := false
-
-		if quoteIdxDouble != -1 && strings.Contains(line[quoteIdxDouble+1:], "'") {
-			isInString = true
-		}
-
-		if quoteIdxSingle != -1 && strings.Contains(line[quoteIdxSingle+1:], "'") {
-			isInString = true
-		}
-
-		if quoteIdxBacktick != -1 && strings.Contains(line[quoteIdxBacktick+1:], "'") {
-			isInString = true
-		}
-
-		if !isInString {
-			return line[:idx] + "\n"
-		}
-	}
-	return line
 }

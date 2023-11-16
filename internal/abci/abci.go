@@ -166,16 +166,16 @@ func (a *AbciApp) ChainID() string {
 // AccountInfo gets the pending balance and nonce for an account. If there are
 // no unconfirmed transactions for the account, the latest confirmed values are
 // returned.
-func (a *AbciApp) AccountInfo(ctx context.Context, pubkey []byte) (balance *big.Int, nonce int64, err error) {
+func (a *AbciApp) AccountInfo(ctx context.Context, identifier []byte) (balance *big.Int, nonce int64, err error) {
 	// If we have any unconfirmed transactions for the user, report that info
 	// without even checking the account store.
-	ua := a.mempool.peekAccountInfo(ctx, pubkey)
+	ua := a.mempool.peekAccountInfo(ctx, identifier)
 	if ua.nonce > 0 {
 		return ua.balance, ua.nonce, nil
 	}
 	// Nothing in mempool, check account store. Changes to the account store are
 	// committed before the mempool is cleared, so there should not be any race.
-	acct, err := a.accounts.GetAccount(ctx, pubkey)
+	acct, err := a.accounts.GetAccount(ctx, identifier)
 	if err != nil {
 		return nil, 0, err
 	}
