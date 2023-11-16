@@ -16,8 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/ident"
-	"github.com/kwilteam/kwil-db/internal/kv/atomic"
+	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/modules/datasets"
 	"github.com/kwilteam/kwil-db/internal/modules/validators"
@@ -30,16 +29,16 @@ import (
 	healthcheck "github.com/kwilteam/kwil-db/internal/services/health"
 	simple_checker "github.com/kwilteam/kwil-db/internal/services/health/simple-checker"
 	"github.com/kwilteam/kwil-db/internal/sessions"
-	sqlSessions "github.com/kwilteam/kwil-db/internal/sessions/sql-session"
-	"github.com/kwilteam/kwil-db/internal/sessions/wal"
+	"github.com/kwilteam/kwil-db/internal/sessions/committable"
+	"github.com/kwilteam/kwil-db/internal/sql/adapter"
+	"github.com/kwilteam/kwil-db/internal/sql/registry"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
-	"github.com/kwilteam/kwil-db/internal/engine"
-	"github.com/kwilteam/kwil-db/internal/sql"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
@@ -52,12 +51,10 @@ import (
 
 func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// atomic committer
-	ac := buildAtomicCommitter(d, closers)
-	closers.addCloser(ac.Close)
+	ac := buildCommitter(d, closers)
 
 	// engine
-	e := buildEngine(d, ac)
-	closers.addCloser(e.Close)
+	e := buildEngine(d, closers, ac)
 
 	// account store
 	accs := buildAccountRepository(d, closers, ac)
@@ -102,6 +99,13 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	}
 }
 
+// db / committable names, to prevent breaking changes
+const (
+	accountsDBName  = "accounts"
+	validatorDBName = "validators"
+	engineName      = "engine"
+)
+
 // coreDependencies holds dependencies that are widely used
 type coreDependencies struct {
 	ctx        context.Context
@@ -109,7 +113,7 @@ type coreDependencies struct {
 	genesisCfg *config.GenesisConfig
 	privKey    cmtEd.PrivKey
 	log        log.Logger
-	opener     sql.Opener
+	opener     func(ctx context.Context, dbName string, persistentReaders, maximumReaders int, create bool) (*sqlite.Pool, error)
 	keypair    *tls.Certificate
 }
 
@@ -134,7 +138,7 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
-	atomicCommitter *sessions.AtomicCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
+	committer *sessions.MultiCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
 		GuaranteeFSync: true,
@@ -145,11 +149,6 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		failBuild(err, "failed to open badger")
 	}
 	closer.addCloser(badgerKv.Close)
-
-	atomicKv, err := atomic.NewAtomicKV(badgerKv)
-	if err != nil {
-		failBuild(err, "failed to open atomic kv")
-	}
 
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
@@ -165,8 +164,8 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		accountsModule,
 		datasetsModule,
 		validatorModule,
-		atomicKv,
-		atomicCommitter,
+		badgerKv,
+		committer,
 		sh,
 		bootstrapper,
 		abci.WithLogger(*d.log.Named("abci")),
@@ -198,7 +197,7 @@ func buildDatasetsModule(d *coreDependencies, eng datasets.Engine, accs datasets
 	)
 }
 
-func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engine {
+func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommitter) *execution.GlobalContext {
 	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
 	if err != nil {
 		failBuild(err, "failed to get extensions")
@@ -208,35 +207,45 @@ func buildEngine(d *coreDependencies, a *sessions.AtomicCommitter) *engine.Engin
 		d.log.Debug("registered extension", zap.String("name", ext.Name()))
 	}
 
-	sqlCommitRegister := &sqlCommittableRegister{
-		committer: a,
-		log:       *d.log.Named("sqlite-committable"),
-	}
-
-	e, err := engine.Open(d.ctx, d.opener,
-		sqlCommitRegister,
-		ident.Address,
-		engine.WithLogger(*d.log.Named("engine")),
-		engine.WithExtensions(adaptExtensions(extensions)),
-	)
+	reg, err := registry.NewRegistry(d.ctx, func(ctx context.Context, dbid string, create bool) (registry.Pool, error) {
+		return sqlite.NewPool(ctx, dbid, 1, 2, true)
+	}, d.cfg.AppCfg.SqliteFilePath, registry.WithReaderWaitTimeout(time.Millisecond*100), registry.WithLogger(
+		*d.log.Named("registry"),
+	))
 	if err != nil {
-		failBuild(err, "failed to open engine")
+		failBuild(err, "failed to build registry")
 	}
 
-	// Register masterDB committable
-	a.Register(d.ctx, "master_db", e.Committable())
-	return e
+	eng, err := execution.NewGlobalContext(d.ctx, reg, adaptExtensions(extensions))
+	if err != nil {
+		failBuild(err, "failed to build engine")
+	}
+	err = a.Register(engineName, reg)
+	if err != nil {
+		failBuild(err, "failed to register engine")
+	}
+
+	closer.addCloser(reg.Close)
+
+	return eng
 }
 
-func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.AtomicCommitter) *accounts.AccountStore {
-	db, err := d.opener.Open("accounts_db", *d.log.Named("account-store"))
+func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.MultiCommitter) *accounts.AccountStore {
+
+	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, accountsDBName), 1, 2, true)
 	if err != nil {
 		failBuild(err, "failed to open accounts db")
 	}
 	closer.addCloser(db.Close)
 
+	adapted := adapter.PoolAdapater{Pool: db}
+
+	com := committable.New(adapted)
+
 	genCfg := d.genesisCfg
-	b, err := accounts.NewAccountStore(d.ctx, db,
+	b, err := accounts.NewAccountStore(d.ctx,
+		&adapted,
+		com,
 		accounts.WithLogger(*d.log.Named("accountStore")),
 		accounts.WithNonces(!genCfg.ConsensusParams.WithoutNonces),
 		accounts.WithGasCosts(!genCfg.ConsensusParams.WithoutGasCosts),
@@ -246,14 +255,16 @@ func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *session
 	}
 	closer.addCloser(b.Close)
 
-	committable := sqlSessions.NewSqlCommittable(db, sqlSessions.WithLogger(*d.log.Named("accounts-committable")))
-	ac.Register(d.ctx, "accounts_db", b.WrapCommittable(committable))
+	err = ac.Register(accountsDBName, com)
+	if err != nil {
+		failBuild(err, "failed to register account store")
+	}
 
 	return b
 }
 
-func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions.AtomicCommitter) *vmgr.ValidatorMgr {
-	db, err := d.opener.Open("validator_db", *d.log.Named("validator-store"))
+func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions.MultiCommitter) *vmgr.ValidatorMgr {
+	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, validatorDBName), 1, 2, true)
 	if err != nil {
 		failBuild(err, "failed to open validator db")
 	}
@@ -265,7 +276,13 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 		feeMultiplier = 0
 	}
 
-	v, err := vmgr.NewValidatorMgr(d.ctx, db,
+	adapted := adapter.PoolAdapater{Pool: db}
+
+	com := committable.New(adapted)
+
+	v, err := vmgr.NewValidatorMgr(d.ctx,
+		&adapted,
+		com,
 		vmgr.WithLogger(*d.log.Named("validatorStore")),
 		vmgr.WithJoinExpiry(joinExpiry),
 		vmgr.WithFeeMultiplier(int64(feeMultiplier)),
@@ -274,8 +291,11 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 		failBuild(err, "failed to build validator store")
 	}
 
-	committable := sqlSessions.NewSqlCommittable(db, sqlSessions.WithLogger(*d.log.Named("validator-committable")))
-	ac.Register(d.ctx, "validator_db", v.WrapCommittable(committable))
+	err = ac.Register(validatorDBName, com)
+	if err != nil {
+		failBuild(err, "failed to register validator store")
+	}
+
 	return v
 }
 
@@ -478,19 +498,22 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 	return node
 }
 
-func buildAtomicCommitter(d *coreDependencies, closers *closeFuncs) *sessions.AtomicCommitter {
-	twoPCWal, err := wal.OpenWal(filepath.Join(d.cfg.RootDir, applicationDirName, "wal"))
+func buildCommitter(d *coreDependencies, closers *closeFuncs) *sessions.MultiCommitter {
+	kv, err := badger.NewBadgerDB(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, "committer"),
+		&badger.Options{
+			GuaranteeFSync:                true,
+			GarbageCollectionInterval:     5 * time.Minute,
+			Logger:                        *d.log.Named("atomic-committer-kv-store"),
+			GarbageCollectionDiscardRatio: 0.5,
+		},
+	)
 	if err != nil {
-		failBuild(err, "failed to open 2pc wal")
+		failBuild(err, "failed to open atomic committer kv")
 	}
-	closers.addCloser(twoPCWal.Close)
 
-	// we are actually registering all committables ad-hoc, so we can pass nil here
-	s := sessions.NewAtomicCommitter(d.ctx, twoPCWal, sessions.WithLogger(*d.log.Named("atomic-committer")))
-	// we need atomic committer to close before 2pc wal
-	closers.addCloser(s.Close)
+	closers.addCloser(kv.Close)
 
-	return s
+	return sessions.NewCommitter(kv, make(map[string]sessions.Committable), sessions.WithLogger(*d.log.Named("atomic-committer")))
 }
 
 func failBuild(err error, msg string) {

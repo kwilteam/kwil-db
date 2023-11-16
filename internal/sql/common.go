@@ -2,35 +2,33 @@ package sql
 
 import (
 	"context"
-	"io"
-
-	"github.com/kwilteam/kwil-db/core/log"
 )
 
-type Opener interface {
-	Open(fileName string, logger log.Logger) (Database, error)
+// KVStore is a key-value store.
+type KVStore interface {
+	// Set sets a key to a value.
+	Set(ctx context.Context, key []byte, value []byte) error
+	// Get gets a value for a key.
+	Get(ctx context.Context, key []byte) ([]byte, error)
+	// Delete deletes a key.
+	Delete(ctx context.Context, key []byte) error
 }
 
-type Database interface {
-	ApplyChangeset(reader io.Reader) error
-	CheckpointWal() error
+type ResultSetFunc func(ctx context.Context, stmt string, args map[string]any) (*ResultSet, error)
+
+// Connection is a connection to a database.
+type Connection interface {
+	KVStore
+	Execute(ctx context.Context, stmt string, args map[string]any) (Result, error)
 	Close() error
 	CreateSession() (Session, error)
-	Delete() error
-	Execute(ctx context.Context, stmt string, args map[string]any) error
-	Prepare(stmt string) (Statement, error)
-	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 	Savepoint() (Savepoint, error)
-	TableExists(ctx context.Context, table string) (bool, error)
-	EnableForeignKey() error
-	DisableForeignKey() error
-	// this should get deleted once we fix the engine
-	QueryUnsafe(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
 }
 
-type Statement interface {
-	Execute(ctx context.Context, args map[string]any) ([]map[string]any, error)
-	Close() error
+// ReturnableConnection is a connection that can be returned to a pool.
+type ReturnableConnection interface {
+	Connection
+	Return()
 }
 
 type Savepoint interface {
@@ -40,16 +38,68 @@ type Savepoint interface {
 
 type Session interface {
 	Delete() error
-	GenerateChangeset() (Changeset, error)
+	ChangesetID(ctx context.Context) ([]byte, error)
 }
 
 type Changeset interface {
-	// Export gets the changeset as a byte array.
-	Export() ([]byte, error)
-
 	// ID generates a deterministic ID for the changeset.
-	// TODO: this is not deterministic yet
 	ID() ([]byte, error)
+}
 
+// Result is the result of a query.
+type Result interface {
 	Close() error
+	// Columns gets the columns of the result.
+	Columns() []string
+	// Finish finishes any execution that is in progress and closes the result.
+	Finish() error
+
+	// Next gets the next row of the result.
+	Next() (rowReturned bool, err error)
+
+	// Values gets the values of the current row.
+	Values() ([]any, error)
+}
+
+type ResultSet struct {
+	Columns []string
+	Rows    [][]any
+}
+
+type ConnectionFlag int
+
+const (
+	// OpenNone indicates that the connection should be read-write and not created if it does not exist.
+	OpenNone ConnectionFlag = 1 << iota
+	// OpenReadOnly indicates that the connection should be read-only.
+	OpenReadOnly
+	// OpenCreate indicates that the connection should be created if it does not exist.
+	OpenCreate
+	// OpenMemory indicates that the connection should be in-memory.
+	OpenMemory
+)
+
+// EmptyResult is a result that has no rows.
+type EmptyResult struct{}
+
+var _ Result = (*EmptyResult)(nil)
+
+func (e *EmptyResult) Close() error {
+	return nil
+}
+
+func (e *EmptyResult) Columns() []string {
+	return nil
+}
+
+func (e *EmptyResult) Finish() error {
+	return nil
+}
+
+func (e *EmptyResult) Next() (rowReturned bool, err error) {
+	return false, nil
+}
+
+func (e *EmptyResult) Values() ([]any, error) {
+	return nil, nil
 }

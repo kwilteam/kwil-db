@@ -35,6 +35,7 @@ func (a *AttributeType) IsValid() bool {
 		upper == MAX_LENGTH.String()
 }
 
+// Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
 func (a *AttributeType) Clean() error {
 	if !a.IsValid() {
 		return fmt.Errorf("invalid attribute type: %s", a.String())

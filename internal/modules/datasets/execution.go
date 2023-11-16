@@ -7,8 +7,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/engine"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
+	"github.com/kwilteam/kwil-db/internal/ident"
 )
 
 /*
@@ -26,25 +26,22 @@ type ExecutionResponse struct {
 func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, tx *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := u.PriceDeploy(ctx, schema)
 	if err != nil {
-		if price == nil {
-			price = big.NewInt(0)
-		}
-		return resp(price), err
+		return nil, err
 	}
 
 	err = u.compareAndSpend(ctx, price, tx)
 	if err != nil {
-		return resp(price), err
+		return nil, err
 	}
 
-	identifier := getUserIdentifier(tx)
-	if err != nil {
-		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
-	}
+	// identifier, err := getUserIdentifier(tx.Sender, tx.Signature.Type)
+	// if err != nil {
+	// 	return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
+	// }
 
-	_, err = u.engine.CreateDataset(ctx, schema, identifier)
+	err = u.engine.CreateDataset(ctx, schema, tx.Sender)
 	if err != nil {
-		return resp(price), fmt.Errorf("failed to create dataset: %w", err)
+		return nil, fmt.Errorf("failed to create dataset: %w", err)
 	}
 
 	return resp(price), nil
@@ -54,25 +51,22 @@ func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, 
 func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := u.PriceDrop(ctx, dbid)
 	if err != nil {
-		if price == nil {
-			price = big.NewInt(0)
-		}
-		return resp(price), err
+		return nil, err
 	}
 
 	err = u.compareAndSpend(ctx, price, tx)
 	if err != nil {
-		return resp(price), err
+		return nil, err
 	}
 
-	identifier := getUserIdentifier(tx)
-	if err != nil {
-		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
-	}
+	// identifier, err := getUserIdentifier(tx.Sender, tx.Signature.Type)
+	// if err != nil {
+	// 	return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
+	// }
 
-	err = u.engine.DropDataset(ctx, dbid, identifier)
+	err = u.engine.DeleteDataset(ctx, dbid, tx.Sender)
 	if err != nil {
-		return resp(price), fmt.Errorf("failed to drop dataset: %w", err)
+		return nil, fmt.Errorf("failed to drop dataset: %w", err)
 	}
 
 	return resp(price), nil
@@ -82,27 +76,28 @@ func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.
 func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string, args [][]any, tx *transactions.Transaction) (*ExecutionResponse, error) {
 	price, err := u.PriceExecute(ctx, dbid, action, args)
 	if err != nil {
-		if price == nil {
-			price = big.NewInt(0)
-		}
-		return resp(price), err
+		return nil, err
 	}
 
 	err = u.compareAndSpend(ctx, price, tx)
 	if err != nil {
-		return resp(price), err
+		return nil, err
 	}
 
-	identifier := getUserIdentifier(tx)
+	identifier, err := getUserIdentifier(tx.Sender, tx.Signature.Type)
 	if err != nil {
-		return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
+		return nil, fmt.Errorf("failed to get user identifier: %w", err)
 	}
 
-	_, err = u.engine.Execute(ctx, dbid, action, args,
-		engine.WithCaller(identifier),
-	)
-	if err != nil {
-		return resp(price), fmt.Errorf("failed to execute action '%s' on database '%s': %w", action, dbid, err)
+	if len(args) == 0 {
+		args = make([][]any, 1)
+	}
+
+	for i := range args {
+		err = u.engine.Execute(ctx, dbid, action, identifier, tx.Sender, args[i])
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute action '%s' on database '%s': %w", action, dbid, err)
+		}
 	}
 
 	return resp(price), nil
@@ -129,9 +124,9 @@ func resp(fee *big.Int) *ExecutionResponse {
 }
 
 // getUserIdentifier gets the user identifier from a transaction.
-func getUserIdentifier(tx *transactions.Transaction) *engineTypes.User {
-	return &engineTypes.User{
-		PublicKey: tx.Sender,
-		AuthType:  tx.Signature.Type,
-	}
+func getUserIdentifier(sender []byte, signatureType string) ([]byte, error) {
+	return (&ident.User{
+		PublicKey: sender,
+		AuthType:  signatureType,
+	}).MarshalBinary()
 }

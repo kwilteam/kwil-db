@@ -1,53 +1,104 @@
 package sqlite
 
 import (
+	"sync"
+
+	"github.com/kwilteam/go-sqlite"
 	"github.com/kwilteam/kwil-db/core/utils/random"
+	sql "github.com/kwilteam/kwil-db/internal/sql"
 )
 
-func (c *Connection) Savepoint() (*Savepoint, error) {
-	return beginSavepoint(c)
-}
+// Savepoint creates a new savepoint.
+func (c *Connection) Savepoint() (sql.Savepoint, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-func beginSavepoint(c *Connection) (*Savepoint, error) {
+	if c.isReadonly() {
+		return nil, ErrReadOnlyConn
+	}
+
+	// if a savepoint is the outer-most, then we should checkpoint the WAL when it is closed
+	shouldCheckpoint := c.activeSavepoint.CompareAndSwap(false, true)
+
 	saveName := "tx_" + randomSavepointName(8)
 
-	err := c.Execute("SAVEPOINT " + saveName)
+	err := execute(c.conn, "SAVEPOINT "+saveName)
 	if err != nil {
 		return nil, err
 	}
-	return &Savepoint{conn: c, saveName: saveName}, nil
+
+	return &Savepoint{
+		conn:     c.conn,
+		saveName: saveName,
+		closeFn: func() error {
+			defer func() {
+				c.activeSavepoint.Store(false)
+			}()
+			if shouldCheckpoint {
+				err := c.checkpointWal()
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}, nil
 }
 
+// Savepoint is a checkpoint in the state of the database.
+// It can be rolled back to, or committed.
 type Savepoint struct {
-	conn     *Connection
+	mu       sync.Mutex
+	conn     *sqlite.Conn
 	saveName string
+
+	closed bool
+
+	// closeFn is called when the savepoint is either committed or rolled back.
+	closeFn func() error
 }
 
 // With both Commit and Rollback, if the checkpoint fails, it doesn't matter
 
 // Commit commits the savepoint and releases it
 func (sp *Savepoint) Commit() error {
-	return sp.conn.Execute("RELEASE " + sp.saveName)
-}
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
 
-// CommitAndCheckpoint commits the savepoint, releases it, and checkpoints the WAL
-func (sp *Savepoint) CommitAndCheckpoint() error {
-	err := sp.Commit()
+	if sp.closed {
+		return nil
+	}
+	sp.closed = true
+
+	err := execute(sp.conn, "RELEASE "+sp.saveName)
 	if err != nil {
 		return err
 	}
 
-	return sp.conn.CheckpointWal()
+	return sp.closeFn()
 }
 
 // Rollback rolls back the savepoint and releases it
 func (sp *Savepoint) Rollback() error {
-	err := sp.conn.Execute("ROLLBACK TO " + sp.saveName)
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+
+	if sp.closed {
+		return nil
+	}
+	sp.closed = true
+
+	err := execute(sp.conn, "ROLLBACK TO "+sp.saveName)
 	if err != nil {
 		return err
 	}
 
-	return sp.conn.Execute("RELEASE " + sp.saveName)
+	err = execute(sp.conn, "RELEASE "+sp.saveName)
+	if err != nil {
+		return err
+	}
+
+	return sp.closeFn()
 }
 
 func randomSavepointName(length int) string {

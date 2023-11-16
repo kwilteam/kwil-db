@@ -38,6 +38,7 @@ func (d *DataType) IsText() bool {
 	return *d == TEXT
 }
 
+// Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
 func (d *DataType) Clean() error {
 	if !d.IsValid() {
 		return fmt.Errorf("invalid data type: %s", d.String())

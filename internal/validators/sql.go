@@ -131,7 +131,7 @@ const (
 )
 
 func (vs *validatorStore) updateCurrentVersion(ctx context.Context, version int) error {
-	err := vs.db.Execute(ctx, sqlUpdateVersion, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlUpdateVersion, map[string]any{
 		"$version": version,
 	})
 	if err != nil {
@@ -170,16 +170,16 @@ func (vs *validatorStore) initTables(ctx context.Context) error {
 	inits := getTableInits()
 
 	for _, init := range inits {
-		if err := vs.db.Execute(ctx, init, nil); err != nil {
+		if _, err := vs.db.Execute(ctx, init, nil); err != nil {
 			return fmt.Errorf("failed to initialize tables: %w", err)
 		}
 	}
 
-	if err := vs.db.Execute(ctx, sqlInitVersionTable, nil); err != nil {
+	if _, err := vs.db.Execute(ctx, sqlInitVersionTable, nil); err != nil {
 		return fmt.Errorf("failed to initialize schema version table: %w", err)
 	}
 
-	err := vs.db.Execute(ctx, sqlInitVersionRow, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlInitVersionRow, map[string]any{
 		"$version": valStoreVersion,
 	})
 	if err != nil {
@@ -191,7 +191,7 @@ func (vs *validatorStore) initTables(ctx context.Context) error {
 
 func (vs *validatorStore) startJoinRequest(ctx context.Context, joiner []byte, approvers [][]byte, power int64, expiresAt int64) error {
 	// Insert into join_reqs.
-	err := vs.db.Execute(ctx, sqlNewJoinReq, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlNewJoinReq, map[string]any{
 		"$candidate":    joiner,
 		"$power_wanted": power,
 		"$expiresAt":    expiresAt,
@@ -208,7 +208,7 @@ func (vs *validatorStore) startJoinRequest(ctx context.Context, joiner []byte, a
 	// 	return fmt.Errorf("failed to prepare get account statement: %w", err)
 	// }
 	for i := range approvers {
-		err = vs.db.Execute(ctx, sqlAddToJoinBoard, map[string]any{
+		_, err = vs.db.Execute(ctx, sqlAddToJoinBoard, map[string]any{
 			"$candidate": joiner,
 			"$validator": approvers[i],
 			"$approval":  0,
@@ -236,39 +236,45 @@ func (vs *validatorStore) addApproval(ctx context.Context, joiner, approver []by
 	}
 
 	// Update the approval column of join_board row.
-	return vs.db.Execute(ctx, sqlSetApproval, map[string]any{
+	_, err = vs.db.Execute(ctx, sqlSetApproval, map[string]any{
 		"$approval":  1,
 		"$validator": approver,
 		"$candidate": joiner,
 	})
+	return err
 }
 
 func (vs *validatorStore) addRemoval(ctx context.Context, target, validator []byte) error {
-	return vs.db.Execute(ctx, sqlAddRemoval, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlAddRemoval, map[string]any{
 		"$remover": validator,
 		"$target":  target,
 	})
+
+	return err
 }
 
 // deleteRemoval and deleteRemovals should not be required with ON DELETE
 // CASCADE on both the remover and target columns of the removals table...
 func (vs *validatorStore) deleteRemoval(ctx context.Context, target, validator []byte) error {
-	return vs.db.Execute(ctx, sqlDeleteRemoval, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlDeleteRemoval, map[string]any{
 		"$remover": validator,
 		"$target":  target,
 	})
+	return err
 }
 
 func (vs *validatorStore) deleteRemovals(ctx context.Context, target []byte) error {
-	return vs.db.Execute(ctx, sqlDeleteRemovals, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlDeleteRemovals, map[string]any{
 		"$target": target,
 	})
+	return err
 }
 
 func (vs *validatorStore) deleteJoinRequest(ctx context.Context, joiner []byte) error {
-	return vs.db.Execute(ctx, sqlDeleteJoinReq, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlDeleteJoinReq, map[string]any{
 		"$candidate": joiner,
 	})
+	return err
 }
 
 func (vs *validatorStore) addValidator(ctx context.Context, joiner []byte, power int64) error {
@@ -282,7 +288,7 @@ func (vs *validatorStore) addValidator(ctx context.Context, joiner []byte, power
 		return errors.New("validator with power already exists")
 	}
 	// Either a new validator, or we are doing a power upsert.
-	err = vs.db.Execute(ctx, sqlNewValidator, map[string]any{
+	_, err = vs.db.Execute(ctx, sqlNewValidator, map[string]any{
 		"$pubkey": joiner,
 		"$power":  power,
 	})
@@ -302,7 +308,7 @@ func (vs *validatorStore) removeValidator(ctx context.Context, validator []byte)
 	if err != nil {
 		return fmt.Errorf("failed to delete removals: %w", err)
 	}
-	err = vs.db.Execute(ctx, sqlDeleteValidator, map[string]any{
+	_, err = vs.db.Execute(ctx, sqlDeleteValidator, map[string]any{
 		"$pubkey": validator,
 	})
 	if err != nil {
@@ -312,7 +318,7 @@ func (vs *validatorStore) removeValidator(ctx context.Context, validator []byte)
 }
 
 func (vs *validatorStore) updateValidatorPower(ctx context.Context, validator []byte, power int64) error {
-	err := vs.db.Execute(ctx, sqlUpdateValidatorPower, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlUpdateValidatorPower, map[string]any{
 		"$power":  power,
 		"$pubkey": validator,
 	})
@@ -323,17 +329,17 @@ func (vs *validatorStore) updateValidatorPower(ctx context.Context, validator []
 }
 
 func (vs *validatorStore) init(ctx context.Context, vals []*Validator) error {
-	err := vs.db.Execute(ctx, sqlDeleteAllValidators, map[string]any{})
+	_, err := vs.db.Execute(ctx, sqlDeleteAllValidators, map[string]any{})
 	if err != nil {
 		return fmt.Errorf("failed to delete all previous validators: %w", err)
 	}
-	err = vs.db.Execute(ctx, sqlDeleteAllJoins, map[string]any{})
+	_, err = vs.db.Execute(ctx, sqlDeleteAllJoins, map[string]any{})
 	if err != nil {
 		return fmt.Errorf("failed to delete all previous join requests: %w", err)
 	}
 
 	for _, vi := range vals {
-		err = vs.db.Execute(ctx, sqlNewValidator, map[string]any{
+		_, err = vs.db.Execute(ctx, sqlNewValidator, map[string]any{
 			"$pubkey": vi.PubKey,
 			"$power":  vi.Power,
 		})

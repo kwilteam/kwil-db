@@ -11,6 +11,7 @@ type Table struct {
 	ForeignKeys []*ForeignKey `json:"foreign_keys"`
 }
 
+// Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
 func (t *Table) Clean() error {
 	hasPrimaryAttribute := false
 	for _, col := range t.Columns {
