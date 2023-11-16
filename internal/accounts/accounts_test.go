@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	accountTesting "github.com/kwilteam/kwil-db/internal/accounts/testing"
+	"github.com/kwilteam/kwil-db/internal/sql/adapter"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -99,13 +102,25 @@ func Test_Accounts(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			deleteTestDir()
+			defer deleteTestDir()
+
 			ctx := context.Background()
 
-			ar, td, err := accountTesting.NewTestAccountStore(ctx, accounts.WithGasCosts(tc.gasOn), accounts.WithNonces(tc.noncesOn))
-			if err != nil {
-				t.Fatalf("unexpected error: %s", err)
+			pool, err := sqlite.NewPool(ctx, "./tmp/accounts_test.db", 1, 1, true)
+			require.NoError(t, err)
+			defer pool.Close()
+
+			opts := []accounts.AccountStoreOpts{}
+			if tc.gasOn {
+				opts = append(opts, accounts.WithGasCosts(true))
 			}
-			defer td()
+			if tc.noncesOn {
+				opts = append(opts, accounts.WithNonces(true))
+			}
+
+			ar, err := accounts.NewAccountStore(ctx, &adapter.PoolAdapater{Pool: pool}, &mockCommittable{skip: false}, opts...)
+			require.NoError(t, err)
 
 			errs := []error{}
 			for _, spend := range tc.spends {
@@ -162,5 +177,26 @@ func assertErr(t *testing.T, errs []error, target error) {
 
 	if !contains {
 		t.Fatalf("expected error %s, got %s", target, errs)
+	}
+}
+
+type mockCommittable struct {
+	skip bool
+}
+
+var testDir = "./tmp"
+
+func (m *mockCommittable) Register(value []byte) error {
+	return nil
+}
+
+func (m *mockCommittable) Skip() bool {
+	return m.skip
+}
+
+func deleteTestDir() {
+	err := os.RemoveAll(testDir)
+	if err != nil {
+		panic(err)
 	}
 }

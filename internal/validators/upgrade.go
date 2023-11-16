@@ -109,16 +109,16 @@ func (vs *validatorStore) runMigrations(ctx context.Context, version int) error 
 func (vs *validatorStore) upgradeValidatorsDBfrom0To1(ctx context.Context) error {
 	vs.log.Info("Upgrading validators db from version 0 to 1")
 	// Add v1 schema version table
-	if err := vs.db.Execute(ctx, sqlInitVersionTableV1, nil); err != nil {
+	if _, err := vs.db.Execute(ctx, sqlInitVersionTableV1, nil); err != nil {
 		return fmt.Errorf("failed to initialize schema version table: %w", err)
 	}
 
-	if err := vs.db.Execute(ctx, sqlAddJoinExpiryV1, nil); err != nil {
+	if _, err := vs.db.Execute(ctx, sqlAddJoinExpiryV1, nil); err != nil {
 		return fmt.Errorf("failed to add expiresAt column to join_reqs table: %w", err)
 	}
 
 	const version = 1
-	err := vs.db.Execute(ctx, sqlInitVersionRowV1, map[string]any{
+	_, err := vs.db.Execute(ctx, sqlInitVersionRowV1, map[string]any{
 		"$version": version,
 	})
 	if err != nil {
@@ -132,7 +132,7 @@ func (vs *validatorStore) upgradeValidatorsDBfrom0To1(ctx context.Context) error
 // Just create the removals table and bump the version.
 func (vs *validatorStore) upgradeValidatorsDBfrom1To2(ctx context.Context) error {
 	vs.log.Info("Upgrading validators db from version 1 to 2")
-	if err := vs.db.Execute(ctx, sqlInitRemovalsTableV2, nil); err != nil {
+	if _, err := vs.db.Execute(ctx, sqlInitRemovalsTableV2, nil); err != nil {
 		return fmt.Errorf("failed to create removals table: %w", err)
 	}
 	const version = 2

@@ -24,4 +24,24 @@ func Test_BadgerKV(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	val, err := db.Get([]byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(val) != "value2" {
+		t.Fatal("expected value2")
+	}
+
+	err = db.Delete([]byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// try deleting non-existent key
+	err = db.Delete([]byte("key"))
+	if err != nil {
+		t.Fatal(err)
+	}
 }

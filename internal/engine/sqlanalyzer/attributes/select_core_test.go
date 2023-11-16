@@ -3,8 +3,6 @@ package attributes_test
 import (
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/attributes"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
@@ -20,9 +18,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 		stmt            string
 		want            []*attributes.RelationAttribute
 		resultTableCols []*types.Column
-		// wantInequality is true if we want the test to fail if the result is equal to want
-		wantInequality bool
-		wantErr        bool
+		wantErr         bool
 	}{
 		{
 			name: "simple select",
@@ -36,17 +32,6 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 			resultTableCols: []*types.Column{
 				col("id", types.INT),
 			},
-		},
-		{
-			name: "simple select - failure",
-			tables: []*types.Table{
-				testdata.TableUsers,
-			},
-			stmt: "SELECT id FROM users",
-			want: []*attributes.RelationAttribute{
-				tblCol(types.TEXT, "users", "name"),
-			},
-			wantInequality: true,
 		},
 		{
 			name: "simple select with alias",
@@ -85,21 +70,21 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				tblCol(types.INT, "users", "id"), // we expect them twice since it is defined twice
 				tblCol(types.TEXT, "users", "username"),
 				tblCol(types.INT, "users", "age"),
-				tblCol(types.TEXT, "users", "address"),
+				tblCol(types.BLOB, "users", "address"),
 				tblCol(types.INT, "users", "id"),
 				tblCol(types.TEXT, "users", "username"),
 				tblCol(types.INT, "users", "age"),
-				tblCol(types.TEXT, "users", "address"),
+				tblCol(types.BLOB, "users", "address"),
 			},
 			resultTableCols: []*types.Column{
 				col("id", types.INT),
 				col("username", types.TEXT),
 				col("age", types.INT),
-				col("address", types.TEXT),
+				col("address", types.BLOB),
 				col("id:1", types.INT),
 				col("username:1", types.TEXT),
 				col("age:1", types.INT),
-				col("address:1", types.TEXT),
+				col("address:1", types.BLOB),
 			},
 		},
 		{
@@ -114,13 +99,13 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				tblCol(types.INT, "users", "id"),
 				tblCol(types.TEXT, "users", "username"),
 				tblCol(types.INT, "users", "age"),
-				tblCol(types.TEXT, "users", "address"),
+				tblCol(types.BLOB, "users", "address"),
 
 				// all user columns from *
 				tblCol(types.INT, "users", "id"),
 				tblCol(types.TEXT, "users", "username"),
 				tblCol(types.INT, "users", "age"),
-				tblCol(types.TEXT, "users", "address"),
+				tblCol(types.BLOB, "users", "address"),
 
 				// all post columns from *
 				tblCol(types.INT, "posts", "id"),
@@ -142,11 +127,11 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				col("id", types.INT),
 				col("username", types.TEXT),
 				col("age", types.INT),
-				col("address", types.TEXT),
+				col("address", types.BLOB),
 				col("id:1", types.INT),
 				col("username:1", types.TEXT),
 				col("age:1", types.INT),
-				col("address:1", types.TEXT),
+				col("address:1", types.BLOB),
 				col("id:2", types.INT),
 				col("title", types.TEXT),
 				col("content", types.TEXT),
@@ -213,26 +198,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 				return
 			}
 
-			same := true
-			incorrectIdx := -1
-			for i, g := range got {
-				if !cmp.Equal(*g, *tt.want[i], cmpopts.IgnoreUnexported(tree.ResultColumnExpression{}, tree.AnySQLFunction{}, tree.AggregateFunc{}, tree.ExpressionFunction{}, tree.ExpressionColumn{}, tree.ExpressionLiteral{}), cmpopts.EquateEmpty()) {
-					same = false
-					incorrectIdx = i
-					break
-				}
-			}
-
-			if same != !tt.wantInequality {
-				t.Errorf("GetSelectCoreRelationAttributes() got = %v, want %v", got, tt.want)
-				if incorrectIdx != -1 {
-					t.Errorf("Incorrect index: %d", incorrectIdx)
-				}
-			}
-
-			if tt.wantInequality {
-				return
-			}
+			assert.ElementsMatch(t, got, tt.want, "GetSelectCoreRelationAttributes() got = %v, want %v", got, tt.want)
 
 			genTable, err := attributes.TableFromAttributes("result_table", got, true)
 			if err != nil {
@@ -242,11 +208,7 @@ func TestGetSelectCoreRelationAttributes(t *testing.T) {
 			// check that the auto primary key works
 			assert.Equal(t, len(tt.want), len(genTable.Indexes[0].Columns))
 
-			// check that the columns are correct
-			if !cmp.Equal(tt.resultTableCols, genTable.Columns, cmpopts.IgnoreSliceElements(func(v int) bool { return true })) {
-				t.Errorf("GetSelectCoreRelationAttributes() got = %v, want %v", got, tt.want)
-				return
-			}
+			assert.ElementsMatch(t, tt.resultTableCols, genTable.Columns, "GetSelectCoreRelationAttributes() got = %v, want %v", got, tt.want)
 		})
 	}
 }

@@ -6,7 +6,8 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	sqlTesting "github.com/kwilteam/kwil-db/internal/sql/testing"
+	"github.com/kwilteam/kwil-db/internal/sql/adapter"
+	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 )
 
 func setup(srcFile string) {
@@ -26,13 +27,18 @@ func setup(srcFile string) {
 func TestValidatorStoreUpgradeLegacy(t *testing.T) {
 	setup("./test_data/version0.sqlite")
 
-	//	Open Version 0 DB. It contains: 1 validator and 3 join requests
-	ds, td, err := sqlTesting.OpenTestDB("validator_db")
+	defer deleteTempDir()
+
+	ctx := context.Background()
+
+	pool, err := sqlite.NewPool(ctx, "./tmp/validator_db.sqlite", 1, 1, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer td()
-	ctx := context.Background()
+	defer pool.Close()
+
+	ds := &adapter.PoolAdapater{Pool: pool}
+
 	logger := log.NewStdOut(log.DebugLevel)
 
 	// validator store
@@ -89,13 +95,18 @@ func TestValidatorStoreUpgradeLegacy(t *testing.T) {
 func TestValidatorStoreUpgradeV1(t *testing.T) {
 	setup("./test_data/version1.sqlite")
 
-	// Open Version 1 DB. It contains 1 validator and 3 join requests
-	ds, td, err := sqlTesting.OpenTestDB("validator_db")
+	defer deleteTempDir()
+
+	ctx := context.Background()
+
+	pool, err := sqlite.NewPool(ctx, "./tmp/validator_db.sqlite", 1, 1, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer td()
-	ctx := context.Background()
+	defer pool.Close()
+
+	ds := &adapter.PoolAdapater{Pool: pool}
+
 	logger := log.NewStdOut(log.DebugLevel)
 
 	realValStoreVersion := valStoreVersion
@@ -183,13 +194,18 @@ func TestValidatorStoreUpgradeV1(t *testing.T) {
 func TestValidatorStoreUpgradeFuture(t *testing.T) {
 	setup("./test_data/version9999.sqlite")
 
-	// Open Version 9999 DB.
-	ds, td, err := sqlTesting.OpenTestDB("validator_db")
+	defer deleteTempDir()
+
+	ctx := context.Background()
+
+	pool, err := sqlite.NewPool(ctx, "./tmp/validator_db.sqlite", 1, 1, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer td()
-	ctx := context.Background()
+	defer pool.Close()
+
+	ds := &adapter.PoolAdapater{Pool: pool}
+
 	logger := log.NewStdOut(log.DebugLevel)
 
 	// validator store

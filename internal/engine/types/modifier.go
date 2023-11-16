@@ -26,6 +26,7 @@ func (m *Modifier) IsValid() bool {
 		upper == ModifierOwner.String()
 }
 
+// Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
 func (m *Modifier) Clean() error {
 	if !m.IsValid() {
 		return fmt.Errorf("invalid modifier: %s", m.String())

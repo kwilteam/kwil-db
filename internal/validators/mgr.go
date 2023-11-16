@@ -10,8 +10,6 @@ import (
 	"slices"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/sessions"
-	sqlSessions "github.com/kwilteam/kwil-db/internal/sessions/sql-session"
 
 	"go.uber.org/zap"
 )
@@ -77,6 +75,8 @@ type ValidatorMgr struct {
 
 	// pricing
 	feeMultiplier int64
+
+	committable Committable
 }
 
 // NOTE: The SQLite validator/approval store is local and transparent to the
@@ -97,21 +97,6 @@ type ValidatorStore interface {
 	DeleteRemoval(ctx context.Context, target, validator []byte) error
 	AddValidator(ctx context.Context, joiner []byte, power int64) error
 	RemoveValidator(ctx context.Context, validator []byte) error
-}
-
-// Committable is a wrapper around the SQL committable that provides a
-// deterministic ID based on the state of the validator manager.
-type Committable struct {
-	sessions.Committable
-
-	dbHash func() []byte
-}
-
-// ID overrides the base Committable. We do this so that we can have the
-// persistence of the state be part of the 2pc process, but have the ID reflect
-// the actual state free from SQL specifics.
-func (c *Committable) ID(ctx context.Context) ([]byte, error) {
-	return c.dbHash(), nil
 }
 
 // ValidatorDB state includes:
@@ -170,27 +155,21 @@ func (vm *ValidatorMgr) isCurrent(val []byte) bool {
 func (vm *ValidatorMgr) candidate(val []byte) *joinReq {
 	return vm.candidates[string(val)]
 }
-
-// WrapCommittable wraps a SQL committable with methods that provide a
-// deterministic ID based on the state of the validator manager.
-func (vm *ValidatorMgr) WrapCommittable(committable *sqlSessions.SqlCommitable) *Committable {
-	return &Committable{
-		Committable: committable,
-		dbHash:      vm.validatorDbHash,
-	}
-}
-
-func NewValidatorMgr(ctx context.Context, datastore Datastore, opts ...ValidatorMgrOpt) (*ValidatorMgr, error) {
+func NewValidatorMgr(ctx context.Context, datastore Datastore, committable Committable, opts ...ValidatorMgrOpt) (*ValidatorMgr, error) {
 	vm := &ValidatorMgr{
-		current:    make(map[string]struct{}),
-		candidates: make(map[string]*joinReq),
-		removals:   make(map[string]map[string]bool),
-		log:        log.NewNoOp(),
-		joinExpiry: 14400, // really should *always* come from opts in production to match consensus config
+		current:     make(map[string]struct{}),
+		candidates:  make(map[string]*joinReq),
+		removals:    make(map[string]map[string]bool),
+		log:         log.NewNoOp(),
+		joinExpiry:  14400, // really should *always* come from opts in production to match consensus config
+		committable: committable,
 	}
 	for _, opt := range opts {
 		opt(vm)
 	}
+	vm.committable.SetIDFunc(func() ([]byte, error) {
+		return vm.validatorDbHash(), nil
+	})
 
 	var err error
 	vm.db, err = newValidatorStore(ctx, datastore, vm.log)
@@ -295,6 +274,10 @@ func (vm *ValidatorMgr) CurrentSet(ctx context.Context) ([]*Validator, error) {
 // Update may be used at the start of block processing when byzantine validators
 // are listed by the consensus client, or to process a leave request.
 func (vm *ValidatorMgr) Update(ctx context.Context, validator []byte, newPower int64) error {
+	if vm.committable.Skip() {
+		return nil
+	}
+
 	if !vm.isCurrent(validator) {
 		return errors.New("not a current validator")
 	}
@@ -314,6 +297,10 @@ func (vm *ValidatorMgr) Update(ctx context.Context, validator []byte, newPower i
 
 // Join creates a join request for a prospective validator.
 func (vm *ValidatorMgr) Join(ctx context.Context, joiner []byte, power int64) error {
+	if vm.committable.Skip() {
+		return nil
+	}
+
 	if vm.isCurrent(joiner) {
 		return errors.New("already a validator")
 	}
@@ -346,6 +333,9 @@ func (vm *ValidatorMgr) Leave(ctx context.Context, leaver []byte) error {
 	// TODO: decide if leave should be a hard removal from the database or just
 	// set power to zero. Punish does update even to zero power, so probably
 	// Leave should too.
+	if vm.committable.Skip() {
+		return nil
+	}
 
 	const leavePower = 0 // leave the entry, set power to zero
 	return vm.Update(ctx, leaver, leavePower)
@@ -354,6 +344,10 @@ func (vm *ValidatorMgr) Leave(ctx context.Context, leaver []byte) error {
 
 // Approve records an approval transaction from a current validator.
 func (vm *ValidatorMgr) Approve(ctx context.Context, joiner, approver []byte) error {
+	if vm.committable.Skip() {
+		return nil
+	}
+
 	candidate := vm.candidate(joiner)
 	if candidate == nil {
 		return errors.New("not a validator candidate")
@@ -381,6 +375,10 @@ func (vm *ValidatorMgr) Approve(ctx context.Context, joiner, approver []byte) er
 // threshold is reached, the target validator should be removed and all the
 // entries in the removals table for this target validator deleted.
 func (vm *ValidatorMgr) Remove(ctx context.Context, target, remover []byte) error {
+	if vm.committable.Skip() {
+		return nil
+	}
+
 	if !vm.isCurrent(target) {
 		return errors.New("target is not a current validator")
 	}
@@ -411,6 +409,10 @@ func (vm *ValidatorMgr) Remove(ctx context.Context, target, remover []byte) erro
 // join/approves are processed for the next block. end of block processing
 // requires providing list of updates to the node's consensus client
 func (vm *ValidatorMgr) Finalize(ctx context.Context) ([]*Validator, error) {
+	if vm.committable.Skip() {
+		return nil, nil
+	}
+
 	// Updates for approved (joining) validators.
 	for candidate, join := range vm.candidates {
 		if join.votes() < join.requiredVotes() {

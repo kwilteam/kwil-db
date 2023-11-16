@@ -35,10 +35,10 @@ func (a *acceptWrapper) Accept(walker tree.Walker) (err error) {
 // ApplyRules analyzes the given statement and returns the transformed statement.
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
-func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*AnalyzedStatement, error) {
-	copiedMetadata, err := metadata.Clean()
+func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*AnalyzedStatement, error) {
+	cleanedTables, err := cleanTables(tables)
 	if err != nil {
-		return nil, fmt.Errorf("error cleaning metadata: %w", err)
+		return nil, fmt.Errorf("error cleaning tables: %w", err)
 	}
 
 	parsed, err := sqlparser.Parse(stmt)
@@ -62,7 +62,7 @@ func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*Analyze
 	}
 
 	if flags&GuaranteedOrder != 0 {
-		err := accept.Accept(order.NewOrderWalker(copiedMetadata.Tables))
+		err := accept.Accept(order.NewOrderWalker(cleanedTables))
 		if err != nil {
 			return nil, fmt.Errorf("error enforcing guaranteed order: %w", err)
 		}
@@ -91,25 +91,16 @@ func ApplyRules(stmt string, flags VerifyFlag, metadata *RuleMetadata) (*Analyze
 	}, nil
 }
 
-// RuleMetadata contains metadata that is needed to enforce a rule
-type RuleMetadata struct {
-	// Tables only needs to be set if you are guaranteeing order
-	Tables []*types.Table
-}
+func cleanTables(tables []*types.Table) ([]*types.Table, error) {
+	cleaned := make([]*types.Table, len(tables))
 
-// Clean copies the tables and cleans them
-func (r *RuleMetadata) Clean() (*RuleMetadata, error) {
-	cleaned := &RuleMetadata{
-		Tables: make([]*types.Table, len(r.Tables)),
-	}
-
-	for i, tbl := range r.Tables {
+	for i, tbl := range tables {
 		err := tbl.Clean()
 		if err != nil {
 			return nil, fmt.Errorf(`error cleaning table "%s": %w`, tbl.Name, err)
 		}
 
-		cleaned.Tables[i] = tbl.Copy()
+		cleaned[i] = tbl.Copy()
 	}
 
 	return cleaned, nil
