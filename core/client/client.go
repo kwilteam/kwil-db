@@ -38,8 +38,8 @@ type RPCClient interface {
 	GetTarget() string
 	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
-	ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error)
-	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
+	ListDatabases(ctx context.Context, acctID []byte) ([]string, error)
+	GetAccount(ctx context.Context, acctID []byte, status types.AccountStatus) (*types.Account, error)
 	Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error)
 	Ping(ctx context.Context) (string, error)
 	EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
@@ -147,7 +147,7 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 // DropDatabase drops a database by name, using the configured signer to derive
 // the DB ID.
 func (c *Client) DropDatabase(ctx context.Context, name string, opts ...TxOpt) (transactions.TxHash, error) {
-	dbid := utils.GenerateDBID(name, c.Signer.PublicKey())
+	dbid := utils.GenerateDBID(name, c.Signer.Identity())
 	return c.DropDatabaseID(ctx, dbid, opts...)
 }
 
@@ -294,8 +294,8 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records
 	return NewRecordsFromMaps(res), nil
 }
 
-func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error) {
-	return c.rpc.ListDatabases(ctx, ownerPubKey)
+func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]string, error) {
+	return c.rpc.ListDatabases(ctx, owner)
 }
 
 func (c *Client) Ping(ctx context.Context) (string, error) {
@@ -501,7 +501,7 @@ func (c *Client) GatewayAuthenticate(ctx context.Context,
 	}
 
 	cookie, err := requestGatewayAuthCookie(hc, c.target, authParam.Nonce,
-		c.Signer.PublicKey(), sig)
+		c.Signer.Identity(), sig)
 	if err != nil {
 		return nil, fmt.Errorf("request for token: %w", err)
 	}

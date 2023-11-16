@@ -346,7 +346,7 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 	case "grpc":
 		return r.getGRPCClientDriver(signer)
 	case "cli":
-		return r.getCliDriver(pk, signer.PublicKey())
+		return r.getCliDriver(pk, signer.Identity())
 	default:
 		panic("unsupported driver type")
 	}

@@ -16,11 +16,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+func (c *Client) GetAccount(ctx context.Context, identifier []byte, status types.AccountStatus) (*types.Account, error) {
 	pbStatus := txpb.AccountStatus(status)
 	res, err := c.txClient.GetAccount(ctx, &txpb.GetAccountRequest{
-		PublicKey: pubKey,
-		Status:    &pbStatus,
+		Identifier: identifier,
+		Status:     &pbStatus,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account: %w", err)
@@ -32,9 +32,9 @@ func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.Acc
 	}
 
 	acc := &types.Account{
-		PublicKey: res.Account.PublicKey,
-		Balance:   bigBal,
-		Nonce:     res.Account.Nonce,
+		Identifier: res.Account.Identifier,
+		Balance:    bigBal,
+		Nonce:      res.Account.Nonce,
 	}
 
 	return acc, nil
@@ -175,9 +175,9 @@ type SvcConfig struct {
 	ProviderAddress string
 }
 
-func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error) {
+func (c *Client) ListDatabases(ctx context.Context, userIdentifier []byte) ([]string, error) {
 	res, err := c.txClient.ListDatabases(ctx, &txpb.ListDatabasesRequest{
-		Owner: ownerPubKey,
+		Owner: userIdentifier,
 	})
 
 	if err != nil {

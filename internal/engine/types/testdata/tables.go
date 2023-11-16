@@ -57,7 +57,7 @@ var (
 			},
 			{
 				Name: "address",
-				Type: types.BLOB,
+				Type: types.TEXT,
 				Attributes: []*types.Attribute{
 					{
 						Type: types.NOT_NULL,

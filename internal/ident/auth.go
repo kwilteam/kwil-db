@@ -63,12 +63,12 @@ func verifySig(pubkey, msg []byte, sig *auth.Signature) error {
 	return authn.Verify(pubkey, msg, sig.Signature)
 }
 
-// Address returns an address from a public key and authenticator type. The
+// Identifier returns a string identifier from a sender and authenticator type. The
 // function requires an Authenticator to be registered for the signature type.
-func Address(authType string, sender []byte) (string, error) {
+func Identifier(authType string, sender []byte) (string, error) {
 	authn, err := getAuthenticator(authType)
 	if err != nil {
 		return "", err
 	}
-	return authn.Address(sender)
+	return authn.Identifier(sender)
 }

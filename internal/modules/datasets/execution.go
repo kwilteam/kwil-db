@@ -34,11 +34,6 @@ func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, 
 		return nil, err
 	}
 
-	// identifier, err := getUserIdentifier(tx.Sender, tx.Signature.Type)
-	// if err != nil {
-	// 	return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
-	// }
-
 	err = u.engine.CreateDataset(ctx, schema, tx.Sender)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create dataset: %w", err)
@@ -58,11 +53,6 @@ func (u *DatasetModule) Drop(ctx context.Context, dbid string, tx *transactions.
 	if err != nil {
 		return nil, err
 	}
-
-	// identifier, err := getUserIdentifier(tx.Sender, tx.Signature.Type)
-	// if err != nil {
-	// 	return resp(price), fmt.Errorf("failed to get user identifier: %w", err)
-	// }
 
 	err = u.engine.DeleteDataset(ctx, dbid, tx.Sender)
 	if err != nil {
@@ -84,7 +74,7 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 		return nil, err
 	}
 
-	identifier, err := getUserIdentifier(tx.Sender, tx.Signature.Type)
+	identifier, err := ident.Identifier(tx.Signature.Type, tx.Sender)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user identifier: %w", err)
 	}
@@ -94,7 +84,14 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 	}
 
 	for i := range args {
-		err = u.engine.Execute(ctx, dbid, action, identifier, tx.Sender, args[i])
+		_, err = u.engine.Execute(ctx, &engineTypes.ExecutionData{
+			Dataset:          dbid,
+			Procedure:        action,
+			Mutative:         true,
+			Args:             args[i],
+			Caller:           tx.Sender,
+			CallerIdentifier: identifier,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute action '%s' on database '%s': %w", action, dbid, err)
 		}
@@ -110,9 +107,9 @@ func (u *DatasetModule) compareAndSpend(ctx context.Context, price *big.Int, tx 
 	}
 
 	return u.accountStore.Spend(ctx, &accounts.Spend{
-		AccountPubKey: tx.Sender,
-		Amount:        price,
-		Nonce:         int64(tx.Body.Nonce),
+		AccountID: tx.Sender,
+		Amount:    price,
+		Nonce:     int64(tx.Body.Nonce),
 	})
 }
 
@@ -121,12 +118,4 @@ func resp(fee *big.Int) *ExecutionResponse {
 		Fee:     fee,
 		GasUsed: 0,
 	}
-}
-
-// getUserIdentifier gets the user identifier from a transaction.
-func getUserIdentifier(sender []byte, signatureType string) ([]byte, error) {
-	return (&ident.User{
-		PublicKey: sender,
-		AuthType:  signatureType,
-	}).MarshalBinary()
 }

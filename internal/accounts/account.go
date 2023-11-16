@@ -8,16 +8,16 @@ import (
 // emptyAccount returns an empty account with a balance of 0 and a nonce of 0.
 func emptyAccount() *Account {
 	return &Account{
-		PublicKey: nil, // do not change unless callers are updated
-		Balance:   big.NewInt(0),
-		Nonce:     0,
+		Identifier: nil,
+		Balance:    big.NewInt(0),
+		Nonce:      0,
 	}
 }
 
 type Account struct {
-	PublicKey []byte   `json:"public_key"`
-	Balance   *big.Int `json:"balance"`
-	Nonce     int64    `json:"nonce"`
+	Identifier []byte   `json:"identifier"` // usually address, but can be pubkey if certain key types
+	Balance    *big.Int `json:"balance"`
+	Nonce      int64    `json:"nonce"`
 }
 
 // validateSpend validates that the account has enough funds to spend the amount.

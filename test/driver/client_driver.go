@@ -55,7 +55,7 @@ func (d *KwildClientDriver) SupportBatch() bool {
 }
 
 func (d *KwildClientDriver) GetUserPublicKey() []byte {
-	return d.clt.Signer.PublicKey()
+	return d.clt.Signer.Identity()
 }
 
 // TxSuccess checks if the transaction was successful
@@ -82,7 +82,7 @@ func (d *KwildClientDriver) TxSuccess(ctx context.Context, txHash []byte) error 
 }
 
 func (d *KwildClientDriver) DBID(name string) string {
-	return utils.GenerateDBID(name, d.clt.Signer.PublicKey())
+	return utils.GenerateDBID(name, d.clt.Signer.Identity())
 }
 
 func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) ([]byte, error) {
@@ -92,7 +92,7 @@ func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions
 	}
 
 	d.logger.Debug("deployed database",
-		zap.String("name", db.Name), zap.String("owner", hex.EncodeToString(d.clt.Signer.PublicKey())),
+		zap.String("name", db.Name), zap.String("owner", hex.EncodeToString(d.clt.Signer.Identity())),
 		zap.String("TxHash", rec.Hex()))
 	return rec, nil
 }

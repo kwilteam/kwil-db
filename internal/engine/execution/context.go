@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 
+	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
 )
 
@@ -17,18 +18,10 @@ type Scoper interface {
 type executionContext struct {
 	Ctx context.Context
 
-	// Caller is the user identifier of the sender of the transaction.
-	Caller []byte
-
-	// PublicKey is the public key of the sender of the transaction.
-	// TODO: this will get removed once we have make the auth updates
-	PublicKey []byte
+	Data *types.ExecutionData
 
 	// FinalResult is the most recent SQL query result.
 	FinalResult *sql.ResultSet
-
-	// Mutative indicates whether the execution can mutate state.
-	Mutative bool
 }
 
 var _ Scoper = (*executionContext)(nil)
@@ -64,11 +57,6 @@ func (s *ScopeContext) Get(key string) (any, bool) {
 	return value, ok
 }
 
-// Signer returns the public key of the sender of the transaction.
-func (s *ScopeContext) Signer() []byte {
-	return s.execution.Caller
-}
-
 // SetResult sets the result of the most recent SQL query.
 func (s *ScopeContext) SetResult(result *sql.ResultSet) {
 	s.execution.FinalResult = result
@@ -82,14 +70,16 @@ func (s *ScopeContext) Values() map[string]any {
 	}
 
 	// set environment variables
-	values["@caller"] = s.execution.Caller
+	values["@caller"] = s.execution.Data.CallerIdentifier
+	values["@dataset"] = s.execution.Data.Dataset
+	values["@procedure"] = s.execution.Data.Procedure
 
 	return values
 }
 
 // Mutative returns whether the execution can mutate state.
 func (s *ScopeContext) Mutative() bool {
-	return s.execution.Mutative
+	return s.execution.Data.Mutative
 }
 
 // Ctx returns the running context.

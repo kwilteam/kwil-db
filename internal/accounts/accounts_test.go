@@ -146,21 +146,22 @@ func Test_Accounts(t *testing.T) {
 
 func newSpend(address string, amount int64, nonce int64) *accounts.Spend {
 	return &accounts.Spend{
-		AccountPubKey: []byte(address),
-		Amount:        big.NewInt(amount),
-		Nonce:         nonce,
+		AccountID: []byte(address),
+		Amount:    big.NewInt(amount),
+		Nonce:     nonce,
 	}
 }
 
 func newAccount(address string, balance int64, nonce int64) *accounts.Account {
 	return &accounts.Account{
-		PublicKey: []byte(address),
-		Balance:   big.NewInt(balance),
-		Nonce:     nonce,
+		Identifier: []byte(address),
+		Balance:    big.NewInt(balance),
+		Nonce:      nonce,
 	}
 }
 
 func assertErr(t *testing.T, errs []error, target error) {
+	t.Helper()
 	if target == nil {
 		if len(errs) > 0 {
 			t.Fatalf("expected no error, got %s", errs)

@@ -48,11 +48,12 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 
 		// try load kgw auth token from file, if exist
 		// Kwild HTTP API doesn't care about KGW cookie, so not harm to load it
-		addr, err := signer.Address()
+		address, err := auth.EthSecp256k1Authenticator{}.Identifier(signer.Identity())
 		if err != nil {
 			return fmt.Errorf("get address: %w", err)
 		}
-		kgwAuthInfo, err := LoadKGWAuthInfo(KGWAuthTokenFilePath(), addr)
+
+		kgwAuthInfo, err := LoadKGWAuthInfo(KGWAuthTokenFilePath(), address)
 		if err == nil && kgwAuthInfo != nil {
 			// here create http client to config cookie
 			// put cookie options in core/client/client.go seems not a good idea
