@@ -477,8 +477,8 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// BeginBlock was this part
 
 	idempotencyKey := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idempotencyKey, uint64(req.Header.Height))
-	a.blockHeight = req.Header.Height
+	binary.LittleEndian.PutUint64(idempotencyKey, uint64(req.Height))
+	a.blockHeight = req.Height
 
 	err := a.committer.Begin(ctx, idempotencyKey)
 	if err != nil {
@@ -534,10 +534,9 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		},
 	}
 
-	// generate the unique id for all changes occurred thus far
-	id, err := a.committer.ID(ctx)
+	id, err := a.committer.Commit(ctx, idempotencyKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate atomic commit ID: %w", err)
+		return nil, fmt.Errorf("failed to commit atomic commit: %w", err)
 	}
 
 	appHash, err := a.createNewAppHash(ctx, id)
@@ -553,14 +552,6 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	err := a.metadataStore.IncrementBlockHeight(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to increment block height: %w", err)
-	}
-
-	idempotencyKey := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idempotencyKey, uint64(a.blockHeight))
-
-	id, err := a.committer.Commit(ctx, idempotencyKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to commit atomic commit: %w", err)
 	}
 
 	defer a.mempool.reset()
