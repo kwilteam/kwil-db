@@ -3,7 +3,7 @@ package syncer
 import (
 	"time"
 
-	cClient "github.com/kwilteam/kwil-db/core/chain"
+	bClient "github.com/kwilteam/kwil-db/core/bridge/client"
 	"github.com/kwilteam/kwil-db/core/log"
 )
 
@@ -19,14 +19,14 @@ const (
 )
 
 type blockSyncer struct {
-	chainClient           cClient.ChainClient
+	chainClient           ChainClient
 	log                   log.Logger
 	reconnectInterval     time.Duration
 	requiredConfirmations int64
 	lastBlock             int64
 }
 
-func New(chainClient cClient.ChainClient, opts ...BlockSyncerOpts) (*blockSyncer, error) {
+func New(chainClient bClient.ChainClient, opts ...BlockSyncerOpts) (*blockSyncer, error) {
 	bs := &blockSyncer{
 		log:                   log.NewNoOp(),
 		reconnectInterval:     DefaultReconnectInterval,

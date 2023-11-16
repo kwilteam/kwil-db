@@ -16,7 +16,7 @@ type Datastore interface {
 }
 
 type EventStore struct {
-	address []byte
+	address []byte // Local nodes address.
 	db      Datastore
 	log     log.Logger
 }
@@ -37,6 +37,19 @@ func NewEventStore(ctx context.Context, datastore Datastore, address []byte, log
 }
 
 func (ev *EventStore) AddLocalEvent(ctx context.Context, event *chain.Event) error {
-	event.Receiver = ev.address
+	event.Observer = ev.address
 	return ev.addLocalEvent(ctx, event)
+}
+
+func (ev *EventStore) AddExternalEvent(ctx context.Context, event *chain.Event) error {
+	event.Observer = []byte("external")
+	return ev.addExternalEvent(ctx, event)
+}
+
+func (ev *EventStore) LastProcessedBlock(ctx context.Context) (int64, error) {
+	return ev.getLastHeight(ctx)
+}
+
+func (ev *EventStore) SetLastProcessedBlock(ctx context.Context, height int64) error {
+	return ev.setLastHeight(ctx, height)
 }

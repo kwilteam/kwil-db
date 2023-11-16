@@ -34,6 +34,14 @@ func addKwildFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
 	// Extension endpoints flags
 	flagSet.StringSliceVar(&cfg.AppCfg.ExtensionEndpoints, "app.extension_endpoints", cfg.AppCfg.ExtensionEndpoints, "kwild extension endpoints")
 
+	// TokenBridge Config flags
+	flagSet.StringVar(&cfg.AppCfg.BridgeConfig.EscrowAddress, "app.token_bridge.escrow_address", cfg.AppCfg.BridgeConfig.EscrowAddress, "TokenBridge escrow contract address")
+	flagSet.StringVar(&cfg.AppCfg.BridgeConfig.Endpoint, "app.token_bridge.endpoint", cfg.AppCfg.BridgeConfig.Endpoint, "TokenBridge endpoint")
+	// flagSet.StringVar(&cfg.AppCfg.BridgeConfig.Code, "app.token_bridge.chain_id", cfg.AppCfg.BridgeConfig.ChainID, "TokenBridge chain ID")
+	flagSet.Int64Var(&cfg.AppCfg.BridgeConfig.RequiredConfirmations, "app.token_bridge.required_confirmations", cfg.AppCfg.BridgeConfig.RequiredConfirmations, "TokenBridge required confirmations")
+	flagSet.Int64Var(&cfg.AppCfg.BridgeConfig.StartingHeight, "app.token_bridge.starting_height", cfg.AppCfg.BridgeConfig.StartingHeight, "TokenBridge starting height")
+	flagSet.DurationVar(&cfg.AppCfg.BridgeConfig.ReconnectInterval, "app.token_bridge.reconnect_interval", cfg.AppCfg.BridgeConfig.ReconnectInterval, "TokenBridge reconnect interval")
+
 	// TODO: Snapshots are not supported yet
 	// // Snapshot Config flags
 	// flagSet.BoolVar(&cfg.AppCfg.SnapshotConfig.Enabled, "app.snapshots.enabled", cfg.AppCfg.SnapshotConfig.Enabled, "Enable snapshots")

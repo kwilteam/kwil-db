@@ -12,16 +12,13 @@ type Event struct {
 	ID       string
 	Type     EventType
 	Data     []byte
-	Receiver []byte // this is the address of the receiver of the event
+	Observer []byte // this is the address of the receiver of the event
 }
 type DepositEvent struct {
 	// Version   int
-	Sender    string `json:"sender"`
-	Receiver  string `json:"receiver"`
-	Amount    string `json:"amount"`
-	Height    int64  `json:"height"`
-	TxHash    string `json:"txHash"`
-	BlockHash string `json:"blockHash"`
+	ID     string `json:"id"`
+	Sender string `json:"sender"`
+	Amount string `json:"amount"`
 }
 
 // eventID: Hash(DepositEvent)

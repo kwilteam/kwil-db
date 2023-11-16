@@ -16,8 +16,8 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	events "github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	events "github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/modules/datasets"
 	"github.com/kwilteam/kwil-db/internal/modules/validators"
@@ -34,6 +34,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/adapter"
 	"github.com/kwilteam/kwil-db/internal/sql/registry"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/kwilteam/kwil-db/internal/tokenbridge"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 
 	bClient "github.com/kwilteam/kwil-db/core/bridge/client"
@@ -42,7 +43,6 @@ import (
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
-	"github.com/kwilteam/kwil-db/internal/chainsyncer"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
@@ -80,7 +80,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	eventStore := buildEventStore(d, closers)
 
 	// ChainSyncer
-	chainsyncer := buildChainSyncer(d, closers, eventStore)
+	tokenBridge := buildTokenBridge(d, closers, eventStore)
 
 	abciApp := buildAbci(d, closers, accs, datasetsModule, validatorModule,
 		ac, snapshotModule, bootstrapperModule)
@@ -103,7 +103,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		admServer:    admServer,
 		gateway:      buildGatewayServer(d),
 		cometBftNode: cometBftNode,
-		chainSyncer:  chainsyncer,
+		tokenBridge:  tokenBridge,
 		log:          *d.log.Named("server"),
 		closers:      closers,
 		cfg:          d.cfg,
@@ -533,27 +533,27 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildChainSyncer(d *coreDependencies, closer *closeFuncs, es *events.EventStore) *chainsyncer.ChainSyncer {
-	// build bridge client
+func buildTokenBridge(d *coreDependencies, closers *closeFuncs, es *events.EventStore) *tokenbridge.TokenBridge {
+	// build token bridge client
 	bridgeClient, err := bClient.New(d.cfg.AppCfg.BridgeConfig.Endpoint,
 		d.cfg.AppCfg.BridgeConfig.Code,
 		d.cfg.AppCfg.BridgeConfig.EscrowAddress,
-		d.cfg.AppCfg.BridgeConfig.TokenAddress)
+	)
 
 	if err != nil {
 		failBuild(err, "failed to build bridge client")
 	}
 
 	// build block syncer
-	blockSyncer, err := syncer.New(bridgeClient.ChainClient())
+	blockSyncer, err := syncer.New(bridgeClient, syncer.WithLogger(*d.log.Named("block-syncer")))
 	if err != nil {
 		failBuild(err, "failed to build block syncer")
 	}
 
-	// build chain syncer
-	chainSyncer := chainsyncer.New(bridgeClient, blockSyncer, es)
-	//chainSyncer.Start()
-	return chainSyncer
+	// build TokenBridge
+	tb := tokenbridge.New(bridgeClient, blockSyncer, es, tokenbridge.WithLogger(*d.log.Named("token-bridge")))
+	closers.addCloser(tb.Close)
+	return tb
 }
 
 func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore {

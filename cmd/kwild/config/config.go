@@ -159,6 +159,7 @@ type TokenBridgeConfig struct {
 	TokenAddress          string
 	RequiredConfirmations int64
 	ReconnectInterval     time.Duration
+	StartingHeight        int64
 }
 
 func defaultMoniker() string {
@@ -268,12 +269,12 @@ func DefaultConfig() *KwildConfig {
 			// 	SnapshotDir:     DefaultSnapshotsDir,
 			// },
 			BridgeConfig: TokenBridgeConfig{
-				Endpoint:              "ws://localhost:8545",
+				Endpoint:              "http://localhost:8545",
 				RequiredConfirmations: 12,
 				ReconnectInterval:     30 * time.Second,
-				EscrowAddress:         "0xcc46cc0960d6903a5b7a76d431aed56fef70e7b0",
-				TokenAddress:          "0x8ce9d23b427b80ab5e21c272a46acd3a27082836",
-				Code:                  chain.GOERLI,
+				EscrowAddress:         "", //"0x006c992966be10e1da52fb2b09a62a1059c093bf",
+				//TokenAddress:          "0xccf612a958da1f8d3fa97a447fc44cffe9994a54",
+				Code: chain.GOERLI,
 			},
 		},
 		Logging: &Logging{

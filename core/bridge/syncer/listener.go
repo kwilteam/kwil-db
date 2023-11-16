@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/jpillora/backoff"
-	cClient "github.com/kwilteam/kwil-db/core/chain"
 	"github.com/kwilteam/kwil-db/core/types/chain"
 )
 
@@ -23,7 +22,7 @@ func (b *blockSyncer) Listen(ctx context.Context, blocks chan<- int64) error {
 		return err
 	}
 
-	go func(ctx context.Context, bc cClient.ChainClient, sub chain.Subscription, headChan chan chain.Header, blockChan chan<- int64) {
+	go func(ctx context.Context, bc ChainClient, sub chain.Subscription, headChan chan chain.Header, blockChan chan<- int64) {
 		defer sub.Unsubscribe()
 		defer close(headChan)
 

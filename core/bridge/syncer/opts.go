@@ -2,6 +2,8 @@ package syncer
 
 import (
 	"time"
+
+	"github.com/kwilteam/kwil-db/core/log"
 )
 
 type BlockSyncerOpts func(*blockSyncer)
@@ -21,5 +23,11 @@ func WithRequiredConfirmations(confirmations int64) BlockSyncerOpts {
 func WithLastBlock(lastBlock int64) BlockSyncerOpts {
 	return func(b *blockSyncer) {
 		b.lastBlock = lastBlock
+	}
+}
+
+func WithLogger(logger log.Logger) BlockSyncerOpts {
+	return func(b *blockSyncer) {
+		b.log = logger
 	}
 }

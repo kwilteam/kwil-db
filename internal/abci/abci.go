@@ -744,6 +744,7 @@ func (a *AbciApp) OfferSnapshot(ctx context.Context, req *abciTypes.RequestOffer
 //     not call RequestExtendVote.
 //   - The Application logic that creates the extension can be non-deterministic.
 func (a *AbciApp) ExtendVote(ctx context.Context, req *abciTypes.RequestExtendVote) (*abciTypes.ResponseExtendVote, error) {
+
 	return &abciTypes.ResponseExtendVote{}, nil
 }
 

@@ -23,7 +23,7 @@ func (c *Escrow) Deposit(ctx context.Context, amount *big.Int, privateKey *ecdsa
 	return res.Hash().String(), nil
 }
 
-func (c *Escrow) Balance(ctx context.Context, address string) (*big.Int, error) {
+func (c *Escrow) DepositBalance(ctx context.Context, address string) (*big.Int, error) {
 	return c.ctr.Balance(&bind.CallOpts{
 		Context: ctx,
 	}, common.HexToAddress(address))

@@ -2,7 +2,9 @@ package escrow
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	escrowAbi "github.com/kwilteam/kwil-db/core/bridge/contracts/evm/escrow/abi"
@@ -24,21 +26,30 @@ func (escrow *Escrow) retrieveDeposits(edi *escrowAbi.EscrowDepositIterator, tok
 	var deposits []*chain.DepositEvent
 
 	for edi.Next() {
-		fmt.Println("Deposit event found: ", edi.Event)
-		// receiver := edi.Event.Receiver.Hex()
-		// if receiver != escrow.escrowAddr {
-		// 	fmt.Println("receiver is not escrow address") // TODO: Use logger
-		// 	continue
-		// }
+		fmt.Println("Deposit event found: ", edi.Event.Caller.Hex(), edi.Event.Receiver.Hex(), edi.Event.Amount.String())
+		receiver := strings.ToLower(edi.Event.Receiver.Hex())
+		if receiver != escrow.escrowAddr {
+			fmt.Println("receiver is not escrow address") // TODO: Use logger
+			continue
+		}
+
+		// Unique ID for the deposit: hash(sender + amount + txHash + blockHash + ChainID)
+		hasher := sha256.New()
+		hasher.Write([]byte("Deposit"))
+		hasher.Write([]byte(edi.Event.Caller.Hex()))
+		hasher.Write([]byte(edi.Event.Amount.String()))
+		hasher.Write([]byte(edi.Event.Raw.TxHash.Hex()))
+		hasher.Write([]byte(edi.Event.Raw.BlockHash.Hex()))
+		hasher.Write([]byte(escrow.chainId.String()))
+		id := hasher.Sum(nil)
+
 		deposit := &chain.DepositEvent{
-			Sender:    edi.Event.Caller.Hex(),
-			Receiver:  edi.Event.Receiver.Hex(),
-			Amount:    edi.Event.Amount.String(),
-			Height:    int64(edi.Event.Raw.BlockNumber),
-			TxHash:    edi.Event.Raw.TxHash.Hex(),
-			BlockHash: edi.Event.Raw.BlockHash.Hex(),
+			ID:     fmt.Sprintf("%x", id),
+			Sender: edi.Event.Caller.Hex(),
+			Amount: edi.Event.Amount.String(),
 		}
 		deposits = append(deposits, deposit)
+		fmt.Printf("Deposit: %+v\n", deposit)
 	}
 	return deposits
 }
