@@ -334,7 +334,7 @@ func (a *AbciApp) executeTx(ctx context.Context, rawTx, blockProposerAddr []byte
 		}
 		// gasUsed = 0 for validator transaction
 
-		logger.Debug("credited account for deposit", zap.String("account", creditPayload.Account),
+		logger.Info("credited account for deposit", zap.String("account", creditPayload.Account),
 			zap.String("amount", creditPayload.Amount))
 
 	case transactions.PayloadTypeDeploySchema:
@@ -813,7 +813,7 @@ func (a *AbciApp) ExtendVote(ctx context.Context, req *abciTypes.RequestExtendVo
 	}
 	ve := []*VoteExtensionSegment{{
 		Version: 0,
-		Type:    VoteExtensionTypeDeposit,
+		Type:    VoteExtensionTypeTest,
 		Data:    data,
 	}}
 
@@ -843,7 +843,7 @@ func (a *AbciApp) ExtendVote(ctx context.Context, req *abciTypes.RequestExtendVo
 }
 
 // registerVoteExtension is the handler for incoming extensions
-func (a *AbciApp) registerVoteExtension(ctx context.Context, validator, b []byte) error {
+func (a *AbciApp) registerVoteExtension(ctx context.Context, valAddr string, b []byte) error {
 	ve, err := DecodeVoteExtension(b)
 	if err != nil {
 		return fmt.Errorf("failed to decode vote extension: %w", err)
@@ -859,6 +859,14 @@ func (a *AbciApp) registerVoteExtension(ctx context.Context, validator, b []byte
 		// data. This code could submit the opaque extension data, but the
 		// module interfaces are more sensible and clear this way.
 		switch ve[i].Type {
+		case VoteExtensionTypeTest:
+			dbg := &TestVoteExt{}
+			err = dbg.UnmarshalBinary(ve[i].Data)
+			if err != nil {
+				return fmt.Errorf("failed to decode test vote: %w", err)
+			}
+			a.log.Info("test vote extension", zap.String("msg", dbg.Msg))
+
 		case VoteExtensionTypeDeposit:
 			dep := &DepositVoteExt{}
 			err = dep.UnmarshalBinary(ve[i].Data)
@@ -868,13 +876,12 @@ func (a *AbciApp) registerVoteExtension(ctx context.Context, validator, b []byte
 			}
 			a.log.Info("decoded a val deposit vote extension segment",
 				zap.String("account", dep.Account), zap.String("amount", dep.Amount),
-				zap.String("validator address", hex.EncodeToString(validator)),
-				zap.String("validator address (maybe)", string(validator)))
+				zap.String("validator address", valAddr))
 
 			// use a.valAddrToKey to get the pubkey?
 
 			// Record the deposit events from other validators in the DepositStore.
-			a.chainEvents.AddDeposit(ctx, dep.EventID, dep.Account, dep.Amount, hex.EncodeToString(validator))
+			a.chainEvents.AddDeposit(ctx, dep.EventID, dep.Account, dep.Amount, valAddr)
 
 		default:
 			a.log.Error("ignoring unknown vote extension type", zap.Uint32("type", ve[i].Type))
@@ -891,7 +898,8 @@ func (a *AbciApp) VerifyVoteExtension(ctx context.Context, req *abciTypes.Reques
 	a.log.Info("verify vote extension", zap.Int64("height", req.Height))
 
 	// handle the vote extension by dispatching to appropriate modules depending on type
-	err := a.registerVoteExtension(ctx, req.ValidatorAddress, req.VoteExtension)
+	valAddr := hex.EncodeToString(req.ValidatorAddress) // insane, their address is hex and they pass it as []byte
+	err := a.registerVoteExtension(ctx, valAddr, req.VoteExtension)
 	if err != nil {
 		a.log.Warn("bad vote extension", zap.Error(err))
 		return &abciTypes.ResponseVerifyVoteExtension{
@@ -1047,7 +1055,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		myNonce := uint64(me.Nonce)
 		for eventID, dep := range a.thresholdDeposits(ctx) {
 			myNonce++
-			a.log.Debug("preparing account credit txn", zap.String("acct_addr", dep.acct),
+			a.log.Info("preparing account credit txn", zap.String("acct_addr", dep.acct),
 				zap.String("amount", dep.amt.String()), zap.String("event", eventID))
 
 			rawTx, err := newAccountCreditTxn(eventID, a.cfg.ChainID, myNonce, dep.amt, dep.acct, a.signer)
