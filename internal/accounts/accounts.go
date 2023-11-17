@@ -3,11 +3,14 @@ package accounts
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	"go.uber.org/zap"
 )
 
 // CommitRegister is an interface for registering a commit.
@@ -60,6 +63,14 @@ func (a *AccountStore) Close() error {
 	return nil
 }
 
+// Credit creates an account with an address and no pubkey.
+//
+// spend based on pubkey will first check by pubkey, and then look for the
+// corresponding address, and if it is found then it can update the pubkey
+// column
+
+// GetAccountByAddress ?
+
 func (a *AccountStore) GetAccount(ctx context.Context, pubKey []byte) (*Account, error) {
 	a.rw.RLock()
 	defer a.rw.RUnlock()
@@ -93,9 +104,42 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 
 	balance, nonce, err := a.checkSpend(ctx, spend)
 	if err != nil {
-		return fmt.Errorf("failed to check spend: %w", err)
-	}
+		if !errors.Is(err, errAccountNotFound) {
+			return fmt.Errorf("failed to check spend: %w", err)
+		}
+		if spend.Nonce != 1 {
+			return errors.New("initial spend with nonce != 1")
+		}
+		if spend.Amount.Cmp(big.NewInt(0)) == 0 {
+			// hack special case for free (governance) transactions that only require nonce check
 
+			// if this is really free, just create the account entry for nonce purposes
+			if err = a.createAccount(ctx, "", spend.AccountPubKey, big.NewInt(0), 1); err != nil {
+				return fmt.Errorf("failed to create account: %w", err)
+			}
+		} else {
+			//  BAD BAD BAD BAD, this is a hack so we can work until *identifier* replaces pubkey
+			addr, _ := auth.EthSecp256k1Authenticator{}.Address(spend.AccountPubKey)
+			balance, err = a.getPendingAccountBalance(ctx, addr)
+			if errors.Is(err, errAccountNotFound) {
+				return fmt.Errorf("getPendingAccountBalance: %w", err)
+			}
+
+			a.log.Info("found pending account", zap.String("addr", addr), zap.String("balance", balance.String()))
+
+			balance, err = (&Account{Balance: balance}).validateSpend(spend.Amount)
+			if err != nil {
+				return fmt.Errorf("validateSpend: %w", err)
+			}
+
+			if err = a.createAccount(ctx, addr, spend.AccountPubKey, balance, 1); err != nil {
+				return fmt.Errorf("failed to create account: %w", err)
+			}
+			if err = a.deletePendingAccount(ctx, addr); err != nil {
+				return fmt.Errorf("failed to delete pending account: %w", err)
+			}
+		}
+	}
 	err = a.updateAccount(ctx, spend.AccountPubKey, balance, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to update account: %w", err)
@@ -104,21 +148,45 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 	return a.committable.Register(spend.bytes())
 }
 
-func (a *AccountStore) Credit(ctx context.Context, addr string, acct []byte, amt *big.Int) error {
-	account, err := a.getOrCreateAccount(ctx, addr, acct)
-	if err != nil {
-		return fmt.Errorf("failed to get account: %w", err)
+func (a *AccountStore) Credit(ctx context.Context, addr string, amt *big.Int) error {
+	a.rw.Lock()
+	defer a.rw.Unlock()
+
+	if a.committable.Skip() {
+		return nil
 	}
 
-	bal := new(big.Int).Add(account.Balance, amt)
-
-	err = a.updateAccountBalance(ctx, acct, bal)
+	// First try to find the account by address in the accounts table. If found,
+	// update the balance in that table, maybe return pubkey. If not found,
+	// check the new_accounts table, if found, update the balance in that table,
+	// otherwise insert a new row.  ALL OF THIS GOES AWAY with identifier replacing pubkey
+	account, err := a.getAccountByAddress(ctx, addr)
 	if err != nil {
-		return fmt.Errorf("failed to update account: %w", err)
+		if !errors.Is(err, errAccountNotFound) {
+			return err
+		}
+		bal, err := a.getPendingAccountBalance(ctx, addr)
+		if err != nil {
+			if !errors.Is(err, errAccountNotFound) {
+				return err
+			}
+			return a.createPendingAccount(ctx, addr, bal)
+		}
+		bal = bal.Add(bal, amt)
+		err = a.updatePendingAccount(ctx, addr, bal)
+		if err != nil {
+			return err
+		}
+	} else {
+		bal := new(big.Int).Add(account.Balance, amt)
+		err = a.updateAccountBalance(ctx, account.PublicKey, bal)
+		if err != nil {
+			return fmt.Errorf("failed to update account: %w", err)
+		}
 	}
 
-	// TODO: registerCredit
-	return nil
+	b := append([]byte(addr), amt.Bytes()...)
+	return a.committable.Register(b)
 }
 
 // checkSpend checks that a spend is valid.  If gas costs are enabled, it checks that the account has enough gas to pay for the spend.
