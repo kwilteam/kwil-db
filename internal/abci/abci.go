@@ -40,10 +40,11 @@ type AbciConfig struct {
 	GenesisAppHash     []byte
 	ChainID            string
 	ApplicationVersion uint64
+	NodeAddress        string
 }
 
 func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModule, vldtrs ValidatorModule, kv KVStore,
-	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
+	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, bridgeEvents BridgeEventsModule, opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
 		cfg:        *cfg,
 		database:   database,
@@ -55,6 +56,7 @@ func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModul
 		bootstrapper: bootstrapper,
 		snapshotter:  snapshotter,
 		accounts:     accounts,
+		chainEvents:  bridgeEvents,
 
 		valAddrToKey: make(map[string][]byte),
 
@@ -805,9 +807,15 @@ func (a *AbciApp) ExtendVote(ctx context.Context, req *abciTypes.RequestExtendVo
 		Data:    data,
 	}}
 
-	// here get from the BridgeEventsModule or something wrapping event store
-	// any new events we have not announced yet.
-	depEventIDs, depAmts, depAccts := a.chainEvents.DepositsToReport()
+	// Fetch the unannounced deposits from the DepositStore and encode them into the vote extension.
+	depEventIDs, depAmts, depAccts, err := a.chainEvents.DepositsToReport(ctx, a.cfg.NodeAddress)
+	if err != nil {
+		// TODO: Is this a panic? or just return nil extension?
+		return &abciTypes.ResponseExtendVote{
+			VoteExtension: nil,
+		}, nil
+	}
+
 	for i := range depEventIDs {
 		// EncodeDeposits(...)
 		dep := &DepositVoteExt{
@@ -850,8 +858,11 @@ func (a *AbciApp) registerVoteExtension(ctx context.Context, validator, b []byte
 			a.log.Info("decoded a val deposit vote extension segment",
 				zap.String("account", dep.Account), zap.String("amount", dep.Amount))
 
-			a.chainEvents.RecordDepositAttestation(dep.EventID,
-				dep.Account, dep.Amount, validator)
+			amt := big.NewInt(0)
+			amt.SetString(dep.Amount, 10)
+
+			// Record the deposit events from other validators in the DepositStore.
+			a.chainEvents.AddDeposit(ctx, dep.EventID, dep.Account, amt, hex.EncodeToString(validator))
 
 		default:
 			a.log.Error("ignoring unknown vote extension type", zap.Uint32("type", ve[i].Type))
@@ -1047,39 +1058,54 @@ type depEvt struct {
 	amt  *big.Int
 }
 
+// thresholdDeposits returns the deposit events that have reached the threshold
+// of attestations from current validators.
 func (a *AbciApp) thresholdDeposits(ctx context.Context) map[string]depEvt {
 	deps := make(map[string]depEvt)
-	for eventID, dep := range a.chainEvents.DepositEvents() {
-		currentValidators, err := a.validators.CurrentSet(ctx)
-		if err != nil {
-			panic(fmt.Sprintf("failed to retrieve current validator set: %s", err))
-		}
-		attestations := dep.Attestations
-		thresh := validators.Threshold(len(currentValidators))
-		if len(attestations) < thresh {
-			a.log.Info("not enough attestations", zap.Int("attestations", len(attestations)))
-			continue
-		}
-		var count int
-		for _, ai := range attestations {
-			pubkey, ok := a.valAddrToKey[string(ai)] // attestations are address, get pubkey
-			if !ok {
-				continue // not a current validator or address unknown
-			}
-			if haveValidatorKey(pubkey, currentValidators) {
-				count++
-			}
-		}
 
-		amt, ok := big.NewInt(0).SetString(dep.Amount, 10)
-		if !ok { // that shouldn't have happened
-			a.log.Error("invalid deposit amount from event store!", zap.String("amount", dep.Amount))
-			continue
-		}
+	vals := make(map[string]bool)
+	for addr, _ := range a.valAddrToKey {
+		vals[addr] = true
+	}
 
-		if count >= thresh {
-			deps[eventID] = depEvt{dep.Account, amt}
-		}
+	deposits, err := a.chainEvents.DepositEvents(ctx, vals)
+	if err != nil {
+		// TODO: How to handle the error?
+		return nil
+	}
+
+	for eventID, dep := range deposits {
+		amt := big.NewInt(0)
+		amt.SetString(dep.Amount, 10)
+		deps[eventID] = depEvt{dep.Sender, amt}
+		// attestations := dep.Attestations
+		// thresh := validators.Threshold(len(currentValidators))
+		// if len(attestations) < thresh {
+		// 	a.log.Info("not enough attestations", zap.Int("attestations", len(attestations)))
+		// 	continue
+		// }
+		// var count int
+		// for _, ai := range attestations {
+		// 	pubkey, ok := a.valAddrToKey[string(ai)] // attestations are address, get pubkey
+		// 	if !ok {
+		// 		continue // not a current validator or address unknown
+		// 	}
+		// 	if haveValidatorKey(pubkey, currentValidators) {
+		// 		count++
+		// 	}
+		// }
+
+		// fmt.Println(eventID)
+		// // TODO: Check the logic for this
+		// amt, ok := big.NewInt(0).SetString(dep.Amount, 10)
+		// if !ok { // that shouldn't have happened
+		// 	a.log.Error("invalid deposit amount from event store!", zap.String("amount", dep.Amount))
+		// 	continue
+		// }
+
+		// if count >= thresh {
+		// 	deps[eventID] = depEvt{dep.Account, amt}
+		// }
 	}
 	return deps
 }

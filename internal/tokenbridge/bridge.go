@@ -2,7 +2,6 @@ package tokenbridge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -24,17 +23,18 @@ import (
 type TokenBridge struct {
 	bridgeClient   bClient.TokenBridgeClient
 	blockSyncer    syncer.BlockSyncer
-	eventStore     EventStore
+	depositStore   *DepositStore /// SHould we define an interface for this?
 	startingHeight int64
 	chunkSize      int64
+	nodeAddress    string
 	log            log.Logger
 }
 
-func New(bridgeClient bClient.TokenBridgeClient, blockSyncer syncer.BlockSyncer, eventStore EventStore, opts ...TokenBridgeOpts) *TokenBridge {
+func New(bridgeClient bClient.TokenBridgeClient, blockSyncer syncer.BlockSyncer, depositStore *DepositStore, opts ...TokenBridgeOpts) *TokenBridge {
 	tb := &TokenBridge{
 		bridgeClient:   bridgeClient,
 		blockSyncer:    blockSyncer,
-		eventStore:     eventStore,
+		depositStore:   depositStore,
 		chunkSize:      10000,
 		startingHeight: 0,
 		log:            log.NewNoOp(),
@@ -50,7 +50,7 @@ func (cs *TokenBridge) Start() error {
 	ctx := context.Background()
 
 	// get the last processed block
-	startHeight, err := cs.eventStore.LastProcessedBlock(ctx)
+	startHeight, err := cs.depositStore.LastProcessedBlock(ctx)
 	if err != nil {
 		return err
 	}
@@ -135,27 +135,14 @@ func (tb *TokenBridge) syncDepositEventsForRange(ctx context.Context, from int64
 
 	for _, depositEvent := range depositEvents {
 		// Insert local event
-
-		// Figure out right way to serialize the data
-		data, err := json.Marshal(depositEvent)
-		if err != nil {
-			tb.log.Error("Failed to marshal deposit event", zap.Error(err))
-			return err
-		}
-
-		event := &chain.Event{
-			Type: chain.Deposits,
-			ID:   depositEvent.ID,
-			Data: data,
-		}
-
-		err = tb.eventStore.AddLocalEvent(ctx, event)
+		// TODO: Keep the amount as big.Int throughout the code
+		err = tb.depositStore.AddDeposit(ctx, depositEvent.ID, depositEvent.Sender, depositEvent.Amount, tb.nodeAddress)
 		if err != nil {
 			tb.log.Error("Failed to add local event", zap.Error(err))
 			return err
 		}
 
-		err = tb.eventStore.SetLastProcessedBlock(ctx, to)
+		err = tb.depositStore.SetLastProcessedBlock(ctx, to)
 		if err != nil {
 			tb.log.Error("Failed to set last processed block", zap.Error(err))
 			return err

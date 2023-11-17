@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	modDataset "github.com/kwilteam/kwil-db/internal/modules/datasets"
 	modVal "github.com/kwilteam/kwil-db/internal/modules/validators"
+	"github.com/kwilteam/kwil-db/internal/tokenbridge"
 
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
@@ -132,11 +133,20 @@ type AccountsModule interface {
 // NOTE: the implementation will depend on an event store, which is continually
 // updated with deposit events for contracts configured with the bridge client.
 type BridgeEventsModule interface {
+	// AddValidators is used to add the validators that are allowed
+	// to push deposit events and add attestations to these events in the DepositStore.
+	// Used when the validator set changes and during the node initialization.
+	// AddValidators(validators []string) error
+
+	// RemoveValidators is used to remove the validators that are valid observers
+	// from the DepositStore. This is used when the validator set changes.
+	// RemoveValidators(validators []string) error
+
 	// DepositsToReport returns witnessed deposit events that should be
 	// broadcast to other validators via vote extensions.
-	DepositsToReport() (eventID, amt, acct []string)
+	DepositsToReport(ctx context.Context, observer string) (eventID, amt, acct []string, err error)
 
-	// RecordDepositAttestation stores a validator's attestation to a deposit
+	// AddDeposit stores a validator's attestation to a deposit
 	// event. i.e. we have received another validator's vote extension
 	// referencing the event in VerifyVoteExtension or PrepareProposal, or we
 	// have reported a deposit with ExtendVote.
@@ -145,26 +155,26 @@ type BridgeEventsModule interface {
 	// account credit transaction without themselves having observed the event.
 	// Do we need the full event data to validate the eventID was correct for
 	// the given amt and account?
-	RecordDepositAttestation(eventID, amt, acct string, validator []byte)
+	AddDeposit(ctx context.Context, eventID string, sender string, amount *big.Int, observer string) error
+	// RecordDepositAttestation(eventID, amt, acct string, validator []byte)
 
 	// DepositEvents is used when preparing a block to determine which events
 	// should be acted upon (i.e. by creation of a governance transaction that
 	// credits and account's balance). This give the application enough
 	// information to decide if an event has sufficient attestation, and to
 	// create a transaction to credit the account.
-	DepositEvents() map[string]struct { // eventID => details
-		Account string
-		Amount  string
-		// Attestations int // number of attestations including local
-		Attestations [][]byte // the attester identities, including self
-	}
+	DepositEvents(ctx context.Context, vals map[string]bool) (map[string]*tokenbridge.DepositEvent, error)
 
 	// MarkDepositActuated is used to mark a deposit as applied to an account
 	// (when a relevant governance transaction referencing it is executed). This
 	// may mean removing all entries for the event. NOTE: would this also be
 	// used as the block proposer at the time the proposal is submitted rather
 	// than later in execution?
-	MarkDepositActuated(eventID string)
+	MarkDepositActuated(ctx context.Context, eventID string) error
+
+	// HasThresholdAttestations returns true if the deposit event has been
+	// attested by the threshold number of validators.
+	HasThresholdAttestations(ctx context.Context, eventID string, validators map[string]bool) (bool, error)
 
 	// Address returns the address for an account public key. Observed on-chain
 	// contract transaction events report a chain-specific address of the

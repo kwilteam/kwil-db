@@ -46,7 +46,7 @@ func (escrow *Escrow) retrieveDeposits(edi *escrowAbi.EscrowDepositIterator, tok
 		deposit := &chain.DepositEvent{
 			ID:     fmt.Sprintf("%x", id),
 			Sender: edi.Event.Caller.Hex(),
-			Amount: edi.Event.Amount.String(),
+			Amount: edi.Event.Amount,
 		}
 		deposits = append(deposits, deposit)
 		fmt.Printf("Deposit: %+v\n", deposit)

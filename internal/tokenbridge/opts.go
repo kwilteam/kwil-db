@@ -23,3 +23,9 @@ func WithChunkSize(chunkSize int64) TokenBridgeOpts {
 		b.chunkSize = chunkSize
 	}
 }
+
+func WithNodeAddress(nodeAddress string) TokenBridgeOpts {
+	return func(b *TokenBridge) {
+		b.nodeAddress = nodeAddress
+	}
+}

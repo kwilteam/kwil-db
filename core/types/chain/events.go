@@ -1,5 +1,7 @@
 package chain
 
+import "math/big"
+
 type EventType uint32
 
 const (
@@ -17,9 +19,9 @@ type Event struct {
 type DepositEvent struct {
 	// ChainID   string //?
 	// Version   int
-	ID     string `json:"id"`
-	Sender string `json:"sender"`
-	Amount string `json:"amount"`
+	ID     string   `json:"id"`
+	Sender string   `json:"sender"`
+	Amount *big.Int `json:"amount"`
 }
 
 // eventID: Hash(DepositEvent)

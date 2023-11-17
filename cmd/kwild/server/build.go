@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -77,13 +78,16 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	bootstrapperModule := buildBootstrapper(d)
 
 	// event store
-	eventStore := buildEventStore(d, closers)
+	// eventStore := buildEventStore(d, closers)
 
-	// ChainSyncer
-	tokenBridge := buildTokenBridge(d, closers, eventStore)
+	// deposit store
+	depositStore := buildDepositStore(d, closers)
+
+	// TokenBridge
+	tokenBridge := buildTokenBridge(d, closers, depositStore)
 
 	abciApp := buildAbci(d, closers, accs, datasetsModule, validatorModule,
-		ac, snapshotModule, bootstrapperModule)
+		ac, snapshotModule, bootstrapperModule, depositStore)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
@@ -149,7 +153,7 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
-	committer *sessions.MultiCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
+	committer *sessions.MultiCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper, depositStore *tokenbridge.DepositStore) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
 		GuaranteeFSync: true,
@@ -166,10 +170,12 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		sh = snapshotter
 	}
 
+	nodeID := hex.EncodeToString(d.privKey.PubKey().Address())
 	cfg := &abci.AbciConfig{
 		GenesisAppHash:     d.genesisCfg.ComputeGenesisHash(),
 		ChainID:            d.genesisCfg.ChainID,
 		ApplicationVersion: d.genesisCfg.ConsensusParams.Version.App,
+		NodeAddress:        nodeID,
 	}
 	return abci.NewAbciApp(cfg,
 		accountsModule,
@@ -179,6 +185,7 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		committer,
 		sh,
 		bootstrapper,
+		depositStore,
 		abci.WithLogger(*d.log.Named("abci")),
 	)
 }
@@ -533,7 +540,7 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildTokenBridge(d *coreDependencies, closers *closeFuncs, es *events.EventStore) *tokenbridge.TokenBridge {
+func buildTokenBridge(d *coreDependencies, closers *closeFuncs, ds *tokenbridge.DepositStore) *tokenbridge.TokenBridge {
 	// build token bridge client
 	bridgeClient, err := bClient.New(d.cfg.AppCfg.BridgeConfig.Endpoint,
 		d.cfg.AppCfg.BridgeConfig.Code,
@@ -550,8 +557,12 @@ func buildTokenBridge(d *coreDependencies, closers *closeFuncs, es *events.Event
 		failBuild(err, "failed to build block syncer")
 	}
 
+	nodeID := hex.EncodeToString(d.privKey.PubKey().Address())
 	// build TokenBridge
-	tb := tokenbridge.New(bridgeClient, blockSyncer, es, tokenbridge.WithLogger(*d.log.Named("token-bridge")))
+	tb := tokenbridge.New(bridgeClient, blockSyncer, ds,
+		tokenbridge.WithLogger(*d.log.Named("token-bridge")),
+		tokenbridge.WithNodeAddress(nodeID))
+
 	closers.addCloser(tb.Close)
 	return tb
 }
@@ -571,4 +582,19 @@ func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore
 	}
 
 	return ev
+}
+
+func buildDepositStore(d *coreDependencies, closer *closeFuncs) *tokenbridge.DepositStore {
+	db, err := d.opener.Open("deposits-db", *d.log.Named("deposit-store"))
+	if err != nil {
+		failBuild(err, "failed to open deposits db")
+	}
+	closer.addCloser(db.Close)
+
+	logger := *d.log.Named("deposit-store")
+	ds, err := tokenbridge.NewDepositStore(d.ctx, db, logger)
+	if err != nil {
+		failBuild(err, "failed to build event store")
+	}
+	return ds
 }
