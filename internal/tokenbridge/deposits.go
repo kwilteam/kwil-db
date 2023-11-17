@@ -2,18 +2,17 @@ package tokenbridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"go.uber.org/zap"
 )
 
 type Datastore interface {
-	Execute(ctx context.Context, stmt string, args map[string]any) error
+	Execute(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
-	Prepare(stmt string) (sql.Statement, error)
 }
 
 type DepositStore struct {
@@ -74,15 +73,20 @@ func isValidObserver(observer string, validators map[string]bool) bool {
 // and adds the observer as the event attester to the deposit_event_attesters table.
 // Interms of conflict where the eventID already exists in the deposit_events table,
 // Should the event data be validated? Or should the event data be ignored?
-func (ds *DepositStore) AddDeposit(ctx context.Context, eventID string, spender string, amount *big.Int, observer string) error {
+func (ds *DepositStore) AddDeposit(ctx context.Context, eventID, spender, amount, observer string) error {
 	// Check if the observer is a valid validator
 	// TODO: Should we check if the observer is a valid validator? If a node just started, should we start the token bridge when it get validator status? or just reject the events observed by the node? or refetch the events from the starting height and add attestation to the existing events?
 	// if !ds.isValidObserver(observer) {
 	// 	return fmt.Errorf("deposit Event [%s] not added as observer is not a validator", eventID)
 	// }
 
+	amt, ok := big.NewInt(0).SetString(amount, 10)
+	if !ok {
+		return errors.New("invalid amount")
+	}
+
 	// Register the event to the database.
-	if err := ds.addDepositEvent(ctx, eventID, spender, amount); err != nil {
+	if err := ds.addDepositEvent(ctx, eventID, spender, amt); err != nil {
 		return fmt.Errorf("failed to add deposit event: %w", err)
 	}
 
@@ -117,7 +121,7 @@ func (ds *DepositStore) DepositsToReport(ctx context.Context, observer string) (
 }
 
 // Check if the deposit event is attested by threshold number of validators
-func (ds *DepositStore) HasThresholdAttestations(ctx context.Context, eventID string, validators map[string]bool) (bool, error) {
+func (ds *DepositStore) hasThresholdAttestations(ctx context.Context, eventID string, validators map[string]bool) (bool, error) {
 	// Get all the eventID's that haven't been broadcasted yet
 	attesters, err := ds.getEventObservers(ctx, eventID)
 	if err != nil {
@@ -153,7 +157,7 @@ func (ds *DepositStore) DepositEvents(ctx context.Context, validators map[string
 
 	evts := make(map[string]*DepositEvent)
 	for _, deposit := range deposits {
-		valid, err := ds.HasThresholdAttestations(ctx, deposit.EventID, validators)
+		valid, err := ds.hasThresholdAttestations(ctx, deposit.EventID, validators)
 		if err != nil {
 			ds.log.Error("Failed to check if deposit event is attested", zap.Error(err))
 			return nil, fmt.Errorf("failed to check if deposit event is attested: %w", err)

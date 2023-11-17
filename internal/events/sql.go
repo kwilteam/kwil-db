@@ -82,13 +82,13 @@ func getTableInits() []string {
 func (ev *EventStore) initTables(ctx context.Context) error {
 	inits := getTableInits()
 	for _, init := range inits {
-		err := ev.db.Execute(ctx, init, nil)
+		_, err := ev.db.Execute(ctx, init, nil)
 		if err != nil {
 			return fmt.Errorf("failed to initialize tables: %w", err)
 		}
 	}
 
-	if err := ev.db.Execute(ctx, sqlSetVersion, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlSetVersion, map[string]interface{}{
 		"$ID":      "version",
 		"$VERSION": eventStoreVersion,
 	}); err != nil {
@@ -122,7 +122,7 @@ func (ev *EventStore) initTables(ctx context.Context) error {
 
 func (ev *EventStore) addLocalEvent(ctx context.Context, event *chain.Event) error {
 	// Add the event to the events table, if it doesn't already exist
-	if err := ev.db.Execute(ctx, sqlAddEvent, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlAddEvent, map[string]interface{}{
 		"$ID":   event.ID,
 		"$Type": event.Type,
 		"$Data": event.Data,
@@ -131,7 +131,7 @@ func (ev *EventStore) addLocalEvent(ctx context.Context, event *chain.Event) err
 	}
 
 	// Add the event to the local_events table, if it doesn't already exist
-	if err := ev.db.Execute(ctx, sqlAddLocalEvent, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlAddLocalEvent, map[string]interface{}{
 		"$ID":            event.ID,
 		"$IsBroadcasted": 0,
 	}); err != nil {
@@ -139,7 +139,7 @@ func (ev *EventStore) addLocalEvent(ctx context.Context, event *chain.Event) err
 	}
 
 	// Add itself as an attester to the event
-	if err := ev.db.Execute(ctx, sqlAddAttester, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlAddAttester, map[string]interface{}{
 		"$ID":        event.ID,
 		"$Validator": event.Observer,
 	}); err != nil {
@@ -150,7 +150,7 @@ func (ev *EventStore) addLocalEvent(ctx context.Context, event *chain.Event) err
 
 func (ev *EventStore) addExternalEvent(ctx context.Context, event *chain.Event) error {
 	// Add the event to the events table, if it doesn't already exist
-	if err := ev.db.Execute(ctx, sqlAddEvent, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlAddEvent, map[string]interface{}{
 		"$ID":   event.ID,
 		"$Type": event.Type,
 		"$Data": event.Data,
@@ -159,7 +159,7 @@ func (ev *EventStore) addExternalEvent(ctx context.Context, event *chain.Event) 
 	}
 
 	// Add itself as an attester to the event
-	if err := ev.db.Execute(ctx, sqlAddAttester, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlAddAttester, map[string]interface{}{
 		"$ID":        event.ID,
 		"$Validator": event.Observer,
 	}); err != nil {
@@ -238,7 +238,7 @@ func (ev *EventStore) getEvent(ctx context.Context, eventID string) (*chain.Even
 
 // Lol comeup with a new name
 func (ev *EventStore) markEventAsBroadcasted(ctx context.Context, eventID string) error {
-	if err := ev.db.Execute(ctx, sqlAddLocalEvent, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlAddLocalEvent, map[string]interface{}{
 		"$ID":            eventID,
 		"$IsBroadcasted": 1,
 	}); err != nil {
@@ -281,7 +281,7 @@ func (ev *EventStore) getVersion(ctx context.Context) (int, error) {
 }
 
 func (ev *EventStore) SetVersion(ctx context.Context, version int) error {
-	if err := ev.db.Execute(ctx, sqlSetVersion, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlSetVersion, map[string]interface{}{
 		"$ID":      "version",
 		"$VERSION": version,
 	}); err != nil {
@@ -291,7 +291,7 @@ func (ev *EventStore) SetVersion(ctx context.Context, version int) error {
 }
 
 func (ev *EventStore) setLastHeight(ctx context.Context, height int64) error {
-	if err := ev.db.Execute(ctx, sqlSetLastHeight, map[string]interface{}{
+	if _, err := ev.db.Execute(ctx, sqlSetLastHeight, map[string]interface{}{
 		"$ID":     "height",
 		"$HEIGHT": height,
 	}); err != nil {

@@ -7,9 +7,9 @@ import (
 
 var (
 	defaultJoinPrice    = big.NewInt(10000000000000)
-	defaultLeavePrice   = big.NewInt(10000000000000)
-	defaultApprovePrice = big.NewInt(10000000000000)
-	defaultRemovePrice  = big.NewInt(10000000000000)
+	defaultLeavePrice   = big.NewInt(0)
+	defaultApprovePrice = big.NewInt(0)
+	defaultRemovePrice  = big.NewInt(0)
 )
 
 // applyFeeMultiplier applies the fee multiplier to the price.

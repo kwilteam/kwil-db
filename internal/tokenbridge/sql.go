@@ -73,7 +73,7 @@ func getTableInits() []string {
 func (ds *DepositStore) initTables(ctx context.Context) error {
 	inits := getTableInits()
 	for _, init := range inits {
-		err := ds.db.Execute(ctx, init, nil)
+		_, err := ds.db.Execute(ctx, init, nil)
 		if err != nil {
 			return fmt.Errorf("failed to initialize tables: %w", err)
 		}
@@ -91,7 +91,7 @@ func (ds *DepositStore) initTables(ctx context.Context) error {
 }
 
 func (ds *DepositStore) addDepositEvent(ctx context.Context, eventId string, sender string, amount *big.Int) error {
-	if err := ds.db.Execute(ctx, sqlAddDepositEvent, map[string]interface{}{
+	if _, err := ds.db.Execute(ctx, sqlAddDepositEvent, map[string]interface{}{
 		"$EventID": eventId,
 		"$Amount":  amount.String(),
 		"$Sender":  sender,
@@ -102,7 +102,7 @@ func (ds *DepositStore) addDepositEvent(ctx context.Context, eventId string, sen
 }
 
 func (ds *DepositStore) addDepositEventAttester(ctx context.Context, eventId string, observer string) error {
-	if err := ds.db.Execute(ctx, sqlAddDepositEventAttester, map[string]interface{}{
+	if _, err := ds.db.Execute(ctx, sqlAddDepositEventAttester, map[string]interface{}{
 		"$EventID":   eventId,
 		"$Observer":  observer,
 		"$Broadcast": 1,
@@ -174,7 +174,7 @@ func (ds *DepositStore) markDepositEventAsBroadcasted(ctx context.Context, event
 }
 
 func (ds *DepositStore) purgeObserverEvents(ctx context.Context, observer string) error {
-	if err := ds.db.Execute(ctx, sqlRemoveObserver, map[string]interface{}{
+	if _, err := ds.db.Execute(ctx, sqlRemoveObserver, map[string]interface{}{
 		"$Observer": observer,
 	}); err != nil {
 		return fmt.Errorf("failed to purge observer events: %w", err)
@@ -183,7 +183,7 @@ func (ds *DepositStore) purgeObserverEvents(ctx context.Context, observer string
 }
 
 func (ds *DepositStore) purgeEvent(ctx context.Context, eventId string) error {
-	if err := ds.db.Execute(ctx, sqlRemoveEvent, map[string]interface{}{
+	if _, err := ds.db.Execute(ctx, sqlRemoveEvent, map[string]interface{}{
 		"$EventID": eventId,
 	}); err != nil {
 		return fmt.Errorf("failed to purge event: %s due to error: %w", eventId, err)
@@ -192,7 +192,7 @@ func (ds *DepositStore) purgeEvent(ctx context.Context, eventId string) error {
 }
 
 func (ds *DepositStore) setLastHeight(ctx context.Context, height int64) error {
-	if err := ds.db.Execute(ctx, sqlSetLastHeight, map[string]interface{}{
+	if _, err := ds.db.Execute(ctx, sqlSetLastHeight, map[string]interface{}{
 		"$ID":     "height",
 		"$HEIGHT": height,
 	}); err != nil {

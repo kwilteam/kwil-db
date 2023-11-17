@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 
@@ -19,9 +21,10 @@ import (
 // This helper is required to support the application's BeginBlock method where
 // the RequestBeginBlock request type includes the addresses of any byzantine
 // validators rather than their public keys, as with all of the other methods.
+// This function returns lower case.
 func cometAddrFromPubKey(pubkey []byte) string {
 	publicKey := ed25519.PubKey(pubkey)
-	return publicKey.Address().String()
+	return strings.ToLower(publicKey.Address().String()) // they return upper...
 }
 
 func convertABCISnapshots(req *abciTypes.Snapshot) *snapshots.Snapshot {
@@ -103,4 +106,12 @@ func ReadKeyFile(keyFile string) ([]byte, error) {
 		return nil, fmt.Errorf("error decoding private key: %v", err)
 	}
 	return privB, nil
+}
+
+func isNilInterface(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	v := reflect.ValueOf(i)
+	return v.Kind() == reflect.Ptr && v.IsNil()
 }

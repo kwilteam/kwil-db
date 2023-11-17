@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
@@ -22,7 +24,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/crypto/ed25519"
 	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtTypes "github.com/cometbft/cometbft/types"
 	"go.uber.org/zap"
@@ -40,13 +41,22 @@ type AbciConfig struct {
 	GenesisAppHash     []byte
 	ChainID            string
 	ApplicationVersion uint64
-	NodeAddress        string
+	NodeKey            *crypto.Ed25519PrivateKey // so we can sign transactions in our role as a validator e.g. oracle txns
 }
 
-func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModule, vldtrs ValidatorModule, kv KVStore,
-	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, bridgeEvents BridgeEventsModule, opts ...AbciOpt) *AbciApp {
+func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModule,
+	vldtrs ValidatorModule, kv KVStore, committer AtomicCommitter, snapshotter SnapshotModule,
+	bootstrapper DBBootstrapModule, bridge BridgeEventsModule, opts ...AbciOpt) *AbciApp {
+	nodeAddr := cometAddrFromPubKey(cfg.NodeKey.PubKey().Bytes())
+	if isNilInterface(bridge) {
+		bridge = &dummyBridgeEvents{
+			me: nodeAddr,
+		}
+	}
 	app := &AbciApp{
 		cfg:        *cfg,
+		signer:     &auth.Ed25519Signer{Ed25519PrivateKey: *cfg.NodeKey},
+		nodeAddr:   nodeAddr,
 		database:   database,
 		validators: vldtrs,
 		committer:  committer,
@@ -56,7 +66,7 @@ func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModul
 		bootstrapper: bootstrapper,
 		snapshotter:  snapshotter,
 		accounts:     accounts,
-		chainEvents:  bridgeEvents,
+		chainEvents:  bridge,
 
 		valAddrToKey: make(map[string][]byte),
 
@@ -75,6 +85,7 @@ func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModul
 	return app
 }
 
+/*
 // pubkeyToAddr converts an Ed25519 public key as used to identify nodes in
 // CometBFT into an address, which for ed25519 in comet is an upper case
 // truncated sha256 hash of the pubkey. For secp256k1, they do like BTC with
@@ -87,9 +98,14 @@ func pubkeyToAddr(pubkey []byte) (string, error) {
 	publicKey := ed25519.PubKey(pubkey)
 	return publicKey.Address().String(), nil
 }
+*/
 
 type AbciApp struct {
 	cfg AbciConfig
+
+	// signer is used to sign transactions in our role as a validator e.g. oracle txns
+	signer   auth.Signer
+	nodeAddr string // from node key on construction
 
 	// database is the database module that handles database deployment, dropping, and execution
 	database DatasetsModule
@@ -126,9 +142,6 @@ type AbciApp struct {
 	// Expected AppState after bootstrapping the node with a given snapshot,
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
-
-	// blockHeight is the current block height
-	blockHeight int64
 }
 
 func (a *AbciApp) ChainID() string {
@@ -297,18 +310,16 @@ func (a *AbciApp) executeTx(ctx context.Context, rawTx, blockProposerAddr []byte
 			return newExecuteTxRes(codeEncodingError, err)
 		}
 
-		// TODO: check that tx.Sender was the proposer of the block? or just let that be in ProcessProposal...
-		// if !bytes.Equal(cometAddrFromPubKey(tx.Sender), blockProposerAddr) {}
-
 		amt, ok := big.NewInt(0).SetString(creditPayload.Amount, 10)
 		if !ok {
 			return newExecuteTxRes(codeUnknownError, fmt.Errorf("bad amount %q", creditPayload.Amount))
 		}
-		addr := a.chainEvents.Address(creditPayload.Account)
-		err = a.accounts.Credit(ctx, addr, creditPayload.Account, amt)
+		err = a.accounts.Credit(ctx, creditPayload.Account, amt)
 		if err != nil { // this is probably worse then just a non-zero code (panic?)
 			return newExecuteTxRes(codeUnknownError, err)
 		}
+
+		_ = a.chainEvents.MarkDepositActuated(ctx, creditPayload.DepositEventID)
 
 		events = []abciTypes.Event{
 			{
@@ -316,13 +327,14 @@ func (a *AbciApp) executeTx(ctx context.Context, rawTx, blockProposerAddr []byte
 				Attributes: []abciTypes.EventAttribute{
 					{Key: "Proposer", Value: hex.EncodeToString(tx.Sender), Index: true},
 					{Key: "Result", Value: "Success", Index: true},
-					{Key: "Account", Value: hex.EncodeToString(creditPayload.Account), Index: true},
+					{Key: "Account", Value: creditPayload.Account, Index: true},
 					{Key: "Amount", Value: creditPayload.Amount, Index: true},
 				},
 			},
 		}
+		// gasUsed = 0 for validator transaction
 
-		logger.Debug("credited account for deposit", zap.String("account", hex.EncodeToString(creditPayload.Account)),
+		logger.Debug("credited account for deposit", zap.String("account", creditPayload.Account),
 			zap.String("amount", creditPayload.Amount))
 
 	case transactions.PayloadTypeDeploySchema:
@@ -526,7 +538,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	idempotencyKey := make([]byte, 8)
 	binary.LittleEndian.PutUint64(idempotencyKey, uint64(req.Height))
-	a.blockHeight = req.Height
 
 	err := a.committer.Begin(ctx, idempotencyKey)
 	if err != nil {
@@ -649,10 +660,7 @@ func (a *AbciApp) Info(ctx context.Context, req *abciTypes.RequestInfo) (*abciTy
 	// Prepare the validator addr=>pubkey map.
 	a.valAddrToKey = make(map[string][]byte, len(vals))
 	for _, vi := range vals {
-		addr, err := pubkeyToAddr(vi.PubKey)
-		if err != nil {
-			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
-		}
+		addr := cometAddrFromPubKey(vi.PubKey)
 		a.valAddrToKey[addr] = vi.PubKey
 	}
 
@@ -681,15 +689,17 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 
 	// Initialize the validator module with the genesis validators.
 	vldtrs := make([]*validators.Validator, len(req.Validators))
+	a.valAddrToKey = make(map[string][]byte, len(req.Validators))
 	for i := range req.Validators {
 		vi := &req.Validators[i]
-		// pk := vi.PubKey.GetEd25519()
-		// if pk == nil { panic("only ed25519 validator keys are supported") }
 		pk := vi.PubKey.GetEd25519()
 		vldtrs[i] = &validators.Validator{
 			PubKey: pk,
 			Power:  vi.Power,
 		}
+
+		addr := cometAddrFromPubKey(pk)
+		a.valAddrToKey[addr] = pk
 	}
 
 	if err := a.validators.GenesisInit(context.Background(), vldtrs, req.InitialHeight); err != nil {
@@ -808,7 +818,7 @@ func (a *AbciApp) ExtendVote(ctx context.Context, req *abciTypes.RequestExtendVo
 	}}
 
 	// Fetch the unannounced deposits from the DepositStore and encode them into the vote extension.
-	depEventIDs, depAmts, depAccts, err := a.chainEvents.DepositsToReport(ctx, a.cfg.NodeAddress)
+	depEventIDs, depAmts, depAccts, err := a.chainEvents.DepositsToReport(ctx, a.nodeAddr)
 	if err != nil {
 		// TODO: Is this a panic? or just return nil extension?
 		return &abciTypes.ResponseExtendVote{
@@ -817,6 +827,7 @@ func (a *AbciApp) ExtendVote(ctx context.Context, req *abciTypes.RequestExtendVo
 	}
 
 	for i := range depEventIDs {
+		a.log.Info("extend vote with dep", zap.String("event id", depEventIDs[i]))
 		// EncodeDeposits(...)
 		dep := &DepositVoteExt{
 			EventID: depEventIDs[i],
@@ -856,13 +867,14 @@ func (a *AbciApp) registerVoteExtension(ctx context.Context, validator, b []byte
 				return fmt.Errorf("failed to decode deposit vote: %w", err)
 			}
 			a.log.Info("decoded a val deposit vote extension segment",
-				zap.String("account", dep.Account), zap.String("amount", dep.Amount))
+				zap.String("account", dep.Account), zap.String("amount", dep.Amount),
+				zap.String("validator address", hex.EncodeToString(validator)),
+				zap.String("validator address (maybe)", string(validator)))
 
-			amt := big.NewInt(0)
-			amt.SetString(dep.Amount, 10)
+			// use a.valAddrToKey to get the pubkey?
 
 			// Record the deposit events from other validators in the DepositStore.
-			a.chainEvents.AddDeposit(ctx, dep.EventID, dep.Account, amt, hex.EncodeToString(validator))
+			a.chainEvents.AddDeposit(ctx, dep.EventID, dep.Account, dep.Amount, hex.EncodeToString(validator))
 
 		default:
 			a.log.Error("ignoring unknown vote extension type", zap.Uint32("type", ve[i].Type))
@@ -1028,16 +1040,25 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 	*/
 
 	// For any deposit events that have reached the deposit threshold, create an
-	// account credit transaction (and clear those events or wait until the tx
-	// executes in case the proposal is rejected?).
+	// account credit transaction.
+	if me, err := a.accounts.GetAccount(ctx, a.cfg.NodeKey.PubKey().Bytes()); err != nil {
+		a.log.Error("failed to get our own validator account nonce!", zap.Error(err))
+	} else {
+		myNonce := uint64(me.Nonce)
+		for eventID, dep := range a.thresholdDeposits(ctx) {
+			myNonce++
+			a.log.Debug("preparing account credit txn", zap.String("acct_addr", dep.acct),
+				zap.String("amount", dep.amt.String()), zap.String("event", eventID))
 
-	for eventID, dep := range a.thresholdDeposits(ctx) {
-		a.log.Debug("preparing account credit txn", zap.String("acct_addr", dep.acct),
-			zap.String("amount", dep.amt.String()), zap.String("event", eventID))
-		// newAccountCreditTxn(eventID, dep.Account, dep.Amount)
+			rawTx, err := newAccountCreditTxn(eventID, a.cfg.ChainID, myNonce, dep.amt, dep.acct, a.signer)
+			if err != nil {
+				a.log.Error("", zap.Error(err))
+				break
+			}
+
+			okTxns = append([][]byte{rawTx}, okTxns...)
+		}
 	}
-
-	// Create consensus transaction type and include in okTxns (prepend?)
 
 	return &abciTypes.ResponsePrepareProposal{
 		Txs: okTxns,
@@ -1075,38 +1096,48 @@ func (a *AbciApp) thresholdDeposits(ctx context.Context) map[string]depEvt {
 	}
 
 	for eventID, dep := range deposits {
-		amt := big.NewInt(0)
-		amt.SetString(dep.Amount, 10)
+		amt, _ := big.NewInt(0).SetString(dep.Amount, 10)
 		deps[eventID] = depEvt{dep.Sender, amt}
-		// attestations := dep.Attestations
-		// thresh := validators.Threshold(len(currentValidators))
-		// if len(attestations) < thresh {
-		// 	a.log.Info("not enough attestations", zap.Int("attestations", len(attestations)))
-		// 	continue
-		// }
-		// var count int
-		// for _, ai := range attestations {
-		// 	pubkey, ok := a.valAddrToKey[string(ai)] // attestations are address, get pubkey
-		// 	if !ok {
-		// 		continue // not a current validator or address unknown
-		// 	}
-		// 	if haveValidatorKey(pubkey, currentValidators) {
-		// 		count++
-		// 	}
-		// }
-
-		// fmt.Println(eventID)
-		// // TODO: Check the logic for this
-		// amt, ok := big.NewInt(0).SetString(dep.Amount, 10)
-		// if !ok { // that shouldn't have happened
-		// 	a.log.Error("invalid deposit amount from event store!", zap.String("amount", dep.Amount))
-		// 	continue
-		// }
-
-		// if count >= thresh {
-		// 	deps[eventID] = depEvt{dep.Account, amt}
-		// }
 	}
+	/* alt: threshold here in the app, AND ensure that the attesters are validators
+	for eventID, dep := range a.chainEvents.DepositEvents() {
+		currentValidators, err := a.validators.CurrentSet(ctx)
+		if err != nil {
+			panic(fmt.Sprintf("failed to retrieve current validator set: %s", err))
+		}
+		attestations := dep.Attestations
+		thresh := validators.Threshold(len(currentValidators))
+		if len(attestations) < thresh {
+			a.log.Info("not enough attestations", zap.Int("attestations", len(attestations)))
+			continue
+		}
+		var count int
+		for _, ai := range attestations {
+			addr := string(ai)
+			pubkey, ok := a.valAddrToKey[addr] // attestations are address, get pubkey
+			if !ok {
+				a.log.Warn("dep attestation not from a known/current validator", zap.String("pub", addr))
+				continue // not a current validator or address unknown
+			}
+			if !haveValidatorKey(pubkey, currentValidators) {
+				a.log.Warn("dep attestation no from a current validator", zap.String("pub", addr))
+			}
+			count++
+		}
+
+		amt, ok := big.NewInt(0).SetString(dep.Amount, 10)
+		if !ok { // that shouldn't have happened
+			a.log.Error("invalid deposit amount from event store!", zap.String("amount", dep.Amount))
+			continue
+		}
+
+		if count >= thresh {
+			deps[eventID] = depEvt{dep.Account, amt}
+		} else {
+			a.log.Info("dep no at thresh")
+		}
+	}
+	*/
 	return deps
 }
 
@@ -1154,7 +1185,8 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 			// warranting the transaction, and that it is authored by the block
 			// proposer.
 			if tx.Body.PayloadType == transactions.PayloadTypeAccountCredit {
-				if cometAddrFromPubKey(tx.Sender) != proposerAddr {
+				if senderAddr := cometAddrFromPubKey(tx.Sender); !strings.EqualFold(senderAddr, proposerAddr) {
+					a.log.Error("account credit not authored by block proposer", zap.String("sender", cometAddrFromPubKey(tx.Sender)), zap.String("proposer", proposerAddr))
 					return fmt.Errorf("account credit not authored by block proposer")
 				}
 				if thresholdDeps == nil {
@@ -1166,7 +1198,7 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 				}
 				if dep, ok := thresholdDeps[eventID]; !ok {
 					return fmt.Errorf("deposit not at threshold (event ID %v)", eventID)
-				} else if a.chainEvents.Address(acct) != dep.acct {
+				} else if acct != dep.acct {
 					return fmt.Errorf("deposit account mismatch (%x != %x)", acct, dep.acct)
 				} else if dep.amt.Cmp(amt) != 0 {
 					return fmt.Errorf("deposit amount mismatch (%v != %v)", acct, dep.amt)
@@ -1176,25 +1208,6 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 		}
 	}
 	return nil
-}
-
-func extractDepInfo(txBody *transactions.TransactionBody) (id string, acct []byte, amt *big.Int, err error) {
-	if txBody.PayloadType != transactions.PayloadTypeAccountCredit {
-		err = errors.New("not an account credit transaction")
-		return
-	}
-	var creditPayload transactions.AccountCredit
-	err = creditPayload.UnmarshalBinary(txBody.Payload)
-	if err != nil {
-		return
-	}
-	var ok bool
-	amt, ok = big.NewInt(0).SetString(creditPayload.Amount, 10)
-	if !ok {
-		err = fmt.Errorf("bad amount %q", creditPayload.Amount)
-		return
-	}
-	return creditPayload.DepositEventID, creditPayload.Account, amt, nil
 }
 
 // ProcessProposal should validate the received blocks and reject the block if:
@@ -1208,7 +1221,8 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	if err := a.validateProposalTransactions(ctx, req.Txs, string(req.ProposerAddress)); err != nil {
+	proposerAddress := hex.EncodeToString(req.ProposerAddress) // the nodeID/address in hex wtf
+	if err := a.validateProposalTransactions(ctx, req.Txs, proposerAddress); err != nil {
 		logger.Warn("rejecting block proposal", zap.Error(err))
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}

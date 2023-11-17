@@ -69,7 +69,7 @@ type AccountCredit struct {
 	// token bridge contract. The transaction is only valid in a block if there
 	// are sufficient attestations from the current validator set.
 	DepositEventID string
-	Account        []byte
+	Account        string
 	Amount         string
 }
 
@@ -82,6 +82,10 @@ func (ac *AccountCredit) UnmarshalBinary(b []byte) error {
 
 func (ac *AccountCredit) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(ac)
+}
+
+func (ac *AccountCredit) Type() PayloadType {
+	return PayloadTypeAccountCredit
 }
 
 /*

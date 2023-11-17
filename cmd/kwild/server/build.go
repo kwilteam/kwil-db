@@ -40,6 +40,7 @@ import (
 
 	bClient "github.com/kwilteam/kwil-db/core/bridge/client"
 	"github.com/kwilteam/kwil-db/core/bridge/syncer"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
@@ -81,13 +82,14 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// eventStore := buildEventStore(d, closers)
 
 	// deposit store
-	depositStore := buildDepositStore(d, closers)
+	// depositStore := buildDepositStore(d, closers)
 
 	// TokenBridge
-	tokenBridge := buildTokenBridge(d, closers, depositStore)
+	// tokenBridge := buildTokenBridge(d, closers, depositStore)
+	var tokenBridge *tokenbridge.TokenBridge // nil bridge does nothing
 
 	abciApp := buildAbci(d, closers, accs, datasetsModule, validatorModule,
-		ac, snapshotModule, bootstrapperModule, depositStore)
+		ac, snapshotModule, bootstrapperModule, nil /* dummy/testing deposit store */)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
@@ -119,6 +121,8 @@ const (
 	accountsDBName  = "accounts"
 	validatorDBName = "validators"
 	engineName      = "engine"
+	eventsDBName    = "events"
+	depositsDBName  = "deposits"
 )
 
 // coreDependencies holds dependencies that are widely used
@@ -152,8 +156,10 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
-	committer *sessions.MultiCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper, depositStore *tokenbridge.DepositStore) *abci.AbciApp {
+func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
+	datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
+	committer *sessions.MultiCommitter, snapshotter *snapshots.SnapshotStore,
+	bootstrapper *snapshots.Bootstrapper, depositStore *tokenbridge.DepositStore) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
 		GuaranteeFSync: true,
@@ -170,12 +176,16 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		sh = snapshotter
 	}
 
-	nodeID := hex.EncodeToString(d.privKey.PubKey().Address())
+	privKey, err := crypto.Ed25519PrivateKeyFromBytes(d.privKey.Bytes())
+	if err != nil {
+		failBuild(err, "invalid node key")
+	}
+
 	cfg := &abci.AbciConfig{
 		GenesisAppHash:     d.genesisCfg.ComputeGenesisHash(),
 		ChainID:            d.genesisCfg.ChainID,
 		ApplicationVersion: d.genesisCfg.ConsensusParams.Version.App,
-		NodeAddress:        nodeID,
+		NodeKey:            privKey,
 	}
 	return abci.NewAbciApp(cfg,
 		accountsModule,
@@ -568,7 +578,7 @@ func buildTokenBridge(d *coreDependencies, closers *closeFuncs, ds *tokenbridge.
 }
 
 func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore {
-	db, err := d.opener.Open("event_db", *d.log.Named("event-store"))
+	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, eventsDBName), 1, 2, true)
 	if err != nil {
 		failBuild(err, "failed to open event db")
 	}
@@ -576,7 +586,8 @@ func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore
 
 	logger := *d.log.Named("event-store")
 	address := []byte("az") // update it with the node address
-	ev, err := events.NewEventStore(d.ctx, db, address, logger)
+	adapted := &adapter.PoolAdapater{Pool: db}
+	ev, err := events.NewEventStore(d.ctx, adapted, address, logger)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}
@@ -585,14 +596,15 @@ func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore
 }
 
 func buildDepositStore(d *coreDependencies, closer *closeFuncs) *tokenbridge.DepositStore {
-	db, err := d.opener.Open("deposits-db", *d.log.Named("deposit-store"))
+	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, depositsDBName), 1, 2, true)
 	if err != nil {
 		failBuild(err, "failed to open deposits db")
 	}
 	closer.addCloser(db.Close)
 
 	logger := *d.log.Named("deposit-store")
-	ds, err := tokenbridge.NewDepositStore(d.ctx, db, logger)
+	adapted := &adapter.PoolAdapater{Pool: db}
+	ds, err := tokenbridge.NewDepositStore(d.ctx, adapted, logger)
 	if err != nil {
 		failBuild(err, "failed to build event store")
 	}

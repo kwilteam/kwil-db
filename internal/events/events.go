@@ -6,13 +6,11 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/chain"
-	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 type Datastore interface {
-	Execute(ctx context.Context, stmt string, args map[string]any) error
+	Execute(ctx context.Context, stmt string, args map[string]any) ([]map[string]any, error)
 	Query(ctx context.Context, query string, args map[string]any) ([]map[string]any, error)
-	Prepare(stmt string) (sql.Statement, error)
 }
 
 type EventStore struct {

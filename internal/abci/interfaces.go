@@ -122,7 +122,7 @@ type DBBootstrapModule interface {
 
 type AccountsModule interface {
 	GetAccount(ctx context.Context, pubKey []byte) (*accounts.Account, error)
-	Credit(ctx context.Context, addr string, acct []byte, amt *big.Int) error
+	Credit(ctx context.Context, addr string, amt *big.Int) error
 	// Passing an opaque chain event would be awkward here I think.
 }
 
@@ -155,7 +155,7 @@ type BridgeEventsModule interface {
 	// account credit transaction without themselves having observed the event.
 	// Do we need the full event data to validate the eventID was correct for
 	// the given amt and account?
-	AddDeposit(ctx context.Context, eventID string, sender string, amount *big.Int, observer string) error
+	AddDeposit(ctx context.Context, eventID, sender, amount, observer string) error
 	// RecordDepositAttestation(eventID, amt, acct string, validator []byte)
 
 	// DepositEvents is used when preparing a block to determine which events
@@ -174,20 +174,5 @@ type BridgeEventsModule interface {
 
 	// HasThresholdAttestations returns true if the deposit event has been
 	// attested by the threshold number of validators.
-	HasThresholdAttestations(ctx context.Context, eventID string, validators map[string]bool) (bool, error)
-
-	// Address returns the address for an account public key. Observed on-chain
-	// contract transaction events report a chain-specific address of the
-	// depositor. This method is used so that Kwil accounts and thus transaction
-	// senders, which are presently public keys, can be matched with deposit
-	// events.
-	Address(pubkey []byte) string
-
-	// **** possibly useless methods below for consideration
-
-	// RemoveDepositAttestation is used to remove a leaving/removed validator's
-	// attestation to an event. NOTE: maybe we don't need this if the module
-	// returns the source/observer identity of each event, which allows the
-	// application to only count attestations for current validators.
-	//RemoveDepositAttestation(eventID string, validator []byte)
+	// HasThresholdAttestations(ctx context.Context, eventID string, validators map[string]bool) (bool, error)
 }

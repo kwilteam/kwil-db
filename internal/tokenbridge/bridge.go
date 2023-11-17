@@ -47,6 +47,9 @@ func New(bridgeClient bClient.TokenBridgeClient, blockSyncer syncer.BlockSyncer,
 }
 
 func (cs *TokenBridge) Start() error {
+	if cs == nil {
+		return nil
+	}
 	ctx := context.Background()
 
 	// get the last processed block
@@ -123,6 +126,9 @@ func (cs *TokenBridge) getDepositEvents(ctx context.Context, from int64, to int6
 }
 
 func (cs *TokenBridge) Close() error {
+	if cs == nil {
+		return nil
+	}
 	return cs.blockSyncer.Close()
 }
 
@@ -136,7 +142,8 @@ func (tb *TokenBridge) syncDepositEventsForRange(ctx context.Context, from int64
 	for _, depositEvent := range depositEvents {
 		// Insert local event
 		// TODO: Keep the amount as big.Int throughout the code
-		err = tb.depositStore.AddDeposit(ctx, depositEvent.ID, depositEvent.Sender, depositEvent.Amount, tb.nodeAddress)
+		amt := depositEvent.Amount.String()
+		err = tb.depositStore.AddDeposit(ctx, depositEvent.ID, depositEvent.Sender, amt, tb.nodeAddress)
 		if err != nil {
 			tb.log.Error("Failed to add local event", zap.Error(err))
 			return err
