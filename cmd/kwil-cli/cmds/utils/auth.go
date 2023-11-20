@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -32,71 +33,71 @@ func authCmd() *cobra.Command {
 		Short: "Auth is used to authenticate to a KGW provider", // or sass provider?
 		Long:  authCmdDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			conf, err := config.LoadCliConfig()
-			if err != nil {
-				return err
-			}
+			err := func() error {
+				conf, err := config.LoadCliConfig()
+				if err != nil {
+					return err
+				}
 
-			if conf.PrivateKey == nil {
-				return fmt.Errorf("private key not provided")
-			}
+				if conf.PrivateKey == nil {
+					return fmt.Errorf("private key not provided")
+				}
 
-			signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}
-			if conf.GrpcURL == "" {
-				// this is somewhat redundant since the config marks it as required, but in case the config is changed
-				return fmt.Errorf("provider url not provided")
-			}
+				signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}
+				if conf.GrpcURL == "" {
+					// this is somewhat redundant since the config marks it as required, but in case the config is changed
+					return fmt.Errorf("provider url not provided")
+				}
 
-			userAddress, err := signer.Address()
-			if err != nil {
-				return fmt.Errorf("get address: %w", err)
-			}
+				userAddress, err := signer.Address()
+				if err != nil {
+					return fmt.Errorf("get address: %w", err)
+				}
 
-			userPubkey := signer.PublicKey()
+				userPubkey := signer.PublicKey()
 
-			// KGW auth is not part of Kwil API, we use a standard http client
-			// this client is to reuse connection
-			hc := httpRPC.DefaultHTTPClient()
+				// KGW auth is not part of Kwil API, we use a standard http client
+				// this client is to reuse connection
+				hc := httpRPC.DefaultHTTPClient()
 
-			authURI, err := url.JoinPath(conf.GrpcURL, kgwAuthEndpoint)
-			if err != nil {
-				panic(err)
-			}
+				authURI, err := url.JoinPath(conf.GrpcURL, kgwAuthEndpoint)
+				if err != nil {
+					panic(err)
+				}
 
-			authParam, err := requestAuthParameter(hc, authURI)
-			if err != nil {
-				return fmt.Errorf("request for authentication: %w", err)
-			}
+				authParam, err := requestAuthParameter(hc, authURI)
+				if err != nil {
+					return fmt.Errorf("request for authentication: %w", err)
+				}
 
-			// NOTE: It seems reasonable to have authVersion as part of the
-			// authParameter, and SDK then use the version to compose the message
-			// using different template.
-			// According to SIWE, the version is the version of the spec, and
-			// it is fixed to "1" right now.
-			msg := composeAuthMessage(authParam, conf.GrpcURL,
-				authURI, "1", conf.ChainID)
+				// NOTE: It seems reasonable to have authVersion as part of the
+				// authParameter, and SDK then use the version to compose the message
+				// using different template.
+				// According to SIWE, the version is the version of the spec, and
+				// it is fixed to "1" right now.
+				msg := composeAuthMessage(authParam, conf.GrpcURL,
+					authURI, "1", conf.ChainID)
 
-			sig, err := promptSigning(&signer, msg)
-			if err != nil {
-				return fmt.Errorf("prompt signing: %w", err)
-			}
+				sig, err := promptSigning(&signer, msg)
+				if err != nil {
+					return fmt.Errorf("prompt signing: %w", err)
+				}
 
-			token, err := requestAuthToken(hc, conf.GrpcURL, authParam.Nonce,
-				userPubkey, sig)
-			if err != nil {
-				return fmt.Errorf("request for token: %w", err)
-			}
+				token, err := requestAuthToken(hc, conf.GrpcURL, authParam.Nonce,
+					userPubkey, sig)
+				if err != nil {
+					return fmt.Errorf("request for token: %w", err)
+				}
 
-			fmt.Println("cookie:", token.String())
+				err = common.SaveAuthInfo(common.KGWAuthTokenFilePath(), userAddress, token)
+				if err != nil {
+					return fmt.Errorf("save auth token: %w", err)
+				}
 
-			err = common.SaveAuthInfo(common.KGWAuthTokenFilePath(), userAddress, token)
-			if err != nil {
-				return fmt.Errorf("save auth token: %w", err)
-			}
+				return nil
+			}()
 
-			// NOTE: seems no point support JSON output format?
-			fmt.Println("Authentication successful")
-			return nil
+			return display.Print(respStr("Success"), err, config.GetOutputFormat())
 		},
 	}
 
