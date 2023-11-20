@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,8 +18,13 @@ import (
 	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	httpTx "github.com/kwilteam/kwil-db/core/rpc/http/tx"
+	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+
+	"google.golang.org/genproto/googleapis/rpc/status"
+	grpcStatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type Client struct {
@@ -58,6 +64,14 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([
 		Tx: convertTx(tx),
 	})
 	if err != nil {
+		// we're in trouble here because we need to return ErrInvalidNonce,
+		// ErrInsufficientBalance, ErrWrongChain, etc. but how? the response
+		// body had better have retained the response error details!
+		if res != nil {
+			fmt.Println("broadcast", res.StatusCode, res.Status)
+			b, _ := io.ReadAll(res.Body)
+			fmt.Println(string(b))
+		}
 		return nil, err
 	}
 	defer res.Body.Close()
@@ -250,11 +264,84 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 	return resultSet, nil
 }
 
+func parseBroadcastError(resp *http.Response) error { //nolint
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	respTxt, err := io.ReadAll(resp.Body) // for protojson.Unmarshal
+	if err != nil {
+		return err
+	}
+
+	var protoStatus status.Status
+	err = protojson.Unmarshal(respTxt, &protoStatus) // jsonpb is deprecated, otherwise we could use the resp.Body directly
+	if err != nil {
+		if err = json.Unmarshal(respTxt, &protoStatus); err != nil {
+			return err
+		}
+	}
+	stat := grpcStatus.FromProto(&protoStatus)
+	code, message := stat.Code(), stat.Message()
+	if message == "" {
+		message = resp.Status
+	}
+	err = &client.RPCError{
+		Msg:  message,
+		Code: int32(code),
+	}
+
+	for _, detail := range stat.Details() {
+		if bcastErr, ok := detail.(*txpb.BroadcastErrorDetails); ok {
+			switch txCode := transactions.TxCode(bcastErr.Code); txCode {
+			case transactions.CodeWrongChain:
+				err = errors.Join(err, transactions.ErrWrongChain)
+			case transactions.CodeInvalidNonce:
+				err = errors.Join(err, transactions.ErrInvalidNonce)
+			case transactions.CodeInvalidAmount:
+				err = errors.Join(err, transactions.ErrInvalidAmount)
+			case transactions.CodeInsufficientBalance:
+				err = errors.Join(err, transactions.ErrInsufficientBalance)
+			default:
+				err = errors.Join(err, errors.New(txCode.String()))
+			}
+		} else { // else unknown details type
+			err = errors.Join(err, fmt.Errorf("unrecognized status error detail type %T", detail))
+		}
+	}
+
+	return err
+
+}
+
+func parseErrorResponse(resp *http.Response) error { //nolint
+	// NOTE: here directly use status.Status from googleapis/rpc/status
+	var res status.Status
+	err := json.NewDecoder(resp.Body).Decode(&res)
+	if err != nil {
+		return err
+	}
+
+	msg := res.GetMessage()
+	if msg == "" {
+		msg = resp.Status
+	}
+
+	return errors.New(msg)
+}
+
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
 	result, res, err := c.conn.TxServiceApi.TxServiceTxQuery(ctx, httpTx.TxTxQueryRequest{
 		TxHash: base64.StdEncoding.EncodeToString(txHash),
 	})
 	if err != nil {
+		// if res != nil {
+		// 	fmt.Println("txQuery", res.StatusCode, res.Status)
+		// 	b, _ := io.ReadAll(res.Body)
+		// 	fmt.Println("resp body:\n", string(b))
+		// }
+		if res != nil && res.StatusCode == http.StatusNotFound { // this is kinda wrong, before we had codes we set
+			return nil, client.ErrNotFound
+		}
 		return nil, err
 	}
 	defer res.Body.Close()

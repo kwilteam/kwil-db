@@ -11,6 +11,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/kwilteam/kwil-db/core/utils/random"
+
+	"go.uber.org/zap"
 )
 
 // The harness methods in this file pertain to the embedded dataset schema,
@@ -73,14 +75,15 @@ func (h *harness) deployDBAsync(ctx context.Context) (string, <-chan asyncResp, 
 	}
 
 	dbid := utils.GenerateDBID(schema.Name, h.Signer.Identity())
-
+	// fmt.Println("deployDBAsync", dbid)
 	promise := make(chan asyncResp, 1)
 	go func() {
 		// time.Sleep(500 * time.Millisecond) // lame, see executeAction notes
-		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		resp, err := h.WaitTx(ctx, txHash, txPollInterval)
 		if err != nil {
+			h.logger.Error("WaitTx", zap.Error(err))
 			err = errors.Join(err, h.recoverNonce(ctx))
 			promise <- asyncResp{err: err}
 			return
@@ -99,7 +102,7 @@ func (h *harness) deployDB(ctx context.Context) (string, error) {
 	}
 	res := <-promise
 	if res.err != nil {
-		return "", err
+		return "", res.err
 	}
 	txRes := res.res
 	if code := txRes.Code; code != 0 {
@@ -113,6 +116,7 @@ func (h *harness) getOrCreateUser(ctx context.Context, dbid string) (int, string
 		meUser     = "me"
 		molAge int = 42
 	)
+	// fmt.Println("dbid", dbid)
 
 	recs, err := h.CallAction(ctx, dbid, actListUsers, nil)
 	if err != nil {

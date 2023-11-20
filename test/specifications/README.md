@@ -7,18 +7,20 @@ Driver is the actual implementation could be used to interact with the system un
 There should be a DriverInterface that all drivers should implement.
 
 For example:
+
 ```go
 type KwilClientDriver interface {
 	DeployDb(ctx context.Context, schema *Schema) TxHash
     TxQuery(ctx context.Context, txHash TxHash) TxQueryResult
 }
-````
+```
 
 ### What's the specifications?
 
 A specification describes all the interactions needed and uses a driver to perform the correspond interactions.
 
 For example:
+
 ```go
 type DeployDatabaseSpec struct {
     Driver KwilClientDriver
@@ -78,4 +80,3 @@ And for acceptance test purpose, a single test case is enough, since we only tes
 ## next
 
 I think it's time to follow the original design to write the tests, especially for the integration tests.
-

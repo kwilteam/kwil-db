@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -43,10 +44,18 @@ func cloneTx(tx *transactions.Transaction) *transactions.Transaction {
 	}
 }
 
-type MockAccountStore struct {
+type MockAccountsModule struct {
 }
 
-func (m *MockAccountStore) GetAccount(ctx context.Context, pubKey []byte) (*accounts.Account, error) {
+func (m *MockAccountsModule) TransferTx(ctx context.Context, tx *modAcct.TxAcct, to []byte, amt *big.Int) error {
+	return nil
+}
+
+func (m *MockAccountsModule) Credit(ctx context.Context, pubKey []byte, amt *big.Int) error {
+	return nil
+}
+
+func (m *MockAccountsModule) Account(ctx context.Context, pubKey []byte) (*accounts.Account, error) {
 	return &accounts.Account{
 		Identifier: nil,
 		Balance:    big.NewInt(0),
@@ -233,7 +242,7 @@ func Test_prepareMempoolTxns(t *testing.T) {
 func Test_ProcessProposal_TxValidation(t *testing.T) {
 	ctx := context.Background()
 	abciApp := &AbciApp{
-		accounts: &MockAccountStore{},
+		accounts: &MockAccountsModule{},
 	}
 	logger := log.NewStdOut(log.DebugLevel)
 
@@ -362,7 +371,7 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 
 func Test_CheckTx(t *testing.T) {
 	m := &mempool{
-		accountStore: &MockAccountStore{},
+		accountStore: &MockAccountsModule{},
 		accounts:     make(map[string]*userAccount),
 	}
 	ctx := context.Background()

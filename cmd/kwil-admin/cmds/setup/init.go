@@ -1,6 +1,10 @@
 package setup
 
 import (
+	"errors"
+	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
@@ -21,7 +25,8 @@ func initCmd() *cobra.Command {
 	var out, chainId string
 	var blockInterval time.Duration
 	var joinExpiry int64 // block height
-	var withoutNonces bool
+	var withoutNonces, withGas bool
+	var allocs AllocsFlag
 
 	cmd := &cobra.Command{
 		Use:     "init",
@@ -39,8 +44,9 @@ func initCmd() *cobra.Command {
 				BlockInterval:   blockInterval,
 				OutputDir:       expandedDir,
 				JoinExpiry:      joinExpiry,
-				WithoutGasCosts: true, // gas disabled by setup init
+				WithoutGasCosts: !withGas,
 				WithoutNonces:   withoutNonces,
+				Allocs:          allocs.M,
 			}
 
 			// GenerateNodeConfig fmt.Printlns, but do we want this printed to display pkg?
@@ -58,6 +64,36 @@ func initCmd() *cobra.Command {
 	cmd.Flags().DurationVarP(&blockInterval, "block-interval", "i", 6*time.Second, "shortest block interval in seconds (timeout_commit) [default: 6s]")
 	cmd.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires [default: 14400]")
 	cmd.Flags().BoolVar(&withoutNonces, "without-nonces", false, "disable account nonces")
+	cmd.Flags().BoolVar(&withGas, "gas", false, "enable gas")
+	cmd.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
 
 	return cmd
+}
+
+type AllocsFlag struct {
+	M map[string]*big.Int
+}
+
+func (a *AllocsFlag) String() string {
+	return fmt.Sprintf("%v", a.M)
+}
+
+func (a *AllocsFlag) Set(value string) error {
+	if a.M == nil {
+		a.M = map[string]*big.Int{}
+	}
+	split := strings.Split(value, "=")
+	if len(split) != 2 {
+		return errors.New("invalid format for alloc, expected key=value")
+	}
+	amt, ok := big.NewInt(0).SetString(split[1], 10)
+	if !ok {
+		return errors.New("bad amount")
+	}
+	a.M[split[0]] = amt
+	return nil
+}
+
+func (a *AllocsFlag) Type() string {
+	return "allocFlag"
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	crand "crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -56,13 +57,13 @@ func runLooped(ctx context.Context, fn func() error, name string, every time.Dur
 func hammer(ctx context.Context) error {
 	var err error
 	var priv *crypto.Secp256k1PrivateKey
-	if key == "" {
+	if key == "" { // only useful with no gas or when spamming non-tx/view calls
 		priv, err = crypto.GenerateSecp256k1Key()
 		if err != nil {
 			return err
 		}
 		fmt.Printf("Generated new key: %v\n\n", priv.Hex())
-	} else { // not a strong case for this, maybe remove
+	} else {
 		priv, err = crypto.Secp256k1PrivateKeyFromHex(key)
 		if err != nil {
 			return err
@@ -70,6 +71,7 @@ func hammer(ctx context.Context) error {
 	}
 	signer := &auth.EthPersonalSigner{Key: *priv}
 	acctID := signer.Identity()
+	fmt.Println("Identity:", hex.EncodeToString(acctID))
 
 	var rpcClient user.TxSvcClient
 
@@ -130,6 +132,7 @@ func hammer(ctx context.Context) error {
 	if acct, err := cl.GetAccount(ctx, acctID, types.AccountStatusPending); err != nil {
 		return err
 	} else { // scoping acct
+		fmt.Println(acct)
 		h.nonce = acct.Nonce
 	}
 

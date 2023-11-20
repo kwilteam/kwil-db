@@ -17,6 +17,8 @@ import (
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
+	"github.com/kwilteam/kwil-db/internal/modules"
+	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
 	modDataset "github.com/kwilteam/kwil-db/internal/modules/datasets"
 	modVal "github.com/kwilteam/kwil-db/internal/modules/validators"
 	"github.com/kwilteam/kwil-db/internal/validators"
@@ -72,6 +74,8 @@ type AbciConfig struct {
 	GenesisAppHash     []byte
 	ChainID            string
 	ApplicationVersion uint64
+	GenesisAllocs      map[string]*big.Int // genesisCft.Alloc
+	// GasEnabled bool // for mempool policy modification
 }
 
 func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModule, vldtrs ValidatorModule, kv KVStore,
@@ -175,7 +179,7 @@ func (a *AbciApp) AccountInfo(ctx context.Context, identifier []byte) (balance *
 	}
 	// Nothing in mempool, check account store. Changes to the account store are
 	// committed before the mempool is cleared, so there should not be any race.
-	acct, err := a.accounts.GetAccount(ctx, identifier)
+	acct, err := a.accounts.Account(ctx, identifier)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -305,6 +309,12 @@ func (a *AbciApp) CheckTx(incoming abciTypes.RequestCheckTx) abciTypes.ResponseC
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
 			logger.Info("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
+		} else if errors.Is(err, transactions.ErrInvalidAmount) {
+			code = codeInvalidAmount
+			logger.Info("received transaction with invalid amount", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
+		} else if errors.Is(err, transactions.ErrInsufficientBalance) {
+			code = codeInsufficientBalance
+			logger.Info("transaction sender has insufficient balance", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
 		} else {
 			code = codeUnknownError
 			logger.Warn("unexpected failure to verify transaction against local mempool state", zap.Error(err))
@@ -339,7 +349,7 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 	}
 
 	var events []abciTypes.Event
-	gasUsed := int64(0)
+	gasUsed := int64(0) // any events, currently no modules actually set a non-zero value
 	txCode := codeOk
 
 	logger = logger.With(zap.String("sender", hex.EncodeToString(tx.Sender)),
@@ -411,6 +421,10 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 			zap.String("DBID", execution.DBID), zap.String("Action", execution.Action),
 			zap.Any("Args", execution.Arguments))
 
+		// say they don't have the balance to pay the required gas, shouldn't we
+		// try to reduce their balance by some amount simply for including the
+		// transaction in the block?
+
 		var res *modDataset.ExecutionResponse
 		res, err = a.database.Execute(ctx, execution.DBID, execution.Action, convertArgs(execution.Arguments), tx)
 		if err != nil {
@@ -419,6 +433,42 @@ func (a *AbciApp) DeliverTx(req abciTypes.RequestDeliverTx) abciTypes.ResponseDe
 		}
 
 		gasUsed = res.GasUsed
+
+	case transactions.PayloadTypeTransfer:
+		transfer := &transactions.Transfer{}
+		err = transfer.UnmarshalBinary(tx.Body.Payload)
+		if err != nil {
+			txCode = codeEncodingError
+			break
+		}
+
+		logger.Info("transfer", zap.String("amount", transfer.Amount),
+			zap.String("to", hex.EncodeToString(transfer.To)),
+			zap.String("fee", tx.Body.Fee.String()))
+
+		amt, ok := big.NewInt(0).SetString(transfer.Amount, 10)
+		if !ok {
+			logger.Warn("invalid amount", zap.String("amt_str", transfer.Amount))
+			txCode = codeInvalidAmount
+			break
+		}
+
+		if amt.Cmp(&big.Int{}) < 0 { // the accounts module should also check this
+			logger.Warn("amount must be non-negative", zap.String("amt_str", transfer.Amount))
+			txCode = codeInvalidAmount
+			break
+		}
+
+		txAcct := &modAcct.TxAcct{
+			Sender: tx.Sender,
+			Fee:    tx.Body.Fee,
+			Nonce:  int64(tx.Body.Nonce),
+		}
+		err := a.accounts.TransferTx(ctx, txAcct, transfer.To, amt)
+		if err != nil {
+			logger.Warn("transfer failed", zap.Error(err))
+			txCode = modules.ErrCode(err)
+		}
 
 	case transactions.PayloadTypeValidatorJoin:
 		var join transactions.ValidatorJoin
@@ -697,6 +747,18 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 
 	ctx := context.Background()
 
+	// Store the genesis account allocations to the datastore. These are
+	// reflected in the genesis app hash.
+	for acct, bal := range a.cfg.GenesisAllocs {
+		identifier, err := hex.DecodeString(acct)
+		if err != nil {
+			panic(newFatalError("InitChain", &p0, fmt.Sprintf("invalid hex pubkey: %v", err)))
+		}
+		if err = a.accounts.Credit(ctx, identifier, bal); err != nil {
+			panic(newFatalError("InitChain", &p0, fmt.Sprintf("failed to credit genesis account: %v", err)))
+		}
+	}
+
 	// Initialize the validator module with the genesis validators.
 	vldtrs := make([]*validators.Validator, len(p0.Validators))
 	for i := range p0.Validators {
@@ -943,7 +1005,7 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 	// execution does not update an accounts nonce in state unless it is the
 	// next nonce. Delivering transactions to a block in that way cannot happen.
 	for sender, txs := range grouped {
-		acct, err := a.accounts.GetAccount(ctx, []byte(sender))
+		acct, err := a.accounts.Account(ctx, []byte(sender))
 		if err != nil {
 			return fmt.Errorf("failed to get account: %w", err)
 		}

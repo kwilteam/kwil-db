@@ -12,8 +12,26 @@ import (
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func convertError(err error) error {
+	grpcErr := status.Convert(err)
+	if grpcErr == nil {
+		return err
+	}
+	rpcErr := &rpcClient.RPCError{
+		Msg:  grpcErr.Message(),
+		Code: int32(grpcErr.Code()),
+	}
+	switch grpcErr.Code() {
+	case codes.NotFound:
+		return errors.Join(rpcErr, rpcClient.ErrNotFound)
+	default:
+		return rpcErr
+	}
+}
 
 func (c *Client) GetAccount(ctx context.Context, identifier []byte, status types.AccountStatus) (*types.Account, error) {
 	pbStatus := txpb.AccountStatus(status)
@@ -44,7 +62,7 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 		TxHash: txHash,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to query: %w", err)
+		return nil, convertError(err)
 	}
 
 	return conversion.ConvertFromPBTxQueryResp(res)

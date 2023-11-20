@@ -22,9 +22,6 @@ func resp(fee *big.Int) *ExecutionResponse {
 	}
 }
 
-// Join/Leave/Approve required a spend. There is currently no pricing associated
-// with the actions, although there probably should be for Join.
-
 func (vm *ValidatorModule) spend(ctx context.Context, acctID []byte,
 	amt *big.Int, nonce uint64) error {
 	return vm.accts.Spend(ctx, &accounts.Spend{

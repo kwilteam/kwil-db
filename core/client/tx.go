@@ -50,6 +50,8 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}
 
+	// c.logger.Info("cost estimate", zap.String("fee", price.String()), zap.Uint64("nonce", nonce))
+
 	// set fee
 	tx.Body.Fee = price
 
@@ -58,6 +60,9 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
+
+	// b, _ := tx.MarshalBinary()
+	// c.logger.Info(fmt.Sprintf("tx hash %x", sha256.Sum256(b)))
 
 	return tx, nil
 }

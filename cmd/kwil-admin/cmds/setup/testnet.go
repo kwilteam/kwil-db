@@ -38,7 +38,8 @@ func testnetCmd() *cobra.Command {
 	var blockInterval time.Duration
 	var joinExpiry int64
 	var validatorAmount, nonValidatorAmount, p2pPort int
-	var withoutNonces bool
+	var withoutNonces, withGas bool
+	var allocs AllocsFlag
 
 	cmd := &cobra.Command{
 		Use:     "testnet",
@@ -61,8 +62,9 @@ func testnetCmd() *cobra.Command {
 				Hostnames:               hostnames,
 				P2pPort:                 p2pPort,
 				JoinExpiry:              joinExpiry,
-				WithoutGasCosts:         true, // gas disabled by setup init
+				WithoutGasCosts:         !withGas,
 				WithoutNonces:           withoutNonces,
+				Allocs:                  allocs.M,
 			}, &nodecfg.ConfigOpts{
 				UniquePorts: true,
 			})
@@ -88,6 +90,8 @@ func testnetCmd() *cobra.Command {
 	cmd.Flags().IntVarP(&validatorAmount, "validators", "v", 1, "number of validators to generate")
 	cmd.Flags().IntVarP(&nonValidatorAmount, "non-validators", "n", 0, "number of non-validators to generate [defaukt: 3]")
 	cmd.Flags().BoolVar(&withoutNonces, "without-nonces", false, "disable account nonces")
+	cmd.Flags().BoolVar(&withGas, "gas", false, "enable gas")
+	cmd.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
 
 	return cmd
 }
