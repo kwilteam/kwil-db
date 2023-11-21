@@ -137,6 +137,8 @@ type AbciApp struct {
 
 	chainEvents BridgeEventsModule
 
+	depositEvents []string
+
 	log log.Logger
 
 	// Expected AppState after bootstrapping the node with a given snapshot,
@@ -642,6 +644,15 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		// Unlock all the DBs
 	}
 
+	// Mark the deposit events as actuated in the deposit store
+	for _, eventID := range a.depositEvents {
+		err = a.chainEvents.MarkDepositActuated(ctx, eventID)
+		if err != nil {
+			a.log.Error("failed to mark deposit event as actuated", zap.Error(err))
+		}
+	}
+	a.depositEvents = nil
+
 	return &abciTypes.ResponseCommit{
 		RetainHeight: height,
 	}, nil
@@ -1022,30 +1033,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	okTxns := prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log)
-
-	if len(okTxns) != len(req.Txs) {
-		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
-			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
-	} else if logger.L.Level() <= log.DebugLevel { // spare the check if it wouldn't be logged
-		for i, tx := range okTxns {
-			if !bytes.Equal(tx, req.Txs[i]) { //  not and error, just notable
-				logger.Debug("transaction was moved or mutated", zap.Int("idx", i))
-			}
-		}
-	}
-
-	/*
-		for _, vote := range req.LocalLastCommit.Votes {
-			a.log.Info("ExtendedCommitInfo", zap.String("validator", hex.EncodeToString(vote.Validator.Address)),
-				zap.Int("extension_length", len(vote.VoteExtension)))
-			err := a.registerVoteExtension(ctx, vote.Validator.Address, vote.VoteExtension)
-			if err != nil {
-				a.log.Error("bad vote extension", zap.Error(err))
-				continue // just ignore it
-			}
-		}
-	*/
+	var Txns [][]byte
 
 	// For any deposit events that have reached the deposit threshold, create an
 	// account credit transaction.
@@ -1064,23 +1052,48 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 				break
 			}
 
-			okTxns = append([][]byte{rawTx}, okTxns...)
+			Txns = append(Txns, rawTx)
 		}
 	}
 
+	okTxns := prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log)
+
+	if len(okTxns) != len(req.Txs) {
+		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
+			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
+	} else if logger.L.Level() <= log.DebugLevel { // spare the check if it wouldn't be logged
+		for i, tx := range okTxns {
+			if !bytes.Equal(tx, req.Txs[i]) { //  not and error, just notable
+				logger.Debug("transaction was moved or mutated", zap.Int("idx", i))
+			}
+		}
+	}
+	Txns = append(Txns, okTxns...)
+	/*
+		for _, vote := range req.LocalLastCommit.Votes {
+			a.log.Info("ExtendedCommitInfo", zap.String("validator", hex.EncodeToString(vote.Validator.Address)),
+				zap.Int("extension_length", len(vote.VoteExtension)))
+			err := a.registerVoteExtension(ctx, vote.Validator.Address, vote.VoteExtension)
+			if err != nil {
+				a.log.Error("bad vote extension", zap.Error(err))
+				continue // just ignore it
+			}
+		}
+	*/
+
 	return &abciTypes.ResponsePrepareProposal{
-		Txs: okTxns,
+		Txs: Txns,
 	}, nil
 }
 
-func haveValidatorKey(b []byte, vs []*validators.Validator) bool {
-	for _, vi := range vs {
-		if bytes.Equal(b, vi.PubKey) {
-			return true
-		}
-	}
-	return false
-}
+// func haveValidatorKey(b []byte, vs []*validators.Validator) bool {
+// 	for _, vi := range vs {
+// 		if bytes.Equal(b, vi.PubKey) {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
 
 type depEvt struct {
 	acct string // account address, not pubkey
@@ -1212,6 +1225,7 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 					return fmt.Errorf("deposit amount mismatch (%v != %v)", acct, dep.amt)
 				}
 				// it's valid!
+				a.depositEvents = append(a.depositEvents, eventID)
 			}
 		}
 	}
@@ -1232,6 +1246,7 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 	proposerAddress := hex.EncodeToString(req.ProposerAddress) // the nodeID/address in hex wtf
 	if err := a.validateProposalTransactions(ctx, req.Txs, proposerAddress); err != nil {
 		logger.Warn("rejecting block proposal", zap.Error(err))
+		a.depositEvents = nil
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}
 

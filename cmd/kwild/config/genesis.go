@@ -14,6 +14,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	types "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/types/chain"
 	"github.com/kwilteam/kwil-db/core/utils/random"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 )
@@ -49,13 +50,24 @@ type GenesisValidator struct {
 }
 
 type ConsensusParams struct {
-	Block     BlockParams     `json:"block"`
-	Evidence  EvidenceParams  `json:"evidence"`
-	Version   VersionParams   `json:"version"`
-	Validator ValidatorParams `json:"validator"`
+	Block       BlockParams       `json:"block"`
+	Evidence    EvidenceParams    `json:"evidence"`
+	Version     VersionParams     `json:"version"`
+	Validator   ValidatorParams   `json:"validator"`
+	TokenBridge TokenBridgeParams `json:"bridge_config"`
 
 	WithoutNonces   bool `json:"without_nonces"`
 	WithoutGasCosts bool `json:"without_gas_costs"`
+}
+
+type TokenBridgeParams struct {
+	Endpoint              string
+	Code                  chain.ChainCode
+	EscrowAddress         string
+	TokenAddress          string
+	RequiredConfirmations int64
+	ReconnectInterval     time.Duration
+	StartingHeight        int64
 }
 
 type BlockParams struct {
@@ -117,6 +129,13 @@ func defaultConsensusParams() *ConsensusParams {
 		Validator: ValidatorParams{
 			PubKeyTypes: []string{abciPubKeyTypeEd25519},
 			JoinExpiry:  14400, // approx 1 day considering block rate of 6 sec/s
+		},
+		TokenBridge: TokenBridgeParams{
+			Endpoint:              "ws://localhost:8545",
+			RequiredConfirmations: 12,
+			ReconnectInterval:     30 * time.Second,
+			EscrowAddress:         "0x006c992966be10e1da52fb2b09a62a1059c093bf",
+			Code:                  chain.GOERLI,
 		},
 		WithoutNonces:   false,
 		WithoutGasCosts: true,

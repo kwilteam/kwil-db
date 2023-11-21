@@ -114,6 +114,7 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 			// hack special case for free (governance) transactions that only require nonce check
 
 			// if this is really free, just create the account entry for nonce purposes
+			// TODO: This is probably incorrect way to do it. while testing with gas disabled and chain syncer on, which we wont be doing. But this just creates an account with nil balance, due to which further get account calls will fail. May need a better way to handle node accounts.
 			if err = a.createAccount(ctx, "", spend.AccountPubKey, big.NewInt(0), 1); err != nil {
 				return fmt.Errorf("failed to create account: %w", err)
 			}
@@ -131,7 +132,8 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 			if err != nil {
 				return fmt.Errorf("validateSpend: %w", err)
 			}
-
+			fmt.Println("Spend creating account", spend.AccountPubKey, balance, 1)
+			nonce = 1
 			if err = a.createAccount(ctx, addr, spend.AccountPubKey, balance, 1); err != nil {
 				return fmt.Errorf("failed to create account: %w", err)
 			}
@@ -140,6 +142,7 @@ func (a *AccountStore) Spend(ctx context.Context, spend *Spend) error {
 			}
 		}
 	}
+	fmt.Println("Spend udpating account", spend.AccountPubKey, balance, nonce)
 	err = a.updateAccount(ctx, spend.AccountPubKey, balance, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to update account: %w", err)
@@ -170,7 +173,7 @@ func (a *AccountStore) Credit(ctx context.Context, addr string, amt *big.Int) er
 			if !errors.Is(err, errAccountNotFound) {
 				return err
 			}
-			return a.createPendingAccount(ctx, addr, bal)
+			return a.createPendingAccount(ctx, addr, amt)
 		}
 		bal = bal.Add(bal, amt)
 		err = a.updatePendingAccount(ctx, addr, bal)

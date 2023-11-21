@@ -120,18 +120,28 @@ func (a *AccountStore) getAccountByAddress(ctx context.Context, addr string) (*A
 }
 
 func (a *AccountStore) getPendingAccountBalance(ctx context.Context, addr string) (*big.Int, error) {
-	results, err := a.db.Execute(ctx, sqlGetAccountByAddr, map[string]interface{}{
+	results, err := a.db.Execute(ctx, sqlGetPendingAccount, map[string]interface{}{
 		"$address": addr,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	acct, err := accountFromRecords(nil, results)
-	if err != nil {
-		return nil, err
+	if len(results) == 0 {
+		return nil, errAccountNotFound
 	}
-	return acct.Balance, nil
+
+	stringBal, ok := results[0]["balance"].(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert stored string balance to big int")
+	}
+
+	balance, ok := new(big.Int).SetString(stringBal, 10)
+	if !ok {
+		return nil, ErrConvertToBigInt
+	}
+
+	return balance, nil
 }
 
 func (a *AccountStore) createPendingAccount(ctx context.Context, addr string, bal *big.Int) error {

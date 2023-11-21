@@ -82,14 +82,14 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// eventStore := buildEventStore(d, closers)
 
 	// deposit store
-	// depositStore := buildDepositStore(d, closers)
+	depositStore := buildDepositStore(d, closers)
 
 	// TokenBridge
-	// tokenBridge := buildTokenBridge(d, closers, depositStore)
-	var tokenBridge *tokenbridge.TokenBridge // nil bridge does nothing
+	tokenBridge := buildTokenBridge(d, closers, depositStore)
+	// var tokenBridge *tokenbridge.TokenBridge // nil bridge does nothing
 
 	abciApp := buildAbci(d, closers, accs, datasetsModule, validatorModule,
-		ac, snapshotModule, bootstrapperModule, nil /* dummy/testing deposit store */)
+		ac, snapshotModule, bootstrapperModule, depositStore /* dummy/testing deposit store */)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
@@ -552,9 +552,9 @@ func failBuild(err error, msg string) {
 
 func buildTokenBridge(d *coreDependencies, closers *closeFuncs, ds *tokenbridge.DepositStore) *tokenbridge.TokenBridge {
 	// build token bridge client
-	bridgeClient, err := bClient.New(d.cfg.AppCfg.BridgeConfig.Endpoint,
-		d.cfg.AppCfg.BridgeConfig.Code,
-		d.cfg.AppCfg.BridgeConfig.EscrowAddress,
+	bridgeClient, err := bClient.New(d.genesisCfg.ConsensusParams.TokenBridge.Endpoint,
+		d.genesisCfg.ConsensusParams.TokenBridge.Code,
+		d.genesisCfg.ConsensusParams.TokenBridge.EscrowAddress,
 	)
 
 	if err != nil {
