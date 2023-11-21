@@ -31,26 +31,26 @@ const (
 	kgwAuthCookieName = "kgw_session"
 )
 
-// KGWAuthParameter defines the result of GET request for KGW authentication.
-// It's the parameters that will be used to compose the message(SIWE like)
-// to sign.
-type KGWAuthParameter struct {
+// gatewayAuthParameter defines the result of GET request for gateway(KGW)
+// authentication. It's the parameters that will be used to compose the
+// message(SIWE like) to sign.
+type gatewayAuthParameter struct {
 	Nonce          string `json:"nonce"`
 	Statement      string `json:"statement"` // optional
 	IssueAt        string `json:"issue_at"`
 	ExpirationTime string `json:"expiration_time"`
 }
 
-// KGWAuthGetResponse defines the response of GET request for KGW authentication.
-type KGWAuthGetResponse struct {
-	Result *KGWAuthParameter `json:"result"`
-	Error  string            `json:"error"`
+// gatewayAuthGetResponse defines the response of GET request for gateway(KGW) authentication.
+type gatewayAuthGetResponse struct {
+	Result *gatewayAuthParameter `json:"result"`
+	Error  string                `json:"error"`
 }
 
-// requestKGWAuthParameter requests authentication parameters from the KGW provider.
+// requestGatewayAuthParameter requests authentication parameters from the gateway(KGW) provider.
 // This will send a GET request to KGW provider, and the provider will return
 // parameters that the user could use to compose a message to sign.
-func requestKGWAuthParameter(hc *http.Client, target string) (*KGWAuthParameter, error) {
+func requestGatewayAuthParameter(hc *http.Client, target string) (*gatewayAuthParameter, error) {
 	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -58,11 +58,11 @@ func requestKGWAuthParameter(hc *http.Client, target string) (*KGWAuthParameter,
 
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("request authn: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var r KGWAuthGetResponse
+	var r gatewayAuthGetResponse
 	err = json.NewDecoder(resp.Body).Decode(&r)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)
@@ -75,10 +75,10 @@ func requestKGWAuthParameter(hc *http.Client, target string) (*KGWAuthParameter,
 	return r.Result, nil
 }
 
-// composeKGWAuthMessage composes the SIWE-like message to sign.
+// composeGatewayAuthMessage composes the SIWE-like message to sign.
 // param is the result of GET request for authentication.
 // ALl the other parameters are expected from config.
-func composeKGWAuthMessage(param *KGWAuthParameter, domain string, uri string,
+func composeGatewayAuthMessage(param *gatewayAuthParameter, domain string, uri string,
 	version string, chainID string) string {
 	var msg bytes.Buffer
 	msg.WriteString(
@@ -97,22 +97,22 @@ func composeKGWAuthMessage(param *KGWAuthParameter, domain string, uri string,
 	return msg.String()
 }
 
-type KGWAuthPostResponse struct {
+type gatewayAuthPostResponse struct {
 	Result string `json:"result"`
 	Error  string `json:"error"`
 }
 
-// KGWAuthPostPayload defines the payload of POST request for authentication
-type KGWAuthPostPayload struct {
+// gatewayAuthPostPayload defines the payload of POST request for authentication
+type gatewayAuthPostPayload struct {
 	Nonce     string          `json:"nonce"`  // identifier for authn session
 	Sender    []byte          `json:"sender"` // sender public key
 	Signature *auth.Signature `json:"signature"`
 }
 
-// requestKGWAuthCookie requests an authenticated cookie from the KGW provider.
+// requestGatewayAuthCookie requests an authenticated cookie from the gateway(KGW) provider.
 // This will send a POST request to the KGW provider, and the provider will
 // return a cookie.
-func requestKGWAuthCookie(hc *http.Client, target string, nonce string,
+func requestGatewayAuthCookie(hc *http.Client, target string, nonce string,
 	sender []byte, sig *auth.Signature) (*http.Cookie, error) {
 	targetURL, err := url.Parse(target)
 	if err != nil {
@@ -124,7 +124,7 @@ func requestKGWAuthCookie(hc *http.Client, target string, nonce string,
 		return nil, fmt.Errorf("parse authURL: %w", err)
 	}
 
-	payload := KGWAuthPostPayload{
+	payload := gatewayAuthPostPayload{
 		Nonce:     nonce,
 		Signature: sig,
 		Sender:    sender,
@@ -143,11 +143,11 @@ func requestKGWAuthCookie(hc *http.Client, target string, nonce string,
 
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("request authn: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var r KGWAuthPostResponse
+	var r gatewayAuthPostResponse
 	err = json.NewDecoder(resp.Body).Decode(&r)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal response: %w", err)

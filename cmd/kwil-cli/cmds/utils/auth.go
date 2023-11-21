@@ -44,7 +44,7 @@ func kgwAuthnCmd() *cobra.Command {
 						return fmt.Errorf("get address: %w", err)
 					}
 
-					cookie, err := client.KGWAuthenticate(ctx, promptMessage)
+					cookie, err := client.GatewayAuthenticate(ctx, promptMessage)
 					if err != nil {
 						return fmt.Errorf("KGW authenticate: %w", err)
 					}

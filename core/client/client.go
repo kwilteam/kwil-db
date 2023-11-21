@@ -468,12 +468,12 @@ func (c *Client) VerifySignature(ctx context.Context, pubKey []byte,
 	return c.rpc.VerifySignature(ctx, pubKey, signature, message)
 }
 
-// KGWAuthenticate authenticates the client with the KGW provider.
+// GatewayAuthenticate authenticates the client with the gateway(KGW) provider.
 // It returns a cookie so caller can choose a way to persist it if wanted.
 // It also sets the cookie in the client, so that it can be used for subsequent requests.
 // 'signMessage' is a function to present the message to be signed to
 // the user, and returns error if the user declines to sign the message.
-func (c *Client) KGWAuthenticate(ctx context.Context,
+func (c *Client) GatewayAuthenticate(ctx context.Context,
 	signMessage func(message string) error) (*http.Cookie, error) {
 	// KGW auth is not part of Kwil API, we use a standard http client
 	// this client is to reuse connection
@@ -484,12 +484,12 @@ func (c *Client) KGWAuthenticate(ctx context.Context,
 		return nil, fmt.Errorf("%w", err)
 	}
 
-	authParam, err := requestKGWAuthParameter(hc, authURI)
+	authParam, err := requestGatewayAuthParameter(hc, authURI)
 	if err != nil {
 		return nil, fmt.Errorf("request for authentication: %w", err)
 	}
 
-	msg := composeKGWAuthMessage(authParam, c.target, authURI, kgwAuthVersion, c.chainID)
+	msg := composeGatewayAuthMessage(authParam, c.target, authURI, kgwAuthVersion, c.chainID)
 	decline := signMessage(msg)
 	if decline != nil {
 		return nil, decline
@@ -500,7 +500,7 @@ func (c *Client) KGWAuthenticate(ctx context.Context,
 		return nil, fmt.Errorf("sign message: %w", err)
 	}
 
-	cookie, err := requestKGWAuthCookie(hc, c.target, authParam.Nonce,
+	cookie, err := requestGatewayAuthCookie(hc, c.target, authParam.Nonce,
 		c.Signer.PublicKey(), sig)
 	if err != nil {
 		return nil, fmt.Errorf("request for token: %w", err)
