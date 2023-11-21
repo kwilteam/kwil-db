@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
@@ -27,7 +28,7 @@ func (tc *timedClient) printDur(t time.Time, method string) {
 	tc.logger.Info(fmt.Sprintf("%s took %vms", method, float64(time.Since(t).Microseconds())/1e3)) // not using zap Fields so it is legible
 }
 
-func (tc *timedClient) Call(ctx context.Context, req *transactions.CallMessage) ([]map[string]any, error) {
+func (tc *timedClient) Call(ctx context.Context, req *transactions.CallMessage, _ ...rpcClient.ActionCallOption) ([]map[string]any, error) {
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "Call")
 	}

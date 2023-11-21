@@ -10,12 +10,15 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	httpRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -30,7 +33,7 @@ import (
 type RPCClient interface {
 	Close() error
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
-	Call(ctx context.Context, req *transactions.CallMessage) ([]map[string]any, error)
+	Call(ctx context.Context, req *transactions.CallMessage, opts ...rpcClient.ActionCallOption) ([]map[string]any, error)
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
 	GetTarget() string
 	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)
@@ -57,9 +60,10 @@ type Client struct {
 	logger log.Logger
 	// chainID is used when creating transactions as replay protection since the
 	// signatures will only be valid on this network.
-	chainID string
-
-	tlsCertFile string // the tls cert file path
+	chainID     string
+	target      string
+	cookie      *http.Cookie // current session cookie
+	tlsCertFile string       // the tls cert file path
 }
 
 // Dial creates a Kwil client. It will by default use http connection, which
@@ -67,6 +71,7 @@ type Client struct {
 func Dial(ctx context.Context, target string, opts ...Option) (c *Client, err error) {
 	c = &Client{
 		logger: log.NewNoOp(), // by default, we do not want to force client to log anything
+		target: target,
 	}
 
 	for _, opt := range opts {
@@ -198,7 +203,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 
 // CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
 func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any, opts ...CallOpt) (*Records, error) {
-	callOpts := &callOptions{}
+	callOpts := &callOptions{} // TODO: remove
 
 	for _, opt := range opts {
 		opt(callOpts)
@@ -233,7 +238,12 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		}
 	}
 
-	res, err := c.rpc.Call(ctx, msg)
+	// NOTE: only HTTP RPC supports authn cookie
+	var actCallOpts []rpcClient.ActionCallOption
+	if c.cookie != nil {
+		actCallOpts = append(actCallOpts, rpcClient.WithAuthCookie(c.cookie))
+	}
+	res, err := c.rpc.Call(ctx, msg, actCallOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("call action: %w", err)
 	}
@@ -456,4 +466,47 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 func (c *Client) VerifySignature(ctx context.Context, pubKey []byte,
 	signature *auth.Signature, message []byte) error {
 	return c.rpc.VerifySignature(ctx, pubKey, signature, message)
+}
+
+// KGWAuthenticate authenticates the client with the KGW provider.
+// It returns a cookie so caller can choose a way to persist it if wanted.
+// It also sets the cookie in the client, so that it can be used for subsequent requests.
+// 'signMessage' is a function to present the message to be signed to
+// the user, and returns error if the user declines to sign the message.
+func (c *Client) KGWAuthenticate(ctx context.Context,
+	signMessage func(message string) error) (*http.Cookie, error) {
+	// KGW auth is not part of Kwil API, we use a standard http client
+	// this client is to reuse connection
+	hc := httpRPC.DefaultHTTPClient()
+
+	authURI, err := url.JoinPath(c.target, kgwAuthEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
+
+	authParam, err := requestKGWAuthParameter(hc, authURI)
+	if err != nil {
+		return nil, fmt.Errorf("request for authentication: %w", err)
+	}
+
+	msg := composeKGWAuthMessage(authParam, c.target, authURI, kgwAuthVersion, c.chainID)
+	decline := signMessage(msg)
+	if decline != nil {
+		return nil, decline
+	}
+
+	sig, err := c.Signer.Sign([]byte(msg))
+	if err != nil {
+		return nil, fmt.Errorf("sign message: %w", err)
+	}
+
+	cookie, err := requestKGWAuthCookie(hc, c.target, authParam.Nonce,
+		c.Signer.PublicKey(), sig)
+	if err != nil {
+		return nil, fmt.Errorf("request for token: %w", err)
+	}
+
+	// set cookie for current session
+	c.cookie = cookie
+	return cookie, nil
 }

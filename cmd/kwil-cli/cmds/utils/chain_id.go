@@ -14,7 +14,7 @@ import (
 func chainInfoCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "chain-info",
-		Short: "Ping is used to ping the kwil provider endpoint",
+		Short: "chain-info is used to query the kwil provider info",
 		Long:  "",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var chainInfo *types.ChainInfo

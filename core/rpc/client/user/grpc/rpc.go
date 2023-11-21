@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	"github.com/kwilteam/kwil-db/core/rpc/client"
+	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -124,7 +124,8 @@ func (c *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction)
 	return bigCost, nil
 }
 
-func (c *Client) Call(ctx context.Context, req *transactions.CallMessage) ([]map[string]any, error) {
+func (c *Client) Call(ctx context.Context, req *transactions.CallMessage,
+	_ ...rpcClient.ActionCallOption) ([]map[string]any, error) {
 	var sender []byte
 	if req.Sender != nil {
 		sender = req.Sender
@@ -263,7 +264,7 @@ func (c *Client) VerifySignature(ctx context.Context, sender []byte,
 
 	// caller can tell if signature is valid
 	if !resp.Valid {
-		return fmt.Errorf("%w: %s", client.ErrInvalidSignature, resp.Error)
+		return fmt.Errorf("%w: %s", rpcClient.ErrInvalidSignature, resp.Error)
 	}
 
 	return nil

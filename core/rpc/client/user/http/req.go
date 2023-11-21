@@ -44,7 +44,6 @@ func NewJsonPostRequest(server string, path string, body io.Reader) (*http.Reque
 		return nil, err
 	}
 
-	req.Header.Add("Content-Type", "application/json")
 	return req, nil
 }
 

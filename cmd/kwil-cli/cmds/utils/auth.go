@@ -1,101 +1,62 @@
 package utils
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"net/http"
-	"net/url"
 
 	"github.com/kwilteam/kwil-db/cmd/internal/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	httpRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 )
 
-const (
-	kgwAuthEndpoint   = "/auth"
-	kgwAuthCookieName = "kgw_session"
-)
-
-var authCmdDesc = `Authentication is required to use the KGW provider. This command will
-prompt for a signature and return a token for later.
+var authCmdDesc = `KGW provider provides ways to protect data privacy, by using cookie authentication.
+This command will prompt for a signature and return a authenticated cookie for
+future API calls.
 KGW authentication is not part of Kwild API.
 `
 
-// authCmd is the command to authenticate to a KGW provider.
-func authCmd() *cobra.Command {
+// kgwAuthnCmd is the command to authenticate to a KGW provider.
+// This is not part of Kwil API.
+func kgwAuthnCmd() *cobra.Command {
 	var cmd = &cobra.Command{
-		Use:   "auth",
-		Short: "Auth is used to authenticate to a KGW provider", // or sass provider?
+		Use:   "kgw-authn",
+		Short: "kgw-authn is used to do authentication with a KGW provider", // or sass provider?
 		Long:  authCmdDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := func() error {
-				conf, err := config.LoadCliConfig()
-				if err != nil {
-					return err
-				}
+			err := common.DialClient(cmd.Context(), 0,
+				func(ctx context.Context, client *client.Client,
+					cfg *config.KwilCliConfig) error {
+					if cfg.PrivateKey == nil {
+						return fmt.Errorf("private key not provided")
+					}
 
-				if conf.PrivateKey == nil {
-					return fmt.Errorf("private key not provided")
-				}
+					signer := auth.EthPersonalSigner{Key: *cfg.PrivateKey}
+					if cfg.GrpcURL == "" {
+						return fmt.Errorf("provider url not provided")
+					}
 
-				signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}
-				if conf.GrpcURL == "" {
-					// this is somewhat redundant since the config marks it as required, but in case the config is changed
-					return fmt.Errorf("provider url not provided")
-				}
+					userAddress, err := signer.Address()
+					if err != nil {
+						return fmt.Errorf("get address: %w", err)
+					}
 
-				userAddress, err := signer.Address()
-				if err != nil {
-					return fmt.Errorf("get address: %w", err)
-				}
+					cookie, err := client.KGWAuthenticate(ctx, promptMessage)
+					if err != nil {
+						return fmt.Errorf("KGW authenticate: %w", err)
+					}
 
-				userPubkey := signer.PublicKey()
+					err = common.SaveAuthInfo(common.KGWAuthTokenFilePath(),
+						userAddress, cookie)
+					if err != nil {
+						return fmt.Errorf("save auth token: %w", err)
+					}
 
-				// KGW auth is not part of Kwil API, we use a standard http client
-				// this client is to reuse connection
-				hc := httpRPC.DefaultHTTPClient()
-
-				authURI, err := url.JoinPath(conf.GrpcURL, kgwAuthEndpoint)
-				if err != nil {
-					panic(err)
-				}
-
-				authParam, err := requestAuthParameter(hc, authURI)
-				if err != nil {
-					return fmt.Errorf("request for authentication: %w", err)
-				}
-
-				// NOTE: It seems reasonable to have authVersion as part of the
-				// authParameter, and SDK then use the version to compose the message
-				// using different template.
-				// According to SIWE, the version is the version of the spec, and
-				// it is fixed to "1" right now.
-				msg := composeAuthMessage(authParam, conf.GrpcURL,
-					authURI, "1", conf.ChainID)
-
-				sig, err := promptSigning(&signer, msg)
-				if err != nil {
-					return fmt.Errorf("prompt signing: %w", err)
-				}
-
-				token, err := requestAuthToken(hc, conf.GrpcURL, authParam.Nonce,
-					userPubkey, sig)
-				if err != nil {
-					return fmt.Errorf("request for token: %w", err)
-				}
-
-				err = common.SaveAuthInfo(common.KGWAuthTokenFilePath(), userAddress, token)
-				if err != nil {
-					return fmt.Errorf("save auth token: %w", err)
-				}
-
-				return nil
-			}()
+					return nil
+				})
 
 			return display.Print(respStr("Success"), err, config.GetOutputFormat())
 		},
@@ -104,59 +65,9 @@ func authCmd() *cobra.Command {
 	return cmd
 }
 
-// requestAuthParameter requests authentication parameters from the KGW provider.
-// This will send a GET request to KGW provider, and the provider will return
-// parameters that the user could use to compose a message to sign.
-func requestAuthParameter(hc *http.Client, target string) (*authParameter, error) {
-	req, err := http.NewRequest(http.MethodGet, target, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := hc.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var r authGetResponse
-	err = json.NewDecoder(resp.Body).Decode(&r)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	if r.Error != "" {
-		return nil, fmt.Errorf("got error response: %s", r.Error)
-	}
-
-	return r.Result, nil
-}
-
-// composeAuthMessage composes the SIWE-like message to sign.
-// param is the result of GET request for authentication.
-// ALl the other parameters are expected from config.
-func composeAuthMessage(param *authParameter, domain string, uri string,
-	version string, chainID string) string {
-	var msg bytes.Buffer
-	msg.WriteString(
-		fmt.Sprintf("%s wants you to sign in with your account:\n", domain))
-	msg.WriteString("\n")
-	if param.Statement != "" {
-		msg.WriteString(fmt.Sprintf("%s\n", param.Statement))
-	}
-	msg.WriteString("\n")
-	msg.WriteString(fmt.Sprintf("URI: %s\n", uri))
-	msg.WriteString(fmt.Sprintf("Version: %s\n", version))
-	msg.WriteString(fmt.Sprintf("Chain ID: %s\n", chainID))
-	msg.WriteString(fmt.Sprintf("Nonce: %s\n", param.Nonce))
-	msg.WriteString(fmt.Sprintf("Issue At: %s\n", param.IssueAt))
-	msg.WriteString(fmt.Sprintf("Expiration Time: %s\n", param.ExpirationTime))
-	return msg.String()
-}
-
-// promptSigning prompts the user to sign a message. User should be aware of
-// the message content, since in this workflow user will only see the message once.
-func promptSigning(signer auth.Signer, msg string) (*auth.Signature, error) {
+// promptMessage prompts the user to sign a message. Return an error if user
+// declines to sign.
+func promptMessage(msg string) error {
 	// display the message to user
 	fmt.Println(msg)
 
@@ -167,93 +78,8 @@ func promptSigning(signer auth.Signer, msg string) (*auth.Signature, error) {
 
 	_, err := prompt.Run()
 	if err != nil {
-		return nil, fmt.Errorf("you declined to sign")
+		return fmt.Errorf("you declined to sign")
 	}
 
-	return signer.Sign([]byte(msg))
-}
-
-// authParameter defines the result of GET request for authentication.
-// It's the parameters that will be used to compose the message(SIWE like)
-// to sign.
-type authParameter struct {
-	Nonce          string `json:"nonce"`
-	Statement      string `json:"statement"` // optional
-	IssueAt        string `json:"issue_at"`
-	ExpirationTime string `json:"expiration_time"`
-}
-
-type authGetResponse struct {
-	Result *authParameter `json:"result"`
-	Error  string         `json:"error"`
-}
-
-type authPostResponse struct {
-	Result string `json:"result"`
-	Error  string `json:"error"`
-}
-
-// authPostPayload defines the payload of POST request for authentication
-type authPostPayload struct {
-	Nonce     string          `json:"nonce"`  // identifier for authn session
-	Sender    []byte          `json:"sender"` // sender public key
-	Signature *auth.Signature `json:"signature"`
-}
-
-// requestAuthToken requests a authenticated token from the KGW provider.
-// This will send a POST request to the KGW provider, and the provider will
-// return a cookie.
-func requestAuthToken(hc *http.Client, target string, nonce string,
-	sender []byte, sig *auth.Signature) (*http.Cookie, error) {
-	targetURL, err := url.Parse(target)
-	if err != nil {
-		return nil, fmt.Errorf("parse target: %w", err)
-	}
-
-	authURL, err := targetURL.Parse(kgwAuthEndpoint)
-	if err != nil {
-		return nil, fmt.Errorf("parse authURL: %w", err)
-	}
-
-	payload := authPostPayload{
-		Nonce:     nonce,
-		Signature: sig,
-		Sender:    sender,
-	}
-
-	buf := new(bytes.Buffer)
-	err = json.NewEncoder(buf).Encode(&payload)
-	if err != nil {
-		return nil, fmt.Errorf("marshal payload: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, authURL.String(), buf)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := hc.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var r authPostResponse
-	err = json.NewDecoder(resp.Body).Decode(&r)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	if r.Error != "" {
-		return nil, fmt.Errorf("error response: %s", r.Error)
-	}
-
-	// NOTE: one cookie is enough for now
-	for _, c := range resp.Cookies() {
-		if c.Name == kgwAuthCookieName {
-			return c, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no cookie returned")
+	return nil
 }
