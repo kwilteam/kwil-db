@@ -25,7 +25,6 @@ type CallMessage struct {
 	AuthType string
 
 	// Sender is the public key of the sender
-	// optional, only required if the action requires authentication
 	Sender []byte
 }
 
