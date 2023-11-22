@@ -6,7 +6,10 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptrace"
 	"net/url"
+	"slices"
 	"time"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 const (
@@ -51,8 +54,8 @@ func DialOptions(target string, opts ...ClientOption) (*Client, error) {
 	}
 
 	headers := make(http.Header, 2+len(cfg.httpHeaders))
-	headers.Set("accept", contentType)
-	headers.Set("content-type", contentType)
+	headers.Set("Accept", contentType)
+	headers.Set("Content-Type", contentType)
 	for key, values := range cfg.httpHeaders {
 		headers[key] = values
 	}
@@ -64,15 +67,16 @@ func DialOptions(target string, opts ...ClientOption) (*Client, error) {
 
 	// enable cookie jar
 	if clt.Jar == nil {
-		clt.Jar, _ = cookiejar.New(nil)
+		clt.Jar = newCookieJar()
 	}
+
 	clt.Jar.SetCookies(u, cfg.cookies)
 
 	client := &Client{
 		target:    target,
 		debugMode: cfg.debugMode,
 		conn:      clt,
-		headers:   cfg.httpHeaders,
+		headers:   headers,
 	}
 
 	return client, nil
@@ -81,6 +85,8 @@ func DialOptions(target string, opts ...ClientOption) (*Client, error) {
 // makeRequest makes a request to the target and returns the response body
 // the caller should read all data in the body and close the response body
 func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
+	carriedCookies := req.Cookies()
+	// default headers
 	req.Header = c.headers.Clone()
 	s := time.Now()
 
@@ -113,6 +119,36 @@ func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
 		req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	}
 
+	// handle jar cookies and request cookies
+	if carriedCookies != nil {
+		jarCookies := c.conn.Jar.Cookies(req.URL)
+		if jarCookies == nil {
+			// use request cookies if jar has no cookies
+			for _, cookie := range carriedCookies {
+				req.AddCookie(cookie)
+			}
+		} else {
+			// NOTE: SetCookies won't overwrite existing cookies of cookieJar,
+			// so we have to create a new cookie jar
+			oldJar := c.conn.Jar
+			defer func() {
+				c.conn.Jar = oldJar
+			}()
+
+			// overwrite jar cookies with request cookies
+			newJarCookies := append(carriedCookies, jarCookies...) // order matters
+			// remove duplicated cookies; CompactFunc will modify the slice and
+			// keep the first one of duplicated cookies, e.g., from carryCookies
+			newJarCookies = slices.CompactFunc(newJarCookies,
+				func(c1 *http.Cookie, c2 *http.Cookie) bool {
+					return c1.Name == c2.Name
+				})
+
+			c.conn.Jar = newCookieJar()
+			c.conn.Jar.SetCookies(req.URL, newJarCookies)
+		}
+	}
+
 	resp, err := c.conn.Do(req)
 	// NOTE: we can copy&close resp.Body to a buffer here so that later we
 	// don't need to close the resp.Body to ensure the connection can be reused.
@@ -140,12 +176,20 @@ func (c *Client) Close() error {
 func DefaultHTTPClient() *http.Client {
 	// same transport same connection
 	tr := &http.Transport{
-		MaxIdleConnsPerHost: 200,
+		//MaxConnsPerHost: 5, // default is 0, no limit
+		//MaxIdleConnsPerHost: 2, // default is 2
 		//DisableCompression: ,
 		//DisableKeepAlives:  ,
+		IdleConnTimeout: time.Second * 5, // default is 90s
 	}
 	return &http.Client{
 		Transport: tr,
 		Timeout:   time.Second * 3,
 	}
+}
+
+func newCookieJar() http.CookieJar {
+	// NOTE: not entirely sure about the PublicSuffixList
+	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	return jar
 }

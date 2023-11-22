@@ -20,7 +20,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 		nonce = uint64(txOpts.nonce)
 	} else {
 		// Get the latest nonce for the account, if it exists.
-		acc, err := c.transportClient.GetAccount(ctx, c.Signer.PublicKey(), types.AccountStatusPending)
+		acc, err := c.rpc.GetAccount(ctx, c.Signer.PublicKey(), types.AccountStatusPending)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +40,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...T
 	}
 
 	// estimate price
-	price, err := c.transportClient.EstimateCost(ctx, tx)
+	price, err := c.rpc.EstimateCost(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate price: %w", err)
 	}

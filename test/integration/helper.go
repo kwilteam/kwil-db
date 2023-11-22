@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
@@ -61,7 +63,7 @@ const (
 // IntTestConfig is the config for integration test
 // This is totally separate from acceptance test
 type IntTestConfig struct {
-	GWEndpoint    string // gateway endpoint
+	HTTPEndpoint  string
 	GrpcEndpoint  string
 	ChainEndpoint string
 
@@ -156,7 +158,7 @@ func (r *IntHelper) LoadConfig() {
 		VisitorRawPK:              getEnv("KIT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KIT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KIT_LOG_LEVEL", "info"),
-		GWEndpoint:                getEnv("KIT_GATEWAY_ENDPOINT", "localhost:8080"),
+		HTTPEndpoint:              getEnv("KIT_HTTP_ENDPOINT", "http://localhost:8080"),
 		GrpcEndpoint:              getEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
@@ -339,8 +341,10 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 	signer := r.cfg.CreatorSigner
 	pk := r.cfg.CreatorRawPk
 	switch driverType {
-	case "client":
-		return r.getClientDriver(signer)
+	case "http":
+		return r.getHTTPClientDriver(signer)
+	case "grpc":
+		return r.getGRPCClientDriver(signer)
 	case "cli":
 		return r.getCliDriver(pk, signer.PublicKey())
 	default:
@@ -377,8 +381,10 @@ container name: "%s"`,
 
 	pk := privKeyHex
 	switch driverType {
-	case "client":
-		return r.getClientDriver(signer)
+	case "http":
+		return r.getHTTPClientDriver(signer)
+	case "grpc":
+		return r.getGRPCClientDriver(signer)
 	case "cli":
 		return r.getCliDriver(pk, signer.PubKey().Bytes())
 	default:
@@ -386,14 +392,32 @@ container name: "%s"`,
 	}
 }
 
-func (r *IntHelper) getClientDriver(signer auth.Signer) KwilIntDriver {
+func (r *IntHelper) getHTTPClientDriver(signer auth.Signer) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	options := []client.Option{client.WithSigner(signer, testChainID),
 		client.WithLogger(logger),
 		client.WithTLSCert("")} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
+	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, options...)
 	require.NoError(r.t, err, "failed to create kwil client")
+
+	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+}
+
+func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) KwilIntDriver {
+	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+
+	gtOptions := []gRPC.Option{gRPC.WithTlsCert("")}
+	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
+	require.NoError(r.t, err, "failed to create grpc transport")
+
+	options := []client.Option{client.WithSigner(signer, ""),
+		client.WithLogger(logger),
+		client.WithTLSCert(""),
+		client.WithRPCClient(gt),
+	} // TODO: handle cert
+	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
+	require.NoError(r.t, err, "failed to create grpc client")
 
 	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
 }
@@ -407,7 +431,7 @@ func (r *IntHelper) getCliDriver(privKey string, pubKey []byte) KwilIntDriver {
 	adminBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.GrpcEndpoint, privKey, pubKey, logger)
+	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, pubKey, logger)
 }
 
 func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {

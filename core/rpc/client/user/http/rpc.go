@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
@@ -27,14 +28,28 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 	return parseChainInfoResponse(resp)
 }
 
-func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage) ([]map[string]any, error) {
+func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage,
+	opts ...rpcClient.ActionCallOption) ([]map[string]any, error) {
 	req, err := newActionCallRequest(c.target, msg)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
+	ctxReq := req.WithContext(ctx)
+
+	// add auth cookies from current session
+	callOpts := rpcClient.ActionCallOpts{}
+	for _, o := range opts {
+		o(&callOpts)
+	}
+	if callOpts.AuthCookies != nil {
+		for _, cookie := range callOpts.AuthCookies {
+			ctxReq.AddCookie(cookie)
+		}
+	}
+
 	// NOTE: probably should start to use status.FromError
-	resp, err := c.makeRequest(req.WithContext(ctx))
+	resp, err := c.makeRequest(ctxReq)
 	if err != nil {
 		return nil, fmt.Errorf("make request: %w", err)
 	}
@@ -103,8 +118,8 @@ func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]strin
 	return parseListDatabasesResponse(resp)
 }
 
-func (c *Client) GetAccount(ctx context.Context, pubKey []byte) (*types.Account, error) {
-	req, err := newGetAccountRequest(c.target, pubKey)
+func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+	req, err := newGetAccountRequest(c.target, pubKey, status)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
