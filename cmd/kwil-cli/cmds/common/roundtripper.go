@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	httpRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 )
 
 const (
@@ -31,6 +32,11 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		client.WithTLSCert(conf.TLSCertFile),
 	}
 
+	// right now the session/cookie check is only done in few APIs in KGW, not ideal
+	// we won't all APIs until we have a rate limiter on KGW
+	// NOTE: with KGW auth, we kind of always need cookie, hence user's wallet address
+	// Store user's wallet address in config file? not sure
+
 	if flags&WithoutPrivateKey == 0 {
 		// this means it needs to use the private key
 		if conf.PrivateKey == nil {
@@ -39,6 +45,24 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 
 		signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}
 		options = append(options, client.WithSigner(&signer, conf.ChainID))
+
+		// try load kgw auth token from file, if exist
+		// Kwild HTTP API doesn't care about KGW cookie, so not harm to load it
+		addr, err := signer.Address()
+		if err != nil {
+			return fmt.Errorf("get address: %w", err)
+		}
+		kgwAuthInfo, err := LoadKGWAuthInfo(KGWAuthTokenFilePath(), addr)
+		if err == nil && kgwAuthInfo != nil {
+			// here create http client to config cookie
+			// put cookie options in core/client/client.go seems not a good idea
+			cookie := ConvertToHttpCookie(kgwAuthInfo.Cookie)
+			hc, err := httpRPC.DialOptions(conf.GrpcURL, httpRPC.WithCookie(cookie))
+			if err != nil {
+				return err
+			}
+			options = append(options, client.WithRPCClient(hc))
+		}
 	}
 
 	if conf.GrpcURL == "" {

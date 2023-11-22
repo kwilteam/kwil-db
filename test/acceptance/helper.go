@@ -11,14 +11,15 @@ import (
 	"testing"
 	"time"
 
+	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+
+	"github.com/joho/godotenv"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/test/driver"
-
-	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -36,7 +37,7 @@ const testChainID = "kwil-test-chain"
 
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
-	GWEndpoint    string // gateway endpoint
+	HTTPEndpoint  string
 	GrpcEndpoint  string
 	ChainEndpoint string
 
@@ -77,7 +78,7 @@ VISITOR_PUBLIC_KEY=%x
 `
 	content := fmt.Sprintf(envTemplage,
 		e.GrpcEndpoint,
-		e.GWEndpoint,
+		e.HTTPEndpoint,
 		e.ChainEndpoint,
 		e.CreatorRawPk,
 		e.CreatorPublicKey(),
@@ -125,7 +126,7 @@ func (r *ActHelper) LoadConfig() {
 		VisitorRawPK:              getEnv("KACT_VISITOR_PK", "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"),
 		SchemaFile:                getEnv("KACT_SCHEMA", "./test-data/test_db.kf"),
 		LogLevel:                  getEnv("KACT_LOG_LEVEL", "info"),
-		GWEndpoint:                getEnv("KACT_GATEWAY_ENDPOINT", "localhost:8080"),
+		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://localhost:8080"),
 		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
@@ -267,8 +268,10 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 	}
 
 	switch driveType {
-	case "client":
-		return r.getClientDriver(signer)
+	case "http":
+		return r.getHTTPClientDriver(signer)
+	case "grpc":
+		return r.getGRPCClientDriver(signer)
 	case "cli":
 		return r.getCliDriver(pk, signer.PublicKey())
 	default:
@@ -276,14 +279,32 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 	}
 }
 
-func (r *ActHelper) getClientDriver(signer auth.Signer) KwilAcceptanceDriver {
+func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	options := []client.Option{client.WithSigner(signer, testChainID),
 		client.WithLogger(logger),
 		client.WithTLSCert("")} // TODO: handle cert
+	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, options...)
+	require.NoError(r.t, err, "failed to create http client")
+
+	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+}
+
+func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver {
+	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+
+	gtOptions := []gRPC.Option{gRPC.WithTlsCert("")}
+	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
+	require.NoError(r.t, err, "failed to create grpc transport")
+
+	options := []client.Option{client.WithSigner(signer, ""),
+		client.WithLogger(logger),
+		client.WithTLSCert(""),
+		client.WithRPCClient(gt),
+	} // TODO: handle cert
 	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
-	require.NoError(r.t, err, "failed to create kwil client")
+	require.NoError(r.t, err, "failed to create grpc client")
 
 	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
 }
@@ -297,5 +318,5 @@ func (r *ActHelper) getCliDriver(privKey string, pubKey []byte) KwilAcceptanceDr
 	adminBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.GrpcEndpoint, privKey, pubKey, logger)
+	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, pubKey, logger)
 }
