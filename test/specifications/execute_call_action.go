@@ -2,9 +2,10 @@ package specifications
 
 import (
 	"context"
+	"testing"
+
 	"github.com/cstockton/go-conv"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, visitor ExecuteCallDsl) {
