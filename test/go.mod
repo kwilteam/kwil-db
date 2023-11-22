@@ -14,7 +14,7 @@ require (
 	github.com/cometbft/cometbft v0.37.2
 	github.com/cstockton/go-conv v1.0.0
 	github.com/joho/godotenv v1.5.1
-	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231121195150-a3f2d2694a55
+	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231121201146-220cb97c8cb2
 	github.com/kwilteam/kwil-db v0.5.1-0.20230927233025-c3e8ef579ade
 	github.com/kwilteam/kwil-db/core v0.0.0
 	github.com/stretchr/testify v1.8.4
