@@ -15,9 +15,9 @@ import (
 
 type KwilCliConfig struct {
 	PrivateKey  *crypto.Secp256k1PrivateKey
-	GrpcURL     string
+	GrpcURL     string // TODO: change to maybe `RPCProvider` or `ProviderURL`
 	ChainID     string
-	TLSCertFile string
+	TLSCertFile string // NOTE: since HTTP by default, this seems not use
 }
 
 func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
