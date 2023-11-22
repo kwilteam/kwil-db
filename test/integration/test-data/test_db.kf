@@ -95,6 +95,7 @@ action get_user_posts($username) public {
     );
 }
 
+@kgw(authn='true')
 action get_post_authenticated($id) public view mustsign {
     SELECT *
     FROM posts
@@ -121,6 +122,7 @@ action divide($numerator1, $numerator2, $denominator) public view {
 }
 
 @test(remove_mustsign='yes', when='after engine refactor')
+@kgw(authn='true')
 action owner_only() public owner view mustsign {
     select 'owner only';
 }
