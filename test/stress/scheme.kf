@@ -4,7 +4,7 @@ table users {
     id int primary notnull,
     username text default('sds'),
     age int min(0),
-    wallet blob unique
+    wallet text unique
 }
 
 table posts {
@@ -35,7 +35,7 @@ action update_username($username) public {
 
 action delete_user() public {
     DELETE FROM users
-    WHERE public_key(wallet) = public_key(@caller);
+    WHERE wallet = @caller;
 }
 
 action delete_user_by_id ($id) public owner {
@@ -86,7 +86,8 @@ action get_user_posts($username) public view {
     );
 }
 
-action get_post_authenticated($id) public view mustsign {
+@kgw(authn='true')
+action get_post_authenticated($id) public view {
     SELECT *
     FROM posts
     WHERE id = $id;
@@ -104,6 +105,7 @@ action multi_select() public {
     SELECT * FROM users;
 }
 
+@kgw(authn='true')
 action owner_only() public owner view {
     select 'owner only';
 }
