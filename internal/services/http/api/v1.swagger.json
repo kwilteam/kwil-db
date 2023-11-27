@@ -673,15 +673,13 @@
         "body": {
           "$ref": "#/definitions/txCallRequestBody"
         },
-        "signature": {
-          "$ref": "#/definitions/txSignature"
+        "auth_type": {
+          "type": "string",
+          "description": "auth_type is the type of authenticator that will be used to derive\nidentifier from the sender."
         },
         "sender": {
           "type": "string",
           "format": "byte"
-        },
-        "serialization": {
-          "type": "string"
         }
       }
     },

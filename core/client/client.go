@@ -220,23 +220,13 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 		Arguments: stringInputs,
 	}
 
-	shouldSign, err := shouldAuthenticate(c.Signer, callOpts.forceAuthenticated)
-	if err != nil {
-		return nil, err
-	}
-
 	msg, err := transactions.CreateCallMessage(payload)
 	if err != nil {
 		return nil, fmt.Errorf("create signed message: %w", err)
 	}
 
-	if shouldSign {
-		err = msg.Sign(c.Signer)
-
-		if err != nil {
-			return nil, fmt.Errorf("sign message: %w", err)
-		}
-	}
+	msg.AuthType = c.Signer.AuthType()
+	msg.Sender = c.Signer.Identity()
 
 	// NOTE: only HTTP RPC supports authn cookie
 	var actCallOpts []rpcClient.ActionCallOption
@@ -249,25 +239,6 @@ func (c *Client) CallAction(ctx context.Context, dbid string, action string, inp
 	}
 
 	return NewRecordsFromMaps(res), nil
-}
-
-// shouldAuthenticate decides whether the client should authenticate or not
-// if enforced is not nil, it will be used instead of the default value
-// otherwise, if the private key is not nil, it will authenticate
-func shouldAuthenticate(signer auth.Signer, enforced *bool) (bool, error) {
-	if enforced != nil {
-		if !*enforced {
-			return false, nil
-		}
-
-		if signer == nil {
-			return false, fmt.Errorf("private key is nil, but authentication is enforced")
-		}
-
-		return true, nil
-	}
-
-	return signer != nil, nil
 }
 
 func DecodeOutputs(bts []byte) ([]map[string]any, error) {
