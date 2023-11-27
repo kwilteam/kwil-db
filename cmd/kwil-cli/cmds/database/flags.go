@@ -33,6 +33,11 @@ func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, e
 			return nil, fmt.Errorf("no user identifier provided")
 		}
 
+		// if it begins with 0x, remove it
+		if len(hexIdent) > 2 && hexIdent[:2] == "0x" {
+			hexIdent = hexIdent[2:]
+		}
+
 		ident, err = hex.DecodeString(hexIdent)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode public key: %w", err)
