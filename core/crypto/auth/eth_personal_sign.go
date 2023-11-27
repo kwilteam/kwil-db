@@ -38,22 +38,23 @@ func (EthSecp256k1Authenticator) Identifier(ident []byte) (string, error) {
 func (EthSecp256k1Authenticator) Verify(identity []byte, msg []byte, signature []byte) error {
 	// signature is 65 bytes, [R || S || V] format
 	if len(signature) != ethPersonalSignSignatureLength {
-		return fmt.Errorf("invalid signature length: expected %d, received %d", ethPersonalSignSignatureLength, len(signature))
+		return fmt.Errorf("invalid signature length: expected %d, received %d",
+			ethPersonalSignSignatureLength, len(signature))
 	}
-	hash := ethAccounts.TextHash(msg)
 
+	if signature[ethCrypto.RecoveryIDOffset] == 27 ||
+		signature[ethCrypto.RecoveryIDOffset] == 28 {
+		// Transform yellow paper V from 27/28 to 0/1
+		signature[ethCrypto.RecoveryIDOffset] -= 27
+	}
+
+	hash := ethAccounts.TextHash(msg)
 	pubkeyBytes, err := ethCrypto.Ecrecover(hash, signature)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid signature: recover public key failed: %w", err)
 	}
 
-	pubkey, err := ethCrypto.UnmarshalPubkey(pubkeyBytes)
-	if err != nil {
-		return err
-	}
-
-	addr := ethCrypto.PubkeyToAddress(*pubkey)
-
+	addr := ethCommon.BytesToAddress(ethCrypto.Keccak256(pubkeyBytes[1:])[12:])
 	if !bytes.Equal(addr.Bytes(), identity) {
 		return fmt.Errorf("invalid signature: expected address %x, received %x", identity, addr.Bytes())
 	}
