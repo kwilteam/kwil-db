@@ -1,9 +1,8 @@
 package auth
 
 import (
+	"bytes"
 	"fmt"
-
-	"github.com/kwilteam/kwil-db/core/crypto"
 
 	ethAccounts "github.com/ethereum/go-ethereum/accounts"
 	ethCommon "github.com/ethereum/go-ethereum/common"
@@ -48,14 +47,16 @@ func (EthSecp256k1Authenticator) Verify(identity []byte, msg []byte, signature [
 		return err
 	}
 
-	pubkey, err := crypto.Secp256k1PublicKeyFromBytes(pubkeyBytes)
+	pubkey, err := ethCrypto.UnmarshalPubkey(pubkeyBytes)
 	if err != nil {
 		return err
 	}
 
-	// The contract of (*Secp256k1PublicKey).Verify is to have any recovery byte
-	// at the end, if it is present. If verification fails here, it is possible
-	// that the recovery byte was the first byte, as is common in other domains.
-	// The EthPersonalSigner provided by the SDK will always work with this.
-	return pubkey.Verify(signature, hash)
+	addr := ethCrypto.PubkeyToAddress(*pubkey)
+
+	if !bytes.Equal(addr.Bytes(), identity) {
+		return fmt.Errorf("invalid signature: expected address %x, received %x", identity, addr.Bytes())
+	}
+
+	return nil
 }
