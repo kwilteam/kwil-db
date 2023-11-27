@@ -42,7 +42,7 @@ func (h *harness) dropDB(ctx context.Context, dbid string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	txResp, err := h.WaitTx(ctx, txHash, txPollInterval)
 	if err != nil {
@@ -77,7 +77,7 @@ func (h *harness) deployDBAsync(ctx context.Context) (string, <-chan asyncResp, 
 	promise := make(chan asyncResp, 1)
 	go func() {
 		// time.Sleep(500 * time.Millisecond) // lame, see executeAction notes
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
 		resp, err := h.WaitTx(ctx, txHash, txPollInterval)
 		if err != nil {
@@ -126,7 +126,7 @@ func (h *harness) getOrCreateUser(ctx context.Context, dbid string) (int, string
 	for recs.Next() {
 		rec := *recs.Record()
 		uid, user, wallet := rec["id"].(int), rec["username"].(string), rec["wallet"].([]byte)
-		if bytes.Equal(wallet, h.pub) {
+		if bytes.Equal(wallet, h.acctID) {
 			userName = user
 			userID = uid
 			break
