@@ -16,7 +16,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.5
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.0
 	github.com/kwilteam/go-sqlite v0.0.0-20230606000142-c7eaa7111421
-	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231121201146-220cb97c8cb2
+	github.com/kwilteam/kuneiform v0.5.0-beta.0.20231127204550-1284c835497e
 	github.com/kwilteam/kwil-db/core v0.0.0
 	github.com/kwilteam/kwil-db/parse v0.0.0
 	github.com/kwilteam/kwil-extensions v0.0.0-20230727040522-1cfd930226b7
