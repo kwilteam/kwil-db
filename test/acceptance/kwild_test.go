@@ -62,7 +62,7 @@ func TestKwildAcceptance(t *testing.T) {
 			specifications.ExecuteOwnerActionFailSpecification(ctx, t, visitorDriver, dbid)
 
 			specifications.ExecuteDBInsertSpecification(ctx, t, creatorDriver)
-			specifications.ExecuteCallSpecification(ctx, t, creatorDriver)
+			specifications.ExecuteCallSpecification(ctx, t, creatorDriver, visitorDriver)
 
 			specifications.ExecuteDBUpdateSpecification(ctx, t, creatorDriver)
 			specifications.ExecuteDBDeleteSpecification(ctx, t, creatorDriver)

@@ -96,7 +96,7 @@ action get_user_posts($username) public {
 }
 
 @kgw(authn='true')
-action get_post_authenticated($id) public view mustsign {
+action get_post_authenticated($id) public view {
     SELECT *
     FROM posts
     WHERE id = $id;
@@ -121,8 +121,7 @@ action divide($numerator1, $numerator2, $denominator) public view {
     select $up AS upper_value, $down AS lower_value;
 }
 
-@test(remove_mustsign='yes', when='after engine refactor')
 @kgw(authn='true')
-action owner_only() public owner view mustsign {
+action owner_only() public owner view {
     select 'owner only';
 }
