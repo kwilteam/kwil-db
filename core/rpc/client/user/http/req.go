@@ -232,12 +232,10 @@ func newActionCallRequest(server string, msg *transactions.CallMessage) (*http.R
 
 	callReq := &txpb.CallRequest{
 		Body: &txpb.CallRequest_Body{
-			Description: msg.Body.Description,
-			Payload:     msg.Body.Payload,
+			Payload: msg.Body.Payload,
 		},
-		Signature:     conversion.ConvertToPBCryptoSignature(msg.Signature),
-		Sender:        sender,
-		Serialization: msg.Serialization.String(),
+		AuthType: msg.AuthType,
+		Sender:   sender,
 	}
 
 	var bodyReader io.Reader

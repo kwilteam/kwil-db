@@ -15,17 +15,10 @@ import (
 // If a message caller is specified, then it will check the signature of the message and use the caller as the caller of the action.
 func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error) {
 	var sender string
-
-	if msg.IsSigned() {
-		err := ident.VerifyMessage(msg)
-		if err != nil {
-			return nil, fmt.Errorf(`%w: failed to verify signed message: %s`, ErrAuthenticationFailed, err.Error())
-		}
-
-		sender, err = ident.Identifier(msg.Signature.Type, msg.Sender)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get sender address: %w", err)
-		}
+	var err error
+	sender, err = ident.Identifier(msg.AuthType, msg.Sender)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sender address: %w", err)
 	}
 
 	results, err := u.engine.Execute(ctx, &engineTypes.ExecutionData{

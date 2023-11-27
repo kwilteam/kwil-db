@@ -23,12 +23,6 @@ func VerifyTransaction(tx *transactions.Transaction) error {
 	return verify(tx, tx.Sender, tx.Signature)
 }
 
-// VerifyMessage verifies a message's signature using the Authenticator
-// registry in this package.
-func VerifyMessage(callMsg *transactions.CallMessage) error {
-	return verify(callMsg, callMsg.Sender, callMsg.Signature)
-}
-
 // VerifySignature verifies the signature given a public key and the message.
 // It uses the Authenticator registry in this package.
 func VerifySignature(pubkey []byte, msg []byte, sig *auth.Signature) error {

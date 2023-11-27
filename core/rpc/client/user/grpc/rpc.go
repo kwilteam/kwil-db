@@ -133,12 +133,10 @@ func (c *Client) Call(ctx context.Context, req *transactions.CallMessage,
 
 	callReq := &txpb.CallRequest{
 		Body: &txpb.CallRequest_Body{
-			Description: req.Body.Description,
-			Payload:     req.Body.Payload,
+			Payload: req.Body.Payload,
 		},
-		Signature:     convertActionSignature(req.Signature),
-		Sender:        sender,
-		Serialization: req.Serialization.String(),
+		AuthType: req.AuthType,
+		Sender:   sender,
 	}
 
 	res, err := c.txClient.Call(ctx, callReq)
