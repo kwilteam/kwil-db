@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/utils"
 
 	"github.com/spf13/cobra"
@@ -42,7 +43,8 @@ func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, e
 			return nil, fmt.Errorf("no public key provided")
 		}
 
-		ident = conf.PrivateKey.PubKey().Bytes()
+		signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}
+		ident = signer.Identity()
 	}
 
 	return ident, nil

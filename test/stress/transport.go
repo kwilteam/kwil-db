@@ -67,11 +67,11 @@ func (tc *timedClient) ListDatabases(ctx context.Context, ownerIdentifier []byte
 	return tc.cl.ListDatabases(ctx, ownerIdentifier)
 }
 
-func (tc *timedClient) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+func (tc *timedClient) GetAccount(ctx context.Context, acctID []byte, status types.AccountStatus) (*types.Account, error) {
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "GetAccount")
 	}
-	return tc.cl.GetAccount(ctx, pubKey, status)
+	return tc.cl.GetAccount(ctx, acctID, status)
 }
 
 func (tc *timedClient) Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {

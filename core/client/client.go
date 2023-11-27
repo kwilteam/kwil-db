@@ -201,7 +201,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	return c.rpc.Broadcast(ctx, tx)
 }
 
-// CallAction call an action, if auxiliary `mustsign` is set, need to sign the action payload. It returns the records.
+// CallAction calls an action. It returns the records.
 func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any, opts ...CallOpt) (*Records, error) {
 	callOpts := &callOptions{} // TODO: remove
 

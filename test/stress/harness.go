@@ -20,7 +20,7 @@ import (
 type harness struct {
 	*client.Client
 	logger *log.Logger
-	pub    []byte
+	acctID []byte
 
 	nonceMtx sync.Mutex
 	nonce    int64 // atomic.Int64
@@ -59,7 +59,7 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 		if errors.Is(err, transactions.ErrInvalidNonce) { // this alone should not happen
 			// NOTE: if GetAccount returns only the confirmed nonce, we'll error
 			// again shortly if there are others already in mempool.
-			acct, err := h.GetAccount(ctx, h.pub, types.AccountStatusPending)
+			acct, err := h.GetAccount(ctx, h.acctID, types.AccountStatusPending)
 			if err != nil {
 				return err
 			}
@@ -75,7 +75,7 @@ func (h *harness) recoverNonce(ctx context.Context) error {
 	h.nonceMtx.Lock()
 	defer h.nonceMtx.Unlock()
 
-	acct, err := h.GetAccount(ctx, h.pub, types.AccountStatusPending)
+	acct, err := h.GetAccount(ctx, h.acctID, types.AccountStatusPending)
 	if err != nil {
 		return err
 	}
