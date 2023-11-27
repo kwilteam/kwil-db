@@ -8,7 +8,7 @@ import (
 
 type Schema struct {
 	Name string
-	// Owner is the public key of the owner of the schema
+	// Owner is the identifier (generally an address in bytes or public key) of the owner of the schema
 	Owner      []byte
 	Extensions []*Extension
 	Tables     []*Table
