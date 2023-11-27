@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/utils"
 
 	"github.com/spf13/cobra"
@@ -32,6 +33,11 @@ func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, e
 			return nil, fmt.Errorf("no user identifier provided")
 		}
 
+		// if it begins with 0x, remove it
+		if len(hexIdent) > 2 && hexIdent[:2] == "0x" {
+			hexIdent = hexIdent[2:]
+		}
+
 		ident, err = hex.DecodeString(hexIdent)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode public key: %w", err)
@@ -42,7 +48,8 @@ func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, e
 			return nil, fmt.Errorf("no public key provided")
 		}
 
-		ident = conf.PrivateKey.PubKey().Bytes()
+		signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}
+		ident = signer.Identity()
 	}
 
 	return ident, nil

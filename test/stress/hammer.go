@@ -66,7 +66,7 @@ func hammer(ctx context.Context) error {
 		}
 	}
 	signer := &auth.EthPersonalSigner{Key: *priv}
-	pub := priv.PubKey().Bytes()
+	acctID := signer.Identity()
 
 	var rpcClient client.RPCClient
 	if strings.Contains(host, "http") {
@@ -109,11 +109,11 @@ func hammer(ctx context.Context) error {
 		concurrentBroadcast: !sequentialBroadcast,
 		Client:              cl,
 		logger:              &logger,
-		pub:                 pub,
+		acctID:              acctID,
 		nestedLogger:        logger.WithOptions(zap.AddCallerSkip(1)),
 	}
 
-	if acct, err := cl.GetAccount(ctx, pub, types.AccountStatusPending); err != nil {
+	if acct, err := cl.GetAccount(ctx, acctID, types.AccountStatusPending); err != nil {
 		return err
 	} else { // scoping acct
 		h.nonce = acct.Nonce
@@ -129,13 +129,13 @@ func hammer(ctx context.Context) error {
 	// bother the account store
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		_, err := h.GetAccount(ctx, pub, types.AccountStatus(rand.Intn(3)))
+		_, err := h.GetAccount(ctx, acctID, types.AccountStatus(rand.Intn(3)))
 		return err
 	}, "GetAccount", badgerInterval, &logger)
 
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		notAnAccount := randomBytes(len(pub))
+		notAnAccount := randomBytes(len(acctID))
 		_, err := h.GetAccount(ctx, notAnAccount, types.AccountStatusPending)
 		return err
 	}, "GetAccount", badgerInterval, &logger)
