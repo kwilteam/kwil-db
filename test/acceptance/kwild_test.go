@@ -13,8 +13,7 @@ import (
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 var remote = flag.Bool("remote", false, "test against remote node")
 
-// by default cli driver use http, so this test will run against http&grpc
-var drivers = flag.String("drivers", "grpc,cli", "comma separated list of drivers to run")
+var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
 // TestKwildAcceptance runs acceptance tests again a single kwild node(and
 // are not concurrent), using different drivers: clientDriver, cliDriver.
