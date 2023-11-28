@@ -16,9 +16,17 @@ import (
 func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error) {
 	var sender string
 	var err error
-	sender, err = ident.Identifier(msg.AuthType, msg.Sender)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get sender address: %w", err)
+
+	if len(msg.Sender) > 0 {
+		if msg.AuthType != "" {
+			sender, err = ident.Identifier(msg.AuthType, msg.Sender)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get sender identifier: %w", err)
+			}
+		} else {
+			// auth_type is the http payload field name
+			return nil, fmt.Errorf("auth_type is required")
+		}
 	}
 
 	results, err := u.engine.Execute(ctx, &engineTypes.ExecutionData{
