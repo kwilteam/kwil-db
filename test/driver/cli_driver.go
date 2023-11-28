@@ -25,28 +25,31 @@ import (
 
 // KwilCliDriver is a driver for tests using `cmd/kwil-cli`
 type KwilCliDriver struct {
-	cliBin     string // kwil-cli binary path
-	adminBin   string // kwil-admin binary path
-	rpcUrl     string
-	privKey    string
-	identifier []byte
-	logger     log.Logger
+	cliBin   string // kwil-cli binary path
+	adminBin string // kwil-admin binary path
+	rpcUrl   string
+	privKey  string
+	identity []byte
+	chainID  string
+	logger   log.Logger
 }
 
-func NewKwilCliDriver(cliBin, adminBin, rpcUrl, privKey string, identifier []byte, logger log.Logger) *KwilCliDriver {
+func NewKwilCliDriver(cliBin, adminBin, rpcUrl, privKey, chainID string, identity []byte, logger log.Logger) *KwilCliDriver {
 	return &KwilCliDriver{
-		cliBin:     cliBin,
-		adminBin:   adminBin,
-		rpcUrl:     rpcUrl,
-		privKey:    privKey,
-		identifier: identifier,
-		logger:     logger,
+		cliBin:   cliBin,
+		adminBin: adminBin,
+		rpcUrl:   rpcUrl,
+		privKey:  privKey,
+		identity: identity,
+		logger:   logger,
+		chainID:  chainID,
 	}
 }
 
 func (d *KwilCliDriver) newKwilCliCmd(args ...string) *exec.Cmd {
 	args = append(args, "--kwil-provider", d.rpcUrl)
 	args = append(args, "--private-key", d.privKey)
+	args = append(args, "--chain-id", d.chainID)
 	args = append(args, "--output", "json")
 
 	d.logger.Info("cli Cmd", zap.String("args",
@@ -74,11 +77,11 @@ func (d *KwilCliDriver) SupportBatch() bool {
 }
 
 func (d *KwilCliDriver) DBID(name string) string {
-	return utils.GenerateDBID(name, d.identifier)
+	return utils.GenerateDBID(name, d.identity)
 }
 
 func (d *KwilCliDriver) listDatabase() ([]string, error) {
-	cmd := d.newKwilCliCmd("database", "list", "--owner", hex.EncodeToString(d.identifier))
+	cmd := d.newKwilCliCmd("database", "list", "--owner", hex.EncodeToString(d.identity))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
 		//d.logger.Error("failed to list databases", zap.Error(err))
