@@ -9,12 +9,12 @@ type msgSerializer interface {
 	SerializeMsg() ([]byte, error)
 }
 
-func verify(obj msgSerializer, pubkey []byte, sig *auth.Signature) error {
+func verify(obj msgSerializer, identity []byte, sig *auth.Signature) error {
 	msg, err := obj.SerializeMsg()
 	if err != nil {
 		return err
 	}
-	return verifySig(pubkey, msg, sig)
+	return verifySig(identity, msg, sig)
 }
 
 // VerifyTransaction verifies a transaction's signature using the Authenticator
@@ -23,8 +23,8 @@ func VerifyTransaction(tx *transactions.Transaction) error {
 	return verify(tx, tx.Sender, tx.Signature)
 }
 
-// VerifySignature verifies the signature given a public key and the message.
+// VerifySignature verifies the signature given a signer's identity and the message.
 // It uses the Authenticator registry in this package.
-func VerifySignature(pubkey []byte, msg []byte, sig *auth.Signature) error {
-	return verifySig(pubkey, msg, sig)
+func VerifySignature(identity []byte, msg []byte, sig *auth.Signature) error {
+	return verifySig(identity, msg, sig)
 }
