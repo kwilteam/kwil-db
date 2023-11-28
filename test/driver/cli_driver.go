@@ -84,13 +84,12 @@ func (d *KwilCliDriver) listDatabase() ([]string, error) {
 	cmd := d.newKwilCliCmd("database", "list", "--owner", hex.EncodeToString(d.identity))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		//d.logger.Error("failed to list databases", zap.Error(err))
 		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 
+	d.logger.Debug("list database result", zap.Any("result", out.Result))
 	dbs, err := parseRespListDatabases(out.Result)
 	if err != nil {
-		//d.logger.Error("failed to parse list databases response", zap.Error(err))
 		return nil, fmt.Errorf("failed to parse list databases response: %w", err)
 	}
 
@@ -122,28 +121,22 @@ func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *transactions.Schem
 
 	dbByte, err := json.MarshalIndent(db, "", "  ")
 	if err != nil {
-		d.logger.Error("failed to marshal database", zap.Error(err))
 		return nil, fmt.Errorf("failed to marshal database: %w", err)
 	}
 
 	err = os.WriteFile(schemaFile, dbByte, 0644)
 	if err != nil {
-		d.logger.Error("failed to write database schema", zap.Error(err))
 		return nil, fmt.Errorf("failed to write database schema: %w", err)
 	}
 
 	cmd := d.newKwilCliCmd("database", "deploy", "-p", schemaFile, "-t", "json")
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Warn("db schema", zap.String("schema", string(dbByte)))
-		d.logger.Error("failed to deploy database", zap.Error(err))
 		return nil, fmt.Errorf("failed to deploy databse: %w", err)
 	}
 
-	d.logger.Debug("deployed database", zap.Any("Resp", out.Result))
 	txHash, err = parseRespTxHash(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx hash", zap.Error(err))
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
 
@@ -154,16 +147,26 @@ func (d *KwilCliDriver) TxSuccess(_ context.Context, txHash []byte) error {
 	cmd := d.newKwilCliCmd("utils", "query-tx", hex.EncodeToString(txHash))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to query tx", zap.Error(err))
 		return fmt.Errorf("failed to query tx: %w", err)
 	}
 
-	d.logger.Debug("tx query result", zap.Any("result", out.Result))
-
-	err = parseRespTxQuery(out.Result)
+	resp, err := parseRespTxQuery(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx query", zap.Error(err))
-		return fmt.Errorf("failed to parse tx query: %w", err)
+		d.logger.Debug("tx query failed", zap.String("error", err.Error()))
+		return fmt.Errorf("query failed: %w", err)
+	}
+
+	d.logger.Debug("tx info", zap.Int64("height", resp.Height),
+		zap.String("txHash", hex.EncodeToString(txHash)),
+		zap.Any("result", resp.TxResult))
+
+	// NOTE: this should not be considered a failure, should retry
+	if resp.Height < 0 {
+		return ErrTxNotConfirmed
+	}
+
+	if resp.TxResult.Code != 0 {
+		return fmt.Errorf("tx failed: %s", resp.TxResult.Log)
 	}
 	return nil
 }
@@ -172,14 +175,12 @@ func (d *KwilCliDriver) DropDatabase(_ context.Context, dbName string) (txHash [
 	cmd := d.newKwilCliCmd("database", "drop", dbName)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to drop database", zap.Error(err))
 		return nil, fmt.Errorf("failed to drop database: %w", err)
 	}
 
-	d.logger.Debug("dropped database", zap.Any("Resp", out.Result))
+	d.logger.Debug("drop database tx", zap.Any("result", out.Result))
 	txHash, err = parseRespTxHash(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx hash", zap.Error(err))
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
 
@@ -190,14 +191,12 @@ func (d *KwilCliDriver) getSchema(dbid string) (*transactions.Schema, error) {
 	cmd := d.newKwilCliCmd("database", "read-schema", "--dbid", dbid)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to drop database", zap.Error(err))
-		return nil, fmt.Errorf("failed to drop database: %w", err)
+		return nil, fmt.Errorf("failed to getSchema: %w", err)
 	}
 
 	schema, err := parseRespGetSchema(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse read schema response", zap.Error(err))
-		return nil, fmt.Errorf("failed to parse read schema response: %w", err)
+		return nil, fmt.Errorf("failed to parse getSchema response: %w", err)
 	}
 	return schema, nil
 }
@@ -207,7 +206,6 @@ func (d *KwilCliDriver) getSchema(dbid string) (*transactions.Schema, error) {
 func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, actionInputs []any) ([]string, error) {
 	schema, err := d.getSchema(dbid)
 	if err != nil {
-		d.logger.Error("failed to get schema", zap.Error(err))
 		return nil, err
 	}
 
@@ -220,7 +218,6 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 	}
 
 	if len(action.Inputs) != len(actionInputs) {
-		d.logger.Error("invalid number of inputs", zap.Int("expected", len(action.Inputs)), zap.Int("got", len(actionInputs)))
 		return nil, fmt.Errorf("invalid number of inputs, expected %d, got %d", len(action.Inputs), len(actionInputs))
 	}
 
@@ -235,8 +232,7 @@ func (d *KwilCliDriver) ExecuteAction(_ context.Context, dbid string, action str
 	// NOTE: kwil-cli does not support batched inputs
 	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs[0])
 	if err != nil {
-		d.logger.Error("failed to get action params", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to get action params: %w", err)
 	}
 
 	args := []string{"database", "execute", "--dbid", dbid, "--action", action}
@@ -245,14 +241,11 @@ func (d *KwilCliDriver) ExecuteAction(_ context.Context, dbid string, action str
 	cmd := d.newKwilCliCmd(args...)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to execute action", zap.Error(err))
 		return nil, fmt.Errorf("failed to execute action: %w", err)
 	}
 
-	d.logger.Debug("deployed database", zap.Any("Resp", out.Result))
 	txHash, err := parseRespTxHash(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx hash", zap.Error(err))
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
 
@@ -263,14 +256,12 @@ func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*c
 	cmd := d.newKwilCliCmd("database", "query", "--dbid", dbid, query)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to query database", zap.Error(err))
-		return nil, fmt.Errorf("failed to d: %w", err)
+		return nil, fmt.Errorf("failed to query database: %w", err)
 	}
 
 	d.logger.Debug("query result", zap.Any("result", out.Result))
 	records, err := parseRespQueryDb(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse query result", zap.Error(err))
 		return nil, fmt.Errorf("failed to parse query result: %w", err)
 	}
 	return records, nil
@@ -280,8 +271,7 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 	// NOTE: kwil-cli does not support batched inputs
 	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs)
 	if err != nil {
-		d.logger.Error("failed to prepare action params", zap.Error(err))
-		return nil, err
+		return nil, fmt.Errorf("failed to prepare action params: %w", err)
 	}
 
 	args := []string{"database", "call", "--dbid", dbid, "--action", action}
@@ -294,11 +284,10 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 	cmd := d.newKwilCliCmd(args...)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to call action", zap.Error(err))
 		return nil, fmt.Errorf("failed to call action: %w", err)
 	}
-
 	d.logger.Debug("call result", zap.Any("result", out.Result))
+
 	return parseRespQueryDb(out.Result)
 }
 
@@ -306,7 +295,6 @@ func (d *KwilCliDriver) ApproveNode(_ context.Context, joinerPubKey []byte) erro
 	cmd := d.newKwilCliCmd("validator", "approve", hex.EncodeToString(joinerPubKey))
 	_, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to approve node", zap.Error(err))
 		return fmt.Errorf("failed to approve node: %w", err)
 	}
 
@@ -317,14 +305,11 @@ func (d *KwilCliDriver) ValidatorNodeApprove(_ context.Context, joinerPubKey []b
 	cmd := d.newKwilAdminCmd("validators", "approve", hex.EncodeToString(joinerPubKey), d.privKey)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to approve validator", zap.Error(err))
 		return nil, fmt.Errorf("failed to approve validators: %w", err)
 	}
 
-	d.logger.Debug("validator approve", zap.Any("Resp", out.Result))
 	txHash, err := parseRespTxHash(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx hash", zap.Error(err))
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
 
@@ -338,7 +323,6 @@ func (d *KwilCliDriver) ValidatorNodeRemove(ctx context.Context, target []byte) 
 		return nil, fmt.Errorf("failed to approve validators: %w", err)
 	}
 
-	d.logger.Debug("validator target", zap.Any("Resp", out.Result))
 	txHash, err := parseRespTxHash(out.Result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
@@ -351,14 +335,11 @@ func (d *KwilCliDriver) ValidatorNodeJoin(_ context.Context) ([]byte, error) {
 	cmd := d.newKwilAdminCmd("validators", "join", d.privKey)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to join as validator", zap.Error(err))
 		return nil, fmt.Errorf("failed to joni as validator: %w", err)
 	}
 
-	d.logger.Debug("validator join", zap.Any("Resp", out.Result))
 	txHash, err := parseRespTxHash(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx hash", zap.Error(err))
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
 
@@ -369,14 +350,11 @@ func (d *KwilCliDriver) ValidatorNodeLeave(_ context.Context) ([]byte, error) {
 	cmd := d.newKwilAdminCmd("validators", "leave", d.privKey)
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to leave as validator", zap.Error(err))
 		return nil, fmt.Errorf("failed to leave as validator: %w", err)
 	}
 
-	d.logger.Debug("validator leave", zap.Any("Resp", out.Result))
 	txHash, err := parseRespTxHash(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx hash", zap.Error(err))
 		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
 	}
 
@@ -387,15 +365,13 @@ func (d *KwilCliDriver) ValidatorJoinStatus(_ context.Context, pubKey []byte) (*
 	cmd := d.newKwilAdminCmd("validators", "join-status", hex.EncodeToString(pubKey))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to query validator join status", zap.Error(err))
 		return nil, fmt.Errorf("failed to query validator join status: %w", err)
 	}
 
 	d.logger.Debug("validator join status", zap.Any("Resp", out.Result))
 	joinReq, err := parseRespValJoinRequest(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx hash", zap.Error(err))
-		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
+		return nil, fmt.Errorf("failed to parse validator join status: %w", err)
 	}
 
 	return joinReq, nil
@@ -405,15 +381,13 @@ func (d *KwilCliDriver) ValidatorsList(_ context.Context) ([]*types.Validator, e
 	cmd := d.newKwilAdminCmd("validators", "list")
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to list validators", zap.Error(err))
 		return nil, fmt.Errorf("failed to list validators: %w", err)
 	}
 
 	d.logger.Debug("validator list", zap.Any("Resp", out.Result))
 	valSets, err := parseRespValSets(out.Result)
 	if err != nil {
-		d.logger.Error("failed to parse tx hash", zap.Error(err))
-		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
+		return nil, fmt.Errorf("failed to parse validator list: %w", err)
 	}
 
 	return valSets, nil
@@ -434,7 +408,7 @@ func mustRun(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
 	}
 
 	output := out.Bytes()
-	logger.Debug("cmd output", zap.String("output", string(output)))
+	//logger.Debug("cmd output", zap.String("output", string(output)))
 
 	var result *cliResponse
 	err = json.Unmarshal(output, &result)
@@ -499,28 +473,19 @@ type respTxQuery struct {
 }
 
 // parserRespTxQuery parses the tx query response(json) from the cli response
-func parseRespTxQuery(data any) error {
+func parseRespTxQuery(data any) (*respTxQuery, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
-		return fmt.Errorf("failed to marshal tx query resp: %w", err)
+		return nil, fmt.Errorf("failed to marshal tx query resp: %w", err)
 	}
 
 	var resp respTxQuery
 	err = json.Unmarshal(bts, &resp)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal tx query: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal tx query: %w", err)
 	}
 
-	if resp.TxResult.Code != 0 {
-		return fmt.Errorf("tx failed: %s", resp.TxResult.Log)
-	}
-
-	// NOTE: this should not be considered a failure, should retry
-	if resp.Height < 0 {
-		return ErrTxNotConfirmed
-	}
-
-	return nil
+	return &resp, nil
 }
 
 // parseRespGetSchema parses the get schema response(json) from the cli response
