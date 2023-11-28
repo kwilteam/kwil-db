@@ -680,6 +680,8 @@ func (a *AbciApp) Info(p0 abciTypes.RequestInfo) abciTypes.ResponseInfo {
 		panic(newFatalError("Info", &p0, fmt.Sprintf("failed to get app hash: %v", err)))
 	}
 
+	a.log.Info("ABCI application is ready", zap.Int64("height", height))
+
 	return abciTypes.ResponseInfo{
 		LastBlockHeight:  height,
 		LastBlockAppHash: appHash,
@@ -722,7 +724,7 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 		panic(fmt.Sprintf("failed to set app hash: %v", err))
 	}
 
-	logger.Debug("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))
+	logger.Info("initialized chain", zap.String("app hash", fmt.Sprintf("%x", a.cfg.GenesisAppHash)))
 
 	return abciTypes.ResponseInitChain{
 		Validators: valUpdates,

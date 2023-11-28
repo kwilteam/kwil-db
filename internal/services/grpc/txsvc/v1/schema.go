@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
-	"github.com/kwilteam/kwil-db/internal/engine"
+	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -17,11 +17,11 @@ func (s *Service) GetSchema(ctx context.Context, req *txpb.GetSchemaRequest) (*t
 	if err != nil {
 		logger.Debug("failed to get schema", zap.Error(err))
 
-		if errors.Is(err, engine.ErrDatasetNotFound) {
+		if errors.Is(err, engineTypes.ErrDatasetNotFound) {
 			return nil, status.Error(codes.NotFound, "dataset not found")
 		}
 
-		return nil, status.Error(codes.Internal, "failed to get schema")
+		return nil, status.Error(codes.Unknown, "failed to get schema")
 	}
 
 	txSchema, err := convertSchemaFromEngine(schema)

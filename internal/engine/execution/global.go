@@ -118,7 +118,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, schema *types.Schema,
 func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller []byte) error {
 	dataset, ok := g.datasets[dbid]
 	if !ok {
-		return fmt.Errorf(`dataset "%s" does not exist`, dbid)
+		return types.ErrDatasetNotFound
 	}
 
 	if !bytes.Equal(caller, dataset.schema.Owner) {
@@ -141,7 +141,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller [
 func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionData) (*sql.ResultSet, error) {
 	dataset, ok := g.datasets[options.Dataset]
 	if !ok {
-		return nil, fmt.Errorf(`dataset "%s" does not exist`, options.Dataset)
+		return nil, types.ErrDatasetNotFound
 	}
 
 	execCtx := &executionContext{
@@ -153,28 +153,6 @@ func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionDat
 
 	return execCtx.FinalResult, err
 }
-
-// // Call calls a procedure.
-// // It can return a sql result.
-// func (g *GlobalContext) Call(ctx context.Context, dbid string, procedure string, caller []byte, args []any) (*sql.ResultSet, error) {
-// 	dataset, ok := g.datasets[dbid]
-// 	if !ok {
-// 		return nil, fmt.Errorf(`dataset "%s" does not exist`, dbid)
-// 	}
-
-// 	execCtx := &executionContext{
-// 		Ctx:      ctx,
-// 		Caller:   caller,
-// 		Mutative: false,
-// 	}
-
-// 	_, err := dataset.Call(execCtx, procedure, args)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return execCtx.FinalResult, nil
-// }
 
 // ListDatasets list datasets deployed by a specific caller
 func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]string, error) {
@@ -192,7 +170,7 @@ func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]stri
 func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
 	dataset, ok := g.datasets[dbid]
 	if !ok {
-		return nil, fmt.Errorf(`dataset "%s" does not exist`, dbid)
+		return nil, types.ErrDatasetNotFound
 	}
 
 	return dataset.schema, nil
@@ -202,7 +180,7 @@ func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types.Sche
 func (g *GlobalContext) Query(ctx context.Context, dbid string, query string) (*sql.ResultSet, error) {
 	dataset, ok := g.datasets[dbid]
 	if !ok {
-		return nil, fmt.Errorf(`dataset "%s" does not exist`, dbid)
+		return nil, types.ErrDatasetNotFound
 	}
 
 	return dataset.read(ctx, query, nil)
@@ -211,14 +189,15 @@ func (g *GlobalContext) Query(ctx context.Context, dbid string, query string) (*
 // loadDataset loads a dataset into the global context.
 // It does not create the dataset in the datastore.
 func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) error {
-	_, ok := g.initializers[schema.DBID()]
+	dbid := schema.DBID()
+	_, ok := g.initializers[dbid]
 	if ok {
-		return fmt.Errorf("dataset %s already exists", schema.DBID())
+		return fmt.Errorf("dataset %s already exists", dbid)
 	}
 
 	datasetCtx := &dataset{
-		readWriter: executor(schema.DBID(), g.datastore.Execute),
-		read:       executor(schema.DBID(), g.datastore.Query),
+		readWriter: executor(dbid, g.datastore.Execute),
+		read:       executor(dbid, g.datastore.Query),
 		schema:     schema,
 		namespaces: make(map[string]Namespace),
 		procedures: make(map[string]*procedure),
@@ -257,10 +236,10 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 		datasetCtx.namespaces[ext.Alias] = namespace
 	}
 
-	g.initializers[schema.DBID()] = func(_ context.Context, _ map[string]string) (Namespace, error) {
+	g.initializers[dbid] = func(_ context.Context, _ map[string]string) (Namespace, error) {
 		return datasetCtx, nil
 	}
-	g.datasets[schema.DBID()] = datasetCtx
+	g.datasets[dbid] = datasetCtx
 
 	return nil
 }
