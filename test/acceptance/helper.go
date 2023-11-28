@@ -309,7 +309,7 @@ func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
 }
 
-func (r *ActHelper) getCliDriver(privKey string, pubKey []byte) KwilAcceptanceDriver {
+func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
@@ -318,5 +318,5 @@ func (r *ActHelper) getCliDriver(privKey string, pubKey []byte) KwilAcceptanceDr
 	adminBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, pubKey, logger)
+	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, identifier, logger)
 }

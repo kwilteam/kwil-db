@@ -19,6 +19,8 @@ type DatabaseIdentifier interface {
 }
 
 type DatabaseExister interface {
+	// DatabaseExists checks if a database exists, impl should check
+	// two APIs: ListDatabases and GetSchema
 	DatabaseExists(ctx context.Context, dbid string) error
 }
 
