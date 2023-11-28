@@ -123,7 +123,7 @@ func NewCometBftNode(app abciTypes.Application, conf *cometConfig.Config, genDoc
 		return nil, fmt.Errorf("invalid node config: %w", err)
 	}
 
-	logger := NewLogWrapper(log)
+	logger := NewLogWrapper(log.Named("cometbft"))
 
 	privateValidator, err := privval.NewValidatorSigner(privateKey, atomicStore)
 	if err != nil {
