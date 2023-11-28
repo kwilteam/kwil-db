@@ -318,5 +318,5 @@ func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptan
 	adminBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, identifier, logger)
+	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, testChainID, identifier, logger)
 }
