@@ -13,8 +13,7 @@ import (
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
-// by default cli driver use http, so this test will run against http&grpc
-var drivers = flag.String("drivers", "grpc,cli", "comma separated list of drivers to run")
+var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
 var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", integration.Ext3Container, "node3"}
 var numServices = len(allServices)
