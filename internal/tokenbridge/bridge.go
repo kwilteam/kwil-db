@@ -60,6 +60,7 @@ func (cs *TokenBridge) Start() error {
 	startHeight = max(startHeight, cs.startingHeight)
 
 	// last finalized block in the chain
+	// TODO: FIX IT: Umm, should we error out if the chain doesn't have any finalized blocks? - probably not
 	latestHeight, err := cs.blockSyncer.LatestBlock(ctx)
 	if err != nil {
 		return err
@@ -100,7 +101,7 @@ func (tb *TokenBridge) listen(ctx context.Context) error {
 				tb.log.Info("TokenBridge stopped")
 				return
 			case block := <-blockChan:
-				tb.log.Info("Received block", zap.Int64("block", block))
+				tb.log.Info("Received Finalized block", zap.Int64("block", block))
 
 				err := tb.syncDepositEventsForRange(ctx, block, block)
 				if err != nil {
@@ -133,6 +134,7 @@ func (cs *TokenBridge) Close() error {
 }
 
 func (tb *TokenBridge) syncDepositEventsForRange(ctx context.Context, from int64, to int64) error {
+	tb.log.Info("Sync Deposits for range", zap.Int64("from", from), zap.Int64("to", to))
 	depositEvents, err := tb.getDepositEvents(ctx, from, to)
 	if err != nil {
 		tb.log.Error("Failed to get deposit events for block range", zap.Int64("from", from), zap.Int64("to", to), zap.Error(err))
@@ -141,6 +143,7 @@ func (tb *TokenBridge) syncDepositEventsForRange(ctx context.Context, from int64
 
 	for _, depositEvent := range depositEvents {
 		// Insert local event
+		tb.log.Info("Adding deposit event to the eventstore", zap.Any("depositEvent", depositEvent))
 		// TODO: Keep the amount as big.Int throughout the code
 		amt := depositEvent.Amount.String()
 		err = tb.depositStore.AddDeposit(ctx, depositEvent.ID, depositEvent.Sender, amt, tb.nodeAddress)

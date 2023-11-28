@@ -79,9 +79,6 @@ type Client struct {
 	// client as well to test HTTP api. This also enables test the cli by mocking.
 	transportClient TransportClient
 
-	//bridgeClient bridge.BridgeClient
-
-	// TODO: chainClient ChainClient that can be used to interact with the chain to do approvals, deposits, etc.
 	Signer auth.Signer
 	logger log.Logger
 	// chainID is used when creating transactions as replay protection since the

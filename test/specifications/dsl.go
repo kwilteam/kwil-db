@@ -2,6 +2,7 @@ package specifications
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -95,4 +96,16 @@ type ValidatorOpsDsl interface {
 	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error)
 	ValidatorNodeJoin(ctx context.Context) ([]byte, error)
 	ValidatorNodeLeave(ctx context.Context) ([]byte, error)
+}
+
+type TokenBridgeDsl interface {
+	// Contract interactions
+	Approve(ctx context.Context, spender string, amount *big.Int) (string, error)
+	BalanceOf(ctx context.Context) (*big.Int, error)
+	Allowance(ctx context.Context, spender string) (*big.Int, error)
+	Deposit(ctx context.Context, amount *big.Int) (string, error)
+	DepositBalance(ctx context.Context) (*big.Int, error)
+
+	// Account store interactions
+	GetAccount(ctx context.Context) (*types.Account, error)
 }

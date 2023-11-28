@@ -15,15 +15,18 @@ import (
 )
 
 var (
-	escrowAddr string = "0x006c992966be10e1da52fb2b09a62a1059c093bf"
+	escrowAddr string = "0xbcf7fffd8b256ec51a36782a52d0c34f6474d951"
 	//tokenAddr  string = "0xccf612a958da1f8d3fa97a447fc44cffe9994a54"
 	userPk   string = "dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5"
 	userAddr string = "1e59ce931B4CFea3fe4B875411e280e173cB7A9C"
+
+	// userPk2 string = "6789ede33b84cbd4e735e12924d07e48b15df0ded10de3c206eeac585852ab22"
+	// userAddr2 string = "c89D42189f0450C2b2c3c61f58Ec5d628176A1E7"
 )
 
 func TestDeposits(t *testing.T) {
 	ctx := context.Background()
-	bc, err := bClient.New("http://localhost:8545", chain.GOERLI, escrowAddr)
+	bc, err := bClient.New(ctx, "http://localhost:8545", chain.GOERLI, escrowAddr)
 	assert.NoError(t, err)
 
 	privKey, _ := ec.HexToECDSA(userPk)
@@ -40,7 +43,7 @@ func TestDeposits(t *testing.T) {
 func Test_BridgeClient(t *testing.T) {
 	ctx := context.Background()
 	// bc, err := bClient.New("http://localhost:8545", chain.GOERLI, escrowAddr, tokenAddr)
-	bc, err := bClient.New("http://localhost:8545", chain.GOERLI, escrowAddr)
+	bc, err := bClient.New(ctx, "http://localhost:8545", chain.GOERLI, escrowAddr)
 	assert.NoError(t, err)
 
 	tokenAddress := bc.TokenAddress()

@@ -28,8 +28,8 @@ func (escrow *Escrow) retrieveDeposits(edi *escrowAbi.EscrowDepositIterator, tok
 	for edi.Next() {
 		fmt.Println("Deposit event found: ", edi.Event.Caller.Hex(), edi.Event.Receiver.Hex(), edi.Event.Amount.String())
 		receiver := strings.ToLower(edi.Event.Receiver.Hex())
-		if receiver != escrow.escrowAddr {
-			fmt.Println("receiver is not escrow address") // TODO: Use logger
+		if receiver != strings.ToLower(escrow.escrowAddr) {
+			fmt.Println("receiver is not escrow address", receiver, " expected: ", escrow.escrowAddr) // TODO: Use logger
 			continue
 		}
 

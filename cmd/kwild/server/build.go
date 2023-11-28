@@ -18,7 +18,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	events "github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	"github.com/kwilteam/kwil-db/internal/modules/datasets"
 	"github.com/kwilteam/kwil-db/internal/modules/validators"
@@ -552,17 +551,27 @@ func failBuild(err error, msg string) {
 
 func buildTokenBridge(d *coreDependencies, closers *closeFuncs, ds *tokenbridge.DepositStore) *tokenbridge.TokenBridge {
 	// build token bridge client
-	bridgeClient, err := bClient.New(d.genesisCfg.ConsensusParams.TokenBridge.Endpoint,
+	if d.genesisCfg.ConsensusParams.WithoutGasCosts {
+		fmt.Println("bridge client not built because gas costs are disabled")
+		return nil
+	}
+
+	fmt.Println("bridge client", d.genesisCfg.ConsensusParams.TokenBridge.Endpoint, d.genesisCfg.ConsensusParams.TokenBridge.Code, d.genesisCfg.ConsensusParams.TokenBridge.EscrowAddress)
+	bridgeClient, err := bClient.New(d.ctx, d.genesisCfg.ConsensusParams.TokenBridge.Endpoint,
 		d.genesisCfg.ConsensusParams.TokenBridge.Code,
 		d.genesisCfg.ConsensusParams.TokenBridge.EscrowAddress,
 	)
 
 	if err != nil {
+		fmt.Println("bridge client error", err)
 		failBuild(err, "failed to build bridge client")
 	}
-
+	fmt.Println("NumConfirmations: ", d.genesisCfg.ConsensusParams.TokenBridge.RequiredConfirmations)
+	fmt.Println("bridge client", bridgeClient, " Created successfully")
 	// build block syncer
-	blockSyncer, err := syncer.New(bridgeClient, syncer.WithLogger(*d.log.Named("block-syncer")))
+	blockSyncer, err := syncer.New(bridgeClient,
+		syncer.WithLogger(*d.log.Named("block-syncer")),
+		syncer.WithRequiredConfirmations(d.genesisCfg.ConsensusParams.TokenBridge.RequiredConfirmations))
 	if err != nil {
 		failBuild(err, "failed to build block syncer")
 	}
@@ -577,23 +586,23 @@ func buildTokenBridge(d *coreDependencies, closers *closeFuncs, ds *tokenbridge.
 	return tb
 }
 
-func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore {
-	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, eventsDBName), 1, 2, true)
-	if err != nil {
-		failBuild(err, "failed to open event db")
-	}
-	closer.addCloser(db.Close)
+// func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore {
+// 	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, eventsDBName), 1, 2, true)
+// 	if err != nil {
+// 		failBuild(err, "failed to open event db")
+// 	}
+// 	closer.addCloser(db.Close)
 
-	logger := *d.log.Named("event-store")
-	address := []byte("az") // update it with the node address
-	adapted := &adapter.PoolAdapater{Pool: db}
-	ev, err := events.NewEventStore(d.ctx, adapted, address, logger)
-	if err != nil {
-		failBuild(err, "failed to build event store")
-	}
+// 	logger := *d.log.Named("event-store")
+// 	address := []byte("az") // update it with the node address
+// 	adapted := &adapter.PoolAdapater{Pool: db}
+// 	ev, err := events.NewEventStore(d.ctx, adapted, address, logger)
+// 	if err != nil {
+// 		failBuild(err, "failed to build event store")
+// 	}
 
-	return ev
-}
+// 	return ev
+// }
 
 func buildDepositStore(d *coreDependencies, closer *closeFuncs) *tokenbridge.DepositStore {
 	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, depositsDBName), 1, 2, true)

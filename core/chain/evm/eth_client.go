@@ -21,8 +21,8 @@ type EthClient struct {
 	endpoint  string
 }
 
-func New(endpoint string, chainCode chain.ChainCode) (*EthClient, error) {
-	client, err := ethereumClient.Dial(endpoint)
+func New(ctx context.Context, endpoint string, chainCode chain.ChainCode) (*EthClient, error) {
+	client, err := ethereumClient.DialContext(ctx, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +57,10 @@ func (c *EthClient) GetAccountNonce(ctx context.Context, address string) (uint64
 
 func (c *EthClient) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	return c.ethclient.SuggestGasPrice(ctx)
+}
+
+func (c *EthClient) ChainID(ctx context.Context) (*big.Int, error) {
+	return c.ethclient.ChainID(ctx)
 }
 
 func (c *EthClient) PrepareTxAuth(ctx context.Context, chainId *big.Int, privateKey *ecdsa.PrivateKey) (*bind.TransactOpts, error) {

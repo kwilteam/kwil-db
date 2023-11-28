@@ -68,6 +68,7 @@ func (a *AccountStore) updateAccountBalance(ctx context.Context, pubKey []byte, 
 
 // createAccount creates an account with the given public_key.
 func (a *AccountStore) createAccount(ctx context.Context, addr string, pubKey []byte, bal *big.Int, nonce int64) error {
+	fmt.Println("Create Account with balance: ", bal.String())
 	_, err := a.db.Execute(ctx, sqlCreateAccount, map[string]interface{}{
 		"$public_key": pubKey,
 		"$address":    addr,
@@ -177,10 +178,14 @@ func accountFromRecords(publicKey []byte, results []map[string]interface{}) (*Ac
 	if !ok {
 		return nil, fmt.Errorf("failed to convert stored string balance to big int")
 	}
+	fmt.Println("Account balance: ", stringBal)
 
-	balance, ok := new(big.Int).SetString(stringBal, 10)
-	if !ok {
-		return nil, ErrConvertToBigInt
+	balance := big.NewInt(0)
+	if stringBal != "<nil>" { // TODO: Remove this once identifier changes are merged
+		balance, ok = new(big.Int).SetString(stringBal, 10)
+		if !ok {
+			return nil, ErrConvertToBigInt
+		}
 	}
 
 	nonce, ok := results[0]["nonce"].(int64)

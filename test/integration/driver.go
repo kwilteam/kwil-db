@@ -9,4 +9,5 @@ type KwilIntDriver interface {
 	specifications.ExecuteCallDsl
 	specifications.ValidatorOpsDsl // TODO: split into ValidatorJoinDsl, ValidatorApproveDsl, ValidatorLeaveDsl
 	specifications.ValidatorRemoveDsl
+	specifications.TokenBridgeDsl
 }

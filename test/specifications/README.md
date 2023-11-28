@@ -1,24 +1,26 @@
-## original design
+# Original design
 
-### What's driver?
+What's a driver?
 
-Driver is the actual implementation could be used to interact with the system under test.
+Driver is the actual implementation that could be used to interact with the system under test.
 
 There should be a DriverInterface that all drivers should implement.
 
 For example:
+
 ```go
 type KwilClientDriver interface {
-	DeployDb(ctx context.Context, schema *Schema) TxHash
+    DeployDb(ctx context.Context, schema *Schema) TxHash
     TxQuery(ctx context.Context, txHash TxHash) TxQueryResult
 }
-````
+```
 
-### What's the specifications?
+## What is a specification?
 
-A specification describes all the interactions needed and uses a driver to perform the correspond interactions.
+A specification describes all the interactions needed and uses a driver to perform corresponding interactions.
 
 For example:
+
 ```go
 type DeployDatabaseSpec struct {
     Driver KwilClientDriver
@@ -32,7 +34,7 @@ func NewDeployDatabaseSpec(driver GrpcDriver) *DeployDatabaseSpec {
 
 
 func (s *DeployDatabaseSpec) DeployDatabase(ctx context.Context, schema *Schema) error {
-	// get schema from somewhere
+    // get schema from somewhere
     s.Driver.DeployDb(ctx, schema)
     return nil
 }
@@ -43,7 +45,7 @@ func (s *DeployDatabaseSpec) TxSuccess(ctx context.Context, txHash TxHash) error
 }
 ```
 
-### A test case
+## A test case
 
 ```go
 func TestDeployDatabase(t *testing.T) {
@@ -71,11 +73,10 @@ func TestDeployDatabase(t *testing.T) {
 
 It gets a bit cumbersome to write different test cases.
 
-For example, `TestDeployDatabase` and `TestDropDatabase`, in `DropDatabase` we need to deploy a database first, then drop it.
+For example, in `TestDeployDatabase` and `TestDropDatabase`, in `DropDatabase` we need to deploy a database first, then drop it.
 
-And for acceptance test purpose, a single test case is enough, since we only test the happy path.
+And for acceptance test purposes, a single test case is enough, since we only test the happy path.
 
 ## next
 
 I think it's time to follow the original design to write the tests, especially for the integration tests.
-

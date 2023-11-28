@@ -285,7 +285,7 @@ func (r *ActHelper) getClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+	return driver.NewKwildClientDriver(kwilClt, nil, nil, driver.WithLogger(logger))
 }
 
 func (r *ActHelper) getCliDriver(privKey string, pubKey []byte) KwilAcceptanceDriver {

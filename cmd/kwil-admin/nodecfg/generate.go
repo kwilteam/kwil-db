@@ -17,6 +17,7 @@ import (
 	// NOTE: do not use the types from these internal packages on nodecfg's
 	// exported API.
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/core/types/chain"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
@@ -39,6 +40,10 @@ type NodeGenerateConfig struct {
 	JoinExpiry      int64
 	WithoutGasCosts bool
 	WithoutNonces   bool
+
+	ChainRPCURL           string
+	EscrowAddress         string
+	RequiredConfirmations int64
 }
 
 type TestnetGenerateConfig struct {
@@ -59,6 +64,9 @@ type TestnetGenerateConfig struct {
 	JoinExpiry              int64
 	WithoutGasCosts         bool
 	WithoutNonces           bool
+	ChainRPCURL             string
+	EscrowAddress           string
+	RequiredConfirmations   int64
 }
 
 // ConfigOpts is a struct to alter the generation of the node config.
@@ -139,6 +147,12 @@ func (genCfg *NodeGenerateConfig) applyGenesisParams(genesisCfg *config.GenesisC
 	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
 	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
+
+	genesisCfg.ConsensusParams.TokenBridge.Endpoint = genCfg.ChainRPCURL
+	genesisCfg.ConsensusParams.TokenBridge.EscrowAddress = genCfg.EscrowAddress
+	genesisCfg.ConsensusParams.TokenBridge.Code = chain.GOERLI
+	genesisCfg.ConsensusParams.TokenBridge.RequiredConfirmations = genCfg.RequiredConfirmations
+
 }
 
 // GenerateTestnetConfig is like GenerateNodeConfig but it generates multiple
@@ -266,6 +280,11 @@ func (genCfg *TestnetGenerateConfig) applyGenesisParams(genesisCfg *config.Genes
 	genesisCfg.ConsensusParams.Validator.JoinExpiry = genCfg.JoinExpiry
 	genesisCfg.ConsensusParams.WithoutGasCosts = genCfg.WithoutGasCosts
 	genesisCfg.ConsensusParams.WithoutNonces = genCfg.WithoutNonces
+	genesisCfg.ConsensusParams.TokenBridge.Endpoint = genCfg.ChainRPCURL
+	genesisCfg.ConsensusParams.TokenBridge.EscrowAddress = genCfg.EscrowAddress
+	genesisCfg.ConsensusParams.TokenBridge.Code = chain.GOERLI
+	genesisCfg.ConsensusParams.TokenBridge.RequiredConfirmations = genCfg.RequiredConfirmations
+
 }
 
 func hostnameOrIP(genCfg *TestnetGenerateConfig, i int) string {

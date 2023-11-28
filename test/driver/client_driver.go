@@ -2,8 +2,10 @@ package driver
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"os"
 
 	"github.com/kwilteam/kwil-db/core/client"
@@ -12,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
 
+	ec "github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
 )
 
@@ -25,8 +28,10 @@ func GetEnv(key, defaultValue string) string {
 
 // KwildClientDriver is driver for tests using the `client` package
 type KwildClientDriver struct {
-	clt    *client.Client
-	logger log.Logger
+	clt          *client.Client
+	bridgeClient BridgeClient
+	pKey         *ecdsa.PrivateKey
+	logger       log.Logger
 }
 
 type GrpcDriverOpt func(*KwildClientDriver)
@@ -37,10 +42,12 @@ func WithLogger(logger log.Logger) GrpcDriverOpt {
 	}
 }
 
-func NewKwildClientDriver(clt *client.Client, opts ...GrpcDriverOpt) *KwildClientDriver {
+func NewKwildClientDriver(clt *client.Client, bridgeClient BridgeClient, pKey *ecdsa.PrivateKey, opts ...GrpcDriverOpt) *KwildClientDriver {
 	driver := &KwildClientDriver{
-		clt:    clt,
-		logger: log.New(log.Config{}),
+		clt:          clt,
+		pKey:         pKey,
+		bridgeClient: bridgeClient,
+		logger:       log.New(log.Config{}),
 	}
 
 	for _, opt := range opts {
@@ -162,4 +169,32 @@ func (d *KwildClientDriver) ValidatorJoinStatus(ctx context.Context, pubKey []by
 
 func (d *KwildClientDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {
 	return d.clt.CurrentValidators(ctx)
+}
+
+// Spender is the contract address
+func (d *KwildClientDriver) Approve(ctx context.Context, spender string, amount *big.Int) (string, error) {
+	return d.bridgeClient.Approve(ctx, spender, amount, d.pKey)
+}
+
+func (d *KwildClientDriver) BalanceOf(ctx context.Context) (*big.Int, error) {
+	address := ec.PubkeyToAddress(d.pKey.PublicKey).Hex()
+	return d.bridgeClient.BalanceOf(ctx, address)
+}
+
+func (d *KwildClientDriver) Allowance(ctx context.Context, spender string) (*big.Int, error) {
+	owner := ec.PubkeyToAddress(d.pKey.PublicKey).Hex()
+	return d.bridgeClient.Allowance(ctx, owner, spender)
+}
+
+func (d *KwildClientDriver) Deposit(ctx context.Context, amount *big.Int) (string, error) {
+	return d.bridgeClient.Deposit(ctx, amount, d.pKey)
+}
+
+func (d *KwildClientDriver) DepositBalance(ctx context.Context) (*big.Int, error) {
+	address := ec.PubkeyToAddress(d.pKey.PublicKey).Hex()
+	return d.bridgeClient.DepositBalance(ctx, address)
+}
+
+func (d *KwildClientDriver) GetAccount(ctx context.Context) (*types.Account, error) {
+	return d.clt.GetAccount(ctx, ec.FromECDSAPub(&d.pKey.PublicKey), types.AccountStatusLatest)
 }

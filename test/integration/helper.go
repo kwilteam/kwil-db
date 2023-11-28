@@ -28,11 +28,17 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
+	bClient "github.com/kwilteam/kwil-db/core/bridge/client"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types/chain"
+	deployer "github.com/kwilteam/kwil-db/test/deployer"
+	ethDeployer "github.com/kwilteam/kwil-db/test/deployer/evm"
 	"github.com/kwilteam/kwil-db/test/driver"
+
+	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -61,13 +67,15 @@ const (
 // IntTestConfig is the config for integration test
 // This is totally separate from acceptance test
 type IntTestConfig struct {
-	GWEndpoint    string // gateway endpoint
-	GrpcEndpoint  string
-	ChainEndpoint string
+	GWEndpoint      string // gateway endpoint
+	GrpcEndpoint    string
+	ChainEndpoint   string
+	ExposedChainRPC string
 
 	SchemaFile                string
 	DockerComposeFile         string
 	DockerComposeOverrideFile string
+	GanacheComposeFile        string
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -82,6 +90,10 @@ type IntTestConfig struct {
 	NValidator    int
 	NNonValidator int
 	JoinExpiry    int64
+
+	EscrowAddress    string
+	NumConfirmations int64
+	WithoutGasCosts  bool
 }
 
 type IntHelper struct {
@@ -99,7 +111,9 @@ func NewIntHelper(t *testing.T, opts ...HelperOpt) *IntHelper {
 		privateKeys: make(map[string]ed25519.PrivKey),
 		containers:  make(map[string]*testcontainers.DockerContainer),
 		cfg: &IntTestConfig{
-			JoinExpiry: 14400,
+			JoinExpiry:       14400,
+			NumConfirmations: 12,
+			WithoutGasCosts:  true,
 		},
 	}
 
@@ -138,6 +152,22 @@ func WithJoinExpiry(expiry int64) HelperOpt {
 	}
 }
 
+func WithNumConfirmations(numConfirmations int64) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.NumConfirmations = numConfirmations
+	}
+}
+
+func WithoutGasCosts(withoutGas bool) HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.WithoutGasCosts = withoutGas
+	}
+}
+
+func (r *IntHelper) EscrowAddress() string {
+	return r.cfg.EscrowAddress
+}
+
 // LoadConfig loads config from system env and .env file.
 // Envs defined in envFile will not overwrite existing env vars.
 func (r *IntHelper) LoadConfig() {
@@ -160,6 +190,7 @@ func (r *IntHelper) LoadConfig() {
 		GrpcEndpoint:              getEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
+		GanacheComposeFile:        getEnv("KIT_GANACHE_COMPOSE_FILE", "./ganache/docker-compose.yml"),
 	}
 
 	waitTimeout := getEnv("KIT_WAIT_TIMEOUT", "10s")
@@ -211,8 +242,11 @@ func (r *IntHelper) generateNodeConfig() {
 		StartingIPAddress:       "172.10.100.2",
 		P2pPort:                 26656,
 		JoinExpiry:              r.cfg.JoinExpiry,
-		WithoutGasCosts:         true,
+		WithoutGasCosts:         r.cfg.WithoutGasCosts,
 		WithoutNonces:           false,
+		RequiredConfirmations:   r.cfg.NumConfirmations,
+		ChainRPCURL:             r.cfg.ChainEndpoint,
+		EscrowAddress:           r.cfg.EscrowAddress,
 	}, nil)
 	require.NoError(r.t, err, "failed to generate testnet config")
 	r.home = tmpPath
@@ -225,6 +259,66 @@ func fileExists(path string) bool {
 	return !os.IsNotExist(err)
 }
 
+func (r *IntHelper) RunGanache(ctx context.Context) {
+	r.t.Logf("run ganache")
+	composeFiles := []string{r.cfg.GanacheComposeFile}
+	dc, err := compose.NewDockerCompose(composeFiles...)
+	require.NoError(r.t, err, "failed to create docker compose object for ganache")
+
+	r.teardown = append(r.teardown, func() {
+		r.t.Log("teardown ganache")
+		dc.Down(ctx, compose.RemoveOrphans(true), compose.RemoveImagesLocal)
+	})
+
+	r.t.Cleanup(func() { // redundant if test defers Teardown()
+		r.Teardown()
+	})
+
+	// Use compose.Wait to wait for containers to become "healthy" according to
+	// their defined healthchecks.
+	dockerComposeId := fmt.Sprintf("%d", time.Now().Unix())
+	stack := dc.WithEnv(map[string]string{
+		"uid": dockerComposeId,
+	})
+	stack = stack.WaitForService("ganache", wait.NewLogStrategy("RPC Listening on 0.0.0.0:8545").WithStartupTimeout(r.cfg.WaitTimeout))
+
+	err = stack.Up(ctx, compose.Wait(true))
+	r.t.Log("ganache up")
+	require.NoError(r.t, err, "failed to start ganache")
+
+	// Get the Escrow address and the ChainRPCURL
+	ctr, err := dc.ServiceContainer(ctx, "ganache")
+	require.NoError(r.t, err, "failed to get container for service ganache")
+
+	exposedChainRPC, err := ctr.PortEndpoint(ctx, "8545", "ws")
+	r.t.Log("exposedChainRPC", exposedChainRPC)
+	require.NoError(r.t, err, "failed to get exposed endpoint")
+	ganacheIp, err := ctr.ContainerIP(ctx)
+	require.NoError(r.t, err, "failed to get ganache container ip")
+	unexposedChainRPC := fmt.Sprintf("ws://%s:8545", ganacheIp)
+	r.t.Log("unexposedChainRPC", unexposedChainRPC)
+
+	// Deploy contracts
+	// chainDeployer := GetDeployer("eth", exposedChainRPC, cfg.DatabaseDeployerPrivateKeyString, cfg.denomination)
+	chainDeployer, err := GetDeployer(ctx, "eth", exposedChainRPC, r.cfg.CreatorRawPk)
+	require.NoError(r.t, err, "failed to get deployer")
+
+	tokenAddress, err := chainDeployer.DeployToken(ctx)
+	require.NoError(r.t, err, "failed to deploy token")
+	r.t.Log("Token address: ", tokenAddress)
+
+	escrowAddress, err := chainDeployer.DeployEscrow(ctx, tokenAddress)
+	require.NoError(r.t, err, "failed to deploy contract")
+	r.t.Logf("Escrow address: %s\n", escrowAddress)
+
+	r.cfg.ChainEndpoint = unexposedChainRPC
+	// TODO: get escrow address from contract deployment
+	r.cfg.EscrowAddress = escrowAddress
+	r.cfg.ExposedChainRPC = exposedChainRPC
+	// sleep
+
+}
+
 func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services []string) {
 	r.t.Logf("run in docker compose")
 	time.Sleep(time.Second) // sometimes docker compose fails if previous test had some slow async clean up (no idea)
@@ -232,6 +326,7 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	envs, err := godotenv.Read(envFile)
 	require.NoError(r.t, err, "failed to parse .env file")
 
+	// Run Kwil cluster
 	composeFiles := []string{r.cfg.DockerComposeFile}
 	if r.cfg.DockerComposeOverrideFile != "" && fileExists(r.cfg.DockerComposeOverrideFile) {
 		composeFiles = append(composeFiles, r.cfg.DockerComposeOverrideFile)
@@ -272,6 +367,10 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 }
 
 func (r *IntHelper) Setup(ctx context.Context, services []string) {
+	// Run Ganache container
+	r.RunGanache(ctx)
+
+	// generate config for testnet based on the ganache container
 	r.generateNodeConfig()
 	r.RunDockerComposeWithServices(ctx, services)
 }
@@ -340,7 +439,7 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 	pk := r.cfg.CreatorRawPk
 	switch driverType {
 	case "client":
-		return r.getClientDriver(signer)
+		return r.getClientDriver(signer, pk)
 	case "cli":
 		return r.getCliDriver(pk, signer.PublicKey())
 	default:
@@ -378,7 +477,7 @@ container name: "%s"`,
 	pk := privKeyHex
 	switch driverType {
 	case "client":
-		return r.getClientDriver(signer)
+		return r.getClientDriver(signer, pk)
 	case "cli":
 		return r.getCliDriver(pk, signer.PubKey().Bytes())
 	default:
@@ -386,16 +485,27 @@ container name: "%s"`,
 	}
 }
 
-func (r *IntHelper) getClientDriver(signer auth.Signer) KwilIntDriver {
+func (r *IntHelper) getClientDriver(signer auth.Signer, pKey string) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
+	ctx := context.Background()
 
 	options := []client.Option{client.WithSigner(signer, testChainID),
 		client.WithLogger(logger),
 		client.WithTLSCert("")} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
+	kwilClt, err := client.Dial(ctx, r.cfg.GrpcEndpoint, options...)
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+	if !r.cfg.WithoutGasCosts {
+		bridgeClt, err := bClient.New(ctx, r.cfg.ExposedChainRPC, chain.GOERLI, r.cfg.EscrowAddress)
+		require.NoError(r.t, err, "failed to create bridge client")
+
+		privKey, err := ec.HexToECDSA(pKey)
+		require.NoError(r.t, err, "invalid private key")
+
+		return driver.NewKwildClientDriver(kwilClt, bridgeClt, privKey, driver.WithLogger(logger))
+	}
+
+	return driver.NewKwildClientDriver(kwilClt, nil, nil, driver.WithLogger(logger))
 }
 
 func (r *IntHelper) getCliDriver(privKey string, pubKey []byte) KwilIntDriver {
@@ -416,4 +526,13 @@ func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {
 
 func (r *IntHelper) ServiceContainer(name string) *testcontainers.DockerContainer {
 	return r.containers[name]
+}
+
+func GetDeployer(ctx context.Context, deployerType string, rpcURL string, privateKeyStr string) (deployer.Deployer, error) {
+	switch deployerType {
+	case "eth":
+		return ethDeployer.New(ctx, rpcURL, privateKeyStr)
+	default:
+		panic("unknown deployer type")
+	}
 }

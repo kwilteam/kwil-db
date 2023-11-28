@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"os/exec"
 	"path"
@@ -387,6 +388,30 @@ func (d *KwilCliDriver) ValidatorsList(_ context.Context) ([]*types.Validator, e
 	}
 
 	return valSets, nil
+}
+
+// Spender is the contract address
+func (d *KwilCliDriver) Approve(ctx context.Context, spender string, amount *big.Int) (string, error) {
+	return "", nil
+}
+
+func (d *KwilCliDriver) BalanceOf(ctx context.Context) (*big.Int, error) {
+	return nil, nil
+}
+
+func (d *KwilCliDriver) Allowance(ctx context.Context, spender string) (*big.Int, error) {
+	return nil, nil
+}
+
+func (d *KwilCliDriver) Deposit(ctx context.Context, amount *big.Int) (string, error) {
+	return "", nil
+}
+
+func (d *KwilCliDriver) DepositBalance(ctx context.Context) (*big.Int, error) {
+	return nil, nil
+}
+func (d *KwilCliDriver) GetAccount(ctx context.Context) (*types.Account, error) {
+	return nil, nil
 }
 
 ///////// helper functions

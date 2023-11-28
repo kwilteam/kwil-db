@@ -30,12 +30,15 @@ func (cc *SetupCmd) run(ctx context.Context) error {
 	switch {
 	case cc.Init != nil:
 		genCfg := &nodecfg.NodeGenerateConfig{
-			ChainID:         cc.Init.ChainID,
-			BlockInterval:   cc.Init.BlockInterval,
-			OutputDir:       cc.Init.OutputDir,
-			JoinExpiry:      cc.Init.JoinExpiry,
-			WithoutGasCosts: true, // gas disabled by setup init
-			WithoutNonces:   cc.Init.WithoutNonces,
+			ChainID:               cc.Init.ChainID,
+			BlockInterval:         cc.Init.BlockInterval,
+			OutputDir:             cc.Init.OutputDir,
+			JoinExpiry:            cc.Init.JoinExpiry,
+			WithoutGasCosts:       true, // gas disabled by setup init
+			WithoutNonces:         cc.Init.WithoutNonces,
+			ChainRPCURL:           cc.Init.ChainRPCURL,
+			EscrowAddress:         cc.Init.EscrowAddress,
+			RequiredConfirmations: cc.Init.RequiredConfirmations,
 		}
 		return nodecfg.GenerateNodeConfig(genCfg)
 	case cc.Testnet != nil:
@@ -71,7 +74,12 @@ type SetupInitCmd struct {
 
 	// WithoutGasCosts is not an available flag since Kwil users have no way to
 	// get funded with the external chain syncer gone.
-	// WithoutGasCosts bool   `arg:"--without-gas-costs" default:"true" help:"disable gas costs"`
+	WithoutGasCosts bool `arg:"--without-gas-costs" help:"disable gas costs"`
+
+	// TokenBridge Params
+	ChainRPCURL           string `arg:"--chain-rpc-url" help:"URL of the RPC endpoint of the chain where the token is deployed"`
+	EscrowAddress         string `arg:"--escrow-address" help:"Address of the escrow contract on the token chain"`
+	RequiredConfirmations int64  `arg:"--required-confirmations" default:"12" help:"Number of block confirmations required for a transaction to be considered final"`
 }
 
 // SetupTestnetCmd exactly matches nodecfg.TestnetGenerateConfig in field name,
@@ -91,8 +99,15 @@ type SetupTestnetCmd struct {
 	Hostnames               []string      `arg:"--hostnames" help:"override all hostnames of the nodes (list of hostnames must be the same length as the number of nodes)" placeholder:"HOST"`
 	P2pPort                 int           `arg:"-p,--p2p-port" help:"P2P port" default:"26656" placeholder:"PORT"`
 	JoinExpiry              int64         `arg:"--join-expiry" default:"14400" help:"number of blocks before a join request expires"`
-	WithoutGasCosts         bool          `arg:"-"` // we force true since kwild doesn't work with gas for this release.
-	WithoutNonces           bool          `arg:"--without-nonces" help:"disable nonces"`
+	// WithoutGasCosts is not an available flag since Kwil users have no way to
+	// get funded with the external chain syncer gone.
+	WithoutGasCosts bool `arg:"--without-gas-costs" help:"disable gas costs"`
+	WithoutNonces   bool `arg:"--without-nonces" help:"disable nonces"`
+
+	// TokenBridge Params
+	ChainRPCURL           string `arg:"--chain-rpc-url" help:"URL of the RPC endpoint of the chain where the token is deployed"`
+	EscrowAddress         string `arg:"--escrow-address" help:"Address of the escrow contract on the token chain"`
+	RequiredConfirmations int64  `arg:"--required-confirmations" default:"12" help:"Number of block confirmations required for a transaction to be considered final"`
 }
 
 // TODO: customize the parser to recognize a detailer subcommand and print

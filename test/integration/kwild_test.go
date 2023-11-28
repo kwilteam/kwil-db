@@ -17,6 +17,12 @@ var drivers = flag.String("drivers", "client,cli", "comma separated list of driv
 var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", integration.Ext3Container, "node3"}
 var numServices = len(allServices)
 
+/*
+We need multiple test cases  for each of the following scenarios:
+1. WithoutGasCosts
+2. WithGasCosts using Treasury
+3. WithGasCosts using EscrowContracts
+*/
 func TestKwildDatabaseIntegration(t *testing.T) {
 	ctx := context.Background()
 
@@ -24,6 +30,8 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(4),
 		integration.WithNonValidators(0),
+		integration.WithNumConfirmations(0),
+		integration.WithoutGasCosts(false),
 	}
 
 	testDrivers := strings.Split(*drivers, ",")

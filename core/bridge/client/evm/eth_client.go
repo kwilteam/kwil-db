@@ -1,6 +1,8 @@
 package evm
 
 import (
+	"context"
+
 	escrowCtr "github.com/kwilteam/kwil-db/core/bridge/contracts/evm/escrow"
 	tokenCtr "github.com/kwilteam/kwil-db/core/bridge/contracts/evm/token"
 	evmClient "github.com/kwilteam/kwil-db/core/chain/evm"
@@ -14,8 +16,8 @@ type ethBridgeClient struct {
 	*escrowCtr.Escrow
 }
 
-func New(endpoint string, chainCode chain.ChainCode, escrowAddress string) (*ethBridgeClient, error) {
-	client, err := evmClient.New(endpoint, chainCode)
+func New(ctx context.Context, endpoint string, chainCode chain.ChainCode, escrowAddress string) (*ethBridgeClient, error) {
+	client, err := evmClient.New(ctx, endpoint, chainCode)
 	if err != nil {
 		return nil, err
 	}

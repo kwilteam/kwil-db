@@ -54,7 +54,7 @@ type ConsensusParams struct {
 	Evidence    EvidenceParams    `json:"evidence"`
 	Version     VersionParams     `json:"version"`
 	Validator   ValidatorParams   `json:"validator"`
-	TokenBridge TokenBridgeParams `json:"bridge_config"`
+	TokenBridge TokenBridgeParams `json:"token_bridge"`
 
 	WithoutNonces   bool `json:"without_nonces"`
 	WithoutGasCosts bool `json:"without_gas_costs"`
