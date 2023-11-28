@@ -25,8 +25,8 @@ func (s *Service) TxQuery(ctx context.Context, req *txpb.TxQueryRequest) (*txpb.
 			logger.Debug("transaction not found")
 			return nil, status.Error(codes.NotFound, "transaction not found")
 		}
-		logger.Error("failed to query tx", zap.Error(err))
-		return nil, status.Error(codes.Internal, "failed to query transaction")
+		logger.Warn("failed to query tx", zap.Error(err))
+		return nil, status.Error(codes.Unknown, "failed to query transaction")
 	}
 
 	originalTx := &transactions.Transaction{}
