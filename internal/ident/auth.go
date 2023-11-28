@@ -50,17 +50,17 @@ func getAuthenticator(name string) (auth.Authenticator, error) {
 	return auth, nil
 }
 
-// verifySig verifies the signature given a signer's public key and the message.
+// verifySig verifies the signature given a signer's identity and the message.
 // The type of the Signature determines how the message digest is prepared, and
 // what key type is used. The function requires an Authenticator to be
 // registered for the signature type. See VerifyTransaction and VerifyMessage in
 // verify.go.
-func verifySig(pubkey, msg []byte, sig *auth.Signature) error {
+func verifySig(identity, msg []byte, sig *auth.Signature) error {
 	authn, err := getAuthenticator(sig.Type)
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrAuthenticatorNotFound, sig.Type)
 	}
-	return authn.Verify(pubkey, msg, sig.Signature)
+	return authn.Verify(identity, msg, sig.Signature)
 }
 
 // Identifier returns a string identifier from a sender and authenticator type. The
