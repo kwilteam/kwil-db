@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -32,13 +33,13 @@ type KwilCliDriver struct {
 	logger     log.Logger
 }
 
-func NewKwilCliDriver(cliBin, adminBin, rpcUrl, privKey string, pubKey []byte, logger log.Logger) *KwilCliDriver {
+func NewKwilCliDriver(cliBin, adminBin, rpcUrl, privKey string, identifier []byte, logger log.Logger) *KwilCliDriver {
 	return &KwilCliDriver{
 		cliBin:     cliBin,
 		adminBin:   adminBin,
 		rpcUrl:     rpcUrl,
 		privKey:    privKey,
-		identifier: pubKey,
+		identifier: identifier,
 		logger:     logger,
 	}
 }
@@ -76,12 +77,38 @@ func (d *KwilCliDriver) DBID(name string) string {
 	return utils.GenerateDBID(name, d.identifier)
 }
 
-func (d *KwilCliDriver) DatabaseExists(_ context.Context, dbid string) error {
-	cmd := d.newKwilCliCmd("database", "read-schema", "--dbid", dbid)
-	_, err := mustRun(cmd, d.logger)
+func (d *KwilCliDriver) listDatabase() ([]string, error) {
+	cmd := d.newKwilCliCmd("database", "list", "--owner", hex.EncodeToString(d.identifier))
+	out, err := mustRun(cmd, d.logger)
 	if err != nil {
-		d.logger.Error("failed to read database schema", zap.Error(err))
-		return fmt.Errorf("failed to read database schema: %w", err)
+		//d.logger.Error("failed to list databases", zap.Error(err))
+		return nil, fmt.Errorf("failed to list databases: %w", err)
+	}
+
+	dbs, err := parseRespListDatabases(out.Result)
+	if err != nil {
+		//d.logger.Error("failed to parse list databases response", zap.Error(err))
+		return nil, fmt.Errorf("failed to parse list databases response: %w", err)
+	}
+
+	return dbs, nil
+}
+
+func (d *KwilCliDriver) DatabaseExists(_ context.Context, dbid string) error {
+	// check GetSchema
+	_, err := d.getSchema(dbid)
+	if err != nil {
+		return err
+	}
+
+	// check ListDatabases
+	dbs, err := d.listDatabase()
+	if err != nil {
+		return err
+	}
+
+	if !slices.Contains(dbs, dbid) {
+		return fmt.Errorf("ListDatabase: database not found: %s", dbid)
 	}
 
 	return nil
@@ -604,4 +631,36 @@ func parseRespValSets(data any) ([]*types.Validator, error) {
 	}
 
 	return vals, nil
+}
+
+// respDBList represent databases belong to an owner in cli
+// NOTE: this is **NOT** exactly the same as the one in cmd/kwil-cli/message.go
+type respDBList struct {
+	Databases []dbInfo `json:"databases"`
+	Owner     []byte   `json:"owner"`
+}
+
+type dbInfo struct {
+	Name string `json:"name"`
+	Id   string `json:"id"`
+}
+
+func parseRespListDatabases(data any) ([]string, error) {
+	bts, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal list databases resp: %w", err)
+	}
+
+	var resp respDBList
+	err = json.Unmarshal(bts, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal list databases: %w", err)
+	}
+
+	dbs := make([]string, len(resp.Databases))
+	for i, db := range resp.Databases {
+		dbs[i] = db.Id
+	}
+
+	return dbs, nil
 }
