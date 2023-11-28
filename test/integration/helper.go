@@ -422,7 +422,7 @@ func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) KwilIntDriver {
 	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
 }
 
-func (r *IntHelper) getCliDriver(privKey string, pubKey []byte) KwilIntDriver {
+func (r *IntHelper) getCliDriver(privKey string, identity []byte) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
@@ -431,7 +431,7 @@ func (r *IntHelper) getCliDriver(privKey string, pubKey []byte) KwilIntDriver {
 	adminBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, pubKey, logger)
+	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, testChainID, identity, logger)
 }
 
 func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {
