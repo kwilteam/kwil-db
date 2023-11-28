@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -98,7 +99,7 @@ func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions
 }
 
 func (d *KwildClientDriver) DatabaseExists(ctx context.Context, dbid string) error {
-
+	// check GetSchema
 	dbSchema, err := d.clt.GetSchema(ctx, dbid)
 	if err != nil {
 		return fmt.Errorf("failed to get database schema: %w", err)
@@ -106,6 +107,16 @@ func (d *KwildClientDriver) DatabaseExists(ctx context.Context, dbid string) err
 
 	if dbSchema == nil {
 		return fmt.Errorf("database schema is nil")
+	}
+
+	// check ListDatabases
+	dbs, err := d.clt.ListDatabases(ctx, dbSchema.Owner)
+	if err != nil {
+		return fmt.Errorf("failed to get database list: %w", err)
+	}
+
+	if !slices.Contains(dbs, dbSchema.Name) {
+		return fmt.Errorf("database %s not found", dbid)
 	}
 
 	return nil
