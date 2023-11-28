@@ -16,9 +16,12 @@ import (
 func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error) {
 	var sender string
 	var err error
-	sender, err = ident.Identifier(msg.AuthType, msg.Sender)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get sender address: %w", err)
+
+	if len(msg.Sender) > 0 && msg.AuthType != "" {
+		sender, err = ident.Identifier(msg.AuthType, msg.Sender)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get sender identifier: %w", err)
+		}
 	}
 
 	results, err := u.engine.Execute(ctx, &engineTypes.ExecutionData{
