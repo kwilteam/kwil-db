@@ -23,10 +23,14 @@ func codeToLevel(code codes.Code) log.Level {
 		return log.InfoLevel
 
 	case codes.DeadlineExceeded, codes.PermissionDenied, codes.ResourceExhausted, codes.FailedPrecondition,
-		codes.Aborted, codes.OutOfRange, codes.Unavailable:
+		codes.Aborted, codes.OutOfRange, codes.Unavailable, codes.Unknown, codes.Unimplemented:
 		return log.WarnLevel
 
-	case codes.Unknown, codes.Unimplemented, codes.Internal, codes.DataLoss:
+	case codes.Internal, codes.DataLoss:
+		// WARNING: This error level will result in a call stack dump, so try
+		// not to use these codes unless we know that there is a server error,
+		// as opposed to a user-generated error such as bad inputs. The docs for
+		// Internal state that it should indicate "something is very broken".
 		return log.ErrorLevel
 
 	default:
