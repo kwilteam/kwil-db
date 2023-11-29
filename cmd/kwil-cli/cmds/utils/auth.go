@@ -35,7 +35,7 @@ func kgwAuthnCmd() *cobra.Command {
 					}
 
 					signer := auth.EthPersonalSigner{Key: *cfg.PrivateKey}
-					if cfg.GrpcURL == "" {
+					if cfg.Provider == "" {
 						return fmt.Errorf("provider url not provided")
 					}
 

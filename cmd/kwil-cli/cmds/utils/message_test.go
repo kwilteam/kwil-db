@@ -188,13 +188,13 @@ func Example_respKwilCliConfig_text() {
 		cfg: &config.KwilCliConfig{
 			PrivateKey:  pk,
 			ChainID:     "chainid123",
-			GrpcURL:     "localhost:9090",
+			Provider:    "http://localhost:8080",
 			TLSCertFile: "",
 		},
 	}, nil, "text")
 	// Output:
 	// PrivateKey: ***
-	// GrpcURL: localhost:9090
+	// Provider: http://localhost:8080
 	// ChainID: chainid123
 	// TLSCertFile:
 }
@@ -209,7 +209,7 @@ func Example_respKwilCliConfig_json() {
 		cfg: &config.KwilCliConfig{
 			PrivateKey:  pk,
 			ChainID:     "chainid123",
-			GrpcURL:     "localhost:9090",
+			Provider:    "http://localhost:8080",
 			TLSCertFile: "",
 		},
 	}, nil, "json")
@@ -217,7 +217,7 @@ func Example_respKwilCliConfig_json() {
 	// {
 	//   "result": {
 	//     "private_key": "***",
-	//     "grpc_url": "localhost:9090",
+	//     "provider": "http://localhost:8080",
 	//     "chain_id": "chainid123",
 	//     "tls_cert_file": ""
 	//   },

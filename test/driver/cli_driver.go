@@ -47,7 +47,7 @@ func NewKwilCliDriver(cliBin, adminBin, rpcUrl, privKey, chainID string, identit
 }
 
 func (d *KwilCliDriver) newKwilCliCmd(args ...string) *exec.Cmd {
-	args = append(args, "--kwil-provider", d.rpcUrl)
+	args = append(args, "--provider", d.rpcUrl)
 	args = append(args, "--private-key", d.privKey)
 	args = append(args, "--chain-id", d.chainID)
 	args = append(args, "--output", "json")

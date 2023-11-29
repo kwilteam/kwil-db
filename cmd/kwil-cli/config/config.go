@@ -9,13 +9,12 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/internal/utils"
-
 	"github.com/spf13/viper"
 )
 
 type KwilCliConfig struct {
 	PrivateKey  *crypto.Secp256k1PrivateKey
-	GrpcURL     string // TODO: change to maybe `RPCProvider` or `ProviderURL`
+	Provider    string
 	ChainID     string
 	TLSCertFile string // NOTE: since HTTP by default, this seems not use
 }
@@ -27,7 +26,7 @@ func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
 	}
 	return &kwilCliPersistedConfig{
 		PrivateKey:  privKeyHex,
-		GrpcURL:     c.GrpcURL,
+		Provider:    c.Provider,
 		ChainID:     c.ChainID,
 		TLSCertFile: c.TLSCertFile,
 	}
@@ -39,7 +38,7 @@ func (c *KwilCliConfig) Store() error {
 
 func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 	return &kwilCliPersistedConfig{
-		GrpcURL: "127.0.0.1:50051",
+		Provider: "http://127.0.0.1:8080",
 	}
 }
 
@@ -48,24 +47,26 @@ func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 type kwilCliPersistedConfig struct {
 	// NOTE: `mapstructure` is used by viper, name is same as the viper key name
 	PrivateKey  string `mapstructure:"private_key" json:"private_key"`
-	GrpcURL     string `mapstructure:"grpc_url" json:"grpc_url"`
+	Provider    string `mapstructure:"provider" json:"provider"`
 	ChainID     string `mapstructure:"chain_id" json:"chain_id"`
 	TLSCertFile string `mapstructure:"tls_cert_file" json:"tls_cert_file"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
+	privateKey, err := crypto.Secp256k1PrivateKeyFromHex(c.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+
 	kwilConfig := &KwilCliConfig{
-		GrpcURL:     c.GrpcURL,
+		PrivateKey:  privateKey,
+		Provider:    c.Provider,
 		ChainID:     c.ChainID,
 		TLSCertFile: c.TLSCertFile,
 	}
 
-	privateKey, err := crypto.Secp256k1PrivateKeyFromHex(c.PrivateKey)
-	if err != nil {
-		return kwilConfig, nil
-	}
-
-	kwilConfig.PrivateKey = privateKey
+	// NOTE: make sure the config is valid, for example, provider should starts
+	// with http:// or https://(if we don't want to use gRPC for kwil-cli)
 
 	return kwilConfig, nil
 }

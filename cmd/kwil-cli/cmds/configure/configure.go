@@ -52,15 +52,15 @@ func runErrs(conf *config.KwilCliConfig, fns ...func(*config.KwilCliConfig) erro
 
 func promptGRPCURL(conf *config.KwilCliConfig) error {
 	prompt := &common.Prompter{
-		Label:   "Kwil RPC URL",
-		Default: conf.GrpcURL,
+		Label:   "Kwil RPC provider URL",
+		Default: conf.Provider,
 	}
 	res, err := prompt.Run()
 	if err != nil {
 		return err
 	}
 
-	conf.GrpcURL = res
+	conf.Provider = res
 
 	return nil
 }

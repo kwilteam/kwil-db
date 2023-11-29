@@ -58,7 +58,7 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 			// here create http client to config cookie
 			// put cookie options in core/client/client.go seems not a good idea
 			cookie := ConvertToHttpCookie(kgwAuthInfo.Cookie)
-			hc, err := httpRPC.DialOptions(conf.GrpcURL, httpRPC.WithCookie(cookie))
+			hc, err := httpRPC.DialOptions(conf.Provider, httpRPC.WithCookie(cookie))
 			if err != nil {
 				return err
 			}
@@ -66,13 +66,13 @@ func DialClient(ctx context.Context, flags uint8, fn RoundTripper) error {
 		}
 	}
 
-	if conf.GrpcURL == "" {
+	if conf.Provider == "" {
 		// the grpc url is required
 		// this is somewhat redundant since the config marks it as required, but in case the config is changed
 		return fmt.Errorf("kwil grpc url is required")
 	}
 
-	clt, err := client.Dial(ctx, conf.GrpcURL, options...)
+	clt, err := client.Dial(ctx, conf.Provider, options...)
 	if err != nil {
 		return err
 	}
