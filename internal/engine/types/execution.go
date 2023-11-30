@@ -5,14 +5,10 @@ package types
 type ExecutionData struct {
 	// Dataset is the DBID of the dataset that was called.
 	// Even if a procedure in another dataset is called, this will always be the original dataset.
-	// This is injected as a variable for usage in the query, under
-	// the variable name "@dataset".
 	Dataset string
 
 	// Procedure is the original procedure that was called.
 	// Even if a nested procedure is called, this will always be the original procedure.
-	// This is injected as a variable for usage in the query, under
-	// the variable name "@procedure".
 	Procedure string
 
 	// Mutative indicates whether the execution can mutate state.

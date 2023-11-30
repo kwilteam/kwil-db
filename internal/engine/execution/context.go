@@ -71,8 +71,6 @@ func (s *ScopeContext) Values() map[string]any {
 
 	// set environment variables
 	values["@caller"] = s.execution.Data.CallerIdentifier
-	values["@dataset"] = s.execution.Data.Dataset
-	values["@procedure"] = s.execution.Data.Procedure
 
 	return values
 }
