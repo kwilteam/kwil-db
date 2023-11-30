@@ -1,5 +1,5 @@
 // package http implements an http transport for the Kwil txsvc client.
-package http2
+package http
 
 import (
 	"encoding/base64"
@@ -71,16 +71,11 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([
 }
 
 func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...client.ActionCallOption) ([]map[string]any, error) {
-	sender := ""
-	if msg.Sender != nil {
-		sender = base64.StdEncoding.EncodeToString(msg.Sender)
-	}
-
 	result, res, err := c.conn.TxServiceApi.TxServiceCall(ctx, httpTx.TxCallRequest{
 		AuthType: msg.AuthType,
 		Sender:   base64.StdEncoding.EncodeToString(msg.Sender),
 		Body: &httpTx.TxCallRequestBody{
-			Payload: sender,
+			Payload: base64.StdEncoding.EncodeToString(msg.Body.Payload),
 		},
 	})
 	if err != nil {

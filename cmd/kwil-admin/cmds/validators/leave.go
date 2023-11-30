@@ -11,12 +11,11 @@ import (
 var (
 	leaveLong = "A current validator may leave the validator set using the `leave` command."
 
-	leaveExample = `$ kwil-admin validators leave --key-file "~/.kwild/private_key"
-TxHash: a001d7ccf73b05d6aa0d749d25cec60fef4de606533ac21f48043c7cc65dfe1b`
+	leaveExample = `# Leave the validator set
+kwil-admin validators leave`
 )
 
 func leaveCmd() *cobra.Command {
-
 	cmd := &cobra.Command{
 		Use:     "leave",
 		Short:   "A current validator may leave the validator set using the `leave` command.",

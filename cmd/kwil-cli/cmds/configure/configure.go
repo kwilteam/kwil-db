@@ -20,11 +20,7 @@ This command will prompt you for the following settings:
 - Kwil RPC TLS certificate path: the path to the TLS certificate of the Kwil node you wish to connect to.  This is only required if the Kwil node is using TLS.
 - Private Key: the private key to use for signing transactions.  If left empty, the Kwil CLI will not sign transactions.`
 
-var configureExample = `$ kwil-cli configure
-✔ Kwil RPC URL localhost:50051
-✔ Kwil Chain ID (leave empty to trust a server-provided value) 
-✔ Private Key f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e
-✔ Kwil RPC TLS certificate path`
+var configureExample = `kwil-cli configure`
 
 func NewCmdConfigure() *cobra.Command {
 	var cmd = &cobra.Command{

@@ -15,11 +15,8 @@ import (
 var (
 	listLong = `List the current validator set of the network.`
 
-	listExample = `$ kwild validator list
-Current validator set:
-  0. {pubkey = 9fed4b19eab0cf87370bff0c7ef04cfcff5b268d096578d3ef5ae3c1010939d8, power = 1}
-  1. {pubkey = f1693096d252eac5e366436314996ec39c189dffb997ad7414ed306e3d9244c4, power = 1}
-  2. {pubkey = f28e3cd6d11e9c5d2d00ea8b9c1e18cc01e568f0b186888fb274567461774fbc, power = 1}`
+	listExample = `# List the current validator set of the network
+kwild validator list`
 )
 
 func listCmd() *cobra.Command {

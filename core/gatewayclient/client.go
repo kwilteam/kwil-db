@@ -14,7 +14,7 @@ import (
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/gateway"
 	httpGateway "github.com/kwilteam/kwil-db/core/rpc/client/gateway/http"
-	httpTx "github.com/kwilteam/kwil-db/core/rpc/client/user/http2"
+	httpTx "github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	gatewayTypes "github.com/kwilteam/kwil-db/core/types/gateway"
 )
 

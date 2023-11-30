@@ -1,4 +1,4 @@
-package http2
+package http
 
 import (
 	"net/http"

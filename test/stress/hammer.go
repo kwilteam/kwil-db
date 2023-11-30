@@ -17,7 +17,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcClients "github.com/kwilteam/kwil-db/core/rpc/client"
 	userGrpc "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/http2"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -78,7 +78,7 @@ func hammer(ctx context.Context) error {
 	}
 
 	if parsedUrl.Scheme == "http" {
-		rpcClient = http2.NewClient(parsedUrl)
+		rpcClient = http.NewClient(parsedUrl)
 	} else {
 		conn, err := grpc.DialContext(ctx, parsedUrl.String(), rpcClients.DefaultGRPCOpts()...)
 		if err != nil {
@@ -107,7 +107,6 @@ func hammer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer cl.Close()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // any early return cancels other goroutines

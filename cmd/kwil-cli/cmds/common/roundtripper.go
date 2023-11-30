@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// WithoutPrivateKey is a flag that can be passed to DialClient to indicate that the client should not use the private key in the config.
+	// WithoutPrivateKey is a flag that can be passed to DialClient to indicate that the client does not need to use the private key.
 	WithoutPrivateKey uint8 = 1 << iota
 
 	// UsingGateway is a flag that can be passed to DialClient to indicate that the client is talking to a gateway.
@@ -41,14 +41,11 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	}
 
 	clientConfig := client.ClientOptions{}
-	if flags&WithoutPrivateKey == 0 {
-		// we need to use the private key
-		if conf.PrivateKey == nil {
-			return fmt.Errorf("private key not provided")
-		}
-
+	if conf.PrivateKey != nil {
 		clientConfig.Signer = &auth.EthPersonalSigner{Key: *conf.PrivateKey}
 		clientConfig.ChainID = conf.ChainID
+	} else if flags&WithoutPrivateKey == 0 {
+		return fmt.Errorf("private key not provided")
 	}
 
 	// if not using the gateway, then we can simply create a regular client and return

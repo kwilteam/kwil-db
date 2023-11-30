@@ -12,8 +12,8 @@ import (
 var (
 	removeLong = "Command `remove` votes to remove a validator from the validator set. If enough validators vote to remove the validator, the validator will be removed from the validator set."
 
-	removeExample = `$ kwil-admin validators remove e16141e4def3a7f2dfc5bbf40d50619b4d7bc9c9f670fcad98327b0d3d7b97b6 --key-file "~/.kwild/private_key"
-TxHash: a001d7ccf73b05d6aa0d749d25cec60fef4de606533ac21f48043c7cc65dfe1b`
+	removeExample = `# Remove a validator from the validator set, by hex public key
+kwil-admin validators remove e16141e4def3a7f2dfc5bbf40d50619b4d7bc9c9f670fcad98327b0d3d7b97b6`
 )
 
 func removeCmd() *cobra.Command {

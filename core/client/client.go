@@ -16,7 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/http2"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
@@ -63,7 +63,7 @@ func Dial(ctx context.Context, target string, options *ClientOptions) (c *Client
 		return nil, fmt.Errorf("parse url: %w", err)
 	}
 
-	httpClient := http2.NewClient(parsedUrl)
+	httpClient := http.NewClient(parsedUrl)
 
 	clt, err := WrapClient(ctx, httpClient, options)
 	if err != nil {
@@ -101,18 +101,10 @@ func WrapClient(ctx context.Context, client TxClient, options *ClientOptions) (*
 		}
 		c.chainID = chainID
 	} else if c.chainID != chainID {
-		c.Close()
 		return nil, fmt.Errorf("remote host chain ID %q != client configured %q", chainID, c.chainID)
 	}
 
 	return c, nil
-}
-
-// Close closes the underlying transport connection.
-// If using HTTP, it will not do anything.
-func (c *Client) Close() error {
-	// TODO: do we need this anymore since we are using http?
-	return nil
 }
 
 // ChainInfo get the current blockchain information like chain ID and best block

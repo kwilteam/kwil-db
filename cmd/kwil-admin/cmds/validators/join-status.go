@@ -17,7 +17,8 @@ import (
 
 var (
 	joinStatusLong    = `Query the status of a pending validator join request.`
-	joinStatusExample = `$ kwil-admin validators join-status 6ecaca8e9394c939a858c2c7b47acb1db26a96d7ab38bd702fa3820c5034e9d0`
+	joinStatusExample = `# Query the status of a pending validator join request, by hex public key
+kwil-admin validators join-status 6ecaca8e9394c939a858c2c7b47acb1db26a96d7ab38bd702fa3820c5034e9d0`
 )
 
 func joinStatusCmd() *cobra.Command {
