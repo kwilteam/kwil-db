@@ -93,9 +93,6 @@ func NewPool(ctx context.Context, name string, persistentReaders, maximumReaders
 		overflow <- struct{}{}
 	}
 
-	readerLock := make(chan struct{}, 1)
-	readerLock <- struct{}{}
-
 	p := &Pool{
 		opener: func(ctx context.Context, flags2 sql.ConnectionFlag) (sql.Connection, error) {
 			return Open(ctx, name, flags2)
