@@ -54,7 +54,7 @@ const (
 )
 
 // New builds the kwild server.
-func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.GenesisConfig, nodeKey *crypto.Ed25519PrivateKey) (svr *Server, err error) {
+func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.GenesisConfig, nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
 	closers := &closeFuncs{
 		closers: make([]func() error, 0),
 	}
@@ -98,6 +98,7 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 
 	deps := &coreDependencies{
 		ctx:        ctx,
+		autogen:    autogen,
 		cfg:        cfg,
 		genesisCfg: genesisCfg,
 		privKey:    ed25519.PrivKey(nodeKey.Bytes()),

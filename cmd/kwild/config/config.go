@@ -35,7 +35,6 @@ var DefaultSQLitePath = filepath.Join("data", "kwild.db") // a folder, not a fil
 
 type KwildConfig struct {
 	RootDir string
-	AutoGen bool
 
 	AppCfg   *AppConfig   `mapstructure:"app"`
 	ChainCfg *ChainConfig `mapstructure:"chain"`
@@ -510,8 +509,8 @@ func (cfg *KwildConfig) sanitizeCfgPaths() {
 	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)
 }
 
-func (cfg *KwildConfig) InitPrivateKeyAndGenesis() (privateKey *crypto.Ed25519PrivateKey, genConfig *GenesisConfig, err error) {
-	return loadGenesisAndPrivateKey(cfg.AutoGen, cfg.AppCfg.PrivateKeyPath, cfg.RootDir)
+func (cfg *KwildConfig) InitPrivateKeyAndGenesis(autogen bool) (privateKey *crypto.Ed25519PrivateKey, genConfig *GenesisConfig, err error) {
+	return loadGenesisAndPrivateKey(autogen, cfg.AppCfg.PrivateKeyPath, cfg.RootDir)
 }
 
 func ExpandPath(path string) (string, error) {

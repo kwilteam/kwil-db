@@ -115,6 +115,7 @@ const (
 // coreDependencies holds dependencies that are widely used
 type coreDependencies struct {
 	ctx        context.Context
+	autogen    bool
 	cfg        *config.KwildConfig
 	genesisCfg *config.GenesisConfig
 	privKey    cmtEd.PrivKey
@@ -441,7 +442,7 @@ func buildAdminService(d *coreDependencies, closer *closeFuncs, admsvc admpb.Adm
 			if err != nil {
 				failBuild(err, "failed to load client CAs file")
 			}
-		} else if d.cfg.AutoGen {
+		} else if d.autogen {
 			clientCredsFileBase := filepath.Join(d.cfg.RootDir, "auth")
 			clientCertFile, clientKeyFile := clientCredsFileBase+".cert", clientCredsFileBase+".key"
 			err = transport.GenTLSKeyPair(clientCertFile, clientKeyFile, "kwild CA", nil)

@@ -35,6 +35,7 @@ func main() {
 
 func rootCmd() *cobra.Command {
 	flagCfg := config.EmptyConfig()
+	var autoGen bool
 
 	cmd := &cobra.Command{
 		Use:               "kwild",
@@ -50,7 +51,7 @@ func rootCmd() *cobra.Command {
 				return err
 			}
 
-			nodeKey, genesisConfig, err := kwildCfg.InitPrivateKeyAndGenesis()
+			nodeKey, genesisConfig, err := kwildCfg.InitPrivateKeyAndGenesis(autoGen)
 			if err != nil {
 				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
 			}
@@ -70,7 +71,7 @@ func rootCmd() *cobra.Command {
 				cancel()
 			}()
 
-			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey)
+			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey, autoGen)
 			if err != nil {
 				return err
 			}
@@ -81,7 +82,10 @@ func rootCmd() *cobra.Command {
 
 	flagSet := cmd.Flags()
 	flagSet.SortFlags = false
-	addKwildFlags(flagSet, flagCfg)
+	config.AddConfigFlags(flagSet, flagCfg)
+
+	flagSet.BoolVarP(&autoGen, "autogen", "a", false,
+		"auto generate private key and genesis file if not exist")
 
 	return cmd
 }

@@ -1,14 +1,9 @@
-package main
+package config
 
-import (
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+import "github.com/spf13/pflag"
 
-	"github.com/spf13/pflag"
-)
-
-func addKwildFlags(flagSet *pflag.FlagSet, cfg *config.KwildConfig) {
-	flagSet.BoolVarP(&cfg.AutoGen, "autogen", "a", false,
-		"auto generate private key and genesis file if not exist")
+// AddConfigFlags adds all flags from KwildConfig to the given flagSet
+func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.StringVarP(&cfg.RootDir, "root-dir", "r", "~/.kwild", "kwild root directory for config and data")
 
 	// logging

@@ -17,7 +17,8 @@ import (
 var (
 	listJoinRequestsLong = `Command ` + "`" + `list-join-requests` + "`" + ` lists all pending join requests.
 	
-Join requests are created when a validator wants to join the validator set. The validator must be approved by 2/3 of the current validator set to be added to the validator set.`
+Join requests are created when a validator wants to join the validator set. The validator must be approved by 2/3 of the current validator set to be added to the validator set.
+Each join request has an expiration block height, after which it is no longer valid.`
 
 	listJoinRequestsExample = `# List all pending join requests
 kwil-admin validators list-join-requests`
@@ -73,10 +74,9 @@ func (r *respJoinList) MarshalText() ([]byte, error) {
 
 	// could be ideal to use the SQL table formatting here
 	msg.WriteString(fmt.Sprintf("Pending join requests (%d %s needed):\n", needed, approvalTerm))
-	msg.WriteString(" Candidate                        | Power | Approvals | Expiration")
-	//                ---------------------------------+-------+-----------+-------------
-	//ref spacing:    22cbbb666c26b2c1f42502df72c32de4 |       | 	       |
-	//                d521138a1a2c96121d417a2f341a759c | 1     | 100	   | 100
+	msg.WriteString(" Candidate                                                        | Power | Approvals | Expiration\n")
+	msg.WriteString("------------------------------------------------------------------+-------+-----------+------------")
+	//ref spacing:    22cbbb666c26b2c1f42502df72c32de4d521138a1a2c96121d417a2f341a759c | 1     | 100	   | 100
 	for _, j := range r.Joins {
 		approvals := 0
 		for _, a := range j.Approved {
@@ -85,11 +85,8 @@ func (r *respJoinList) MarshalText() ([]byte, error) {
 			}
 		}
 
-		hexPubKey := hex.EncodeToString(j.Candidate)
-		half := len(hexPubKey) / 2
-		msg.WriteString("\n ---------------------------------+-------+-----------+-------------")
-		msg.WriteString(fmt.Sprintf("\n %s | % 5s | % 9s | %s", hexPubKey[0:half], "", "", ""))
-		msg.WriteString(fmt.Sprintf("\n %s | % 5d | % 9d | %d", hexPubKey[half:], j.Power, approvals, j.ExpiresAt))
+		msg.WriteString(fmt.Sprintf("\n %s | % 5d | % 9d | %d", hex.EncodeToString(j.Candidate), j.Power, approvals, j.ExpiresAt))
+
 	}
 
 	return msg.Bytes(), nil
