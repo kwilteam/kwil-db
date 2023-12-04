@@ -141,10 +141,11 @@ func Test_Changeset(t *testing.T) {
 	// tests the changeset is deterministic
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
 			ctx := context.Background()
-			conn, err := openDB("test", sql.OpenCreate)
+			conn, err := openDB(tempDir, "test", sql.OpenCreate)
 			require.NoError(t, err)
-			defer deleteTempDir()
+
 			defer func() {
 				err = conn.Close()
 				require.NoError(t, err)
@@ -172,7 +173,7 @@ func Test_Changeset(t *testing.T) {
 			}
 
 			sqliteSession, ok := session.(*sqlite.Session)
-			require.True(t, ok) // doing this to test that the chageset returns the correct results
+			require.True(t, ok) // doing this to test that the changeset returns the correct results
 
 			changeset, err := sqliteSession.Changeset(ctx)
 			require.NoError(t, err)
@@ -187,9 +188,10 @@ func Test_Changeset(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				func() {
 					ctx := context.Background()
-					conn, err := openDB("test", sql.OpenCreate)
+					tempDir := t.TempDir()
+					conn, err := openDB(tempDir, "test", sql.OpenCreate)
 					require.NoError(t, err)
-					defer deleteTempDir()
+
 					defer func() {
 						err = conn.Close()
 						require.NoError(t, err)

@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -92,11 +93,10 @@ func Test_Pool(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			deleteTempDir()
-			defer deleteTempDir()
+			tempDir := t.TempDir()
 
 			ctx := context.Background()
-			conn, err := sqlite.Open(ctx, fmt.Sprintf("%s/%s", tempDir, "testdb"), sql.OpenCreate)
+			conn, err := sqlite.Open(ctx, filepath.Join(tempDir, "testdb"), sql.OpenCreate)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -107,24 +107,22 @@ func Test_Pool(t *testing.T) {
 			err = conn.Close()
 			require.NoError(t, err)
 
-			p, err := sqlite.NewPool(ctx, fmt.Sprintf("%s/%s", tempDir, "testdb"), test.persistentReaders, test.maximumReaders, false)
+			p, err := sqlite.NewPool(ctx, filepath.Join(tempDir, "testdb"), test.persistentReaders, test.maximumReaders, false)
 			require.NoError(t, err)
 
 			test.fn(t, p)
 
 			err = p.Close()
 			require.NoError(t, err)
-
 		})
 	}
 }
 
 func Test_RunningReadersClose(t *testing.T) {
 	ctx := context.Background()
-	deleteTempDir()
-	defer deleteTempDir()
+	tempDir := t.TempDir()
 
-	p, err := sqlite.NewPool(ctx, fmt.Sprintf("%s/%s", tempDir, "testdb"), 1, 2, true)
+	p, err := sqlite.NewPool(ctx, filepath.Join(tempDir, "testdb"), 1, 2, true)
 	require.NoError(t, err)
 
 	_, err = p.Execute(ctx, createUsersTableStmt, nil)
@@ -178,9 +176,9 @@ func Test_Open(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Cleanup(deleteTempDir)
+			tempDir := t.TempDir()
 			ctx := context.Background()
-			conn, err := sqlite.Open(ctx, fmt.Sprintf("%s/%s", tempDir, "testdb"), sql.OpenCreate)
+			conn, err := sqlite.Open(ctx, filepath.Join(tempDir, "testdb"), sql.OpenCreate)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -191,7 +189,7 @@ func Test_Open(t *testing.T) {
 			err = conn.Close()
 			require.NoError(t, err)
 
-			p, err := sqlite.NewPool(ctx, fmt.Sprintf("%s/%s", tempDir, "testdb"), test.persistentReaders, test.maximumReaders, false)
+			p, err := sqlite.NewPool(ctx, filepath.Join(tempDir, "testdb"), test.persistentReaders, test.maximumReaders, false)
 			if test.err != nil {
 				require.ErrorIs(t, err, test.err)
 				return
