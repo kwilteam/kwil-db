@@ -119,6 +119,8 @@ func Test_Pool(t *testing.T) {
 }
 
 func Test_RunningReadersClose(t *testing.T) {
+	// This test ensures that Close() on a pool with active readers doing Query
+	// works as expected.
 	ctx := context.Background()
 	tempDir := t.TempDir()
 
@@ -133,23 +135,43 @@ func Test_RunningReadersClose(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	wg := sync.WaitGroup{}
+	var wg, wgLoop sync.WaitGroup
 	wg.Add(1)
+	wgLoop.Add(1)
 
 	go func() {
-		for i := 0; i < 100000000000; i++ { // will timeout if not closed
-			p.Query(ctx, "select * from users;", nil)
+		defer wgLoop.Done()
+		for i := 0; ; i++ { // will timeout if not closed
+			_, err := p.Query(ctx, "select * from users;", nil)
 			if i == 0 {
-				wg.Done()
+				wg.Done() // let Close() happen concurrently
+			}
+			// There are various errors here depending on what it was doing when
+			// Close was called, including "execution was interrupted", "context
+			// canceled", "interrupted", etc.
+			//
+			// If the loop continues, subsequent Queries would receive
+			// "connection pool forcefully closed".
+			//
+			// However, we are just going to break the loop so that the DB does
+			// not continue to be in use after this test case.
+			if err != nil {
+				return
 			}
 		}
 	}()
 
 	wg.Wait()
 
+	// Sleep a bit to discover other returns paths from Query => reader => ... => Open
+	// This is the kind of real-life timing to expect from weak and virtualized
+	// test runners used by CI systems like GitHub Actions.
+	// time.Sleep(200 * time.Millisecond)
+
 	err = p.Close()
 	require.NoError(t, err)
 
+	wgLoop.Wait()
 }
 
 func Test_Open(t *testing.T) {
