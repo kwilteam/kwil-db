@@ -24,6 +24,8 @@ var (
 // Open opens a connection to a sqlite database.
 // It will open with foreign key constraints enabled.
 func Open(ctx context.Context, name string, flags sql.ConnectionFlag) (*Connection, error) {
+	// Fail defines extra actions to perform on an error path.
+	fail := func(err error) error { return err } // passthrough to start
 
 	globalMu.Lock()
 	defer globalMu.Unlock()
@@ -39,9 +41,13 @@ func Open(ctx context.Context, name string, flags sql.ConnectionFlag) (*Connecti
 			return nil, ErrWriterOpen
 		}
 
-		// only if the database is not in-memory do we want to track it
+		// only if the database is RW and not in-memory do we want to track it
 		if flags&sql.OpenMemory == 0 {
 			openDBs[name] = struct{}{}
+			fail = func(err error) error {
+				delete(openDBs, name)
+				return err
+			}
 		}
 	}
 
@@ -60,7 +66,7 @@ func Open(ctx context.Context, name string, flags sql.ConnectionFlag) (*Connecti
 
 	// Create the directory along with any necessary parent directories
 	if err := os.MkdirAll(dirName, 0755); err != nil {
-		return nil, err
+		return nil, fail(err)
 	}
 
 	done := make(chan struct{})
@@ -75,22 +81,30 @@ func Open(ctx context.Context, name string, flags sql.ConnectionFlag) (*Connecti
 	select {
 	case <-ctx.Done():
 		// Cancel ongoing operations here and then return
-		return nil, ctx.Err()
+		return nil, fail(ctx.Err())
 	case <-done:
 		// Continue as normal
 	}
 	if err != nil {
-		return nil, err
+		return nil, fail(err)
+	}
+
+	// If we fail now, we must also close the connection.
+	{
+		baseFail := fail // for capture in new fail
+		fail = func(err error) error {
+			return errors.Join(conn.Close(), baseFail(err))
+		}
 	}
 
 	err = functions.Register(conn)
 	if err != nil {
-		return nil, errors.Join(err, conn.Close())
+		return nil, fail(err)
 	}
 
 	err = conn.SetDefensive(true)
 	if err != nil {
-		return nil, errors.Join(err, conn.Close())
+		return nil, fail(err)
 	}
 
 	c := &Connection{
@@ -99,26 +113,28 @@ func Open(ctx context.Context, name string, flags sql.ConnectionFlag) (*Connecti
 		flags:  flags,
 		file:   name,
 	}
+	// NOTE:  We must not use the Connection's close method since it tries to
+	// acquire globalMu; we can do the cleanup directly.
 
 	if !c.isReadonly() {
 		err = c.EnableForeignKey()
 		if err != nil {
-			return nil, errors.Join(err, c.close())
+			return nil, fail(err)
 		}
 	}
 
 	res, err := c.execute(ctx, sqlPragmaSync, nil)
 	if err != nil {
-		return nil, errors.Join(err, c.close())
+		return nil, fail(err)
 	}
 	err = res.Finish()
 	if err != nil {
-		return nil, errors.Join(err, c.close())
+		return nil, fail(err)
 	}
 
 	err = initializeKv(ctx, c)
 	if err != nil {
-		return nil, errors.Join(err, c.close())
+		return nil, fail(err)
 	}
 
 	return c, nil
