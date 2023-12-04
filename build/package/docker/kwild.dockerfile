@@ -11,7 +11,7 @@ RUN apk update && apk add git ca-certificates-bundle
 COPY . .
 RUN test -f go.work && rm go.work || true
 
-RUN GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" GO_BUILDTAGS=$go_build_tags ./scripts/build/binary kwild
+RUN GOWORK=off GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" GO_BUILDTAGS=$go_build_tags ./scripts/build/binary kwild
 RUN chmod +x /app/dist/kwild-*
 
 FROM scratch AS assemble
