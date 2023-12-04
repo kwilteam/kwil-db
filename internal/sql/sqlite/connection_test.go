@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
+	"path/filepath"
 	"testing"
 
 	sql "github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,6 +19,8 @@ func Test_WriterConn(t *testing.T) {
 		flags sql.ConnectionFlag
 		fn    func(*testing.T, *sqlite.Connection)
 	}
+
+	var tempDir string
 
 	cases := []testcase{
 		{
@@ -33,7 +36,7 @@ func Test_WriterConn(t *testing.T) {
 				require.NoError(t, err)
 
 				// open a reader connection
-				readerConn, err := openDB("test", sql.OpenReadOnly)
+				readerConn, err := openDB(tempDir, "test", sql.OpenReadOnly)
 				require.NoError(t, err)
 
 				// select all users
@@ -71,7 +74,7 @@ func Test_WriterConn(t *testing.T) {
 				require.NoError(t, err)
 
 				// open a reader connection
-				readerConn, err := openDB("test", sql.OpenReadOnly)
+				readerConn, err := openDB(tempDir, "test", sql.OpenReadOnly)
 				require.NoError(t, err)
 
 				// select all users
@@ -246,7 +249,7 @@ func Test_WriterConn(t *testing.T) {
 				require.NoError(t, err)
 
 				// create a reader connection
-				readerConn, err := openDB("test", sql.OpenReadOnly)
+				readerConn, err := openDB(tempDir, "test", sql.OpenReadOnly)
 				require.NoError(t, err)
 
 				// insert a user with reader connection
@@ -307,7 +310,7 @@ func Test_WriterConn(t *testing.T) {
 		{
 			name: "testing reader restrictions",
 			fn: func(t *testing.T, conn *sqlite.Connection) {
-				reader, err := openDB("test", sql.OpenReadOnly)
+				reader, err := openDB(tempDir, "test", sql.OpenReadOnly)
 				require.NoError(t, err)
 
 				err = reader.ApplyChangeset(bytes.NewReader([]byte{}))
@@ -332,7 +335,7 @@ func Test_WriterConn(t *testing.T) {
 		{
 			name: "testing multiple writers fails",
 			fn: func(t *testing.T, conn *sqlite.Connection) {
-				_, err := openDB("test", sql.OpenCreate)
+				_, err := openDB(tempDir, "test", sql.OpenCreate)
 				require.Error(t, err)
 			},
 		},
@@ -451,12 +454,13 @@ func Test_WriterConn(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			defer deleteTempDir()
+			// Must not be t.Parallel().
+			tempDir = t.TempDir()
 			if tt.flags&sql.OpenCreate == 0 {
 				tt.flags |= sql.OpenCreate
 			}
 
-			conn, err := openDB("test", tt.flags)
+			conn, err := openDB(tempDir, "test", tt.flags)
 			require.NoError(t, err)
 			tt.fn(t, conn)
 			err = conn.Close()
@@ -477,19 +481,17 @@ func notEq(a, b any) bool {
 
 // we pass no OpenCreate flag, so it should fail
 func Test_OpenNoCreate(t *testing.T) {
-	_, err := openDB("test", 0)
+	tempDir := t.TempDir()
+	_, err := openDB(tempDir, "test", 0)
 	if err == nil {
 		t.Fatal("expected error")
 	}
-
-	deleteTempDir()
 }
 
 func Test_InMemory(t *testing.T) {
 	ctx := context.Background()
 	conn, err := sqlite.Open(ctx, ":memory:", sql.OpenMemory)
 	require.NoError(t, err)
-	defer deleteTempDir()
 	defer func() {
 		err = conn.Close()
 		require.NoError(t, err)
@@ -516,17 +518,9 @@ func Test_InMemory(t *testing.T) {
 	require.NoError(t, err)
 }
 
-const tempDir = "./tmp"
-
-func openDB(name string, flag sql.ConnectionFlag) (*sqlite.Connection, error) {
+func openDB(dir, name string, flag sql.ConnectionFlag) (*sqlite.Connection, error) {
 	ctx := context.Background()
-	return sqlite.Open(ctx, fmt.Sprintf("%s/%s", tempDir, name), flag)
-}
-func deleteTempDir() {
-	err := os.RemoveAll(tempDir)
-	if err != nil {
-		panic(err)
-	}
+	return sqlite.Open(ctx, filepath.Join(dir, name), flag)
 }
 
 const (
