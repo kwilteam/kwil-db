@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/spf13/cobra"
 )
 
@@ -83,6 +84,10 @@ func callCmd() *cobra.Command {
 				data, err := clnt.CallAction(ctx, dbid, lowerName, tuples[0])
 				if err != nil {
 					display.PrintErr(cmd, fmt.Errorf("error calling action: %w", err))
+				}
+
+				if data == nil {
+					data = &client.Records{}
 				}
 
 				return display.PrintCmd(cmd, &respRelations{Data: data})

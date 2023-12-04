@@ -36,6 +36,11 @@ func NewRecordsFromMaps(recs []map[string]any) *Records {
 
 func (r *Records) Next() bool {
 	r.index++
+
+	if r.records == nil {
+		return false
+	}
+
 	return r.index < len(r.records)
 }
 
@@ -44,11 +49,20 @@ func (r *Records) Reset() {
 }
 
 func (r *Records) Record() *Record {
+	if r.records == nil {
+		return &Record{}
+	}
+
 	return r.records[r.index]
 }
 
 func (r *Records) Export() []map[string]any {
+	if r.records == nil {
+		return make([]map[string]any, 0)
+	}
+
 	records := make([]map[string]any, len(r.records))
+
 	for i, record := range r.records {
 		records[i] = *record
 	}
@@ -57,7 +71,12 @@ func (r *Records) Export() []map[string]any {
 }
 
 func (r *Records) ExportString() []map[string]string {
+	if r.records == nil {
+		return make([]map[string]string, 0)
+	}
+
 	records := make([]map[string]string, len(r.records))
+
 	for i, record := range r.records {
 		records[i] = record.String()
 	}
