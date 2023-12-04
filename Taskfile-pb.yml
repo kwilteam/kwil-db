@@ -6,8 +6,8 @@ tasks:
       - task: tx:v1
       - task: tx:v1:swagger
       - task: admin:v0
-#      - task: function:v0
-#      - task: function:v0:swagger
+      - task: function:v0
+      - task: function:v0:swagger
 
   tx:v1:
     desc: Compiles TxService v1 protobuf
