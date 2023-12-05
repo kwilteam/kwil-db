@@ -109,7 +109,23 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		}
 	}
 
-	return fn(ctx, client, conf)
+	err = fn(ctx, client, conf)
+	if err != nil {
+		return err
+	}
+
+	// persist the cookie
+	cookie, found := client.GetAuthCookie()
+	if !found {
+		return nil
+	}
+
+	err = SaveCookie(KGWAuthTokenFilePath(), clientConfig.Signer.Identity(), cookie)
+	if err != nil {
+		return fmt.Errorf("save cookie: %w", err)
+	}
+
+	return nil
 }
 
 // Client is a client that can be used to talk to a kwil node

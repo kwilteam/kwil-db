@@ -50,16 +50,7 @@ func kgwAuthnCmd() *cobra.Command {
 						return display.PrintErr(cmd, fmt.Errorf("authentication failed: %w", err))
 					}
 
-					// retrieve the cookie and persist it
-					cookie, found := gatewayClient.GetAuthCookie()
-					if !found {
-						return display.PrintErr(cmd, fmt.Errorf("authentication failed: cookie could not be found"))
-					}
-
-					err = common.SaveCookie(common.KGWAuthTokenFilePath(), gatewayClient.Signer.Identity(), cookie)
-					if err != nil {
-						return display.PrintErr(cmd, fmt.Errorf("save cookie: %w", err))
-					}
+					// we do not need to persist the cookie since DialClient will do that for us
 
 					return display.PrintCmd(cmd, display.RespString("Success"))
 				})
