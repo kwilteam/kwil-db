@@ -141,14 +141,13 @@ func (a *SavepointCommittable) Commit(ctx context.Context, idempotencyKey []byte
 	a.writable = false
 
 	if a.skip {
+		a.skip = false
 		return a.db.Get(ctx, ApphashKey, true)
 	}
 
 	if a.savepoint == nil {
 		return nil, fmt.Errorf("no session exists")
 	}
-
-	a.skip = false
 
 	var appHash []byte
 	if a.idFn != nil {
