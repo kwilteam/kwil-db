@@ -79,11 +79,9 @@ func (m *MultiCommitter) Begin(ctx context.Context, idempotencyKey []byte) (err 
 		return err
 	}
 
-	// if lastKey is not nil, we are recovering from a crash
-	if lastKey != nil {
-		if !bytes.Equal(lastKey, idempotencyKey) {
-			return fmt.Errorf("%w on recovery: expected %s, got %s", ErrIdempotencyKeyMismatch, lastKey, idempotencyKey)
-		}
+	// if the last key is the same as the current key, we are recovering
+	// from a crash, therefore begin recovery mode.
+	if bytes.Equal(lastKey, idempotencyKey) {
 		for _, committable := range m.committables {
 			err = committable.BeginRecovery(ctx, idempotencyKey)
 			if err != nil {
@@ -143,7 +141,6 @@ func (m *MultiCommitter) Commit(ctx context.Context, idempotencyKey []byte) (id 
 		id = append(id, newId...)
 	}
 
-	err = deleteCurrentKey(m.kv)
 	return id, err
 }
 

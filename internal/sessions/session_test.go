@@ -45,7 +45,8 @@ func Test_Sessions(t *testing.T) {
 				_, err = mc.Commit(ctx, key2)
 				assert.NoError(t, err)
 
-				assert.Equal(t, len(kv.vals), 0)
+				// IdempotentKey is never deleted, just updated with every block, so it should always be 1
+				assert.Equal(t, len(kv.vals), 1)
 			},
 		},
 		{
