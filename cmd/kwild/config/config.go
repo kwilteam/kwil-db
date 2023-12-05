@@ -445,24 +445,6 @@ func DefaultConfig() *KwildConfig {
 	}
 }
 
-func EmptyConfig() *KwildConfig {
-	return &KwildConfig{
-		AppCfg: &AppConfig{
-			ExtensionEndpoints: []string{},
-		},
-		ChainCfg: &ChainConfig{
-			P2P:     &P2PConfig{},
-			RPC:     &ChainRPCConfig{},
-			Mempool: &MempoolConfig{},
-			StateSync: &StateSyncConfig{
-				RPCServers: []string{},
-			},
-			Consensus: &ConsensusConfig{},
-		},
-		Logging: &Logging{},
-	}
-}
-
 func (cfg *KwildConfig) LogConfig() *log.Config {
 	// Rootify any relative paths.
 	outputPaths := make([]string, 0, len(cfg.Logging.OutputPaths))

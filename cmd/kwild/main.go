@@ -34,7 +34,7 @@ func main() {
 }
 
 func rootCmd() *cobra.Command {
-	flagCfg := config.EmptyConfig()
+	flagCfg := config.DefaultConfig()
 	var autoGen bool
 
 	cmd := &cobra.Command{

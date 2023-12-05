@@ -20,7 +20,7 @@ kwil-admin setup peer --root-dir ./kwil-node --genesis /path/to/genesis.json --p
 )
 
 func peerCmd() *cobra.Command {
-	cfg := config.EmptyConfig()
+	cfg := config.DefaultConfig()
 	var genesisPath string
 
 	cmd := &cobra.Command{
