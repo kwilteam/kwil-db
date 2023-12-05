@@ -96,24 +96,8 @@ type PrivateKeyInfo struct {
 }
 
 func (p *PrivateKeyInfo) MarshalJSON() ([]byte, error) {
-	// must use anonymous struct to avoid infinite recursion
-	return json.Marshal(struct {
-		PrivateKeyHex         string `json:"private_key_hex"`
-		PrivateKeyBase64      string `json:"private_key_base64"`
-		PublicKeyBase64       string `json:"public_key_base64"`
-		PublicKeyCometizedHex string `json:"public_key_cometized_hex"`
-		PublicKeyPlainHex     string `json:"public_key_plain_hex"`
-		Address               string `json:"address"`
-		NodeID                string `json:"node_id"`
-	}{
-		PrivateKeyHex:         p.PrivateKeyHex,
-		PrivateKeyBase64:      p.PrivateKeyBase64,
-		PublicKeyBase64:       p.PublicKeyBase64,
-		PublicKeyCometizedHex: p.PublicKeyCometizedHex,
-		PublicKeyPlainHex:     p.PublicKeyPlainHex,
-		Address:               p.Address,
-		NodeID:                p.NodeID,
-	})
+	type pki PrivateKeyInfo
+	return json.Marshal((*pki)(p))
 }
 
 func (p *PrivateKeyInfo) MarshalText() ([]byte, error) {

@@ -156,24 +156,11 @@ func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionDat
 }
 
 // ListDatasets list datasets deployed by a specific caller.
-// If caller is nil, it will list all datasets.
+// If caller is empty, it will list all datasets.
 func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]*coreTypes.DatasetIdentifier, error) {
 	datasets := make([]*coreTypes.DatasetIdentifier, 0, len(g.datasets))
-
-	if len(caller) == 0 {
-		for dbid, dataset := range g.datasets {
-			datasets = append(datasets, &coreTypes.DatasetIdentifier{
-				Name:  dataset.schema.Name,
-				Owner: dataset.schema.Owner,
-				DBID:  dbid,
-			})
-		}
-
-		return datasets, nil
-	}
-
 	for dbid, dataset := range g.datasets {
-		if bytes.Equal(dataset.schema.Owner, caller) {
+		if len(caller) == 0 || bytes.Equal(dataset.schema.Owner, caller) {
 			datasets = append(datasets, &coreTypes.DatasetIdentifier{
 				Name:  dataset.schema.Name,
 				Owner: dataset.schema.Owner,

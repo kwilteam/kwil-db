@@ -427,7 +427,7 @@ func DefaultConfig() *KwildConfig {
 		},
 		ChainCfg: &ChainConfig{
 			P2P: &P2PConfig{
-				ListenAddress:       "tcp://127.0.0.1:26656",
+				ListenAddress:       "tcp://0.0.0.0:26656",
 				ExternalAddress:     "",
 				AddrBookStrict:      false, // override comet
 				MaxNumInboundPeers:  40,

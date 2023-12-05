@@ -145,7 +145,6 @@ tasks:
     desc: Start the dev environment
     deps:
       - task: build:docker
-        vars: {VARIANT: 'shell'}
     cmds:
       - task: dev:up:nb
 
@@ -170,7 +169,6 @@ tasks:
     desc: Start the dev environment(with testnet)
     deps:
       - task: build:docker
-        vars: { VARIANT: 'shell' }
     cmds:
       - task: dev:testnet:up:nb
 
