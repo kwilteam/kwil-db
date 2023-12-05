@@ -48,6 +48,7 @@ Class | Method | HTTP request | Description
  - [TxCallResponse](docs/TxCallResponse.md)
  - [TxChainInfoResponse](docs/TxChainInfoResponse.md)
  - [TxColumn](docs/TxColumn.md)
+ - [TxDatasetInfo](docs/TxDatasetInfo.md)
  - [TxEstimatePriceRequest](docs/TxEstimatePriceRequest.md)
  - [TxEstimatePriceResponse](docs/TxEstimatePriceResponse.md)
  - [TxExtensions](docs/TxExtensions.md)

@@ -44,10 +44,10 @@ type txClient interface {
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
 }
 
-// New creates a new admin client.
+// NewClient creates a new admin client.
 // It can be configured to either use TLS or not, if using gRPC.
 // The target arg should be either "tcp://localhost:50151", "localhost:50151", or "unix://path/to/socket.sock"
-func New(ctx context.Context, target string, opts ...AdminClientOpt) (*AdminClient, error) {
+func NewClient(ctx context.Context, target string, opts ...AdminClientOpt) (*AdminClient, error) {
 	c := &AdminClient{
 		log: log.NewNoOp(),
 	}

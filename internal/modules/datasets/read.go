@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
@@ -61,7 +62,7 @@ func (u *DatasetModule) GetSchema(ctx context.Context, dbid string) (*engineType
 }
 
 // ListOwnedDatabase returns a list of databases owned by a public key.
-func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner []byte) ([]string, error) {
+func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner []byte) ([]*coreTypes.DatasetInfo, error) {
 	return u.engine.ListDatasets(ctx, owner)
 }
 

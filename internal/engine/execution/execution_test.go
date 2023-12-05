@@ -177,7 +177,9 @@ func Test_Execution(t *testing.T) {
 				require.NoError(t, err)
 
 				require.Equal(t, 1, len(datasets))
-				require.Equal(t, testdata.TestSchema.Name, datasets[0])
+				require.Equal(t, testdata.TestSchema.Name, datasets[0].Name)
+				require.Equal(t, testdata.TestSchema.Owner, datasets[0].Owner)
+				require.Equal(t, testdata.TestSchema.DBID(), datasets[0].DBID)
 			},
 		},
 	}

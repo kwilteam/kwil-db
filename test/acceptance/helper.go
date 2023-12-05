@@ -285,7 +285,7 @@ func (r *ActHelper) GetDriver(driveType string, user string) KwilAcceptanceDrive
 func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
+	kwilClt, err := client.NewClient(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
 		Signer:  signer,
 		ChainID: TestChainID,
 		Logger:  logger,

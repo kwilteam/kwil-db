@@ -14,7 +14,7 @@ var nodeCmd = &cobra.Command{
 
 func NewNodeCmd() *cobra.Command {
 	nodeCmd.AddCommand(
-
+		dumpCfgCmd(),
 		versionCmd(),
 		statusCmd(),
 		peersCmd(),

@@ -51,7 +51,7 @@ func (tc *timedClient) Query(ctx context.Context, dbid string, query string) ([]
 	return tc.cl.Query(ctx, dbid, query)
 }
 
-func (tc *timedClient) ListDatabases(ctx context.Context, ownerIdentifier []byte) ([]string, error) {
+func (tc *timedClient) ListDatabases(ctx context.Context, ownerIdentifier []byte) ([]*types.DatasetInfo, error) {
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "ListDatabases")
 	}

@@ -194,7 +194,7 @@ func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, 
 
 	signer := auth.Ed25519Signer{Ed25519PrivateKey: *pk}
 
-	return admSvc.NewService(transactor, node, validatorStore, &signer,
+	return admSvc.NewService(transactor, node, validatorStore, &signer, d.cfg,
 		admSvc.WithLogger(*d.log.Named("admin-service")),
 	)
 }

@@ -1,14 +1,18 @@
 package database
 
 import (
+	"encoding/base64"
+	"encoding/hex"
+
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 func Example_respDBlist_text_0() {
 	display.Print(
-		&respDBList{Databases: []string{}, Owner: []byte("owner")},
+		&respDBList{Info: []*types.DatasetInfo{}, owner: mustDecodeHex("6f776e6572")},
 		nil, "text")
 	// Output:
 	// No databases found for '6f776e6572'.
@@ -16,33 +20,77 @@ func Example_respDBlist_text_0() {
 
 func Example_respDBlist_text() {
 	display.Print(
-		&respDBList{Databases: []string{"db_a", "db_b"}, Owner: []byte("owner")},
+		&respDBList{Info: []*types.DatasetInfo{
+			{
+				Name:  "db_a",
+				Owner: mustDecodeHex("6f776e6572"),
+				DBID:  "xabc",
+			},
+			{
+				Name:  "db_b",
+				Owner: mustDecodeHex("6f776e6572"),
+				DBID:  "xdef",
+			},
+		},
+			owner: mustDecodeHex("6f776e6572")},
 		nil, "text")
 	// Output:
 	// Databases belonging to '6f776e6572':
-	//  - db_a   (dbid:xf1a24857f73e3bbdeaae383338e8fb4bde364e959207bd2327e375ea)
-	//  - db_b   (dbid:x63e828a14a11c00b84adc9fc1473c5104557cd857ca81588638bb1f3)
+	//   DBID: xabc
+	//     Name: db_a
+	//     Owner: 6f776e6572
+	//   DBID: xdef
+	//     Name: db_b
+	//     Owner: 6f776e6572
+}
+
+func mustDecodeHex(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func mustDecodeBase64(s string) []byte {
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 func Example_respDBlist_json() {
+
 	display.Print(
-		&respDBList{Databases: []string{"db_a", "db_b"}, Owner: []byte("owner")},
+		&respDBList{Info: []*types.DatasetInfo{
+			{
+				Name:  "db_a",
+				Owner: mustDecodeBase64("b3duZXI="),
+				DBID:  "xabc",
+			},
+			{
+				Name:  "db_b",
+				Owner: mustDecodeBase64("b3duZXI="),
+				DBID:  "xdef",
+			},
+		}},
 		nil, "json")
+
 	// Output:
 	// {
-	//   "result": {
-	//     "databases": [
-	//       {
-	//         "name": "db_a",
-	//         "id": "xf1a24857f73e3bbdeaae383338e8fb4bde364e959207bd2327e375ea"
-	//       },
-	//       {
-	//         "name": "db_b",
-	//         "id": "x63e828a14a11c00b84adc9fc1473c5104557cd857ca81588638bb1f3"
-	//       }
-	//     ],
-	//     "owner": "6f776e6572"
-	//   },
+	//   "result": [
+	//     {
+	//       "name": "db_a",
+	//       "owner": "b3duZXI=",
+	//       "dbid": "xabc"
+	//     },
+	//     {
+	//       "name": "db_b",
+	//       "owner": "b3duZXI=",
+	//       "dbid": "xdef"
+	//     }
+	//   ],
 	//   "error": ""
 	// }
 }

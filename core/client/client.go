@@ -35,9 +35,9 @@ type Client struct {
 	noWarnings bool // silence warning logs
 }
 
-// Dial creates a Kwil client. It will dial the remote host via HTTP, and
+// NewClient creates a Kwil client. It will dial the remote host via HTTP, and
 // verify the chain ID of the remote host against the chain ID passed in.
-func Dial(ctx context.Context, target string, options *ClientOptions) (c *Client, err error) {
+func NewClient(ctx context.Context, target string, options *ClientOptions) (c *Client, err error) {
 	parsedUrl, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("parse url: %w", err)
@@ -228,7 +228,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records
 	return NewRecordsFromMaps(res), nil
 }
 
-func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]string, error) {
+func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetInfo, error) {
 	return c.txClient.ListDatabases(ctx, owner)
 }
 

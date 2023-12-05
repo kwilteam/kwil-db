@@ -552,6 +552,21 @@
         }
       }
     },
+    "txDatasetInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string",
+          "format": "byte"
+        },
+        "dbid": {
+          "type": "string"
+        }
+      }
+    },
     "txEstimatePriceRequest": {
       "type": "object",
       "properties": {
@@ -678,7 +693,8 @@
         "databases": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object",
+            "$ref": "#/definitions/txDatasetInfo"
           }
         }
       }

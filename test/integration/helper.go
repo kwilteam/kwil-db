@@ -382,7 +382,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, httpEndpoint string) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
+	kwilClt, err := client.NewClient(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
 		Signer:  signer,
 		ChainID: testChainID,
 		Logger:  logger,

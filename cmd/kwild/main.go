@@ -34,7 +34,8 @@ func main() {
 }
 
 func rootCmd() *cobra.Command {
-	flagCfg := config.DefaultConfig()
+	// we use an empty config because this config gets merged later, and should only contain flag values
+	flagCfg := config.EmptyConfig()
 	var autoGen bool
 
 	cmd := &cobra.Command{

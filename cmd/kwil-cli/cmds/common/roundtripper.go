@@ -50,7 +50,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	// if not using the gateway, then we can simply create a regular client and return
 	if flags&UsingGateway == 0 {
-		client, err := client.Dial(ctx, conf.GrpcURL, &clientConfig)
+		client, err := client.NewClient(ctx, conf.GrpcURL, &clientConfig)
 		if err != nil {
 			return err
 		}
@@ -60,7 +60,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	// if we reach here, we are talking to a gateway
 
-	client, err := gatewayclient.NewGatewayClient(ctx, conf.GrpcURL, &gatewayclient.GatewayOptions{
+	client, err := gatewayclient.NewClient(ctx, conf.GrpcURL, &gatewayclient.GatewayOptions{
 		ClientOptions: clientConfig,
 		AuthSignFunc: func(message string, signer auth.Signer) (*auth.Signature, error) {
 			assumeYes, err := GetAssumeYesFlag(cmd)
@@ -122,7 +122,7 @@ type Client interface {
 	ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...client.TxOpt) (transactions.TxHash, error)
 	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
 	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)
-	ListDatabases(ctx context.Context, owner []byte) ([]string, error)
+	ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetInfo, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, dbid string, query string) (*client.Records, error)
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"slices"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -103,8 +102,16 @@ func (d *KwildClientDriver) DatabaseExists(ctx context.Context, dbid string) err
 		return fmt.Errorf("failed to get database list: %w", err)
 	}
 
-	if !slices.Contains(dbs, dbSchema.Name) {
-		return fmt.Errorf("database %s not found", dbid)
+	found := false
+	for _, db := range dbs {
+		if db.DBID == dbid {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("ListDatabase: database not found: %s", dbid)
 	}
 
 	return nil

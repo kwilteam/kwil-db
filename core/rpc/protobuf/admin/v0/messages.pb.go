@@ -1105,6 +1105,91 @@ func (x *ListJoinRequestsResponse) GetJoinRequests() []*PendingJoin {
 	return nil
 }
 
+type GetConfigRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *GetConfigRequest) Reset() {
+	*x = GetConfigRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[21]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetConfigRequest) ProtoMessage() {}
+
+func (x *GetConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[21]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetConfigRequest.ProtoReflect.Descriptor instead.
+func (*GetConfigRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{21}
+}
+
+type GetConfigResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Config []byte `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"` // due to the size of the config, and how often it is updated, doing this for now
+}
+
+func (x *GetConfigResponse) Reset() {
+	*x = GetConfigResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[22]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetConfigResponse) ProtoMessage() {}
+
+func (x *GetConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[22]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetConfigResponse.ProtoReflect.Descriptor instead.
+func (*GetConfigResponse) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetConfigResponse) GetConfig() []byte {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
 var File_kwil_admin_v0_messages_proto protoreflect.FileDescriptor
 
 var file_kwil_admin_v0_messages_proto_rawDesc = []byte{
@@ -1206,11 +1291,16 @@ var file_kwil_admin_v0_messages_proto_rawDesc = []byte{
 	0x0a, 0x0d, 0x6a, 0x6f, 0x69, 0x6e, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x73, 0x18,
 	0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x50, 0x65,
 	0x6e, 0x64, 0x69, 0x6e, 0x67, 0x4a, 0x6f, 0x69, 0x6e, 0x52, 0x0d, 0x6a, 0x6f, 0x69, 0x6e, 0x5f,
-	0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x73, 0x42, 0x3e, 0x5a, 0x3c, 0x67, 0x69, 0x74, 0x68,
-	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x74, 0x65, 0x61, 0x6d, 0x2f,
-	0x6b, 0x77, 0x69, 0x6c, 0x2d, 0x64, 0x62, 0x2f, 0x63, 0x6f, 0x72, 0x65, 0x2f, 0x72, 0x70, 0x63,
-	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2f,
-	0x76, 0x30, 0x3b, 0x61, 0x64, 0x6d, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x73, 0x22, 0x12, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x43,
+	0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x2b, 0x0a, 0x11,
+	0x47, 0x65, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x16, 0x0a, 0x06, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0c, 0x52, 0x06, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x42, 0x3e, 0x5a, 0x3c, 0x67, 0x69, 0x74,
+	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x74, 0x65, 0x61, 0x6d,
+	0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x2d, 0x64, 0x62, 0x2f, 0x63, 0x6f, 0x72, 0x65, 0x2f, 0x72, 0x70,
+	0x63, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x61, 0x64, 0x6d, 0x69, 0x6e,
+	0x2f, 0x76, 0x30, 0x3b, 0x61, 0x64, 0x6d, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -1225,7 +1315,7 @@ func file_kwil_admin_v0_messages_proto_rawDescGZIP() []byte {
 	return file_kwil_admin_v0_messages_proto_rawDescData
 }
 
-var file_kwil_admin_v0_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_kwil_admin_v0_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_kwil_admin_v0_messages_proto_goTypes = []interface{}{
 	(*VersionRequest)(nil),           // 0: admin.VersionRequest
 	(*VersionResponse)(nil),          // 1: admin.VersionResponse
@@ -1248,6 +1338,8 @@ var file_kwil_admin_v0_messages_proto_goTypes = []interface{}{
 	(*ListValidatorsResponse)(nil),   // 18: admin.ListValidatorsResponse
 	(*ListJoinRequestsRequest)(nil),  // 19: admin.ListJoinRequestsRequest
 	(*ListJoinRequestsResponse)(nil), // 20: admin.ListJoinRequestsResponse
+	(*GetConfigRequest)(nil),         // 21: admin.GetConfigRequest
+	(*GetConfigResponse)(nil),        // 22: admin.GetConfigResponse
 }
 var file_kwil_admin_v0_messages_proto_depIdxs = []int32{
 	4,  // 0: admin.StatusResponse.node:type_name -> admin.NodeInfo
@@ -1523,6 +1615,30 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
+		file_kwil_admin_v0_messages_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetConfigRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetConfigResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1530,7 +1646,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_kwil_admin_v0_messages_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

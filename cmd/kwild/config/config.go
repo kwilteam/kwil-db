@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -192,6 +193,21 @@ func (d *Duration) Set(s string) error {
 // Merge merges b onto a, overwriting any fields in a that are also set in b.
 func (a *KwildConfig) Merge(b *KwildConfig) error {
 	return merge.MergeWithOverwrite(a, b)
+}
+
+func (a *KwildConfig) MarshalBinary() ([]byte, error) {
+	mapCfg := make(map[string]interface{})
+	mapstructure.Decode(a, &mapCfg)
+	return json.Marshal(mapCfg)
+}
+
+func (a *KwildConfig) UnmarshalBinary(b []byte) error {
+	mapCfg := make(map[string]interface{})
+	err := json.Unmarshal(b, &mapCfg)
+	if err != nil {
+		return err
+	}
+	return mapstructure.Decode(mapCfg, a)
 }
 
 func defaultMoniker() string {
@@ -442,6 +458,26 @@ func DefaultConfig() *KwildConfig {
 				TimeoutCommit:    Duration(6 * time.Second),
 			},
 		},
+	}
+}
+
+// EmptyConfig returns a config with all fields set to their zero values.
+// This is useful for guaranteeing that all fields are set when merging
+func EmptyConfig() *KwildConfig {
+	return &KwildConfig{
+		AppCfg: &AppConfig{
+			ExtensionEndpoints: []string{},
+		},
+		ChainCfg: &ChainConfig{
+			P2P:     &P2PConfig{},
+			RPC:     &ChainRPCConfig{},
+			Mempool: &MempoolConfig{},
+			StateSync: &StateSyncConfig{
+				RPCServers: []string{},
+			},
+			Consensus: &ConsensusConfig{},
+		},
+		Logging: &Logging{},
 	}
 }
 

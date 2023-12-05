@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"slices"
 	"strings"
 	"time"
 
@@ -67,7 +66,7 @@ func (d *KwilCliDriver) DBID(name string) string {
 	return utils.GenerateDBID(name, d.identity)
 }
 
-func (d *KwilCliDriver) listDatabase() ([]string, error) {
+func (d *KwilCliDriver) listDatabase() ([]*types.DatasetInfo, error) {
 	cmd := d.newKwilCliCmd("database", "list", "--owner", hex.EncodeToString(d.identity))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
@@ -96,7 +95,15 @@ func (d *KwilCliDriver) DatabaseExists(_ context.Context, dbid string) error {
 		return err
 	}
 
-	if !slices.Contains(dbs, dbid) {
+	found := false
+	for _, db := range dbs {
+		if db.DBID == dbid {
+			found = true
+			break
+		}
+	}
+
+	if !found {
 		return fmt.Errorf("ListDatabase: database not found: %s", dbid)
 	}
 
@@ -430,34 +437,17 @@ func parseRespQueryDb(data any) (*client.Records, error) {
 	return client.NewRecordsFromMaps(resp), nil
 }
 
-// respDBList represent databases belong to an owner in cli
-// NOTE: this is **NOT** exactly the same as the one in cmd/kwil-cli/message.go
-type respDBList struct {
-	Databases []dbInfo `json:"databases"`
-	Owner     []byte   `json:"owner"`
-}
-
-type dbInfo struct {
-	Name string `json:"name"`
-	Id   string `json:"id"`
-}
-
-func parseRespListDatabases(data any) ([]string, error) {
+func parseRespListDatabases(data any) ([]*types.DatasetInfo, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal list databases resp: %w", err)
 	}
 
-	var resp respDBList
+	var resp []*types.DatasetInfo
 	err = json.Unmarshal(bts, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal list databases: %w", err)
 	}
 
-	dbs := make([]string, len(resp.Databases))
-	for i, db := range resp.Databases {
-		dbs[i] = db.Id
-	}
-
-	return dbs, nil
+	return resp, nil
 }

@@ -20,7 +20,7 @@ type TxSvcClient interface {
 	EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
 	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)
-	ListDatabases(ctx context.Context, ownerPubKey []byte) ([]string, error)
+	ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*types.DatasetInfo, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)

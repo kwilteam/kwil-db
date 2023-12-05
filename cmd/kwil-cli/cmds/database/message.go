@@ -7,8 +7,8 @@ import (
 	"sort"
 
 	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/core/utils"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -21,45 +21,36 @@ import (
 
 // respDBList represent databases belong to an owner in cli
 type respDBList struct {
-	Databases []string `json:"databases"`
-	Owner     []byte   `json:"owner"`
-}
-
-type dbInfo struct {
-	Name string `json:"name"`
-	Id   string `json:"id"`
+	Info []*types.DatasetInfo
+	// owner is the owner configured in cli
+	owner []byte
 }
 
 func (d *respDBList) MarshalJSON() ([]byte, error) {
-	dbs := make([]dbInfo, len(d.Databases))
-
-	for i, db := range d.Databases {
-		dbs[i] = dbInfo{
-			Name: db,
-			Id:   utils.GenerateDBID(db, d.Owner),
-		}
-	}
-
-	return json.Marshal(struct {
-		Databases []dbInfo `json:"databases"`
-		Owner     string   `json:"owner"`
-	}{
-		Databases: dbs,
-		Owner:     fmt.Sprintf("%x", d.Owner),
-	})
+	return json.Marshal(d.Info)
 }
 
 func (d *respDBList) MarshalText() ([]byte, error) {
-	if len(d.Databases) == 0 {
-		return []byte(fmt.Sprintf("No databases found for '%x'.", d.Owner)), nil
+	if len(d.Info) == 0 {
+		return []byte(fmt.Sprintf("No databases found for '%x'.", d.owner)), nil
 	}
 
-	msg := fmt.Sprintf("Databases belonging to '%x':\n", d.Owner)
-	for _, db := range d.Databases {
-		msg += fmt.Sprintf(" - %s   (dbid:%s)\n", db, utils.GenerateDBID(db, d.Owner))
+	var msg bytes.Buffer
+	if len(d.owner) == 0 {
+		msg.WriteString("Databases:\n")
+	} else {
+		msg.WriteString(fmt.Sprintf("Databases belonging to '%x':\n", d.owner))
+	}
+	for i, db := range d.Info {
+		msg.WriteString(fmt.Sprintf("  DBID: %s\n", db.DBID))
+		msg.WriteString(fmt.Sprintf("    Name: %s\n", db.Name))
+		msg.WriteString(fmt.Sprintf("    Owner: %x", db.Owner))
+		if i != len(d.Info)-1 {
+			msg.WriteString("\n")
+		}
 	}
 
-	return []byte(msg), nil
+	return msg.Bytes(), nil
 }
 
 // respRelations is a slice of maps that represent the relations(from set theory)

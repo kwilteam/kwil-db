@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
@@ -62,6 +63,8 @@ type Service struct {
 	nodeApp    NodeApplication
 	validators ValidatorReader
 
+	cfg *config.KwildConfig
+
 	log log.Logger
 
 	signer auth.Signer // signer is an ed25519 signer derived from the nodes private key.
@@ -70,12 +73,13 @@ type Service struct {
 var _ admpb.AdminServiceServer = (*Service)(nil)
 
 // NewService constructs a new Service.
-func NewService(blockchain BlockchainTransactor, node NodeApplication, validators ValidatorReader, signer auth.Signer, opts ...AdminSvcOpt) *Service {
+func NewService(blockchain BlockchainTransactor, node NodeApplication, validators ValidatorReader, signer auth.Signer, cfg *config.KwildConfig, opts ...AdminSvcOpt) *Service {
 	s := &Service{
 		blockchain: blockchain,
 		nodeApp:    node,
 		validators: validators,
 		signer:     signer,
+		cfg:        cfg,
 		log:        log.NewNoOp(),
 	}
 
@@ -324,5 +328,16 @@ func (s *Service) ListPendingJoins(ctx context.Context, req *admpb.ListJoinReque
 
 	return &admpb.ListJoinRequestsResponse{
 		JoinRequests: pbJoins,
+	}, nil
+}
+
+func (s *Service) GetConfig(ctx context.Context, req *admpb.GetConfigRequest) (*admpb.GetConfigResponse, error) {
+	bts, err := s.cfg.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return &admpb.GetConfigResponse{
+		Config: bts,
 	}, nil
 }

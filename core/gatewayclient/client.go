@@ -33,7 +33,7 @@ type GatewayClient struct {
 	gatewaySigner GatewayAuthSignFunc // a hook for when the gateway authentication is needed
 }
 
-func NewGatewayClient(ctx context.Context, target string, opts *GatewayOptions) (*GatewayClient, error) {
+func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*GatewayClient, error) {
 	options := DefaultOptions()
 	options.Apply(opts)
 

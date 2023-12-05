@@ -30,6 +30,7 @@ const (
 	AdminService_JoinStatus_FullMethodName       = "/admin.AdminService/JoinStatus"
 	AdminService_ListValidators_FullMethodName   = "/admin.AdminService/ListValidators"
 	AdminService_ListPendingJoins_FullMethodName = "/admin.AdminService/ListPendingJoins"
+	AdminService_GetConfig_FullMethodName        = "/admin.AdminService/GetConfig"
 )
 
 // AdminServiceClient is the client API for AdminService service.
@@ -46,6 +47,7 @@ type AdminServiceClient interface {
 	JoinStatus(ctx context.Context, in *JoinStatusRequest, opts ...grpc.CallOption) (*JoinStatusResponse, error)
 	ListValidators(ctx context.Context, in *ListValidatorsRequest, opts ...grpc.CallOption) (*ListValidatorsResponse, error)
 	ListPendingJoins(ctx context.Context, in *ListJoinRequestsRequest, opts ...grpc.CallOption) (*ListJoinRequestsResponse, error)
+	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 }
 
 type adminServiceClient struct {
@@ -146,6 +148,15 @@ func (c *adminServiceClient) ListPendingJoins(ctx context.Context, in *ListJoinR
 	return out, nil
 }
 
+func (c *adminServiceClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
+	out := new(GetConfigResponse)
+	err := c.cc.Invoke(ctx, AdminService_GetConfig_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AdminServiceServer is the server API for AdminService service.
 // All implementations must embed UnimplementedAdminServiceServer
 // for forward compatibility
@@ -160,6 +171,7 @@ type AdminServiceServer interface {
 	JoinStatus(context.Context, *JoinStatusRequest) (*JoinStatusResponse, error)
 	ListValidators(context.Context, *ListValidatorsRequest) (*ListValidatorsResponse, error)
 	ListPendingJoins(context.Context, *ListJoinRequestsRequest) (*ListJoinRequestsResponse, error)
+	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	mustEmbedUnimplementedAdminServiceServer()
 }
 
@@ -196,6 +208,9 @@ func (UnimplementedAdminServiceServer) ListValidators(context.Context, *ListVali
 }
 func (UnimplementedAdminServiceServer) ListPendingJoins(context.Context, *ListJoinRequestsRequest) (*ListJoinRequestsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPendingJoins not implemented")
+}
+func (UnimplementedAdminServiceServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
 }
 func (UnimplementedAdminServiceServer) mustEmbedUnimplementedAdminServiceServer() {}
 
@@ -390,6 +405,24 @@ func _AdminService_ListPendingJoins_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AdminService_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdminServiceServer).GetConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AdminService_GetConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdminServiceServer).GetConfig(ctx, req.(*GetConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AdminService_ServiceDesc is the grpc.ServiceDesc for AdminService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -436,6 +469,10 @@ var AdminService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPendingJoins",
 			Handler:    _AdminService_ListPendingJoins_Handler,
+		},
+		{
+			MethodName: "GetConfig",
+			Handler:    _AdminService_GetConfig_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -5,7 +5,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/rpc/client"
+	adminRPC "github.com/kwilteam/kwil-db/core/rpc/client/admin"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
@@ -16,6 +18,8 @@ import (
 type GrpcAdminClient struct {
 	client admpb.AdminServiceClient
 }
+
+var _ adminRPC.AdminClient = (*GrpcAdminClient)(nil)
 
 // NewAdminClient creates a grpc client for the Kwil admin service.
 func NewAdminClient(conn *grpc.ClientConn) *GrpcAdminClient {
@@ -157,6 +161,21 @@ func (c *GrpcAdminClient) ListPendingJoins(ctx context.Context) ([]*types.JoinRe
 		joins[i] = convertPendingJoin(j)
 	}
 	return joins, nil
+}
+
+func (c *GrpcAdminClient) GetConfig(ctx context.Context) (*config.KwildConfig, error) {
+	resp, err := c.client.GetConfig(ctx, &admpb.GetConfigRequest{})
+	if err != nil {
+		return nil, client.ConvertGRPCErr(err)
+	}
+
+	cfg := &config.KwildConfig{}
+	err = cfg.UnmarshalBinary(resp.Config)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }
 
 func convertPendingJoin(join *admpb.PendingJoin) *types.JoinRequest {

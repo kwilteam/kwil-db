@@ -51,7 +51,7 @@ func GetAdminSvcClient(ctx context.Context, cmd *cobra.Command) (*adminclient.Ad
 		dialOpt = append(dialOpt, adminclient.WithTLS(kwildTLSCertFile, clientTLSKeyFile, clientTLSCertFile))
 	}
 
-	return adminclient.New(ctx, rpcServer, dialOpt...)
+	return adminclient.NewClient(ctx, rpcServer, dialOpt...)
 }
 
 const (

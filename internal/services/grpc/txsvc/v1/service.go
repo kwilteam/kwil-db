@@ -7,7 +7,8 @@ import (
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/kwilteam/kwil-db/core/log"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
-	types "github.com/kwilteam/kwil-db/core/types/admin"
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
+	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
@@ -51,7 +52,7 @@ func NewService(engine EngineReader, accountStore AccountReader, vstore Validato
 type EngineReader interface {
 	Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
-	ListOwnedDatabases(ctx context.Context, owner []byte) ([]string, error)
+	ListOwnedDatabases(ctx context.Context, owner []byte) ([]*coreTypes.DatasetInfo, error)
 	PriceDeploy(ctx context.Context, schema *engineTypes.Schema) (price *big.Int, err error)
 	PriceDrop(ctx context.Context, dbid string) (price *big.Int, err error)
 	PriceExecute(ctx context.Context, dbid string, action string, args [][]any) (price *big.Int, err error)
@@ -63,7 +64,7 @@ type AccountReader interface {
 }
 
 type BlockchainTransactor interface {
-	Status(ctx context.Context) (*types.Status, error)
+	Status(ctx context.Context) (*adminTypes.Status, error)
 	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
 	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error) // TODO: don't use comet types here
 }

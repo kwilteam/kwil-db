@@ -8,6 +8,8 @@
  */
 package swagger
 
-type TxListDatabasesResponse struct {
-	Databases []TxDatasetInfo `json:"databases,omitempty"`
+type TxDatasetInfo struct {
+	Name string `json:"name,omitempty"`
+	Owner string `json:"owner,omitempty"`
+	Dbid string `json:"dbid,omitempty"`
 }

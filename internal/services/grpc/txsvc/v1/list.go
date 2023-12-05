@@ -12,7 +12,16 @@ func (s *Service) ListDatabases(ctx context.Context, req *txpb.ListDatabasesRequ
 		return nil, err
 	}
 
+	pbDatasets := make([]*txpb.DatasetInfo, len(dbs))
+	for i, db := range dbs {
+		pbDatasets[i] = &txpb.DatasetInfo{
+			Dbid:  db.DBID,
+			Name:  db.Name,
+			Owner: db.Owner,
+		}
+	}
+
 	return &txpb.ListDatabasesResponse{
-		Databases: dbs,
+		Databases: pbDatasets,
 	}, nil
 }
