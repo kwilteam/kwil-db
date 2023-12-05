@@ -124,10 +124,11 @@ func ConvertFromPBTxQueryResp(resp *txpb.TxQueryResponse) (*transactions.TcTxQue
 
 func ConvertFromPBSchema(dataset *txpb.Schema) *transactions.Schema {
 	return &transactions.Schema{
-		Owner:   dataset.Owner,
-		Name:    dataset.Name,
-		Tables:  convertFromPBTables(dataset.Tables),
-		Actions: convertFromPBActions(dataset.Actions),
+		Owner:      dataset.Owner,
+		Name:       dataset.Name,
+		Tables:     convertFromPBTables(dataset.Tables),
+		Actions:    convertFromPBActions(dataset.Actions),
+		Extensions: convertFromPBExtensions(dataset.Extensions),
 	}
 }
 
@@ -135,9 +136,10 @@ func convertFromPBTables(tables []*txpb.Table) []*transactions.Table {
 	convTables := make([]*transactions.Table, len(tables))
 	for i, table := range tables {
 		convTables[i] = &transactions.Table{
-			Name:    table.Name,
-			Columns: convertFromPBColumns(table.Columns),
-			Indexes: convertFromPBIndexes(table.Indexes),
+			Name:        table.Name,
+			Columns:     convertFromPBColumns(table.Columns),
+			Indexes:     convertFromPBIndexes(table.Indexes),
+			ForeignKeys: convertFromPBForeignKeys(table.ForeignKeys),
 		}
 	}
 
@@ -196,4 +198,47 @@ func convertFromPBActions(actions []*txpb.Action) []*transactions.Action {
 	}
 
 	return convActions
+}
+
+func convertFromPBForeignKeys(foreignKeys []*txpb.ForeignKey) []*transactions.ForeignKey {
+	convForeignKeys := make([]*transactions.ForeignKey, len(foreignKeys))
+	for i, foreignKey := range foreignKeys {
+		actions := make([]*transactions.ForeignKeyAction, len(foreignKey.Actions))
+		for j, action := range foreignKey.Actions {
+			actions[j] = &transactions.ForeignKeyAction{
+				On: action.On,
+				Do: action.Do,
+			}
+		}
+
+		convForeignKeys[i] = &transactions.ForeignKey{
+			ChildKeys:   foreignKey.ChildKeys,
+			ParentKeys:  foreignKey.ParentKeys,
+			ParentTable: foreignKey.ParentTable,
+			Actions:     actions,
+		}
+	}
+
+	return convForeignKeys
+}
+
+func convertFromPBExtensions(extensions []*txpb.Extensions) []*transactions.Extension {
+	convExtensions := make([]*transactions.Extension, len(extensions))
+	for i, extension := range extensions {
+		extensionsConfigs := make([]*transactions.ExtensionConfig, len(extension.Initialization))
+		for j, config := range extension.Initialization {
+			extensionsConfigs[j] = &transactions.ExtensionConfig{
+				Argument: config.Argument,
+				Value:    config.Value,
+			}
+		}
+
+		convExtensions[i] = &transactions.Extension{
+			Name:   extension.Name,
+			Config: extensionsConfigs,
+			Alias:  extension.Alias,
+		}
+	}
+
+	return convExtensions
 }

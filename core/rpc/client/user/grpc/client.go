@@ -1,3 +1,4 @@
+// package grpc implements a gRPC client for the Kwil txsvc client.
 package grpc
 
 import (
@@ -5,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
 
@@ -14,11 +16,13 @@ import (
 )
 
 type Client struct {
-	txClient txpb.TxServiceClient
+	TxClient txpb.TxServiceClient
 	conn     *grpc.ClientConn
 
-	dailOpts []grpc.DialOption
+	dialOpts []grpc.DialOption
 }
+
+var _ user.TxSvcClient = (*Client)(nil)
 
 type Option func(*Client) error
 
@@ -28,21 +32,21 @@ func WithTlsCert(certFile string) Option {
 		if err != nil {
 			return err
 		}
-		c.dailOpts = append(c.dailOpts, tlsDailOption)
+		c.dialOpts = append(c.dialOpts, tlsDailOption)
 		return nil
 	}
 }
 
 func WithDialOptions(opts ...grpc.DialOption) Option {
 	return func(c *Client) error {
-		c.dailOpts = append(c.dailOpts, opts...)
+		c.dialOpts = append(c.dialOpts, opts...)
 		return nil
 	}
 }
 
 func New(ctx context.Context, target string, opts ...Option) (*Client, error) {
 	clt := &Client{
-		dailOpts: []grpc.DialOption{
+		dialOpts: []grpc.DialOption{
 			grpc.WithDefaultCallOptions(
 				grpc.MaxCallRecvMsgSize(64 * 1024 * 1024), // 64MiB limit on *responses*; sends are unlimited
 			),
@@ -55,14 +59,22 @@ func New(ctx context.Context, target string, opts ...Option) (*Client, error) {
 		}
 	}
 
-	conn, err := grpc.DialContext(ctx, target, clt.dailOpts...)
+	conn, err := grpc.DialContext(ctx, target, clt.dialOpts...)
 	if err != nil {
 		return nil, err
 	}
 
-	clt.txClient = txpb.NewTxServiceClient(conn)
+	clt.TxClient = txpb.NewTxServiceClient(conn)
 	clt.conn = conn
 	return clt, nil
+}
+
+// WrapConn wraps an existing grpc.ClientConn with the TxServiceClient.
+func WrapConn(conn *grpc.ClientConn) *Client {
+	return &Client{
+		TxClient: txpb.NewTxServiceClient(conn),
+		conn:     conn,
+	}
 }
 
 func (c *Client) Close() error {

@@ -20,7 +20,12 @@ func Test_Generate_TOML(t *testing.T) {
 	defer os.Remove("test.toml")
 
 	updatedcfg := config.DefaultConfig()
-	err := updatedcfg.ParseConfig("test.toml")
+	tomlCfg, err := config.LoadConfigFile("test.toml")
+	assert.NoError(t, err)
+
+	err = updatedcfg.Merge(tomlCfg)
+	assert.NoError(t, err)
+
 	assert.NoError(t, err)
 	assert.Equal(t, cfg.AppCfg.SqliteFilePath, updatedcfg.AppCfg.SqliteFilePath)
 	assert.Equal(t, cfg.AppCfg.GrpcListenAddress, updatedcfg.AppCfg.GrpcListenAddress)

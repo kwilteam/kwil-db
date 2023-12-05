@@ -35,9 +35,8 @@ type SyncInfo struct {
 
 // ValidatorInfo describes a validator node.
 type ValidatorInfo struct {
-	PubKey     types.HexBytes `json:"pubkey"`
-	PubKeyType string         `json:"pubkey_type"`
-	Power      int64          `json:"power"`
+	PubKey types.HexBytes `json:"pubkey"`
+	Power  int64          `json:"power"`
 }
 
 // Status includes a comprehensive summary of a nodes status, including if the

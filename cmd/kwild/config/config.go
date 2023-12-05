@@ -4,16 +4,23 @@ package config
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/mitchellh/mapstructure"
+	toml "github.com/pelletier/go-toml/v2"
 
+	merge "dario.cat/mergo"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -29,7 +36,6 @@ var DefaultSQLitePath = filepath.Join("data", "kwild.db") // a folder, not a fil
 
 type KwildConfig struct {
 	RootDir string
-	AutoGen bool
 
 	AppCfg   *AppConfig   `mapstructure:"app"`
 	ChainCfg *ChainConfig `mapstructure:"chain"`
@@ -95,9 +101,9 @@ type P2PConfig struct {
 	// AllowDuplicateIP permits peers connecting from the same IP.
 	AllowDuplicateIP bool `mapstructure:"allow_duplicate_ip"`
 	// HandshakeTimeout is the peer connection handshake timeout.
-	HandshakeTimeout time.Duration `mapstructure:"handshake_timeout"`
+	HandshakeTimeout Duration `mapstructure:"handshake_timeout"`
 	// DialTimeout is the peer connection establishment timeout.
-	DialTimeout time.Duration `mapstructure:"dial_timeout"`
+	DialTimeout Duration `mapstructure:"dial_timeout"`
 }
 
 type MempoolConfig struct {
@@ -118,25 +124,25 @@ type MempoolConfig struct {
 type ConsensusConfig struct {
 	// TimeoutPropose is how long to wait for a proposal block before prevoting
 	// nil.
-	TimeoutPropose time.Duration `mapstructure:"timeout_propose"`
+	TimeoutPropose Duration `mapstructure:"timeout_propose"`
 	// TimeoutPrevote is how long to wait after receiving +2/3 prevotes for
 	// “anything” (i.e. not a single block or nil).
-	TimeoutPrevote time.Duration `mapstructure:"timeout_prevote"`
+	TimeoutPrevote Duration `mapstructure:"timeout_prevote"`
 	// TimeoutPrecommit is how long we wait after receiving +2/3 precommits for
 	// “anything” (i.e. not a single block or nil).
-	TimeoutPrecommit time.Duration `mapstructure:"timeout_precommit"`
+	TimeoutPrecommit Duration `mapstructure:"timeout_precommit"`
 	// TimeoutCommit is how long to wait after committing a block, before
 	// starting on the new height (this gives us a chance to receive some more
 	// precommits, even though we already have +2/3).
-	TimeoutCommit time.Duration `mapstructure:"timeout_commit"`
+	TimeoutCommit Duration `mapstructure:"timeout_commit"`
 }
 
 type StateSyncConfig struct {
-	Enable              bool          `mapstructure:"enable"`
-	TempDir             string        `mapstructure:"temp_dir"`
-	RPCServers          []string      `mapstructure:"rpc_servers"`
-	DiscoveryTime       time.Duration `mapstructure:"discovery_time"`
-	ChunkRequestTimeout time.Duration `mapstructure:"chunk_request_timeout"`
+	Enable              bool     `mapstructure:"enable"`
+	TempDir             string   `mapstructure:"temp_dir"`
+	RPCServers          []string `mapstructure:"rpc_servers"`
+	DiscoveryTime       Duration `mapstructure:"discovery_time"`
+	ChunkRequestTimeout Duration `mapstructure:"chunk_request_timeout"`
 }
 
 type ChainConfig struct {
@@ -150,6 +156,60 @@ type ChainConfig struct {
 	Consensus *ConsensusConfig `mapstructure:"consensus"`
 }
 
+// toml package does not support time.Duration, since time is not part of TOML spec
+// Fix can be found here: https://github.com/pelletier/go-toml/issues/767
+// It implements both the TextUnmarshaler interface and the pflag.Value interface
+type Duration time.Duration
+
+var _ encoding.TextUnmarshaler = (*Duration)(nil)
+var _ pflag.Value = (*Duration)(nil)
+
+func (d *Duration) UnmarshalText(b []byte) error {
+	x, err := time.ParseDuration(string(b))
+	if err != nil {
+		return err
+	}
+	*d = Duration(x)
+	return nil
+}
+
+func (d *Duration) String() string {
+	return time.Duration(*d).String()
+}
+
+func (d *Duration) Type() string {
+	return "duration"
+}
+
+func (d *Duration) Set(s string) error {
+	x, err := time.ParseDuration(s)
+	if err != nil {
+		return err
+	}
+	*d = Duration(x)
+	return nil
+}
+
+// Merge merges b onto a, overwriting any fields in a that are also set in b.
+func (a *KwildConfig) Merge(b *KwildConfig) error {
+	return merge.MergeWithOverwrite(a, b)
+}
+
+func (a *KwildConfig) MarshalBinary() ([]byte, error) {
+	mapCfg := make(map[string]interface{})
+	mapstructure.Decode(a, &mapCfg)
+	return json.Marshal(mapCfg)
+}
+
+func (a *KwildConfig) UnmarshalBinary(b []byte) error {
+	mapCfg := make(map[string]interface{})
+	err := json.Unmarshal(b, &mapCfg)
+	if err != nil {
+		return err
+	}
+	return mapstructure.Decode(mapCfg, a)
+}
+
 func defaultMoniker() string {
 	moniker, err := os.Hostname()
 	if err != nil {
@@ -158,89 +218,191 @@ func defaultMoniker() string {
 	return moniker
 }
 
-func (cfg *KwildConfig) LoadKwildConfig() error {
-	var err error
-	cfg.RootDir, err = ExpandPath(cfg.RootDir)
+// GetCfg gets the kwild config
+// It has the following precedence (low to high):
+// 1. Default
+// 2. Config file
+// 3. Env vars
+// 4. Command line flags
+// It takes one argument, which is the config generated from the command line flags.
+func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
+	/*
+		the process here is:
+		1. identify the root dir.  This requires reading in the env and command line flags
+		to see if they specify a root dir (since they take precedence over the config file).
+		If no root dir is specified from these, then use the default root dir.
+		2. Read in the config file, if it exists, and merge it into the default config.
+		3. Merge in the env config.
+		4. Merge in the flag config.
+	*/
+
+	// 1. identify the root dir
+	cfg := DefaultConfig()
+	rootDir := cfg.RootDir
+
+	// read in env config
+	envCfg, err := LoadEnvConfig()
 	if err != nil {
-		return fmt.Errorf("failed to expand root directory \"%v\": %v", cfg.RootDir, err)
+		return nil, fmt.Errorf("failed to load env config: %w", err)
+	}
+	if envCfg.RootDir != "" {
+		rootDir = envCfg.RootDir
 	}
 
-	fmt.Printf("kwild starting with root directory \"%v\"\n", cfg.RootDir)
-
-	cfgFile := filepath.Join(cfg.RootDir, ConfigFileName)
-	err = cfg.ParseConfig(cfgFile) // viper magic here
-	if err != nil {
-		return fmt.Errorf("failed to parse config file: %v", err)
+	if flagCfg.RootDir != "" {
+		rootDir = flagCfg.RootDir
 	}
+
+	// expand the root dir
+	rootDir, err = ExpandPath(rootDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to expand root directory \"%v\": %v", rootDir, err)
+	}
+
+	// make sure the root dir exists
+	err = os.MkdirAll(rootDir, 0755)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create root directory \"%v\": %v", rootDir, err)
+	}
+
+	// 2. Read in the config file
+	// read in config file and merge into default config
+	fileCfg, err := LoadConfigFile(filepath.Join(rootDir, ConfigFileName))
+	if err == nil {
+		// merge in config file
+		err2 := cfg.Merge(fileCfg)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to merge config file: %w", err2)
+		}
+	} else if err != ErrConfigFileNotFound {
+		return nil, fmt.Errorf("failed to load config file: %w", err)
+	}
+
+	// 3. Merge in the env config
+	// merge in env config
+	err = cfg.Merge(envCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge env config: %w", err)
+	}
+
+	// 4. Merge in the flag config
+	// merge in flag config
+	err = cfg.Merge(flagCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge flag config: %w", err)
+	}
+
+	cfg.RootDir = rootDir
 
 	cfg.sanitizeCfgPaths()
 	cfg.configureCerts()
-
 	if cfg.ChainCfg.Moniker == "" {
 		cfg.ChainCfg.Moniker = defaultMoniker()
 	}
 
-	return nil
+	return cfg, nil
 }
+
+// LoadConfig reads a config.toml at the given path and returns a KwilConfig.
+// If the file does not exist, it will return an ErrConfigFileNotFound error.
+func LoadConfigFile(configPath string) (*KwildConfig, error) {
+	cfgFilePath, err := filepath.Abs(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path of config file: %v due to error: %v", configPath, err)
+	}
+
+	if !fileExists(cfgFilePath) {
+		return nil, ErrConfigFileNotFound
+	}
+
+	bts, err := os.ReadFile(cfgFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %v", err)
+	}
+
+	// unmarshal toml to maps
+	var cfg map[string]interface{}
+	err = toml.Unmarshal(bts, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %v", err)
+	}
+
+	// convert mapstructure toml to KwilConfig
+	var kwilCfg KwildConfig
+
+	mapDecoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			// func to decode string to Duration
+			func(
+				f reflect.Type,
+				t reflect.Type,
+				data interface{}) (interface{}, error) {
+				if f.Kind() != reflect.String {
+					return data, nil
+				}
+				if t != reflect.TypeOf(Duration(time.Duration(5))) {
+					return data, nil
+				}
+
+				// Convert it by parsing
+				dur, err := time.ParseDuration(data.(string))
+				if err != nil {
+					return nil, err
+				}
+
+				return Duration(dur), nil
+			},
+			// func to decode string to []string{} if the field is of type []string
+			// AFAICT this is only used for statesync rpc servers, which while not released,
+			// we do have some tooling for it
+			func(
+				f reflect.Type,
+				t reflect.Type,
+				data interface{}) (interface{}, error) {
+				if f.Kind() != reflect.String {
+					return data, nil
+				}
+
+				if t != reflect.TypeOf([]string{}) {
+					return data, nil
+				}
+
+				// parse comma separated string to []string
+				return strings.Split(data.(string), ","), nil
+			},
+		),
+		Result: &kwilCfg,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create mapstructure decoder: %v", err)
+	}
+
+	err = mapDecoder.Decode(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert config file: %v", err)
+	}
+
+	return &kwilCfg, nil
+}
+
+// LoadEnvConfig loads a config from environment variables.
+func LoadEnvConfig() (*KwildConfig, error) {
+	viper.SetEnvPrefix("KWILD")
+	viper.AutomaticEnv()
+
+	var cfg KwildConfig
+	if err := viper.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("decoding config: %v", err)
+	}
+
+	return &cfg, nil
+}
+
+var ErrConfigFileNotFound = fmt.Errorf("config file not found")
 
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
-}
-
-func (cfg *KwildConfig) ParseConfig(cfgFile string) error {
-	/*
-		Lots of Viper magic here, but the gist is:
-		We want to be able to set config values via
-			-  flags
-			-  environment variables
-			-  config file
-			-  default values
-
-		for env variables support:
-		Requirement is, we need to be able to config from env variables with a prefix "KWILD_"
-
-		It can be done 2 ways:
-		1. AutomaticEnv: off mode
-			- This will not bind env variables to config values automatically
-			- We need to manually bind env variables to config values (this is what we are doing currently)
-			- As we bound flags to viper, viper is already aware of the config structure mapping,
-				so we can explicitly call viper.BindEnv() on all the keys in viper.AllKeys()
-			- else we would have to reflect on the config structure and bind env variables to config values
-
-		2. AutomaticEnv: on mode
-			- This is supposed to automatically bind env variables to config values
-				(but it doesn't work without doing a bit more work from our side)
-			- One way to make this work is add default values using either viper.SetDefault() for all the config values
-			  or can do viper.MergeConfig(<serialized config>)
-			- Serializing is really painful as cometbft has a field which is using map<interface><interface> though its deprecated.
-				which prevents us from doing the AutomaticEnv binding
-		Issues referencing the issues (or) correct usage of AutomaticEnv: https://github.com/spf13/viper/issues/188
-		For now, we are going with the first approach
-
-		Note:
-		The order of preference of various modes of config supported by viper is:
-		explicit call to Set > flags > env variables > config file > default values
-	*/
-	for _, key := range viper.AllKeys() {
-		envKey := "KWILD_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
-		viper.BindEnv(key, envKey)
-	}
-
-	if fileExists(cfgFile) {
-		fmt.Println("Loading config from: ", cfgFile)
-		viper.SetConfigFile(cfgFile)
-		if err := viper.ReadInConfig(); err != nil {
-			return fmt.Errorf("reading config: %v", err)
-		}
-	} else {
-		fmt.Printf("Config file %s not found. Using default settings.\n", cfgFile)
-	}
-
-	if err := viper.Unmarshal(cfg); err != nil {
-		return fmt.Errorf("decoding config: %v", err)
-	}
-	return nil
 }
 
 func DefaultConfig() *KwildConfig {
@@ -248,7 +410,7 @@ func DefaultConfig() *KwildConfig {
 		AppCfg: &AppConfig{
 			GrpcListenAddress:  "localhost:50051",
 			HTTPListenAddress:  "localhost:8080",
-			AdminListenAddress: "localhost:50151",
+			AdminListenAddress: "unix:///tmp/kwil_admin.sock",
 			SqliteFilePath:     DefaultSQLitePath,
 			// SnapshotConfig: SnapshotConfig{
 			// 	Enabled:         false,
@@ -272,8 +434,8 @@ func DefaultConfig() *KwildConfig {
 				MaxNumOutboundPeers: 10,
 				AllowDuplicateIP:    true,  // override comet
 				PexReactor:          false, // override comet - not recommended for validators
-				HandshakeTimeout:    20 * time.Second,
-				DialTimeout:         3 * time.Second,
+				HandshakeTimeout:    Duration(20 * time.Second),
+				DialTimeout:         Duration(3 * time.Second),
 			},
 			RPC: &ChainRPCConfig{
 				ListenAddress: "tcp://127.0.0.1:26657",
@@ -286,16 +448,36 @@ func DefaultConfig() *KwildConfig {
 			},
 			StateSync: &StateSyncConfig{
 				Enable:              false,
-				DiscoveryTime:       15 * time.Second,
-				ChunkRequestTimeout: 10 * time.Second,
+				DiscoveryTime:       Duration(15 * time.Second),
+				ChunkRequestTimeout: Duration(10 * time.Second),
 			},
 			Consensus: &ConsensusConfig{
-				TimeoutPropose:   3 * time.Second,
-				TimeoutPrevote:   2 * time.Second,
-				TimeoutPrecommit: 2 * time.Second,
-				TimeoutCommit:    6 * time.Second,
+				TimeoutPropose:   Duration(3 * time.Second),
+				TimeoutPrevote:   Duration(2 * time.Second),
+				TimeoutPrecommit: Duration(2 * time.Second),
+				TimeoutCommit:    Duration(6 * time.Second),
 			},
 		},
+	}
+}
+
+// EmptyConfig returns a config with all fields set to their zero values.
+// This is useful for guaranteeing that all fields are set when merging
+func EmptyConfig() *KwildConfig {
+	return &KwildConfig{
+		AppCfg: &AppConfig{
+			ExtensionEndpoints: []string{},
+		},
+		ChainCfg: &ChainConfig{
+			P2P:     &P2PConfig{},
+			RPC:     &ChainRPCConfig{},
+			Mempool: &MempoolConfig{},
+			StateSync: &StateSyncConfig{
+				RPCServers: []string{},
+			},
+			Consensus: &ConsensusConfig{},
+		},
+		Logging: &Logging{},
 	}
 }
 
@@ -345,8 +527,8 @@ func (cfg *KwildConfig) sanitizeCfgPaths() {
 	fmt.Println("Private key path:", cfg.AppCfg.PrivateKeyPath)
 }
 
-func (cfg *KwildConfig) InitPrivateKeyAndGenesis() (privateKey *crypto.Ed25519PrivateKey, genConfig *GenesisConfig, err error) {
-	return loadGenesisAndPrivateKey(cfg.AutoGen, cfg.AppCfg.PrivateKeyPath, cfg.RootDir)
+func (cfg *KwildConfig) InitPrivateKeyAndGenesis(autogen bool) (privateKey *crypto.Ed25519PrivateKey, genConfig *GenesisConfig, err error) {
+	return loadGenesisAndPrivateKey(autogen, cfg.AppCfg.PrivateKeyPath, cfg.RootDir)
 }
 
 func ExpandPath(path string) (string, error) {

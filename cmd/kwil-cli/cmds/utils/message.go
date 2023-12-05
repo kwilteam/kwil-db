@@ -12,35 +12,12 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
-// respStr represents a string in cli
-type respStr string
-
-func (s respStr) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Message string `json:"message"`
-	}{
-		Message: string(s),
-	})
-}
-
-func (s respStr) MarshalText() ([]byte, error) {
-	return []byte(s), nil
-}
-
 type respChainInfo struct {
 	Info *types.ChainInfo
 }
 
 func (r *respChainInfo) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		ChainID     string `json:"chain_id"`
-		BlockHeight uint64 `json:"block_height"`
-		BlockHash   string `json:"block_hash"`
-	}{
-		ChainID:     r.Info.ChainID,
-		BlockHeight: r.Info.BlockHeight,
-		BlockHash:   r.Info.BlockHash,
-	})
+	return json.Marshal(r.Info)
 }
 
 func (r *respChainInfo) MarshalText() ([]byte, error) {
@@ -86,8 +63,7 @@ func (r *respTxQuery) MarshalText() ([]byte, error) {
 	msg := fmt.Sprintf(`Transaction ID: %s
 Status: %s
 Height: %d
-Log: %s
-`,
+Log: %s`,
 		hex.EncodeToString(r.Msg.Hash),
 		status,
 		r.Msg.Height,

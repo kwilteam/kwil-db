@@ -22,31 +22,46 @@ const (
 
 // ChainInfo describes the current status of a Kwil blockchain.
 type ChainInfo struct {
-	ChainID     string
-	BlockHeight uint64
-	BlockHash   string
+	ChainID     string `json:"chain_id"`
+	BlockHeight uint64 `json:"block_height"`
+	BlockHash   string `json:"block_hash"`
 }
 
 type JoinRequest struct {
-	Candidate []byte   // pubkey of the candidate validator
-	Power     int64    // the requested power
-	ExpiresAt int64    // the block height at which the join request expires
-	Board     [][]byte // slice of pubkeys of all the eligible voting validators
-	Approved  []bool   // if they approved
+	Candidate []byte   `json:"candidate"`  // pubkey of the candidate validator
+	Power     int64    `json:"power"`      // the requested power
+	ExpiresAt int64    `json:"expires_at"` // the block height at which the join request expires
+	Board     [][]byte `json:"board"`      // slice of pubkeys of all the eligible voting validators
+	Approved  []bool   `json:"approved"`   // slice of bools indicating if the corresponding validator approved
 }
 
 type Validator struct {
-	PubKey []byte
-	Power  int64
+	PubKey []byte `json:"pubkey"`
+	Power  int64  `json:"power"`
 }
 
 // ValidatorRemoveProposal is a proposal from an existing validator (remover) to
 // remove a validator (the target) from the validator set.
 type ValidatorRemoveProposal struct {
-	Target  []byte
-	Remover []byte
+	Target  []byte `json:"target"`  // pubkey of the validator to remove
+	Remover []byte `json:"remover"` // pubkey of the validator proposing the removal
+}
+
+// NodeInfo contains public information about a node.
+// It can be used by clients to join as a peer.
+type NodeInfo struct {
+	NodeID           string   `json:"node_id"`
+	PublicKey        HexBytes `json:"pubkey"`
+	P2PListenAddress string   `json:"p2p_listen_address"`
 }
 
 func (v *Validator) String() string {
 	return fmt.Sprintf("{pubkey = %x, power = %d}", v.PubKey, v.Power)
+}
+
+// DatasetIdentifier contains the information required to identify a dataset.
+type DatasetIdentifier struct {
+	Name  string `json:"name"`
+	Owner []byte `json:"owner"`
+	DBID  string `json:"dbid"`
 }

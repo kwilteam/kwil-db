@@ -20,100 +20,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type PingRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Message string `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
-}
-
-func (x *PingRequest) Reset() {
-	*x = PingRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[0]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *PingRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PingRequest) ProtoMessage() {}
-
-func (x *PingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[0]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
-func (*PingRequest) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *PingRequest) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-type PingResponse struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Message string `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
-}
-
-func (x *PingResponse) Reset() {
-	*x = PingResponse{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[1]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *PingResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PingResponse) ProtoMessage() {}
-
-func (x *PingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[1]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
-func (*PingResponse) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *PingResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
 type VersionRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -123,7 +29,7 @@ type VersionRequest struct {
 func (x *VersionRequest) Reset() {
 	*x = VersionRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[2]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -136,7 +42,7 @@ func (x *VersionRequest) String() string {
 func (*VersionRequest) ProtoMessage() {}
 
 func (x *VersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[2]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -149,7 +55,7 @@ func (x *VersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VersionRequest.ProtoReflect.Descriptor instead.
 func (*VersionRequest) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{2}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{0}
 }
 
 type VersionResponse struct {
@@ -163,7 +69,7 @@ type VersionResponse struct {
 func (x *VersionResponse) Reset() {
 	*x = VersionResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[3]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -176,7 +82,7 @@ func (x *VersionResponse) String() string {
 func (*VersionResponse) ProtoMessage() {}
 
 func (x *VersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[3]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -189,7 +95,7 @@ func (x *VersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VersionResponse.ProtoReflect.Descriptor instead.
 func (*VersionResponse) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{3}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *VersionResponse) GetVersionString() string {
@@ -208,7 +114,7 @@ type StatusRequest struct {
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[4]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -221,7 +127,7 @@ func (x *StatusRequest) String() string {
 func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[4]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -234,7 +140,7 @@ func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
 func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{4}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{2}
 }
 
 type StatusResponse struct {
@@ -242,15 +148,15 @@ type StatusResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Node      *NodeInfo      `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
-	Sync      *SyncInfo      `protobuf:"bytes,2,opt,name=sync,proto3" json:"sync,omitempty"`
-	Validator *ValidatorInfo `protobuf:"bytes,3,opt,name=validator,proto3" json:"validator,omitempty"`
+	Node      *NodeInfo  `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Sync      *SyncInfo  `protobuf:"bytes,2,opt,name=sync,proto3" json:"sync,omitempty"`
+	Validator *Validator `protobuf:"bytes,3,opt,name=validator,proto3" json:"validator,omitempty"`
 }
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[5]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -263,7 +169,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[5]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -276,7 +182,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{5}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *StatusResponse) GetNode() *NodeInfo {
@@ -293,7 +199,7 @@ func (x *StatusResponse) GetSync() *SyncInfo {
 	return nil
 }
 
-func (x *StatusResponse) GetValidator() *ValidatorInfo {
+func (x *StatusResponse) GetValidator() *Validator {
 	if x != nil {
 		return x.Validator
 	}
@@ -318,7 +224,7 @@ type NodeInfo struct {
 func (x *NodeInfo) Reset() {
 	*x = NodeInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[6]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -331,7 +237,7 @@ func (x *NodeInfo) String() string {
 func (*NodeInfo) ProtoMessage() {}
 
 func (x *NodeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[6]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -344,7 +250,7 @@ func (x *NodeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeInfo.ProtoReflect.Descriptor instead.
 func (*NodeInfo) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{6}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *NodeInfo) GetChainId() string {
@@ -418,7 +324,7 @@ type SyncInfo struct {
 func (x *SyncInfo) Reset() {
 	*x = SyncInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[7]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -431,7 +337,7 @@ func (x *SyncInfo) String() string {
 func (*SyncInfo) ProtoMessage() {}
 
 func (x *SyncInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[7]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -444,7 +350,7 @@ func (x *SyncInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncInfo.ProtoReflect.Descriptor instead.
 func (*SyncInfo) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{7}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SyncInfo) GetAppHash() string {
@@ -482,33 +388,32 @@ func (x *SyncInfo) GetSyncing() bool {
 	return false
 }
 
-type ValidatorInfo struct {
+type Validator struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Pubkey     []byte `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
-	PubkeyType string `protobuf:"bytes,2,opt,name=pubkey_type,proto3" json:"pubkey_type,omitempty"`
-	Power      int64  `protobuf:"varint,3,opt,name=power,proto3" json:"power,omitempty"`
+	Pubkey []byte `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"` // ED25519 PubKey
+	Power  int64  `protobuf:"varint,2,opt,name=power,proto3" json:"power,omitempty"`
 }
 
-func (x *ValidatorInfo) Reset() {
-	*x = ValidatorInfo{}
+func (x *Validator) Reset() {
+	*x = Validator{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[8]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
 }
 
-func (x *ValidatorInfo) String() string {
+func (x *Validator) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ValidatorInfo) ProtoMessage() {}
+func (*Validator) ProtoMessage() {}
 
-func (x *ValidatorInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[8]
+func (x *Validator) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -519,26 +424,19 @@ func (x *ValidatorInfo) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ValidatorInfo.ProtoReflect.Descriptor instead.
-func (*ValidatorInfo) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{8}
+// Deprecated: Use Validator.ProtoReflect.Descriptor instead.
+func (*Validator) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *ValidatorInfo) GetPubkey() []byte {
+func (x *Validator) GetPubkey() []byte {
 	if x != nil {
 		return x.Pubkey
 	}
 	return nil
 }
 
-func (x *ValidatorInfo) GetPubkeyType() string {
-	if x != nil {
-		return x.PubkeyType
-	}
-	return ""
-}
-
-func (x *ValidatorInfo) GetPower() int64 {
+func (x *Validator) GetPower() int64 {
 	if x != nil {
 		return x.Power
 	}
@@ -558,7 +456,7 @@ type Peer struct {
 func (x *Peer) Reset() {
 	*x = Peer{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[9]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -571,7 +469,7 @@ func (x *Peer) String() string {
 func (*Peer) ProtoMessage() {}
 
 func (x *Peer) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[9]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +482,7 @@ func (x *Peer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Peer.ProtoReflect.Descriptor instead.
 func (*Peer) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{9}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Peer) GetNode() *NodeInfo {
@@ -617,7 +515,7 @@ type PeersRequest struct {
 func (x *PeersRequest) Reset() {
 	*x = PeersRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[10]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -630,7 +528,7 @@ func (x *PeersRequest) String() string {
 func (*PeersRequest) ProtoMessage() {}
 
 func (x *PeersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[10]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -643,7 +541,7 @@ func (x *PeersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersRequest.ProtoReflect.Descriptor instead.
 func (*PeersRequest) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{10}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{8}
 }
 
 type PeersResponse struct {
@@ -657,7 +555,7 @@ type PeersResponse struct {
 func (x *PeersResponse) Reset() {
 	*x = PeersResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_kwil_admin_v0_messages_proto_msgTypes[11]
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -670,7 +568,7 @@ func (x *PeersResponse) String() string {
 func (*PeersResponse) ProtoMessage() {}
 
 func (x *PeersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kwil_admin_v0_messages_proto_msgTypes[11]
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -683,7 +581,7 @@ func (x *PeersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeersResponse.ProtoReflect.Descriptor instead.
 func (*PeersResponse) Descriptor() ([]byte, []int) {
-	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{11}
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PeersResponse) GetPeers() []*Peer {
@@ -693,83 +591,716 @@ func (x *PeersResponse) GetPeers() []*Peer {
 	return nil
 }
 
+// the following are all transactions, and therefore return a tx.BroadcastResponse
+type ApproveRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Pubkey []byte `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
+}
+
+func (x *ApproveRequest) Reset() {
+	*x = ApproveRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ApproveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApproveRequest) ProtoMessage() {}
+
+func (x *ApproveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApproveRequest.ProtoReflect.Descriptor instead.
+func (*ApproveRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ApproveRequest) GetPubkey() []byte {
+	if x != nil {
+		return x.Pubkey
+	}
+	return nil
+}
+
+type JoinRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *JoinRequest) Reset() {
+	*x = JoinRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *JoinRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JoinRequest) ProtoMessage() {}
+
+func (x *JoinRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JoinRequest.ProtoReflect.Descriptor instead.
+func (*JoinRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{11}
+}
+
+type LeaveRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *LeaveRequest) Reset() {
+	*x = LeaveRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *LeaveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaveRequest) ProtoMessage() {}
+
+func (x *LeaveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaveRequest.ProtoReflect.Descriptor instead.
+func (*LeaveRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{12}
+}
+
+type RemoveRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Pubkey []byte `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
+}
+
+func (x *RemoveRequest) Reset() {
+	*x = RemoveRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RemoveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveRequest) ProtoMessage() {}
+
+func (x *RemoveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveRequest.ProtoReflect.Descriptor instead.
+func (*RemoveRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RemoveRequest) GetPubkey() []byte {
+	if x != nil {
+		return x.Pubkey
+	}
+	return nil
+}
+
+type JoinStatusRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Pubkey []byte `protobuf:"bytes,1,opt,name=pubkey,proto3" json:"pubkey,omitempty"`
+}
+
+func (x *JoinStatusRequest) Reset() {
+	*x = JoinStatusRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *JoinStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JoinStatusRequest) ProtoMessage() {}
+
+func (x *JoinStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JoinStatusRequest.ProtoReflect.Descriptor instead.
+func (*JoinStatusRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *JoinStatusRequest) GetPubkey() []byte {
+	if x != nil {
+		return x.Pubkey
+	}
+	return nil
+}
+
+type JoinStatusResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	JoinRequest *PendingJoin `protobuf:"bytes,1,opt,name=join_request,proto3" json:"join_request,omitempty"`
+}
+
+func (x *JoinStatusResponse) Reset() {
+	*x = JoinStatusResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *JoinStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JoinStatusResponse) ProtoMessage() {}
+
+func (x *JoinStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JoinStatusResponse.ProtoReflect.Descriptor instead.
+func (*JoinStatusResponse) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *JoinStatusResponse) GetJoinRequest() *PendingJoin {
+	if x != nil {
+		return x.JoinRequest
+	}
+	return nil
+}
+
+type PendingJoin struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Candidate []byte   `protobuf:"bytes,1,opt,name=candidate,proto3" json:"candidate,omitempty"` // ED25519 PubKey
+	Power     int64    `protobuf:"varint,2,opt,name=power,proto3" json:"power,omitempty"`
+	ExpiresAt int64    `protobuf:"varint,3,opt,name=expires_at,proto3" json:"expires_at,omitempty"`
+	Board     [][]byte `protobuf:"bytes,4,rep,name=board,proto3" json:"board,omitempty"`               // all validators
+	Approved  []bool   `protobuf:"varint,5,rep,packed,name=approved,proto3" json:"approved,omitempty"` // whether each validator has approved
+}
+
+func (x *PendingJoin) Reset() {
+	*x = PendingJoin{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *PendingJoin) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PendingJoin) ProtoMessage() {}
+
+func (x *PendingJoin) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PendingJoin.ProtoReflect.Descriptor instead.
+func (*PendingJoin) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *PendingJoin) GetCandidate() []byte {
+	if x != nil {
+		return x.Candidate
+	}
+	return nil
+}
+
+func (x *PendingJoin) GetPower() int64 {
+	if x != nil {
+		return x.Power
+	}
+	return 0
+}
+
+func (x *PendingJoin) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *PendingJoin) GetBoard() [][]byte {
+	if x != nil {
+		return x.Board
+	}
+	return nil
+}
+
+func (x *PendingJoin) GetApproved() []bool {
+	if x != nil {
+		return x.Approved
+	}
+	return nil
+}
+
+type ListValidatorsRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ListValidatorsRequest) Reset() {
+	*x = ListValidatorsRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListValidatorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListValidatorsRequest) ProtoMessage() {}
+
+func (x *ListValidatorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListValidatorsRequest.ProtoReflect.Descriptor instead.
+func (*ListValidatorsRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{17}
+}
+
+type ListValidatorsResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Validators []*Validator `protobuf:"bytes,1,rep,name=validators,proto3" json:"validators,omitempty"`
+}
+
+func (x *ListValidatorsResponse) Reset() {
+	*x = ListValidatorsResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[18]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListValidatorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListValidatorsResponse) ProtoMessage() {}
+
+func (x *ListValidatorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[18]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListValidatorsResponse.ProtoReflect.Descriptor instead.
+func (*ListValidatorsResponse) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListValidatorsResponse) GetValidators() []*Validator {
+	if x != nil {
+		return x.Validators
+	}
+	return nil
+}
+
+type ListJoinRequestsRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *ListJoinRequestsRequest) Reset() {
+	*x = ListJoinRequestsRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[19]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListJoinRequestsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListJoinRequestsRequest) ProtoMessage() {}
+
+func (x *ListJoinRequestsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[19]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListJoinRequestsRequest.ProtoReflect.Descriptor instead.
+func (*ListJoinRequestsRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{19}
+}
+
+type ListJoinRequestsResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	JoinRequests []*PendingJoin `protobuf:"bytes,1,rep,name=join_requests,proto3" json:"join_requests,omitempty"`
+}
+
+func (x *ListJoinRequestsResponse) Reset() {
+	*x = ListJoinRequestsResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[20]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ListJoinRequestsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListJoinRequestsResponse) ProtoMessage() {}
+
+func (x *ListJoinRequestsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[20]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListJoinRequestsResponse.ProtoReflect.Descriptor instead.
+func (*ListJoinRequestsResponse) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ListJoinRequestsResponse) GetJoinRequests() []*PendingJoin {
+	if x != nil {
+		return x.JoinRequests
+	}
+	return nil
+}
+
+type GetConfigRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *GetConfigRequest) Reset() {
+	*x = GetConfigRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[21]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetConfigRequest) ProtoMessage() {}
+
+func (x *GetConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[21]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetConfigRequest.ProtoReflect.Descriptor instead.
+func (*GetConfigRequest) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{21}
+}
+
+type GetConfigResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Config []byte `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"` // due to the size of the config, and how often it is updated, doing this for now
+}
+
+func (x *GetConfigResponse) Reset() {
+	*x = GetConfigResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_kwil_admin_v0_messages_proto_msgTypes[22]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetConfigResponse) ProtoMessage() {}
+
+func (x *GetConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_kwil_admin_v0_messages_proto_msgTypes[22]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetConfigResponse.ProtoReflect.Descriptor instead.
+func (*GetConfigResponse) Descriptor() ([]byte, []int) {
+	return file_kwil_admin_v0_messages_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetConfigResponse) GetConfig() []byte {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
 var File_kwil_admin_v0_messages_proto protoreflect.FileDescriptor
 
 var file_kwil_admin_v0_messages_proto_rawDesc = []byte{
 	0x0a, 0x1c, 0x6b, 0x77, 0x69, 0x6c, 0x2f, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2f, 0x76, 0x30, 0x2f,
 	0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x05,
-	0x61, 0x64, 0x6d, 0x69, 0x6e, 0x22, 0x27, 0x0a, 0x0b, 0x50, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x71,
-	0x75, 0x65, 0x73, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x28,
-	0x0a, 0x0c, 0x50, 0x69, 0x6e, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18,
-	0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x22, 0x10, 0x0a, 0x0e, 0x56, 0x65, 0x72, 0x73,
-	0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x38, 0x0a, 0x0f, 0x56, 0x65,
-	0x72, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a,
-	0x0e, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x5f, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0d, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x53, 0x74,
-	0x72, 0x69, 0x6e, 0x67, 0x22, 0x0f, 0x0a, 0x0d, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x8e, 0x01, 0x0a, 0x0e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x23, 0x0a, 0x04, 0x6e, 0x6f, 0x64, 0x65,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x4e,
-	0x6f, 0x64, 0x65, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x12, 0x23, 0x0a,
-	0x04, 0x73, 0x79, 0x6e, 0x63, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x61, 0x64,
-	0x6d, 0x69, 0x6e, 0x2e, 0x53, 0x79, 0x6e, 0x63, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x04, 0x73, 0x79,
-	0x6e, 0x63, 0x12, 0x32, 0x0a, 0x09, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x18,
-	0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x56, 0x61,
-	0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x09, 0x76, 0x61, 0x6c,
-	0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x22, 0x90, 0x02, 0x0a, 0x08, 0x4e, 0x6f, 0x64, 0x65, 0x49,
-	0x6e, 0x66, 0x6f, 0x12, 0x1a, 0x0a, 0x08, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x5f, 0x69, 0x64, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x63, 0x68, 0x61, 0x69, 0x6e, 0x5f, 0x69, 0x64, 0x12,
-	0x1c, 0x0a, 0x09, 0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x09, 0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x18, 0x0a,
-	0x07, 0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07,
-	0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x69, 0x64, 0x12, 0x2a, 0x0a, 0x10, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x63, 0x6f, 0x6c, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28,
-	0x04, 0x52, 0x10, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x6f, 0x6c, 0x5f, 0x76, 0x65, 0x72, 0x73,
-	0x69, 0x6f, 0x6e, 0x12, 0x20, 0x0a, 0x0b, 0x61, 0x70, 0x70, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69,
-	0x6f, 0x6e, 0x18, 0x05, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0b, 0x61, 0x70, 0x70, 0x5f, 0x76, 0x65,
-	0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x24, 0x0a, 0x0d, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x76,
-	0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x06, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0d, 0x62, 0x6c,
-	0x6f, 0x63, 0x6b, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x20, 0x0a, 0x0b, 0x6c,
-	0x69, 0x73, 0x74, 0x65, 0x6e, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x07, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x0b, 0x6c, 0x69, 0x73, 0x74, 0x65, 0x6e, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x12, 0x1a, 0x0a,
-	0x08, 0x72, 0x70, 0x63, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x08, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x08, 0x72, 0x70, 0x63, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x22, 0xc2, 0x01, 0x0a, 0x08, 0x53, 0x79,
-	0x6e, 0x63, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x1a, 0x0a, 0x08, 0x61, 0x70, 0x70, 0x5f, 0x68, 0x61,
-	0x73, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x61, 0x70, 0x70, 0x5f, 0x68, 0x61,
-	0x73, 0x68, 0x12, 0x28, 0x0a, 0x0f, 0x62, 0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b,
-	0x5f, 0x68, 0x61, 0x73, 0x68, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0f, 0x62, 0x65, 0x73,
-	0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x68, 0x61, 0x73, 0x68, 0x12, 0x2c, 0x0a, 0x11,
-	0x62, 0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x68, 0x65, 0x69, 0x67, 0x68,
-	0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x11, 0x62, 0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c,
-	0x6f, 0x63, 0x6b, 0x5f, 0x68, 0x65, 0x69, 0x67, 0x68, 0x74, 0x12, 0x28, 0x0a, 0x0f, 0x62, 0x65,
-	0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x04, 0x20,
-	0x01, 0x28, 0x03, 0x52, 0x0f, 0x62, 0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f,
-	0x74, 0x69, 0x6d, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x79, 0x6e, 0x63, 0x69, 0x6e, 0x67, 0x18,
-	0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x73, 0x79, 0x6e, 0x63, 0x69, 0x6e, 0x67, 0x22, 0x5f,
-	0x0a, 0x0d, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x49, 0x6e, 0x66, 0x6f, 0x12,
-	0x16, 0x0a, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52,
-	0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x12, 0x20, 0x0a, 0x0b, 0x70, 0x75, 0x62, 0x6b, 0x65,
-	0x79, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x70, 0x75,
-	0x62, 0x6b, 0x65, 0x79, 0x5f, 0x74, 0x79, 0x70, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x70, 0x6f, 0x77,
-	0x65, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x70, 0x6f, 0x77, 0x65, 0x72, 0x22,
-	0x67, 0x0a, 0x04, 0x50, 0x65, 0x65, 0x72, 0x12, 0x23, 0x0a, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x4e, 0x6f,
-	0x64, 0x65, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x12, 0x18, 0x0a, 0x07,
-	0x69, 0x6e, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x69,
-	0x6e, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x12, 0x20, 0x0a, 0x0b, 0x72, 0x65, 0x6d, 0x6f, 0x74, 0x65,
-	0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x72, 0x65, 0x6d,
-	0x6f, 0x74, 0x65, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x22, 0x0e, 0x0a, 0x0c, 0x50, 0x65, 0x65, 0x72,
-	0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x32, 0x0a, 0x0d, 0x50, 0x65, 0x65, 0x72,
-	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x21, 0x0a, 0x05, 0x70, 0x65, 0x65,
-	0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0b, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e,
-	0x2e, 0x50, 0x65, 0x65, 0x72, 0x52, 0x05, 0x70, 0x65, 0x65, 0x72, 0x73, 0x42, 0x3e, 0x5a, 0x3c,
-	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x74,
-	0x65, 0x61, 0x6d, 0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x2d, 0x64, 0x62, 0x2f, 0x63, 0x6f, 0x72, 0x65,
-	0x2f, 0x72, 0x70, 0x63, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x61, 0x64,
-	0x6d, 0x69, 0x6e, 0x2f, 0x76, 0x30, 0x3b, 0x61, 0x64, 0x6d, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x61, 0x64, 0x6d, 0x69, 0x6e, 0x22, 0x10, 0x0a, 0x0e, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x38, 0x0a, 0x0f, 0x56, 0x65, 0x72, 0x73, 0x69,
+	0x6f, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x25, 0x0a, 0x0e, 0x76, 0x65,
+	0x72, 0x73, 0x69, 0x6f, 0x6e, 0x5f, 0x73, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x0d, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x72, 0x69, 0x6e,
+	0x67, 0x22, 0x0f, 0x0a, 0x0d, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x22, 0x8a, 0x01, 0x0a, 0x0e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x23, 0x0a, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x4e, 0x6f, 0x64, 0x65,
+	0x49, 0x6e, 0x66, 0x6f, 0x52, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x12, 0x23, 0x0a, 0x04, 0x73, 0x79,
+	0x6e, 0x63, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e,
+	0x2e, 0x53, 0x79, 0x6e, 0x63, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x04, 0x73, 0x79, 0x6e, 0x63, 0x12,
+	0x2e, 0x0a, 0x09, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x10, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64,
+	0x61, 0x74, 0x6f, 0x72, 0x52, 0x09, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x22,
+	0x90, 0x02, 0x0a, 0x08, 0x4e, 0x6f, 0x64, 0x65, 0x49, 0x6e, 0x66, 0x6f, 0x12, 0x1a, 0x0a, 0x08,
+	0x63, 0x68, 0x61, 0x69, 0x6e, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08,
+	0x63, 0x68, 0x61, 0x69, 0x6e, 0x5f, 0x69, 0x64, 0x12, 0x1c, 0x0a, 0x09, 0x6e, 0x6f, 0x64, 0x65,
+	0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x6e, 0x6f, 0x64,
+	0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x69,
+	0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x69, 0x64,
+	0x12, 0x2a, 0x0a, 0x10, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x6f, 0x6c, 0x5f, 0x76, 0x65, 0x72,
+	0x73, 0x69, 0x6f, 0x6e, 0x18, 0x04, 0x20, 0x01, 0x28, 0x04, 0x52, 0x10, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x63, 0x6f, 0x6c, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x20, 0x0a, 0x0b,
+	0x61, 0x70, 0x70, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x05, 0x20, 0x01, 0x28,
+	0x04, 0x52, 0x0b, 0x61, 0x70, 0x70, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x24,
+	0x0a, 0x0d, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x18,
+	0x06, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0d, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x76, 0x65, 0x72,
+	0x73, 0x69, 0x6f, 0x6e, 0x12, 0x20, 0x0a, 0x0b, 0x6c, 0x69, 0x73, 0x74, 0x65, 0x6e, 0x5f, 0x61,
+	0x64, 0x64, 0x72, 0x18, 0x07, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x6c, 0x69, 0x73, 0x74, 0x65,
+	0x6e, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x70, 0x63, 0x5f, 0x61, 0x64,
+	0x64, 0x72, 0x18, 0x08, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72, 0x70, 0x63, 0x5f, 0x61, 0x64,
+	0x64, 0x72, 0x22, 0xc2, 0x01, 0x0a, 0x08, 0x53, 0x79, 0x6e, 0x63, 0x49, 0x6e, 0x66, 0x6f, 0x12,
+	0x1a, 0x0a, 0x08, 0x61, 0x70, 0x70, 0x5f, 0x68, 0x61, 0x73, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x61, 0x70, 0x70, 0x5f, 0x68, 0x61, 0x73, 0x68, 0x12, 0x28, 0x0a, 0x0f, 0x62,
+	0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x68, 0x61, 0x73, 0x68, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x0f, 0x62, 0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b,
+	0x5f, 0x68, 0x61, 0x73, 0x68, 0x12, 0x2c, 0x0a, 0x11, 0x62, 0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c,
+	0x6f, 0x63, 0x6b, 0x5f, 0x68, 0x65, 0x69, 0x67, 0x68, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03,
+	0x52, 0x11, 0x62, 0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x68, 0x65, 0x69,
+	0x67, 0x68, 0x74, 0x12, 0x28, 0x0a, 0x0f, 0x62, 0x65, 0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63,
+	0x6b, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52, 0x0f, 0x62, 0x65,
+	0x73, 0x74, 0x5f, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x74, 0x69, 0x6d, 0x65, 0x12, 0x18, 0x0a,
+	0x07, 0x73, 0x79, 0x6e, 0x63, 0x69, 0x6e, 0x67, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07,
+	0x73, 0x79, 0x6e, 0x63, 0x69, 0x6e, 0x67, 0x22, 0x39, 0x0a, 0x09, 0x56, 0x61, 0x6c, 0x69, 0x64,
+	0x61, 0x74, 0x6f, 0x72, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05,
+	0x70, 0x6f, 0x77, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x70, 0x6f, 0x77,
+	0x65, 0x72, 0x22, 0x67, 0x0a, 0x04, 0x50, 0x65, 0x65, 0x72, 0x12, 0x23, 0x0a, 0x04, 0x6e, 0x6f,
+	0x64, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e,
+	0x2e, 0x4e, 0x6f, 0x64, 0x65, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x12,
+	0x18, 0x0a, 0x07, 0x69, 0x6e, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x07, 0x69, 0x6e, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x12, 0x20, 0x0a, 0x0b, 0x72, 0x65, 0x6d,
+	0x6f, 0x74, 0x65, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b,
+	0x72, 0x65, 0x6d, 0x6f, 0x74, 0x65, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x22, 0x0e, 0x0a, 0x0c, 0x50,
+	0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x32, 0x0a, 0x0d, 0x50,
+	0x65, 0x65, 0x72, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x21, 0x0a, 0x05,
+	0x70, 0x65, 0x65, 0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0b, 0x2e, 0x61, 0x64,
+	0x6d, 0x69, 0x6e, 0x2e, 0x50, 0x65, 0x65, 0x72, 0x52, 0x05, 0x70, 0x65, 0x65, 0x72, 0x73, 0x22,
+	0x28, 0x0a, 0x0e, 0x41, 0x70, 0x70, 0x72, 0x6f, 0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0c, 0x52, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x22, 0x0d, 0x0a, 0x0b, 0x4a, 0x6f, 0x69,
+	0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x0e, 0x0a, 0x0c, 0x4c, 0x65, 0x61, 0x76,
+	0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x27, 0x0a, 0x0d, 0x52, 0x65, 0x6d, 0x6f,
+	0x76, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x75, 0x62,
+	0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65,
+	0x79, 0x22, 0x2b, 0x0a, 0x11, 0x4a, 0x6f, 0x69, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x70, 0x75, 0x62, 0x6b, 0x65, 0x79, 0x22, 0x4c,
+	0x0a, 0x12, 0x4a, 0x6f, 0x69, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x12, 0x36, 0x0a, 0x0c, 0x6a, 0x6f, 0x69, 0x6e, 0x5f, 0x72, 0x65, 0x71,
+	0x75, 0x65, 0x73, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x61, 0x64, 0x6d,
+	0x69, 0x6e, 0x2e, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x4a, 0x6f, 0x69, 0x6e, 0x52, 0x0c,
+	0x6a, 0x6f, 0x69, 0x6e, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x93, 0x01, 0x0a,
+	0x0b, 0x50, 0x65, 0x6e, 0x64, 0x69, 0x6e, 0x67, 0x4a, 0x6f, 0x69, 0x6e, 0x12, 0x1c, 0x0a, 0x09,
+	0x63, 0x61, 0x6e, 0x64, 0x69, 0x64, 0x61, 0x74, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52,
+	0x09, 0x63, 0x61, 0x6e, 0x64, 0x69, 0x64, 0x61, 0x74, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x70, 0x6f,
+	0x77, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x70, 0x6f, 0x77, 0x65, 0x72,
+	0x12, 0x1e, 0x0a, 0x0a, 0x65, 0x78, 0x70, 0x69, 0x72, 0x65, 0x73, 0x5f, 0x61, 0x74, 0x18, 0x03,
+	0x20, 0x01, 0x28, 0x03, 0x52, 0x0a, 0x65, 0x78, 0x70, 0x69, 0x72, 0x65, 0x73, 0x5f, 0x61, 0x74,
+	0x12, 0x14, 0x0a, 0x05, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0c, 0x52,
+	0x05, 0x62, 0x6f, 0x61, 0x72, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x61, 0x70, 0x70, 0x72, 0x6f, 0x76,
+	0x65, 0x64, 0x18, 0x05, 0x20, 0x03, 0x28, 0x08, 0x52, 0x08, 0x61, 0x70, 0x70, 0x72, 0x6f, 0x76,
+	0x65, 0x64, 0x22, 0x17, 0x0a, 0x15, 0x4c, 0x69, 0x73, 0x74, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61,
+	0x74, 0x6f, 0x72, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x4a, 0x0a, 0x16, 0x4c,
+	0x69, 0x73, 0x74, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x30, 0x0a, 0x0a, 0x76, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74,
+	0x6f, 0x72, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x61, 0x64, 0x6d, 0x69,
+	0x6e, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x52, 0x0a, 0x76, 0x61, 0x6c,
+	0x69, 0x64, 0x61, 0x74, 0x6f, 0x72, 0x73, 0x22, 0x19, 0x0a, 0x17, 0x4c, 0x69, 0x73, 0x74, 0x4a,
+	0x6f, 0x69, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x22, 0x54, 0x0a, 0x18, 0x4c, 0x69, 0x73, 0x74, 0x4a, 0x6f, 0x69, 0x6e, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x38,
+	0x0a, 0x0d, 0x6a, 0x6f, 0x69, 0x6e, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x73, 0x18,
+	0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x2e, 0x50, 0x65,
+	0x6e, 0x64, 0x69, 0x6e, 0x67, 0x4a, 0x6f, 0x69, 0x6e, 0x52, 0x0d, 0x6a, 0x6f, 0x69, 0x6e, 0x5f,
+	0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x73, 0x22, 0x12, 0x0a, 0x10, 0x47, 0x65, 0x74, 0x43,
+	0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x2b, 0x0a, 0x11,
+	0x47, 0x65, 0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x16, 0x0a, 0x06, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0c, 0x52, 0x06, 0x63, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x42, 0x3e, 0x5a, 0x3c, 0x67, 0x69, 0x74,
+	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x74, 0x65, 0x61, 0x6d,
+	0x2f, 0x6b, 0x77, 0x69, 0x6c, 0x2d, 0x64, 0x62, 0x2f, 0x63, 0x6f, 0x72, 0x65, 0x2f, 0x72, 0x70,
+	0x63, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x61, 0x64, 0x6d, 0x69, 0x6e,
+	0x2f, 0x76, 0x30, 0x3b, 0x61, 0x64, 0x6d, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -784,32 +1315,46 @@ func file_kwil_admin_v0_messages_proto_rawDescGZIP() []byte {
 	return file_kwil_admin_v0_messages_proto_rawDescData
 }
 
-var file_kwil_admin_v0_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_kwil_admin_v0_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_kwil_admin_v0_messages_proto_goTypes = []interface{}{
-	(*PingRequest)(nil),     // 0: admin.PingRequest
-	(*PingResponse)(nil),    // 1: admin.PingResponse
-	(*VersionRequest)(nil),  // 2: admin.VersionRequest
-	(*VersionResponse)(nil), // 3: admin.VersionResponse
-	(*StatusRequest)(nil),   // 4: admin.StatusRequest
-	(*StatusResponse)(nil),  // 5: admin.StatusResponse
-	(*NodeInfo)(nil),        // 6: admin.NodeInfo
-	(*SyncInfo)(nil),        // 7: admin.SyncInfo
-	(*ValidatorInfo)(nil),   // 8: admin.ValidatorInfo
-	(*Peer)(nil),            // 9: admin.Peer
-	(*PeersRequest)(nil),    // 10: admin.PeersRequest
-	(*PeersResponse)(nil),   // 11: admin.PeersResponse
+	(*VersionRequest)(nil),           // 0: admin.VersionRequest
+	(*VersionResponse)(nil),          // 1: admin.VersionResponse
+	(*StatusRequest)(nil),            // 2: admin.StatusRequest
+	(*StatusResponse)(nil),           // 3: admin.StatusResponse
+	(*NodeInfo)(nil),                 // 4: admin.NodeInfo
+	(*SyncInfo)(nil),                 // 5: admin.SyncInfo
+	(*Validator)(nil),                // 6: admin.Validator
+	(*Peer)(nil),                     // 7: admin.Peer
+	(*PeersRequest)(nil),             // 8: admin.PeersRequest
+	(*PeersResponse)(nil),            // 9: admin.PeersResponse
+	(*ApproveRequest)(nil),           // 10: admin.ApproveRequest
+	(*JoinRequest)(nil),              // 11: admin.JoinRequest
+	(*LeaveRequest)(nil),             // 12: admin.LeaveRequest
+	(*RemoveRequest)(nil),            // 13: admin.RemoveRequest
+	(*JoinStatusRequest)(nil),        // 14: admin.JoinStatusRequest
+	(*JoinStatusResponse)(nil),       // 15: admin.JoinStatusResponse
+	(*PendingJoin)(nil),              // 16: admin.PendingJoin
+	(*ListValidatorsRequest)(nil),    // 17: admin.ListValidatorsRequest
+	(*ListValidatorsResponse)(nil),   // 18: admin.ListValidatorsResponse
+	(*ListJoinRequestsRequest)(nil),  // 19: admin.ListJoinRequestsRequest
+	(*ListJoinRequestsResponse)(nil), // 20: admin.ListJoinRequestsResponse
+	(*GetConfigRequest)(nil),         // 21: admin.GetConfigRequest
+	(*GetConfigResponse)(nil),        // 22: admin.GetConfigResponse
 }
 var file_kwil_admin_v0_messages_proto_depIdxs = []int32{
-	6, // 0: admin.StatusResponse.node:type_name -> admin.NodeInfo
-	7, // 1: admin.StatusResponse.sync:type_name -> admin.SyncInfo
-	8, // 2: admin.StatusResponse.validator:type_name -> admin.ValidatorInfo
-	6, // 3: admin.Peer.node:type_name -> admin.NodeInfo
-	9, // 4: admin.PeersResponse.peers:type_name -> admin.Peer
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	4,  // 0: admin.StatusResponse.node:type_name -> admin.NodeInfo
+	5,  // 1: admin.StatusResponse.sync:type_name -> admin.SyncInfo
+	6,  // 2: admin.StatusResponse.validator:type_name -> admin.Validator
+	4,  // 3: admin.Peer.node:type_name -> admin.NodeInfo
+	7,  // 4: admin.PeersResponse.peers:type_name -> admin.Peer
+	16, // 5: admin.JoinStatusResponse.join_request:type_name -> admin.PendingJoin
+	6,  // 6: admin.ListValidatorsResponse.validators:type_name -> admin.Validator
+	16, // 7: admin.ListJoinRequestsResponse.join_requests:type_name -> admin.PendingJoin
+	8,  // [8:8] is the sub-list for method output_type
+	8,  // [8:8] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_kwil_admin_v0_messages_proto_init() }
@@ -819,30 +1364,6 @@ func file_kwil_admin_v0_messages_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_kwil_admin_v0_messages_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PingRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_admin_v0_messages_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PingResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_kwil_admin_v0_messages_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*VersionRequest); i {
 			case 0:
 				return &v.state
@@ -854,7 +1375,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_admin_v0_messages_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*VersionResponse); i {
 			case 0:
 				return &v.state
@@ -866,7 +1387,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_admin_v0_messages_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*StatusRequest); i {
 			case 0:
 				return &v.state
@@ -878,7 +1399,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_admin_v0_messages_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*StatusResponse); i {
 			case 0:
 				return &v.state
@@ -890,7 +1411,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_admin_v0_messages_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*NodeInfo); i {
 			case 0:
 				return &v.state
@@ -902,7 +1423,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_admin_v0_messages_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SyncInfo); i {
 			case 0:
 				return &v.state
@@ -914,8 +1435,8 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidatorInfo); i {
+		file_kwil_admin_v0_messages_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Validator); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -926,7 +1447,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_admin_v0_messages_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Peer); i {
 			case 0:
 				return &v.state
@@ -938,7 +1459,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_admin_v0_messages_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PeersRequest); i {
 			case 0:
 				return &v.state
@@ -950,8 +1471,164 @@ func file_kwil_admin_v0_messages_proto_init() {
 				return nil
 			}
 		}
-		file_kwil_admin_v0_messages_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+		file_kwil_admin_v0_messages_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*PeersResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ApproveRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*JoinRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LeaveRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RemoveRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*JoinStatusRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*JoinStatusResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PendingJoin); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListValidatorsRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListValidatorsResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListJoinRequestsRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ListJoinRequestsResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetConfigRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_kwil_admin_v0_messages_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetConfigResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -969,7 +1646,7 @@ func file_kwil_admin_v0_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_kwil_admin_v0_messages_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

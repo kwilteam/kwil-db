@@ -1,0 +1,908 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "kwil/tx/v1/account.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "TxService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/accounts/{identifier}": {
+      "get": {
+        "operationId": "TxService_GetAccount",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txGetAccountResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "byte"
+          },
+          {
+            "name": "status",
+            "description": "Mapped to URL query parameter `status`.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": [
+              "latest",
+              "pending"
+            ],
+            "default": "latest"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/broadcast": {
+      "post": {
+        "operationId": "TxService_Broadcast",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txBroadcastResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txBroadcastRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/call": {
+      "post": {
+        "operationId": "TxService_Call",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txCallResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txCallRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/chain_info": {
+      "get": {
+        "operationId": "TxService_ChainInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txChainInfoResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/config": {
+      "get": {
+        "operationId": "TxService_GetConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txGetConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/databases/{dbid}/schema": {
+      "get": {
+        "operationId": "TxService_GetSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txGetSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "dbid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/estimate_price": {
+      "post": {
+        "operationId": "TxService_EstimatePrice",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txEstimatePriceResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txEstimatePriceRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/ping": {
+      "get": {
+        "operationId": "TxService_Ping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txPingResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "message",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/query": {
+      "post": {
+        "operationId": "TxService_Query",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txQueryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txQueryRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/tx_query": {
+      "post": {
+        "operationId": "TxService_TxQuery",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txTxQueryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/txTxQueryRequest"
+            }
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    },
+    "/api/v1/{owner}/databases": {
+      "get": {
+        "operationId": "TxService_ListDatabases",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/txListDatabasesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "byte"
+          }
+        ],
+        "tags": [
+          "TxService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "ExtensionsExtensionConfig": {
+      "type": "object",
+      "properties": {
+        "argument": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "txAccount": {
+      "type": "object",
+      "properties": {
+        "identifier": {
+          "type": "string",
+          "format": "byte"
+        },
+        "balance": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "txAccountStatus": {
+      "type": "string",
+      "enum": [
+        "latest",
+        "pending"
+      ],
+      "default": "latest"
+    },
+    "txAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "public": {
+          "type": "boolean"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "statements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mutability": {
+          "type": "string"
+        },
+        "auxiliaries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "txAttribute": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "txBroadcastRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/txTransaction"
+        }
+      }
+    },
+    "txBroadcastResponse": {
+      "type": "object",
+      "properties": {
+        "tx_hash": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "txCallRequest": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "$ref": "#/definitions/txCallRequestBody"
+        },
+        "auth_type": {
+          "type": "string",
+          "description": "auth_type is the type of authenticator that will be used to derive\nidentifier from the sender."
+        },
+        "sender": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "txCallRequestBody": {
+      "type": "object",
+      "properties": {
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "txCallResponse": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "txChainInfoResponse": {
+      "type": "object",
+      "properties": {
+        "chain_id": {
+          "type": "string"
+        },
+        "height": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "hash": {
+          "type": "string"
+        }
+      }
+    },
+    "txColumn": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "attributes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txAttribute"
+          }
+        }
+      }
+    },
+    "txDatasetInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string",
+          "format": "byte"
+        },
+        "dbid": {
+          "type": "string"
+        }
+      }
+    },
+    "txEstimatePriceRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "$ref": "#/definitions/txTransaction"
+        }
+      }
+    },
+    "txEstimatePriceResponse": {
+      "type": "object",
+      "properties": {
+        "price": {
+          "type": "string"
+        }
+      }
+    },
+    "txExtensions": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "initialization": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/ExtensionsExtensionConfig"
+          }
+        },
+        "alias": {
+          "type": "string"
+        }
+      }
+    },
+    "txForeignKey": {
+      "type": "object",
+      "properties": {
+        "child_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parent_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parent_table": {
+          "type": "string"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txForeignKeyAction"
+          }
+        }
+      }
+    },
+    "txForeignKeyAction": {
+      "type": "object",
+      "properties": {
+        "on": {
+          "type": "string"
+        },
+        "do": {
+          "type": "string"
+        }
+      }
+    },
+    "txGetAccountResponse": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/txAccount"
+        }
+      }
+    },
+    "txGetConfigResponse": {
+      "type": "object",
+      "properties": {
+        "chain_code": {
+          "type": "string",
+          "format": "int64"
+        },
+        "provider_address": {
+          "type": "string"
+        },
+        "pool_address": {
+          "type": "string"
+        }
+      }
+    },
+    "txGetSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/definitions/txSchema"
+        }
+      }
+    },
+    "txIndex": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string"
+        }
+      }
+    },
+    "txListDatabasesResponse": {
+      "type": "object",
+      "properties": {
+        "databases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txDatasetInfo"
+          }
+        }
+      }
+    },
+    "txPingResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "txQueryRequest": {
+      "type": "object",
+      "properties": {
+        "dbid": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        }
+      }
+    },
+    "txQueryResponse": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "txSchema": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "format": "byte"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txTable"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txAction"
+          }
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txExtensions"
+          }
+        }
+      }
+    },
+    "txSignature": {
+      "type": "object",
+      "properties": {
+        "signature_bytes": {
+          "type": "string",
+          "format": "byte"
+        },
+        "signature_type": {
+          "type": "string"
+        }
+      }
+    },
+    "txTable": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txColumn"
+          }
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txIndex"
+          }
+        },
+        "foreign_keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/txForeignKey"
+          }
+        }
+      }
+    },
+    "txTransaction": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "$ref": "#/definitions/txTransactionBody"
+        },
+        "signature": {
+          "$ref": "#/definitions/txSignature"
+        },
+        "sender": {
+          "type": "string",
+          "format": "byte"
+        },
+        "serialization": {
+          "type": "string"
+        }
+      }
+    },
+    "txTransactionBody": {
+      "type": "object",
+      "properties": {
+        "payload": {
+          "type": "string",
+          "format": "byte"
+        },
+        "payload_type": {
+          "type": "string"
+        },
+        "fee": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "chain_id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "txTransactionResult": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "log": {
+          "type": "string"
+        },
+        "gas_used": {
+          "type": "string",
+          "format": "int64"
+        },
+        "gas_wanted": {
+          "type": "string",
+          "format": "int64"
+        },
+        "data": {
+          "type": "string",
+          "format": "byte",
+          "description": "Data contains the output of the transaction."
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        }
+      }
+    },
+    "txTxQueryRequest": {
+      "type": "object",
+      "properties": {
+        "tx_hash": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "txTxQueryResponse": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "format": "byte"
+        },
+        "height": {
+          "type": "string",
+          "format": "int64"
+        },
+        "tx": {
+          "$ref": "#/definitions/txTransaction"
+        },
+        "tx_result": {
+          "$ref": "#/definitions/txTransactionResult"
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
@@ -47,18 +48,18 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	nodeCfg.P2P.UnconditionalPeerIDs = userChainCfg.P2P.UnconditionalPeerIDs
 	nodeCfg.P2P.PexReactor = userChainCfg.P2P.PexReactor
 	nodeCfg.P2P.AllowDuplicateIP = cfg.ChainCfg.P2P.AllowDuplicateIP
-	nodeCfg.P2P.HandshakeTimeout = userChainCfg.P2P.HandshakeTimeout
-	nodeCfg.P2P.DialTimeout = userChainCfg.P2P.DialTimeout
+	nodeCfg.P2P.HandshakeTimeout = time.Duration(userChainCfg.P2P.HandshakeTimeout)
+	nodeCfg.P2P.DialTimeout = time.Duration(userChainCfg.P2P.DialTimeout)
 
 	nodeCfg.Mempool.Size = userChainCfg.Mempool.Size
 	nodeCfg.Mempool.CacheSize = userChainCfg.Mempool.CacheSize
 	nodeCfg.Mempool.MaxTxBytes = userChainCfg.Mempool.MaxTxBytes
 	nodeCfg.Mempool.MaxTxsBytes = int64(userChainCfg.Mempool.MaxTxsBytes)
 
-	nodeCfg.Consensus.TimeoutPropose = userChainCfg.Consensus.TimeoutPropose
-	nodeCfg.Consensus.TimeoutPrevote = userChainCfg.Consensus.TimeoutPrevote
-	nodeCfg.Consensus.TimeoutPrecommit = userChainCfg.Consensus.TimeoutPrecommit
-	nodeCfg.Consensus.TimeoutCommit = userChainCfg.Consensus.TimeoutCommit
+	nodeCfg.Consensus.TimeoutPropose = time.Duration(userChainCfg.Consensus.TimeoutPropose)
+	nodeCfg.Consensus.TimeoutPrevote = time.Duration(userChainCfg.Consensus.TimeoutPrevote)
+	nodeCfg.Consensus.TimeoutPrecommit = time.Duration(userChainCfg.Consensus.TimeoutPrecommit)
+	nodeCfg.Consensus.TimeoutCommit = time.Duration(userChainCfg.Consensus.TimeoutCommit)
 
 	nodeCfg.StateSync.Enable = false
 	// nodeCfg.StateSync.Enable = userChainCfg.StateSync.Enable
@@ -72,7 +73,7 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 
 	chainRoot := filepath.Join(cfg.RootDir, abciDirName)
 	nodeCfg.SetRoot(chainRoot)
-	nodeCfg.Genesis = cometbft.GenesisPath(chainRoot)
+	nodeCfg.Genesis = filepath.Join(cfg.RootDir, cometbft.GenesisJSONName)
 	nodeCfg.P2P.AddrBook = cometbft.AddrBookPath(chainRoot)
 
 	return nodeCfg

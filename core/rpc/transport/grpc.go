@@ -32,15 +32,7 @@ type TimeOutOption struct {
 }
 
 type GrpcTransport struct {
-	tlsOpts *TlsOption
 	timeout TimeOutOption
-}
-
-func NewGrpcTransport(tlsOpts *TlsOption, timeout TimeOutOption) *GrpcTransport {
-	return &GrpcTransport{
-		tlsOpts: tlsOpts,
-		timeout: timeout,
-	}
 }
 
 func (t *GrpcTransport) Dial(ctx context.Context, address string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
@@ -72,11 +64,15 @@ func (t *GrpcTransport) Dial(ctx context.Context, address string, opts ...grpc.D
 
 	return conn, err
 }
-
 func Dial(ctx context.Context, address string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	timeout := TimeOutOption{
 		Dial:    DefaultDialTimeout,
 		Request: DefaultRequestTimeout,
 	}
-	return NewGrpcTransport(nil, timeout).Dial(ctx, address, opts...)
+
+	t := &GrpcTransport{
+		timeout: timeout,
+	}
+
+	return t.Dial(ctx, address, opts...)
 }

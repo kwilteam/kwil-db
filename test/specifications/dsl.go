@@ -76,6 +76,12 @@ type TxQueryDsl interface {
 	TxSuccess(ctx context.Context, txHash []byte) error
 }
 
+// InfoDsl is a dsl for information about the chain and node, according
+// to usage in the TxSvc
+type InfoDsl interface {
+	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
+}
+
 // ValidatorStatusDsl is the dsl for checking validator status, including
 // current validator set and active join requests.
 type ValidatorStatusDsl interface {

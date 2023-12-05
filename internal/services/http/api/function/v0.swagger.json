@@ -1,0 +1,121 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "kwil/function/v0/messages.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "FunctionService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/verify_signature": {
+      "post": {
+        "operationId": "FunctionService_VerifySignature",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/functionVerifySignatureResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/functionVerifySignatureRequest"
+            }
+          }
+        ],
+        "tags": [
+          "FunctionService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "functionVerifySignatureRequest": {
+      "type": "object",
+      "properties": {
+        "signature": {
+          "$ref": "#/definitions/txSignature"
+        },
+        "sender": {
+          "type": "string",
+          "format": "byte"
+        },
+        "msg": {
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "functionVerifySignatureResponse": {
+      "type": "object",
+      "properties": {
+        "valid": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "txSignature": {
+      "type": "object",
+      "properties": {
+        "signature_bytes": {
+          "type": "string",
+          "format": "byte"
+        },
+        "signature_type": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

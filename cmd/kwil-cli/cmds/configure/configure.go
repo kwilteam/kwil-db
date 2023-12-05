@@ -3,6 +3,7 @@ package configure
 import (
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/cmd/common/display"
 	common "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -10,15 +11,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var configureLong = `Configure the Kwil CLI with persistent global settings.
+
+This command will prompt you for the following settings:
+
+- Kwil RPC URL: the gRPC URL of the Kwil node you wish to connect to.
+- Kwil Chain ID: the chain ID of the Kwil node you wish to connect to.  If left empty, the Kwil node will provide this value.
+- Kwil RPC TLS certificate path: the path to the TLS certificate of the Kwil node you wish to connect to.  This is only required if the Kwil node is using TLS.
+- Private Key: the private key to use for signing transactions.  If left empty, the Kwil CLI will not sign transactions.`
+
+var configureExample = `kwil-cli configure`
+
 func NewCmdConfigure() *cobra.Command {
 	var cmd = &cobra.Command{
-		Use:   "configure",
-		Short: "Configure your client",
-		Long:  "",
+		Use:     "configure",
+		Short:   "Configure the Kwil CLI with persistent global settings.",
+		Long:    configureLong,
+		Example: configureExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if display.ShouldSilence(cmd) {
+				return display.PrintErr(cmd, fmt.Errorf("cannot configure run in silence mode"))
+			}
+
 			conf, err := config.LoadPersistedConfig()
 			if err != nil {
-				return err
+				return display.PrintErr(cmd, err)
 			}
 
 			err = runErrs(conf,
@@ -28,7 +45,7 @@ func NewCmdConfigure() *cobra.Command {
 				promptTLSCertFile,
 			)
 			if err != nil {
-				return err
+				return display.PrintErr(cmd, err)
 			}
 
 			return config.PersistConfig(conf)

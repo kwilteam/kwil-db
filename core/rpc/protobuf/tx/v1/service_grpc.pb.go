@@ -19,23 +19,17 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	TxService_ChainInfo_FullMethodName           = "/tx.TxService/ChainInfo"
-	TxService_Broadcast_FullMethodName           = "/tx.TxService/Broadcast"
-	TxService_EstimatePrice_FullMethodName       = "/tx.TxService/EstimatePrice"
-	TxService_Query_FullMethodName               = "/tx.TxService/Query"
-	TxService_GetAccount_FullMethodName          = "/tx.TxService/GetAccount"
-	TxService_Ping_FullMethodName                = "/tx.TxService/Ping"
-	TxService_GetConfig_FullMethodName           = "/tx.TxService/GetConfig"
-	TxService_ListDatabases_FullMethodName       = "/tx.TxService/ListDatabases"
-	TxService_GetSchema_FullMethodName           = "/tx.TxService/GetSchema"
-	TxService_ApproveValidator_FullMethodName    = "/tx.TxService/ApproveValidator"
-	TxService_ValidatorJoin_FullMethodName       = "/tx.TxService/ValidatorJoin"
-	TxService_ValidatorLeave_FullMethodName      = "/tx.TxService/ValidatorLeave"
-	TxService_ValidatorJoinStatus_FullMethodName = "/tx.TxService/ValidatorJoinStatus"
-	TxService_CurrentValidators_FullMethodName   = "/tx.TxService/CurrentValidators"
-	TxService_Call_FullMethodName                = "/tx.TxService/Call"
-	TxService_TxQuery_FullMethodName             = "/tx.TxService/TxQuery"
-	TxService_VerifySignature_FullMethodName     = "/tx.TxService/VerifySignature"
+	TxService_ChainInfo_FullMethodName     = "/tx.TxService/ChainInfo"
+	TxService_Broadcast_FullMethodName     = "/tx.TxService/Broadcast"
+	TxService_EstimatePrice_FullMethodName = "/tx.TxService/EstimatePrice"
+	TxService_Query_FullMethodName         = "/tx.TxService/Query"
+	TxService_GetAccount_FullMethodName    = "/tx.TxService/GetAccount"
+	TxService_Ping_FullMethodName          = "/tx.TxService/Ping"
+	TxService_GetConfig_FullMethodName     = "/tx.TxService/GetConfig"
+	TxService_ListDatabases_FullMethodName = "/tx.TxService/ListDatabases"
+	TxService_GetSchema_FullMethodName     = "/tx.TxService/GetSchema"
+	TxService_Call_FullMethodName          = "/tx.TxService/Call"
+	TxService_TxQuery_FullMethodName       = "/tx.TxService/TxQuery"
 )
 
 // TxServiceClient is the client API for TxService service.
@@ -51,14 +45,8 @@ type TxServiceClient interface {
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	ListDatabases(ctx context.Context, in *ListDatabasesRequest, opts ...grpc.CallOption) (*ListDatabasesResponse, error)
 	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
-	ApproveValidator(ctx context.Context, in *ValidatorApprovalRequest, opts ...grpc.CallOption) (*ValidatorApprovalResponse, error)
-	ValidatorJoin(ctx context.Context, in *ValidatorJoinRequest, opts ...grpc.CallOption) (*ValidatorJoinResponse, error)
-	ValidatorLeave(ctx context.Context, in *ValidatorLeaveRequest, opts ...grpc.CallOption) (*ValidatorLeaveResponse, error)
-	ValidatorJoinStatus(ctx context.Context, in *ValidatorJoinStatusRequest, opts ...grpc.CallOption) (*ValidatorJoinStatusResponse, error)
-	CurrentValidators(ctx context.Context, in *CurrentValidatorsRequest, opts ...grpc.CallOption) (*CurrentValidatorsResponse, error)
 	Call(ctx context.Context, in *CallRequest, opts ...grpc.CallOption) (*CallResponse, error)
 	TxQuery(ctx context.Context, in *TxQueryRequest, opts ...grpc.CallOption) (*TxQueryResponse, error)
-	VerifySignature(ctx context.Context, in *VerifySignatureRequest, opts ...grpc.CallOption) (*VerifySignatureResponse, error)
 }
 
 type txServiceClient struct {
@@ -150,51 +138,6 @@ func (c *txServiceClient) GetSchema(ctx context.Context, in *GetSchemaRequest, o
 	return out, nil
 }
 
-func (c *txServiceClient) ApproveValidator(ctx context.Context, in *ValidatorApprovalRequest, opts ...grpc.CallOption) (*ValidatorApprovalResponse, error) {
-	out := new(ValidatorApprovalResponse)
-	err := c.cc.Invoke(ctx, TxService_ApproveValidator_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *txServiceClient) ValidatorJoin(ctx context.Context, in *ValidatorJoinRequest, opts ...grpc.CallOption) (*ValidatorJoinResponse, error) {
-	out := new(ValidatorJoinResponse)
-	err := c.cc.Invoke(ctx, TxService_ValidatorJoin_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *txServiceClient) ValidatorLeave(ctx context.Context, in *ValidatorLeaveRequest, opts ...grpc.CallOption) (*ValidatorLeaveResponse, error) {
-	out := new(ValidatorLeaveResponse)
-	err := c.cc.Invoke(ctx, TxService_ValidatorLeave_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *txServiceClient) ValidatorJoinStatus(ctx context.Context, in *ValidatorJoinStatusRequest, opts ...grpc.CallOption) (*ValidatorJoinStatusResponse, error) {
-	out := new(ValidatorJoinStatusResponse)
-	err := c.cc.Invoke(ctx, TxService_ValidatorJoinStatus_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *txServiceClient) CurrentValidators(ctx context.Context, in *CurrentValidatorsRequest, opts ...grpc.CallOption) (*CurrentValidatorsResponse, error) {
-	out := new(CurrentValidatorsResponse)
-	err := c.cc.Invoke(ctx, TxService_CurrentValidators_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *txServiceClient) Call(ctx context.Context, in *CallRequest, opts ...grpc.CallOption) (*CallResponse, error) {
 	out := new(CallResponse)
 	err := c.cc.Invoke(ctx, TxService_Call_FullMethodName, in, out, opts...)
@@ -207,15 +150,6 @@ func (c *txServiceClient) Call(ctx context.Context, in *CallRequest, opts ...grp
 func (c *txServiceClient) TxQuery(ctx context.Context, in *TxQueryRequest, opts ...grpc.CallOption) (*TxQueryResponse, error) {
 	out := new(TxQueryResponse)
 	err := c.cc.Invoke(ctx, TxService_TxQuery_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *txServiceClient) VerifySignature(ctx context.Context, in *VerifySignatureRequest, opts ...grpc.CallOption) (*VerifySignatureResponse, error) {
-	out := new(VerifySignatureResponse)
-	err := c.cc.Invoke(ctx, TxService_VerifySignature_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -235,14 +169,8 @@ type TxServiceServer interface {
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	ListDatabases(context.Context, *ListDatabasesRequest) (*ListDatabasesResponse, error)
 	GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error)
-	ApproveValidator(context.Context, *ValidatorApprovalRequest) (*ValidatorApprovalResponse, error)
-	ValidatorJoin(context.Context, *ValidatorJoinRequest) (*ValidatorJoinResponse, error)
-	ValidatorLeave(context.Context, *ValidatorLeaveRequest) (*ValidatorLeaveResponse, error)
-	ValidatorJoinStatus(context.Context, *ValidatorJoinStatusRequest) (*ValidatorJoinStatusResponse, error)
-	CurrentValidators(context.Context, *CurrentValidatorsRequest) (*CurrentValidatorsResponse, error)
 	Call(context.Context, *CallRequest) (*CallResponse, error)
 	TxQuery(context.Context, *TxQueryRequest) (*TxQueryResponse, error)
-	VerifySignature(context.Context, *VerifySignatureRequest) (*VerifySignatureResponse, error)
 	mustEmbedUnimplementedTxServiceServer()
 }
 
@@ -277,29 +205,11 @@ func (UnimplementedTxServiceServer) ListDatabases(context.Context, *ListDatabase
 func (UnimplementedTxServiceServer) GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchema not implemented")
 }
-func (UnimplementedTxServiceServer) ApproveValidator(context.Context, *ValidatorApprovalRequest) (*ValidatorApprovalResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ApproveValidator not implemented")
-}
-func (UnimplementedTxServiceServer) ValidatorJoin(context.Context, *ValidatorJoinRequest) (*ValidatorJoinResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ValidatorJoin not implemented")
-}
-func (UnimplementedTxServiceServer) ValidatorLeave(context.Context, *ValidatorLeaveRequest) (*ValidatorLeaveResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ValidatorLeave not implemented")
-}
-func (UnimplementedTxServiceServer) ValidatorJoinStatus(context.Context, *ValidatorJoinStatusRequest) (*ValidatorJoinStatusResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ValidatorJoinStatus not implemented")
-}
-func (UnimplementedTxServiceServer) CurrentValidators(context.Context, *CurrentValidatorsRequest) (*CurrentValidatorsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CurrentValidators not implemented")
-}
 func (UnimplementedTxServiceServer) Call(context.Context, *CallRequest) (*CallResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Call not implemented")
 }
 func (UnimplementedTxServiceServer) TxQuery(context.Context, *TxQueryRequest) (*TxQueryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TxQuery not implemented")
-}
-func (UnimplementedTxServiceServer) VerifySignature(context.Context, *VerifySignatureRequest) (*VerifySignatureResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method VerifySignature not implemented")
 }
 func (UnimplementedTxServiceServer) mustEmbedUnimplementedTxServiceServer() {}
 
@@ -476,96 +386,6 @@ func _TxService_GetSchema_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TxService_ApproveValidator_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ValidatorApprovalRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TxServiceServer).ApproveValidator(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TxService_ApproveValidator_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TxServiceServer).ApproveValidator(ctx, req.(*ValidatorApprovalRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TxService_ValidatorJoin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ValidatorJoinRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TxServiceServer).ValidatorJoin(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TxService_ValidatorJoin_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TxServiceServer).ValidatorJoin(ctx, req.(*ValidatorJoinRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TxService_ValidatorLeave_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ValidatorLeaveRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TxServiceServer).ValidatorLeave(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TxService_ValidatorLeave_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TxServiceServer).ValidatorLeave(ctx, req.(*ValidatorLeaveRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TxService_ValidatorJoinStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ValidatorJoinStatusRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TxServiceServer).ValidatorJoinStatus(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TxService_ValidatorJoinStatus_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TxServiceServer).ValidatorJoinStatus(ctx, req.(*ValidatorJoinStatusRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TxService_CurrentValidators_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CurrentValidatorsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TxServiceServer).CurrentValidators(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TxService_CurrentValidators_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TxServiceServer).CurrentValidators(ctx, req.(*CurrentValidatorsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _TxService_Call_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CallRequest)
 	if err := dec(in); err != nil {
@@ -598,24 +418,6 @@ func _TxService_TxQuery_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TxServiceServer).TxQuery(ctx, req.(*TxQueryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _TxService_VerifySignature_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(VerifySignatureRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TxServiceServer).VerifySignature(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TxService_VerifySignature_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TxServiceServer).VerifySignature(ctx, req.(*VerifySignatureRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -664,36 +466,12 @@ var TxService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TxService_GetSchema_Handler,
 		},
 		{
-			MethodName: "ApproveValidator",
-			Handler:    _TxService_ApproveValidator_Handler,
-		},
-		{
-			MethodName: "ValidatorJoin",
-			Handler:    _TxService_ValidatorJoin_Handler,
-		},
-		{
-			MethodName: "ValidatorLeave",
-			Handler:    _TxService_ValidatorLeave_Handler,
-		},
-		{
-			MethodName: "ValidatorJoinStatus",
-			Handler:    _TxService_ValidatorJoinStatus_Handler,
-		},
-		{
-			MethodName: "CurrentValidators",
-			Handler:    _TxService_CurrentValidators_Handler,
-		},
-		{
 			MethodName: "Call",
 			Handler:    _TxService_Call_Handler,
 		},
 		{
 			MethodName: "TxQuery",
 			Handler:    _TxService_TxQuery_Handler,
-		},
-		{
-			MethodName: "VerifySignature",
-			Handler:    _TxService_VerifySignature_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
