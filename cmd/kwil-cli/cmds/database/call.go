@@ -57,24 +57,24 @@ func callCmd() *cobra.Command {
 			return common.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt common.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
-					display.PrintErr(cmd, fmt.Errorf("target database not properly specified: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("target database not properly specified: %w", err))
 				}
 
 				lowerName := strings.ToLower(action)
 
 				inputs, err := parseInputs(args)
 				if err != nil {
-					display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}
 
 				actionStructure, err := getAction(ctx, clnt, dbid, lowerName)
 				if err != nil {
-					display.PrintErr(cmd, fmt.Errorf("error getting action: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting action: %w", err))
 				}
 
 				tuples, err := createActionInputs(inputs, actionStructure)
 				if err != nil {
-					display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
 
 				if len(tuples) == 0 {
@@ -83,7 +83,7 @@ func callCmd() *cobra.Command {
 
 				data, err := clnt.CallAction(ctx, dbid, lowerName, tuples[0])
 				if err != nil {
-					display.PrintErr(cmd, fmt.Errorf("error calling action: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error calling action: %w", err))
 				}
 
 				if data == nil {

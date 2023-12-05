@@ -9,6 +9,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 
+	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/gateway"
 	types "github.com/kwilteam/kwil-db/core/types/gateway"
 )
@@ -77,6 +78,10 @@ func (g *GatewayHttpClient) Auth(ctx context.Context, auth *types.GatewayAuth) e
 	}
 	defer res.Body.Close()
 
+	if res.StatusCode != http.StatusOK {
+		return errors.Join(rpcClient.ErrNotFound, errors.New(res.Status))
+	}
+
 	var r gatewayAuthPostResponse
 	err = json.NewDecoder(res.Body).Decode(&r)
 	if err != nil {
@@ -102,6 +107,13 @@ func (g *GatewayHttpClient) GetAuthParameter(ctx context.Context) (*types.Gatewa
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusNotFound {
+		return nil, errors.Join(rpcClient.ErrNotFound, errors.New(res.Status))
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.New(res.Status)
+	}
 
 	var r gatewayAuthGetResponse
 	err = json.NewDecoder(res.Body).Decode(&r)

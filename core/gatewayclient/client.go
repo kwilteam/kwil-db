@@ -100,7 +100,9 @@ func (c *GatewayClient) CallAction(ctx context.Context, dbid string, action stri
 // authenticate authenticates the client with the gateway.
 func (c *GatewayClient) authenticate(ctx context.Context) error {
 	authParam, err := c.gatewayClient.GetAuthParameter(ctx)
-	if err != nil {
+	if errors.Is(err, rpcClient.ErrNotFound) {
+		return fmt.Errorf("failed to get auth parameter. are you sure you're talking to a gateway? err: %w", err)
+	} else if err != nil {
 		return fmt.Errorf("get auth parameter: %w", err)
 	}
 
@@ -120,11 +122,16 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 	}
 
 	// send the auth request
-	return c.gatewayClient.Auth(ctx, &gatewayTypes.GatewayAuth{
+	err = c.gatewayClient.Auth(ctx, &gatewayTypes.GatewayAuth{
 		Nonce:     authParam.Nonce,
 		Sender:    c.Signer.Identity(),
 		Signature: sig,
 	})
+	if err != nil {
+		return fmt.Errorf("gateway auth: %w", err)
+	}
+
+	return nil
 }
 
 // GetAuthCookie returns the authentication cookie currently being used.

@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -77,4 +78,17 @@ func newEd25519Signer(pkey string) *auth.Ed25519Signer {
 	}
 
 	return &auth.Ed25519Signer{Ed25519PrivateKey: *edKey}
+}
+
+func Test_del(t *testing.T) {
+	sig := []byte("\xb7Ka\\\xd35LSߨ\x8b\xf6\x9ate*\xf5\r\xd7Q \xd31\xe7\xec}\xd1Wl\t\xe2\x04xv/\x91\xb6f:\xe9\x01Uy)%+V\xa5]\x18#X\x19\xbaa!\x1ek\xe9\xa9\xee>E0\x01")
+	sender := []byte("\xaf\xfd\xc0l\xf3J\xfd}X\x01\xa1=H\xc9*Ӗ\t\x90\x1d")
+	msg := []byte("https://localhost wants you to sign in with your account:\n\nsign pws\n\nURI: https://localhost/auth\nVersion: 1\nChain ID: kwil-chain-shyc8zBu\nNonce: 236f0c9b3d285df2fe29\nIssue At: 2023-12-05T17:50:13Z\nExpiration Time: 2023-12-05T17:50:43Z\n")
+
+	fmt.Println(sender)
+	fmt.Println(string(msg))
+
+	err := auth.EthSecp256k1Authenticator{}.Verify(sender, msg, sig)
+	assert.NoError(t, err)
+
 }

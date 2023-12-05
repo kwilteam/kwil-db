@@ -75,7 +75,8 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 				}
 			}
 
-			sig, err := signer.Sign([]byte(message))
+			toSign := []byte(message)
+			sig, err := signer.Sign(toSign)
 			if err != nil {
 				return nil, err
 			}

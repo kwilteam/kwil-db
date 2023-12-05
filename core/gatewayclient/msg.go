@@ -44,7 +44,7 @@ func composeGatewayAuthMessage(param *types.GatewayAuthParameter, domain string,
 	version string, chainID string) string {
 	var msg bytes.Buffer
 	msg.WriteString(
-		fmt.Sprintf("%s wants you to sign in with your account:\n", domain))
+		fmt.Sprintf("%s wants you to sign in with your account:\n", domain)) // apparently this HAS to use https, according to the standard
 	msg.WriteString("\n")
 	if param.Statement != "" {
 		msg.WriteString(fmt.Sprintf("%s\n", param.Statement))
@@ -55,6 +55,8 @@ func composeGatewayAuthMessage(param *types.GatewayAuthParameter, domain string,
 	msg.WriteString(fmt.Sprintf("Chain ID: %s\n", chainID))
 	msg.WriteString(fmt.Sprintf("Nonce: %s\n", param.Nonce))
 	msg.WriteString(fmt.Sprintf("Issue At: %s\n", param.IssueAt))
-	msg.WriteString(fmt.Sprintf("Expiration Time: %s\n", param.ExpirationTime))
+	if param.ExpirationTime != "" {
+		msg.WriteString(fmt.Sprintf("Expiration Time: %s\n", param.ExpirationTime))
+	}
 	return msg.String()
 }
