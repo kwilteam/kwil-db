@@ -528,6 +528,7 @@ func buildGatewayServer(d *coreDependencies) *gateway.GatewayServer {
 		gateway.WithLogger(*d.log.Named("gateway")),
 		gateway.WithMiddleware(cors.MCors([]string{})),
 		gateway.WithGrpcService(d.cfg.AppCfg.GrpcListenAddress, txpb.RegisterTxServiceHandlerFromEndpoint),
+		gateway.WithGrpcService(d.cfg.AppCfg.GrpcListenAddress, functionpb.RegisterFunctionServiceHandlerFromEndpoint),
 	)
 	if err != nil {
 		failBuild(err, "failed to build gateway server")

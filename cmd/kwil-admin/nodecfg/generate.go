@@ -94,7 +94,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 		cfg.ChainCfg.Consensus.TimeoutCommit = config.Duration(genCfg.BlockInterval)
 	}
 
-	pub, err := GenerateNodeFiles(rootDir, cfg)
+	pub, err := GenerateNodeFiles(rootDir, cfg, false)
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func GenerateNodeConfig(genCfg *NodeGenerateConfig) error {
 // GenerateNodeFiles will generate all generic node files that are not
 // dependent on the network configuration (e.g. genesis.json).
 // It can optionally be given a config file to merge with the default config.
-func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig) (publicKey []byte, err error) {
+func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig, silence bool) (publicKey []byte, err error) {
 	cfg := config.DefaultConfig()
 	if originalCfg != nil {
 		err := cfg.Merge(originalCfg)
@@ -155,7 +155,7 @@ func GenerateNodeFiles(outputDir string, originalCfg *config.KwildConfig) (publi
 	if err != nil {
 		return nil, fmt.Errorf("cannot read or create private key: %w", err)
 	}
-	if newKey {
+	if newKey && !silence {
 		fmt.Printf("Generated new private key: %v\n", fullKeyPath)
 	}
 

@@ -30,7 +30,13 @@ func dumpCfgCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			cfg, err := client.GetConfig(ctx)
+			bts, err := client.GetConfig(ctx)
+			if err != nil {
+				return display.PrintErr(cmd, err)
+			}
+
+			cfg := &config.KwildConfig{}
+			err = json.Unmarshal(bts, cfg)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

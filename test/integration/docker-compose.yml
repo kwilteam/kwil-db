@@ -21,7 +21,6 @@ services:
         ipv4_address: 172.10.100.2
     depends_on:
       - ext1
-    # the admin_listen_addr socket HAS to have the same number as the node name (node0 -> admin0.sock)
     command: |
       --root-dir=/app/kwil
       --log.level=${LOG_LEVEL:-debug}
@@ -29,7 +28,7 @@ services:
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
-      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   node1:
@@ -58,7 +57,7 @@ services:
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
-      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   node2:
@@ -87,7 +86,7 @@ services:
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
-      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   # This node is used to test the scenario where new node join the network & sync the blocks
@@ -118,7 +117,7 @@ services:
       --app.extension-endpoints=ext3:50051
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
-      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/rpc/client"
 	adminRPC "github.com/kwilteam/kwil-db/core/rpc/client/admin"
 	admpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/admin/v0"
@@ -163,19 +162,13 @@ func (c *GrpcAdminClient) ListPendingJoins(ctx context.Context) ([]*types.JoinRe
 	return joins, nil
 }
 
-func (c *GrpcAdminClient) GetConfig(ctx context.Context) (*config.KwildConfig, error) {
+func (c *GrpcAdminClient) GetConfig(ctx context.Context) ([]byte, error) {
 	resp, err := c.client.GetConfig(ctx, &admpb.GetConfigRequest{})
 	if err != nil {
 		return nil, client.ConvertGRPCErr(err)
 	}
 
-	cfg := &config.KwildConfig{}
-	err = cfg.UnmarshalBinary(resp.Config)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
+	return resp.Config, nil
 }
 
 func convertPendingJoin(join *admpb.PendingJoin) *types.JoinRequest {

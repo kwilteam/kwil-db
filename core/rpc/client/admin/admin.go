@@ -4,7 +4,6 @@ package admin
 import (
 	"context"
 
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 )
@@ -21,5 +20,6 @@ type AdminClient interface {
 	Version(ctx context.Context) (string, error)
 	ListPendingJoins(ctx context.Context) ([]*types.JoinRequest, error)
 	// GetConfig gets the current config from the node.
-	GetConfig(ctx context.Context) (*config.KwildConfig, error)
+	// It returns the config serialized as JSON.
+	GetConfig(ctx context.Context) ([]byte, error)
 }

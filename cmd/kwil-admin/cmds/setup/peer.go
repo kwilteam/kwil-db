@@ -58,7 +58,7 @@ func peerCmd() *cobra.Command {
 				}
 			}
 
-			_, err = nodecfg.GenerateNodeFiles(expandedDir, cfg)
+			_, err = nodecfg.GenerateNodeFiles(expandedDir, cfg, true)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
