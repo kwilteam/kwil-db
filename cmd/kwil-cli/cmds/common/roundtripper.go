@@ -122,7 +122,7 @@ type Client interface {
 	ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...client.TxOpt) (transactions.TxHash, error)
 	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
 	GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error)
-	ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetInfo, error)
+	ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, dbid string, query string) (*client.Records, error)
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)

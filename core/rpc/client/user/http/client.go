@@ -187,7 +187,7 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 	return convertedSchema, nil
 }
 
-func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*types.DatasetInfo, error) {
+func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*types.DatasetIdentifier, error) {
 	// we need to use b64url since this method uses a query string
 	result, res, err := c.conn.TxServiceApi.TxServiceListDatabases(ctx, base64.URLEncoding.EncodeToString(ownerPubKey))
 	if err != nil {
@@ -195,14 +195,14 @@ func (c *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*type
 	}
 	defer res.Body.Close()
 
-	datasets := make([]*types.DatasetInfo, 0, len(result.Databases))
+	datasets := make([]*types.DatasetIdentifier, 0, len(result.Databases))
 	for _, db := range result.Databases {
 		decodedOwner, err := base64.StdEncoding.DecodeString(db.Owner)
 		if err != nil {
 			return nil, err
 		}
 
-		datasets = append(datasets, &types.DatasetInfo{
+		datasets = append(datasets, &types.DatasetIdentifier{
 			Name:  db.Name,
 			Owner: decodedOwner,
 			DBID:  db.Dbid,

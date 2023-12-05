@@ -59,8 +59,8 @@ func (v *Validator) String() string {
 	return fmt.Sprintf("{pubkey = %x, power = %d}", v.PubKey, v.Power)
 }
 
-// DatasetInfo contains metadata about a dataset.
-type DatasetInfo struct {
+// DatasetIdentifier contains the information required to identify a dataset.
+type DatasetIdentifier struct {
 	Name  string `json:"name"`
 	Owner []byte `json:"owner"`
 	DBID  string `json:"dbid"`

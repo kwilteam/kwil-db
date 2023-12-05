@@ -228,7 +228,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) (*Records
 	return NewRecordsFromMaps(res), nil
 }
 
-func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetInfo, error) {
+func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error) {
 	return c.txClient.ListDatabases(ctx, owner)
 }
 

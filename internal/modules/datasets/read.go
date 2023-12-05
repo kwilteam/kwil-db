@@ -62,7 +62,7 @@ func (u *DatasetModule) GetSchema(ctx context.Context, dbid string) (*engineType
 }
 
 // ListOwnedDatabase returns a list of databases owned by a public key.
-func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner []byte) ([]*coreTypes.DatasetInfo, error) {
+func (u *DatasetModule) ListOwnedDatabases(ctx context.Context, owner []byte) ([]*coreTypes.DatasetIdentifier, error) {
 	return u.engine.ListDatasets(ctx, owner)
 }
 

@@ -12,7 +12,7 @@ import (
 
 func Example_respDBlist_text_0() {
 	display.Print(
-		&respDBList{Info: []*types.DatasetInfo{}, owner: mustDecodeHex("6f776e6572")},
+		&respDBList{Info: []*types.DatasetIdentifier{}, owner: mustDecodeHex("6f776e6572")},
 		nil, "text")
 	// Output:
 	// No databases found for '6f776e6572'.
@@ -20,7 +20,7 @@ func Example_respDBlist_text_0() {
 
 func Example_respDBlist_text() {
 	display.Print(
-		&respDBList{Info: []*types.DatasetInfo{
+		&respDBList{Info: []*types.DatasetIdentifier{
 			{
 				Name:  "db_a",
 				Owner: mustDecodeHex("6f776e6572"),
@@ -63,7 +63,7 @@ func mustDecodeBase64(s string) []byte {
 func Example_respDBlist_json() {
 
 	display.Print(
-		&respDBList{Info: []*types.DatasetInfo{
+		&respDBList{Info: []*types.DatasetIdentifier{
 			{
 				Name:  "db_a",
 				Owner: mustDecodeBase64("b3duZXI="),

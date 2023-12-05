@@ -66,7 +66,7 @@ func (d *KwilCliDriver) DBID(name string) string {
 	return utils.GenerateDBID(name, d.identity)
 }
 
-func (d *KwilCliDriver) listDatabase() ([]*types.DatasetInfo, error) {
+func (d *KwilCliDriver) listDatabase() ([]*types.DatasetIdentifier, error) {
 	cmd := d.newKwilCliCmd("database", "list", "--owner", hex.EncodeToString(d.identity))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
@@ -437,13 +437,13 @@ func parseRespQueryDb(data any) (*client.Records, error) {
 	return client.NewRecordsFromMaps(resp), nil
 }
 
-func parseRespListDatabases(data any) ([]*types.DatasetInfo, error) {
+func parseRespListDatabases(data any) ([]*types.DatasetIdentifier, error) {
 	bts, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal list databases resp: %w", err)
 	}
 
-	var resp []*types.DatasetInfo
+	var resp []*types.DatasetIdentifier
 	err = json.Unmarshal(bts, &resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal list databases: %w", err)

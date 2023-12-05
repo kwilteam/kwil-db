@@ -21,7 +21,7 @@ import (
 
 // respDBList represent databases belong to an owner in cli
 type respDBList struct {
-	Info []*types.DatasetInfo
+	Info []*types.DatasetIdentifier
 	// owner is the owner configured in cli
 	owner []byte
 }

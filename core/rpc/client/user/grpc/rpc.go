@@ -172,7 +172,7 @@ type SvcConfig struct {
 	ProviderAddress string
 }
 
-func (c *Client) ListDatabases(ctx context.Context, ownerIdentifier []byte) ([]*types.DatasetInfo, error) {
+func (c *Client) ListDatabases(ctx context.Context, ownerIdentifier []byte) ([]*types.DatasetIdentifier, error) {
 	res, err := c.TxClient.ListDatabases(ctx, &txpb.ListDatabasesRequest{
 		Owner: ownerIdentifier,
 	})
@@ -181,9 +181,9 @@ func (c *Client) ListDatabases(ctx context.Context, ownerIdentifier []byte) ([]*
 		return nil, fmt.Errorf("failed to list databases: %w", err)
 	}
 
-	datasets := make([]*types.DatasetInfo, len(res.Databases))
+	datasets := make([]*types.DatasetIdentifier, len(res.Databases))
 	for i, db := range res.Databases {
-		datasets[i] = &types.DatasetInfo{
+		datasets[i] = &types.DatasetIdentifier{
 			Name:  db.Name,
 			Owner: db.Owner,
 			DBID:  db.Dbid,

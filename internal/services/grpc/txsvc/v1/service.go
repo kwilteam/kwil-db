@@ -52,7 +52,7 @@ func NewService(engine EngineReader, accountStore AccountReader, vstore Validato
 type EngineReader interface {
 	Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
-	ListOwnedDatabases(ctx context.Context, owner []byte) ([]*coreTypes.DatasetInfo, error)
+	ListOwnedDatabases(ctx context.Context, owner []byte) ([]*coreTypes.DatasetIdentifier, error)
 	PriceDeploy(ctx context.Context, schema *engineTypes.Schema) (price *big.Int, err error)
 	PriceDrop(ctx context.Context, dbid string) (price *big.Int, err error)
 	PriceExecute(ctx context.Context, dbid string, action string, args [][]any) (price *big.Int, err error)
