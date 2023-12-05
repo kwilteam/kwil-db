@@ -30,12 +30,12 @@ import (
 
 // Server controls the gRPC server and http gateway.
 type Server struct {
-	grpcServer   *grpc.Server
-	gateway      *gateway.GatewayServer
-	admServer    *grpc.Server
-	cometBftNode *cometbft.CometBftNode
-	closers      *closeFuncs
-	log          log.Logger
+	grpcServer     *grpc.Server
+	gateway        *gateway.GatewayServer
+	adminTPCServer *grpc.Server
+	cometBftNode   *cometbft.CometBftNode
+	closers        *closeFuncs
+	log            log.Logger
 
 	cfg *config.KwildConfig
 
@@ -54,7 +54,7 @@ const (
 )
 
 // New builds the kwild server.
-func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.GenesisConfig, nodeKey *crypto.Ed25519PrivateKey) (svr *Server, err error) {
+func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.GenesisConfig, nodeKey *crypto.Ed25519PrivateKey, autogen bool) (svr *Server, err error) {
 	closers := &closeFuncs{
 		closers: make([]func() error, 0),
 	}
@@ -98,6 +98,7 @@ func New(ctx context.Context, cfg *config.KwildConfig, genesisCfg *config.Genesi
 
 	deps := &coreDependencies{
 		ctx:        ctx,
+		autogen:    autogen,
 		cfg:        cfg,
 		genesisCfg: genesisCfg,
 		privKey:    ed25519.PrivKey(nodeKey.Bytes()),
@@ -166,10 +167,10 @@ func (s *Server) Start(ctx context.Context) error {
 		go func() {
 			<-groupCtx.Done()
 			s.log.Info("stop admin server")
-			s.admServer.Stop()
+			s.adminTPCServer.Stop()
 		}()
 
-		return s.admServer.Start()
+		return s.adminTPCServer.Start()
 	})
 	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
 

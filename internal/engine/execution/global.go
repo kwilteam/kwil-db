@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
 )
@@ -154,12 +155,17 @@ func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionDat
 	return execCtx.FinalResult, err
 }
 
-// ListDatasets list datasets deployed by a specific caller
-func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]string, error) {
-	var datasets []string
-	for _, dataset := range g.datasets {
-		if bytes.Equal(dataset.schema.Owner, caller) {
-			datasets = append(datasets, dataset.schema.Name)
+// ListDatasets list datasets deployed by a specific caller.
+// If caller is empty, it will list all datasets.
+func (g *GlobalContext) ListDatasets(ctx context.Context, caller []byte) ([]*coreTypes.DatasetIdentifier, error) {
+	datasets := make([]*coreTypes.DatasetIdentifier, 0, len(g.datasets))
+	for dbid, dataset := range g.datasets {
+		if len(caller) == 0 || bytes.Equal(dataset.schema.Owner, caller) {
+			datasets = append(datasets, &coreTypes.DatasetIdentifier{
+				Name:  dataset.schema.Name,
+				Owner: dataset.schema.Owner,
+				DBID:  dbid,
+			})
 		}
 	}
 

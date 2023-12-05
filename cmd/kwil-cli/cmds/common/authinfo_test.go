@@ -24,16 +24,15 @@ func TestLoadKGWAuthInfo(t *testing.T) {
 		Raw:        "",
 		Unparsed:   nil,
 	}
-	expectCk := ConvertToCookie(&ck)
 
 	var err error
 	authFile := filepath.Join(t.TempDir(), "auth.json")
 
-	err = SaveAuthInfo(authFile, "0x123", &ck)
+	err = SaveCookie(authFile, []byte("0x123"), &ck)
 	assert.NoError(t, err)
 
-	got, err := LoadKGWAuthInfo(authFile, "0x123")
+	got, err := LoadPersistedCookie(authFile, []byte("0x123"))
 	assert.NoError(t, err)
 
-	assert.EqualValues(t, expectCk, got.Cookie)
+	assert.EqualValues(t, &ck, got)
 }

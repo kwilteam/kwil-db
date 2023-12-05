@@ -17,7 +17,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/version"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
 )
@@ -27,60 +26,69 @@ var (
 )
 
 func main() {
-	rootCmd.Version = version.KwilVersion
-
-	flagSet := rootCmd.Flags()
-	flagSet.SortFlags = false
-	addKwildFlags(flagSet, kwildCfg)
-	viper.BindPFlags(flagSet)
-
-	if err := rootCmd.Execute(); err != nil {
+	if err := rootCmd().Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	os.Exit(0)
 }
 
-var rootCmd = &cobra.Command{
-	Use:               "kwild",
-	Short:             "kwild node and rpc server",
-	Long:              "kwild: the Kwil blockchain node and RPC server",
-	DisableAutoGenTag: true,
-	Args:              cobra.NoArgs, // just flags
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// command line flags are now (finally) parsed by cobra. Bind env vars,
-		// load the config file, and unmarshal into kwildCfg.
-		if err := kwildCfg.LoadKwildConfig(); err != nil {
-			return fmt.Errorf("failed to load kwild config: %w", err)
-		}
+func rootCmd() *cobra.Command {
+	// we use an empty config because this config gets merged later, and should only contain flag values
+	flagCfg := config.EmptyConfig()
+	var autoGen bool
 
-		nodeKey, genesisConfig, err := kwildCfg.InitPrivateKeyAndGenesis()
-		if err != nil {
-			return fmt.Errorf("failed to initialize private key and genesis: %w", err)
-		}
+	cmd := &cobra.Command{
+		Use:               "kwild",
+		Short:             "kwild node and rpc server",
+		Long:              "kwild: the Kwil blockchain node and RPC server",
+		DisableAutoGenTag: true,
+		Args:              cobra.NoArgs, // just flags
+		Version:           version.KwilVersion,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			kwildCfg, err = config.GetCfg(flagCfg)
+			if err != nil {
+				return err
+			}
 
-		stopProfiler, err := startProfilers(kwildCfg)
-		if err != nil {
-			return err
-		}
-		defer stopProfiler()
+			nodeKey, genesisConfig, err := kwildCfg.InitPrivateKeyAndGenesis(autoGen)
+			if err != nil {
+				return fmt.Errorf("failed to initialize private key and genesis: %w", err)
+			}
 
-		signalChan := make(chan os.Signal, 1)
-		signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
-		ctx, cancel := context.WithCancel(cmd.Context())
+			stopProfiler, err := startProfilers(kwildCfg)
+			if err != nil {
+				return err
+			}
+			defer stopProfiler()
 
-		go func() {
-			<-signalChan
-			cancel()
-		}()
+			signalChan := make(chan os.Signal, 1)
+			signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+			ctx, cancel := context.WithCancel(cmd.Context())
 
-		svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey)
-		if err != nil {
-			return err
-		}
+			go func() {
+				<-signalChan
+				cancel()
+			}()
 
-		return svr.Start(ctx)
-	},
+			svr, err := server.New(ctx, kwildCfg, genesisConfig, nodeKey, autoGen)
+			if err != nil {
+				return err
+			}
+
+			return svr.Start(ctx)
+		},
+	}
+
+	flagSet := cmd.Flags()
+	flagSet.SortFlags = false
+	config.AddConfigFlags(flagSet, flagCfg)
+
+	flagSet.BoolVarP(&autoGen, "autogen", "a", false,
+		"auto generate private key and genesis file if not exist")
+
+	return cmd
 }
 
 func startProfilers(cfg *config.KwildConfig) (func(), error) {

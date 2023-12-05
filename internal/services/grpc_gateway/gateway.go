@@ -81,12 +81,7 @@ func (g *GatewayServer) Shutdown(ctx context.Context) error {
 }
 
 func registerHelperEndpoints(mux *runtime.ServeMux) error {
-	// err := mux.HandlePath(http.MethodGet, "/api/v0/swagger.json", swagger.GWSwaggerJSONV0Handler)
-	// if err != nil {
-	// 	return err
-	// }
-
-	err := mux.HandlePath(http.MethodGet, "/api/v1/swagger.json", swagger.GWSwaggerJSONV1Handler)
+	err := mux.HandlePath(http.MethodGet, "/api/v1/tx.swagger.json", swagger.GWSwaggerJSONTxV1Handler)
 	if err != nil {
 		return err
 	}

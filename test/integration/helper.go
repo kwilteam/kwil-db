@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path"
@@ -20,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/adminclient"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -35,6 +37,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/test/driver"
+	"github.com/kwilteam/kwil-db/test/driver/operator"
 )
 
 var (
@@ -66,6 +69,7 @@ type IntTestConfig struct {
 	HTTPEndpoint  string
 	GrpcEndpoint  string
 	ChainEndpoint string
+	AdminRPC      string // either tcp or unix.  Should be of form unix://var/run/kwil/admin.sock or tcp://localhost:26657
 
 	SchemaFile                string
 	DockerComposeFile         string
@@ -160,6 +164,7 @@ func (r *IntHelper) LoadConfig() {
 		LogLevel:                  getEnv("KIT_LOG_LEVEL", "info"),
 		HTTPEndpoint:              getEnv("KIT_HTTP_ENDPOINT", "http://localhost:8080"),
 		GrpcEndpoint:              getEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
+		AdminRPC:                  getEnv("KIT_SOCKET_DIR", "unix:///var/run/kwil/admin.sock"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
@@ -353,40 +358,37 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 }
 
 // GetOperatorDriver returns a integration driver connected to the given kwil node,
-// using the private key of the operator
-func (r *IntHelper) GetOperatorDriver(ctx context.Context, name string, driverType string) KwilIntDriver {
-	ctr := r.containers[name]
-
-	rpcURL, err := ctr.PortEndpoint(ctx, "50051", "")
-	require.NoError(r.t, err, "failed to get node url")
-	gatewayURL, err := ctr.PortEndpoint(ctx, "8080", "")
-	require.NoError(r.t, err, "failed to get gateway url")
-	p2pURL, err := ctr.PortEndpoint(ctx, "26656", "tcp")
-	require.NoError(r.t, err, "failed to get p2p url")
-	cometBftURL, err := ctr.PortEndpoint(ctx, "26657", "tcp")
-	require.NoError(r.t, err, "failed to get cometBFT RPC url")
-
-	r.t.Logf(`user RPC URL: "%s"
-gateway URL: "%s"
-p2p URL: "%s"
-cometBFT URL: "%s"
-container name: "%s"`,
-		rpcURL, gatewayURL, cometBftURL, p2pURL, name)
-
-	privKeyB := r.privateKeys[name].Bytes()
-	privKeyHex := hex.EncodeToString(privKeyB)
-	privKey, err := crypto.Ed25519PrivateKeyFromBytes(privKeyB)
-	require.NoError(r.t, err, "invalid private key")
-	signer := &auth.Ed25519Signer{Ed25519PrivateKey: *privKey}
-
-	pk := privKeyHex
+// using the private key of the operator.
+// The passed nodeName needs to be the same as the name of the container in docker-compose.yml
+func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driverType string) operator.KwilOperatorDriver {
 	switch driverType {
 	case "http":
-		return r.getHTTPClientDriver(signer)
+		r.t.Fatalf("http driver not supported for node operator")
+		return nil
 	case "grpc":
-		return r.getGRPCClientDriver(signer)
+		c, ok := r.containers[nodeName]
+		if !ok {
+			r.t.Fatalf("container %s not found", nodeName)
+		}
+
+		adminGrpcUrl, err := c.PortEndpoint(ctx, "50151", "tcp")
+		require.NoError(r.t, err, "failed to get admin grpc url")
+
+		clt, err := adminclient.NewClient(ctx, adminGrpcUrl)
+		if err != nil {
+			r.t.Fatalf("failed to create admin client: %v", err)
+		}
+
+		return &operator.AdminClientDriver{
+			Client: clt,
+		}
 	case "cli":
-		return r.getCliDriver(pk, signer.PubKey().Bytes())
+		c, ok := r.containers[nodeName]
+		if !ok {
+			r.t.Fatalf("container %s not found", nodeName)
+		}
+
+		return r.getCLIAdminClientDriver(r.cfg.AdminRPC, c)
 	default:
 		panic("unsupported driver type")
 	}
@@ -395,13 +397,14 @@ container name: "%s"`,
 func (r *IntHelper) getHTTPClientDriver(signer auth.Signer) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	options := []client.Option{client.WithSigner(signer, testChainID),
-		client.WithLogger(logger),
-		client.WithTLSCert("")} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.HTTPEndpoint, options...)
+	kwilClt, err := client.NewClient(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
+		Signer:  signer,
+		ChainID: testChainID,
+		Logger:  logger,
+	})
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+	return driver.NewKwildClientDriver(kwilClt, logger)
 }
 
 func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) KwilIntDriver {
@@ -411,15 +414,41 @@ func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) KwilIntDriver {
 	gt, err := gRPC.New(context.Background(), r.cfg.GrpcEndpoint, gtOptions...)
 	require.NoError(r.t, err, "failed to create grpc transport")
 
-	options := []client.Option{client.WithSigner(signer, ""),
-		client.WithLogger(logger),
-		client.WithTLSCert(""),
-		client.WithRPCClient(gt),
-	} // TODO: handle cert
-	kwilClt, err := client.Dial(context.TODO(), r.cfg.GrpcEndpoint, options...)
+	kwilClt, err := client.WrapClient(context.TODO(), gt, &client.ClientOptions{
+		Signer:  signer,
+		ChainID: testChainID,
+		Logger:  logger,
+	})
 	require.NoError(r.t, err, "failed to create grpc client")
 
-	return driver.NewKwildClientDriver(kwilClt, driver.WithLogger(logger))
+	return driver.NewKwildClientDriver(kwilClt, logger)
+}
+
+// getCLIAdminClientDriver returns a kwil-admin client driver connected to the given kwil node.
+// the adminSvcServer should be either unix:// or tcp://
+func (r *IntHelper) getCLIAdminClientDriver(adminSvcServer string, c *testcontainers.DockerContainer) operator.KwilOperatorDriver {
+	return &operator.OperatorCLIDriver{
+		Exec: func(ctx context.Context, args ...string) ([]byte, error) {
+			_, reader, err := c.Exec(ctx, append([]string{"/app/kwil-admin"}, args...))
+			if err != nil {
+				return nil, err
+			}
+			bts, err := io.ReadAll(reader)
+			if err != nil {
+				return nil, err
+			}
+
+			// docker engine returns an 8 byte header as part of their response
+			// https://docs.docker.com/engine/api/v1.43/#tag/Container/operation/ContainerAttach
+
+			if len(bts) < 8 {
+				return nil, fmt.Errorf("invalid response from docker engine")
+			}
+
+			return bts[8:], nil
+		},
+		RpcUrl: adminSvcServer,
+	}
 }
 
 func (r *IntHelper) getCliDriver(privKey string, identity []byte) KwilIntDriver {
@@ -428,10 +457,8 @@ func (r *IntHelper) getCliDriver(privKey string, identity []byte) KwilIntDriver 
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-cli-%s-%s", runtime.GOOS, runtime.GOARCH))
-	adminBinPath := path.Join(path.Dir(currentFilePath),
-		fmt.Sprintf("../../.build/kwil-admin-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, adminBinPath, r.cfg.HTTPEndpoint, privKey, testChainID, identity, logger)
+	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, testChainID, identity, logger)
 }
 
 func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {

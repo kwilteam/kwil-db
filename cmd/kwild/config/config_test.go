@@ -11,7 +11,11 @@ import (
 
 func Test_Config_Toml(t *testing.T) {
 	cfg := config.DefaultConfig()
-	err := cfg.ParseConfig(filepath.Join("test_data", config.ConfigFileName))
+
+	tomlCfg, err := config.LoadConfigFile(filepath.Join("test_data", config.ConfigFileName))
+	assert.NoError(t, err)
+
+	err = cfg.Merge(tomlCfg)
 	assert.NoError(t, err)
 
 	assert.Equal(t, "localhost:50051", cfg.AppCfg.GrpcListenAddress)

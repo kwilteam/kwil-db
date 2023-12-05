@@ -1,11 +1,11 @@
 package common
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	kgwAuthTokenFileName = "kgw_auth.json"
+	kgwAuthTokenFileName = "auth.json"
 )
 
+// KGWAuthTokenFilePath returns the path to the file that stores the Gateway Auth cookies.
 func KGWAuthTokenFilePath() string {
 	return filepath.Join(config.DefaultConfigDir, kgwAuthTokenFileName)
 }
@@ -41,7 +42,7 @@ type cookie struct {
 	Unparsed []string `json:"unparsed,omitempty"` // Raw text of unparsed attribute-value pairs
 }
 
-func ConvertToCookie(c *http.Cookie) cookie {
+func convertToCookie(c *http.Cookie) cookie {
 	return cookie{
 		Name:       c.Name,
 		Value:      c.Value,
@@ -58,7 +59,7 @@ func ConvertToCookie(c *http.Cookie) cookie {
 	}
 }
 
-func ConvertToHttpCookie(c cookie) *http.Cookie {
+func convertToHttpCookie(c cookie) *http.Cookie {
 	return &http.Cookie{
 		Name:       c.Name,
 		Value:      c.Value,
@@ -75,18 +76,15 @@ func ConvertToHttpCookie(c cookie) *http.Cookie {
 	}
 }
 
-// KGWAuthInfo represents the KGW authentication info for a wallet address
-type KGWAuthInfo struct {
-	Address string `json:"address"`
-	Cookie  cookie `json:"cookie"`
-}
+// PersistedCookies is a set of Gateway Auth cookies that can be saved to a file.
+// It maps a base64 user identifier to a cookie, ensuring only one cookie per wallet.
+// It uses a custom cookie type that is json serializable.
+type PersistedCookies map[string]cookie
 
-type LocalKGWAuthInfo []*KGWAuthInfo
-
-// LoadKGWAuthInfo loads the address KGW authentication info from the given file.
-// If the address is not authenticated(local), it returns nil.
-func LoadKGWAuthInfo(authFile string, address string) (*KGWAuthInfo, error) {
-	address = strings.ToLower(address)
+// LoadPersistedCookie loads a persisted cookie from the auth file.
+// It will look up the cookie for the given user identifier.
+// If nothing is found, it returns nil, nil.
+func LoadPersistedCookie(authFile string, userIdentifier []byte) (*http.Cookie, error) {
 	if !utils.FileExists(authFile) {
 		return nil, nil
 	}
@@ -96,63 +94,73 @@ func LoadKGWAuthInfo(authFile string, address string) (*KGWAuthInfo, error) {
 		return nil, fmt.Errorf("open kgw auth file: %w", err)
 	}
 
-	var aInfo LocalKGWAuthInfo
+	var aInfo PersistedCookies
 	err = json.NewDecoder(file).Decode(&aInfo)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal kgw auth file: %w", err)
 	}
 
-	// always overwrite if the address already exists
-	for _, a := range aInfo {
-		if a.Address == address {
-			return a, nil
-		}
-	}
+	b64Identifier := base64.StdEncoding.EncodeToString(userIdentifier)
+	cookie := aInfo[b64Identifier]
 
-	return nil, nil
+	return convertToHttpCookie(cookie), nil
 }
 
-// SaveAuthInfo saves the cookie to auth file.
-func SaveAuthInfo(authFile string, address string, originCookie *http.Cookie) error {
-	address = strings.ToLower(address)
-	cookie := ConvertToCookie(originCookie)
+// SaveCookie saves the cookie to auth file.
+// It will overwrite the cookie if the address already exists.
+func SaveCookie(authFile string, userIdentifier []byte, originCookie *http.Cookie) error {
+	cookie := convertToCookie(originCookie)
 
 	authInfoBytes, err := utils.ReadOrCreateFile(authFile)
 	if err != nil {
 		return fmt.Errorf("read kgw auth file: %w", err)
 	}
 
-	var aInfo LocalKGWAuthInfo
+	b64Identifier := base64.StdEncoding.EncodeToString(userIdentifier)
 
-	if len(authInfoBytes) != 0 {
-		// if the file is not empty, load the content
+	var aInfo PersistedCookies
+	if len(authInfoBytes) == 0 {
+		aInfo = make(PersistedCookies)
+	} else {
 		err = json.Unmarshal(authInfoBytes, &aInfo)
 		if err != nil {
 			return fmt.Errorf("unmarshal kgw auth file: %w", err)
 		}
-
-		exists := false
-		// always overwrite if the address already exists
-		for _, a := range aInfo {
-			if a.Address == address {
-				a.Cookie = cookie
-				exists = true
-				break
-			}
-		}
-
-		if !exists {
-			aInfo = append(aInfo, &KGWAuthInfo{
-				Address: address,
-				Cookie:  cookie,
-			})
-		}
-	} else {
-		aInfo = append(aInfo, &KGWAuthInfo{
-			Address: address,
-			Cookie:  cookie,
-		})
 	}
+	aInfo[b64Identifier] = cookie
+
+	jsonBytes, err := json.MarshalIndent(&aInfo, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal kgw auth info: %w", err)
+	}
+
+	err = utils.WriteFile(authFile, jsonBytes)
+	if err != nil {
+		return fmt.Errorf("write kgw auth file: %w", err)
+	}
+	return nil
+}
+
+// DeleteCookie will delete a cookie that exists for a given user identifier.
+// If no cookie exists for the user identifier, it will do nothing.
+func DeleteCookie(authFile string, userIdentifier []byte) error {
+	authInfoBytes, err := utils.ReadOrCreateFile(authFile)
+	if err != nil {
+		return fmt.Errorf("read kgw auth file: %w", err)
+	}
+
+	b64Identifier := base64.StdEncoding.EncodeToString(userIdentifier)
+
+	var aInfo PersistedCookies
+	if len(authInfoBytes) == 0 {
+		aInfo = make(PersistedCookies)
+	} else {
+		err = json.Unmarshal(authInfoBytes, &aInfo)
+		if err != nil {
+			return fmt.Errorf("unmarshal kgw auth file: %w", err)
+		}
+	}
+	delete(aInfo, b64Identifier)
 
 	jsonBytes, err := json.MarshalIndent(&aInfo, "", "  ")
 	if err != nil {
