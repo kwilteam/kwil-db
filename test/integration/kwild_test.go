@@ -71,8 +71,11 @@ func TestKwildValidatorRemoval(t *testing.T) {
 		integration.WithNonValidators(numNonVals),
 	}
 
-	testDrivers := []string{"cli"} // strings.Split(*drivers, ",")
+	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
+		if driverType == "http" {
+			continue // admin service cannot use http
+		}
 
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
@@ -118,8 +121,12 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 
 	expiryWait := 2 * expiryBlocks * blockInterval
 
-	testDrivers := []string{"cli"} // strings.Split(*drivers, ",")
+	testDrivers := strings.Split(*drivers, ",")
 	for _, driverType := range testDrivers {
+		if driverType == "http" {
+			continue // admin service cannot use http
+		}
+
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)

@@ -6,6 +6,8 @@ ARG git_commit
 ARG go_build_tags
 
 WORKDIR /app
+RUN mkdir -p /var/run/kwil
+RUN chmod 777 /var/run/kwil
 RUN apk update && apk add git ca-certificates-bundle
 
 COPY . .

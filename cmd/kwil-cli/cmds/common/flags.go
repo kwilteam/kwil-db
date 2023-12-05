@@ -7,7 +7,7 @@ import "github.com/spf13/cobra"
 // BindAssumeYesFlag binds the assume yes flag to the passed command
 // If bound, the command will assume yes for all prompts
 func BindAssumeYesFlag(cmd *cobra.Command) {
-	cmd.Flags().BoolP("assume-yes", "Y", false, "Assume yes for all prompts")
+	cmd.PersistentFlags().BoolP("assume-yes", "Y", false, "Assume yes for all prompts")
 }
 
 // GetAssumeYesFlag returns the value of the assume yes flag

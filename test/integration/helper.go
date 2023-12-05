@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/adminclient"
 	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 
 	"github.com/cometbft/cometbft/crypto/ed25519"
@@ -346,7 +347,7 @@ func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType s
 	pk := r.cfg.CreatorRawPk
 	switch driverType {
 	case "http":
-		return r.getHTTPClientDriver(signer, r.cfg.HTTPEndpoint)
+		return r.getHTTPClientDriver(signer)
 	case "grpc":
 		return r.getGRPCClientDriver(signer)
 	case "cli":
@@ -365,8 +366,22 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 		r.t.Fatalf("http driver not supported for node operator")
 		return nil
 	case "grpc":
-		r.t.Fatal("grpc driver not supported for node operator") // we can do this, but it is lower priority
-		return nil
+		c, ok := r.containers[nodeName]
+		if !ok {
+			r.t.Fatalf("container %s not found", nodeName)
+		}
+
+		adminGrpcUrl, err := c.PortEndpoint(ctx, "50151", "tcp")
+		require.NoError(r.t, err, "failed to get admin grpc url")
+
+		clt, err := adminclient.NewClient(ctx, adminGrpcUrl)
+		if err != nil {
+			r.t.Fatalf("failed to create admin client: %v", err)
+		}
+
+		return &operator.AdminClientDriver{
+			Client: clt,
+		}
 	case "cli":
 		c, ok := r.containers[nodeName]
 		if !ok {
@@ -379,7 +394,7 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 	}
 }
 
-func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, httpEndpoint string) KwilIntDriver {
+func (r *IntHelper) getHTTPClientDriver(signer auth.Signer) KwilIntDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	kwilClt, err := client.NewClient(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
