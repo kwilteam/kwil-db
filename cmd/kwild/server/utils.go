@@ -116,6 +116,7 @@ func (wc *wrappedCometBFTClient) Peers(ctx context.Context) ([]*types.PeerInfo, 
 	if err != nil {
 		return nil, err
 	}
+
 	peers := make([]*types.PeerInfo, len(cmtNetInfo.Peers))
 	for i, p := range cmtNetInfo.Peers {
 		peers[i] = &types.PeerInfo{
@@ -142,9 +143,8 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 			BestBlockTime:   si.LatestBlockTime.UTC(),
 		},
 		Validator: &types.ValidatorInfo{
-			PubKey:     vi.PubKey.Bytes(),
-			PubKeyType: vi.PubKey.Type(),
-			Power:      vi.VotingPower,
+			PubKey: vi.PubKey.Bytes(),
+			Power:  vi.VotingPower,
 		},
 	}, nil
 }

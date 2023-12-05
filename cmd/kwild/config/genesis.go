@@ -176,8 +176,7 @@ func loadGenesisAndPrivateKey(autoGen bool, privKeyPath, rootDir string) (privKe
 		return nil, nil, fmt.Errorf("invalid private key: %v", err)
 	}
 
-	abciCfgDir := filepath.Join(chainRootDir, cometbft.ConfigDir)
-	genFile := filepath.Join(abciCfgDir, cometbft.GenesisJSONName) // i.e. <root>/abci/config/genesis.json
+	genFile := filepath.Join(rootDir, cometbft.GenesisJSONName)
 
 	if fileExists(genFile) {
 		genesisCfg, err = LoadGenesisConfig(genFile)
@@ -191,8 +190,8 @@ func loadGenesisAndPrivateKey(autoGen bool, privKeyPath, rootDir string) (privKe
 		return nil, nil, fmt.Errorf("genesis file not found: %s", genFile)
 	}
 
-	if err = os.MkdirAll(abciCfgDir, 0755); err != nil {
-		return nil, nil, fmt.Errorf("error creating abci config dir %s: %v", abciCfgDir, err)
+	if err = os.MkdirAll(chainRootDir, 0755); err != nil {
+		return nil, nil, fmt.Errorf("error creating abci config dir %s: %v", chainRootDir, err)
 	}
 
 	genesisCfg = NewGenesisWithValidator(pub)

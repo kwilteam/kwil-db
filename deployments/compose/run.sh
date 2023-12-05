@@ -16,7 +16,7 @@ bringup() {
 
 start() {
   # Build Kwild
-  test $1 && task --taskfile ../../Taskfile.yml build:docker -- shell &&   task build || echo "skip build image"
+  test $1 && task --taskfile ../../Taskfile.yml build:docker &&   task build || echo "skip build image"
 
   # start kwild
   printf "bringing up kwild services: \n"

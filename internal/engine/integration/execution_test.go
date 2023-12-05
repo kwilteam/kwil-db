@@ -45,7 +45,7 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 
 				require.Equal(t, 1, len(dbs))
-				require.Equal(t, testdata.TestSchema.Name, dbs[0])
+				require.Equal(t, testdata.TestSchema.Name, dbs[0].Name)
 
 				regDbs, err := reg.List(ctx)
 				require.NoError(t, err)

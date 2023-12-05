@@ -25,9 +25,10 @@ func convertTablesFromEngine(tables []*engineTypes.Table) []*txpb.Table {
 	convTables := make([]*txpb.Table, len(tables))
 	for i, table := range tables {
 		convTable := &txpb.Table{
-			Name:    table.Name,
-			Columns: convertColumnsFromEngine(table.Columns),
-			Indexes: convertIndexesFromEngine(table.Indexes),
+			Name:        table.Name,
+			Columns:     convertColumnsFromEngine(table.Columns),
+			Indexes:     convertIndexesFromEngine(table.Indexes),
+			ForeignKeys: convertForeignKeysFromEngine(table.ForeignKeys),
 		}
 		convTables[i] = convTable
 	}
@@ -115,4 +116,28 @@ func convertModifiersFromEngine(mods []engineTypes.Modifier) (mutability string,
 	}
 
 	return mutability, auxiliaries, nil
+}
+
+func convertForeignKeysFromEngine(foreignKeys []*engineTypes.ForeignKey) []*txpb.ForeignKey {
+
+	convForeignKeys := make([]*txpb.ForeignKey, len(foreignKeys))
+	for i, foreignKey := range foreignKeys {
+		convertedActions := make([]*txpb.ForeignKeyAction, len(foreignKey.Actions))
+
+		for j, action := range foreignKey.Actions {
+			convertedActions[j] = &txpb.ForeignKeyAction{
+				On: action.On.String(),
+				Do: action.Do.String(),
+			}
+		}
+
+		convForeignKeys[i] = &txpb.ForeignKey{
+			ChildKeys:   foreignKey.ChildKeys,
+			ParentKeys:  foreignKey.ParentKeys,
+			ParentTable: foreignKey.ParentTable,
+			Actions:     convertedActions,
+		}
+	}
+
+	return convForeignKeys
 }

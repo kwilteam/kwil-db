@@ -41,7 +41,7 @@ func getSelectedOwner(cmd *cobra.Command, conf *config.KwilCliConfig) ([]byte, e
 
 	} else {
 		if conf.PrivateKey == nil {
-			return nil, fmt.Errorf("no public key provided")
+			return nil, nil // nil is a valid owner, as it will return all
 		}
 
 		signer := auth.EthPersonalSigner{Key: *conf.PrivateKey}

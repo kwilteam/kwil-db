@@ -7,57 +7,86 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 )
 
-type Option func(*Client)
+// ClientOptions are options that can be set for the client
+type ClientOptions struct {
+	// Logger is the logger to use for the client.
+	Logger log.Logger
 
-func WithLogger(logger log.Logger) Option {
-	return func(c *Client) {
-		c.logger = logger
+	// Signer will be used to sign transactions.
+	Signer auth.Signer
+
+	// The chain ID will be used in all transactions, which helps prevent replay attacks on
+	// different chains. On the initial connection, the remote node's chain ID is
+	// checked against ours to ensure were are on the right network. If the chain ID
+	// is empty, we will create and sign transactions for whatever network the
+	// remote node claims, which should only be done for testing or when in secure
+	// communication with a trusted node (using TLS or Unix sockets).
+	ChainID string
+
+	// Silence silences warnings logged from the client.
+	Silence bool
+}
+
+// Apply applies the passed options to the receiver.
+func (c *ClientOptions) Apply(opts *ClientOptions) {
+	if opts == nil {
+		return
+	}
+
+	if opts.Logger.L != nil {
+		c.Logger = opts.Logger
+	}
+
+	if opts.Signer != nil {
+		c.Signer = opts.Signer
+	}
+
+	if opts.ChainID != "" {
+		c.ChainID = opts.ChainID
+	}
+
+	c.Silence = opts.Silence
+}
+
+// DefaultOptions returns the default options for the client.
+func DefaultOptions() *ClientOptions {
+	return &ClientOptions{
+		Logger: log.NewNoOp(),
 	}
 }
 
-// WithSigner sets a signer to use when authoring transactions. The chain ID
+type Option func(*ClientOptions)
+
+func WithLogger(logger log.Logger) Option {
+	return func(c *ClientOptions) {
+		c.Logger = logger
+	}
+}
+
+// WithSigner sets a signer to use when authoring transactions.
+func WithSigner(signer auth.Signer) Option {
+	return func(c *ClientOptions) {
+		c.Signer = signer
+	}
+}
+
+// WithChainID sets the chain ID to use when authoring transactions. The chain ID
 // will be used in all transactions, which helps prevent replay attacks on
 // different chains. On the initial connection, the remote node's chain ID is
 // checked against ours to ensure were are on the right network. If the chain ID
 // is empty, we will create and sign transactions for whatever network the
 // remote node claims, which should only be done for testing or when in secure
-// (TLS) communication with a trusted node.
-func WithSigner(signer auth.Signer, chainID string) Option {
-	return func(c *Client) {
-		c.Signer = signer
-		c.chainID = chainID
+// communication with a trusted node (using TLS or Unix sockets).
+func WithChainID(chainID string) Option {
+	return func(c *ClientOptions) {
+		c.ChainID = chainID
 	}
 }
 
-func WithTLSCert(certFile string) Option {
-	return func(c *Client) {
-		c.tlsCertFile = certFile
-	}
-}
-
-func WithRPCClient(tc RPCClient) Option {
-	return func(c *Client) {
-		c.rpc = tc
-	}
-}
-
-type callOptions struct {
-	// forceAuthenticated is used to force the client to authenticate
-	// if nil, the client will use the default value
-	// if false, it will not authenticate
-	// if true, it will authenticate
-	forceAuthenticated *bool // is pointer necessary here?
-}
-
-type CallOpt func(*callOptions)
-
-// Authenticated can be used to force the client to authenticate (or not)
-// if true, the client will authenticate. if false, it will not authenticate
-// if nil, the client will decide itself
-func Authenticated(shouldSign bool) CallOpt {
-	return func(o *callOptions) {
-		copied := shouldSign
-		o.forceAuthenticated = &copied
+// SilenceWarnings silences warnings from the client.
+func SilenceWarnings() Option {
+	return func(c *ClientOptions) {
+		c.Silence = true
 	}
 }
 
