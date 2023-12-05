@@ -19,12 +19,12 @@ services:
       kwilnet:
         ipv4_address: 172.10.100.2
     command: |
-      --root_dir=/app/.kwild
+      --root-dir=/app/.kwild
       --log.level=debug
-      --app.admin_listen_addr=:50151
-      --app.grpc_listen_addr=:50051
-      --app.http_listen_addr=:8080
-      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --app.admin-listen-addr=:50151
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.laddr=tcp://0.0.0.0:26657
 
   k2:
@@ -45,12 +45,12 @@ services:
       kwilnet:
         ipv4_address: 172.10.100.3
     command: |
-      --root_dir=/app/.kwild
+      --root-dir=/app/.kwild
       --log.level=debug
-      --app.admin_listen_addr=:50151
-      --app.grpc_listen_addr=:50051
-      --app.http_listen_addr=:8080
-      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --app.admin-listen-addr=:50151
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.laddr=tcp://0.0.0.0:26657
 
   k3:
@@ -71,12 +71,12 @@ services:
       kwilnet:
         ipv4_address: 172.10.100.4
     command: |
-      --root_dir=/app/.kwild
+      --root-dir=/app/.kwild
       --log.level=debug
-      --app.admin_listen_addr=:50151
-      --app.grpc_listen_addr=:50051
-      --app.http_listen_addr=:8080
-      --chain.p2p.external_address=tcp://0.0.0.0:26656
+      --app.admin-listen-addr=:50151
+      --app.grpc-listen-addr=:50051
+      --app.http-listen-addr=:8080
+      --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.laddr=tcp://0.0.0.0:26657
 
 

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"slices"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -30,22 +29,10 @@ type KwildClientDriver struct {
 	logger log.Logger
 }
 
-type GrpcDriverOpt func(*KwildClientDriver)
-
-func WithLogger(logger log.Logger) GrpcDriverOpt {
-	return func(d *KwildClientDriver) {
-		d.logger = logger
-	}
-}
-
-func NewKwildClientDriver(clt *client.Client, opts ...GrpcDriverOpt) *KwildClientDriver {
+func NewKwildClientDriver(clt *client.Client, logger log.Logger) *KwildClientDriver {
 	driver := &KwildClientDriver{
 		clt:    clt,
-		logger: log.New(log.Config{}),
-	}
-
-	for _, opt := range opts {
-		opt(driver)
+		logger: logger,
 	}
 
 	return driver
@@ -115,8 +102,16 @@ func (d *KwildClientDriver) DatabaseExists(ctx context.Context, dbid string) err
 		return fmt.Errorf("failed to get database list: %w", err)
 	}
 
-	if !slices.Contains(dbs, dbSchema.Name) {
-		return fmt.Errorf("database %s not found", dbid)
+	found := false
+	for _, db := range dbs {
+		if db.DBID == dbid {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("ListDatabase: database not found: %s", dbid)
 	}
 
 	return nil
@@ -146,31 +141,10 @@ func (d *KwildClientDriver) QueryDatabase(ctx context.Context, dbid, query strin
 }
 
 func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any, withSignature bool) (*client.Records, error) {
-	callOpts := make([]client.CallOpt, 0)
-	callOpts = append(callOpts, client.Authenticated(withSignature))
-	return d.clt.CallAction(ctx, dbid, action, inputs, callOpts...)
+
+	return d.clt.CallAction(ctx, dbid, action, inputs)
 }
 
-func (d *KwildClientDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) ([]byte, error) {
-	return d.clt.ApproveValidator(ctx, joinerPubKey)
-}
-
-func (d *KwildClientDriver) ValidatorNodeRemove(ctx context.Context, target []byte) ([]byte, error) {
-	return d.clt.RemoveValidator(ctx, target)
-}
-
-func (d *KwildClientDriver) ValidatorNodeJoin(ctx context.Context) ([]byte, error) {
-	return d.clt.ValidatorJoin(ctx)
-}
-
-func (d *KwildClientDriver) ValidatorNodeLeave(ctx context.Context) ([]byte, error) {
-	return d.clt.ValidatorLeave(ctx)
-}
-
-func (d *KwildClientDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
-	return d.clt.ValidatorJoinStatus(ctx, pubKey)
-}
-
-func (d *KwildClientDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {
-	return d.clt.CurrentValidators(ctx)
+func (d *KwildClientDriver) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
+	return d.clt.ChainInfo(ctx)
 }

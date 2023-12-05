@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -15,10 +15,13 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	rpcClients "github.com/kwilteam/kwil-db/core/rpc/client"
+	"github.com/kwilteam/kwil-db/core/rpc/client/user"
+	userGrpc "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 // runLooped executes a basic function with a specified delay between each call
@@ -68,11 +71,22 @@ func hammer(ctx context.Context) error {
 	signer := &auth.EthPersonalSigner{Key: *priv}
 	acctID := signer.Identity()
 
-	var rpcClient client.RPCClient
-	if strings.Contains(host, "http") {
-		rpcClient, err = http.Dial(host)
+	var rpcClient user.TxSvcClient
+
+	parsedUrl, err := url.Parse(host)
+	if err != nil {
+		return err
+	}
+
+	if parsedUrl.Scheme == "http" {
+		rpcClient = http.NewClient(parsedUrl)
 	} else {
-		rpcClient, err = grpc.New(ctx, host, grpc.WithTlsCert(""))
+		conn, err := grpc.DialContext(ctx, parsedUrl.String(), rpcClients.DefaultGRPCOpts()...)
+		if err != nil {
+			return err
+		}
+
+		rpcClient = userGrpc.WrapConn(conn)
 	}
 	if err != nil {
 		return err
@@ -86,14 +100,14 @@ func hammer(ctx context.Context) error {
 	})
 	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
 	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
-	cl, err := client.Dial(ctx, host, client.WithLogger(trLogger),
-		client.WithRPCClient(&timedClient{rpcTiming, &logger, rpcClient}),
-		client.WithSigner(signer, ""), // we don't care what the chain ID is
-	)
+	cl, err := client.WrapClient(ctx, &timedClient{rpcTiming, &logger, rpcClient}, &client.ClientOptions{
+		Signer: signer,
+		Logger: trLogger,
+	})
+
 	if err != nil {
 		return err
 	}
-	defer cl.Close()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // any early return cancels other goroutines

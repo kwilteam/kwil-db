@@ -35,11 +35,11 @@
 # TCP address for the KWILD App's GRPC server to listen on
 grpc_listen_addr = "localhost:50051"
 
-# TCP address for the KWILD App's admin server to listen on
-admin_listen_addr="localhost:50151"
-
 # TCP address for the KWILD App's HTTP server to listen on
 http_listen_addr = "localhost:8080"
+
+# UNIX socket for KWILD Admin server to listen on
+admin_unix_socket = "/tmp/kwil_admin.sock"
 
 # List of Extension endpoints to be enabled ex: ["localhost:50052", "169.198.102.34:50053"]
 extension_endpoints = []
