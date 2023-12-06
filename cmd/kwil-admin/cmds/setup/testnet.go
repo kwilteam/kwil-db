@@ -84,9 +84,13 @@ func testnetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&nodeDirPrefix, "node-dir-prefix", "node", "prefix for the node directories (node results in node0, node1, ...)")
 	cmd.Flags().StringVar(&startingIPAddress, "starting-ip", "172.10.100.2", "starting IP address for nodes")
 	cmd.Flags().StringSliceVar(&hostnames, "hostnames", []string{}, "override all hostnames of the nodes (list of hostnames must be the same length as the number of nodes)")
+	cmd.Flags().IntVarP(&p2pPort, "p2p-port", "p", 26656, "p2p port for nodes")
 	cmd.Flags().DurationVarP(&blockInterval, "block-interval", "i", 6*time.Second, "shortest block interval in seconds")
 	cmd.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires")
 	cmd.Flags().IntVarP(&validatorAmount, "validators", "v", 3, "number of validators to generate")
 	cmd.Flags().IntVarP(&nonValidatorAmount, "non-validators", "n", 0, "number of non-validators to generate")
+	cmd.Flags().BoolVar(&withoutNonces, "without-nonces", false, "disable account nonces")
+	cmd.Flags().BoolVar(&withGas, "gas", false, "enable gas")
+	cmd.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
 	return cmd
 }
