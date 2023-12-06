@@ -15,7 +15,7 @@ import (
 // BindOutputFormatFlag binds the output format flag to the command.
 // This should be added on the root command.
 func BindOutputFormatFlag(cmd *cobra.Command) {
-	cmd.PersistentFlags().String("output", defaultOutputFormat.string(), "the format for command output - either `text` or `json`")
+	cmd.PersistentFlags().String("output", defaultOutputFormat.string(), "the format for command output - either 'text' or 'json'")
 }
 
 // BindSilenceFlag binds the silence flag to the passed command.
