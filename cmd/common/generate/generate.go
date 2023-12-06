@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/spf13/cobra/doc"
 )
 
 type writeFunc func(string) (*os.File, error)
@@ -55,6 +57,7 @@ func createIndexFile(cmd *cobra.Command, dir string, write writeFunc) error {
 		id:               strings.ReplaceAll(cmd.CommandPath(), " ", "-"),
 		title:            cmd.CommandPath(),
 		description:      cmd.Short,
+		slug:             getSlug(cmd),
 	}
 
 	file, err := write(dir + "/index.md")
@@ -64,7 +67,7 @@ func createIndexFile(cmd *cobra.Command, dir string, write writeFunc) error {
 
 	file.WriteString(header.String() + "\n\n")
 
-	err = genMarkdownCustom(cmd, file, linkHandler(dir))
+	err = doc.GenMarkdownCustom(cmd, file, linkHandler(dir))
 	if err != nil {
 		return err
 	}
@@ -86,11 +89,12 @@ func createCmdFile(cmd *cobra.Command, dir string, idx int, write writeFunc) err
 		id:               strings.ReplaceAll(cmd.CommandPath(), " ", "-"),
 		title:            cmd.CommandPath(),
 		description:      cmd.Short,
+		slug:             getSlug(cmd),
 	}
 
 	file.WriteString(header.String() + "\n\n")
 
-	err = genMarkdownCustom(cmd, file, linkHandler(dir))
+	err = doc.GenMarkdownCustom(cmd, file, linkHandler(dir))
 	if err != nil {
 		return err
 	}
@@ -98,43 +102,19 @@ func createCmdFile(cmd *cobra.Command, dir string, idx int, write writeFunc) err
 	return nil
 }
 
-// linkHandler creates the relative file path for links
-// the value passed to the return func (the link) is passed as root-cmd_sub-cmd_sub-sub-cmd
-// dir is passed as ./root-cmd/sub-cmd/sub-sub-cmd
-// if the link is shorter than the dir, such as root-cmd_sub-cmd and dir is root-cmd/sub-cmd/sub-sub-cmd
-// then the result should be ../ (since it is relative to the current directory)
-// If the link is longer than the dir, such as root-cmd_sub-cmd_sub-sub-cmd and dir is root-cmd/sub-cmd
-// then the result should be ./sub-sub-cmd
-// If the link is the same as the dir, such as root-cmd_sub-cmd_sub-sub-cmd and dir is root-cmd/sub-cmd/sub-sub-cmd
-// then the result should be .
 func linkHandler(dir string) func(string) string {
 	return func(s string) string {
+		// trying just linking ids??
 		s = strings.Trim(s, ".md")
 		s = strings.ReplaceAll(s, "_", "/")
 
-		currentDir := strings.Split(dir, "/")
-		linkDir := strings.Split(s, "/")
-
-		if len(currentDir) > 0 && currentDir[0] == "." {
-			currentDir = currentDir[1:]
-		}
-
-		// if the link is shorter than the dir, such as root-cmd_sub-cmd and dir is root-cmd/sub-cmd/sub-sub-cmd
-		// then the result should be ../ (since it is relative to the current directory)
-		if len(linkDir) < len(currentDir) {
-			return strings.Repeat("../", len(currentDir)-len(linkDir))
-		}
-
-		// If the link is longer than the dir, such as root-cmd_sub-cmd_sub-sub-cmd and dir is root-cmd/sub-cmd
-		// then the result should be ./sub-sub-cmd/
-		if len(linkDir) > len(currentDir) {
-			return "./" + strings.Join(linkDir[len(currentDir):], "/")
-		}
-
-		// If the link is the same as the dir, such as root-cmd_sub-cmd_sub-sub-cmd and dir is root-cmd/sub-cmd/sub-sub-cmd
-		// then the result should be .
-		return "."
+		return "/docs/ref/" + s
 	}
+}
+
+// getSlug gets a slug for the command
+func getSlug(cmd *cobra.Command) string {
+	return "/ref/" + strings.ReplaceAll(cmd.CommandPath(), " ", "/")
 }
 
 // docusaurusHeader is a page header for a doc page in a docusaurus site.
@@ -144,11 +124,12 @@ type docusaursHeader struct {
 	id               string
 	title            string
 	description      string
+	slug             string
 }
 
 // String returns the header as a string.
 func (d *docusaursHeader) String() string {
-	return fmt.Sprintf(headerString, d.sidebar_position, d.sidebar_label, d.id, d.title, d.description)
+	return fmt.Sprintf(headerString, d.sidebar_position, d.sidebar_label, d.id, d.title, d.description, d.slug)
 }
 
 var headerString = `---
@@ -157,4 +138,5 @@ sidebar_label: "%s"
 id: "%s"
 title: "%s"
 description: "%s"
+slug: %s
 ---`
