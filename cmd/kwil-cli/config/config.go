@@ -50,7 +50,7 @@ func (c *KwilCliConfig) Store() error {
 
 func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 	return &kwilCliPersistedConfig{
-		GrpcURL: "127.0.0.1:50051",
+		GrpcURL: "http://localhost:8080",
 	}
 }
 
