@@ -59,7 +59,7 @@ func initCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&out, "output-dir", "o", "./.testnet", "generated node parent directory [default: ./testnet]")
+	cmd.Flags().StringVarP(&out, "output-dir", "o", "./.testnet", "generated node parent directory [default: ./.testnet]")
 	cmd.Flags().StringVar(&chainId, "chain-id", "", "chain ID to use for the genesis file (default: random)")
 	cmd.Flags().DurationVarP(&blockInterval, "block-interval", "i", 6*time.Second, "shortest block interval in seconds (timeout_commit) [default: 6s]")
 	cmd.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires [default: 14400]")

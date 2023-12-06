@@ -76,19 +76,19 @@ func testnetCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&outputDir, "output-dir", "o", "./.testnet", "parent directory for all of generated node folders [default: ./testnet]")
+	cmd.Flags().StringVarP(&outputDir, "output-dir", "o", "./.testnet", "parent directory for all of generated node folders [default: ./.testnet]")
 	cmd.Flags().StringVar(&configFile, "config", "", "path to a config file to use as a template for all nodes")
 	cmd.Flags().StringVar(&chainId, "chain-id", "", "chain ID to use for the genesis file (default: random)")
 	cmd.Flags().StringVar(&hostnamePrefix, "hostname-prefix", "", "prefix for hostnames of nodes")
 	cmd.Flags().StringVar(&hostnameSuffix, "hostname-suffix", "", "suffix for hostnames of nodes")
-	cmd.Flags().StringVar(&nodeDirPrefix, "node-dir-prefix", "", "prefix for the node directories (node results in node0, node1, ...)")
+	cmd.Flags().StringVar(&nodeDirPrefix, "node-dir-prefix", "node", "prefix for the node directories (node results in node0, node1, ...)")
 	cmd.Flags().StringVar(&startingIPAddress, "starting-ip", "172.10.100.2", "starting IP address for nodes")
 	cmd.Flags().StringSliceVar(&hostnames, "hostnames", []string{}, "override all hostnames of the nodes (list of hostnames must be the same length as the number of nodes)")
 	cmd.Flags().IntVarP(&p2pPort, "p2p-port", "p", 26656, "p2p port for nodes")
 	cmd.Flags().DurationVarP(&blockInterval, "block-interval", "i", 6*time.Second, "shortest block interval in seconds (timeout_commit) [default: 6s]")
 	cmd.Flags().Int64Var(&joinExpiry, "join-expiry", 14400, "number of blocks before a join request expires [default: 14400]")
-	cmd.Flags().IntVarP(&validatorAmount, "validators", "v", 1, "number of validators to generate")
-	cmd.Flags().IntVarP(&nonValidatorAmount, "non-validators", "n", 0, "number of non-validators to generate [defaukt: 3]")
+	cmd.Flags().IntVarP(&validatorAmount, "validators", "v", 3, "number of validators to generate [default: 3]")
+	cmd.Flags().IntVarP(&nonValidatorAmount, "non-validators", "n", 0, "number of non-validators to generate [default: 0]")
 	cmd.Flags().BoolVar(&withoutNonces, "without-nonces", false, "disable account nonces")
 	cmd.Flags().BoolVar(&withGas, "gas", false, "enable gas")
 	cmd.Flags().Var(&allocs, "alloc", "account=amount pairs of genesis account allocations")
