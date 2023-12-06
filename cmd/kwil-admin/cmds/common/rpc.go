@@ -17,11 +17,11 @@ import (
 // These flags can be used to create an admin service client.
 // The flags will be bound to all subcommands of the given command.
 func BindRPCFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringP("rpcserver", "s", "unix:///tmp/kwil_admin.sock", "admin RPC server address (either unix or tcp) [default: unix:///tmp/kwil_admin.sock]")
+	cmd.PersistentFlags().StringP("rpcserver", "s", "unix:///tmp/kwil_admin.sock", "admin RPC server address (either unix or tcp)")
 
 	cmd.PersistentFlags().String("authrpc-cert", "", "kwild's TLS certificate")
-	cmd.PersistentFlags().String("tlskey", "auth.key", "kwil-admin's TLS key file to establish a mTLS (authenticated) connection [default: auth.key]")
-	cmd.PersistentFlags().String("tlscert", "auth.cert", "kwil-admin's TLS certificate file for server to authenticate us [default: auth.cert]")
+	cmd.PersistentFlags().String("tlskey", "auth.key", "kwil-admin's TLS key file to establish a mTLS (authenticated) connection")
+	cmd.PersistentFlags().String("tlscert", "auth.cert", "kwil-admin's TLS certificate file for server to authenticate us")
 }
 
 // GetRPCServerFlag returns the RPC flag from the given command.

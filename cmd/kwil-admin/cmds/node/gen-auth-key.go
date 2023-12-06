@@ -56,8 +56,8 @@ func genAuthKeyCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&keyFile, "tlskey", "auth.key", "output path for the node's TLS key file [default: auth.key]")
-	cmd.Flags().StringVar(&certFile, "tlscert", "auth.cert", "output path for the node's TLS certificate file [default: auth.cert]")
+	cmd.Flags().StringVar(&keyFile, "tlskey", "auth.key", "output path for the node's TLS key file")
+	cmd.Flags().StringVar(&certFile, "tlscert", "auth.cert", "output path for the node's TLS certificate file")
 
 	return cmd
 }
