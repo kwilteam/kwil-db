@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,6 +22,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -68,9 +68,11 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([
 		// ErrInsufficientBalance, ErrWrongChain, etc. but how? the response
 		// body had better have retained the response error details!
 		if res != nil {
-			fmt.Println("broadcast", res.StatusCode, res.Status)
-			b, _ := io.ReadAll(res.Body)
-			fmt.Println(string(b))
+			// fmt.Println("broadcast", res.StatusCode, res.Status)
+			if swaggerErr, ok := err.(httpTx.GenericSwaggerError); ok {
+				body := swaggerErr.Body() // fmt.Println(string(body))
+				return nil, parseBroadcastError(body)
+			}
 		}
 		return nil, err
 	}
@@ -264,17 +266,9 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 	return resultSet, nil
 }
 
-func parseBroadcastError(resp *http.Response) error { //nolint
-	if resp.StatusCode == http.StatusOK {
-		return nil
-	}
-	respTxt, err := io.ReadAll(resp.Body) // for protojson.Unmarshal
-	if err != nil {
-		return err
-	}
-
+func parseBroadcastError(respTxt []byte) error {
 	var protoStatus status.Status
-	err = protojson.Unmarshal(respTxt, &protoStatus) // jsonpb is deprecated, otherwise we could use the resp.Body directly
+	err := protojson.Unmarshal(respTxt, &protoStatus) // jsonpb is deprecated, otherwise we could use the resp.Body directly
 	if err != nil {
 		if err = json.Unmarshal(respTxt, &protoStatus); err != nil {
 			return err
@@ -282,9 +276,6 @@ func parseBroadcastError(resp *http.Response) error { //nolint
 	}
 	stat := grpcStatus.FromProto(&protoStatus)
 	code, message := stat.Code(), stat.Message()
-	if message == "" {
-		message = resp.Status
-	}
 	err = &client.RPCError{
 		Msg:  message,
 		Code: int32(code),
@@ -313,20 +304,26 @@ func parseBroadcastError(resp *http.Response) error { //nolint
 
 }
 
-func parseErrorResponse(resp *http.Response) error { //nolint
+func parseErrorResponse(respTxt []byte) error {
 	// NOTE: here directly use status.Status from googleapis/rpc/status
 	var res status.Status
-	err := json.NewDecoder(resp.Body).Decode(&res)
+	err := json.Unmarshal(respTxt, &res)
 	if err != nil {
 		return err
 	}
 
-	msg := res.GetMessage()
-	if msg == "" {
-		msg = resp.Status
+	rpcErr := &client.RPCError{
+		Msg:  res.GetMessage(),
+		Code: res.GetCode(),
 	}
 
-	return errors.New(msg)
+	switch res.Code {
+	case int32(codes.NotFound):
+		return errors.Join(client.ErrNotFound, rpcErr)
+	default:
+	}
+
+	return rpcErr
 }
 
 func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
@@ -334,11 +331,13 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 		TxHash: base64.StdEncoding.EncodeToString(txHash),
 	})
 	if err != nil {
-		// if res != nil {
-		// 	fmt.Println("txQuery", res.StatusCode, res.Status)
-		// 	b, _ := io.ReadAll(res.Body)
-		// 	fmt.Println("resp body:\n", string(b))
-		// }
+		if res != nil {
+			// fmt.Println("txQuery", res.StatusCode, res.Status)
+			if swaggerErr, ok := err.(httpTx.GenericSwaggerError); ok {
+				body := swaggerErr.Body() // fmt.Println(string(body))
+				return nil, parseErrorResponse(body)
+			}
+		}
 		if res != nil && res.StatusCode == http.StatusNotFound { // this is kinda wrong, before we had codes we set
 			return nil, client.ErrNotFound
 		}
