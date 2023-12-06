@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -750,6 +751,7 @@ func (a *AbciApp) InitChain(p0 abciTypes.RequestInitChain) abciTypes.ResponseIni
 	// Store the genesis account allocations to the datastore. These are
 	// reflected in the genesis app hash.
 	for acct, bal := range a.cfg.GenesisAllocs {
+		acct, _ := strings.CutPrefix(acct, "0x") // special case for ethereum addresses
 		identifier, err := hex.DecodeString(acct)
 		if err != nil {
 			panic(newFatalError("InitChain", &p0, fmt.Sprintf("invalid hex pubkey: %v", err)))
