@@ -66,6 +66,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		}); err != nil {
 			logger.Error("failed to marshal broadcast error details", zap.Error(err))
 		} else {
+			logger.Info("broadcast error details", zap.Uint32("code", code), zap.String("message", txCode.String()))
 			stat.Details = append(stat.Details, details)
 		}
 		return nil, status.ErrorProto(stat)

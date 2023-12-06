@@ -24,6 +24,8 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 		price, err = s.priceDrop(ctx, tx.Body)
 	case transactions.PayloadTypeExecuteAction:
 		price, err = s.priceAction(ctx, tx.Body)
+	case transactions.PayloadTypeTransfer:
+		price, err = s.priceTransfer(ctx, tx.Body)
 	case transactions.PayloadTypeValidatorJoin:
 		price, err = s.priceValidatorJoin(ctx, tx.Body)
 	case transactions.PayloadTypeValidatorApprove:
@@ -42,6 +44,10 @@ func (s *Service) EstimatePrice(ctx context.Context, req *txpb.EstimatePriceRequ
 	return &txpb.EstimatePriceResponse{
 		Price: price.String(),
 	}, nil
+}
+
+func (s *Service) priceTransfer(ctx context.Context, _ *txpb.Transaction_Body) (*big.Int, error) {
+	return s.accountStore.PriceTransfer(ctx)
 }
 
 func (s *Service) priceDeploy(ctx context.Context, txBody *txpb.Transaction_Body) (*big.Int, error) {

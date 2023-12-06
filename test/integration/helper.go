@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"path"
@@ -88,6 +89,7 @@ type IntTestConfig struct {
 	NValidator    int
 	NNonValidator int
 	JoinExpiry    int64
+	WithGas       bool
 }
 
 type IntHelper struct {
@@ -141,6 +143,12 @@ func WithNonValidators(n int) HelperOpt {
 func WithJoinExpiry(expiry int64) HelperOpt {
 	return func(r *IntHelper) {
 		r.cfg.JoinExpiry = expiry
+	}
+}
+
+func WithGas() HelperOpt {
+	return func(r *IntHelper) {
+		r.cfg.WithGas = true
 	}
 }
 
@@ -203,6 +211,12 @@ func (r *IntHelper) generateNodeConfig() {
 	// }
 	r.t.Logf("create test temp directory: %s", tmpPath)
 
+	bal, ok := big.NewInt(0).SetString("100000000000000000000000000000000", 10)
+	if !ok {
+		r.t.Fatal("failed to parse balance")
+	}
+	creatorIdent := hex.EncodeToString(r.cfg.CreatorSigner.Identity())
+
 	err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,
 		BlockInterval: r.cfg.BlockInterval,
@@ -218,8 +232,12 @@ func (r *IntHelper) generateNodeConfig() {
 		StartingIPAddress:       "172.10.100.2",
 		P2pPort:                 26656,
 		JoinExpiry:              r.cfg.JoinExpiry,
-		WithoutGasCosts:         true,
+		WithoutGasCosts:         !r.cfg.WithGas,
 		WithoutNonces:           false,
+		Allocs: map[string]*big.Int{
+			creatorIdent: bal,
+		},
+		FundNonValidators: r.cfg.WithGas, // when gas is required, also give the non-validators some for tests
 	}, nil)
 	require.NoError(r.t, err, "failed to generate testnet config")
 	r.home = tmpPath

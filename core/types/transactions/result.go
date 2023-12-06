@@ -1,6 +1,9 @@
 package transactions
 
-import "errors"
+import (
+	"errors"
+	"math"
+)
 
 // TransactionResult is the result of a transaction execution on chain
 type TransactionResult struct {
@@ -15,21 +18,27 @@ type TransactionResult struct {
 var (
 	// ErrTxNotFound is indicates when the a transaction was not found in the
 	// nodes blocks or mempool.
-	ErrTxNotFound   = errors.New("transaction not found")
-	ErrWrongChain   = errors.New("wrong chain ID")
-	ErrInvalidNonce = errors.New("invalid nonce")
+	ErrTxNotFound          = errors.New("transaction not found")
+	ErrWrongChain          = errors.New("wrong chain ID")
+	ErrInvalidNonce        = errors.New("invalid nonce")
+	ErrInvalidAmount       = errors.New("invalid amount")
+	ErrInsufficientBalance = errors.New("insufficient balance")
 )
 
 type TxCode uint32
 
 const (
-	CodeOk               TxCode = 0
-	CodeEncodingError    TxCode = 1
-	CodeInvalidTxType    TxCode = 2
-	CodeInvalidSignature TxCode = 3
-	CodeInvalidNonce     TxCode = 4
-	CodeWrongChain       TxCode = 5
-	CodeUnknownError     TxCode = 6
+	CodeOk                  TxCode = 0
+	CodeEncodingError       TxCode = 1
+	CodeInvalidTxType       TxCode = 2
+	CodeInvalidSignature    TxCode = 3
+	CodeInvalidNonce        TxCode = 4
+	CodeWrongChain          TxCode = 5
+	CodeInsufficientBalance TxCode = 6
+	CodeInsufficientFee     TxCode = 7
+	CodeInvalidAmount       TxCode = 8
+
+	CodeUnknownError TxCode = math.MaxUint32
 )
 
 func (c TxCode) Uint32() uint32 {
@@ -50,6 +59,12 @@ func (tc TxCode) String() string {
 		return "invalid nonce"
 	case CodeWrongChain:
 		return "wrong chain"
+	case CodeInsufficientBalance:
+		return "insufficient balance"
+	case CodeInsufficientFee:
+		return "insufficient fee"
+	case CodeInvalidAmount:
+		return "invalid amount"
 	default:
 		return "unknown tx error"
 	}
