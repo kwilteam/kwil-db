@@ -2,16 +2,17 @@ package acceptance
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"math/big"
 	"os"
 	"os/signal"
 	"path"
 	"runtime"
+	"strconv"
 	"syscall"
 	"testing"
 	"time"
-
-	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 
 	"github.com/joho/godotenv"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
@@ -19,7 +20,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
 	"github.com/kwilteam/kwil-db/test/driver"
+
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -45,6 +48,7 @@ type ActTestCfg struct {
 	SchemaFile                string
 	DockerComposeFile         string
 	DockerComposeOverrideFile string
+	NoCleanup                 bool
 
 	WaitTimeout time.Duration
 	LogLevel    string
@@ -53,13 +57,15 @@ type ActTestCfg struct {
 	VisitorRawPK  string
 	CreatorSigner auth.Signer
 	VisitorSigner auth.Signer
+
+	GasEnabled bool
 }
 
-func (e *ActTestCfg) CreatorPublicKey() []byte {
+func (e *ActTestCfg) CreatorIdent() []byte {
 	return e.CreatorSigner.Identity()
 }
 
-func (e *ActTestCfg) VisitorPublicKey() []byte {
+func (e *ActTestCfg) VisitorIdent() []byte {
 	return e.VisitorSigner.Identity()
 }
 
@@ -82,9 +88,9 @@ VISITOR_PUBLIC_KEY=%x
 		e.HTTPEndpoint,
 		e.P2PAddress,
 		e.CreatorRawPk,
-		e.CreatorPublicKey(),
+		e.CreatorIdent(),
 		e.VisitorRawPK,
-		e.VisitorPublicKey(),
+		e.VisitorIdent(),
 	)
 
 	err := os.WriteFile("../../.local_env", []byte(content), 0644)
@@ -112,7 +118,7 @@ func (r *ActHelper) GetConfig() *ActTestCfg {
 
 // LoadConfig loads config from system env and env file.
 // Envs defined in envFile will not overwrite existing env vars.
-func (r *ActHelper) LoadConfig() {
+func (r *ActHelper) LoadConfig() *ActTestCfg {
 	ef, err := os.OpenFile(envFile, os.O_RDWR|os.O_CREATE, 0666)
 	require.NoError(r.t, err, "failed to open env file")
 	defer ef.Close()
@@ -135,6 +141,12 @@ func (r *ActHelper) LoadConfig() {
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
 
+	cfg.GasEnabled, err = strconv.ParseBool(getEnv("KACT_GAS_ENABLED", "false"))
+	require.NoError(r.t, err, "invalid gasEnabled bool")
+
+	cfg.NoCleanup, err = strconv.ParseBool(getEnv("KACT_NO_CLEANUP", "false"))
+	require.NoError(r.t, err, "invalid noCleanup bool")
+
 	// value is in format of "10s" or "1m"
 	waitTimeout := getEnv("KACT_WAIT_TIMEOUT", "10s")
 	cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
@@ -150,6 +162,8 @@ func (r *ActHelper) LoadConfig() {
 
 	r.cfg = cfg
 	cfg.DumpToEnv()
+
+	return cfg
 }
 
 func (r *ActHelper) updateGeneratedConfig(ks, vs []string) {
@@ -168,13 +182,24 @@ func (r *ActHelper) updateGeneratedConfig(ks, vs []string) {
 
 func (r *ActHelper) generateNodeConfig() {
 	r.t.Logf("generate node config")
-	tmpPath := r.t.TempDir() // automatically removed by testing.T.Cleanup
-	// To prevent go test from cleaning up:
-	// tmpPath, err := os.MkdirTemp("", "TestKwilAct")
-	// if err != nil {
-	// 	r.t.Fatal(err)
-	// }
-	r.t.Logf("create test temp directory: %s", tmpPath)
+	var tmpPath string
+	if r.cfg.NoCleanup {
+		var err error
+		tmpPath, err = os.MkdirTemp("", "TestKwilAct")
+		if err != nil {
+			r.t.Fatal(err)
+		}
+	} else {
+		tmpPath = r.t.TempDir() // automatically removed by testing.T.Cleanup
+	}
+
+	r.t.Logf("created test temp directory: %s", tmpPath)
+
+	bal, ok := big.NewInt(0).SetString("1000000000000000000000000000", 10)
+	if !ok {
+		r.t.Fatal("failed to parse balance")
+	}
+	creatorIdent := hex.EncodeToString(r.cfg.CreatorSigner.Identity())
 
 	err := nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
 		ChainID:       TestChainID,
@@ -182,8 +207,11 @@ func (r *ActHelper) generateNodeConfig() {
 		// InitialHeight: 0,
 		OutputDir:       tmpPath,
 		JoinExpiry:      14400,
-		WithoutGasCosts: true,
+		WithoutGasCosts: !r.cfg.GasEnabled,
 		WithoutNonces:   false,
+		Allocs: map[string]*big.Int{
+			creatorIdent: bal,
+		},
 	})
 	require.NoError(r.t, err, "failed to generate node config")
 
@@ -243,6 +271,9 @@ func (r *ActHelper) Setup(ctx context.Context) {
 }
 
 func (r *ActHelper) Teardown() {
+	if r.cfg.NoCleanup {
+		return
+	}
 	r.t.Log("teardown test environment")
 	for _, fn := range r.teardown {
 		fn()

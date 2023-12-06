@@ -163,7 +163,7 @@ tasks:
       KACT_WAIT_TIMEOUT: 20s
     dir: test # different module
     cmds:
-      - go test ./acceptance -timeout 12h -dev -v
+      - go test ./acceptance -run ^TestKwildAcceptance$ -timeout 12h -dev -v
 
   dev:testnet:up:
     desc: Start the dev environment(with testnet)

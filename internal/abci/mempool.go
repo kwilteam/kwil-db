@@ -3,6 +3,7 @@ package abci
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -17,6 +18,9 @@ type mempool struct {
 	// in-memory account state to validate transactions against, purged at the end of commit.
 	accounts map[string]*userAccount
 	mu       sync.Mutex
+
+	// TODO: noGas bool, so we can accept replacement transactions (same
+	// nonce but higher fee).
 }
 
 type userAccount struct {
@@ -32,7 +36,7 @@ func (m *mempool) accountInfo(ctx context.Context, acctID []byte) (*userAccount,
 	}
 
 	// get account from account store
-	acct, err := m.accountStore.GetAccount(ctx, acctID)
+	acct, err := m.accountStore.Account(ctx, acctID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,17 +74,58 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 		return err
 	}
 
-	//  It is normally permissible to accept a transaction with the same nonce
-	//	as a tx already in mempool (but not in a block), however without gas
-	//	we would not want to allow that since there is no criteria
-	//  for selecting the one to mine (normally higher fee).
+	// It is normally permissible to accept a transaction with the same nonce as
+	// a tx already in mempool (but not in a block), however without gas we
+	// would not want to allow that since there is no criteria for selecting the
+	// one to mine (normally higher fee).
 	if tx.Body.Nonce != uint64(acct.nonce)+1 {
 		return fmt.Errorf("%w for account %s: got %d, expected %d", transactions.ErrInvalidNonce,
 			hex.EncodeToString(tx.Sender), tx.Body.Nonce, acct.nonce+1)
 	}
 
 	acct.nonce = int64(tx.Body.Nonce)
-	//acct.balance.Sub(acct.balance, fee)
+	spend := big.NewInt(0).Set(tx.Body.Fee) // NOTE: this could be the fee *limit*, but it depends on how the modules work
+
+	switch tx.Body.PayloadType {
+	case transactions.PayloadTypeTransfer:
+		transfer := &transactions.Transfer{}
+		err = transfer.UnmarshalBinary(tx.Body.Payload)
+		if err != nil {
+			return err
+		}
+
+		amt, ok := big.NewInt(0).SetString(transfer.Amount, 10)
+		if !ok {
+			return transactions.ErrInvalidAmount
+		}
+
+		if amt.Cmp(&big.Int{}) < 0 {
+			return errors.Join(transactions.ErrInvalidAmount, errors.New("negative transfer not permitted"))
+		}
+
+		if amt.Cmp(acct.balance) > 0 {
+			return transactions.ErrInsufficientBalance
+		}
+
+		spend.Add(spend, amt)
+	}
+
+	// We'd check balance against the total spend (fees plus value sent) if we
+	// know gas is enabled. Transfers must be funded regardless of transaction
+	// gas requirement:
+
+	// if spend.Cmp(acct.balance) > 0 {
+	// 	return errors.New("insufficient funds")
+	// }
+
+	// Since we're not yet operating with different policy depending on whether
+	// gas is enabled for the chain, we're just going to reduce the account's
+	// pending balance, but no lower than zero. Tx execution will handle it.
+	if spend.Cmp(acct.balance) > 0 {
+		acct.balance.SetUint64(0)
+	} else {
+		acct.balance.Sub(acct.balance, spend)
+	}
 
 	return nil
 }

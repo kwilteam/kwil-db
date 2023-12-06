@@ -19,7 +19,7 @@ import (
 type ExecutionResponse struct {
 	// Fee is the amount of tokens spent on the execution
 	Fee     *big.Int
-	GasUsed int64
+	GasUsed int64 // ?
 }
 
 // Deploy deploys a database.
@@ -31,6 +31,9 @@ func (u *DatasetModule) Deploy(ctx context.Context, schema *engineTypes.Schema, 
 
 	err = u.compareAndSpend(ctx, price, tx)
 	if err != nil {
+		// problem: this transaction is being mined regardless, so shouldn't we
+		// have updated the nonce and deducted up to the full price from their
+		// balance?
 		return nil, err
 	}
 
@@ -116,6 +119,6 @@ func (u *DatasetModule) compareAndSpend(ctx context.Context, price *big.Int, tx 
 func resp(fee *big.Int) *ExecutionResponse {
 	return &ExecutionResponse{
 		Fee:     fee,
-		GasUsed: 0,
+		GasUsed: 0, // !?
 	}
 }

@@ -15,11 +15,14 @@ var (
 // These aliases are for internal use by the ABCI application. They exist only
 // for brevity in the application code.
 const (
-	codeOk               = transactions.CodeOk
-	codeEncodingError    = transactions.CodeEncodingError
-	codeInvalidTxType    = transactions.CodeInvalidTxType
-	codeInvalidSignature = transactions.CodeInvalidSignature
-	codeInvalidNonce     = transactions.CodeInvalidNonce
-	codeWrongChain       = transactions.CodeWrongChain
-	codeUnknownError     = transactions.CodeUnknownError
+	codeOk                  = transactions.CodeOk
+	codeEncodingError       = transactions.CodeEncodingError
+	codeInvalidTxType       = transactions.CodeInvalidTxType
+	codeInvalidSignature    = transactions.CodeInvalidSignature
+	codeInvalidNonce        = transactions.CodeInvalidNonce
+	codeWrongChain          = transactions.CodeWrongChain
+	codeInsufficientBalance = transactions.CodeInsufficientBalance
+	codeInsufficientFee     = transactions.CodeInsufficientFee
+	codeInvalidAmount       = transactions.CodeInvalidAmount
+	codeUnknownError        = transactions.CodeUnknownError
 )

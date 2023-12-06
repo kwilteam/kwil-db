@@ -2,6 +2,7 @@ package specifications
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -31,6 +32,20 @@ type DatabaseDeployDsl interface {
 	DatabaseExister
 	TxQueryDsl
 	DeployDatabase(ctx context.Context, db *transactions.Schema) (txHash []byte, err error)
+}
+
+// AccountBalanceDsl is the dsl for checking an confirmed account balance. This
+// is likely to be useful for most other specifications when gas is enabled.
+type AccountBalanceDsl interface {
+	AccountBalance(ctx context.Context, acctID []byte) (*big.Int, error)
+}
+
+// TransferAmountDsl is the dsl for the account-to-account transfer
+// specification.
+type TransferAmountDsl interface {
+	TxQueryDsl
+	AccountBalanceDsl
+	TransferAmt(ctx context.Context, to []byte, amt *big.Int) (txHash []byte, err error)
 }
 
 // DatabaseDropDsl is dsl for database drop specification

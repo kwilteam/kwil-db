@@ -118,6 +118,13 @@ func Test_Types(t *testing.T) {
 			},
 		},
 		{
+			name: "transfer funds",
+			obj: &transactions.Transfer{
+				To:     []byte("to be a user identifier"),
+				Amount: "1234123400000",
+			},
+		},
+		{
 			name: "validator_approve",
 			obj: &transactions.ValidatorApprove{
 				Candidate: []byte("asdfadsf"),
@@ -158,6 +165,8 @@ func Test_Types(t *testing.T) {
 				obj = &transactions.ActionCall{}
 			case *transactions.DropSchema:
 				obj = &transactions.DropSchema{}
+			case *transactions.Transfer:
+				obj = &transactions.Transfer{}
 			case *transactions.ValidatorApprove:
 				obj = &transactions.ValidatorApprove{}
 			case *transactions.ValidatorJoin:

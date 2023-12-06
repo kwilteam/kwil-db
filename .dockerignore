@@ -21,3 +21,4 @@ cmd/kwil-cli/kwil-cli
 **/__debug_bin.exe
 **/__debug_bin*
 **/_*
+**/.testnet

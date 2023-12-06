@@ -11,7 +11,7 @@ const (
 		identifier BLOB PRIMARY KEY,
 		balance TEXT NOT NULL,
 		nonce INTEGER NOT NULL
-		) WITHOUT ROWID, STRICT;`
+	) WITHOUT ROWID, STRICT;`
 
 	sqlCreateAccount = `INSERT INTO accounts (identifier, balance, nonce) VALUES ($identifier, $balance, $nonce)`
 
@@ -26,6 +26,7 @@ func (ar *AccountStore) initTables(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize tables: %w", err)
 	}
+	// insert genesisAllocs (IF NOT EXISTS)?
 	return nil
 }
 
@@ -38,14 +39,20 @@ func (a *AccountStore) updateAccount(ctx context.Context, ident []byte, amount *
 	return err
 }
 
-// createAccount creates an account with the given public_key.
-func (a *AccountStore) createAccount(ctx context.Context, ident []byte) error {
+// createAccountWithBalance creates an account with the given identifier and
+// initial balance.
+func (a *AccountStore) createAccountWithBalance(ctx context.Context, ident []byte, amt *big.Int) error {
 	_, err := a.db.Execute(ctx, sqlCreateAccount, map[string]interface{}{
 		"$identifier": ident,
-		"$balance":    big.NewInt(0).String(),
+		"$balance":    amt.String(),
 		"$nonce":      0,
 	})
 	return err
+}
+
+// createAccount creates an account with the given identifier.
+func (a *AccountStore) createAccount(ctx context.Context, ident []byte) error {
+	return a.createAccountWithBalance(ctx, ident, big.NewInt(0))
 }
 
 // getAccountReadOnly gets an account using a read-only connection. it will not
@@ -60,7 +67,7 @@ func (a *AccountStore) getAccountReadOnly(ctx context.Context, ident []byte) (*A
 	}
 
 	acc, err := accountFromRecords(ident, results)
-	if err == errAccountNotFound {
+	if err == ErrAccountNotFound {
 		return emptyAccount(), nil
 	}
 	return acc, err
@@ -82,7 +89,7 @@ func (a *AccountStore) getAccountSynchronous(ctx context.Context, ident []byte) 
 // accountFromRecords gets the first account from a list of records.
 func accountFromRecords(identifier []byte, results []map[string]interface{}) (*Account, error) {
 	if len(results) == 0 {
-		return nil, errAccountNotFound
+		return nil, ErrAccountNotFound
 	}
 
 	stringBal, ok := results[0]["balance"].(string)
@@ -110,7 +117,7 @@ func accountFromRecords(identifier []byte, results []map[string]interface{}) (*A
 // getOrCreateAccount gets an account, creating it if it doesn't exist.
 func (a *AccountStore) getOrCreateAccount(ctx context.Context, ident []byte) (*Account, error) {
 	account, err := a.getAccountSynchronous(ctx, ident)
-	if account == nil && err == errAccountNotFound {
+	if account == nil && err == ErrAccountNotFound {
 		err = a.createAccount(ctx, ident)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create account: %w", err)

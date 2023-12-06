@@ -29,7 +29,7 @@ func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (
 		}, nil
 	}
 
-	acct, err := s.accountStore.GetAccount(ctx, req.Identifier)
+	acct, err := s.accountStore.Account(ctx, req.Identifier)
 	if err != nil {
 		return nil, err
 	}
