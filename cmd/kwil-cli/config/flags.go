@@ -51,7 +51,7 @@ func init() {
 func BindGlobalFlags(fs *pflag.FlagSet) {
 	// Bind flags to environment variables
 	fs.String(globalPrivateKeyFlag, cliCfg.PrivateKey, "the private key of the wallet that will be used for signing")
-	fs.String(globalProviderFlag, cliCfg.GrpcURL, "the Kwil provider gRPC endpoint")
+	fs.String(globalProviderFlag, cliCfg.GrpcURL, "the Kwil provider HTTP endpoint")
 	fs.String(globalChainIDFlag, cliCfg.ChainID, "the expected/intended Kwil Chain ID")
 	fs.String(globalTlsCertFlag, cliCfg.TLSCertFile, "the path to the TLS certificate (if the provider endpoint is using TLS)")
 
