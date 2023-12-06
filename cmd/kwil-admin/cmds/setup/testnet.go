@@ -76,7 +76,7 @@ func testnetCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&outputDir, "output-dir", "o", "./testnet", "parent directory for all of generated node folders [default: ./testnet]")
+	cmd.Flags().StringVarP(&outputDir, "output-dir", "o", "./.testnet", "parent directory for all of generated node folders [default: ./testnet]")
 	cmd.Flags().StringVar(&configFile, "config", "", "path to a config file to use as a template for all nodes")
 	cmd.Flags().StringVar(&chainId, "chain-id", "", "chain ID to use for the genesis file (default: random)")
 	cmd.Flags().StringVar(&hostnamePrefix, "hostname-prefix", "", "prefix for hostnames of nodes")
