@@ -68,7 +68,7 @@ func deployCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the database definition file (required)")
-	cmd.Flags().StringVarP(&fileType, "type", "t", "kf", "file type of the database definition file (kf or json) - defaults to kf")
+	cmd.Flags().StringVarP(&fileType, "type", "t", "kf", "file type of the database definition file (kf or json)")
 	cmd.MarkFlagRequired("path")
 	return cmd
 }
