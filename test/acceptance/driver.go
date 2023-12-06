@@ -10,4 +10,6 @@ type KwilAcceptanceDriver interface {
 	specifications.ExecuteQueryDsl
 	specifications.ExecuteCallDsl
 	specifications.InfoDsl
+	specifications.AccountBalanceDsl
+	specifications.TransferAmountDsl
 }

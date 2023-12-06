@@ -5,22 +5,25 @@ package client
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/big"
 	"net/url"
 	"time"
 
 	"github.com/cstockton/go-conv"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user/http"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
+
 	"go.uber.org/zap"
-	grpcCodes "google.golang.org/grpc/codes"
-	grpcStatus "google.golang.org/grpc/status"
 )
 
 // Client is a Kwil client that can interact with the main public Kwil RPC.
@@ -87,6 +90,36 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *ClientOpt
 	return c, nil
 }
 
+func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...TxOpt) (transactions.TxHash, error) {
+	// Get account balance to ensure we can afford the transfer, and use the
+	// nonce to avoid a second GetAccount in newTx.
+	acct, err := c.txClient.GetAccount(ctx, c.Signer.Identity(), types.AccountStatusPending)
+	if err != nil {
+		return nil, err
+	}
+	nonceOpt := WithNonce(acct.Nonce + 1)
+	opts = append([]TxOpt{nonceOpt}, opts...) // prepend in case caller specified a nonce
+
+	trans := &transactions.Transfer{
+		To:     to,
+		Amount: amount.String(),
+	}
+	tx, err := c.newTx(ctx, trans, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	totalSpend := big.NewInt(0).Add(tx.Body.Fee, amount)
+	if totalSpend.Cmp(acct.Balance) > 0 {
+		return nil, fmt.Errorf("send amount plus fees (%v) larger than balance (%v)", totalSpend, acct.Balance)
+	}
+
+	c.logger.Debug("transfer", zap.String("to", hex.EncodeToString(to)),
+		zap.String("amount", amount.String()))
+
+	return c.txClient.Broadcast(ctx, tx)
+}
+
 // ChainInfo get the current blockchain information like chain ID and best block
 // height/hash.
 func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
@@ -112,7 +145,8 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 
 	c.logger.Debug("deploying database",
 		zap.String("signature_type", tx.Signature.Type),
-		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
+		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
+		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
 	return c.txClient.Broadcast(ctx, tx)
 }
 
@@ -136,7 +170,8 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt)
 
 	c.logger.Debug("deploying database",
 		zap.String("signature_type", tx.Signature.Type),
-		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
+		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
+		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
 
 	res, err := c.txClient.Broadcast(ctx, tx)
 	if err != nil {
@@ -167,8 +202,10 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 	}
 
 	c.logger.Debug("execute action",
+		zap.String("DBID", dbid), zap.String("action", action),
 		zap.String("signature_type", tx.Signature.Type),
-		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)))
+		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
+		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
 
 	return c.txClient.Broadcast(ctx, tx)
 }
@@ -236,8 +273,8 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 	return c.txClient.Ping(ctx)
 }
 
-func (c *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
-	return c.txClient.GetAccount(ctx, pubKey, status)
+func (c *Client) GetAccount(ctx context.Context, acctID []byte, status types.AccountStatus) (*types.Account, error) {
+	return c.txClient.GetAccount(ctx, acctID, status)
 }
 
 // convertTuples converts user passed tuples to strings.
@@ -288,18 +325,13 @@ func (c *Client) WaitTx(ctx context.Context, txHash []byte, interval time.Durati
 	defer tick.Stop()
 	for {
 		resp, err := c.TxQuery(ctx, txHash)
-		notFound := grpcStatus.Code(err) == grpcCodes.NotFound
-		if !notFound {
-			if err != nil {
+		if err != nil {
+			// Only error out if it's something other than not found.
+			if !errors.Is(err, rpcClient.ErrNotFound) {
 				return nil, err
-			}
-			if resp.Height > 0 {
-				return resp, nil
-			}
-		} else {
-			// NOTE: this log may be removed once we've resolved the issue of
-			// transactions not being found immediately after broadcast.
-			c.logger.Debug("tx not found")
+			} // else not found, try again next time
+		} else if resp.Height > 0 {
+			return resp, nil
 		}
 		select {
 		case <-tick.C:

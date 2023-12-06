@@ -21,13 +21,22 @@ const (
 
 func Test_Accounts(t *testing.T) {
 	type testCase struct {
-		name          string
+		name string
+
+		gasOn    bool
+		noncesOn bool
+
+		credit             map[string]*big.Int // to test credit new/non-existent accounts
+		creditErr          error
+		afterCreditBalance map[string]*big.Int
+
 		spends        []*accounts.Spend
-		gasOn         bool
-		noncesOn      bool
 		finalBalances map[string]*accounts.Account
-		// the error must be triggered once
-		err error
+		err           error // the error must be triggered once
+
+		postCredit             map[string]*big.Int // to test credit existing accounts
+		postCreditErr          error
+		afterPostCreditBalance map[string]*big.Int
 	}
 
 	// once we have a way to increase balances in accounts, we will have to add tests
@@ -64,7 +73,21 @@ func Test_Accounts(t *testing.T) {
 			err: nil,
 		},
 		{
-			name: "gas and nonces on",
+			name: "gas and nonces on, no account",
+			spends: []*accounts.Spend{
+				newSpend(account1, 100, 1),
+			},
+			gasOn:         true,
+			noncesOn:      true,
+			finalBalances: map[string]*accounts.Account{},
+			err:           accounts.ErrAccountNotFound,
+		},
+		{
+			name: "gas and nonces on, no funds",
+			credit: map[string]*big.Int{
+				account1: big.NewInt(1),
+			},
+			creditErr: nil,
 			spends: []*accounts.Spend{
 				newSpend(account1, 100, 1),
 			},
@@ -74,7 +97,36 @@ func Test_Accounts(t *testing.T) {
 			err:           accounts.ErrInsufficientFunds,
 		},
 		{
-			name:     "no account",
+			name: "gas and nonces on, credits",
+			credit: map[string]*big.Int{
+				account1: big.NewInt(123),
+			},
+			creditErr: nil,
+			afterCreditBalance: map[string]*big.Int{
+				account1: big.NewInt(123),
+				account2: big.NewInt(0), // same
+			},
+			spends: []*accounts.Spend{
+				newSpend(account1, 100, 1),
+			},
+			gasOn:    true,
+			noncesOn: true,
+			finalBalances: map[string]*accounts.Account{
+				account1: newAccount(account1, 23, 1),
+			},
+			err: nil,
+			postCredit: map[string]*big.Int{
+				account1: big.NewInt(27),
+				account2: big.NewInt(42),
+			},
+			postCreditErr: nil,
+			afterPostCreditBalance: map[string]*big.Int{
+				account1: big.NewInt(50),
+				account2: big.NewInt(42),
+			},
+		},
+		{
+			name:     "no account, gas off",
 			spends:   []*accounts.Spend{},
 			gasOn:    false,
 			noncesOn: false,
@@ -122,6 +174,19 @@ func Test_Accounts(t *testing.T) {
 			ar, err := accounts.NewAccountStore(ctx, &adapter.PoolAdapater{Pool: pool}, &mockCommittable{skip: false}, opts...)
 			require.NoError(t, err)
 
+			for acct, amt := range tc.credit {
+				err := ar.Credit(ctx, []byte(acct), amt)
+				assert.ErrorIs(t, err, tc.creditErr)
+			}
+
+			for acct, amt := range tc.afterCreditBalance {
+				account, err := ar.GetAccount(ctx, []byte(acct))
+				assert.NoError(t, err)
+				if account.Balance.Cmp(amt) != 0 {
+					t.Fatalf("expected balance %s, got %s", amt, account.Balance)
+				}
+			}
+
 			errs := []error{}
 			for _, spend := range tc.spends {
 				err := ar.Spend(ctx, spend)
@@ -139,6 +204,20 @@ func Test_Accounts(t *testing.T) {
 
 				assert.Equal(t, expectedBalance.Balance, account.Balance, "expected balance %s, got %s", expectedBalance, account.Balance)
 				assert.Equal(t, expectedBalance.Nonce, account.Nonce, "expected nonce %d, got %d", expectedBalance.Nonce, account.Nonce)
+			}
+
+			for acct, amt := range tc.postCredit {
+				err := ar.Credit(ctx, []byte(acct), amt)
+				// assertErr(t, []error{err}, tc.creditErr)
+				assert.ErrorIs(t, err, tc.postCreditErr)
+			}
+
+			for acct, amt := range tc.afterPostCreditBalance {
+				account, err := ar.GetAccount(ctx, []byte(acct))
+				assert.NoError(t, err)
+				if account.Balance.Cmp(amt) != 0 {
+					t.Fatalf("expected balance %s, got %s", amt, account.Balance)
+				}
 			}
 		})
 	}

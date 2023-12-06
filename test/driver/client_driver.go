@@ -3,11 +3,14 @@ package driver
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"math/big"
 	"os"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
+	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
@@ -50,6 +53,9 @@ func (d *KwildClientDriver) GetUserPublicKey() []byte {
 func (d *KwildClientDriver) TxSuccess(ctx context.Context, txHash []byte) error {
 	resp, err := d.clt.TxQuery(ctx, txHash)
 	if err != nil {
+		if errors.Is(err, rpcClient.ErrNotFound) {
+			return ErrTxNotConfirmed // not quite, but for this driver it's a retry condition
+		}
 		return fmt.Errorf("failed to query: %w", err)
 	}
 
@@ -67,6 +73,18 @@ func (d *KwildClientDriver) TxSuccess(ctx context.Context, txHash []byte) error 
 	}
 
 	return nil
+}
+
+func (d *KwildClientDriver) AccountBalance(ctx context.Context, acctID []byte) (*big.Int, error) {
+	acct, err := d.clt.GetAccount(ctx, acctID, types.AccountStatusLatest) // confirmed
+	if err != nil {
+		return nil, err
+	}
+	return acct.Balance, nil
+}
+
+func (d *KwildClientDriver) TransferAmt(ctx context.Context, to []byte, amt *big.Int) (txHash []byte, err error) {
+	return d.clt.Transfer(ctx, to, amt)
 }
 
 func (d *KwildClientDriver) DBID(name string) string {

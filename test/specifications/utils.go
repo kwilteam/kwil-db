@@ -82,6 +82,10 @@ func (l *FileDatabaseSchemaLoader) LoadWithoutValidation(t *testing.T, targetSch
 	return db
 }
 
+func ExpectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte) {
+	expectTxSuccess(t, spec, ctx, txHash, defaultTxQueryTimeout)()
+}
+
 func expectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) func() {
 	return func() {
 		var status strings.Builder
@@ -90,12 +94,20 @@ func expectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash 
 			status.Reset()
 			if err := spec.TxSuccess(ctx, txHash); err == nil {
 				return true
+				// Consider failing faster for unexpected errors:
+				// } else if !errors.Is(err, driver.ErrTxNotConfirmed) {
+				// 	t.Fatal(err)
+				// 	return false
 			} else {
 				status.WriteString(err.Error())
 				return false
 			}
 		}, waitFor, time.Millisecond*300, "tx failed: %s", status.String())
 	}
+}
+
+func ExpectTxfail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte) {
+	expectTxFail(t, spec, ctx, txHash, defaultTxQueryTimeout)()
 }
 
 func expectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash []byte, waitFor time.Duration) func() {

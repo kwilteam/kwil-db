@@ -22,7 +22,8 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeValidatorJoin,
 		PayloadTypeValidatorApprove,
 		PayloadTypeValidatorRemove,
-		PayloadTypeValidatorLeave:
+		PayloadTypeValidatorLeave,
+		PayloadTypeTransfer:
 		return true
 	default:
 		return false
@@ -34,6 +35,7 @@ const (
 	PayloadTypeDropSchema       PayloadType = "drop_schema"
 	PayloadTypeExecuteAction    PayloadType = "execute_action"
 	PayloadTypeCallAction       PayloadType = "call_action"
+	PayloadTypeTransfer         PayloadType = "transfer"
 	PayloadTypeValidatorJoin    PayloadType = "validator_join"
 	PayloadTypeValidatorLeave   PayloadType = "validator_leave"
 	PayloadTypeValidatorRemove  PayloadType = "validator_remove"
@@ -264,6 +266,26 @@ var _ encoding.BinaryMarshaler = (*ActionCall)(nil)
 
 func (a *ActionCall) Type() PayloadType {
 	return PayloadTypeCallAction
+}
+
+type Transfer struct {
+	To     []byte `json:"to"`     // to be string as user identifier
+	Amount string `json:"amount"` // big.Int
+}
+
+func (v *Transfer) Type() PayloadType {
+	return PayloadTypeTransfer
+}
+
+var _ encoding.BinaryUnmarshaler = (*Transfer)(nil)
+var _ encoding.BinaryMarshaler = (*Transfer)(nil)
+
+func (v *Transfer) UnmarshalBinary(b []byte) error {
+	return serialize.DecodeInto(b, v)
+}
+
+func (v *Transfer) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(v)
 }
 
 type ValidatorJoin struct {

@@ -60,7 +60,8 @@ type EngineReader interface {
 }
 
 type AccountReader interface {
-	GetAccount(ctx context.Context, identifier []byte) (*accounts.Account, error)
+	Account(ctx context.Context, identifier []byte) (*accounts.Account, error)
+	PriceTransfer(ctx context.Context) (*big.Int, error)
 }
 
 type BlockchainTransactor interface {

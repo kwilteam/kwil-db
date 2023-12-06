@@ -19,6 +19,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
+	acctmod "github.com/kwilteam/kwil-db/internal/modules/accounts"
 	"github.com/kwilteam/kwil-db/internal/modules/datasets"
 	"github.com/kwilteam/kwil-db/internal/modules/validators"
 	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
@@ -64,6 +65,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// account store
 	accs := buildAccountRepository(d, closers, ac)
+	accsMod := buildAccountsModule(accs) // abci accounts module
 
 	// datasets module
 	datasetsModule := buildDatasetsModule(d, e, accs)
@@ -78,7 +80,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	bootstrapperModule := buildBootstrapper(d)
 
-	abciApp := buildAbci(d, closers, accs, datasetsModule, validatorModule,
+	abciApp := buildAbci(d, closers, accsMod, datasetsModule, validatorModule,
 		ac, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
@@ -86,7 +88,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	cometBftClient := buildCometBftClient(cometBftNode)
 
 	// tx service and grpc server
-	txsvc := buildTxSvc(d, datasetsModule, accs, vstore,
+	txsvc := buildTxSvc(d, datasetsModule, accsMod, vstore,
 		&wrappedCometBFTClient{cometBftClient}, abciApp)
 	grpcServer := buildGrpcServer(d, txsvc)
 
@@ -166,6 +168,7 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		GenesisAppHash:     d.genesisCfg.ComputeGenesisHash(),
 		ChainID:            d.genesisCfg.ChainID,
 		ApplicationVersion: d.genesisCfg.ConsensusParams.Version.App,
+		GenesisAllocs:      d.genesisCfg.Alloc,
 	}
 	return abci.NewAbciApp(cfg,
 		accountsModule,
@@ -242,6 +245,10 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 	closer.addCloser(reg.Close)
 
 	return eng
+}
+
+func buildAccountsModule(store *accounts.AccountStore) *acctmod.AccountsModule {
+	return acctmod.NewAccountsModule(store)
 }
 
 func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.MultiCommitter) *accounts.AccountStore {
