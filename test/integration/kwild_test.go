@@ -110,13 +110,14 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	const expiryBlocks = 10
-	const blockInterval = 500 * time.Millisecond
+	const blockInterval = time.Second
 	const numVals, numNonVals = 3, 1
 	opts := []integration.HelperOpt{
 		integration.WithValidators(numVals),
 		integration.WithNonValidators(numNonVals),
 		integration.WithJoinExpiry(expiryBlocks),
 		integration.WithBlockInterval(blockInterval),
+		integration.WithGas(), // must give the joining node some gas too
 	}
 
 	expiryWait := 2 * expiryBlocks * blockInterval

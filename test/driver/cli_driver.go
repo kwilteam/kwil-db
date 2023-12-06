@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"os/exec"
 	"path"
@@ -60,6 +61,45 @@ func (d *KwilCliDriver) newKwilCliCmd(args ...string) *exec.Cmd {
 // kwil-cli does not support batched inputs.
 func (d *KwilCliDriver) SupportBatch() bool {
 	return false
+}
+
+func (d *KwilCliDriver) account(ctx context.Context, acctID []byte) (*types.Account, error) {
+	cmd := d.newKwilCliCmd("account", "balance", hex.EncodeToString(acctID))
+	out, err := mustRun(cmd, d.logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list databases: %w", err)
+	}
+
+	d.logger.Debug("account balance result", zap.Any("result", out.Result))
+	acct, err := parseRespAccount(out.Result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse list databases response: %w", err)
+	}
+
+	return acct, nil
+}
+
+func (d *KwilCliDriver) AccountBalance(ctx context.Context, acctID []byte) (*big.Int, error) {
+	acct, err := d.account(ctx, acctID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse list databases response: %w", err)
+	}
+
+	return acct.Balance, nil
+}
+
+func (d *KwilCliDriver) TransferAmt(ctx context.Context, to []byte, amt *big.Int) (txHash []byte, err error) {
+	cmd := d.newKwilCliCmd("account", "transfer", hex.EncodeToString(to), amt.String())
+	out, err := mustRun(cmd, d.logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list databases: %w", err)
+	}
+	txHash, err = parseRespTxHash(out.Result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tx hash: %w", err)
+	}
+
+	return txHash, nil
 }
 
 func (d *KwilCliDriver) DBID(name string) string {
@@ -141,6 +181,9 @@ func (d *KwilCliDriver) TxSuccess(_ context.Context, txHash []byte) error {
 	cmd := d.newKwilCliCmd("utils", "query-tx", hex.EncodeToString(txHash))
 	out, err := mustRun(cmd, d.logger)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return ErrTxNotConfirmed // not quite, but for this driver it's a retry condition
+		}
 		return fmt.Errorf("failed to query tx: %w", err)
 	}
 
@@ -323,7 +366,7 @@ func mustRun(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
 	}
 
 	output := out.Bytes()
-	//logger.Debug("cmd output", zap.String("output", string(output)))
+	// logger.Debug("cmd output", zap.String("output", string(output)))
 
 	var result *cliResponse
 	err = json.Unmarshal(output, &result)
@@ -339,7 +382,7 @@ func mustRun(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
 }
 
 type cliResponse struct {
-	Result any    `json:"result"`
+	Result any    `json:"result"` // json.RawMessage
 	Error  string `json:"error"`
 }
 
@@ -450,4 +493,40 @@ func parseRespListDatabases(data any) ([]*types.DatasetIdentifier, error) {
 	}
 
 	return resp, nil
+}
+
+type respAccount struct {
+	Identifier string `json:"identifier"`
+	Balance    string `json:"balance"`
+	Nonce      int64  `json:"nonce"`
+}
+
+func parseRespAccount(data any) (*types.Account, error) {
+	bts, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal list databases resp: %w", err)
+	}
+
+	var resp respAccount
+	err = json.Unmarshal(bts, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal list databases: %w", err)
+	}
+
+	acctID, err := hex.DecodeString(resp.Identifier)
+	if err != nil {
+		return nil, fmt.Errorf("invalid identifier hex string: %w", err)
+	}
+
+	bal, ok := big.NewInt(0).SetString(resp.Balance, 10)
+	if !ok {
+		return nil, errors.New("invalid decimal string balance")
+	}
+
+	acct := &types.Account{
+		Identifier: acctID,
+		Balance:    bal,
+		Nonce:      resp.Nonce,
+	}
+	return acct, nil
 }

@@ -3,6 +3,7 @@ package cmds
 import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/common/version"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/account"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/configure"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
@@ -18,6 +19,7 @@ func NewRootCmd() *cobra.Command {
 	common.BindAssumeYesFlag(rootCmd)
 
 	rootCmd.AddCommand(
+		account.NewCmdAccount(),
 		configure.NewCmdConfigure(),
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),

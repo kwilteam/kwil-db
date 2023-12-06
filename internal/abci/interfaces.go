@@ -5,6 +5,11 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+
+	// NOTE: we are defining interfaces, but using the types defined in the
+	// packages that provide the concrete implementations. This is a bit
+	// backwards, but it at least allows us to stub out for testing.
+	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
 	modDataset "github.com/kwilteam/kwil-db/internal/modules/datasets"
 	modVal "github.com/kwilteam/kwil-db/internal/modules/validators"
 
@@ -120,5 +125,7 @@ type DBBootstrapModule interface {
 }
 
 type AccountsModule interface {
-	GetAccount(ctx context.Context, acctID []byte) (*accounts.Account, error)
+	Account(ctx context.Context, acctID []byte) (*accounts.Account, error)
+	Credit(ctx context.Context, acctID []byte, amt *big.Int) error
+	TransferTx(ctx context.Context, tx *modAcct.TxAcct, to []byte, amt *big.Int) error
 }

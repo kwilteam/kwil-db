@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -28,10 +30,11 @@ const (
 type HexBytes = types.HexBytes
 
 type GenesisConfig struct {
-	GenesisTime   time.Time `json:"genesis_time"`
-	ChainID       string    `json:"chain_id"`
-	InitialHeight int64     `json:"initial_height"`
-	DataAppHash   []byte    `json:"app_hash"`
+	GenesisTime   time.Time    `json:"genesis_time"`
+	ChainID       string       `json:"chain_id"`
+	InitialHeight int64        `json:"initial_height"`
+	DataAppHash   []byte       `json:"app_hash"`
+	Alloc         GenesisAlloc `json:"alloc,omitempty"`
 
 	/*
 	 TODO: Can introduce app state later if needed. Used to specify raw initial state such as tokens etc,
@@ -41,6 +44,23 @@ type GenesisConfig struct {
 	ConsensusParams *ConsensusParams    `json:"consensus_params,omitempty"`
 	Validators      []*GenesisValidator `json:"validators,omitempty"`
 }
+
+type GenesisAlloc map[string]*big.Int
+
+/*xxx
+type GenesisAlloc map[string]GenesisAccount
+
+type GenesisAccount struct {
+	Balance *big.Int `json:"balance"`
+
+	// The struct and the map containing it are is modeled after ethereum's
+	// genesis.json. If we don't see a need to set nonce or code, we can
+	// simplify the map.
+	//
+	// Code       []byte        `json:"code,omitempty"`
+	// Nonce      uint64        `json:"nonce,omitempty"`
+}
+*/
 
 type GenesisValidator struct {
 	PubKey HexBytes `json:"pub_key"`
@@ -219,10 +239,11 @@ in the genesis file which aren't monitored by cometBFT for consensus purposes.
 This app hash is used by the ABCI application to initialize the blockchain.
 
 Currently includes:
-  - AppHash (Database state)
+  - AppHash (Datastores state)
   - Join Expiry
   - Without Gas Costs
   - Without Nonces
+  - Allocs (account allocations, same format as ethereum genesis.json)
 */
 func (genConf *GenesisConfig) ComputeGenesisHash() []byte {
 	hasher := sha256.New()
@@ -239,6 +260,25 @@ func (genConf *GenesisConfig) ComputeGenesisHash() []byte {
 		hasher.Write([]byte{1})
 	} else {
 		hasher.Write([]byte{0})
+	}
+
+	type genesisAlloc struct {
+		acct string
+		bal  *big.Int
+	}
+	allocs := make([]genesisAlloc, 0, len(genConf.Alloc))
+	for acct, bal := range genConf.Alloc {
+		allocs = append(allocs, genesisAlloc{
+			acct: acct,
+			bal:  bal,
+		})
+	}
+	sort.Slice(allocs, func(i, j int) bool {
+		return allocs[i].acct < allocs[j].acct
+	})
+	for _, alloc := range allocs {
+		hasher.Write([]byte(alloc.acct))
+		hasher.Write(alloc.bal.Bytes())
 	}
 
 	return hasher.Sum(nil)

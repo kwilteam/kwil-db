@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common/prompt"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/internal/utils"
 
 	"github.com/spf13/viper"
@@ -18,6 +19,16 @@ type KwilCliConfig struct {
 	GrpcURL     string // TODO: change to maybe `RPCProvider` or `ProviderURL`
 	ChainID     string
 	TLSCertFile string // NOTE: since HTTP by default, this seems not use
+}
+
+// Identity returns the account ID, or nil if no private key is set. These are
+// the bytes of the ethereum address.
+func (c *KwilCliConfig) Identity() []byte {
+	if c.PrivateKey == nil {
+		return nil
+	}
+	signer := &auth.EthPersonalSigner{Key: *c.PrivateKey}
+	return signer.Identity()
 }
 
 func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {

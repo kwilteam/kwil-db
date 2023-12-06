@@ -2,11 +2,10 @@ package common
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
+	"math/big"
 	"time"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -103,9 +102,6 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 			if err2 != nil {
 				return fmt.Errorf("failed to delete cookie: %w", err2)
 			}
-
-			display.PrintCmd(cmd, display.RespString(fmt.Sprintf("deleted invalid persisted cookie for user %s", hex.EncodeToString(clientConfig.Signer.Identity()))))
-
 		}
 	}
 
@@ -144,6 +140,7 @@ type Client interface {
 	Query(ctx context.Context, dbid string, query string) (*client.Records, error)
 	TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error)
 	WaitTx(ctx context.Context, txHash []byte, interval time.Duration) (*transactions.TcTxQueryResponse, error)
+	Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...client.TxOpt) (transactions.TxHash, error)
 }
 
 // promptMessage prompts the user to sign a message. Return an error if user
