@@ -205,6 +205,7 @@ func (vm *ValidatorMgr) init() error {
 			pubkey:     dbj.Candidate,
 			power:      dbj.Power,
 			validators: make(map[string]bool, len(dbj.Board)),
+			expiresAt:  dbj.ExpiresAt,
 		}
 
 		for i, vi := range dbj.Board {
@@ -361,6 +362,7 @@ func (vm *ValidatorMgr) Approve(ctx context.Context, joiner, approver []byte) er
 	} else {
 		// Record the vote. Check threshold in Finalize.
 		if err := vm.db.AddApproval(ctx, joiner, approver); err != nil {
+			candidate.validators[string(approver)] = false
 			return fmt.Errorf("failed to record approval: %v", err)
 		}
 	}
