@@ -224,7 +224,7 @@ func (vs *validatorStore) addApproval(ctx context.Context, joiner, approver []by
 	// We could just YOLO update, potentially updating zero rows if there's no
 	// join request for this candidate or if approver is not an eligible voting
 	// validator, but let's go the extra mile.
-	res, err := vs.db.Query(ctx, sqlEligibleApprove, map[string]any{
+	res, err := vs.db.Execute(ctx, sqlEligibleApprove, map[string]any{
 		"$candidate": joiner,
 		"$validator": approver,
 	})
