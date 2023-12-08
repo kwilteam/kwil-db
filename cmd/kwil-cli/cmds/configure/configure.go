@@ -17,7 +17,6 @@ This command will prompt you for the following settings:
 
 - Kwil RPC URL: the gRPC URL of the Kwil node you wish to connect to.
 - Kwil Chain ID: the chain ID of the Kwil node you wish to connect to.  If left empty, the Kwil node will provide this value.
-- Kwil RPC TLS certificate path: the path to the TLS certificate of the Kwil node you wish to connect to.  This is only required if the Kwil node is using TLS.
 - Private Key: the private key to use for signing transactions.  If left empty, the Kwil CLI will not sign transactions.`
 
 var configureExample = `kwil-cli configure`
@@ -42,7 +41,6 @@ func NewCmdConfigure() *cobra.Command {
 				promptGRPCURL,
 				promptChainID,
 				promptPrivateKey,
-				promptTLSCertFile,
 			)
 			if err != nil {
 				return display.PrintErr(cmd, err)
@@ -93,21 +91,6 @@ func promptChainID(conf *config.KwilCliConfig) error {
 	}
 
 	conf.ChainID = res
-
-	return nil
-}
-
-func promptTLSCertFile(conf *config.KwilCliConfig) error {
-	prompt := &common.Prompter{
-		Label:   "Kwil RPC TLS certificate path",
-		Default: conf.TLSCertFile,
-	}
-	res, err := prompt.Run()
-	if err != nil {
-		return err
-	}
-
-	conf.TLSCertFile = res
 
 	return nil
 }
