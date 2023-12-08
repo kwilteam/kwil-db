@@ -306,10 +306,17 @@ func GenerateTestnetConfig(genCfg *TestnetGenerateConfig, opts *ConfigOpts) erro
 		if i <= len(genCfg.Hostnames)-1 {
 			cfg.AppCfg.Hostname = genCfg.Hostnames[i]
 		}
-		if i > 0 && opts.UniquePorts {
-			err = addressSpecificConfig(cfg)
+		if opts.UniquePorts {
+			err = uniqueAdminAddress(cfg)
 			if err != nil {
-				return fmt.Errorf("failed to apply unique addresses: %w", err)
+				return fmt.Errorf("failed to apply unique admin address: %w", err)
+			}
+
+			if i > 0 {
+				err = addressSpecificConfig(cfg)
+				if err != nil {
+					return fmt.Errorf("failed to apply unique addresses: %w", err)
+				}
 			}
 		}
 
@@ -383,6 +390,7 @@ func persistentPeersString(genCfg *TestnetGenerateConfig, privKeys []cmtEd.PrivK
 
 // applyUniqueAddresses applies unique addresses to the config.
 // it will begin at the default port and increment by 1 for each node.
+// it does not apply to the admin address.
 func addressSpecificConfig(c *config.KwildConfig) error {
 
 	grpcAddr, err := incrementPort(c.AppCfg.GrpcListenAddress, 1)
@@ -396,12 +404,6 @@ func addressSpecificConfig(c *config.KwildConfig) error {
 		return err
 	}
 	c.AppCfg.HTTPListenAddress = httpAddr
-
-	adminAddr, err := incrementPort(c.AppCfg.AdminListenAddress, 1)
-	if err != nil {
-		return err
-	}
-	c.AppCfg.AdminListenAddress = adminAddr
 
 	p2pAddr, err := incrementPort(c.ChainCfg.P2P.ListenAddress, -1) // decrement since default rpc is 1 higher than p2p, so p2p needs to be 1 lower
 	if err != nil {
@@ -418,15 +420,67 @@ func addressSpecificConfig(c *config.KwildConfig) error {
 	return nil
 }
 
+// uniqueAdminAddress applies a unique address to the config.
+func uniqueAdminAddress(cfg *config.KwildConfig) error {
+	s := cfg.AppCfg.AdminListenAddress
+
+	res, err := url.Parse(s)
+	if err != nil {
+		return err
+	}
+
+	if res.Scheme != "unix" {
+		s, err = incrementPort(s, 1)
+		if err != nil {
+			return err
+		}
+
+		cfg.AppCfg.AdminListenAddress = s
+		return nil
+	}
+
+	// if scheme is unix, it will use Host if it is path/to/sock, but Path if it is /path/to/sock
+	// if unix:///socket, it will set the value to be unix:///socket_0, then unix:///socket_1, etc.
+	var path string
+	var set *string
+	if res.Host != "" {
+		path = res.Host
+		set = &res.Host
+	} else {
+		path = res.Path
+		set = &res.Path
+	}
+
+	extension := filepath.Ext(path)
+	fileWithoutExt := strings.TrimSuffix(path, extension)
+
+	// see if the file already has a number appended to it
+	numerToUse := 0
+
+	nums := strings.Split(fileWithoutExt, "_")
+	if len(nums) > 1 {
+		last := nums[len(nums)-1]
+		// if the last part is a number, remove it
+		num, err := strconv.Atoi(last)
+		if err == nil {
+			fileWithoutExt = strings.TrimSuffix(fileWithoutExt, "_"+last)
+			numerToUse = num + 1
+		}
+	}
+
+	*set = fileWithoutExt + "_" + strconv.Itoa(numerToUse) + extension
+
+	cfg.AppCfg.AdminListenAddress = res.String()
+
+	return nil
+}
+
 // incrementPort increments the port in the URL by the given amount.
+// if the url is a UNIX socket, it will append the amount to the path.
 func incrementPort(incoming string, amt int) (string, error) {
 	res, err := url.Parse(incoming)
 	if err != nil {
 		return "", err
-	}
-
-	if res.Scheme == "unix" {
-		return incoming, nil
 	}
 
 	// Split the URL into two parts: host (and possibly scheme) and port
