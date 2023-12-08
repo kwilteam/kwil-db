@@ -19,6 +19,7 @@ RUN chmod +x /app/dist/kwild-* /app/dist/kwil-admin-*
 
 FROM alpine:3.17
 WORKDIR /app
+RUN mkdir -p /var/run/kwil && chmod 777 /var/run/kwil
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /app/dist/kwild-* ./kwild
 COPY --from=build /app/dist/kwil-admin-* ./kwil-admin
