@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -59,5 +60,5 @@ func (c *cfgMsg) MarshalJSON() ([]byte, error) {
 }
 
 func (c *cfgMsg) MarshalText() ([]byte, error) {
-	return json.MarshalIndent(c.cfg, "", "  ")
+	return toml.Marshal(c.cfg)
 }
