@@ -15,10 +15,9 @@ import (
 )
 
 type KwilCliConfig struct {
-	PrivateKey  *crypto.Secp256k1PrivateKey
-	GrpcURL     string // TODO: change to maybe `RPCProvider` or `ProviderURL`
-	ChainID     string
-	TLSCertFile string // NOTE: since HTTP by default, this seems not use
+	PrivateKey *crypto.Secp256k1PrivateKey
+	GrpcURL    string // TODO: change to maybe `RPCProvider` or `ProviderURL`
+	ChainID    string
 }
 
 // Identity returns the account ID, or nil if no private key is set. These are
@@ -37,15 +36,10 @@ func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
 		privKeyHex = c.PrivateKey.Hex()
 	}
 	return &kwilCliPersistedConfig{
-		PrivateKey:  privKeyHex,
-		GrpcURL:     c.GrpcURL,
-		ChainID:     c.ChainID,
-		TLSCertFile: c.TLSCertFile,
+		PrivateKey: privKeyHex,
+		GrpcURL:    c.GrpcURL,
+		ChainID:    c.ChainID,
 	}
-}
-
-func (c *KwilCliConfig) Store() error {
-	return PersistConfig(c)
 }
 
 func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
@@ -58,17 +52,15 @@ func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 // and also to work with viper(flags)
 type kwilCliPersistedConfig struct {
 	// NOTE: `mapstructure` is used by viper, name is same as the viper key name
-	PrivateKey  string `mapstructure:"private_key" json:"private_key"`
-	GrpcURL     string `mapstructure:"grpc_url" json:"grpc_url"`
-	ChainID     string `mapstructure:"chain_id" json:"chain_id"`
-	TLSCertFile string `mapstructure:"tls_cert_file" json:"tls_cert_file"`
+	PrivateKey string `mapstructure:"private_key" json:"private_key"`
+	GrpcURL    string `mapstructure:"grpc_url" json:"grpc_url"`
+	ChainID    string `mapstructure:"chain_id" json:"chain_id"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 	kwilConfig := &KwilCliConfig{
-		GrpcURL:     c.GrpcURL,
-		ChainID:     c.ChainID,
-		TLSCertFile: c.TLSCertFile,
+		GrpcURL: c.GrpcURL,
+		ChainID: c.ChainID,
 	}
 
 	privateKey, err := crypto.Secp256k1PrivateKeyFromHex(c.PrivateKey)
