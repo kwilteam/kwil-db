@@ -53,11 +53,9 @@ func BindGlobalFlags(fs *pflag.FlagSet) {
 	fs.String(globalPrivateKeyFlag, cliCfg.PrivateKey, "the private key of the wallet that will be used for signing")
 	fs.String(globalProviderFlag, cliCfg.GrpcURL, "the Kwil provider HTTP endpoint")
 	fs.String(globalChainIDFlag, cliCfg.ChainID, "the expected/intended Kwil Chain ID")
-	fs.String(globalTlsCertFlag, cliCfg.TLSCertFile, "the path to the TLS certificate (if the provider endpoint is using TLS)")
 
 	// Bind flags to viper, named by the flag name
 	viper.BindPFlag(viperPrivateKeyName, fs.Lookup(globalPrivateKeyFlag))
 	viper.BindPFlag(viperProviderName, fs.Lookup(globalProviderFlag))
 	viper.BindPFlag(viperChainID, fs.Lookup(globalChainIDFlag))
-	viper.BindPFlag(viperTlsCertName, fs.Lookup(globalTlsCertFlag))
 }
