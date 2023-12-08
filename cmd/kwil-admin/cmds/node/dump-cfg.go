@@ -6,7 +6,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
-	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 )
 
@@ -56,21 +55,9 @@ type cfgMsg struct {
 var _ display.MsgFormatter = (*cfgMsg)(nil)
 
 func (c *cfgMsg) MarshalJSON() ([]byte, error) {
-	maps := make(map[string]interface{})
-	err := mapstructure.Decode(c.cfg, &maps)
-	if err != nil {
-		return nil, err
-	}
-
-	return json.Marshal(maps)
+	return json.Marshal(c.cfg)
 }
 
 func (c *cfgMsg) MarshalText() ([]byte, error) {
-	maps := make(map[string]interface{})
-	err := mapstructure.Decode(c.cfg, &maps)
-	if err != nil {
-		return nil, err
-	}
-
-	return json.MarshalIndent(maps, "", "  ")
+	return json.MarshalIndent(c.cfg, "", "  ")
 }
