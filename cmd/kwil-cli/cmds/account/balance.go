@@ -34,27 +34,24 @@ func balanceCmd() *cobra.Command {
 				}
 			} // else use our account from the signer
 
-			var acct *types.Account
-			err = common.DialClient(cmd.Context(), cmd, clientFlags, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
+			return common.DialClient(cmd.Context(), cmd, clientFlags, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
 				if len(acctID) == 0 {
 					acctID = conf.Identity()
 					if len(acctID) == 0 {
 						return display.PrintErr(cmd, errors.New("empty account ID"))
 					}
 				}
-				acct, err = cl.GetAccount(ctx, acctID, types.AccountStatusLatest)
+				acct, err := cl.GetAccount(ctx, acctID, types.AccountStatusLatest)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("get account failed: %w", err))
 				}
-				return nil
+				// NOTE: empty acct.Identifier means it doesn't even have a record
+				// on the network. Perhaps we convey that to the caller? Their
+				// balance is zero regardless, assuming it's the correct acct ID.
+				resp := (*respAccount)(acct)
+				return display.PrintCmd(cmd, resp)
 			})
 
-			// NOTE: empty acct.Identifier means it doesn't even have a record
-			// on the network. Should we convey that to the caller? Their
-			// balance is zero regardless, assuming it's the correct acct ID.
-
-			resp := (*respAccount)(acct)
-			return display.PrintCmd(cmd, resp)
 		},
 	}
 
