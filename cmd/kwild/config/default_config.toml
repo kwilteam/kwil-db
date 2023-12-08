@@ -185,6 +185,9 @@ unconditional_peer_ids = ""
 # Toggle to disable guard against peers connecting from the same ip.
 allow_duplicate_ip = true
 
+# Enable gossiping of peer information
+pex = true
+
 #######################################################
 ###          Mempool Configuration Options          ###
 #######################################################

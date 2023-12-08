@@ -52,6 +52,7 @@ func AddConfigFlags(flagSet *pflag.FlagSet, cfg *KwildConfig) {
 	flagSet.IntVar(&cfg.ChainCfg.P2P.MaxNumInboundPeers, "chain.p2p.max-num-inbound-peers", cfg.ChainCfg.P2P.MaxNumInboundPeers, "Chain P2P maximum number of inbound peers")
 	flagSet.IntVar(&cfg.ChainCfg.P2P.MaxNumOutboundPeers, "chain.p2p.max-num-outbound-peers", cfg.ChainCfg.P2P.MaxNumOutboundPeers, "Chain P2P maximum number of outbound peers")
 	flagSet.BoolVar(&cfg.ChainCfg.P2P.AllowDuplicateIP, "chain.p2p.allow-duplicate-ip", cfg.ChainCfg.P2P.AllowDuplicateIP, "Chain P2P allow multiple peers with the same IP address")
+	flagSet.BoolVar(&cfg.ChainCfg.P2P.PexReactor, "chain.p2p.pex", cfg.ChainCfg.P2P.PexReactor, "Enables peer information exchange")
 
 	// Chain Mempool flags
 	flagSet.IntVar(&cfg.ChainCfg.Mempool.Size, "chain.mempool.size", cfg.ChainCfg.Mempool.Size, "Chain mempool size")
