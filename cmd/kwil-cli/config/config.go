@@ -15,10 +15,9 @@ import (
 )
 
 type KwilCliConfig struct {
-	PrivateKey  *crypto.Secp256k1PrivateKey
-	GrpcURL     string // TODO: change to maybe `RPCProvider` or `ProviderURL`
-	ChainID     string
-	TLSCertFile string // NOTE: since HTTP by default, this seems not use
+	PrivateKey *crypto.Secp256k1PrivateKey
+	GrpcURL    string // TODO: change to maybe `RPCProvider` or `ProviderURL`
+	ChainID    string
 }
 
 // Identity returns the account ID, or nil if no private key is set. These are
