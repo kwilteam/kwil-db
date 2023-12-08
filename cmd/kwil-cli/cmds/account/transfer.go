@@ -16,8 +16,6 @@ import (
 )
 
 func transferCmd() *cobra.Command {
-	// var recipient, amt string
-
 	cmd := &cobra.Command{
 		Use:   "transfer",
 		Short: "Transfer value to an account",
@@ -34,28 +32,15 @@ func transferCmd() *cobra.Command {
 				return display.PrintErr(cmd, errors.New("invalid decimal amount"))
 			}
 
-			var txHash []byte
-			err = common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
-				txHash, err = cl.Transfer(ctx, to, amount, client.WithNonce(nonceOverride))
+			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
+				txHash, err := cl.Transfer(ctx, to, amount, client.WithNonce(nonceOverride))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("transfer failed: %w", err))
 				}
-
-				return nil
+				return display.PrintCmd(cmd, display.RespTxHash(txHash))
 			})
-
-			return display.PrintCmd(cmd, display.RespTxHash(txHash))
 		},
 	}
-
-	// const (
-	// 	toFlagName  = "to"
-	// 	amtFlagName = "amount"
-	// )
-	// cmd.Flags().StringVar(&recipient, toFlagName, "", "the recipient (required)")
-	// cmd.Flags().StringVar(&amt, amtFlagName, "", "the recipient (required)")
-
-	// cmd.MarkFlagRequired(toFlagName)
 
 	return cmd
 }
