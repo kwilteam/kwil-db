@@ -432,8 +432,8 @@ func DefaultConfig() *KwildConfig {
 				AddrBookStrict:      false, // override comet
 				MaxNumInboundPeers:  40,
 				MaxNumOutboundPeers: 10,
-				AllowDuplicateIP:    true,  // override comet
-				PexReactor:          false, // override comet - not recommended for validators
+				AllowDuplicateIP:    true, // override comet
+				PexReactor:          true,
 				HandshakeTimeout:    Duration(20 * time.Second),
 				DialTimeout:         Duration(3 * time.Second),
 			},
