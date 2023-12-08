@@ -419,6 +419,7 @@ func addressSpecificConfig(c *config.KwildConfig) error {
 }
 
 // incrementPort increments the port in the URL by the given amount.
+// if the url is a UNIX socket, it will append the amount to the path.
 func incrementPort(incoming string, amt int) (string, error) {
 	res, err := url.Parse(incoming)
 	if err != nil {
@@ -426,7 +427,37 @@ func incrementPort(incoming string, amt int) (string, error) {
 	}
 
 	if res.Scheme == "unix" {
-		return incoming, nil
+		// if scheme is unix, it will use Host if it is path/to/sock, but Path if it is /path/to/sock
+		var path string
+		var set *string
+		if res.Host != "" {
+			path = res.Host
+			set = &res.Host
+		} else {
+			path = res.Path
+			set = &res.Path
+		}
+
+		extension := filepath.Ext(path)
+		fileWithoutExt := strings.TrimSuffix(path, extension)
+
+		// see if the file already has a number appended to it
+		startingNum := 0
+
+		nums := strings.Split(fileWithoutExt, "_")
+		if len(nums) > 1 {
+			last := nums[len(nums)-1]
+			// if the last part is a number, remove it
+			num, err := strconv.Atoi(last)
+			if err == nil {
+				fileWithoutExt = strings.TrimSuffix(fileWithoutExt, "_"+last)
+				startingNum = num
+			}
+		}
+
+		*set = fileWithoutExt + "_" + strconv.Itoa(startingNum+amt) + extension
+
+		return res.String(), nil
 	}
 
 	// Split the URL into two parts: host (and possibly scheme) and port

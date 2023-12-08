@@ -97,6 +97,26 @@ func Test_IncrementingPorts(t *testing.T) {
 			amount: 3,
 			want:   "tcp://0.0.0.0:26659",
 		},
+		{
+			input:  "unix://local.sock",
+			amount: 1,
+			want:   "unix://local_1.sock",
+		},
+		{
+			input:  "unix:///tmp/local.sock",
+			amount: 1,
+			want:   "unix:///tmp/local_1.sock",
+		},
+		{
+			input:  "unix:///tmp/local.sock",
+			amount: 2,
+			want:   "unix:///tmp/local_2.sock",
+		},
+		{
+			input:  "unix:///tmp/local_1.sock",
+			amount: 1,
+			want:   "unix:///tmp/local_2.sock",
+		},
 	}
 
 	for _, tc := range testcases {

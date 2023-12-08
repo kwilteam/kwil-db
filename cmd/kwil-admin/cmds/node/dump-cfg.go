@@ -6,7 +6,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 )
@@ -35,8 +34,8 @@ func dumpCfgCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			cfg := &config.KwildConfig{}
-			err = json.Unmarshal(bts, cfg)
+			cfg := make(map[string]interface{})
+			err = json.Unmarshal(bts, &cfg)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -51,7 +50,7 @@ func dumpCfgCmd() *cobra.Command {
 }
 
 type cfgMsg struct {
-	cfg *config.KwildConfig
+	cfg map[string]interface{}
 }
 
 var _ display.MsgFormatter = (*cfgMsg)(nil)
