@@ -37,7 +37,7 @@ func (d *dataset) Call(caller *ScopeContext, method string, inputs []any) ([]any
 		return nil, fmt.Errorf(`procedure "%s" is not public`, method)
 	}
 
-	err := proc.call(caller.NewScope(), inputs)
+	err := proc.call(caller.NewScope(d.schema.DBID(), method), inputs)
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types/extensions"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
@@ -40,6 +41,7 @@ func (e *executionContext) NewScope() *ScopeContext {
 
 // ScopeContext is the context that encapsulates a bounded set of variables.
 // These variables are only accessible within the scope.
+// Scopes are responsible for passing a scope context to its children.
 type ScopeContext struct {
 	// values are the variables that are available to the execution.
 	values map[string]any
@@ -111,11 +113,18 @@ func (s *ScopeContext) Ctx() context.Context {
 	return s.execution.Ctx
 }
 
-// New creates a new scope context.
+// NewScope creates a new scope context.
 // It will inherit the execution context from the parent.
-func (s *ScopeContext) NewScope() *ScopeContext {
+// It will not inherit the values from the parent.
+// It will not inherit the dbd or procedure from the parent,
+// but will instead use the provided values.
+// It is expected that a parent calls this when passing a scope to a child, and
+// sets the dbid and procedure to the values of the parent.
+func (s *ScopeContext) NewScope(fromDBID, fromProcedure string) *ScopeContext {
 	return &ScopeContext{
 		values:    make(map[string]any),
+		dbid:      fromDBID,
+		procedure: fromProcedure,
 		execution: s.execution,
 	}
 }
@@ -136,13 +145,6 @@ type ExtensionScoper struct {
 }
 
 var _ extensions.CallContext = (*ExtensionScoper)(nil)
-
-// NewScope creates a new scope context.
-func (e *ExtensionScoper) NewScope() extensions.CallContext {
-	return &ExtensionScoper{
-		ScopeContext: e.ScopeContext.NewScope(),
-	}
-}
 
 // Query executes a query against a reader connection
 func (e *ExtensionScoper) Datastore() extensions.Datastore {
@@ -197,17 +199,15 @@ func (e *extensionDatastore) Query(ctx context.Context, dbid string, stmt string
 	var err error
 	if e.scope.Mutative() {
 		parsedStmt, err = sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, dataset.schema.Tables)
-		if err != nil {
-			return nil, err
-		}
 	} else {
-		parsedStmt, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.NoCartesianProduct, dataset.schema.Tables)
-		if err != nil {
-			return nil, err
-		}
-		if parsedStmt.Mutative() {
-			return nil, ErrReadOnly
-		}
+		parsedStmt, err = sqlanalyzer.ApplyRules(stmt, sqlanalyzer.NoCartesianProduct, dataset.schema.Tables)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if parsedStmt.Mutative() {
+		return nil, fmt.Errorf(`cannot execute mutative statement using Query(): '%s'`, stmt)
 	}
 
 	return e.scope.execution.global.datastore.Query(ctx, dbid, parsedStmt.Statement(), params)

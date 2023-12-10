@@ -1,4 +1,4 @@
-//go:build actions_math || ext_test
+//go:build actions_adhoc || ext_test
 
 package actions
 
@@ -29,9 +29,11 @@ import (
 			control / authentication mechanism.
 */
 
+const adhocName = "adhoc"
+
 func init() {
 	a := &adhocExtension{}
-	err := RegisterExtension("math", a)
+	err := RegisterExtension(adhocName, a)
 	if err != nil {
 		panic(err)
 	}
@@ -84,8 +86,4 @@ func (a *adhocExtension) Execute(scope extensions.CallContext, metadata map[stri
 // Takes no initialization parameters.
 func (a *adhocExtension) Initialize(ctx context.Context, metadata map[string]string) (map[string]string, error) {
 	return nil, nil
-}
-
-func (a *adhocExtension) Name() string {
-	return "adhoc"
 }

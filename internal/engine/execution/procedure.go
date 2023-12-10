@@ -239,7 +239,7 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 			return fmt.Errorf(`procedure "%s" not found`, e.Method)
 		}
 
-		err = procedure.call(scope.NewScope(), inputs)
+		err = procedure.call(scope.NewScope(scope.DBID(), scope.Procedure()), inputs)
 	} else {
 		namespace, ok := dataset.namespaces[e.Namespace]
 		if !ok {
@@ -247,7 +247,7 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 		}
 
 		// new scope since we are calling a namespace
-		results, err = namespace.Call(scope.NewScope(), e.Method, inputs)
+		results, err = namespace.Call(scope.NewScope(scope.DBID(), scope.Procedure()), e.Method, inputs)
 	}
 	if err != nil {
 		return err

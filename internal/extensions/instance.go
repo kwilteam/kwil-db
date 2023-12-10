@@ -21,10 +21,6 @@ func (i *Instance) Metadata() map[string]string {
 	return i.metadata
 }
 
-func (i *Instance) Name() string {
-	return i.extension.Name()
-}
-
 func (i *Instance) Execute(ctx extensions.CallContext, method string, args ...any) ([]any, error) {
 	lowerMethod := strings.ToLower(method)
 	return i.extension.Execute(ctx, i.metadata, lowerMethod, args...)

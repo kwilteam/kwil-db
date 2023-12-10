@@ -7,9 +7,6 @@ import (
 // EngineExtension is an extension that can be loaded into the engine.
 // It can be used to extend the functionality of the engine.
 type EngineExtension interface {
-	// Name returns the name of the extension.
-	// This is used to identify the extension in the engine.
-	Name() string
 	// Initialize initializes the extension with the given metadata.
 	// It is called each time a database is deployed that uses the extension,
 	// or for each database that uses the extension when the engine starts.

@@ -66,7 +66,7 @@ type ResultSet struct {
 	ReturnedColumns []string
 	Rows            [][]any
 
-	i int
+	i int // starts at 0
 }
 
 func (r *ResultSet) Columns() []string {
@@ -86,12 +86,12 @@ func (r *ResultSet) Next() (rowReturned bool, err error) {
 }
 
 func (r *ResultSet) Values() ([]any, error) {
-	if r.i >= len(r.Rows) {
+	if r.i > len(r.Rows) {
 		return nil, fmt.Errorf("result set has no more rows")
 	}
 
-	v := make([]any, len(r.Rows[r.i]))
-	copy(v, r.Rows[r.i])
+	v := make([]any, len(r.Rows[r.i-1]))
+	copy(v, r.Rows[r.i-1])
 
 	return v, nil
 }
