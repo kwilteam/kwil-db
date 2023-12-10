@@ -16,10 +16,10 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/mitchellh/mapstructure"
-	toml "github.com/pelletier/go-toml/v2"
 
 	merge "dario.cat/mergo"
+	"github.com/mitchellh/mapstructure"
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -258,6 +258,8 @@ func GetCfg(flagCfg *KwildConfig) (*KwildConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to expand root directory \"%v\": %v", rootDir, err)
 	}
+
+	fmt.Printf("Root directory \"%v\"\n", rootDir)
 
 	// make sure the root dir exists
 	err = os.MkdirAll(rootDir, 0755)
