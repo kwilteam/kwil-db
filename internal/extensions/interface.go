@@ -3,7 +3,7 @@ package extensions
 import (
 	"context"
 
-	extensions "github.com/kwilteam/kwil-db/extensions/actions"
+	"github.com/kwilteam/kwil-db/core/types/extensions"
 	"github.com/kwilteam/kwil-extensions/client"
 	"github.com/kwilteam/kwil-extensions/types"
 )
@@ -14,7 +14,7 @@ var (
 )
 
 type ExtensionInitializer struct {
-	Extension extensions.Extension
+	Extension extensions.EngineExtension
 }
 
 // CreateInstance creates an instance of the extension with the given metadata.

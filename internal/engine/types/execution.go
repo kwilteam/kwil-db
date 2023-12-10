@@ -17,12 +17,12 @@ type ExecutionData struct {
 	// Args are the arguments that were passed to the procedure.
 	Args []any
 
-	// Caller is the binary identifier of the sender of the transaction.
-	// This can be a public key, address, etc.
-	Caller []byte
+	// Signer is the address of public key that signed the incoming transaction.
+	Signer []byte
 
-	// CallerIdentifier is a string identifier for the caller.
+	// Caller is a string identifier for the signer.
+	// It is derived from the signer's registered authenticator.
 	// It is injected as a variable for usage in the query, under
 	// the variable name "@caller".
-	CallerIdentifier string
+	Caller string
 }

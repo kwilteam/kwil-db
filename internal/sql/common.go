@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"fmt"
 )
 
 // KVStore is a key-value store.
@@ -62,8 +63,37 @@ type Result interface {
 }
 
 type ResultSet struct {
-	Columns []string
-	Rows    [][]any
+	ReturnedColumns []string
+	Rows            [][]any
+
+	i int
+}
+
+func (r *ResultSet) Columns() []string {
+	v := make([]string, len(r.ReturnedColumns))
+	copy(v, r.ReturnedColumns)
+
+	return v
+}
+
+func (r *ResultSet) Next() (rowReturned bool, err error) {
+	if r.i >= len(r.Rows) {
+		return false, nil
+	}
+
+	r.i++
+	return true, nil
+}
+
+func (r *ResultSet) Values() ([]any, error) {
+	if r.i >= len(r.Rows) {
+		return nil, fmt.Errorf("result set has no more rows")
+	}
+
+	v := make([]any, len(r.Rows[r.i]))
+	copy(v, r.Rows[r.i])
+
+	return v, nil
 }
 
 type ConnectionFlag int

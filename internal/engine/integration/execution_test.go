@@ -92,22 +92,22 @@ func Test_Engine(t *testing.T) {
 
 				ctx := context.Background()
 				_, err := global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureCreateUser.Name,
-					Mutative:         true,
-					Args:             []any{1, "satoshi", 42},
-					Caller:           []byte(signer),
-					CallerIdentifier: signer,
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureCreateUser.Name,
+					Mutative:  true,
+					Args:      []any{1, "satoshi", 42},
+					Signer:    []byte(signer),
+					Caller:    signer,
 				})
 				require.NoError(t, err)
 
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureCreatePost.Name,
-					Mutative:         true,
-					Args:             []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
-					Caller:           []byte(signer),
-					CallerIdentifier: signer,
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureCreatePost.Name,
+					Mutative:  true,
+					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
+					Signer:    []byte(signer),
+					Caller:    signer,
 				})
 				require.NoError(t, err)
 			},
@@ -115,16 +115,16 @@ func Test_Engine(t *testing.T) {
 				ctx := context.Background()
 
 				res, err := global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureGetPosts.Name,
-					Mutative:         false,
-					Args:             []any{"satoshi"},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureGetPosts.Name,
+					Mutative:  false,
+					Args:      []any{"satoshi"},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.NoError(t, err)
 
-				require.Equal(t, res.Columns, []string{"id", "title", "content", "post_date", "author"})
+				require.Equal(t, res.ReturnedColumns, []string{"id", "title", "content", "post_date", "author"})
 				require.Equal(t, len(res.Rows), 1)
 
 				row1 := res.Rows[0]
@@ -138,7 +138,7 @@ func Test_Engine(t *testing.T) {
 				res2, err := global.Query(ctx, testdata.TestSchema.DBID(), `SELECT * from posts;`)
 				require.NoError(t, err)
 
-				require.Equal(t, res2.Columns, []string{"id", "title", "content", "author_id", "post_date"})
+				require.Equal(t, res2.ReturnedColumns, []string{"id", "title", "content", "author_id", "post_date"})
 				require.Equal(t, len(res2.Rows), 1)
 				require.Equal(t, res2.Rows[0], []any{int64(1), "Bitcoin!", "The Bitcoin Whitepaper", int64(1), "9/31/2008"})
 			},
@@ -154,12 +154,12 @@ func Test_Engine(t *testing.T) {
 				ctx := context.Background()
 
 				_, err := global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureCreatePost.Name,
-					Mutative:         true,
-					Args:             []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureCreatePost.Name,
+					Mutative:  true,
+					Args:      []any{1, "Bitcoin!", "The Bitcoin Whitepaper", "9/31/2008"},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.ErrorIs(t, err, registry.ErrRegistryNotWritable)
 			},
@@ -172,12 +172,12 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureCreateUser.Name,
-					Mutative:         true,
-					Args:             []any{1, "satoshi", 42},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureCreateUser.Name,
+					Mutative:  true,
+					Args:      []any{1, "satoshi", 42},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.NoError(t, err)
 			},
@@ -185,12 +185,12 @@ func Test_Engine(t *testing.T) {
 				ctx := context.Background()
 
 				users, err := global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureGetUserByAddress.Name,
-					Mutative:         false,
-					Args:             []any{"signer"},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureGetUserByAddress.Name,
+					Mutative:  false,
+					Args:      []any{"signer"},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.NoError(t, err)
 
@@ -207,12 +207,12 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureCreateUser.Name,
-					Mutative:         true,
-					Args:             []any{1, "satoshi", 42},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureCreateUser.Name,
+					Mutative:  true,
+					Args:      []any{1, "satoshi", 42},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.NoError(t, err)
 			},
@@ -220,12 +220,12 @@ func Test_Engine(t *testing.T) {
 				ctx := context.Background()
 
 				users, err := global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureGetUserByAddress.Name,
-					Mutative:         false,
-					Args:             []any{"signer"},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureGetUserByAddress.Name,
+					Mutative:  false,
+					Args:      []any{"signer"},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.NoError(t, err)
 
@@ -272,22 +272,22 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureAdminDeleteUser.Name,
-					Mutative:         true,
-					Args:             []any{1},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureAdminDeleteUser.Name,
+					Mutative:  true,
+					Args:      []any{1},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.Error(t, err)
 
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureAdminDeleteUser.Name,
-					Mutative:         true,
-					Args:             []any{1},
-					Caller:           testdata.TestSchema.Owner,
-					CallerIdentifier: string(testdata.TestSchema.Owner),
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureAdminDeleteUser.Name,
+					Mutative:  true,
+					Args:      []any{1},
+					Signer:    testdata.TestSchema.Owner,
+					Caller:    string(testdata.TestSchema.Owner),
 				})
 				require.NoError(t, err)
 			},
@@ -302,23 +302,23 @@ func Test_Engine(t *testing.T) {
 
 				// calling private fails
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedurePrivate.Name,
-					Mutative:         true,
-					Args:             []any{},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedurePrivate.Name,
+					Mutative:  true,
+					Args:      []any{},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.Error(t, err)
 
 				// calling a public which calls private succeeds
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureCallsPrivate.Name,
-					Mutative:         true,
-					Args:             []any{},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureCallsPrivate.Name,
+					Mutative:  true,
+					Args:      []any{},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.NoError(t, err)
 			},
@@ -332,22 +332,22 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureCreateUser.Name,
-					Mutative:         true,
-					Args:             []any{1, "satoshi", 42},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureCreateUser.Name,
+					Mutative:  true,
+					Args:      []any{1, "satoshi", 42},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.NoError(t, err)
 
 				_, err = global.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        testdata.ProcedureGetUserByAddress.Name,
-					Mutative:         false,
-					Args:             []any{"signer"},
-					Caller:           []byte("signer"),
-					CallerIdentifier: "signer",
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: testdata.ProcedureGetUserByAddress.Name,
+					Mutative:  false,
+					Args:      []any{"signer"},
+					Signer:    []byte("signer"),
+					Caller:    "signer",
 				})
 				require.Error(t, err)
 			},
