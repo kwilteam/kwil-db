@@ -46,6 +46,8 @@ func rootCmd() *cobra.Command {
 		Args:              cobra.NoArgs, // just flags
 		Version:           version.KwilVersion,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("kwild version %v (Go version %s)\n", version.KwilVersion, runtime.Version())
+
 			var err error
 			kwildCfg, err = config.GetCfg(flagCfg)
 			if err != nil {
