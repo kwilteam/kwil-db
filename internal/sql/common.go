@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"fmt"
 )
 
 // KVStore is a key-value store.
@@ -55,15 +56,47 @@ type Result interface {
 	Finish() error
 
 	// Next gets the next row of the result.
-	Next() (rowReturned bool, err error)
+	Next() (rowReturned bool)
+
+	// Err gets any error that occurred during iteration.
+	Err() error
 
 	// Values gets the values of the current row.
 	Values() ([]any, error)
 }
 
 type ResultSet struct {
-	Columns []string
-	Rows    [][]any
+	ReturnedColumns []string
+	Rows            [][]any
+
+	i int // starts at 0
+}
+
+func (r *ResultSet) Columns() []string {
+	v := make([]string, len(r.ReturnedColumns))
+	copy(v, r.ReturnedColumns)
+
+	return v
+}
+
+func (r *ResultSet) Next() (rowReturned bool, err error) {
+	if r.i >= len(r.Rows) {
+		return false, nil
+	}
+
+	r.i++
+	return true, nil
+}
+
+func (r *ResultSet) Values() ([]any, error) {
+	if r.i > len(r.Rows) {
+		return nil, fmt.Errorf("result set has no more rows")
+	}
+
+	v := make([]any, len(r.Rows[r.i-1]))
+	copy(v, r.Rows[r.i-1])
+
+	return v, nil
 }
 
 type ConnectionFlag int
@@ -96,8 +129,12 @@ func (e *EmptyResult) Finish() error {
 	return nil
 }
 
-func (e *EmptyResult) Next() (rowReturned bool, err error) {
-	return false, nil
+func (e *EmptyResult) Next() (rowReturned bool) {
+	return false
+}
+
+func (e *EmptyResult) Err() error {
+	return nil
 }
 
 func (e *EmptyResult) Values() ([]any, error) {

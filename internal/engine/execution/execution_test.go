@@ -73,12 +73,12 @@ func Test_Execution(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = eng.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        "create_user",
-					Mutative:         true,
-					Args:             []any{1, "brennan", 22},
-					Caller:           testdata.TestSchema.Owner,
-					CallerIdentifier: string(testdata.TestSchema.Owner),
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: "create_user",
+					Mutative:  true,
+					Args:      []any{1, "brennan", 22},
+					Signer:    testdata.TestSchema.Owner,
+					Caller:    string(testdata.TestSchema.Owner),
 				})
 				require.NoError(t, err)
 			},
@@ -92,12 +92,12 @@ func Test_Execution(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = eng.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        "create_user",
-					Mutative:         true,
-					Args:             []any{1, "brennan"}, // missing age
-					Caller:           testdata.TestSchema.Owner,
-					CallerIdentifier: string(testdata.TestSchema.Owner),
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: "create_user",
+					Mutative:  true,
+					Args:      []any{1, "brennan"}, // missing age
+					Signer:    testdata.TestSchema.Owner,
+					Caller:    string(testdata.TestSchema.Owner),
 				})
 				require.Error(t, err)
 			},
@@ -111,23 +111,23 @@ func Test_Execution(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = eng.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        "create_user",
-					Mutative:         false,
-					Args:             []any{1, "brennan", 22},
-					Caller:           testdata.TestSchema.Owner,
-					CallerIdentifier: string(testdata.TestSchema.Owner),
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: "create_user",
+					Mutative:  false,
+					Args:      []any{1, "brennan", 22},
+					Signer:    testdata.TestSchema.Owner,
+					Caller:    string(testdata.TestSchema.Owner),
 				})
 				require.Error(t, err)
 				require.ErrorIs(t, err, execution.ErrMutativeProcedure)
 
 				_, err = eng.Execute(ctx, &types.ExecutionData{
-					Dataset:          testdata.TestSchema.DBID(),
-					Procedure:        "get_user_by_address",
-					Mutative:         false,
-					Args:             []any{"address"},
-					Caller:           testdata.TestSchema.Owner,
-					CallerIdentifier: string(testdata.TestSchema.Owner),
+					Dataset:   testdata.TestSchema.DBID(),
+					Procedure: "get_user_by_address",
+					Mutative:  false,
+					Args:      []any{"address"},
+					Signer:    testdata.TestSchema.Owner,
+					Caller:    string(testdata.TestSchema.Owner),
 				})
 				require.NoError(t, err)
 			},
@@ -141,24 +141,24 @@ func Test_Execution(t *testing.T) {
 				require.NoError(t, err)
 
 				_, err = eng.Execute(ctx, &types.ExecutionData{
-					Dataset:          testSchema.DBID(),
-					Procedure:        "use_math",
-					Mutative:         true,
-					Args:             []any{1, 2},
-					Caller:           testSchema.Owner,
-					CallerIdentifier: string(testSchema.Owner),
+					Dataset:   testSchema.DBID(),
+					Procedure: "use_math",
+					Mutative:  true,
+					Args:      []any{1, 2},
+					Signer:    testSchema.Owner,
+					Caller:    string(testSchema.Owner),
 				})
 				require.NoError(t, err)
 
 				// call non-mutative
 				// since we do not have a sql connection, we cannot evaluate the result
 				_, err = eng.Execute(ctx, &types.ExecutionData{
-					Dataset:          testSchema.DBID(),
-					Procedure:        "use_math",
-					Mutative:         false,
-					Args:             []any{1, 2},
-					Caller:           testSchema.Owner,
-					CallerIdentifier: string(testSchema.Owner),
+					Dataset:   testSchema.DBID(),
+					Procedure: "use_math",
+					Mutative:  false,
+					Args:      []any{1, 2},
+					Signer:    testSchema.Owner,
+					Caller:    string(testSchema.Owner),
 				})
 				require.NoError(t, err)
 			},
@@ -241,8 +241,8 @@ func (m *mockRegistry) Execute(ctx context.Context, dbid string, stmt string, pa
 	}
 
 	return &sql.ResultSet{
-		Columns: []string{},
-		Rows:    [][]any{},
+		ReturnedColumns: []string{},
+		Rows:            [][]any{},
 	}, nil
 }
 
@@ -262,8 +262,8 @@ func (m *mockRegistry) Query(ctx context.Context, dbid string, stmt string, para
 	}
 
 	return &sql.ResultSet{
-		Columns: []string{},
-		Rows:    [][]any{},
+		ReturnedColumns: []string{},
+		Rows:            [][]any{},
 	}, nil
 }
 
@@ -374,7 +374,7 @@ type mathExt struct{}
 
 var _ execution.Namespace = &mathExt{}
 
-func (m *mathExt) Call(caller execution.Scoper, method string, inputs []any) ([]any, error) {
+func (m *mathExt) Call(caller *execution.ScopeContext, method string, inputs []any) ([]any, error) {
 	return nil, nil
 }
 

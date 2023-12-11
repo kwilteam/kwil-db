@@ -31,12 +31,12 @@ func (u *DatasetModule) Call(ctx context.Context, dbid string, action string, ar
 	}
 
 	results, err := u.engine.Execute(ctx, &engineTypes.ExecutionData{
-		Dataset:          dbid,
-		Procedure:        action,
-		Mutative:         false,
-		Args:             args,
-		Caller:           msg.Sender,
-		CallerIdentifier: sender,
+		Dataset:   dbid,
+		Procedure: action,
+		Mutative:  false,
+		Args:      args,
+		Signer:    msg.Sender,
+		Caller:    sender,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute call: %w", err)
@@ -70,7 +70,7 @@ func getResultMap(results *sql.ResultSet) []map[string]any {
 	resMap := make([]map[string]any, 0)
 	for _, result := range results.Rows {
 		res := make(map[string]any)
-		for i, column := range results.Columns {
+		for i, column := range results.ReturnedColumns {
 			res[column] = result[i]
 		}
 

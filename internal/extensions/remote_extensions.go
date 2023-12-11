@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-extensions/types"
 )
 
@@ -39,14 +40,14 @@ func (e *RemoteExtension) Initialize(ctx context.Context, metadata map[string]st
 }
 
 // Execute executes the requested method of an extension. If the method is not supported, an error is returned.
-func (e *RemoteExtension) Execute(ctx context.Context, metadata map[string]string, method string, args ...any) ([]any, error) {
+func (e *RemoteExtension) Execute(ctx actions.CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
 	_, ok := e.methods[method]
 	if !ok {
 		return nil, fmt.Errorf("method '%s' is not available for extension '%s' at target '%s'", method, e.name, e.url)
 	}
 
 	return e.client.CallMethod(&types.ExecutionContext{
-		Ctx:      ctx,
+		Ctx:      ctx.Ctx(),
 		Metadata: metadata,
 	}, method, args...)
 }
