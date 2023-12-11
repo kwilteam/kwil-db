@@ -565,10 +565,18 @@ func buildCometNode(d *coreDependencies, closer *closeFuncs, abciApp abciTypes.A
 		key: []byte("az"), // any key here will work
 	}
 
-	nodeCfg := newCometConfig(d.cfg)
 	genDoc, err := extractGenesisDoc(d.genesisCfg)
 	if err != nil {
 		failBuild(err, "failed to generate cometbft genesis configuration")
+	}
+
+	nodeCfg := newCometConfig(d.cfg)
+	if nodeCfg.P2P.SeedMode {
+		d.log.Info("Seed mode enabled.")
+		if !nodeCfg.P2P.PexReactor {
+			d.log.Warn("Enabling peer exchange to run in seed mode.")
+			nodeCfg.P2P.PexReactor = true
+		}
 	}
 
 	node, err := cometbft.NewCometBftNode(abciApp, nodeCfg, genDoc, d.privKey,

@@ -50,6 +50,8 @@ func newCometConfig(cfg *config.KwildConfig) *cmtCfg.Config {
 	nodeCfg.P2P.AllowDuplicateIP = cfg.ChainCfg.P2P.AllowDuplicateIP
 	nodeCfg.P2P.HandshakeTimeout = time.Duration(userChainCfg.P2P.HandshakeTimeout)
 	nodeCfg.P2P.DialTimeout = time.Duration(userChainCfg.P2P.DialTimeout)
+	nodeCfg.P2P.SeedMode = userChainCfg.P2P.SeedMode
+	nodeCfg.P2P.Seeds = userChainCfg.P2P.Seeds
 
 	nodeCfg.Mempool.Size = userChainCfg.Mempool.Size
 	nodeCfg.Mempool.CacheSize = userChainCfg.Mempool.CacheSize
