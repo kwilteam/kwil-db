@@ -104,6 +104,13 @@ type P2PConfig struct {
 	HandshakeTimeout Duration `mapstructure:"handshake_timeout"`
 	// DialTimeout is the peer connection establishment timeout.
 	DialTimeout Duration `mapstructure:"dial_timeout"`
+	// SeedMode makes the node constantly crawls the network looking for peers.
+	// If another node asks it for addresses, it responds and disconnects.
+	// Requires peer-exchange.
+	SeedMode bool `mapstructure:"seed_mode"`
+	// Seeds is a comma-separated separated list of seed nodes to query for peer
+	// addresses. Only used if the peers in the address book are unreachable.
+	Seeds string `mapstructure:"seeds"`
 }
 
 type MempoolConfig struct {
