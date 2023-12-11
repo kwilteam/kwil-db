@@ -81,13 +81,12 @@ func prepareProcedure(unparsed *types.Procedure, datasetCtx *dataset) (*procedur
 }
 
 // Call executes a procedure.
-func (p *procedure) call(scoper Scoper, inputs []any) error {
+func (p *procedure) call(scope *ScopeContext, inputs []any) error {
 	if len(inputs) != len(p.parameters) {
 		return fmt.Errorf(`%w: procedure "%s" requires %d arguments, but %d were provided`, ErrIncorrectNumberOfArguments, p.name, len(p.parameters), len(inputs))
 	}
-	scope := scoper.NewScope()
 
-	if p.mutable && !scope.execution.Data.Mutative {
+	if p.mutable && !scope.Mutative() {
 		return fmt.Errorf(`%w: mutable procedure "%s" called with non-mutative scope`, ErrMutativeProcedure, p.name)
 	}
 
@@ -109,7 +108,7 @@ func convertModifier(mod types.Modifier) (instruction, error) {
 	switch mod {
 	case types.ModifierOwner:
 		return instructionFunc(func(scope *ScopeContext, dataset *dataset) error {
-			if !bytes.Equal(scope.execution.Data.Caller, dataset.schema.Owner) {
+			if !bytes.Equal(scope.execution.signer, dataset.schema.Owner) {
 				return fmt.Errorf("cannot call owner procedure, not owner")
 			}
 
@@ -240,14 +239,15 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 			return fmt.Errorf(`procedure "%s" not found`, e.Method)
 		}
 
-		err = procedure.call(scope, inputs)
+		err = procedure.call(scope.NewScope(scope.DBID(), scope.Procedure()), inputs)
 	} else {
 		namespace, ok := dataset.namespaces[e.Namespace]
 		if !ok {
 			return fmt.Errorf(`namespace "%s" not found`, e.Namespace)
 		}
 
-		results, err = namespace.Call(scope, e.Method, inputs)
+		// new scope since we are calling a namespace
+		results, err = namespace.Call(scope.NewScope(scope.DBID(), scope.Procedure()), e.Method, inputs)
 	}
 	if err != nil {
 		return err

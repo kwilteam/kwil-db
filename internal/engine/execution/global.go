@@ -146,11 +146,14 @@ func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionDat
 	}
 
 	execCtx := &executionContext{
-		Ctx:  ctx,
-		Data: options,
+		Ctx:      ctx,
+		mutative: options.Mutative,
+		signer:   options.Signer,
+		caller:   options.Caller,
+		global:   g,
 	}
 
-	_, err := dataset.Call(execCtx, options.Procedure, options.Args)
+	_, err := dataset.Call(execCtx.NewScope(), options.Procedure, options.Args)
 
 	return execCtx.FinalResult, err
 }

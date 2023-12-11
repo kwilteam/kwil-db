@@ -1,18 +1,16 @@
 //go:build actions_math || ext_test
 
-package mathexample
+package actions
 
 import (
 	"context"
 	"fmt"
 	"math/big"
-
-	extensions "github.com/kwilteam/kwil-db/extensions/actions"
 )
 
 func init() {
 	mathExt := &MathExtension{}
-	err := extensions.RegisterExtension("math", mathExt)
+	err := RegisterExtension("math", mathExt)
 	if err != nil {
 		panic(err)
 	}
@@ -39,35 +37,35 @@ func (e *MathExtension) Initialize(ctx context.Context, metadata map[string]stri
 	return metadata, nil
 }
 
-func (e *MathExtension) Execute(ctx context.Context, metadata map[string]string, method string, args ...any) ([]any, error) {
+func (e *MathExtension) Execute(ctx CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
 	switch method {
 	case "add":
-		return e.add(ctx, metadata, args...)
+		return e.add(args...)
 	case "subtract":
-		return e.subtract(ctx, metadata, args...)
+		return e.subtract(args...)
 	case "multiply":
-		return e.multiply(ctx, metadata, args...)
+		return e.multiply(args...)
 	case "divide":
-		return e.divide(ctx, metadata, args...)
+		return e.divide(metadata, args...)
 	default:
 		return nil, fmt.Errorf("method %s not found", method)
 	}
 }
 
 // add takes two integers and returns their sum
-func (e *MathExtension) add(ctx context.Context, metadata map[string]string, values ...any) ([]any, error) {
+func (e *MathExtension) add(values ...any) ([]any, error) {
 	if len(values) != 2 {
 		return nil, fmt.Errorf("expected 2 values for method Add, got %d", len(values))
 	}
 
 	val0Int, ok := values[0].(int)
 	if !ok {
-		return nil, fmt.Errorf("Argument 1 is not an int")
+		return nil, fmt.Errorf("argument 1 is not an int")
 	}
 
 	val1Int, ok := values[1].(int)
 	if !ok {
-		return nil, fmt.Errorf("Argument 2 is not an int")
+		return nil, fmt.Errorf("argument 2 is not an int")
 	}
 
 	var results []any
@@ -76,19 +74,19 @@ func (e *MathExtension) add(ctx context.Context, metadata map[string]string, val
 }
 
 // subtract takes two integers and returns their difference
-func (e *MathExtension) subtract(ctx context.Context, metadata map[string]string, values ...any) ([]any, error) {
+func (e *MathExtension) subtract(values ...any) ([]any, error) {
 	if len(values) != 2 {
 		return nil, fmt.Errorf("expected 2 values for method Add, got %d", len(values))
 	}
 
 	val0Int, ok := values[0].(int)
 	if !ok {
-		return nil, fmt.Errorf("Argument 1 is not an int")
+		return nil, fmt.Errorf("argument 1 is not an int")
 	}
 
 	val1Int, ok := values[1].(int)
 	if !ok {
-		return nil, fmt.Errorf("Argument 2 is not an int")
+		return nil, fmt.Errorf("argument 2 is not an int")
 	}
 
 	var results []any
@@ -97,19 +95,19 @@ func (e *MathExtension) subtract(ctx context.Context, metadata map[string]string
 }
 
 // multiply takes two integers and returns their product
-func (e *MathExtension) multiply(ctx context.Context, metadata map[string]string, values ...any) ([]any, error) {
+func (e *MathExtension) multiply(values ...any) ([]any, error) {
 	if len(values) != 2 {
 		return nil, fmt.Errorf("expected 2 values for method Add, got %d", len(values))
 	}
 
 	val0Int, ok := values[0].(int)
 	if !ok {
-		return nil, fmt.Errorf("Argument 1 is not an int")
+		return nil, fmt.Errorf("argument 1 is not an int")
 	}
 
 	val1Int, ok := values[1].(int)
 	if !ok {
-		return nil, fmt.Errorf("Argument 2 is not an int")
+		return nil, fmt.Errorf("argument 2 is not an int")
 	}
 
 	var results []any
@@ -118,19 +116,19 @@ func (e *MathExtension) multiply(ctx context.Context, metadata map[string]string
 }
 
 // divide takes two integers and returns their quotient rounded up or down depending on how the extension was initialized
-func (e *MathExtension) divide(ctx context.Context, metadata map[string]string, values ...any) ([]any, error) {
+func (e *MathExtension) divide(metadata map[string]string, values ...any) ([]any, error) {
 	if len(values) != 2 {
 		return nil, fmt.Errorf("expected 2 values for method Divide, got %d", len(values))
 	}
 
 	val0Int, ok := values[0].(int)
 	if !ok {
-		return nil, fmt.Errorf("Argument 1 is not an int")
+		return nil, fmt.Errorf("argument 1 is not an int")
 	}
 
 	val1Int, ok := values[1].(int)
 	if !ok {
-		return nil, fmt.Errorf("Argument 2 is not an int")
+		return nil, fmt.Errorf("argument 2 is not an int")
 	}
 
 	bigVal1 := newBigFloat(float64(val0Int))

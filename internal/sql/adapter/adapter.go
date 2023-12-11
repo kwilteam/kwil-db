@@ -40,7 +40,7 @@ func toMaps(res *sql.ResultSet) []map[string]any {
 	for i, row := range res.Rows {
 		rows[i] = make(map[string]any)
 		for j, value := range row {
-			rows[i][res.Columns[j]] = value
+			rows[i][res.ReturnedColumns[j]] = value
 		}
 	}
 	return rows
