@@ -1,8 +1,27 @@
-package extensions
+// package actions allows custom actions to be registered with the engine.
+package actions
 
 import (
 	"context"
+	"fmt"
+	"strings"
 )
+
+var registeredExtensions = make(map[string]EngineExtension)
+
+func RegisterExtension(name string, ext EngineExtension) error {
+	name = strings.ToLower(name)
+	if _, ok := registeredExtensions[name]; ok {
+		return fmt.Errorf("extension of same name already registered:%s ", name)
+	}
+
+	registeredExtensions[name] = ext
+	return nil
+}
+
+func RegisteredExtensions() map[string]EngineExtension {
+	return registeredExtensions
+}
 
 // EngineExtension is an extension that can be loaded into the engine.
 // It can be used to extend the functionality of the engine.
@@ -64,7 +83,7 @@ type CallContext interface {
 //
 // columns := res.Columns()
 //
-// var res extensions.Result
+// var res Result
 //
 //	for {
 //		rowReturned, err := res.Next()

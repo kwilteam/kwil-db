@@ -6,8 +6,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/kwilteam/kwil-db/core/types/extensions"
 )
 
 /*
@@ -47,7 +45,7 @@ type adhocExtension struct{}
 // Has two methods: Execute and Query.
 // We check that only one argument is passed, and that it is a string.
 // We then execute the query against the datastore.
-func (a *adhocExtension) Execute(scope extensions.CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
+func (a *adhocExtension) Execute(scope CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
 	lowerMethod := strings.ToLower(method)
 	if len(args) != 1 {
 		return nil, fmt.Errorf("adhoc: expected 1 string argument, got %d", len(args))
@@ -59,7 +57,7 @@ func (a *adhocExtension) Execute(scope extensions.CallContext, metadata map[stri
 
 	// for either execution, we will pass the scope.Values() as the arguments.
 	// this makes it possible to use @caller, etc in the ad-hoc statement.
-	var res extensions.Result
+	var res Result
 	var err error
 	switch lowerMethod {
 	default:

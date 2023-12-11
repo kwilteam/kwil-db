@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	types "github.com/kwilteam/kwil-db/core/types/admin"
-	extTypes "github.com/kwilteam/kwil-db/core/types/extensions"
 	extActions "github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft/privval"
@@ -26,8 +25,8 @@ import (
 
 // getExtensions returns both the local and remote extensions. Remote extensions are identified by
 // connecting to the specified extension URLs.
-func getExtensions(ctx context.Context, urls []string) (map[string]extTypes.EngineExtension, error) {
-	exts := make(map[string]extTypes.EngineExtension)
+func getExtensions(ctx context.Context, urls []string) (map[string]extActions.EngineExtension, error) {
+	exts := make(map[string]extActions.EngineExtension)
 
 	for name, ext := range extActions.RegisteredExtensions() {
 		_, ok := exts[name]
@@ -54,7 +53,7 @@ func getExtensions(ctx context.Context, urls []string) (map[string]extTypes.Engi
 	return exts, nil
 }
 
-func adaptExtensions(exts map[string]extTypes.EngineExtension) map[string]execution.NamespaceInitializer {
+func adaptExtensions(exts map[string]extActions.EngineExtension) map[string]execution.NamespaceInitializer {
 	adapted := make(map[string]execution.NamespaceInitializer, len(exts))
 
 	for name, ext := range exts {

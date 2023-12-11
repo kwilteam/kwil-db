@@ -221,7 +221,7 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 	}
 
 	for name := range extensions {
-		d.log.Debug("registered extension", zap.String("name", name))
+		d.log.Info("registered extension", zap.String("name", name))
 	}
 
 	reg, err := registry.NewRegistry(d.ctx, func(ctx context.Context, dbid string, create bool) (registry.Pool, error) {

@@ -7,10 +7,8 @@ import (
 	"math/big"
 	"testing"
 
-	mathexample "github.com/kwilteam/kwil-db/extensions/actions/math_example"
+	"github.com/kwilteam/kwil-db/extensions/actions"
 	extensions "github.com/kwilteam/kwil-db/internal/extensions"
-
-	extensions1 "github.com/kwilteam/kwil-db/core/types/extensions"
 	"github.com/kwilteam/kwil-extensions/client"
 	"github.com/kwilteam/kwil-extensions/types"
 	"github.com/stretchr/testify/assert"
@@ -65,7 +63,7 @@ func Test_LocalExtension(t *testing.T) {
 		"roundoff": "down",
 	}
 
-	ext := &mathexample.MathExtension{}
+	ext := &actions.MathExtension{}
 
 	initializer := &extensions.ExtensionInitializer{
 		Extension: ext,
@@ -141,7 +139,7 @@ func (m *mockCtx) DBID() string {
 	return ""
 }
 
-func (m *mockCtx) Datastore() extensions1.Datastore {
+func (m *mockCtx) Datastore() actions.Datastore {
 	return nil
 }
 
@@ -153,7 +151,7 @@ func (m *mockCtx) Procedure() string {
 	return ""
 }
 
-func (m *mockCtx) SetResult(result extensions1.Result) error {
+func (m *mockCtx) SetResult(result actions.Result) error {
 	return nil
 }
 

@@ -3,7 +3,7 @@ package extensions
 import (
 	"strings"
 
-	"github.com/kwilteam/kwil-db/core/types/extensions"
+	"github.com/kwilteam/kwil-db/extensions/actions"
 )
 
 // An instance is a single instance of an extension.
@@ -14,14 +14,14 @@ import (
 type Instance struct {
 	metadata map[string]string
 
-	extension extensions.EngineExtension
+	extension actions.EngineExtension
 }
 
 func (i *Instance) Metadata() map[string]string {
 	return i.metadata
 }
 
-func (i *Instance) Execute(ctx extensions.CallContext, method string, args ...any) ([]any, error) {
+func (i *Instance) Execute(ctx actions.CallContext, method string, args ...any) ([]any, error) {
 	lowerMethod := strings.ToLower(method)
 	return i.extension.Execute(ctx, i.metadata, lowerMethod, args...)
 }

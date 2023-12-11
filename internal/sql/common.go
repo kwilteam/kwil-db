@@ -56,7 +56,10 @@ type Result interface {
 	Finish() error
 
 	// Next gets the next row of the result.
-	Next() (rowReturned bool, err error)
+	Next() (rowReturned bool)
+
+	// Err gets any error that occurred during iteration.
+	Err() error
 
 	// Values gets the values of the current row.
 	Values() ([]any, error)
@@ -126,8 +129,12 @@ func (e *EmptyResult) Finish() error {
 	return nil
 }
 
-func (e *EmptyResult) Next() (rowReturned bool, err error) {
-	return false, nil
+func (e *EmptyResult) Next() (rowReturned bool) {
+	return false
+}
+
+func (e *EmptyResult) Err() error {
+	return nil
 }
 
 func (e *EmptyResult) Values() ([]any, error) {

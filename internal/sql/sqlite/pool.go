@@ -337,21 +337,16 @@ func getResultSet(res sql.Result) (*sql.ResultSet, error) {
 		Rows:            make([][]any, 0),
 	}
 
-	for {
-		rowReturned, err := res.Next()
-		if err != nil {
-			return nil, err
-		}
-		if !rowReturned {
-			break
-		}
-
+	for res.Next() {
 		values, err := res.Values()
 		if err != nil {
 			return nil, err
 		}
 
 		resultSet.Rows = append(resultSet.Rows, values)
+	}
+	if res.Err() != nil {
+		return nil, res.Err()
 	}
 
 	return resultSet, nil

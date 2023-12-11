@@ -1,19 +1,16 @@
 //go:build actions_math || ext_test
 
-package mathexample
+package actions
 
 import (
 	"context"
 	"fmt"
 	"math/big"
-
-	"github.com/kwilteam/kwil-db/core/types/extensions"
-	"github.com/kwilteam/kwil-db/extensions/actions"
 )
 
 func init() {
 	mathExt := &MathExtension{}
-	err := actions.RegisterExtension("math", mathExt)
+	err := RegisterExtension("math", mathExt)
 	if err != nil {
 		panic(err)
 	}
@@ -40,7 +37,7 @@ func (e *MathExtension) Initialize(ctx context.Context, metadata map[string]stri
 	return metadata, nil
 }
 
-func (e *MathExtension) Execute(ctx extensions.CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
+func (e *MathExtension) Execute(ctx CallContext, metadata map[string]string, method string, args ...any) ([]any, error) {
 	switch method {
 	case "add":
 		return e.add(args...)

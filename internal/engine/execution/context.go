@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/core/types/extensions"
+	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
 )
@@ -81,11 +81,10 @@ func (s *ScopeContext) Caller() string {
 // Signer returns the address or public key of the wallet that signed the transaction.
 // It returns a copy of the signer, and nil if the execution is not signed.
 func (s *ScopeContext) Signer() []byte {
-	var signer []byte
-	if s.execution.signer == nil {
+	if len(s.execution.signer) == 0 {
 		return nil
 	}
-	signer = make([]byte, len(s.execution.signer))
+	signer := make([]byte, len(s.execution.signer))
 	copy(signer, s.execution.signer)
 	return signer
 }
@@ -139,22 +138,22 @@ func (s *ScopeContext) Procedure() string {
 	return s.procedure
 }
 
-// ExtensionScoper is a scope context that implements the extensions.ScopeContext interface.
+// ExtensionScoper is a scope context that implements the actions.CallContext interface.
 type ExtensionScoper struct {
 	*ScopeContext
 }
 
-var _ extensions.CallContext = (*ExtensionScoper)(nil)
+var _ actions.CallContext = (*ExtensionScoper)(nil)
 
 // Query executes a query against a reader connection
-func (e *ExtensionScoper) Datastore() extensions.Datastore {
+func (e *ExtensionScoper) Datastore() actions.Datastore {
 	return &extensionDatastore{
 		scope: e.ScopeContext,
 	}
 }
 
 // SetResult sets the result of the most recent SQL query.
-func (e *ExtensionScoper) SetResult(result extensions.Result) error {
+func (e *ExtensionScoper) SetResult(result actions.Result) error {
 	res := &sql.ResultSet{
 		ReturnedColumns: result.Columns(),
 	}
@@ -187,9 +186,9 @@ type extensionDatastore struct {
 	scope *ScopeContext
 }
 
-var _ extensions.Datastore = (*extensionDatastore)(nil)
+var _ actions.Datastore = (*extensionDatastore)(nil)
 
-func (e *extensionDatastore) Query(ctx context.Context, dbid string, stmt string, params map[string]any) (extensions.Result, error) {
+func (e *extensionDatastore) Query(ctx context.Context, dbid string, stmt string, params map[string]any) (actions.Result, error) {
 	var parsedStmt *sqlanalyzer.AnalyzedStatement
 	dataset, ok := e.scope.execution.global.datasets[dbid]
 	if !ok {
@@ -213,7 +212,7 @@ func (e *extensionDatastore) Query(ctx context.Context, dbid string, stmt string
 	return e.scope.execution.global.datastore.Query(ctx, dbid, parsedStmt.Statement(), params)
 }
 
-func (e *extensionDatastore) Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (extensions.Result, error) {
+func (e *extensionDatastore) Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (actions.Result, error) {
 	if !e.scope.Mutative() {
 		return nil, ErrReadOnly
 	}
