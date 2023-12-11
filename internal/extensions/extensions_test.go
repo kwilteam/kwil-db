@@ -7,9 +7,8 @@ import (
 	"math/big"
 	"testing"
 
-	mathexample "github.com/kwilteam/kwil-db/extensions/actions/math_example"
+	"github.com/kwilteam/kwil-db/extensions/actions"
 	extensions "github.com/kwilteam/kwil-db/internal/extensions"
-
 	"github.com/kwilteam/kwil-extensions/client"
 	"github.com/kwilteam/kwil-extensions/types"
 	"github.com/stretchr/testify/assert"
@@ -55,6 +54,8 @@ func (m *mockClient) Initialize(ctx context.Context, metadata map[string]string)
 
 func Test_LocalExtension(t *testing.T) {
 	ctx := context.Background()
+	callCtx := &mockCtx{}
+
 	metadata := map[string]string{
 		"round": "down",
 	}
@@ -62,7 +63,7 @@ func Test_LocalExtension(t *testing.T) {
 		"roundoff": "down",
 	}
 
-	ext := &mathexample.MathExtension{}
+	ext := &actions.MathExtension{}
 
 	initializer := &extensions.ExtensionInitializer{
 		Extension: ext,
@@ -72,14 +73,14 @@ func Test_LocalExtension(t *testing.T) {
 	instance1, err := initializer.CreateInstance(ctx, metadata)
 	assert.NoError(t, err)
 
-	result, err := instance1.Execute(ctx, "add", 1, 2)
+	result, err := instance1.Execute(callCtx, "add", 1, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, int(3), result[0])
 
-	result, err = instance1.Execute(ctx, "add", 1.2, 2.3)
+	result, err = instance1.Execute(callCtx, "add", 1.2, 2.3)
 	assert.Error(t, err)
 
-	result, err = instance1.Execute(ctx, "divide", 1, 2)
+	result, err = instance1.Execute(callCtx, "divide", 1, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(0), result[0]) // 1/2 rounded down to 0
 
@@ -89,7 +90,7 @@ func Test_LocalExtension(t *testing.T) {
 	updatedMetadata := instance2.Metadata()
 	assert.Equal(t, updatedMetadata["round"], "up")
 
-	result, err = instance2.Execute(ctx, "divide", 1, 2)
+	result, err = instance2.Execute(callCtx, "divide", 1, 2)
 	assert.NoError(t, err)
 	assert.Equal(t, big.NewInt(1), result[0]) // 1/2 rounded up -> 1
 }
@@ -97,6 +98,7 @@ func Test_LocalExtension(t *testing.T) {
 func Test_RemoteExtension(t *testing.T) {
 	ctx := context.Background()
 	ext := extensions.New("local:8080")
+	callCtx := &mockCtx{}
 
 	err := ext.Connect(ctx)
 	if err != nil {
@@ -113,7 +115,7 @@ func Test_RemoteExtension(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results, err := instance.Execute(ctx, "method1", "0x12345")
+	results, err := instance.Execute(callCtx, "method1", "0x12345")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,4 +123,42 @@ func Test_RemoteExtension(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
+}
+
+type mockCtx struct{}
+
+func (m *mockCtx) Caller() string {
+	return ""
+}
+
+func (m *mockCtx) Ctx() context.Context {
+	return context.Background()
+}
+
+func (m *mockCtx) DBID() string {
+	return ""
+}
+
+func (m *mockCtx) Datastore() actions.Datastore {
+	return nil
+}
+
+func (m *mockCtx) Mutative() bool {
+	return false
+}
+
+func (m *mockCtx) Procedure() string {
+	return ""
+}
+
+func (m *mockCtx) SetResult(result actions.Result) error {
+	return nil
+}
+
+func (m *mockCtx) Signer() []byte {
+	return nil
+}
+
+func (m *mockCtx) Values() map[string]any {
+	return nil
 }
