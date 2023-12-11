@@ -74,7 +74,7 @@ type mathExt struct{}
 
 var _ execution.Namespace = &mathExt{}
 
-func (m *mathExt) Call(caller execution.Scoper, method string, inputs []any) ([]any, error) {
+func (m *mathExt) Call(caller *execution.ScopeContext, method string, inputs []any) ([]any, error) {
 	if method != "add" {
 		return nil, fmt.Errorf("unknown method: %s", method)
 	}

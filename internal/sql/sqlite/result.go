@@ -14,6 +14,9 @@ type Result struct {
 	// stmt is the connection to the actual sqlite statement.
 	stmt *sqlite.Stmt
 
+	// err is any error that occurred during iteration.
+	err error
+
 	// closed indicates whether the result set is closed.
 	closed bool
 
@@ -40,28 +43,24 @@ type Result struct {
 }
 
 // Next steps to the next row.
-func (r *Result) Next() (rowReturned bool, err error) {
-
-	return r.next()
-}
-
-// next steps to the next row.
-// it does not acquire the result mutex.
-func (r *Result) next() (rowReturned bool, err error) {
+func (r *Result) Next() (rowReturned bool) {
 	if r.isClosed() {
-		return false, ErrClosed
+		r.err = ErrClosed
+		return false
 	}
 
 	if r.complete {
-		return false, nil
+		return false
 	}
 
-	rowReturned, err = r.stmt.Step()
+	rowReturned, err := r.stmt.Step()
 	if err != nil {
 		if errors.Is(err, sqlite.ResultInterrupt.ToError()) {
-			return false, ErrInterrupted
+			r.err = ErrInterrupted
+		} else {
+			r.err = err
 		}
-		return false, err
+		return false
 	}
 
 	if r.firstIteration {
@@ -73,7 +72,7 @@ func (r *Result) next() (rowReturned bool, err error) {
 		r.complete = true
 	}
 
-	return rowReturned, nil
+	return rowReturned
 }
 
 // Columns returns the column names of the current row.
@@ -117,9 +116,13 @@ func (r *Result) Values() ([]any, error) {
 	return values, nil
 }
 
+// Err gets any error that occurred during iteration.
+func (r *Result) Err() error {
+	return r.err
+}
+
 // Close closes the result set.
 func (r *Result) Close() error {
-
 	return r.close()
 }
 
@@ -142,15 +145,11 @@ func (r *Result) Finish() error {
 		return ErrClosed
 	}
 
-	for {
-		rowReturned, err := r.next()
-		if err != nil {
-			return errors.Join(err, r.close())
-		}
-
-		if !rowReturned {
-			break
-		}
+	// iterate through the result set to finish any remaining execution.
+	for r.Next() {
+	}
+	if r.Err() != nil {
+		return errors.Join(r.err, r.close())
 	}
 
 	return r.close()

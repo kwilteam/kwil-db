@@ -94,12 +94,13 @@ func (c *Connection) Get(ctx context.Context, key []byte) ([]byte, error) {
 	}
 	defer res.Finish()
 
-	rowReturned, err := res.Next()
-	if err != nil {
-		return nil, err
-	}
+	rowReturned := res.Next()
 	if !rowReturned {
 		return nil, nil
+	}
+
+	if res.Err() != nil {
+		return nil, res.Err()
 	}
 
 	values, err := res.Values()
