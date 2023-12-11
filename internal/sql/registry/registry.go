@@ -255,8 +255,8 @@ func (r *Registry) Execute(ctx context.Context, dbid string, stmt string, params
 
 	if skip {
 		return &sql.ResultSet{
-			Columns: []string{},
-			Rows:    [][]any{},
+			ReturnedColumns: []string{},
+			Rows:            [][]any{},
 		}, nil
 	}
 

@@ -220,8 +220,8 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 		failBuild(err, "failed to get extensions")
 	}
 
-	for _, ext := range extensions {
-		d.log.Debug("registered extension", zap.String("name", ext.Name()))
+	for name := range extensions {
+		d.log.Info("registered extension", zap.String("name", name))
 	}
 
 	reg, err := registry.NewRegistry(d.ctx, func(ctx context.Context, dbid string, create bool) (registry.Pool, error) {

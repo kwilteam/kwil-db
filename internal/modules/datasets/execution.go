@@ -88,12 +88,12 @@ func (u *DatasetModule) Execute(ctx context.Context, dbid string, action string,
 
 	for i := range args {
 		_, err = u.engine.Execute(ctx, &engineTypes.ExecutionData{
-			Dataset:          dbid,
-			Procedure:        action,
-			Mutative:         true,
-			Args:             args[i],
-			Caller:           tx.Sender,
-			CallerIdentifier: identifier,
+			Dataset:   dbid,
+			Procedure: action,
+			Mutative:  true,
+			Args:      args[i],
+			Signer:    tx.Sender,
+			Caller:    identifier,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute action '%s' on database '%s': %w", action, dbid, err)

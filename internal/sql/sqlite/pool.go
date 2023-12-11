@@ -333,25 +333,20 @@ func (p *Pool) Query(ctx context.Context, query string, args map[string]any) (*s
 
 func getResultSet(res sql.Result) (*sql.ResultSet, error) {
 	resultSet := &sql.ResultSet{
-		Columns: res.Columns(),
-		Rows:    make([][]any, 0),
+		ReturnedColumns: res.Columns(),
+		Rows:            make([][]any, 0),
 	}
 
-	for {
-		rowReturned, err := res.Next()
-		if err != nil {
-			return nil, err
-		}
-		if !rowReturned {
-			break
-		}
-
+	for res.Next() {
 		values, err := res.Values()
 		if err != nil {
 			return nil, err
 		}
 
 		resultSet.Rows = append(resultSet.Rows, values)
+	}
+	if res.Err() != nil {
+		return nil, res.Err()
 	}
 
 	return resultSet, nil

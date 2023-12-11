@@ -23,7 +23,7 @@ func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallRe
 
 	executeResult, err := s.engine.Call(ctx, body.DBID, body.Action, args, msg)
 	if err != nil {
-		return nil, status.Errorf(codes.Unknown, "failed to execution view action: %s", err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "failed to execute view action: %s", err.Error())
 	}
 
 	btsResult, err := json.Marshal(executeResult)

@@ -73,22 +73,16 @@ func (c *Connection) getColumnNames(ctx context.Context, table string) ([]string
 			nameIdx = i
 		}
 	}
-	for {
-		rowReturned, err := res.Next()
-		if err != nil {
-			return nil, err
-		}
-
-		if !rowReturned {
-			break
-		}
-
+	for res.Next() {
 		vals, err := res.Values()
 		if err != nil {
 			return nil, err
 		}
 
 		columns = append(columns, vals[nameIdx].(string))
+	}
+	if res.Err() != nil {
+		return nil, res.Err()
 	}
 
 	return columns, nil

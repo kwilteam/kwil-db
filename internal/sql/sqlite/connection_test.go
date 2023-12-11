@@ -381,8 +381,8 @@ func Test_WriterConn(t *testing.T) {
 
 				cancel()
 
-				err = res.Finish()
-				require.ErrorIs(t, err, sqlite.ErrInterrupted)
+				_ = res.Next()
+				require.ErrorIs(t, res.Err(), sqlite.ErrInterrupted)
 			},
 		},
 		{
@@ -500,9 +500,9 @@ func Test_InMemory(t *testing.T) {
 	res, err := conn.Execute(ctx, "SELECT 1+2", nil)
 	require.NoError(t, err)
 
-	rowReturned, err := res.Next()
-	require.NoError(t, err)
+	rowReturned := res.Next()
 	require.True(t, rowReturned)
+	require.NoError(t, res.Err())
 
 	vals, err := res.Values()
 	require.NoError(t, err)
@@ -608,15 +608,7 @@ func deleteUser(ctx context.Context, conn *sqlite.Connection, id int64) error {
 // getResults exports the results from a sqlite.Result.
 func getResults(res sql.Result) ([]map[string]any, error) {
 	results := make([]map[string]any, 0)
-	for {
-		rowReturned, err := res.Next()
-		if err != nil {
-			return nil, err
-		}
-		if !rowReturned {
-			break
-		}
-
+	for res.Next() {
 		values, err := res.Values()
 		if err != nil {
 			return nil, err
@@ -629,6 +621,9 @@ func getResults(res sql.Result) ([]map[string]any, error) {
 		}
 
 		results = append(results, record)
+	}
+	if res.Err() != nil {
+		return nil, res.Err()
 	}
 
 	return results, res.Close()

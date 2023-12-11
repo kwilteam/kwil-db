@@ -27,7 +27,7 @@ type dataset struct {
 // Call calls a procedure from the dataset.
 // If the procedure is not public, it will return an error.
 // It implements the Namespace interface.
-func (d *dataset) Call(caller Scoper, method string, inputs []any) ([]any, error) {
+func (d *dataset) Call(caller *ScopeContext, method string, inputs []any) ([]any, error) {
 	proc, ok := d.procedures[method]
 	if !ok {
 		return nil, fmt.Errorf(`procedure "%s" not found`, method)
@@ -37,7 +37,7 @@ func (d *dataset) Call(caller Scoper, method string, inputs []any) ([]any, error
 		return nil, fmt.Errorf(`procedure "%s" is not public`, method)
 	}
 
-	err := proc.call(caller.NewScope(), inputs)
+	err := proc.call(caller.NewScope(d.schema.DBID(), method), inputs)
 	if err != nil {
 		return nil, err
 	}
