@@ -204,6 +204,21 @@ unconditional_peer_ids = "{{ .ChainCfg.P2P.UnconditionalPeerIDs }}"
 # Toggle to disable guard against peers connecting from the same ip.
 allow_duplicate_ip = {{ .ChainCfg.P2P.AllowDuplicateIP }}
 
+# Enable gossiping of peer information
+pex = {{ .ChainCfg.P2P.PexReactor }}
+
+# Seed nodes used to obtain peer addresses. Only used if the peers in the
+# address book are unreachable.
+seeds = "{{ .ChainCfg.P2P.Seeds }}"
+
+# Seed mode, in which node constantly crawls the network and looks for
+# peers. If another node asks it for addresses, it responds and disconnects.
+#
+# It is recommended to instead run a dedicated seeder like https://github.com/kwilteam/cometseed.
+#
+# Requires peer-exchange to be enabled.
+seed_mode = {{ .ChainCfg.P2P.SeedMode }}
+
 #######################################################
 ###          Mempool Configuration Options          ###
 #######################################################
