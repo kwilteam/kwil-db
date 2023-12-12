@@ -28,7 +28,7 @@ func init() {
 }
 
 type Route interface {
-	PayloadType() string
+	PayloadType() string // not sure if we need this
 	Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse
 	Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error)
 }

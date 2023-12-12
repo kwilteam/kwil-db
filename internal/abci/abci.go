@@ -14,14 +14,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/core/utils"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
-	"github.com/kwilteam/kwil-db/internal/modules"
-	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
-	modDataset "github.com/kwilteam/kwil-db/internal/modules/datasets"
-	modVal "github.com/kwilteam/kwil-db/internal/modules/validators"
 	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
@@ -47,11 +41,10 @@ type AbciConfig struct {
 	// GasEnabled bool // for mempool policy modification
 }
 
-func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModule, vldtrs ValidatorModule, kv KVStore,
+func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule, kv KVStore,
 	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
 		cfg:        *cfg,
-		database:   database,
 		validators: vldtrs,
 		committer:  committer,
 		metadataStore: &metadataStore{
@@ -94,9 +87,6 @@ func pubkeyToAddr(pubkey []byte) (string, error) {
 type AbciApp struct {
 	cfg AbciConfig
 
-	// database is the database module that handles database deployment, dropping, and execution
-	database DatasetsModule
-
 	// validators is the validators module that handles joining and approving validators
 	validators ValidatorModule
 	// comet punishes by address, so we maintain an address=>pubkey map.
@@ -128,7 +118,6 @@ type AbciApp struct {
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
 
-	// TODO: this is not passed in the constructor.  just testing it out right now.
 	txRouter TxRouter
 }
 
@@ -257,265 +246,6 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	return &abciTypes.ResponseCheckTx{Code: code.Uint32()}, nil
 }
 
-func (a *AbciApp) executeTx(ctx context.Context, rawTx []byte, logger *log.Logger) *abciTypes.ExecTxResult {
-	var events []abciTypes.Event
-	var gasUsed int64
-
-	newExecuteTxRes := func(code transactions.TxCode, err error) *abciTypes.ExecTxResult {
-		res := &abciTypes.ExecTxResult{
-			Code:    code.Uint32(),
-			GasUsed: gasUsed,
-			Events:  events,
-			Log:     "success",
-			// Data, GasWanted, Info, Codespace
-		}
-
-		if err != nil {
-			res.Log = fmt.Sprintf("FAILED TRANSACTION: %v", err) // may be too much info in err
-		}
-
-		return res
-	}
-
-	tx := &transactions.Transaction{}
-	err := tx.UnmarshalBinary(rawTx)
-	if err != nil {
-		logger.Error("failed to unmarshal transaction", zap.Error(err))
-		return newExecuteTxRes(codeEncodingError, err)
-	}
-
-	logger = logger.With(zap.String("Sender", hex.EncodeToString(tx.Sender)),
-		zap.String("PayloadType", tx.Body.PayloadType.String()))
-
-	switch tx.Body.PayloadType {
-	case transactions.PayloadTypeDeploySchema:
-		var schemaPayload transactions.Schema
-		err = schemaPayload.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		var schema *engineTypes.Schema
-		schema, err = modDataset.ConvertSchemaToEngine(&schemaPayload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		var res *modDataset.ExecutionResponse
-		res, err = a.database.Deploy(ctx, schema, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		dbID := utils.GenerateDBID(schema.Name, tx.Sender)
-		gasUsed = res.GasUsed
-		events = []abciTypes.Event{
-			{
-				Type: transactions.PayloadTypeDeploySchema.String(),
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Sender", Value: hex.EncodeToString(tx.Sender), Index: true},
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "DBID", Value: dbID, Index: true},
-				},
-			},
-		}
-		logger.Debug("deployed database", zap.String("DBID", dbID))
-
-	case transactions.PayloadTypeDropSchema:
-		drop := &transactions.DropSchema{}
-		err = drop.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("drop database", zap.String("DBID", drop.DBID))
-
-		var res *modDataset.ExecutionResponse
-		res, err = a.database.Drop(ctx, drop.DBID, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeExecuteAction:
-		execution := &transactions.ActionExecution{}
-		err = execution.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("execute action",
-			zap.String("DBID", execution.DBID), zap.String("Action", execution.Action),
-			zap.Any("Args", execution.Arguments))
-
-		// say they don't have the balance to pay the required gas, shouldn't we
-		// try to reduce their balance by some amount simply for including the
-		// transaction in the block?
-
-		var res *modDataset.ExecutionResponse
-		res, err = a.database.Execute(ctx, execution.DBID, execution.Action, convertArgs(execution.Arguments), tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeTransfer:
-		transfer := &transactions.Transfer{}
-		err = transfer.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Info("transfer", zap.String("amount", transfer.Amount),
-			zap.String("to", hex.EncodeToString(transfer.To)),
-			zap.String("fee", tx.Body.Fee.String()))
-
-		amt, ok := big.NewInt(0).SetString(transfer.Amount, 10)
-		if !ok {
-			logger.Warn("invalid amount", zap.String("amt_str", transfer.Amount))
-			return newExecuteTxRes(codeInvalidAmount, err)
-		}
-
-		if amt.Cmp(&big.Int{}) < 0 { // the accounts module should also check this
-			logger.Warn("amount must be non-negative", zap.String("amt_str", transfer.Amount))
-			return newExecuteTxRes(codeInvalidAmount, err)
-		}
-
-		txAcct := &modAcct.TxAcct{
-			Sender: tx.Sender,
-			Fee:    tx.Body.Fee,
-			Nonce:  int64(tx.Body.Nonce),
-		}
-		err := a.accounts.TransferTx(ctx, txAcct, transfer.To, amt)
-		if err != nil {
-			logger.Warn("transfer failed", zap.Error(err))
-			return newExecuteTxRes(modules.ErrCode(err), err)
-		}
-
-	case transactions.PayloadTypeValidatorJoin:
-		var join transactions.ValidatorJoin
-		err = join.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("join validator",
-			zap.String("pubkey", hex.EncodeToString(tx.Sender)),
-			zap.Int64("power", int64(join.Power)))
-
-		var res *modVal.ExecutionResponse
-		res, err = a.validators.Join(ctx, int64(join.Power), tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		events = []abciTypes.Event{
-			{
-				Type: "validator_join",
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
-					{Key: "ValidatorPower", Value: fmt.Sprintf("%d", join.Power), Index: true},
-				},
-			},
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeValidatorLeave:
-		var leave transactions.ValidatorLeave
-		err = leave.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(tx.Sender)))
-
-		var res *modVal.ExecutionResponse
-		res, err = a.validators.Leave(ctx, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		events = []abciTypes.Event{
-			{
-				Type: "validator_leave",
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
-					{Key: "ValidatorPower", Value: "0", Index: true},
-				},
-			},
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeValidatorApprove:
-		var approve transactions.ValidatorApprove
-		err = approve.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("approve validator", zap.String("pubkey", hex.EncodeToString(approve.Candidate)))
-
-		var res *modVal.ExecutionResponse
-		res, err = a.validators.Approve(ctx, approve.Candidate, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		events = []abciTypes.Event{
-			{
-				Type: "validator_approve",
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "CandidatePubKey", Value: hex.EncodeToString(approve.Candidate), Index: true},
-					{Key: "ApproverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
-				},
-			},
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeValidatorRemove:
-		var remove transactions.ValidatorRemove
-		err = remove.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("remove validator", zap.String("pubkey", hex.EncodeToString(remove.Validator)))
-
-		var res *modVal.ExecutionResponse
-		res, err = a.validators.Remove(ctx, remove.Validator, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		events = []abciTypes.Event{
-			{
-				Type: "validator_remove",
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "TargetPubKey", Value: hex.EncodeToString(remove.Validator), Index: true},
-					{Key: "RemoverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
-				},
-			},
-		}
-
-		gasUsed = res.GasUsed
-
-	default:
-		err = fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
-		return newExecuteTxRes(codeUnknownError, err)
-	}
-
-	return newExecuteTxRes(codeOk, nil)
-}
-
 // FinalizeBlock is on the consensus connection
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int("height", int(req.Height)))
@@ -555,8 +285,24 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	for _, tx := range req.Txs {
 		// DeliverTx was the part in this loop.
-		execRes := a.executeTx(ctx, tx, logger)
-		res.TxResults = append(res.TxResults, execRes)
+		decoded := &transactions.Transaction{}
+		err := decoded.UnmarshalBinary(tx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal transaction: %w", err)
+		}
+
+		txRes := a.txRouter.Execute(ctx, decoded)
+
+		abciRes := &abciTypes.ExecTxResult{}
+		if txRes.Error != nil {
+			abciRes.Log = txRes.Error.Error()
+		} else {
+			abciRes.Log = "success"
+		}
+		abciRes.Code = txRes.ResponseCode.Uint32()
+		abciRes.GasUsed = txRes.Spend
+
+		res.TxResults = append(res.TxResults, abciRes)
 	}
 
 	// EndBlock was this part
@@ -1029,19 +775,6 @@ func (a *AbciApp) createNewAppHash(ctx context.Context, addition []byte) ([]byte
 // TODO: here should probably be other apphash computations such as the genesis
 // config digest. The cmd/kwild/config package should probably not
 // contain consensus-critical computations.
-
-// convertArgs converts the string args to type any.
-func convertArgs(args [][]string) [][]any {
-	converted := make([][]any, len(args))
-	for i, arg := range args {
-		converted[i] = make([]any, len(arg))
-		for j, a := range arg {
-			converted[i][j] = a
-		}
-	}
-
-	return converted
-}
 
 var (
 	appHashKey     = []byte("a")
