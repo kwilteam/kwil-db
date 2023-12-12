@@ -4,16 +4,16 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	// NOTE: we are defining interfaces, but using the types defined in the
 	// packages that provide the concrete implementations. This is a bit
 	// backwards, but it at least allows us to stub out for testing.
 
-	"github.com/kwilteam/kwil-db/internal/txrouter"
-
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
+	"github.com/kwilteam/kwil-db/internal/txrouter"
 	"github.com/kwilteam/kwil-db/internal/validators"
 )
 
@@ -38,21 +38,6 @@ type ValidatorModule interface {
 	// Punish may be used at the start of block processing when byzantine
 	// validators are listed by the consensus client (no transaction).
 	Punish(ctx context.Context, validator []byte, power int64) error
-
-	// Finalize is used at the end of block processing to retrieve the validator
-	// updates to be provided to the consensus client for the next block. This
-	// is not idempotent. The modules working list of updates is reset until
-	// subsequent join/approves are processed for the next block.
-	Finalize(ctx context.Context) ([]*validators.Validator, error) // end of block processing requires providing list of updates to the node's consensus client
-
-	// Updates block height stored by the validator manager. Called in the abci Commit
-	UpdateBlockHeight(ctx context.Context, blockHeight int64)
-}
-
-// AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
-type AtomicCommitter interface {
-	Begin(ctx context.Context, idempotencyKey []byte) error
-	Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error)
 }
 
 // KVStore is an interface for a basic key-value store
@@ -94,5 +79,8 @@ type AccountsModule interface {
 }
 
 type TxRouter interface {
+	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
+	Begin(ctx context.Context, blockHeight int64) error
+	Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
 	Execute(ctx context.Context, tx *transactions.Transaction) *txrouter.TxResponse
 }

@@ -42,11 +42,10 @@ type AbciConfig struct {
 }
 
 func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule, kv KVStore,
-	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
+	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
 	app := &AbciApp{
 		cfg:        *cfg,
 		validators: vldtrs,
-		committer:  committer,
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
@@ -55,11 +54,6 @@ func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule
 		accounts:     accounts,
 
 		valAddrToKey: make(map[string][]byte),
-
-		mempool: &mempool{
-			accounts:     make(map[string]*userAccount),
-			accountStore: accounts,
-		},
 
 		log: log.NewNoOp(),
 	}
@@ -91,11 +85,6 @@ type AbciApp struct {
 	validators ValidatorModule
 	// comet punishes by address, so we maintain an address=>pubkey map.
 	valAddrToKey map[string][]byte // NOTE: includes candidates
-	// Validator updates obtained in EndBlock, applied to valAddrToKey in Commit
-	valUpdates []*validators.Validator
-
-	// committer is the atomic committer that handles atomic commits across multiple stores
-	committer AtomicCommitter
 
 	// snapshotter is the snapshotter module that handles snapshotting
 	snapshotter SnapshotModule
@@ -109,9 +98,6 @@ type AbciApp struct {
 	// accountStore is the store that maintains the account state
 	accounts AccountsModule
 
-	// mempool maintains in-memory account state to validate the unconfirmed transactions against.
-	mempool *mempool
-
 	log log.Logger
 
 	// Expected AppState after bootstrapping the node with a given snapshot,
@@ -123,25 +109,6 @@ type AbciApp struct {
 
 func (a *AbciApp) ChainID() string {
 	return a.cfg.ChainID
-}
-
-// AccountInfo gets the pending balance and nonce for an account. If there are
-// no unconfirmed transactions for the account, the latest confirmed values are
-// returned.
-func (a *AbciApp) AccountInfo(ctx context.Context, identifier []byte) (balance *big.Int, nonce int64, err error) {
-	// If we have any unconfirmed transactions for the user, report that info
-	// without even checking the account store.
-	ua := a.mempool.peekAccountInfo(ctx, identifier)
-	if ua.nonce > 0 {
-		return ua.balance, ua.nonce, nil
-	}
-	// Nothing in mempool, check account store. Changes to the account store are
-	// committed before the mempool is cleared, so there should not be any race.
-	acct, err := a.accounts.Account(ctx, identifier)
-	if err != nil {
-		return nil, 0, err
-	}
-	return acct.Balance, acct.Nonce, nil
 }
 
 var _ abciTypes.Application = &AbciApp{}
@@ -206,12 +173,13 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 			logger.Info("wrong chain ID", zap.String("payloadType", tx.Body.PayloadType.String()))
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "wrong chain ID"}, nil
 		}
-		// Verify Payload type
-		if !tx.Body.PayloadType.Valid() {
-			code = codeInvalidTxType
-			logger.Debug("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
-			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "invalid payload type"}, nil
-		}
+		// we no longer need to do this, it fails in the mempool itself
+		// // Verify Payload type
+		// if !tx.Body.PayloadType.Valid() {
+		// 	code = codeInvalidTxType
+		// 	logger.Debug("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
+		// 	return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "invalid payload type"}, nil
+		// }
 
 		// Verify Signature
 		err = ident.VerifyTransaction(tx)
@@ -225,7 +193,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce))
 	}
 
-	err = a.mempool.applyTransaction(ctx, tx)
+	err = a.txRouter.ApplyMempool(ctx, tx)
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
@@ -253,11 +221,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	res := &abciTypes.ResponseFinalizeBlock{}
 
 	// BeginBlock was this part
-
-	idempotencyKey := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idempotencyKey, uint64(req.Height))
-
-	err := a.committer.Begin(ctx, idempotencyKey)
+	err := a.txRouter.Begin(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("begin atomic commit failed: %w", err)
 	}
@@ -306,17 +270,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 
 	// EndBlock was this part
-
-	a.valUpdates, err = a.validators.Finalize(ctx)
-	if err != nil {
-		panic(fmt.Sprintf("failed to finalize validator updates: %v", err))
-	}
-
-	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(a.valUpdates))
-	for i, up := range a.valUpdates {
-		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
-	}
-
 	res.ConsensusParamUpdates = &tendermintTypes.ConsensusParams{ // why are we "updating" these on every block? Should be nil for no update.
 		// we can include evidence in here for malicious actors, but this is not important this release
 		Version: &tendermintTypes.VersionParams{
@@ -327,12 +280,27 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		},
 	}
 
-	id, err := a.committer.Commit(ctx, idempotencyKey)
+	// TODO: some of this commit logic would actually go in Commit, but we need
+	// to reconcile some issues with our idempotent commit process first.
+	// while we have idempotent commits, it is ok to have this here.
+	newAppHash, validatorUpdates, err := a.txRouter.Commit(ctx, req.Height)
 	if err != nil {
-		return nil, fmt.Errorf("failed to commit atomic commit: %w", err)
+		return nil, fmt.Errorf("failed to commit transaction router: %w", err)
 	}
 
-	appHash, err := a.createNewAppHash(ctx, id)
+	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(validatorUpdates))
+	for i, up := range validatorUpdates {
+		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
+
+		addr := cometAddrFromPubKey(up.PubKey)
+		if up.Power < 1 { // leave or punish
+			delete(a.valAddrToKey, addr)
+		} else { // add or update without remove
+			a.valAddrToKey[addr] = up.PubKey
+		}
+	}
+
+	appHash, err := a.createNewAppHash(ctx, newAppHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new app hash: %w", err)
 	}
@@ -347,24 +315,10 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		return nil, fmt.Errorf("failed to increment block height: %w", err)
 	}
 
-	defer a.mempool.reset()
-
-	// Update the validator address=>pubkey map used by Penalize.
-	for _, up := range a.valUpdates {
-		addr := cometAddrFromPubKey(up.PubKey)
-		if up.Power < 1 { // leave or punish
-			delete(a.valAddrToKey, addr)
-		} else { // add or update without remove
-			a.valAddrToKey[addr] = up.PubKey
-		}
-	}
-	a.valUpdates = nil
-
 	height, err := a.metadataStore.GetBlockHeight(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block height: %w", err)
 	}
-	a.validators.UpdateBlockHeight(ctx, height)
 
 	// snapshotting
 	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(uint64(height)) {

@@ -28,7 +28,6 @@ func init() {
 }
 
 type Route interface {
-	PayloadType() string // not sure if we need this
 	Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse
 	Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error)
 }
@@ -74,10 +73,6 @@ func (d *deployDatasetRoute) Execute(ctx context.Context, router *Router, tx *tr
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (d *deployDatasetRoute) PayloadType() string {
-	return transactions.PayloadTypeDeploySchema.String()
-}
-
 func (d *deployDatasetRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(1000000000000000000), nil
 }
@@ -102,10 +97,6 @@ func (d *dropDatasetRoute) Execute(ctx context.Context, router *Router, tx *tran
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
-}
-
-func (d *dropDatasetRoute) PayloadType() string {
-	return transactions.PayloadTypeDropSchema.String()
 }
 
 func (d *dropDatasetRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
@@ -163,10 +154,6 @@ func (e *executeActionRoute) Execute(ctx context.Context, router *Router, tx *tr
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (e *executeActionRoute) PayloadType() string {
-	return transactions.PayloadTypeExecuteAction.String()
-}
-
 func (e *executeActionRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(2000000000000000), nil
 }
@@ -208,10 +195,6 @@ func (t *transferRoute) Execute(ctx context.Context, router *Router, tx *transac
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (t *transferRoute) PayloadType() string {
-	return transactions.PayloadTypeTransfer.String()
-}
-
 func (t *transferRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(210_000), nil
 }
@@ -236,10 +219,6 @@ func (v *validatorJoinRoute) Execute(ctx context.Context, router *Router, tx *tr
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
-}
-
-func (v *validatorJoinRoute) PayloadType() string {
-	return transactions.PayloadTypeValidatorJoin.String()
 }
 
 func (v *validatorJoinRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
@@ -268,10 +247,6 @@ func (v *validatorApproveRoute) Execute(ctx context.Context, router *Router, tx 
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorApproveRoute) PayloadType() string {
-	return transactions.PayloadTypeValidatorApprove.String()
-}
-
 func (v *validatorApproveRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
@@ -296,10 +271,6 @@ func (v *validatorRemoveRoute) Execute(ctx context.Context, router *Router, tx *
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
-}
-
-func (v *validatorRemoveRoute) PayloadType() string {
-	return transactions.PayloadTypeValidatorRemove.String()
 }
 
 func (v *validatorRemoveRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
@@ -327,10 +298,6 @@ func (v *validatorLeaveRoute) Execute(ctx context.Context, router *Router, tx *t
 	}
 
 	return txRes(spend, transactions.CodeOk, nil)
-}
-
-func (v *validatorLeaveRoute) PayloadType() string {
-	return transactions.PayloadTypeValidatorLeave.String()
 }
 
 func (v *validatorLeaveRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
