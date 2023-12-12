@@ -17,6 +17,11 @@ import (
 // TransactionBody and CallMessageBody
 const MsgDescriptionMaxLength = 200
 
+// TxSignerNetwork is used to identify when a transaction has originated from general
+// network consensus (via vote extensions), rather than from an individual user / validator.
+// It replaces the Sender field in the Transaction struct.
+var TxSignerNetwork = []byte("network")
+
 const txMsgToSignTmplV0 = `%s
 
 PayloadType: %s
