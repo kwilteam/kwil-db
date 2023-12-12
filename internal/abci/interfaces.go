@@ -12,6 +12,7 @@ import (
 	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
 	modDataset "github.com/kwilteam/kwil-db/internal/modules/datasets"
 	modVal "github.com/kwilteam/kwil-db/internal/modules/validators"
+	"github.com/kwilteam/kwil-db/internal/txrouter"
 
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
@@ -128,4 +129,8 @@ type AccountsModule interface {
 	Account(ctx context.Context, acctID []byte) (*accounts.Account, error)
 	Credit(ctx context.Context, acctID []byte, amt *big.Int) error
 	TransferTx(ctx context.Context, tx *modAcct.TxAcct, to []byte, amt *big.Int) error
+}
+
+type TxRouter interface {
+	Execute(ctx context.Context, tx *transactions.Transaction) *txrouter.TxResponse
 }
