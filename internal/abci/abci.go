@@ -127,6 +127,9 @@ type AbciApp struct {
 	// Expected AppState after bootstrapping the node with a given snapshot,
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
+
+	// TODO: this is not passed in the constructor.  just testing it out right now.
+	txRouter TxRouter
 }
 
 func (a *AbciApp) ChainID() string {
