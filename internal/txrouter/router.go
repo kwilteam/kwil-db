@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
@@ -30,6 +31,23 @@ func (r *Router) Execute(ctx context.Context, tx *transactions.Transaction) *TxR
 	}
 
 	return route.Execute(ctx, r, tx)
+}
+
+// Begin signals that a new block has begun.
+func (r *Router) Begin(ctx context.Context, blockHeight int64) error {
+	return nil
+}
+
+// Commit signals that a block has been committed.
+// TODO: once we use postgres, this will no longer be applicable
+// we will need a separate function for getting end results and committing
+// Right now, Commit is called in FinalizeBlock in abci. However, it should
+// be called in Commit.  The reason we can get away with this is because
+// we rely on idempotency keys to ensure we don't double execute to a datastore.
+// With Postgres, we will simply rely on its cross-schema
+// transaction support.
+func (r *Router) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
+	return nil, nil, nil
 }
 
 // TxResponse is the response from a transaction.
@@ -77,6 +95,12 @@ type ValidatorStore interface {
 	Leave(ctx context.Context, joiner []byte) error
 	Approve(ctx context.Context, joiner, approver []byte) error
 	Remove(ctx context.Context, target, validator []byte) error
+}
+
+// AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
+type AtomicCommitter interface {
+	Begin(ctx context.Context, idempotencyKey []byte) error
+	Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error)
 }
 
 // checkAndSpend checks the price of a transaction.
