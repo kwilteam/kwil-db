@@ -23,13 +23,23 @@ import (
 // messages from cometBFT that we will log at Debug level. These are exact
 // messages, no grep patterns.
 var demotedInfoMsgs = map[string]string{
-	"indexed block exents":             "",
 	"indexed block events":             "",
 	"committed state":                  "",
 	"received proposal":                "",
 	"received complete proposal block": "",
 	"executed block":                   "",
 	"Timed out":                        "consensus", // only the one from consensus.(*timeoutTicker).timeoutRoutine, which seems to be normal
+}
+
+// demotedErrMsgs contain error-level messages that should not be logged as
+// errors, and are instead logged at Warn level. For example, a peer hanging up
+// on us is barely log-worthy and certainly not an error that indicates a
+// serious problem, which is logged with a large call stack dump. The logs in
+// cometbft/p2p.(*Switch) are the most egregious, but most of cometbft uses
+// error logging quite liberally, probably because they have no Warn.
+var demotedErrMsgs = map[string]string{
+	"Stopping peer for error":   "p2p",
+	"error while stopping peer": "p2p",
 }
 
 // LogWrapper that implements cometbft's Logger interface.
@@ -63,9 +73,12 @@ func (lw *LogWrapper) Info(msg string, kvs ...any) {
 }
 
 func (lw *LogWrapper) Error(msg string, kvs ...any) {
-	// fields := append(keyValsToFields(kvs), zap.Stack("stacktrace"))
-	// lw.log.Error(msg, fields...)
-	lw.log.Error(msg, keyValsToFields(kvs)...)
+	logFun := lw.log.Error
+	if module, quiet := demotedErrMsgs[msg]; quiet &&
+		(module == "" || lw.module == module) {
+		logFun = lw.log.Warn
+	}
+	logFun(msg, keyValsToFields(kvs)...)
 }
 
 func (lw *LogWrapper) With(kvs ...any) cometLog.Logger {
