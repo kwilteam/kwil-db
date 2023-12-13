@@ -11,7 +11,7 @@ const (
 	ownerOnlyActionName = "owner_only"
 )
 
-func ExecuteOwnerActionSpecification(ctx context.Context, t *testing.T, execute ExecuteOwnerActionsDsl) {
+func ExecuteOwnerActionSpecification(ctx context.Context, t *testing.T, execute ExecuteActionsDsl) {
 	t.Logf("Executing owner action specification")
 
 	db := SchemaLoader.Load(t, SchemaTestDB)
@@ -24,7 +24,7 @@ func ExecuteOwnerActionSpecification(ctx context.Context, t *testing.T, execute 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 }
 
-func ExecuteOwnerActionFailSpecification(ctx context.Context, t *testing.T, execute ExecuteOwnerActionsDsl, dbID string) {
+func ExecuteOwnerActionFailSpecification(ctx context.Context, t *testing.T, execute ExecuteActionsDsl, dbID string) {
 	t.Logf("Executing owner action fail specification")
 
 	actionInputs := []any{}
