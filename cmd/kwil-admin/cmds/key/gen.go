@@ -33,7 +33,8 @@ func genCmd() *cobra.Command {
 				if raw {
 					return display.PrintCmd(cmd, display.RespString(hex.EncodeToString(privKey)))
 				} else {
-					return display.PrintCmd(cmd, abci.PrivKeyInfo(privKey))
+					keyInfo, _ := abci.PrivKeyInfo(privKey) // just generated, won't error
+					return display.PrintCmd(cmd, keyInfo)
 				}
 			}
 
