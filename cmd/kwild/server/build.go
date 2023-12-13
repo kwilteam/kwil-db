@@ -36,6 +36,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/adapter"
 	"github.com/kwilteam/kwil-db/internal/sql/registry"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/kwilteam/kwil-db/internal/txrouter"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -67,9 +68,6 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	accs := buildAccountRepository(d, closers, ac)
 	accsMod := buildAccountsModule(accs) // abci accounts module
 
-	// datasets module
-	datasetsModule := buildDatasetsModule(d, e, accs)
-
 	// validator updater and store
 	vstore := buildValidatorManager(d, closers, ac)
 
@@ -80,20 +78,22 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	bootstrapperModule := buildBootstrapper(d)
 
-	abciApp := buildAbci(d, closers, accsMod, datasetsModule, validatorModule,
-		ac, snapshotModule, bootstrapperModule)
+	router := buildTxRouter(d, accs, e, vstore, ac)
+
+	abciApp := buildAbci(d, closers, accsMod, validatorModule,
+		router, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
 	// tx service and grpc server
-	txsvc := buildTxSvc(d, datasetsModule, accsMod, vstore,
-		&wrappedCometBFTClient{cometBftClient}, abciApp)
+	txsvc := buildTxSvc(d, &engineAdapter{e},
+		&wrappedCometBFTClient{cometBftClient}, router)
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	// admin service and server
-	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient}, abciApp, vstore)
+	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient}, router, vstore, abciApp.ChainID())
 	adminTCPServer := buildAdminService(d, closers, admsvc, txsvc)
 
 	return &Server{
@@ -146,8 +146,13 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule, datasetsModule abci.DatasetsModule, validatorModule abci.ValidatorModule,
-	committer *sessions.MultiCommitter, snapshotter *snapshots.SnapshotStore, bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
+func buildTxRouter(d *coreDependencies, accs *accounts.AccountStore, db txrouter.DatabaseEngine, validators txrouter.ValidatorStore, atomicCommitter txrouter.AtomicCommitter) *txrouter.Router {
+	return txrouter.NewRouter(db, accs, validators, atomicCommitter, *d.log.Named("tx-router"))
+}
+
+func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
+	validatorModule abci.ValidatorModule, router abci.TxApp, snapshotter *snapshots.SnapshotStore,
+	bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
 		GuaranteeFSync: true,
@@ -172,24 +177,22 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 	}
 	return abci.NewAbciApp(cfg,
 		accountsModule,
-		datasetsModule,
 		validatorModule,
 		badgerKv,
-		committer,
 		sh,
 		bootstrapper,
-		abci.WithLogger(*d.log.Named("abci")),
+		router,
+		*d.log.Named("abci"),
 	)
 }
 
-func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, accs txSvc.AccountReader,
-	vstore *vmgr.ValidatorMgr, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
-	return txSvc.NewService(txsvc, accs, vstore, cometBftClient, nodeApp,
+func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
+	return txSvc.NewService(txsvc, cometBftClient, nodeApp,
 		txSvc.WithLogger(*d.log.Named("tx-service")),
 	)
 }
 
-func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, node admSvc.NodeApplication, validatorStore admSvc.ValidatorReader) *admSvc.Service {
+func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, txApp admSvc.TxApp, validatorStore admSvc.ValidatorReader, chainID string) *admSvc.Service {
 	pk, err := crypto.Ed25519PrivateKeyFromBytes(d.privKey.Bytes())
 	if err != nil {
 		failBuild(err, "failed to build admin service")
@@ -197,20 +200,8 @@ func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, 
 
 	signer := auth.Ed25519Signer{Ed25519PrivateKey: *pk}
 
-	return admSvc.NewService(transactor, node, validatorStore, &signer, d.cfg,
+	return admSvc.NewService(transactor, txApp, validatorStore, &signer, d.cfg, chainID,
 		admSvc.WithLogger(*d.log.Named("admin-service")),
-	)
-}
-
-func buildDatasetsModule(d *coreDependencies, eng datasets.Engine, accs datasets.AccountStore) *datasets.DatasetModule {
-	feeMultiplier := 1
-	if d.genesisCfg.ConsensusParams.WithoutGasCosts {
-		feeMultiplier = 0
-	}
-
-	return datasets.NewDatasetModule(eng, accs,
-		datasets.WithLogger(*d.log.Named("dataset-module")),
-		datasets.WithFeeMultiplier(int64(feeMultiplier)),
 	)
 }
 

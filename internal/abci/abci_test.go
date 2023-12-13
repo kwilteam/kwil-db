@@ -92,19 +92,6 @@ func newTxBts(t *testing.T, nonce uint64, signer auth.Signer) []byte {
 	return bts
 }
 
-func newTx(t *testing.T, nonce uint64, sender string) *transactions.Transaction {
-	return &transactions.Transaction{
-		Signature: &auth.Signature{},
-		Body: &transactions.TransactionBody{
-			Description: "test",
-			Payload:     []byte(`random payload`),
-			Fee:         big.NewInt(0),
-			Nonce:       nonce,
-		},
-		Sender: []byte(sender),
-	}
-}
-
 func Test_prepareMempoolTxns(t *testing.T) {
 	// To make these tests deterministic, we manually craft certain misorderings
 	// and the known expected orderings. Also include some malformed
@@ -368,40 +355,3 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 		})
 	}
 }
-
-// func Test_CheckTx(t *testing.T) {
-// 	m := &mempool{
-// 		accountStore: &MockAccountsModule{},
-// 		accounts:     make(map[string]*userAccount),
-// 	}
-// 	ctx := context.Background()
-
-// 	// Successful transaction A: 1
-// 	err := m.applyTransaction(ctx, newTx(t, 1, "A"))
-// 	assert.NoError(t, err)
-// 	assert.EqualValues(t, m.accounts["A"].nonce, 1)
-
-// 	// Successful transaction A: 2
-// 	err = m.applyTransaction(ctx, newTx(t, 2, "A"))
-// 	assert.NoError(t, err)
-// 	assert.EqualValues(t, m.accounts["A"].nonce, 2)
-
-// 	// Duplicate nonce failure
-// 	err = m.applyTransaction(ctx, newTx(t, 2, "A"))
-// 	assert.Error(t, err)
-// 	assert.EqualValues(t, m.accounts["A"].nonce, 2)
-
-// 	// Invalid order
-// 	err = m.applyTransaction(ctx, newTx(t, 4, "A"))
-// 	assert.Error(t, err)
-// 	assert.EqualValues(t, m.accounts["A"].nonce, 2)
-
-// 	err = m.applyTransaction(ctx, newTx(t, 3, "A"))
-// 	assert.NoError(t, err)
-// 	assert.EqualValues(t, m.accounts["A"].nonce, 3)
-
-// 	// Recheck nonce 4 transaction
-// 	err = m.applyTransaction(ctx, newTx(t, 4, "A"))
-// 	assert.NoError(t, err)
-// 	assert.EqualValues(t, m.accounts["A"].nonce, 4)
-// }

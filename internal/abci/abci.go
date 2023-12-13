@@ -42,7 +42,7 @@ type AbciConfig struct {
 }
 
 func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule, kv KVStore,
-	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
+	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, log log.Logger) *AbciApp {
 	app := &AbciApp{
 		cfg:        *cfg,
 		validators: vldtrs,
@@ -52,14 +52,11 @@ func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule
 		bootstrapper: bootstrapper,
 		snapshotter:  snapshotter,
 		accounts:     accounts,
+		txRouter:     txRouter,
 
 		valAddrToKey: make(map[string][]byte),
 
-		log: log.NewNoOp(),
-	}
-
-	for _, opt := range opts {
-		opt(app)
+		log: log,
 	}
 
 	return app
@@ -104,7 +101,7 @@ type AbciApp struct {
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
 
-	txRouter TxRouter
+	txRouter TxApp
 }
 
 func (a *AbciApp) ChainID() string {
@@ -778,3 +775,8 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 
 	return m.SetBlockHeight(ctx, height+1)
 }
+
+// VotePayload is the payload of a vote, which is passed as a regular transaction.
+// It includes an "ID" field, and a "Vote" field.  The "ID" field is simply a hash
+// of the "Vote" field. It therefore has to have some sort of uniqueness.
+type VotePayload struct{}

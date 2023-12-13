@@ -78,7 +78,10 @@ type AccountsModule interface {
 	Credit(ctx context.Context, acctID []byte, amt *big.Int) error
 }
 
-type TxRouter interface {
+// TxApp is an application that can process transactions.
+// It has methods for beginning and ending blocks, applying transactions,
+// and managing a mempool
+type TxApp interface {
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
 	Begin(ctx context.Context, blockHeight int64) error
 	Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)

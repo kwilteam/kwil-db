@@ -30,22 +30,18 @@ type BlockchainTransactor interface {
 	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
 }
 
-// NodeApplication is the abci application that is running on the node.
-type NodeApplication interface {
-	ChainID() string
+type TxApp interface {
+	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 	// AccountInfo returns the unconfirmed account info for the given identifier.
-	AccountInfo(ctx context.Context, identifier []byte) (balance *big.Int, nonce int64, err error)
+	// If unconfirmed is true, the account found in the mempool is returned.
+	// Otherwise, the account found in the blockchain is returned.
+	AccountInfo(ctx context.Context, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
 }
 
 // ValidatorReader reads data about the validator store.
 type ValidatorReader interface {
 	CurrentValidators(ctx context.Context) ([]*validators.Validator, error)
 	ActiveVotes(ctx context.Context) ([]*validators.JoinRequest, []*validators.ValidatorRemoveProposal, error)
-	// JoinStatus(ctx context.Context, joiner []byte) ([]*JoinRequest, error)
-	PriceJoin(ctx context.Context) (*big.Int, error)
-	PriceLeave(ctx context.Context) (*big.Int, error)
-	PriceApprove(ctx context.Context) (*big.Int, error)
-	PriceRemove(ctx context.Context) (*big.Int, error)
 }
 
 type AdminSvcOpt func(*Service)
@@ -60,12 +56,13 @@ func WithLogger(logger log.Logger) AdminSvcOpt {
 type Service struct {
 	admpb.UnimplementedAdminServiceServer
 	blockchain BlockchainTransactor // node is the local node that can accept transactions.
-	nodeApp    NodeApplication
+	TxApp      TxApp
 	validators ValidatorReader
 
 	cfg *config.KwildConfig
 
-	log log.Logger
+	log     log.Logger
+	chainId string
 
 	signer auth.Signer // signer is an ed25519 signer derived from the nodes private key.
 }
@@ -73,12 +70,13 @@ type Service struct {
 var _ admpb.AdminServiceServer = (*Service)(nil)
 
 // NewService constructs a new Service.
-func NewService(blockchain BlockchainTransactor, node NodeApplication, validators ValidatorReader, signer auth.Signer, cfg *config.KwildConfig, opts ...AdminSvcOpt) *Service {
+func NewService(blockchain BlockchainTransactor, txApp TxApp, validators ValidatorReader, signer auth.Signer, cfg *config.KwildConfig, chainId string, opts ...AdminSvcOpt) *Service {
 	s := &Service{
 		blockchain: blockchain,
-		nodeApp:    node,
+		TxApp:      txApp,
 		validators: validators,
 		signer:     signer,
+		chainId:    chainId,
 		cfg:        cfg,
 		log:        log.NewNoOp(),
 	}
@@ -158,19 +156,24 @@ func (svc *Service) Peers(ctx context.Context, req *admpb.PeersRequest) (*admpb.
 }
 
 // sendTx makes a transaction and sends it to the local node.
-func (s *Service) sendTx(ctx context.Context, payload transactions.Payload, price *big.Int) (*txpb.BroadcastResponse, error) {
+func (s *Service) sendTx(ctx context.Context, payload transactions.Payload) (*txpb.BroadcastResponse, error) {
 	// Get the latest nonce for the account, if it exists.
-	_, nonce, err := s.nodeApp.AccountInfo(ctx, s.signer.Identity())
+	_, nonce, err := s.TxApp.AccountInfo(ctx, s.signer.Identity(), true)
 	if err != nil {
 		return nil, err
 	}
 
-	tx, err := transactions.CreateTransaction(payload, s.nodeApp.ChainID(), uint64(nonce+1))
+	tx, err := transactions.CreateTransaction(payload, s.chainId, uint64(nonce+1))
 	if err != nil {
 		return nil, err
 	}
 
-	tx.Body.Fee = price
+	fee, err := s.TxApp.Price(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	tx.Body.Fee = fee
 
 	// Sign the transaction.
 	err = tx.Sign(s.signer)
@@ -213,36 +216,22 @@ func (s *Service) sendTx(ctx context.Context, payload transactions.Payload, pric
 }
 
 func (s *Service) Approve(ctx context.Context, req *admpb.ApproveRequest) (*txpb.BroadcastResponse, error) {
-	price, err := s.validators.PriceApprove(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	return s.sendTx(ctx, &transactions.ValidatorApprove{
 		Candidate: req.Pubkey,
-	}, price)
+	})
 }
 
 func (s *Service) Join(ctx context.Context, req *admpb.JoinRequest) (*txpb.BroadcastResponse, error) {
-	price, err := s.validators.PriceJoin(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	return s.sendTx(ctx, &transactions.ValidatorJoin{
 		Power: 1,
-	}, price)
+	})
 }
 
 func (s *Service) Remove(ctx context.Context, req *admpb.RemoveRequest) (*txpb.BroadcastResponse, error) {
-	price, err := s.validators.PriceRemove(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	return s.sendTx(ctx, &transactions.ValidatorRemove{
 		Validator: req.Pubkey,
-	}, price)
+	})
 }
 
 func (s *Service) JoinStatus(ctx context.Context, req *admpb.JoinStatusRequest) (*admpb.JoinStatusResponse, error) {
@@ -286,12 +275,7 @@ func convertJoinRequest(join *validators.JoinRequest) *admpb.PendingJoin {
 }
 
 func (s *Service) Leave(ctx context.Context, req *admpb.LeaveRequest) (*txpb.BroadcastResponse, error) {
-	price, err := s.validators.PriceLeave(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.sendTx(ctx, &transactions.ValidatorLeave{}, price)
+	return s.sendTx(ctx, &transactions.ValidatorLeave{})
 }
 
 func (s *Service) ListValidators(ctx context.Context, req *admpb.ListValidatorsRequest) (*admpb.ListValidatorsResponse, error) {
