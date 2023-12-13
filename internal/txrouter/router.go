@@ -7,13 +7,30 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/validators"
+	"go.uber.org/zap"
 )
+
+// NewRouter creates a new router.
+func NewRouter(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter, log log.Logger) *Router {
+	return &Router{
+		Database:        db,
+		Accounts:        acc,
+		Validators:      validators,
+		atomicCommitter: atomicCommitter,
+		log:             log,
+		mempool: &mempool{
+			accountStore: acc,
+			accounts:     make(map[string]*accounts.Account),
+		},
+	}
+}
 
 // Router routes incoming transactions to the appropriate module(s)
 // It is capable of sending to the database, spending, adding/removing
@@ -22,6 +39,8 @@ type Router struct {
 	Database   DatabaseEngine
 	Accounts   AccountsStore
 	Validators ValidatorStore
+
+	log log.Logger
 
 	atomicCommitter AtomicCommitter
 	mempool         *mempool
@@ -35,6 +54,8 @@ func (r *Router) Execute(ctx context.Context, tx *transactions.Transaction) *TxR
 		return txRes(nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String()))
 	}
 
+	r.log.Debug("executing transaction", zap.Any("tx", tx))
+
 	return route.Execute(ctx, r, tx)
 }
 
@@ -42,6 +63,8 @@ func (r *Router) Execute(ctx context.Context, tx *transactions.Transaction) *TxR
 func (r *Router) Begin(ctx context.Context, blockHeight int64) error {
 	idempotencyKey := make([]byte, 8)
 	binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
+
+	r.log.Debug("beginning block", zap.Int64("blockHeight", blockHeight))
 
 	return r.atomicCommitter.Begin(ctx, idempotencyKey)
 }
@@ -59,6 +82,8 @@ func (r *Router) Begin(ctx context.Context, blockHeight int64) error {
 func (r *Router) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
 	// this would go in Commit
 	defer r.mempool.reset()
+
+	r.log.Debug("committing block", zap.Int64("blockHeight", blockHeight))
 
 	// this would go in GetEndResults
 	validators, err := r.Validators.Finalize(ctx)
@@ -80,7 +105,7 @@ func (r *Router) Commit(ctx context.Context, blockHeight int64) (apphash []byte,
 	// this only updates an in-memory value. but it seems weird to me that the validator store needs to be aware
 	// of the current block height and "keep it"
 	// this would go in Commit
-	r.Validators.UpdateBlockHeight(ctx, blockHeight)
+	r.Validators.UpdateBlockHeight(blockHeight)
 
 	return appHash, validators, nil
 }
@@ -131,12 +156,18 @@ func (r *Router) ApplyMempool(ctx context.Context, tx *transactions.Transaction)
 
 // GetAccount gets account info from either the mempool or the account store.
 // It takes a flag to indicate whether it should check the mempool first.
-func (r *Router) GetAccount(ctx context.Context, acctID []byte, getUncommitted bool) (*accounts.Account, error) {
+func (r *Router) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+	var a *accounts.Account
 	if getUncommitted {
-		return r.mempool.accountInfoSafe(ctx, acctID)
+		a, err = r.mempool.accountInfoSafe(ctx, acctID)
+	} else {
+		a, err = r.Accounts.GetAccount(ctx, acctID)
+	}
+	if err != nil {
+		return nil, 0, err
 	}
 
-	return r.Accounts.GetAccount(ctx, acctID)
+	return a.Balance, a.Nonce, nil
 }
 
 // TxResponse is the response from a transaction.
@@ -179,7 +210,12 @@ type AccountsStore interface {
 }
 
 // AccountReader is a datastore that can read accounts.
+// It should not be used during block execution, since it does not read
+// uncommitted accounts.
 type AccountReader interface {
+	// GetAccount gets an account from the datastore.
+	// It should not be used during block execution, since it does not read
+	// uncommitted accounts.
 	GetAccount(ctx context.Context, acctID []byte) (*accounts.Account, error)
 }
 
@@ -196,7 +232,7 @@ type ValidatorStore interface {
 	Finalize(ctx context.Context) ([]*validators.Validator, error) // end of block processing requires providing list of updates to the node's consensus client
 
 	// Updates block height stored by the validator manager. Called in the abci Commit
-	UpdateBlockHeight(ctx context.Context, blockHeight int64)
+	UpdateBlockHeight(blockHeight int64)
 }
 
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
@@ -231,33 +267,16 @@ func (r *Router) checkAndSpend(ctx context.Context, tx *transactions.Transaction
 		return nil, transactions.CodeInsufficientFee, fmt.Errorf("transaction fee is too low: %s", amt.String())
 	}
 
-	acct, err := r.Accounts.GetAccount(ctx, tx.Sender)
-	if err != nil {
-		return nil, transactions.CodeUnknownError, err
-	}
-
-	// check if the account has enough tokens to pay for the transaction
-	if acct.Balance.Cmp(amt) < 0 {
-		return nil, transactions.CodeInsufficientBalance, fmt.Errorf("account %s does not have enough tokens to pay for transaction. account balance: %s, required balance: %s", tx.Sender, acct.Balance.String(), amt.String())
-	}
-
 	// check if the transaction consented to spending enough tokens
 	if tx.Body.Fee.Cmp(amt) < 0 {
 		return nil, transactions.CodeInsufficientFee, fmt.Errorf("transaction does not consent to spending enough tokens. transaction fee: %s, required fee: %s", tx.Body.Fee.String(), amt.String())
-	}
-
-	// check the nonce
-	// this is somewhat redundant with the account store, but we can add the correct
-	// error code here
-	if acct.Nonce != int64(tx.Body.Nonce)+1 {
-		return nil, transactions.CodeInvalidNonce, fmt.Errorf("invalid nonce. account nonce: %d, transaction nonce: %d", acct.Nonce, tx.Body.Nonce)
 	}
 
 	// spend the tokens
 	err = r.Accounts.Spend(ctx, &accounts.Spend{
 		AccountID: tx.Sender,
 		Amount:    amt,
-		Nonce:     int64(tx.Body.Nonce) + 1,
+		Nonce:     int64(tx.Body.Nonce),
 	})
 	if err != nil {
 		return nil, transactions.CodeUnknownError, err

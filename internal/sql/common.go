@@ -99,6 +99,20 @@ func (r *ResultSet) Values() ([]any, error) {
 	return v, nil
 }
 
+func (r *ResultSet) Map() []map[string]any {
+	m := make([]map[string]any, 0)
+	for _, row := range r.Rows {
+		m2 := make(map[string]any)
+		for j, col := range row {
+			m2[r.ReturnedColumns[j]] = col
+		}
+
+		m = append(m, m2)
+	}
+
+	return m
+}
+
 type ConnectionFlag int
 
 const (

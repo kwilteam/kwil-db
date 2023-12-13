@@ -10,36 +10,27 @@ import (
 	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/accounts"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
-	"github.com/kwilteam/kwil-db/internal/validators"
 )
 
 type Service struct {
 	txpb.UnimplementedTxServiceServer
 
 	log log.Logger
-	// chainID is the Kwil network ID.
-	chainID string
 
-	engine       EngineReader
-	accountStore AccountReader
-	vstore       ValidatorReader
+	engine EngineReader
 
 	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
 	chainClient BlockchainTransactor
 }
 
-func NewService(engine EngineReader, accountStore AccountReader, vstore ValidatorReader,
+func NewService(engine EngineReader,
 	chainClient BlockchainTransactor, nodeApp NodeApplication, opts ...TxSvcOpt) *Service {
 	s := &Service{
-		log:          log.NewNoOp(),
-		chainID:      nodeApp.ChainID(),
-		engine:       engine,
-		accountStore: accountStore,
-		vstore:       vstore,
-		nodeApp:      nodeApp,
-		chainClient:  chainClient,
+		log:         log.NewNoOp(),
+		engine:      engine,
+		nodeApp:     nodeApp,
+		chainClient: chainClient,
 	}
 
 	for _, opt := range opts {
@@ -52,16 +43,8 @@ func NewService(engine EngineReader, accountStore AccountReader, vstore Validato
 type EngineReader interface {
 	Call(ctx context.Context, dbid string, action string, args []any, msg *transactions.CallMessage) ([]map[string]any, error)
 	GetSchema(ctx context.Context, dbid string) (*engineTypes.Schema, error)
-	ListOwnedDatabases(ctx context.Context, owner []byte) ([]*coreTypes.DatasetIdentifier, error)
-	PriceDeploy(ctx context.Context, schema *engineTypes.Schema) (price *big.Int, err error)
-	PriceDrop(ctx context.Context, dbid string) (price *big.Int, err error)
-	PriceExecute(ctx context.Context, dbid string, action string, args [][]any) (price *big.Int, err error)
+	ListDatasets(ctx context.Context, owner []byte) ([]*coreTypes.DatasetIdentifier, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
-}
-
-type AccountReader interface {
-	Account(ctx context.Context, identifier []byte) (*accounts.Account, error)
-	PriceTransfer(ctx context.Context) (*big.Int, error)
 }
 
 type BlockchainTransactor interface {
@@ -71,16 +54,6 @@ type BlockchainTransactor interface {
 }
 
 type NodeApplication interface {
-	ChainID() string
-	AccountInfo(ctx context.Context, identifier []byte) (balance *big.Int, nonce int64, err error)
-}
-
-type ValidatorReader interface {
-	CurrentValidators(ctx context.Context) ([]*validators.Validator, error)
-	ActiveVotes(ctx context.Context) ([]*validators.JoinRequest, []*validators.ValidatorRemoveProposal, error)
-	// JoinStatus(ctx context.Context, joiner []byte) ([]*JoinRequest, error)
-	PriceJoin(ctx context.Context) (*big.Int, error)
-	PriceLeave(ctx context.Context) (*big.Int, error)
-	PriceApprove(ctx context.Context) (*big.Int, error)
-	PriceRemove(ctx context.Context) (*big.Int, error)
+	AccountInfo(ctx context.Context, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
+	Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error)
 }

@@ -160,6 +160,8 @@ func (e *executeActionRoute) Price(ctx context.Context, router *Router, tx *tran
 
 type transferRoute struct{}
 
+var bigZero = big.NewInt(0)
+
 func (t *transferRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
@@ -177,14 +179,10 @@ func (t *transferRoute) Execute(ctx context.Context, router *Router, tx *transac
 		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("failed to parse amount: %s", transfer.Amount))
 	}
 
-	// check if the sender has enough tokens to transfer
-	acct, err := router.Accounts.GetAccount(ctx, tx.Sender)
-	if err != nil {
-		return txRes(spend, transactions.CodeUnknownError, err)
-	}
-
-	if acct.Balance.Cmp(bigAmt) < 0 {
-		return txRes(spend, transactions.CodeInsufficientBalance, fmt.Errorf("account %s does not have enough tokens to transfer. account balance: %s, required balance: %s", tx.Sender, acct.Balance.String(), bigAmt.String()))
+	// Negative send amounts should be blocked at various levels, so we should
+	// never get this, but be extra defensive since we cannot allow thievery.
+	if bigAmt.Cmp(bigZero) < 0 {
+		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("invalid transfer amount: %s", transfer.Amount))
 	}
 
 	err = router.Accounts.Transfer(ctx, transfer.To, tx.Sender, bigAmt)
