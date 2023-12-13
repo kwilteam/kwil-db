@@ -1,5 +1,5 @@
 // package tx_router routes transactions to the appropriate module(s)
-package txrouter
+package txapp
 
 import (
 	"context"
@@ -18,8 +18,8 @@ import (
 )
 
 // NewRouter creates a new router.
-func NewRouter(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter, log log.Logger) *Router {
-	return &Router{
+func NewRouter(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter, log log.Logger) *TxApp {
+	return &TxApp{
 		Database:        db,
 		Accounts:        acc,
 		Validators:      validators,
@@ -32,10 +32,11 @@ func NewRouter(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, 
 	}
 }
 
-// Router routes incoming transactions to the appropriate module(s)
-// It is capable of sending to the database, spending, adding/removing
-// validators, etc.
-type Router struct {
+// TxApp maintains the state for Kwil's ABCI application.
+// It is responsible for interpreting payload bodies and routing them properly.
+// It also contains a mempool for uncommitted accounts, as well as pricing
+// for transactions
+type TxApp struct {
 	Database   DatabaseEngine
 	Accounts   AccountsStore
 	Validators ValidatorStore
@@ -48,7 +49,7 @@ type Router struct {
 
 // Execute executes a transaction.  It will route the transaction to the
 // appropriate module(s) and return the response.
-func (r *Router) Execute(ctx context.Context, tx *transactions.Transaction) *TxResponse {
+func (r *TxApp) Execute(ctx context.Context, tx *transactions.Transaction) *TxResponse {
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
 		return txRes(nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String()))
@@ -60,7 +61,7 @@ func (r *Router) Execute(ctx context.Context, tx *transactions.Transaction) *TxR
 }
 
 // Begin signals that a new block has begun.
-func (r *Router) Begin(ctx context.Context, blockHeight int64) error {
+func (r *TxApp) Begin(ctx context.Context, blockHeight int64) error {
 	idempotencyKey := make([]byte, 8)
 	binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
 
@@ -79,7 +80,7 @@ func (r *Router) Begin(ctx context.Context, blockHeight int64) error {
 // transaction support.  Therefore, we should have another method here called
 // GetEndResults.
 // Commit also clears the mempool.
-func (r *Router) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
+func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
 	// this would go in Commit
 	defer r.mempool.reset()
 
@@ -144,7 +145,7 @@ func (r *Router) Commit(ctx context.Context, blockHeight int64) error {
 
 // ApplyMempool applies the transactions in the mempool.
 // If it returns an error, then the transaction is invalid.
-func (r *Router) ApplyMempool(ctx context.Context, tx *transactions.Transaction) error {
+func (r *TxApp) ApplyMempool(ctx context.Context, tx *transactions.Transaction) error {
 	// check that payload type is valid
 	_, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
@@ -156,7 +157,7 @@ func (r *Router) ApplyMempool(ctx context.Context, tx *transactions.Transaction)
 
 // GetAccount gets account info from either the mempool or the account store.
 // It takes a flag to indicate whether it should check the mempool first.
-func (r *Router) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
 	var a *accounts.Account
 	if getUncommitted {
 		a, err = r.mempool.accountInfoSafe(ctx, acctID)
@@ -185,7 +186,7 @@ type TxResponse struct {
 
 // Price estimates the price of a transaction.
 // It returns the estimated price in tokens.
-func (r *Router) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
 		return nil, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
@@ -252,7 +253,7 @@ type AtomicCommitter interface {
 // It also returns an error code.
 // if we allow users to implement their own routes, this function will need to
 // be exported.
-func (r *Router) checkAndSpend(ctx context.Context, tx *transactions.Transaction) (*big.Int, transactions.TxCode, error) {
+func (r *TxApp) checkAndSpend(ctx context.Context, tx *transactions.Transaction) (*big.Int, transactions.TxCode, error) {
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
 		return nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())

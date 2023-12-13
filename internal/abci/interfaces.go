@@ -13,7 +13,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	"github.com/kwilteam/kwil-db/internal/txrouter"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/validators"
 )
 
@@ -85,5 +85,5 @@ type TxApp interface {
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
 	Begin(ctx context.Context, blockHeight int64) error
 	Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
-	Execute(ctx context.Context, tx *transactions.Transaction) *txrouter.TxResponse
+	Execute(ctx context.Context, tx *transactions.Transaction) *txapp.TxResponse
 }

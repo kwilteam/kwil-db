@@ -1,4 +1,4 @@
-package txrouter
+package txapp
 
 import (
 	"context"
@@ -28,8 +28,8 @@ func init() {
 }
 
 type Route interface {
-	Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse
-	Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error)
+	Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse
+	Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error)
 }
 
 // routes is a map of transaction payload types to their respective routes
@@ -47,7 +47,7 @@ func registerRoute(payloadType string, route Route) error {
 
 type deployDatasetRoute struct{}
 
-func (d *deployDatasetRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
+func (d *deployDatasetRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -73,13 +73,13 @@ func (d *deployDatasetRoute) Execute(ctx context.Context, router *Router, tx *tr
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (d *deployDatasetRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
+func (d *deployDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(1000000000000000000), nil
 }
 
 type dropDatasetRoute struct{}
 
-func (d *dropDatasetRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
+func (d *dropDatasetRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -99,13 +99,13 @@ func (d *dropDatasetRoute) Execute(ctx context.Context, router *Router, tx *tran
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (d *dropDatasetRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
+func (d *dropDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 type executeActionRoute struct{}
 
-func (e *executeActionRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
+func (e *executeActionRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -154,7 +154,7 @@ func (e *executeActionRoute) Execute(ctx context.Context, router *Router, tx *tr
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (e *executeActionRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
+func (e *executeActionRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(2000000000000000), nil
 }
 
@@ -162,7 +162,7 @@ type transferRoute struct{}
 
 var bigZero = big.NewInt(0)
 
-func (t *transferRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
+func (t *transferRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -193,13 +193,13 @@ func (t *transferRoute) Execute(ctx context.Context, router *Router, tx *transac
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (t *transferRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
+func (t *transferRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(210_000), nil
 }
 
 type validatorJoinRoute struct{}
 
-func (v *validatorJoinRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
+func (v *validatorJoinRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -219,13 +219,13 @@ func (v *validatorJoinRoute) Execute(ctx context.Context, router *Router, tx *tr
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorJoinRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorJoinRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 type validatorApproveRoute struct{}
 
-func (v *validatorApproveRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
+func (v *validatorApproveRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -245,13 +245,13 @@ func (v *validatorApproveRoute) Execute(ctx context.Context, router *Router, tx 
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorApproveRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorApproveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 type validatorRemoveRoute struct{}
 
-func (v *validatorRemoveRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
+func (v *validatorRemoveRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -271,13 +271,13 @@ func (v *validatorRemoveRoute) Execute(ctx context.Context, router *Router, tx *
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorRemoveRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorRemoveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 type validatorLeaveRoute struct{}
 
-func (v *validatorLeaveRoute) Execute(ctx context.Context, router *Router, tx *transactions.Transaction) *TxResponse {
+func (v *validatorLeaveRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -298,6 +298,6 @@ func (v *validatorLeaveRoute) Execute(ctx context.Context, router *Router, tx *t
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorLeaveRoute) Price(ctx context.Context, router *Router, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorLeaveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
