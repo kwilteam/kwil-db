@@ -203,7 +203,7 @@ func Example_respSchema_text() {
 	//       primary_key
 	//         true
 	// Actions:
-	//   get_user
+	//   get_user (public)
 	//     Inputs: [user_id]
 }
 

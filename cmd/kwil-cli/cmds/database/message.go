@@ -133,7 +133,12 @@ func (s *respSchema) MarshalText() ([]byte, error) {
 	// print queries
 	msg.WriteString("Actions:\n")
 	for _, q := range s.Schema.Actions {
-		msg.WriteString(fmt.Sprintf("  %s\n", q.Name))
+		public := "private"
+		if q.Public {
+			public = "public"
+		}
+
+		msg.WriteString(fmt.Sprintf("  %s (%s)\n", q.Name, public))
 		msg.WriteString(fmt.Sprintf("    Inputs: %s\n", q.Inputs))
 	}
 

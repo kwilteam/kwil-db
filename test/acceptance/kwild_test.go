@@ -162,6 +162,8 @@ func TestKwildAcceptance(t *testing.T) {
 			// test that the loaded extensions works
 			specifications.ExecuteExtensionSpecification(ctx, t, creatorDriver)
 
+			specifications.ExecutePrivateActionSpecification(ctx, t, creatorDriver)
+
 			// and user should be able to drop database
 			specifications.DatabaseDropSpecification(ctx, t, creatorDriver)
 
