@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -69,7 +70,10 @@ func abciStatus(status snapshots.Status) abciTypes.ResponseApplySnapshotChunk_Re
 	}
 }
 
-func PrivKeyInfo(privateKey []byte) *PrivateKeyInfo {
+func PrivKeyInfo(privateKey []byte) (*PrivateKeyInfo, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return nil, errors.New("incorrect private key length")
+	}
 	priv := ed25519.PrivKey(privateKey)
 	pub := priv.PubKey().(ed25519.PubKey)
 	nodeID := p2p.PubKeyToID(pub)
@@ -82,7 +86,7 @@ func PrivKeyInfo(privateKey []byte) *PrivateKeyInfo {
 		PublicKeyPlainHex:     hex.EncodeToString(pub.Bytes()),
 		Address:               pub.Address().String(),
 		NodeID:                fmt.Sprintf("%v", nodeID), // same as address, just upper case
-	}
+	}, nil
 }
 
 type PrivateKeyInfo struct {
