@@ -80,8 +80,8 @@ type ExecuteQueryDsl interface {
 	SupportBatch() bool
 }
 
-// ExecuteOwnerActionsDsl is dsl for owner actions specification
-type ExecuteOwnerActionsDsl interface {
+// ExecuteActionsDsl is dsl for executing any sort of action
+type ExecuteActionsDsl interface {
 	ExecuteQueryDsl
 	ExecuteCallDsl
 }
