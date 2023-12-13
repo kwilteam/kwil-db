@@ -19,9 +19,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
-	acctmod "github.com/kwilteam/kwil-db/internal/modules/accounts"
-	"github.com/kwilteam/kwil-db/internal/modules/datasets"
-	"github.com/kwilteam/kwil-db/internal/modules/validators"
 	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
 	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
 	"github.com/kwilteam/kwil-db/internal/services/grpc/healthsvc/v0"
@@ -66,13 +63,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	// account store
 	accs := buildAccountRepository(d, closers, ac)
-	accsMod := buildAccountsModule(accs) // abci accounts module
 
 	// validator updater and store
 	vstore := buildValidatorManager(d, closers, ac)
-
-	// validator module
-	validatorModule := buildValidatorModule(d, accs, vstore)
 
 	snapshotModule := buildSnapshotter(d)
 
@@ -80,7 +73,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	router := buildTxRouter(d, accs, e, vstore, ac)
 
-	abciApp := buildAbci(d, closers, accsMod, validatorModule,
+	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
 		router, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
@@ -238,10 +231,6 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 	return eng
 }
 
-func buildAccountsModule(store *accounts.AccountStore) *acctmod.AccountsModule {
-	return acctmod.NewAccountsModule(store)
-}
-
 func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.MultiCommitter) *accounts.AccountStore {
 
 	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, accountsDBName), 1, 2, true)
@@ -309,12 +298,6 @@ func buildValidatorManager(d *coreDependencies, closer *closeFuncs, ac *sessions
 	}
 
 	return v
-}
-
-func buildValidatorModule(d *coreDependencies, accs datasets.AccountStore,
-	vals validators.ValidatorMgr) *validators.ValidatorModule {
-	return validators.NewValidatorModule(vals, accs,
-		validators.WithLogger(*d.log.Named("validator-module")))
 }
 
 func buildSnapshotter(d *coreDependencies) *snapshots.SnapshotStore {

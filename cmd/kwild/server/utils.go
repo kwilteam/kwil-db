@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
 	"github.com/kwilteam/kwil-db/internal/services/grpc/txsvc/v1"
+	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/p2p"
@@ -288,4 +289,16 @@ func (e *engineAdapter) Query(ctx context.Context, dbid string, query string) ([
 	}
 
 	return res.Map(), nil
+}
+
+// validatorStoreAdapater adapts the validator store to add
+// a "Punish" method.
+type validatorStoreAdapter struct {
+	*validators.ValidatorMgr
+}
+
+var _ abci.ValidatorModule = (*validatorStoreAdapter)(nil)
+
+func (v *validatorStoreAdapter) Punish(ctx context.Context, validator []byte, newPower int64) error {
+	return v.ValidatorMgr.Update(ctx, validator, newPower)
 }
