@@ -83,7 +83,6 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 			hex.EncodeToString(tx.Sender), tx.Body.Nonce, acct.nonce+1)
 	}
 
-	acct.nonce = int64(tx.Body.Nonce)
 	spend := big.NewInt(0).Set(tx.Body.Fee) // NOTE: this could be the fee *limit*, but it depends on how the modules work
 
 	switch tx.Body.PayloadType {
@@ -126,6 +125,13 @@ func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transac
 	} else {
 		acct.balance.Sub(acct.balance, spend)
 	}
+
+	// Account nonces and spends tracked by mempool should be incremented only for the
+	// valid transactions. This is to avoid the case where mempool rejects a transaction
+	// due to insufficient balance, but the account nonce and spend are already incremented.
+	// Due to which it accepts the next transaction with nonce+1, instead of nonce
+	// (but Tx with nonce is never pushed to the consensus pool).
+	acct.nonce = int64(tx.Body.Nonce)
 
 	return nil
 }
