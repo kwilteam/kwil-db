@@ -36,7 +36,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/adapter"
 	"github.com/kwilteam/kwil-db/internal/sql/registry"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
-	"github.com/kwilteam/kwil-db/internal/txrouter"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -146,8 +146,8 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildTxRouter(d *coreDependencies, accs *accounts.AccountStore, db txrouter.DatabaseEngine, validators txrouter.ValidatorStore, atomicCommitter txrouter.AtomicCommitter) *txrouter.Router {
-	return txrouter.NewRouter(db, accs, validators, atomicCommitter, *d.log.Named("tx-router"))
+func buildTxRouter(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore, atomicCommitter txapp.AtomicCommitter) *txapp.TxApp {
+	return txapp.NewRouter(db, accs, validators, atomicCommitter, *d.log.Named("tx-router"))
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
