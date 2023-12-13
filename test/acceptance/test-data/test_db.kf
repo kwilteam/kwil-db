@@ -125,3 +125,14 @@ action divide($numerator1, $numerator2, $denominator) public view {
 action owner_only() public owner view {
     select 'owner only';
 }
+
+action create_post_private($id, $title, $content) private {
+    INSERT INTO posts (id, user_id, title, content)
+    VALUES ($id, (
+        SELECT id FROM users WHERE wallet = @caller
+    ), $title, $content);
+}
+
+action create_post_nested($id, $title, $content) public {
+    create_post_private($id, $title, $content);
+}
