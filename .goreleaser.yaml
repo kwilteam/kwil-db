@@ -23,6 +23,8 @@ builds:
       - 6
       - 7
     ignore:
+    flags:
+      - -trimpath
     ldflags:
       - -s -w
       - -X 'github.com/kwilteam/kwil-db/internal/version.KwilVersion={{ index .Env "KWIL_VERSION" }}'
@@ -45,6 +47,8 @@ builds:
       - 6
       - 7
     ignore:
+    flags:
+      - -trimpath
     ldflags:
       - -s -w
       - -X 'github.com/kwilteam/kwil-db/internal/version.KwilVersion={{ index .Env "KWIL_VERSION" }}'
@@ -67,6 +71,8 @@ builds:
       - 6
       - 7
     ignore:
+    flags:
+      - -trimpath
     ldflags:
       - -s -w
       - -X 'github.com/kwilteam/kwil-db/internal/version.KwilVersion={{ index .Env "KWIL_VERSION"  }}'
