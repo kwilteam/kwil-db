@@ -74,7 +74,7 @@ type DBBootstrapModule interface {
 }
 
 type AccountsModule interface {
-	Account(ctx context.Context, acctID []byte) (*accounts.Account, error)
+	GetAccount(ctx context.Context, acctID []byte) (*accounts.Account, error)
 	Credit(ctx context.Context, acctID []byte, amt *big.Int) error
 }
 

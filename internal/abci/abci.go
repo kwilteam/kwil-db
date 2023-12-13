@@ -656,7 +656,7 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 	// execution does not update an accounts nonce in state unless it is the
 	// next nonce. Delivering transactions to a block in that way cannot happen.
 	for sender, txs := range grouped {
-		acct, err := a.accounts.Account(ctx, []byte(sender))
+		acct, err := a.accounts.GetAccount(ctx, []byte(sender))
 		if err != nil {
 			return fmt.Errorf("failed to get account: %w", err)
 		}

@@ -11,7 +11,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -47,15 +46,11 @@ func cloneTx(tx *transactions.Transaction) *transactions.Transaction {
 type MockAccountsModule struct {
 }
 
-func (m *MockAccountsModule) TransferTx(ctx context.Context, tx *modAcct.TxAcct, to []byte, amt *big.Int) error {
-	return nil
-}
-
 func (m *MockAccountsModule) Credit(ctx context.Context, pubKey []byte, amt *big.Int) error {
 	return nil
 }
 
-func (m *MockAccountsModule) Account(ctx context.Context, pubKey []byte) (*accounts.Account, error) {
+func (m *MockAccountsModule) GetAccount(ctx context.Context, pubKey []byte) (*accounts.Account, error) {
 	return &accounts.Account{
 		Identifier: nil,
 		Balance:    big.NewInt(0),
