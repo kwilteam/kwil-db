@@ -1,6 +1,7 @@
 package key
 
 import (
+	"encoding/hex"
 	"errors"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
@@ -33,14 +34,26 @@ func infoCmd() *cobra.Command {
 			// if len(args) == 1, then the private key is passed as a hex string
 			// otherwise, it is passed as a file path
 			if len(args) == 1 {
-				return display.PrintCmd(cmd, abci.PrivKeyInfo([]byte(args[0])))
+				key, err := hex.DecodeString(args[0])
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+				keyInfo, err := abci.PrivKeyInfo(key)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+				return display.PrintCmd(cmd, keyInfo)
 			} else if privkeyFile != "" {
 				key, err := abci.ReadKeyFile(privkeyFile)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
 
-				return display.PrintCmd(cmd, abci.PrivKeyInfo(key))
+				keyInfo, err := abci.PrivKeyInfo(key)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+				return display.PrintCmd(cmd, keyInfo)
 			} else {
 				return display.PrintErr(cmd, errors.New("must provide with the private key file or hex string"))
 			}
