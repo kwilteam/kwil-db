@@ -63,6 +63,10 @@ type Result interface {
 
 	// Values gets the values of the current row.
 	Values() ([]any, error)
+
+	// ResultSet gets the result set.
+	// This finalizes the execution, copies the data, and unblocks the connection.
+	ResultSet() (*ResultSet, error)
 }
 
 type ResultSet struct {
@@ -139,4 +143,11 @@ func (e *EmptyResult) Err() error {
 
 func (e *EmptyResult) Values() ([]any, error) {
 	return nil, nil
+}
+
+func (e *EmptyResult) ResultSet() (*ResultSet, error) {
+	return &ResultSet{
+		ReturnedColumns: []string{},
+		Rows:            [][]any{},
+	}, nil
 }
