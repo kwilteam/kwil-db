@@ -31,8 +31,8 @@ var (
 
 	tableVoters = `CREATE TABLE IF NOT EXISTS voters (
 		id BLOB PRIMARY KEY, -- id is an rfc4122 uuid derived from the voter
-		voter BLOB UNIQUE NOT NULL, -- voter is the identifier of the voter
-		power INTEGER NOT NULL -- power is the voting power of the voter
+		name BLOB UNIQUE NOT NULL, -- voter is the identifier of the voter
+		power INTEGER NOT NULL CHECK(power > 0) -- power is the voting power of the voter
 	);`
 
 	// votes tracks whether a voter has voted on a resolution
@@ -68,10 +68,17 @@ var (
 		expiration = $expiration;`
 
 	// upsertVoter is the sql statement used to ensure a voter is present in the voters table.  If the voter is present, the power is updated.
-	upsertVoter = `INSERT INTO voters (id, voter, power) VALUES ($id, $voter, $power) ON CONFLICT(id) DO UPDATE SET power = $power;`
+	upsertVoter = `INSERT INTO voters (id, name, power) VALUES ($id, $voter, $power) ON CONFLICT(id) DO UPDATE SET power = power + $power;`
+
+	// decreaseVoterPower is the sql statement used to decrease the power of a voter
+	// this is necessary because the voters table CHECK filters before the on conflict
+	decreaseVoterPower = `UPDATE voters SET power = power - $power WHERE id = $id;`
 
 	// removeVoter is the sql statement used to remove a voter from the voters table
 	removeVoter = `DELETE FROM voters WHERE id = $id;`
+
+	// getVoterPower is the sql statement used to get the power and name of a voter
+	getVoterPower = `SELECT power FROM voters WHERE id = $id;`
 
 	// addVote adds a vote for a resolution
 	addVote = `INSERT INTO votes (resolution_id, voter_id) VALUES ($resolution_id, $voter_id);`
@@ -83,9 +90,17 @@ var (
 	// getResolution is the sql statement used to get a resolution and the associated vote info.
 	// while it would be nice to get the needed power as well, it is significantly more expensive to do so.
 	// it would be better to cache the maximum needed power for a given resolution.
-	getResolution = `SELECT r.body AS body, t.name AS type, r.expiration AS expiration, SUM(vr.power) AS approved_power
+	getResolution = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration, SUM(vr.power) AS approved_power
 	FROM resolutions AS r
 	INNER JOIN resolution_types AS t ON r.type = t.id
+	LEFT JOIN votes AS v ON r.id = v.resolution_id
+	LEFT JOIN voters AS vr ON v.voter_id = vr.id
+	WHERE r.id = $id
+	GROUP BY r.id;`
+
+	// getUnfilledResolution gets en expiration and approved power for a resolution that has not been filled with a body and type
+	getUnfilledResolution = `SELECT r.expiration AS expiration, SUM(vr.power) AS approved_power
+	FROM resolutions AS r
 	LEFT JOIN votes AS v ON r.id = v.resolution_id
 	LEFT JOIN voters AS vr ON v.voter_id = vr.id
 	WHERE r.id = $id

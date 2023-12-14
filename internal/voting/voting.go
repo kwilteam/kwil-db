@@ -174,14 +174,47 @@ func (v *VoteProcessor) Expire(ctx context.Context, blockheight int64) error {
 // It does not read uncommitted data.
 func (v *VoteProcessor) GetResolution(ctx context.Context, id types.UUID) (info *ResolutionStatus, err error) {
 	res, err := v.db.Query(ctx, getResolution, map[string]interface{}{
-		"$id": id,
+		"$id": id[:],
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	if len(res.Rows) == 0 {
-		return nil, ErrResolutionNotFound
+		res, err = v.db.Query(ctx, getUnfilledResolution, map[string]interface{}{
+			"$id": id[:],
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if len(res.Rows) == 0 {
+			return nil, ErrResolutionNotFound
+		}
+
+		// res.ReturnedColumns[0] == expiration
+		// res.ReturnedColumns[1] == approved_power
+		if len(res.Rows[0]) != 2 {
+			// this should never happen, just for safety
+			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		}
+
+		expiration, ok := res.Rows[0][0].(int64)
+		if !ok {
+			return nil, fmt.Errorf("invalid type for expiration. this is an internal bug")
+		}
+		approvedPower, ok := res.Rows[0][1].(int64)
+		if !ok {
+			return nil, fmt.Errorf("invalid type for approved power. this is an internal bug")
+		}
+
+		return &ResolutionStatus{
+			Resolution: Resolution{
+				ID:         id,
+				Expiration: expiration,
+			},
+			ApprovedPower: approvedPower,
+		}, nil
 	}
 
 	// res.ReturnedColumns[0] == id
@@ -282,10 +315,27 @@ func getResolutionFromRow(rows []any) (*Resolution, error) {
 	}, nil
 }
 
-// AddVoter adds a voter to the system, with a given voting power.
-// If the voter already exists, it will update the voting power.
-func (v *VoteProcessor) AddVoter(ctx context.Context, identifier []byte, power int64) error {
+// UpdateVoter adds a voter to the system, with a given voting power.
+// If the voter already exists, it will add the power to the existing power.
+// If the power is 0, it will remove the voter from the system.
+// If negative power is given, it will subtract the power from the existing power.
+func (v *VoteProcessor) UpdateVoter(ctx context.Context, identifier []byte, power int64) error {
 	uuid := types.NewUUIDV5(identifier)
+
+	if power == 0 {
+		_, err := v.db.Execute(ctx, removeVoter, map[string]interface{}{
+			"$id": uuid[:],
+		})
+		return err
+	}
+	if power < 0 {
+		_, err := v.db.Execute(ctx, decreaseVoterPower, map[string]interface{}{
+			"$id":    uuid[:],
+			"$power": -power,
+		})
+		return err
+	}
+
 	_, err := v.db.Execute(ctx, upsertVoter, map[string]interface{}{
 		"$id":    uuid[:],
 		"$voter": identifier,
@@ -294,14 +344,33 @@ func (v *VoteProcessor) AddVoter(ctx context.Context, identifier []byte, power i
 	return err
 }
 
-// RemoveVoter removes a voter from the system.
-// If the voter does not exist, it does nothing.
-func (v *VoteProcessor) RemoveVoter(ctx context.Context, identifier []byte) error {
+// GetVoterPower gets the power of a voter.
+// If the voter does not exist, it will return 0.
+func (v *VoteProcessor) GetVoterPower(ctx context.Context, identifier []byte) (power int64, err error) {
 	uuid := types.NewUUIDV5(identifier)
-	_, err := v.db.Execute(ctx, removeVoter, map[string]interface{}{
+
+	res, err := v.db.Query(ctx, getVoterPower, map[string]interface{}{
 		"$id": uuid[:],
 	})
-	return err
+	if err != nil {
+		return 0, err
+	}
+
+	if len(res.Columns()) != 1 {
+		// this should never happen, just for safety
+		return 0, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+	}
+
+	if len(res.Rows) == 0 {
+		return 0, nil
+	}
+
+	power, ok := res.Rows[0][0].(int64)
+	if !ok {
+		return 0, fmt.Errorf("invalid type for power. this is an internal bug")
+	}
+
+	return power, nil
 }
 
 // ProcessConfirmedResolutions processes all resolutions that have exceeded
