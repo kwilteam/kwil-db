@@ -1,6 +1,7 @@
 package voting_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,13 +38,14 @@ func Test_Votes(t *testing.T) {
 				ctx := context.Background()
 
 				// add voter
-				err := v.AddVoter(ctx, []byte("voter1"), 10)
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
 				require.NoError(t, err)
 
 				// create vote with body
 				body := &exampleResolutionPayload{
-					Account: []byte("account1"),
-					Amount:  100,
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
@@ -66,6 +68,306 @@ func Test_Votes(t *testing.T) {
 				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
 				require.NoError(t, err)
 				require.Equal(t, big.NewInt(100), acc.Balance)
+			},
+		},
+		{
+			name: "vote before adding body",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				// add one voter, create vote, approve, and resolve
+				ctx := context.Background()
+
+				// add voter
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// create vote with body
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+
+				uuid := types.NewUUIDV5(bts)
+
+				// approve vote, before creating vote
+				// expiration does not matter here since it only matters for the first vote
+				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				require.NoError(t, err)
+
+				// now create the vote
+				err = v.CreateVote(ctx, bts, examplePayloadType, 10000)
+				require.NoError(t, err)
+
+				// resolve vote
+				err = v.ProcessConfirmedResolutions(ctx)
+				require.NoError(t, err)
+
+				// check that the account was credited
+				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
+				require.NoError(t, err)
+				require.Equal(t, big.NewInt(100), acc.Balance)
+			},
+		},
+		{
+			name: "vote without providing body does not confirm",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				// add one voter, create vote, approve, and resolve
+				ctx := context.Background()
+
+				// add voter
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// create vote with body
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+
+				uuid := types.NewUUIDV5(bts)
+
+				// approve vote, before creating vote
+				// expiration does not matter here since it only matters for the first vote
+				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				require.NoError(t, err)
+
+				// resolve vote
+				err = v.ProcessConfirmedResolutions(ctx)
+				require.NoError(t, err)
+
+				// check that the account was credited
+				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
+				require.NoError(t, err)
+				require.Equal(t, big.NewInt(0), acc.Balance)
+			},
+		},
+		{
+			name: "insufficient voting power",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				// add one voter, create vote, approve, and resolve
+				ctx := context.Background()
+
+				// add voter 1
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// add voter 2
+				err = v.UpdateVoter(ctx, []byte("voter2"), 1000)
+				require.NoError(t, err)
+
+				// create vote with body
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+
+				err = v.CreateVote(ctx, bts, examplePayloadType, 10000)
+				require.NoError(t, err)
+
+				uuid := types.NewUUIDV5(bts)
+
+				// approve vote
+				// expiration does not matter here since it only matters for the first vote
+				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				require.NoError(t, err)
+
+				// resolve votes, it will fail since voter 2 did not approve
+				err = v.ProcessConfirmedResolutions(ctx)
+				require.NoError(t, err)
+
+				// check that the resolution still exists
+				res, err := v.GetResolution(ctx, uuid)
+				require.NoError(t, err)
+
+				require.Equal(t, uuid, res.ID)
+				if !bytes.EqualFold(bts, res.Body) {
+					require.Equal(t, bts, res.Body) // will fail since the bytes are not equal
+				}
+				require.Equal(t, examplePayloadType, res.Type)
+				require.Equal(t, int64(10000), res.Expiration)
+				require.Equal(t, int64(10), res.ApprovedPower)
+
+				// get votes by category
+				resolutions, err := v.GetVotesByCategory(ctx, examplePayloadType)
+				require.NoError(t, err)
+				require.Len(t, resolutions, 1)
+
+				requireEqualResolutions(t, resolutions[0], res)
+			},
+		},
+		{
+			name: "ByCategory does not panic when no votes exist",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				ctx := context.Background()
+
+				// get votes by category
+				resolutions, err := v.GetVotesByCategory(ctx, examplePayloadType)
+				require.NoError(t, err)
+				require.Len(t, resolutions, 0)
+			},
+		},
+		{
+			name: "Get and ByCategory do not panic with no body",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				ctx := context.Background()
+
+				// add voter
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// create vote with body
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+
+				uuid := types.NewUUIDV5(bts)
+
+				// approve vote
+				// expiration does not matter here since it only matters for the first vote
+				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				require.NoError(t, err)
+
+				// get votes by category, should fail since categories do not get defined until
+				// the body is set
+				resolutions, err := v.GetVotesByCategory(ctx, examplePayloadType)
+				require.NoError(t, err)
+				require.Len(t, resolutions, 0)
+
+				// get vote by id
+				res, err := v.GetResolution(ctx, uuid)
+				require.NoError(t, err)
+
+				// check id is same
+				require.Equal(t, uuid, res.ID)
+				// body is nil, expiration is same, approved power is same, type is nil b/c body is not set
+				require.Nil(t, res.Body)
+				require.Equal(t, int64(10323), res.Expiration)
+				require.Equal(t, int64(10), res.ApprovedPower)
+			},
+		},
+		{
+			name: "manipulating voting power",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				ctx := context.Background()
+
+				// add voter
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// add power
+				err = v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// get power
+				power, err := v.GetVoterPower(ctx, []byte("voter1"))
+				require.NoError(t, err)
+
+				require.Equal(t, int64(20), power)
+
+				// subtract power
+				err = v.UpdateVoter(ctx, []byte("voter1"), -10)
+				require.NoError(t, err)
+
+				// get power
+				power, err = v.GetVoterPower(ctx, []byte("voter1"))
+				require.NoError(t, err)
+
+				require.Equal(t, int64(10), power)
+
+				// ensure power cannot go to 0
+				err = v.UpdateVoter(ctx, []byte("voter1"), -10)
+				if err == nil {
+					t.Fatal("expected error")
+				}
+
+				// remove
+				err = v.UpdateVoter(ctx, []byte("voter1"), 0)
+				require.NoError(t, err)
+
+				// get power
+				power, err = v.GetVoterPower(ctx, []byte("voter1"))
+				require.NoError(t, err)
+
+				require.Equal(t, int64(0), power)
+			},
+		},
+		{
+			name: "non-existent voter cannot vote",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				ctx := context.Background()
+
+				// create vote with body
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+
+				uuid := types.NewUUIDV5(bts)
+
+				// approve vote
+				// expiration does not matter here since it only matters for the first vote
+				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				if err == nil {
+					t.Fatal("expected error")
+				}
+			},
+		},
+		{
+			name: "expiration works",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				// create 3 votes
+				// expire on 2
+				ctx := context.Background()
+
+				// add voter
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// payload
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+
+				// create vote 1
+				err = v.CreateVote(ctx, bts, examplePayloadType, 2)
+				require.NoError(t, err)
+
+				body.UniqueID = "unique_id2"
+				err = v.CreateVote(ctx, bts, examplePayloadType, 3)
+				require.NoError(t, err)
+
+				body.UniqueID = "unique_id3"
+				err = v.CreateVote(ctx, bts, examplePayloadType, 4)
+				require.NoError(t, err)
+
+				// expire
+				err = v.Expire(ctx, 3)
+				require.NoError(t, err)
+
+				// get votes by category
+				resolutions, err := v.GetVotesByCategory(ctx, examplePayloadType)
+				require.NoError(t, err)
+
+				require.Len(t, resolutions, 1)
 			},
 		},
 	}
@@ -95,6 +397,17 @@ func Test_Votes(t *testing.T) {
 			tt.fn(t, v, ds)
 		})
 	}
+}
+
+// requireEqualResolutions is a helper function to compare two resolutions.
+// 1 is a resolution, the other is a resolution status
+func requireEqualResolutions(t *testing.T, res1 *voting.Resolution, res2 *voting.ResolutionStatus) {
+	require.Equal(t, res1.ID, res2.ID)
+	if !bytes.EqualFold(res1.Body, res2.Body) {
+		require.Equal(t, res1.Body, res2.Body) // will fail since the bytes are not equal
+	}
+	require.Equal(t, res1.Type, res2.Type)
+	require.Equal(t, res1.Expiration, res2.Expiration)
 }
 
 type db struct {
@@ -185,8 +498,9 @@ func (m *mockAccountStore) Transfer(ctx context.Context, from []byte, to []byte,
 // exampleResolutionPayload is an example payload that can be used for testing
 // we can use json encoding since it is a local unit test
 type exampleResolutionPayload struct {
-	Account []byte `json:"account"`
-	Amount  int64  `json:"amount"`
+	UniqueID string `json:"unique_id"` // could be a transaction hash from a different chain
+	Account  []byte `json:"account"`
+	Amount   int64  `json:"amount"`
 }
 
 func (e *exampleResolutionPayload) Apply(ctx context.Context, datastores *voting.Datastores) error {

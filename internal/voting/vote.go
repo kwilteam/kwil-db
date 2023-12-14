@@ -23,7 +23,6 @@ func RegisterPaylod(name string, payload ResolutionPayload) error {
 
 // A ResolutionPayload is a payload that can be used as the body of a resolution
 type ResolutionPayload interface {
-	MarshalBinary() ([]byte, error)
 	UnmarshalBinary(data []byte) error
 	// Apply is called when a resolution is approved.
 	Apply(ctx context.Context, datastores *Datastores) error

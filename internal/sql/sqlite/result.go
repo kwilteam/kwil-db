@@ -186,6 +186,9 @@ func (r *Result) ResultSet() (*sql.ResultSet, error) {
 
 		rows = append(rows, values)
 	}
+	if r.Err() != nil {
+		return nil, r.Err()
+	}
 
 	return &sql.ResultSet{
 		Rows:            rows,
