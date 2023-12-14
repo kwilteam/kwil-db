@@ -10,7 +10,7 @@ import (
 
 // NewVoteProcessor creates a new vote processor.
 // It initializes the database with the required tables.
-func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, threshhold int64) (*VoteProcessor, error) {
+func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, threshold int64) (*VoteProcessor, error) {
 	sp, err := db.Savepoint()
 	if err != nil {
 		return nil, err
@@ -65,9 +65,9 @@ func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, 
 	}
 
 	return &VoteProcessor{
-		threshhold: threshhold,
-		db:         db,
-		accounts:   accounts,
+		percentThreshold: threshold,
+		db:               db,
+		accounts:         accounts,
 	}, nil
 }
 
@@ -75,10 +75,10 @@ func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, 
 // It is responsible for tracking the relative power of voters, and for
 // expiring resolutions.
 type VoteProcessor struct {
-	// threshhold is the threshhold of votes required to approve a resolution
+	// percentThreshold is the percentThreshold of votes required to approve a resolution
 	// it must be a number between 0 and 1000000.  This defines the percentage
 	// of total voting power required to approve a resolution (e.g. 500000 = 50%)
-	threshhold int64
+	percentThreshold int64
 
 	db       Datastore
 	accounts AccountStore
@@ -374,7 +374,7 @@ func (v *VoteProcessor) GetVoterPower(ctx context.Context, identifier []byte) (p
 }
 
 // ProcessConfirmedResolutions processes all resolutions that have exceeded
-// the threshhold of votes, and have a non-nil body.
+// the threshold of votes, and have a non-nil body.
 // It sorts them lexicographically by ID, and processes them in that order.
 func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) error {
 	sp, err := v.db.Savepoint()
@@ -410,11 +410,11 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) error {
 
 	// big arithmetic to guarantee accuracy
 	bigTotal := big.NewInt(totalPower)
-	bigThreshold := big.NewInt(v.threshhold)
+	bigThreshold := big.NewInt(v.percentThreshold)
 
 	scaled := new(big.Int).Mul(bigTotal, bigThreshold)
 
-	// divide by 1000000 to get the threshhold
+	// divide by 1000000 to get the threshold
 	// this is the amount of power needed to approve a resolution
 	result := new(big.Int).Div(scaled, big.NewInt(1000000))
 
