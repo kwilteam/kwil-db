@@ -113,8 +113,8 @@ var (
 	WHERE t.name = $type;`
 
 	// getConfirmedResolutions is the statement used to get all resolutions
-	// that have been confirmed above the given power threshhold
-	// we do not calculate the threshhold here since we need to guarantee accuracy
+	// that have been confirmed above the given power threshold
+	// we do not calculate the threshold here since we need to guarantee accuracy
 	// using big ints.
 	// it orders by id for determinism
 	getConfirmedResolutions = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration
