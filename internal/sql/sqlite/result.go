@@ -8,6 +8,7 @@ import (
 	"reflect"
 
 	"github.com/kwilteam/go-sqlite"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 type Result struct {
@@ -169,6 +170,27 @@ func (r *Result) isClosed() bool {
 	}
 
 	return false
+}
+
+func (r *Result) ResultSet() (*sql.ResultSet, error) {
+	if r.isClosed() {
+		return nil, ErrClosed
+	}
+
+	rows := make([][]any, 0, 10)
+	for r.Next() {
+		values, err := r.Values()
+		if err != nil {
+			return nil, err
+		}
+
+		rows = append(rows, values)
+	}
+
+	return &sql.ResultSet{
+		Rows:            rows,
+		ReturnedColumns: r.Columns(),
+	}, nil
 }
 
 // setAny sets the given value to the parameter name.

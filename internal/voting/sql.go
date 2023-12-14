@@ -1,9 +1,8 @@
 package voting
 
 import (
-	"context"
-
-	"github.com/kwilteam/kwil-db/internal/sql"
+	"bytes"
+	"encoding/hex"
 )
 
 /*
@@ -11,15 +10,6 @@ import (
 */
 
 // Datastore is a connection to a database.
-type Datastore interface {
-	// Execute executes a statement with the given arguments.
-	Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error)
-	// Query executes a query with the given arguments.
-	// It will not read uncommitted data.
-	Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error)
-	// Savepoint creates a savepoint.
-	Savepoint() (sql.Savepoint, error)
-}
 
 var (
 	// tableResolutions is the sql table used to store resolutions that can be voted on
@@ -34,7 +24,7 @@ var (
 	// resolutionTypeIndex is the sql index used to index the type of a resolution
 	resolutionTypeIndex = `CREATE INDEX IF NOT EXISTS type_index ON resolutions (type);`
 
-	tableVoteTypes = `CREATE TABLE IF NOT EXISTS resolution_types (
+	tableResolutionTypes = `CREATE TABLE IF NOT EXISTS resolution_types (
 		id BLOB PRIMARY KEY, -- id is an rfc4122 uuid derived from the name
 		name TEXT UNIQUE NOT NULL -- name is the name of the resolution type
 	);`
@@ -106,4 +96,47 @@ var (
 	FROM resolutions AS r
 	INNER JOIN resolution_types AS t ON r.type = t.id
 	WHERE t.name = $type;`
+
+	// getConfirmedResolutions is the statement used to get all resolutions
+	// that have been confirmed above the given power threshhold
+	// we do not calculate the threshhold here since we need to guarantee accuracy
+	// using big ints.
+	// it orders by id for determinism
+	getConfirmedResolutions = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration
+	FROM resolutions AS r
+	INNER JOIN resolution_types AS t ON r.type = t.id
+	LEFT JOIN votes AS v ON r.id = v.resolution_id
+	LEFT JOIN voters AS vr ON v.voter_id = vr.id
+	WHERE r.body IS NOT NULL
+	GROUP BY r.id
+	HAVING SUM(vr.power) >= $power_needed
+	ORDER BY r.id;`
+
+	// deleteResolutions deletes a set of resolutions
+	// it is meant to be used in formatResolutionList
+	deleteResolutions = `DELETE FROM resolutions WHERE id IN (%s);`
+
+	// totalPower gets the total power of all voters
+	totalPower = `SELECT SUM(power) AS required_power FROM voters;`
+
+	// createResolutionType creates a resolution type
+	createResolutionType = `INSERT INTO resolution_types (id, name) VALUES ($id, $name) ON CONFLICT(id) DO NOTHING;`
 )
+
+// SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration FROM resolutions AS r INNER JOIN resolution_types AS t ON r.type = t.id LEFT JOIN votes AS v ON r.id = v.resolution_id LEFT JOIN voters AS vr ON v.voter_id = vr.id WHERE r.body IS NOT NULL GROUP BY r.id HAVING SUM(vr.power) >= 3 ORDER BY r.id;
+
+// formatResolutionList formats a list of resolutions for use in a sql statement
+// it will hex encode the resolutions, and then wrap them in unhex()
+func formatResolutionList(r [][]byte) string {
+	var buf bytes.Buffer
+	for i, v := range r {
+		buf.WriteString("unhex('")
+		buf.WriteString(hex.EncodeToString(v))
+		buf.WriteString("')")
+		if i != len(r)-1 {
+			buf.WriteString(", ")
+		}
+	}
+
+	return buf.String()
+}
