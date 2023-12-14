@@ -238,7 +238,7 @@ func (v *VoteProcessor) GetResolution(ctx context.Context, id types.UUID) (info 
 
 	return &ResolutionStatus{
 		Resolution: Resolution{
-			ID:         types.UUID(resolution.ID),
+			ID:         resolution.ID,
 			Type:       resolution.Type,
 			Body:       resolution.Body,
 			Expiration: resolution.Expiration,
@@ -461,7 +461,7 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) error {
 			return fmt.Errorf("invalid id length for UUID. required 16 bytes, got %d", len(vote.ID))
 		}
 
-		usedDBIDs[i] = []byte(vote.ID[:])
+		usedDBIDs[i] = vote.ID[:]
 	}
 
 	if len(usedDBIDs) == 0 {
