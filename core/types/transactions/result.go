@@ -37,6 +37,7 @@ const (
 	CodeInsufficientBalance TxCode = 6
 	CodeInsufficientFee     TxCode = 7
 	CodeInvalidAmount       TxCode = 8
+	CodeInvalidSender       TxCode = 9
 
 	CodeUnknownError TxCode = math.MaxUint32
 )

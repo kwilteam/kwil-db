@@ -14,14 +14,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/core/utils"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
-	"github.com/kwilteam/kwil-db/internal/modules"
-	modAcct "github.com/kwilteam/kwil-db/internal/modules/accounts"
-	modDataset "github.com/kwilteam/kwil-db/internal/modules/datasets"
-	modVal "github.com/kwilteam/kwil-db/internal/modules/validators"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
@@ -43,36 +38,28 @@ type AbciConfig struct {
 	GenesisAppHash     []byte
 	ChainID            string
 	ApplicationVersion uint64
-	GenesisAllocs      map[string]*big.Int // genesisCft.Alloc
+	GenesisAllocs      map[string]*big.Int
+	// genesisCft.Alloc
 	// GasEnabled bool // for mempool policy modification
 }
 
-func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, database DatasetsModule, vldtrs ValidatorModule, kv KVStore,
-	committer AtomicCommitter, snapshotter SnapshotModule, bootstrapper DBBootstrapModule, opts ...AbciOpt) *AbciApp {
+func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule, kv KVStore,
+	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
 	app := &AbciApp{
 		cfg:        *cfg,
-		database:   database,
 		validators: vldtrs,
-		committer:  committer,
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
-		bootstrapper: bootstrapper,
-		snapshotter:  snapshotter,
-		accounts:     accounts,
+		bootstrapper:    bootstrapper,
+		snapshotter:     snapshotter,
+		accounts:        accounts,
+		txApp:           txRouter,
+		consensusParams: consensusParams,
 
 		valAddrToKey: make(map[string][]byte),
 
-		mempool: &mempool{
-			accounts:     make(map[string]*userAccount),
-			accountStore: accounts,
-		},
-
-		log: log.NewNoOp(),
-	}
-
-	for _, opt := range opts {
-		opt(app)
+		log: log,
 	}
 
 	return app
@@ -91,21 +78,20 @@ func pubkeyToAddr(pubkey []byte) (string, error) {
 	return publicKey.Address().String(), nil
 }
 
+// proposerAddrToString converts a proposer address to a string.
+// This follows the semantics of comet's ed25519.Pubkey.Address() method,
+// which hex encodes and upper cases the address
+func proposerAddrToString(addr []byte) string {
+	return strings.ToUpper(hex.EncodeToString(addr))
+}
+
 type AbciApp struct {
 	cfg AbciConfig
-
-	// database is the database module that handles database deployment, dropping, and execution
-	database DatasetsModule
 
 	// validators is the validators module that handles joining and approving validators
 	validators ValidatorModule
 	// comet punishes by address, so we maintain an address=>pubkey map.
 	valAddrToKey map[string][]byte // NOTE: includes candidates
-	// Validator updates obtained in EndBlock, applied to valAddrToKey in Commit
-	valUpdates []*validators.Validator
-
-	// committer is the atomic committer that handles atomic commits across multiple stores
-	committer AtomicCommitter
 
 	// snapshotter is the snapshotter module that handles snapshotting
 	snapshotter SnapshotModule
@@ -119,37 +105,36 @@ type AbciApp struct {
 	// accountStore is the store that maintains the account state
 	accounts AccountsModule
 
-	// mempool maintains in-memory account state to validate the unconfirmed transactions against.
-	mempool *mempool
-
 	log log.Logger
 
 	// Expected AppState after bootstrapping the node with a given snapshot,
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
+
+	txApp TxApp
+
+	consensusParams ConsensusParams
+
+	// commitHooks is a set of functions that are called after a block is committed.
+	// If any of the hooks return an error, the rest of the hooks will be called,
+	// and the node will then fail with a consensus error.
+	// This can be used to build extra logic within a node, such as broadcasting validator txa,
+	// sending data to Arweave, etc.
+	// It is placed within abci's `Commit` method, since abci blocks mempool updates during commit.
+	// This allows validators to automatically author transactions, and not conflict with potential
+	// transactions authored by the same validator's administrator.
+	commitHooks []CommitHook
+
+	// blockInfo is information about the last block that was finalized.
+	// it is set and at the end of FinalizeBlock.
+	// It is primarily made to be used in Commit.  If used elsewhere,
+	// the implementer should take care to ensure that they account for potential
+	// nil values (in the case of the node not yet having finalized a block).
+	blockInfo *BlockInfo
 }
 
 func (a *AbciApp) ChainID() string {
 	return a.cfg.ChainID
-}
-
-// AccountInfo gets the pending balance and nonce for an account. If there are
-// no unconfirmed transactions for the account, the latest confirmed values are
-// returned.
-func (a *AbciApp) AccountInfo(ctx context.Context, identifier []byte) (balance *big.Int, nonce int64, err error) {
-	// If we have any unconfirmed transactions for the user, report that info
-	// without even checking the account store.
-	ua := a.mempool.peekAccountInfo(ctx, identifier)
-	if ua.nonce > 0 {
-		return ua.balance, ua.nonce, nil
-	}
-	// Nothing in mempool, check account store. Changes to the account store are
-	// committed before the mempool is cleared, so there should not be any race.
-	acct, err := a.accounts.Account(ctx, identifier)
-	if err != nil {
-		return nil, 0, err
-	}
-	return acct.Balance, acct.Nonce, nil
 }
 
 var _ abciTypes.Application = &AbciApp{}
@@ -200,10 +185,12 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil // return error now or is it still all about code?
 	}
 
+	txHash := cmtTypes.Tx(incoming.Tx).Hash()
 	logger.Debug("",
 		zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()),
-		zap.Uint64("nonce", tx.Body.Nonce))
+		zap.Uint64("nonce", tx.Body.Nonce),
+		zap.String("hash", hex.EncodeToString(txHash)))
 
 	// For a new transaction (not re-check), before looking at execution cost or
 	// checking nonce validity, ensure the payload is recognized and signature is valid.
@@ -215,12 +202,13 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 				zap.String("payloadType", tx.Body.PayloadType.String()))
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "wrong chain ID"}, nil
 		}
-		// Verify Payload type
-		if !tx.Body.PayloadType.Valid() {
-			code = codeInvalidTxType
-			logger.Debug("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
-			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "invalid payload type"}, nil
-		}
+		// we no longer need to do this, it fails in the mempool itself
+		// // Verify Payload type
+		// if !tx.Body.PayloadType.Valid() {
+		// 	code = codeInvalidTxType
+		// 	logger.Debug("invalid payload type", zap.String("payloadType", tx.Body.PayloadType.String()))
+		// 	return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "invalid payload type"}, nil
+		// }
 
 		// Verify Signature
 		err = ident.VerifyTransaction(tx)
@@ -230,11 +218,10 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil
 		}
 	} else {
-		txHash := cmtTypes.Tx(incoming.Tx).Hash()
 		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce))
 	}
 
-	err = a.mempool.applyTransaction(ctx, tx)
+	err = a.txApp.ApplyMempool(ctx, tx)
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
@@ -255,265 +242,6 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	return &abciTypes.ResponseCheckTx{Code: code.Uint32()}, nil
 }
 
-func (a *AbciApp) executeTx(ctx context.Context, rawTx []byte, logger *log.Logger) *abciTypes.ExecTxResult {
-	var events []abciTypes.Event
-	var gasUsed int64
-
-	newExecuteTxRes := func(code transactions.TxCode, err error) *abciTypes.ExecTxResult {
-		res := &abciTypes.ExecTxResult{
-			Code:    code.Uint32(),
-			GasUsed: gasUsed,
-			Events:  events,
-			Log:     "",
-			// Data, GasWanted, Info, Codespace
-		}
-
-		if err != nil {
-			res.Log = fmt.Sprintf("FAILED TRANSACTION: %v", err) // may be too much info in err
-		}
-
-		return res
-	}
-
-	tx := &transactions.Transaction{}
-	err := tx.UnmarshalBinary(rawTx)
-	if err != nil {
-		logger.Error("failed to unmarshal transaction", zap.Error(err))
-		return newExecuteTxRes(codeEncodingError, err)
-	}
-
-	logger = logger.With(zap.String("Sender", hex.EncodeToString(tx.Sender)),
-		zap.String("PayloadType", tx.Body.PayloadType.String()))
-
-	switch tx.Body.PayloadType {
-	case transactions.PayloadTypeDeploySchema:
-		var schemaPayload transactions.Schema
-		err = schemaPayload.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		var schema *engineTypes.Schema
-		schema, err = modDataset.ConvertSchemaToEngine(&schemaPayload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		var res *modDataset.ExecutionResponse
-		res, err = a.database.Deploy(ctx, schema, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		dbID := utils.GenerateDBID(schema.Name, tx.Sender)
-		gasUsed = res.GasUsed
-		events = []abciTypes.Event{
-			{
-				Type: transactions.PayloadTypeDeploySchema.String(),
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Sender", Value: hex.EncodeToString(tx.Sender), Index: true},
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "DBID", Value: dbID, Index: true},
-				},
-			},
-		}
-		logger.Debug("deployed database", zap.String("DBID", dbID))
-
-	case transactions.PayloadTypeDropSchema:
-		drop := &transactions.DropSchema{}
-		err = drop.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("drop database", zap.String("DBID", drop.DBID))
-
-		var res *modDataset.ExecutionResponse
-		res, err = a.database.Drop(ctx, drop.DBID, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeExecuteAction:
-		execution := &transactions.ActionExecution{}
-		err = execution.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("execute action",
-			zap.String("DBID", execution.DBID), zap.String("Action", execution.Action),
-			zap.Any("Args", execution.Arguments))
-
-		// say they don't have the balance to pay the required gas, shouldn't we
-		// try to reduce their balance by some amount simply for including the
-		// transaction in the block?
-
-		var res *modDataset.ExecutionResponse
-		res, err = a.database.Execute(ctx, execution.DBID, execution.Action, convertArgs(execution.Arguments), tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeTransfer:
-		transfer := &transactions.Transfer{}
-		err = transfer.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Info("transfer", zap.String("amount", transfer.Amount),
-			zap.String("to", hex.EncodeToString(transfer.To)),
-			zap.String("fee", tx.Body.Fee.String()))
-
-		amt, ok := big.NewInt(0).SetString(transfer.Amount, 10)
-		if !ok {
-			logger.Warn("invalid amount", zap.String("amt_str", transfer.Amount))
-			return newExecuteTxRes(codeInvalidAmount, err)
-		}
-
-		if amt.Cmp(&big.Int{}) < 0 { // the accounts module should also check this
-			logger.Warn("amount must be non-negative", zap.String("amt_str", transfer.Amount))
-			return newExecuteTxRes(codeInvalidAmount, err)
-		}
-
-		txAcct := &modAcct.TxAcct{
-			Sender: tx.Sender,
-			Fee:    tx.Body.Fee,
-			Nonce:  int64(tx.Body.Nonce),
-		}
-		err := a.accounts.TransferTx(ctx, txAcct, transfer.To, amt)
-		if err != nil {
-			logger.Warn("transfer failed", zap.Error(err))
-			return newExecuteTxRes(modules.ErrCode(err), err)
-		}
-
-	case transactions.PayloadTypeValidatorJoin:
-		var join transactions.ValidatorJoin
-		err = join.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("join validator",
-			zap.String("pubkey", hex.EncodeToString(tx.Sender)),
-			zap.Int64("power", int64(join.Power)))
-
-		var res *modVal.ExecutionResponse
-		res, err = a.validators.Join(ctx, int64(join.Power), tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		events = []abciTypes.Event{
-			{
-				Type: "validator_join",
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
-					{Key: "ValidatorPower", Value: fmt.Sprintf("%d", join.Power), Index: true},
-				},
-			},
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeValidatorLeave:
-		var leave transactions.ValidatorLeave
-		err = leave.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("leave validator", zap.String("pubkey", hex.EncodeToString(tx.Sender)))
-
-		var res *modVal.ExecutionResponse
-		res, err = a.validators.Leave(ctx, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		events = []abciTypes.Event{
-			{
-				Type: "validator_leave",
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "ValidatorPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
-					{Key: "ValidatorPower", Value: "0", Index: true},
-				},
-			},
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeValidatorApprove:
-		var approve transactions.ValidatorApprove
-		err = approve.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("approve validator", zap.String("pubkey", hex.EncodeToString(approve.Candidate)))
-
-		var res *modVal.ExecutionResponse
-		res, err = a.validators.Approve(ctx, approve.Candidate, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		events = []abciTypes.Event{
-			{
-				Type: "validator_approve",
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "CandidatePubKey", Value: hex.EncodeToString(approve.Candidate), Index: true},
-					{Key: "ApproverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
-				},
-			},
-		}
-
-		gasUsed = res.GasUsed
-
-	case transactions.PayloadTypeValidatorRemove:
-		var remove transactions.ValidatorRemove
-		err = remove.UnmarshalBinary(tx.Body.Payload)
-		if err != nil {
-			return newExecuteTxRes(codeEncodingError, err)
-		}
-
-		logger.Debug("remove validator", zap.String("pubkey", hex.EncodeToString(remove.Validator)))
-
-		var res *modVal.ExecutionResponse
-		res, err = a.validators.Remove(ctx, remove.Validator, tx)
-		if err != nil {
-			return newExecuteTxRes(codeUnknownError, err)
-		}
-
-		events = []abciTypes.Event{
-			{
-				Type: "validator_remove",
-				Attributes: []abciTypes.EventAttribute{
-					{Key: "Result", Value: "Success", Index: true},
-					{Key: "TargetPubKey", Value: hex.EncodeToString(remove.Validator), Index: true},
-					{Key: "RemoverPubKey", Value: hex.EncodeToString(tx.Sender), Index: true},
-				},
-			},
-		}
-
-		gasUsed = res.GasUsed
-
-	default:
-		err = fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
-		return newExecuteTxRes(codeUnknownError, err)
-	}
-
-	return newExecuteTxRes(codeOk, nil)
-}
-
 // FinalizeBlock is on the consensus connection
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int("height", int(req.Height)))
@@ -521,18 +249,14 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	res := &abciTypes.ResponseFinalizeBlock{}
 
 	// BeginBlock was this part
-
-	idempotencyKey := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idempotencyKey, uint64(req.Height))
-
-	err := a.committer.Begin(ctx, idempotencyKey)
+	err := a.txApp.Begin(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("begin atomic commit failed: %w", err)
 	}
 
 	// Punish bad validators.
 	for _, ev := range req.Misbehavior {
-		addr := string(ev.Validator.Address) // comet example app confirms this conversion... weird
+		addr := proposerAddrToString(ev.Validator.Address) // comet example app confirms this conversion... weird
 		// if ev.Type == abciTypes.MisbehaviorType_DUPLICATE_VOTE { // ?
 		// 	a.log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
 		// 	continue
@@ -551,24 +275,42 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 	}
 
+	addr := proposerAddrToString(req.ProposerAddress)
+	proposerPubKey, ok := a.valAddrToKey[addr]
+	if !ok {
+		a.log.Warn("received block proposal from unknown validator", zap.String("addr", addr))
+		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to address %v", addr)
+	}
+
 	for _, tx := range req.Txs {
 		// DeliverTx was the part in this loop.
-		execRes := a.executeTx(ctx, tx, logger)
-		res.TxResults = append(res.TxResults, execRes)
+		decoded := &transactions.Transaction{}
+		err := decoded.UnmarshalBinary(tx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal transaction: %w", err)
+		}
+
+		txRes := a.txApp.Execute(txapp.TxContext{
+			BlockHeight:  req.Height,
+			Proposer:     proposerPubKey,
+			VotingPeriod: a.consensusParams.VotingPeriod(),
+			Ctx:          ctx,
+		}, decoded)
+
+		abciRes := &abciTypes.ExecTxResult{}
+		if txRes.Error != nil {
+			abciRes.Log = txRes.Error.Error()
+			a.log.Warn("failed to execute transaction", zap.Error(txRes.Error))
+		} else {
+			abciRes.Log = "success"
+		}
+		abciRes.Code = txRes.ResponseCode.Uint32()
+		abciRes.GasUsed = txRes.Spend
+
+		res.TxResults = append(res.TxResults, abciRes)
 	}
 
 	// EndBlock was this part
-
-	a.valUpdates, err = a.validators.Finalize(ctx)
-	if err != nil {
-		panic(fmt.Sprintf("failed to finalize validator updates: %v", err))
-	}
-
-	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(a.valUpdates))
-	for i, up := range a.valUpdates {
-		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
-	}
-
 	res.ConsensusParamUpdates = &tendermintTypes.ConsensusParams{ // why are we "updating" these on every block? Should be nil for no update.
 		// we can include evidence in here for malicious actors, but this is not important this release
 		Version: &tendermintTypes.VersionParams{
@@ -579,16 +321,49 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		},
 	}
 
-	id, err := a.committer.Commit(ctx, idempotencyKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to commit atomic commit: %w", err)
+	for _, hook := range a.commitHooks {
+		err := hook(ctx, a.blockInfo)
+		if err != nil {
+			a.log.Error("commit hook failed", zap.Error(err))
+			return nil, fmt.Errorf("commit hook failed: %w", err)
+		}
 	}
 
-	appHash, err := a.createNewAppHash(ctx, id)
+	// TODO: some of this commit logic would actually go in Commit, but we need
+	// to reconcile some issues with our idempotent commit process first.
+	// while we have idempotent commits, it is ok to have this here.
+	newAppHash, validatorUpdates, err := a.txApp.Commit(ctx, req.Height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction router: %w", err)
+	}
+
+	res.ValidatorUpdates = make([]abciTypes.ValidatorUpdate, len(validatorUpdates))
+	for i, up := range validatorUpdates {
+		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
+
+		addr, err := pubkeyToAddr(up.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
+		}
+
+		if up.Power < 1 { // leave or punish
+			delete(a.valAddrToKey, addr)
+		} else { // add or update without remove
+			a.valAddrToKey[addr] = up.PubKey
+		}
+	}
+
+	appHash, err := a.createNewAppHash(ctx, newAppHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new app hash: %w", err)
 	}
 	res.AppHash = appHash
+
+	a.blockInfo = &BlockInfo{
+		Height:    req.Height,
+		BlockHash: req.Hash,
+		Proposer:  proposerPubKey,
+	}
 
 	return res, nil
 }
@@ -599,24 +374,10 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 		return nil, fmt.Errorf("failed to increment block height: %w", err)
 	}
 
-	defer a.mempool.reset()
-
-	// Update the validator address=>pubkey map used by Penalize.
-	for _, up := range a.valUpdates {
-		addr := cometAddrFromPubKey(up.PubKey)
-		if up.Power < 1 { // leave or punish
-			delete(a.valAddrToKey, addr)
-		} else { // add or update without remove
-			a.valAddrToKey[addr] = up.PubKey
-		}
-	}
-	a.valUpdates = nil
-
 	height, err := a.metadataStore.GetBlockHeight(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block height: %w", err)
 	}
-	a.validators.UpdateBlockHeight(ctx, height)
 
 	// snapshotting
 	if a.snapshotter != nil && a.snapshotter.IsSnapshotDue(uint64(height)) {
@@ -699,10 +460,21 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 			PubKey: pk,
 			Power:  vi.Power,
 		}
+
+		addr, err := pubkeyToAddr(pk)
+		if err != nil {
+			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
+		}
+
+		a.valAddrToKey[addr] = pk
 	}
 
-	if err := a.validators.GenesisInit(context.Background(), vldtrs, req.InitialHeight); err != nil {
+	if err := a.validators.GenesisInit(ctx, vldtrs, req.InitialHeight); err != nil {
 		return nil, fmt.Errorf("validators.GenesisInit failed: %w", err)
+	}
+
+	if err := a.txApp.GenesisInit(ctx, vldtrs); err != nil {
+		return nil, fmt.Errorf("txApp.GenesisInit failed: %w", err)
 	}
 
 	valUpdates := make([]abciTypes.ValidatorUpdate, len(vldtrs))
@@ -870,7 +642,7 @@ type indexedTxn struct {
 //
 // NOTE: This is a plain function instead of an AbciApplication method so that
 // it may be directly tested.
-func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger) [][]byte {
+func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger, proposerAddr []byte) ([][]byte, uint64) {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
 	var i int
@@ -909,17 +681,24 @@ func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger) [][]byte {
 	nonces := make([]uint64, 0, len(okTxns))
 	finalTxns := make([][]byte, 0, len(okTxns))
 	i = 0
+	proposerNonce := uint64(0)
+
 	for _, tx := range okTxns {
 		if i > 0 && tx.Body.Nonce == nonces[i-1] && bytes.Equal(tx.Sender, okTxns[i-1].Sender) {
 			log.Warn(fmt.Sprintf("Dropping tx with re-used nonce %d from block proposal", tx.Body.Nonce))
 			continue // mempool recheck should have removed this
 		}
+
+		if bytes.Equal(tx.Sender, proposerAddr) {
+			proposerNonce = tx.Body.Nonce + 1
+		}
+
 		finalTxns = append(finalTxns, txs[tx.is])
 		nonces = append(nonces, tx.Body.Nonce)
 		i++
 	}
 
-	return finalTxns
+	return finalTxns, proposerNonce
 }
 
 func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPrepareProposal) (*abciTypes.ResponsePrepareProposal, error) {
@@ -927,8 +706,12 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	okTxns := prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log)
+	addr, ok := a.valAddrToKey[proposerAddrToString(req.ProposerAddress)]
+	if !ok {
+		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to %s", proposerAddrToString(req.ProposerAddress))
+	}
 
+	okTxns, proposerNonce := prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log, addr)
 	if len(okTxns) != len(req.Txs) {
 		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
 			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
@@ -940,12 +723,36 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		}
 	}
 
+	if proposerNonce == 0 {
+		acct, err := a.accounts.GetAccount(ctx, addr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get proposer account: %w", err)
+		}
+		proposerNonce = uint64(acct.Nonce) + 1
+	}
+
+	proposerTxs, err := a.txApp.ProposerTxs(ctx, proposerNonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get proposer transactions: %w", err)
+	}
+
+	proposerTxBts := make([][]byte, 0)
+	for _, tx := range proposerTxs {
+		bts, err := tx.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proposer transaction: %w", err)
+		}
+		proposerTxBts = append(proposerTxBts, bts)
+	}
+
+	txs := append(req.Txs, proposerTxBts...)
+
 	return &abciTypes.ResponsePrepareProposal{
-		Txs: okTxns,
+		Txs: txs,
 	}, nil
 }
 
-func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byte) error {
+func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byte, proposer []byte) error {
 	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"))
 	grouped, err := groupTxsBySender(txns)
 	if err != nil {
@@ -957,7 +764,7 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 	// execution does not update an accounts nonce in state unless it is the
 	// next nonce. Delivering transactions to a block in that way cannot happen.
 	for sender, txs := range grouped {
-		acct, err := a.accounts.Account(ctx, []byte(sender))
+		acct, err := a.accounts.GetAccount(ctx, []byte(sender))
 		if err != nil {
 			return fmt.Errorf("failed to get account: %w", err)
 		}
@@ -974,6 +781,15 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 			chainID := tx.Body.ChainID
 			if protected := chainID != ""; protected && chainID != a.cfg.ChainID {
 				return fmt.Errorf("protected transaction with mismatched chain ID")
+			}
+
+			// if it is a vote body payload, then only the proposer can propose it
+			// this is a hard consensus rule for block building, and is protected by
+			// the mempool.
+			// it seems like this should somehow be in the same package as mempool since this is inter-related
+			// logically, but I am putting it here for now.
+			if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteBodies && !bytes.Equal(proposer, tx.Sender) {
+				return fmt.Errorf("only proposer can propose validator vote bodies")
 			}
 
 			// This block proposal may include transactions that did not pass
@@ -997,7 +813,14 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	if err := a.validateProposalTransactions(ctx, req.Txs); err != nil {
+	addr := proposerAddrToString(req.ProposerAddress)
+	proposerPubKey, ok := a.valAddrToKey[addr]
+	if !ok {
+		a.log.Warn("received block proposal from unknown validator", zap.String("addr", addr))
+		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
+	}
+
+	if err := a.validateProposalTransactions(ctx, req.Txs, proposerPubKey); err != nil {
 		logger.Warn("rejecting block proposal", zap.Error(err))
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}
@@ -1027,19 +850,6 @@ func (a *AbciApp) createNewAppHash(ctx context.Context, addition []byte) ([]byte
 // TODO: here should probably be other apphash computations such as the genesis
 // config digest. The cmd/kwild/config package should probably not
 // contain consensus-critical computations.
-
-// convertArgs converts the string args to type any.
-func convertArgs(args [][]string) [][]any {
-	converted := make([][]any, len(args))
-	for i, arg := range args {
-		converted[i] = make([]any, len(arg))
-		for j, a := range arg {
-			converted[i][j] = a
-		}
-	}
-
-	return converted
-}
 
 var (
 	appHashKey     = []byte("a")
@@ -1088,4 +898,20 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	}
 
 	return m.SetBlockHeight(ctx, height+1)
+}
+
+// BlockInfo contains information about a block.
+type BlockInfo struct {
+	Height    int64  // block height
+	Proposer  []byte // public key of the proposer
+	BlockHash []byte // hash of the block
+}
+
+type CommitHook func(ctx context.Context, block *BlockInfo) error
+
+// AddCommitHook adds a function to be called after a block is committed.
+// We allow this to be done ad-hoc, to give the application control over when
+// their commit hook begins taking place (e.g. before blocksync, after blocksync, etc.)
+func (a *AbciApp) AddCommitHook(hook CommitHook) {
+	a.commitHooks = append(a.commitHooks, hook)
 }
