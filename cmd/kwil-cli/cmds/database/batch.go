@@ -24,7 +24,7 @@ var (
 	batchLong = `Batch executes an action on a database using inputs from a CSV file.
 
 To map a CSV column name to an action input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
-The format is ` + "`" + `--map-inputs <csv_column>:<action_input>` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
+The format is ` + "`" + `--map-inputs <csv_column_1>:<action_input_1>,<csv_column_2>:<action_input_2>` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
 the CSV column name will be used as the action input name.
 	
 You can also specify the input values directly using the ` + "`" + `--values` + "`" + ` flag, delimited by a colon.
@@ -41,7 +41,7 @@ flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner wi
 # 3,jack,35
 
 # Executing the ` + "`" + `create_user($user_id, $username, $user_age, $created_at)` + "`" + ` action on the "mydb" database
-kwil-cli database batch --path ./users.csv --action create_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 --map-inputs id:user_id name:username age:user_age --values created_at:$(date +%s)`
+kwil-cli database batch --path ./users.csv --action create_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 --map-inputs "id:user_id,name:username,age:user_age" --values created_at:$(date +%s)`
 )
 
 // batch is used for batch operations on databases
