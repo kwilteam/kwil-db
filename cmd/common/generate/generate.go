@@ -105,9 +105,8 @@ func createCmdFile(cmd *cobra.Command, dir string, idx int, write writeFunc) err
 func linkHandler(dir string) func(string) string {
 	return func(s string) string {
 		// trying just linking ids??
-		s = strings.Trim(s, ".md")
+		s = strings.TrimSuffix(s, ".md")
 		s = strings.ReplaceAll(s, "_", "/")
-
 		return "/docs/ref/" + s
 	}
 }
