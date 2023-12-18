@@ -55,7 +55,7 @@ var _ gateway.GatewayClient = (*GatewayHttpClient)(nil)
 
 // fullUrl returns the full url for the given endpoint
 func (g *GatewayHttpClient) fullUrl(endpoint string) string {
-	return g.target.String() + endpoint
+	return g.target.JoinPath(endpoint).String()
 }
 
 // Auth authenticates the client with the gateway.
