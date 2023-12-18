@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 )
 
+// CreateDirIfNeeded should diaf
 func CreateDirIfNeeded(path string) error {
 	return os.MkdirAll(path, 0755)
 }
@@ -47,6 +48,7 @@ func CreateOrOpenFile(path string) (*os.File, error) {
 
 // NOTE: os.ReadFile requires no wrapper.
 
+// WriteFile should diaf
 func WriteFile(path string, data []byte) error {
 	return os.WriteFile(path, data, 0644)
 }

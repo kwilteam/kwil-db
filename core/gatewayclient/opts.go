@@ -1,6 +1,8 @@
 package gatewayclient
 
 import (
+	"net/http"
+
 	"github.com/kwilteam/kwil-db/core/client"
 )
 
@@ -10,6 +12,8 @@ type GatewayOptions struct {
 
 	// AuthSignFunc is a function that will be used to sign gateway authentication messages.
 	AuthSignFunc GatewayAuthSignFunc
+
+	AuthCookieHandler func(*http.Cookie) error
 }
 
 // DefaultOptions returns the default options for the gateway client.
@@ -31,5 +35,8 @@ func (c *GatewayOptions) Apply(opt *GatewayOptions) {
 
 	if opt.AuthSignFunc != nil {
 		c.AuthSignFunc = opt.AuthSignFunc
+	}
+	if opt.AuthCookieHandler != nil {
+		c.AuthCookieHandler = opt.AuthCookieHandler
 	}
 }
