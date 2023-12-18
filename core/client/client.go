@@ -75,7 +75,7 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *ClientOpt
 
 	chainInfo, err := c.ChainInfo(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ping: %w", err)
+		return nil, fmt.Errorf("chain_info: %w", err)
 	}
 	chainID := chainInfo.ChainID
 	if c.chainID == "" {

@@ -31,6 +31,37 @@ type GatewayClient struct {
 	gatewayClient gateway.GatewayClient
 
 	gatewaySigner GatewayAuthSignFunc // a hook for when the gateway authentication is needed
+
+	authCookie *http.Cookie // might need a mutex
+}
+
+// customAuthCookieJar implements the http.CookieJar interface used by an
+// http.Client. It uses a net/http/cookiejar.Jar to manage retrieval and
+// expiration of cookies for the http.Client requests, and a provided function
+// that is called when SetCookies receives a cookie with Name set to
+// kgwAuthCookieName ("kgw_session"). This function can be anything, from
+// storing the cookie in a struct field or writing it to disk.
+type customAuthCookieJar struct {
+	jar              *cookiejar.Jar
+	handleAuthCookie func(c *http.Cookie) error
+}
+
+var _ http.CookieJar = (*customAuthCookieJar)(nil)
+
+func (acj *customAuthCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	acj.jar.SetCookies(u, cookies)
+	if acj.handleAuthCookie == nil {
+		return
+	}
+	for _, c := range cookies {
+		if c.Name == kgwAuthCookieName {
+			acj.handleAuthCookie(c)
+		}
+	}
+}
+
+func (acj *customAuthCookieJar) Cookies(u *url.URL) []*http.Cookie {
+	return acj.jar.Cookies(u)
 }
 
 func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*GatewayClient, error) {
@@ -42,8 +73,10 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 		return nil, fmt.Errorf("create cookie jar: %w", err)
 	}
 
+	persistJar := &customAuthCookieJar{jar: cookieJar}
+
 	httpClient := &http.Client{
-		Jar: cookieJar,
+		Jar: persistJar,
 	}
 
 	parsedTarget, err := url.Parse(target)
@@ -69,6 +102,15 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 		gatewaySigner: options.AuthSignFunc,
 		gatewayClient: gatewayRPC,
 		target:        parsedTarget,
+	}
+
+	optAuthCookieHandler := options.AuthCookieHandler
+	persistJar.handleAuthCookie = func(c *http.Cookie) error {
+		g.authCookie = c
+		if optAuthCookieHandler == nil {
+			return nil
+		}
+		return optAuthCookieHandler(c)
 	}
 
 	return g, nil
@@ -137,13 +179,7 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 // GetAuthCookie returns the authentication cookie currently being used.
 // If no authentication cookie is being used, it returns nil, false.
 func (c *GatewayClient) GetAuthCookie() (cookie *http.Cookie, found bool) {
-	cookies := c.httpClient.Jar.Cookies(c.target)
-	for _, cookie := range cookies {
-		if cookie.Name == kgwAuthCookieName {
-			return cookie, true
-		}
-	}
-	return nil, false
+	return c.authCookie, c.authCookie != nil
 }
 
 // SetAuthCookie sets the authentication cookie to be used.
@@ -158,6 +194,8 @@ func (c *GatewayClient) SetAuthCookie(cookie *http.Cookie) error {
 	}
 
 	c.httpClient.Jar.SetCookies(c.target, []*http.Cookie{cookie})
+
+	c.authCookie = cookie
 
 	return nil
 }
