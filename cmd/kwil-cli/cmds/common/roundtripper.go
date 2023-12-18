@@ -82,6 +82,9 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 			return sig, nil
 		},
+		// AuthCookieHandler: func(c *http.Cookie) error {
+		// 	return SaveCookie(KGWAuthTokenFilePath(), clientConfig.Signer.Identity(), c)
+		// },
 	})
 	if err != nil {
 		return err
@@ -120,6 +123,10 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	if err != nil {
 		return fmt.Errorf("save cookie: %w", err)
 	}
+
+	// NOTE: if we set GatewayOptions.AuthCookieHandler, we would remove the
+	// above client.GetAuthCookie and SaveCookie calls since it would be
+	// automatic. Which do approach do we prefer?
 
 	return nil
 }
