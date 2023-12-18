@@ -24,7 +24,7 @@ var (
 	batchLong = `Batch executes an action on a database using inputs from a CSV file.
 
 To map a CSV column name to an action input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
-The format is ` + "`" + `--map-inputs <csv_column_1>:<action_input_1>,<csv_column_2>:<action_input_2>` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
+The format is ` + "`" + `--map-inputs "<csv_column_1>:<action_input_1>,<csv_column_2>:<action_input_2>"` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
 the CSV column name will be used as the action input name.
 	
 You can also specify the input values directly using the ` + "`" + `--values` + "`" + ` flag, delimited by a colon.
