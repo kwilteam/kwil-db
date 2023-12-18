@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -28,7 +29,7 @@ type cookie struct {
 
 	Path       string    `json:"path,omitempty"`        // optional
 	Domain     string    `json:"domain,omitempty"`      // optional
-	Expires    time.Time `json:"expires"`               // optional
+	Expires    time.Time `json:"expires,omitempty"`     // optional
 	RawExpires string    `json:"raw_expires,omitempty"` // for reading cookies only
 
 	// MaxAge=0 means no 'Max-Age' attribute specified.
@@ -85,7 +86,7 @@ type PersistedCookies map[string]cookie
 // It will look up the cookie for the given user identifier.
 // If nothing is found, it returns nil, nil.
 func LoadPersistedCookie(authFile string, userIdentifier []byte) (*http.Cookie, error) {
-	if !utils.FileExists(authFile) {
+	if _, err := os.Stat(authFile); os.IsNotExist(err) {
 		return nil, nil
 	}
 
@@ -134,7 +135,7 @@ func SaveCookie(authFile string, userIdentifier []byte, originCookie *http.Cooki
 		return fmt.Errorf("marshal kgw auth info: %w", err)
 	}
 
-	err = utils.WriteFile(authFile, jsonBytes)
+	err = os.WriteFile(authFile, jsonBytes, 0600)
 	if err != nil {
 		return fmt.Errorf("write kgw auth file: %w", err)
 	}
