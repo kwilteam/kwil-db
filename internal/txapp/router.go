@@ -39,14 +39,13 @@ func NewRouter(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, 
 // It also contains a mempool for uncommitted accounts, as well as pricing
 // for transactions
 type TxApp struct {
-	Database       DatabaseEngine
-	Accounts       AccountsStore
-	Validators     ValidatorStore
-	VoteStore      VoteStore
-	LocalValidator LocalValidator
-	NetworkInfo    NetworkInfo
-
-	eventStore EventStore // unexported for now, since idk if we want to expose non-consensus stores to custom routes
+	Database       DatabaseEngine // tracks deployed schemas
+	Accounts       AccountsStore  // accounts
+	Validators     ValidatorStore // validators
+	VoteStore      VoteStore      // tracks resolutions, their votes, manages expiration
+	LocalValidator LocalValidator // information about the local validator
+	NetworkInfo    NetworkInfo    // information about the network
+	EventStore     EventStore     // tracks events, not part of consensus
 
 	log log.Logger
 
@@ -102,7 +101,7 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 
 	// this would also go in finalize block
 	for _, eventID := range finalizedEvents {
-		err = r.eventStore.DeleteEvent(ctx, eventID)
+		err = r.EventStore.DeleteEvent(ctx, eventID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -168,22 +167,22 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 	return a.Balance, a.Nonce, nil
 }
 
-// BuildBlock chooses the transactions to include in the next block.
-// It adds any transactions that the validator wishes to include.
-func (r *TxApp) BuildBlock(ctx context.Context, txs []*transactions.Transaction, consensusParams *ConsensusParams) ([]*transactions.Transaction, error) {
-	events, err := r.eventStore.GetEvents(ctx)
+// ProposerTxs returns the transactions that the proposer should include in the
+// next block.
+func (r *TxApp) ProposerTxs(ctx context.Context) ([]*transactions.Transaction, error) {
+	events, err := r.EventStore.GetEvents(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	_, nonce, err := r.AccountInfo(ctx, r.LocalValidator.Signer().Identity(), true)
+	account, err := r.Accounts.GetAccount(ctx, r.LocalValidator.Signer().Identity())
 	if err != nil {
 		return nil, err
 	}
 
-	tx, err := transactions.CreateTransaction(&transactions.VoteBodies{
+	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
 		Events: events,
-	}, r.NetworkInfo.ChainID(), uint64(nonce+1))
+	}, r.NetworkInfo.ChainID(), uint64(account.Nonce+1))
 	if err != nil {
 		return nil, err
 	}
@@ -193,13 +192,7 @@ func (r *TxApp) BuildBlock(ctx context.Context, txs []*transactions.Transaction,
 		return nil, err
 	}
 
-	ordered := prepareMempoolTxns(txs, int(consensusParams.MaxTxSize), &r.log)
-
-	final := make([]*transactions.Transaction, 0, len(ordered)+1)
-	final = append(final, tx)
-	final = append(final, ordered...)
-
-	return final, nil
+	return []*transactions.Transaction{tx}, nil
 }
 
 // TxResponse is the response from a transaction.

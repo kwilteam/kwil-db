@@ -17,12 +17,9 @@ type TxContext interface {
 // ConsensusParams contains parameters that are agreed upon by the network.
 // These can only be changed via voting on the network.
 type ConsensusParams struct {
-	// MaxVotingPeriod is the maximum length of a voting period.
+	// VotingPeriod is the maximum length of a voting period.
 	// It is measured in blocks, and is applied additively.
-	// e.g. if the current block is 50, and MaxVotingPeriod is 100,
+	// e.g. if the current block is 50, and VotingPeriod is 100,
 	// then the current voting period ends at block 150.
-	MaxVotingPeriod int64
-
-	// MaxTxSize is the maximum size (in bytes) of a transaction.
-	MaxTxSize int64
+	VotingPeriod int64
 }

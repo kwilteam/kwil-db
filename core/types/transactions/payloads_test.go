@@ -148,8 +148,8 @@ func Test_Types(t *testing.T) {
 			},
 		},
 		{
-			name: "vote_approve",
-			obj: &transactions.VoteApprove{
+			name: "validator_vote_approve",
+			obj: &transactions.ValidatorVoteIDs{
 				ResolutionIDs: []types.UUID{
 					types.NewUUIDV5([]byte("asdfadsf")),
 					types.NewUUIDV5([]byte("asdfad2sf")),
@@ -157,8 +157,8 @@ func Test_Types(t *testing.T) {
 			},
 		},
 		{
-			name: "vote_bodies",
-			obj: &transactions.VoteBodies{
+			name: "validator_vote_bodies",
+			obj: &transactions.ValidatorVoteBodies{
 				Events: []*types.VotableEvent{
 					{
 						Type: "asdfadsf",
@@ -200,10 +200,10 @@ func Test_Types(t *testing.T) {
 				obj = &transactions.ValidatorLeave{}
 			case *transactions.ValidatorRemove:
 				obj = &transactions.ValidatorRemove{}
-			case *transactions.VoteApprove:
-				obj = &transactions.VoteApprove{}
-			case *transactions.VoteBodies:
-				obj = &transactions.VoteBodies{}
+			case *transactions.ValidatorVoteIDs:
+				obj = &transactions.ValidatorVoteIDs{}
+			case *transactions.ValidatorVoteBodies:
+				obj = &transactions.ValidatorVoteBodies{}
 			default:
 				t.Fatal("unknown type")
 			}

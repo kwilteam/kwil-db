@@ -21,8 +21,8 @@ func init() {
 		registerRoute(transactions.PayloadTypeValidatorApprove.String(), &validatorApproveRoute{}),
 		registerRoute(transactions.PayloadTypeValidatorRemove.String(), &validatorRemoveRoute{}),
 		registerRoute(transactions.PayloadTypeValidatorLeave.String(), &validatorLeaveRoute{}),
-		registerRoute(transactions.PayloadTypeVoteApprove.String(), &voteApproveRoute{}),
-		registerRoute(transactions.PayloadTypeVoteBodies.String(), &voteBodiesRoute{}),
+		registerRoute(transactions.PayloadTypeValidatorVoteIDs.String(), &validatorVoteIDsRoute{}),
+		registerRoute(transactions.PayloadTypeValidatorVoteBodies.String(), &validatorVoteBodiesRoute{}),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("failed to register routes: %s", err))
@@ -274,7 +274,7 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 }
 
 func (v *validatorRemoveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	return big.NewInt(10000000000000), nil
+	return bigZero, nil
 }
 
 type validatorLeaveRoute struct{}
@@ -304,19 +304,27 @@ func (v *validatorLeaveRoute) Price(ctx TxContext, router *TxApp, tx *transactio
 	return big.NewInt(10000000000000), nil
 }
 
-// voteApproveRoute is a route for approving a set of votes based on their IDs.
-type voteApproveRoute struct{}
+// validatorVoteIDsRoute is a route for approving a set of votes based on their IDs.
+type validatorVoteIDsRoute struct{}
 
 // Execute will approve the votes for the given IDs.
 // If the event already has a body in the event store, and the vote
 // is from the local validator, the event will be deleted from the event store.
-func (v *voteApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
 	}
 
-	approve := &transactions.VoteApprove{}
+	isValidator, err := router.Validators.IsCurrent(ctx.Ctx(), tx.Sender)
+	if err != nil {
+		return txRes(spend, transactions.CodeUnknownError, err)
+	}
+	if !isValidator {
+		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotValidator)
+	}
+
+	approve := &transactions.ValidatorVoteIDs{}
 	err = approve.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
 		return txRes(spend, transactions.CodeEncodingError, err)
@@ -325,14 +333,14 @@ func (v *voteApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 	isLocalValidator := bytes.Equal(tx.Sender, router.LocalValidator.Signer().Identity())
 
 	for _, voteID := range approve.ResolutionIDs {
-		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().MaxVotingPeriod
+		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
 		containsBody, err := router.VoteStore.Approve(ctx.Ctx(), voteID, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
 		if isLocalValidator && containsBody {
-			err = router.eventStore.DeleteEvent(ctx.Ctx(), voteID)
+			err = router.EventStore.DeleteEvent(ctx.Ctx(), voteID)
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}
@@ -342,25 +350,17 @@ func (v *voteApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *voteApproveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	isValidator, err := router.Validators.IsCurrent(ctx.Ctx(), tx.Sender)
-	if err != nil {
-		return nil, err
-	}
-	if isValidator {
-		return bigZero, nil
-	}
-
-	return big.NewInt(100000000), nil
+func (v *validatorVoteIDsRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+	return bigZero, nil
 }
 
-// voteBodiesRoute is a route for handling votes for a set of vote bodies.
-type voteBodiesRoute struct{}
+// validatorVoteBodiesRoute is a route for handling votes for a set of vote bodies.
+type validatorVoteBodiesRoute struct{}
 
 // Execute will add the event bodies to the event store.
 // For each event, if the local validator has already voted on the event,
 // the event will be deleted from the event store.
-func (v *voteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -370,7 +370,7 @@ func (v *voteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions
 		return txRes(spend, transactions.CodeInvalidSender, fmt.Errorf("vote body tx must be sent by block proposer"))
 	}
 
-	vote := &transactions.VoteBodies{}
+	vote := &transactions.ValidatorVoteBodies{}
 	err = vote.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
 		return txRes(spend, transactions.CodeEncodingError, err)
@@ -379,7 +379,7 @@ func (v *voteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions
 	localValidator := router.LocalValidator.Signer().Identity()
 
 	for _, event := range vote.Events {
-		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().MaxVotingPeriod
+		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
 
 		err = router.VoteStore.CreateVote(ctx.Ctx(), event, expiryHeight)
 		if err != nil {
@@ -391,7 +391,7 @@ func (v *voteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 		if hasVoted {
-			err = router.eventStore.DeleteEvent(ctx.Ctx(), event.ID())
+			err = router.EventStore.DeleteEvent(ctx.Ctx(), event.ID())
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}
@@ -401,15 +401,6 @@ func (v *voteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *voteBodiesRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
-	isCurrent, err := router.Validators.IsCurrent(ctx.Ctx(), tx.Sender)
-	if err != nil {
-		return nil, err
-	}
-
-	if isCurrent {
-		return bigZero, nil
-	}
-
-	return big.NewInt(10000000000), nil
+func (v *validatorVoteBodiesRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+	return bigZero, nil
 }

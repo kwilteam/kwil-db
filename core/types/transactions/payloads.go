@@ -24,9 +24,7 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeValidatorApprove,
 		PayloadTypeValidatorRemove,
 		PayloadTypeValidatorLeave,
-		PayloadTypeTransfer,
-		PayloadTypeVoteApprove,
-		PayloadTypeVoteBodies:
+		PayloadTypeTransfer:
 		return true
 	default:
 		return false
@@ -34,17 +32,17 @@ func (p PayloadType) Valid() bool {
 }
 
 const (
-	PayloadTypeDeploySchema     PayloadType = "deploy_schema"
-	PayloadTypeDropSchema       PayloadType = "drop_schema"
-	PayloadTypeExecuteAction    PayloadType = "execute_action"
-	PayloadTypeCallAction       PayloadType = "call_action"
-	PayloadTypeTransfer         PayloadType = "transfer"
-	PayloadTypeValidatorJoin    PayloadType = "validator_join"
-	PayloadTypeValidatorLeave   PayloadType = "validator_leave"
-	PayloadTypeValidatorRemove  PayloadType = "validator_remove"
-	PayloadTypeValidatorApprove PayloadType = "validator_approve"
-	PayloadTypeVoteApprove      PayloadType = "vote_approve"
-	PayloadTypeVoteBodies       PayloadType = "vote_bodies"
+	PayloadTypeDeploySchema        PayloadType = "deploy_schema"
+	PayloadTypeDropSchema          PayloadType = "drop_schema"
+	PayloadTypeExecuteAction       PayloadType = "execute_action"
+	PayloadTypeCallAction          PayloadType = "call_action"
+	PayloadTypeTransfer            PayloadType = "transfer"
+	PayloadTypeValidatorJoin       PayloadType = "validator_join"
+	PayloadTypeValidatorLeave      PayloadType = "validator_leave"
+	PayloadTypeValidatorRemove     PayloadType = "validator_remove"
+	PayloadTypeValidatorApprove    PayloadType = "validator_approve"
+	PayloadTypeValidatorVoteIDs    PayloadType = "validator_vote_ids"
+	PayloadTypeValidatorVoteBodies PayloadType = "validator_vote_bodies"
 )
 
 // Payload is the interface that all payloads must implement
@@ -367,38 +365,41 @@ func (v *ValidatorLeave) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
-// VoteApprove is a payload for submitting approvals for any pending resolution.
-type VoteApprove struct {
+// in the future, if/when we go to implement voting based on token weight (instead of validatorship),
+// we will create identical payloads as the VoteIDs and VoteBodies payloads, but with different types
+
+// ValidatorVoteIDs is a payload for submitting approvals for any pending resolution, by ID.
+type ValidatorVoteIDs struct {
 	// ResolutionIDs is an array of all resolution IDs the caller is approving.
 	ResolutionIDs []types.UUID
 }
 
-func (v *VoteApprove) MarshalBinary() (serialize.SerializedData, error) {
+func (v *ValidatorVoteIDs) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(v)
 }
 
-func (v *VoteApprove) Type() PayloadType {
-	return PayloadTypeVoteApprove
+func (v *ValidatorVoteIDs) Type() PayloadType {
+	return PayloadTypeValidatorVoteIDs
 }
 
-func (v *VoteApprove) UnmarshalBinary(p0 serialize.SerializedData) error {
+func (v *ValidatorVoteIDs) UnmarshalBinary(p0 serialize.SerializedData) error {
 	return serialize.DecodeInto(p0, v)
 }
 
-// VoteBodies is a payload for submitting the full vote bodies for any resolution.
-type VoteBodies struct {
+// ValidatorVoteBodies is a payload for submitting the full vote bodies for any resolution.
+type ValidatorVoteBodies struct {
 	// Events is an array of the full resolution bodies the caller is voting for.
 	Events []*types.VotableEvent
 }
 
-func (v *VoteBodies) MarshalBinary() (serialize.SerializedData, error) {
+func (v *ValidatorVoteBodies) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(v)
 }
 
-func (v *VoteBodies) Type() PayloadType {
-	return PayloadTypeVoteBodies
+func (v *ValidatorVoteBodies) Type() PayloadType {
+	return PayloadTypeValidatorVoteBodies
 }
 
-func (v *VoteBodies) UnmarshalBinary(p0 serialize.SerializedData) error {
+func (v *ValidatorVoteBodies) UnmarshalBinary(p0 serialize.SerializedData) error {
 	return serialize.DecodeInto(p0, v)
 }
