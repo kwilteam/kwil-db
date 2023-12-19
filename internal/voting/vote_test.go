@@ -18,7 +18,7 @@ import (
 const examplePayloadType = "example"
 
 func init() {
-	err := voting.RegisterPaylod(examplePayloadType, &exampleResolutionPayload{})
+	err := voting.RegisterPaylod(&exampleResolutionPayload{})
 	if err != nil {
 		panic(err)
 	}
@@ -50,19 +50,35 @@ func Test_Votes(t *testing.T) {
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
 
+				uuid := types.NewUUIDV5(bts)
+
+				alreadyProcessed, err := v.AlreadyProcessed(ctx, uuid)
+				require.NoError(t, err)
+				require.False(t, alreadyProcessed)
+
 				err = v.CreateVote(ctx, bts, examplePayloadType, 10000)
 				require.NoError(t, err)
 
-				uuid := types.NewUUIDV5(bts)
+				alreadyProcessed, err = v.AlreadyProcessed(ctx, uuid)
+				require.NoError(t, err)
+				require.False(t, alreadyProcessed)
 
 				// approve vote
 				// expiration does not matter here since it only matters for the first vote
 				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
 				require.NoError(t, err)
 
+				alreadyProcessed, err = v.AlreadyProcessed(ctx, uuid)
+				require.NoError(t, err)
+				require.False(t, alreadyProcessed)
+
 				// resolve vote
 				err = v.ProcessConfirmedResolutions(ctx)
 				require.NoError(t, err)
+
+				alreadyProcessed, err = v.AlreadyProcessed(ctx, uuid)
+				require.NoError(t, err)
+				require.True(t, alreadyProcessed)
 
 				// check that the account was credited
 				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
@@ -339,6 +355,76 @@ func Test_Votes(t *testing.T) {
 				require.NoError(t, err)
 
 				// payload
+				body1 := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts1, err := body1.MarshalBinary()
+				require.NoError(t, err)
+
+				body2 := &exampleResolutionPayload{
+					UniqueID: "unique_id2",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts2, err := body2.MarshalBinary()
+				require.NoError(t, err)
+				uuid2 := types.NewUUIDV5(bts2)
+
+				body3 := &exampleResolutionPayload{
+					UniqueID: "unique_id3",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts3, err := body3.MarshalBinary()
+				require.NoError(t, err)
+
+				// create vote 1
+				err = v.CreateVote(ctx, bts1, examplePayloadType, 2)
+				require.NoError(t, err)
+
+				err = v.CreateVote(ctx, bts2, examplePayloadType, 3)
+				require.NoError(t, err)
+
+				err = v.CreateVote(ctx, bts3, examplePayloadType, 4)
+				require.NoError(t, err)
+
+				// get votes by category
+				resolutions, err := v.GetVotesByCategory(ctx, examplePayloadType)
+				require.NoError(t, err)
+
+				require.Len(t, resolutions, 3)
+
+				alreadyProcessed, err := v.AlreadyProcessed(ctx, uuid2)
+				require.NoError(t, err)
+				require.False(t, alreadyProcessed)
+
+				// expire
+				err = v.Expire(ctx, 3)
+				require.NoError(t, err)
+
+				alreadyProcessed, err = v.AlreadyProcessed(ctx, uuid2)
+				require.NoError(t, err)
+				require.True(t, alreadyProcessed)
+
+				// get votes by category
+				resolutions, err = v.GetVotesByCategory(ctx, examplePayloadType)
+				require.NoError(t, err)
+
+				require.Len(t, resolutions, 1)
+			},
+		},
+		{
+			name: "double approve does nothing",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				ctx := context.Background()
+
+				// add voter
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// payload
 				body := &exampleResolutionPayload{
 					UniqueID: "unique_id",
 					Account:  []byte("account1"),
@@ -346,28 +432,14 @@ func Test_Votes(t *testing.T) {
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
+				uuid := types.NewUUIDV5(bts)
 
-				// create vote 1
-				err = v.CreateVote(ctx, bts, examplePayloadType, 2)
+				// approve vote twice
+				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
 				require.NoError(t, err)
 
-				body.UniqueID = "unique_id2"
-				err = v.CreateVote(ctx, bts, examplePayloadType, 3)
+				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
 				require.NoError(t, err)
-
-				body.UniqueID = "unique_id3"
-				err = v.CreateVote(ctx, bts, examplePayloadType, 4)
-				require.NoError(t, err)
-
-				// expire
-				err = v.Expire(ctx, 3)
-				require.NoError(t, err)
-
-				// get votes by category
-				resolutions, err := v.GetVotesByCategory(ctx, examplePayloadType)
-				require.NoError(t, err)
-
-				require.Len(t, resolutions, 1)
 			},
 		},
 	}
@@ -521,4 +593,8 @@ func (e *exampleResolutionPayload) MarshalBinary() ([]byte, error) {
 
 func (e *exampleResolutionPayload) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, e)
+}
+
+func (e *exampleResolutionPayload) Type() string {
+	return examplePayloadType
 }

@@ -47,6 +47,11 @@ func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, 
 		return nil, err
 	}
 
+	_, err = db.Execute(ctx, tableProcessed, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	for name := range registeredPayloads {
 		uuid := types.NewUUIDV5([]byte(name))
 
@@ -117,7 +122,7 @@ type Resolution struct {
 // If the resolution already exists, it will simply track that the voter
 // has approved the resolution, and will not change the body or expiration.
 // If the voter does not exist, an error will be returned.
-// If the voter has already approved the resolution, it will return an error.
+// If the voter has already approved the resolution, no error will be returned.
 func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
 	// we need to ensure that the resolution ID exists
 	_, err := v.db.Execute(ctx, resolutionIDExists, map[string]interface{}{
@@ -138,6 +143,7 @@ func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, ex
 	})
 
 	// TODO: check for a sql error that indicates that the voter does not exist
+	// looping back, I am not sure if we need this
 	return err
 }
 
@@ -163,11 +169,39 @@ func (v *VoteProcessor) CreateVote(ctx context.Context, body []byte, category st
 // Expire expires all votes at or before a given blockheight.
 // All expired votes will be removed from the system.
 func (v *VoteProcessor) Expire(ctx context.Context, blockheight int64) error {
-	_, err := v.db.Execute(ctx, expireResolutions, map[string]interface{}{
+	sp, err := v.db.Savepoint()
+	if err != nil {
+		return err
+	}
+	defer sp.Rollback()
+
+	res, err := v.db.Execute(ctx, expireResolutions, map[string]interface{}{
 		"$blockheight": blockheight,
 	})
+	if err != nil {
+		return err
+	}
 
-	return err
+	if len(res.Columns()) != 1 {
+		// this should never happen, just for safety
+		return fmt.Errorf("invalid number of columns returned. this is an internal bug")
+	}
+
+	for _, row := range res.Rows {
+		id, ok := row[0].([]byte)
+		if !ok {
+			return fmt.Errorf("invalid type for id. this is an internal bug")
+		}
+
+		_, err = v.db.Execute(ctx, markProcessed, map[string]interface{}{
+			"$id": id,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return sp.Commit()
 }
 
 // GetResolution gets a resolution, identified by the ID.
@@ -457,11 +491,19 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) error {
 		}
 
 		// id needs to be 16 bytes
+		// this should never happen, just for safety
 		if len(vote.ID) != 16 {
-			return fmt.Errorf("invalid id length for UUID. required 16 bytes, got %d", len(vote.ID))
+			return fmt.Errorf("invalid id length for UUID. required 16 bytes, got %d. this is a bug", len(vote.ID))
 		}
 
 		usedDBIDs[i] = vote.ID[:]
+
+		_, err = v.db.Execute(ctx, markProcessed, map[string]interface{}{
+			"$id": vote.ID[:],
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(usedDBIDs) == 0 {
@@ -474,4 +516,16 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) error {
 	}
 
 	return sp.Commit()
+}
+
+// AlreadyProcessed checks if a vote has either already succeeded, or expired.
+func (v *VoteProcessor) AlreadyProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
+	res, err := v.db.Query(ctx, alreadyProcessed, map[string]interface{}{
+		"$id": resolutionID[:],
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return len(res.Rows) != 0, nil
 }

@@ -311,6 +311,16 @@ func (p *Pool) Get(ctx context.Context, key []byte, sync bool) ([]byte, error) {
 	return value, queryErr
 }
 
+func (p *Pool) Delete(ctx context.Context, key []byte) error {
+	writer, returnFn, err := p.getWriter()
+	if err != nil {
+		return err
+	}
+	defer returnFn()
+
+	return writer.Delete(ctx, key)
+}
+
 func (p *Pool) Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error) {
 	var res *sql.ResultSet
 	var queryErr error

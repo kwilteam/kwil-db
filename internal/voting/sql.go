@@ -48,6 +48,11 @@ var (
 	votesResolutionIndex = `CREATE INDEX IF NOT EXISTS resolution_index ON votes (resolution_id);`
 	// we don't look up votes by voter, so we don't need a voter index
 
+	// tableProcessed contains all processed resolution ids
+	tableProcessed = `CREATE TABLE IF NOT EXISTS processed (
+		id BLOB PRIMARY KEY
+	) WITHOUT ROWID, STRICT;`
+
 	// resolutionIDExists is the sql statement used to ensure a resolution ID is present in the resolutions table
 	resolutionIDExists = `INSERT INTO resolutions (id, expiration) VALUES ($id, $expiration) ON CONFLICT(id) DO NOTHING;`
 
@@ -81,11 +86,11 @@ var (
 	getVoterPower = `SELECT power FROM voters WHERE id = $id;`
 
 	// addVote adds a vote for a resolution
-	addVote = `INSERT INTO votes (resolution_id, voter_id) VALUES ($resolution_id, $voter_id);`
+	addVote = `INSERT INTO votes (resolution_id, voter_id) VALUES ($resolution_id, $voter_id) ON CONFLICT(resolution_id, voter_id) DO NOTHING;`
 
 	// expireResolutions is the sql statement used to expire resolutions
 	// it will expire resolutions that have an expiration less than or equal to the given blockheight
-	expireResolutions = `DELETE FROM resolutions WHERE expiration <= $blockheight;`
+	expireResolutions = `DELETE FROM resolutions WHERE expiration <= $blockheight RETURNING id;`
 
 	// getResolution is the sql statement used to get a resolution and the associated vote info.
 	// while it would be nice to get the needed power as well, it is significantly more expensive to do so.
@@ -136,6 +141,12 @@ var (
 
 	// createResolutionType creates a resolution type
 	createResolutionType = `INSERT INTO resolution_types (id, name) VALUES ($id, $name) ON CONFLICT(id) DO NOTHING;`
+
+	// markProcessed marks a resolution as processed
+	markProcessed = `INSERT INTO processed (id) VALUES ($id);`
+
+	// alreadyProcessed checks if a resolution has already been processed
+	alreadyProcessed = `SELECT id FROM processed WHERE id = $id;`
 )
 
 // SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration FROM resolutions AS r INNER JOIN resolution_types AS t ON r.type = t.id LEFT JOIN votes AS v ON r.id = v.resolution_id LEFT JOIN voters AS vr ON v.voter_id = vr.id WHERE r.body IS NOT NULL GROUP BY r.id HAVING SUM(vr.power) >= 3 ORDER BY r.id;

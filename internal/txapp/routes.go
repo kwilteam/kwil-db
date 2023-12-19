@@ -1,7 +1,7 @@
 package txapp
 
 import (
-	"context"
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -21,6 +21,8 @@ func init() {
 		registerRoute(transactions.PayloadTypeValidatorApprove.String(), &validatorApproveRoute{}),
 		registerRoute(transactions.PayloadTypeValidatorRemove.String(), &validatorRemoveRoute{}),
 		registerRoute(transactions.PayloadTypeValidatorLeave.String(), &validatorLeaveRoute{}),
+		registerRoute(transactions.PayloadTypeVoteApprove.String(), &voteApproveRoute{}),
+		registerRoute(transactions.PayloadTypeVoteBodies.String(), &voteBodiesRoute{}),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("failed to register routes: %s", err))
@@ -28,8 +30,8 @@ func init() {
 }
 
 type Route interface {
-	Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse
-	Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error)
+	Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse
+	Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error)
 }
 
 // routes is a map of transaction payload types to their respective routes
@@ -47,7 +49,7 @@ func registerRoute(payloadType string, route Route) error {
 
 type deployDatasetRoute struct{}
 
-func (d *deployDatasetRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -65,7 +67,7 @@ func (d *deployDatasetRoute) Execute(ctx context.Context, router *TxApp, tx *tra
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
 
-	err = router.Database.CreateDataset(ctx, schema, tx.Sender)
+	err = router.Database.CreateDataset(ctx.Ctx(), schema, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -73,13 +75,13 @@ func (d *deployDatasetRoute) Execute(ctx context.Context, router *TxApp, tx *tra
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (d *deployDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (d *deployDatasetRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(1000000000000000000), nil
 }
 
 type dropDatasetRoute struct{}
 
-func (d *dropDatasetRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -91,7 +93,7 @@ func (d *dropDatasetRoute) Execute(ctx context.Context, router *TxApp, tx *trans
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Database.DeleteDataset(ctx, drop.DBID, tx.Sender)
+	err = router.Database.DeleteDataset(ctx.Ctx(), drop.DBID, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -99,13 +101,13 @@ func (d *dropDatasetRoute) Execute(ctx context.Context, router *TxApp, tx *trans
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (d *dropDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (d *dropDatasetRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 type executeActionRoute struct{}
 
-func (e *executeActionRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -138,7 +140,7 @@ func (e *executeActionRoute) Execute(ctx context.Context, router *TxApp, tx *tra
 	}
 
 	for i := range action.Arguments {
-		_, err = router.Database.Execute(ctx, &engineTypes.ExecutionData{
+		_, err = router.Database.Execute(ctx.Ctx(), &engineTypes.ExecutionData{
 			Dataset:   action.DBID,
 			Procedure: action.Action,
 			Mutative:  true, // transaction execution is always mutative
@@ -154,7 +156,7 @@ func (e *executeActionRoute) Execute(ctx context.Context, router *TxApp, tx *tra
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (e *executeActionRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (e *executeActionRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(2000000000000000), nil
 }
 
@@ -162,7 +164,7 @@ type transferRoute struct{}
 
 var bigZero = big.NewInt(0)
 
-func (t *transferRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -185,7 +187,7 @@ func (t *transferRoute) Execute(ctx context.Context, router *TxApp, tx *transact
 		return txRes(spend, transactions.CodeInvalidAmount, fmt.Errorf("invalid transfer amount: %s", transfer.Amount))
 	}
 
-	err = router.Accounts.Transfer(ctx, transfer.To, tx.Sender, bigAmt)
+	err = router.Accounts.Transfer(ctx.Ctx(), transfer.To, tx.Sender, bigAmt)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -193,13 +195,13 @@ func (t *transferRoute) Execute(ctx context.Context, router *TxApp, tx *transact
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (t *transferRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (t *transferRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(210_000), nil
 }
 
 type validatorJoinRoute struct{}
 
-func (v *validatorJoinRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -211,7 +213,7 @@ func (v *validatorJoinRoute) Execute(ctx context.Context, router *TxApp, tx *tra
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Validators.Join(ctx, tx.Sender, int64(join.Power))
+	err = router.Validators.Join(ctx.Ctx(), tx.Sender, int64(join.Power))
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -219,13 +221,13 @@ func (v *validatorJoinRoute) Execute(ctx context.Context, router *TxApp, tx *tra
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorJoinRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorJoinRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 type validatorApproveRoute struct{}
 
-func (v *validatorApproveRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -237,7 +239,7 @@ func (v *validatorApproveRoute) Execute(ctx context.Context, router *TxApp, tx *
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Validators.Approve(ctx, approve.Candidate, tx.Sender)
+	err = router.Validators.Approve(ctx.Ctx(), approve.Candidate, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -245,13 +247,13 @@ func (v *validatorApproveRoute) Execute(ctx context.Context, router *TxApp, tx *
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorApproveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorApproveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 type validatorRemoveRoute struct{}
 
-func (v *validatorRemoveRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -263,7 +265,7 @@ func (v *validatorRemoveRoute) Execute(ctx context.Context, router *TxApp, tx *t
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Validators.Remove(ctx, remove.Validator, tx.Sender)
+	err = router.Validators.Remove(ctx.Ctx(), remove.Validator, tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -271,13 +273,13 @@ func (v *validatorRemoveRoute) Execute(ctx context.Context, router *TxApp, tx *t
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorRemoveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorRemoveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
 type validatorLeaveRoute struct{}
 
-func (v *validatorLeaveRoute) Execute(ctx context.Context, router *TxApp, tx *transactions.Transaction) *TxResponse {
+func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
 	spend, code, err := router.checkAndSpend(ctx, tx)
 	if err != nil {
 		return txRes(spend, code, err)
@@ -290,7 +292,7 @@ func (v *validatorLeaveRoute) Execute(ctx context.Context, router *TxApp, tx *tr
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	err = router.Validators.Leave(ctx, tx.Sender)
+	err = router.Validators.Leave(ctx.Ctx(), tx.Sender)
 	if err != nil {
 		return txRes(spend, transactions.CodeUnknownError, err)
 	}
@@ -298,6 +300,116 @@ func (v *validatorLeaveRoute) Execute(ctx context.Context, router *TxApp, tx *tr
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorLeaveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorLeaveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
+}
+
+// voteApproveRoute is a route for approving a set of votes based on their IDs.
+type voteApproveRoute struct{}
+
+// Execute will approve the votes for the given IDs.
+// If the event already has a body in the event store, and the vote
+// is from the local validator, the event will be deleted from the event store.
+func (v *voteApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	spend, code, err := router.checkAndSpend(ctx, tx)
+	if err != nil {
+		return txRes(spend, code, err)
+	}
+
+	approve := &transactions.VoteApprove{}
+	err = approve.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return txRes(spend, transactions.CodeEncodingError, err)
+	}
+
+	isLocalValidator := bytes.Equal(tx.Sender, router.LocalValidator.Signer().Identity())
+
+	for _, voteID := range approve.ResolutionIDs {
+		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().MaxVotingPeriod
+		containsBody, err := router.VoteStore.Approve(ctx.Ctx(), voteID, expiryHeight, tx.Sender)
+		if err != nil {
+			return txRes(spend, transactions.CodeUnknownError, err)
+		}
+
+		if isLocalValidator && containsBody {
+			err = router.eventStore.DeleteEvent(ctx.Ctx(), voteID)
+			if err != nil {
+				return txRes(spend, transactions.CodeUnknownError, err)
+			}
+		}
+	}
+
+	return txRes(spend, transactions.CodeOk, nil)
+}
+
+func (v *voteApproveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+	isValidator, err := router.Validators.IsCurrent(ctx.Ctx(), tx.Sender)
+	if err != nil {
+		return nil, err
+	}
+	if isValidator {
+		return bigZero, nil
+	}
+
+	return big.NewInt(100000000), nil
+}
+
+// voteBodiesRoute is a route for handling votes for a set of vote bodies.
+type voteBodiesRoute struct{}
+
+// Execute will add the event bodies to the event store.
+// For each event, if the local validator has already voted on the event,
+// the event will be deleted from the event store.
+func (v *voteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse {
+	spend, code, err := router.checkAndSpend(ctx, tx)
+	if err != nil {
+		return txRes(spend, code, err)
+	}
+
+	if !bytes.Equal(tx.Sender, ctx.Proposer()) {
+		return txRes(spend, transactions.CodeInvalidSender, fmt.Errorf("vote body tx must be sent by block proposer"))
+	}
+
+	vote := &transactions.VoteBodies{}
+	err = vote.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return txRes(spend, transactions.CodeEncodingError, err)
+	}
+
+	localValidator := router.LocalValidator.Signer().Identity()
+
+	for _, event := range vote.Events {
+		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().MaxVotingPeriod
+
+		err = router.VoteStore.CreateVote(ctx.Ctx(), event, expiryHeight)
+		if err != nil {
+			return txRes(spend, transactions.CodeUnknownError, err)
+		}
+
+		hasVoted, err := router.VoteStore.HasVoted(ctx.Ctx(), event.ID(), localValidator)
+		if err != nil {
+			return txRes(spend, transactions.CodeUnknownError, err)
+		}
+		if hasVoted {
+			err = router.eventStore.DeleteEvent(ctx.Ctx(), event.ID())
+			if err != nil {
+				return txRes(spend, transactions.CodeUnknownError, err)
+			}
+		}
+	}
+
+	return txRes(spend, transactions.CodeOk, nil)
+}
+
+func (v *voteBodiesRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+	isCurrent, err := router.Validators.IsCurrent(ctx.Ctx(), tx.Sender)
+	if err != nil {
+		return nil, err
+	}
+
+	if isCurrent {
+		return bigZero, nil
+	}
+
+	return big.NewInt(10000000000), nil
 }

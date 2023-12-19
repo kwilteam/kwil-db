@@ -111,6 +111,10 @@ func (vs *stubValStore) AddValidator(_ context.Context, joiner []byte, power int
 	return nil
 }
 
+func (vs *stubValStore) IsCurrent(_ context.Context, validator []byte) (bool, error) {
+	return findValidator(validator, vs.current) != -1, nil
+}
+
 func newTestValidatorMgr(t *testing.T, committable Committable, store ValidatorStore) *ValidatorMgr {
 	mgr := &ValidatorMgr{
 		current:     make(map[string]struct{}),

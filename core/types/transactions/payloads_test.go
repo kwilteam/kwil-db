@@ -3,6 +3,7 @@ package transactions_test
 import (
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 
 	"github.com/stretchr/testify/assert"
@@ -146,6 +147,30 @@ func Test_Types(t *testing.T) {
 				Validator: []byte("asdfadsf"),
 			},
 		},
+		{
+			name: "vote_approve",
+			obj: &transactions.VoteApprove{
+				ResolutionIDs: []types.UUID{
+					types.NewUUIDV5([]byte("asdfadsf")),
+					types.NewUUIDV5([]byte("asdfad2sf")),
+				},
+			},
+		},
+		{
+			name: "vote_bodies",
+			obj: &transactions.VoteBodies{
+				Events: []*types.VotableEvent{
+					{
+						Type: "asdfadsf",
+						Body: []byte("asdfadsf"),
+					},
+					{
+						Type: "asdfad2sf",
+						Body: []byte("asdfad2sf"),
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -175,6 +200,10 @@ func Test_Types(t *testing.T) {
 				obj = &transactions.ValidatorLeave{}
 			case *transactions.ValidatorRemove:
 				obj = &transactions.ValidatorRemove{}
+			case *transactions.VoteApprove:
+				obj = &transactions.VoteApprove{}
+			case *transactions.VoteBodies:
+				obj = &transactions.VoteBodies{}
 			default:
 				t.Fatal("unknown type")
 			}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -20,6 +21,7 @@ import (
 // NewRouter creates a new router.
 func NewRouter(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter, log log.Logger) *TxApp {
 	return &TxApp{
+		// TODO: set the eventstore and votestore dependencies
 		Database:        db,
 		Accounts:        acc,
 		Validators:      validators,
@@ -37,9 +39,14 @@ func NewRouter(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, 
 // It also contains a mempool for uncommitted accounts, as well as pricing
 // for transactions
 type TxApp struct {
-	Database   DatabaseEngine
-	Accounts   AccountsStore
-	Validators ValidatorStore
+	Database       DatabaseEngine
+	Accounts       AccountsStore
+	Validators     ValidatorStore
+	VoteStore      VoteStore
+	LocalValidator LocalValidator
+	NetworkInfo    NetworkInfo
+
+	eventStore EventStore // unexported for now, since idk if we want to expose non-consensus stores to custom routes
 
 	log log.Logger
 
@@ -49,7 +56,7 @@ type TxApp struct {
 
 // Execute executes a transaction.  It will route the transaction to the
 // appropriate module(s) and return the response.
-func (r *TxApp) Execute(ctx context.Context, tx *transactions.Transaction) *TxResponse {
+func (r *TxApp) Execute(ctx TxContext, tx *transactions.Transaction) *TxResponse {
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
 		return txRes(nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String()))
@@ -86,6 +93,28 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 
 	r.log.Debug("committing block", zap.Int64("blockHeight", blockHeight))
 
+	// this would go in finalize block
+	// run all approved votes, and delete from local store
+	finalizedEvents, err := r.VoteStore.ProcessConfirmedResolutions(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// this would also go in finalize block
+	for _, eventID := range finalizedEvents {
+		err = r.eventStore.DeleteEvent(ctx, eventID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// expire votes
+	// this would go in FinalizeBlock
+	err = r.VoteStore.Expire(ctx, blockHeight)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// this would go in GetEndResults
 	validators, err := r.Validators.Finalize(ctx)
 	if err != nil {
@@ -110,38 +139,6 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 
 	return appHash, validators, nil
 }
-
-/*
-	To be used once we don't have an idempotent commit process, and instead use postgres
-
-// GetEndResults gets the end results of a block.
-// It returns the app hash, validator upgrades, and an error.
-func (r *Router) GetEndResults(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
-	validators, err := r.Validators.Finalize(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	appHash, err := r.atomicCommitter.AppHashes(ctx, blockHeight)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return appHash, validators, nil
-}
-
-// Commit commits a block.
-func (r *Router) Commit(ctx context.Context, blockHeight int64) error {
-	defer r.mempool.reset()
-
-	r.Validators.UpdateBlockHeight(ctx, blockHeight)
-
-	idempotencyKey := make([]byte, 8)
-	binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
-
-	return r.atomicCommitter.Commit(ctx, idempotencyKey)
-}
-*/
 
 // ApplyMempool applies the transactions in the mempool.
 // If it returns an error, then the transaction is invalid.
@@ -171,6 +168,40 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 	return a.Balance, a.Nonce, nil
 }
 
+// BuildBlock chooses the transactions to include in the next block.
+// It adds any transactions that the validator wishes to include.
+func (r *TxApp) BuildBlock(ctx context.Context, txs []*transactions.Transaction, consensusParams *ConsensusParams) ([]*transactions.Transaction, error) {
+	events, err := r.eventStore.GetEvents(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	_, nonce, err := r.AccountInfo(ctx, r.LocalValidator.Signer().Identity(), true)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := transactions.CreateTransaction(&transactions.VoteBodies{
+		Events: events,
+	}, r.NetworkInfo.ChainID(), uint64(nonce+1))
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.Sign(r.LocalValidator.Signer())
+	if err != nil {
+		return nil, err
+	}
+
+	ordered := prepareMempoolTxns(txs, int(consensusParams.MaxTxSize), &r.log)
+
+	final := make([]*transactions.Transaction, 0, len(ordered)+1)
+	final = append(final, tx)
+	final = append(final, ordered...)
+
+	return final, nil
+}
+
 // TxResponse is the response from a transaction.
 // It contains information about the transaction, such as the amount spent.
 type TxResponse struct {
@@ -186,7 +217,7 @@ type TxResponse struct {
 
 // Price estimates the price of a transaction.
 // It returns the estimated price in tokens.
-func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (r *TxApp) Price(ctx TxContext, tx *transactions.Transaction) (*big.Int, error) {
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
 		return nil, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
@@ -234,6 +265,43 @@ type ValidatorStore interface {
 
 	// Updates block height stored by the validator manager. Called in the abci Commit
 	UpdateBlockHeight(blockHeight int64)
+
+	// IsCurrent returns true if the validator is currently a validator.
+	// It does not take into account uncommitted changes, but is thread-safe.
+	IsCurrent(ctx context.Context, validator []byte) (bool, error)
+}
+
+// LocalValidator returns information about the local validator.
+type LocalValidator interface {
+	Signer() auth.Signer
+}
+
+// NetworkInfo contains information about the network.
+type NetworkInfo interface {
+	ChainID() string
+}
+
+// VoteStore is a datastore that tracks votes.
+type VoteStore interface {
+	// Approve approves a resolution.
+	// If the resolution already includes a body, then it will return true.
+	Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) (containsBody bool, err error)
+	CreateVote(ctx context.Context, event *types.VotableEvent, expiration int64) error
+	Expire(ctx context.Context, blockheight int64) error
+	UpdateVoter(ctx context.Context, identifier []byte, power int64) error
+	// ProcessConfirmedResolutions processes all resolutions that have been confirmed.
+	// It returns an array of the ID of the resolutions that were processed.
+	ProcessConfirmedResolutions(ctx context.Context) ([]types.UUID, error)
+	// AlreadyProcessed returns true if the resolution ID has been voted on (either succeeded, or expired).
+	AlreadyProcessed(ctx context.Context, resolutionID types.UUID) (bool, error)
+	// HasVoted returns true if the voter has voted on the resolution.
+	HasVoted(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
+}
+
+// EventStore is a datastore that tracks events.
+type EventStore interface {
+	DeleteEvent(ctx context.Context, id types.UUID) error
+	GetEvents(ctx context.Context) ([]*types.VotableEvent, error)
 }
 
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
@@ -253,7 +321,7 @@ type AtomicCommitter interface {
 // It also returns an error code.
 // if we allow users to implement their own routes, this function will need to
 // be exported.
-func (r *TxApp) checkAndSpend(ctx context.Context, tx *transactions.Transaction) (*big.Int, transactions.TxCode, error) {
+func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction) (*big.Int, transactions.TxCode, error) {
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
 		return nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
@@ -274,7 +342,7 @@ func (r *TxApp) checkAndSpend(ctx context.Context, tx *transactions.Transaction)
 	}
 
 	// spend the tokens
-	err = r.Accounts.Spend(ctx, &accounts.Spend{
+	err = r.Accounts.Spend(ctx.Ctx(), &accounts.Spend{
 		AccountID: tx.Sender,
 		Amount:    amt,
 		Nonce:     int64(tx.Body.Nonce),

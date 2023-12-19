@@ -160,3 +160,16 @@ func (vs *validatorStore) DeleteJoinRequest(ctx context.Context, joiner []byte) 
 
 	return vs.deleteJoinRequest(ctx, joiner)
 }
+
+// IsCurrent returns true if the validator is in the current validator set.
+func (vs *validatorStore) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
+	vs.rw.RLock()
+	defer vs.rw.RUnlock()
+
+	power, err := vs.validatorPower(ctx, validator)
+	if err != nil {
+		return false, err
+	}
+
+	return power > 0, nil
+}

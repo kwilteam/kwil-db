@@ -83,13 +83,13 @@ func (r *ResultSet) Columns() []string {
 	return v
 }
 
-func (r *ResultSet) Next() (rowReturned bool, err error) {
+func (r *ResultSet) Next() (rowReturned bool) {
 	if r.i >= len(r.Rows) {
-		return false, nil
+		return false
 	}
 
 	r.i++
-	return true, nil
+	return true
 }
 
 func (r *ResultSet) Values() ([]any, error) {
@@ -115,6 +115,11 @@ func (r *ResultSet) Map() []map[string]any {
 	}
 
 	return m
+}
+
+// implements Result
+func (r *ResultSet) Err() error {
+	return nil
 }
 
 type ConnectionFlag int

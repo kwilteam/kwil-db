@@ -11,18 +11,22 @@ import (
 
 var registeredPayloads = make(map[string]ResolutionPayload)
 
-func RegisterPaylod(name string, payload ResolutionPayload) error {
-	_, ok := registeredPayloads[name]
+func RegisterPaylod(payload ResolutionPayload) error {
+	_, ok := registeredPayloads[payload.Type()]
 	if ok {
-		return fmt.Errorf("payload %s already registered", name)
+		return fmt.Errorf("payload %s already registered", payload.Type())
 	}
 
-	registeredPayloads[name] = payload
+	registeredPayloads[payload.Type()] = payload
 	return nil
 }
 
 // A ResolutionPayload is a payload that can be used as the body of a resolution
 type ResolutionPayload interface {
+	// Type returns the type of the payload.
+	// This should be constant for a given payload implementation.
+	Type() string
+	// UnmarshalBinary unmarshals the payload from binary data.
 	UnmarshalBinary(data []byte) error
 	// Apply is called when a resolution is approved.
 	Apply(ctx context.Context, datastores *Datastores) error

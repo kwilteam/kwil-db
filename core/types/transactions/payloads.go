@@ -3,6 +3,7 @@ package transactions
 import (
 	"encoding"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 )
 
@@ -23,7 +24,9 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeValidatorApprove,
 		PayloadTypeValidatorRemove,
 		PayloadTypeValidatorLeave,
-		PayloadTypeTransfer:
+		PayloadTypeTransfer,
+		PayloadTypeVoteApprove,
+		PayloadTypeVoteBodies:
 		return true
 	default:
 		return false
@@ -40,6 +43,8 @@ const (
 	PayloadTypeValidatorLeave   PayloadType = "validator_leave"
 	PayloadTypeValidatorRemove  PayloadType = "validator_remove"
 	PayloadTypeValidatorApprove PayloadType = "validator_approve"
+	PayloadTypeVoteApprove      PayloadType = "vote_approve"
+	PayloadTypeVoteBodies       PayloadType = "vote_bodies"
 )
 
 // Payload is the interface that all payloads must implement
@@ -360,4 +365,40 @@ func (v *ValidatorLeave) UnmarshalBinary(b []byte) error {
 
 func (v *ValidatorLeave) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
+}
+
+// VoteApprove is a payload for submitting approvals for any pending resolution.
+type VoteApprove struct {
+	// ResolutionIDs is an array of all resolution IDs the caller is approving.
+	ResolutionIDs []types.UUID
+}
+
+func (v *VoteApprove) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(v)
+}
+
+func (v *VoteApprove) Type() PayloadType {
+	return PayloadTypeVoteApprove
+}
+
+func (v *VoteApprove) UnmarshalBinary(p0 serialize.SerializedData) error {
+	return serialize.DecodeInto(p0, v)
+}
+
+// VoteBodies is a payload for submitting the full vote bodies for any resolution.
+type VoteBodies struct {
+	// Events is an array of the full resolution bodies the caller is voting for.
+	Events []*types.VotableEvent
+}
+
+func (v *VoteBodies) MarshalBinary() (serialize.SerializedData, error) {
+	return serialize.Encode(v)
+}
+
+func (v *VoteBodies) Type() PayloadType {
+	return PayloadTypeVoteBodies
+}
+
+func (v *VoteBodies) UnmarshalBinary(p0 serialize.SerializedData) error {
+	return serialize.DecodeInto(p0, v)
 }
