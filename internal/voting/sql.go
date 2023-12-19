@@ -19,7 +19,7 @@ var (
 		type BLOB, -- type is the type of resolution
 		expiration INTEGER NOT NULL, -- expiration is the blockheight at which the resolution expires
 		FOREIGN KEY(type) REFERENCES resolution_types(id) ON UPDATE CASCADE ON DELETE CASCADE
-	);`
+	) WITHOUT ROWID, STRICT;`
 
 	// resolutionTypeIndex is the sql index used to index the type of a resolution
 	resolutionTypeIndex = `CREATE INDEX IF NOT EXISTS type_index ON resolutions (type);`
@@ -27,13 +27,13 @@ var (
 	tableResolutionTypes = `CREATE TABLE IF NOT EXISTS resolution_types (
 		id BLOB PRIMARY KEY, -- id is an rfc4122 uuid derived from the name
 		name TEXT UNIQUE NOT NULL -- name is the name of the resolution type
-	);`
+	) WITHOUT ROWID, STRICT;`
 
 	tableVoters = `CREATE TABLE IF NOT EXISTS voters (
 		id BLOB PRIMARY KEY, -- id is an rfc4122 uuid derived from the voter
 		name BLOB UNIQUE NOT NULL, -- voter is the identifier of the voter
 		power INTEGER NOT NULL CHECK(power > 0) -- power is the voting power of the voter
-	);`
+	) WITHOUT ROWID, STRICT;`
 
 	// votes tracks whether a voter has voted on a resolution
 	tableVotes = `CREATE TABLE IF NOT EXISTS votes (
@@ -42,7 +42,7 @@ var (
 		FOREIGN KEY(resolution_id) REFERENCES resolutions(id) ON UPDATE CASCADE ON DELETE CASCADE,
 		FOREIGN KEY(voter_id) REFERENCES voters(id) ON UPDATE CASCADE ON DELETE CASCADE,
 		PRIMARY KEY(resolution_id, voter_id)
-	);`
+	) WITHOUT ROWID, STRICT;`
 
 	// creating a votesResolutionIndex since looking up votes by resolution is a common operation
 	votesResolutionIndex = `CREATE INDEX IF NOT EXISTS resolution_index ON votes (resolution_id);`
