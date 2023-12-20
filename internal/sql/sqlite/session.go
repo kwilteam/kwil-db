@@ -59,7 +59,7 @@ func (c *Connection) listTables() ([]string, error) {
 
 // getColumNames gets the column names for the given table.
 func (c *Connection) getColumnNames(ctx context.Context, table string) ([]string, error) {
-	res, err := c.execute(ctx, "PRAGMA table_info(users)", nil)
+	res, err := c.execute(ctx, "PRAGMA table_info("+table+")", nil)
 	if err != nil {
 		return nil, err
 	}
