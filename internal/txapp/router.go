@@ -278,8 +278,9 @@ type NetworkInfo interface {
 type VoteStore interface {
 	// Approve approves a resolution.
 	// If the resolution already includes a body, then it will return true.
-	Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) (containsBody bool, err error)
-	CreateVote(ctx context.Context, event *types.VotableEvent, expiration int64) error
+	Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error
+	ContainsBody(ctx context.Context, resolutionID types.UUID) (bool, error)
+	CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error
 	Expire(ctx context.Context, blockheight int64) error
 	UpdateVoter(ctx context.Context, identifier []byte, power int64) error
 	// ProcessConfirmedResolutions processes all resolutions that have been confirmed.
@@ -301,6 +302,11 @@ type EventStore interface {
 type AtomicCommitter interface {
 	Begin(ctx context.Context, idempotencyKey []byte) error
 	Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error)
+}
+
+// Broadcaster can broadcast transactions to the network.
+type Broadcaster interface {
+	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
 }
 
 // checkAndSpend checks the price of a transaction.

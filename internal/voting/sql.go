@@ -3,6 +3,8 @@ package voting
 import (
 	"bytes"
 	"encoding/hex"
+
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 /*
@@ -88,14 +90,20 @@ var (
 	// addVote adds a vote for a resolution
 	addVote = `INSERT INTO votes (resolution_id, voter_id) VALUES ($resolution_id, $voter_id) ON CONFLICT(resolution_id, voter_id) DO NOTHING;`
 
+	// hasVoted checks if a voter has voted on a resolution
+	hasVoted = `SELECT resolution_id FROM votes WHERE resolution_id = $resolution_id AND voter_id = $voter_id;`
+
 	// expireResolutions is the sql statement used to expire resolutions
 	// it will expire resolutions that have an expiration less than or equal to the given blockheight
 	expireResolutions = `DELETE FROM resolutions WHERE expiration <= $blockheight RETURNING id;`
 
-	// getResolution is the sql statement used to get a resolution and the associated vote info.
+	// getResolutionBody gets a resolution body by id
+	getResolutionBody = `SELECT body FROM resolutions WHERE id = $id;`
+
+	// getResolutionVoteInfo is the sql statement used to get a resolution and the associated vote info.
 	// while it would be nice to get the needed power as well, it is significantly more expensive to do so.
 	// it would be better to cache the maximum needed power for a given resolution.
-	getResolution = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration, SUM(vr.power) AS approved_power
+	getResolutionVoteInfo = `SELECT r.id AS id, r.body AS body, t.name AS type, r.expiration AS expiration, SUM(vr.power) AS approved_power
 	FROM resolutions AS r
 	INNER JOIN resolution_types AS t ON r.type = t.id
 	LEFT JOIN votes AS v ON r.id = v.resolution_id
@@ -103,8 +111,8 @@ var (
 	WHERE r.id = $id
 	GROUP BY r.id;`
 
-	// getUnfilledResolution gets en expiration and approved power for a resolution that has not been filled with a body and type
-	getUnfilledResolution = `SELECT r.expiration AS expiration, SUM(vr.power) AS approved_power
+	// getUnfilledResolutionVoteInfo gets en expiration and approved power for a resolution that has not been filled with a body and type
+	getUnfilledResolutionVoteInfo = `SELECT r.expiration AS expiration, SUM(vr.power) AS approved_power
 	FROM resolutions AS r
 	LEFT JOIN votes AS v ON r.id = v.resolution_id
 	LEFT JOIN voters AS vr ON v.voter_id = vr.id
@@ -153,11 +161,11 @@ var (
 
 // formatResolutionList formats a list of resolutions for use in a sql statement
 // it will hex encode the resolutions, and then wrap them in unhex()
-func formatResolutionList(r [][]byte) string {
+func formatResolutionList(r []types.UUID) string {
 	var buf bytes.Buffer
 	for i, v := range r {
 		buf.WriteString("unhex('")
-		buf.WriteString(hex.EncodeToString(v))
+		buf.WriteString(hex.EncodeToString(v[:]))
 		buf.WriteString("')")
 		if i != len(r)-1 {
 			buf.WriteString(", ")

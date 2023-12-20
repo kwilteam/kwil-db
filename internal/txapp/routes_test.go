@@ -45,13 +45,16 @@ func Test_Routes(t *testing.T) {
 	// we can have scoped data in our mock implementations
 	type testcase struct {
 		name    string
-		fn      func(t *testing.T, callback func(*TxApp)) // required, uses this callback structure to allow tests
+		fn      func(t *testing.T, callback func(*TxApp)) // required, uses callback to allow for scoped data
 		payload transactions.Payload                      // required
 		fee     string                                    // optional, if nil, will automatically use 0
 		ctx     TxContext                                 // optional, if nil, will automatically create a mock
 		from    auth.Signer                               // optional, if nil, will automatically use default validatorSigner1
 		err     error                                     // if not nil, expect this error
 	}
+
+	// due to the relative simplicity of routes and pricing, I have only tested a few complex ones.
+	// as routes / pricing becomes more complex, we should add more tests here.
 
 	testCases := []testcase{
 		{
@@ -65,9 +68,12 @@ func Test_Routes(t *testing.T) {
 				callback(&TxApp{
 					LocalValidator: &mockLocalValidator{},
 					VoteStore: &mockVoteStore{
-						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) (containsBody bool, err error) {
+						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
 							approveCount++
 
+							return nil
+						},
+						containsBody: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
 							return true, nil
 						},
 					},
@@ -105,9 +111,12 @@ func Test_Routes(t *testing.T) {
 				callback(&TxApp{
 					LocalValidator: &mockLocalValidator{},
 					VoteStore: &mockVoteStore{
-						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) (containsBody bool, err error) {
+						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
 							approveCount++
 
+							return nil
+						},
+						containsBody: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
 							return true, nil
 						},
 					},
@@ -155,6 +164,90 @@ func Test_Routes(t *testing.T) {
 				},
 			},
 			err: ErrCallerNotValidator,
+		},
+		{
+			// testing validator_vote_bodies, as the proposer
+			name: "validator_vote_bodies, as proposer",
+			fn: func(t *testing.T, callback func(*TxApp)) {
+				deleteCount := 0
+
+				callback(&TxApp{
+					LocalValidator: &mockLocalValidator{},
+					VoteStore: &mockVoteStore{
+						hasVoted: func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error) {
+							return true, nil
+						},
+					},
+					EventStore: &mockEventStore{
+						deleteEvent: func(ctx context.Context, id types.UUID) error {
+							deleteCount++
+
+							return nil
+						},
+					},
+					Validators: &mockValidatorStore{
+						isCurrent: func(ctx context.Context, validator []byte) (bool, error) {
+							return true, nil
+						},
+					},
+				})
+				assert.Equal(t, 1, deleteCount)
+			},
+			payload: &transactions.ValidatorVoteBodies{
+				Events: []*types.VotableEvent{
+					{
+						Type: "asdfadsf",
+						Body: []byte("asdfadsf"),
+					},
+				},
+			},
+			ctx: &mockCtx{
+				proposer: validatorSigner1().Identity(),
+			},
+			from: validatorSigner1(),
+		},
+		{
+			// testing validator_vote_bodies, as a non-proposer
+			// should fail
+			name: "validator_vote_bodies, as non-proposer",
+			fn: func(t *testing.T, callback func(*TxApp)) {
+				deleteCount := 0
+
+				callback(&TxApp{
+					LocalValidator: &mockLocalValidator{},
+					VoteStore: &mockVoteStore{
+						hasVoted: func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error) {
+							return true, nil
+						},
+					},
+					EventStore: &mockEventStore{
+						deleteEvent: func(ctx context.Context, id types.UUID) error {
+							deleteCount++
+
+							return nil
+						},
+					},
+					Validators: &mockValidatorStore{
+						isCurrent: func(ctx context.Context, validator []byte) (bool, error) {
+							return true, nil
+						},
+					},
+				})
+				assert.Equal(t, 0, deleteCount) // 0, since this does not go through
+			},
+			payload: &transactions.ValidatorVoteBodies{
+				Events: []*types.VotableEvent{
+					{
+						Type: "asdfadsf",
+						Body: []byte("asdfadsf"),
+					},
+				},
+			},
+			ctx: &mockCtx{
+				proposer: validatorSigner1().Identity(),
+			},
+			from: validatorSigner2(),
+			err:  ErrCallerNotProposer,
 		},
 	}
 
@@ -291,8 +384,9 @@ func (m *mockLocalValidator) Signer() auth.Signer {
 
 type mockVoteStore struct {
 	alreadyProcessed            func(ctx context.Context, resolutionID types.UUID) (bool, error)
-	approve                     func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) (containsBody bool, err error)
-	createVote                  func(ctx context.Context, event *types.VotableEvent, expiration int64) error
+	approve                     func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error
+	containsBody                func(ctx context.Context, resolutionID types.UUID) (bool, error)
+	createResolution            func(ctx context.Context, event *types.VotableEvent, expiration int64) error
 	expire                      func(ctx context.Context, blockheight int64) error
 	hasVoted                    func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
 	processConfirmedResolutions func(ctx context.Context) ([]types.UUID, error)
@@ -307,17 +401,25 @@ func (m *mockVoteStore) AlreadyProcessed(ctx context.Context, resolutionID types
 	return false, nil
 }
 
-func (m *mockVoteStore) Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) (containsBody bool, err error) {
+func (m *mockVoteStore) Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
 	if m.approve != nil {
 		return m.approve(ctx, resolutionID, expiration, from)
+	}
+
+	return nil
+}
+
+func (m *mockVoteStore) ContainsBody(ctx context.Context, resolutionID types.UUID) (bool, error) {
+	if m.containsBody != nil {
+		return m.containsBody(ctx, resolutionID)
 	}
 
 	return false, nil
 }
 
-func (m *mockVoteStore) CreateVote(ctx context.Context, event *types.VotableEvent, expiration int64) error {
-	if m.createVote != nil {
-		return m.createVote(ctx, event, expiration)
+func (m *mockVoteStore) CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error {
+	if m.createResolution != nil {
+		return m.createResolution(ctx, event, expiration)
 	}
 
 	return nil

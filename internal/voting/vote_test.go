@@ -49,34 +49,37 @@ func Test_Votes(t *testing.T) {
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
 
-				uuid := types.NewUUIDV5(bts)
-
-				alreadyProcessed, err := v.AlreadyProcessed(ctx, uuid)
+				alreadyProcessed, err := v.AlreadyProcessed(ctx, event.ID())
 				require.NoError(t, err)
 				require.False(t, alreadyProcessed)
 
-				err = v.CreateVote(ctx, bts, examplePayloadType, 10000)
+				err = v.CreateResolution(ctx, event, 10000)
 				require.NoError(t, err)
 
-				alreadyProcessed, err = v.AlreadyProcessed(ctx, uuid)
+				alreadyProcessed, err = v.AlreadyProcessed(ctx, event.ID())
 				require.NoError(t, err)
 				require.False(t, alreadyProcessed)
 
 				// approve vote
 				// expiration does not matter here since it only matters for the first vote
-				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
-				alreadyProcessed, err = v.AlreadyProcessed(ctx, uuid)
+				alreadyProcessed, err = v.AlreadyProcessed(ctx, event.ID())
 				require.NoError(t, err)
 				require.False(t, alreadyProcessed)
 
 				// resolve vote
-				err = v.ProcessConfirmedResolutions(ctx)
+				processed, err := v.ProcessConfirmedResolutions(ctx)
 				require.NoError(t, err)
+				require.Len(t, processed, 1)
 
-				alreadyProcessed, err = v.AlreadyProcessed(ctx, uuid)
+				alreadyProcessed, err = v.AlreadyProcessed(ctx, event.ID())
 				require.NoError(t, err)
 				require.True(t, alreadyProcessed)
 
@@ -104,21 +107,24 @@ func Test_Votes(t *testing.T) {
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
-
-				uuid := types.NewUUIDV5(bts)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
 
 				// approve vote, before creating vote
 				// expiration does not matter here since it only matters for the first vote
-				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
 				// now create the vote
-				err = v.CreateVote(ctx, bts, examplePayloadType, 10000)
+				err = v.CreateResolution(ctx, event, 10000)
 				require.NoError(t, err)
 
 				// resolve vote
-				err = v.ProcessConfirmedResolutions(ctx)
+				processed, err := v.ProcessConfirmedResolutions(ctx)
 				require.NoError(t, err)
+				require.Len(t, processed, 1)
 
 				// check that the account was credited
 				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
@@ -144,19 +150,22 @@ func Test_Votes(t *testing.T) {
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
-
-				uuid := types.NewUUIDV5(bts)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
 
 				// approve vote, before creating vote
 				// expiration does not matter here since it only matters for the first vote
-				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
 				// resolve vote
-				err = v.ProcessConfirmedResolutions(ctx)
+				processed, err := v.ProcessConfirmedResolutions(ctx)
 				require.NoError(t, err)
+				require.Len(t, processed, 0)
 
-				// check that the account was credited
+				// check that the account was not credited
 				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
 				require.NoError(t, err)
 				require.Equal(t, big.NewInt(0), acc.Balance)
@@ -184,26 +193,29 @@ func Test_Votes(t *testing.T) {
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
 
-				err = v.CreateVote(ctx, bts, examplePayloadType, 10000)
+				err = v.CreateResolution(ctx, event, 10000)
 				require.NoError(t, err)
-
-				uuid := types.NewUUIDV5(bts)
 
 				// approve vote
 				// expiration does not matter here since it only matters for the first vote
-				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
 				// resolve votes, it will fail since voter 2 did not approve
-				err = v.ProcessConfirmedResolutions(ctx)
+				processed, err := v.ProcessConfirmedResolutions(ctx)
 				require.NoError(t, err)
+				require.Len(t, processed, 0)
 
 				// check that the resolution still exists
-				res, err := v.GetResolution(ctx, uuid)
+				res, err := v.GetResolutionVoteInfo(ctx, event.ID())
 				require.NoError(t, err)
 
-				require.Equal(t, uuid, res.ID)
+				require.Equal(t, event.ID(), res.ID)
 				if !bytes.EqualFold(bts, res.Body) {
 					require.Equal(t, bts, res.Body) // will fail since the bytes are not equal
 				}
@@ -247,12 +259,14 @@ func Test_Votes(t *testing.T) {
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
-
-				uuid := types.NewUUIDV5(bts)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
 
 				// approve vote
 				// expiration does not matter here since it only matters for the first vote
-				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
 				// get votes by category, should fail since categories do not get defined until
@@ -262,11 +276,11 @@ func Test_Votes(t *testing.T) {
 				require.Len(t, resolutions, 0)
 
 				// get vote by id
-				res, err := v.GetResolution(ctx, uuid)
+				res, err := v.GetResolutionVoteInfo(ctx, event.ID())
 				require.NoError(t, err)
 
 				// check id is same
-				require.Equal(t, uuid, res.ID)
+				require.Equal(t, event.ID(), res.ID)
 				// body is nil, expiration is same, approved power is same, type is nil b/c body is not set
 				require.Nil(t, res.Body)
 				require.Equal(t, int64(10323), res.Expiration)
@@ -332,12 +346,14 @@ func Test_Votes(t *testing.T) {
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
-
-				uuid := types.NewUUIDV5(bts)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
 
 				// approve vote
 				// expiration does not matter here since it only matters for the first vote
-				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				if err == nil {
 					t.Fatal("expected error")
 				}
@@ -362,6 +378,10 @@ func Test_Votes(t *testing.T) {
 				}
 				bts1, err := body1.MarshalBinary()
 				require.NoError(t, err)
+				event1 := &types.VotableEvent{
+					Body: bts1,
+					Type: examplePayloadType,
+				}
 
 				body2 := &exampleResolutionPayload{
 					UniqueID: "unique_id2",
@@ -370,7 +390,10 @@ func Test_Votes(t *testing.T) {
 				}
 				bts2, err := body2.MarshalBinary()
 				require.NoError(t, err)
-				uuid2 := types.NewUUIDV5(bts2)
+				event2 := &types.VotableEvent{
+					Body: bts2,
+					Type: examplePayloadType,
+				}
 
 				body3 := &exampleResolutionPayload{
 					UniqueID: "unique_id3",
@@ -379,15 +402,19 @@ func Test_Votes(t *testing.T) {
 				}
 				bts3, err := body3.MarshalBinary()
 				require.NoError(t, err)
+				event3 := &types.VotableEvent{
+					Body: bts3,
+					Type: examplePayloadType,
+				}
 
 				// create vote 1
-				err = v.CreateVote(ctx, bts1, examplePayloadType, 2)
+				err = v.CreateResolution(ctx, event1, 2)
 				require.NoError(t, err)
 
-				err = v.CreateVote(ctx, bts2, examplePayloadType, 3)
+				err = v.CreateResolution(ctx, event2, 3)
 				require.NoError(t, err)
 
-				err = v.CreateVote(ctx, bts3, examplePayloadType, 4)
+				err = v.CreateResolution(ctx, event3, 4)
 				require.NoError(t, err)
 
 				// get votes by category
@@ -396,7 +423,7 @@ func Test_Votes(t *testing.T) {
 
 				require.Len(t, resolutions, 3)
 
-				alreadyProcessed, err := v.AlreadyProcessed(ctx, uuid2)
+				alreadyProcessed, err := v.AlreadyProcessed(ctx, event2.ID())
 				require.NoError(t, err)
 				require.False(t, alreadyProcessed)
 
@@ -404,7 +431,7 @@ func Test_Votes(t *testing.T) {
 				err = v.Expire(ctx, 3)
 				require.NoError(t, err)
 
-				alreadyProcessed, err = v.AlreadyProcessed(ctx, uuid2)
+				alreadyProcessed, err = v.AlreadyProcessed(ctx, event2.ID())
 				require.NoError(t, err)
 				require.True(t, alreadyProcessed)
 
@@ -432,14 +459,101 @@ func Test_Votes(t *testing.T) {
 				}
 				bts, err := body.MarshalBinary()
 				require.NoError(t, err)
-				uuid := types.NewUUIDV5(bts)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
 
 				// approve vote twice
-				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
-				err = v.Approve(ctx, uuid, 10323, []byte("voter1"))
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
+			},
+		},
+		{
+			name: "approval correctly indicates if it contains a body",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				ctx := context.Background()
+
+				// add voters
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// body
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
+
+				_, err = v.ContainsBody(ctx, event.ID())
+				require.ErrorIs(t, err, voting.ErrResolutionNotFound)
+
+				// approve vote
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
+				require.NoError(t, err)
+
+				hasBody, err := v.ContainsBody(ctx, event.ID())
+				require.NoError(t, err)
+				require.False(t, hasBody)
+
+				// create vote
+				err = v.CreateResolution(ctx, event, 10000)
+				require.NoError(t, err)
+
+				hasBody, err = v.ContainsBody(ctx, event.ID())
+				require.NoError(t, err)
+				require.True(t, hasBody)
+			},
+		},
+		{
+			name: "test HasVoted",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				ctx := context.Background()
+
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
+
+				// hasVoted, no voter
+				hasVoted, err := v.HasVoted(ctx, event.ID(), []byte("voter1"))
+				require.NoError(t, err)
+				require.False(t, hasVoted)
+
+				// add voter
+				err = v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// hasVoted, no vote
+				hasVoted, err = v.HasVoted(ctx, event.ID(), []byte("voter1"))
+				require.NoError(t, err)
+				require.False(t, hasVoted)
+
+				// approve vote
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
+				require.NoError(t, err)
+
+				// hasVoted, vote
+				hasVoted, err = v.HasVoted(ctx, event.ID(), []byte("voter1"))
+				require.NoError(t, err)
+				require.True(t, hasVoted)
 			},
 		},
 	}
@@ -473,7 +587,7 @@ func Test_Votes(t *testing.T) {
 
 // requireEqualResolutions is a helper function to compare two resolutions.
 // 1 is a resolution, the other is a resolution status
-func requireEqualResolutions(t *testing.T, res1 *voting.Resolution, res2 *voting.ResolutionStatus) {
+func requireEqualResolutions(t *testing.T, res1 *voting.Resolution, res2 *voting.ResolutionVoteInfo) {
 	require.Equal(t, res1.ID, res2.ID)
 	if !bytes.EqualFold(res1.Body, res2.Body) {
 		require.Equal(t, res1.Body, res2.Body) // will fail since the bytes are not equal

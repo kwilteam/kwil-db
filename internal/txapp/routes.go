@@ -334,7 +334,12 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 
 	for _, voteID := range approve.ResolutionIDs {
 		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
-		containsBody, err := router.VoteStore.Approve(ctx.Ctx(), voteID, expiryHeight, tx.Sender)
+		err = router.VoteStore.Approve(ctx.Ctx(), voteID, expiryHeight, tx.Sender)
+		if err != nil {
+			return txRes(spend, transactions.CodeUnknownError, err)
+		}
+
+		containsBody, err := router.VoteStore.ContainsBody(ctx.Ctx(), voteID)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
@@ -367,7 +372,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	}
 
 	if !bytes.Equal(tx.Sender, ctx.Proposer()) {
-		return txRes(spend, transactions.CodeInvalidSender, fmt.Errorf("vote body tx must be sent by block proposer"))
+		return txRes(spend, transactions.CodeInvalidSender, ErrCallerNotProposer)
 	}
 
 	vote := &transactions.ValidatorVoteBodies{}
@@ -381,7 +386,14 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	for _, event := range vote.Events {
 		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
 
-		err = router.VoteStore.CreateVote(ctx.Ctx(), event, expiryHeight)
+		err = router.VoteStore.CreateResolution(ctx.Ctx(), event, expiryHeight)
+		if err != nil {
+			return txRes(spend, transactions.CodeUnknownError, err)
+		}
+
+		// since the vote body proposer is implicitly voting for the event,
+		// we need to approve the newly created vote body here
+		err = router.VoteStore.Approve(ctx.Ctx(), event.ID(), expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
