@@ -28,8 +28,8 @@ kwil-cli database deploy --path ./schema.kf`
 )
 
 func deployCmd() *cobra.Command {
-	var filePath string
-	var fileType string
+	var filePath, fileType, overrideName string
+
 	cmd := &cobra.Command{
 		Use:     "deploy",
 		Short:   "Deploy a database schema to the target Kwil node.",
@@ -57,6 +57,13 @@ func deployCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("failed to unmarshal file: %w", err))
 				}
 
+				if cmd.Flags().Changed("name") {
+					if overrideName == "" {
+						return display.PrintErr(cmd, fmt.Errorf("--name flag cannot be empty string"))
+					}
+					db.Name = overrideName
+				}
+
 				txHash, err := cl.DeployDatabase(ctx, db, client.WithNonce(nonceOverride))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("failed to deploy database: %w", err))
@@ -69,6 +76,8 @@ func deployCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the database definition file (required)")
 	cmd.Flags().StringVarP(&fileType, "type", "t", "kf", "file type of the database definition file (kf or json)")
+	cmd.Flags().StringVarP(&overrideName, "name", "n", "", "set the name of the database, overriding the name in the schema file")
+
 	cmd.MarkFlagRequired("path")
 	return cmd
 }
