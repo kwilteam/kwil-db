@@ -26,6 +26,7 @@ func Test_Changeset(t *testing.T) {
 			stmts: []string{
 				"INSERT INTO users (id, name, age) VALUES (1, 'alice', 42)",
 				"INSERT INTO users (id, name, age) VALUES (2, 'bob', 43)",
+				"INSERT INTO posts (id, content, user_id) VALUES (1, 'alice was here', 1)",
 			},
 			results: &sqlite.Changeset{
 				Tables: map[string]*sqlite.TableChangeset{
@@ -46,6 +47,19 @@ func Test_Changeset(t *testing.T) {
 									sqlVal(2),
 									sqlVal("bob"),
 									sqlVal(43),
+								},
+							},
+						},
+					},
+					"posts": {
+						ColumnNames: []string{"id", "content", "user_id"},
+						Records: map[string]*sqlite.RecordChange{
+							pkId(1): {
+								ChangeType: sqlite.RecordChangeTypeCreate,
+								Values: []*sqlite.Value{
+									sqlVal(1),
+									sqlVal("alice was here"),
+									sqlVal(1),
 								},
 							},
 						},
@@ -154,6 +168,9 @@ func Test_Changeset(t *testing.T) {
 			err = createUserTable(ctx, conn)
 			require.NoError(t, err)
 
+			err = createPostTable(ctx, conn)
+			require.NoError(t, err)
+
 			for _, stmt := range tc.initial {
 				res, err := conn.Execute(ctx, stmt, nil)
 				require.NoError(t, err)
@@ -198,6 +215,9 @@ func Test_Changeset(t *testing.T) {
 					}()
 
 					err = createUserTable(ctx, conn)
+					require.NoError(t, err)
+
+					err = createPostTable(ctx, conn)
 					require.NoError(t, err)
 
 					for _, stmt := range tc.initial {
