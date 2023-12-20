@@ -294,7 +294,7 @@ func (m *mockRegistry) Get(ctx context.Context, dbid string, key []byte, sync bo
 // identitySchema is a schema that relies on the testdata user's schema
 // it creates an example credential application
 var testSchema = &types.Schema{
-	Name:  "identity",
+	Name:  "identity_db",
 	Owner: []byte(`owner`),
 	Tables: []*types.Table{
 		{
