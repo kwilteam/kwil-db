@@ -39,7 +39,11 @@ func (f *ForeignKey) Clean() error {
 		}
 	}
 
-	return nil
+	return runCleans(
+		cleanIdents(&f.ChildKeys),
+		cleanIdents(&f.ParentKeys),
+		cleanIdent(&f.ParentTable),
+	)
 }
 
 // Copy returns a copy of the foreign key

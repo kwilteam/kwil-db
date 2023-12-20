@@ -17,6 +17,11 @@ type Schema struct {
 
 // Clean validates rules about the data in the struct (naming conventions, syntax, etc.).
 func (s *Schema) Clean() error {
+	err := cleanIdent(&s.Name)
+	if err != nil {
+		return err
+	}
+
 	tableSet := make(map[string]struct{})
 	for _, table := range s.Tables {
 		err := table.Clean()
