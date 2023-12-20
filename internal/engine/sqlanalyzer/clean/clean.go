@@ -13,7 +13,6 @@ CTEs allowed, then we would add it there.
 package clean
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -56,14 +55,4 @@ func cleanIdentifiers(identifiers []string) ([]string, error) {
 func checkLiteral(literal string) error {
 	_, err := utils.IsLiteral(literal)
 	return wrapErr(ErrInvalidLiteral, err)
-}
-
-// checkBindParameter checks that the bind parameter is a valid bind parameter.
-// It must start with either a $ or @.
-func checkBindParameter(bindParameter string) error {
-	if !strings.HasPrefix(bindParameter, "$") && !strings.HasPrefix(bindParameter, "@") {
-		return wrapErr(ErrInvalidBindParameter, errors.New("bind parameter must start with $ or @"))
-	}
-
-	return nil
 }
