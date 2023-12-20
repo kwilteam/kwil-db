@@ -14,16 +14,42 @@ func runCleans(errs ...error) error {
 }
 
 func cleanIdent(ident *string) error {
-	if ident == nil {
-		return fmt.Errorf("identifier cannot be nil")
-	}
-
-	err := validation.ValidateIdentifier(*ident)
+	err := cleanString(ident)
 	if err != nil {
 		return err
 	}
 
-	*ident = strings.ToLower(*ident)
+	err = validation.ValidateIdentifier(*ident)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func cleanDBID(dbid *string) error {
+	err := cleanString(dbid)
+	if err != nil {
+		return err
+	}
+
+	err = validation.ValidateDBID(*dbid)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// cleanString cleans a string by trimming whitespace and making it lowercase.
+// It returns an error if the string is nil.
+func cleanString(str *string) error {
+	if str == nil {
+		return fmt.Errorf("string cannot be nil")
+	}
+
+	*str = strings.TrimSpace(*str)
+	*str = strings.ToLower(*str)
 
 	return nil
 }
@@ -70,6 +96,8 @@ func cleanActionParameter(input *string) error {
 	if !strings.HasPrefix(*input, "$") {
 		return fmt.Errorf("action parameter must start with $")
 	}
+
+	*input = strings.ToLower(*input)
 
 	return nil
 }

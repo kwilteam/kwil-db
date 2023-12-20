@@ -2,6 +2,7 @@ package clean
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
 )
@@ -64,7 +65,12 @@ func (s *StatementCleaner) EnterExpressionLiteral(node *tree.ExpressionLiteral) 
 
 // EnterExpressionBindParameter checks that the bind parameter is a valid bind parameter
 func (s *StatementCleaner) EnterExpressionBindParameter(node *tree.ExpressionBindParameter) (err error) {
-	return wrapErr(ErrInvalidBindParameter, checkBindParameter(node.Parameter))
+	if !strings.HasPrefix(node.Parameter, "$") && !strings.HasPrefix(node.Parameter, "@") {
+		return wrapErr(ErrInvalidBindParameter, errors.New("bind parameter must start with $ or @"))
+	}
+
+	node.Parameter = strings.ToLower(node.Parameter)
+	return nil
 }
 
 // EnterExpressionColumn checks that the table and column names are valid identifiers
