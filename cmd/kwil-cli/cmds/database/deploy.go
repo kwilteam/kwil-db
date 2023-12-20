@@ -61,7 +61,6 @@ func deployCmd() *cobra.Command {
 				if overrideName != nil {
 					db.Name = *overrideName
 				}
-				// TODO: we need to clean the DB
 
 				txHash, err := cl.DeployDatabase(ctx, db, client.WithNonce(nonceOverride))
 				if err != nil {
