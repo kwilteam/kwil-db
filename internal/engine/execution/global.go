@@ -140,6 +140,11 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller [
 // It has the ability to mutate state, including uncommitted state.
 // once we fix auth, signer should get removed, as they would be the same.
 func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionData) (*sql.ResultSet, error) {
+	err := options.Clean()
+	if err != nil {
+		return nil, err
+	}
+
 	dataset, ok := g.datasets[options.Dataset]
 	if !ok {
 		return nil, types.ErrDatasetNotFound
@@ -153,7 +158,7 @@ func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionDat
 		global:   g,
 	}
 
-	_, err := dataset.Call(execCtx.NewScope(), options.Procedure, options.Args)
+	_, err = dataset.Call(execCtx.NewScope(), options.Procedure, options.Args)
 
 	return execCtx.FinalResult, err
 }

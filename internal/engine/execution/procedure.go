@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
 	actparser "github.com/kwilteam/kwil-db/parse/action"
@@ -140,11 +141,16 @@ func prepareStmt(stmt string, immutable bool, tables []*types.Table) (instructio
 			return nil, err
 		}
 
+		receivers := make([]string, len(stmt.Receivers))
+		for i, receiver := range stmt.Receivers {
+			receivers[i] = strings.ToLower(receiver)
+		}
+
 		i := &callMethod{
 			Namespace: strings.ToLower(stmt.Extension),
 			Method:    strings.ToLower(stmt.Method),
 			Args:      args,
-			Receivers: stmt.Receivers,
+			Receivers: receivers,
 		}
 		instr = i
 	case *actparser.DMLStmt:
@@ -175,11 +181,16 @@ func prepareStmt(stmt string, immutable bool, tables []*types.Table) (instructio
 			return nil, err
 		}
 
+		receivers := make([]string, len(stmt.Receivers))
+		for i, receiver := range stmt.Receivers {
+			receivers[i] = strings.ToLower(receiver)
+		}
+
 		i := &callMethod{
 			Namespace: strings.ToLower(stmt.Database),
 			Method:    strings.ToLower(stmt.Method),
 			Args:      args,
-			Receivers: stmt.Receivers,
+			Receivers: receivers,
 		}
 		instr = i
 	default:
@@ -219,8 +230,9 @@ func (e *callMethod) execute(scope *ScopeContext, dataset *dataset) error {
 	}
 
 	var inputs []any
+	vals := scope.Values() // declare here since scope.Values() is expensive
 	for _, arg := range e.Args {
-		val, err := arg(scope.Ctx(), exec, scope.Values())
+		val, err := arg(scope.Ctx(), exec, vals)
 		if err != nil {
 			return err
 		}
@@ -323,7 +335,13 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 			return nil, fmt.Errorf("unsupported expression type: %T", e)
 		}
 
-		stmt, err := (&tree.Select{
+		// clean expression, since it is submitted by the user
+		err := expr.Accept(clean.NewStatementCleaner())
+		if err != nil {
+			return nil, err
+		}
+
+		selectTree := &tree.Select{
 			SelectStmt: &tree.SelectStmt{
 				SelectCores: []*tree.SelectCore{
 					{
@@ -336,7 +354,9 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 					},
 				},
 			},
-		}).ToSQL()
+		}
+
+		stmt, err := selectTree.ToSQL()
 		if err != nil {
 			return nil, err
 		}
