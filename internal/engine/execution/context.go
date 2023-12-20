@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
@@ -93,7 +94,7 @@ func (s *ScopeContext) Signer() []byte {
 func (s *ScopeContext) Values() map[string]any {
 	values := make(map[string]any)
 	for k, v := range s.values {
-		values[k] = v
+		values[strings.ToLower(k)] = v
 	}
 
 	// set environment variables

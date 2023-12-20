@@ -378,6 +378,63 @@ func Test_Engine(t *testing.T) {
 				require.NoError(t, err)
 			},
 		},
+		{
+			name: "case insensitive",
+			ses1: func(t *testing.T, global *execution.GlobalContext, reg *registry.Registry) {
+				ctx := context.Background()
+
+				schema := *caseSchema
+
+				err := global.CreateDataset(ctx, &schema, testdata.TestSchema.Owner)
+				require.NoError(t, err)
+
+				caller := "signer"
+				signer := []byte("signer")
+
+				_, err = global.Execute(ctx, &types.ExecutionData{
+					Dataset:   schema.DBID(),
+					Procedure: "CREATE_USER",
+					Mutative:  true,
+					Args:      []any{1, "satoshi"},
+					Signer:    []byte(caller),
+					Caller:    string(signer),
+				})
+				require.NoError(t, err)
+
+				_, err = global.Execute(ctx, &types.ExecutionData{
+					Dataset:   schema.DBID(),
+					Procedure: "CREATE_USER",
+					Mutative:  true,
+					Args:      []any{2, "vitalik"},
+					Signer:    []byte(caller),
+					Caller:    string(signer),
+				})
+				require.NoError(t, err)
+
+				_, err = global.Execute(ctx, &types.ExecutionData{
+					Dataset:   schema.DBID(),
+					Procedure: "CREATE_FOLLOWER",
+					Mutative:  true,
+					Args:      []any{"satoshi", "vitalik"},
+					Signer:    []byte(caller),
+					Caller:    string(signer),
+				})
+				require.NoError(t, err)
+
+				res, err := global.Execute(ctx, &types.ExecutionData{
+					Dataset:   schema.DBID(),
+					Procedure: "USE_EXTENSION",
+					Mutative:  true,
+					Args:      []any{1, 2},
+					Signer:    []byte(caller),
+					Caller:    string(signer),
+				})
+				require.NoError(t, err)
+
+				require.Equal(t, res.ReturnedColumns, []string{"$res"})
+				require.Equal(t, res.Rows[0][0], int64(3))
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -426,3 +483,137 @@ func Test_Engine(t *testing.T) {
 		})
 	}
 }
+
+var (
+	caseSchema = &types.Schema{
+		Name: "case_insensITive",
+		Tables: []*types.Table{
+			{
+				Name: "usErs",
+				Columns: []*types.Column{
+					{
+						Name: "id",
+						Type: types.INT,
+						Attributes: []*types.Attribute{
+							{
+								Type: types.PRIMARY_KEY,
+							},
+						},
+					},
+					{
+						Name: "nAMe",
+						Type: types.TEXT,
+					},
+				},
+				Indexes: []*types.Index{
+					{
+						Name: "usErs_name",
+						Columns: []string{
+							"nAmE",
+						},
+						Type: types.BTREE,
+					},
+				},
+			},
+			{
+				Name: "fOllOwers",
+				Columns: []*types.Column{
+					{
+						Name: "foLlOwer_id",
+						Type: types.INT,
+						Attributes: []*types.Attribute{
+							{
+								Type: types.NOT_NULL,
+							},
+						},
+					},
+					{
+						Name: "fOllOwee_id",
+						Type: types.INT,
+						Attributes: []*types.Attribute{
+							{
+								Type: types.NOT_NULL,
+							},
+						},
+					},
+				},
+				Indexes: []*types.Index{
+					{
+						Name: "fOllOwers_pk",
+						Columns: []string{
+							"foLlowEr_id",
+							"fOllOwee_Id",
+						},
+						Type: types.PRIMARY,
+					},
+				},
+				ForeignKeys: []*types.ForeignKey{
+					{
+						ChildKeys: []string{
+							"FoLlOwer_id",
+						},
+						ParentKeys: []string{
+							"iD",
+						},
+						ParentTable: "useRS",
+					},
+					{
+						ChildKeys: []string{
+							"FoLlOweE_id",
+						},
+						ParentKeys: []string{
+							"ID",
+						},
+						ParentTable: "UseRS",
+					},
+				},
+			},
+		},
+		Procedures: []*types.Procedure{
+			{
+				Name: "CrEaTe_UsEr",
+				Args: []string{
+					"$Id",
+					"$nAmE",
+				},
+				Public: true,
+				Statements: []string{
+					"INSERT INTO UseRs (ID, nAme) VALUES ($iD, $nAME);",
+				},
+			},
+			{
+				Name: "CrEaTe_FoLlOwEr",
+				Args: []string{
+					"$FoLlOwer_nAme",
+					"$FoLlOwee_nAme",
+				},
+				Public: true,
+				Statements: []string{
+					`INSERT INTO FollOweRS (FOLlOwer_id, FOLlOwee_id)
+					VALUES (
+						(SELECT ID FROM USErs WHERE NAmE = $FoLlOwer_nAME),
+						(SELECT ID FROM UsErS WHERE nAME = $FoLlOwee_nAME)
+					);`,
+				},
+			},
+			{
+				Name: "use_ExTension",
+				Args: []string{
+					"$vAl1",
+					"$vAl2",
+				},
+				Public: true,
+				Statements: []string{
+					"$rEs = Math_Ext.AdD($VAl1, $VAl2);",
+					"SELECT $rES;",
+				},
+			},
+		},
+		Extensions: []*types.Extension{
+			{
+				Name:  "maTh",
+				Alias: "Math_Ext",
+			},
+		},
+	}
+)

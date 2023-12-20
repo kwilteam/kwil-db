@@ -26,3 +26,10 @@ type ExecutionData struct {
 	// the variable name "@caller".
 	Caller string
 }
+
+func (e *ExecutionData) Clean() error {
+	return runCleans(
+		cleanDBID(&e.Dataset),
+		cleanIdent(&e.Procedure),
+	)
+}
