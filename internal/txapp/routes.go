@@ -331,9 +331,9 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	}
 
 	isLocalValidator := bytes.Equal(tx.Sender, router.LocalValidator.Signer().Identity())
+	expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
 
 	for _, voteID := range approve.ResolutionIDs {
-		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
 		err = router.VoteStore.Approve(ctx.Ctx(), voteID, expiryHeight, tx.Sender)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
@@ -382,10 +382,9 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	}
 
 	localValidator := router.LocalValidator.Signer().Identity()
+	expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
 
 	for _, event := range vote.Events {
-		expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
-
 		err = router.VoteStore.CreateResolution(ctx.Ctx(), event, expiryHeight)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
