@@ -12,7 +12,7 @@ type ClientOptions struct {
 	// Logger is the logger to use for the client.
 	Logger log.Logger
 
-	// Signer will be used to sign transactions.
+	// Signer will be used to sign transactions and set the Sender field on call messages.
 	Signer auth.Signer
 
 	// The chain ID will be used in all transactions, which helps prevent replay attacks on
