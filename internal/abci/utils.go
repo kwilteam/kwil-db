@@ -7,17 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
-	"github.com/cometbft/cometbft/crypto/ed25519"
 )
-
-// cometAddrFromPubKey computes the cometBFT address from an ed25519 public key.
-// This helper is required to support the application's BeginBlock method where
-// the RequestBeginBlock request type includes the addresses of any byzantine
-// validators rather than their public keys, as with all of the other methods.
-func cometAddrFromPubKey(pubkey []byte) string {
-	publicKey := ed25519.PubKey(pubkey)
-	return publicKey.Address().String()
-}
 
 func convertABCISnapshots(req *abciTypes.Snapshot) *snapshots.Snapshot {
 	var metadata snapshots.SnapshotMetadata

@@ -18,7 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/extensions"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
-	"github.com/kwilteam/kwil-db/internal/services/grpc/txsvc/v1"
+	txsvc "github.com/kwilteam/kwil-db/internal/services/grpc/txsvc/v1"
 	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"

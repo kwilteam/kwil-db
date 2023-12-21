@@ -78,6 +78,13 @@ func pubkeyToAddr(pubkey []byte) (string, error) {
 	return publicKey.Address().String(), nil
 }
 
+// proposerAddrToString converts a proposer address to a string.
+// This follows the semantics of comet's ed25519.Pubkey.Address() method,
+// which hex encodes and upper cases the address
+func proposerAddrToString(addr []byte) string {
+	return strings.ToUpper(hex.EncodeToString(addr))
+}
+
 type AbciApp struct {
 	cfg AbciConfig
 
@@ -230,7 +237,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 	// Punish bad validators.
 	for _, ev := range req.Misbehavior {
-		addr := string(ev.Validator.Address) // comet example app confirms this conversion... weird
+		addr := proposerAddrToString(ev.Validator.Address) // comet example app confirms this conversion... weird
 		// if ev.Type == abciTypes.MisbehaviorType_DUPLICATE_VOTE { // ?
 		// 	a.log.Error("Wanted to punish val, but can't find it", zap.String("val", addr))
 		// 	continue
@@ -299,7 +306,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	for i, up := range validatorUpdates {
 		res.ValidatorUpdates[i] = abciTypes.Ed25519ValidatorUpdate(up.PubKey, up.Power)
 
-		addr := cometAddrFromPubKey(up.PubKey)
+		addr, err := pubkeyToAddr(up.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
+		}
+
 		if up.Power < 1 { // leave or punish
 			delete(a.valAddrToKey, addr)
 		} else { // add or update without remove
@@ -408,6 +419,13 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 			PubKey: pk,
 			Power:  vi.Power,
 		}
+
+		addr, err := pubkeyToAddr(pk)
+		if err != nil {
+			return nil, fmt.Errorf("invalid validator pubkey: %w", err)
+		}
+
+		a.valAddrToKey[addr] = pk
 	}
 
 	if err := a.validators.GenesisInit(context.Background(), vldtrs, req.InitialHeight); err != nil {
@@ -641,12 +659,13 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		return nil, fmt.Errorf("failed to get proposer transactions: %w", err)
 	}
 
-	proposerTxBts := make([][]byte, len(proposerTxs))
-	for i, tx := range proposerTxs {
-		proposerTxBts[i], err = tx.MarshalBinary()
+	proposerTxBts := make([][]byte, 0)
+	for _, tx := range proposerTxs {
+		bts, err := tx.MarshalBinary()
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal proposer transaction: %w", err)
 		}
+		proposerTxBts = append(proposerTxBts, bts)
 	}
 
 	txs := append(proposerTxBts, req.Txs...)
@@ -730,9 +749,10 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	proposerPubKey, ok := a.valAddrToKey[string(req.ProposerAddress)]
+	addr := proposerAddrToString(req.ProposerAddress)
+	proposerPubKey, ok := a.valAddrToKey[addr]
 	if !ok {
-		a.log.Warn("received block proposal from unknown validator", zap.String("addr", string(req.ProposerAddress)))
+		a.log.Warn("received block proposal from unknown validator", zap.String("addr", addr))
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}
 
