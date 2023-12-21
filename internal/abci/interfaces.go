@@ -85,5 +85,16 @@ type TxApp interface {
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
 	Begin(ctx context.Context, blockHeight int64) error
 	Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
-	Execute(ctx context.Context, tx *transactions.Transaction) *txapp.TxResponse
+	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
+	ProposerTxs(ctx context.Context) ([]*transactions.Transaction, error)
+}
+
+// ConsensusParams returns kwil specific consensus parameters.
+// I made this its own separate interface (instead of adding it to AbciConfig)
+// since this should be dynamic and changeable via voting.
+type ConsensusParams interface {
+	// VotingPeriod is the vote expiration period
+	// for validator joins and resolutions.
+	// We may want these to be separate in the future.
+	VotingPeriod() int64
 }

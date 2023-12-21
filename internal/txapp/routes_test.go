@@ -73,7 +73,7 @@ func Test_Routes(t *testing.T) {
 
 							return nil
 						},
-						containsBody: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
+						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
 							return true, nil
 						},
 					},
@@ -116,7 +116,7 @@ func Test_Routes(t *testing.T) {
 
 							return nil
 						},
-						containsBody: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
+						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
 							return true, nil
 						},
 					},
@@ -307,12 +307,12 @@ func Test_Routes(t *testing.T) {
 // mockCtx is a mock implementation of the TxContext interface.
 // It can be given values, or otherwise returns zero values.
 type mockCtx struct {
-	height       uint64
+	height       int64
 	proposer     []byte
 	votingPeriod int64
 }
 
-func (m *mockCtx) BlockHeight() uint64 {
+func (m *mockCtx) BlockHeight() int64 {
 	return m.height
 }
 
@@ -371,10 +371,10 @@ func (m *mockAccountStore) Transfer(ctx context.Context, to []byte, from []byte,
 }
 
 type mockLocalValidator struct {
-	signer func() auth.Signer
+	signer func() *auth.Ed25519Signer
 }
 
-func (m *mockLocalValidator) Signer() auth.Signer {
+func (m *mockLocalValidator) Signer() *auth.Ed25519Signer {
 	if m.signer != nil {
 		return m.signer()
 	}
@@ -385,7 +385,7 @@ func (m *mockLocalValidator) Signer() auth.Signer {
 type mockVoteStore struct {
 	alreadyProcessed            func(ctx context.Context, resolutionID types.UUID) (bool, error)
 	approve                     func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error
-	containsBody                func(ctx context.Context, resolutionID types.UUID) (bool, error)
+	containsBodyOrFinished      func(ctx context.Context, resolutionID types.UUID) (bool, error)
 	createResolution            func(ctx context.Context, event *types.VotableEvent, expiration int64) error
 	expire                      func(ctx context.Context, blockheight int64) error
 	hasVoted                    func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
@@ -409,9 +409,9 @@ func (m *mockVoteStore) Approve(ctx context.Context, resolutionID types.UUID, ex
 	return nil
 }
 
-func (m *mockVoteStore) ContainsBody(ctx context.Context, resolutionID types.UUID) (bool, error) {
-	if m.containsBody != nil {
-		return m.containsBody(ctx, resolutionID)
+func (m *mockVoteStore) ContainsBodyOrFinished(ctx context.Context, resolutionID types.UUID) (bool, error) {
+	if m.containsBodyOrFinished != nil {
+		return m.containsBodyOrFinished(ctx, resolutionID)
 	}
 
 	return false, nil

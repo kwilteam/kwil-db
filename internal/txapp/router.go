@@ -7,30 +7,33 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/accounts"
-	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
-	"github.com/kwilteam/kwil-db/internal/sql"
-	"github.com/kwilteam/kwil-db/internal/validators"
 	"go.uber.org/zap"
 )
 
-// NewRouter creates a new router.
-func NewRouter(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter, log log.Logger) *TxApp {
+// NewTxApp creates a new router.
+func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter,
+	voteStore VoteStore, localValidator LocalValidator, networkInfo NetworkInfo, eventStore EventStore, log log.Logger) *TxApp {
 	return &TxApp{
 		// TODO: set the eventstore and votestore dependencies
-		Database:        db,
-		Accounts:        acc,
-		Validators:      validators,
+		Database:       db,
+		Accounts:       acc,
+		Validators:     validators,
+		VoteStore:      voteStore,
+		LocalValidator: localValidator,
+		NetworkInfo:    networkInfo,
+		EventStore:     eventStore,
+
 		atomicCommitter: atomicCommitter,
 		log:             log,
 		mempool: &mempool{
 			accountStore: acc,
 			accounts:     make(map[string]*accounts.Account),
 		},
+		broadcaster: &uninitializedBroadcaster{},
 	}
 }
 
@@ -285,106 +288,13 @@ type TxResponse struct {
 
 // Price estimates the price of a transaction.
 // It returns the estimated price in tokens.
-func (r *TxApp) Price(ctx TxContext, tx *transactions.Transaction) (*big.Int, error) {
+func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
 		return nil, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
 
 	return route.Price(ctx, r, tx)
-}
-
-// DatabaseEngine is a database that can handle deployments, executions, etc.
-type DatabaseEngine interface {
-	CreateDataset(ctx context.Context, schema *engineTypes.Schema, caller []byte) (err error)
-	DeleteDataset(ctx context.Context, dbid string, caller []byte) error
-	Execute(ctx context.Context, data *engineTypes.ExecutionData) (*sql.ResultSet, error)
-}
-
-// AccountsStore is a datastore that can handle accounts.
-type AccountsStore interface {
-	AccountReader
-	Credit(ctx context.Context, acctID []byte, amt *big.Int) error
-	Transfer(ctx context.Context, to, from []byte, amt *big.Int) error
-	Spend(ctx context.Context, spend *accounts.Spend) error
-}
-
-// AccountReader is a datastore that can read accounts.
-// It should not be used during block execution, since it does not read
-// uncommitted accounts.
-type AccountReader interface {
-	// GetAccount gets an account from the datastore.
-	// It should not be used during block execution, since it does not read
-	// uncommitted accounts.
-	GetAccount(ctx context.Context, acctID []byte) (*accounts.Account, error)
-}
-
-// ValidatorStore is a datastore that tracks validator information.
-type ValidatorStore interface {
-	IsValidatorChecker
-	Join(ctx context.Context, joiner []byte, power int64) error
-	Leave(ctx context.Context, joiner []byte) error
-	Approve(ctx context.Context, joiner, approver []byte) error
-	Remove(ctx context.Context, target, validator []byte) error
-	// Finalize is used at the end of block processing to retrieve the validator
-	// updates to be provided to the consensus client for the next block. This
-	// is not idempotent. The modules working list of updates is reset until
-	// subsequent join/approves are processed for the next block.
-	Finalize(ctx context.Context) ([]*validators.Validator, error) // end of block processing requires providing list of updates to the node's consensus client
-
-	// Updates block height stored by the validator manager. Called in the abci Commit
-	UpdateBlockHeight(blockHeight int64)
-}
-
-// part of the validator store, but split up to delineate between TxApp and
-// mempool dependencies
-type IsValidatorChecker interface {
-	// IsCurrent returns true if the validator is currently a validator.
-	// It does not take into account uncommitted changes, but is thread-safe.
-	IsCurrent(ctx context.Context, validator []byte) (bool, error)
-}
-
-// LocalValidator returns information about the local validator.
-type LocalValidator interface {
-	Signer() auth.Signer
-}
-
-// NetworkInfo contains information about the network.
-type NetworkInfo interface {
-	ChainID() string
-}
-
-// VoteStore is a datastore that tracks votes.
-type VoteStore interface {
-	// Approve approves a resolution.
-	// If the resolution already includes a body, then it will return true.
-	Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error
-	ContainsBody(ctx context.Context, resolutionID types.UUID) (bool, error)
-	CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error
-	Expire(ctx context.Context, blockheight int64) error
-	UpdateVoter(ctx context.Context, identifier []byte, power int64) error
-	// ProcessConfirmedResolutions processes all resolutions that have been confirmed.
-	// It returns an array of the ID of the resolutions that were processed.
-	ProcessConfirmedResolutions(ctx context.Context) ([]types.UUID, error)
-	// HasVoted returns true if the voter has voted on the resolution.
-	HasVoted(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
-}
-
-// EventStore is a datastore that tracks events.
-type EventStore interface {
-	DeleteEvent(ctx context.Context, id types.UUID) error
-	GetEvents(ctx context.Context) ([]*types.VotableEvent, error)
-}
-
-// AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
-type AtomicCommitter interface {
-	Begin(ctx context.Context, idempotencyKey []byte) error
-	Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error)
-}
-
-// Broadcaster can broadcast transactions to the network.
-type Broadcaster interface {
-	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
 }
 
 // checkAndSpend checks the price of a transaction.
@@ -404,7 +314,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction) (*big
 		return nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
 	}
 
-	amt, err := route.Price(ctx, r, tx)
+	amt, err := route.Price(ctx.Ctx(), r, tx)
 	if err != nil {
 		return nil, transactions.CodeUnknownError, err
 	}
@@ -444,4 +354,19 @@ func txRes(spend *big.Int, code transactions.TxCode, err error) *TxResponse {
 		Spend:        spend.Int64(),
 		Error:        err,
 	}
+}
+
+type uninitializedBroadcaster struct{}
+
+var _ Broadcaster = (*uninitializedBroadcaster)(nil)
+
+func (b *uninitializedBroadcaster) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error) {
+	return 0, nil, fmt.Errorf("broadcaster not initialized. this is a bug with the node startup process")
+}
+
+// SetBroadcaster sets the broadcaster.
+// This is required due to the circular dependency between the txapp and the
+// cometbft client
+func (r *TxApp) SetBroadcaster(b Broadcaster) {
+	r.broadcaster = b
 }

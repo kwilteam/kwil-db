@@ -65,7 +65,12 @@ func (e *EventStore) KV(prefix []byte) sql.KVStore {
 // Store stores an event in the event store.
 // It is idempotent.
 func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) error {
-	id := types.NewUUIDV5(data)
+	event := &types.VotableEvent{
+		Body: data,
+		Type: eventType,
+	}
+
+	id := event.ID()
 
 	_, err := e.db.Execute(ctx, insertEventIdempotent, map[string]any{
 		"$id":         id[:],
@@ -76,13 +81,13 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 }
 
 // GetEvents gets all events in the event store.
-func (e *EventStore) GetEvents(ctx context.Context) ([]*Event, error) {
+func (e *EventStore) GetEvents(ctx context.Context) ([]*types.VotableEvent, error) {
 	res, err := e.db.Query(ctx, getEvents, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var events []*Event
+	var events []*types.VotableEvent
 	if len(res.Columns()) != 2 {
 		return nil, fmt.Errorf("expected 2 columns getting events. this is an internal bug")
 	}
@@ -103,9 +108,9 @@ func (e *EventStore) GetEvents(ctx context.Context) ([]*Event, error) {
 			return nil, fmt.Errorf("expected event type to be string, got %T", values[1])
 		}
 
-		events = append(events, &Event{
-			Data:      data,
-			EventType: eventType,
+		events = append(events, &types.VotableEvent{
+			Body: data,
+			Type: eventType,
 		})
 	}
 	if err := res.Err(); err != nil {
@@ -122,17 +127,6 @@ func (e *EventStore) DeleteEvent(ctx context.Context, id types.UUID) error {
 		"$id": id[:],
 	})
 	return err
-}
-
-type Event struct {
-	// Data is the data of the event.
-	Data []byte
-	// EventType is the type of the event.
-	EventType string
-}
-
-func (e *Event) ID() types.UUID {
-	return types.NewUUIDV5(e.Data)
 }
 
 // scopedKVStore is a KVStore that is scoped to an event type.

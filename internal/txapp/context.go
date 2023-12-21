@@ -7,7 +7,7 @@ type TxContext interface {
 	// Context gets a Golang context.
 	Ctx() context.Context
 	// BlockHeight gets the height of the current block.
-	BlockHeight() uint64
+	BlockHeight() int64
 	// Proposer gets the proposer public key of the current block.
 	Proposer() []byte
 	// ConsensusParams gets the consensus parameters.

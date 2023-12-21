@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 	"github.com/kwilteam/kwil-db/internal/voting"
@@ -68,7 +69,7 @@ func Test_Votes(t *testing.T) {
 				require.Len(t, processed, 1)
 
 				// check that the account was credited
-				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
+				acc, err := ds.Accounts.GetAccount(ctx, []byte("account1"))
 				require.NoError(t, err)
 				require.Equal(t, big.NewInt(100), acc.Balance)
 			},
@@ -111,7 +112,7 @@ func Test_Votes(t *testing.T) {
 				require.Len(t, processed, 1)
 
 				// check that the account was credited
-				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
+				acc, err := ds.Accounts.GetAccount(ctx, []byte("account1"))
 				require.NoError(t, err)
 				require.Equal(t, big.NewInt(100), acc.Balance)
 			},
@@ -150,7 +151,7 @@ func Test_Votes(t *testing.T) {
 				require.Len(t, processed, 0)
 
 				// check that the account was not credited
-				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
+				acc, err := ds.Accounts.GetAccount(ctx, []byte("account1"))
 				require.NoError(t, err)
 				require.Equal(t, big.NewInt(0), acc.Balance)
 			},
@@ -470,14 +471,14 @@ func Test_Votes(t *testing.T) {
 					Type: examplePayloadType,
 				}
 
-				_, err = v.ContainsBody(ctx, event.ID())
+				_, err = v.ContainsBodyOrFinished(ctx, event.ID())
 				require.ErrorIs(t, err, voting.ErrResolutionNotFound)
 
 				// approve vote
 				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
-				hasBody, err := v.ContainsBody(ctx, event.ID())
+				hasBody, err := v.ContainsBodyOrFinished(ctx, event.ID())
 				require.NoError(t, err)
 				require.False(t, hasBody)
 
@@ -485,7 +486,7 @@ func Test_Votes(t *testing.T) {
 				err = v.CreateResolution(ctx, event, 10000)
 				require.NoError(t, err)
 
-				hasBody, err = v.ContainsBody(ctx, event.ID())
+				hasBody, err = v.ContainsBodyOrFinished(ctx, event.ID())
 				require.NoError(t, err)
 				require.True(t, hasBody)
 			},
@@ -599,7 +600,7 @@ func Test_Votes(t *testing.T) {
 
 			ds := &voting.Datastores{
 				Accounts: &mockAccountStore{
-					accounts: map[string]*types.Account{},
+					accounts: map[string]*accounts.Account{},
 				},
 				Databases: &db{conn: conn},
 			}
@@ -654,13 +655,13 @@ func (d *db) Savepoint() (sql.Savepoint, error) {
 }
 
 type mockAccountStore struct {
-	accounts map[string]*types.Account
+	accounts map[string]*accounts.Account
 }
 
-func (m *mockAccountStore) Account(ctx context.Context, identifier []byte) (*types.Account, error) {
+func (m *mockAccountStore) GetAccount(ctx context.Context, identifier []byte) (*accounts.Account, error) {
 	acc, ok := m.accounts[string(identifier)]
 	if !ok {
-		acc = &types.Account{
+		acc = &accounts.Account{
 			Identifier: identifier,
 			Balance:    big.NewInt(0),
 			Nonce:      0,
@@ -674,7 +675,7 @@ func (m *mockAccountStore) Account(ctx context.Context, identifier []byte) (*typ
 func (m *mockAccountStore) Credit(ctx context.Context, account []byte, amount *big.Int) error {
 	acc, ok := m.accounts[string(account)]
 	if !ok {
-		acc = &types.Account{
+		acc = &accounts.Account{
 			Identifier: account,
 			Balance:    big.NewInt(0),
 			Nonce:      0,
@@ -685,29 +686,6 @@ func (m *mockAccountStore) Credit(ctx context.Context, account []byte, amount *b
 	acc.Balance = new(big.Int).Add(acc.Balance, amount)
 
 	return nil
-}
-
-func (m *mockAccountStore) Debit(ctx context.Context, account []byte, amount *big.Int) error {
-	acc, ok := m.accounts[string(account)]
-	if !ok {
-		return fmt.Errorf("account %s not found", account)
-	}
-
-	if acc.Balance.Cmp(amount) < 0 {
-		return fmt.Errorf("insufficient funds")
-	}
-
-	acc.Balance.Sub(acc.Balance, amount)
-
-	return nil
-}
-
-func (m *mockAccountStore) Transfer(ctx context.Context, from []byte, to []byte, amount *big.Int) error {
-	if err := m.Debit(ctx, from, amount); err != nil {
-		return err
-	}
-
-	return m.Credit(ctx, to, amount)
 }
 
 // exampleResolutionPayload is an example payload that can be used for testing

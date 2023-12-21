@@ -2,6 +2,7 @@ package txapp
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -31,7 +32,7 @@ func init() {
 
 type Route interface {
 	Execute(ctx TxContext, router *TxApp, tx *transactions.Transaction) *TxResponse
-	Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error)
+	Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error)
 }
 
 // routes is a map of transaction payload types to their respective routes
@@ -75,7 +76,7 @@ func (d *deployDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (d *deployDatasetRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (d *deployDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(1000000000000000000), nil
 }
 
@@ -101,7 +102,7 @@ func (d *dropDatasetRoute) Execute(ctx TxContext, router *TxApp, tx *transaction
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (d *dropDatasetRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (d *dropDatasetRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
@@ -156,7 +157,7 @@ func (e *executeActionRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (e *executeActionRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (e *executeActionRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(2000000000000000), nil
 }
 
@@ -195,7 +196,7 @@ func (t *transferRoute) Execute(ctx TxContext, router *TxApp, tx *transactions.T
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (t *transferRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (t *transferRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(210_000), nil
 }
 
@@ -221,7 +222,7 @@ func (v *validatorJoinRoute) Execute(ctx TxContext, router *TxApp, tx *transacti
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorJoinRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorJoinRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
@@ -247,7 +248,7 @@ func (v *validatorApproveRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorApproveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorApproveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
@@ -273,7 +274,7 @@ func (v *validatorRemoveRoute) Execute(ctx TxContext, router *TxApp, tx *transac
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorRemoveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorRemoveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return bigZero, nil
 }
 
@@ -300,7 +301,7 @@ func (v *validatorLeaveRoute) Execute(ctx TxContext, router *TxApp, tx *transact
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorLeaveRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorLeaveRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
@@ -331,7 +332,7 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	}
 
 	isLocalValidator := bytes.Equal(tx.Sender, router.LocalValidator.Signer().Identity())
-	expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
+	expiryHeight := ctx.BlockHeight() + ctx.ConsensusParams().VotingPeriod
 
 	for _, voteID := range approve.ResolutionIDs {
 		err = router.VoteStore.Approve(ctx.Ctx(), voteID, expiryHeight, tx.Sender)
@@ -339,7 +340,7 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
-		containsBody, err := router.VoteStore.ContainsBody(ctx.Ctx(), voteID)
+		containsBody, err := router.VoteStore.ContainsBodyOrFinished(ctx.Ctx(), voteID)
 		if err != nil {
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
@@ -355,7 +356,7 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorVoteIDsRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorVoteIDsRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return bigZero, nil
 }
 
@@ -382,7 +383,7 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	}
 
 	localValidator := router.LocalValidator.Signer().Identity()
-	expiryHeight := int64(ctx.BlockHeight()) + ctx.ConsensusParams().VotingPeriod
+	expiryHeight := ctx.BlockHeight() + ctx.ConsensusParams().VotingPeriod
 
 	for _, event := range vote.Events {
 		err = router.VoteStore.CreateResolution(ctx.Ctx(), event, expiryHeight)
@@ -412,6 +413,6 @@ func (v *validatorVoteBodiesRoute) Execute(ctx TxContext, router *TxApp, tx *tra
 	return txRes(spend, transactions.CodeOk, nil)
 }
 
-func (v *validatorVoteBodiesRoute) Price(ctx TxContext, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
+func (v *validatorVoteBodiesRoute) Price(ctx context.Context, router *TxApp, tx *transactions.Transaction) (*big.Int, error) {
 	return bigZero, nil
 }

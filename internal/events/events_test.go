@@ -29,8 +29,8 @@ func Test_EventStore(t *testing.T) {
 				require.NoError(t, err)
 
 				require.Len(t, events, 1)
-				require.Equal(t, []byte("hello"), events[0].Data)
-				require.Equal(t, "test", events[0].EventType)
+				require.Equal(t, []byte("hello"), events[0].Body)
+				require.Equal(t, "test", events[0].Type)
 
 				err = e.DeleteEvent(ctx, events[0].ID())
 				require.NoError(t, err)

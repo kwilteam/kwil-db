@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/internal/events"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
 	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
@@ -35,6 +36,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
+	"github.com/kwilteam/kwil-db/internal/voting"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -71,7 +73,19 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	bootstrapperModule := buildBootstrapper(d)
 
-	router := buildTxRouter(d, accs, e, vstore, ac)
+	// vote store
+	v := buildVoteStore(d, closers, accs)
+
+	// event store
+	ev := buildEventStore(d, closers)
+
+	// this is a hack
+	// we need the cometbft client to broadcast txs.
+	// in order to get this, we need the comet node
+	// to get the comet node, we need the abci app
+	// to get the abci app, we need the tx router
+	// but the tx router needs the cometbft client
+	router := buildTxApp(d, accs, e, vstore, ac, v, ev, &networkInfoAdapter{chainId: d.genesisCfg.ChainID})
 
 	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
 		router, snapshotModule, bootstrapperModule)
@@ -79,6 +93,12 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
+
+	// set broadcaster late
+	// this should be fine, since the tx app does not use
+	// the broadcaster until cometbft starts, but it is not
+	// clear
+	router.SetBroadcaster(&wrappedCometBFTClient{cometBftClient})
 
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, &engineAdapter{e},
@@ -105,6 +125,8 @@ const (
 	accountsDBName  = "accounts"
 	validatorDBName = "validators"
 	engineName      = "engine"
+	votesDBName     = "votes"
+	eventsDBName    = "events"
 )
 
 // coreDependencies holds dependencies that are widely used
@@ -139,12 +161,13 @@ func (c *closeFuncs) closeAll() error {
 	return err
 }
 
-func buildTxRouter(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore, atomicCommitter txapp.AtomicCommitter) *txapp.TxApp {
-	return txapp.NewRouter(db, accs, validators, atomicCommitter, *d.log.Named("tx-router"))
+func buildTxApp(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore,
+	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore, networkInfo txapp.NetworkInfo) *txapp.TxApp {
+	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, &localValidatorAdapter{signer: buildSigner(d)}, networkInfo, eventStore, *d.log.Named("tx-router"))
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
-	validatorModule abci.ValidatorModule, router abci.TxApp, snapshotter *snapshots.SnapshotStore,
+	validatorModule abci.ValidatorModule, txApp abci.TxApp, snapshotter *snapshots.SnapshotStore,
 	bootstrapper *snapshots.Bootstrapper) *abci.AbciApp {
 	badgerPath := filepath.Join(d.cfg.RootDir, abciDirName, config.ABCIInfoSubDirName)
 	badgerKv, err := badger.NewBadgerDB(d.ctx, badgerPath, &badger.Options{
@@ -174,9 +197,40 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		badgerKv,
 		sh,
 		bootstrapper,
-		router,
+		txApp,
+		&consensusParamAdapter{voteExpiry: d.genesisCfg.ConsensusParams.Validator.JoinExpiry},
 		*d.log.Named("abci"),
 	)
+}
+
+func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountStore) *voting.VoteProcessor {
+	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, votesDBName), 1, 2, true)
+	if err != nil {
+		failBuild(err, "failed to open votes db")
+	}
+	closer.addCloser(db.Close)
+
+	v, err := voting.NewVoteProcessor(d.ctx, db, acc, 666667) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
+	if err != nil {
+		failBuild(err, "failed to build vote store")
+	}
+
+	return v
+}
+
+func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore {
+	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, eventsDBName), 1, 2, true)
+	if err != nil {
+		failBuild(err, "failed to open events db")
+	}
+	closer.addCloser(db.Close)
+
+	e, err := events.NewEventStore(d.ctx, db)
+	if err != nil {
+		failBuild(err, "failed to build event store")
+	}
+
+	return e
 }
 
 func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
@@ -186,16 +240,18 @@ func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, cometBftClient tx
 }
 
 func buildAdminSvc(d *coreDependencies, transactor admSvc.BlockchainTransactor, txApp admSvc.TxApp, validatorStore admSvc.ValidatorReader, chainID string) *admSvc.Service {
+	return admSvc.NewService(transactor, txApp, validatorStore, buildSigner(d), d.cfg, chainID,
+		admSvc.WithLogger(*d.log.Named("admin-service")),
+	)
+}
+
+func buildSigner(d *coreDependencies) *auth.Ed25519Signer {
 	pk, err := crypto.Ed25519PrivateKeyFromBytes(d.privKey.Bytes())
 	if err != nil {
 		failBuild(err, "failed to build admin service")
 	}
 
-	signer := auth.Ed25519Signer{Ed25519PrivateKey: *pk}
-
-	return admSvc.NewService(transactor, txApp, validatorStore, &signer, d.cfg, chainID,
-		admSvc.WithLogger(*d.log.Named("admin-service")),
-	)
+	return &auth.Ed25519Signer{Ed25519PrivateKey: *pk}
 }
 
 func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommitter) *execution.GlobalContext {

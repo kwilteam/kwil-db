@@ -10,6 +10,8 @@ import (
 
 // NewVoteProcessor creates a new vote processor.
 // It initializes the database with the required tables.
+// The threshold is the percentThreshold of votes required to approve a resolution
+// It must be an integer between 0 and 1000000.  This defines the percentage
 func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, threshold int64) (*VoteProcessor, error) {
 	sp, err := db.Savepoint()
 	if err != nil {
@@ -299,9 +301,15 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 	}, nil
 }
 
-// ContainsBody checks if a resolution contains a body.
-// It does not read uncommitted data.
-func (v *VoteProcessor) ContainsBody(ctx context.Context, id types.UUID) (bool, error) {
+// ContainsBodyOrFinished returns true if (any of the following are true):
+// 1. the resolution has a body
+// 2. the resolution has expired
+// 3. the resolution has been approved
+func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUID) (bool, error) {
+	// we check for existence of body in resolutions table before checking
+	// for the resolution ID in the processed table, since it is a faster lookup.
+	// furthermore, we are more likely to hit the resolutions table during consensus,
+	// and processed table during catchup. consensus speed is more important.
 	res, err := v.db.Query(ctx, getResolutionBody, map[string]interface{}{
 		"$id": id[:],
 	})
@@ -317,7 +325,16 @@ func (v *VoteProcessor) ContainsBody(ctx context.Context, id types.UUID) (bool, 
 		return false, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
 
-	return res.Rows[0][0] != nil, nil
+	if res.Rows[0][0] != nil {
+		return true, nil
+	}
+
+	processed, err := v.alreadyProcessed(ctx, id)
+	if err != nil {
+		return false, err
+	}
+
+	return processed, nil
 }
 
 // GetVotesByCategory gets all votes of a specific category.

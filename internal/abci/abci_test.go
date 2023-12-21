@@ -341,7 +341,7 @@ func Test_ProcessProposal_TxValidation(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := abciApp.validateProposalTransactions(ctx, tc.txs)
+			err := abciApp.validateProposalTransactions(ctx, tc.txs, nil)
 			if tc.err {
 				assert.Error(t, err, "expected error due to %s", tc.name)
 			} else {

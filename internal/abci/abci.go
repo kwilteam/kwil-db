@@ -22,6 +22,7 @@ import (
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtTypes "github.com/cometbft/cometbft/types"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 	"go.uber.org/zap"
 )
 
@@ -37,22 +38,24 @@ type AbciConfig struct {
 	GenesisAppHash     []byte
 	ChainID            string
 	ApplicationVersion uint64
-	GenesisAllocs      map[string]*big.Int // genesisCft.Alloc
+	GenesisAllocs      map[string]*big.Int
+	// genesisCft.Alloc
 	// GasEnabled bool // for mempool policy modification
 }
 
 func NewAbciApp(cfg *AbciConfig, accounts AccountsModule, vldtrs ValidatorModule, kv KVStore,
-	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, log log.Logger) *AbciApp {
+	snapshotter SnapshotModule, bootstrapper DBBootstrapModule, txRouter TxApp, consensusParams ConsensusParams, log log.Logger) *AbciApp {
 	app := &AbciApp{
 		cfg:        *cfg,
 		validators: vldtrs,
 		metadataStore: &metadataStore{
 			kv: kv,
 		},
-		bootstrapper: bootstrapper,
-		snapshotter:  snapshotter,
-		accounts:     accounts,
-		txRouter:     txRouter,
+		bootstrapper:    bootstrapper,
+		snapshotter:     snapshotter,
+		accounts:        accounts,
+		txApp:           txRouter,
+		consensusParams: consensusParams,
 
 		valAddrToKey: make(map[string][]byte),
 
@@ -101,7 +104,9 @@ type AbciApp struct {
 	// state gets updated with the bootupState after bootstrapping
 	bootupState appState
 
-	txRouter TxApp
+	txApp TxApp
+
+	consensusParams ConsensusParams
 }
 
 func (a *AbciApp) ChainID() string {
@@ -190,7 +195,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce))
 	}
 
-	err = a.txRouter.ApplyMempool(ctx, tx)
+	err = a.txApp.ApplyMempool(ctx, tx)
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
@@ -218,7 +223,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	res := &abciTypes.ResponseFinalizeBlock{}
 
 	// BeginBlock was this part
-	err := a.txRouter.Begin(ctx, req.Height)
+	err := a.txApp.Begin(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("begin atomic commit failed: %w", err)
 	}
@@ -252,7 +257,12 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			return nil, fmt.Errorf("failed to unmarshal transaction: %w", err)
 		}
 
-		txRes := a.txRouter.Execute(ctx, decoded)
+		txRes := a.txApp.Execute(&txCtx{
+			blockHeight:  req.Height,
+			proposer:     req.ProposerAddress,
+			votingPeriod: a.consensusParams.VotingPeriod(),
+			ctx:          ctx,
+		}, decoded)
 
 		abciRes := &abciTypes.ExecTxResult{}
 		if txRes.Error != nil {
@@ -280,7 +290,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	// TODO: some of this commit logic would actually go in Commit, but we need
 	// to reconcile some issues with our idempotent commit process first.
 	// while we have idempotent commits, it is ok to have this here.
-	newAppHash, validatorUpdates, err := a.txRouter.Commit(ctx, req.Height)
+	newAppHash, validatorUpdates, err := a.txApp.Commit(ctx, req.Height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction router: %w", err)
 	}
@@ -626,14 +636,29 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	okTxns := prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log)
+	proposerTxs, err := a.txApp.ProposerTxs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get proposer transactions: %w", err)
+	}
 
-	if len(okTxns) != len(req.Txs) {
+	proposerTxBts := make([][]byte, len(proposerTxs))
+	for i, tx := range proposerTxs {
+		proposerTxBts[i], err = tx.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal proposer transaction: %w", err)
+		}
+	}
+
+	txs := append(proposerTxBts, req.Txs...)
+
+	okTxns := prepareMempoolTxns(txs, int(req.MaxTxBytes), &a.log)
+
+	if len(okTxns) != len(txs) {
 		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
-			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
+			zap.Int("in", len(txs)), zap.Int("out", len(okTxns)))
 	} else if logger.L.Level() <= log.DebugLevel { // spare the check if it wouldn't be logged
 		for i, tx := range okTxns {
-			if !bytes.Equal(tx, req.Txs[i]) { //  not and error, just notable
+			if !bytes.Equal(tx, txs[i]) { //  not and error, just notable
 				logger.Debug("transaction was moved or mutated", zap.Int("idx", i))
 			}
 		}
@@ -644,7 +669,7 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 	}, nil
 }
 
-func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byte) error {
+func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byte, proposer []byte) error {
 	logger := a.log.With(zap.String("stage", "ABCI ProcessProposal"))
 	grouped, err := groupTxsBySender(txns)
 	if err != nil {
@@ -675,6 +700,15 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 				return fmt.Errorf("protected transaction with mismatched chain ID")
 			}
 
+			// if it is a vote body payload, then only the proposer can propose it
+			// this is a hard consensus rule for block building, and is protected by
+			// the mempool.
+			// it seems like this should somehow be in the same package as mempool since this is inter-related
+			// logically, but I am putting it here for now.
+			if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteBodies && !bytes.Equal(proposer, tx.Sender) {
+				return fmt.Errorf("only proposer can propose validator vote bodies")
+			}
+
 			// This block proposal may include transactions that did not pass
 			// through our mempool, so we have to verify all signatures.
 			if err = ident.VerifyTransaction(tx); err != nil {
@@ -696,7 +730,13 @@ func (a *AbciApp) ProcessProposal(ctx context.Context, req *abciTypes.RequestPro
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	if err := a.validateProposalTransactions(ctx, req.Txs); err != nil {
+	proposerPubKey, ok := a.valAddrToKey[string(req.ProposerAddress)]
+	if !ok {
+		a.log.Warn("received block proposal from unknown validator", zap.String("addr", string(req.ProposerAddress)))
+		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
+	}
+
+	if err := a.validateProposalTransactions(ctx, req.Txs, proposerPubKey); err != nil {
 		logger.Warn("rejecting block proposal", zap.Error(err))
 		return &abciTypes.ResponseProcessProposal{Status: abciTypes.ResponseProcessProposal_REJECT}, nil
 	}
@@ -776,7 +816,29 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	return m.SetBlockHeight(ctx, height+1)
 }
 
-// VotePayload is the payload of a vote, which is passed as a regular transaction.
-// It includes an "ID" field, and a "Vote" field.  The "ID" field is simply a hash
-// of the "Vote" field. It therefore has to have some sort of uniqueness.
-type VotePayload struct{}
+type txCtx struct {
+	blockHeight  int64
+	votingPeriod int64
+	ctx          context.Context
+	proposer     []byte
+}
+
+var _ txapp.TxContext = &txCtx{}
+
+func (t *txCtx) BlockHeight() int64 {
+	return t.blockHeight
+}
+
+func (t *txCtx) ConsensusParams() txapp.ConsensusParams {
+	return txapp.ConsensusParams{
+		VotingPeriod: t.votingPeriod,
+	}
+}
+
+func (t *txCtx) Ctx() context.Context {
+	return t.ctx
+}
+
+func (t *txCtx) Proposer() []byte {
+	return t.proposer
+}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
@@ -41,16 +41,10 @@ type Datastores struct {
 
 type AccountStore interface {
 	// Account gets an account by its identifier
-	Account(ctx context.Context, identifier []byte) (*types.Account, error)
+	GetAccount(ctx context.Context, identifier []byte) (*accounts.Account, error)
 
 	// Credit credits an account with a given amount
 	Credit(ctx context.Context, account []byte, amount *big.Int) error
-
-	// Debit debits an account with a given amount
-	Debit(ctx context.Context, account []byte, amount *big.Int) error
-
-	// Transfer transfers an amount from one account to another
-	Transfer(ctx context.Context, from []byte, to []byte, amount *big.Int) error
 }
 
 type Datastore interface {
