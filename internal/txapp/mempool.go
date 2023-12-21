@@ -16,7 +16,8 @@ type mempool struct {
 	accounts map[string]*accounts.Account
 	mu       sync.Mutex
 
-	accountStore AccountReader
+	accountStore   AccountReader
+	validatorStore IsValidatorChecker
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
@@ -48,6 +49,23 @@ func (m *mempool) accountInfoSafe(ctx context.Context, acctID []byte) (*accounts
 func (m *mempool) applyTransaction(ctx context.Context, tx *transactions.Transaction) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// seems like maybe this should go in the switch statement below,
+	// but I put it here to avoid extra db call for account info
+	if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteIDs {
+		isValidator, err := m.validatorStore.IsCurrent(ctx, tx.Sender)
+		if err != nil {
+			return err
+		}
+
+		if !isValidator {
+			return fmt.Errorf("only validators can submit validator vote transactions")
+		}
+	}
+	if tx.Body.PayloadType == transactions.PayloadTypeValidatorVoteBodies {
+		// not sure if this is the right error code
+		return fmt.Errorf("validator vote bodies can not enter the mempool, and can only be submitted during block proposal")
+	}
 
 	// get account info from mempool state or account store
 	acct, err := m.accountInfo(ctx, tx.Sender)

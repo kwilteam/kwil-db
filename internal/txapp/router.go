@@ -51,6 +51,7 @@ type TxApp struct {
 
 	atomicCommitter AtomicCommitter
 	mempool         *mempool
+	broadcaster     Broadcaster
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -145,6 +146,70 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 	// of the current block height and "keep it"
 	// this would go in Commit
 	r.Validators.UpdateBlockHeight(blockHeight)
+
+	// TODO: if we are syncing, we can just return here
+	// if syncing {
+	// 	return appHash, validatorUpdates, nil
+	// }
+
+	localPublicKey := r.LocalValidator.Signer().Identity()
+
+	// if the local node is a validator, broadcast all vote IDs
+	isValidator, err := r.Validators.IsCurrent(ctx, localPublicKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !isValidator {
+		events, err := r.EventStore.GetEvents(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ids := make([]types.UUID, 0)
+		for _, event := range events {
+			// if we have already voted, then do not rebroadcast
+			hasVoted, err := r.VoteStore.HasVoted(ctx, event.ID(), localPublicKey)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !hasVoted {
+				ids = append(ids, event.ID())
+			}
+		}
+
+		// calling external method so that we get the nonce based on mempool content
+		// I believe this is the correct way to do it, but I'm not sure
+		_, nonce, err := r.AccountInfo(ctx, localPublicKey, true)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteIDs{
+			ResolutionIDs: ids,
+		}, r.NetworkInfo.ChainID(), uint64(nonce+1))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		err = tx.Sign(r.LocalValidator.Signer())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		bts, err := tx.MarshalBinary()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// no async, since there is really no reason to wait here
+		// we just broadcast here since it is a uniform place to
+		// do it, and we have just deleted processed events
+		_, _, err = r.broadcaster.BroadcastTx(ctx, bts, 0)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
 	return appHash, validatorUpdates, nil
 }
@@ -256,6 +321,7 @@ type AccountReader interface {
 
 // ValidatorStore is a datastore that tracks validator information.
 type ValidatorStore interface {
+	IsValidatorChecker
 	Join(ctx context.Context, joiner []byte, power int64) error
 	Leave(ctx context.Context, joiner []byte) error
 	Approve(ctx context.Context, joiner, approver []byte) error
@@ -268,7 +334,11 @@ type ValidatorStore interface {
 
 	// Updates block height stored by the validator manager. Called in the abci Commit
 	UpdateBlockHeight(blockHeight int64)
+}
 
+// part of the validator store, but split up to delineate between TxApp and
+// mempool dependencies
+type IsValidatorChecker interface {
 	// IsCurrent returns true if the validator is currently a validator.
 	// It does not take into account uncommitted changes, but is thread-safe.
 	IsCurrent(ctx context.Context, validator []byte) (bool, error)
