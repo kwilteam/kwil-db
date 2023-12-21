@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
@@ -162,13 +163,7 @@ func (c *Client) Call(ctx context.Context, req *transactions.CallMessage,
 		return nil, fmt.Errorf("failed to call: %w", err)
 	}
 
-	var result []map[string]any
-	err = json.Unmarshal(res.Result, &result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal result: %w", err)
-	}
-
-	return result, nil
+	return unmarshalMapResults(res.Result)
 }
 
 func (c *Client) GetConfig(ctx context.Context) (*SvcConfig, error) {
@@ -220,13 +215,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 		return nil, fmt.Errorf("failed to query: %w", err)
 	}
 
-	var result []map[string]any
-	err = json.Unmarshal(res.Result, &result)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal result: %w", err)
-	}
-
-	return result, nil
+	return unmarshalMapResults(res.Result)
 }
 
 func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Schema, error) {
@@ -238,4 +227,18 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 	}
 
 	return conversion.ConvertFromPBSchema(res.Schema), nil
+}
+
+func unmarshalMapResults(b []byte) ([]map[string]any, error) {
+	d := json.NewDecoder(strings.NewReader(string(b)))
+	d.UseNumber()
+
+	// unmashal result
+	var result []map[string]any
+	err := d.Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
