@@ -115,9 +115,19 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 	}
 
 	// this would go in GetEndResults
-	validators, err := r.Validators.Finalize(ctx)
+	validatorUpdates, err := r.Validators.Finalize(ctx)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// we intentionally update the validators after processing confirmed resolutions
+	// if a vote passes and a validator is upgraded in the same block, it doesn't make sense
+	// for that new validator's votes to have an impact an the otherwise "confirmed" resolution
+	for _, validator := range validatorUpdates {
+		err = r.VoteStore.UpdateVoter(ctx, validator.PubKey, validator.Power)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// this would go in Commit
@@ -136,7 +146,7 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 	// this would go in Commit
 	r.Validators.UpdateBlockHeight(blockHeight)
 
-	return appHash, validators, nil
+	return appHash, validatorUpdates, nil
 }
 
 // ApplyMempool applies the transactions in the mempool.
@@ -286,8 +296,6 @@ type VoteStore interface {
 	// ProcessConfirmedResolutions processes all resolutions that have been confirmed.
 	// It returns an array of the ID of the resolutions that were processed.
 	ProcessConfirmedResolutions(ctx context.Context) ([]types.UUID, error)
-	// AlreadyProcessed returns true if the resolution ID has been voted on (either succeeded, or expired).
-	AlreadyProcessed(ctx context.Context, resolutionID types.UUID) (bool, error)
 	// HasVoted returns true if the voter has voted on the resolution.
 	HasVoted(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
 }

@@ -123,10 +123,18 @@ type Resolution struct {
 // has approved the resolution, and will not change the body or expiration.
 // If the voter does not exist, an error will be returned.
 // If the voter has already approved the resolution, no error will be returned.
-// If the resolution body already exists, it will be returned as true.
+// If the resolution has already been processed, no error will be returned.
 func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
+	alreadyProcessed, err := v.alreadyProcessed(ctx, resolutionID)
+	if err != nil {
+		return err
+	}
+	if alreadyProcessed {
+		return nil
+	}
+
 	// we need to ensure that the resolution ID exists
-	_, err := v.db.Execute(ctx, resolutionIDExists, map[string]interface{}{
+	_, err = v.db.Execute(ctx, resolutionIDExists, map[string]interface{}{
 		"$id":         resolutionID[:],
 		"$expiration": expiration,
 	})
@@ -142,15 +150,22 @@ func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, ex
 		"$resolution_id": resolutionID[:],
 		"$voter_id":      userId[:],
 	})
-
-	// TODO: check for a sql error that indicates that the voter does not exist
-	// looping back, I am not sure if we need this
 	return err
 }
 
 // CreateResolution creates a vote, by submitting a body of a vote, a topic
 // and an expiration.  The expiration should be a blockheight.
+// If the resolution already exists, it will not be changed.
+// If the resolution was already processed, nothing will happen.
 func (v *VoteProcessor) CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error {
+	alreadyProcessed, err := v.alreadyProcessed(ctx, event.ID())
+	if err != nil {
+		return err
+	}
+	if alreadyProcessed {
+		return nil
+	}
+
 	// ensure that the category exists
 	_, ok := registeredPayloads[event.Type]
 	if !ok {
@@ -159,7 +174,7 @@ func (v *VoteProcessor) CreateResolution(ctx context.Context, event *types.Votab
 
 	id := event.ID()
 
-	_, err := v.db.Execute(ctx, upsertResolution, map[string]interface{}{
+	_, err = v.db.Execute(ctx, upsertResolution, map[string]interface{}{
 		"$id":         id[:],
 		"$body":       event.Body,
 		"$type":       event.Type,
@@ -542,8 +557,8 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 	return usedDBIDs, sp.Commit()
 }
 
-// AlreadyProcessed checks if a vote has either already succeeded, or expired.
-func (v *VoteProcessor) AlreadyProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
+// alreadyProcessed checks if a vote has either already succeeded, or expired.
+func (v *VoteProcessor) alreadyProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
 	res, err := v.db.Query(ctx, alreadyProcessed, map[string]interface{}{
 		"$id": resolutionID[:],
 	})

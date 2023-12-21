@@ -54,34 +54,18 @@ func Test_Votes(t *testing.T) {
 					Type: examplePayloadType,
 				}
 
-				alreadyProcessed, err := v.AlreadyProcessed(ctx, event.ID())
-				require.NoError(t, err)
-				require.False(t, alreadyProcessed)
-
 				err = v.CreateResolution(ctx, event, 10000)
 				require.NoError(t, err)
-
-				alreadyProcessed, err = v.AlreadyProcessed(ctx, event.ID())
-				require.NoError(t, err)
-				require.False(t, alreadyProcessed)
 
 				// approve vote
 				// expiration does not matter here since it only matters for the first vote
 				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
-				alreadyProcessed, err = v.AlreadyProcessed(ctx, event.ID())
-				require.NoError(t, err)
-				require.False(t, alreadyProcessed)
-
 				// resolve vote
 				processed, err := v.ProcessConfirmedResolutions(ctx)
 				require.NoError(t, err)
 				require.Len(t, processed, 1)
-
-				alreadyProcessed, err = v.AlreadyProcessed(ctx, event.ID())
-				require.NoError(t, err)
-				require.True(t, alreadyProcessed)
 
 				// check that the account was credited
 				acc, err := ds.Accounts.Account(ctx, []byte("account1"))
@@ -423,17 +407,9 @@ func Test_Votes(t *testing.T) {
 
 				require.Len(t, resolutions, 3)
 
-				alreadyProcessed, err := v.AlreadyProcessed(ctx, event2.ID())
-				require.NoError(t, err)
-				require.False(t, alreadyProcessed)
-
 				// expire
 				err = v.Expire(ctx, 3)
 				require.NoError(t, err)
-
-				alreadyProcessed, err = v.AlreadyProcessed(ctx, event2.ID())
-				require.NoError(t, err)
-				require.True(t, alreadyProcessed)
 
 				// get votes by category
 				resolutions, err = v.GetVotesByCategory(ctx, examplePayloadType)
@@ -554,6 +530,59 @@ func Test_Votes(t *testing.T) {
 				hasVoted, err = v.HasVoted(ctx, event.ID(), []byte("voter1"))
 				require.NoError(t, err)
 				require.True(t, hasVoted)
+			},
+		},
+		{
+			name: "voting and giving a body for a finalized vote does nothing",
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+				ctx := context.Background()
+
+				// add voters
+				err := v.UpdateVoter(ctx, []byte("voter1"), 10)
+				require.NoError(t, err)
+
+				// body
+				body := &exampleResolutionPayload{
+					UniqueID: "unique_id",
+					Account:  []byte("account1"),
+					Amount:   100,
+				}
+				bts, err := body.MarshalBinary()
+				require.NoError(t, err)
+				event := &types.VotableEvent{
+					Body: bts,
+					Type: examplePayloadType,
+				}
+
+				// create vote
+				err = v.CreateResolution(ctx, event, 10000)
+				require.NoError(t, err)
+
+				// approve vote
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
+				require.NoError(t, err)
+
+				// resolve vote
+				processed, err := v.ProcessConfirmedResolutions(ctx)
+				require.NoError(t, err)
+				require.Len(t, processed, 1)
+
+				// give body
+				err = v.CreateResolution(ctx, event, 10000)
+				require.NoError(t, err)
+
+				// approve vote
+				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
+				require.NoError(t, err)
+
+				// get votes by category
+				resolutions, err := v.GetVotesByCategory(ctx, examplePayloadType)
+				require.NoError(t, err)
+				require.Len(t, resolutions, 0)
+
+				// get vote by id
+				_, err = v.GetResolutionVoteInfo(ctx, event.ID())
+				require.ErrorIs(t, err, voting.ErrResolutionNotFound)
 			},
 		},
 	}
