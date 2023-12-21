@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/conversion"
@@ -220,10 +221,14 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 		return nil, fmt.Errorf("failed to query: %w", err)
 	}
 
+	d := json.NewDecoder(strings.NewReader(string(res.Result)))
+	d.UseNumber()
+
+	// unmashal result
 	var result []map[string]any
-	err = json.Unmarshal(res.Result, &result)
+	err = d.Decode(&result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal result: %w", err)
+		return nil, err
 	}
 
 	return result, nil

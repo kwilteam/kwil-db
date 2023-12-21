@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"context"
 	"math/big"
@@ -256,9 +257,12 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 		return nil, err
 	}
 
+	d := json.NewDecoder(strings.NewReader(string(decodedResult)))
+	d.UseNumber()
+
 	// unmashal result
 	var resultSet []map[string]any
-	err = json.Unmarshal(decodedResult, &resultSet)
+	err = d.Decode(&resultSet)
 	if err != nil {
 		return nil, err
 	}
