@@ -114,14 +114,7 @@ func (c *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts .
 		return nil, err
 	}
 
-	// unmashal result
-	var resultSet []map[string]any
-	err = json.Unmarshal(decodedResult, &resultSet)
-	if err != nil {
-		return nil, err
-	}
-
-	return resultSet, nil
+	return unmarshalMapResults(decodedResult)
 }
 
 func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
@@ -257,17 +250,7 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 		return nil, err
 	}
 
-	d := json.NewDecoder(strings.NewReader(string(decodedResult)))
-	d.UseNumber()
-
-	// unmashal result
-	var resultSet []map[string]any
-	err = d.Decode(&resultSet)
-	if err != nil {
-		return nil, err
-	}
-
-	return resultSet, nil
+	return unmarshalMapResults(decodedResult)
 }
 
 func parseBroadcastError(respTxt []byte) error {
@@ -375,4 +358,18 @@ func (c *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTx
 		Tx:       *convertedTx,
 		TxResult: *convertedTxResult,
 	}, nil
+}
+
+func unmarshalMapResults(b []byte) ([]map[string]any, error) {
+	d := json.NewDecoder(strings.NewReader(string(b)))
+	d.UseNumber()
+
+	// unmashal result
+	var result []map[string]any
+	err := d.Decode(&result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
