@@ -9,10 +9,7 @@ import (
 func (s *Service) GetAccount(ctx context.Context, req *txpb.GetAccountRequest) (*txpb.GetAccountResponse, error) {
 	// Status is presently just 0 for confirmed and 1 for pending, but there may
 	// be others such as finalized and safe.
-	uncommitted := false
-	if req.Status != nil && *req.Status > 0 {
-		uncommitted = true
-	}
+	uncommitted := req.Status != nil && *req.Status > 0
 
 	balance, nonce, err := s.nodeApp.AccountInfo(ctx, req.Identifier, uncommitted)
 	if err != nil {

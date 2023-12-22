@@ -167,6 +167,9 @@ func (vs *validatorStore) IsCurrent(ctx context.Context, validator []byte) (bool
 	defer vs.rw.RUnlock()
 
 	power, err := vs.validatorPower(ctx, validator)
+	if err == errUnknownValidator {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}

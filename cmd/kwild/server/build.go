@@ -85,7 +85,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	router := buildTxApp(d, accs, e, vstore, ac, v, ev, &networkInfoAdapter{chainId: d.genesisCfg.ChainID})
+	router := buildTxApp(d, accs, e, vstore, ac, v, ev)
 
 	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
 		router, snapshotModule, bootstrapperModule)
@@ -98,6 +98,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// this should be fine, since the tx app does not use
 	// the broadcaster until cometbft starts, but it is not
 	// clear
+	// TODO: this is not fine, cometbft syncs when we call buildCometNode
 	router.SetBroadcaster(&wrappedCometBFTClient{cometBftClient})
 
 	// tx service and grpc server
@@ -162,8 +163,8 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildTxApp(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore,
-	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore, networkInfo txapp.NetworkInfo) *txapp.TxApp {
-	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, &localValidatorAdapter{signer: buildSigner(d)}, networkInfo, eventStore, *d.log.Named("tx-router"))
+	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore, node txapp.Node) *txapp.TxApp {
+	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, node, *d.log.Named("tx-router"))
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,

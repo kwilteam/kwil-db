@@ -16,13 +16,13 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/ident"
 	"github.com/kwilteam/kwil-db/internal/kv"
+	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/validators"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	tendermintTypes "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmtTypes "github.com/cometbft/cometbft/types"
-	"github.com/kwilteam/kwil-db/internal/txapp"
 	"go.uber.org/zap"
 )
 
@@ -264,11 +264,11 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 			return nil, fmt.Errorf("failed to unmarshal transaction: %w", err)
 		}
 
-		txRes := a.txApp.Execute(&txCtx{
-			blockHeight:  req.Height,
-			proposer:     req.ProposerAddress,
-			votingPeriod: a.consensusParams.VotingPeriod(),
-			ctx:          ctx,
+		txRes := a.txApp.Execute(txapp.TxContext{
+			BlockHeight:  req.Height,
+			Proposer:     req.ProposerAddress,
+			VotingPeriod: a.consensusParams.VotingPeriod(),
+			Ctx:          ctx,
 		}, decoded)
 
 		abciRes := &abciTypes.ExecTxResult{}
@@ -834,31 +834,4 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	}
 
 	return m.SetBlockHeight(ctx, height+1)
-}
-
-type txCtx struct {
-	blockHeight  int64
-	votingPeriod int64
-	ctx          context.Context
-	proposer     []byte
-}
-
-var _ txapp.TxContext = &txCtx{}
-
-func (t *txCtx) BlockHeight() int64 {
-	return t.blockHeight
-}
-
-func (t *txCtx) ConsensusParams() txapp.ConsensusParams {
-	return txapp.ConsensusParams{
-		VotingPeriod: t.votingPeriod,
-	}
-}
-
-func (t *txCtx) Ctx() context.Context {
-	return t.ctx
-}
-
-func (t *txCtx) Proposer() []byte {
-	return t.proposer
 }

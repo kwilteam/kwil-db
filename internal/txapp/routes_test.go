@@ -66,7 +66,6 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				callback(&TxApp{
-					LocalValidator: &mockLocalValidator{},
 					VoteStore: &mockVoteStore{
 						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
 							approveCount++
@@ -109,7 +108,6 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				callback(&TxApp{
-					LocalValidator: &mockLocalValidator{},
 					VoteStore: &mockVoteStore{
 						approve: func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
 							approveCount++
@@ -150,7 +148,6 @@ func Test_Routes(t *testing.T) {
 			name: "validator_vote_id, as non-validator",
 			fn: func(t *testing.T, callback func(*TxApp)) {
 				callback(&TxApp{
-					LocalValidator: &mockLocalValidator{},
 					Validators: &mockValidatorStore{
 						isCurrent: func(ctx context.Context, validator []byte) (bool, error) {
 							return false, nil
@@ -172,7 +169,6 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				callback(&TxApp{
-					LocalValidator: &mockLocalValidator{},
 					VoteStore: &mockVoteStore{
 						hasVoted: func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error) {
 							return true, nil
@@ -201,8 +197,8 @@ func Test_Routes(t *testing.T) {
 					},
 				},
 			},
-			ctx: &mockCtx{
-				proposer: validatorSigner1().Identity(),
+			ctx: TxContext{
+				Proposer: validatorSigner1().Identity(),
 			},
 			from: validatorSigner1(),
 		},
@@ -214,7 +210,6 @@ func Test_Routes(t *testing.T) {
 				deleteCount := 0
 
 				callback(&TxApp{
-					LocalValidator: &mockLocalValidator{},
 					VoteStore: &mockVoteStore{
 						hasVoted: func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error) {
 							return true, nil
@@ -243,8 +238,8 @@ func Test_Routes(t *testing.T) {
 					},
 				},
 			},
-			ctx: &mockCtx{
-				proposer: validatorSigner1().Identity(),
+			ctx: TxContext{
+				Proposer: validatorSigner1().Identity(),
 			},
 			from: validatorSigner2(),
 			err:  ErrCallerNotProposer,
@@ -255,9 +250,6 @@ func Test_Routes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.from == nil {
 				tc.from = validatorSigner1()
-			}
-			if tc.ctx == nil {
-				tc.ctx = &mockCtx{}
 			}
 
 			// build tx
@@ -291,6 +283,9 @@ func Test_Routes(t *testing.T) {
 				if app.log.L == nil {
 					app.log = log.NewNoOp()
 				}
+				if app.signer == nil {
+					app.signer = validatorSigner1()
+				}
 
 				res := app.Execute(tc.ctx, tx)
 				if tc.err != nil {
@@ -302,32 +297,6 @@ func Test_Routes(t *testing.T) {
 
 		})
 	}
-}
-
-// mockCtx is a mock implementation of the TxContext interface.
-// It can be given values, or otherwise returns zero values.
-type mockCtx struct {
-	height       int64
-	proposer     []byte
-	votingPeriod int64
-}
-
-func (m *mockCtx) BlockHeight() int64 {
-	return m.height
-}
-
-func (m *mockCtx) ConsensusParams() ConsensusParams {
-	return ConsensusParams{
-		VotingPeriod: m.votingPeriod,
-	}
-}
-
-func (m *mockCtx) Ctx() context.Context {
-	return context.Background()
-}
-
-func (m *mockCtx) Proposer() []byte {
-	return m.proposer
 }
 
 type mockAccountStore struct {
@@ -368,18 +337,6 @@ func (m *mockAccountStore) Transfer(ctx context.Context, to []byte, from []byte,
 		return m.transfer(ctx, to, from, amt)
 	}
 	return nil
-}
-
-type mockLocalValidator struct {
-	signer func() *auth.Ed25519Signer
-}
-
-func (m *mockLocalValidator) Signer() *auth.Ed25519Signer {
-	if m.signer != nil {
-		return m.signer()
-	}
-
-	return validatorSigner1()
 }
 
 type mockVoteStore struct {

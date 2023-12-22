@@ -110,3 +110,10 @@ type AtomicCommitter interface {
 type Broadcaster interface {
 	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
 }
+
+// Node is the local node
+type Node interface {
+	// IsCatchup returns true if the node is running in blocksync
+	// / catchup mode
+	IsCatchup() bool
+}

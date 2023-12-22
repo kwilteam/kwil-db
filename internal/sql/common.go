@@ -104,14 +104,14 @@ func (r *ResultSet) Values() ([]any, error) {
 }
 
 func (r *ResultSet) Map() []map[string]any {
-	m := make([]map[string]any, 0)
-	for _, row := range r.Rows {
+	m := make([]map[string]any, len(r.Rows))
+	for i, row := range r.Rows {
 		m2 := make(map[string]any)
 		for j, col := range row {
 			m2[r.ReturnedColumns[j]] = col
 		}
 
-		m = append(m, m2)
+		m[i] = m2
 	}
 
 	return m

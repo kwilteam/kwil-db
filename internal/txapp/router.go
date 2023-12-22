@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
@@ -16,16 +17,14 @@ import (
 
 // NewTxApp creates a new router.
 func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter,
-	voteStore VoteStore, localValidator LocalValidator, networkInfo NetworkInfo, eventStore EventStore, log log.Logger) *TxApp {
+	voteStore VoteStore, signer *auth.Ed25519Signer, chaindID string, eventStore EventStore, node Node, log log.Logger) *TxApp {
 	return &TxApp{
 		// TODO: set the eventstore and votestore dependencies
-		Database:       db,
-		Accounts:       acc,
-		Validators:     validators,
-		VoteStore:      voteStore,
-		LocalValidator: localValidator,
-		NetworkInfo:    networkInfo,
-		EventStore:     eventStore,
+		Database:   db,
+		Accounts:   acc,
+		Validators: validators,
+		VoteStore:  voteStore,
+		EventStore: eventStore,
 
 		atomicCommitter: atomicCommitter,
 		log:             log,
@@ -34,6 +33,7 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 			accounts:     make(map[string]*accounts.Account),
 		},
 		broadcaster: &uninitializedBroadcaster{},
+		node:        node,
 	}
 }
 
@@ -42,19 +42,21 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 // It also contains a mempool for uncommitted accounts, as well as pricing
 // for transactions
 type TxApp struct {
-	Database       DatabaseEngine // tracks deployed schemas
-	Accounts       AccountsStore  // accounts
-	Validators     ValidatorStore // validators
-	VoteStore      VoteStore      // tracks resolutions, their votes, manages expiration
-	LocalValidator LocalValidator // information about the local validator
-	NetworkInfo    NetworkInfo    // information about the network
-	EventStore     EventStore     // tracks events, not part of consensus
+	Database   DatabaseEngine // tracks deployed schemas
+	Accounts   AccountsStore  // accounts
+	Validators ValidatorStore // validators
+	VoteStore  VoteStore      // tracks resolutions, their votes, manages expiration
+	EventStore EventStore     // tracks events, not part of consensus
+
+	chainID string
+	signer  *auth.Ed25519Signer
 
 	log log.Logger
 
 	atomicCommitter AtomicCommitter
 	mempool         *mempool
 	broadcaster     Broadcaster
+	node            Node
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -90,7 +92,8 @@ func (r *TxApp) Begin(ctx context.Context, blockHeight int64) error {
 // transaction support.  Therefore, we should have another method here called
 // GetEndResults.
 // Commit also clears the mempool.
-func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
+// It takes a `syncMode` parameter, which signals whether or not the node is currently syncing data
+func (r *TxApp) Commit(ctx context.Context, blockHeight int64, syncMode bool) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
 	// this would go in Commit
 	defer r.mempool.reset()
 
@@ -150,12 +153,12 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 	// this would go in Commit
 	r.Validators.UpdateBlockHeight(blockHeight)
 
-	// TODO: if we are syncing, we can just return here
-	// if syncing {
-	// 	return appHash, validatorUpdates, nil
-	// }
+	// if we are syncing blocks, we do not want to broadcast.
+	if r.node.IsCatchup() {
+		return appHash, validatorUpdates, nil
+	}
 
-	localPublicKey := r.LocalValidator.Signer().Identity()
+	localPublicKey := r.signer.Identity()
 
 	// if the local node is a validator, broadcast all vote IDs
 	isValidator, err := r.Validators.IsCurrent(ctx, localPublicKey)
@@ -190,12 +193,12 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 
 		tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteIDs{
 			ResolutionIDs: ids,
-		}, r.NetworkInfo.ChainID(), uint64(nonce+1))
+		}, r.chainID, uint64(nonce+1))
 		if err != nil {
 			return nil, nil, err
 		}
 
-		err = tx.Sign(r.LocalValidator.Signer())
+		err = tx.Sign(r.signer)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -253,19 +256,19 @@ func (r *TxApp) ProposerTxs(ctx context.Context) ([]*transactions.Transaction, e
 		return nil, err
 	}
 
-	account, err := r.Accounts.GetAccount(ctx, r.LocalValidator.Signer().Identity())
+	account, err := r.Accounts.GetAccount(ctx, r.signer.Identity())
 	if err != nil {
 		return nil, err
 	}
 
 	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
 		Events: events,
-	}, r.NetworkInfo.ChainID(), uint64(account.Nonce+1))
+	}, r.chainID, uint64(account.Nonce+1))
 	if err != nil {
 		return nil, err
 	}
 
-	err = tx.Sign(r.LocalValidator.Signer())
+	err = tx.Sign(r.signer)
 	if err != nil {
 		return nil, err
 	}
@@ -308,13 +311,8 @@ func (r *TxApp) Price(ctx context.Context, tx *transactions.Transaction) (*big.I
 // It also returns an error code.
 // if we allow users to implement their own routes, this function will need to
 // be exported.
-func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction) (*big.Int, transactions.TxCode, error) {
-	route, ok := routes[tx.Body.PayloadType.String()]
-	if !ok {
-		return nil, transactions.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
-	}
-
-	amt, err := route.Price(ctx.Ctx(), r, tx)
+func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction, pricer Pricer) (*big.Int, transactions.TxCode, error) {
+	amt, err := pricer.Price(ctx.Ctx, r, tx)
 	if err != nil {
 		return nil, transactions.CodeUnknownError, err
 	}
@@ -329,7 +327,7 @@ func (r *TxApp) checkAndSpend(ctx TxContext, tx *transactions.Transaction) (*big
 	}
 
 	// spend the tokens
-	err = r.Accounts.Spend(ctx.Ctx(), &accounts.Spend{
+	err = r.Accounts.Spend(ctx.Ctx, &accounts.Spend{
 		AccountID: tx.Sender,
 		Amount:    amt,
 		Nonce:     int64(tx.Body.Nonce),
