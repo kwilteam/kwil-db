@@ -129,6 +129,55 @@ func (e *EventStore) DeleteEvent(ctx context.Context, id types.UUID) error {
 	return err
 }
 
+// GetUnreceivedEvents gets all events that have not been received by the network in a block.
+// Events are only marked as "received" when they have been included in a block, by this validator.
+func (e *EventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error) {
+	res, err := e.db.Query(ctx, getUnbroadcastedEvents, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var events []*types.VotableEvent
+	if len(res.Columns()) != 2 {
+		return nil, fmt.Errorf("expected 2 columns getting events. this is an internal bug")
+	}
+	for res.Next() {
+		// res.Rows[0] is the raw data of the event
+		// res.Rows[1] is the event type
+		values, err := res.Values()
+		if err != nil {
+			return nil, err
+		}
+
+		data, ok := values[0].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("expected data to be []byte, got %T", values[0])
+		}
+		eventType, ok := values[1].(string)
+		if !ok {
+			return nil, fmt.Errorf("expected event type to be string, got %T", values[1])
+		}
+
+		events = append(events, &types.VotableEvent{
+			Body: data,
+			Type: eventType,
+		})
+	}
+	if err := res.Err(); err != nil {
+		return nil, err
+	}
+
+	return events, nil
+}
+
+// MarkReceived marks that an event has been received by the network, and should not be re-broadcasted.
+func (e *EventStore) MarkReceived(ctx context.Context, id types.UUID) error {
+	_, err := e.db.Execute(ctx, markReceived, map[string]any{
+		"$id": id[:],
+	})
+	return err
+}
+
 // scopedKVStore is a KVStore that is scoped to an event type.
 type scopedKVStore struct {
 	prefix []byte

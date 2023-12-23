@@ -17,7 +17,7 @@ import (
 
 // NewTxApp creates a new router.
 func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter,
-	voteStore VoteStore, signer *auth.Ed25519Signer, chaindID string, eventStore EventStore, node Node, log log.Logger) *TxApp {
+	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, eventStore EventStore, log log.Logger) *TxApp {
 	return &TxApp{
 		// TODO: set the eventstore and votestore dependencies
 		Database:   db,
@@ -32,8 +32,8 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 			accountStore: acc,
 			accounts:     make(map[string]*accounts.Account),
 		},
-		broadcaster: &uninitializedBroadcaster{},
-		node:        node,
+		signer:  signer,
+		chainID: chainID,
 	}
 }
 
@@ -55,8 +55,6 @@ type TxApp struct {
 
 	atomicCommitter AtomicCommitter
 	mempool         *mempool
-	broadcaster     Broadcaster
-	node            Node
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -93,7 +91,7 @@ func (r *TxApp) Begin(ctx context.Context, blockHeight int64) error {
 // GetEndResults.
 // Commit also clears the mempool.
 // It takes a `syncMode` parameter, which signals whether or not the node is currently syncing data
-func (r *TxApp) Commit(ctx context.Context, blockHeight int64, syncMode bool) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
+func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error) {
 	// this would go in Commit
 	defer r.mempool.reset()
 
@@ -153,70 +151,6 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64, syncMode bool) (a
 	// this would go in Commit
 	r.Validators.UpdateBlockHeight(blockHeight)
 
-	// if we are syncing blocks, we do not want to broadcast.
-	if r.node.IsCatchup() {
-		return appHash, validatorUpdates, nil
-	}
-
-	localPublicKey := r.signer.Identity()
-
-	// if the local node is a validator, broadcast all vote IDs
-	isValidator, err := r.Validators.IsCurrent(ctx, localPublicKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !isValidator {
-		events, err := r.EventStore.GetEvents(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		ids := make([]types.UUID, 0)
-		for _, event := range events {
-			// if we have already voted, then do not rebroadcast
-			hasVoted, err := r.VoteStore.HasVoted(ctx, event.ID(), localPublicKey)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if !hasVoted {
-				ids = append(ids, event.ID())
-			}
-		}
-
-		// calling external method so that we get the nonce based on mempool content
-		// I believe this is the correct way to do it, but I'm not sure
-		_, nonce, err := r.AccountInfo(ctx, localPublicKey, true)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteIDs{
-			ResolutionIDs: ids,
-		}, r.chainID, uint64(nonce+1))
-		if err != nil {
-			return nil, nil, err
-		}
-
-		err = tx.Sign(r.signer)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		bts, err := tx.MarshalBinary()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// no async, since there is really no reason to wait here
-		// we just broadcast here since it is a uniform place to
-		// do it, and we have just deleted processed events
-		_, _, err = r.broadcaster.BroadcastTx(ctx, bts, 0)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
 	return appHash, validatorUpdates, nil
 }
 
@@ -254,6 +188,9 @@ func (r *TxApp) ProposerTxs(ctx context.Context) ([]*transactions.Transaction, e
 	events, err := r.EventStore.GetEvents(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if len(events) == 0 {
+		return nil, nil
 	}
 
 	account, err := r.Accounts.GetAccount(ctx, r.signer.Identity())
@@ -352,19 +289,4 @@ func txRes(spend *big.Int, code transactions.TxCode, err error) *TxResponse {
 		Spend:        spend.Int64(),
 		Error:        err,
 	}
-}
-
-type uninitializedBroadcaster struct{}
-
-var _ Broadcaster = (*uninitializedBroadcaster)(nil)
-
-func (b *uninitializedBroadcaster) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error) {
-	return 0, nil, fmt.Errorf("broadcaster not initialized. this is a bug with the node startup process")
-}
-
-// SetBroadcaster sets the broadcaster.
-// This is required due to the circular dependency between the txapp and the
-// cometbft client
-func (r *TxApp) SetBroadcaster(b Broadcaster) {
-	r.broadcaster = b
 }

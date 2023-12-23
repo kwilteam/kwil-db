@@ -162,6 +162,7 @@ func Test_Routes(t *testing.T) {
 			},
 			err: ErrCallerNotValidator,
 		},
+		// TODO: we should test that we properly hit eventstore.MarkReceived
 		{
 			// testing validator_vote_bodies, as the proposer
 			name: "validator_vote_bodies, as proposer",
@@ -415,8 +416,9 @@ func (m *mockVoteStore) UpdateVoter(ctx context.Context, identifier []byte, powe
 }
 
 type mockEventStore struct {
-	deleteEvent func(ctx context.Context, id types.UUID) error
-	getEvents   func(ctx context.Context) ([]*types.VotableEvent, error)
+	deleteEvent  func(ctx context.Context, id types.UUID) error
+	getEvents    func(ctx context.Context) ([]*types.VotableEvent, error)
+	markReceived func(ctx context.Context, id types.UUID) error
 }
 
 func (m *mockEventStore) DeleteEvent(ctx context.Context, id types.UUID) error {
@@ -433,6 +435,14 @@ func (m *mockEventStore) GetEvents(ctx context.Context) ([]*types.VotableEvent, 
 	}
 
 	return nil, nil
+}
+
+func (m *mockEventStore) MarkReceived(ctx context.Context, id types.UUID) error {
+	if m.markReceived != nil {
+		return m.markReceived(ctx, id)
+	}
+
+	return nil
 }
 
 type mockValidatorStore struct {

@@ -114,6 +114,23 @@ type AbciApp struct {
 	txApp TxApp
 
 	consensusParams ConsensusParams
+
+	// commitHooks is a set of functions that are called after a block is committed.
+	// If any of the hooks return an error, the rest of the hooks will be called,
+	// and the node will then fail with a consensus error.
+	// This can be used to build extra logic within a node, such as broadcasting validator txa,
+	// sending data to Arweave, etc.
+	// It is placed within abci's `Commit` method, since abci blocks mempool updates during commit.
+	// This allows validators to automatically author transactions, and not conflict with potential
+	// transactions authored by the same validator's administrator.
+	commitHooks []CommitHook
+
+	// blockInfo is information about the last block that was finalized.
+	// it is set and at the end of FinalizeBlock.
+	// It is primarily made to be used in Commit.  If used elsewhere,
+	// the implementer should take care to ensure that they account for potential
+	// nil values (in the case of the node not yet having finalized a block).
+	blockInfo *BlockInfo
 }
 
 func (a *AbciApp) ChainID() string {
@@ -324,6 +341,17 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 	res.AppHash = appHash
 
+	proposerPubKey, ok := a.valAddrToKey[proposerAddrToString(req.ProposerAddress)]
+	if !ok {
+		return nil, fmt.Errorf("failed to find proposer pubkey in FinalizeBlock")
+	}
+
+	a.blockInfo = &BlockInfo{
+		Height:    req.Height,
+		BlockHash: req.Hash,
+		Proposer:  proposerPubKey,
+	}
+
 	return res, nil
 }
 
@@ -346,6 +374,17 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 			a.log.Error("snapshot creation failed", zap.Error(err))
 		}
 		// Unlock all the DBs
+	}
+
+	errs := make([]error, 0)
+	for _, hook := range a.commitHooks {
+		err := hook(ctx, a.blockInfo)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("commit hooks failed: %w", errors.Join(errs...))
 	}
 
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
@@ -834,4 +873,20 @@ func (m *metadataStore) IncrementBlockHeight(ctx context.Context) error {
 	}
 
 	return m.SetBlockHeight(ctx, height+1)
+}
+
+// BlockInfo contains information about a block.
+type BlockInfo struct {
+	Height    int64  // block height
+	Proposer  []byte // public key of the proposer
+	BlockHash []byte // hash of the block
+}
+
+type CommitHook func(ctx context.Context, block *BlockInfo) error
+
+// AddCommitHook adds a function to be called after a block is committed.
+// We allow this to be done ad-hoc, to give the application control over when
+// their commit hook begins taking place (e.g. before blocksync, after blocksync, etc.)
+func (a *AbciApp) AddCommitHook(hook CommitHook) {
+	a.commitHooks = append(a.commitHooks, hook)
 }

@@ -349,7 +349,7 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		return txRes(spend, transactions.CodeEncodingError, err)
 	}
 
-	isLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
+	fromLocalValidator := bytes.Equal(tx.Sender, router.signer.Identity())
 	expiryHeight := ctx.BlockHeight + ctx.VotingPeriod
 
 	for _, voteID := range approve.ResolutionIDs {
@@ -358,15 +358,26 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 			return txRes(spend, transactions.CodeUnknownError, err)
 		}
 
-		containsBody, err := router.VoteStore.ContainsBodyOrFinished(ctx.Ctx, voteID)
-		if err != nil {
-			return txRes(spend, transactions.CodeUnknownError, err)
-		}
-
-		if isLocalValidator && containsBody {
-			err = router.EventStore.DeleteEvent(ctx.Ctx, voteID)
+		// if from local validator, we should mark that it is committed,
+		// so that we do not rebroadcast. We do not want to delete,
+		// since we may be the proposer later, and will need the body
+		// If the network already has the body, then we can just delete.
+		if fromLocalValidator {
+			containsBody, err := router.VoteStore.ContainsBodyOrFinished(ctx.Ctx, voteID)
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
+			}
+
+			if containsBody {
+				err = router.EventStore.DeleteEvent(ctx.Ctx, voteID)
+				if err != nil {
+					return txRes(spend, transactions.CodeUnknownError, err)
+				}
+			} else {
+				err = router.EventStore.MarkReceived(ctx.Ctx, voteID)
+				if err != nil {
+					return txRes(spend, transactions.CodeUnknownError, err)
+				}
 			}
 		}
 	}

@@ -374,6 +374,8 @@ type ValidatorVoteIDs struct {
 	ResolutionIDs []types.UUID
 }
 
+var _ Payload = (*ValidatorVoteIDs)(nil)
+
 func (v *ValidatorVoteIDs) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(v)
 }
@@ -391,6 +393,8 @@ type ValidatorVoteBodies struct {
 	// Events is an array of the full resolution bodies the caller is voting for.
 	Events []*types.VotableEvent
 }
+
+var _ Payload = (*ValidatorVoteBodies)(nil)
 
 func (v *ValidatorVoteBodies) MarshalBinary() (serialize.SerializedData, error) {
 	return serialize.Encode(v)

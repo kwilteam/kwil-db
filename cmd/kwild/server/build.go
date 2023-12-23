@@ -19,6 +19,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/events"
+	"github.com/kwilteam/kwil-db/internal/events/broadcast"
 	"github.com/kwilteam/kwil-db/internal/kv/badger"
 	admSvc "github.com/kwilteam/kwil-db/internal/services/grpc/admin/v0"
 	functionSvc "github.com/kwilteam/kwil-db/internal/services/grpc/function/v0"
@@ -85,29 +86,25 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	router := buildTxApp(d, accs, e, vstore, ac, v, ev)
+	txApp := buildTxApp(d, accs, e, vstore, ac, v, ev)
 
 	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
-		router, snapshotModule, bootstrapperModule)
+		txApp, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
-	// set broadcaster late
-	// this should be fine, since the tx app does not use
-	// the broadcaster until cometbft starts, but it is not
-	// clear
-	// TODO: this is not fine, cometbft syncs when we call buildCometNode
-	router.SetBroadcaster(&wrappedCometBFTClient{cometBftClient})
+	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore)
+	abciApp.AddCommitHook(eventBroadcaster.RunBroadcast)
 
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, &engineAdapter{e},
-		&wrappedCometBFTClient{cometBftClient}, router)
+		&wrappedCometBFTClient{cometBftClient}, txApp)
 	grpcServer := buildGrpcServer(d, txsvc)
 
 	// admin service and server
-	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient}, router, vstore, abciApp.ChainID())
+	admsvc := buildAdminSvc(d, &wrappedCometBFTClient{cometBftClient}, txApp, vstore, abciApp.ChainID())
 	adminTCPServer := buildAdminService(d, closers, admsvc, txsvc)
 
 	return &Server{
@@ -163,8 +160,8 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildTxApp(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore,
-	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore, node txapp.Node) *txapp.TxApp {
-	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, node, *d.log.Named("tx-router"))
+	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore) *txapp.TxApp {
+	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, *d.log.Named("tx-router"))
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
@@ -202,6 +199,10 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 		&consensusParamAdapter{voteExpiry: d.genesisCfg.ConsensusParams.Validator.JoinExpiry},
 		*d.log.Named("abci"),
 	)
+}
+
+func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, accs broadcast.AccountInfoer, v broadcast.ValidatorStore) *broadcast.EventBroadcaster {
+	return broadcast.NewEventBroadcaster(ev, b, accs, v, buildSigner(d), d.genesisCfg.ChainID)
 }
 
 func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountStore) *voting.VoteProcessor {

@@ -96,24 +96,22 @@ type VoteStore interface {
 
 // EventStore is a datastore that tracks events.
 type EventStore interface {
+	// DeleteEvent deletes an event. It will not longer
+	// be broadcasted
 	DeleteEvent(ctx context.Context, id types.UUID) error
+	// GetEvents gets all events, even if they have been
+	// marked received
 	GetEvents(ctx context.Context) ([]*types.VotableEvent, error)
+	// MarkReceived marks that an event from the local
+	// validator has been received by the network.
+	// This tells the event store to not re-broadcast the event,
+	// but also to not delete it, as it may need to get the event
+	// body in case it is a future block proposer.
+	MarkReceived(ctx context.Context, id types.UUID) error
 }
 
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
 type AtomicCommitter interface {
 	Begin(ctx context.Context, idempotencyKey []byte) error
 	Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error)
-}
-
-// Broadcaster can broadcast transactions to the network.
-type Broadcaster interface {
-	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
-}
-
-// Node is the local node
-type Node interface {
-	// IsCatchup returns true if the node is running in blocksync
-	// / catchup mode
-	IsCatchup() bool
 }

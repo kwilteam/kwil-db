@@ -92,6 +92,38 @@ func Test_EventStore(t *testing.T) {
 				require.Nil(t, value)
 			},
 		},
+		{
+			name: "marking received",
+			fn: func(t *testing.T, e *events.EventStore) {
+				ctx := context.Background()
+
+				event := &types.VotableEvent{
+					Body: []byte("hello"),
+					Type: "test",
+				}
+
+				err := e.Store(ctx, event.Body, event.Type)
+				require.NoError(t, err)
+
+				// GetUnreceivedEvents should return the event
+				events, err := e.GetUnreceivedEvents(ctx)
+				require.NoError(t, err)
+				require.Len(t, events, 1)
+
+				err = e.MarkReceived(ctx, event.ID())
+				require.NoError(t, err)
+
+				// GetEvents should still return the event
+				events, err = e.GetEvents(ctx)
+				require.NoError(t, err)
+				require.Len(t, events, 1)
+
+				// GetUnreceivedEvents should not return the event
+				events, err = e.GetUnreceivedEvents(ctx)
+				require.NoError(t, err)
+				require.Len(t, events, 0)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
