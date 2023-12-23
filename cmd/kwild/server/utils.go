@@ -8,7 +8,6 @@ import (
 	"math"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	extActions "github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/abci"
@@ -302,22 +301,6 @@ var _ abci.ValidatorModule = (*validatorStoreAdapter)(nil)
 
 func (v *validatorStoreAdapter) Punish(ctx context.Context, validator []byte, newPower int64) error {
 	return v.ValidatorMgr.Update(ctx, validator, newPower)
-}
-
-type networkInfoAdapter struct {
-	chainId string
-}
-
-func (n *networkInfoAdapter) ChainID() string {
-	return n.chainId
-}
-
-type localValidatorAdapter struct {
-	signer *auth.Ed25519Signer
-}
-
-func (l *localValidatorAdapter) Signer() *auth.Ed25519Signer {
-	return l.signer
 }
 
 // once we have consensus param voting, we should remove this adapter
