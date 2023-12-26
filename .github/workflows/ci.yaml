@@ -10,10 +10,12 @@ on:
       - main
 
 jobs:
-  unit-test:
-    runs-on: ubuntu-latest
+  test:
+    #runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
     steps:
+      # shared setup for all tests
       - name: Checkout
         uses: actions/checkout@v3
         with:
@@ -26,18 +28,18 @@ jobs:
           version: '23.4'
           repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
-#      - name: Install swagger-codegen
-#        uses: swagger-api/swagger-codegen/.github/actions/generate/action.yml@main
-
       - name: Install Taskfile
         uses: arduino/setup-task@v1
         with:
           repo-token: ${{ secrets.KWIL_MACH_SECRET }}
 
+      #ubuntu-latest has go 1.21 installed https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md#go
+      #self-hosted also has go 1.21 installed
+      #the default behavior here will load pre-installed go version
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.21.x'
           check-latest: true
 
       - name: Install dependencies
@@ -48,6 +50,7 @@ jobs:
           git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
           task install:deps
 
+      # checks
       - name: Check tidiness of go.mod and go.sum
         run: |
           ./scripts/mods/check_tidy
@@ -73,46 +76,12 @@ jobs:
           skip-pkg-cache: true
           args: ./... ./core/... ./test/... ./parse/... --timeout=10m --config=.golangci.yml --skip-dirs ./core/rpc/protobuf
 
+      # unit test
       - name: Run unit test
         run: |
           task test:unit
 
-  acceptance-test:
-    runs-on: ubuntu-latest
-    if: ${{ !github.event.pull_request.draft }} # only run on non-draft PRs
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          submodules: true
-          token: ${{ secrets.KWIL_MACH_SECRET }}
-
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v2
-        with:
-          version: '23.4'
-          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
-
-      - name: Install Taskfile
-        uses: arduino/setup-task@v1
-        with:
-          repo-token: ${{ secrets.KWIL_MACH_SECRET }}
-
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-          check-latest: true
-
-      - name: Install dependencies
-        env:
-          GH_ACCESS_TOKEN: ${{ secrets.KWIL_MACH_SECRET }}
-        run: |
-          go version
-          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
-          task install:deps
-          go mod download
-
+      # integration test
       - name: Generate go vendor
         #for faster builds and private repos, need to run this after pb:compile:v1
         run: |
@@ -146,9 +115,33 @@ jobs:
           task build:cli
           task build:admin
 
-      - name: Pull Docker image
+      - name: Pull math extension docker image
         run: |
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
+
+      - name: pull kgw repo & create vendor
+        # we only pull the repo, not build the image, because we want to use the cache
+        # provided by the docker/build-push-action
+        # vendor is used to bypass private repo issues
+        run: |
+          rm -rf /tmp/kgw
+          git clone https://github.com/kwilteam/kgw.git /tmp/kgw
+          cd /tmp/kgw
+          go mod vendor
+          cd -
+
+      - name: Build kgw image
+        id: docker_build_kgw
+        uses: docker/build-push-action@v4
+        with:
+          context: /tmp/kgw
+          load: true
+          builder: ${{ steps.buildx.outputs.name }}
+          file: /tmp/kgw/Dockerfile
+          push: false
+          tags: kgw:latest
+          cache-from: type=local,src=/tmp/.buildx-cache-kgw
+          cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
 
       - name: Build kwild image
         id: docker_build_kwild
@@ -167,6 +160,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
+      # maybe no need
       - name: Run acceptance test
         run: |
           echo "UID=$(id -u)" >> test/acceptance/.env
@@ -175,7 +169,17 @@ jobs:
           echo "KACT_DOCKER_COMPOSE_OVERRIDE_FILE=docker-compose.override.yml" >> test/acceptance/.env
           task test:act:nb
 
+      - name: Run integration test
+        run: |
+          echo "UID=$(id -u)" >> test/integration/.env
+          echo "GID=$(id -g)" >> test/integration/.env
+          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
+          echo "KIT_DOCKER_COMPOSE_OVERRIDE_FILE=docker-compose.override.yml" >> test/integration/.env
+          task test:it:nb:all
+
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache-kwild
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
+          rm -rf /tmp/.buildx-cache-kgw
+            mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
