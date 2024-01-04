@@ -1,6 +1,10 @@
 package client
 
-import "net/http"
+import (
+	"net/http"
+
+	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
+)
 
 // ActionCallOpts is the options for action call.
 // Currently only HTTP RPCClient supports this option.
@@ -23,3 +27,15 @@ func WithAuthCookie(cookie *http.Cookie) ActionCallOption {
 		opts.AuthCookies = append(opts.AuthCookies, cookie)
 	}
 }
+
+// BroadcastWait is an argument type that indicates how long to wait when
+// broadcasting a transaction. The levels are async (do not wait for mempool
+// acceptance), sync (wait for mempool acceptance), and commit (wait for it to
+// be included in a block).
+type BroadcastWait uint8
+
+const (
+	BroadcastWaitAsync  = BroadcastWait(txpb.BroadcastSync_async)
+	BroadcastWaitSync   = BroadcastWait(txpb.BroadcastSync_sync)
+	BroadcastWaitCommit = BroadcastWait(txpb.BroadcastSync_commit)
+)

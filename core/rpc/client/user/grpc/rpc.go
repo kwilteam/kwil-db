@@ -82,9 +82,10 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 	}, nil
 }
 
-func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
+func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sync rpcClient.BroadcastWait) ([]byte, error) {
 	pbTx := convertTx(tx)
-	res, err := c.TxClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx})
+	pbSync := txpb.BroadcastSync(sync)
+	res, err := c.TxClient.Broadcast(ctx, &txpb.BroadcastRequest{Tx: pbTx, Sync: &pbSync})
 	if err != nil {
 		statusError, ok := status.FromError(err)
 		if !ok {

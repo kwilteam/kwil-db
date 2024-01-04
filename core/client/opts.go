@@ -93,9 +93,19 @@ func SilenceWarnings() Option {
 type txOptions struct {
 	nonce int64
 	fee   *big.Int
+
+	syncBcast bool // wait for mining on broadcast
 }
 
-// TxOpt sets an option used when making a new transaction.
+func getTxOpts(opts []TxOpt) *txOptions {
+	txOpts := &txOptions{}
+	for _, opt := range opts {
+		opt(txOpts)
+	}
+	return txOpts
+}
+
+// TxOpt sets an option used when making and broadcasting a transaction.
 type TxOpt func(*txOptions)
 
 // WithNonce sets the nonce to use for the transaction.
@@ -110,5 +120,13 @@ func WithNonce(nonce int64) TxOpt {
 func WithFee(fee *big.Int) TxOpt {
 	return func(o *txOptions) {
 		o.fee = fee
+	}
+}
+
+// WithSyncBroadcast indicates that broadcast should wait for the transaction to
+// be included in a block, not merely accepted into mempool.
+func WithSyncBroadcast() TxOpt {
+	return func(o *txOptions) {
+		o.syncBcast = true
 	}
 }

@@ -90,6 +90,14 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *ClientOpt
 	return c, nil
 }
 
+func syncBcastFlag(syncBcast bool) rpcClient.BroadcastWait {
+	syncFlag := rpcClient.BroadcastWaitSync
+	if syncBcast { // the bool really means wait for commit in cometbft terms
+		syncFlag = rpcClient.BroadcastWaitCommit
+	}
+	return syncFlag
+}
+
 func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...TxOpt) (transactions.TxHash, error) {
 	// Get account balance to ensure we can afford the transfer, and use the
 	// nonce to avoid a second GetAccount in newTx.
@@ -99,12 +107,13 @@ func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts 
 	}
 	nonceOpt := WithNonce(acct.Nonce + 1)
 	opts = append([]TxOpt{nonceOpt}, opts...) // prepend in case caller specified a nonce
+	txOpts := getTxOpts(opts)
 
 	trans := &transactions.Transfer{
 		To:     to,
 		Amount: amount.String(),
 	}
-	tx, err := c.newTx(ctx, trans, opts...)
+	tx, err := c.newTx(ctx, trans, txOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +126,7 @@ func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts 
 	c.logger.Debug("transfer", zap.String("to", hex.EncodeToString(to)),
 		zap.String("amount", amount.String()))
 
-	return c.txClient.Broadcast(ctx, tx)
+	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.syncBcast))
 }
 
 // ChainInfo get the current blockchain information like chain ID and best block
@@ -138,7 +147,8 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*transactions.Sche
 
 // DeployDatabase deploys a schema
 func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schema, opts ...TxOpt) (transactions.TxHash, error) {
-	tx, err := c.newTx(ctx, payload, opts...)
+	txOpts := getTxOpts(opts)
+	tx, err := c.newTx(ctx, payload, txOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +157,7 @@ func (c *Client) DeployDatabase(ctx context.Context, payload *transactions.Schem
 		zap.String("signature_type", tx.Signature.Type),
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
 		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
-	return c.txClient.Broadcast(ctx, tx)
+	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.syncBcast))
 }
 
 // DropDatabase drops a database by name, using the configured signer to derive
@@ -163,7 +173,8 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt)
 		DBID: dbid,
 	}
 
-	tx, err := c.newTx(ctx, identifier, opts...)
+	txOpts := getTxOpts(opts)
+	tx, err := c.newTx(ctx, identifier, txOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +184,7 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt)
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
 		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
 
-	res, err := c.txClient.Broadcast(ctx, tx)
+	res, err := c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.syncBcast))
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +207,8 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		Arguments: stringTuples,
 	}
 
-	tx, err := c.newTx(ctx, executionBody, opts...)
+	txOpts := getTxOpts(opts)
+	tx, err := c.newTx(ctx, executionBody, txOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +219,7 @@ func (c *Client) ExecuteAction(ctx context.Context, dbid string, action string, 
 		zap.String("signature", base64.StdEncoding.EncodeToString(tx.Signature.Signature)),
 		zap.String("fee", tx.Body.Fee.String()), zap.Int64("nonce", int64(tx.Body.Nonce)))
 
-	return c.txClient.Broadcast(ctx, tx)
+	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.syncBcast))
 }
 
 // CallAction call an action. It returns the result records.
