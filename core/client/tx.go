@@ -9,14 +9,12 @@ import (
 )
 
 // newTx creates a new Transaction signed by the Client's Signer
-func (c *Client) newTx(ctx context.Context, data transactions.Payload, opts ...TxOpt) (*transactions.Transaction, error) {
+func (c *Client) newTx(ctx context.Context, data transactions.Payload, txOpts *txOptions) (*transactions.Transaction, error) {
 	if c.Signer == nil {
 		return nil, fmt.Errorf("signer must be set to create a transaction")
 	}
-
-	txOpts := &txOptions{}
-	for _, opt := range opts {
-		opt(txOpts)
+	if txOpts == nil {
+		txOpts = &txOptions{}
 	}
 
 	var nonce uint64
