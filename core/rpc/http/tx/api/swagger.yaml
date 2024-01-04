@@ -396,6 +396,8 @@ components:
       properties:
         tx:
           $ref: '#/components/schemas/txTransaction'
+        sync:
+          $ref: '#/components/schemas/txBroadcastSync'
     txBroadcastResponse:
       type: object
       properties:
@@ -405,6 +407,17 @@ components:
           format: byte
       example:
         tx_hash: ""
+    txBroadcastSync:
+      title: |-
+        - async: do not wait for acceptance into mempool
+         - sync: ensure it is accepted to mempool before returning
+         - commit: wait for the transaction to be included in a block
+      type: string
+      default: async
+      enum:
+      - async
+      - sync
+      - commit
     txCallRequest:
       type: object
       properties:

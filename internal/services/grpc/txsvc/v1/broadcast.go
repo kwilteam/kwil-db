@@ -47,7 +47,10 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		return nil, status.Errorf(codes.Internal, "failed to serialize transaction data")
 	}
 
-	const sync = 1
+	var sync uint8 = 1 // default to sync, not async or commit
+	if req.Sync != nil {
+		sync = uint8(*req.Sync)
+	}
 	code, txHash, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
 	if err != nil {
 		logger.Error("failed to broadcast tx", zap.Error(err))
@@ -73,7 +76,7 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	}
 
 	logger.Info("broadcast transaction", zap.String("TxHash", hex.EncodeToString(txHash)),
-		zap.Int("sync", sync), zap.Uint64("nonce", tx.Body.Nonce))
+		zap.Uint8("sync", sync), zap.Uint64("nonce", tx.Body.Nonce))
 	return &txpb.BroadcastResponse{
 		TxHash: txHash,
 	}, nil

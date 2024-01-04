@@ -60,9 +60,21 @@ func NewClient(target *url.URL, opts ...ClientOption) *Client {
 
 var _ user.TxSvcClient = (*Client)(nil)
 
-func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
+func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sync client.BroadcastWait) ([]byte, error) {
+	var bcastSync httpTx.TxBroadcastSync // swagger uses a string for this enum unlike grpc
+	switch sync {
+	case client.BroadcastWaitAsync:
+		bcastSync = httpTx.ASYNC_TxBroadcastSync
+	case client.BroadcastWaitSync:
+		bcastSync = httpTx.SYNC_TxBroadcastSync
+	case client.BroadcastWaitCommit:
+		bcastSync = httpTx.COMMIT_TxBroadcastSync
+	default:
+		return nil, errors.New("invalid sync flag")
+	}
 	result, res, err := c.conn.TxServiceApi.TxServiceBroadcast(ctx, httpTx.TxBroadcastRequest{
-		Tx: convertTx(tx),
+		Tx:   convertTx(tx),
+		Sync: &bcastSync,
 	})
 	if err != nil {
 		// we're in trouble here because we need to return ErrInvalidNonce,
