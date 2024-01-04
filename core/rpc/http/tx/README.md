@@ -43,6 +43,7 @@ Class | Method | HTTP request | Description
  - [TxAttribute](docs/TxAttribute.md)
  - [TxBroadcastRequest](docs/TxBroadcastRequest.md)
  - [TxBroadcastResponse](docs/TxBroadcastResponse.md)
+ - [TxBroadcastSync](docs/TxBroadcastSync.md)
  - [TxCallRequest](docs/TxCallRequest.md)
  - [TxCallRequestBody](docs/TxCallRequestBody.md)
  - [TxCallResponse](docs/TxCallResponse.md)

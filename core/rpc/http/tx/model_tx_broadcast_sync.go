@@ -8,7 +8,11 @@
  */
 package swagger
 
-type TxBroadcastRequest struct {
-	Tx *TxTransaction `json:"tx,omitempty"`
-	Sync *TxBroadcastSync `json:"sync,omitempty"`
-}
+type TxBroadcastSync string
+
+// List of txBroadcastSync
+const (
+	ASYNC_TxBroadcastSync TxBroadcastSync = "async"
+	SYNC_TxBroadcastSync TxBroadcastSync = "sync"
+	COMMIT_TxBroadcastSync TxBroadcastSync = "commit"
+)
