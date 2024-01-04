@@ -65,11 +65,11 @@ func (tc *timedClient) GetAccount(ctx context.Context, acctID []byte, status typ
 	return tc.cl.GetAccount(ctx, acctID, status)
 }
 
-func (tc *timedClient) Broadcast(ctx context.Context, tx *transactions.Transaction) ([]byte, error) {
+func (tc *timedClient) Broadcast(ctx context.Context, tx *transactions.Transaction, sync rpcClient.BroadcastWait) ([]byte, error) {
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "Broadcast")
 	}
-	return tc.cl.Broadcast(ctx, tx)
+	return tc.cl.Broadcast(ctx, tx, sync)
 }
 
 func (tc *timedClient) Ping(ctx context.Context) (string, error) {

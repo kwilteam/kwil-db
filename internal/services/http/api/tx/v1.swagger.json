@@ -473,6 +473,9 @@
       "properties": {
         "tx": {
           "$ref": "#/definitions/txTransaction"
+        },
+        "sync": {
+          "$ref": "#/definitions/txBroadcastSync"
         }
       }
     },
@@ -484,6 +487,16 @@
           "format": "byte"
         }
       }
+    },
+    "txBroadcastSync": {
+      "type": "string",
+      "enum": [
+        "async",
+        "sync",
+        "commit"
+      ],
+      "default": "async",
+      "title": "- async: do not wait for acceptance into mempool\n - sync: ensure it is accepted to mempool before returning\n - commit: wait for the transaction to be included in a block"
     },
     "txCallRequest": {
       "type": "object",
