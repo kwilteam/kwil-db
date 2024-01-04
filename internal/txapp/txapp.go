@@ -29,8 +29,9 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 		atomicCommitter: atomicCommitter,
 		log:             log,
 		mempool: &mempool{
-			accountStore: acc,
-			accounts:     make(map[string]*accounts.Account),
+			accountStore:   acc,
+			accounts:       make(map[string]*accounts.Account),
+			validatorStore: validators,
 		},
 		signer:  signer,
 		chainID: chainID,
@@ -55,6 +56,17 @@ type TxApp struct {
 
 	atomicCommitter AtomicCommitter
 	mempool         *mempool
+}
+
+// GenesisInit initializes the VoteStore with the genesis validators.
+func (r *TxApp) GenesisInit(ctx context.Context, validators []*types.Validator) error {
+	for _, validator := range validators {
+		err := r.VoteStore.UpdateVoter(ctx, validator.PubKey, validator.Power)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Execute executes a transaction.  It will route the transaction to the
@@ -184,7 +196,10 @@ func (r *TxApp) AccountInfo(ctx context.Context, acctID []byte, getUncommitted b
 
 // ProposerTxs returns the transactions that the proposer should include in the
 // next block.
-func (r *TxApp) ProposerTxs(ctx context.Context) ([]*transactions.Transaction, error) {
+// It takes txNonce as an argument because, the proposer may have its own transactions
+// in the mempool that are included in the current block. Therefore, we need to know the
+// largest nonce of the transactions included in the block that are authored by the proposer.
+func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error) {
 	events, err := r.EventStore.GetEvents(ctx)
 	if err != nil {
 		return nil, err
@@ -193,14 +208,9 @@ func (r *TxApp) ProposerTxs(ctx context.Context) ([]*transactions.Transaction, e
 		return nil, nil
 	}
 
-	account, err := r.Accounts.GetAccount(ctx, r.signer.Identity())
-	if err != nil {
-		return nil, err
-	}
-
 	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
 		Events: events,
-	}, r.chainID, uint64(account.Nonce+1))
+	}, r.chainID, txNonce)
 	if err != nil {
 		return nil, err
 	}
