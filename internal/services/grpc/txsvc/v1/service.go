@@ -66,8 +66,8 @@ type AccountReader interface {
 
 type BlockchainTransactor interface {
 	Status(ctx context.Context) (*adminTypes.Status, error)
-	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
-	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error) // TODO: don't use comet types here
+	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (*cmtCoreTypes.ResultBroadcastTx, error)
+	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error)
 }
 
 type NodeApplication interface {
