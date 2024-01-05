@@ -30,7 +30,10 @@ var idCmd = &cobra.Command{
 	},
 }
 
-var nonceOverride int64
+var (
+	nonceOverride int64
+	syncBcast     bool
+)
 
 func NewCmdAccount() *cobra.Command {
 	var cmd = &cobra.Command{
@@ -48,6 +51,7 @@ func NewCmdAccount() *cobra.Command {
 	)
 
 	trCmd.Flags().Int64VarP(&nonceOverride, "nonce", "N", -1, "nonce override (-1 means request from server)")
+	trCmd.Flags().BoolVar(&syncBcast, "sync", false, "synchronous broadcast (wait for it to be included in a block)")
 
 	return cmd
 }
