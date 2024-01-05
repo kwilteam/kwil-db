@@ -17,7 +17,7 @@ import (
 
 func transferCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "transfer",
+		Use:   "transfer <recipient> <amount>",
 		Short: "Transfer value to an account",
 		Long:  `Transfers value to an account.`,
 		Args:  cobra.ExactArgs(2), // recipient, amt
@@ -33,7 +33,8 @@ func transferCmd() *cobra.Command {
 			}
 
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
-				txHash, err := cl.Transfer(ctx, to, amount, client.WithNonce(nonceOverride))
+				txHash, err := cl.Transfer(ctx, to, amount, client.WithNonce(nonceOverride),
+					client.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("transfer failed: %w", err))
 				}
