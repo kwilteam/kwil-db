@@ -147,7 +147,7 @@ func (wc *wrappedCometBFTClient) Status(ctx context.Context) (*types.Status, err
 	}, nil
 }
 
-func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (uint32, []byte, error) {
+func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, sync uint8) (*cmtCoreTypes.ResultBroadcastTx, error) {
 	var bcastFun func(ctx context.Context, tx cmttypes.Tx) (*cmtCoreTypes.ResultBroadcastTx, error)
 	switch sync {
 	case 0:
@@ -179,12 +179,7 @@ func (wc *wrappedCometBFTClient) BroadcastTx(ctx context.Context, tx []byte, syn
 		}
 	}
 
-	result, err := bcastFun(ctx, cmttypes.Tx(tx))
-	if err != nil {
-		return 0, nil, err
-	}
-
-	return result.Code, result.Hash.Bytes(), nil
+	return bcastFun(ctx, cmttypes.Tx(tx))
 }
 
 // TxQuery locates a transaction in the node's blockchain or mempool. If the
