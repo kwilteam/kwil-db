@@ -275,14 +275,16 @@ func parseBroadcastError(respTxt []byte) error {
 	}
 	stat := grpcStatus.FromProto(&protoStatus)
 	code, message := stat.Code(), stat.Message()
-	err = &client.RPCError{
+	rpcErr := &client.RPCError{
 		Msg:  message,
 		Code: int32(code),
 	}
+	err = rpcErr
 
 	for _, detail := range stat.Details() {
 		if bcastErr, ok := detail.(*txpb.BroadcastErrorDetails); ok {
-			switch txCode := transactions.TxCode(bcastErr.Code); txCode {
+			txCode := transactions.TxCode(bcastErr.Code)
+			switch txCode {
 			case transactions.CodeWrongChain:
 				err = errors.Join(err, transactions.ErrWrongChain)
 			case transactions.CodeInvalidNonce:
@@ -291,8 +293,15 @@ func parseBroadcastError(respTxt []byte) error {
 				err = errors.Join(err, transactions.ErrInvalidAmount)
 			case transactions.CodeInsufficientBalance:
 				err = errors.Join(err, transactions.ErrInsufficientBalance)
-			default:
-				err = errors.Join(err, errors.New(txCode.String()))
+			}
+
+			// Reset the generic code and message in the RPCError with the
+			// broadcast-specific details. NOTE: this will overwrite if there
+			// are more than one details object, which is not expected.
+			rpcErr.Code = int32(txCode)
+			rpcErr.Msg = bcastErr.Message
+			if bcastErr.Hash != "" { // if there is a tx hash, include it (possibly just executed it)
+				rpcErr.Msg += "\nTxHash: " + bcastErr.Hash
 			}
 		} else { // else unknown details type
 			err = errors.Join(err, fmt.Errorf("unrecognized status error detail type %T", detail))
