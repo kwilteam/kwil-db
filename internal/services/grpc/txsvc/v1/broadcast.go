@@ -51,11 +51,12 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 	if req.Sync != nil {
 		sync = uint8(*req.Sync)
 	}
-	code, txHash, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
+	res, err := s.chainClient.BroadcastTx(ctx, encodedTx, sync)
 	if err != nil {
 		logger.Error("failed to broadcast tx", zap.Error(err))
 		return nil, status.Errorf(codes.Internal, "failed to broadcast transaction")
 	}
+	code, txHash := res.Code, res.Hash.Bytes()
 
 	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
 		stat := &spb.Status{
@@ -65,11 +66,11 @@ func (s *Service) Broadcast(ctx context.Context, req *txpb.BroadcastRequest) (*t
 		if details, err := anypb.New(&txpb.BroadcastErrorDetails{
 			Code:    code, // e.g. invalid nonce, wrong chain, etc.
 			Hash:    hex.EncodeToString(txHash),
-			Message: txCode.String(),
+			Message: res.Log,
 		}); err != nil {
 			logger.Error("failed to marshal broadcast error details", zap.Error(err))
 		} else {
-			logger.Info("broadcast error details", zap.Uint32("code", code), zap.String("message", txCode.String()))
+			logger.Info("broadcast error details", zap.Uint32("code", code), zap.String("message", res.Log))
 			stat.Details = append(stat.Details, details)
 		}
 		return nil, status.ErrorProto(stat)

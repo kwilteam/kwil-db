@@ -15,6 +15,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/validators"
 	"github.com/kwilteam/kwil-db/internal/version"
+
+	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
 	"go.uber.org/zap"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -27,7 +29,7 @@ import (
 type BlockchainTransactor interface {
 	Status(context.Context) (*types.Status, error)
 	Peers(context.Context) ([]*types.PeerInfo, error)
-	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
+	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (*cmtCoreTypes.ResultBroadcastTx, error)
 }
 
 // NodeApplication is the abci application that is running on the node.
@@ -184,10 +186,11 @@ func (s *Service) sendTx(ctx context.Context, payload transactions.Payload, pric
 	}
 
 	// Broadcast the transaction.
-	code, txHash, err := s.blockchain.BroadcastTx(ctx, encodedTx, 1)
+	res, err := s.blockchain.BroadcastTx(ctx, encodedTx, 1)
 	if err != nil {
 		return nil, err
 	}
+	code, txHash := res.Code, res.Hash.Bytes()
 
 	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
 		stat := &spb.Status{
@@ -197,7 +200,7 @@ func (s *Service) sendTx(ctx context.Context, payload transactions.Payload, pric
 		if details, err := anypb.New(&txpb.BroadcastErrorDetails{
 			Code:    code, // e.g. invalid nonce, wrong chain, etc.
 			Hash:    hex.EncodeToString(txHash),
-			Message: txCode.String(),
+			Message: res.Log,
 		}); err != nil {
 			s.log.Error("failed to marshal broadcast error details", zap.Error(err))
 		} else {
