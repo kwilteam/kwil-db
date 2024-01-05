@@ -64,7 +64,8 @@ func deployCmd() *cobra.Command {
 					db.Name = overrideName
 				}
 
-				txHash, err := cl.DeployDatabase(ctx, db, client.WithNonce(nonceOverride))
+				txHash, err := cl.DeployDatabase(ctx, db, client.WithNonce(nonceOverride),
+					client.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("failed to deploy database: %w", err))
 				}

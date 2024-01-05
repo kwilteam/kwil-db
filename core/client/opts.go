@@ -125,8 +125,8 @@ func WithFee(fee *big.Int) TxOpt {
 
 // WithSyncBroadcast indicates that broadcast should wait for the transaction to
 // be included in a block, not merely accepted into mempool.
-func WithSyncBroadcast() TxOpt {
+func WithSyncBroadcast(wait bool) TxOpt {
 	return func(o *txOptions) {
-		o.syncBcast = true
+		o.syncBcast = wait
 	}
 }
