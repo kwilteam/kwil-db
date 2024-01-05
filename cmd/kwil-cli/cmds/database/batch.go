@@ -93,7 +93,8 @@ func batchCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
 
-				resp, err := cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples, client.WithNonce(nonceOverride))
+				resp, err := cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples,
+					client.WithNonce(nonceOverride), client.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing action: %w", err))
 				}
