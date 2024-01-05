@@ -33,7 +33,8 @@ func dropCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
 				var err error
-				resp, err := cl.DropDatabase(ctx, args[0], client.WithNonce(nonceOverride))
+				resp, err := cl.DropDatabase(ctx, args[0], client.WithNonce(nonceOverride),
+					client.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error dropping database: %w", err))
 				}

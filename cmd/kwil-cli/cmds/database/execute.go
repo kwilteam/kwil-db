@@ -62,7 +62,8 @@ func executeCmd() *cobra.Command {
 
 				// Could actually just directly pass nonce to the client method,
 				// but those methods don't need tx details in the inputs.
-				resp, err := cl.ExecuteAction(ctx, dbId, lowerName, inputs, client.WithNonce(nonceOverride))
+				resp, err := cl.ExecuteAction(ctx, dbId, lowerName, inputs,
+					client.WithNonce(nonceOverride), client.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing database: %w", err))
 				}

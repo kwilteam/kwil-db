@@ -13,6 +13,7 @@ var (
 	}
 
 	nonceOverride int64
+	syncBcast     bool
 )
 
 func NewCmdDatabase() *cobra.Command {
@@ -38,6 +39,7 @@ func NewCmdDatabase() *cobra.Command {
 	// node for the latest confirmed nonce.
 	for _, cmd := range writeCmds {
 		cmd.Flags().Int64VarP(&nonceOverride, "nonce", "N", -1, "nonce override (-1 means request from server)")
+		cmd.Flags().BoolVar(&syncBcast, "sync", false, "synchronous broadcast (wait for it to be included in a block)")
 	}
 
 	return dbCmd
