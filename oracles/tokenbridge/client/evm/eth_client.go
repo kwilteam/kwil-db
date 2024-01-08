@@ -28,10 +28,6 @@ func New(ctx context.Context, endpoint string, chainCode chain.ChainCode, escrow
 
 	tokenAddress := escrow.TokenAddress()
 
-	// if tokenAddress == "" {
-	// 	tokenAddress = escrow.TokenAddress() // Does this work?
-	// }
-
 	token, err := tokenCtr.New(client, tokenAddress, chainCode.ToChainId())
 	if err != nil {
 		return nil, err

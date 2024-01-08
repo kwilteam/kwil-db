@@ -15,6 +15,8 @@ import (
 	ec "github.com/ethereum/go-ethereum/crypto"
 )
 
+// TODO: remove this file
+
 var (
 	escrowAddr string = "0xbcf7fffd8b256ec51a36782a52d0c34f6474d951"
 	//tokenAddr  string = "0xccf612a958da1f8d3fa97a447fc44cffe9994a54"

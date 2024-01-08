@@ -4,11 +4,8 @@ pragma solidity >=0.8.0;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract Escrow {
-    event Deposit(
-        address caller,
-        address receiver,
-        uint256 amount
-    );
+  
+    event Credit(address _from, uint256 _amount);
 
     event Withdrawal(
         address receiver,
@@ -43,7 +40,7 @@ contract Escrow {
 
         deposits[msg.sender] += amt;
 
-        emit Deposit(msg.sender, address(this), amt);
+        emit Credit(msg.sender, amt);
     }
 
     // function returnDeposit(address recipient, uint256 amt, uint256 fee, string memory nonce) public {
