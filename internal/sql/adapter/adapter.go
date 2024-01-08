@@ -36,11 +36,12 @@ func toMaps(res *sql.ResultSet) []map[string]any {
 		return nil
 	}
 
-	rows := make([]map[string]any, len(res.Rows))
-	for i, row := range res.Rows {
+	rows := make([]map[string]any, len(res.Rows()))
+	cols := res.Columns()
+	for i, row := range res.Rows() {
 		rows[i] = make(map[string]any)
 		for j, value := range row {
-			rows[i][res.ReturnedColumns[j]] = value
+			rows[i][cols[j]] = value
 		}
 	}
 	return rows

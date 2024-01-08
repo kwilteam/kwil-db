@@ -46,7 +46,9 @@ import (
 	functionpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/function/v0"
 	txpb "github.com/kwilteam/kwil-db/core/rpc/protobuf/tx/v1"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/url"
+	"github.com/kwilteam/kwil-db/oracles"
 
 	abciTypes "github.com/cometbft/cometbft/abci/types"
 	cmtEd "github.com/cometbft/cometbft/crypto/ed25519"
@@ -62,7 +64,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	ac := buildCommitter(d, closers)
 
 	// engine
-	e := buildEngine(d, closers, ac)
+	e, reg := buildEngine(d, closers, ac)
 
 	// account store
 	accs := buildAccountRepository(d, closers, ac)
@@ -75,10 +77,13 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	bootstrapperModule := buildBootstrapper(d)
 
 	// vote store
-	v := buildVoteStore(d, closers, accs)
+	v := buildVoteStore(d, closers, accs, reg)
 
 	// event store
 	ev := buildEventStore(d, closers)
+
+	// build oracles
+	buildOracles(d, closers, ev, accs, reg)
 
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
@@ -205,14 +210,14 @@ func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broad
 	return broadcast.NewEventBroadcaster(ev, b, accs, v, buildSigner(d), d.genesisCfg.ChainID)
 }
 
-func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountStore) *voting.VoteProcessor {
+func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc types.AccountStore, registry *registry.Registry) *voting.VoteProcessor {
 	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, votesDBName), 1, 2, true)
 	if err != nil {
 		failBuild(err, "failed to open votes db")
 	}
 	closer.addCloser(db.Close)
 
-	v, err := voting.NewVoteProcessor(d.ctx, db, acc, 666667) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
+	v, err := voting.NewVoteProcessor(d.ctx, db, acc, registry, 666667) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
 	if err != nil {
 		failBuild(err, "failed to build vote store")
 	}
@@ -256,7 +261,7 @@ func buildSigner(d *coreDependencies) *auth.Ed25519Signer {
 	return &auth.Ed25519Signer{Ed25519PrivateKey: *pk}
 }
 
-func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommitter) *execution.GlobalContext {
+func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommitter) (*execution.GlobalContext, *registry.Registry) {
 	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
 	if err != nil {
 		failBuild(err, "failed to get extensions")
@@ -286,7 +291,7 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 
 	closer.addCloser(reg.Close)
 
-	return eng
+	return eng, reg
 }
 
 func buildAccountRepository(d *coreDependencies, closer *closeFuncs, ac *sessions.MultiCommitter) *accounts.AccountStore {
@@ -641,5 +646,21 @@ func buildCommitter(d *coreDependencies, closers *closeFuncs) *sessions.MultiCom
 func failBuild(err error, msg string) {
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
+	}
+}
+
+func buildOracles(d *coreDependencies, closer *closeFuncs, eventstore types.EventStore, accounts types.AccountStore, db *registry.Registry) {
+	oraclesR := oracles.RegisteredOracles()
+
+	ds := types.Datastores{
+		Accounts:  accounts,
+		Databases: db,
+	}
+	for name, oracle := range oraclesR {
+		err := oracle.Start(d.ctx, ds, eventstore, *d.log.Named(name), d.cfg.AppCfg.OraclesCfg[name])
+		if err != nil {
+			failBuild(err, "failed to build oracle "+name)
+		}
+		closer.addCloser(oracle.Stop)
 	}
 }

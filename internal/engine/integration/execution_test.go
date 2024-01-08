@@ -123,11 +123,11 @@ func Test_Engine(t *testing.T) {
 					Caller:    "signer",
 				})
 				require.NoError(t, err)
+				rows := res.Rows()
+				require.Equal(t, res.Columns(), []string{"id", "title", "content", "post_date", "author"})
+				require.Equal(t, len(rows), 1)
 
-				require.Equal(t, res.ReturnedColumns, []string{"id", "title", "content", "post_date", "author"})
-				require.Equal(t, len(res.Rows), 1)
-
-				row1 := res.Rows[0]
+				row1 := rows[0]
 
 				require.Equal(t, row1[0], int64(1))
 				require.Equal(t, row1[1], "Bitcoin!")
@@ -138,9 +138,9 @@ func Test_Engine(t *testing.T) {
 				res2, err := global.Query(ctx, testdata.TestSchema.DBID(), `SELECT * from posts;`)
 				require.NoError(t, err)
 
-				require.Equal(t, res2.ReturnedColumns, []string{"id", "title", "content", "author_id", "post_date"})
-				require.Equal(t, len(res2.Rows), 1)
-				require.Equal(t, res2.Rows[0], []any{int64(1), "Bitcoin!", "The Bitcoin Whitepaper", int64(1), "9/31/2008"})
+				require.Equal(t, res2.Columns(), []string{"id", "title", "content", "author_id", "post_date"})
+				require.Equal(t, len(res2.Rows()), 1)
+				require.Equal(t, res2.Rows()[0], []any{int64(1), "Bitcoin!", "The Bitcoin Whitepaper", int64(1), "9/31/2008"})
 			},
 		},
 		{
@@ -193,9 +193,9 @@ func Test_Engine(t *testing.T) {
 					Caller:    "signer",
 				})
 				require.NoError(t, err)
-
-				require.Equal(t, len(users.Rows), 1)
-				require.Equal(t, []any{int64(1), "satoshi", int64(42)}, []any{users.Rows[0][0], users.Rows[0][1], users.Rows[0][2]})
+				rows := users.Rows()
+				require.Equal(t, len(rows), 1)
+				require.Equal(t, []any{int64(1), "satoshi", int64(42)}, []any{rows[0][0], rows[0][1], rows[0][2]})
 			},
 		},
 		{
@@ -229,8 +229,9 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				require.Equal(t, len(users.Rows), 1)
-				require.Equal(t, []any{int64(1), "satoshi", int64(42)}, []any{users.Rows[0][0], users.Rows[0][1], users.Rows[0][2]})
+				rows := users.Rows()
+				require.Equal(t, len(rows), 1)
+				require.Equal(t, []any{int64(1), "satoshi", int64(42)}, []any{rows[0][0], rows[0][1], rows[0][2]})
 			},
 		},
 		{
@@ -431,8 +432,8 @@ func Test_Engine(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				require.Equal(t, res.ReturnedColumns, []string{"$res"})
-				require.Equal(t, res.Rows[0][0], int64(3))
+				require.Equal(t, res.Columns(), []string{"$res"})
+				require.Equal(t, res.Rows()[0][0], int64(3))
 			},
 		},
 	}

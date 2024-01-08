@@ -63,8 +63,9 @@ type AppConfig struct {
 	Hostname     string `mapstructure:"hostname"`
 	ProfileMode  string `mapstructure:"profile_mode"`
 	ProfileFile  string `mapstructure:"profile_file"`
-}
 
+	OraclesCfg map[string]map[string]string `mapstructure:"oracles"`
+}
 type SnapshotConfig struct {
 	Enabled         bool   `mapstructure:"enabled"`
 	RecurringHeight uint64 `mapstructure:"snapshot_heights"`

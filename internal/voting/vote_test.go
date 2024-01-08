@@ -19,7 +19,7 @@ import (
 const examplePayloadType = "example"
 
 func init() {
-	err := voting.RegisterPaylod(&exampleResolutionPayload{})
+	err := types.RegisterPaylod(&exampleResolutionPayload{})
 	if err != nil {
 		panic(err)
 	}
@@ -28,13 +28,13 @@ func init() {
 func Test_Votes(t *testing.T) {
 	type testCase struct {
 		name string
-		fn   func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores)
+		fn   func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores)
 	}
 
 	testCases := []testCase{
 		{
 			name: "successful usage, single user",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				// add one voter, create vote, approve, and resolve
 				ctx := context.Background()
 
@@ -69,14 +69,14 @@ func Test_Votes(t *testing.T) {
 				require.Len(t, processed, 1)
 
 				// check that the account was credited
-				acc, err := ds.Accounts.GetAccount(ctx, []byte("account1"))
+				bal, _, err := ds.Accounts.AccountInfo(ctx, []byte("account1"))
 				require.NoError(t, err)
-				require.Equal(t, big.NewInt(100), acc.Balance)
+				require.Equal(t, big.NewInt(100), bal)
 			},
 		},
 		{
 			name: "vote before adding body",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				// add one voter, create vote, approve, and resolve
 				ctx := context.Background()
 
@@ -112,14 +112,14 @@ func Test_Votes(t *testing.T) {
 				require.Len(t, processed, 1)
 
 				// check that the account was credited
-				acc, err := ds.Accounts.GetAccount(ctx, []byte("account1"))
+				bal, _, err := ds.Accounts.AccountInfo(ctx, []byte("account1"))
 				require.NoError(t, err)
-				require.Equal(t, big.NewInt(100), acc.Balance)
+				require.Equal(t, big.NewInt(100), bal)
 			},
 		},
 		{
 			name: "vote without providing body does not confirm",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				// add one voter, create vote, approve, and resolve
 				ctx := context.Background()
 
@@ -151,14 +151,14 @@ func Test_Votes(t *testing.T) {
 				require.Len(t, processed, 0)
 
 				// check that the account was not credited
-				acc, err := ds.Accounts.GetAccount(ctx, []byte("account1"))
+				bal, _, err := ds.Accounts.AccountInfo(ctx, []byte("account1"))
 				require.NoError(t, err)
-				require.Equal(t, big.NewInt(0), acc.Balance)
+				require.Equal(t, big.NewInt(0), bal)
 			},
 		},
 		{
 			name: "insufficient voting power",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				// add one voter, create vote, approve, and resolve
 				ctx := context.Background()
 
@@ -218,7 +218,7 @@ func Test_Votes(t *testing.T) {
 		},
 		{
 			name: "ByCategory does not panic when no votes exist",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				ctx := context.Background()
 
 				// get votes by category
@@ -229,7 +229,7 @@ func Test_Votes(t *testing.T) {
 		},
 		{
 			name: "Get and ByCategory do not panic with no body",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				ctx := context.Background()
 
 				// add voter
@@ -274,7 +274,7 @@ func Test_Votes(t *testing.T) {
 		},
 		{
 			name: "manipulating voting power",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				ctx := context.Background()
 
 				// add voter
@@ -320,7 +320,7 @@ func Test_Votes(t *testing.T) {
 		},
 		{
 			name: "non-existent voter cannot vote",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				ctx := context.Background()
 
 				// create vote with body
@@ -346,7 +346,7 @@ func Test_Votes(t *testing.T) {
 		},
 		{
 			name: "expiration works",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				// create 3 votes
 				// expire on 2
 				ctx := context.Background()
@@ -421,7 +421,7 @@ func Test_Votes(t *testing.T) {
 		},
 		{
 			name: "double approve does nothing",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				ctx := context.Background()
 
 				// add voter
@@ -451,7 +451,7 @@ func Test_Votes(t *testing.T) {
 		},
 		{
 			name: "approval correctly indicates if it contains a body",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				ctx := context.Background()
 
 				// add voters
@@ -471,14 +471,14 @@ func Test_Votes(t *testing.T) {
 					Type: examplePayloadType,
 				}
 
-				_, err = v.ContainsBodyOrFinished(ctx, event.ID())
+				_, _, err = v.ContainsBodyOrFinished(ctx, event.ID())
 				require.ErrorIs(t, err, voting.ErrResolutionNotFound)
 
 				// approve vote
 				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
-				hasBody, err := v.ContainsBodyOrFinished(ctx, event.ID())
+				_, hasBody, err := v.ContainsBodyOrFinished(ctx, event.ID())
 				require.NoError(t, err)
 				require.False(t, hasBody)
 
@@ -486,14 +486,14 @@ func Test_Votes(t *testing.T) {
 				err = v.CreateResolution(ctx, event, 10000)
 				require.NoError(t, err)
 
-				hasBody, err = v.ContainsBodyOrFinished(ctx, event.ID())
+				_, hasBody, err = v.ContainsBodyOrFinished(ctx, event.ID())
 				require.NoError(t, err)
 				require.True(t, hasBody)
 			},
 		},
 		{
 			name: "test HasVoted",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				ctx := context.Background()
 
 				body := &exampleResolutionPayload{
@@ -535,7 +535,7 @@ func Test_Votes(t *testing.T) {
 		},
 		{
 			name: "voting and giving a body for a finalized vote does nothing",
-			fn: func(t *testing.T, v *voting.VoteProcessor, ds *voting.Datastores) {
+			fn: func(t *testing.T, v *voting.VoteProcessor, ds *types.Datastores) {
 				ctx := context.Background()
 
 				// add voters
@@ -598,14 +598,15 @@ func Test_Votes(t *testing.T) {
 			}
 			defer conn.Close()
 
-			ds := &voting.Datastores{
+			ds := &types.Datastores{
 				Accounts: &mockAccountStore{
 					accounts: map[string]*accounts.Account{},
 				},
 				Databases: &db{conn: conn},
 			}
 
-			v, err := voting.NewVoteProcessor(ctx, ds.Databases, ds.Accounts, 500000)
+			// v, err := voting.NewVoteProcessor(ctx, ds.Databases, ds.Accounts, 500000)
+			v, err := voting.NewVoteProcessor(ctx, nil, ds.Accounts, ds.Databases, 500000)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -630,7 +631,7 @@ type db struct {
 	conn *sqlite.Connection
 }
 
-func (d *db) Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error) {
+func (d *db) Execute(ctx context.Context, dbid string, stmt string, args map[string]any) (types.ResultSet, error) {
 	res, err := d.conn.Execute(ctx, stmt, args)
 	if err != nil {
 		return nil, err
@@ -640,7 +641,7 @@ func (d *db) Execute(ctx context.Context, stmt string, args map[string]any) (*sq
 	return res.ResultSet()
 }
 
-func (d *db) Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error) {
+func (d *db) Query(ctx context.Context, dbid string, query string, args map[string]any) (types.ResultSet, error) {
 	res, err := d.conn.Execute(ctx, query, args)
 	if err != nil {
 		return nil, err
@@ -658,7 +659,7 @@ type mockAccountStore struct {
 	accounts map[string]*accounts.Account
 }
 
-func (m *mockAccountStore) GetAccount(ctx context.Context, identifier []byte) (*accounts.Account, error) {
+func (m *mockAccountStore) AccountInfo(ctx context.Context, identifier []byte) (balance *big.Int, nonce int64, err error) {
 	acc, ok := m.accounts[string(identifier)]
 	if !ok {
 		acc = &accounts.Account{
@@ -669,7 +670,7 @@ func (m *mockAccountStore) GetAccount(ctx context.Context, identifier []byte) (*
 		m.accounts[string(identifier)] = acc
 	}
 
-	return acc, nil
+	return acc.Balance, acc.Nonce, nil
 }
 
 func (m *mockAccountStore) Credit(ctx context.Context, account []byte, amount *big.Int) error {
@@ -696,7 +697,7 @@ type exampleResolutionPayload struct {
 	Amount   int64  `json:"amount"`
 }
 
-func (e *exampleResolutionPayload) Apply(ctx context.Context, datastores *voting.Datastores) error {
+func (e *exampleResolutionPayload) Apply(ctx context.Context, datastores *types.Datastores) error {
 	if e.Account == nil {
 		return fmt.Errorf("account is required")
 	}

@@ -18,6 +18,8 @@ package broadcast
 
 import (
 	"context"
+	"encoding/hex"
+	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -123,5 +125,6 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, _ *abci.BlockInfo) 
 		return err
 	}
 
+	fmt.Println("Broadcast events: ", ids, " with nonce: ", nonce+1, " For account: ", hex.EncodeToString(e.signer.Identity()))
 	return nil
 }

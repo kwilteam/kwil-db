@@ -76,6 +76,27 @@ func (r *Result) Next() (rowReturned bool) {
 	return rowReturned
 }
 
+func (r *Result) Rows() ([][]any, error) {
+	if r.isClosed() {
+		return nil, ErrClosed
+	}
+
+	rows := make([][]any, 0, 10)
+	for r.Next() {
+		values, err := r.Values()
+		if err != nil {
+			return nil, err
+		}
+
+		rows = append(rows, values)
+	}
+	if r.Err() != nil {
+		return nil, r.Err()
+	}
+
+	return rows, nil
+}
+
 // Columns returns the column names of the current row.
 func (r *Result) Columns() []string {
 
@@ -190,10 +211,7 @@ func (r *Result) ResultSet() (*sql.ResultSet, error) {
 		return nil, r.Err()
 	}
 
-	return &sql.ResultSet{
-		Rows:            rows,
-		ReturnedColumns: r.Columns(),
-	}, nil
+	return sql.NewResultSet(r.Columns(), rows), nil
 }
 
 // setAny sets the given value to the parameter name.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/actions"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
@@ -70,8 +71,8 @@ func (s *ScopeContext) Get(key string) (any, bool) {
 }
 
 // SetResult sets the result of the most recent SQL query.
-func (s *ScopeContext) SetResult(result *sql.ResultSet) {
-	s.execution.FinalResult = result
+func (s *ScopeContext) SetResult(result coreTypes.ResultSet) {
+	s.execution.FinalResult = sql.NewResultSet(result.Columns(), result.Rows())
 }
 
 // Caller returns the caller identifier.
@@ -155,23 +156,21 @@ func (e *ExtensionScoper) Datastore() actions.Datastore {
 
 // SetResult sets the result of the most recent SQL query.
 func (e *ExtensionScoper) SetResult(result actions.Result) error {
-	res := &sql.ResultSet{
-		ReturnedColumns: result.Columns(),
-	}
-
+	cols := result.Columns()
+	rows := make([][]any, 0)
 	for result.Next() {
 		values, err := result.Values()
 		if err != nil {
 			return err
 		}
 
-		res.Rows = append(res.Rows, values)
+		rows = append(rows, values)
 	}
 	if err := result.Err(); err != nil {
 		return err
 	}
 
-	e.ScopeContext.SetResult(res)
+	e.ScopeContext.SetResult(sql.NewResultSet(cols, rows))
 	return nil
 }
 

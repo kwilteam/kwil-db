@@ -3,6 +3,8 @@ package sql
 import (
 	"context"
 	"fmt"
+
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // KVStore is a key-value store.
@@ -15,7 +17,7 @@ type KVStore interface {
 	Delete(ctx context.Context, key []byte) error
 }
 
-type ResultSetFunc func(ctx context.Context, stmt string, args map[string]any) (*ResultSet, error)
+type ResultSetFunc func(ctx context.Context, stmt string, args map[string]any) (types.ResultSet, error)
 
 // Connection is a connection to a database.
 type Connection interface {
@@ -70,21 +72,40 @@ type Result interface {
 }
 
 type ResultSet struct {
-	ReturnedColumns []string
-	Rows            [][]any
+	returnedColumns []string
+	rows            [][]any
 
 	i int // starts at 0
 }
 
+func NewResultSet(returnedColumns []string, rows [][]any) *ResultSet {
+	return &ResultSet{
+		returnedColumns: returnedColumns,
+		rows:            rows,
+	}
+}
+
+func (r *ResultSet) Rows() [][]any {
+	v := make([][]any, len(r.rows))
+	for i, row := range r.rows {
+		v2 := make([]any, len(row))
+		copy(v2, row)
+
+		v[i] = v2
+	}
+
+	return v
+}
+
 func (r *ResultSet) Columns() []string {
-	v := make([]string, len(r.ReturnedColumns))
-	copy(v, r.ReturnedColumns)
+	v := make([]string, len(r.returnedColumns))
+	copy(v, r.returnedColumns)
 
 	return v
 }
 
 func (r *ResultSet) Next() (rowReturned bool) {
-	if r.i >= len(r.Rows) {
+	if r.i >= len(r.rows) {
 		return false
 	}
 
@@ -93,22 +114,22 @@ func (r *ResultSet) Next() (rowReturned bool) {
 }
 
 func (r *ResultSet) Values() ([]any, error) {
-	if r.i > len(r.Rows) {
+	if r.i > len(r.rows) {
 		return nil, fmt.Errorf("result set has no more rows")
 	}
 
-	v := make([]any, len(r.Rows[r.i-1]))
-	copy(v, r.Rows[r.i-1])
+	v := make([]any, len(r.rows[r.i-1]))
+	copy(v, r.rows[r.i-1])
 
 	return v, nil
 }
 
 func (r *ResultSet) Map() []map[string]any {
-	m := make([]map[string]any, len(r.Rows))
-	for i, row := range r.Rows {
+	m := make([]map[string]any, len(r.rows))
+	for i, row := range r.rows {
 		m2 := make(map[string]any)
 		for j, col := range row {
-			m2[r.ReturnedColumns[j]] = col
+			m2[r.returnedColumns[j]] = col
 		}
 
 		m[i] = m2
@@ -166,7 +187,7 @@ func (e *EmptyResult) Values() ([]any, error) {
 
 func (e *EmptyResult) ResultSet() (*ResultSet, error) {
 	return &ResultSet{
-		ReturnedColumns: []string{},
-		Rows:            [][]any{},
+		returnedColumns: []string{},
+		rows:            [][]any{},
 	}, nil
 }

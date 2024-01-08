@@ -8,7 +8,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	engineTypes "github.com/kwilteam/kwil-db/internal/engine/types"
-	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/validators"
 )
 
@@ -18,7 +17,7 @@ import (
 type DatabaseEngine interface {
 	CreateDataset(ctx context.Context, schema *engineTypes.Schema, caller []byte) (err error)
 	DeleteDataset(ctx context.Context, dbid string, caller []byte) error
-	Execute(ctx context.Context, data *engineTypes.ExecutionData) (*sql.ResultSet, error)
+	Execute(ctx context.Context, data *engineTypes.ExecutionData) (types.ResultSet, error)
 }
 
 // AccountsStore is a datastore that can handle accounts.
@@ -83,7 +82,7 @@ type VoteStore interface {
 	// 1. the resolution has a body
 	// 2. the resolution has expired
 	// 3. the resolution has been approved
-	ContainsBodyOrFinished(ctx context.Context, resolutionID types.UUID) (bool, error)
+	ContainsBodyOrFinished(ctx context.Context, resolutionID types.UUID) (bool, bool, error)
 	CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error
 	Expire(ctx context.Context, blockheight int64) error
 	UpdateVoter(ctx context.Context, identifier []byte, power int64) error

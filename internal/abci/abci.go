@@ -167,7 +167,7 @@ var _ abciTypes.Application = &AbciApp{}
 func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckTx) (*abciTypes.ResponseCheckTx, error) {
 	newTx := incoming.Type == abciTypes.CheckTxType_New
 	logger := a.log.With(zap.Bool("recheck", !newTx))
-	logger.Debug("check tx")
+	logger.Info("check tx")
 
 	var err error
 	code := codeOk
@@ -184,9 +184,8 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		logger.Debug("failed to unmarshal transaction", zap.Error(err))
 		return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil // return error now or is it still all about code?
 	}
-
 	txHash := cmtTypes.Tx(incoming.Tx).Hash()
-	logger.Debug("",
+	logger.Info("",
 		zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()),
 		zap.Uint64("nonce", tx.Body.Nonce),
@@ -217,7 +216,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil
 		}
 	} else {
-		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce))
+		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce), zap.String("sender", hex.EncodeToString(tx.Sender)))
 	}
 
 	err = a.txApp.ApplyMempool(ctx, tx)
@@ -764,12 +763,12 @@ func (a *AbciApp) validateProposalTransactions(ctx context.Context, txns [][]byt
 	// execution does not update an accounts nonce in state unless it is the
 	// next nonce. Delivering transactions to a block in that way cannot happen.
 	for sender, txs := range grouped {
+
 		acct, err := a.accounts.GetAccount(ctx, []byte(sender))
 		if err != nil {
 			return fmt.Errorf("failed to get account: %w", err)
 		}
 		expectedNonce := uint64(acct.Nonce) + 1
-
 		for _, tx := range txs {
 			if tx.Body.Nonce != expectedNonce {
 				logger.Warn("nonce mismatch", zap.Uint64("txNonce", tx.Body.Nonce),

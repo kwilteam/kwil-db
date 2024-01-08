@@ -5,6 +5,7 @@ import (
 
 	"context"
 
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/metadata"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
@@ -86,7 +87,7 @@ func Test_MetadataStore(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tt.fn(t, func(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error) {
+		tt.fn(t, func(ctx context.Context, stmt string, args map[string]any) (coreTypes.ResultSet, error) {
 			return nil, nil
 		}, kv)
 	}

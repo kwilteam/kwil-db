@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	execution "github.com/kwilteam/kwil-db/internal/engine/execution"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types/testdata"
@@ -234,16 +235,13 @@ func (m *mockRegistry) Delete(ctx context.Context, dbid string) error {
 	return nil
 }
 
-func (m *mockRegistry) Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error) {
+func (m *mockRegistry) Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (coreTypes.ResultSet, error) {
 	_, ok := m.dbs[dbid]
 	if !ok {
 		return nil, fmt.Errorf(`database "%s" does not exist`, dbid)
 	}
 
-	return &sql.ResultSet{
-		ReturnedColumns: []string{},
-		Rows:            [][]any{},
-	}, nil
+	return sql.NewResultSet([]string{}, [][]any{}), nil
 }
 
 func (m *mockRegistry) List(ctx context.Context) ([]string, error) {
@@ -255,16 +253,13 @@ func (m *mockRegistry) List(ctx context.Context) ([]string, error) {
 	return dbs, nil
 }
 
-func (m *mockRegistry) Query(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error) {
+func (m *mockRegistry) Query(ctx context.Context, dbid string, stmt string, params map[string]any) (coreTypes.ResultSet, error) {
 	_, ok := m.dbs[dbid]
 	if !ok {
 		return nil, fmt.Errorf(`database "%s" does not exist`, dbid)
 	}
 
-	return &sql.ResultSet{
-		ReturnedColumns: []string{},
-		Rows:            [][]any{},
-	}, nil
+	return sql.NewResultSet([]string{}, [][]any{}), nil
 }
 
 func (m *mockRegistry) Set(ctx context.Context, dbid string, key, value []byte) error {

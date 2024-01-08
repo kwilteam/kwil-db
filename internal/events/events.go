@@ -55,7 +55,7 @@ func NewEventStore(ctx context.Context, db Datastore) (*EventStore, error) {
 // restart, to avoid re-processing events. Key uniqueness is
 // scoped to the event type.
 // It is up to each oracle to define their own sufficiently unique prefix(es).
-func (e *EventStore) KV(prefix []byte) sql.KVStore {
+func (e *EventStore) KV(prefix []byte) types.KVStore {
 	return &scopedKVStore{
 		prefix: prefix,
 		store:  e.db,

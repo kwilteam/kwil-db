@@ -9,7 +9,6 @@ import (
 
 	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
-	sql "github.com/kwilteam/kwil-db/internal/sql"
 )
 
 // GlobalContext is the context for the entire execution.
@@ -139,7 +138,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller [
 // Execute executes a procedure.
 // It has the ability to mutate state, including uncommitted state.
 // once we fix auth, signer should get removed, as they would be the same.
-func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionData) (*sql.ResultSet, error) {
+func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionData) (coreTypes.ResultSet, error) {
 	err := options.Clean()
 	if err != nil {
 		return nil, err
@@ -191,7 +190,7 @@ func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types.Sche
 }
 
 // Query executes a read-only query.
-func (g *GlobalContext) Query(ctx context.Context, dbid string, query string) (*sql.ResultSet, error) {
+func (g *GlobalContext) Query(ctx context.Context, dbid string, query string) (coreTypes.ResultSet, error) {
 	dataset, ok := g.datasets[dbid]
 	if !ok {
 		return nil, types.ErrDatasetNotFound

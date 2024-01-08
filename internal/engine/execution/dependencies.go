@@ -3,7 +3,7 @@ package execution
 import (
 	"context"
 
-	sql "github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // Registry is the interface for a database registry.
@@ -25,11 +25,11 @@ type Registry interface {
 type Databases interface {
 	// Query executes a query against a reader connection
 	// It will not read uncommitted data, and cannot be used to write data.
-	Query(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error)
+	Query(ctx context.Context, dbid string, stmt string, params map[string]any) (types.ResultSet, error)
 
 	// Execute executes a statement against the database.
 	// The statement can mutate state, and will read uncommitted data.
-	Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error)
+	Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (types.ResultSet, error)
 
 	// Set sets a key to a value.
 	Set(ctx context.Context, dbid string, key []byte, value []byte) error

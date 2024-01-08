@@ -68,6 +68,15 @@ func (a *AccountStore) GetAccount(ctx context.Context, ident []byte) (*Account, 
 	return a.getAccountReadOnly(ctx, ident)
 }
 
+func (a *AccountStore) AccountInfo(ctx context.Context, ident []byte) (balance *big.Int, nonce int64, err error) {
+	acct, err := a.GetAccount(ctx, ident)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return acct.Balance, acct.Nonce, nil
+}
+
 // Transfer sends an amount from the sender's balance to another account. The
 // amount sent is given by the amount. This does not affect the sending
 // account's nonce; a Spend should precede this to pay for required transaction

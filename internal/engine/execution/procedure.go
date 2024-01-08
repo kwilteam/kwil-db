@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
@@ -296,7 +297,7 @@ func (e *dmlStmt) execute(scope *ScopeContext, dataset *dataset) error {
 		return fmt.Errorf("cannot mutate state in immutable procedure")
 	}
 
-	var results *sql.ResultSet
+	var results coreTypes.ResultSet
 	var err error
 	if scope.Mutative() {
 		results, err = dataset.readWriter(scope.Ctx(), e.DeterministicStatement, scope.Values())
@@ -367,14 +368,15 @@ func makeExecutables(exprs []tree.Expression) ([]evaluatable, error) {
 				return nil, err
 			}
 
-			if len(result.Rows) == 0 {
+			rows := result.Rows()
+			if len(rows) == 0 {
 				return nil, nil
 			}
-			if len(result.Rows) > 1 {
-				return nil, fmt.Errorf("expected max 1 row for in-line expression, got %d", len(result.Rows))
+			if len(result.Rows()) > 1 {
+				return nil, fmt.Errorf("expected max 1 row for in-line expression, got %d", len(rows))
 			}
 
-			record := result.Rows[0]
+			record := rows[0]
 			if len(record) != 1 {
 				return nil, fmt.Errorf("expected 1 value for in-line expression, got %d", len(record))
 			}

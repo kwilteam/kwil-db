@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/utils/order"
 	syncmap "github.com/kwilteam/kwil-db/internal/utils/sync_map"
@@ -240,7 +241,7 @@ func (r *Registry) Delete(ctx context.Context, dbid string) error {
 
 // Execute executes a statement on a database.
 // If the database does not exist, it returns an error.
-func (r *Registry) Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error) {
+func (r *Registry) Execute(ctx context.Context, dbid string, stmt string, params map[string]any) (types.ResultSet, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -254,10 +255,7 @@ func (r *Registry) Execute(ctx context.Context, dbid string, stmt string, params
 	}
 
 	if skip {
-		return &sql.ResultSet{
-			ReturnedColumns: []string{},
-			Rows:            [][]any{},
-		}, nil
+		return sql.NewResultSet([]string{}, [][]any{}), nil
 	}
 
 	// execute the statement
@@ -372,7 +370,7 @@ func (r *Registry) getExistentWriter(ctx context.Context, dbid string, idempoten
 
 // Query executes a query on a database.
 // If the database does not exist, it returns an error.
-func (r *Registry) Query(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error) {
+func (r *Registry) Query(ctx context.Context, dbid string, stmt string, params map[string]any) (types.ResultSet, error) {
 	pool, ok := r.pools.Get(dbid)
 	if !ok {
 		return nil, ErrDatabaseNotFound
@@ -696,7 +694,7 @@ func (r *Registry) Commit(ctx context.Context, idempotencyKey []byte) ([]byte, e
 				delete(r.session.Open, dbid)
 				appHashes[dbid] = appHash
 
-				r.log.Debug("adding app hash", zap.String("dbid", dbid), zap.String("appHash", fmt.Sprintf("%x", appHash)), zap.Binary("idempotencyKey", idempotencyKey))
+				r.log.Info("adding app hash", zap.String("dbid", dbid), zap.String("appHash", fmt.Sprintf("%x", appHash)), zap.Binary("idempotencyKey", idempotencyKey))
 
 				newPool, err := r.opener(ctx, r.path(dbid), false)
 				if err != nil {
@@ -739,7 +737,7 @@ func (r *Registry) Commit(ctx context.Context, idempotencyKey []byte) ([]byte, e
 				delete(r.session.Open, dbid)
 
 				appHashes[dbid] = appHash
-				r.log.Debug("adding app hash", zap.String("dbid", dbid), zap.String("appHash", fmt.Sprintf("%x", appHash)), zap.Binary("idempotencyKey", idempotencyKey))
+				r.log.Info("adding app hash", zap.String("dbid", dbid), zap.String("appHash", fmt.Sprintf("%x", appHash)), zap.Binary("idempotencyKey", idempotencyKey))
 
 			}
 		}

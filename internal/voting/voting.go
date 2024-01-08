@@ -6,13 +6,20 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
+
+type Datastore interface {
+	Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error)
+	Query(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error)
+	Savepoint() (sql.Savepoint, error)
+}
 
 // NewVoteProcessor creates a new vote processor.
 // It initializes the database with the required tables.
 // The threshold is the percentThreshold of votes required to approve a resolution
 // It must be an integer between 0 and 1000000.  This defines the percentage
-func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, threshold int64) (*VoteProcessor, error) {
+func NewVoteProcessor(ctx context.Context, db Datastore, accounts types.AccountStore, registry types.Datastore, threshold int64) (*VoteProcessor, error) {
 	sp, err := db.Savepoint()
 	if err != nil {
 		return nil, err
@@ -54,6 +61,7 @@ func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, 
 		return nil, err
 	}
 
+	registeredPayloads := types.RegisteredPayloads()
 	for name := range registeredPayloads {
 		uuid := types.NewUUIDV5([]byte(name))
 
@@ -75,6 +83,7 @@ func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, 
 		percentThreshold: threshold,
 		db:               db,
 		accounts:         accounts,
+		registry:         registry,
 	}, nil
 }
 
@@ -88,7 +97,8 @@ type VoteProcessor struct {
 	percentThreshold int64
 
 	db       Datastore
-	accounts AccountStore
+	accounts types.AccountStore
+	registry types.Datastore
 }
 
 // ResolutionVoteInfo is a struct that contains information about the status of a resolution
@@ -169,13 +179,13 @@ func (v *VoteProcessor) CreateResolution(ctx context.Context, event *types.Votab
 	}
 
 	// ensure that the category exists
+	registeredPayloads := types.RegisteredPayloads()
 	_, ok := registeredPayloads[event.Type]
 	if !ok {
 		return fmt.Errorf("payload not registered for type %s", event.Type)
 	}
 
 	id := event.ID()
-
 	_, err = v.db.Execute(ctx, upsertResolution, map[string]interface{}{
 		"$id":         id[:],
 		"$body":       event.Body,
@@ -206,7 +216,7 @@ func (v *VoteProcessor) Expire(ctx context.Context, blockheight int64) error {
 		return fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
 
-	for _, row := range res.Rows {
+	for _, row := range res.Rows() {
 		id, ok := row[0].([]byte)
 		if !ok {
 			return fmt.Errorf("invalid type for id. this is an internal bug")
@@ -233,8 +243,8 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 		return nil, err
 	}
 
-	// if no rows, then the resolution may still exist, but does not have a body
-	if len(res.Rows) == 0 {
+	// if no rows(), then the resolution may still exist, but does not have a body
+	if len(res.Rows()) == 0 {
 		res, err = v.db.Query(ctx, getUnfilledResolutionVoteInfo, map[string]interface{}{
 			"$id": id[:],
 		})
@@ -242,22 +252,22 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 			return nil, err
 		}
 
-		if len(res.Rows) == 0 {
+		if len(res.Rows()) == 0 {
 			return nil, ErrResolutionNotFound
 		}
 
 		// res.ReturnedColumns[0] == expiration
 		// res.ReturnedColumns[1] == approved_power
-		if len(res.Rows[0]) != 2 {
+		if len(res.Rows()[0]) != 2 {
 			// this should never happen, just for safety
 			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 		}
 
-		expiration, ok := res.Rows[0][0].(int64)
+		expiration, ok := res.Rows()[0][0].(int64)
 		if !ok {
 			return nil, fmt.Errorf("invalid type for expiration. this is an internal bug")
 		}
-		approvedPower, ok := res.Rows[0][1].(int64)
+		approvedPower, ok := res.Rows()[0][1].(int64)
 		if !ok {
 			return nil, fmt.Errorf("invalid type for approved power. this is an internal bug")
 		}
@@ -276,16 +286,16 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 	// res.ReturnedColumns[2] == type (can be nil)
 	// res.ReturnedColumns[3] == expiration
 	// res.ReturnedColumns[4] == approved_power
-	if len(res.Rows[0]) != 5 {
+	if len(res.Rows()[0]) != 5 {
 		// this should never happen, just for safety
 		return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
 
-	resolution, err := getResolutionFromRow(res.Rows[0])
+	resolution, err := getResolutionFromRow(res.Rows()[0])
 	if err != nil {
 		return nil, fmt.Errorf("internal bug: %w", err)
 	}
-	approvedPower, ok := res.Rows[0][4].(int64)
+	approvedPower, ok := res.Rows()[0][4].(int64)
 	if !ok {
 		return nil, fmt.Errorf("invalid type for approved power. this is an internal bug")
 	}
@@ -305,36 +315,40 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 // 1. the resolution has a body
 // 2. the resolution has expired
 // 3. the resolution has been approved
-func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUID) (bool, error) {
+func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUID) (processed bool, containsBody bool, err error) {
 	// we check for existence of body in resolutions table before checking
 	// for the resolution ID in the processed table, since it is a faster lookup.
 	// furthermore, we are more likely to hit the resolutions table during consensus,
 	// and processed table during catchup. consensus speed is more important.
+	processed, err = v.alreadyProcessed(ctx, id)
+	if err != nil {
+		return false, false, err
+	}
+
+	if processed {
+		return true, false, nil
+	}
+
 	res, err := v.db.Query(ctx, getResolutionBody, map[string]interface{}{
 		"$id": id[:],
 	})
 	if err != nil {
-		return false, err
+		return processed, false, err
 	}
 
-	if len(res.Rows) == 0 {
-		return false, ErrResolutionNotFound
+	if len(res.Rows()) == 0 {
+		return processed, false, ErrResolutionNotFound
 	}
-	if len(res.Rows[0]) != 1 {
+	if len(res.Rows()[0]) != 1 {
 		// this should never happen, just for safety
-		return false, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		return processed, false, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
 
-	if res.Rows[0][0] != nil {
-		return true, nil
+	if res.Rows()[0][0] != nil {
+		return processed, true, nil
 	}
 
-	processed, err := v.alreadyProcessed(ctx, id)
-	if err != nil {
-		return false, err
-	}
-
-	return processed, nil
+	return processed, false, nil
 }
 
 // GetVotesByCategory gets all votes of a specific category.
@@ -347,11 +361,11 @@ func (v *VoteProcessor) GetVotesByCategory(ctx context.Context, category string)
 		return nil, err
 	}
 
-	if len(res.Rows) == 0 {
+	if len(res.Rows()) == 0 {
 		return []*Resolution{}, nil
 	}
 
-	if len(res.Rows[0]) != 4 {
+	if len(res.Rows()[0]) != 4 {
 		// this should never happen, just for safety
 		return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
@@ -360,8 +374,8 @@ func (v *VoteProcessor) GetVotesByCategory(ctx context.Context, category string)
 	// res.ReturnedColumns[1] == body (can be nil)
 	// res.ReturnedColumns[2] == type (can be nil)
 	// res.ReturnedColumns[3] == expiration
-	votes = make([]*Resolution, len(res.Rows))
-	for i, row := range res.Rows {
+	votes = make([]*Resolution, len(res.Rows()))
+	for i, row := range res.Rows() {
 		resolution, err := getResolutionFromRow(row)
 		if err != nil {
 			return nil, fmt.Errorf("internal bug: %w", err)
@@ -451,11 +465,11 @@ func (v *VoteProcessor) GetVoterPower(ctx context.Context, identifier []byte) (p
 		return 0, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
 
-	if len(res.Rows) == 0 {
+	if len(res.Rows()) == 0 {
 		return 0, nil
 	}
 
-	power, ok := res.Rows[0][0].(int64)
+	power, ok := res.Rows()[0][0].(int64)
 	if !ok {
 		return 0, fmt.Errorf("invalid type for power. this is an internal bug")
 	}
@@ -479,19 +493,19 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 		return nil, err
 	}
 
-	if len(powerRes.Rows) == 0 {
+	if len(powerRes.Rows()) == 0 {
 		return nil, nil // cannot process any resolutions
 	}
 
-	if len(powerRes.Rows[0]) != 1 {
+	if len(powerRes.Rows()[0]) != 1 {
 		// this should never happen, just for safety
 		return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
 
-	totalPower, ok := powerRes.Rows[0][0].(int64)
+	totalPower, ok := powerRes.Rows()[0][0].(int64)
 	if !ok {
 		// if it is nil, then no validators have been added yet
-		if powerRes.Rows[0][0] == nil {
+		if powerRes.Rows()[0][0] == nil {
 			return nil, nil
 		}
 
@@ -515,14 +529,14 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 		return nil, err
 	}
 
-	if len(res.ReturnedColumns) != 4 {
+	if len(res.Columns()) != 4 {
 		// this should never happen, just for safety
 		return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
 
-	usedDBIDs := make([]types.UUID, len(res.Rows)) // tracks the uuids of the resolutions we have processed
-
-	for i, row := range res.Rows {
+	usedDBIDs := make([]types.UUID, len(res.Rows())) // tracks the uuids of the resolutions we have processed
+	registeredPayloads := types.RegisteredPayloads()
+	for i, row := range res.Rows() {
 		vote, err := getResolutionFromRow(row)
 		if err != nil {
 			return nil, fmt.Errorf("internal bug: %w", err)
@@ -538,9 +552,9 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 			return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 		}
 
-		err = payload.Apply(ctx, &Datastores{
+		err = payload.Apply(ctx, &types.Datastores{
 			Accounts:  v.accounts,
-			Databases: v.db,
+			Databases: v.registry,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply payload: %w", err)
@@ -570,7 +584,6 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 	if err != nil {
 		return nil, err
 	}
-
 	return usedDBIDs, sp.Commit()
 }
 
@@ -583,7 +596,7 @@ func (v *VoteProcessor) alreadyProcessed(ctx context.Context, resolutionID types
 		return false, err
 	}
 
-	return len(res.Rows) != 0, nil
+	return len(res.Rows()) != 0, nil
 }
 
 // HasVoted checks if a voter has voted on a resolution.
@@ -598,5 +611,5 @@ func (v *VoteProcessor) HasVoted(ctx context.Context, resolutionID types.UUID, f
 		return false, err
 	}
 
-	return len(res.Rows) != 0, nil
+	return len(res.Rows()) != 0, nil
 }

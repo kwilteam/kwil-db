@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	coreTypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/metadata"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
 )
 
 // executor makes a registry `Execute` or `Query` method into a sql.Executor
-func executor(dbid string, fn func(ctx context.Context, dbid string, stmt string, params map[string]any) (*sql.ResultSet, error)) sql.ResultSetFunc {
-	return func(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
+func executor(dbid string, fn func(ctx context.Context, dbid string, stmt string, params map[string]any) (coreTypes.ResultSet, error)) sql.ResultSetFunc {
+	return func(ctx context.Context, stmt string, params map[string]any) (coreTypes.ResultSet, error) {
 		return fn(ctx, dbid, stmt, params)
 	}
 }
