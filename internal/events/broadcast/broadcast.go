@@ -103,7 +103,7 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, _ *abci.BlockInfo) 
 		return err
 	}
 
-	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteIDs{}, e.chainID, uint64(nonce)+1)
+	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteIDs{ResolutionIDs: ids}, e.chainID, uint64(nonce)+1)
 	if err != nil {
 		return err
 	}

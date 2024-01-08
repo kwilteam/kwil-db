@@ -185,10 +185,12 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil // return error now or is it still all about code?
 	}
 
+	txHash := cmtTypes.Tx(incoming.Tx).Hash()
 	logger.Debug("",
 		zap.String("sender", hex.EncodeToString(tx.Sender)),
 		zap.String("PayloadType", tx.Body.PayloadType.String()),
-		zap.Uint64("nonce", tx.Body.Nonce))
+		zap.Uint64("nonce", tx.Body.Nonce),
+		zap.String("hash", hex.EncodeToString(txHash)))
 
 	// For a new transaction (not re-check), before looking at execution cost or
 	// checking nonce validity, ensure the payload is recognized and signature is valid.
@@ -215,7 +217,6 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: err.Error()}, nil
 		}
 	} else {
-		txHash := cmtTypes.Tx(incoming.Tx).Hash()
 		logger.Info("Recheck", zap.String("hash", hex.EncodeToString(txHash)), zap.Uint64("nonce", tx.Body.Nonce))
 	}
 
@@ -273,6 +274,13 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		}
 	}
 
+	addr := proposerAddrToString(req.ProposerAddress)
+	proposerPubKey, ok := a.valAddrToKey[addr]
+	if !ok {
+		a.log.Warn("received block proposal from unknown validator", zap.String("addr", addr))
+		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to address %v", addr)
+	}
+
 	for _, tx := range req.Txs {
 		// DeliverTx was the part in this loop.
 		decoded := &transactions.Transaction{}
@@ -283,7 +291,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 		txRes := a.txApp.Execute(txapp.TxContext{
 			BlockHeight:  req.Height,
-			Proposer:     req.ProposerAddress,
+			Proposer:     proposerPubKey,
 			VotingPeriod: a.consensusParams.VotingPeriod(),
 			Ctx:          ctx,
 		}, decoded)
@@ -291,6 +299,7 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		abciRes := &abciTypes.ExecTxResult{}
 		if txRes.Error != nil {
 			abciRes.Log = txRes.Error.Error()
+			a.log.Warn("failed to execute transaction", zap.Error(txRes.Error))
 		} else {
 			abciRes.Log = "success"
 		}
@@ -309,6 +318,14 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 		Validator: &tendermintTypes.ValidatorParams{
 			PubKeyTypes: []string{"ed25519"},
 		},
+	}
+
+	for _, hook := range a.commitHooks {
+		err := hook(ctx, a.blockInfo)
+		if err != nil {
+			fmt.Println("commit hook failed", err)
+			return nil, fmt.Errorf("commit hook failed: %w", err)
+		}
 	}
 
 	// TODO: some of this commit logic would actually go in Commit, but we need
@@ -341,11 +358,6 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 	}
 	res.AppHash = appHash
 
-	proposerPubKey, ok := a.valAddrToKey[proposerAddrToString(req.ProposerAddress)]
-	if !ok {
-		return nil, fmt.Errorf("failed to find proposer pubkey in FinalizeBlock")
-	}
-
 	a.blockInfo = &BlockInfo{
 		Height:    req.Height,
 		BlockHash: req.Hash,
@@ -374,17 +386,6 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 			a.log.Error("snapshot creation failed", zap.Error(err))
 		}
 		// Unlock all the DBs
-	}
-
-	errs := make([]error, 0)
-	for _, hook := range a.commitHooks {
-		err := hook(ctx, a.blockInfo)
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if len(errs) > 0 {
-		return nil, fmt.Errorf("commit hooks failed: %w", errors.Join(errs...))
 	}
 
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
@@ -467,8 +468,12 @@ func (a *AbciApp) InitChain(ctx context.Context, req *abciTypes.RequestInitChain
 		a.valAddrToKey[addr] = pk
 	}
 
-	if err := a.validators.GenesisInit(context.Background(), vldtrs, req.InitialHeight); err != nil {
+	if err := a.validators.GenesisInit(ctx, vldtrs, req.InitialHeight); err != nil {
 		return nil, fmt.Errorf("validators.GenesisInit failed: %w", err)
+	}
+
+	if err := a.txApp.GenesisInit(ctx, vldtrs); err != nil {
+		return nil, fmt.Errorf("txApp.GenesisInit failed: %w", err)
 	}
 
 	valUpdates := make([]abciTypes.ValidatorUpdate, len(vldtrs))
@@ -636,7 +641,7 @@ type indexedTxn struct {
 //
 // NOTE: This is a plain function instead of an AbciApplication method so that
 // it may be directly tested.
-func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger) [][]byte {
+func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger, proposerAddr []byte) ([][]byte, uint64) {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
 	var i int
@@ -675,17 +680,24 @@ func prepareMempoolTxns(txs [][]byte, maxBytes int, log *log.Logger) [][]byte {
 	nonces := make([]uint64, 0, len(okTxns))
 	finalTxns := make([][]byte, 0, len(okTxns))
 	i = 0
+	proposerNonce := uint64(0)
+
 	for _, tx := range okTxns {
 		if i > 0 && tx.Body.Nonce == nonces[i-1] && bytes.Equal(tx.Sender, okTxns[i-1].Sender) {
 			log.Warn(fmt.Sprintf("Dropping tx with re-used nonce %d from block proposal", tx.Body.Nonce))
 			continue // mempool recheck should have removed this
 		}
+
+		if bytes.Equal(tx.Sender, proposerAddr) {
+			proposerNonce = tx.Body.Nonce + 1
+		}
+
 		finalTxns = append(finalTxns, txs[tx.is])
 		nonces = append(nonces, tx.Body.Nonce)
 		i++
 	}
 
-	return finalTxns
+	return finalTxns, proposerNonce
 }
 
 func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPrepareProposal) (*abciTypes.ResponsePrepareProposal, error) {
@@ -693,7 +705,32 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 		zap.Int64("height", req.Height),
 		zap.Int("txs", len(req.Txs)))
 
-	proposerTxs, err := a.txApp.ProposerTxs(ctx)
+	addr, ok := a.valAddrToKey[proposerAddrToString(req.ProposerAddress)]
+	if !ok {
+		return nil, fmt.Errorf("failed to find proposer pubkey corresponding to %s", proposerAddrToString(req.ProposerAddress))
+	}
+
+	okTxns, proposerNonce := prepareMempoolTxns(req.Txs, int(req.MaxTxBytes), &a.log, addr)
+	if len(okTxns) != len(req.Txs) {
+		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
+			zap.Int("in", len(req.Txs)), zap.Int("out", len(okTxns)))
+	} else if logger.L.Level() <= log.DebugLevel { // spare the check if it wouldn't be logged
+		for i, tx := range okTxns {
+			if !bytes.Equal(tx, req.Txs[i]) { //  not and error, just notable
+				logger.Debug("transaction was moved or mutated", zap.Int("idx", i))
+			}
+		}
+	}
+
+	if proposerNonce == 0 {
+		acct, err := a.accounts.GetAccount(ctx, addr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get proposer account: %w", err)
+		}
+		proposerNonce = uint64(acct.Nonce) + 1
+	}
+
+	proposerTxs, err := a.txApp.ProposerTxs(ctx, proposerNonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get proposer transactions: %w", err)
 	}
@@ -705,25 +742,13 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 			return nil, fmt.Errorf("failed to marshal proposer transaction: %w", err)
 		}
 		proposerTxBts = append(proposerTxBts, bts)
+		fmt.Println("Proposer inserted tx: ", tx.Body.Nonce, " proposer addr: ", hex.EncodeToString(tx.Sender))
 	}
 
-	txs := append(proposerTxBts, req.Txs...)
-
-	okTxns := prepareMempoolTxns(txs, int(req.MaxTxBytes), &a.log)
-
-	if len(okTxns) != len(txs) {
-		logger.Info("PrepareProposal: number of transactions in proposed block has changed!",
-			zap.Int("in", len(txs)), zap.Int("out", len(okTxns)))
-	} else if logger.L.Level() <= log.DebugLevel { // spare the check if it wouldn't be logged
-		for i, tx := range okTxns {
-			if !bytes.Equal(tx, txs[i]) { //  not and error, just notable
-				logger.Debug("transaction was moved or mutated", zap.Int("idx", i))
-			}
-		}
-	}
+	txs := append(req.Txs, proposerTxBts...)
 
 	return &abciTypes.ResponsePrepareProposal{
-		Txs: okTxns,
+		Txs: txs,
 	}, nil
 }
 

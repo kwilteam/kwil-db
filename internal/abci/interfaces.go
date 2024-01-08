@@ -82,11 +82,12 @@ type AccountsModule interface {
 // It has methods for beginning and ending blocks, applying transactions,
 // and managing a mempool
 type TxApp interface {
+	GenesisInit(ctx context.Context, validators []*types.Validator) error
 	ApplyMempool(ctx context.Context, tx *transactions.Transaction) error
 	Begin(ctx context.Context, blockHeight int64) error
 	Commit(ctx context.Context, blockHeight int64) (apphash []byte, validatorUpgrades []*types.Validator, err error)
 	Execute(ctx txapp.TxContext, tx *transactions.Transaction) *txapp.TxResponse
-	ProposerTxs(ctx context.Context) ([]*transactions.Transaction, error)
+	ProposerTxs(ctx context.Context, txNonce uint64) ([]*transactions.Transaction, error)
 }
 
 // ConsensusParams returns kwil specific consensus parameters.
