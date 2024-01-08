@@ -167,17 +167,20 @@ func (s *Server) Start(ctx context.Context) error {
 	s.log.Info("grpc server started", zap.String("address", s.cfg.AppCfg.AdminListenAddress))
 
 	group.Go(func() error {
-		go func() {
-			<-groupCtx.Done()
-			s.log.Info("stop comet server")
-			if err := s.cometBftNode.Stop(); err != nil {
-				s.log.Warn("failed to stop comet server", zap.Error(err))
-			}
-		}()
+		// The CometBFT services do not block on Start().
+		if err := s.cometBftNode.Start(); err != nil {
+			return err
+		}
+		s.log.Info("comet node is now started")
 
-		return s.cometBftNode.Start()
+		<-groupCtx.Done()
+		s.log.Info("stop comet server")
+		if err := s.cometBftNode.Stop(); err != nil {
+			return fmt.Errorf("failed to stop comet server: %w", err)
+		}
+		s.log.Info("comet server is stopped")
+		return nil
 	})
-	s.log.Info("comet node started")
 
 	err := group.Wait()
 
