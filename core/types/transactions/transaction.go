@@ -113,7 +113,7 @@ func CreateTransaction(contents Payload, chainID string, nonce uint64) (*Transac
 	}, nil
 }
 
-type Transaction struct {
+type Transaction struct { // TODO: json tags with lower case, technically a breaking change
 	// Signature is the signature of the transaction.
 	Signature *auth.Signature
 

@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
@@ -33,13 +34,21 @@ func dropCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return common.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl common.Client, conf *config.KwilCliConfig) error {
 				var err error
-				resp, err := cl.DropDatabase(ctx, args[0], client.WithNonce(nonceOverride),
+				txHash, err := cl.DropDatabase(ctx, args[0], client.WithNonce(nonceOverride),
 					client.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error dropping database: %w", err))
 				}
-
-				return display.PrintCmd(cmd, display.RespTxHash(resp))
+				// If sycnBcast, and we have a txHash (error or not), do a query-tx.
+				if len(txHash) != 0 && syncBcast {
+					time.Sleep(500 * time.Millisecond) // otherwise it says not found at first
+					resp, err := cl.TxQuery(ctx, txHash)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("tx query failed: %w", err))
+					}
+					return display.PrintCmd(cmd, display.NewTxHashAndExecResponse(resp))
+				}
+				return display.PrintCmd(cmd, display.RespTxHash(txHash))
 			})
 		},
 	}
