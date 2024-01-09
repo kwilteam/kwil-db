@@ -28,7 +28,7 @@ func txQueryCmd() *cobra.Command {
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error querying transaction: %w", err))
 				}
-				return display.PrintCmd(cmd, &respTxQuery{Msg: msg})
+				return display.PrintCmd(cmd, &display.RespTxQuery{Msg: msg})
 			})
 
 		},

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
@@ -93,13 +94,21 @@ func batchCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
 
-				resp, err := cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples,
+				txHash, err := cl.ExecuteAction(ctx, dbid, strings.ToLower(action), tuples,
 					client.WithNonce(nonceOverride), client.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing action: %w", err))
 				}
-
-				return display.PrintCmd(cmd, display.RespTxHash(resp))
+				// If sycnBcast, and we have a txHash (error or not), do a query-tx.
+				if len(txHash) != 0 && syncBcast {
+					time.Sleep(500 * time.Millisecond) // otherwise it says not found at first
+					resp, err := cl.TxQuery(ctx, txHash)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("tx query failed: %w", err))
+					}
+					return display.PrintCmd(cmd, display.NewTxHashAndExecResponse(resp))
+				}
+				return display.PrintCmd(cmd, display.RespTxHash(txHash))
 			})
 		},
 	}
