@@ -85,7 +85,8 @@ jobs:
       - name: Generate go vendor
         #for faster builds and private repos, need to run this after pb:compile:v1
         run: |
-          task vendor
+          rm -rf vendor
+          GOWORK=off go mod vendor
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -119,7 +120,7 @@ jobs:
         run: |
           docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
 
-      - name: pull kgw repo & create vendor
+      - name: Pull kgw repo & create vendor
         # we only pull the repo, not build the image, because we want to use the cache
         # provided by the docker/build-push-action
         # vendor is used to bypass private repo issues
@@ -127,7 +128,7 @@ jobs:
           rm -rf /tmp/kgw
           git clone https://github.com/kwilteam/kgw.git /tmp/kgw
           cd /tmp/kgw
-          go mod vendor
+          GOWORK=off go mod vendor
           cd -
 
       - name: Build kgw image
