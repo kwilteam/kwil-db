@@ -111,7 +111,8 @@ tasks:
     deps:
       - task: vendor:clean
     cmds:
-      - go mod vendor || go work vendor
+      # somehow GOWORK=off has no effect on local dev workflow, it will include local module changes
+      - GOWORK=off go mod vendor
 
   vendor:clean:
     desc: Clean vendor

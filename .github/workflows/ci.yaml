@@ -127,7 +127,7 @@ jobs:
           rm -rf /tmp/kgw
           git clone https://github.com/kwilteam/kgw.git /tmp/kgw
           cd /tmp/kgw
-          go mod vendor || go work vendor
+          GOWORK=off go mod vendor
           cd -
 
       - name: Build kgw image
