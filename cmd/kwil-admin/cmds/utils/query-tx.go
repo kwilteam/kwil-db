@@ -35,7 +35,7 @@ func queryTxCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			return display.PrintCmd(cmd, &respTxQuery{Msg: res})
+			return display.PrintCmd(cmd, &display.RespTxQuery{Msg: res})
 		},
 	}
 
@@ -44,12 +44,12 @@ func queryTxCmd() *cobra.Command {
 	return cmd
 }
 
-// respTxQuery is used to represent a transaction response in cli
-type respTxQuery struct {
+// RespTxQuery is used to represent a transaction response in cli
+type RespTxQuery struct {
 	Msg *transactions.TcTxQueryResponse
 }
 
-func (r *respTxQuery) MarshalJSON() ([]byte, error) {
+func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Hash     string                         `json:"hash"` // HEX
 		Height   int64                          `json:"height"`
@@ -63,7 +63,7 @@ func (r *respTxQuery) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (r *respTxQuery) MarshalText() ([]byte, error) {
+func (r *RespTxQuery) MarshalText() ([]byte, error) {
 	status := "failed"
 	if r.Msg.Height == -1 {
 		status = "pending"

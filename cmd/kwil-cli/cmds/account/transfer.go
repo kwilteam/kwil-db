@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
@@ -37,6 +38,15 @@ func transferCmd() *cobra.Command {
 					client.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("transfer failed: %w", err))
+				}
+				// If sycnBcast, and we have a txHash (error or not), do a query-tx.
+				if len(txHash) != 0 && syncBcast {
+					time.Sleep(500 * time.Millisecond) // otherwise it says not found at first
+					resp, err := cl.TxQuery(ctx, txHash)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("tx query failed: %w", err))
+					}
+					return display.PrintCmd(cmd, display.NewTxHashAndExecResponse(resp))
 				}
 				return display.PrintCmd(cmd, display.RespTxHash(txHash))
 			})
