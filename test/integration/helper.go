@@ -22,23 +22,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kwilteam/kwil-db/core/adminclient"
-	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
-
 	"github.com/cometbft/cometbft/crypto/ed25519"
 	"github.com/joho/godotenv"
+	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
+	"github.com/kwilteam/kwil-db/core/adminclient"
+	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/gatewayclient"
+	"github.com/kwilteam/kwil-db/core/log"
+	gRPC "github.com/kwilteam/kwil-db/core/rpc/client/user/grpc"
+	"github.com/kwilteam/kwil-db/test/driver"
+	"github.com/kwilteam/kwil-db/test/driver/operator"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/nodecfg"
-	"github.com/kwilteam/kwil-db/core/client"
-	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/test/driver"
-	"github.com/kwilteam/kwil-db/test/driver/operator"
 )
 
 var (
@@ -56,6 +56,7 @@ var defaultWaitStrategies = map[string]string{
 	"node1":       "Starting Node service",
 	"node2":       "Starting Node service",
 	"node3":       "Starting Node service",
+	"kgw":         "KGW Server started",
 }
 
 const (
@@ -172,7 +173,7 @@ func (r *IntHelper) LoadConfig() {
 		LogLevel:                  getEnv("KIT_LOG_LEVEL", "info"),
 		HTTPEndpoint:              getEnv("KIT_HTTP_ENDPOINT", "http://localhost:8080"),
 		GrpcEndpoint:              getEnv("KIT_GRPC_ENDPOINT", "localhost:50051"),
-		AdminRPC:                  getEnv("KIT_SOCKET_DIR", "unix:///var/run/kwil/admin.sock"),
+		AdminRPC:                  getEnv("KIT_ADMIN_RPC", "unix:///tmp/admin.sock"),
 		DockerComposeFile:         getEnv("KIT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KIT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
@@ -280,6 +281,8 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 	}
 	// Use compose.Wait to wait for containers to become "healthy" according to
 	// their defined healthchecks.
+
+	// NOTE: services will be sorted by docker-compose here.
 	err = stack.Up(ctx, compose.Wait(true), compose.RunServices(services...))
 	r.t.Log("docker compose up")
 	require.NoError(r.t, err, "failed to start kwild cluster")
@@ -293,7 +296,6 @@ func (r *IntHelper) RunDockerComposeWithServices(ctx context.Context, services [
 		require.NoError(r.t, err, "failed to get container for service %s", name)
 		r.containers[name] = container
 	}
-
 }
 
 func (r *IntHelper) Setup(ctx context.Context, services []string) {
@@ -347,29 +349,61 @@ func decodePrivateKey(pkey string) (ed25519.PrivKey, error) {
 	return ed25519.PrivKey(privB), nil
 }
 
-// GetUserDriver returns a integration driver connected to the given kwil node
-// using the creator's private key
-func (r *IntHelper) GetUserDriver(ctx context.Context, name string, driverType string) KwilIntDriver {
-	ctr := r.containers[name]
+// GetUserGatewayDriver returns an integration driver connected to the given gateway node
+func (r *IntHelper) GetUserGatewayDriver(ctx context.Context, driverType string, user string) KwilIntDriver {
+	gatewayProvider := true
 
-	// NOTE: maybe get from docker-compose.yml ? the port mapping is already there
-	nodeURL, err := ctr.PortEndpoint(ctx, "50051", "")
-	require.NoError(r.t, err, "failed to get node url")
-	gatewayURL, err := ctr.PortEndpoint(ctx, "8080", "")
+	ctr := r.containers["kgw"]
+	gatewayURL, err := ctr.PortEndpoint(ctx, "8090", "http")
 	require.NoError(r.t, err, "failed to get gateway url")
-	cometBftURL, err := ctr.PortEndpoint(ctx, "26657", "tcp")
-	require.NoError(r.t, err, "failed to get cometBft url")
-	r.t.Logf("nodeURL: %s gatewayURL: %s cometBftURL: %s for container name: %s", nodeURL, gatewayURL, cometBftURL, name)
+	r.t.Logf("gatewayURL: %s  for container: %s", gatewayURL, "kgw")
+	// NOTE: gatewayURL should be http://localhost:8090, match the domain in docker-compose.yml
 
 	signer := r.cfg.CreatorSigner
 	pk := r.cfg.CreatorRawPk
+
+	if user == "visitor" {
+		signer = r.cfg.VisitorSigner
+		pk = r.cfg.VisitorRawPK
+	}
+
 	switch driverType {
 	case "http":
-		return r.getHTTPClientDriver(signer)
+		return r.getHTTPClientDriver(signer, gatewayURL, gatewayProvider)
+	case "cli":
+		return r.getCliDriver(gatewayURL, pk, signer.Identity(), gatewayProvider)
+	default:
+		panic("unsupported driver type")
+	}
+}
+
+// GetUserDriver returns an integration driver connected to the given rpc node
+// using the private key
+func (r *IntHelper) GetUserDriver(ctx context.Context, nodeName string, driverType string) KwilIntDriver {
+	gatewayProvider := false
+
+	ctr := r.containers[nodeName]
+	// NOTE: maybe get from docker-compose.yml ? the port mapping is already there
+	grpcURL, err := ctr.PortEndpoint(ctx, "50051", "tcp")
+	require.NoError(r.t, err, "failed to get node url")
+	httpURL, err := ctr.PortEndpoint(ctx, "8080", "http")
+	require.NoError(r.t, err, "failed to get gateway url")
+	cometBftURL, err := ctr.PortEndpoint(ctx, "26657", "tcp")
+	require.NoError(r.t, err, "failed to get cometBft url")
+	r.t.Logf("grpcURL: %s httpURL: %s cometBftURL: %s for container: %s", grpcURL, httpURL, cometBftURL, nodeName)
+
+	signer := r.cfg.CreatorSigner
+	pk := r.cfg.CreatorRawPk
+
+	switch driverType {
+	case "http":
+		return r.getHTTPClientDriver(signer, httpURL, gatewayProvider)
 	case "grpc":
+		// should use grpcURL, r.cfg.GrpcEndpoint is not correct(it's intended
+		// to be used for `remote` test mode, but integation tests don't use it)
 		return r.getGRPCClientDriver(signer)
 	case "cli":
-		return r.getCliDriver(pk, signer.Identity())
+		return r.getCliDriver(httpURL, pk, signer.Identity(), gatewayProvider)
 	default:
 		panic("unsupported driver type")
 	}
@@ -412,20 +446,34 @@ func (r *IntHelper) GetOperatorDriver(ctx context.Context, nodeName string, driv
 	}
 }
 
-func (r *IntHelper) getHTTPClientDriver(signer auth.Signer) KwilIntDriver {
+func (r *IntHelper) getHTTPClientDriver(signer auth.Signer, endpoint string, gatewayProvider bool) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
-	kwilClt, err := client.NewClient(context.TODO(), r.cfg.HTTPEndpoint, &client.ClientOptions{
-		Signer:  signer,
-		ChainID: testChainID,
-		Logger:  logger,
-	})
+	var kwilClt common.Client
+	var err error
+
+	if gatewayProvider {
+		kwilClt, err = gatewayclient.NewClient(context.TODO(), endpoint, &gatewayclient.GatewayOptions{
+			ClientOptions: client.ClientOptions{
+				Signer:  signer,
+				ChainID: testChainID,
+				Logger:  logger,
+			},
+		})
+	} else {
+		kwilClt, err = client.NewClient(context.TODO(), endpoint, &client.ClientOptions{
+			Signer:  signer,
+			ChainID: testChainID,
+			Logger:  logger,
+		})
+	}
+
 	require.NoError(r.t, err, "failed to create kwil client")
 
-	return driver.NewKwildClientDriver(kwilClt, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, logger)
 }
 
-func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) KwilIntDriver {
+func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) *driver.KwildClientDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	gtOptions := []gRPC.Option{gRPC.WithTlsCert("")}
@@ -439,7 +487,7 @@ func (r *IntHelper) getGRPCClientDriver(signer auth.Signer) KwilIntDriver {
 	})
 	require.NoError(r.t, err, "failed to create grpc client")
 
-	return driver.NewKwildClientDriver(kwilClt, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, logger)
 }
 
 // getCLIAdminClientDriver returns a kwil-admin client driver connected to the given kwil node.
@@ -469,14 +517,14 @@ func (r *IntHelper) getCLIAdminClientDriver(adminSvcServer string, c *testcontai
 	}
 }
 
-func (r *IntHelper) getCliDriver(privKey string, identity []byte) KwilIntDriver {
+func (r *IntHelper) getCliDriver(endpoint string, privKey string, identity []byte, gatewayProvider bool) *driver.KwilCliDriver {
 	logger := log.New(log.Config{Level: r.cfg.LogLevel})
 
 	_, currentFilePath, _, _ := runtime.Caller(1)
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-cli-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, testChainID, identity, logger)
+	return driver.NewKwilCliDriver(cliBinPath, endpoint, privKey, testChainID, identity, gatewayProvider, logger)
 }
 
 func (r *IntHelper) NodePrivateKey(name string) ed25519.PrivKey {

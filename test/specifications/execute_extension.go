@@ -24,7 +24,7 @@ func ExecuteExtensionSpecification(ctx context.Context, t *testing.T, execute Ex
 
 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	records, err := execute.Call(ctx, dbID, divideActionName, []any{2, 1, 2}, false)
+	records, err := execute.Call(ctx, dbID, divideActionName, []any{2, 1, 2})
 	assert.NoError(t, err)
 
 	results := records.Export()

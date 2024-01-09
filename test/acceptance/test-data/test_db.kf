@@ -95,16 +95,9 @@ action get_user_posts($username) public {
     );
 }
 
-@kgw(authn='true')
-action get_post_authenticated($id) public view {
+action get_post($id) public view {
     SELECT *
     FROM posts
-    WHERE id = $id;
-}
-
-action get_post_unauthenticated($id) public view {
-    SELECT *
-    FROM "posts"
     WHERE id = $id;
 }
 
@@ -135,4 +128,9 @@ action create_post_private($id, $title, $content) private {
 
 action create_post_nested($id, $title, $content) public {
     create_post_private($id, $title, $content);
+}
+
+@kgw(authn='true')
+action authn_only() public view {
+    select 'authn only';
 }

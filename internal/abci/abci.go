@@ -211,7 +211,8 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 		// Verify the correct chain ID is set, if it is set.
 		if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != a.cfg.ChainID {
 			code = codeWrongChain
-			logger.Info("wrong chain ID", zap.String("payloadType", tx.Body.PayloadType.String()))
+			logger.Info("wrong chain ID",
+				zap.String("payloadType", tx.Body.PayloadType.String()))
 			return &abciTypes.ResponseCheckTx{Code: code.Uint32(), Log: "wrong chain ID"}, nil
 		}
 		// Verify Payload type
@@ -263,7 +264,7 @@ func (a *AbciApp) executeTx(ctx context.Context, rawTx []byte, logger *log.Logge
 			Code:    code.Uint32(),
 			GasUsed: gasUsed,
 			Events:  events,
-			Log:     "success",
+			Log:     "",
 			// Data, GasWanted, Info, Codespace
 		}
 

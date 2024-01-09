@@ -86,14 +86,7 @@ action get_user_posts($username) public view {
     );
 }
 
-@kgw(authn='true')
-action get_post_authenticated($id) public view {
-    SELECT *
-    FROM posts
-    WHERE id = $id;
-}
-
-action get_post_unauthenticated($id) public view {
+action get_post($id) public view {
     SELECT *
     FROM posts
     WHERE id = $id;

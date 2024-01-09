@@ -59,7 +59,7 @@ type DatabaseDropDsl interface {
 // ExecuteCallDsl is dsl for call specification
 type ExecuteCallDsl interface {
 	DatabaseIdentifier
-	Call(ctx context.Context, dbid, action string, inputs []any, withSignature bool) (*client.Records, error)
+	Call(ctx context.Context, dbid, action string, inputs []any) (*client.Records, error)
 }
 
 // ExecuteExtensionDsl is dsl for extension specification
