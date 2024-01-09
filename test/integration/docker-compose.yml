@@ -11,7 +11,7 @@ services:
       - "26656:26656"
       - "26657:26657"
     env_file:
-      - .env # docker compose by default will use this file, here just make it explicit
+      - .env # docker compose by default will use this file if presented, here just make it explicit
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnet}/node0
@@ -27,7 +27,7 @@ services:
       --app.extension-endpoints=ext1:50051
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
-      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
@@ -56,7 +56,7 @@ services:
       --app.extension-endpoints=ext1:50051
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
-      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
@@ -85,7 +85,7 @@ services:
       --app.extension-endpoints=ext1:50051
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
-      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
@@ -118,7 +118,7 @@ services:
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
-      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --app.admin-listen-addr=unix:///tmp/admin.sock
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
 
   # this ext is shared by all nodes
@@ -151,6 +151,31 @@ services:
       interval: 1s
       timeout: 6s
       retries: 20
+
+  # for kgw tests, to run locally, you need to build this image in kgw repo
+  kgw:
+    container_name: kgw
+    image: kgw:latest
+    ports:
+      - "8090:8090"
+    env_file:
+      - .env
+    networks:
+      kwil-int-testnet:
+        ipv4_address: 172.10.100.10
+    command: |
+      --log-level ${LOG_LEVEL:-debug}
+      --cors-allow-origins *
+      --backends node0:8080 node1:8080 node2:8080 node3:8080
+      --domain http://localhost:8090
+      --statement "Trust me ok?"
+      --session-secret "kgwtest"
+      --chain-id ${CHAIN_ID:-kwil-test-chain}
+      --allow-deploy-db
+      --allow-adhoc-query
+      --devmode
+      --schema-sync-interval 2
+    # domain should not be changed, and client should use 'doamin' value as the provider, otherwise the test will fail
 
 networks:
   kwil-int-testnet:

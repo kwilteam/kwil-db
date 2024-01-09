@@ -15,8 +15,34 @@ var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 
 var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
-var allServices = []string{integration.ExtContainer, "node0", "node1", "node2", integration.Ext3Container, "node3"}
-var numServices = len(allServices)
+// Here we make clear the services will be used in each stage
+var basicServices = []string{integration.ExtContainer, "node0", "node1", "node2"}
+var newServices = []string{integration.Ext3Container, "node3"}
+
+// NOTE: allServices will be sorted by docker-compose(in setup), so the order is not reliable
+var allServices = []string{integration.ExtContainer, integration.Ext3Container, "node0", "node1", "node2", "node3"}
+
+func TestLocalDevSetup(t *testing.T) {
+	if !*dev {
+		t.Skip("skipping local dev setup")
+	}
+
+	// running forever for local development
+
+	ctx := context.Background()
+
+	opts := []integration.HelperOpt{
+		integration.WithBlockInterval(time.Second),
+		integration.WithValidators(4),
+		integration.WithNonValidators(0),
+	}
+
+	helper := integration.NewIntHelper(t, opts...)
+	helper.Setup(ctx, allServices)
+	defer helper.Teardown()
+
+	helper.WaitForSignals(t)
+}
 
 func TestKwildDatabaseIntegration(t *testing.T) {
 	ctx := context.Background()
@@ -31,14 +57,8 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
-			helper.Setup(ctx, allServices)
+			helper.Setup(ctx, basicServices)
 			defer helper.Teardown()
-
-			// running forever for local development
-			if *dev {
-				helper.WaitForSignals(t)
-				return
-			}
 
 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetUserDriver(ctx, "node1", driverType)
@@ -81,12 +101,6 @@ func TestKwildValidatorRemoval(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)
 			defer helper.Teardown()
-
-			// running forever for local development
-			if *dev {
-				helper.WaitForSignals(t)
-				return
-			}
 
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
@@ -132,12 +146,6 @@ func TestKwildValidatorUpdatesIntegration(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
 			helper.Setup(ctx, allServices)
 			defer helper.Teardown()
-
-			// running forever for local development
-			if *dev {
-				helper.WaitForSignals(t)
-				return
-			}
 
 			node0Driver := helper.GetOperatorDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetOperatorDriver(ctx, "node1", driverType)
@@ -199,15 +207,8 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 	for _, driverType := range testDrivers {
 		t.Run(driverType+"_driver", func(t *testing.T) {
 			helper := integration.NewIntHelper(t, opts...)
-			// Bringup ext1, node 0,1,2 services but not node3 or ext3
-			helper.Setup(ctx, allServices[:numServices-2])
+			helper.Setup(ctx, basicServices)
 			defer helper.Teardown()
-
-			// running forever for local development
-			if *dev {
-				helper.WaitForSignals(t)
-				return
-			}
 
 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType)
 			node1Driver := helper.GetUserDriver(ctx, "node1", driverType)
@@ -215,6 +216,7 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 
 			// Create a new database and verify that the database exists on other nodes
 			specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
+			time.Sleep(time.Second * 2) // need time to sync
 			specifications.DatabaseVerifySpecification(ctx, t, node1Driver, true)
 			specifications.DatabaseVerifySpecification(ctx, t, node2Driver, true)
 
@@ -228,14 +230,14 @@ func TestKwildNetworkSyncIntegration(t *testing.T) {
 				3. Get the node driver
 				4. Verify that the database exists on the new node
 			*/
-			helper.RunDockerComposeWithServices(ctx, allServices[numServices-2:])
-			//node3Driver := helper.GetUserDriver(ctx, helper.ServiceContainer("node3"))
+			helper.RunDockerComposeWithServices(ctx, newServices)
 			node3Driver := helper.GetUserDriver(ctx, "node3", driverType)
 
 			/*
 			   1. This checks if the database exists on the new node
 			   2. Verify if the user and posts are synced to the new node
 			*/
+			time.Sleep(time.Second * 4) // need time to catch up
 			specifications.DatabaseVerifySpecification(ctx, t, node3Driver, true)
 
 			expectPosts := 1

@@ -35,6 +35,6 @@ func ExecuteOwnerActionFailSpecification(ctx context.Context, t *testing.T, exec
 	expectTxFail(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
 	// call authenticated, should fail
-	_, err = execute.Call(ctx, dbID, ownerOnlyActionName, actionInputs, true)
+	_, err = execute.Call(ctx, dbID, ownerOnlyActionName, actionInputs)
 	require.Error(t, err, "expected error calling owner only action with authentication")
 }
