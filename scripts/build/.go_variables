@@ -58,6 +58,11 @@ if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ]; then
     # from the glibc version used for linking"
     GO_BUILDTAGS="$GO_BUILDTAGS osusergo netgo auth_nep413 auth_ed25519_sha256"
 fi
+# Set the KwilVersion to the `git describe` info that includes latest tag.
+# The specific git revision and commit time comes from debug.ReadBuildInfo
+# at runtime, but that does not include the tag.
+VERSION_PKG="github.com/kwilteam/kwil-db/internal/version"
+GO_LDFLAGS="$GO_LDFLAGS -X \"${VERSION_PKG}.KwilVersion=${GIT_VERSION}\""
 if [ -n "$GO_STRIP" ]; then
     GO_LDFLAGS="$GO_LDFLAGS -s -w"
 fi
