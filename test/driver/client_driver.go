@@ -8,13 +8,14 @@ import (
 	"math/big"
 	"os"
 
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/common"
 	"github.com/kwilteam/kwil-db/core/client"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcClient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/core/utils"
-
 	"go.uber.org/zap"
 )
 
@@ -28,13 +29,15 @@ func GetEnv(key, defaultValue string) string {
 
 // KwildClientDriver is driver for tests using the `client` package
 type KwildClientDriver struct {
-	clt    *client.Client
+	clt    common.Client
+	signer auth.Signer
 	logger log.Logger
 }
 
-func NewKwildClientDriver(clt *client.Client, logger log.Logger) *KwildClientDriver {
+func NewKwildClientDriver(clt common.Client, signer auth.Signer, logger log.Logger) *KwildClientDriver {
 	driver := &KwildClientDriver{
 		clt:    clt,
+		signer: signer,
 		logger: logger,
 	}
 
@@ -46,7 +49,7 @@ func (d *KwildClientDriver) SupportBatch() bool {
 }
 
 func (d *KwildClientDriver) GetUserPublicKey() []byte {
-	return d.clt.Signer.Identity()
+	return d.signer.Identity()
 }
 
 // TxSuccess checks if the transaction was successful
@@ -88,7 +91,7 @@ func (d *KwildClientDriver) TransferAmt(ctx context.Context, to []byte, amt *big
 }
 
 func (d *KwildClientDriver) DBID(name string) string {
-	return utils.GenerateDBID(name, d.clt.Signer.Identity())
+	return utils.GenerateDBID(name, d.signer.Identity())
 }
 
 func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions.Schema) ([]byte, error) {
@@ -98,7 +101,7 @@ func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *transactions
 	}
 
 	d.logger.Debug("deployed database",
-		zap.String("name", db.Name), zap.String("owner", hex.EncodeToString(d.clt.Signer.Identity())),
+		zap.String("name", db.Name), zap.String("owner", hex.EncodeToString(d.signer.Identity())),
 		zap.String("TxHash", rec.Hex()))
 	return rec, nil
 }
@@ -158,8 +161,7 @@ func (d *KwildClientDriver) QueryDatabase(ctx context.Context, dbid, query strin
 	return d.clt.Query(ctx, dbid, query)
 }
 
-func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any, withSignature bool) (*client.Records, error) {
-
+func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*client.Records, error) {
 	return d.clt.CallAction(ctx, dbid, action, inputs)
 }
 

@@ -111,7 +111,8 @@ tasks:
     deps:
       - task: vendor:clean
     cmds:
-      - go mod vendor
+      # somehow GOWORK=off has no effect on local dev workflow, it will include local module changes
+      - GOWORK=off go mod vendor
 
   vendor:clean:
     desc: Clean vendor
@@ -176,7 +177,7 @@ tasks:
     desc: Start the dev environment(with testnet) without rebuilding docker image
     dir: test # different module
     cmds:
-      - go test ./integration -timeout 12h -dev -v
+      - go test ./integration -run ^TestLocalDevSetup$ -timeout 12h -dev -v
 
   # ************ test ************
   # test with build:docker task support passing CLI_ARGS to go test, e.g. task test:act -- -debug
@@ -216,7 +217,7 @@ tasks:
       - go test ./... -tags=ext_test -count=1 -race
 
   test:it:
-    desc: Run integration tests
+    desc: Run integration tests ('short' mode)
     deps:
       - task: build:cli
       - task: build:admin
@@ -225,6 +226,12 @@ tasks:
       - task: test:it:nb
 
   test:it:nb:
+    desc: Run integration tests ('short' mode)
+    dir: test # different module
+    cmds:
+      - go test -short -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+
+  test:it:nb:all:
     desc: Run integration tests
     dir: test # different module
     cmds:

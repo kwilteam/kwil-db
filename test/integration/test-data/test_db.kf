@@ -95,16 +95,9 @@ action get_user_posts($username) public {
     );
 }
 
-@kgw(authn='true')
-action get_post_authenticated($id) public view {
+action get_post($id) public view {
     SELECT *
     FROM posts
-    WHERE id = $id;
-}
-
-action get_post_unauthenticated($id) public view {
-    SELECT *
-    FROM "posts"
     WHERE id = $id;
 }
 
@@ -124,4 +117,9 @@ action divide($numerator1, $numerator2, $denominator) public view {
 @kgw(authn='true')
 action owner_only() public owner view {
     select 'owner only';
+}
+
+@kgw(authn='true')
+action authn_only() public view {
+    select 'authn only';
 }

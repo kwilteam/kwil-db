@@ -18,7 +18,7 @@ var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
 var remote = flag.Bool("remote", false, "test against remote node")
 var noCleanup = flag.Bool("messy", false, "do not cleanup test directories or stop the docker compose when done")
 
-var drivers = flag.String("drivers", "grpc,cli", "comma separated list of drivers to run")
+var drivers = flag.String("drivers", "http,cli", "comma separated list of drivers to run")
 
 func TestKwildTransferAcceptance(t *testing.T) {
 	if testing.Short() {

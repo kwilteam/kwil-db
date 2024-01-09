@@ -12,7 +12,7 @@ services:
       - "26657:26657"
       - "40000:40000" # debugger
     env_file:
-      - .env # docker compose by default will use this file, here just make it explicit
+      - .env # docker compose by default will use this file if presented, here just make it explicit
     volumes:
       - type: bind
         source: ${KWIL_HOME:-./.testnode}
@@ -26,7 +26,7 @@ services:
       --root-dir=/app/kwil
       --log.level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext:50051
-      --app.admin-listen-addr=unix:///var/run/kwil/admin.sock
+      --app.admin-listen-addr=unix:///tmp/admin.sock
       --app.grpc-listen-addr=:50051
       --app.http-listen-addr=:8080
       --chain.p2p.external-address=tcp://0.0.0.0:26656

@@ -13,6 +13,7 @@ import (
 func (s *Service) Call(ctx context.Context, req *txpb.CallRequest) (*txpb.CallResponse, error) {
 	body, msg, err := convertActionCall(req)
 	if err != nil {
+		// NOTE: http api needs to be able to get the error message
 		return nil, status.Errorf(codes.InvalidArgument, "failed to convert action call: %s", err.Error())
 	}
 
