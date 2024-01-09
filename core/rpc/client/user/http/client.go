@@ -81,12 +81,16 @@ func (c *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sy
 		// ErrInsufficientBalance, ErrWrongChain, etc. but how? the response
 		// body had better have retained the response error details!
 		if res != nil {
-			// fmt.Println("broadcast", res.StatusCode, res.Status)
 			if swaggerErr, ok := err.(httpTx.GenericSwaggerError); ok {
 				body := swaggerErr.Body() // fmt.Println(string(body))
-				return nil, parseBroadcastError(body)
+				if ok, _err := parseBroadcastError(body); ok {
+					return nil, _err
+				} else {
+					return nil, err // return the original error(unparsed)
+				}
 			}
 		}
+
 		return nil, err
 	}
 	defer res.Body.Close()
@@ -265,12 +269,14 @@ func (c *Client) Query(ctx context.Context, dbid string, query string) ([]map[st
 	return unmarshalMapResults(decodedResult)
 }
 
-func parseBroadcastError(respTxt []byte) error {
+// parseBroadcastError parses the response body from a broadcast error.
+// It returns true if the error was parsed successfully, false otherwise.
+func parseBroadcastError(respTxt []byte) (bool, error) {
 	var protoStatus status.Status
 	err := protojson.Unmarshal(respTxt, &protoStatus) // jsonpb is deprecated, otherwise we could use the resp.Body directly
 	if err != nil {
 		if err = json.Unmarshal(respTxt, &protoStatus); err != nil {
-			return err
+			return false, err
 		}
 	}
 	stat := grpcStatus.FromProto(&protoStatus)
@@ -308,8 +314,7 @@ func parseBroadcastError(respTxt []byte) error {
 		}
 	}
 
-	return err
-
+	return true, err
 }
 
 func parseErrorResponse(respTxt []byte) error {

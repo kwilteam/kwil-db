@@ -25,25 +25,28 @@ import (
 
 // KwilCliDriver is a driver for tests using `cmd/kwil-cli`
 type KwilCliDriver struct {
-	cliBin   string // kwil-cli binary path
-	rpcUrl   string
-	privKey  string
-	identity []byte
-	chainID  string
-	logger   log.Logger
+	cliBin          string // kwil-cli binary path
+	rpcUrl          string
+	privKey         string
+	identity        []byte
+	gatewayProvider bool
+	chainID         string
+	logger          log.Logger
 }
 
-func NewKwilCliDriver(cliBin, rpcUrl, privKey, chainID string, identity []byte, logger log.Logger) *KwilCliDriver {
+func NewKwilCliDriver(cliBin, rpcUrl, privKey, chainID string, identity []byte, gatewayProvider bool, logger log.Logger) *KwilCliDriver {
 	return &KwilCliDriver{
-		cliBin:   cliBin,
-		rpcUrl:   rpcUrl,
-		privKey:  privKey,
-		identity: identity,
-		logger:   logger,
-		chainID:  chainID,
+		cliBin:          cliBin,
+		rpcUrl:          rpcUrl,
+		privKey:         privKey,
+		identity:        identity,
+		gatewayProvider: gatewayProvider,
+		logger:          logger,
+		chainID:         chainID,
 	}
 }
 
+// newKwilCliCmd returns a new exec.Cmd for kwil-cli
 func (d *KwilCliDriver) newKwilCliCmd(args ...string) *exec.Cmd {
 	args = append(args, "--kwil-provider", d.rpcUrl)
 	args = append(args, "--private-key", d.privKey)
@@ -57,8 +60,27 @@ func (d *KwilCliDriver) newKwilCliCmd(args ...string) *exec.Cmd {
 	return cmd
 }
 
+// newKwilCliCmdWithYes this is a helper function to automatically answer yes to
+// all prompts. This is useful for testing.
+// The cmd will be executed as `yes | kwil-cli <args>`
+func (d *KwilCliDriver) newKwilCliCmdWithYes(args ...string) *exec.Cmd {
+	args = append([]string{"yes |", d.cliBin}, args...)
+
+	args = append(args, "--kwil-provider", d.rpcUrl)
+	args = append(args, "--private-key", d.privKey)
+	args = append(args, "--chain-id", d.chainID)
+	args = append(args, "--output", "json")
+
+	s := strings.Join(args, " ")
+
+	d.logger.Info("cli Cmd(with yes)", zap.String("args",
+		strings.Join(append([]string{"bash", "-c"}, s), " ")))
+
+	cmd := exec.Command("bash", "-c", s)
+	return cmd
+}
+
 // SupportBatch
-// kwil-cli does not support batched inputs.
 func (d *KwilCliDriver) SupportBatch() bool {
 	return false
 }
@@ -260,6 +282,7 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 
 	args := []string{}
 	for i, input := range action.Inputs {
+		input = input[1:] // remove the leading $
 		args = append(args, fmt.Sprintf("%s:%v", input, actionInputs[i]))
 	}
 	return args, nil
@@ -304,7 +327,7 @@ func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*c
 	return records, nil
 }
 
-func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []any, withSignature bool) (*client.Records, error) {
+func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []any) (*client.Records, error) {
 	// NOTE: kwil-cli does not support batched inputs
 	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs)
 	if err != nil {
@@ -314,12 +337,12 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 	args := []string{"database", "call", "--dbid", dbid, "--action", action}
 	args = append(args, actionInputs...)
 
-	if withSignature {
+	if d.gatewayProvider {
 		args = append(args, "--authenticate")
 	}
 
-	cmd := d.newKwilCliCmd(args...)
-	out, err := mustRun(cmd, d.logger)
+	cmd := d.newKwilCliCmdWithYes(args...)
+	out, err := mustRunCallIgnorePrompt(cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call action: %w", err)
 	}
@@ -356,8 +379,7 @@ func (d *KwilCliDriver) ChainInfo(_ context.Context) (*types.ChainInfo, error) {
 // mustRun runs the give command, and parse stdout
 func mustRun(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
 	cmd.Stderr = os.Stderr
-	//cmd.Stdout = os.Stdout
-	//// here we ignore the stdout
+	//// here we capture the stdout
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
@@ -367,6 +389,43 @@ func mustRun(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
 
 	output := out.Bytes()
 	// logger.Debug("cmd output", zap.String("output", string(output)))
+
+	var result *cliResponse
+	err = json.Unmarshal(output, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != "" {
+		return nil, errors.New(result.Error)
+	}
+
+	return result, nil
+}
+
+// mustRunCallIgnorePrompt runs the given `kwil-cli database call` command, and
+// throw away the prompt output. This is necessary for authn call, because
+// kwil-cli will prompt for confirmation.
+func mustRunCallIgnorePrompt(cmd *exec.Cmd, logger log.Logger) (*cliResponse, error) {
+	cmd.Stderr = os.Stderr
+	//// here we capture the stdout
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	output := out.Bytes()
+	// logger.Debug("cmd output", zap.String("output", string(output)))
+
+	// This is a bit hacky, throw away the first part prompt output, if any
+	prompted := "Do you want to sign this message?"
+	delimiter := "{\n"
+	if strings.Contains(string(output), prompted) {
+		logger.Debug("throw away prompt output")
+		output = []byte(delimiter + strings.SplitN(string(output), delimiter, 2)[1])
+	}
 
 	var result *cliResponse
 	err = json.Unmarshal(output, &result)

@@ -40,10 +40,10 @@ const TestChainID = "kwil-test-chain"
 
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
-	HTTPEndpoint          string
-	GrpcEndpoint          string
-	P2PAddress            string // cometbft p2p address
-	AdminClientUnixSocket string
+	HTTPEndpoint string
+	GrpcEndpoint string
+	P2PAddress   string // cometbft p2p address
+	AdminRPC     string // tcp or unix socket
 
 	SchemaFile                string
 	DockerComposeFile         string
@@ -136,7 +136,7 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 		HTTPEndpoint:              getEnv("KACT_HTTP_ENDPOINT", "http://localhost:8080"),
 		GrpcEndpoint:              getEnv("KACT_GRPC_ENDPOINT", "localhost:50051"),
 		P2PAddress:                getEnv("KACT_CHAIN_ENDPOINT", "tcp://0.0.0.0:26656"),
-		AdminClientUnixSocket:     getEnv("KACT_ADMIN_CLIENT_UNIX_SOCKET", "tcp://localhost:50151"),
+		AdminRPC:                  getEnv("KACT_ADMIN_RPC", "unix:///tmp/admin.sock"),
 		DockerComposeFile:         getEnv("KACT_DOCKER_COMPOSE_FILE", "./docker-compose.yml"),
 		DockerComposeOverrideFile: getEnv("KACT_DOCKER_COMPOSE_OVERRIDE_FILE", "./docker-compose.override.yml"),
 	}
@@ -323,7 +323,7 @@ func (r *ActHelper) getHTTPClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	})
 	require.NoError(r.t, err, "failed to create http client")
 
-	return driver.NewKwildClientDriver(kwilClt, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, logger)
 }
 
 func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver {
@@ -340,7 +340,7 @@ func (r *ActHelper) getGRPCClientDriver(signer auth.Signer) KwilAcceptanceDriver
 	})
 	require.NoError(r.t, err, "failed to create grpc client")
 
-	return driver.NewKwildClientDriver(kwilClt, logger)
+	return driver.NewKwildClientDriver(kwilClt, signer, logger)
 }
 
 func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptanceDriver {
@@ -350,5 +350,5 @@ func (r *ActHelper) getCliDriver(privKey string, identifier []byte) KwilAcceptan
 	cliBinPath := path.Join(path.Dir(currentFilePath),
 		fmt.Sprintf("../../.build/kwil-cli-%s-%s", runtime.GOOS, runtime.GOARCH))
 
-	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, TestChainID, identifier, logger)
+	return driver.NewKwilCliDriver(cliBinPath, r.cfg.HTTPEndpoint, privKey, TestChainID, identifier, false, logger)
 }

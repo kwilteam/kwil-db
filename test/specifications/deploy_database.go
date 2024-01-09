@@ -40,12 +40,12 @@ func DatabaseDeployInvalidSql1Specification(ctx context.Context, t *testing.T, d
 	// Then i expect tx failure
 	expectTxFail(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
 
-	// read in fixed schema
+	// deploy fixed schema
 	db2 := SchemaLoader.Load(t, schemaInvalidSqlSyntaxFixed)
-	_, err = deploy.DeployDatabase(ctx, db2)
+	txHash2, err := deploy.DeployDatabase(ctx, db2)
 	require.NoError(t, err, "failed to send deploy database tx")
 
-	expectTxSuccess(t, deploy, ctx, txHash, defaultTxQueryTimeout)()
+	expectTxSuccess(t, deploy, ctx, txHash2, defaultTxQueryTimeout)()
 
 	err = deploy.DatabaseExists(ctx, deploy.DBID(db.Name))
 	require.NoError(t, err)
