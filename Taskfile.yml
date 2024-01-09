@@ -111,7 +111,7 @@ tasks:
     deps:
       - task: vendor:clean
     cmds:
-      - go mod vendor
+      - go mod vendor || go work vendor
 
   vendor:clean:
     desc: Clean vendor

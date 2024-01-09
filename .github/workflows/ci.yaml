@@ -85,8 +85,7 @@ jobs:
       - name: Generate go vendor
         #for faster builds and private repos, need to run this after pb:compile:v1
         run: |
-          rm -rf vendor
-          GOWORK=off go mod vendor
+          task vendor
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -128,7 +127,7 @@ jobs:
           rm -rf /tmp/kgw
           git clone https://github.com/kwilteam/kgw.git /tmp/kgw
           cd /tmp/kgw
-          GOWORK=off go mod vendor
+          go mod vendor || go work vendor
           cd -
 
       - name: Build kgw image
