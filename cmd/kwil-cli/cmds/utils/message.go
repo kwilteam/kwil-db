@@ -2,14 +2,12 @@ package utils
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"reflect"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 type respChainInfo struct {
@@ -28,46 +26,6 @@ Hash: %s
 		r.Info.ChainID,
 		r.Info.BlockHeight,
 		r.Info.BlockHash,
-	)
-
-	return []byte(msg), nil
-}
-
-// respTxQuery is used to represent a transaction response in cli
-type respTxQuery struct {
-	Msg *transactions.TcTxQueryResponse
-}
-
-func (r *respTxQuery) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Hash     string                         `json:"hash"` // HEX
-		Height   int64                          `json:"height"`
-		Tx       transactions.Transaction       `json:"tx"`
-		TxResult transactions.TransactionResult `json:"tx_result"`
-	}{
-		Hash:     hex.EncodeToString(r.Msg.Hash),
-		Height:   r.Msg.Height,
-		Tx:       r.Msg.Tx,
-		TxResult: r.Msg.TxResult,
-	})
-}
-
-func (r *respTxQuery) MarshalText() ([]byte, error) {
-	status := "failed"
-	if r.Msg.Height == -1 {
-		status = "pending"
-	} else if r.Msg.TxResult.Code == transactions.CodeOk.Uint32() {
-		status = "success"
-	}
-
-	msg := fmt.Sprintf(`Transaction ID: %s
-Status: %s
-Height: %d
-Log: %s`,
-		hex.EncodeToString(r.Msg.Hash),
-		status,
-		r.Msg.Height,
-		r.Msg.TxResult.Log,
 	)
 
 	return []byte(msg), nil
