@@ -38,7 +38,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 	"github.com/kwilteam/kwil-db/internal/voting"
-	"github.com/kwilteam/kwil-db/oracles"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -84,7 +83,6 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// event store
 	ev := buildEventStore(d, closers)
 
-	buildOracles(d, ev)
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
 	// in order to get this, we need the comet node
@@ -117,6 +115,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		adminTPCServer: adminTCPServer,
 		gateway:        buildGatewayServer(d),
 		cometBftNode:   cometBftNode,
+		eventStore:     ev,
 		log:            *d.log.Named("server"),
 		closers:        closers,
 		cfg:            d.cfg,
@@ -650,15 +649,5 @@ func buildCommitter(d *coreDependencies, closers *closeFuncs) *sessions.MultiCom
 func failBuild(err error, msg string) {
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
-	}
-}
-
-func buildOracles(d *coreDependencies, eventStore oracles.EventStore) {
-	oracles := oracles.RegisteredOracles()
-	for name, oracle := range oracles {
-		err := oracle.Initialize(d.ctx, eventStore, d.cfg.AppCfg.Oracles[name], *d.log.Named(name))
-		if err != nil {
-			failBuild(err, "failed to initialize oracle "+name)
-		}
 	}
 }

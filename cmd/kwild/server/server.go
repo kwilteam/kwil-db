@@ -17,11 +17,11 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
-	"github.com/kwilteam/kwil-db/oracles"
 
 	// internalize
 	"go.uber.org/zap"
@@ -34,6 +34,7 @@ type Server struct {
 	gateway        *gateway.GatewayServer
 	adminTPCServer *grpc.Server
 	cometBftNode   *cometbft.CometBftNode
+	eventStore     oracles.EventStore
 	closers        *closeFuncs
 	log            log.Logger
 
@@ -183,20 +184,20 @@ func (s *Server) Start(ctx context.Context) error {
 	oracles := oracles.RegisteredOracles()
 	for name, oracle := range oracles {
 		oracleName := name
-		oracleInstance := oracle
+		oracleInst := oracle
 
 		s.log.Info("starting oracle", zap.String("name", oracleName))
 		group.Go(func() error {
 			go func() {
 				<-groupCtx.Done()
 				s.log.Info("stop oracle", zap.String("name", oracleName))
-				if err := oracleInstance.Stop(); err != nil {
+				if err := oracleInst.Stop(); err != nil {
 					s.log.Warn("failed to stop oracle", zap.String("name", oracleName), zap.Error(err))
 				}
 			}()
 
 			// Start the oracle
-			return oracleInstance.Start(groupCtx)
+			return oracleInst.Start(groupCtx, s.eventStore, s.cfg.AppCfg.Oracles[oracleName], *s.log.Named(oracleName))
 		})
 	}
 

@@ -1,7 +1,8 @@
-package ethbridge
+package deposit_oracle
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -30,7 +31,20 @@ func (ac *AccountCredit) Type() string {
 }
 
 func (ac *AccountCredit) Apply(ctx context.Context, datastores *voting.Datastores) error {
-	err := datastores.Accounts.Credit(ctx, []byte(ac.Account), ac.Amount)
+	// trim the 0x prefix
+	if len(ac.Account) > 2 && ac.Account[:2] == "0x" {
+		ac.Account = ac.Account[2:]
+	} else {
+		return fmt.Errorf("account address must start with 0x")
+	}
+
+	// decode the hex string into a byte slice
+	bts, err := hex.DecodeString(ac.Account)
+	if err != nil {
+		return err
+	}
+
+	err = datastores.Accounts.Credit(ctx, bts, ac.Amount)
 	if err != nil {
 		return err
 	}
