@@ -49,10 +49,8 @@ type AccountStore interface {
 
 type Datastore interface {
 	// Execute executes a statement with the given arguments.
-	Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error)
+	Execute(ctx context.Context, dbid string, stmt string, args map[string]any) (*sql.ResultSet, error)
 	// Query executes a query with the given arguments.
 	// It will not read uncommitted data.
-	Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error)
-	// Savepoint creates a savepoint.
-	Savepoint() (sql.Savepoint, error)
+	Query(ctx context.Context, dbid string, query string, args map[string]any) (*sql.ResultSet, error)
 }

@@ -742,7 +742,6 @@ func (a *AbciApp) PrepareProposal(ctx context.Context, req *abciTypes.RequestPre
 			return nil, fmt.Errorf("failed to marshal proposer transaction: %w", err)
 		}
 		proposerTxBts = append(proposerTxBts, bts)
-		fmt.Println("Proposer inserted tx: ", tx.Body.Nonce, " proposer addr: ", hex.EncodeToString(tx.Sender))
 	}
 
 	txs := append(req.Txs, proposerTxBts...)

@@ -72,8 +72,8 @@ func Test_Routes(t *testing.T) {
 
 							return nil
 						},
-						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
-							return true, nil
+						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, bool, error) {
+							return false, true, nil
 						},
 					},
 					EventStore: &mockEventStore{
@@ -114,8 +114,8 @@ func Test_Routes(t *testing.T) {
 
 							return nil
 						},
-						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, error) {
-							return true, nil
+						containsBodyOrFinished: func(ctx context.Context, resolutionID types.UUID) (bool, bool, error) {
+							return false, true, nil
 						},
 					},
 					EventStore: &mockEventStore{
@@ -343,7 +343,7 @@ func (m *mockAccountStore) Transfer(ctx context.Context, to []byte, from []byte,
 type mockVoteStore struct {
 	alreadyProcessed            func(ctx context.Context, resolutionID types.UUID) (bool, error)
 	approve                     func(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error
-	containsBodyOrFinished      func(ctx context.Context, resolutionID types.UUID) (bool, error)
+	containsBodyOrFinished      func(ctx context.Context, resolutionID types.UUID) (bool, bool, error)
 	createResolution            func(ctx context.Context, event *types.VotableEvent, expiration int64) error
 	expire                      func(ctx context.Context, blockheight int64) error
 	hasVoted                    func(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
@@ -367,12 +367,12 @@ func (m *mockVoteStore) Approve(ctx context.Context, resolutionID types.UUID, ex
 	return nil
 }
 
-func (m *mockVoteStore) ContainsBodyOrFinished(ctx context.Context, resolutionID types.UUID) (bool, error) {
+func (m *mockVoteStore) ContainsBodyOrFinished(ctx context.Context, resolutionID types.UUID) (bool, bool, error) {
 	if m.containsBodyOrFinished != nil {
 		return m.containsBodyOrFinished(ctx, resolutionID)
 	}
 
-	return false, nil
+	return true, false, nil
 }
 
 func (m *mockVoteStore) CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error {

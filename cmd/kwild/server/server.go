@@ -21,6 +21,7 @@ import (
 	gateway "github.com/kwilteam/kwil-db/internal/services/grpc_gateway"
 	grpc "github.com/kwilteam/kwil-db/internal/services/grpc_server"
 	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/kwilteam/kwil-db/oracles"
 
 	// internalize
 	"go.uber.org/zap"
@@ -178,6 +179,26 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.cometBftNode.Start()
 	})
 	s.log.Info("comet node started")
+
+	oracles := oracles.RegisteredOracles()
+	for name, oracle := range oracles {
+		oracleName := name
+		oracleInstance := oracle
+
+		s.log.Info("starting oracle", zap.String("name", oracleName))
+		group.Go(func() error {
+			go func() {
+				<-groupCtx.Done()
+				s.log.Info("stop oracle", zap.String("name", oracleName))
+				if err := oracleInstance.Stop(); err != nil {
+					s.log.Warn("failed to stop oracle", zap.String("name", oracleName), zap.Error(err))
+				}
+			}()
+
+			// Start the oracle
+			return oracleInstance.Start(groupCtx)
+		})
+	}
 
 	err := group.Wait()
 

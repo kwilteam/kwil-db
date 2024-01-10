@@ -38,6 +38,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	vmgr "github.com/kwilteam/kwil-db/internal/validators"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/oracles"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -61,8 +62,11 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// atomic committer
 	ac := buildCommitter(d, closers)
 
+	// registry
+	reg := buildRegistry(d, closers)
+
 	// engine
-	e := buildEngine(d, closers, ac)
+	e := buildEngine(d, closers, ac, reg)
 
 	// account store
 	accs := buildAccountRepository(d, closers, ac)
@@ -75,11 +79,12 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	bootstrapperModule := buildBootstrapper(d)
 
 	// vote store
-	v := buildVoteStore(d, closers, accs)
+	v := buildVoteStore(d, closers, accs, reg)
 
 	// event store
 	ev := buildEventStore(d, closers)
 
+	buildOracles(d, ev)
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
 	// in order to get this, we need the comet node
@@ -205,14 +210,14 @@ func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broad
 	return broadcast.NewEventBroadcaster(ev, b, accs, v, buildSigner(d), d.genesisCfg.ChainID)
 }
 
-func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountStore) *voting.VoteProcessor {
+func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountStore, reg *registry.Registry) *voting.VoteProcessor {
 	db, err := d.opener(d.ctx, filepath.Join(d.cfg.RootDir, applicationDirName, votesDBName), 1, 2, true)
 	if err != nil {
 		failBuild(err, "failed to open votes db")
 	}
 	closer.addCloser(db.Close)
 
-	v, err := voting.NewVoteProcessor(d.ctx, db, acc, 666667) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
+	v, err := voting.NewVoteProcessor(d.ctx, db, acc, reg, 666667) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
 	if err != nil {
 		failBuild(err, "failed to build vote store")
 	}
@@ -256,16 +261,7 @@ func buildSigner(d *coreDependencies) *auth.Ed25519Signer {
 	return &auth.Ed25519Signer{Ed25519PrivateKey: *pk}
 }
 
-func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommitter) *execution.GlobalContext {
-	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
-	if err != nil {
-		failBuild(err, "failed to get extensions")
-	}
-
-	for name := range extensions {
-		d.log.Info("registered extension", zap.String("name", name))
-	}
-
+func buildRegistry(d *coreDependencies, closer *closeFuncs) *registry.Registry {
 	reg, err := registry.NewRegistry(d.ctx, func(ctx context.Context, dbid string, create bool) (registry.Pool, error) {
 		return sqlite.NewPool(ctx, dbid, 1, 2, true)
 	}, d.cfg.AppCfg.SqliteFilePath, registry.WithReaderWaitTimeout(time.Millisecond*100), registry.WithLogger(
@@ -273,6 +269,19 @@ func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommi
 	))
 	if err != nil {
 		failBuild(err, "failed to build registry")
+	}
+
+	return reg
+}
+
+func buildEngine(d *coreDependencies, closer *closeFuncs, a *sessions.MultiCommitter, reg *registry.Registry) *execution.GlobalContext {
+	extensions, err := getExtensions(d.ctx, d.cfg.AppCfg.ExtensionEndpoints)
+	if err != nil {
+		failBuild(err, "failed to get extensions")
+	}
+
+	for name := range extensions {
+		d.log.Info("registered extension", zap.String("name", name))
 	}
 
 	eng, err := execution.NewGlobalContext(d.ctx, reg, adaptExtensions(extensions))
@@ -641,5 +650,15 @@ func buildCommitter(d *coreDependencies, closers *closeFuncs) *sessions.MultiCom
 func failBuild(err error, msg string) {
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
+	}
+}
+
+func buildOracles(d *coreDependencies, eventStore oracles.EventStore) {
+	oracles := oracles.RegisteredOracles()
+	for name, oracle := range oracles {
+		err := oracle.Initialize(d.ctx, eventStore, d.cfg.AppCfg.Oracles[name], *d.log.Named(name))
+		if err != nil {
+			failBuild(err, "failed to initialize oracle "+name)
+		}
 	}
 }

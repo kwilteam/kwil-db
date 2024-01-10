@@ -83,7 +83,7 @@ type VoteStore interface {
 	// 1. the resolution has a body
 	// 2. the resolution has expired
 	// 3. the resolution has been approved
-	ContainsBodyOrFinished(ctx context.Context, resolutionID types.UUID) (bool, error)
+	ContainsBodyOrFinished(ctx context.Context, resolutionID types.UUID) (bool, bool, error)
 	CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error
 	Expire(ctx context.Context, blockheight int64) error
 	UpdateVoter(ctx context.Context, identifier []byte, power int64) error

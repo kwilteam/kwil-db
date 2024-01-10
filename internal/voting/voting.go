@@ -6,13 +6,20 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
+
+type VoteStore interface {
+	Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error)
+	Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error)
+	Savepoint() (sql.Savepoint, error)
+}
 
 // NewVoteProcessor creates a new vote processor.
 // It initializes the database with the required tables.
 // The threshold is the percentThreshold of votes required to approve a resolution
 // It must be an integer between 0 and 1000000.  This defines the percentage
-func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, threshold int64) (*VoteProcessor, error) {
+func NewVoteProcessor(ctx context.Context, db VoteStore, accounts AccountStore, reg Datastore, threshold int64) (*VoteProcessor, error) {
 	sp, err := db.Savepoint()
 	if err != nil {
 		return nil, err
@@ -75,6 +82,7 @@ func NewVoteProcessor(ctx context.Context, db Datastore, accounts AccountStore, 
 		percentThreshold: threshold,
 		db:               db,
 		accounts:         accounts,
+		registry:         reg,
 	}, nil
 }
 
@@ -87,8 +95,9 @@ type VoteProcessor struct {
 	// of total voting power required to approve a resolution (e.g. 500000 = 50%)
 	percentThreshold int64
 
-	db       Datastore
+	db       VoteStore
 	accounts AccountStore
+	registry Datastore
 }
 
 // ResolutionVoteInfo is a struct that contains information about the status of a resolution
@@ -305,36 +314,40 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 // 1. the resolution has a body
 // 2. the resolution has expired
 // 3. the resolution has been approved
-func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUID) (bool, error) {
+func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUID) (processed bool, containsBody bool, err error) {
 	// we check for existence of body in resolutions table before checking
 	// for the resolution ID in the processed table, since it is a faster lookup.
 	// furthermore, we are more likely to hit the resolutions table during consensus,
 	// and processed table during catchup. consensus speed is more important.
+	processed, err = v.alreadyProcessed(ctx, id)
+	if err != nil {
+		return false, false, err
+	}
+
+	if processed {
+		return true, false, nil
+	}
+
 	res, err := v.db.Query(ctx, getResolutionBody, map[string]interface{}{
 		"$id": id[:],
 	})
 	if err != nil {
-		return false, err
+		return processed, false, err
 	}
 
 	if len(res.Rows) == 0 {
-		return false, ErrResolutionNotFound
+		return processed, false, ErrResolutionNotFound
 	}
 	if len(res.Rows[0]) != 1 {
 		// this should never happen, just for safety
-		return false, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		return processed, false, fmt.Errorf("invalid number of columns returned. this is an internal bug")
 	}
 
 	if res.Rows[0][0] != nil {
-		return true, nil
+		return processed, true, nil
 	}
 
-	processed, err := v.alreadyProcessed(ctx, id)
-	if err != nil {
-		return false, err
-	}
-
-	return processed, nil
+	return processed, false, nil
 }
 
 // GetVotesByCategory gets all votes of a specific category.
@@ -540,7 +553,7 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 
 		err = payload.Apply(ctx, &Datastores{
 			Accounts:  v.accounts,
-			Databases: v.db,
+			Databases: v.registry,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply payload: %w", err)

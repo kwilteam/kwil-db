@@ -471,14 +471,14 @@ func Test_Votes(t *testing.T) {
 					Type: examplePayloadType,
 				}
 
-				_, err = v.ContainsBodyOrFinished(ctx, event.ID())
+				_, _, err = v.ContainsBodyOrFinished(ctx, event.ID())
 				require.ErrorIs(t, err, voting.ErrResolutionNotFound)
 
 				// approve vote
 				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
-				hasBody, err := v.ContainsBodyOrFinished(ctx, event.ID())
+				_, hasBody, err := v.ContainsBodyOrFinished(ctx, event.ID())
 				require.NoError(t, err)
 				require.False(t, hasBody)
 
@@ -486,7 +486,7 @@ func Test_Votes(t *testing.T) {
 				err = v.CreateResolution(ctx, event, 10000)
 				require.NoError(t, err)
 
-				hasBody, err = v.ContainsBodyOrFinished(ctx, event.ID())
+				_, hasBody, err = v.ContainsBodyOrFinished(ctx, event.ID())
 				require.NoError(t, err)
 				require.True(t, hasBody)
 			},
@@ -602,10 +602,10 @@ func Test_Votes(t *testing.T) {
 				Accounts: &mockAccountStore{
 					accounts: map[string]*accounts.Account{},
 				},
-				Databases: &db{conn: conn},
+				Databases: nil,
 			}
 
-			v, err := voting.NewVoteProcessor(ctx, ds.Databases, ds.Accounts, 500000)
+			v, err := voting.NewVoteProcessor(ctx, &db{conn: conn}, ds.Accounts, ds.Databases, 500000)
 			if err != nil {
 				t.Fatal(err)
 			}
