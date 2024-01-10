@@ -95,9 +95,15 @@ func (do *DepositOracle) resubscribe(ctx context.Context, sub ethereum.Subscript
 	}
 	// keep trying to resubscribe until it works
 	for {
-		time.Sleep(retrier.Duration())
 		sub, err := do.ethclient.SubscribeNewHead(ctx, headers)
 		if err != nil {
+			// fail after 15 retries,
+			// TODO: shld we make this configurable
+			if retrier.Attempt() > 15 {
+				return nil, err
+			}
+
+			time.Sleep(retrier.Duration())
 			continue
 		}
 		retrier.Reset()
@@ -125,9 +131,13 @@ func (do *DepositOracle) filterLogs(ctx context.Context, from int64, to int64) (
 			Jitter: true,
 		}
 		for {
-			time.Sleep(retrier.Duration())
 			logs, err := do.ethclient.FilterLogs(ctx, query)
 			if err != nil {
+				// fail after 15 retries
+				if retrier.Attempt() > 15 {
+					return nil, err
+				}
+				time.Sleep(retrier.Duration())
 				continue
 			}
 
