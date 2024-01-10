@@ -1,10 +1,11 @@
-package parameters
+package parameters_test
 
 import (
 	"strings"
 	"testing"
 	"unicode"
 
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 )
 
@@ -47,7 +48,7 @@ func Test_Parameters(t *testing.T) {
 				t.Errorf("Parameters() = %v, want %v", err, tt.wantParams)
 			}
 
-			v := NewParametersVisitor()
+			v := parameters.NewParametersVisitor()
 
 			if err := ast.Accept(v); err != nil {
 				t.Errorf("Parameters() = %v, want %v", err, tt.wantParams)
