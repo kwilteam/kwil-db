@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/clean"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/join"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
@@ -75,6 +76,17 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*Analyzed
 		}
 	}
 
+	orderedParams := []string{}
+	if flags&ReplaceNamedParameters != 0 {
+		paramVisitor := parameters.NewParametersVisitor()
+		err := accept.Accept(paramVisitor)
+		if err != nil {
+			return nil, fmt.Errorf("error replacing named parameters: %w", err)
+		}
+
+		orderedParams = paramVisitor.NumberedParameters()
+	}
+
 	mutative, err := isMutative(parsed)
 	if err != nil {
 		return nil, fmt.Errorf("error determining mutativity: %w", err)
@@ -86,8 +98,9 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*Analyzed
 	}
 
 	return &AnalyzedStatement{
-		stmt:     generated,
-		mutative: mutative,
+		stmt:          generated,
+		mutative:      mutative,
+		orderedParams: orderedParams,
 	}, nil
 }
 
@@ -115,10 +128,12 @@ const (
 	GuaranteedOrder
 	// DeterministicAggregates enforces that aggregates are deterministic
 	DeterministicAggregates
+	// ReplaceNamedParameters replaces named parameters with numbered parameters
+	ReplaceNamedParameters
 )
 
 const (
-	AllRules = NoCartesianProduct | GuaranteedOrder | DeterministicAggregates
+	AllRules = NoCartesianProduct | GuaranteedOrder | DeterministicAggregates // TODO: once postgres is supported, add | ReplaceNamedParameters
 )
 
 // AnalyzedStatement is a statement that has been analyzed by the analyzer
@@ -126,6 +141,8 @@ const (
 type AnalyzedStatement struct {
 	stmt     string
 	mutative bool
+	// if the statement replaces $id, $name with $1, $2, then this will be ["$id", "$name"]
+	orderedParams []string
 }
 
 // Mutative returns true if the statement will mutate the database
@@ -137,4 +154,14 @@ func (a *AnalyzedStatement) Mutative() bool {
 // It may contains changes to the original statement, depending on the flags that were passed in
 func (a *AnalyzedStatement) Statement() string {
 	return a.stmt
+}
+
+// OrderedParameters returns the parameters in the order that they appeared in the statement
+// For example, if the statement was SELECT * FROM tbl WHERE a = $a AND b = $b, the query would be rewritten
+// as SELECT * FROM tbl WHERE a = $1 AND b = $2, and this function would return []string{"$a", "$b"}.
+// If ReplaceNamedParameters was not passed in, this will return an empty slice.
+func (a *AnalyzedStatement) OrderedParameters() []string {
+	vals := make([]string, len(a.orderedParams))
+	copy(vals, a.orderedParams)
+	return vals
 }
