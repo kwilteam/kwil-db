@@ -368,11 +368,7 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}
 
-			if processed {
-				continue
-			}
-
-			if containsBody {
+			if processed || containsBody {
 				err = router.EventStore.DeleteEvent(ctx.Ctx, voteID)
 				if err != nil {
 					return txRes(spend, transactions.CodeUnknownError, err)
