@@ -97,7 +97,9 @@ func (do *DepositOracle) Start(ctx context.Context, eventstore oracles.EventStor
 }
 
 func (do *DepositOracle) Stop() error {
-	do.ethclient.Close()
+	if do.ethclient != nil {
+		do.ethclient.Close()
+	}
 	return nil
 }
 
