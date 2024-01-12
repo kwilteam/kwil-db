@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/sql"
@@ -605,7 +606,7 @@ func Test_Votes(t *testing.T) {
 				Databases: nil,
 			}
 
-			v, err := voting.NewVoteProcessor(ctx, &db{conn: conn}, ds.Accounts, ds.Databases, 500000)
+			v, err := voting.NewVoteProcessor(ctx, &db{conn: conn}, ds.Accounts, ds.Databases, 500000, log.NewStdOut(log.DebugLevel))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -696,7 +697,7 @@ type exampleResolutionPayload struct {
 	Amount   int64  `json:"amount"`
 }
 
-func (e *exampleResolutionPayload) Apply(ctx context.Context, datastores *voting.Datastores) error {
+func (e *exampleResolutionPayload) Apply(ctx context.Context, datastores *voting.Datastores, logger log.Logger) error {
 	if e.Account == nil {
 		return fmt.Errorf("account is required")
 	}

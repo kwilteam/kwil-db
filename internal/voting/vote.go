@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/sql"
 )
@@ -29,7 +30,7 @@ type ResolutionPayload interface {
 	// UnmarshalBinary unmarshals the payload from binary data.
 	UnmarshalBinary(data []byte) error
 	// Apply is called when a resolution is approved.
-	Apply(ctx context.Context, datastores *Datastores) error
+	Apply(ctx context.Context, datastores *Datastores, logger log.Logger) error
 }
 
 // Datastores provides implementers of ResolutionPayload with access

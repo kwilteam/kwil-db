@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/internal/voting"
+	"go.uber.org/zap"
 )
 
 type AccountCredit struct {
@@ -30,7 +32,7 @@ func (ac *AccountCredit) Type() string {
 	return "AccountCredit"
 }
 
-func (ac *AccountCredit) Apply(ctx context.Context, datastores *voting.Datastores) error {
+func (ac *AccountCredit) Apply(ctx context.Context, datastores *voting.Datastores, logger log.Logger) error {
 	// trim the 0x prefix
 	if len(ac.Account) > 2 && ac.Account[:2] == "0x" {
 		ac.Account = ac.Account[2:]
@@ -48,7 +50,6 @@ func (ac *AccountCredit) Apply(ctx context.Context, datastores *voting.Datastore
 	if err != nil {
 		return err
 	}
-	fmt.Println("Credited account for deposit, account: ", ac.Account, " amount: ", ac.Amount.String())
-
+	logger.Info("Credited account for deposit", zap.String("account", ac.Account), zap.String("amount", ac.Amount.String()))
 	return nil
 }

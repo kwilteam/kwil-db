@@ -216,7 +216,7 @@ func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountS
 	}
 	closer.addCloser(db.Close)
 
-	v, err := voting.NewVoteProcessor(d.ctx, db, acc, reg, 666667) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
+	v, err := voting.NewVoteProcessor(d.ctx, db, acc, reg, 666667, *d.log.Named("vote-processor")) // maybe there is a more precise way to set 2/3rd that is deterministic across nodes?
 	if err != nil {
 		failBuild(err, "failed to build vote store")
 	}

@@ -3,7 +3,6 @@ package deposit_oracle
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -33,6 +32,7 @@ func (do *DepositOracle) listen(ctx context.Context) error {
 
 		lastHeight = max(lastHeight, do.cfg.startingHeight)
 		requiredConfirmations := do.cfg.requiredConfirmations
+		do.logger.Debug("Started listening for new blocks on ethereum: ", zap.Int64("lastHeight", lastHeight), zap.Int64("requiredConfirmations", requiredConfirmations))
 		for {
 			select {
 			case <-ctx.Done():
@@ -48,7 +48,7 @@ func (do *DepositOracle) listen(ctx context.Context) error {
 				}
 
 			case <-time.After(do.cfg.reconnectInterval):
-				fmt.Println("subscription timeout")
+				do.logger.Debug("subscription timeout")
 				sub, err = do.resubscribe(ctx, sub, headers)
 				if err != nil {
 					do.logger.Error("Failed to resubscribe", zap.Error(err))
@@ -190,7 +190,6 @@ func (do *DepositOracle) getBlockHeight(ctx context.Context) (int64, error) {
 	}
 
 	height := binary.BigEndian.Uint64(blockBytes)
-	fmt.Println("Last processed block", height)
 	return int64(height), nil
 }
 

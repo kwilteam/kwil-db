@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/sql"
 )
@@ -19,7 +20,7 @@ type VoteStore interface {
 // It initializes the database with the required tables.
 // The threshold is the percentThreshold of votes required to approve a resolution
 // It must be an integer between 0 and 1000000.  This defines the percentage
-func NewVoteProcessor(ctx context.Context, db VoteStore, accounts AccountStore, reg Datastore, threshold int64) (*VoteProcessor, error) {
+func NewVoteProcessor(ctx context.Context, db VoteStore, accounts AccountStore, reg Datastore, threshold int64, logger log.Logger) (*VoteProcessor, error) {
 	sp, err := db.Savepoint()
 	if err != nil {
 		return nil, err
@@ -83,6 +84,7 @@ func NewVoteProcessor(ctx context.Context, db VoteStore, accounts AccountStore, 
 		db:               db,
 		accounts:         accounts,
 		registry:         reg,
+		logger:           logger,
 	}, nil
 }
 
@@ -98,6 +100,8 @@ type VoteProcessor struct {
 	db       VoteStore
 	accounts AccountStore
 	registry Datastore
+
+	logger log.Logger
 }
 
 // ResolutionVoteInfo is a struct that contains information about the status of a resolution
@@ -554,7 +558,7 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 		err = payload.Apply(ctx, &Datastores{
 			Accounts:  v.accounts,
 			Databases: v.registry,
-		})
+		}, v.logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply payload: %w", err)
 		}
