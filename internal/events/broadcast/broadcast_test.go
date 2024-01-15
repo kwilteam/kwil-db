@@ -7,12 +7,13 @@ import (
 	"math/big"
 
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/events/broadcast"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_Broadcaster(t *testing.T) {

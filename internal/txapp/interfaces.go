@@ -113,5 +113,6 @@ type EventStore interface {
 // AtomicCommitter is an interface for a struct that implements atomic commits across multiple stores
 type AtomicCommitter interface {
 	Begin(ctx context.Context, idempotencyKey []byte) error
-	Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error)
+	Precommit(ctx context.Context) ([]byte, error)
+	Commit(ctx context.Context) error
 }

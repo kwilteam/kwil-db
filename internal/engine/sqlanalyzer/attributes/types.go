@@ -225,10 +225,8 @@ func (r *returnTypeWalker) EnterExpressionLiteral(p0 *tree.ExpressionLiteral) er
 		return err
 	}
 	switch dataTypes {
-	case types.TEXT:
-		r.set(types.TEXT)
-	case types.INT:
-		r.set(types.INT)
+	case types.TEXT, types.BOOL, types.INT:
+		r.set(dataTypes)
 	default:
 		return fmt.Errorf("unknown literal type for analyzed relation attribute: %s", dataTypes)
 	}

@@ -2,8 +2,8 @@ package validation
 
 // max name lengths
 const (
-	MAX_OWNER_NAME_LENGTH = 44 // ETH addresses are 42, Solana are 44
-	MAX_IDENT_NAME_LENGTH = 32
+	MAX_OWNER_NAME_LENGTH = 44  // ETH addresses are 42, Solana are 44
+	MAX_IDENT_NAME_LENGTH = 128 // reasoning for this value?  Also, does this apply to table names, which are potentially long with a schema prefix?
 )
 
 // table restrictions

@@ -39,7 +39,7 @@ func init() {
 
 	// Register the AccountCredit payload with the Vote Processor
 	payload := &AccountCredit{}
-	err = voting.RegisterPaylod(payload)
+	err = voting.RegisterPayload(payload)
 	if err != nil {
 		panic(err)
 	}
@@ -51,7 +51,7 @@ func init() {
 type EthDepositOracle struct {
 	cfg                  EthDepositOracleConfig
 	eventstore           oracles.EventStore
-	kvstore              sql.KVStore
+	kvstore              sql.KV
 	creditEventSignature common.Hash
 	eventABI             abi.ABI
 	ethclient            *ethereumClient.Client

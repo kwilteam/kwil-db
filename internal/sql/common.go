@@ -47,14 +47,13 @@ type KV interface {
 // started with BeginTx.
 type TxCloser interface {
 	Rollback(ctx context.Context) error
+	Precommit(ctx context.Context) ([]byte, error)
 	Commit(ctx context.Context) error
 }
 
 type TxBeginner interface {
 	Begin(ctx context.Context) (TxCloser, error)
 }
-
-// type Tx = TxCloser // refactoring
 
 // TxMaker is the special kind of transaction beginner that can make nested
 // transactions, and that explicitly scopes Query/Execute to the tx.
@@ -64,8 +63,7 @@ type TxMaker interface {
 
 // Tx can do it all, including start nested transactions.
 //
-// TODO: after refactoring this should become Tx and anything using implicit
-// tx/session management should use TxCloser.
+// Anything using implicit tx/session management should use TxCloser.
 type Tx interface {
 	Queryer
 	Executor

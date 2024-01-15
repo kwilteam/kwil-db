@@ -7,7 +7,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
-	sql "github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/sql"
 )
 
 type Dataset interface {
@@ -21,9 +21,9 @@ type Dataset interface {
 // It implements the Dataset interface.
 type baseDataset struct {
 	// readWrite is a readWriter connection to the dataset.
-	readWriter sql.ResultSetFunc
+	readWriter types.ResultSetFunc
 	// read is a read connection to the dataset.
-	read sql.ResultSetFunc
+	read types.ResultSetFunc
 
 	// schema is the schema of the dataset.
 	schema *types.Schema
@@ -88,7 +88,8 @@ var _ Dataset = (*protectedDataset)(nil)
 // Execute executes a statement on the dataset.
 func (d *protectedDataset) Execute(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
 	// TODO: once we switch to postgres, we will have to switch the named parameters to positional parameters
-	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables, d.schema.DBID())
+	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables,
+		types.DBIDSchema(d.schema.DBID()))
 	if err != nil {
 		return nil, fmt.Errorf("error analyzing statement: %w", err)
 	}
@@ -103,7 +104,8 @@ func (d *protectedDataset) Query(ctx context.Context, stmt string, params map[st
 	// however, we don't actually know if this is being called from a non-mutative context.
 	// It is very possible that this is being called from an action that later mutates the database,
 	// so we need to guarantee determinism here.
-	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables, d.schema.DBID())
+	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables,
+		types.DBIDSchema(d.schema.DBID()))
 	if err != nil {
 		return nil, fmt.Errorf("error analyzing statement: %w", err)
 	}

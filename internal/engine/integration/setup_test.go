@@ -1,57 +1,136 @@
-// package inregration_test contains full engine integration tests
+//go:build pglive
+
+// package integration_test contains full engine integration tests
 package integration_test
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"os"
+	"strings"
 	"testing"
-	"time"
 
+	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/internal/conv"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/registry"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
 )
 
-// setup sets up the global context and registry for the tests
-func setup(t *testing.T) (global *execution.GlobalContext, reg *registry.Registry, err error) {
-	t.Helper()
+func TestMain(m *testing.M) {
+	// pg.UseLogger(log.NewStdOut(log.InfoLevel)) // uncomment for debugging
+	m.Run()
+}
 
-	cleanup := func() {
-		err := os.RemoveAll("./tmp")
+// setup sets up the global context and registry for the tests
+func setup(t *testing.T) (global *execution.GlobalContext, reg *registry.Registry, db *pg.DB, err error) {
+	ctx := context.Background()
+
+	cfg := &pg.DBConfig{
+		PoolConfig: pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   "/var/run/postgresql",
+				Port:   "",
+				User:   "kwil_test_user",
+				Pass:   "kwil", // would be ignored if pg_hba.conf set with trust
+				DBName: "kwil_test_db",
+			},
+			MaxConns: 11,
+		},
+		SchemaFilter: func(s string) bool {
+			return strings.Contains(s, "ds_")
+		},
+	}
+	db, err = pg.NewDB(ctx, cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	db.AutoCommit(true)        // init and loading writes out-of-session
+	defer db.AutoCommit(false) // tests use sessions
+
+	t.Cleanup(func() {
+		p := db.Pool()
+		_, err := p.Execute(ctx, `DO $$
+		DECLARE
+			sn text;
+		BEGIN
+			FOR sn IN SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'ds_%'
+			LOOP
+				EXECUTE 'DROP SCHEMA ' || quote_ident(sn) || ' CASCADE';
+			END LOOP;
+		END $$;`)
+		if err != nil {
+			t.Error(err)
+		}
+		_, err = p.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE`)
+		if err != nil {
+			t.Error(err)
+		}
+
+		err = db.Close()
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
-	// run cleanup first to ensure we don't have any leftover files
-	cleanup()
+	})
 
-	ctx := context.Background()
-
-	reg, err = registry.NewRegistry(ctx, func(ctx context.Context, dbid string, create bool) (registry.Pool, error) {
-		return sqlite.NewPool(ctx, dbid, 1, 1, true)
-	}, "./tmp", registry.WithReaderWaitTimeout(time.Millisecond*100))
+	reg, err = registry.New(ctx, db, registry.WithLogger(log.NewStdOut(log.InfoLevel)))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
+
+	t.Cleanup(func() {
+		skey := randomBytes(32)
+		err := reg.Begin(ctx, skey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		dbids, err := reg.List(ctx)
+		if err != nil {
+			t.Error(err)
+		} else {
+			// t.Logf("Removing DBIDs: %v", dbids)
+			for _, dbid := range dbids {
+				err = reg.Delete(ctx, dbid)
+				if err != nil {
+					t.Error(err)
+				}
+			}
+		}
+
+		id, err := reg.Precommit(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(id) == 0 {
+			t.Error("expected a non-empty commit id")
+		}
+
+		err = reg.Commit(ctx, skey)
+		if err != nil {
+			t.Error(err)
+		}
+
+		err = reg.Close(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
 
 	global, err = execution.NewGlobalContext(ctx, reg, map[string]execution.ExtensionInitializer{
 		"math": (&mathInitializer{}).initialize,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	t.Cleanup(func() {
-		err = reg.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
+	return global, reg, db, nil
+}
 
-		cleanup()
-	})
-
-	return global, reg, nil
+func randomBytes(l int) []byte {
+	b := make([]byte, l)
+	_, _ = rand.Read(b)
+	return b
 }
 
 // mocks a namespace initializer
@@ -83,14 +162,16 @@ func (m *mathExt) Call(caller *execution.ProcedureContext, method string, inputs
 		return nil, fmt.Errorf("expected 2 inputs, got %d", len(inputs))
 	}
 
-	a, ok := inputs[0].(int64)
-	if !ok {
-		return nil, fmt.Errorf("expected int64, got %T", inputs[0])
+	// The extension needs to tolerate any compatible input type.
+
+	a, err := conv.Int(inputs[0])
+	if err != nil {
+		return nil, fmt.Errorf("expected int64, got %T (%w)", inputs[0], err)
 	}
 
-	b, ok := inputs[1].(int64)
-	if !ok {
-		return nil, fmt.Errorf("expected int64, got %T", inputs[1])
+	b, err := conv.Int(inputs[1])
+	if err != nil {
+		return nil, fmt.Errorf("expected int64, got %T (%w)", inputs[1], err)
 	}
 
 	return []any{a + b}, nil

@@ -14,6 +14,12 @@ type ExecutionData struct {
 	// Mutative indicates whether the execution can mutate state.
 	Mutative bool
 
+	// ReadUncommitted bool
+	// ^ as mentioned in other comments, I think blockchain transaction
+	// execution may involve action execution that is not mutative, but also
+	// must reflect uncommitted state (e.g. preceding transaction execution in
+	// the same block.)
+
 	// Args are the arguments that were passed to the procedure.
 	Args []any
 

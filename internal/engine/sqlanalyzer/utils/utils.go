@@ -16,7 +16,7 @@ func IsLiteral(literal string) (types.DataType, error) {
 	}
 
 	if strings.EqualFold(literal, "true") || strings.EqualFold(literal, "false") {
-		return types.INT, nil
+		return types.BOOL, nil
 	}
 
 	if strings.EqualFold(literal, "null") {

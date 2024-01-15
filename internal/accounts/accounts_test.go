@@ -1,15 +1,17 @@
+//go:build pglive
+
 package accounts_test
 
 import (
 	"context"
 	"errors"
 	"math/big"
-	"os"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"github.com/kwilteam/kwil-db/internal/sql/adapter"
-	"github.com/kwilteam/kwil-db/internal/sql/sqlite"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,9 +19,22 @@ import (
 const (
 	account1 = "account1"
 	account2 = "account2"
+
+	schemaName = `kwild_accts` // not exported from accounts but we want to clean up
 )
 
 func Test_Accounts(t *testing.T) {
+	cfg := &pg.PoolConfig{
+		ConnConfig: pg.ConnConfig{
+			Host:   "/var/run/postgresql",
+			Port:   "",
+			User:   "kwil_test_user",
+			Pass:   "kwil", // would be ignored if pg_hba.conf set with trust
+			DBName: "kwil_test_db",
+		},
+		MaxConns: 11,
+	}
+
 	type testCase struct {
 		name string
 
@@ -148,14 +163,13 @@ func Test_Accounts(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			deleteTestDir()
-			defer deleteTestDir()
-
 			ctx := context.Background()
 
-			pool, err := sqlite.NewPool(ctx, "./tmp/accounts_test.db", 1, 1, true)
+			db, err := pg.NewPool(ctx, cfg)
 			require.NoError(t, err)
-			defer pool.Close()
+			defer db.Close()
+
+			defer db.Execute(ctx, `DROP SCHEMA IF EXISTS `+schemaName+` CASCADE;`)
 
 			opts := []accounts.AccountStoreOpts{}
 			if tc.gasOn {
@@ -165,7 +179,7 @@ func Test_Accounts(t *testing.T) {
 			// 	opts = append(opts, accounts.WithNonces(true))
 			// }
 
-			ar, err := accounts.NewAccountStore(ctx, &adapter.PoolAdapater{Pool: pool}, &mockCommittable{skip: false}, opts...)
+			ar, err := accounts.NewAccountStore(ctx, &adapter.DB{Datastore: db}, &mockCommittable{}, opts...)
 			require.NoError(t, err)
 
 			for acct, amt := range tc.credit {
@@ -254,23 +268,8 @@ func assertErr(t *testing.T, errs []error, target error) {
 	}
 }
 
-type mockCommittable struct {
-	skip bool
-}
-
-var testDir = "./tmp"
+type mockCommittable struct{}
 
 func (m *mockCommittable) Register(value []byte) error {
 	return nil
-}
-
-func (m *mockCommittable) Skip() bool {
-	return m.skip
-}
-
-func deleteTestDir() {
-	err := os.RemoveAll(testDir)
-	if err != nil {
-		panic(err)
-	}
 }

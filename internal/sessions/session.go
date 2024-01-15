@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/internal/utils/order"
+
 	"go.uber.org/zap"
 )
 
@@ -17,14 +18,16 @@ type Committable interface {
 	// should begin allowing writes.
 	// Commit should be called to signal that the session is complete.
 	Begin(ctx context.Context, idempotencyKey []byte) error
-	// BeginRecovery signals that the server is recovering from a crash.
-	// It should be called instead of Begin, and Commit should be called
-	// to signal that the recovery is complete.
-	BeginRecovery(ctx context.Context, idempotencyKey []byte) error
+
+	// Precommit prepares to commit the changes, returning a hash of the
+	// updates or current state.
+	Precommit(context.Context) ([]byte, error)
+
 	// Commit signals that the session is complete.
 	// It returns a unique identifier for the session that
 	// is generated deterministically from the applied changes.
-	Commit(ctx context.Context, idempotencyKey []byte) ([]byte, error)
+	Commit(ctx context.Context, idempotencyKey []byte) error
+
 	// Cancel signals that the session is cancelled.
 	// If a session is cancelled, it will be reset to the state that
 	// it was in before Begin was called.
@@ -40,7 +43,7 @@ type Committable interface {
 // check to ensure the idempotency keys match, and if so, will begin recovery.
 type MultiCommitter struct {
 	committables map[string]Committable // the committables to commit
-	inSession    bool                   // whether the committables are in a session
+	sessionKey   []byte                 // whether the committables are in a session
 	kv           KV                     // KV tracks state about the committables
 	mu           sync.Mutex             // mu protects the committables
 	log          log.Logger
@@ -69,10 +72,10 @@ func (m *MultiCommitter) Begin(ctx context.Context, idempotencyKey []byte) (err 
 	defer m.mu.Unlock()
 	defer m.handleErr(ctx, &err)
 
-	if m.inSession {
+	if len(m.sessionKey) > 0 {
 		return ErrInSession
 	}
-	m.inSession = true
+	m.sessionKey = idempotencyKey
 
 	lastKey, err := getCurrentKey(m.kv)
 	if err != nil {
@@ -82,19 +85,22 @@ func (m *MultiCommitter) Begin(ctx context.Context, idempotencyKey []byte) (err 
 	// if the last key is the same as the current key, we are recovering
 	// from a crash, therefore begin recovery mode.
 	if bytes.Equal(lastKey, idempotencyKey) {
-		for _, committable := range m.committables {
-			err = committable.BeginRecovery(ctx, idempotencyKey)
-			if err != nil {
-				return err
-			}
+		// At this point we don't know if any of the committables had gotten to
+		// the Commit loop previously. Since the previous recover/Skip
+		// mechanisms did not properly support DB reads at the prior state, we
+		// can only warn and see if the individual committables fail to Begin
+		// based on their own recorded idempotencyKeys.
+		//
+		// Maybe we remove MultiCommitter and replace it with another mechanisms
+		// just for aggregating app hashes from each committer in a
+		// deterministic order.
+		m.log.Warn("trying to apply same transaction again, individual committables may error")
+		// return errors.New("trying to apply same transaction again, no recovery possible")
+	} else {
+		err = setCurrentKey(m.kv, idempotencyKey)
+		if err != nil {
+			return err
 		}
-
-		return nil
-	}
-
-	err = setCurrentKey(m.kv, idempotencyKey)
-	if err != nil {
-		return err
 	}
 
 	for _, committable := range m.committables {
@@ -107,41 +113,54 @@ func (m *MultiCommitter) Begin(ctx context.Context, idempotencyKey []byte) (err 
 	return nil
 }
 
-// Commit commits the session for the committables.
-// It returns a unique identifier for the session that
-// is generated deterministically from the applied changes.
-func (m *MultiCommitter) Commit(ctx context.Context, idempotencyKey []byte) (id []byte, err error) {
+// Precommit prepares to commit the session. No more updates may be performed
+// after this. This should precede Commit or Cancel. The unique identifier is
+// deterministically generated from the commit IDs of the individual committers.
+func (m *MultiCommitter) Precommit(ctx context.Context) (id []byte, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	defer m.handleErr(ctx, &err)
 
-	if !m.inSession {
+	if len(m.sessionKey) == 0 {
 		return nil, ErrNotInSession
 	}
-	m.inSession = false
-
-	lastKey, err := getCurrentKey(m.kv)
-	if err != nil {
-		return nil, err
-	}
-
-	if !bytes.Equal(lastKey, idempotencyKey) {
-		return nil, fmt.Errorf("%w on commit: expected %s, got %s", ErrIdempotencyKeyMismatch, lastKey, idempotencyKey)
-	}
-
-	id = []byte{}
 
 	orderedMap := order.OrderMap(m.committables)
 	for _, c := range orderedMap {
-		newId, err := c.Value.Commit(ctx, idempotencyKey)
+		newID, err := c.Value.Precommit(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		id = append(id, newId...)
+		id = append(id, newID...)
 	}
 
-	return id, err
+	return
+}
+
+// Commit commits the session for the committables.
+func (m *MultiCommitter) Commit(ctx context.Context) (err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	defer m.handleErr(ctx, &err)
+
+	if len(m.sessionKey) == 0 {
+		return ErrNotInSession
+	}
+
+	for _, c := range m.committables {
+		if err := c.Commit(ctx, m.sessionKey); err != nil {
+			return err
+		}
+	}
+
+	err = setCurrentKey(m.kv, m.sessionKey)
+	if err != nil {
+		return err
+	}
+	m.sessionKey = nil
+
+	return err
 }
 
 // Register registers a committable with the committer.
@@ -161,17 +180,17 @@ func (m *MultiCommitter) Register(name string, committable Committable) error {
 // handleErr checks if an error is nil or not.
 // If it is not nil, it logs it, and notifies the committables that the session has been cancelled.
 // It then sets the session state to not in progress.
-func (a *MultiCommitter) handleErr(ctx context.Context, err *error) {
+func (m *MultiCommitter) handleErr(ctx context.Context, err *error) {
 	if *err != nil {
-		a.log.Error("error during atomic commit", zap.Error(*err))
+		m.log.Error("error during atomic commit", zap.Error(*err))
 
-		for _, committable := range a.committables {
+		for _, committable := range m.committables {
 			err := committable.Cancel(ctx)
 			if err != nil {
-				a.log.Error("error cancelling committable", zap.Error(err))
+				m.log.Error("error cancelling committable", zap.Error(err))
 			}
 		}
-		a.inSession = false
+		m.sessionKey = nil
 	}
 
 }

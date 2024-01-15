@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	coreTypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sql "github.com/kwilteam/kwil-db/internal/sql"
+	"github.com/kwilteam/kwil-db/internal/sql/pg"
 )
 
 // GlobalContext is the context for the entire execution.
@@ -106,12 +109,7 @@ func (g *GlobalContext) CreateDataset(ctx context.Context, schema *types.Schema,
 		}
 	}()
 
-	err = storeSchema(ctx, schema, g.datastore)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return storeSchema(ctx, schema, g.datastore)
 }
 
 // DeleteDataset deletes a dataset.
@@ -137,7 +135,7 @@ func (g *GlobalContext) DeleteDataset(ctx context.Context, dbid string, caller [
 }
 
 // Execute executes a procedure.
-// It has the ability to mutate state, including uncommitted state.
+// It has the ability to mutate state, including uncommitted state. <=== UNCOMMITTED STATE, but caller is in various contexts (e.g. tx exec vs. RPC call)
 // once we fix auth, signer should get removed, as they would be the same.
 func (g *GlobalContext) Execute(ctx context.Context, options *types.ExecutionData) (*sql.ResultSet, error) {
 	err := options.Clean()
@@ -195,12 +193,72 @@ func (g *GlobalContext) GetSchema(ctx context.Context, dbid string) (*types.Sche
 
 // Query executes a read-only query.
 func (g *GlobalContext) Query(ctx context.Context, dbid string, query string) (*sql.ResultSet, error) {
-	dataset, ok := g.datasets[dbid]
+	dataset, ok := g.datasets[dbid] // data race with txsvc hitting this freely?
 	if !ok {
 		return nil, types.ErrDatasetNotFound
 	}
 
-	return dataset.read(ctx, query, nil)
+	// We have to parse the query and ensure the dbid is used to derive schema.
+	// OR do we permit (or require) the schema to be specified in the query? It
+	// could go either way, but this ad hoc query function is questionable anyway.
+	parsed, err := sqlanalyzer.ApplyRules(query,
+		sqlanalyzer.NoCartesianProduct|sqlanalyzer.ReplaceNamedParameters,
+		dataset.schema.Tables, types.DBIDSchema(dbid))
+	if err != nil {
+		return nil, err
+	}
+
+	return dataset.read(ctx, parsed.Statement(), nil)
+}
+
+type registryQueryFn func(ctx context.Context, dbid string, stmt string, args ...any) (*sql.ResultSet, error)
+
+// queryor converts a registry `Query` method into a sql.Queryor. It captures
+// dbid, and does a params map rewrite (copy) to work with statements processed
+// with ReplaceNamedParameters (see prepNamedQueryParams).
+func queryor(dbid string, fn registryQueryFn) types.ResultSetFunc {
+	return func(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
+		varArgs := []any{pg.QueryModeExec}
+		if len(params) > 0 {
+			params = prepNamedQueryParams(params)
+			varArgs = append(varArgs, pg.NamedArgs(params))
+			// varArgs := []any{pg.QueryModeSimple, pg.NamedArgs(params)}
+			// return fn(ctx, dbid, stmt, pg.QueryModeSimple)
+		}
+		return fn(ctx, dbid, stmt, varArgs...)
+	}
+}
+
+// prepNamedQueryParams is used with the sqlanalyzer.ReplaceNamedParameters
+// cleaner that rewrites the statement. The purpose of this function is to
+// rewrite the parameter strings in the values map to work with the named
+// parameter mapping that registry and pgx can do. Rewrite the map keys as such,
+// by example:
+//
+//   - $id => id_arg (strip $ and append "_arg")
+//   - @caller => caller (strip @)
+//
+// The returned map is suitable for the Registry's on-the-fly rewriting of the
+// statement from named to positional arguments, which requires all arguments
+// that should be rewritten to begin with "@" and be followed by one [a-zA-Z]
+// and zero or more [a-zA-Z0-9_]
+func prepNamedQueryParams(values map[string]any) map[string]any {
+	if values == nil {
+		return nil
+	}
+	namedQueryParams := make(map[string]any)
+	for argOrEnv, v := range values {
+		if argOrEnv, cut := strings.CutPrefix(argOrEnv, "$"); cut {
+			namedQueryParams[argOrEnv+"_arg"] = v
+			continue
+		}
+		if argOrEnv, cut := strings.CutPrefix(argOrEnv, "@"); cut {
+			namedQueryParams[argOrEnv] = v
+			continue
+		}
+		fmt.Println("unexpected parameter name: ", argOrEnv)
+	}
+	return namedQueryParams
 }
 
 // loadDataset loads a dataset into the global context.
@@ -213,8 +271,8 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 	}
 
 	datasetCtx := &baseDataset{
-		readWriter: executor(dbid, g.datastore.Execute),
-		read:       executor(dbid, g.datastore.Query),
+		readWriter: queryor(dbid, g.datastore.Execute),
+		read:       queryor(dbid, g.datastore.Query),
 		schema:     schema,
 		namespaces: make(map[string]ExtensionNamespace),
 		procedures: make(map[string]*procedure),

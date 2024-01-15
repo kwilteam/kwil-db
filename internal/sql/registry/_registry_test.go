@@ -7,10 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"io/fs"
-
 	sql "github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/sql/registry"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,14 +38,14 @@ func Test_Registry(t *testing.T) {
 				err := registry.Create(ctx, "db1")
 				require.NoError(t, err)
 
-				_, err = registry.Execute(ctx, "db1", "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)", nil)
+				err = registry.Execute(ctx, "db1", "CREATE TABLE foo (id INT8 PRIMARY KEY, name TEXT)", nil)
 				require.NoError(t, err)
 			},
 			hasPools: []string{"db1"},
 			hasExecutions: map[string][]executedStmt{
 				"db1": {
 					{
-						stmt:   "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)",
+						stmt:   "CREATE TABLE foo (id INT8 PRIMARY KEY, name TEXT)",
 						params: nil,
 					},
 				},
@@ -56,7 +55,7 @@ func Test_Registry(t *testing.T) {
 			name:       "execute against existing database",
 			initialDbs: []string{"db1"},
 			fn: func(ctx context.Context, t *testing.T, registry *registry.Registry, recovery bool) {
-				_, err := registry.Execute(ctx, "db1", "INSERT", nil)
+				err := registry.Execute(ctx, "db1", "INSERT", nil)
 				require.NoError(t, err)
 			},
 			hasPools: []string{"db1"},
@@ -91,9 +90,8 @@ func Test_Registry(t *testing.T) {
 				err := r.Delete(ctx, "db1")
 				require.NoError(t, err)
 
-				res, err := r.Execute(ctx, "db1", "INSERT", nil)
+				err = r.Execute(ctx, "db1", "INSERT", nil)
 				require.Equal(t, registry.ErrDatabaseNotFound, err)
-				require.Nil(t, res)
 			},
 			hasPools: []string{},
 		},
@@ -131,18 +129,13 @@ func Test_Registry(t *testing.T) {
 		// testing regular registry operations
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			tracker := &poolTracker{
-				dbs: map[string]*mockPool{},
-			}
-
-			dir := "dir"
 
 			for _, dbid := range tt.initialDbs {
-				pool := newMockPool(dbid)
+				pool := newMockDB(dbid)
 				tracker.dbs[filepath.Join(dir, dbid)] = pool
 			}
 
-			registry, err := registry.NewRegistry(ctx, tracker.Open, dir, registry.WithFilesystem(tracker), registry.WithReaderWaitTimeout(time.Duration(1)*time.Microsecond))
+			registry, err := registry.New(ctx, tracker.Open)
 			require.NoError(t, err)
 
 			idempotencyKey := []byte("idempotencyKey")
@@ -154,14 +147,8 @@ func Test_Registry(t *testing.T) {
 			_, err = registry.Commit(ctx, idempotencyKey)
 			require.NoError(t, err)
 
-			err = registry.Close()
+			err = registry.Close(ctx)
 			require.NoError(t, err)
-
-			for _, dbid := range tt.hasPools {
-				pool, ok := tracker.getPool(dir, dbid)
-				require.True(t, ok)
-				require.True(t, pool.closed)
-			}
 
 			for dbid, executions := range tt.hasExecutions {
 				pool, ok := tracker.getPool(dir, dbid)
@@ -174,17 +161,17 @@ func Test_Registry(t *testing.T) {
 		t.Run(tt.name+"-failure-before-commit", func(t *testing.T) {
 			ctx := context.Background()
 			tracker := &poolTracker{
-				dbs: map[string]*mockPool{},
+				dbs: map[string]*mockDB{},
 			}
 
 			dir := "dir"
 
 			for _, dbid := range tt.initialDbs {
-				pool := newMockPool(dbid)
+				pool := newmockDB(dbid)
 				tracker.dbs[filepath.Join(dir, dbid)] = pool
 			}
 
-			registry, err := registry.NewRegistry(ctx, tracker.Open, dir, registry.WithFilesystem(tracker), registry.WithReaderWaitTimeout(time.Duration(1)*time.Microsecond))
+			registry, err := registry.New(ctx, tracker.Open)
 			require.NoError(t, err)
 
 			idempotencyKey := []byte("idempotencyKey")
@@ -207,7 +194,7 @@ func Test_Registry(t *testing.T) {
 			_, err = registry.Commit(ctx, idempotencyKey)
 			require.NoError(t, err)
 
-			err = registry.Close()
+			err = registry.Close(ctx)
 			require.NoError(t, err)
 
 			for _, dbid := range tt.hasPools {
@@ -227,17 +214,17 @@ func Test_Registry(t *testing.T) {
 		t.Run(tt.name+"-failure-before-commit-using-recovery", func(t *testing.T) {
 			ctx := context.Background()
 			tracker := &poolTracker{
-				dbs: map[string]*mockPool{},
+				dbs: map[string]*mockDB{},
 			}
 
 			dir := "dir"
 
 			for _, dbid := range tt.initialDbs {
-				pool := newMockPool(dbid)
+				pool := newmockDB(dbid)
 				tracker.dbs[filepath.Join(dir, dbid)] = pool
 			}
 
-			registry, err := registry.NewRegistry(ctx, tracker.Open, dir, registry.WithFilesystem(tracker), registry.WithReaderWaitTimeout(time.Duration(1)*time.Microsecond))
+			registry, err := registry.New(ctx, tracker.Open)
 			require.NoError(t, err)
 
 			idempotencyKey := []byte("idempotencyKey")
@@ -260,7 +247,7 @@ func Test_Registry(t *testing.T) {
 			_, err = registry.Commit(ctx, idempotencyKey)
 			require.NoError(t, err)
 
-			err = registry.Close()
+			err = registry.Close(ctx)
 			require.NoError(t, err)
 
 			for _, dbid := range tt.hasPools {
@@ -281,17 +268,17 @@ func Test_Registry(t *testing.T) {
 		t.Run(tt.name+"-recovery-on-committed-has-no-change", func(t *testing.T) {
 			ctx := context.Background()
 			tracker := &poolTracker{
-				dbs: map[string]*mockPool{},
+				dbs: map[string]*mockDB{},
 			}
 
 			dir := "dir"
 
 			for _, dbid := range tt.initialDbs {
-				pool := newMockPool(dbid)
+				pool := newmockDB(dbid)
 				tracker.dbs[filepath.Join(dir, dbid)] = pool
 			}
 
-			registry, err := registry.NewRegistry(ctx, tracker.Open, dir, registry.WithFilesystem(tracker), registry.WithReaderWaitTimeout(time.Duration(1)*time.Microsecond))
+			registry, err := registry.New(ctx, tracker.Open)
 			require.NoError(t, err)
 
 			idempotencyKey := []byte("idempotencyKey")
@@ -313,7 +300,7 @@ func Test_Registry(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err = registry.Close()
+			err = registry.Close(ctx)
 			require.NoError(t, err)
 
 			for _, dbid := range tt.hasPools {
@@ -348,12 +335,10 @@ func Test_RegistryUncommitted(t *testing.T) {
 			ctx := context.Background()
 
 			tracker := &poolTracker{
-				dbs: map[string]*mockPool{},
+				dbs: map[string]*mockDB{},
 			}
 
-			dir := "dir"
-
-			registry, err := registry.NewRegistry(ctx, tracker.Open, dir, registry.WithFilesystem(tracker), registry.WithReaderWaitTimeout(time.Duration(1)*time.Microsecond))
+			registry, err := registry.New(ctx, tracker.Open)
 			require.NoError(t, err)
 
 			tt.fn(ctx, t, registry)
@@ -361,93 +346,7 @@ func Test_RegistryUncommitted(t *testing.T) {
 	}
 }
 
-// poolTracker is a mock pool tracker.
-type poolTracker struct {
-	dbs map[string]*mockPool
-}
-
-// wipeUncommitted wipes the statements if the connection is not committed.
-func (p *poolTracker) wipeUncommitted() {
-	for _, pool := range p.dbs {
-		pool.writer.wipeUncommitted()
-	}
-}
-
-// wipePools wipes the pools of statements.
-func (p *poolTracker) wipePools() {
-	for _, pool := range p.dbs {
-		pool.wipe()
-	}
-}
-
-var _ registry.Filesystem = (*poolTracker)(nil)
-
-func (p *poolTracker) getPool(path string, dbid string) (*mockPool, bool) {
-	pool, ok := p.dbs[filepath.Join(path, dbid)]
-	return pool, ok
-}
-
-func (p *poolTracker) Remove(path string) error {
-	_, ok := p.dbs[path]
-	if !ok {
-		return fmt.Errorf("mockPoolTracker: database %q not found", path)
-	}
-
-	delete(p.dbs, path)
-	return nil
-}
-
-func (p *poolTracker) Open(ctx context.Context, dbid string, create bool) (registry.Pool, error) {
-	if create {
-		if _, ok := p.dbs[dbid]; ok {
-			return nil, fmt.Errorf("mockPoolTracker: database %q already exists", dbid)
-		}
-
-		pool := newMockPool(dbid)
-
-		p.dbs[dbid] = pool
-
-		return pool, nil
-	}
-
-	pool, ok := p.dbs[dbid]
-	if !ok {
-		return nil, fmt.Errorf("mockPoolTracker: database %q not found", dbid)
-	}
-	pool.closed = false
-
-	return pool, nil
-}
-
-func (p *poolTracker) ForEachFile(path string, fn func(string) error) error {
-	for fileName := range p.dbs {
-		err := fn(filepath.Base(fileName))
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (p *poolTracker) MkdirAll(path string, perms fs.FileMode) error {
-	return nil
-}
-
-func (p *poolTracker) Rename(oldpath string, newpath string) error {
-	file, ok := p.dbs[oldpath]
-	if !ok {
-		return fmt.Errorf("mockPoolTracker: database %q not found", oldpath)
-	}
-
-	delete(p.dbs, oldpath)
-
-	p.dbs[newpath] = file
-
-	return nil
-}
-
-type mockPool struct {
+type mockDB struct {
 	onCommit   func()
 	closed     bool
 	writerOpen bool
@@ -455,8 +354,8 @@ type mockPool struct {
 	executed   []executedStmt
 }
 
-func newMockPool(name string, onCommit ...func(string)) *mockPool {
-	return &mockPool{
+func newMockDB(name string, onCommit ...func(string)) *mockDB {
+	return &mockDB{
 		onCommit: func() {
 			for _, fn := range onCommit {
 				fn(name)
@@ -470,14 +369,14 @@ func newMockPool(name string, onCommit ...func(string)) *mockPool {
 	}
 }
 
-var _ registry.Pool = (*mockPool)(nil)
+var _ registry.DB = (*mockDB)(nil)
 
-func (m *mockPool) Close() error {
+func (m *mockDB) Close() error {
 	m.closed = true
 	return nil
 }
 
-func (m *mockPool) BlockReaders(t time.Duration) func() {
+func (m *mockDB) BlockReaders(t time.Duration) func() {
 	if m.closed {
 		return nil
 	}
@@ -486,23 +385,39 @@ func (m *mockPool) BlockReaders(t time.Duration) func() {
 	}
 }
 
-func (m *mockPool) Reader(p0 context.Context) (sql.ReturnableConnection, error) {
-	if m.closed {
-		return nil, fmt.Errorf("mockPool: already closed")
-	}
-	return &mockConnection{
-		kv:       map[string][]byte{},
-		executed: []executedStmt{},
-	}, nil
-}
+// func (m *mockDB) Reader(p0 context.Context) (sql.ReturnableConnection, error) {
+// 	if m.closed {
+// 		return nil, fmt.Errorf("mockDB: already closed")
+// 	}
+// 	return &mockConnection{
+// 		kv:       map[string][]byte{},
+// 		executed: []executedStmt{},
+// 	}, nil
+// }
 
-func (m *mockPool) Writer() (sql.ReturnableConnection, error) {
+// // Connection is a connection to a database.
+// type Connection interface {
+// 	KVStore
+// 	Execute(ctx context.Context, stmt string, args map[string]any) (Result, error)
+// 	Close() error
+// 	CreateSession() (Session, error)
+// 	Savepoint() (Savepoint, error)
+// }
+
+// // ReturnableConnection is a connection that can be returned to a pool.
+// type ReturnableConnection interface {
+// 	Connection
+// 	Return()
+// }
+
+/*xxx
+func (m *mockDB) Writer() (sql.ReturnableConnection, error) {
 	if m.closed {
-		return nil, fmt.Errorf("mockPool: already closed")
+		return nil, fmt.Errorf("mockDB: already closed")
 	}
 
 	if m.writerOpen {
-		return nil, fmt.Errorf("mockPool: writer already open")
+		return nil, fmt.Errorf("mockDB: writer already open")
 	}
 
 	m.writerOpen = true
@@ -513,33 +428,38 @@ func (m *mockPool) Writer() (sql.ReturnableConnection, error) {
 
 	return m.writer, nil
 }
+*/
 
-func (m *mockPool) CreateSession() (sql.Session, error) {
-	return &mockSession{}, nil
-}
+// func (m *mockDB) CreateSession() (sql.Session, error) {
+// 	return &mockSession{}, nil
+// }
 
-func (m *mockPool) Execute(ctx context.Context, stmt string, args map[string]any) (*sql.ResultSet, error) {
+func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) error {
 	m.executed = append(m.executed, executedStmt{
 		stmt:   stmt,
 		params: args,
 	})
+	return nil
+}
+
+func (m *mockDB) Query(ctx context.Context, query string, args ...any) (*sql.ResultSet, error) {
 	return nil, nil
 }
 
-func (m *mockPool) Query(ctx context.Context, query string, args map[string]any) (*sql.ResultSet, error) {
+func (m *mockDB) QueryPending(ctx context.Context, query string, args ...any) (*sql.ResultSet, error) {
 	return nil, nil
 }
 
-func (m *mockPool) Savepoint() (sql.Savepoint, error) {
+func (m *mockDB) BeginTx(ctx context.Context) (sql.Tx, error) {
 	return &mockSavepoint{}, nil
 }
 
-func (m *mockPool) Set(ctx context.Context, key []byte, value []byte) error {
+func (m *mockDB) Set(ctx context.Context, key []byte, value []byte) error {
 	m.writer.kv[string(key)] = value
 	return nil
 }
 
-func (m *mockPool) Get(ctx context.Context, key []byte, sync bool) ([]byte, error) {
+func (m *mockDB) Get(ctx context.Context, key []byte, sync bool) ([]byte, error) {
 	val, ok := m.writer.kv[string(key)]
 	if !ok {
 		return nil, nil
@@ -549,7 +469,7 @@ func (m *mockPool) Get(ctx context.Context, key []byte, sync bool) ([]byte, erro
 }
 
 // wipeUncommitted wipes the statements
-func (m *mockPool) wipe() {
+func (m *mockDB) wipe() {
 	m.executed = []executedStmt{}
 }
 
@@ -564,10 +484,10 @@ type mockConnection struct {
 
 type executedStmt struct {
 	stmt   string
-	params map[string]any
+	params []any
 }
 
-func (m *mockConnection) Execute(ctx context.Context, stmt string, params map[string]any) (sql.Result, error) {
+func (m *mockConnection) Execute(ctx context.Context, stmt string, params ...any) (sql.Result, error) {
 	m.executed = append(m.executed, executedStmt{
 		stmt:   stmt,
 		params: params,
@@ -595,7 +515,7 @@ func (m *mockConnection) Return() {
 	}
 }
 
-func (m *mockConnection) Savepoint() (sql.Savepoint, error) {
+func (m *mockConnection) BeginTx(ctx context.Context) (sql.Tx, error) {
 	if m.savepointOpen {
 		return nil, fmt.Errorf("mockConnection: savepoint already open")
 	}
@@ -619,10 +539,10 @@ func (m *mockConnection) wipeUncommitted() {
 	}
 }
 
-// CreateSession creates a session.
-func (m *mockConnection) CreateSession() (sql.Session, error) {
-	return &mockSession{}, nil
-}
+// // CreateSession creates a session.
+// func (m *mockConnection) CreateSession() (sql.Session, error) {
+// 	return &mockSession{}, nil
+// }
 
 func (m *mockConnection) Close() error {
 	return nil
@@ -638,28 +558,18 @@ type mockSavepoint struct {
 	rollbackFn func()
 }
 
-func (m *mockSavepoint) Commit() error {
+func (m *mockSavepoint) Commit(context.Context) error {
 	if m.commitFn != nil {
 		m.commitFn()
 	}
 	return nil
 }
 
-func (m *mockSavepoint) Rollback() error {
+func (m *mockSavepoint) Rollback(context.Context) error {
 	if m.rollbackFn != nil {
 		m.rollbackFn()
 	}
 	return nil
-}
-
-type mockSession struct{}
-
-func (m *mockSession) Delete() error {
-	return nil
-}
-
-func (m *mockSession) ChangesetID(ctx context.Context) ([]byte, error) {
-	return []byte("changeset"), nil
 }
 
 /*
@@ -676,7 +586,7 @@ func Test_RegistryUncommitted(t *testing.T) {
 			ctx := context.Background()
 
 			tracker := &poolTracker{
-				dbs: map[string]*mockPool{},
+				dbs: map[string]*mockDB{},
 			}
 
 			dir := "dir"
