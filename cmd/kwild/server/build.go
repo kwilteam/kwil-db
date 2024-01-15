@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
+	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
@@ -83,6 +84,9 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// event store
 	ev := buildEventStore(d, closers)
 
+	// build oracle service
+	buildOracles(d, ev, closers)
+
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
 	// in order to get this, we need the comet node
@@ -95,10 +99,11 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		txApp, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
+	txApp.CometNode = cometBftNode
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
-	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore)
+	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore, v)
 	abciApp.AddCommitHook(eventBroadcaster.RunBroadcast)
 
 	// tx service and grpc server
@@ -205,8 +210,8 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 	)
 }
 
-func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, accs broadcast.AccountInfoer, v broadcast.ValidatorStore) *broadcast.EventBroadcaster {
-	return broadcast.NewEventBroadcaster(ev, b, accs, v, buildSigner(d), d.genesisCfg.ChainID)
+func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, accs broadcast.AccountInfoer, v broadcast.ValidatorStore, vstore txapp.VoteStore) *broadcast.EventBroadcaster {
+	return broadcast.NewEventBroadcaster(ev, b, accs, v, vstore, buildSigner(d), d.genesisCfg.ChainID)
 }
 
 func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountStore, reg *registry.Registry) *voting.VoteProcessor {
@@ -649,5 +654,14 @@ func buildCommitter(d *coreDependencies, closers *closeFuncs) *sessions.MultiCom
 func failBuild(err error, msg string) {
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
+	}
+}
+
+func buildOracles(d *coreDependencies, ev *events.EventStore, closer *closeFuncs) {
+	oracles := oracles.RegisteredOracles()
+	fmt.Println("Initializing oracles")
+	for name, oracle := range oracles {
+		oracle.Initialize(d.ctx, ev, d.cfg.AppCfg.Oracles[name], *d.log.Named("oracle-" + name))
+		closer.addCloser(oracle.Stop)
 	}
 }

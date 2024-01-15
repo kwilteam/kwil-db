@@ -92,6 +92,8 @@ type VoteStore interface {
 	ProcessConfirmedResolutions(ctx context.Context) ([]types.UUID, error)
 	// HasVoted returns true if the voter has voted on the resolution.
 	HasVoted(ctx context.Context, resolutionID types.UUID, voter []byte) (bool, error)
+
+	IsProcessed(ctx context.Context, resolutionID types.UUID) (bool, error)
 }
 
 // EventStore is a datastore that tracks events.

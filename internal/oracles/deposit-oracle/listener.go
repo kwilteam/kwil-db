@@ -32,7 +32,7 @@ func (do *DepositOracle) listen(ctx context.Context) error {
 
 		lastHeight = max(lastHeight, do.cfg.startingHeight)
 		requiredConfirmations := do.cfg.requiredConfirmations
-		do.logger.Debug("Started listening for new blocks on ethereum: ", zap.Int64("lastHeight", lastHeight), zap.Int64("requiredConfirmations", requiredConfirmations))
+		do.logger.Info("Started listening for new blocks on ethereum: ", zap.Int64("lastHeight", lastHeight), zap.Int64("requiredConfirmations", requiredConfirmations))
 		for {
 			select {
 			case <-ctx.Done():

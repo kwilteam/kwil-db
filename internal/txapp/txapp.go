@@ -11,6 +11,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/transactions"
+	"github.com/kwilteam/kwil-db/extensions/oracles"
+	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/accounts"
 	"go.uber.org/zap"
 )
@@ -33,8 +35,9 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 			accounts:       make(map[string]*accounts.Account),
 			validatorStore: validators,
 		},
-		signer:  signer,
-		chainID: chainID,
+		caughtUp: false,
+		signer:   signer,
+		chainID:  chainID,
 	}
 }
 
@@ -49,8 +52,10 @@ type TxApp struct {
 	VoteStore  VoteStore      // tracks resolutions, their votes, manages expiration
 	EventStore EventStore     // tracks events, not part of consensus
 
-	chainID string
-	signer  *auth.Ed25519Signer
+	CometNode *cometbft.CometBftNode // comet node
+	chainID   string
+	signer    *auth.Ed25519Signer
+	caughtUp  bool
 
 	log log.Logger
 
@@ -88,6 +93,25 @@ func (r *TxApp) Begin(ctx context.Context, blockHeight int64) error {
 	binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
 
 	r.log.Debug("beginning block", zap.Int64("blockHeight", blockHeight))
+
+	// Check if the node is in a catchup-mode
+	// Do this only if the node is a validator
+	if !r.caughtUp && !r.CometNode.IsCatchup() {
+		// Start the oracles for the current block
+		r.log.Debug("starting oracles")
+		r.caughtUp = true
+		regOracles := oracles.RegisteredOracles()
+		for name, oracle := range regOracles {
+			go func(name string, inst oracles.Oracle) {
+				r.log.Debug("Starting oracle", zap.String("oracle", name))
+				err := inst.Start(ctx)
+				if err != nil {
+					r.log.Error("error starting oracle", zap.String("oracle", name), zap.Error(err))
+					return
+				}
+			}(name, oracle)
+		}
+	}
 
 	return r.atomicCommitter.Begin(ctx, idempotencyKey)
 }
@@ -162,7 +186,6 @@ func (r *TxApp) Commit(ctx context.Context, blockHeight int64) (apphash []byte, 
 	// of the current block height and "keep it"
 	// this would go in Commit
 	r.Validators.UpdateBlockHeight(blockHeight)
-
 	return appHash, validatorUpdates, nil
 }
 
@@ -208,8 +231,28 @@ func (r *TxApp) ProposerTxs(ctx context.Context, txNonce uint64) ([]*transaction
 		return nil, nil
 	}
 
+	// Check of any of thr resolution ids are already processed
+	finalEvents := make([]*types.VotableEvent, 0)
+	for _, event := range events {
+		id := event.ID()
+		processed, err := r.VoteStore.IsProcessed(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if !processed {
+			finalEvents = append(finalEvents, event)
+		} else {
+			// Event already processed, delete it from the event store
+			err = r.EventStore.DeleteEvent(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// TODO: Should we check if any of these events are not already processed??
 	tx, err := transactions.CreateTransaction(&transactions.ValidatorVoteBodies{
-		Events: events,
+		Events: finalEvents,
 	}, r.chainID, txNonce)
 	if err != nil {
 		return nil, err

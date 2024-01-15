@@ -351,9 +351,9 @@ type mockVoteStore struct {
 	updateVoter                 func(ctx context.Context, identifier []byte, power int64) error
 }
 
-func (m *mockVoteStore) AlreadyProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
+func (m *mockVoteStore) IsProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
 	if m.alreadyProcessed != nil {
-		return m.alreadyProcessed(ctx, resolutionID)
+		return m.IsProcessed(ctx, resolutionID)
 	}
 
 	return false, nil

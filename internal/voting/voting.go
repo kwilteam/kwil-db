@@ -47,6 +47,11 @@ func NewVoteProcessor(ctx context.Context, db VoteStore, accounts AccountStore, 
 		return nil, err
 	}
 
+	// _, err = db.Execute(ctx, tableBlockHeights, nil)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
 	_, err = db.Execute(ctx, resolutionTypeIndex, nil)
 	if err != nil {
 		return nil, err
@@ -140,7 +145,7 @@ type Resolution struct {
 // If the voter has already approved the resolution, no error will be returned.
 // If the resolution has already been processed, no error will be returned.
 func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, expiration int64, from []byte) error {
-	alreadyProcessed, err := v.alreadyProcessed(ctx, resolutionID)
+	alreadyProcessed, err := v.IsProcessed(ctx, resolutionID)
 	if err != nil {
 		return err
 	}
@@ -173,7 +178,7 @@ func (v *VoteProcessor) Approve(ctx context.Context, resolutionID types.UUID, ex
 // If the resolution already exists, it will not be changed.
 // If the resolution was already processed, nothing will happen.
 func (v *VoteProcessor) CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error {
-	alreadyProcessed, err := v.alreadyProcessed(ctx, event.ID())
+	alreadyProcessed, err := v.IsProcessed(ctx, event.ID())
 	if err != nil {
 		return err
 	}
@@ -323,7 +328,7 @@ func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUI
 	// for the resolution ID in the processed table, since it is a faster lookup.
 	// furthermore, we are more likely to hit the resolutions table during consensus,
 	// and processed table during catchup. consensus speed is more important.
-	processed, err = v.alreadyProcessed(ctx, id)
+	processed, err = v.IsProcessed(ctx, id)
 	if err != nil {
 		return false, false, err
 	}
@@ -592,7 +597,7 @@ func (v *VoteProcessor) ProcessConfirmedResolutions(ctx context.Context) ([]type
 }
 
 // alreadyProcessed checks if a vote has either already succeeded, or expired.
-func (v *VoteProcessor) alreadyProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
+func (v *VoteProcessor) IsProcessed(ctx context.Context, resolutionID types.UUID) (bool, error) {
 	res, err := v.db.Query(ctx, alreadyProcessed, map[string]interface{}{
 		"$id": resolutionID[:],
 	})

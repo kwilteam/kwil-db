@@ -181,26 +181,6 @@ func (s *Server) Start(ctx context.Context) error {
 	})
 	s.log.Info("comet node started")
 
-	oracles := oracles.RegisteredOracles()
-	for name, oracle := range oracles {
-		oracleName := name
-		oracleInst := oracle
-
-		s.log.Info("starting oracle", zap.String("name", oracleName))
-		group.Go(func() error {
-			go func() {
-				<-groupCtx.Done()
-				s.log.Info("stop oracle", zap.String("name", oracleName))
-				if err := oracleInst.Stop(); err != nil {
-					s.log.Warn("failed to stop oracle", zap.String("name", oracleName), zap.Error(err))
-				}
-			}()
-
-			// Start the oracle
-			return oracleInst.Start(groupCtx, s.eventStore, s.cfg.AppCfg.Oracles[oracleName], *s.log.Named(oracleName))
-		})
-	}
-
 	err := group.Wait()
 
 	if err != nil {

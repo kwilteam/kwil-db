@@ -11,7 +11,8 @@ import (
 var registeredOracles = make(map[string]Oracle)
 
 type Oracle interface {
-	Start(ctx context.Context, eventstore EventStore, config map[string]string, logger log.Logger) error
+	Initialize(ctx context.Context, eventstore EventStore, config map[string]string, logger log.Logger) error
+	Start(ctx context.Context) error
 	Stop() error
 }
 

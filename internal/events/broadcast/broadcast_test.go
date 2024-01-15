@@ -99,7 +99,10 @@ func Test_Broadcaster(t *testing.T) {
 				}
 			}
 
-			bc := broadcast.NewEventBroadcaster(e, b, ai, v, validatorSigner(), "test-chain")
+			vs := &mockVoteStore{
+				isProcessed: false,
+			}
+			bc := broadcast.NewEventBroadcaster(e, b, ai, v, vs, validatorSigner(), "test-chain")
 
 			err := bc.RunBroadcast(context.Background(), nil)
 			if tc.err != nil {
@@ -120,6 +123,10 @@ type mockEventStore struct {
 
 func (m *mockEventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error) {
 	return m.events, nil
+}
+
+func (m *mockEventStore) DeleteEvent(ctx context.Context, id types.UUID) error {
+	return nil
 }
 
 type broadcaster struct {
@@ -156,4 +163,12 @@ type mockValidatorStore struct {
 
 func (m *mockValidatorStore) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
 	return m.isValidator, nil
+}
+
+type mockVoteStore struct {
+	isProcessed bool
+}
+
+func (m *mockVoteStore) IsProcessed(ctx context.Context, id types.UUID) (bool, error) {
+	return m.isProcessed, nil
 }

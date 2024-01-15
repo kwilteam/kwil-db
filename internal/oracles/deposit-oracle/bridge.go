@@ -59,16 +59,18 @@ type DepositOracle struct {
 }
 
 type DepositOracleConfig struct {
-	endpoint              string
-	chainID               string
-	escrowAddress         string
+	endpoint      string
+	chainID       string
+	escrowAddress string
+	// startingHeight is the block height to start processing events from.
+	// Especially useful when node is catching up and don't want to process old events.
 	startingHeight        int64
 	requiredConfirmations int64
 	reconnectInterval     time.Duration
 	maxTotalRequests      int64
 }
 
-func (do *DepositOracle) Start(ctx context.Context, eventstore oracles.EventStore, config map[string]string, logger log.Logger) error {
+func (do *DepositOracle) Initialize(ctx context.Context, eventstore oracles.EventStore, config map[string]string, logger log.Logger) error {
 	do.logger = logger
 	do.eventstore = eventstore
 	do.kvstore = eventstore.KV([]byte(oracleName))
@@ -92,7 +94,10 @@ func (do *DepositOracle) Start(ctx context.Context, eventstore oracles.EventStor
 	}
 	do.eventABI = contractABI
 
-	// Start the listener
+	return nil
+}
+
+func (do *DepositOracle) Start(ctx context.Context) error {
 	return do.listen(ctx)
 }
 

@@ -32,6 +32,9 @@ type EventStore interface {
 	// GetUnbroadcastedEvents gets events that this node has not yet broadcasted.
 	// Events are only marked as "broadcasted" when they have been included in a block.
 	GetUnreceivedEvents(ctx context.Context) ([]*types.VotableEvent, error)
+
+	// DeleteEvent deletes an event from the event store.
+	DeleteEvent(ctx context.Context, id types.UUID) error
 }
 
 // Broadcaster is an interface for broadcasting to the Kwil network.
@@ -51,12 +54,17 @@ type ValidatorStore interface {
 	IsCurrent(ctx context.Context, validator []byte) (bool, error)
 }
 
-func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, accountInfo AccountInfoer, validatorStore ValidatorStore, signer *auth.Ed25519Signer, chainID string) *EventBroadcaster {
+type VoteStore interface {
+	IsProcessed(ctx context.Context, id types.UUID) (bool, error)
+}
+
+func NewEventBroadcaster(store EventStore, broadcaster Broadcaster, accountInfo AccountInfoer, validatorStore ValidatorStore, voteStore VoteStore, signer *auth.Ed25519Signer, chainID string) *EventBroadcaster {
 	return &EventBroadcaster{
 		store:          store,
 		broadcaster:    broadcaster,
 		accountInfo:    accountInfo,
 		validatorStore: validatorStore,
+		voteStore:      voteStore,
 		signer:         signer,
 		chainID:        chainID,
 	}
@@ -68,6 +76,7 @@ type EventBroadcaster struct {
 	broadcaster    Broadcaster
 	accountInfo    AccountInfoer
 	validatorStore ValidatorStore
+	voteStore      VoteStore
 	signer         *auth.Ed25519Signer
 	chainID        string
 }
@@ -93,9 +102,21 @@ func (e *EventBroadcaster) RunBroadcast(ctx context.Context, _ *abci.BlockInfo) 
 		return nil
 	}
 
-	ids := make([]types.UUID, len(events))
-	for i, event := range events {
-		ids[i] = event.ID()
+	ids := make([]types.UUID, 0)
+	for _, event := range events {
+		id := event.ID()
+		processed, err := e.voteStore.IsProcessed(ctx, id)
+		if err != nil {
+			return err
+		}
+		if !processed {
+			ids = append(ids, id)
+		} else {
+			err = e.store.DeleteEvent(ctx, id)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	_, nonce, err := e.accountInfo.AccountInfo(ctx, e.signer.Identity(), true)
