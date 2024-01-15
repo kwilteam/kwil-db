@@ -2,52 +2,82 @@ package sql
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 )
 
-// KVStore is a key-value store.
-type KVStore interface {
+var (
+	ErrNoTransaction = errors.New("no transaction")
+	ErrNoRows        = errors.New("no rows in result set")
+)
+
+func CleanStmt(stmt string) string {
+	trimmed := strings.TrimSpace(stmt)
+	// Ensure it ends with a semicolon.
+	if !strings.HasSuffix(trimmed, ";") {
+		return trimmed + ";"
+	}
+	return trimmed
+}
+
+type Queryer interface {
+	Query(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
+}
+
+type Executor interface {
+	Execute(ctx context.Context, stmt string, args ...any) (*ResultSet, error)
+}
+
+type KVGetter interface {
+	// Get gets a value for a key.
+	Get(ctx context.Context, key []byte, sync bool) ([]byte, error)
+}
+
+type KV interface {
+	KVGetter
+
 	// Set sets a key to a value.
 	Set(ctx context.Context, key []byte, value []byte) error
-	// Get gets a value for a key.
-	Get(ctx context.Context, key []byte) ([]byte, error)
-	// Delete deletes a key.
-	Delete(ctx context.Context, key []byte) error
 }
 
-type ResultSetFunc func(ctx context.Context, stmt string, args map[string]any) (*ResultSet, error)
-
-// Connection is a connection to a database.
-type Connection interface {
-	KVStore
-	Execute(ctx context.Context, stmt string, args map[string]any) (Result, error)
-	Close() error
-	CreateSession() (Session, error)
-	Savepoint() (Savepoint, error)
+// TxCloser terminates a transaction by committing or rolling it back. A method
+// that returns this alone would keep the tx under the hood of the parent type,
+// directing queries internally through the scope of a transaction/session
+// started with BeginTx.
+type TxCloser interface {
+	Rollback(ctx context.Context) error
+	Commit(ctx context.Context) error
 }
 
-// ReturnableConnection is a connection that can be returned to a pool.
-type ReturnableConnection interface {
-	Connection
-	Return()
+type TxBeginner interface {
+	Begin(ctx context.Context) (TxCloser, error)
 }
 
-type Savepoint interface {
-	Rollback() error
-	Commit() error
+// type Tx = TxCloser // refactoring
+
+// TxMaker is the special kind of transaction beginner that can make nested
+// transactions, and that explicitly scopes Query/Execute to the tx.
+type TxMaker interface {
+	BeginTx(ctx context.Context) (Tx, error)
 }
 
-type Session interface {
-	Delete() error
-	ChangesetID(ctx context.Context) ([]byte, error)
+// Tx can do it all, including start nested transactions.
+//
+// TODO: after refactoring this should become Tx and anything using implicit
+// tx/session management should use TxCloser.
+type Tx interface {
+	Queryer
+	Executor
+	TxCloser // just Commit and Rollback
+	TxMaker  // for nested transactions to isolate failures
 }
 
-type Changeset interface {
-	// ID generates a deterministic ID for the changeset.
-	ID() ([]byte, error)
+type ExecResult interface {
+	RowsAffected() (int64, error)
 }
 
-// Result is the result of a query.
+// Result is the result of a query. TODO: this is detail, not needed outside of sqlite impl
 type Result interface {
 	Close() error
 	// Columns gets the columns of the result.
@@ -64,8 +94,12 @@ type Result interface {
 	// Values gets the values of the current row.
 	Values() ([]any, error)
 
-	// ResultSet gets the result set.
-	// This finalizes the execution, copies the data, and unblocks the connection.
+	// A ResultSet() (*ResultSet, error) method is a red flag for me. Something
+	// should not be returning a sql.Result (or the caller should assert to a
+	// *sql.ResultSet). If an interface has a method to return the concrete type
+	// that's actually implementing the interface, then the interface is
+	// pointless.
+
 	ResultSet() (*ResultSet, error)
 }
 
@@ -74,6 +108,17 @@ type ResultSet struct {
 	Rows            [][]any
 
 	i int // starts at 0
+
+	Status CommandTag
+}
+
+type CommandTag struct {
+	Text         string
+	RowsAffected int64
+}
+
+func (ct *CommandTag) String() string {
+	return ct.Text // tip: prefix will be select, insert, etc.
 }
 
 var _ Result = (*ResultSet)(nil)
