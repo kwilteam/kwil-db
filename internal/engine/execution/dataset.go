@@ -88,7 +88,7 @@ var _ Dataset = (*protectedDataset)(nil)
 // Execute executes a statement on the dataset.
 func (d *protectedDataset) Execute(ctx context.Context, stmt string, params map[string]any) (*sql.ResultSet, error) {
 	// TODO: once we switch to postgres, we will have to switch the named parameters to positional parameters
-	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables)
+	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables, d.schema.DBID())
 	if err != nil {
 		return nil, fmt.Errorf("error analyzing statement: %w", err)
 	}
@@ -103,7 +103,7 @@ func (d *protectedDataset) Query(ctx context.Context, stmt string, params map[st
 	// however, we don't actually know if this is being called from a non-mutative context.
 	// It is very possible that this is being called from an action that later mutates the database,
 	// so we need to guarantee determinism here.
-	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables)
+	analyzed, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, d.schema.Tables, d.schema.DBID())
 	if err != nil {
 		return nil, fmt.Errorf("error analyzing statement: %w", err)
 	}

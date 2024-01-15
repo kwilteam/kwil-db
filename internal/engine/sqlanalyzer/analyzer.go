@@ -8,6 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/join"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/order"
 	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/parameters"
+	"github.com/kwilteam/kwil-db/internal/engine/sqlanalyzer/schema"
 	"github.com/kwilteam/kwil-db/internal/engine/types"
 	sqlparser "github.com/kwilteam/kwil-db/parse/sql"
 	"github.com/kwilteam/kwil-db/parse/sql/tree"
@@ -36,7 +37,8 @@ func (a *acceptWrapper) Accept(walker tree.Walker) (err error) {
 // ApplyRules analyzes the given statement and returns the transformed statement.
 // It parses it, and then traverses the AST with the given flags.
 // It will alter the statement to make it conform to the given flags, or return an error if it cannot.
-func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*AnalyzedStatement, error) {
+// All tables will target the pgSchemaName schema.
+func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table, pgSchemaName string) (*AnalyzedStatement, error) {
 	cleanedTables, err := cleanTables(tables)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning tables: %w", err)
@@ -53,6 +55,12 @@ func ApplyRules(stmt string, flags VerifyFlag, tables []*types.Table) (*Analyzed
 	err = accept.Accept(clnr)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning statement: %w", err)
+	}
+
+	schemaWalker := schema.NewSchemaWalker(pgSchemaName)
+	err = accept.Accept(schemaWalker)
+	if err != nil {
+		return nil, fmt.Errorf("error applying schema rules: %w", err)
 	}
 
 	if flags&NoCartesianProduct != 0 {
