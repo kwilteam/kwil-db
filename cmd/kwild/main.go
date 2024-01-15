@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
-	_ "github.com/kwilteam/kwil-db/internal/oracles/deposit-oracle"
+	_ "github.com/kwilteam/kwil-db/internal/oracles/eth-deposit-oracle"
 )
 
 var (

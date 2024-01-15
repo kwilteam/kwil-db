@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (do *DepositOracle) listen(ctx context.Context) error {
+func (do *EthDepositOracle) listen(ctx context.Context) error {
 	// Listen for new blocks
 	headers := make(chan *types.Header)
 	sub, err := do.ethclient.SubscribeNewHead(ctx, headers)
@@ -40,7 +40,7 @@ func (do *DepositOracle) listen(ctx context.Context) error {
 			case err := <-sub.Err():
 				if err != nil {
 					do.logger.Warn("subscription error", zap.Error(err))
-					sub, err = do.resubscribe(ctx, sub, headers)
+					sub, err = do.resubscribe(ctx, sub, headers, do.cfg.maxRetries)
 					if err != nil {
 						do.logger.Error("Failed to resubscribe", zap.Error(err))
 						return
@@ -49,7 +49,7 @@ func (do *DepositOracle) listen(ctx context.Context) error {
 
 			case <-time.After(do.cfg.reconnectInterval):
 				do.logger.Debug("subscription timeout")
-				sub, err = do.resubscribe(ctx, sub, headers)
+				sub, err = do.resubscribe(ctx, sub, headers, do.cfg.maxRetries)
 				if err != nil {
 					do.logger.Error("Failed to resubscribe", zap.Error(err))
 					return
@@ -68,8 +68,8 @@ func (do *DepositOracle) listen(ctx context.Context) error {
 				ToBlock := currentHeight - requiredConfirmations
 				events, err := do.filterLogs(ctx, FromBlock, ToBlock)
 				if err != nil {
-					do.logger.Error("Failed to filter logs", zap.Error(err))
-					continue
+					do.logger.Error("Failed to filter logs", zap.Error(err), zap.Int64("from", FromBlock), zap.Int64("to", ToBlock))
+					return
 				}
 
 				for _, event := range events {
@@ -84,7 +84,7 @@ func (do *DepositOracle) listen(ctx context.Context) error {
 	return nil
 }
 
-func (do *DepositOracle) resubscribe(ctx context.Context, sub ethereum.Subscription, headers chan *types.Header) (ethereum.Subscription, error) {
+func (do *EthDepositOracle) resubscribe(ctx context.Context, sub ethereum.Subscription, headers chan *types.Header, maxRetries uint64) (ethereum.Subscription, error) {
 	sub.Unsubscribe()
 
 	retrier := &backoff.Backoff{
@@ -97,9 +97,9 @@ func (do *DepositOracle) resubscribe(ctx context.Context, sub ethereum.Subscript
 	for {
 		sub, err := do.ethclient.SubscribeNewHead(ctx, headers)
 		if err != nil {
-			// fail after 15 retries,
+			// fail after 50 retries,
 			// TODO: shld we make this configurable
-			if retrier.Attempt() > 15 {
+			if retrier.Attempt() > float64(maxRetries) {
 				return nil, err
 			}
 
@@ -111,7 +111,7 @@ func (do *DepositOracle) resubscribe(ctx context.Context, sub ethereum.Subscript
 	}
 }
 
-func (do *DepositOracle) filterLogs(ctx context.Context, from int64, to int64) ([]AccountCredit, error) {
+func (do *EthDepositOracle) filterLogs(ctx context.Context, from int64, to int64) ([]AccountCredit, error) {
 	// Make the queries in batches of do.cfg.maxTotalRequests to avoid overloading the server
 	events := make([]AccountCredit, 0)
 	for i := from; i <= to; i += do.cfg.maxTotalRequests {
@@ -134,7 +134,7 @@ func (do *DepositOracle) filterLogs(ctx context.Context, from int64, to int64) (
 			logs, err := do.ethclient.FilterLogs(ctx, query)
 			if err != nil {
 				// fail after 15 retries
-				if retrier.Attempt() > 15 {
+				if retrier.Attempt() > float64(do.cfg.maxRetries) {
 					return nil, err
 				}
 				time.Sleep(retrier.Duration())
@@ -162,7 +162,7 @@ func (do *DepositOracle) filterLogs(ctx context.Context, from int64, to int64) (
 	return events, nil
 }
 
-func (do *DepositOracle) addEvent(ctx context.Context, credit AccountCredit) error {
+func (do *EthDepositOracle) addEvent(ctx context.Context, credit AccountCredit) error {
 	do.logger.Debug("Adding credit event to eventstore", zap.Any("event", credit))
 
 	bts, err := credit.MarshalBinary()
@@ -178,7 +178,7 @@ func (do *DepositOracle) addEvent(ctx context.Context, credit AccountCredit) err
 	return nil
 }
 
-func (do *DepositOracle) getBlockHeight(ctx context.Context) (int64, error) {
+func (do *EthDepositOracle) getBlockHeight(ctx context.Context) (int64, error) {
 	blockBytes, err := do.kvstore.Get(ctx, []byte(last_processed_block))
 	if err == kv.ErrKeyNotFound || blockBytes == nil {
 		do.setBlockHeight(ctx, 0)
@@ -193,7 +193,7 @@ func (do *DepositOracle) getBlockHeight(ctx context.Context) (int64, error) {
 	return int64(height), nil
 }
 
-func (do *DepositOracle) setBlockHeight(ctx context.Context, height int64) error {
+func (do *EthDepositOracle) setBlockHeight(ctx context.Context, height int64) error {
 	heightBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(heightBytes, uint64(height))
 	return do.kvstore.Set(ctx, []byte(last_processed_block), heightBytes)

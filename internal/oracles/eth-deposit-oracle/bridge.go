@@ -16,26 +16,24 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/internal/sql"
 	"github.com/kwilteam/kwil-db/internal/voting"
-	"go.uber.org/zap"
 )
 
 const (
-	oracleName = "deposit_oracle"
+	oracleName = "eth_deposit_oracle"
 
 	depositEventSignature = "Credit(address,uint256)"
 
-	contractABIStr = "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"_from\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"_amount\",\"type\":\"uint256\"}],\"name\":\"Credit\",\"type\":\"event\"}]"
+	contractABIStr = `[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"_from","type":"address"},{"indexed":false,"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"Credit","type":"event"}]`
 
 	last_processed_block = "last_processed_block"
 )
 
 func init() {
-	oracle := &DepositOracle{}
+	oracle := &EthDepositOracle{}
 
 	// Register the oracle
 	err := oracles.RegisterOracle(oracleName, oracle)
 	if err != nil {
-		fmt.Println("Failed to register oracle", zap.Error(err))
 		panic(err)
 	}
 
@@ -43,13 +41,12 @@ func init() {
 	payload := &AccountCredit{}
 	err = voting.RegisterPaylod(payload)
 	if err != nil {
-		fmt.Println("Failed to register payload", zap.Error(err))
 		panic(err)
 	}
 }
 
-type DepositOracle struct {
-	cfg                  DepositOracleConfig
+type EthDepositOracle struct {
+	cfg                  EthDepositOracleConfig
 	eventstore           oracles.EventStore
 	kvstore              sql.KVStore
 	creditEventSignature common.Hash
@@ -58,7 +55,7 @@ type DepositOracle struct {
 	logger               log.Logger
 }
 
-type DepositOracleConfig struct {
+type EthDepositOracleConfig struct {
 	endpoint      string
 	chainID       string
 	escrowAddress string
@@ -68,9 +65,10 @@ type DepositOracleConfig struct {
 	requiredConfirmations int64
 	reconnectInterval     time.Duration
 	maxTotalRequests      int64
+	maxRetries            uint64
 }
 
-func (do *DepositOracle) Initialize(ctx context.Context, eventstore oracles.EventStore, config map[string]string, logger log.Logger) error {
+func (do *EthDepositOracle) Initialize(ctx context.Context, eventstore oracles.EventStore, config map[string]string, logger log.Logger) error {
 	do.logger = logger
 	do.eventstore = eventstore
 	do.kvstore = eventstore.KV([]byte(oracleName))
@@ -97,18 +95,18 @@ func (do *DepositOracle) Initialize(ctx context.Context, eventstore oracles.Even
 	return nil
 }
 
-func (do *DepositOracle) Start(ctx context.Context) error {
+func (do *EthDepositOracle) Start(ctx context.Context) error {
 	return do.listen(ctx)
 }
 
-func (do *DepositOracle) Stop() error {
+func (do *EthDepositOracle) Stop() error {
 	if do.ethclient != nil {
 		do.ethclient.Close()
 	}
 	return nil
 }
 
-func (do *DepositOracle) extractConfig(ctx context.Context, metadata map[string]string) error {
+func (do *EthDepositOracle) extractConfig(ctx context.Context, metadata map[string]string) error {
 	// Endpoint
 	if endpoint, ok := metadata["endpoint"]; ok {
 		do.cfg.endpoint = endpoint
@@ -174,6 +172,18 @@ func (do *DepositOracle) extractConfig(ctx context.Context, metadata map[string]
 		do.cfg.maxTotalRequests = maxTotalRequests64
 	} else {
 		do.cfg.maxTotalRequests = 1000
+	}
+
+	// MaxRetries
+	if maxRetries, ok := metadata["max_retries"]; ok {
+		// convert maxRetries to uint64
+		maxRetries64, err := strconv.ParseUint(maxRetries, 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse max retries: %w", err)
+		}
+		do.cfg.maxRetries = maxRetries64
+	} else {
+		do.cfg.maxRetries = 50
 	}
 
 	return nil
