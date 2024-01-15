@@ -49,6 +49,7 @@ func (ins *Insert) ToSQL() (str string, err error) {
 }
 
 type InsertStmt struct {
+	schema          string
 	InsertType      InsertType
 	Table           string
 	TableAlias      string
@@ -74,6 +75,13 @@ func (ins *InsertStmt) Accept(w Walker) error {
 		accept(w, ins.ReturningClause),
 		w.ExitInsertStmt(ins),
 	)
+}
+
+// SetSchema sets the schema of the table.
+// It should not be called by the parser, and is meant to be called
+// by processes after parsing.
+func (ins *InsertStmt) SetSchema(schema string) {
+	ins.schema = schema
 }
 
 type InsertType uint8
@@ -112,6 +120,12 @@ func (ins *InsertStmt) ToSQL() string {
 	stmt := sqlwriter.NewWriter()
 	stmt.WriteString(ins.InsertType.String())
 	stmt.Token.Into()
+
+	if ins.schema != "" {
+		stmt.WriteIdentNoSpace(ins.schema)
+		stmt.Token.Period()
+	}
+
 	stmt.WriteIdent(ins.Table)
 
 	if ins.TableAlias != "" {

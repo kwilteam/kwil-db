@@ -198,9 +198,9 @@ func (e *extensionDatastore) Query(ctx context.Context, dbid string, stmt string
 
 	var err error
 	if e.scope.Mutative() {
-		parsedStmt, err = sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, dataset.schema.Tables)
+		parsedStmt, err = sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, dataset.schema.Tables, dbid)
 	} else {
-		parsedStmt, err = sqlanalyzer.ApplyRules(stmt, sqlanalyzer.NoCartesianProduct, dataset.schema.Tables)
+		parsedStmt, err = sqlanalyzer.ApplyRules(stmt, sqlanalyzer.NoCartesianProduct, dataset.schema.Tables, dbid)
 	}
 	if err != nil {
 		return nil, err
@@ -223,7 +223,7 @@ func (e *extensionDatastore) Execute(ctx context.Context, dbid string, stmt stri
 		return nil, errors.New("unknown dataset")
 	}
 
-	parsedStmt, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, dataset.schema.Tables)
+	parsedStmt, err := sqlanalyzer.ApplyRules(stmt, sqlanalyzer.AllRules, dataset.schema.Tables, dbid)
 	if err != nil {
 		return nil, err
 	}

@@ -63,7 +63,7 @@ func prepareProcedure(unparsed *types.Procedure, datasetCtx *dataset) (*procedur
 	}
 
 	for _, stmt := range unparsed.Statements {
-		instr, err := prepareStmt(stmt, !unparsed.IsMutative(), datasetCtx.schema.Tables)
+		instr, err := prepareStmt(stmt, !unparsed.IsMutative(), datasetCtx.schema.Tables, datasetCtx.schema.DBID())
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +126,7 @@ func convertModifier(mod types.Modifier) (instruction, error) {
 // prepareStmt parses a statement into an instruction.
 // if immutable (aka a VIEW procedure), then the function will
 // return an error if the statement is attempting to mutate state.
-func prepareStmt(stmt string, immutable bool, tables []*types.Table) (instruction, error) {
+func prepareStmt(stmt string, immutable bool, tables []*types.Table, dbid string) (instruction, error) {
 	parsedStmt, err := actparser.Parse(stmt)
 	if err != nil {
 		return nil, err
@@ -154,12 +154,12 @@ func prepareStmt(stmt string, immutable bool, tables []*types.Table) (instructio
 		}
 		instr = i
 	case *actparser.DMLStmt:
-		deterministic, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.AllRules, tables)
+		deterministic, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.AllRules, tables, dbid)
 		if err != nil {
 			return nil, err
 		}
 
-		nonDeterministic, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.NoCartesianProduct, tables)
+		nonDeterministic, err := sqlanalyzer.ApplyRules(stmt.Statement, sqlanalyzer.NoCartesianProduct, tables, dbid)
 		if err != nil {
 			return nil, err
 		}
