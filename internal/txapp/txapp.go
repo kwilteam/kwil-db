@@ -35,9 +35,9 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 			accounts:       make(map[string]*accounts.Account),
 			validatorStore: validators,
 		},
-		caughtUp: false,
-		signer:   signer,
-		chainID:  chainID,
+		oraclesUp: false,
+		signer:    signer,
+		chainID:   chainID,
 	}
 }
 
@@ -55,7 +55,7 @@ type TxApp struct {
 	CometNode *cometbft.CometBftNode // comet node
 	chainID   string
 	signer    *auth.Ed25519Signer
-	caughtUp  bool
+	oraclesUp bool
 
 	log log.Logger
 
@@ -94,12 +94,17 @@ func (r *TxApp) Begin(ctx context.Context, blockHeight int64) error {
 
 	r.log.Debug("beginning block", zap.Int64("blockHeight", blockHeight))
 
+	isValidator, err := r.Validators.IsCurrent(ctx, r.signer.Identity())
+	if err != nil {
+		return err
+	}
+
 	// Check if the node is in a catchup-mode
-	// Do this only if the node is a validator
-	if !r.caughtUp && !r.CometNode.IsCatchup() {
+	// start oracles only if the node is a validator
+	if isValidator && !r.CometNode.IsCatchup() && !r.oraclesUp {
 		// Start the oracles for the current block
 		r.log.Debug("starting oracles")
-		r.caughtUp = true
+		r.oraclesUp = true
 		regOracles := oracles.RegisteredOracles()
 		for name, oracle := range regOracles {
 			go func(name string, inst oracles.Oracle) {
