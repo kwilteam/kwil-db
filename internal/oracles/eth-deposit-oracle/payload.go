@@ -50,6 +50,6 @@ func (ac *AccountCredit) Apply(ctx context.Context, datastores *voting.Datastore
 	if err != nil {
 		return err
 	}
-	logger.Info("Credited account for deposit", zap.String("account", ac.Account), zap.String("amount", ac.Amount.String()))
+	logger.Debug("Credited account for deposit", zap.String("account", ac.Account), zap.String("amount", ac.Amount.String()))
 	return nil
 }

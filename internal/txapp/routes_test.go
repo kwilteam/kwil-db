@@ -372,7 +372,7 @@ func (m *mockVoteStore) ContainsBodyOrFinished(ctx context.Context, resolutionID
 		return m.containsBodyOrFinished(ctx, resolutionID)
 	}
 
-	return true, nil
+	return false, nil
 }
 
 func (m *mockVoteStore) CreateResolution(ctx context.Context, event *types.VotableEvent, expiration int64) error {

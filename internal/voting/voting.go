@@ -47,11 +47,6 @@ func NewVoteProcessor(ctx context.Context, db VoteStore, accounts AccountStore, 
 		return nil, err
 	}
 
-	// _, err = db.Execute(ctx, tableBlockHeights, nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	_, err = db.Execute(ctx, resolutionTypeIndex, nil)
 	if err != nil {
 		return nil, err

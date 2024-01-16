@@ -122,10 +122,6 @@ func (m *mockEventStore) GetUnreceivedEvents(ctx context.Context) ([]*types.Vota
 	return m.events, nil
 }
 
-func (m *mockEventStore) DeleteEvent(ctx context.Context, id types.UUID) error {
-	return nil
-}
-
 type broadcaster struct {
 	broadcastFn func(ctx context.Context, tx []byte, sync uint8) (code uint32, txHash []byte, err error)
 }
