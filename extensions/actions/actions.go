@@ -81,20 +81,11 @@ type CallContext interface {
 // Result is a result that is returned from a query.
 // It should be used in the following way:
 //
-// columns := res.Columns()
-//
 // var res Result
 //
-//	for {
-//		rowReturned, err := res.Next()
-//		if err != nil {
-//			return err
-//		}
+// columns := res.Columns()
 //
-//		if !rowReturned {
-//			break
-//		}
-//
+//	for res.Next() {
 //		values, err := res.Values()
 //		if err != nil {
 //			return err
@@ -110,8 +101,6 @@ type Result interface {
 	// If there is, it will increment the row index, which can be used
 	// to get the values for the current row.
 	Next() (rowReturned bool)
-	// Err returns the error that occurred during the query.
-	Err() error
 	// Values returns the values for the current row.
 	// The values are returned in the same order as the columns.
 	Values() ([]any, error)
