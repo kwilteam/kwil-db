@@ -17,7 +17,7 @@ import (
 
 // NewTxApp creates a new router.
 func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, atomicCommitter AtomicCommitter,
-	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, eventStore EventStore, valStatus chan bool, log log.Logger) *TxApp {
+	voteStore VoteStore, signer *auth.Ed25519Signer, chainID string, eventStore EventStore, log log.Logger) *TxApp {
 	return &TxApp{
 		// TODO: set the eventstore and votestore dependencies
 		Database:   db,
@@ -33,9 +33,8 @@ func NewTxApp(db DatabaseEngine, acc AccountsStore, validators ValidatorStore, a
 			accounts:       make(map[string]*accounts.Account),
 			validatorStore: validators,
 		},
-		signer:    signer,
-		valStatus: valStatus,
-		chainID:   chainID,
+		signer:  signer,
+		chainID: chainID,
 	}
 }
 
@@ -50,9 +49,8 @@ type TxApp struct {
 	VoteStore  VoteStore      // tracks resolutions, their votes, manages expiration
 	EventStore EventStore     // tracks events, not part of consensus
 
-	chainID   string
-	signer    *auth.Ed25519Signer
-	valStatus chan<- bool
+	chainID string
+	signer  *auth.Ed25519Signer
 
 	log log.Logger
 
@@ -90,13 +88,6 @@ func (r *TxApp) Begin(ctx context.Context, blockHeight int64) error {
 	binary.LittleEndian.PutUint64(idempotencyKey, uint64(blockHeight))
 
 	r.log.Debug("beginning block", zap.Int64("blockHeight", blockHeight))
-
-	// Inform the node's Validator status to the Oracle Manager
-	isVal, err := r.Validators.IsCurrent(ctx, r.signer.Identity())
-	if err != nil {
-		return err
-	}
-	r.valStatus <- isVal
 
 	return r.atomicCommitter.Begin(ctx, idempotencyKey)
 }

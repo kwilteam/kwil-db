@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// OracleMgr listens to the Validator state changes and node catch up status
+// OracleMgr listens for any Validator state changes and node catch up status
 // and starts or stops the oracles accordingly
 // It starts the oracles only when the node is a validator and is caught up
 // It stops the running oracles when the node loses its validator status
@@ -18,26 +18,34 @@ type OracleMgr struct {
 	ctx        context.Context
 	config     map[string]map[string]string
 	eventStore oracles.EventStore
+	vstore     ValidatorStore
 	cometNode  *cometbft.CometBftNode
+	// pubKey is the public key of the node
+	pubKey []byte
 
 	// oraclesUp specifies whether the oracles are running currently or not
 	oraclesUp bool
-	// Status is a channel that will specify whether to run oracles or not
-	// It depends on Validator Status and Node's Catch Up Status
-	// Oracles can only be run when the node is a validator and is already caught up
-	valStatus <-chan bool
+	done      chan bool
 
 	logger log.Logger
 }
 
-func NewOracleMgr(ctx context.Context, config map[string]map[string]string, eventStore oracles.EventStore, node *cometbft.CometBftNode, valStatusChan chan bool, logger log.Logger) *OracleMgr {
+type ValidatorStore interface {
+	// IsCurrent returns true if the validator is currently a validator.
+	// It does not take into account uncommitted changes, but is thread-safe.
+	IsCurrent(ctx context.Context, validator []byte) (bool, error)
+}
+
+func NewOracleMgr(ctx context.Context, config map[string]map[string]string, eventStore oracles.EventStore, node *cometbft.CometBftNode, nodePubKey []byte, vstore ValidatorStore, logger log.Logger) *OracleMgr {
 	return &OracleMgr{
 		ctx:        ctx,
 		config:     config,
 		eventStore: eventStore,
+		vstore:     vstore,
 		cometNode:  node,
-		valStatus:  valStatusChan,
+		pubKey:     nodePubKey,
 		oraclesUp:  false,
+		done:       make(chan bool),
 		logger:     logger,
 	}
 }
@@ -54,26 +62,37 @@ func (omgr *OracleMgr) listenForValidatorStatusChanges() {
 		omgr.logger.Info("starting oracle manager")
 		for {
 			select {
-			case status := <-omgr.valStatus:
+			// case status := <-omgr.valStatus:
+			case <-omgr.ctx.Done():
+				return
+			case <-omgr.done:
+				omgr.logger.Info("stopping oracle manager")
+				return
+			default:
+				// still in the catch up mode, do nothing
 				if omgr.cometNode.IsCatchup() {
 					continue
 				}
 
-				if !omgr.oraclesUp && status {
+				// check if the node is a validator
+				isVal, err := omgr.vstore.IsCurrent(omgr.ctx, omgr.pubKey)
+				if err != nil {
+					omgr.logger.Warn("failed to get validator status", zap.Error(err))
+					continue
+				}
+
+				if !omgr.oraclesUp && isVal {
 					// Start the oracles if they are not running
 					omgr.oraclesUp = true
 					omgr.logger.Info("Node's a validator and caught up with the network, starting oracles")
 					omgr.startOracles()
-				} else if omgr.oraclesUp && !status {
+				} else if omgr.oraclesUp && !isVal {
 					// Stop the oracles if they are running
 					omgr.logger.Info("Node's no longer the validator, stopping oracles")
 					omgr.oraclesUp = false
 					omgr.stopOracles()
 				}
-			case <-omgr.ctx.Done():
-				return
-			default:
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}()

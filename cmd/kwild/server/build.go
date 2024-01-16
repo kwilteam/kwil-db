@@ -86,16 +86,13 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 
 	evm := buildEventMgr(ev, v)
 
-	// Validator status updates channel
-	statusChan := make(chan bool)
-
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
 	// in order to get this, we need the comet node
 	// to get the comet node, we need the abci app
 	// to get the abci app, we need the tx router
 	// but the tx router needs the cometbft client
-	txApp := buildTxApp(d, accs, e, vstore, ac, v, ev, statusChan)
+	txApp := buildTxApp(d, accs, e, vstore, ac, v, ev)
 
 	abciApp := buildAbci(d, closers, accs, &validatorStoreAdapter{vstore},
 		txApp, snapshotModule, bootstrapperModule)
@@ -108,7 +105,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	abciApp.AddCommitHook(eventBroadcaster.RunBroadcast)
 
 	// oracle manager
-	om := buildOracleManager(d, closers, evm, statusChan, cometBftNode)
+	om := buildOracleManager(d, closers, evm, cometBftNode, vstore)
 
 	// tx service and grpc server
 	txsvc := buildTxSvc(d, &engineAdapter{e},
@@ -173,8 +170,8 @@ func (c *closeFuncs) closeAll() error {
 }
 
 func buildTxApp(d *coreDependencies, accs *accounts.AccountStore, db txapp.DatabaseEngine, validators txapp.ValidatorStore,
-	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore, valStatus chan bool) *txapp.TxApp {
-	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, valStatus, *d.log.Named("tx-router"))
+	atomicCommitter txapp.AtomicCommitter, voteStore txapp.VoteStore, eventStore txapp.EventStore) *txapp.TxApp {
+	return txapp.NewTxApp(db, accs, validators, atomicCommitter, voteStore, buildSigner(d), d.genesisCfg.ChainID, eventStore, *d.log.Named("tx-router"))
 }
 
 func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.AccountsModule,
@@ -665,6 +662,6 @@ func failBuild(err error, msg string) {
 	}
 }
 
-func buildOracleManager(d *coreDependencies, closer *closeFuncs, evm *events.EventMgr, statusChan chan bool, node *cometbft.CometBftNode) *oracles.OracleMgr {
-	return oracles.NewOracleMgr(d.ctx, d.cfg.AppCfg.Oracles, evm, node, statusChan, *d.log.Named("oracle-manager"))
+func buildOracleManager(d *coreDependencies, closer *closeFuncs, evm *events.EventMgr, node *cometbft.CometBftNode, vm *vmgr.ValidatorMgr) *oracles.OracleMgr {
+	return oracles.NewOracleMgr(d.ctx, d.cfg.AppCfg.Oracles, evm, node, d.privKey.PubKey().Bytes(), vm, *d.log.Named("oracle-manager"))
 }
