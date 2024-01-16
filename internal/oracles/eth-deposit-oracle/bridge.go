@@ -53,6 +53,8 @@ type EthDepositOracle struct {
 	eventABI             abi.ABI
 	ethclient            *ethereumClient.Client
 	logger               log.Logger
+
+	done chan bool
 }
 
 type EthDepositOracleConfig struct {
@@ -68,7 +70,7 @@ type EthDepositOracleConfig struct {
 	maxRetries            uint64
 }
 
-func (do *EthDepositOracle) Initialize(ctx context.Context, eventstore oracles.EventStore, config map[string]string, logger log.Logger) error {
+func (do *EthDepositOracle) Start(ctx context.Context, eventstore oracles.EventStore, config map[string]string, logger log.Logger) error {
 	do.logger = logger
 	do.eventstore = eventstore
 	do.kvstore = eventstore.KV([]byte(oracleName))
@@ -92,10 +94,8 @@ func (do *EthDepositOracle) Initialize(ctx context.Context, eventstore oracles.E
 	}
 	do.eventABI = contractABI
 
-	return nil
-}
+	do.done = make(chan bool)
 
-func (do *EthDepositOracle) Start(ctx context.Context) error {
 	return do.listen(ctx)
 }
 
@@ -103,6 +103,8 @@ func (do *EthDepositOracle) Stop() error {
 	if do.ethclient != nil {
 		do.ethclient.Close()
 	}
+	// Signal to the listener to stop
+	do.done <- true
 	return nil
 }
 

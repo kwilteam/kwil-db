@@ -323,40 +323,39 @@ func (v *VoteProcessor) GetResolutionVoteInfo(ctx context.Context, id types.UUID
 // 1. the resolution has a body
 // 2. the resolution has expired
 // 3. the resolution has been approved
-func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUID) (processed bool, containsBody bool, err error) {
+func (v *VoteProcessor) ContainsBodyOrFinished(ctx context.Context, id types.UUID) (bool, error) {
 	// we check for existence of body in resolutions table before checking
 	// for the resolution ID in the processed table, since it is a faster lookup.
 	// furthermore, we are more likely to hit the resolutions table during consensus,
 	// and processed table during catchup. consensus speed is more important.
-	processed, err = v.IsProcessed(ctx, id)
-	if err != nil {
-		return false, false, err
-	}
-
-	if processed {
-		return true, false, nil
-	}
-
 	res, err := v.db.Query(ctx, getResolutionBody, map[string]interface{}{
 		"$id": id[:],
 	})
 	if err != nil {
-		return processed, false, err
+		return false, err
 	}
 
-	if len(res.Rows) == 0 {
-		return processed, false, ErrResolutionNotFound
-	}
-	if len(res.Rows[0]) != 1 {
-		// this should never happen, just for safety
-		return processed, false, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+	if len(res.Rows) != 0 {
+		if len(res.Rows[0]) != 1 {
+			// this should never happen, just for safety
+			return false, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		}
+
+		if res.Rows[0][0] != nil {
+			return true, nil
+		}
 	}
 
-	if res.Rows[0][0] != nil {
-		return processed, true, nil
+	processed, err := v.IsProcessed(ctx, id)
+	if err != nil {
+		return false, err
 	}
 
-	return processed, false, nil
+	if processed {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // GetVotesByCategory gets all votes of a specific category.

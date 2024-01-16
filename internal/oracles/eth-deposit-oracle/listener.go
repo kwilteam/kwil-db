@@ -37,6 +37,8 @@ func (do *EthDepositOracle) listen(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return
+			case <-do.done:
+				return
 			case err := <-sub.Err():
 				if err != nil {
 					do.logger.Warn("subscription error", zap.Error(err))

@@ -363,12 +363,12 @@ func (v *validatorVoteIDsRoute) Execute(ctx TxContext, router *TxApp, tx *transa
 		// since we may be the proposer later, and will need the body
 		// If the network already has the body, then we can just delete.
 		if fromLocalValidator {
-			processed, containsBody, err := router.VoteStore.ContainsBodyOrFinished(ctx.Ctx, voteID)
+			containsBody, err := router.VoteStore.ContainsBodyOrFinished(ctx.Ctx, voteID)
 			if err != nil {
 				return txRes(spend, transactions.CodeUnknownError, err)
 			}
 
-			if processed || containsBody {
+			if containsBody {
 				err = router.EventStore.DeleteEvent(ctx.Ctx, voteID)
 				if err != nil {
 					return txRes(spend, transactions.CodeUnknownError, err)

@@ -181,6 +181,42 @@ func (s *Server) Start(ctx context.Context) error {
 	})
 	s.log.Info("comet node started")
 
+	group.Go(func() error {
+		// Continuously check if the node is caught up
+		for {
+			select {
+			case <-groupCtx.Done():
+				return nil
+			default:
+				// Check if the node is caught up
+				if !s.cometBftNode.IsCatchup() {
+					s.log.Info("Node caught up with the latest block")
+					oracles := oracles.RegisteredOracles()
+					for name, oracle := range oracles {
+						oracleName := name
+						oracleInst := oracle
+
+						s.log.Info("starting oracle", zap.String("name", oracleName))
+						group.Go(func() error {
+							select {
+							case <-groupCtx.Done():
+								s.log.Info("stop oracle", zap.String("name", oracleName))
+								if err := oracleInst.Stop(); err != nil {
+									s.log.Warn("failed to stop oracle", zap.String("name", oracleName), zap.Error(err))
+								}
+								return nil
+							default:
+								return oracleInst.Start(groupCtx, s.eventStore, s.cfg.AppCfg.Oracles[oracleName], *s.log.Named(oracleName))
+							}
+						})
+					}
+					// After starting all oracles, exit the loop to avoid restarting them
+					return nil
+				}
+			}
+		}
+	})
+
 	err := group.Wait()
 
 	if err != nil {

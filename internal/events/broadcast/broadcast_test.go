@@ -99,10 +99,7 @@ func Test_Broadcaster(t *testing.T) {
 				}
 			}
 
-			vs := &mockVoteStore{
-				isProcessed: false,
-			}
-			bc := broadcast.NewEventBroadcaster(e, b, ai, v, vs, validatorSigner(), "test-chain")
+			bc := broadcast.NewEventBroadcaster(e, b, ai, v, validatorSigner(), "test-chain")
 
 			err := bc.RunBroadcast(context.Background(), nil)
 			if tc.err != nil {
@@ -163,12 +160,4 @@ type mockValidatorStore struct {
 
 func (m *mockValidatorStore) IsCurrent(ctx context.Context, validator []byte) (bool, error) {
 	return m.isValidator, nil
-}
-
-type mockVoteStore struct {
-	isProcessed bool
-}
-
-func (m *mockVoteStore) IsProcessed(ctx context.Context, id types.UUID) (bool, error) {
-	return m.isProcessed, nil
 }

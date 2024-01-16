@@ -472,14 +472,14 @@ func Test_Votes(t *testing.T) {
 					Type: examplePayloadType,
 				}
 
-				_, _, err = v.ContainsBodyOrFinished(ctx, event.ID())
+				_, err = v.ContainsBodyOrFinished(ctx, event.ID())
 				require.ErrorIs(t, err, voting.ErrResolutionNotFound)
 
 				// approve vote
 				err = v.Approve(ctx, event.ID(), 10323, []byte("voter1"))
 				require.NoError(t, err)
 
-				_, hasBody, err := v.ContainsBodyOrFinished(ctx, event.ID())
+				hasBody, err := v.ContainsBodyOrFinished(ctx, event.ID())
 				require.NoError(t, err)
 				require.False(t, hasBody)
 
@@ -487,7 +487,7 @@ func Test_Votes(t *testing.T) {
 				err = v.CreateResolution(ctx, event, 10000)
 				require.NoError(t, err)
 
-				_, hasBody, err = v.ContainsBodyOrFinished(ctx, event.ID())
+				hasBody, err = v.ContainsBodyOrFinished(ctx, event.ID())
 				require.NoError(t, err)
 				require.True(t, hasBody)
 			},

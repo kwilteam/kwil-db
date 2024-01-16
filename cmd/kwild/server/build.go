@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
-	"github.com/kwilteam/kwil-db/extensions/oracles"
 	"github.com/kwilteam/kwil-db/internal/abci"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/snapshots"
@@ -84,8 +83,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// event store
 	ev := buildEventStore(d, closers)
 
-	// build oracle service
-	buildOracles(d, ev, closers)
+	evm := buildEventMgr(ev, v)
 
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
@@ -99,11 +97,10 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		txApp, snapshotModule, bootstrapperModule)
 
 	cometBftNode := buildCometNode(d, closers, abciApp)
-	txApp.CometNode = cometBftNode
 
 	cometBftClient := buildCometBftClient(cometBftNode)
 
-	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore, v)
+	eventBroadcaster := buildEventBroadcaster(d, ev, &wrappedCometBFTClient{cometBftClient}, txApp, vstore)
 	abciApp.AddCommitHook(eventBroadcaster.RunBroadcast)
 
 	// tx service and grpc server
@@ -120,7 +117,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		adminTPCServer: adminTCPServer,
 		gateway:        buildGatewayServer(d),
 		cometBftNode:   cometBftNode,
-		eventStore:     ev,
+		eventStore:     evm,
 		log:            *d.log.Named("server"),
 		closers:        closers,
 		cfg:            d.cfg,
@@ -210,8 +207,8 @@ func buildAbci(d *coreDependencies, closer *closeFuncs, accountsModule abci.Acco
 	)
 }
 
-func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, accs broadcast.AccountInfoer, v broadcast.ValidatorStore, vstore txapp.VoteStore) *broadcast.EventBroadcaster {
-	return broadcast.NewEventBroadcaster(ev, b, accs, v, vstore, buildSigner(d), d.genesisCfg.ChainID)
+func buildEventBroadcaster(d *coreDependencies, ev broadcast.EventStore, b broadcast.Broadcaster, accs broadcast.AccountInfoer, v broadcast.ValidatorStore) *broadcast.EventBroadcaster {
+	return broadcast.NewEventBroadcaster(ev, b, accs, v, buildSigner(d), d.genesisCfg.ChainID)
 }
 
 func buildVoteStore(d *coreDependencies, closer *closeFuncs, acc voting.AccountStore, reg *registry.Registry) *voting.VoteProcessor {
@@ -242,6 +239,10 @@ func buildEventStore(d *coreDependencies, closer *closeFuncs) *events.EventStore
 	}
 
 	return e
+}
+
+func buildEventMgr(es *events.EventStore, vs *voting.VoteProcessor) *events.EventMgr {
+	return events.NewEventMgr(es, vs)
 }
 
 func buildTxSvc(d *coreDependencies, txsvc txSvc.EngineReader, cometBftClient txSvc.BlockchainTransactor, nodeApp txSvc.NodeApplication) *txSvc.Service {
@@ -654,14 +655,5 @@ func buildCommitter(d *coreDependencies, closers *closeFuncs) *sessions.MultiCom
 func failBuild(err error, msg string) {
 	if err != nil {
 		panic(fmt.Sprintf("%s: %s", msg, err.Error()))
-	}
-}
-
-func buildOracles(d *coreDependencies, ev *events.EventStore, closer *closeFuncs) {
-	oracles := oracles.RegisteredOracles()
-	fmt.Println("Initializing oracles")
-	for name, oracle := range oracles {
-		oracle.Initialize(d.ctx, ev, d.cfg.AppCfg.Oracles[name], *d.log.Named("oracle-" + name))
-		closer.addCloser(oracle.Stop)
 	}
 }
